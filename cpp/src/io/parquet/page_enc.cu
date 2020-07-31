@@ -653,7 +653,7 @@ static __device__ void RleEncode(
   uint32_t rle_pos = s->rle_pos;
   uint32_t rle_run = s->rle_run;
 
-  while (rle_pos < numvals) {
+  while (rle_pos < numvals || (flush && rle_run)) {
     uint32_t pos = rle_pos + t;
     if (rle_run > 0 && !(rle_run & 1)) {
       // Currently in a long repeat run
@@ -675,10 +675,10 @@ static __device__ void RleEncode(
       rle_run += rle_rpt_count << 1;
       rle_pos += rle_rpt_count;
       if (rle_rpt_count < max_rpt_count || (flush && rle_pos == numvals)) {
-        if (!t) {
-          uint32_t run_val = s->run_val;
-          uint8_t *dst     = VlqEncode(s->rle_out, rle_run);
-          *dst++           = run_val;
+        if (t == 0) {
+          uint32_t const run_val = s->run_val;
+          uint8_t *dst           = VlqEncode(s->rle_out, rle_run);
+          *dst++                 = run_val;
           if (nbits > 8) { *dst++ = run_val >> 8; }
           s->rle_out = dst;
         }
@@ -949,7 +949,9 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
           PlainBoolEncode(s, rle_numvals, (cur_row == s->page.num_rows), t);
         } else
 #endif
+        {
           RleEncode(s, rle_numvals, dict_bits, (cur_row == s->page.num_rows), t);
+        }
         __syncthreads();
       }
       if (t == 0) { s->cur = s->rle_out; }

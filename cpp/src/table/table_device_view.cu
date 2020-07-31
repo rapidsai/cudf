@@ -28,6 +28,7 @@ namespace detail {
 template <typename ColumnDeviceView, typename HostTableView>
 void table_device_view_base<ColumnDeviceView, HostTableView>::destroy()
 {
+  delete _descendant_storage;
   delete this;
 }
 

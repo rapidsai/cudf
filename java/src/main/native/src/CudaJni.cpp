@@ -149,6 +149,14 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_setDevice(JNIEnv *env, jclass, j
   CATCH_STD(env, );
 }
 
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_autoSetDevice(JNIEnv *env, jclass, jint dev) {
+  try {
+    cudf::jni::auto_set_device(env);
+  }
+  CATCH_STD(env, );
+}
+
+
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_freeZero(JNIEnv *env, jclass) {
   try {
     cudf::jni::auto_set_device(env);

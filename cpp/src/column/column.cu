@@ -19,6 +19,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/copying.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -188,8 +189,17 @@ struct create_column_from_view {
   std::unique_ptr<column> operator()()
   {
     std::vector<std::unique_ptr<column>> children;
-    for (size_type i = 0; i < view.num_children(); ++i)
-      children.emplace_back(std::make_unique<column>(view.child(i), stream, mr));
+    if (view.num_children()) {
+      cudf::dictionary_column_view dict_view(view);
+      auto indices_view = column_view(data_type{type_id::INT32},
+                                      view.size(),
+                                      dict_view.indices().data<int32_t>(),
+                                      nullptr,
+                                      0,
+                                      view.offset());
+      children.emplace_back(std::make_unique<column>(indices_view, stream, mr));
+      children.emplace_back(std::make_unique<column>(dict_view.keys(), stream, mr));
+    }
     return std::make_unique<column>(view.type(),
                                     view.size(),
                                     rmm::device_buffer{0, stream, mr},

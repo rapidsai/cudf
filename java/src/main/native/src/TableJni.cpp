@@ -16,6 +16,7 @@
 
 #include <cudf/aggregation.hpp>
 #include <cudf/concatenate.hpp>
+#include <cudf/filling.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/hashing.hpp>
 #include <cudf/io/data_sink.hpp>
@@ -28,7 +29,7 @@
 #include <cudf/sorting.hpp>
 #include <cudf/stream_compaction.hpp>
 
-#include "jni_utils.hpp"
+#include "cudf_jni_apis.hpp"
 
 namespace cudf {
 namespace jni {
@@ -1136,6 +1137,35 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_filter(JNIEnv *env, jclas
     cudf::table_view *input = reinterpret_cast<cudf::table_view *>(input_jtable);
     cudf::column_view *mask = reinterpret_cast<cudf::column_view *>(mask_jcol);
     std::unique_ptr<cudf::table> result = cudf::apply_boolean_mask(*input, *mask);
+    return cudf::jni::convert_table_for_return(env, result);
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_repeatStaticCount(JNIEnv *env, jclass,
+                                                                         jlong input_jtable,
+                                                                         jint count) {
+  JNI_NULL_CHECK(env, input_jtable, "input table is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::table_view *input = reinterpret_cast<cudf::table_view *>(input_jtable);
+    std::unique_ptr<cudf::table> result = cudf::repeat(*input, count);
+    return cudf::jni::convert_table_for_return(env, result);
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_repeatColumnCount(JNIEnv *env, jclass,
+                                                                         jlong input_jtable,
+                                                                         jlong count_jcol,
+                                                                         jboolean check_count) {
+  JNI_NULL_CHECK(env, input_jtable, "input table is null", 0);
+  JNI_NULL_CHECK(env, count_jcol, "count column is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::table_view *input = reinterpret_cast<cudf::table_view *>(input_jtable);
+    cudf::column_view *count = reinterpret_cast<cudf::column_view *>(count_jcol);
+    std::unique_ptr<cudf::table> result = cudf::repeat(*input, *count, check_count);
     return cudf::jni::convert_table_for_return(env, result);
   }
   CATCH_STD(env, 0);

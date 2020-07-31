@@ -82,10 +82,15 @@ void BM_reduction(benchmark::State& state, std::unique_ptr<cudf::aggregation> co
   REDUCE_BENCHMARK_DEFINE(double, aggregation);
 
 REDUCE_BENCHMARK_NUMERIC(sum);
-REDUCE_BENCHMARK_NUMERIC(product);
-REDUCE_BENCHMARK_NUMERIC(min);
+REDUCE_BENCHMARK_DEFINE(int32_t, product);
+REDUCE_BENCHMARK_DEFINE(float, product);
+REDUCE_BENCHMARK_DEFINE(int64_t, min);
+REDUCE_BENCHMARK_DEFINE(double, min);
 using cudf::timestamp_ms;
 REDUCE_BENCHMARK_DEFINE(timestamp_ms, min);
-REDUCE_BENCHMARK_NUMERIC(mean);
-REDUCE_BENCHMARK_NUMERIC(variance);
-REDUCE_BENCHMARK_NUMERIC(std);
+REDUCE_BENCHMARK_DEFINE(int8_t, mean);
+REDUCE_BENCHMARK_DEFINE(float, mean);
+REDUCE_BENCHMARK_DEFINE(int32_t, variance);
+REDUCE_BENCHMARK_DEFINE(double, variance);
+REDUCE_BENCHMARK_DEFINE(int64_t, std);
+REDUCE_BENCHMARK_DEFINE(float, std);

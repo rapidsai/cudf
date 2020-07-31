@@ -17,14 +17,17 @@
 /**
  * @file reader_impl.cu
  * @brief cuDF-IO JSON reader class implementation
- **/
+ */
 
 #include "reader_impl.hpp"
 
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/device_scalar.hpp>
 
 #include <cudf/detail/utilities/trie.cuh>
+#include <cudf/groupby.hpp>
 #include <cudf/io/readers.hpp>
+#include <cudf/sorting.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <io/comp/io_uncomp.h>
@@ -40,48 +43,6 @@ namespace json {
 using namespace cudf::io;
 
 namespace {
-/**
- * @brief Extract value names from a JSON object
- *
- * @param[in] json_obj Host vector containing the JSON object
- * @param[in] opts Parsing options (e.g. delimiter and quotation character)
- *
- * @return std::vector<std::string> names of JSON object values
- **/
-std::vector<std::string> get_names_from_json_object(const std::vector<char> &json_obj,
-                                                    const ParseOptions &opts)
-{
-  enum class ParseState { preColName, colName, postColName };
-  std::vector<std::string> names;
-  bool quotation = false;
-  auto state     = ParseState::preColName;
-  int name_start = 0;
-  for (size_t pos = 0; pos < json_obj.size(); ++pos) {
-    if (state == ParseState::preColName) {
-      if (json_obj[pos] == opts.quotechar) {
-        name_start = pos + 1;
-        state      = ParseState::colName;
-        continue;
-      }
-    } else if (state == ParseState::colName) {
-      if (json_obj[pos] == opts.quotechar && json_obj[pos - 1] != '\\') {
-        // if found a non-escaped quote character, it's the end of the column name
-        names.emplace_back(&json_obj[name_start], &json_obj[pos]);
-        state = ParseState::postColName;
-        continue;
-      }
-    } else if (state == ParseState::postColName) {
-      // TODO handle complex data types that might include unquoted commas
-      if (!quotation && json_obj[pos] == opts.delimiter) {
-        state = ParseState::preColName;
-        continue;
-      } else if (json_obj[pos] == opts.quotechar) {
-        quotation = !quotation;
-      }
-    }
-  }
-  return names;
-}
 
 /**
  * @brief Estimates the maximum expected length or a row, based on the number
@@ -93,7 +54,7 @@ std::vector<std::string> get_names_from_json_object(const std::vector<char> &jso
  * @param[in] num_columns Number of columns in the JSON file (optional)
  *
  * @return Estimated maximum size of a row, in bytes
- **/
+ */
 constexpr size_t calculate_max_row_size(int num_columns = 0) noexcept
 {
   constexpr size_t max_row_bytes = 16 * 1024;  // 16KB
@@ -111,15 +72,171 @@ constexpr size_t calculate_max_row_size(int num_columns = 0) noexcept
 }  // anonymous namespace
 
 /**
- * @brief Ingest input JSON file/buffer, without decompression
+ * @brief Aggregate the table containing keys info by their hash values.
+ *
+ * @param[in] info Table with columns containing key offsets, lengths and hashes, respectively
+ *
+ * @return Table with data aggregated by key hash values
+ */
+std::unique_ptr<table> aggregate_keys_info(std::unique_ptr<table> info)
+{
+  auto const info_view = info->view();
+  std::vector<groupby::aggregation_request> requests;
+  requests.emplace_back(groupby::aggregation_request{info_view.column(0)});
+  requests.back().aggregations.emplace_back(make_min_aggregation());
+  requests.back().aggregations.emplace_back(make_nth_element_aggregation(0));
+
+  requests.emplace_back(groupby::aggregation_request{info_view.column(1)});
+  requests.back().aggregations.emplace_back(make_min_aggregation());
+  requests.back().aggregations.emplace_back(make_nth_element_aggregation(0));
+
+  // Aggregate by hash values
+  groupby::groupby gb_obj(
+    table_view({info_view.column(2)}), null_policy::EXCLUDE, sorted::NO, {}, {});
+
+  auto result = gb_obj.aggregate(requests);  // TODO: no stream parameter?
+
+  std::vector<std::unique_ptr<column>> out_columns;
+  out_columns.emplace_back(std::move(result.second[0].results[0]));  // offsets
+  out_columns.emplace_back(std::move(result.second[1].results[0]));  // lengths
+  out_columns.emplace_back(std::move(result.first->release()[0]));   // hashes
+  return std::make_unique<table>(std::move(out_columns));
+}
+
+/**
+ * @brief Initializes the (key hash -> column index) hash map.
+ */
+col_map_ptr_type create_col_names_hash_map(column_view column_name_hashes, cudaStream_t stream)
+{
+  auto key_col_map{col_map_type::create(column_name_hashes.size())};
+  auto const column_data = column_name_hashes.data<uint32_t>();
+  thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+                     thrust::make_counting_iterator<size_type>(0),
+                     column_name_hashes.size(),
+                     [map = *key_col_map, column_data] __device__(size_type idx) mutable {
+                       map.insert(thrust::make_pair(column_data[idx], idx));
+                     });
+  return std::move(key_col_map);
+}
+
+/**
+ * @brief Create a table whose columns contain the information on JSON objects' keys.
+ *
+ * The columns contain name offsets in the file, name lengths and name hashes, respectively.
+ *
+ * @param[in] data Input JSON device data
+ * @param[in] record_starts Device array of row start locations in the input buffer
+ * @param[in] opts Parsing options (e.g. delimiter and quotation character)
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
+ *
+ * @return std::unique_ptr<table> cudf table with three columns (offsets, lenghts, hashes)
+ */
+std::unique_ptr<table> create_json_keys_info_table(
+  rmm::device_buffer const &data,
+  rmm::device_vector<uint64_t> const &record_starts,
+  const ParseOptions &opts,
+  cudaStream_t stream)
+{
+  // Count keys
+  rmm::device_scalar<unsigned long long int> key_counter(0, stream);
+  auto const data_ptr = static_cast<const char *>(data.data());
+  cudf::io::json::gpu::collect_keys_info(data_ptr,
+                                         data.size(),
+                                         opts,
+                                         record_starts.data().get(),
+                                         record_starts.size(),
+                                         key_counter.data(),
+                                         nullptr,
+                                         stream);
+
+  // Allocate columns to store hash value, length, and offset of each JSON object key in the input
+  auto const num_keys = key_counter.value();
+  std::vector<std::unique_ptr<column>> info_columns;
+  info_columns.emplace_back(make_numeric_column(data_type(type_id::UINT64), num_keys));
+  info_columns.emplace_back(make_numeric_column(data_type(type_id::UINT16), num_keys));
+  info_columns.emplace_back(make_numeric_column(data_type(type_id::UINT32), num_keys));
+  // Create a table out of these columns to pass them around more easily
+  auto info_table = std::make_unique<table>(std::move(info_columns));
+  rmm::device_scalar<mutable_table_device_view> info_table_mdv(
+    *mutable_table_device_view::create(info_table->mutable_view(), stream), stream);
+
+  // Reset the key counter - now used for indexing
+  key_counter.set_value(0, stream);
+  // Fill the allocated columns
+  cudf::io::json::gpu::collect_keys_info(data_ptr,
+                                         data.size(),
+                                         opts,
+                                         record_starts.data().get(),
+                                         record_starts.size(),
+                                         key_counter.data(),
+                                         info_table_mdv.data(),
+                                         stream);
+  return std::move(info_table);
+}
+
+/**
+ * @brief Extract the keys from the JSON file the name offsets/lengths.
+ */
+std::vector<std::string> create_key_strings(char const *h_data,
+                                            table_view sorted_info,
+                                            cudaStream_t stream)
+{
+  auto const num_cols = sorted_info.num_rows();
+  std::vector<uint64_t> h_offsets(num_cols);
+  cudaMemcpyAsync(h_offsets.data(),
+                  sorted_info.column(0).data<uint64_t>(),
+                  sizeof(uint64_t) * num_cols,
+                  cudaMemcpyDefault,
+                  stream);
+
+  std::vector<uint16_t> h_lens(num_cols);
+  cudaMemcpyAsync(h_lens.data(),
+                  sorted_info.column(1).data<uint16_t>(),
+                  sizeof(uint16_t) * num_cols,
+                  cudaMemcpyDefault,
+                  stream);
+
+  std::vector<std::string> names(num_cols);
+  std::transform(h_offsets.cbegin(),
+                 h_offsets.cend(),
+                 h_lens.cbegin(),
+                 names.begin(),
+                 [&](auto offset, auto len) { return std::string(h_data + offset, len); });
+  return names;
+}
+
+auto sort_keys_info_by_offset(std::unique_ptr<table> info)
+{
+  auto const agg_offset_col_view = info->get_column(0).view();
+  return sort_by_key(info->view(), table_view({agg_offset_col_view}));
+}
+
+/**
+ * @brief Extract JSON object keys from a JSON file.
+ *
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ *
+ * @return Names of JSON object keys in the file
+ */
+std::pair<std::vector<std::string>, col_map_ptr_type> reader::impl::get_json_object_keys_hashes(
+  cudaStream_t stream)
+{
+  auto info            = create_json_keys_info_table(data_, rec_starts_, opts_, stream);
+  auto aggregated_info = aggregate_keys_info(std::move(info));
+  auto sorted_info     = sort_keys_info_by_offset(std::move(aggregated_info));
+
+  return {create_key_strings(uncomp_data_, sorted_info->view(), stream),
+          create_col_names_hash_map(sorted_info->get_column(2).view(), stream)};
+}
+
+/**
+ * @brief Ingest input JSON file/buffer, without decompression.
  *
  * Sets the source_, byte_range_offset_, and byte_range_size_ data members
  *
  * @param[in] range_offset Number of bytes offset from the start
  * @param[in] range_size Bytes to read; use `0` for all remaining data
- *
- * @return void
- **/
+ */
 void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size)
 {
   size_t map_range_size = 0;
@@ -147,9 +264,7 @@ void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size)
  *
  * Sets the uncomp_data_ and uncomp_size_ data members
  * Loads the data into device memory if byte range parameters are not used
- *
- * @return void
- **/
+ */
 void reader::impl::decompress_input()
 {
   const auto compression_type = infer_compression_type(
@@ -173,9 +288,7 @@ void reader::impl::decompress_input()
  * Does not upload the entire file to the GPU
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
- *
- * @return void
- **/
+ */
 void reader::impl::set_record_starts(cudaStream_t stream)
 {
   std::vector<char> chars_to_count{'\n'};
@@ -246,8 +359,7 @@ void reader::impl::set_record_starts(cudaStream_t stream)
  * Only rows that need to be parsed are copied, based on the byte range
  * Also updates the array of record starts to match the device data offset.
  *
- * @return void
- **/
+ */
 void reader::impl::upload_data_to_device()
 {
   size_t start_offset = 0;
@@ -292,9 +404,7 @@ void reader::impl::upload_data_to_device()
  * Sets the column_names_ data member
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
- *
- * @return void
- **/
+ */
 void reader::impl::set_column_names(cudaStream_t stream)
 {
   // If file only contains one row, use the file size for the row size
@@ -321,9 +431,11 @@ void reader::impl::set_column_names(cudaStream_t stream)
   CUDF_EXPECTS(first_curly_bracket != first_row.end() || first_square_bracket != first_row.end(),
                "Input data is not a valid JSON file.");
   // If the first opening bracket is '{', assume object format
-  const bool is_object = first_curly_bracket < first_square_bracket;
-  if (is_object) {
-    metadata.column_names = get_names_from_json_object(first_row, opts_);
+  if (first_curly_bracket < first_square_bracket) {
+    // use keys as column names if input rows are objects
+    auto keys_desc        = get_json_object_keys_hashes(stream);
+    metadata.column_names = keys_desc.first;
+    set_column_map(std::move(keys_desc.second));
   } else {
     int cols_found = 0;
     bool quotation = false;
@@ -341,14 +453,25 @@ void reader::impl::set_column_names(cudaStream_t stream)
 }
 
 /**
+ * @brief Set the null count to the row count (all fields assumes to be null).
+ */
+void set_null_count(size_type num_rows,
+                    rmm::device_vector<cudf::io::json::ColumnInfo> &infos,
+                    cudaStream_t stream)
+{
+  thrust::for_each(rmm::exec_policy(stream)->on(stream),
+                   infos.begin(),
+                   infos.end(),
+                   [num_rows] __device__(auto &info) { info.null_count = num_rows; });
+}
+
+/**
  * @brief Set the data type array data member
  *
  * If user does not pass the data types, deduces types from the file content
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
- *
- * @return void
- **/
+ */
 void reader::impl::set_data_types(cudaStream_t stream)
 {
   if (!args_.dtype.empty()) {
@@ -389,16 +512,20 @@ void reader::impl::set_data_types(cudaStream_t stream)
 
     rmm::device_vector<cudf::io::json::ColumnInfo> d_column_infos(num_columns,
                                                                   cudf::io::json::ColumnInfo{});
+    // For object rows, it's not efficient for the kernel to determine which fields are missing in
+    // each row. Set the null count to row count; kernel reduces this value for each valid field.
+    if (key_to_col_idx_map) set_null_count(rec_starts_.size(), d_column_infos, stream);
+
     cudf::io::json::gpu::detect_data_types(d_column_infos.data().get(),
                                            static_cast<const char *>(data_.data()),
                                            data_.size(),
                                            opts_,
+                                           get_column_map_device_ptr(),
                                            num_columns,
                                            rec_starts_.data().get(),
                                            rec_starts_.size(),
                                            stream);
     thrust::host_vector<cudf::io::json::ColumnInfo> h_column_infos = d_column_infos;
-
     for (const auto &cinfo : h_column_infos) {
       if (cinfo.null_count == static_cast<int>(rec_starts_.size())) {
         // Entire column is NULL; allocate the smallest amount of memory
@@ -426,7 +553,7 @@ void reader::impl::set_data_types(cudaStream_t stream)
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *
  * @return table_with_metadata struct
- **/
+ */
 table_with_metadata reader::impl::convert_data_to_table(cudaStream_t stream)
 {
   const auto num_columns = dtypes_.size();
@@ -462,6 +589,7 @@ table_with_metadata reader::impl::convert_data_to_table(cudaStream_t stream)
                                                d_valid.data().get(),
                                                d_valid_counts.data().get(),
                                                opts_,
+                                               get_column_map_device_ptr(),
                                                stream);
   CUDA_TRY(cudaStreamSynchronize(stream));
   CUDA_TRY(cudaGetLastError());
@@ -507,8 +635,8 @@ reader::impl::impl(std::unique_ptr<datasource> source,
  * @param[in] range_size Bytes to read; use `0` for all remaining data
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *
- * @return Unique pointer to the table data
- **/
+ * @return Table and its metadata
+ */
 table_with_metadata reader::impl::read(size_t range_offset, size_t range_size, cudaStream_t stream)
 {
   ingest_raw_input(range_offset, range_size);

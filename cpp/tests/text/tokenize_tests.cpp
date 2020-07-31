@@ -148,3 +148,45 @@ TEST_F(TextTokenizeTest, TokenizeEmptyTest)
   results = nvtext::character_tokenize(cudf::strings_column_view(all_null));
   EXPECT_EQ(results->size(), 0);
 }
+
+TEST_F(TextTokenizeTest, Detokenize)
+{
+  cudf::test::strings_column_wrapper strings{
+    "the", "fox", "jumped", "over",   "the", "dog",   "the", "dog",   "chased", "the",
+    "cat", "the", "cat",    "chased", "the", "mouse", "the", "mousé", "ate",    "cheese"};
+
+  {
+    cudf::test::fixed_width_column_wrapper<int32_t> rows{0, 0, 0, 0, 0, 0, 1, 1, 1, 1,
+                                                         1, 2, 2, 2, 2, 2, 3, 3, 3, 3};
+    auto results = nvtext::detokenize(cudf::strings_column_view(strings), rows);
+    cudf::test::strings_column_wrapper expected{"the fox jumped over the dog",
+                                                "the dog chased the cat",
+                                                "the cat chased the mouse",
+                                                "the mousé ate cheese"};
+    cudf::test::expect_columns_equal(*results, expected);
+  }
+  {
+    cudf::test::fixed_width_column_wrapper<int16_t> rows{0, 0, 0, 0, 0, 0, 1, 1, 1, 1,
+                                                         1, 2, 2, 2, 2, 2, 3, 3, 3, 0};
+    auto results =
+      nvtext::detokenize(cudf::strings_column_view(strings), rows, cudf::string_scalar("_"));
+    cudf::test::strings_column_wrapper expected{"the_fox_jumped_over_the_dog_cheese",
+                                                "the_dog_chased_the_cat",
+                                                "the_cat_chased_the_mouse",
+                                                "the_mousé_ate"};
+    cudf::test::expect_columns_equal(*results, expected);
+  }
+}
+
+TEST_F(TextTokenizeTest, DetokenizeErrors)
+{
+  cudf::test::strings_column_wrapper strings{"this column intentionally left blank"};
+  cudf::strings_column_view strings_view(strings);
+
+  cudf::test::fixed_width_column_wrapper<int32_t> one({0});
+  cudf::test::fixed_width_column_wrapper<int32_t> none;
+
+  EXPECT_THROW(nvtext::detokenize(strings_view, none), cudf::logic_error);
+  EXPECT_THROW(nvtext::detokenize(strings_view, one, cudf::string_scalar("", false)),
+               cudf::logic_error);
+}

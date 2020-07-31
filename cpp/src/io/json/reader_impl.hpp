@@ -25,6 +25,7 @@
 #include "json_gpu.h"
 
 #include <thrust/device_vector.h>
+#include <hash/concurrent_unordered_map.cuh>
 #include <rmm/device_buffer.hpp>
 
 #include <io/utilities/column_buffer.hpp>
@@ -39,10 +40,12 @@ namespace json {
 using namespace cudf::io::json;
 using namespace cudf::io;
 
+using col_map_type     = cudf::io::json::gpu::col_map_type;
+using col_map_ptr_type = std::unique_ptr<col_map_type, std::function<void(col_map_type *)>>;
+
 /**
- * @brief Class used to parse Json input and convert it into gdf columns
- *
- **/
+ * @brief Class used to parse Json input and convert it into gdf columns.
+ */
 class reader::impl {
  public:
  private:
@@ -69,6 +72,11 @@ class reader::impl {
   table_metadata metadata;
   std::vector<data_type> dtypes_;
 
+  // the map is only used for files with rows in object format; initialize to a dummy value so the
+  // map object can be passed to the kernel in any case
+  col_map_ptr_type key_to_col_idx_map;
+  std::unique_ptr<rmm::device_scalar<col_map_type>> d_key_col_map;
+
   // parsing options
   const bool allow_newlines_in_strings_ = false;
   ParseOptions opts_{',', '\n', '\"', '.'};
@@ -77,24 +85,44 @@ class reader::impl {
   rmm::device_vector<SerialTrieNode> d_na_trie_;
 
   /**
+   * @brief Sets the column map data member and makes a device copy to be used as a kernel
+   * parameter.
+   */
+  void set_column_map(col_map_ptr_type &&map)
+  {
+    key_to_col_idx_map = std::move(map);
+    d_key_col_map      = std::make_unique<rmm::device_scalar<col_map_type>>(*key_to_col_idx_map);
+  }
+  /**
+   * @brief Gets the pointer to the column hash map in the device memory.
+   *
+   * Returns `nullptr` if the map is not created.
+   */
+  auto get_column_map_device_ptr() { return key_to_col_idx_map ? d_key_col_map->data() : nullptr; }
+
+  /**
    * @brief Ingest input JSON file/buffer, without decompression
    *
    * Sets the source_, byte_range_offset_, and byte_range_size_ data members
    *
    * @param[in] range_offset Number of bytes offset from the start
    * @param[in] range_size Bytes to read; use `0` for all remaining data
-   *
-   * @return void
-   **/
+   */
   void ingest_raw_input(size_t range_offset, size_t range_size);
+
+  /**
+   * @brief Extract the JSON objects keys from the input file with object rows.
+   *
+   * @return Array of keys and a map that maps their hash values to column indices
+   */
+  std::pair<std::vector<std::string>, col_map_ptr_type> get_json_object_keys_hashes(
+    cudaStream_t stream);
 
   /**
    * @brief Decompress the input data, if needed
    *
    * Sets the uncomp_data_ and uncomp_size_ data members
-   *
-   * @return void
-   **/
+   */
   void decompress_input();
 
   /**
@@ -103,9 +131,7 @@ class reader::impl {
    * Does not upload the entire file to the GPU
    *
    * @param[in] stream CUDA stream used for device memory operations and kernel launches.
-   *
-   * @return void
-   **/
+   */
   void set_record_starts(cudaStream_t stream);
 
   /**
@@ -114,9 +140,7 @@ class reader::impl {
    * Sets the d_data_ data member.
    * Only rows that need to be parsed are copied, based on the byte range
    * Also updates the array of record starts to match the device data offset.
-   *
-   * @return void
-   **/
+   */
   void upload_data_to_device();
 
   /**
@@ -125,9 +149,7 @@ class reader::impl {
    * Sets the column_names_ data member
    *
    * @param[in] stream CUDA stream used for device memory operations and kernel launches.
-   *
-   * @return void
-   **/
+   */
   void set_column_names(cudaStream_t stream);
 
   /**
@@ -136,9 +158,7 @@ class reader::impl {
    * If user does not pass the data types, deduces types from the file content
    *
    * @param[in] stream CUDA stream used for device memory operations and kernel launches.
-   *
-   * @return void
-   **/
+   */
   void set_data_types(cudaStream_t stream);
 
   /**
@@ -146,14 +166,14 @@ class reader::impl {
    *
    * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    *
-   * @return table_with_metadata struct
-   **/
+   * @return Table and its metadata
+   */
   table_with_metadata convert_data_to_table(cudaStream_t stream);
 
  public:
   /**
    * @brief Constructor from a dataset source with reader options.
-   **/
+   */
   explicit impl(std::unique_ptr<datasource> source,
                 std::string filepath,
                 reader_options const &args,
@@ -166,8 +186,8 @@ class reader::impl {
    * @param[in] range_size Bytes to read; use `0` for all remaining data
    * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    *
-   * @return Unique pointer to the table data
-   **/
+   * @return Table and its metadata
+   */
   table_with_metadata read(size_t range_offset, size_t range_size, cudaStream_t stream);
 };
 
