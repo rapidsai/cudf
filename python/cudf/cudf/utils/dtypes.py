@@ -9,6 +9,7 @@ import pyarrow as pa
 from pandas.core.dtypes.dtypes import CategoricalDtype, CategoricalDtypeType
 
 import cudf
+from cudf._lib.scalar import Scalar
 
 _NA_REP = "<NA>"
 _np_pa_dtypes = {
@@ -201,6 +202,7 @@ def cudf_dtype_from_pydata_dtype(dtype):
 def is_scalar(val):
     return (
         val is None
+        or isinstance(val, Scalar)
         or isinstance(val, str)
         or isinstance(val, numbers.Number)
         or np.isscalar(val)
