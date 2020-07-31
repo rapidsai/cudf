@@ -27,6 +27,7 @@ from cudf.utils.dtypes import is_string_dtype
 
 from cudf._lib.cpp.binaryop cimport binary_operator
 cimport cudf._lib.cpp.binaryop as cpp_binaryop
+from cudf._lib.types cimport _Dtype
 
 
 class BinaryOperation(IntEnum):
@@ -170,19 +171,13 @@ def binaryop(lhs, rhs, op, dtype):
     """
     Dispatches a binary op call to the appropriate libcudf function:
     """
+    cdef _Dtype py_dtype = dtype
     op = BinaryOperation[op.upper()]
     cdef binary_operator c_op = <binary_operator> (
         <underlying_type_t_binary_operator> op
     )
-    cdef type_id tid = (
-        <type_id> (
-            <underlying_type_t_type_id> (
-                np_to_cudf_types[np.dtype(dtype)]
-            )
-        )
-    )
 
-    cdef data_type c_dtype = data_type(tid)
+    cdef data_type c_dtype = py_dtype.get_libcudf_type()
 
     if isinstance(lhs, Scalar) or np.isscalar(lhs) or lhs is None:
 

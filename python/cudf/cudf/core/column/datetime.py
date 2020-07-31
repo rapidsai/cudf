@@ -11,6 +11,7 @@ from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.utils import utils
 from cudf.utils.dtypes import is_scalar, np_to_pa_dtype
+from cudf.core.dtypes import make_dtype_from_obj
 
 # nanoseconds per time_unit
 _numpy_to_pandas_conversion = {
@@ -45,7 +46,7 @@ class DatetimeColumn(column.ColumnBase):
         mask : Buffer; optional
             The validity mask
         """
-        dtype = np.dtype(dtype)
+        dtype = make_dtype_from_obj(dtype)
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
         if size is None:
@@ -60,7 +61,7 @@ class DatetimeColumn(column.ColumnBase):
             null_count=null_count,
         )
         assert self.dtype.type is np.datetime64
-        self._time_unit, _ = np.datetime_data(self.dtype)
+        self._time_unit, _ = np.datetime_data(self.dtype.to_numpy)
 
     def __contains__(self, item):
         # Handles improper item types
@@ -164,7 +165,7 @@ class DatetimeColumn(column.ColumnBase):
 
     def to_pandas(self, index=None, nullable_pd_dtype=False):
         return pd.Series(
-            self.to_array(fillna="pandas").astype(self.dtype), index=index
+            self.to_array(fillna="pandas").astype(self.dtype.to_pandas), index=index
         )
 
     def to_arrow(self):

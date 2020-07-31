@@ -70,26 +70,27 @@ class NumericalColumn(column.ColumnBase):
 
     def binary_operator(self, binop, rhs, reflect=False):
         int_dtypes = [
-            np.dtype("int8"),
-            np.dtype("int16"),
-            np.dtype("int32"),
-            np.dtype("int64"),
-            np.dtype("uint8"),
-            np.dtype("uint16"),
-            np.dtype("uint32"),
-            np.dtype("uint64"),
+            cudf.Int8Dtype(),
+            cudf.Int16Dtype(),
+            cudf.Int32Dtype(),
+            cudf.Int64Dtype(),
+            cudf.UInt8Dtype(),
+            cudf.UInt16Dtype(),
+            cudf.UInt32Dtype(),
+            cudf.UInt64Dtype(),
         ]
         tmp = rhs
         if reflect:
             tmp = self
         if isinstance(rhs, (NumericalColumn, Scalar)) or np.isscalar(rhs):
-            out_dtype = np.result_type(self.dtype, rhs.dtype)
+            out_dtype = np.result_type(make_dtype_from_obj(self.dtype).to_numpy, make_dtype_from_obj(rhs.dtype).to_numpy)
+            out_dtype = make_dtype_from_obj(out_dtype)
             if binop in ["mod", "floordiv"]:
                 if (tmp.dtype in int_dtypes) and (
                     (np.isscalar(tmp) and (0 == tmp))
                     or ((isinstance(tmp, NumericalColumn)) and (0.0 in tmp))
                 ):
-                    out_dtype = np.dtype("float_")
+                    out_dtype = cudf.Float64Dtype()
         elif rhs is None:
             out_dtype = self.dtype
         else:
@@ -160,8 +161,6 @@ class NumericalColumn(column.ColumnBase):
         # expect a cudf dtype always here
         if dtype == self.dtype:
             return self
-        import pdb
-        pdb.set_trace()
         return libcudf.unary.cast(self, dtype)
 
     def to_pandas(self, index=None, nullable_pd_dtype=False):
@@ -198,14 +197,13 @@ class NumericalColumn(column.ColumnBase):
         if self.nullable:
             mask = pa.py_buffer(self.mask_array_view.copy_to_host())
         data = pa.py_buffer(self.data_array_view.copy_to_host())
-        pa_dtype = np_to_pa_dtype(self.dtype)
         out = pa.Array.from_buffers(
-            type=pa_dtype,
+            type=self.dtype.pa_type,
             length=len(self),
             buffers=[mask, data],
             null_count=self.null_count,
         )
-        if self.dtype == np.bool:
+        if self.dtype.is_boolean:
             return out.cast(pa.bool_())
         else:
             return out
@@ -312,7 +310,8 @@ class NumericalColumn(column.ColumnBase):
         """
         if np.isscalar(fill_value):
             # castsafely to the same dtype as self
-            fill_value_casted = self.dtype.type(fill_value)
+            # TODO - produce a libcudf scalar directly
+            fill_value_casted = self.dtype.to_numpy.type(fill_value)
             if not np.isnan(fill_value) and (fill_value_casted != fill_value):
                 raise TypeError(
                     "Cannot safely cast non-equivalent {} to {}".format(
@@ -455,7 +454,7 @@ def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
 
     if is_op_comparison:
         out_dtype = "bool"
-
+        
     out = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
 
     if is_op_comparison:

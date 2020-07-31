@@ -60,8 +60,11 @@ class Dtype(ExtensionDtype, _Dtype):
     def __eq__(self, other):
         if isinstance(other, self.__class__):
             return True
+        if isinstance(other, Dtype) and not isinstance(other, self.__class__):
+            return False
         if isinstance(other, self.to_pandas.__class__) or other is self.to_pandas.__class__:
             return True
+        
         if self.to_numpy == other:
             return True
         raise NotImplementedError
@@ -80,11 +83,16 @@ class Dtype(ExtensionDtype, _Dtype):
 
     @property
     def type(self):
-        return self.to_pandas.type
+        if self.is_float or self.is_datetime:
+            return self.to_numpy.kind
+        else: self.to_pandas.type
 
     @property
     def kind(self):
-        return self.to_pandas.kind
+        if self.is_float:
+            return 'f'
+        else:
+            return self.to_pandas.kind
 
     @property
     def name(self):
@@ -242,8 +250,16 @@ def make_dtype_from_obj(obj):
         return pa_to_cudf_dtypes[obj]
     elif isinstance(obj, str):
         return make_dtype_from_string(obj)
+    elif obj in pd_to_cudf_dtypes.keys():
+        return pd_to_cudf_dtypes[obj]
     else:
-        raise TypeError
+        try:
+            if issubclass(obj, np.generic):
+                return np_to_cudf_dtypes[np.dtype(obj)]
+        except:
+            import pdb
+            pdb.set_trace()
+            raise TypeError('cant transform this object to a cudf dtype. ')
 
 class CategoricalDtype(ExtensionDtype):
 
@@ -444,4 +460,17 @@ np_to_cudf_dtypes = {
     np.dtype('datetime64[us]'): Datetime64USDtype(),
     np.dtype('datetime64[ms]'): Datetime64MSDtype(),
     np.dtype('datetime64[s]'): Datetime64SDtype(),
+}
+
+pd_to_cudf_dtypes = {
+    pd.Int8Dtype(): Int8Dtype(),
+    pd.Int16Dtype(): Int16Dtype(),
+    pd.Int32Dtype(): Int32Dtype(),
+    pd.Int64Dtype(): Int64Dtype(),
+    pd.UInt8Dtype(): UInt8Dtype(),
+    pd.UInt16Dtype(): UInt16Dtype(),
+    pd.UInt32Dtype(): UInt32Dtype(),
+    pd.UInt64Dtype(): UInt64Dtype(),
+    pd.BooleanDtype(): BooleanDtype(),
+    pd.StringDtype(): StringDtype()
 }

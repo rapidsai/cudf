@@ -1129,9 +1129,9 @@ def build_column(
     offset : int, optional
     children : tuple, optional
     """
-    dtype = pd.api.types.pandas_dtype(dtype)
+    dtype = make_dtype_from_obj(dtype)
 
-    if is_categorical_dtype(dtype):
+    if dtype.is_categorical:
         if not len(children) == 1:
             raise ValueError(
                 "Must specify exactly one child column for CategoricalColumn"
@@ -1146,7 +1146,7 @@ def build_column(
             null_count=null_count,
             children=children,
         )
-    elif dtype.type is np.datetime64:
+    elif dtype.is_datetime:
         return cudf.core.column.DatetimeColumn(
             data=data,
             dtype=dtype,
@@ -1155,7 +1155,7 @@ def build_column(
             offset=offset,
             null_count=null_count,
         )
-    elif dtype.type in (np.object_, np.str_):
+    elif dtype.is_string:
         return cudf.core.column.StringColumn(
             mask=mask,
             size=size,
@@ -1264,6 +1264,8 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
     * pyarrow array
     * pandas.Categorical objects
     """
+
+    dtype = make_dtype_from_obj(dtype) if dtype is not None else None
 
     if isinstance(arbitrary, ColumnBase):
         if dtype is not None:
@@ -1449,7 +1451,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             )
             data = cudf.core.column.NumericalColumn(
                 data=padata,
-                dtype=dtype,
+                dtype=make_dtype_from_obj(arbitrary.type),
                 mask=pamask,
                 size=pa_size,
                 offset=pa_offset,
@@ -1648,7 +1650,6 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                     dtype = pd.api.types.pandas_dtype(dtype)
                     if dtype.is_categorical:
                         raise TypeError
-
                 pa_data = pa.array(arbitrary, type=dtype.pa_type if dtype is not None else None, from_pandas=True if nan_as_null is None else nan_as_null)
                 data = as_column(pa_data, dtype=make_dtype_from_obj(pa_data.type), nan_as_null=nan_as_null)
 
