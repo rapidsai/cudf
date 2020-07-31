@@ -60,6 +60,7 @@
 - PR #5782 Add Kafka support to custreamz
 - PR #5642 Add `GroupBy.groups()`
 - PR #5810 Make Cython subdirs packages and simplify package_data
+- PR #5820 Fix ListColumn.to_arrow for all null case
 
 ## Improvements
 
