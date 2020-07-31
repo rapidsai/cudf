@@ -75,7 +75,7 @@ __device__ auto get_new_value(cudf::size_type idx,
 {
   auto found_ptr =
     thrust::find(thrust::seq, values_to_replace_begin, values_to_replace_end, input_data[idx]);
-  T new_value{0};
+  T new_value{};
   bool output_is_valid{true};
 
   if (found_ptr != values_to_replace_end) {
