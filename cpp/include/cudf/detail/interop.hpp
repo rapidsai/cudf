@@ -68,7 +68,7 @@ std::shared_ptr<arrow::Array> to_arrow_array(cudf::type_id id, Ts&&... args)
 }
 
 // Converting arrow type to cudf type
-data_type arrow_to_cudf_type(arrow::Type::type arrow_type);
+data_type arrow_to_cudf_type(arrow::DataType const& arrow_type);
 
 /**
  * @copydoc cudf::to_arrow
