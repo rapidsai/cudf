@@ -41,10 +41,11 @@ namespace cudf {
 namespace ast {
 
 template <typename Element>
-__device__ Element resolve_input_data_reference(detail::device_data_reference device_data_reference,
-                                                table_device_view table,
-                                                std::int64_t* thread_intermediate_storage,
-                                                cudf::size_type row_index)
+__device__ Element
+resolve_input_data_reference(detail::device_data_reference const device_data_reference,
+                             table_device_view const table,
+                             std::int64_t* const thread_intermediate_storage,
+                             cudf::size_type row_index)
 {
   switch (device_data_reference.reference_type) {
     case detail::device_data_reference_type::COLUMN: {
@@ -68,8 +69,8 @@ __device__ Element resolve_input_data_reference(detail::device_data_reference de
 
 template <typename Element>
 __device__ Element* resolve_output_data_reference(
-  detail::device_data_reference device_data_reference,
-  table_device_view table,
+  detail::device_data_reference const device_data_reference,
+  table_device_view const table,
   mutable_column_device_view output_column,
   std::int64_t* thread_intermediate_storage,
   cudf::size_type row_index)
@@ -96,13 +97,13 @@ template <typename OperatorFunctor,
           typename Out,
           std::enable_if_t<cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>*>
 CUDA_HOST_DEVICE_CALLABLE decltype(auto) typed_operator_dispatch_functor::operator()(
-  table_device_view table,
+  table_device_view const table,
   mutable_column_device_view output_column,
   std::int64_t* thread_intermediate_storage,
   cudf::size_type row_index,
-  detail::device_data_reference lhs,
-  detail::device_data_reference rhs,
-  detail::device_data_reference output)
+  detail::device_data_reference const lhs,
+  detail::device_data_reference const rhs,
+  detail::device_data_reference const output)
 {
   auto const typed_lhs =
     resolve_input_data_reference<LHS>(lhs, table, thread_intermediate_storage, row_index);
@@ -119,26 +120,26 @@ template <typename OperatorFunctor,
           typename Out,
           std::enable_if_t<!cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>*>
 CUDA_HOST_DEVICE_CALLABLE decltype(auto) typed_operator_dispatch_functor::operator()(
-  table_device_view table,
+  table_device_view const table,
   mutable_column_device_view output_column,
   std::int64_t* thread_intermediate_storage,
   cudf::size_type row_index,
-  detail::device_data_reference lhs,
-  detail::device_data_reference rhs,
-  detail::device_data_reference output)
+  detail::device_data_reference const lhs,
+  detail::device_data_reference const rhs,
+  detail::device_data_reference const output)
 {
   // TODO: Need a template to match unsupported types, or prevent the compiler from attempting to
   // compile unsupported types here.
 }
 
 __device__ void operate(ast_operator op,
-                        table_device_view table,
+                        table_device_view const table,
                         mutable_column_device_view output_column,
                         std::int64_t* thread_intermediate_storage,
                         cudf::size_type row_index,
-                        detail::device_data_reference lhs,
-                        detail::device_data_reference rhs,
-                        detail::device_data_reference output)
+                        detail::device_data_reference const lhs,
+                        detail::device_data_reference const rhs,
+                        detail::device_data_reference const output)
 {
   ast_operator_dispatcher(op,
                           lhs.data_type,
@@ -153,11 +154,11 @@ __device__ void operate(ast_operator op,
                           output);
 }
 
-__device__ void evaluate_row_expression(table_device_view table,
-                                        detail::device_data_reference* data_references,
-                                        // scalar* literals,
-                                        ast_operator* operators,
-                                        cudf::size_type* operator_source_indices,
+__device__ void evaluate_row_expression(table_device_view const table,
+                                        detail::device_data_reference* const data_references,
+                                        // scalar const* literals,
+                                        ast_operator* const operators,
+                                        cudf::size_type* const operator_source_indices,
                                         cudf::size_type num_operators,
                                         cudf::size_type row_index,
                                         std::int64_t* thread_intermediate_storage,
@@ -198,11 +199,11 @@ __device__ void evaluate_row_expression(table_device_view table,
 
 template <size_type block_size>
 __launch_bounds__(block_size) __global__
-  void compute_column_kernel(table_device_view table,
-                             detail::device_data_reference* data_references,
-                             // scalar* literals,
-                             ast_operator* operators,
-                             cudf::size_type* operator_source_indices,
+  void compute_column_kernel(table_device_view const table,
+                             detail::device_data_reference* const data_references,
+                             // scalar* const literals,
+                             ast_operator* const operators,
+                             cudf::size_type* const operator_source_indices,
                              cudf::size_type num_operators,
                              cudf::size_type num_intermediates,
                              mutable_column_device_view output_column)
@@ -226,7 +227,7 @@ __launch_bounds__(block_size) __global__
   }
 }
 
-std::unique_ptr<column> compute_column(table_view table,
+std::unique_ptr<column> compute_column(table_view const table,
                                        std::reference_wrapper<const expression> expr,
                                        cudaStream_t stream,
                                        rmm::mr::device_memory_resource* mr)
