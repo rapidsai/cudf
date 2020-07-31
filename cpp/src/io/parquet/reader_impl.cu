@@ -156,8 +156,41 @@ std::tuple<int32_t, int32_t, int8_t> conversion_info(type_id column_type_id,
 
 std::string name_from_path(const std::vector<std::string> &path_in_schema)
 {
-  std::string s = (path_in_schema.size() > 0) ? path_in_schema[0] : "";
-  for (size_t i = 1; i < path_in_schema.size(); i++) { s += "." + path_in_schema[i]; }
+  // For the case of lists, we will see a schema that looks like:
+  // a.list.element.list.element
+  // where each (list.item) pair represents a level of nesting.  According to the parquet spec,
+  // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md
+  // the initial field must be named "list" and the inner element must be named "element".
+  // If we are dealing with a list, we want to return the topmost name of the group ("a").
+  //
+  // For other nested schemas, like structs we just want to return the bottom-most name. For
+  // example a struct with the schema
+  // b.employee.id,  the column representing "id" should simply be named "id".
+  //
+  // In short, this means : return the highest level of the schema that does not have list
+  // definitions underneath it.
+  //
+  std::string s   = (path_in_schema.size() > 0) ? path_in_schema[0] : "";
+  bool skip_field = false;
+  for (size_t i = 1; i < path_in_schema.size(); i++) {
+    // if we're skipping this field (in the case of a list)
+    if (skip_field) {
+      // strictly speaking, the Parquet spec says this should be named "element", but
+      // some libraries seem to get this wrong.  Pandas names it "item". So for now
+      // we'll just ignore it and assume it's simply the inner element of a list
+      // declaration.
+      skip_field = false;
+      continue;
+    }
+    // if we encounter a field named "list", do some checking to ensure that this
+    // is actually a list field.
+    if (path_in_schema[i] == "list") {
+      skip_field = true;
+      continue;
+    }
+    // otherwise, we've got a real nested column. update the name
+    s = path_in_schema[i];
+  }
   return s;
 }
 
