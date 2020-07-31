@@ -57,6 +57,7 @@
 - PR #5572 Add `cudf::encode` API.
 - PR #5568 Add support for `Series.keys()` and `DataFrame.keys()`
 - PR #5642 Add `GroupBy.groups()`
+- PR #5810 Make Cython subdirs packages and simplify package_data
 
 ## Improvements
 
