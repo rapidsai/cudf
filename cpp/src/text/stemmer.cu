@@ -60,62 +60,6 @@ __device__ bool is_consonant(cudf::string_view::const_iterator string_iterator)
 }
 
 /**
- * @brief Returns the measure for each string.
- *
- * Text description here is from https://tartarus.org/martin/PorterStemmer/def.txt
- *
- * A consonant will be denoted by `c`, a vowel by `v`. A list `ccc...` of length
- * greater than 0 will be denoted by `C`, and a list `vvv...` of length greater
- * than 0 will be denoted by `V`. Any word, or part of a word, therefore has one
- * of the four forms:
- *
- * @code{.pseudo}
- *     CVCV ... C
- *     CVCV ... V
- *     VCVC ... C
- *     VCVC ... V
- * @endcode
- *
- * These may all be represented by the single form `[C]VCVC ... [V]`
- * where the square brackets denote arbitrary presence of their contents.
- * Using `(VC){m}` to denote `VC` repeated `m` times, this may again be written as
- * `[C](VC){m}[V]`.
- *
- * And `m` will be called the _measure_ of any word or word part when represented in
- * this form. The case `m = 0` covers the null or empty string.
- *
- * Examples:
- * @code{.pseudo}
- * m=0:    TR,  EE,  TREE,  Y,  BY.
- * m=1:    TROUBLE,  OATS,  TREES,  IVY.
- * m=2:    TROUBLES,  PRIVATE,  OATEN,  ORRERY.
- * @endcode
- */
-struct porter_stemmer_measure_fn {
-  cudf::column_device_view const d_strings;  // strings to measure
-
-  __device__ int32_t operator()(cudf::size_type idx) const
-  {
-    if (d_strings.is_null(idx)) return 0;
-    cudf::string_view d_str = d_strings.element<cudf::string_view>(idx);
-    if (d_str.empty()) return 0;
-    int32_t measure = 0;
-    auto itr        = d_str.begin();
-    bool vowel_run  = !is_consonant(itr);
-    while (itr != d_str.end()) {
-      if (is_consonant(itr)) {
-        if (vowel_run) measure++;
-        vowel_run = false;
-      } else {
-        vowel_run = true;
-      }
-      ++itr;
-    }
-    return measure;
-  }
-};
-
-/**
  * @brief Functor for the detail::is_letter_fn called to return true/false
  * indicating the specified character is a consonant or a vowel.
  */
@@ -179,18 +123,75 @@ struct dispatch_is_letter_fn {
   std::unique_ptr<cudf::column> operator()(cudf::strings_column_view const& strings,
                                            letter_type ltype,
                                            cudf::column_view const& indices,
+                                           cudaStream_t stream,
                                            rmm::mr::device_memory_resource* mr) const
   {
     CUDF_EXPECTS(strings.size() == indices.size(),
                  "strings column and indices column must be the same size");
     CUDF_EXPECTS(!indices.has_nulls(), "indices column must not contain nulls");
     // resolve and pass an iterator for the indices column to the detail function
-    return is_letter(strings, ltype, indices.begin<T>(), 0, mr);
+    return is_letter(strings, ltype, indices.begin<T>(), stream, mr);
   }
   template <typename T, typename... Args, std::enable_if_t<not cudf::is_index_type<T>()>* = nullptr>
   std::unique_ptr<cudf::column> operator()(Args&&... args) const
   {
     CUDF_FAIL("The is_letter indices parameter must be an integer type.");
+  }
+};
+
+/**
+ * @brief Returns the measure for each string.
+ *
+ * Text description here is from https://tartarus.org/martin/PorterStemmer/def.txt
+ *
+ * A consonant will be denoted by `c`, a vowel by `v`. A list `ccc...` of length
+ * greater than 0 will be denoted by `C`, and a list `vvv...` of length greater
+ * than 0 will be denoted by `V`. Any word, or part of a word, therefore has one
+ * of the four forms:
+ *
+ * @code{.pseudo}
+ *     CVCV ... C
+ *     CVCV ... V
+ *     VCVC ... C
+ *     VCVC ... V
+ * @endcode
+ *
+ * These may all be represented by the single form `[C]VCVC ... [V]`
+ * where the square brackets denote arbitrary presence of their contents.
+ * Using `(VC){m}` to denote `VC` repeated `m` times, this may again be written as
+ * `[C](VC){m}[V]`.
+ *
+ * And `m` will be called the _measure_ of any word or word part when represented in
+ * this form. The case `m = 0` covers the null or empty string.
+ *
+ * Examples:
+ * @code{.pseudo}
+ * m=0:    TR,  EE,  TREE,  Y,  BY.
+ * m=1:    TROUBLE,  OATS,  TREES,  IVY.
+ * m=2:    TROUBLES,  PRIVATE,  OATEN,  ORRERY.
+ * @endcode
+ */
+struct porter_stemmer_measure_fn {
+  cudf::column_device_view const d_strings;  // strings to measure
+
+  __device__ int32_t operator()(cudf::size_type idx) const
+  {
+    if (d_strings.is_null(idx)) return 0;
+    cudf::string_view d_str = d_strings.element<cudf::string_view>(idx);
+    if (d_str.empty()) return 0;
+    int32_t measure = 0;
+    auto itr        = d_str.begin();
+    bool vowel_run  = !is_consonant(itr);
+    while (itr != d_str.end()) {
+      if (is_consonant(itr)) {
+        if (vowel_run) measure++;
+        vowel_run = false;
+      } else {
+        vowel_run = true;
+      }
+      ++itr;
+    }
+    return measure;
   }
 };
 
@@ -219,6 +220,16 @@ std::unique_ptr<cudf::column> porter_stemmer_measure(cudf::strings_column_view c
   return results;
 }
 
+std::unique_ptr<cudf::column> is_letter(cudf::strings_column_view const& strings,
+                                        letter_type ltype,
+                                        cudf::column_view const& indices,
+                                        cudaStream_t stream,
+                                        rmm::mr::device_memory_resource* mr)
+{
+  return cudf::type_dispatcher(
+    indices.type(), dispatch_is_letter_fn{}, strings, ltype, indices, stream, mr);
+}
+
 }  // namespace detail
 
 // external APIs
@@ -239,8 +250,7 @@ std::unique_ptr<cudf::column> is_letter(cudf::strings_column_view const& strings
                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return cudf::type_dispatcher(
-    indices.type(), detail::dispatch_is_letter_fn{}, strings, ltype, indices, mr);
+  return detail::is_letter(strings, ltype, indices, 0, mr);
 }
 
 /**
