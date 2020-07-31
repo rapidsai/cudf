@@ -56,6 +56,11 @@ data_type arrow_to_cudf_type(arrow::Type::type arrow_type)
 }
 
 namespace {
+/**
+ * @brief Functor to return pair of column and column view for a corresponding arrow array. column
+ * is formed from buffer underneath the arrow array, and if the array is resized or has an offset,
+ * that is taken care by the column view provided along with it
+ */
 struct dispatch_to_cudf_column {
   template <typename T>
   std::pair<std::unique_ptr<column>, column_view> operator()(arrow::Array const& array,
@@ -94,24 +99,24 @@ struct dispatch_to_cudf_column {
                                                       rmm::mr::device_memory_resource* mr,
                                                       cudaStream_t stream)
   {
-    return [&]() {
-      if (array.null_bitmap_data() == nullptr) {
-        return std::make_unique<rmm::device_buffer>(0, stream, mr);
-      } else {
-        auto mask = std::make_unique<rmm::device_buffer>(array.null_bitmap()->size(), stream, mr);
-        CUDA_TRY(cudaMemcpyAsync(mask->data(),
-                                 array.null_bitmap_data(),
-                                 array.null_bitmap()->size(),
-                                 cudaMemcpyHostToDevice,
-                                 stream));
-        return mask;
-      }
-    }();
+    if (array.null_bitmap_data() == nullptr) {
+      return std::make_unique<rmm::device_buffer>(0, stream, mr);
+    }
+    auto mask = std::make_unique<rmm::device_buffer>(array.null_bitmap()->size(), stream, mr);
+    CUDA_TRY(cudaMemcpyAsync(mask->data(),
+                             array.null_bitmap_data(),
+                             array.null_bitmap()->size(),
+                             cudaMemcpyHostToDevice,
+                             stream));
+    return mask;
   }
 };
 
-// This has been introduced to take care of compile error "error: explicit specialization of
-// function must precede its first use"
+/**
+ * @brief Returns cudf column formed from given arrow array
+ * This has been introduced to take care of compile error "error: explicit specialization of
+ * function must precede its first use"
+ */
 std::pair<std::unique_ptr<column>, column_view> get_column(arrow::Array const& array,
                                                            data_type type,
                                                            bool skip_mask,
