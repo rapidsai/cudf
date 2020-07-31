@@ -18,7 +18,10 @@ from cudf._lib.nvtext.generate_ngrams import (
 from cudf._lib.nvtext.ngrams_tokenize import (
     ngrams_tokenize as cpp_ngrams_tokenize,
 )
-from cudf._lib.nvtext.normalize import normalize_spaces as cpp_normalize_spaces
+from cudf._lib.nvtext.normalize import (
+    normalize_characters as cpp_normalize_characters,
+    normalize_spaces as cpp_normalize_spaces,
+)
 from cudf._lib.nvtext.replace import (
     filter_tokens as cpp_filter_tokens,
     replace_tokens as cpp_replace_tokens,
@@ -29,6 +32,7 @@ from cudf._lib.nvtext.subword_tokenize import (
 from cudf._lib.nvtext.tokenize import (
     character_tokenize as cpp_character_tokenize,
     count_tokens as cpp_count_tokens,
+    detokenize as cpp_detokenize,
     tokenize as cpp_tokenize,
 )
 from cudf._lib.nvtx import annotate
@@ -1985,9 +1989,9 @@ class StringMethods(ColumnMethodsMixin):
 
         result_table = cpp_split(self._column, as_scalar(pat, "str"), n)
         if len(result_table._data) == 1:
-            if result_table._data[0].null_count == len(self._column):
+            if result_table._data[0].null_count == len(self._parent):
                 result_table = []
-            elif self._column.null_count == len(self._column):
+            if self._column.null_count == len(self._column):
                 result_table = [self._column.copy()]
 
         return self._return_or_inplace(result_table, **kwargs,)
@@ -3616,6 +3620,55 @@ class StringMethods(ColumnMethodsMixin):
             cpp_normalize_spaces(self._column), **kwargs
         )
 
+    def normalize_characters(self, do_lower=True, **kwargs):
+        """
+        Normalizes strings characters for tokenizing.
+
+        This uses the normalizer that is built into the
+        subword_tokenize function which includes:
+
+            - adding padding around punctuation (unicode category starts with
+              "P") as well as certain ASCII symbols like "^" and "$"
+            - adding padding around the CJK Unicode block characters
+            - changing whitespace (e.g. ``\\t``, ``\\n``, ``\\r``) to space
+            - removing control characters (unicode categories "Cc" and "Cf")
+
+        If `do_lower_case = true`, lower-casing also removes the accents.
+        The accents cannot be removed from upper-case characters without
+        lower-casing and lower-casing cannot be performed without also
+        removing accents. However, if the accented character is already
+        lower-case, then only the accent is removed.
+
+        Parameters
+        ----------
+        do_lower : bool, Default is True
+            If set to True, characters will be lower-cased and accents
+            will be removed. If False, accented and upper-case characters
+            are not transformed.
+
+        Returns
+        -------
+        Series or Index of object.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series(["héllo, \\tworld","ĂĆCĖÑTED","$99"])
+        >>> ser.str.normalize_characters()
+        0    hello ,  world
+        1          accented
+        2              $ 99
+        dtype: object
+        >>> ser.str.normalize_characters(do_lower=False)
+        0    héllo ,  world
+        1          ĂĆCĖÑTED
+        2              $ 99
+        dtype: object
+        """
+        return self._return_or_inplace(
+            cpp_normalize_characters(self._column, do_lower), **kwargs
+        )
+
     def tokenize(self, delimiter=" ", **kwargs):
         """
         Each string is split into tokens using the provided delimiter(s).
@@ -3649,6 +3702,41 @@ class StringMethods(ColumnMethodsMixin):
         kwargs.setdefault("retain_index", False)
         return self._return_or_inplace(
             cpp_tokenize(self._column, delimiter), **kwargs
+        )
+
+    def detokenize(self, indices, separator=" ", **kwargs):
+        """
+        Combines tokens into strings by concatenating them in the order
+        in which they appear in the ``indices`` column. The ``separator`` is
+        concatenated between each token.
+
+        Parameters
+        ----------
+        indices : list of ints
+            Each value identifies the output row for the corresponding token.
+        separator : str
+            The string concatenated between each token in an output row.
+            Default is space.
+
+        Returns
+        -------
+        Series or Index of object.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> strs = cudf.Series(["hello", "world", "one", "two", "three"])
+        >>> indices = cudf.Series([0, 0, 1, 1, 2])
+        >>> strs.str.detokenize(indices)
+        0    hello world
+        1        one two
+        2          three
+        dtype: object
+        """
+        separator = _massage_string_arg(separator, "separator")
+        kwargs.setdefault("retain_index", False)
+        return self._return_or_inplace(
+            cpp_detokenize(self._column, indices._column, separator), **kwargs
         )
 
     def character_tokenize(self, **kwargs):
@@ -4153,6 +4241,14 @@ class StringColumn(column.ColumnBase):
                 size = children[0].size - 1
             size = size - offset
 
+        if len(children) == 0 and size != 0:
+            # all nulls-column:
+            offsets = cudf.core.column.as_column(
+                cupy.zeros(size + 1, dtype="int32")
+            )
+            chars = cudf.core.column.as_column([], dtype="int8")
+            children = (offsets, chars)
+
         super().__init__(
             None,
             size,
@@ -4205,54 +4301,6 @@ class StringColumn(column.ColumnBase):
     def set_base_children(self, value):
         # TODO: Implement dtype validation of the children here somehow
         super().set_base_children(value)
-
-    @property
-    def children(self):
-        if self._children is None:
-            if len(self.base_children) == 0:
-                self._children = ()
-            elif self.offset == 0 and self.base_children[0].size == (
-                self.size + 1
-            ):
-                self._children = self.base_children
-            else:
-                # First get the base columns for chars and offsets
-                chars_column = self.base_children[1]
-                offsets_column = self.base_children[0]
-
-                # Shift offsets column by the parent offset.
-                offsets_column = column.build_column(
-                    data=offsets_column.base_data,
-                    dtype=offsets_column.dtype,
-                    mask=offsets_column.base_mask,
-                    size=self.size + 1,
-                    offset=self.offset,
-                )
-
-                # Now run a subtraction binary op to shift all of the offsets
-                # by the respective number of characters relative to the
-                # parent offset
-                chars_offset = libcudf.copying.get_element(offsets_column, 0)
-                offsets_column = offsets_column.binary_operator(
-                    "sub", chars_offset
-                )
-
-                # Shift the chars offset by the new first element of the
-                # offsets column
-                chars_size = libcudf.copying.get_element(
-                    offsets_column, self.size
-                )
-
-                chars_column = column.build_column(
-                    data=chars_column.base_data,
-                    dtype=chars_column.dtype,
-                    mask=chars_column.base_mask,
-                    size=chars_size.value,
-                    offset=chars_offset.value,
-                )
-
-                self._children = (offsets_column, chars_column)
-        return self._children
 
     def __contains__(self, item):
         return True in self.str().contains(f"^{item}$")
@@ -4361,10 +4409,12 @@ class StringColumn(column.ColumnBase):
                 len(self), obuf, sbuf, nbuf, self.null_count
             )
 
-    def to_pandas(self, index=None):
+    def to_pandas(self, index=None, nullable_pd_dtype=False):
         pd_series = self.to_arrow().to_pandas()
         if index is not None:
             pd_series.index = index
+        if nullable_pd_dtype:
+            return pd_series.astype(pd.StringDtype(), copy=False)
         return pd_series
 
     @property
@@ -4419,6 +4469,8 @@ class StringColumn(column.ColumnBase):
     def serialize(self):
         header = {"null_count": self.null_count}
         header["type-serialized"] = pickle.dumps(type(self))
+        header["size"] = pickle.dumps(self.size)
+
         frames = []
         sub_headers = []
 
@@ -4436,6 +4488,7 @@ class StringColumn(column.ColumnBase):
 
     @classmethod
     def deserialize(cls, header, frames):
+        size = pickle.loads(header["size"])
         # Deserialize the mask, value, and offset frames
         buffers = [Buffer(each_frame) for each_frame in frames]
 
@@ -4450,7 +4503,11 @@ class StringColumn(column.ColumnBase):
             children.append(column_type.deserialize(h, [b]))
 
         col = column.build_column(
-            data=None, dtype="str", mask=nbuf, children=tuple(children)
+            data=None,
+            dtype="str",
+            mask=nbuf,
+            children=tuple(children),
+            size=size,
         )
         return col
 

@@ -467,7 +467,9 @@ class Index(Frame, Serializable):
         >>> type(idx)
         <class 'cudf.core.index.GenericIndex'>
         """
-        return pd.Index(self._values.to_pandas(), name=self.name)
+        return pd.Index(
+            self._values.to_pandas(nullable_pd_dtype=False), name=self.name
+        )
 
     def to_arrow(self):
         """
@@ -489,12 +491,9 @@ class Index(Frame, Serializable):
         return self._values.to_arrow()
 
     def tolist(self):
-
-        raise TypeError(
-            "cuDF does not support conversion to host memory "
-            "via `tolist()` method. Consider using "
-            "`.to_arrow().to_pylist()` to construct a Python list."
-        )
+        # TODO: This needs to raise an error instead.
+        # xref: https://github.com/rapidsai/cudf/issues/5689
+        return self.to_arrow().to_pylist()
 
     to_list = tolist
 
@@ -1433,7 +1432,7 @@ class RangeIndex(Index):
         elif isinstance(other, cudf.core.index.RangeIndex):
             return self._start == other._start and self._stop == other._stop
         else:
-            return (self == other)._values.all()
+            return super().equals(other)
 
     def serialize(self):
         header = {}
@@ -1975,7 +1974,9 @@ class DatetimeIndex(GenericIndex):
 
     def to_pandas(self):
         nanos = self._values.astype("datetime64[ns]")
-        return pd.DatetimeIndex(nanos.to_pandas(), name=self.name)
+        return pd.DatetimeIndex(
+            nanos.to_pandas(nullable_pd_dtype=False), name=self.name
+        )
 
     def get_dt_field(self, field):
         out_column = self._values.get_dt_field(field)
