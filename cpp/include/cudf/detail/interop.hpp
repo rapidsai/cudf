@@ -59,16 +59,24 @@ std::shared_ptr<arrow::Array> to_arrow_array(cudf::type_id id, Ts&&... args)
     case type_id::UINT64: return std::make_shared<arrow::UInt64Array>(std::forward<Ts>(args)...);
     case type_id::FLOAT32: return std::make_shared<arrow::FloatArray>(std::forward<Ts>(args)...);
     case type_id::FLOAT64: return std::make_shared<arrow::DoubleArray>(std::forward<Ts>(args)...);
-    case type_id::TIMESTAMP_DAYS:
-      return std::make_shared<arrow::Date32Array>(std::forward<Ts>(args)...);
+    case type_id::TIMESTAMP_SECONDS:
+      return std::make_shared<arrow::TimestampArray>(arrow::timestamp(arrow::TimeUnit::SECOND),
+                                                     std::forward<Ts>(args)...);
     case type_id::TIMESTAMP_MILLISECONDS:
-      return std::make_shared<arrow::Date64Array>(std::forward<Ts>(args)...);
+      return std::make_shared<arrow::TimestampArray>(arrow::timestamp(arrow::TimeUnit::MILLI),
+                                                     std::forward<Ts>(args)...);
+    case type_id::TIMESTAMP_MICROSECONDS:
+      return std::make_shared<arrow::TimestampArray>(arrow::timestamp(arrow::TimeUnit::MICRO),
+                                                     std::forward<Ts>(args)...);
+    case type_id::TIMESTAMP_NANOSECONDS:
+      return std::make_shared<arrow::TimestampArray>(arrow::timestamp(arrow::TimeUnit::NANO),
+                                                     std::forward<Ts>(args)...);
     default: CUDF_FAIL("Unsupported type_id conversion to arrow");
   }
 }
 
 // Converting arrow type to cudf type
-data_type arrow_to_cudf_type(arrow::Type::type arrow_type);
+data_type arrow_to_cudf_type(arrow::DataType const& arrow_type);
 
 /**
  * @copydoc cudf::to_arrow

@@ -28,6 +28,10 @@
 namespace cudf {
 namespace detail {
 namespace {
+
+/**
+ * @brief Create arrow buffer of data from given cudf column
+ */
 template <typename T>
 std::shared_ptr<arrow::Buffer> fetch_data_buffer(column_view input_view,
                                                  arrow::MemoryPool* ar_mr,
@@ -47,6 +51,9 @@ std::shared_ptr<arrow::Buffer> fetch_data_buffer(column_view input_view,
   return data_buffer;
 }
 
+/**
+ * @brief Create arrow buffer of mask from given cudf column
+ */
 std::shared_ptr<arrow::Buffer> fetch_mask_buffer(column_view input_view,
                                                  arrow::MemoryPool* ar_mr,
                                                  cudaStream_t stream)
@@ -74,7 +81,13 @@ std::shared_ptr<arrow::Buffer> fetch_mask_buffer(column_view input_view,
   return nullptr;
 }
 
+/**
+ * @brief Functor to convert cudf column to arrow array
+ */
 struct dispatch_to_arrow {
+  /**
+   * @brief Creates vector Arrays from given cudf column childrens
+   */
   std::vector<std::shared_ptr<arrow::Array>> fetch_child_array(column_view input_view,
                                                                arrow::MemoryPool* ar_mr,
                                                                cudaStream_t stream)
