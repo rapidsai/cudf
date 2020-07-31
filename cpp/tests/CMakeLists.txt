@@ -293,8 +293,8 @@ ConfigureTest(TRANSFORM_TEST "${TRANSFORM_TEST_SRC}")
 # - interop tests -------------------------------------------------------------------------
 
 set(INTEROP_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/interop/cudf_to_arrow_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/interop/arrow_to_cudf_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/interop/to_arrow_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/interop/from_arrow_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/interop/dlpack_test.cpp")
 
 ConfigureTest(INTEROP_TEST "${INTEROP_TEST_SRC}")

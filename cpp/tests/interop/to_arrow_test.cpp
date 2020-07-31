@@ -79,27 +79,22 @@ TEST_F(CUDFToArrowTest, DateTimeTable)
 {
   auto data = {1, 2, 3, 4, 5, 6};
 
-  auto col1 = cudf::test::fixed_width_column_wrapper<cudf::timestamp_D>(data);
-  auto col2 = cudf::test::fixed_width_column_wrapper<cudf::timestamp_ms>(data);
+  auto col = cudf::test::fixed_width_column_wrapper<cudf::timestamp_ms>(data);
 
-  cudf::table_view input_view({col1, col2});
+  cudf::table_view input_view({col});
 
-  std::shared_ptr<arrow::Array> arr1;
-  arrow::Date32Builder d32builder;
-  d32builder.AppendValues(std::vector<int32_t>(data));
-  CUDF_EXPECTS(d32builder.Finish(&arr1).ok(), "Failed to build array");
-  std::shared_ptr<arrow::Array> arr2;
-  arrow::Date64Builder d64builder;
-  d64builder.AppendValues(std::vector<int64_t>{1, 2, 3, 4, 5, 6});
-  CUDF_EXPECTS(d64builder.Finish(&arr2).ok(), "Failed to build array");
+  std::shared_ptr<arrow::Array> arr;
+  arrow::TimestampBuilder timestamp_builder(timestamp(arrow::TimeUnit::type::MILLI),
+                                            arrow::default_memory_pool());
+  timestamp_builder.AppendValues(std::vector<int64_t>{1, 2, 3, 4, 5, 6});
+  CUDF_EXPECTS(timestamp_builder.Finish(&arr).ok(), "Failed to build array");
 
-  std::vector<std::shared_ptr<arrow::Field>> schema_vector(
-    {arrow::field("a", arr1->type()), arrow::field("b", arr2->type())});
+  std::vector<std::shared_ptr<arrow::Field>> schema_vector({arrow::field("a", arr->type())});
   auto schema = std::make_shared<arrow::Schema>(schema_vector);
 
-  auto expected_arrow_table = arrow::Table::Make(schema, {arr1, arr2});
+  auto expected_arrow_table = arrow::Table::Make(schema, {arr});
 
-  auto got_arrow_table = cudf::to_arrow(input_view, {"a", "b"});
+  auto got_arrow_table = cudf::to_arrow(input_view, {"a"});
 
   ASSERT_EQ(expected_arrow_table->Equals(*got_arrow_table, true), true);
 }
