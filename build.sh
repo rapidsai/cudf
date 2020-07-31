@@ -17,8 +17,8 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libcudf cudf dask_cudf benchmarks tests libcudf_kafka cudf_kafka -v -g -n -l --allgpuarch --disable_nvtx --show_depr_warn --ptds -h"
-HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [libcudf_kafka] [cudf_kafka] [-v] [-g] [-n] [-h] [-l]
+VALIDARGS="clean libcudf cudf dask_cudf benchmarks tests libcudf_kafka cudf_kafka custreamz -v -g -n -l --allgpuarch --disable_nvtx --show_depr_warn --ptds -h"
+HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [libcudf_kafka] [cudf_kafka] [custreamz] [-v] [-g] [-n] [-h] [-l]
    clean                - remove all existing build artifacts and configuration (start
                           over)
    libcudf              - build the cudf C++ code only
@@ -28,6 +28,7 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [libcudf_kafk
    tests                - build tests
    libcudf_kafka        - build the libcudf_kafka C++ code only
    cudf_kafka           - build the cudf_kafka Python package
+   custreamz            - build the custreamz Python package
    -v                   - verbose build mode
    -g                   - build for debug
    -n                   - no install step
@@ -46,7 +47,8 @@ KAFKA_LIB_BUILD_DIR=${KAFKA_LIB_BUILD_DIR:=${REPODIR}/cpp/libcudf_kafka/build}
 CUDF_KAFKA_BUILD_DIR=${REPODIR}/python/cudf_kafka/build
 CUDF_BUILD_DIR=${REPODIR}/python/cudf/build
 DASK_CUDF_BUILD_DIR=${REPODIR}/python/dask_cudf/build
-BUILD_DIRS="${LIB_BUILD_DIR} ${CUDF_BUILD_DIR} ${DASK_CUDF_BUILD_DIR} ${KAFKA_LIB_BUILD_DIR} ${CUDF_KAFKA_BUILD_DIR}"
+CUSTREAMZ_BUILD_DIR=${REPODIR}/python/custreamz/build
+BUILD_DIRS="${LIB_BUILD_DIR} ${CUDF_BUILD_DIR} ${DASK_CUDF_BUILD_DIR} ${KAFKA_LIB_BUILD_DIR} ${CUDF_KAFKA_BUILD_DIR} ${CUSTREAMZ_BUILD_DIR}"
 
 # Set defaults for vars modified by flags to this script
 VERBOSE=""
@@ -58,7 +60,6 @@ BUILD_NVTX=ON
 BUILD_TESTS=OFF
 BUILD_DISABLE_DEPRECATION_WARNING=ON
 BUILD_PER_THREAD_DEFAULT_STREAM=OFF
-BUILD_LIBCUDF_KAFKA=OFF
 
 # Set defaults for vars that may not have been defined externally
 #  FIXME: if INSTALL_PREFIX is not set, check PREFIX, then check
@@ -117,9 +118,6 @@ if hasArg --show_depr_warn; then
 fi
 if hasArg --ptds; then
     BUILD_PER_THREAD_DEFAULT_STREAM=ON
-fi
-if hasArg libcudf_kafka; then
-    BUILD_LIBCUDF_KAFKA=ON
 fi
 
 # If clean given, run it prior to any other steps
@@ -230,3 +228,13 @@ if hasArg cudf_kafka; then
     fi
 fi
 
+# build custreamz Python package
+if hasArg custreamz; then
+    cd ${REPODIR}/python/custreamz
+    if [[ ${INSTALL_TARGET} != "" ]]; then
+        PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace
+        python setup.py install --single-version-externally-managed --record=record.txt
+    else
+        PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace --library-dir=${LIBCUDF_BUILD_DIR}
+    fi
+fi
