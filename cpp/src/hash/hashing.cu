@@ -26,7 +26,6 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
-// #include <hash/hash_constants.hpp>
 
 #include <sys/types.h>
 #include <thrust/tabulate.h>
@@ -612,13 +611,33 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
 }
 
 /**
+ * Modified GPU implementation of
+ * https://johnnylee-sde.github.io/Fast-unsigned-integer-to-hex-string/ that is lowercase only and
+ * does not flip the endianness of the input.
+ */
+void __device__ uint32ToLowercaseHexString(uint32_t num, char* destination)
+{
+  // Transform 0xABCD1234 => 0x0000ABCD00001234 => 0x0B0A0D0C02010403
+  uint64_t x = num;
+  x          = ((x & 0xFFFF0000) << 16) | ((x & 0xFFFF));
+  x          = ((x & 0xF0000000F) << 8) | ((x & 0xF0000000F0) >> 4) | ((x & 0xF0000000F00) << 16) |
+      ((x & 0xF0000000F000) << 4);
+
+  // Calculate a mask of ascii value offsets for bytes that contain alphabetical hex digits
+  uint64_t offsets = (((x + 0x0606060606060606) >> 4) & 0x0101010101010101) * 0x27;
+
+  x |= 0x3030303030303030;
+  x += offsets;
+  thrust::copy_n(thrust::seq, reinterpret_cast<uint8_t*>(&x), 8, destination);
+}
+
+/**
  * @brief Finalize MD5 hash including converstion to hex string.
  */
 void __device__ finalize_md5_hash(detail::md5_intermediate_data* hash_state,
                                   char* result_location,
                                   const detail::md5_hash_constants_type* hash_constants,
-                                  const detail::md5_shift_constants_type* shift_constants,
-                                  const detail::hex_to_char_mapping_type* hex_char_map)
+                                  const detail::md5_shift_constants_type* shift_constants)
 {
   auto const full_length = (static_cast<uint64_t>(hash_state->message_length)) << 3;
   thrust::fill_n(thrust::seq, hash_state->buffer + hash_state->buffer_length, 1, 0x80);
@@ -642,14 +661,9 @@ void __device__ finalize_md5_hash(detail::md5_intermediate_data* hash_state,
     thrust::seq, reinterpret_cast<uint8_t const*>(&full_length), 8, hash_state->buffer + 56);
   detail::md5_hash_step(hash_state, hash_constants, shift_constants);
 
-  u_char final_hash[32];
-  uint8_t* hash_result = reinterpret_cast<uint8_t*>(hash_state->hash_value);
-  for (int i = 0; i < 16; i++) {
-    final_hash[i * 2]     = hex_char_map[(hash_result[i] >> 4) & 0xf];
-    final_hash[i * 2 + 1] = hex_char_map[hash_result[i] & 0xf];
-  }
-
-  thrust::copy_n(thrust::seq, final_hash, 32, result_location);
+#pragma unroll
+  for (int i = 0; i < 4; ++i)
+    uint32ToLowercaseHexString(hash_state->hash_value[i], result_location + (8 * i));
 }
 
 }  // namespace
@@ -723,8 +737,9 @@ std::unique_ptr<column> md5_hash(table_view const& input,
   }
 
   std::for_each(input.begin(), input.end(), [](auto col) {
-    CUDF_EXPECTS(col.type().id() <= type_id::BOOL8 || col.type().id() == type_id::STRING,
-                 "Unsupported column type");
+    CUDF_EXPECTS(!is_chrono(col.type()), "MD5 does not support chrono column types");
+    CUDF_EXPECTS(is_fixed_width(col.type()) || (col.type().id() == type_id::STRING),
+                 "MD5 requires fixed width column types except for strings");
   });
 
   // Result column allocation and creation
@@ -747,42 +762,39 @@ std::unique_ptr<column> md5_hash(table_view const& input,
   // Fetch hash constants
   md5_shift_constants_type const* shift_constants = get_md5_shift_constants();
   md5_hash_constants_type const* hash_constants   = get_md5_hash_constants();
-  hex_to_char_mapping_type const* hex_char_map    = get_hex_to_char_mapping();
 
   // Hash each row, hashing each element sequentially left to right
-  thrust::for_each(
-    rmm::exec_policy(stream)->on(stream),
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(input.num_rows()),
-    [d_chars,
-     device_input    = *device_input,
-     hash_constants  = hash_constants,
-     shift_constants = shift_constants,
-     hex_char_map    = hex_char_map,
-     has_nulls       = nullable] __device__(auto row_index) {
-      md5_intermediate_data hash_state;
-      for (int col_index = 0; col_index < device_input.num_columns(); col_index++) {
-        if (has_nulls) {
-          cudf::type_dispatcher(device_input.column(col_index).type(),
-                                md5_element_hasher<true>{},
-                                device_input.column(col_index),
-                                row_index,
-                                &hash_state,
-                                hash_constants,
-                                shift_constants);
-        } else {
-          cudf::type_dispatcher(device_input.column(col_index).type(),
-                                md5_element_hasher<false>{},
-                                device_input.column(col_index),
-                                row_index,
-                                &hash_state,
-                                hash_constants,
-                                shift_constants);
-        }
-      }
-      finalize_md5_hash(
-        &hash_state, d_chars + (row_index * 32), hash_constants, shift_constants, hex_char_map);
-    });
+  thrust::for_each(rmm::exec_policy(stream)->on(stream),
+                   thrust::make_counting_iterator(0),
+                   thrust::make_counting_iterator(input.num_rows()),
+                   [d_chars,
+                    device_input    = *device_input,
+                    hash_constants  = hash_constants,
+                    shift_constants = shift_constants,
+                    has_nulls       = nullable] __device__(auto row_index) {
+                     md5_intermediate_data hash_state;
+                     for (int col_index = 0; col_index < device_input.num_columns(); col_index++) {
+                       if (has_nulls) {
+                         cudf::type_dispatcher(device_input.column(col_index).type(),
+                                               md5_element_hasher<true>{},
+                                               device_input.column(col_index),
+                                               row_index,
+                                               &hash_state,
+                                               hash_constants,
+                                               shift_constants);
+                       } else {
+                         cudf::type_dispatcher(device_input.column(col_index).type(),
+                                               md5_element_hasher<false>{},
+                                               device_input.column(col_index),
+                                               row_index,
+                                               &hash_state,
+                                               hash_constants,
+                                               shift_constants);
+                       }
+                     }
+                     finalize_md5_hash(
+                       &hash_state, d_chars + (row_index * 32), hash_constants, shift_constants);
+                   });
 
   return make_strings_column(input.num_rows(),
                              std::move(offsets_column),

@@ -12,16 +12,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-// #include <cudf/column/column_device_view.cuh>
-#include "./hash_constants.hpp"
+#include "hash_constants.hpp"
 
 #include <strings/utilities.cuh>
 
 namespace cudf {
 namespace detail {
-
-const hex_to_char_mapping_type g_hex_to_char_mapping[] = {
-  '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
 
 const md5_shift_constants_type g_md5_shift_constants[] = {
   7,
@@ -54,28 +50,12 @@ const md5_hash_constants_type g_md5_hash_constants[] = {
 };
 
 namespace {
-__device__ hex_to_char_mapping_type hex_to_char_mapping[sizeof(g_hex_to_char_mapping)];
 __device__ md5_hash_constants_type md5_hash_constants[sizeof(g_md5_hash_constants)];
 __device__ md5_shift_constants_type md5_shift_constants[sizeof(g_md5_shift_constants)];
 
-strings::detail::thread_safe_per_context_cache<hex_to_char_mapping_type> d_hex_to_char_mapping;
 strings::detail::thread_safe_per_context_cache<md5_hash_constants_type> d_md5_hash_constants;
 strings::detail::thread_safe_per_context_cache<md5_shift_constants_type> d_md5_shift_constants;
 }  // namespace
-
-/**
- * @copydoc cudf::detail::get_hex_to_char_mapping
- */
-const hex_to_char_mapping_type* get_hex_to_char_mapping()
-{
-  return d_hex_to_char_mapping.find_or_initialize([&](void) {
-    hex_to_char_mapping_type* table = nullptr;
-    CUDA_TRY(cudaMemcpyToSymbol(
-      hex_to_char_mapping, g_hex_to_char_mapping, sizeof(g_hex_to_char_mapping)));
-    CUDA_TRY(cudaGetSymbolAddress((void**)&table, hex_to_char_mapping));
-    return table;
-  });
-}
 
 /**
  * @copydoc cudf::detail::get_md5_hash_constants

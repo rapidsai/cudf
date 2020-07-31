@@ -16,14 +16,11 @@
 
 #pragma once
 
-#include <cstdint>
 #include <cudf/strings/string_view.cuh>
 #include <hash/hash_constants.hpp>
 
 #include "cuda_runtime_api.h"
 #include "cudf/types.hpp"
-#include "driver_types.h"
-#include "vector_types.h"
 
 using hash_value_type = uint32_t;
 
@@ -31,7 +28,7 @@ namespace cudf {
 namespace detail {
 
 /**
- * @brief Core MD5 algorith implementation. Processes a single 512-bit chunk,
+ * @brief Core MD5 algorithm implementation. Processes a single 512-bit chunk,
  * updating the hash value so far. Does not zero out the buffer contents.
  */
 void CUDA_DEVICE_CALLABLE md5_hash_step(md5_intermediate_data* hash_state,
