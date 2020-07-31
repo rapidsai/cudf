@@ -523,7 +523,7 @@ TEST_F(RollingErrorTest, MeanTimestampNotSupported)
                cudf::logic_error);
 }
 
-TYPED_TEST_CASE(RollingTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_CASE(RollingTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 // simple example from Pandas docs
 TYPED_TEST(RollingTest, SimpleStatic)
