@@ -118,7 +118,7 @@ template <typename T>
 struct FixedWidthScalarFactory : public ScalarFactoryTest {
 };
 
-TYPED_TEST_CASE(FixedWidthScalarFactory, cudf::test::FixedWidthTypes);
+TYPED_TEST_CASE(FixedWidthScalarFactory, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(FixedWidthScalarFactory, ValueProvided)
 {

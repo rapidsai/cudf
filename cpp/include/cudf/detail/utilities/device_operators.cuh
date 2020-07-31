@@ -27,6 +27,10 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+
+// will fail to compile if grouped with the includes above
+#include <cudf/fixed_point/fixed_point.hpp>
+
 #include <type_traits>
 
 namespace cudf {
@@ -46,10 +50,19 @@ struct DeviceSum {
     return T{typename T::duration{0}};
   }
 
-  template <typename T, typename std::enable_if_t<!cudf::is_timestamp<T>()>* = nullptr>
+  template <
+    typename T,
+    typename std::enable_if_t<!cudf::is_timestamp<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
     return T{0};
+  }
+
+  template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
+  static constexpr T identity()
+  {
+    CUDF_FAIL("fixed_point does not yet support device operator identity");
+    return T{};
   }
 };
 
@@ -94,9 +107,17 @@ struct DeviceMin {
   }
 
   template <typename T,
-            typename std::enable_if_t<!std::is_same<T, cudf::string_view>::value>* = nullptr>
+            typename std::enable_if_t<!std::is_same<T, cudf::string_view>::value &&
+                                      !cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
+    return std::numeric_limits<T>::max();
+  }
+
+  template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
+  static constexpr T identity()
+  {
+    CUDF_FAIL("fixed_point does not yet support DeviceMin identity");
     return std::numeric_limits<T>::max();
   }
 
@@ -124,11 +145,20 @@ struct DeviceMax {
   }
 
   template <typename T,
-            typename std::enable_if_t<!std::is_same<T, cudf::string_view>::value>* = nullptr>
+            typename std::enable_if_t<!std::is_same<T, cudf::string_view>::value &&
+                                      !cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
     return std::numeric_limits<T>::lowest();
   }
+
+  template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
+  static constexpr T identity()
+  {
+    CUDF_FAIL("fixed_point does not yet support DeviceMax identity");
+    return std::numeric_limits<T>::lowest();
+  }
+
   template <typename T,
             typename std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE static constexpr T identity()
@@ -151,10 +181,17 @@ struct DeviceProduct {
     return lhs * rhs;
   }
 
-  template <typename T>
+  template <typename T, typename std::enable_if_t<!cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
     return T{1};
+  }
+
+  template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
+  static constexpr T identity()
+  {
+    CUDF_FAIL("fixed_point does not yet support DeviceProduct identity");
+    return T{1, numeric::scale_type{0}};
   }
 };
 

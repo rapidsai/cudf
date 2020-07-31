@@ -536,7 +536,7 @@ TEST_F(GroupedRollingErrorTest, SumTimestampNotSupported)
     cudf::logic_error);
 }
 
-TYPED_TEST_CASE(GroupedRollingTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_CASE(GroupedRollingTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(GroupedRollingTest, SimplePartitionedStaticWindowsWithGroupKeys)
 {
