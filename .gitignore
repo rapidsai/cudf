@@ -152,3 +152,6 @@ ENV/
 
 # Dask
 dask-worker-space/
+
+# Datasets
+*.parquet
