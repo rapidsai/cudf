@@ -333,7 +333,7 @@ if(BUILD_TESTS)
         set(GTEST_LIBRARY_DIR "${GTEST_ROOT}/install/lib")
     endif(GTEST_FOUND)
 
-    add_subdirectory(${CMAKE_SOURCE_DIR}/release/tests)
+    add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
     
     link_directories(${GTEST_LIBRARY_DIR})
     include_directories(${GTEST_INCLUDE_DIR})
@@ -365,7 +365,7 @@ if(BUILD_BENCHMARKS)
         set(GBENCH_LIBRARY_DIR "${benchmark_ROOT}/install/lib")
     endif(benchmark_FOUND)
 
-    add_subdirectory(${CMAKE_SOURCE_DIR}/release/benchmarks)
+    add_subdirectory(${CMAKE_SOURCE_DIR}/benchmarks)
 
     
     link_directories(${GBENCH_LIBRARY_DIR})
