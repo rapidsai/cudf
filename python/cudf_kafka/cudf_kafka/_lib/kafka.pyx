@@ -34,7 +34,7 @@ cdef class KafkaDatasource(Datasource):
     cdef datasource* get_datasource(self) nogil:
         return <datasource *> self.c_datasource.get()
 
-    cpdef bool commit_offset(self,
+    cpdef void commit_offset(self,
                              string topic,
                              int32_t partition,
                              int64_t offset):
