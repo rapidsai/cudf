@@ -2696,6 +2696,31 @@ public class ColumnVectorTest extends CudfTestBase {
 
 
   @Test
+  void testConcatListsStrings() {
+    List<String> list = new ArrayList<>();
+    list.add("0");
+    list.add("1");
+    list.add("2");
+    list.add("3");
+    List<String> list2 = new ArrayList<>();
+    list2.add("4");
+    list2.add(null);
+    list2.add("6");
+    list2.add(null);
+    List<String> list3 = null;
+    try (ColumnVector res1 = ColumnVector.fromLists(DType.STRING, list, list3);
+         ColumnVector res2 = ColumnVector.fromLists(DType.STRING, list2);
+         ColumnVector v = ColumnVector.concatenate(res1, res2);
+         HostColumnVector hostColumnVector = v.copyToHost()) {
+      List<String> ret = hostColumnVector.getList(2);
+      System.out.println("Guess we passed!"+ (ret.get(1) == null) + " v size ="+v.getRowCount());
+      //add asserts
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
+  }
+
+  @Test
   void testConcatListsOfLists() {
     List<Integer> list = new ArrayList<>();
     list.add(1);

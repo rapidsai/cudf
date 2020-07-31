@@ -480,9 +480,6 @@ public final class HostColumnVector implements AutoCloseable {
   public boolean isNull(int level, long index) {
     assert (index >= 0 && index < allRows.get(allRows.size() - 1)) : "index is out of range 0 <= " + index + " < " + allRows.get(allRows.size() - 1);
     if (hasValidityVector()) {
-      if (nullCount.isPresent() && !hasNulls()) {
-        return false;
-      }
       return BitVectorHelper.isNull(offHeap.valid.get(level), index);
     }
     return false;
@@ -1913,7 +1910,7 @@ public final class HostColumnVector implements AutoCloseable {
       assert index < allRows.get(level);
 
       // add null
-      if (this.allValids.size() < level) {
+      if (this.allValids.size() < level || this.allValids.isEmpty()) {
         allocateBitmaskAndSetDefaultValues(level);
       }
       nullCount += BitVectorHelper.setNullAt(allValids.get(allValids.size() - 1), index);
