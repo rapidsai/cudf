@@ -239,6 +239,7 @@
 - PR #5797 Fix a missing data issue in some Parquet files
 - PR #5787 Fix column create from dictionary column view
 
+- PR #5816 Always preserve list column hierarchies across operations.
 
 # cuDF 0.14.0 (03 Jun 2020)
 
