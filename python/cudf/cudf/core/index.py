@@ -16,6 +16,7 @@ from cudf.core.column import (
     DatetimeColumn,
     NumericalColumn,
     StringColumn,
+    TimeDeltaColumn,
     column,
 )
 from cudf.core.column.string import StringMethods as StringMethods
@@ -1992,6 +1993,44 @@ class DatetimeIndex(GenericIndex):
         return as_index(out_column, name=self.name)
 
 
+class TimedeltaIndex(GenericIndex):
+    def __new__(
+        cls,
+        data=None,
+        unit=None,
+        freq=None,
+        closed=None,
+        dtype="timedelta64[ns]",
+        copy=False,
+        name=None,
+    ) -> "TimedeltaIndex":
+
+        out = Frame.__new__(cls)
+
+        if freq is not None:
+            raise NotImplementedError("freq is not yet supported")
+
+        if copy:
+            data = column.as_column(data).copy()
+        kwargs = _setdefault_name(data, name=name)
+        if isinstance(data, np.ndarray) and data.dtype.kind == "m":
+            data = column.as_column(data)
+        elif isinstance(data, pd.TimedeltaIndex):
+            data = column.as_column(data.values)
+        elif isinstance(data, (list, tuple)):
+            data = column.as_column(np.array(data, dtype=dtype))
+        out._initialize(data, **kwargs)
+        return out
+
+    def to_pandas(self):
+        nanos = self._values  # .astype("timedelta64[ns]")
+        return pd.TimedeltaIndex(
+            nanos.to_pandas(nullable_pd_dtype=False),
+            name=self.name,
+            unit=self._value.time_unit,
+        )
+
+
 class CategoricalIndex(GenericIndex):
     """An categorical of orderable values that represent the indices of another
     Column
@@ -2230,7 +2269,7 @@ def as_index(arbitrary, **kwargs):
     """
 
     kwargs = _setdefault_name(arbitrary, **kwargs)
-
+    print(arbitrary)
     if isinstance(arbitrary, cudf.MultiIndex):
         return arbitrary
     elif isinstance(arbitrary, Index):
@@ -2246,6 +2285,8 @@ def as_index(arbitrary, **kwargs):
         return StringIndex(arbitrary, **kwargs)
     elif isinstance(arbitrary, DatetimeColumn):
         return DatetimeIndex(arbitrary, **kwargs)
+    elif isinstance(arbitrary, TimeDeltaColumn):
+        return TimedeltaIndex(arbitrary, **kwargs)
     elif isinstance(arbitrary, CategoricalColumn):
         return CategoricalIndex(arbitrary, **kwargs)
     elif isinstance(arbitrary, cudf.Series):

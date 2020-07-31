@@ -24,6 +24,7 @@ from cudf.core import (
     MultiIndex,
     RangeIndex,
     Series,
+    TimedeltaIndex,
     UInt8Index,
     UInt16Index,
     UInt32Index,

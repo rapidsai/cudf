@@ -14,6 +14,7 @@ from cudf.core.index import (
     Int32Index,
     Int64Index,
     RangeIndex,
+    TimedeltaIndex,
     UInt8Index,
     UInt16Index,
     UInt32Index,
