@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include "boost/optional/optional.hpp"
 #include "parquet.h"
 #include "parquet_gpu.h"
 
@@ -29,11 +30,14 @@
 
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/readers.hpp>
+#include <cudf/ast/linearizer.hpp>
 
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
+
+#include <boost/optional.hpp>
 
 namespace cudf {
 namespace io {
@@ -170,7 +174,7 @@ class reader::impl {
   std::unique_ptr<aggregate_metadata> _metadata;
 
   std::vector<std::pair<int, std::string>> _selected_columns;
-  bool _predicate;
+  boost::optional<std::reference_wrapper<cudf::ast::expression>> _predicate;
   bool _strings_to_categorical = false;
   data_type _timestamp_type{type_id::EMPTY};
 };

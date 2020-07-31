@@ -21,16 +21,20 @@
 
 #pragma once
 
+#include "boost/optional/optional.hpp"
 #include "types.hpp"
 
 #include <cudf/io/datasource.hpp>
 #include <cudf/types.hpp>
+#include <cudf/ast/linearizer.hpp>
 
 #include <memory>
 #include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
+
+#include <boost/optional.hpp>
 
 // Forward declarations
 namespace arrow {
@@ -511,7 +515,7 @@ namespace parquet {
  */
 struct reader_options {
   std::vector<std::string> columns;
-  bool predicate              = false;
+  boost::optional<std::reference_wrapper<cudf::ast::expression>> predicate;
   bool strings_to_categorical = false;
   bool use_pandas_metadata    = false;
   data_type timestamp_type{type_id::EMPTY};
@@ -537,18 +541,18 @@ struct reader_options {
       timestamp_type(timestamp_type)
   {
   }
-
+  
   /**
-   * @brief Constructor to populate reader options where predicate is specified.
+   * @brief Constructor to populate reader options where predicate is optionally specified.
    *
    * @param columns Set of columns to read; empty for all columns
-   * @param predicate Predicate for selecting rows
+   * @param predicate Optional predicate for selecting rows
    * @param strings_to_categorical Whether to return strings as category
    * @param use_pandas_metadata Whether to always load PANDAS index columns
    * @param timestamp_type Cast timestamp columns to a specific type
    */
   reader_options(std::vector<std::string> columns,
-                 bool predicate,
+                 boost::optional<std::reference_wrapper<cudf::ast::expression>> predicate,
                  bool strings_to_categorical,
                  bool use_pandas_metadata,
                  data_type timestamp_type)

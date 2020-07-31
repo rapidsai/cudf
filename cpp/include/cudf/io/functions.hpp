@@ -26,11 +26,14 @@
 #include <cudf/io/writers.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/ast/linearizer.hpp>
 
 #include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+#include <boost/optional.hpp>
 
 //! cuDF interfaces
 namespace cudf {
@@ -414,7 +417,7 @@ struct read_parquet_args {
   /// Names of column to read; empty is all
   std::vector<std::string> columns;
   /// Predicate for selecting rows
-  bool predicate = false;
+  boost::optional<std::reference_wrapper<cudf::ast::expression>> predicate;
 
   /// List of individual row groups to read (ignored if empty)
   std::vector<std::vector<size_type>> row_groups;

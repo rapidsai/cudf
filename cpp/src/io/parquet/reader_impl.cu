@@ -19,6 +19,7 @@
  * @brief cuDF-IO Parquet reader class implementation
  */
 
+#include "cudf/ast/linearizer.hpp"
 #include "reader_impl.hpp"
 
 #include <io/comp/gpuinflate.h>
@@ -728,7 +729,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                        cudaStream_t stream)
 {
   // Use read_filtered if predicate is specified
-  if (_predicate) { return read_filtered(skip_rows, num_rows, row_group_list, stream); }
+  if (_predicate != boost::none) { return read_filtered(skip_rows, num_rows, row_group_list, stream); }
 
   // Select only row groups required
   const auto selected_row_groups =
@@ -909,6 +910,9 @@ table_with_metadata reader::impl::read_filtered(
   std::vector<std::vector<size_type>> const &row_group_list,
   cudaStream_t stream)
 {
+  // Get predicate for filtering
+  std::reference_wrapper<cudf::ast::expression> predicate = _predicate->get();
+
   // Select only row groups required
   const auto selected_row_groups =
     _metadata->select_row_groups(row_group_list, skip_rows, num_rows);
