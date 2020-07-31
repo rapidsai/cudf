@@ -878,6 +878,8 @@ class ColumnBase(Column, Serializable):
         return cpp_distinct_count(self, ignore_nulls=dropna)
 
     def astype(self, dtype, **kwargs):
+        if self.dtype == dtype:
+            return True
         if is_categorical_dtype(dtype):
             return self.as_categorical_column(dtype, **kwargs)
         elif np.issubdtype(dtype, np.datetime64):
