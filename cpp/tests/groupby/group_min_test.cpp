@@ -28,7 +28,7 @@ template <typename V>
 struct groupby_min_test : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(groupby_min_test, cudf::test::FixedWidthTypes);
+TYPED_TEST_CASE(groupby_min_test, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 // clang-format off
 TYPED_TEST(groupby_min_test, basic)
