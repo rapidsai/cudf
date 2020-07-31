@@ -47,7 +47,7 @@ __global__ void test_value(ScalarDeviceViewType s, ScalarDeviceViewType s1, bool
 
 TYPED_TEST(TypedScalarDeviceViewTest, Value)
 {
-  TypeParam value(7);
+  TypeParam value = cudf::test::make_type_param_scalar<TypeParam>(7);
   cudf::scalar_type_t<TypeParam> s(value);
   cudf::scalar_type_t<TypeParam> s1;
 
@@ -75,7 +75,7 @@ __global__ void test_null(ScalarDeviceViewType s, bool* result)
 
 TYPED_TEST(TypedScalarDeviceViewTest, ConstructNull)
 {
-  TypeParam value(5);
+  TypeParam value = cudf::test::make_type_param_scalar<TypeParam>(5);
   cudf::scalar_type_t<TypeParam> s(value, false);
   auto scalar_device_view = cudf::get_scalar_device_view(s);
   rmm::device_scalar<bool> result;

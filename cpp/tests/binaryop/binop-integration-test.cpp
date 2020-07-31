@@ -169,7 +169,7 @@ TEST_F(BinaryOperationIntegrationTest, Sub_Vector_Scalar_TimepointD_TimepointS_D
   using SUB = cudf::library::operation::Sub<TypeOut, TypeLhs, TypeRhs>;
 
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
-  auto rhs = cudf::scalar_type_t<TypeRhs>(34);
+  auto rhs = cudf::scalar_type_t<TypeRhs>(typename TypeRhs::duration{34}, true);
   auto out =
     cudf::binary_operation(lhs, rhs, cudf::binary_operator::SUB, data_type(type_to_id<TypeOut>()));
 
@@ -649,7 +649,8 @@ TEST_F(BinaryOperationIntegrationTest, Greater_Vector_Vector_B8_TSMS_TSS)
   auto itr = cudf::test::make_counting_transform_iterator(
     0, [&rand_gen](auto row) { return rand_gen.generate() * 1000; });
 
-  auto lhs = cudf::test::fixed_width_column_wrapper<TypeLhs>(itr, itr + 100, make_validity_iter());
+  cudf::test::fixed_width_column_wrapper<TypeLhs, typename decltype(itr)::value_type> lhs(
+    itr, itr + 100, make_validity_iter());
 
   auto rhs = make_random_wrapped_column<TypeRhs>(100);
   auto out = cudf::binary_operation(
@@ -1110,7 +1111,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_tsD_tsD)
   using TypeLhs = cudf::timestamp_D;
   using TypeRhs = cudf::timestamp_D;
 
-  auto ts_col = fixed_width_column_wrapper<cudf::timestamp_D>{
+  cudf::test::fixed_width_column_wrapper<TypeLhs, TypeLhs::rep> ts_col(
     {
       999,    // Random nullable field
       0,      // This is the UNIX epoch - 1970-01-01
@@ -1121,9 +1122,8 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_tsD_tsD)
       22270,  // 2030-12-22 00:00:00 GMT
       111,    // Random nullable field
     },
-    {false, true, true, true, false, true, true, false},
-  };
-  auto ts_scalar = cudf::scalar_type_t<TypeRhs>(44376);
+    {false, true, true, true, false, true, true, false});
+  auto ts_scalar = cudf::scalar_type_t<TypeRhs>(typename TypeRhs::duration{44376}, true);
 
   auto op_col = cudf::binary_operation(
     ts_scalar, ts_col, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
@@ -1327,21 +1327,21 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_tsD_tsD_N
   using TypeLhs = cudf::timestamp_D;
   using TypeRhs = cudf::timestamp_D;
 
-  auto lhs_col = fixed_width_column_wrapper<cudf::timestamp_D>{{
+  cudf::test::fixed_width_column_wrapper<TypeLhs, TypeLhs::rep> lhs_col({
     0,      // This is the UNIX epoch - 1970-01-01
     44376,  // 2091-07-01 00:00:00 GMT
     47695,  // 2100-08-02 00:00:00 GMT
     66068,  // 2150-11-21 00:00:00 GMT
     22270,  // 2030-12-22 00:00:00 GMT
-  }};
+  });
   ASSERT_EQ(column_view{lhs_col}.nullable(), false);
-  auto rhs_col = fixed_width_column_wrapper<cudf::timestamp_D>{{
+  cudf::test::fixed_width_column_wrapper<TypeRhs, TypeRhs::rep> rhs_col({
     0,      // This is the UNIX epoch - 1970-01-01
     44380,  // Mismatched
     47695,  // 2100-08-02 00:00:00 GMT
     66070,  // Mismatched
     22270,  // 2030-12-22 00:00:00 GMT
-  }};
+  });
 
   auto op_col = cudf::binary_operation(
     lhs_col, rhs_col, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
@@ -1649,35 +1649,34 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Vector_Vector_SI64_SI32_SI8)
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Vector_tsD_tsD_tsD)
 {
-  auto lhs_col =
-    fixed_width_column_wrapper<cudf::timestamp_D>{{
-                                                    0,      // This is the UNIX epoch - 1970-01-01
-                                                    44376,  // 2091-07-01 00:00:00 GMT
-                                                    47695,  // 2100-08-02 00:00:00 GMT
-                                                    66068,  // 2150-11-21 00:00:00 GMT
-                                                    22270,  // 2030-12-22 00:00:00 GMT
-                                                  },
-                                                  {true, false, true, true, false}};
-  auto rhs_col =
-    fixed_width_column_wrapper<cudf::timestamp_D>{{
-                                                    0,      // This is the UNIX epoch - 1970-01-01
-                                                    44380,  // Mismatched
-                                                    47695,  // 2100-08-02 00:00:00 GMT
-                                                    66070,  // Mismatched
-                                                    22270,  // 2030-12-22 00:00:00 GMT
-                                                  },
-                                                  {false, true, true, true, false}};
+  cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> lhs_col(
+    {
+      0,      // This is the UNIX epoch - 1970-01-01
+      44376,  // 2091-07-01 00:00:00 GMT
+      47695,  // 2100-08-02 00:00:00 GMT
+      66068,  // 2150-11-21 00:00:00 GMT
+      22270,  // 2030-12-22 00:00:00 GMT
+    },
+    {true, false, true, true, false});
+  cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> rhs_col(
+    {
+      0,      // This is the UNIX epoch - 1970-01-01
+      44380,  // Mismatched
+      47695,  // 2100-08-02 00:00:00 GMT
+      66070,  // Mismatched
+      22270,  // 2030-12-22 00:00:00 GMT
+    },
+    {false, true, true, true, false});
 
   auto op_col = cudf::binary_operation(
     lhs_col, rhs_col, cudf::binary_operator::NULL_MIN, data_type(type_to_id<cudf::timestamp_D>()));
 
   // Every row has a value
-  expect_columns_equal(*op_col,
-                       fixed_width_column_wrapper<cudf::timestamp_D>{
-                         {0, 44380, 47695, 66068, 0},
-                         {true, true, true, true, false},
-                       },
-                       true);
+  expect_columns_equal(
+    *op_col,
+    cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>(
+      {0, 44380, 47695, 66068, 0}, {true, true, true, true, false}),
+    true);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Vector_Vector_SI32_SI64_SI8)
@@ -1801,7 +1800,7 @@ TEST_F(BinaryOperationIntegrationTest, Add_Vector_Scalar_DurationD_TimepointS_Ti
   using ADD = cudf::library::operation::Add<TypeOut, TypeLhs, TypeRhs>;
 
   auto lhs = make_random_wrapped_column<TypeLhs>(100);
-  auto rhs = cudf::scalar_type_t<TypeRhs>(34);
+  auto rhs = cudf::scalar_type_t<TypeRhs>(typename TypeRhs::duration{34}, true);
   auto out =
     cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD, data_type(type_to_id<TypeOut>()));
 

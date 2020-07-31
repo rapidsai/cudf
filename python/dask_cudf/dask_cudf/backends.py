@@ -1,3 +1,4 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
 import cupy as cp
 import numpy as np
 import pandas as pd
@@ -13,6 +14,13 @@ from dask.dataframe.utils import (
     is_arraylike,
     is_scalar,
 )
+
+try:
+    from dask.dataframe.methods import tolist_dispatch
+except ImportError:  # Fallback for Dask without `tolist` dispatch
+    from dask.utils import Dispatch
+
+    tolist_dispatch = Dispatch("tolist")
 
 import cudf
 from cudf.utils.dtypes import is_string_dtype
@@ -216,6 +224,11 @@ def concat_cudf(
 @categorical_dtype_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
 def categorical_dtype_cudf(categories=None, ordered=None):
     return cudf.CategoricalDtype(categories=categories, ordered=ordered)
+
+
+@tolist_dispatch.register((cudf.Series, cudf.Index))
+def tolist_cudf(obj):
+    return obj.to_arrow().to_pylist()
 
 
 try:

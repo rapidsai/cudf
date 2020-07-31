@@ -15,10 +15,11 @@
  */
 #pragma once
 
+#include <memory>
+#include <vector>
+
 #include <jni.h>
 
-#include <cudf/copying.hpp>
-#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/utilities/error.hpp>
 
 namespace cudf {
@@ -657,43 +658,6 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
   }
 }
 
-jobject contiguous_table_from(JNIEnv *env, cudf::contiguous_split_result &split);
-
-native_jobjectArray<jobject> contiguous_table_array(JNIEnv *env, jsize length);
-
-std::unique_ptr<cudf::aggregation> map_jni_aggregation(jint op);
-
-jlongArray convert_table_for_return(JNIEnv *env, std::unique_ptr<cudf::table> &table_result);
-
-/**
- * Allocate a HostMemoryBuffer
- */
-jobject allocate_host_buffer(JNIEnv *env, jlong amount, jboolean prefer_pinned);
-
-/**
- * Get the address of a HostMemoryBuffer
- */
-jlong get_host_buffer_address(JNIEnv *env, jobject buffer);
-
-/**
- * Get the length of a HostMemoryBuffer
- */
-jlong get_host_buffer_length(JNIEnv *env, jobject buffer);
-
-// Get the JNI environment, attaching the current thread to the JVM if necessary. If the thread
-// needs to be attached, the thread will automatically detach when the thread terminates.
-JNIEnv *get_jni_env(JavaVM *jvm);
-
-/** Set the device to use for cudf */
-void set_cudf_device(int device);
-
-/**
- * If the current thread has not set the CUDA device via Cuda.setDevice then this could
- * set the device, throw an exception, or do nothing depending on how the application has
- * configured it via Cuda.setAutoSetDeviceMode.
- */
-void auto_set_device(JNIEnv *env);
-
 } // namespace jni
 } // namespace cudf
 
@@ -751,7 +715,7 @@ void auto_set_device(JNIEnv *env);
     }                                                                                              \
   }
 
-#define CATCH_STD(env, ret_val)                                                                    \
+#define CATCH_STD_CLASS(env, class_name, ret_val)                                                  \
   catch (const std::bad_alloc &e) {                                                                \
     /* In some cases a cuda exception can be the cause so peek and clear if needed*/               \
     if (cudaErrorMemoryAllocation == cudaPeekAtLastError()) {                                      \
@@ -761,5 +725,8 @@ void auto_set_device(JNIEnv *env);
   }                                                                                                \
   catch (const std::exception &e) {                                                                \
     /* If jni_exception caught then a Java exception is pending and this will not overwrite it. */ \
-    JNI_CHECK_THROW_NEW(env, cudf::jni::CUDF_ERROR_CLASS, e.what(), ret_val);                      \
+    JNI_CHECK_THROW_NEW(env, class_name, e.what(), ret_val);                                       \
   }
+
+#define CATCH_STD(env, ret_val)                                                                    \
+    CATCH_STD_CLASS(env, cudf::jni::CUDF_ERROR_CLASS, ret_val)

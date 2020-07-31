@@ -34,7 +34,7 @@ template <typename T, typename ScalarType = cudf::scalar_type_t<T>>
 std::unique_ptr<cudf::scalar> make_scalar(
   cudaStream_t stream = 0, rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
 {
-  auto s = new ScalarType(T{0}, false, stream, mr);
+  auto s = new ScalarType(cudf::test::make_type_param_scalar<T>(0), false, stream, mr);
   return std::unique_ptr<cudf::scalar>(s);
 }
 
@@ -96,10 +96,22 @@ TYPED_TEST(ShiftTest, OneColumn)
 {
   using T = TypeParam;
 
-  auto input = fixed_width_column_wrapper<T>{lowest<T>, T(1), T(2), T(3), T(4), T(5), highest<T>};
-  auto expected = fixed_width_column_wrapper<T>{T(7), T(7), lowest<T>, T(1), T(2), T(3), T(4)};
+  auto input    = fixed_width_column_wrapper<T>{lowest<T>,
+                                             cudf::test::make_type_param_scalar<T>(1),
+                                             cudf::test::make_type_param_scalar<T>(2),
+                                             cudf::test::make_type_param_scalar<T>(3),
+                                             cudf::test::make_type_param_scalar<T>(4),
+                                             cudf::test::make_type_param_scalar<T>(5),
+                                             highest<T>};
+  auto expected = fixed_width_column_wrapper<T>{cudf::test::make_type_param_scalar<T>(7),
+                                                cudf::test::make_type_param_scalar<T>(7),
+                                                lowest<T>,
+                                                cudf::test::make_type_param_scalar<T>(1),
+                                                cudf::test::make_type_param_scalar<T>(2),
+                                                cudf::test::make_type_param_scalar<T>(3),
+                                                cudf::test::make_type_param_scalar<T>(4)};
 
-  auto fill   = make_scalar<T>(T(7));
+  auto fill   = make_scalar<T>(cudf::test::make_type_param_scalar<T>(7));
   auto actual = cudf::shift(input, 2, *fill);
 
   cudf::test::expect_columns_equal(expected, *actual);
@@ -109,10 +121,22 @@ TYPED_TEST(ShiftTest, OneColumnNegativeShift)
 {
   using T = TypeParam;
 
-  auto input = fixed_width_column_wrapper<T>{lowest<T>, T(1), T(2), T(3), T(4), T(5), highest<T>};
-  auto expected = fixed_width_column_wrapper<T>{T(4), T(5), highest<T>, T(7), T(7), T(7), T(7)};
+  auto input    = fixed_width_column_wrapper<T>{lowest<T>,
+                                             cudf::test::make_type_param_scalar<T>(1),
+                                             cudf::test::make_type_param_scalar<T>(2),
+                                             cudf::test::make_type_param_scalar<T>(3),
+                                             cudf::test::make_type_param_scalar<T>(4),
+                                             cudf::test::make_type_param_scalar<T>(5),
+                                             highest<T>};
+  auto expected = fixed_width_column_wrapper<T>{cudf::test::make_type_param_scalar<T>(4),
+                                                cudf::test::make_type_param_scalar<T>(5),
+                                                highest<T>,
+                                                cudf::test::make_type_param_scalar<T>(7),
+                                                cudf::test::make_type_param_scalar<T>(7),
+                                                cudf::test::make_type_param_scalar<T>(7),
+                                                cudf::test::make_type_param_scalar<T>(7)};
 
-  auto fill   = make_scalar<T>(T(7));
+  auto fill   = make_scalar<T>(cudf::test::make_type_param_scalar<T>(7));
   auto actual = cudf::shift(input, -4, *fill);
 
   cudf::test::expect_columns_equal(expected, *actual);
@@ -122,8 +146,20 @@ TYPED_TEST(ShiftTest, OneColumnNullFill)
 {
   using T = TypeParam;
 
-  auto input = fixed_width_column_wrapper<T>{lowest<T>, T(5), T(0), T(3), T(0), T(1), highest<T>};
-  auto expected = fixed_width_column_wrapper<T>({T(0), T(0), lowest<T>, T(5), T(0), T(3), T(0)},
+  auto input    = fixed_width_column_wrapper<T>{lowest<T>,
+                                             cudf::test::make_type_param_scalar<T>(5),
+                                             cudf::test::make_type_param_scalar<T>(0),
+                                             cudf::test::make_type_param_scalar<T>(3),
+                                             cudf::test::make_type_param_scalar<T>(0),
+                                             cudf::test::make_type_param_scalar<T>(1),
+                                             highest<T>};
+  auto expected = fixed_width_column_wrapper<T>({cudf::test::make_type_param_scalar<T>(0),
+                                                 cudf::test::make_type_param_scalar<T>(0),
+                                                 lowest<T>,
+                                                 cudf::test::make_type_param_scalar<T>(5),
+                                                 cudf::test::make_type_param_scalar<T>(0),
+                                                 cudf::test::make_type_param_scalar<T>(3),
+                                                 cudf::test::make_type_param_scalar<T>(0)},
                                                 {0, 0, 1, 1, 1, 1, 1});
 
   auto fill = make_scalar<T>();
@@ -140,7 +176,7 @@ TYPED_TEST(ShiftTest, TwoColumnsNullableInput)
   auto input    = fixed_width_column_wrapper<T, int32_t>({1, 2, 3, 4, 5}, {0, 1, 1, 1, 0});
   auto expected = fixed_width_column_wrapper<T, int32_t>({7, 7, 1, 2, 3}, {1, 1, 0, 1, 1});
 
-  auto fill   = make_scalar<T>(T(7));
+  auto fill   = make_scalar<T>(cudf::test::make_type_param_scalar<T>(7));
   auto actual = cudf::shift(input, 2, *fill);
 
   cudf::test::expect_columns_equal(expected, *actual);

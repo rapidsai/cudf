@@ -34,19 +34,19 @@ namespace cudf {
 // Binary operators
 /* @brief binary `sum` operator */
 struct DeviceSum {
-  template <typename T, typename std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs)
-  {
-    return T{DeviceSum{}(lhs.time_since_epoch(), rhs.time_since_epoch())};
-  }
-
   template <typename T, typename std::enable_if_t<!cudf::is_timestamp<T>()>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs)
   {
     return lhs + rhs;
   }
 
-  template <typename T>
+  template <typename T, typename std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
+  static constexpr T identity()
+  {
+    return T{typename T::duration{0}};
+  }
+
+  template <typename T, typename std::enable_if_t<!cudf::is_timestamp<T>()>* = nullptr>
   static constexpr T identity()
   {
     return T{0};
@@ -145,12 +145,6 @@ struct DeviceMax {
 
 /* @brief binary `product` operator */
 struct DeviceProduct {
-  template <typename T, typename std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs)
-  {
-    return T{DeviceProduct{}(lhs.time_since_epoch().count(), rhs.time_since_epoch().count())};
-  }
-
   template <typename T, typename std::enable_if_t<!cudf::is_timestamp<T>()>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs)
   {

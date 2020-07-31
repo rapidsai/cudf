@@ -387,7 +387,7 @@ TYPED_TEST(CopyTestChrono, CopyIfElseTestScalarColumn)
   bool mask[] = {1, 0, 0, 1};
   cudf::test::fixed_width_column_wrapper<bool> mask_w(mask, mask + num_els);
 
-  auto lhs_w = create_chrono_scalar<T>{}(5, true);
+  auto lhs_w = create_chrono_scalar<T>{}(cudf::test::make_type_param_scalar<T>(5), true);
 
   bool rhs_v[] = {1, 0, 1, 1};
   wrapper<T, int32_t> rhs_w({6, 6, 6, 6}, rhs_v);
@@ -410,7 +410,7 @@ TYPED_TEST(CopyTestChrono, CopyIfElseTestColumnScalar)
   bool lhs_v[] = {0, 1, 1, 1};
   wrapper<T, int32_t> lhs_w({5, 5, 5, 5}, lhs_v);
 
-  auto rhs_w = create_chrono_scalar<T>{}(6, true);
+  auto rhs_w = create_chrono_scalar<T>{}(cudf::test::make_type_param_scalar<T>(6), true);
 
   wrapper<T, int32_t> expected_w({5, 6, 6, 5}, lhs_v);
 
@@ -427,8 +427,8 @@ TYPED_TEST(CopyTestChrono, CopyIfElseTestScalarScalar)
   bool mask[] = {1, 0, 0, 1};
   cudf::test::fixed_width_column_wrapper<bool> mask_w(mask, mask + num_els);
 
-  auto lhs_w = create_chrono_scalar<T>{}(5, true);
-  auto rhs_w = create_chrono_scalar<T>{}(6, false);
+  auto lhs_w = create_chrono_scalar<T>{}(cudf::test::make_type_param_scalar<T>(5), true);
+  auto rhs_w = create_chrono_scalar<T>{}(cudf::test::make_type_param_scalar<T>(6), false);
 
   wrapper<T, int32_t> expected_w({5, 6, 6, 5}, mask);
 

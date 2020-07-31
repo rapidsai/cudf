@@ -156,7 +156,17 @@ class UniformRandomGenerator {
   /**
    * @brief Returns the next random number.
    **/
-  T generate() { return T{dist(rng)}; }
+  template <typename TL = T, std::enable_if_t<!cudf::is_timestamp<TL>()> * = nullptr>
+  T generate()
+  {
+    return T{dist(rng)};
+  }
+
+  template <typename TL = T, std::enable_if_t<cudf::is_timestamp<TL>()> * = nullptr>
+  T generate()
+  {
+    return T{typename T::duration{dist(rng)}};
+  }
 
  private:
   uniform_distribution dist{};  ///< Distribution

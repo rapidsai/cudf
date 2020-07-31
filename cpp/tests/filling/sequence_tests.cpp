@@ -99,8 +99,8 @@ TEST_F(SequenceTestFixture, BadTypes)
   numeric_scalar<bool> bool_step(false);
   EXPECT_THROW(cudf::sequence(10, bool_init, bool_step), cudf::logic_error);
 
-  timestamp_scalar<timestamp_s> ts_init(10);
-  timestamp_scalar<timestamp_s> ts_step(10);
+  timestamp_scalar<timestamp_s> ts_init(duration_s{10}, true);
+  timestamp_scalar<timestamp_s> ts_step(duration_s{10}, true);
   EXPECT_THROW(cudf::sequence(10, ts_init, ts_step), cudf::logic_error);
 }
 

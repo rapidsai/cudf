@@ -210,15 +210,16 @@ void run_fixed_width_test(size_t cols,
                           cudf::size_type num_partitions,
                           bool has_nulls = false)
 {
-  std::vector<fixed_width_column_wrapper<T, int32_t>> columns(cols);
+  std::vector<fixed_width_column_wrapper<T, int32_t>> columns;
+  columns.reserve(cols);
   if (has_nulls) {
-    std::generate(columns.begin(), columns.end(), [rows]() {
+    std::generate_n(std::back_inserter(columns), cols, [rows]() {
       auto iter   = thrust::make_counting_iterator(0);
       auto valids = thrust::make_transform_iterator(iter, [](auto i) { return i % 4 != 0; });
       return fixed_width_column_wrapper<T, int32_t>(iter, iter + rows, valids);
     });
   } else {
-    std::generate(columns.begin(), columns.end(), [rows]() {
+    std::generate_n(std::back_inserter(columns), cols, [rows]() {
       auto iter = thrust::make_counting_iterator(0);
       return fixed_width_column_wrapper<T, int32_t>(iter, iter + rows);
     });
