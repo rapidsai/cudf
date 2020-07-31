@@ -910,8 +910,8 @@ table_with_metadata reader::impl::read_filtered(
   std::vector<std::vector<size_type>> const &row_group_list,
   cudaStream_t stream)
 {
-  // Get predicate for filtering
-  std::reference_wrapper<cudf::ast::expression> predicate = _predicate->get();
+  // // Get predicate for filtering
+  // std::reference_wrapper<cudf::ast::expression> predicate = _predicate->get();
 
   // Select only row groups required
   const auto selected_row_groups =

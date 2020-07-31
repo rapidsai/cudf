@@ -30,6 +30,8 @@
 
 #include <fstream>
 #include <type_traits>
+#include "boost/optional/optional.hpp"
+#include "gtest/gtest.h"
 
 namespace cudf_io = cudf::io;
 
@@ -1066,6 +1068,24 @@ TEST_F(ParquetWriterStressTest, DeviceWriteLargeTableWithValids)
   cudf_io::read_parquet_args custom_args{cudf_io::source_info{mm_buf.data(), mm_buf.size()}};
   auto custom_tbl = cudf_io::read_parquet(custom_args);
   expect_tables_equal(custom_tbl.tbl->view(), expected->view());
+}
+
+// Base test fixture for tests for filtered reading
+struct ParquetFilteredReaderTest : public cudf::test::BaseFixture {
+};
+
+TEST_F(ParquetFilteredReaderTest, BasicFilteredReading)
+{
+  cudf_io::read_parquet_args args{
+    cudf_io::source_info{"/datasets/cwinston/cudf/cpp/tests/io/datasets/simple.parquet"}};
+  auto tbl = cudf_io::read_parquet(args);
+
+  auto age_col_ref = cudf::ast::column_reference(0);
+  auto age_value   = cudf::numeric_scalar<int32_t>(60);
+  auto age         = cudf::ast::literal(age_value);
+  auto expr        = cudf::ast::binary_expression(cudf::ast::ast_operator::GREATER, age_col_ref, age);
+  args.predicate = expr;
+  auto tbl_filtered = cudf_io::read_parquet(args);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
