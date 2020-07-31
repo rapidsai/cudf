@@ -270,7 +270,7 @@ class NumericalColumn(column.ColumnBase):
         out = column.column_applymap(udf=udf, column=self, out_dtype=out_dtype)
         return out
 
-    def default_na_value(self):
+    def default_na_value(self, **kwargs):
         """Returns the default NA value for this column
         """
         dkind = self.dtype.kind

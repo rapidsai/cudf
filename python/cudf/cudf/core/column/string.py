@@ -4571,7 +4571,7 @@ class StringColumn(column.ColumnBase):
         else:
             raise TypeError("cannot broadcast {}".format(type(other)))
 
-    def default_na_value(self):
+    def default_na_value(self, **kwargs):
         return None
 
     def binary_operator(self, op, rhs, reflect=False):

@@ -2270,7 +2270,6 @@ def as_index(arbitrary, **kwargs):
     """
 
     kwargs = _setdefault_name(arbitrary, **kwargs)
-    print(arbitrary)
     if isinstance(arbitrary, cudf.MultiIndex):
         return arbitrary
     elif isinstance(arbitrary, Index):

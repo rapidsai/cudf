@@ -7,7 +7,7 @@ import pyarrow as pa
 
 from cudf import _lib as libcudf
 from cudf._lib.nvtx import annotate
-from cudf._lib.scalar import as_scalar
+from cudf._lib.scalar import Scalar, as_scalar
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.utils import utils
@@ -190,12 +190,17 @@ class DatetimeColumn(column.ColumnBase):
             null_count=self.null_count,
         )
 
-    def default_na_value(self):
+    def default_na_value(self, **kwargs):
         """Returns the default NA value for this column
         """
         dkind = self.dtype.kind
         if dkind == "M":
-            return np.datetime64("nat", self.time_unit)
+            valid_scalar = kwargs.pop("valid_scalar", False)
+            na_value = np.datetime64("nat", self.time_unit)
+            if valid_scalar:
+                return Scalar(na_value, valid=True)
+            else:
+                return na_value
         else:
             raise TypeError(
                 "datetime column of {} has no NaN value".format(self.dtype)
@@ -228,7 +233,8 @@ class DatetimeColumn(column.ColumnBase):
 
     def fillna(self, fill_value):
         if is_scalar(fill_value):
-            fill_value = np.datetime64(fill_value, self.time_unit)
+            if not isinstance(fill_value, Scalar):
+                fill_value = np.datetime64(fill_value, self.time_unit)
         else:
             fill_value = column.as_column(fill_value, nan_as_null=False)
 

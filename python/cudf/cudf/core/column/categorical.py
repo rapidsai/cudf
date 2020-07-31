@@ -984,7 +984,7 @@ class CategoricalColumn(column.ColumnBase):
             return None
         return self.categories.element_indexing(value)
 
-    def default_na_value(self):
+    def default_na_value(self, **kwargs):
         return -1
 
     def find_and_replace(self, to_replace, replacement, all_nan):
