@@ -54,7 +54,7 @@ resolve_input_data_reference(detail::device_data_reference const device_data_ref
     }
     case detail::device_data_reference_type::LITERAL: {
       // TODO: Fetch and return literal.
-      return static_cast<Element>(0);
+      return Element();
     }
     case detail::device_data_reference_type::INTERMEDIATE: {
       return *reinterpret_cast<Element*>(
@@ -62,7 +62,7 @@ resolve_input_data_reference(detail::device_data_reference const device_data_ref
     }
     default: {
       // TODO: Error
-      return static_cast<Element>(0);
+      return Element();
     }
   }
 }
