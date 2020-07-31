@@ -1125,7 +1125,7 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
   }
 };
 
-TYPED_TEST_CASE(GroupedTimeRangeRollingTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_CASE(GroupedTimeRangeRollingTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(GroupedTimeRangeRollingTest,
            SimplePartitionedStaticWindowsWithGroupKeysAndTimeRangesAscending)
