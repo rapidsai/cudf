@@ -669,6 +669,33 @@ def merge_sorted(
     return result
 
 
+def _pivot(df, index, columns):
+    """
+    Pivot a DataFrame to the given index and columns
+    """
+    columns_labels, columns_idx = columns._encode()
+    index_labels, index_idx = index._encode()
+    column_labels = pd.DataFrame(columns_labels.to_pandas())
+
+    # the result of pivot always has a multicolumn
+    result = cudf.core.column_accessor.ColumnAccessor(
+        multiindex=True, level_names=(None,) + columns._data.names
+    )
+
+    for v in df:
+        names = [(v,) + name for name in column_labels.itertuples(index=False)]
+        col = df._data[v]
+        result.update(
+            cudf.DataFrame._from_table(
+                col.scatter_to_table(index_idx, columns_idx, names)
+            )._data
+        )
+
+    return cudf.DataFrame(
+        result, index=cudf.Index(index_labels, name=index.name)
+    )
+
+
 def pivot(df, index=None, columns=None, values=None):
     """
     Return reshaped DataFrame organized by the given index and column values.
@@ -697,58 +724,27 @@ def pivot(df, index=None, columns=None, values=None):
     TODO
     """
     if values is None:
-        values = [v for v in df._data.keys() if v not in (index, columns)]
-
-    if index is None:
-        index_column = df.index._values
-    else:
-        index_column = df._data[index]
-
-    columns_column = df._data[columns]
-
-    index_labels, index_idx = index_column.encode()
-    columns_labels, columns_idx = columns_column.encode()
-    column_names = columns_labels.to_pandas()
-
-    # the result of pivot always has a multicolumn
-    result = cudf.core.column_accessor.ColumnAccessor(
-        multiindex=True, level_names=(None, columns)
-    )
-
-    for v in values:
-        names = [(v, name) for name in column_names]
-        col = df._data[v]
-        result.update(
-            cudf.DataFrame._from_table(
-                col.scatter_to_table(index_idx, columns_idx, names)
-            )._data
+        values = df._columns_view(
+            col for col in df.columns if col not in (index, columns)
         )
-
-    return cudf.DataFrame(result, index=cudf.Index(index_labels, name=index))
+    else:
+        values = df._columns_view(values)
+    if index is None:
+        index = df.index
+    else:
+        index = cudf.core.index.Index(df.loc[:, index])
+    columns = df.loc[:, columns]
+    return _pivot(values, index, columns)
 
 
 def unstack(df, level, fill_value=None):
+    if pd.api.types.is_list_like(level):
+        if not level:
+            return df
     df = df.copy()
-
     columns = df.index._poplevels(level)
     index = df.index
-
-    columns_labels, columns_idx = columns._encode()
-    index_labels, index_idx = index._encode()
-    column_labels = columns_labels.to_pandas().to_frame()
-
-    # the result of pivot always has a multicolumn
-    result = cudf.core.column_accessor.ColumnAccessor(
-        multiindex=True, level_names=(None,) + columns.names
-    )
-
-    for v in df:
-        names = [(v,) + name for name in column_labels.itertuples(index=False)]
-        col = df._data[v]
-        result.update(
-            cudf.DataFrame._from_table(
-                col.scatter_to_table(index_idx, columns_idx, names)
-            )._data
-        )
-
-    return cudf.DataFrame(result, index=cudf.Index(index_labels, name=index))
+    result = _pivot(df, index, columns)
+    if result.index.nlevels == 1:
+        result.index = result.index.get_level_values(result.index.names[0])
+    return result

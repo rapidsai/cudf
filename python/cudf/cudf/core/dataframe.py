@@ -6725,7 +6725,7 @@ class DataFrame(Frame, Serializable):
         )
 
     def unstack(self, level=-1):
-        return cudf.core.reshape.pivot(self, level=level)
+        return cudf.core.reshape.unstack(self, level=level)
 
 
 def from_pandas(obj, nan_as_null=None):

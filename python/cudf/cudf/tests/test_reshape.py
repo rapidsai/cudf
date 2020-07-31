@@ -379,3 +379,38 @@ def test_pivot_multi_values():
         nullable_pd_dtype=True,
         check_dtype=False,
     )
+
+
+@pytest.mark.parametrize(
+    "level",
+    [
+        0,
+        1,
+        2,
+        "foo",
+        "bar",
+        "baz",
+        [],
+        [0, 1],
+        ["foo"],
+        ["foo", "bar"],
+        pytest.param([0, 1, 2], marks=pytest.mark.xfail),
+        pytest.param(["foo", "bar", "baz"], marks=pytest.mark.xfail),
+    ],
+)
+def test_unstack(level):
+    pdf = pd.DataFrame(
+        {
+            "foo": ["one", "one", "one", "two", "two", "two"],
+            "bar": ["A", "B", "C", "A", "B", "C"],
+            "baz": [1, 2, 3, 4, 5, 6],
+            "zoo": ["x", "y", "z", "q", "w", "t"],
+        }
+    ).set_index(["foo", "bar", "baz"])
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(
+        pdf.unstack(level=level),
+        gdf.unstack(level=level),
+        nullable_pd_dtype=True,
+        check_dtype=False,
+    )

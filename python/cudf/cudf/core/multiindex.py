@@ -2,6 +2,7 @@
 import numbers
 import pickle
 import warnings
+from collections import OrderedDict
 from collections.abc import Sequence
 
 import cupy
@@ -855,20 +856,18 @@ class MultiIndex(Index):
         if not pd.api.types.is_list_like(level):
             level = (level,)
 
-        if not level:
-            return self
-
         ilevels = [self._level_index_from_level(lev) for lev in level]
 
-        popped_data = {}
+        popped_data = OrderedDict({})
         popped_names = []
         names = list(self.names)
 
         for i in reversed(sorted(ilevels)):
+            names.pop(i)
             n = self._data.names[i]
             popped_data[n] = self._data.pop(n)
-            popped_names.append(self.names[i])
-            names.pop(i)
+            popped_names.insert(0, self.names[i])
+            popped_data.move_to_end(n, last=False)
 
         result = cudf.core.index.Index._from_table(
             cudf.core.frame.Frame(popped_data)
