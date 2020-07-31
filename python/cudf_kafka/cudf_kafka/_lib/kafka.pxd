@@ -27,7 +27,7 @@ cdef extern from "kafka_consumer.hpp" \
 
         bool assign(vector[string] topics, vector[int32_t] partitions) except +
 
-        bool commit_offset(string topic,
+        void commit_offset(string topic,
                            int32_t partition,
                            int64_t offset) except +
 
@@ -39,9 +39,9 @@ cdef extern from "kafka_consumer.hpp" \
                                                   int32_t timeout,
                                                   bool cached) except +
 
-        bool unsubscribe() except +
+        void unsubscribe() except +
 
-        bool close(int timeout) except +
+        void close(int timeout) except +
 
 cdef class KafkaDatasource(Datasource):
 

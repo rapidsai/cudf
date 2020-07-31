@@ -38,7 +38,7 @@ cdef class KafkaDatasource(Datasource):
                              string topic,
                              int32_t partition,
                              int64_t offset):
-        return (<kafka_consumer *> self.c_datasource.get()).commit_offset(
+        (<kafka_consumer *> self.c_datasource.get()).commit_offset(
             topic, partition, offset)
 
     cpdef int64_t get_committed_offset(self,
