@@ -25,9 +25,8 @@ namespace external {
 namespace kafka {
 
 kafka_consumer::kafka_consumer(std::map<std::string, std::string> const &configs)
+  : kafka_conf(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL))
 {
-  kafka_conf = std::unique_ptr<RdKafka::Conf>(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
-
   for (auto const &key_value : configs) {
     std::string error_string;
     CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK ==
@@ -137,15 +136,8 @@ std::map<std::string, std::string> kafka_consumer::current_configs()
 {
   std::map<std::string, std::string> configs;
   std::list<std::string> *dump = kafka_conf->dump();
-  std::string key;
-  std::string val;
-  for (std::list<std::string>::iterator it = dump->begin(); it != dump->end();) {
-    key = (*it);
-    it++;
-    val = (*it);
-    it++;
-    configs.insert(std::pair<std::string, std::string>{key, val});
-  }
+  for (auto it = dump->begin(); it != dump->end(); std::advance(it, 2))
+    configs.insert({*it, *std::next(it)});
   return configs;
 }
 
@@ -155,7 +147,8 @@ int64_t kafka_consumer::get_committed_offset(std::string const &topic, int parti
   toppar_list.push_back(RdKafka::TopicPartition::create(topic, partition));
 
   // Query Kafka to populate the TopicPartitions with the desired offsets
-  RdKafka::ErrorCode err = consumer->committed(toppar_list, default_timeout);
+  CUDF_EXPECTS(RdKafka::ERR_NO_ERROR == consumer->committed(toppar_list, default_timeout),
+               "Failed retrieve Kafka committed offsets");
 
   int64_t offset = toppar_list[0]->offset();
   return offset > 0 ? offset : 0;
@@ -192,40 +185,28 @@ std::map<std::string, int64_t> kafka_consumer::get_watermark_offset(std::string 
   return results;
 }
 
-bool kafka_consumer::commit_offset(std::string const &topic, int partition, int64_t offset)
+void kafka_consumer::commit_offset(std::string const &topic, int partition, int64_t offset)
 {
   std::vector<RdKafka::TopicPartition *> partitions_;
   RdKafka::TopicPartition *toppar = RdKafka::TopicPartition::create(topic, partition, offset);
-  if (toppar != NULL) {
-    toppar->set_offset(offset);
-    partitions_.push_back(toppar);
-    RdKafka::ErrorCode err = consumer->commitSync(partitions_);
-    return true;
-  } else {
-    return false;
-  }
+  CUDF_EXPECTS(toppar != nullptr, "RdKafka failed to create TopicPartition");
+  toppar->set_offset(offset);
+  partitions_.push_back(toppar);
+  CUDF_EXPECTS(RdKafka::ERR_NO_ERROR == consumer->commitSync(partitions_),
+               "Failed to commit consumer offsets");
 }
 
-bool kafka_consumer::unsubscribe()
+void kafka_consumer::unsubscribe()
 {
-  RdKafka::ErrorCode err = consumer.get()->unassign();
-  if (err != RdKafka::ERR_NO_ERROR) {
-    printf(
-      "Timeout occurred while unsubscribing from Kafka Consumer "
-      "assignments.\n");
-    return false;
-  } else {
-    return true;
-  }
+  CUDF_EXPECTS(RdKafka::ErrorCode::ERR_NO_ERROR == consumer.get()->unassign(),
+               "Failed to unsubscribe from Kafka Consumer");
 }
 
-bool kafka_consumer::close(int timeout)
+void kafka_consumer::close(int timeout)
 {
-  RdKafka::ErrorCode err = consumer.get()->close();
-  delete consumer.get();
-  delete kafka_conf.get();
-
-  return err == RdKafka::ERR_NO_ERROR;
+  CUDF_EXPECTS(RdKafka::ERR_NO_ERROR == consumer->close(), "Failed to close Kafka consumer");
+  consumer.reset(nullptr);
+  kafka_conf.reset(nullptr);
 }
 
 }  // namespace kafka

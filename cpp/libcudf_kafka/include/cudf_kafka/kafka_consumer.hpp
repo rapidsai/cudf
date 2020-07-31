@@ -36,11 +36,14 @@ namespace kafka {
 class kafka_consumer : public cudf::io::datasource {
  public:
   /**
-   * @brief Creates an instance of the Kafka consumer object that is in a semi ready state.
+   * @brief Creates an instance of the Kafka consumer object that is in a semi-ready state.
    *
-   * This is useful when the need for delayed partition and topic assignment is not know ahead of
-   * time and needs to be delayed to as late as possible. Documentation for librdkafka
-   * configurations can be found at
+   * A consumer in a semi-ready state does not have all required parameters to make successful
+   * consumer interactions with the Kafka broker. However in the semi-ready state Kafka metadata
+   * operations are still possible. This is useful for clients who plan to only use those metadata
+   * operations. This is useful when the need for delayed partition and topic assignment
+   * is not known ahead of time and needs to be delayed to as late as possible.
+   * Documentation for librdkafka configurations can be found at
    * https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
    *
    * @param configs key/value pairs of librdkafka configurations that will be
@@ -102,18 +105,19 @@ class kafka_consumer : public cudf::io::datasource {
   /**
    * @brief Commits an offset to a specified Kafka Topic/Partition instance
    *
+   * @throws cudf::logic_error on failure to commit the partition offset
+   *
    * @param[in] topic Name of the Kafka topic that the offset should be set for
    * @param[in] partition Partition on the specified topic that should be used
    * @param[in] offset Offset that should be set for the topic/partition pair
    *
-   * @return True if the offset is successfully committed and false otherwise
    */
-  bool commit_offset(std::string const &topic, int partition, int64_t offset);
+  void commit_offset(std::string const &topic, int partition, int64_t offset);
 
   /**
    * @brief Retrieve the watermark offset values for a topic/partition
    *
-   * @param[in] topic Name of the Kafka topci that the watermark should be retrieved for
+   * @param[in] topic Name of the Kafka topic that the watermark should be retrieved for
    * @param[in] partition Partition on the specified topic which should be used
    * @param[in] timeout Max milliseconds to wait on a response from the Kafka broker
    * @param[in] cached If True uses the last retrieved value from the Kafka broker, if False
@@ -145,17 +149,17 @@ class kafka_consumer : public cudf::io::datasource {
   /**
    * @brief Close the underlying socket connection to Kafka and clean up system resources
    *
-   * @return True on success and False otherwise
+   * @throws cudf::logic_error on failure to close the connection
    */
-  bool close(int timeout);
+  void close(int timeout);
 
   /**
    * @brief Stop all active consumption and remove consumer subscriptions to topic/partition
    * instances
    *
-   * @return True if success and False otherwise
+   * @throws cudf::logic_error on failure to unsubscribe from the active partition assignments.
    */
-  bool unsubscribe();
+  void unsubscribe();
 
   virtual ~kafka_consumer(){};
 
