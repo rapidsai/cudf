@@ -19,6 +19,7 @@ from cudf.core.abc import Serializable
 from cudf.core.column import (
     ColumnBase,
     DatetimeColumn,
+    TimeDeltaColumn,
     as_column,
     column,
     column_empty_like,
@@ -379,6 +380,8 @@ class Series(Frame, Serializable):
         """
         if isinstance(self._column, DatetimeColumn):
             return DatetimeProperties(self)
+        elif isinstance(self._column, TimeDeltaColumn):
+            return TimedeltaProperties(self)
         else:
             raise AttributeError(
                 "Can only use .dt accessor with datetimelike values"
@@ -4294,6 +4297,49 @@ class DatetimeProperties(object):
 
     def _get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)
+        return Series(
+            data=out_column, index=self.series._index, name=self.series.name
+        )
+
+
+class TimedeltaProperties(object):
+    def __init__(self, series):
+        self.series = series
+
+    @property
+    def days(self):
+        return self._get_td_field("days")
+
+    @property
+    def seconds(self):
+        return self._get_td_field("seconds")
+
+    @property
+    def microseconds(self):
+        return self._get_td_field("microseconds")
+
+    @property
+    def nanoseconds(self):
+        return self._get_td_field("nanoseconds")
+
+    @property
+    def components(self):
+        df = cudf.DataFrame(
+            columns=[
+                "days",
+                "hours",
+                "minutes",
+                "seconds",
+                "milliseconds",
+                "microseconds",
+                "nanoseconds",
+            ]
+        )
+        # TODO: Implement this
+        return df
+
+    def _get_td_field(self, field):
+        out_column = getattr(self.series._column, field)
         return Series(
             data=out_column, index=self.series._index, name=self.series.name
         )
