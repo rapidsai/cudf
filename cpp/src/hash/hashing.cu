@@ -705,27 +705,6 @@ std::unique_ptr<column> hash(table_view const& input,
   }
 }
 
-/**
- * @brief Updates the MD5 hash value with an element in the given column.
- *
- * @tparam has_nulls Indicates the potential for null values in the column.
- **/
-template <bool has_nulls>
-class md5_element_hasher {
- public:
-  template <typename T>
-  __device__ inline void operator()(column_device_view col,
-                                    size_type row_index,
-                                    md5_intermediate_data* hash_state,
-                                    md5_hash_constants_type const* hash_constants,
-                                    md5_shift_constants_type const* shift_constants)
-  {
-    if (!has_nulls || col.is_valid(row_index)) {
-      MD5Hash<T>{}(col.element<T>(row_index), hash_state, hash_constants, shift_constants);
-    }
-  }
-};
-
 std::unique_ptr<column> md5_hash(table_view const& input,
                                  rmm::mr::device_memory_resource* mr,
                                  cudaStream_t stream)
@@ -774,17 +753,9 @@ std::unique_ptr<column> md5_hash(table_view const& input,
                     has_nulls       = nullable] __device__(auto row_index) {
                      md5_intermediate_data hash_state;
                      for (int col_index = 0; col_index < device_input.num_columns(); col_index++) {
-                       if (has_nulls) {
+                       if (device_input.column(col_index).is_valid(row_index)) {
                          cudf::type_dispatcher(device_input.column(col_index).type(),
-                                               md5_element_hasher<true>{},
-                                               device_input.column(col_index),
-                                               row_index,
-                                               &hash_state,
-                                               hash_constants,
-                                               shift_constants);
-                       } else {
-                         cudf::type_dispatcher(device_input.column(col_index).type(),
-                                               md5_element_hasher<false>{},
+                                               MD5Hash{},
                                                device_input.column(col_index),
                                                row_index,
                                                &hash_state,

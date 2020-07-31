@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <hash/hash_constants.hpp>
 
@@ -84,10 +85,7 @@ void CUDA_DEVICE_CALLABLE md5_hash_step(md5_intermediate_data* hash_state,
   hash_state->buffer_length = 0;
 }
 
-template <typename Key>
 struct MD5Hash {
-  using argument_type = Key;
-
   /**
    * @brief Core MD5 element processing function
    */
@@ -122,7 +120,8 @@ struct MD5Hash {
   }
 
   template <typename T, typename std::enable_if_t<is_chrono<T>()>* = nullptr>
-  void __device__ operator()(T const& key,
+  void __device__ operator()(column_device_view col,
+                             size_type row_index,
                              md5_intermediate_data* hash_state,
                              md5_hash_constants_type const* hash_constants,
                              md5_shift_constants_type const* shift_constants) const
@@ -130,10 +129,9 @@ struct MD5Hash {
     release_assert(false && "MD5 Unsupported chrono type column");
   }
 
-  template <typename T,
-            typename std::enable_if_t<!std::is_same<T, cudf::string_view>::value &&
-                                      !is_fixed_width<T>()>* = nullptr>
-  void __device__ operator()(T const& key,
+  template <typename T, typename std::enable_if_t<!is_fixed_width<T>()>* = nullptr>
+  void __device__ operator()(column_device_view col,
+                             size_type row_index,
                              md5_intermediate_data* hash_state,
                              md5_hash_constants_type const* hash_constants,
                              md5_shift_constants_type const* shift_constants) const
@@ -141,20 +139,14 @@ struct MD5Hash {
     release_assert(false && "MD5 Unsupported non-fixed-width type column");
   }
 
-  void CUDA_DEVICE_CALLABLE operator()(argument_type const& key,
-                                       md5_intermediate_data* hash_state,
-                                       md5_hash_constants_type const* hash_constants,
-                                       md5_shift_constants_type const* shift_constants) const
+  template <typename T, typename std::enable_if_t<is_floating_point<T>()>* = nullptr>
+  void __device__ operator()(column_device_view col,
+                             size_type row_index,
+                             md5_intermediate_data* hash_state,
+                             md5_hash_constants_type const* hash_constants,
+                             md5_shift_constants_type const* shift_constants) const
   {
-    process(key, hash_state, hash_constants, shift_constants);
-  }
-
-  template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
-  void __device__ process_floating_point(T const& key,
-                                         md5_intermediate_data* hash_state,
-                                         md5_hash_constants_type const* hash_constants,
-                                         md5_shift_constants_type const* shift_constants) const
-  {
+    T const& key = col.element<T>(row_index);
     if (isnan(key)) {
       T nan = std::numeric_limits<T>::quiet_NaN();
       process(nan, hash_state, hash_constants, shift_constants);
@@ -164,15 +156,29 @@ struct MD5Hash {
       process(key, hash_state, hash_constants, shift_constants);
     }
   }
+
+  template <typename T,
+            typename std::enable_if_t<is_fixed_width<T>() && !is_floating_point<T>() &&
+                                      !is_chrono<T>()>* = nullptr>
+  void CUDA_DEVICE_CALLABLE operator()(column_device_view col,
+                                       size_type row_index,
+                                       md5_intermediate_data* hash_state,
+                                       md5_hash_constants_type const* hash_constants,
+                                       md5_shift_constants_type const* shift_constants) const
+  {
+    process(col.element<T>(row_index), hash_state, hash_constants, shift_constants);
+  }
 };
 
 template <>
 void CUDA_DEVICE_CALLABLE
-MD5Hash<string_view>::operator()(string_view const& key,
+MD5Hash::operator()<string_view>(column_device_view col,
+                                 size_type row_index,
                                  md5_intermediate_data* hash_state,
                                  md5_hash_constants_type const* hash_constants,
                                  md5_shift_constants_type const* shift_constants) const
 {
+  string_view key     = col.element<string_view>(row_index);
   uint32_t const len  = static_cast<uint32_t>(key.size_bytes());
   uint8_t const* data = reinterpret_cast<uint8_t const*>(key.data());
 
@@ -195,26 +201,6 @@ MD5Hash<string_view>::operator()(string_view const& key,
     thrust::copy_n(thrust::seq, data + copylen, len - copylen, hash_state->buffer);
     hash_state->buffer_length = len - copylen;
   }
-}
-
-template <>
-void CUDA_DEVICE_CALLABLE
-MD5Hash<float>::operator()(float const& key,
-                           md5_intermediate_data* hash_state,
-                           md5_hash_constants_type const* hash_constants,
-                           md5_shift_constants_type const* shift_constants) const
-{
-  this->process_floating_point(key, hash_state, hash_constants, shift_constants);
-}
-
-template <>
-void CUDA_DEVICE_CALLABLE
-MD5Hash<double>::operator()(double const& key,
-                            md5_intermediate_data* hash_state,
-                            md5_hash_constants_type const* hash_constants,
-                            md5_shift_constants_type const* shift_constants) const
-{
-  this->process_floating_point(key, hash_state, hash_constants, shift_constants);
 }
 
 }  // namespace detail
