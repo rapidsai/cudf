@@ -933,10 +933,10 @@ class CategoricalColumn(column.ColumnBase):
             " if you need this functionality."
         )
 
-    def to_pandas(self, index=None):
+    def to_pandas(self, index=None, nullable_pd_dtype=None):
         signed_dtype = min_signed_type(len(self.categories))
         codes = self.cat().codes.astype(signed_dtype).fillna(-1).to_array()
-        categories = self.categories.to_pandas()
+        categories = self.categories.to_pandas(nullable_pd_dtype=False)
         data = pd.Categorical.from_codes(
             codes, categories=categories, ordered=self.ordered
         )
@@ -1088,7 +1088,7 @@ class CategoricalColumn(column.ColumnBase):
             codes=column.as_column(result.base_data, dtype=result.dtype),
             offset=result.offset,
             size=result.size,
-            mask=None,
+            mask=result.base_mask,
             ordered=self.dtype.ordered,
         )
 

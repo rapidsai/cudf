@@ -24,13 +24,33 @@ namespace io {
 namespace external {
 namespace kafka {
 
-kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,
-                               std::string topic_name,
+kafka_consumer::kafka_consumer(std::map<std::string, std::string> const &configs)
+  : kafka_conf(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL))
+{
+  for (auto const &key_value : configs) {
+    std::string error_string;
+    CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK ==
+                   kafka_conf->set(key_value.first, key_value.second, error_string),
+                 "Invalid Kafka configuration");
+  }
+
+  // Kafka 0.9 > requires group.id in the configuration
+  std::string conf_val;
+  CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK == kafka_conf->get("group.id", conf_val),
+               "Kafka group.id must be configured");
+
+  std::string errstr;
+  consumer = std::unique_ptr<RdKafka::KafkaConsumer>(
+    RdKafka::KafkaConsumer::create(kafka_conf.get(), errstr));
+}
+
+kafka_consumer::kafka_consumer(std::map<std::string, std::string> const &configs,
+                               std::string const &topic_name,
                                int partition,
                                int64_t start_offset,
                                int64_t end_offset,
                                int batch_timeout,
-                               std::string delimiter)
+                               std::string const &delimiter)
   : topic_name(topic_name),
     partition(partition),
     start_offset(start_offset),
@@ -49,7 +69,7 @@ kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,
 
   // Kafka 0.9 > requires group.id in the configuration
   std::string conf_val;
-  CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK == kafka_conf->get("group_id", conf_val),
+  CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK == kafka_conf->get("group.id", conf_val),
                "Kafka group.id must be configured");
 
   std::string errstr;
@@ -104,8 +124,89 @@ void kafka_consumer::consume_to_buffer()
       buffer.append(static_cast<char *>(msg->payload()));
       buffer.append(delimiter);
       messages_read++;
+    } else if (msg->err() == RdKafka::ErrorCode::ERR__TIMED_OUT ||
+               msg->err() == RdKafka::ErrorCode::ERR__PARTITION_EOF) {
+      // If there are no more messages or a timeout reading a message occurs then return
+      break;
     }
   }
+}
+
+std::map<std::string, std::string> kafka_consumer::current_configs()
+{
+  std::map<std::string, std::string> configs;
+  std::list<std::string> *dump = kafka_conf->dump();
+  for (auto it = dump->begin(); it != dump->end(); std::advance(it, 2))
+    configs.insert({*it, *std::next(it)});
+  return configs;
+}
+
+int64_t kafka_consumer::get_committed_offset(std::string const &topic, int partition)
+{
+  std::vector<RdKafka::TopicPartition *> toppar_list;
+  toppar_list.push_back(RdKafka::TopicPartition::create(topic, partition));
+
+  // Query Kafka to populate the TopicPartitions with the desired offsets
+  CUDF_EXPECTS(RdKafka::ERR_NO_ERROR == consumer->committed(toppar_list, default_timeout),
+               "Failed retrieve Kafka committed offsets");
+
+  int64_t offset = toppar_list[0]->offset();
+  return offset > 0 ? offset : 0;
+}
+
+std::map<std::string, int64_t> kafka_consumer::get_watermark_offset(std::string const &topic,
+                                                                    int partition,
+                                                                    int timeout,
+                                                                    bool cached)
+{
+  int64_t low;
+  int64_t high;
+  std::map<std::string, int64_t> results;
+  RdKafka::ErrorCode err;
+
+  if (cached == true) {
+    err = consumer->get_watermark_offsets(topic, partition, &low, &high);
+  } else {
+    err = consumer->query_watermark_offsets(topic, partition, &low, &high, timeout);
+  }
+
+  if (err != RdKafka::ErrorCode::ERR_NO_ERROR) {
+    if (err == RdKafka::ErrorCode::ERR__PARTITION_EOF) {
+      results.insert(std::pair<std::string, int64_t>("low", low));
+      results.insert(std::pair<std::string, int64_t>("high", high));
+    } else {
+      CUDF_FAIL("Error retrieving Kafka watermark offset from broker");
+    }
+  } else {
+    results.insert(std::pair<std::string, int64_t>("low", low));
+    results.insert(std::pair<std::string, int64_t>("high", high));
+  }
+
+  return results;
+}
+
+void kafka_consumer::commit_offset(std::string const &topic, int partition, int64_t offset)
+{
+  std::vector<RdKafka::TopicPartition *> partitions_;
+  RdKafka::TopicPartition *toppar = RdKafka::TopicPartition::create(topic, partition, offset);
+  CUDF_EXPECTS(toppar != nullptr, "RdKafka failed to create TopicPartition");
+  toppar->set_offset(offset);
+  partitions_.push_back(toppar);
+  CUDF_EXPECTS(RdKafka::ERR_NO_ERROR == consumer->commitSync(partitions_),
+               "Failed to commit consumer offsets");
+}
+
+void kafka_consumer::unsubscribe()
+{
+  CUDF_EXPECTS(RdKafka::ErrorCode::ERR_NO_ERROR == consumer.get()->unassign(),
+               "Failed to unsubscribe from Kafka Consumer");
+}
+
+void kafka_consumer::close(int timeout)
+{
+  CUDF_EXPECTS(RdKafka::ERR_NO_ERROR == consumer->close(), "Failed to close Kafka consumer");
+  consumer.reset(nullptr);
+  kafka_conf.reset(nullptr);
 }
 
 }  // namespace kafka

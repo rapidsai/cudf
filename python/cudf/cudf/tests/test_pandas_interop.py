@@ -15,7 +15,7 @@ def test_to_pandas():
     df["b"] = np.arange(10, 15, dtype=np.float64)
     df["c"] = np.array([True, False, None, True, True])
 
-    pdf = df.to_pandas()
+    pdf = df.to_pandas(nullable_pd_dtype=False)
 
     assert tuple(df.columns) == tuple(pdf.columns)
 
@@ -72,7 +72,7 @@ def test_from_pandas_with_index():
     # Check index
     assert_eq(df.index.values, pdf.index.values)
     # Check again using pandas testing tool on frames
-    assert_eq(df.to_pandas(), pdf)
+    assert_eq(df, pdf)
 
 
 def test_from_pandas_rangeindex():

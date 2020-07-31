@@ -69,10 +69,18 @@ def assert_eq(left, right, **kwargs):
     """
     __tracebackhide__ = True
 
+    nullable_pd_dtype = kwargs.pop("nullable_pd_dtype", False)
     if hasattr(left, "to_pandas"):
-        left = left.to_pandas()
+        try:
+            left = left.to_pandas(nullable_pd_dtype=nullable_pd_dtype)
+        except TypeError:
+            # nullable_pd_dtype not a kwarg
+            left = left.to_pandas()
     if hasattr(right, "to_pandas"):
-        right = right.to_pandas()
+        try:
+            right = right.to_pandas(nullable_pd_dtype=nullable_pd_dtype)
+        except TypeError:
+            right = right.to_pandas()
     if isinstance(left, cupy.ndarray):
         left = cupy.asnumpy(left)
     if isinstance(right, cupy.ndarray):

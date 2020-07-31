@@ -18,7 +18,7 @@ def test_null_series(nrows, dtype):
     data = cudf.Series(np.random.randint(1, 9, size))
     column = data.set_mask(mask)
     sr = cudf.Series(column).astype(dtype)
-    ps = sr.to_pandas()
+    ps = sr.to_pandas(nullable_pd_dtype=False)
     pd.options.display.max_rows = int(nrows)
     psrepr = ps.__repr__()
     psrepr = psrepr.replace("NaN", "<NA>")
@@ -238,6 +238,60 @@ def test_generic_index(length, dtype):
     gsr = cudf.Series.from_pandas(psr)
 
     assert psr.index.__repr__() == gsr.index.__repr__()
+
+
+@pytest.mark.parametrize(
+    "gdf",
+    [
+        cudf.DataFrame({"a": range(10000)}),
+        cudf.DataFrame({"a": range(10000), "b": range(10000)}),
+        cudf.DataFrame({"a": range(20), "b": range(20)}),
+        cudf.DataFrame(
+            {
+                "a": range(20),
+                "b": range(20),
+                "c": ["abc", "def", "xyz", "def", "pqr"] * 4,
+            }
+        ),
+        cudf.DataFrame(index=[1, 2, 3]),
+        cudf.DataFrame(index=range(10000)),
+        cudf.DataFrame(columns=["a", "b", "c", "d"]),
+        cudf.DataFrame(columns=["a"], index=range(10000)),
+        cudf.DataFrame(columns=["a", "col2", "...col n"], index=range(10000)),
+        cudf.DataFrame(index=cudf.Series(range(10000)).astype("str")),
+        cudf.DataFrame(
+            columns=["a", "b", "c", "d"],
+            index=cudf.Series(range(10000)).astype("str"),
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "slice",
+    [
+        slice(2500, 5000),
+        slice(2500, 2501),
+        slice(5000),
+        slice(1, 10),
+        slice(10, 20),
+        slice(15, 2400),
+    ],
+)
+@pytest.mark.parametrize("max_seq_items", [1, 10, 60, 10000, None])
+@pytest.mark.parametrize("max_rows", [1, 10, 60, 10000, None])
+def test_dataframe_sliced(gdf, slice, max_seq_items, max_rows):
+    pd.options.display.max_seq_items = max_seq_items
+    pd.options.display.max_rows = max_rows
+    pdf = gdf.to_pandas()
+
+    sliced_gdf = gdf[slice]
+    sliced_pdf = pdf[slice]
+
+    expected_repr = sliced_pdf.__repr__().replace("None", "<NA>")
+    actual_repr = sliced_gdf.__repr__()
+
+    assert expected_repr == actual_repr
+    pd.reset_option("display.max_rows")
+    pd.reset_option("display.max_seq_items")
 
 
 @pytest.mark.parametrize(

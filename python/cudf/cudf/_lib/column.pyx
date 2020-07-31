@@ -255,12 +255,15 @@ cdef class Column:
 
     @property
     def children(self):
-        if self.base_children is ():
-            return ()
+        if (self.offset == 0) and (self.size == self.base_size):
+            self._children = self.base_children
         if self._children is None:
-            self._children = Column.from_unique_ptr(
-                make_unique[column](self.view())
-            ).base_children
+            if self.base_children == ():
+                self._children = ()
+            else:
+                self._children = Column.from_unique_ptr(
+                    make_unique[column](self.view())
+                ).base_children
         return self._children
 
     def set_base_children(self, value):

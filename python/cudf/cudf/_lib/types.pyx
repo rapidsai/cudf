@@ -4,6 +4,8 @@ from enum import IntEnum
 
 import numpy as np
 
+from libcpp.memory cimport shared_ptr, make_shared
+
 from cudf._lib.types cimport (
     underlying_type_t_order,
     underlying_type_t_null_order,
@@ -12,6 +14,8 @@ from cudf._lib.types cimport (
 )
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
+from cudf.core.dtypes import ListDtype
+
 cimport cudf._lib.cpp.types as libcudf_types
 
 
@@ -123,29 +127,25 @@ class NullHandling(IntEnum):
     EXCLUDE = <underlying_type_t_null_policy> libcudf_types.null_policy.EXCLUDE
 
 
-cdef dtype_from_lists_column_view(lists_column_view lv):
-    from cudf.core.dtypes import ListDtype
+cdef dtype_from_lists_column_view(column_view cv):
+    # lists_column_view have no default constructor, so we heap
+    # allocate it to get around Cython's limitation of requiring
+    # default constructors for stack allocated objects
+    cdef shared_ptr[lists_column_view] lv = make_shared[lists_column_view](cv)
+    cdef column_view child = lv.get()[0].child()
 
-    if lv.child().type().id() == libcudf_types.type_id.LIST:
-        return ListDtype(
-            dtype_from_lists_column_view(lists_column_view(lv.child()))
-        )
+    if child.type().id() == libcudf_types.type_id.LIST:
+        return ListDtype(dtype_from_lists_column_view(child))
     else:
         return ListDtype(
-            cudf_to_np_types[
-                <underlying_type_t_type_id> lv.child().type().id()
-            ]
+            cudf_to_np_types[<underlying_type_t_type_id> child.type().id()]
         )
 
 
 cdef dtype_from_column_view(column_view cv):
     cdef libcudf_types.type_id tid = cv.type().id()
     if tid == libcudf_types.type_id.LIST:
-        dtype = dtype_from_lists_column_view(
-            lists_column_view(cv)
-        )
+        dtype = dtype_from_lists_column_view(cv)
     else:
-        dtype = cudf_to_np_types[<underlying_type_t_type_id>(
-            tid
-        )]
+        dtype = cudf_to_np_types[<underlying_type_t_type_id>(tid)]
     return dtype

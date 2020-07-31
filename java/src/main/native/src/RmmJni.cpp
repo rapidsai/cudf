@@ -28,7 +28,7 @@
 #include <rmm/mr/device/pool_memory_resource.hpp>
 #include <unordered_map>
 
-#include "jni_utils.hpp"
+#include "cudf_jni_apis.hpp"
 
 using rmm::mr::device_memory_resource;
 using rmm::mr::logging_resource_adaptor;
