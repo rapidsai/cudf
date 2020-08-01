@@ -161,6 +161,7 @@
 - PR #5800 Expose arrow datasource instead of directly taking a RandomAccessFile
 - PR #5795 Clarify documentation on Boost dependency
 - PR #5803 Add in Java support for the repeat command
+- PR #5825 Enable ORC statistics generation by default
 
 ## Bug Fixes
 
