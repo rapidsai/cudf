@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
+import cudf
 from cudf import _lib as libcudf
 from cudf._lib.nvtx import annotate
 from cudf._lib.scalar import Scalar, as_scalar
@@ -105,8 +106,11 @@ class TimeDeltaColumn(column.ColumnBase):
                 out_dtype = np.bool
             elif op in ("add", "sub"):
                 out_dtype = self.dtype
+            elif op in ("mod"):
+                out_dtype = np.dtype("timedelta64[ns]")
             elif op == "truediv":
-                lhs = lhs.astype("float64")
+                lhs = lhs.astype("timedelta64[ns]").astype("float64")
+
                 if isinstance(rhs, Scalar):
                     rhs = as_scalar(rhs, dtype="float64")
                 else:
@@ -114,6 +118,11 @@ class TimeDeltaColumn(column.ColumnBase):
                 out_dtype = np.dtype("float_")
             elif op == "floordiv":
                 op = "truediv"
+                lhs = lhs.astype("timedelta64[ns]").astype("float64")
+                if isinstance(rhs, Scalar):
+                    rhs = as_scalar(rhs, dtype="float64")
+                else:
+                    rhs = rhs.astype("float64")
                 out_dtype = np.dtype("int_")
             else:
                 raise TypeError(
@@ -133,7 +142,7 @@ class TimeDeltaColumn(column.ColumnBase):
             # TODO
             pass
         elif isinstance(other, np.timedelta64):
-            other = other.astype(self.dtype)
+            other = other.astype("timedelta64[ns]")
             return as_scalar(other)
         elif np.isscalar(other):
             return as_scalar(other)
@@ -156,12 +165,17 @@ class TimeDeltaColumn(column.ColumnBase):
             size=self.size,
         )
 
-    def default_na_value(self):
+    def default_na_value(self, **kwargs):
         """Returns the default NA value for this column
         """
         dkind = self.dtype.kind
         if dkind == "m":
-            return np.timedelta64("nat", self.time_unit)
+            valid_scalar = kwargs.pop("valid_scalar", False)
+            na_value = np.timedelta64("nat", self.time_unit)
+            if valid_scalar:
+                return Scalar(na_value, valid=True)
+            else:
+                return na_value
         else:
             raise TypeError(
                 "datetime column of {} has no NaN value".format(self.dtype)
@@ -173,7 +187,8 @@ class TimeDeltaColumn(column.ColumnBase):
 
     def fillna(self, fill_value):
         if is_scalar(fill_value):
-            fill_value = np.timedelta64(fill_value, self.time_unit)
+            if not isinstance(fill_value, Scalar):
+                fill_value = np.timedelta64(fill_value, self.time_unit)
         else:
             fill_value = column.as_column(fill_value, nan_as_null=False)
 
@@ -227,29 +242,71 @@ class TimeDeltaColumn(column.ColumnBase):
                 self.as_numerical.sum(dtype=dtype), unit=self.time_unit
             )
 
+    def components(self, index=None):
+        return cudf.DataFrame(
+            data={
+                "days": self.binary_operator(
+                    "floordiv", as_scalar(np.timedelta64(86400000000000, "ns"))
+                ),
+                "hours": self.binary_operator(
+                    "mod", as_scalar(np.timedelta64(86400000000000, "ns"))
+                ).binary_operator(
+                    "floordiv", as_scalar(np.timedelta64(3600000000000, "ns"))
+                ),
+                "minutes": self.binary_operator(
+                    "mod", as_scalar(np.timedelta64(3600000000000, "ns"))
+                ).binary_operator(
+                    "floordiv", as_scalar(np.timedelta64(60000000000, "ns"))
+                ),
+                "seconds": self.binary_operator(
+                    "mod", as_scalar(np.timedelta64(60000000000, "ns"))
+                ).binary_operator(
+                    "floordiv", as_scalar(np.timedelta64(1000000000, "ns"))
+                ),
+                "milliseconds": self.binary_operator(
+                    "mod", as_scalar(np.timedelta64(1000000000, "ns"))
+                ).binary_operator(
+                    "floordiv", as_scalar(np.timedelta64(1000000, "ns"))
+                ),
+                "microseconds": self.binary_operator(
+                    "mod", as_scalar(np.timedelta64(1000000, "ns"))
+                ).binary_operator(
+                    "floordiv", as_scalar(np.timedelta64(1000, "ns"))
+                ),
+                "nanoseconds": self.binary_operator(
+                    "mod", as_scalar(np.timedelta64(1000, "ns"))
+                ).binary_operator(
+                    "floordiv", as_scalar(np.timedelta64(1, "ns"))
+                ),
+            },
+            index=index,
+        )
+
     @property
     def days(self):
         return self.binary_operator(
-            "truediv", as_scalar(np.timedelta64(1, "D"))
+            "floordiv", as_scalar(np.timedelta64(86400000000000, "ns"))
         )
 
     @property
     def seconds(self):
         return self.binary_operator(
-            "truediv", as_scalar(np.timedelta64(1, "s"))
+            "mod", as_scalar(np.timedelta64(86400000000000, "ns"))
+        ).binary_operator(
+            "floordiv", as_scalar(np.timedelta64(1000000000, "ns"))
         )
 
     @property
     def microseconds(self):
         return self.binary_operator(
-            "truediv", as_scalar(np.timedelta64(1, "ms"))
-        )
+            "mod", np.timedelta64(1000000000, "ns")
+        ).binary_operator("floordiv", as_scalar(np.timedelta64(1000, "ns")))
 
     @property
     def nanoseconds(self):
         return self.binary_operator(
-            "truediv", as_scalar(np.timedelta64(1, "ns"))
-        )
+            "mod", as_scalar(np.timedelta64(1000, "ns"))
+        ).binary_operator("floordiv", as_scalar(np.timedelta64(1, "ns")))
 
 
 @annotate("BINARY_OP", color="orange", domain="cudf_python")

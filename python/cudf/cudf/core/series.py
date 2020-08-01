@@ -4311,20 +4311,8 @@ class TimedeltaProperties(object):
         return self._get_td_field("days")
 
     @property
-    def hours(self):
-        return self._get_td_field("hours")
-
-    @property
-    def minutes(self):
-        return self._get_td_field("minutes")
-
-    @property
     def seconds(self):
         return self._get_td_field("seconds")
-
-    @property
-    def milliseconds(self):
-        return self._get_td_field("milliseconds")
 
     @property
     def microseconds(self):
@@ -4336,18 +4324,7 @@ class TimedeltaProperties(object):
 
     @property
     def components(self):
-        df = cudf.DataFrame(
-            {
-                "days": self._get_td_field("days"),
-                "hours": self._get_td_field("hours"),
-                "minutes": self._get_td_field("minutes"),
-                "seconds": self._get_td_field("seconds"),
-                "milliseconds": self._get_td_field("milliseconds"),
-                "microseconds": self._get_td_field("microseconds"),
-                "nanoseconds": self._get_td_field("nanoseconds"),
-            }
-        )
-        return df
+        return self.series._column.components(index=self.series._index)
 
     def _get_td_field(self, field):
         out_column = getattr(self.series._column, field)
