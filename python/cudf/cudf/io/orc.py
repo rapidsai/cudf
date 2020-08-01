@@ -78,7 +78,7 @@ def read_orc(
 
 
 @ioutils.doc_to_orc()
-def to_orc(df, fname, compression=None, enable_statistics=False, **kwargs):
+def to_orc(df, fname, compression=None, enable_statistics=True, **kwargs):
     """{docstring}"""
 
     path_or_buf = ioutils.get_writer_filepath_or_buffer(
