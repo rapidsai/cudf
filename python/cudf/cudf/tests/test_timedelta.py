@@ -417,3 +417,107 @@ def test_timedelta_reduction_ops(data, dtype, reduction_op):
         print(expected, type(expected))
         print(actual, type(actual))
         assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [],
+        [None],
+        [None, None, None, None, None],
+        [12, 12, 22, 343, 4353534, 435342],
+        np.array([10, 20, 30, None, 100]),
+        cp.asarray([10, 20, 30, 100]),
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [1],
+        [12, 11, 232, 223432411, 2343241, 234324, 23234],
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+        [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
+        [
+            136457654736252,
+            134736784364431,
+            245345345545332,
+            223432411,
+            2343241,
+            3634548734,
+            23234,
+        ],
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+    ],
+)
+@pytest.mark.parametrize("dtype", dtypeutils.TIMEDELTA_TYPES)
+def test_timedelta_dt_components(data, dtype):
+    gsr = cudf.Series(data, dtype=dtype)
+    psr = gsr.to_pandas(nullable_pd_dtype=True)
+
+    expected = psr.dt.components
+    actual = gsr.dt.components
+
+    if gsr.isnull().any():
+        assert_eq(expected, actual.astype("float"))
+    else:
+        assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [],
+        [None],
+        [None, None, None, None, None],
+        [12, 12, 22, 343, 4353534, 435342],
+        np.array([10, 20, 30, None, 100]),
+        cp.asarray([10, 20, 30, 100]),
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [1],
+        [12, 11, 232, 223432411, 2343241, 234324, 23234],
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+        [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
+        [
+            136457654736252,
+            134736784364431,
+            245345345545332,
+            223432411,
+            2343241,
+            3634548734,
+            23234,
+        ],
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+    ],
+)
+@pytest.mark.parametrize("dtype", dtypeutils.TIMEDELTA_TYPES)
+def test_timedelta_dt_properties(data, dtype):
+    gsr = cudf.Series(data, dtype=dtype)
+    psr = gsr.to_pandas(nullable_pd_dtype=True)
+
+    def local_assert(expected, actual):
+        if gsr.isnull().any():
+            assert_eq(expected, actual.astype("float"))
+        else:
+            assert_eq(expected, actual)
+
+    expected_days = psr.dt.days
+    actual_days = gsr.dt.days
+
+    local_assert(expected_days, actual_days)
+
+    expected_seconds = psr.dt.seconds
+    actual_seconds = gsr.dt.seconds
+
+    local_assert(expected_seconds, actual_seconds)
+
+    expected_microseconds = psr.dt.microseconds
+    actual_microseconds = gsr.dt.microseconds
+
+    local_assert(expected_microseconds, actual_microseconds)
+
+    expected_nanoseconds = psr.dt.nanoseconds
+    actual_nanoseconds = gsr.dt.nanoseconds
+
+    local_assert(expected_nanoseconds, actual_nanoseconds)
