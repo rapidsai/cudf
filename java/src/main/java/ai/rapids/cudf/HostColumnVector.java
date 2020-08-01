@@ -307,26 +307,8 @@ public final class HostColumnVector implements AutoCloseable {
         offsets = null;
         return ret;
       } else {
-        int depth = allTypes.size() -1 ; // 0,1,2 for List<List<int>>
-        int offsetLen = this.offHeap.offsets.size();
-        int validityLen = this.offHeap.valid.size();
-        int rowsLen = this.allRows.size();
-        long prev = 0l;
-        ColumnVector newCol = null;
-        List<MemoryBuffer> buffersToClose = new ArrayList<>();
-        for (int i = depth; i >= 0; i--) {
-          DType colType = allTypes.get(i);
-          long colRows = allRows.get(i);
-          HostMemoryBuffer colData = (i == depth) ? offHeap.data : null;
-          HostMemoryBuffer colValid = i < offHeap.valid.size() ? offHeap.valid.get(i) : null;
-          HostMemoryBuffer colOffsets = i < offHeap.offsets.size() ? offHeap.offsets.get(i) : null;
-          newCol = createColumnVector(colType, colRows, nullCount, colData, colValid, colOffsets, prev);
-          if (i > 0) {
-            prev = newCol.stealColumnView(buffersToClose);
-          }
-        }
-        newCol.getToClose().addAll(buffersToClose);
-      return newCol;
+        return ColumnVector.createNestedColumnVector(
+            offHeap.data, offHeap.valid, offHeap.offsets, allTypes, allRows, nullCount);
       }
     } finally {
       if (data != null) {
@@ -339,42 +321,6 @@ public final class HostColumnVector implements AutoCloseable {
         offsets.close();
       }
     }
-  }
-
-  ColumnVector createColumnVector(DType type, long rows, Optional<Long> nullCount,
-                                  HostMemoryBuffer dataBuffer, HostMemoryBuffer validityBuffer,
-                                  HostMemoryBuffer offsetBuffer, long child) {
-    DeviceMemoryBuffer data = null;
-    DeviceMemoryBuffer valid = null;
-    DeviceMemoryBuffer offsets = null;
-    if (dataBuffer != null) {
-      long dataLen = rows * type.sizeInBytes;
-      if (type == DType.STRING) {
-        // This needs a different type
-        dataLen = getEndStringOffset(rows - 1);
-        if (dataLen == 0 && getNullCount() == 0) {
-          // This is a work around to an issue where a column of all empty strings must have at
-          // least one byte or it will not be interpreted correctly.
-          dataLen = 1;
-        }
-      } else if (type == DType.LIST) {
-        dataLen = dataBuffer.length;
-      }
-      data = DeviceMemoryBuffer.allocate(dataLen);
-      data.copyFromHostBuffer(dataBuffer, 0, dataLen);
-    }
-    if (validityBuffer != null) {
-      long validLen = ColumnVector.getNativeValidPointerSize((int) rows);
-      valid = DeviceMemoryBuffer.allocate(validLen);
-      valid.copyFromHostBuffer(validityBuffer, 0, validLen);
-    }
-    if (offsetBuffer != null) {
-      long offsetsLen = OFFSET_SIZE * (rows + 1);
-      offsets = DeviceMemoryBuffer.allocate(offsetsLen);
-      offsets.copyFromHostBuffer(offsetBuffer, 0, offsetsLen);
-    }
-    ColumnVector ret = new ColumnVector(type, rows, nullCount, data, valid, offsets, child);
-    return ret;
   }
   /////////////////////////////////////////////////////////////////////////////
   // DATA ACCESS
