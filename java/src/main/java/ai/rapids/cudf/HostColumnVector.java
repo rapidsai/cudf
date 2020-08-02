@@ -1550,14 +1550,9 @@ public final class HostColumnVector implements AutoCloseable {
   public static final class Builder implements AutoCloseable {
     public static final int INIT_OFFSET_SIZE = 10;
     private final long rows;
-    private final List<Long> allRows = new ArrayList<>();
     private final DType type;
-    private final List<DType> allTypes = new ArrayList<>();
     private HostMemoryBuffer data;
     private HostMemoryBuffer valid;
-    private List<HostMemoryBuffer> allValids = new ArrayList<>();
-    private List<HostMemoryBuffer> allOffsets = new ArrayList<>();
-    private ArrayList<Integer> currentOffsets = new ArrayList<>();
     private HostMemoryBuffer offsets;
     private long currentIndex = 0;
     private long currentListIndex = 0;
@@ -1576,9 +1571,7 @@ public final class HostColumnVector implements AutoCloseable {
      */
     Builder(DType type, long rows, long stringBufferSize) {
       this.type = type;
-      this.allTypes.add(type);
       this.rows = rows;
-      this.allRows.add(rows);
       if (type == DType.STRING) {
         if (stringBufferSize <= 0) {
           // We need at least one byte or we will get NULL back for data
@@ -1587,7 +1580,6 @@ public final class HostColumnVector implements AutoCloseable {
         this.data = HostMemoryBuffer.allocate(stringBufferSize);
         // The offsets are ints and there is 1 more than the number of rows.
         this.offsets = HostMemoryBuffer.allocate((rows + 1) * OFFSET_SIZE);
-        allOffsets.add(this.offsets);
         // The first offset is always 0
         this.offsets.setInt(0, 0);
       } else {
@@ -1607,12 +1599,9 @@ public final class HostColumnVector implements AutoCloseable {
     Builder(DType type, long rows, HostMemoryBuffer testData,
             HostMemoryBuffer testValid, HostMemoryBuffer testOffsets) {
       this.type = type;
-      this.allTypes.add(type);
       this.rows = rows;
-      this.allRows.add(rows);
       this.data = testData;
       this.valid = testValid;
-      this.allValids.add(testValid);
     }
 
     public final Builder append(boolean value) {
@@ -1948,15 +1937,7 @@ public final class HostColumnVector implements AutoCloseable {
     private void allocateBitmaskAndSetDefaultValues() {
       long bitmaskSize = ColumnVector.getNativeValidPointerSize((int) rows);
       valid = (HostMemoryBuffer.allocate(bitmaskSize));
-      allValids.add(valid);
       valid.setMemory(0, bitmaskSize, (byte) 0xFF);
-    }
-
-    private void allocateBitmaskAndSetDefaultValues(int level) {
-      long bitmaskSize = ColumnVector.getNativeValidPointerSize((int) rows);
-      HostMemoryBuffer newValid = (HostMemoryBuffer.allocate(bitmaskSize));
-      allValids.add(newValid);
-      newValid.setMemory(0, bitmaskSize, (byte) 0xFF);
     }
 
     /**
@@ -1976,24 +1957,13 @@ public final class HostColumnVector implements AutoCloseable {
      * @param index
      */
     public final Builder setNullAt(long index) {
-      assert index < allRows.get(allRows.size() - 1);
+      assert index < rows;
 
       // add null
       if (this.valid == null) {
         allocateBitmaskAndSetDefaultValues();
       }
       nullCount += BitVectorHelper.setNullAt(valid, index);
-      return this;
-    }
-
-    public final Builder setNullAt(int level, long index) {
-      assert index < allRows.get(level);
-
-      // add null
-      if (this.allValids.size() < level || this.allValids.isEmpty()) {
-        allocateBitmaskAndSetDefaultValues(level);
-      }
-      nullCount += BitVectorHelper.setNullAt(allValids.get(allValids.size() - 1), index);
       return this;
     }
 
