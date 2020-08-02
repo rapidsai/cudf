@@ -41,6 +41,7 @@ from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     cudf_dtype_from_pydata_dtype,
     is_categorical_dtype,
+    is_list_dtype,
     is_list_like,
     is_scalar,
     is_string_dtype,
@@ -1163,7 +1164,10 @@ class DataFrame(Frame, Serializable):
         filling with `<NA>` values.
         """
         for col in df._data:
-            if self._data[col].has_nulls:
+            if is_list_dtype(self._data[col]):
+                # TODO we need to handle this
+                pass
+            elif self._data[col].has_nulls:
                 df[col] = df._data[col].astype("str").fillna(cudf._NA_REP)
             else:
                 df[col] = df._data[col]
