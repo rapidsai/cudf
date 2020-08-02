@@ -28,7 +28,7 @@ namespace lists {
 
 /**
  * @brief Create a column using values from row `index` from each
- * sublist within the intput `lists_column`.
+ * sublist within the input `lists_column`.
  *
  * Output `column[i]` is set from element `lists_column[i][index]`.
  * If `index` is larger than the size of the sublist at `lists_column[i]`
