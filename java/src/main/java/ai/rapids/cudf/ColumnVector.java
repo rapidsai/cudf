@@ -24,6 +24,7 @@ import ai.rapids.cudf.WindowOptions.FrameType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.xml.datatype.DatatypeConfigurationException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -3222,8 +3223,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     return build(DType.BOOL8, values.length, (b) -> b.appendArray(values));
   }
 
-  public static<T> ColumnVector fromLists(DType baseType, List<T>... lists) {
-    try (HostColumnVector host = HostColumnVector.fromLists(baseType, lists)) {
+  public static<T> ColumnVector fromLists(HostColumnVector.ColumnBuilder.DataType dataType, List<T>... lists) {
+    try (HostColumnVector host = HostColumnVector.fromLists(dataType, lists)) {
       return host.copyToDevice();
     }
   }
