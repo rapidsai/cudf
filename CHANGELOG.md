@@ -60,7 +60,9 @@
 - PR #5568 Add support for `Series.keys()` and `DataFrame.keys()`
 - PR #5782 Add Kafka support to custreamz
 - PR #5642 Add `GroupBy.groups()`
+- PR #5789 Add groupby support for duration types
 - PR #5810 Make Cython subdirs packages and simplify package_data
+- PR #5822 Add `cudf_kafka` to `custreamz` run time conda dependency and fix bash syntax issue
 
 ## Improvements
 
@@ -164,6 +166,7 @@
 - PR #5803 Add in Java support for the repeat command
 - PR #5825 Enable ORC statistics generation by default
 - PR #5832 Make dictionary_wrapper constructor from a value explicit
+- PR #5833 Pin `dask` and `distributed` version to `2.22.0`
 
 ## Bug Fixes
 
@@ -237,10 +240,12 @@
 - PR #5750 Add RMM_ROOT/include to the spdlog search path in JNI build
 - PR #5763 Update Java slf4j version to match Spark 3.0
 - PR #5766 Fix issue related to `iloc` and slicing a `DataFrame`
+- PR #5827 Revert fallback for `tolist` being absent
 - PR #5774 Add fallback for when `tolist` is absent
 - PR #5319 Disallow SUM and specialize MEAN of timestamp types
 - PR #5797 Fix a missing data issue in some Parquet files
 - PR #5787 Fix column create from dictionary column view
+- PR #5813 Fix normalizer exception with all-null strings column
 - PR #5820 Fix ListColumn.to_arrow for all null case
 
 
