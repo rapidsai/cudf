@@ -778,10 +778,10 @@ def test_edit_distance():
     sr = cudf.Series(["kitten", "saturday", "address", "book"])
     tg = cudf.Series(["sitting", "sunday", "addressee", "back"])
 
-    expected = cudf.Series([3, 3, 2, 2])
+    expected = cudf.Series([3, 3, 2, 2], dtype=np.int32)
     actual = sr.str.edit_distance(tg)
     assert_eq(expected, actual)
 
-    expected = cudf.Series([0, 7, 6, 6])
+    expected = cudf.Series([0, 7, 6, 6], dtype=np.int32)
     actual = sr.str.edit_distance("kitten")
     assert_eq(expected, actual)
