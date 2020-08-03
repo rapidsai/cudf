@@ -200,7 +200,7 @@ struct ClampTestNumeric : public cudf::test::BaseFixture {
     }
   }
 };
-using Types = cudf::test::FixedWidthTypes;
+using Types = cudf::test::FixedWidthTypesWithoutFixedPoint;
 
 TYPED_TEST_CASE(ClampTestNumeric, Types);
 

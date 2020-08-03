@@ -42,7 +42,7 @@ class RepeatTypedTestFixture : public cudf::test::BaseFixture,
   cudf::size_type repeat_count() { return this->generate(); }
 };
 
-TYPED_TEST_CASE(RepeatTypedTestFixture, cudf::test::FixedWidthTypes);
+TYPED_TEST_CASE(RepeatTypedTestFixture, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(RepeatTypedTestFixture, RepeatScalarCount)
 {
@@ -67,24 +67,6 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatScalarCount)
 
   EXPECT_EQ(p_ret->num_columns(), 1);
   cudf::test::expect_columns_equal(p_ret->view().column(0), expected);
-}
-
-template <typename Element, typename InputIterator>
-void generate_sequence(
-  InputIterator begin,
-  InputIterator end,
-  typename std::enable_if<!cudf::is_duration_t<Element>::value>::type* = nullptr)
-{
-  std::iota(begin, end, 0);
-}
-
-template <typename Element, typename InputIterator>
-void generate_sequence(
-  InputIterator begin,
-  InputIterator end,
-  typename std::enable_if<cudf::is_duration_t<Element>::value>::type* = nullptr)
-{
-  std::iota(begin, end, Element{0});
 }
 
 TYPED_TEST(RepeatTypedTestFixture, RepeatColumnCount)

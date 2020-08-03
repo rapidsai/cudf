@@ -35,6 +35,7 @@
 #include <tests/utilities/column_utilities.hpp>
 
 #include <cudf/lists/lists_column_view.hpp>
+#include "cudf/fixed_point/fixed_point.hpp"
 
 namespace cudf {
 namespace test {
@@ -130,6 +131,18 @@ struct fixed_width_type_converter {
   void operator()(InputIterator begin, InputIterator end, OutputIterator out) const
   {
     std::transform(begin, end, out, [](auto const& e) { return static_cast<ToT>(e); });
+  }
+
+  // Is the target type a fixed_point type
+  template <typename FromT = From,
+            typename ToT   = To,
+            typename InputIterator,
+            typename OutputIterator,
+            typename std::enable_if<!std::is_same<FromT, ToT>::value &&
+                                    cudf::is_fixed_point<ToT>()>::type* = nullptr>
+  void operator()(InputIterator begin, InputIterator end, OutputIterator out) const
+  {
+    std::transform(begin, end, out, [](auto const& e) { return ToT{e, numeric::scale_type{0}}; });
   }
 
   // Convert integral values to timestamps

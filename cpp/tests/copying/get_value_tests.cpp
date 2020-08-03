@@ -33,7 +33,7 @@ template <typename T>
 struct FixedWidthGetValueTest : public BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedWidthGetValueTest, FixedWidthTypes);
+TYPED_TEST_CASE(FixedWidthGetValueTest, FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(FixedWidthGetValueTest, BasicGet)
 {
@@ -123,7 +123,7 @@ template <typename T>
 struct DictionaryGetValueTest : public BaseFixture {
 };
 
-TYPED_TEST_CASE(DictionaryGetValueTest, FixedWidthTypes);
+TYPED_TEST_CASE(DictionaryGetValueTest, FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(DictionaryGetValueTest, BasicGet)
 {

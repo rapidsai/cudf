@@ -18,8 +18,14 @@
  */
 
 #include <tests/binaryop/assert-binops.h>
-#include <cudf/binaryop.hpp>
 #include <tests/binaryop/binop-fixture.hpp>
+#include <tests/utilities/type_lists.hpp>
+
+#include <cudf/binaryop.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
+#include "cudf/types.hpp"
+#include "cudf/utilities/type_dispatcher.hpp"
+#include "tests/utilities/column_utilities.hpp"
 
 namespace cudf {
 namespace test {
@@ -1111,7 +1117,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_tsD_tsD)
   using TypeLhs = cudf::timestamp_D;
   using TypeRhs = cudf::timestamp_D;
 
-  cudf::test::fixed_width_column_wrapper<TypeLhs, TypeLhs::rep> ts_col(
+  cudf::test::fixed_width_column_wrapper<TypeLhs, TypeLhs::rep> ts_col{
     {
       999,    // Random nullable field
       0,      // This is the UNIX epoch - 1970-01-01
@@ -1122,7 +1128,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_tsD_tsD)
       22270,  // 2030-12-22 00:00:00 GMT
       111,    // Random nullable field
     },
-    {false, true, true, true, false, true, true, false});
+    {false, true, true, true, false, true, true, false}};
   auto ts_scalar = cudf::scalar_type_t<TypeRhs>(typename TypeRhs::duration{44376}, true);
 
   auto op_col = cudf::binary_operation(
@@ -1327,21 +1333,21 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_tsD_tsD_N
   using TypeLhs = cudf::timestamp_D;
   using TypeRhs = cudf::timestamp_D;
 
-  cudf::test::fixed_width_column_wrapper<TypeLhs, TypeLhs::rep> lhs_col({
+  cudf::test::fixed_width_column_wrapper<TypeLhs, TypeLhs::rep> lhs_col{
     0,      // This is the UNIX epoch - 1970-01-01
     44376,  // 2091-07-01 00:00:00 GMT
     47695,  // 2100-08-02 00:00:00 GMT
     66068,  // 2150-11-21 00:00:00 GMT
     22270,  // 2030-12-22 00:00:00 GMT
-  });
+  };
   ASSERT_EQ(column_view{lhs_col}.nullable(), false);
-  cudf::test::fixed_width_column_wrapper<TypeRhs, TypeRhs::rep> rhs_col({
+  cudf::test::fixed_width_column_wrapper<TypeRhs, TypeRhs::rep> rhs_col{
     0,      // This is the UNIX epoch - 1970-01-01
     44380,  // Mismatched
     47695,  // 2100-08-02 00:00:00 GMT
     66070,  // Mismatched
     22270,  // 2030-12-22 00:00:00 GMT
-  });
+  };
 
   auto op_col = cudf::binary_operation(
     lhs_col, rhs_col, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
@@ -1649,7 +1655,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Vector_Vector_SI64_SI32_SI8)
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Vector_tsD_tsD_tsD)
 {
-  cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> lhs_col(
+  cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> lhs_col{
     {
       0,      // This is the UNIX epoch - 1970-01-01
       44376,  // 2091-07-01 00:00:00 GMT
@@ -1657,8 +1663,8 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Vector_tsD_tsD_tsD)
       66068,  // 2150-11-21 00:00:00 GMT
       22270,  // 2030-12-22 00:00:00 GMT
     },
-    {true, false, true, true, false});
-  cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> rhs_col(
+    {true, false, true, true, false}};
+  cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> rhs_col{
     {
       0,      // This is the UNIX epoch - 1970-01-01
       44380,  // Mismatched
@@ -1666,7 +1672,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Vector_tsD_tsD_tsD)
       66070,  // Mismatched
       22270,  // 2030-12-22 00:00:00 GMT
     },
-    {false, true, true, true, false});
+    {false, true, true, true, false}};
 
   auto op_col = cudf::binary_operation(
     lhs_col, rhs_col, cudf::binary_operator::NULL_MIN, data_type(type_to_id<cudf::timestamp_D>()));
@@ -1674,8 +1680,8 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Vector_tsD_tsD_tsD)
   // Every row has a value
   expect_columns_equal(
     *op_col,
-    cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>(
-      {0, 44380, 47695, 66068, 0}, {true, true, true, true, false}),
+    cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
+      {0, 44380, 47695, 66068, 0}, {true, true, true, true, false}},
     true);
 }
 
@@ -2033,6 +2039,141 @@ TEST_F(BinaryOperationIntegrationTest, ATan2_Vector_Vector_FP64_SI32_SI64)
 
   // atan2 has a max ULP error of 2 per CUDA programming guide
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ATAN2(), NearEqualComparator<TypeOut>{2});
+}
+
+template <typename T>
+struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+};
+
+template <typename T>
+using wrapper = cudf::test::fixed_width_column_wrapper<T>;
+TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpAdd)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+
+  auto const sz = std::size_t{1000};
+
+  auto vec1       = std::vector<decimalXX>(sz);
+  auto const vec2 = std::vector<decimalXX>(sz, decimalXX{1, scale_type{-1}});
+  auto expected   = std::vector<decimalXX>(sz);
+
+  std::iota(std::begin(vec1), std::end(vec1), decimalXX{});
+
+  std::transform(std::cbegin(vec1),
+                 std::cend(vec1),
+                 std::cbegin(vec2),
+                 std::begin(expected),
+                 std::plus<decimalXX>());
+
+  auto const lhs          = wrapper<decimalXX>(vec1.begin(), vec1.end());
+  auto const rhs          = wrapper<decimalXX>(vec2.begin(), vec2.end());
+  auto const expected_col = wrapper<decimalXX>(expected.begin(), expected.end());
+
+  auto const result = cudf::binary_operation(
+    lhs, rhs, cudf::binary_operator::ADD, static_cast<cudf::column_view>(lhs).type());
+
+  cudf::test::expect_columns_equal(expected_col, result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpMultiply)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+
+  auto const sz = std::size_t{1000};
+
+  auto vec1       = std::vector<decimalXX>(sz);
+  auto const vec2 = std::vector<decimalXX>(sz, decimalXX{1, scale_type{-1}});
+  auto expected   = std::vector<decimalXX>(sz);
+
+  std::iota(std::begin(vec1), std::end(vec1), decimalXX{});
+
+  std::transform(std::cbegin(vec1),
+                 std::cend(vec1),
+                 std::cbegin(vec2),
+                 std::begin(expected),
+                 std::multiplies<decimalXX>());
+
+  auto const lhs          = wrapper<decimalXX>(vec1.begin(), vec1.end());
+  auto const rhs          = wrapper<decimalXX>(vec2.begin(), vec2.end());
+  auto const expected_col = wrapper<decimalXX>(expected.begin(), expected.end());
+
+  auto const result = cudf::binary_operation(
+    lhs, rhs, cudf::binary_operator::MUL, static_cast<cudf::column_view>(lhs).type());
+
+  cudf::test::expect_columns_equal(expected_col, result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpEqualSimple)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+
+  auto const ONE   = decimalXX{1, scale_type{0}};
+  auto const TWO   = decimalXX{2, scale_type{0}};
+  auto const THREE = decimalXX{3, scale_type{0}};
+  auto const FOUR  = decimalXX{4, scale_type{0}};
+
+  auto const ONE_2   = decimalXX{1, scale_type{-2}};
+  auto const TWO_2   = decimalXX{2, scale_type{-2}};
+  auto const THREE_2 = decimalXX{3, scale_type{-2}};
+  auto const FOUR_2  = decimalXX{4, scale_type{-2}};
+
+  auto const vec1  = std::vector<decimalXX>{ONE, TWO, THREE, FOUR};
+  auto const vec2  = std::vector<decimalXX>{ONE_2, TWO_2, THREE_2, FOUR_2};
+  auto const trues = std::vector<bool>(4, true);
+
+  auto const col1     = wrapper<decimalXX>(vec1.begin(), vec1.end());
+  auto const col2     = wrapper<decimalXX>(vec2.begin(), vec2.end());
+  auto const expected = wrapper<bool>(trues.begin(), trues.end());
+
+  auto const result = cudf::binary_operation(
+    col1, col2, cudf::binary_operator::EQUAL, cudf::data_type{type_id::BOOL8});
+
+  cudf::test::expect_columns_equal(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpEqualLessGreater)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+
+  auto const sz = std::size_t{1000};
+
+  // TESTING binary op ADD
+
+  auto vec1 = std::vector<decimalXX>(sz, decimalXX{0, scale_type{-3}});
+  auto vec2 = std::vector<decimalXX>(sz, decimalXX{0, scale_type{-1}});
+
+  std::iota(std::begin(vec1), std::end(vec1), decimalXX{1, scale_type{-3}});
+
+  auto const iota_1  = wrapper<decimalXX>(vec1.begin(), vec1.end());
+  auto const zeros_3 = wrapper<decimalXX>(vec2.begin(), vec2.end());
+
+  auto const iota_3 = cudf::binary_operation(
+    zeros_3, iota_1, cudf::binary_operator::ADD, static_cast<cudf::column_view>(zeros_3).type());
+
+  cudf::test::expect_columns_equal(iota_1, iota_3->view());
+
+  // TESTING binary op EQUAL, LESS, GREATER
+
+  auto const trues    = std::vector<bool>(sz, true);
+  auto const true_col = wrapper<bool>(trues.begin(), trues.end());
+
+  auto const equal_result = cudf::binary_operation(
+    iota_1, iota_3->view(), cudf::binary_operator::EQUAL, data_type{type_id::BOOL8});
+  cudf::test::expect_columns_equal(true_col, equal_result->view());
+
+  auto const less_result = cudf::binary_operation(
+    zeros_3, iota_3->view(), cudf::binary_operator::LESS, data_type{type_id::BOOL8});
+  cudf::test::expect_columns_equal(true_col, less_result->view());
+
+  auto const greater_result = cudf::binary_operation(
+    iota_3->view(), zeros_3, cudf::binary_operator::GREATER, data_type{type_id::BOOL8});
+  cudf::test::expect_columns_equal(true_col, greater_result->view());
 }
 
 }  // namespace binop
