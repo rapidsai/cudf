@@ -15,13 +15,13 @@
  */
 #include <algorithm>
 #include <cudf/ast/linearizer.hpp>
+#include <cudf/ast/operators.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <functional>
 #include <iterator>
-#include "cudf/ast/operators.hpp"
 
 namespace cudf {
 
