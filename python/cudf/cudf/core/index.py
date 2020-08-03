@@ -80,6 +80,15 @@ class Index(Frame, Serializable):
 
         return as_index(data, copy=copy, dtype=dtype, name=name, **kwargs)
 
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        import cudf
+
+        if method == "__call__" and hasattr(cudf, ufunc.__name__):
+            func = getattr(cudf, ufunc.__name__)
+            return func(*inputs)
+        else:
+            return NotImplemented
+
     def __init__(
         self,
         data=None,

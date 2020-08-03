@@ -387,6 +387,25 @@ def test_timedelta_series_ops_with_scalars(data, other_scalars, dtype, op):
 
     assert_eq(expected, actual, nullable_pd_dtype=True)
 
+    if op == "add":
+        expected = other_scalars + psr
+        actual = other_scalars + gsr
+    elif op == "sub":
+        expected = other_scalars - psr
+        actual = other_scalars - gsr
+    elif op == "truediv":
+        expected = other_scalars / psr
+        actual = other_scalars / gsr
+    elif op == "floordiv":
+        # TODO: https://github.com/pandas-dev/pandas/issues/35529
+        # uncomment this below line once above bug is fixed
+
+        # expected = psr // other_scalars
+        expected = (other_scalars / gsr).astype("int64")
+        actual = other_scalars // gsr
+
+    assert_eq(expected, actual, nullable_pd_dtype=True)
+
 
 @pytest.mark.parametrize(
     "data",
@@ -725,5 +744,24 @@ def test_timedelta_index_ops_with_scalars(data, other_scalars, dtype, op):
         # expected = psr // other_scalars
         expected = (gtdi / other_scalars).astype("int64")
         actual = gtdi // other_scalars
+
+    assert_eq(expected, actual)
+
+    if op == "add":
+        expected = other_scalars + ptdi
+        actual = other_scalars + gtdi
+    elif op == "sub":
+        expected = other_scalars - ptdi
+        actual = other_scalars - gtdi
+    elif op == "truediv":
+        expected = other_scalars / ptdi
+        actual = other_scalars / gtdi
+    elif op == "floordiv":
+        # TODO: https://github.com/pandas-dev/pandas/issues/35529
+        # uncomment this below line once above bug is fixed
+
+        # expected = other_scalars // psr
+        expected = (other_scalars / gtdi).astype("int64")
+        actual = other_scalars // gtdi
 
     assert_eq(expected, actual)
