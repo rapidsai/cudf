@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,8 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/copying.hpp>
 #include <cudf/detail/concatenate.cuh>
-#include <cudf/detail/search.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/dictionary/detail/concatenate.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
@@ -37,16 +34,38 @@ namespace dictionary {
 namespace detail {
 namespace {
 
-// keys and indices offsets for concatenated child columns
+/**
+ * @brief Keys and indices offsets values.
+ *
+ * The first value is the keys offsets and the second values is the indices offsets.
+ * These are offsets to the beginning of each input column after concatenating.
+ */
 using offsets_pair = thrust::pair<size_type, size_type>;
 
-struct compute_child_offsets {
-  compute_child_offsets(std::vector<column_view> const& columns) : columns_ptrs{columns.size()}
+/**
+ * @brief Utility for calculating the offsets for the concatenated child columns
+ *        of the output dictionary column.
+ */
+struct compute_children_offsets_fn {
+  /**
+   * @brief Create the utility functor.
+   *
+   * The columns vector is converted into vector of column_view pointers so they
+   * can be used in thrust::transform_exclusive_scan without causing the
+   * compiler warning/error: "host/device function calling host function".
+   *
+   * @param columns The input dictionary columns.
+   */
+  compute_children_offsets_fn(std::vector<column_view> const& columns)
+    : columns_ptrs{columns.size()}
   {
     std::transform(
       columns.begin(), columns.end(), columns_ptrs.begin(), [](auto& cv) { return &cv; });
   }
 
+  /**
+   * @brief Return the first keys().type of the dictionary columns.
+   */
   data_type get_keys_type()
   {
     dictionary_column_view dict_view(**std::find_if(
@@ -54,6 +73,16 @@ struct compute_child_offsets {
     return dict_view.keys().type();
   }
 
+  /**
+   * @brief Create the offsets pair for the concatenated columns.
+   *
+   * Both vectors have the length of the number of input columns.
+   * The sizes of each child (keys and indices) of the individual columns
+   * are used to create the offsets.
+   *
+   * @param stream Stream used for allocating the output rmm::device_uvector.
+   * @return Vector of offsets_pair objects for keys and indices.
+   */
   rmm::device_uvector<offsets_pair> create_children_offsets(cudaStream_t stream)
   {
     std::vector<offsets_pair> offsets(columns_ptrs.size());
@@ -80,8 +109,7 @@ struct compute_child_offsets {
   }
 
  private:
-  // thrust::transform_exclusive_scan does not compile with column_view
-  std::vector<column_view const*> columns_ptrs;
+  std::vector<column_view const*> columns_ptrs;  ///< pointer version of input column_view vector
 };
 
 /**
@@ -107,7 +135,8 @@ struct dispatch_compute_indices {
     auto d_all_keys    = *keys_view;
     auto indices_view  = column_device_view::create(all_indices, stream);
     auto d_all_indices = *indices_view;
-    auto all_itr       = thrust::make_transform_iterator(
+
+    auto all_itr = thrust::make_transform_iterator(
       thrust::make_counting_iterator<size_type>(0),
       [d_all_keys, d_offsets, d_map_to_keys, d_all_indices] __device__(size_type idx) {
         if (d_all_indices.is_null(idx)) return Element{};
@@ -115,12 +144,14 @@ struct dispatch_compute_indices {
           d_all_indices.template element<int32_t>(idx) + d_offsets[d_map_to_keys[idx]].first;
         return d_all_keys.template element<Element>(index);
       });
+
     auto new_keys_view = column_device_view::create(new_keys, stream);
     auto d_new_keys    = *new_keys_view;
     auto keys_itr      = thrust::make_transform_iterator(
       thrust::make_counting_iterator<size_type>(0),
       [d_new_keys] __device__(size_type idx) { return d_new_keys.template element<Element>(idx); });
 
+    // compute new indices values into output column
     auto result = make_numeric_column(
       data_type{type_id::INT32}, all_indices.size(), mask_state::UNALLOCATED, stream, mr);
     auto d_result = result->mutable_view().data<int32_t>();
@@ -131,7 +162,6 @@ struct dispatch_compute_indices {
                         all_itr + all_indices.size(),
                         d_result,
                         thrust::less<Element>());
-    result->set_null_count(0);
     return result;
   }
 
@@ -159,11 +189,12 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
   if (columns.size() == 0) return make_empty_column(data_type{type_id::DICTIONARY32});
 
   // concatenate the keys (and check the keys match)
-  compute_child_offsets child_offsets_fn{columns};
+  compute_children_offsets_fn child_offsets_fn{columns};
   auto keys_type = child_offsets_fn.get_keys_type();
   std::vector<column_view> keys_views(columns.size());
   std::transform(columns.begin(), columns.end(), keys_views.begin(), [keys_type](auto cv) {
     auto dict_view = dictionary_column_view(cv);
+    // empty column may not have keys so we create an empty column_view place-holder
     if (dict_view.size() == 0) return column_view{keys_type, 0, nullptr};
     auto keys = dict_view.keys();
     CUDF_EXPECTS(keys.type() == keys_type, "key types of each dictionary column must match");
@@ -171,7 +202,8 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
   });
   auto all_keys = cudf::detail::concatenate(keys_views, rmm::mr::get_default_resource(), stream);
 
-  // sort keys and remove duplicates
+  // sort keys and remove duplicates;
+  // this becomes the keys child for the output dictionary column
   auto table_keys = cudf::detail::drop_duplicates(table_view{{all_keys->view()}},
                                                   std::vector<size_type>{0},
                                                   duplicate_keep_option::KEEP_FIRST,
@@ -181,34 +213,35 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
                       ->release();
   std::unique_ptr<column> keys_column(std::move(table_keys.front()));
 
-  // concatenate the indices
+  // next, concatenate the indices
   std::vector<column_view> indices_views(columns.size());
   std::transform(columns.begin(), columns.end(), indices_views.begin(), [](auto cv) {
     auto dict_view = dictionary_column_view(cv);
     if (dict_view.size() == 0) return column_view{data_type{type_id::INT32}, 0, nullptr};
-    return dict_view.get_indices_annotated();  // includes validity mask and offset
+    return dict_view.get_indices_annotated();  // nicely includes validity mask and view offset
   });
-  auto all_indices       = cudf::detail::concatenate(indices_views, mr, stream);
-  size_type indices_size = all_indices->size();
+  auto all_indices        = cudf::detail::concatenate(indices_views, mr, stream);
+  auto const indices_size = all_indices->size();
 
-  // create vector of values to match old indices to the concatenated keys
+  // build a vector of values to map the old indices to the concatenated keys
   auto children_offsets = child_offsets_fn.create_children_offsets(stream);
-
   rmm::device_uvector<size_type> map_to_keys(indices_size, stream);
-  auto pair_itr = thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(1),
-                                                  [] __device__(size_type idx) {
-                                                    return offsets_pair{0, idx};
-                                                  });
+  auto indices_itr = thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(1),
+                                                     [] __device__(size_type idx) {
+                                                       return offsets_pair{0, idx};
+                                                     });
+  // the indices offsets (pair.second) are for building the map
   thrust::lower_bound(
     rmm::exec_policy(stream)->on(stream),
     children_offsets.begin() + 1,
     children_offsets.end(),
-    pair_itr,
-    pair_itr + indices_size + 1,
+    indices_itr,
+    indices_itr + indices_size + 1,
     map_to_keys.begin(),
     [] __device__(auto const& lhs, auto const& rhs) { return lhs.second < rhs.second; });
 
-  // now recompute the indices values for the new keys_column
+  // now recompute the indices values for the new keys_column;
+  // the keys offsets (pair.first) are for mapping to the input keys
   auto indices_column = type_dispatcher(keys_type,
                                         dispatch_compute_indices{},
                                         all_keys->view(),     // old keys
@@ -219,11 +252,11 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
                                         stream,
                                         mr);
 
-  // remove the bitmask from the indices_column
+  // remove the bitmask from the all_indices
   auto null_count = all_indices->null_count();  // get before release()
   auto contents   = all_indices->release();     // all_indices will now be empty
 
-  // finally, frankenstein the dictionary column
+  // finally, frankenstein that dictionary column together
   return make_dictionary_column(std::move(keys_column),
                                 std::move(indices_column),
                                 std::move(*(contents.null_mask.release())),
