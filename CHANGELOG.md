@@ -248,6 +248,7 @@
 - PR #5787 Fix column create from dictionary column view
 - PR #5813 Fix normalizer exception with all-null strings column
 - PR #5820 Fix ListColumn.to_arrow for all null case
+- PR #5837 Bash syntax error in prebuild.sh preventing `cudf_kafka` and `libcudf_kafka` from being uploaded to Anaconda
 
 
 # cuDF 0.14.0 (03 Jun 2020)
