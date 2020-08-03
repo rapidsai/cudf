@@ -4179,6 +4179,7 @@ class StringMethods(ColumnMethodsMixin):
         """
         The targets strings are measured against the strings in this column
         using the Levenshtein edit distance algorithm.
+        https://www.cuelogic.com/blog/the-levenshtein-algorithm
 
         Parameters
         ----------
@@ -4192,12 +4193,12 @@ class StringMethods(ColumnMethodsMixin):
         Examples
         --------
         >>> import cudf
-        >>> sr = cudf.Series(["puppy", "doggy", "cat"])
-        >>> targets = cudf.Series(["pup", "dog", "kitten"])
+        >>> sr = cudf.Series(["puppy", "doggy", "kitty"])
+        >>> targets = cudf.Series(["pup", "dogie", "kitten"])
         >>> sr.str.edit_distance(targets=targets)
         0    2
         1    2
-        2    3
+        2    2
         dtype: int32
         """
         if is_scalar(targets):
