@@ -56,6 +56,7 @@
 - PR #5645 Enforce pd.NA and Pandas nullable dtype parity
 - PR #5729 Create nvtext normalize_characters API from the subword_tokenize internal function
 - PR #5572 Add `cudf::encode` API.
+- PR #5753 Add `cudf::lists::extract_list_element` API
 - PR #5568 Add support for `Series.keys()` and `DataFrame.keys()`
 - PR #5782 Add Kafka support to custreamz
 - PR #5642 Add `GroupBy.groups()`
