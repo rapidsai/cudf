@@ -186,7 +186,7 @@ template <typename T>
 class HashPartitionFixedWidth : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(HashPartitionFixedWidth, cudf::test::FixedWidthTypes);
+TYPED_TEST_CASE(HashPartitionFixedWidth, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(HashPartitionFixedWidth, NullableFixedWidth)
 {

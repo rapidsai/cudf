@@ -20,6 +20,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/string_view.cuh>
+#include "cudf/fixed_point/fixed_point.hpp"
 
 namespace cudf {
 namespace detail {
@@ -112,6 +113,42 @@ struct copy_if_else_functor_impl<list_view, Left, Right, Filter> {
                                      cudaStream_t stream)
   {
     CUDF_FAIL("copy_if_else not supported for list_view yet");
+  }
+};
+
+/**
+ * @brief Specialization of copy_if_else_functor for decimal32.
+ */
+template <typename Left, typename Right, typename Filter>
+struct copy_if_else_functor_impl<numeric::decimal32, Left, Right, Filter> {
+  std::unique_ptr<column> operator()(Left const& lhs,
+                                     Right const& rhs,
+                                     size_type size,
+                                     bool left_nullable,
+                                     bool right_nullable,
+                                     Filter filter,
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream)
+  {
+    CUDF_FAIL("copy_if_else not supported for decimal32 yet");
+  }
+};
+
+/**
+ * @brief Specialization of copy_if_else_functor for decimal64.
+ */
+template <typename Left, typename Right, typename Filter>
+struct copy_if_else_functor_impl<numeric::decimal64, Left, Right, Filter> {
+  std::unique_ptr<column> operator()(Left const& lhs,
+                                     Right const& rhs,
+                                     size_type size,
+                                     bool left_nullable,
+                                     bool right_nullable,
+                                     Filter filter,
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream)
+  {
+    CUDF_FAIL("copy_if_else not supported for decimal64 yet");
   }
 };
 
