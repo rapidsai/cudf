@@ -162,6 +162,7 @@
 - PR #5795 Clarify documentation on Boost dependency
 - PR #5803 Add in Java support for the repeat command
 - PR #5825 Enable ORC statistics generation by default
+- PR #5834 Add support for dictionary column in concatenate
 
 ## Bug Fixes
 
