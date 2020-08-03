@@ -51,22 +51,20 @@ TEST_F(ASTTest, BasicASTEvaluation)
   auto expect_add = column_wrapper<int32_t>{13, 27, 21, 50};
   // auto expect_less   = column_wrapper<bool>{true, false, true, false};
   auto expect_tree_1 = column_wrapper<int32_t>{7, 73, 22, -99};
-  /*
   auto expect_tree_2 =
     column_wrapper<double>{0.6, std::numeric_limits<double>::infinity(), -3.201, -2099.18};
-  */
 
   auto table_a = cudf::table_view{{a_0, a_1, a_2}};
-  // auto table_b = cudf::table_view{{b_0, b_1, b_2}};
+  auto table_b = cudf::table_view{{b_0, b_1, b_2}};
 
   auto col_ref_a_0 = cudf::ast::column_reference(0);
   auto col_ref_a_1 = cudf::ast::column_reference(1);
   auto col_ref_a_2 = cudf::ast::column_reference(2);
 
-  /*
   auto col_ref_b_0 = cudf::ast::column_reference(0);
   auto col_ref_b_1 = cudf::ast::column_reference(1);
   auto col_ref_b_2 = cudf::ast::column_reference(2);
+  /*
   auto literal_value = cudf::numeric_scalar<int32_t>(42);
   auto literal       = cudf::ast::literal(literal_value);
   */
@@ -85,23 +83,21 @@ TEST_F(ASTTest, BasicASTEvaluation)
   auto expression_tree_1 = cudf::ast::binary_expression(
     cudf::ast::ast_operator::ADD, expression_tree_1_1, expression_tree_1_2);
 
-  /*
   auto expression_tree_2_1 =
     cudf::ast::binary_expression(cudf::ast::ast_operator::MUL, col_ref_b_0, col_ref_b_1);
 
   auto expression_tree_2 =
     cudf::ast::binary_expression(cudf::ast::ast_operator::SUB, col_ref_b_2, expression_tree_2_1);
-  */
 
   auto result_add = cudf::ast::compute_column(table_a, expression_add);
   // auto result_less   = cudf::ast::compute_column(table_a, expression_less);
   auto result_tree_1 = cudf::ast::compute_column(table_a, expression_tree_1);
-  // auto result_tree_2 = cudf::ast::compute_column(table_b, expression_tree_2);
+  auto result_tree_2 = cudf::ast::compute_column(table_b, expression_tree_2);
 
   cudf::test::expect_columns_equal(expect_add, result_add->view(), true);
   // cudf::test::expect_columns_equal(expect_less, result_less->view(), true);
   cudf::test::expect_columns_equal(expect_tree_1, result_tree_1->view(), true);
-  // cudf::test::expect_columns_equal(expect_tree_2, result_tree_2->view(), true);
+  cudf::test::expect_columns_equal(expect_tree_2, result_tree_2->view(), true);
 }
 
 struct custom_functor {
