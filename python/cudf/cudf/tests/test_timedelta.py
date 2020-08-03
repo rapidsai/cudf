@@ -556,3 +556,75 @@ def test_timedelta_index(data, dtype):
     pdi = gdi.to_pandas()
 
     assert_eq(pdi, gdi)
+
+
+@pytest.mark.parametrize(
+    "datetime_data",
+    [
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [],
+        [None],
+        [None, None, None, None, None],
+        [12, 12, 22, 343, 4353534, 435342],
+        np.array([10, 20, 30, None, 100]),
+        cp.asarray([10, 20, 30, 100]),
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [1],
+        [12, 11, 232, 223432411, 2343241, 234324, 23234],
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+        [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
+        [
+            136457654736252,
+            134736784364431,
+            245345345545332,
+            223432411,
+            2343241,
+            3634548734,
+            23234,
+        ],
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+    ],
+)
+@pytest.mark.parametrize("datetime_dtype", dtypeutils.DATETIME_TYPES)
+@pytest.mark.parametrize(
+    "timedelta_data",
+    [
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [],
+        [None],
+        [None, None, None, None, None],
+        [12, 12, 22, 343, 4353534, 435342],
+        np.array([10, 20, 30, None, 100]),
+        cp.asarray([10, 20, 30, 100]),
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [1],
+        [12, 11, 232, 223432411, 2343241, 234324, 23234],
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+        [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
+        [
+            136457654736252,
+            134736784364431,
+            245345345545332,
+            223432411,
+            2343241,
+            3634548734,
+            23234,
+        ],
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+    ],
+)
+@pytest.mark.parametrize("timedelta_dtype", dtypeutils.TIMEDELTA_TYPES)
+def test_timedelta_index_datetime_index_ops(
+    datetime_data, datetime_dtype, timedelta_data, timedelta_dtype
+):
+    gdt = cudf.Index(datetime_data, dtype=datetime_dtype)
+    gtd = cudf.Index(timedelta_data, dtype=timedelta_dtype)
+
+    pdt = gdt.to_pandas()
+    ptd = gtd.to_pandas()
+
+    assert_eq(gdt - gtd, pdt - ptd)
