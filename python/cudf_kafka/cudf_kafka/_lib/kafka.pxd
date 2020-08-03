@@ -62,3 +62,12 @@ cdef class KafkaDatasource(Datasource):
                              int64_t offset)
 
     cpdef int64_t get_committed_offset(self, string topic, int32_t partition)
+
+    cpdef map[string, int64_t] get_watermark_offset(string, topic,
+                                                    int32_t partition,
+                                                    int32_t timeout,
+                                                    bool cached) except +
+
+    cpdef void unsubscribe() except +
+
+    cpdef void close(int timeout) except +
