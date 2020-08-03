@@ -11,6 +11,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib import string_casting as str_cast
 from cudf._lib.column import Column
+from cudf._lib.nvtext.edit_distance import edit_distance as cpp_edit_distance
 from cudf._lib.nvtext.generate_ngrams import (
     generate_character_ngrams as cpp_generate_character_ngrams,
     generate_ngrams as cpp_generate_ngrams,
@@ -4172,6 +4173,45 @@ class StringMethods(ColumnMethodsMixin):
             cupy.asarray(tokens),
             cupy.asarray(masks),
             cupy.asarray(metadata),
+        )
+
+    def edit_distance(self, targets, **kwargs):
+        """
+        The targets strings are measured against the strings in this column
+        using the Levenshtein edit distance algorithm.
+
+        Parameters
+        ----------
+        targets : array-like, Sequence or Series or str
+            The string(s) to measure against each string.
+
+        Returns
+        -------
+        Series or Index of int32.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> sr = cudf.Series(["puppy", "doggy", "cat"])
+        >>> targets = cudf.Series(["pup", "dog", "kitten"])
+        >>> sr.str.edit_distance(targets=targets)
+        0    2
+        1    2
+        2    3
+        dtype: int32
+        """
+        if is_scalar(targets):
+            targets_column = column.as_column([targets])
+        elif can_convert_to_column(targets):
+            targets_column = column.as_column(targets)
+        else:
+            raise TypeError(
+                f"targets should be an str, array-like or Series object, "
+                f"found {type(targets)}"
+            )
+
+        return self._return_or_inplace(
+            cpp_edit_distance(self._column, targets_column), **kwargs,
         )
 
 
