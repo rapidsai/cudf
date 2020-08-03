@@ -63,8 +63,7 @@ const void* get_data_ptr(column_view const& view)
 
 const void* get_data_ptr(scalar const& s)
 {
-  auto val = type_dispatcher(s.type(), get_data_ptr_functor{}, s);
-  return val;
+  return type_dispatcher(s.type(), get_data_ptr_functor{}, s);
 }
 
 std::string get_type_name(data_type type)

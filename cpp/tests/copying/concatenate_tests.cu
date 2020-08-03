@@ -13,16 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/column/column.hpp>
-#include <cudf/concatenate.hpp>
-#include <cudf/copying.hpp>
-#include <cudf/table/table.hpp>
 
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
+
+#include <cudf/column/column.hpp>
+#include <cudf/concatenate.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/table/table.hpp>
 
 #include <thrust/sequence.h>
 
@@ -545,4 +547,31 @@ TEST_F(ListsColumnTest, ConcatenateIncompleteHierarchies)
 
     cudf::test::expect_columns_equal(*result, expected);
   }
+}
+
+template <typename T>
+struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+};
+
+template <typename T>
+using wrapper = cudf::test::fixed_width_column_wrapper<T>;
+TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointConcatentate)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+
+  auto vec = std::vector<decimalXX>(1000);
+  std::iota(std::begin(vec), std::end(vec), decimalXX{});
+
+  auto const a = wrapper<decimalXX>(vec.begin(), /***/ vec.begin() + 300);
+  auto const b = wrapper<decimalXX>(vec.begin() + 300, vec.begin() + 700);
+  auto const c = wrapper<decimalXX>(vec.begin() + 700, vec.end());
+
+  auto const fixed_point_columns = std::vector<cudf::column_view>{a, b, c};
+  auto const results             = cudf::concatenate(fixed_point_columns);
+  auto const expected            = wrapper<decimalXX>(vec.begin(), vec.end());
+
+  cudf::test::expect_columns_equal(*results, expected);
 }

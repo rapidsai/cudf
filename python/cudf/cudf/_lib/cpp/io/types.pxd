@@ -33,8 +33,6 @@ cdef extern from "cudf/io/types.hpp" \
     ctypedef enum io_type:
         FILEPATH "cudf::io::io_type::FILEPATH"
         HOST_BUFFER "cudf::io::io_type::HOST_BUFFER"
-        ARROW_RANDOM_ACCESS_FILE \
-            "cudf::io::io_type::ARROW_RANDOM_ACCESS_FILE"
         VOID "cudf::io::io_type::VOID"
         USER_IMPLEMENTED "cudf::io::io_type::USER_IMPLEMENTED"
 
