@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# Copyright (c) 2020, NVIDIA CORPORATION.
+set -e
+
 #Upload cudf once per PYTHON
 if [[ "$CUDA" == "10.1" ]]; then
     export UPLOAD_CUDF=1
