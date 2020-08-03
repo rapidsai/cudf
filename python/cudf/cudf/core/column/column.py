@@ -1606,7 +1606,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 arb_dtype = np.dtype("O")
             else:
                 arb_dtype = check_cast_unsupported_dtype(arbitrary.dtype)
-                if arb_dtype != arbitrary.dtype.to_numpy:
+                if cudf.dtype(arb_dtype) != cudf.dtype(arbitrary.dtype):
                     arbitrary = arbitrary.astype(arb_dtype)
         if arb_dtype.kind in ("O", "U"):
             data = as_column(pa.Array.from_pandas(arbitrary), dtype=arb_dtype)

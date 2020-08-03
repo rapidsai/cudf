@@ -287,6 +287,8 @@ def dtype(obj):
         return make_dtype_from_string(obj)
     elif obj in pd_to_cudf_dtypes.keys():
         return pd_to_cudf_dtypes[obj]
+    elif isinstance(obj, pd.core.arrays.numpy_.PandasDtype):
+        return make_dtype_from_string(obj.name)
     else:
         try:
             if issubclass(obj, np.generic):
