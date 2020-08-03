@@ -2042,6 +2042,26 @@ class TimedeltaIndex(GenericIndex):
             unit=self._values.time_unit,
         )
 
+    @property
+    def days(self):
+        return as_index(arbitrary=self._values.days, name=self.name)
+
+    @property
+    def seconds(self):
+        return as_index(arbitrary=self._values.seconds, name=self.name)
+
+    @property
+    def microseconds(self):
+        return as_index(arbitrary=self._values.microseconds, name=self.name)
+
+    @property
+    def nanoseconds(self):
+        return as_index(arbitrary=self._values.nanoseconds, name=self.name)
+
+    @property
+    def components(self):
+        return self._values.components()
+
 
 class CategoricalIndex(GenericIndex):
     """An categorical of orderable values that represent the indices of another

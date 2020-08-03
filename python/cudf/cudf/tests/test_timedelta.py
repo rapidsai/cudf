@@ -765,3 +765,77 @@ def test_timedelta_index_ops_with_scalars(data, other_scalars, dtype, op):
         actual = other_scalars // gtdi
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [],
+        [None],
+        [None, None, None, None, None],
+        [12, 12, 22, 343, 4353534, 435342],
+        np.array([10, 20, 30, None, 100]),
+        cp.asarray([10, 20, 30, 100]),
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [1],
+        [12, 11, 232, 223432411, 2343241, 234324, 23234],
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+        [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
+        [
+            136457654736252,
+            134736784364431,
+            245345345545332,
+            223432411,
+            2343241,
+            3634548734,
+            23234,
+        ],
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+    ],
+)
+@pytest.mark.parametrize("dtype", dtypeutils.TIMEDELTA_TYPES)
+@pytest.mark.parametrize("name", ["abcd", None])
+def test_timedelta_index_properties(data, dtype, name):
+    gdi = cudf.Index(data, dtype=dtype, name=name)
+    pdi = gdi.to_pandas()
+
+    def local_assert(expected, actual):
+        if actual._values.null_count:
+            assert_eq(expected, actual.astype("float64"))
+        else:
+            assert_eq(expected, actual)
+
+    expected_days = pdi.days
+    actual_days = gdi.days
+
+    local_assert(expected_days, actual_days)
+
+    expected_seconds = pdi.seconds
+    actual_seconds = gdi.seconds
+
+    local_assert(expected_seconds, actual_seconds)
+
+    expected_microseconds = pdi.microseconds
+    actual_microseconds = gdi.microseconds
+
+    local_assert(expected_microseconds, actual_microseconds)
+
+    expected_nanoseconds = pdi.nanoseconds
+    actual_nanoseconds = gdi.nanoseconds
+
+    local_assert(expected_nanoseconds, actual_nanoseconds)
+
+    expected_components = pdi.components
+    actual_components = gdi.components
+
+    if actual_components.isnull().any().any():
+        assert_eq(expected_components, actual_components.astype("float"))
+    else:
+        assert_eq(
+            expected_components,
+            actual_components,
+            check_index_type=not actual_components.empty,
+        )
