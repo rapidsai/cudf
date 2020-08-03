@@ -162,6 +162,7 @@
 - PR #5800 Expose arrow datasource instead of directly taking a RandomAccessFile
 - PR #5795 Clarify documentation on Boost dependency
 - PR #5803 Add in Java support for the repeat command
+- PR #5825 Enable ORC statistics generation by default
 
 ## Bug Fixes
 
@@ -239,6 +240,7 @@
 - PR #5319 Disallow SUM and specialize MEAN of timestamp types
 - PR #5797 Fix a missing data issue in some Parquet files
 - PR #5787 Fix column create from dictionary column view
+- PR #5820 Fix ListColumn.to_arrow for all null case
 
 
 # cuDF 0.14.0 (03 Jun 2020)
