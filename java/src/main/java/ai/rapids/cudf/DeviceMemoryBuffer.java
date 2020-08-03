@@ -53,13 +53,13 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
           // We cannot know how far it progressed before the exception, and
           // therefore it is unsafe to retry.
           address = 0;
-          lengthInBytes = 0;
+//          lengthInBytes = 0;
           stream = null;
         }
         neededCleanup = true;
       }
       if (neededCleanup && logErrorIfNotClean) {
-        log.error("A DEVICE BUFFER WAS LEAKED (ID: " + id + " " + Long.toHexString(origAddress) + ")");
+        log.error("A DEVICE BUFFER WAS LEAKED (ID: " + lengthInBytes + " " + Long.toHexString(origAddress) + ")");
         logRefCountDebug("Leaked device buffer");
       }
       return neededCleanup;

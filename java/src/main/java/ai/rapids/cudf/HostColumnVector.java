@@ -48,7 +48,7 @@ public final class HostColumnVector implements AutoCloseable {
     NativeDepsLoader.loadNativeDeps();
   }
 
-  protected static class NestedHostColumnVector {
+  protected static class NestedHostColumnVector implements AutoCloseable {
     private HostMemoryBuffer data;
     private HostMemoryBuffer offsets;
     private HostMemoryBuffer validity;
@@ -68,12 +68,26 @@ public final class HostColumnVector implements AutoCloseable {
       this.nullCount = nullCount;
       this.nestedChildren = nestedChildren;
     }
-    /*
-    protected boolean cleanImpl(boolean logErrorIfNotClean) { // make recursive
-     */
+
+    @Override
+    public void close() {
+      for (NestedHostColumnVector child : nestedChildren) {
+        if (child != null) {
+          child.close();
+        }
+      }
+      if (data != null) {
+        data.close();
+      }
+      if (validity != null) {
+        validity.close();
+      }
+      if (offsets != null) {
+        offsets.close();
+      }
+    }
 
     private HostMemoryBuffer getData() {
-      HostMemoryBuffer ret = null;
       if (nestedChildren.size() > 0)
         return nestedChildren.get(0).getData();
       else return data;
@@ -115,7 +129,7 @@ public final class HostColumnVector implements AutoCloseable {
       return ret;
     }
 
-    public Object getElement(int rowIndex) {
+    private Object getElement(int rowIndex) {
       if (type == DType.LIST) {
         List retList = new ArrayList();
         int start = offsets.getInt(rowIndex * DType.INT32.getSizeInBytes());
@@ -125,8 +139,8 @@ public final class HostColumnVector implements AutoCloseable {
         }
         return retList;
       } else if (type == DType.STRING) {
-        int start = offsets.getInt(rowIndex*DType.INT32.getSizeInBytes());
-        int end = offsets.getInt((rowIndex+1)*DType.INT32.getSizeInBytes());
+        int start = offsets.getInt(rowIndex * DType.INT32.getSizeInBytes());
+        int end = offsets.getInt((rowIndex + 1) * DType.INT32.getSizeInBytes());
         int size = end - start;
         byte[] rawData = new byte[size];
         if (size > 0) {
@@ -198,33 +212,13 @@ public final class HostColumnVector implements AutoCloseable {
    *                           the hostDataBuffer indicating the start and end of a string
    *                           entry. It should be (rows + 1) ints.
    */
-  //FOR lists
-  HostColumnVector(DType type, long rows, Optional<Long> nullCount,
-                   HostMemoryBuffer hostDataBuffer, HostMemoryBuffer hostValidityBuffer,
-                   HostMemoryBuffer offsetBuffer, List<NestedHostColumnVector> nestedHostColumnVector) {
-    if (nullCount.isPresent() && nullCount.get() > 0 && hostValidityBuffer == null) {
-      throw new IllegalStateException("Buffer cannot have a nullCount without a validity buffer");
-    }
-    if (type != DType.STRING && type != DType.LIST) {
-      assert offsetBuffer == null : "offsets are only supported for STRING";
-    }
-    offHeap = new OffHeapState(hostDataBuffer, hostValidityBuffer, offsetBuffer);
-    MemoryCleaner.register(this, offHeap);
-    this.rows = rows;
-    this.nullCount = nullCount;
-    this.type = type;
-    this.children = nestedHostColumnVector;
-
-    refCount = 0;
-    incRefCountInternal(true);
-  }
 
   //Constructor for lists
   HostColumnVector(List<DType> type, List<Long> rows, Optional<Long> nullCount,
                    HostMemoryBuffer hostDataBuffer, List<HostMemoryBuffer> hostValidityBuffer,
                    List<HostMemoryBuffer> offsetBuffer) {
     List<NestedHostColumnVector> nestedHostColumnVector = null;
-    for (int i = type.size() -1 ; i > 0; i--) {
+    for (int i = type.size() - 1 ; i > 0; i--) {
       DType currType = type.get(i);
       long currRows = rows.get(i);
       HostMemoryBuffer currData = null;
@@ -249,6 +243,20 @@ public final class HostColumnVector implements AutoCloseable {
     this.rows = currRows;
     this.nullCount = nullCount;
     this.type = currType;
+    this.children = nestedHostColumnVector;
+    refCount = 0;
+    incRefCountInternal(true);
+  }
+
+  //Constructor for lists
+  HostColumnVector(DType type, long rows, Optional<Long> nullCount,
+                   HostMemoryBuffer hostDataBuffer, HostMemoryBuffer hostValidityBuffer,
+                   HostMemoryBuffer offsetBuffer, List<NestedHostColumnVector> nestedHostColumnVector) {
+    this.offHeap = new OffHeapState(hostDataBuffer, hostValidityBuffer, offsetBuffer);
+    MemoryCleaner.register(this, offHeap);
+    this.rows = rows;
+    this.nullCount = nullCount;
+    this.type = type;
     this.children = nestedHostColumnVector;
     refCount = 0;
     incRefCountInternal(true);
@@ -291,6 +299,9 @@ public final class HostColumnVector implements AutoCloseable {
     offHeap.delRef();
     if (refCount == 0) {
       offHeap.clean(false);
+      for( NestedHostColumnVector child : children) {
+        child.close();
+      }
     } else if (refCount < 0) {
       offHeap.logRefCountDebug("double free " + this);
       throw new IllegalStateException("Close called too many times " + this);
@@ -498,7 +509,10 @@ public final class HostColumnVector implements AutoCloseable {
   // DATA ACCESS
   /////////////////////////////////////////////////////////////////////////////
 
-  public List getList(long rowIndex) {
+  /**
+   * WARNING: Strictly for test only. This call is not efficient for production.
+   */
+  List getList(long rowIndex) {
     assert rowIndex < rows;
     assert type == DType.LIST;
     List retList = new ArrayList();
