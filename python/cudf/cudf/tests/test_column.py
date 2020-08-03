@@ -44,10 +44,10 @@ def test_column_offset_and_size(pandas_input, offset, size):
         children=col.base_children,
     )
 
-    if col.dtype.is_categorical:
+    if cudf.utils.dtypes.is_categorical_dtype(col.dtype):
         assert col.size == col.codes.size
         assert col.size == (col.codes.data.size / col.codes.dtype.itemsize)
-    elif col.dtype.is_string:
+    elif isinstance(col.dtype, cudf.StringDtype):
         assert col.size == (col.children[0].size - 1)
         assert col.size == (
             (col.children[0].data.size / col.children[0].dtype.itemsize) - 1

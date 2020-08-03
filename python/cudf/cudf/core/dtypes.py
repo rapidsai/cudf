@@ -49,21 +49,13 @@ pa_to_np_dtypes = {
 }
 
 
-class Dtype(ExtensionDtype, _Dtype):
-    is_integer = False
-    is_string = False
-    is_boolean = False
-    is_categorical = False
-    is_datetime = False
-    is_list = False
-    is_float = False
-    is_numeric = False
+class Generic(ExtensionDtype, _Dtype):
     pa_type = None
 
     def __eq__(self, other):
         if isinstance(other, self.__class__):
             return True
-        if isinstance(other, Dtype) and not isinstance(other, self.__class__):
+        if isinstance(other, Generic) and not isinstance(other, self.__class__):
             return False
         if (
             isinstance(other, self.to_pandas.__class__)
@@ -91,14 +83,14 @@ class Dtype(ExtensionDtype, _Dtype):
 
     @property
     def type(self):
-        if self.is_float or self.is_datetime:
-            return self.to_numpy.kind
+        if isinstance(self, (Floating, Datetime)):
+            return self.to_numpy.type
         else:
             return self.to_pandas.type
 
     @property
     def kind(self):
-        if self.is_float:
+        if isinstance(self, Floating):
             return "f"
         else:
             return self.to_pandas.kind
@@ -113,78 +105,87 @@ class Dtype(ExtensionDtype, _Dtype):
     def __hash__(self):
         return hash(self.__repr__())
 
+class Number(Generic):
+    pass
 
-class IntDtype(Dtype):
-    is_integer = True
-    is_numeric = True
+class Integer(Number):
+    pass
 
+class SignedInteger(Integer):
+    pass
 
-class UInt8Dtype(IntDtype):
+class UnsignedInteger(Integer):
+    pass
+
+class Inexact(Number):
+    pass
+
+class Floating(Inexact):
+    pass
+
+class Flexible(Generic):
+    pass
+
+class UInt8Dtype(UnsignedInteger):
     def __init__(self):
         self.pa_type = pa.uint8()
         self._name = "UInt8"
 
 
-class UInt16Dtype(IntDtype):
+class UInt16Dtype(UnsignedInteger):
     def __init__(self):
         self.pa_type = pa.uint16()
         self._name = "UInt16"
 
 
-class UInt32Dtype(IntDtype):
+class UInt32Dtype(UnsignedInteger):
     def __init__(self):
         self.pa_type = pa.uint32()
         self._name = "UInt32"
 
 
-class UInt64Dtype(IntDtype):
+class UInt64Dtype(UnsignedInteger):
     def __init__(self):
         self.pa_type = pa.uint64()
         self._name = "UInt64"
 
 
-class Int8Dtype(IntDtype):
+class Int8Dtype(SignedInteger):
     def __init__(self):
         self.pa_type = pa.int8()
         self._name = "Int8"
 
 
-class Int16Dtype(IntDtype):
+class Int16Dtype(SignedInteger):
     def __init__(self):
         self.pa_type = pa.int16()
         self._name = "Int16"
 
 
-class Int32Dtype(IntDtype):
+class Int32Dtype(SignedInteger):
     def __init__(self):
         self.pa_type = pa.int32()
         self._name = "Int32"
 
 
-class Int64Dtype(IntDtype):
+class Int64Dtype(SignedInteger):
     def __init__(self):
         self.pa_type = pa.int64()
         self._name = "Int64"
 
-
-class FloatDtype(Dtype):
-    is_float = True
-    is_numeric = True
-
-
-class Float32Dtype(FloatDtype):
+class Float32Dtype(Floating):
     def __init__(self):
         self.pa_type = pa.float32()
         self._name = "Float32"
 
 
-class Float64Dtype(FloatDtype):
+class Float64Dtype(Floating):
     def __init__(self):
         self.pa_type = pa.float64()
         self._name = "Float64"
 
 
-class BooleanDtype(Dtype):
+class BooleanDtype(Generic):
     is_boolean = True
 
     def __init__(self):
@@ -192,35 +193,34 @@ class BooleanDtype(Dtype):
         self._name = "Boolean"
 
 
-class DatetimeDtype(Dtype):
-    is_datetime = True
+class Datetime(Generic):
+    pass
 
-
-class Datetime64NSDtype(DatetimeDtype):
+class Datetime64NSDtype(Datetime):
     def __init__(self):
         self.pa_type = pa.timestamp("ns")
         self._name = "Datetime64NS"
 
 
-class Datetime64USDtype(DatetimeDtype):
+class Datetime64USDtype(Datetime):
     def __init__(self):
         self.pa_type = pa.timestamp("us")
         self._name = "Datetime64US"
 
 
-class Datetime64MSDtype(DatetimeDtype):
+class Datetime64MSDtype(Datetime):
     def __init__(self):
         self.pa_type = pa.timestamp("ms")
         self._name = "Datetime64MS"
 
 
-class Datetime64SDtype(DatetimeDtype):
+class Datetime64SDtype(Datetime):
     def __init__(self):
         self.pa_type = pa.timestamp("s")
         self._name = "Datetime64S"
 
 
-class StringDtype(Dtype):
+class StringDtype(Flexible):
     is_string = True
 
     def __init__(self):
@@ -272,10 +272,12 @@ def make_dtype_from_numpy(obj):
     return result
 
 
-def make_dtype_from_obj(obj):
+def dtype(obj):
+    if obj is None:
+        return None
     if isinstance(obj, CategoricalDtype):
         return obj
-    elif isinstance(obj, Dtype):
+    elif isinstance(obj, Generic):
         return np_to_cudf_dtypes[obj.to_numpy]
     if isinstance(obj, np.dtype):
         return np_to_cudf_dtypes[obj]
@@ -291,14 +293,11 @@ def make_dtype_from_obj(obj):
                 return np_to_cudf_dtypes[np.dtype(obj)]
         except:
             import pdb
-
             pdb.set_trace()
-            raise TypeError("cant transform this object to a cudf dtype. ")
+    
 
 
-class CategoricalDtype(Dtype):
-
-    is_categorical = True
+class CategoricalDtype(Generic):
 
     def __init__(self, categories=None, ordered=None):
         """
@@ -475,7 +474,7 @@ pa_to_cudf_dtypes = {
     pa.timestamp("us"): Datetime64USDtype(),
     pa.timestamp("ms"): Datetime64MSDtype(),
     pa.timestamp("s"): Datetime64SDtype(),
-    None: Dtype,
+    pa.null(): None
 }
 
 np_to_cudf_dtypes = {

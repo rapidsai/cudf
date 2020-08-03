@@ -12,4 +12,4 @@ ctypedef int32_t underlying_type_t_type_id
 ctypedef bool underlying_type_t_null_policy
 
 cdef class _Dtype:
-    cdef data_type get_libcudf_type(self)
+    cdef data_type get_libcudf_type(self) except *

@@ -134,46 +134,47 @@ from cudf.utils.dtypes import (
     is_scalar,
     is_string_dtype,
 )
-from cudf.core.dtypes import make_dtype_from_obj
+
+from cudf.core.dtypes import dtype
 
 _str_to_numeric_typecast_functions = {
-    make_dtype_from_obj("int8"): str_cast.stoi8,
-    make_dtype_from_obj("int16"): str_cast.stoi16,
-    make_dtype_from_obj("int32"): str_cast.stoi,
-    make_dtype_from_obj("int64"): str_cast.stol,
-    make_dtype_from_obj("uint8"): str_cast.stoui8,
-    make_dtype_from_obj("uint16"): str_cast.stoui16,
-    make_dtype_from_obj("uint32"): str_cast.stoui,
-    make_dtype_from_obj("uint64"): str_cast.stoul,
-    make_dtype_from_obj("float32"): str_cast.stof,
-    make_dtype_from_obj("float64"): str_cast.stod,
-    make_dtype_from_obj("bool"): str_cast.to_booleans,
+    dtype("int8"): str_cast.stoi8,
+    dtype("int16"): str_cast.stoi16,
+    dtype("int32"): str_cast.stoi,
+    dtype("int64"): str_cast.stol,
+    dtype("uint8"): str_cast.stoui8,
+    dtype("uint16"): str_cast.stoui16,
+    dtype("uint32"): str_cast.stoui,
+    dtype("uint64"): str_cast.stoul,
+    dtype("float32"): str_cast.stof,
+    dtype("float64"): str_cast.stod,
+    dtype("bool"): str_cast.to_booleans,
     # TODO: support Date32 UNIX days
     # np.dtype("datetime64[D]"): str_cast.timestamp2int,
-    make_dtype_from_obj("datetime64[s]"): str_cast.timestamp2int,
-    make_dtype_from_obj("datetime64[ms]"): str_cast.timestamp2int,
-    make_dtype_from_obj("datetime64[us]"): str_cast.timestamp2int,
-    make_dtype_from_obj("datetime64[ns]"): str_cast.timestamp2int,
+    dtype("datetime64[s]"): str_cast.timestamp2int,
+    dtype("datetime64[ms]"): str_cast.timestamp2int,
+    dtype("datetime64[us]"): str_cast.timestamp2int,
+    dtype("datetime64[ns]"): str_cast.timestamp2int,
 }
 
 _numeric_to_str_typecast_functions = {
-    make_dtype_from_obj(np.dtype("int8")): str_cast.i8tos,
-    make_dtype_from_obj(np.dtype("int16")): str_cast.i16tos,
-    make_dtype_from_obj(np.dtype("int32")): str_cast.itos,
-    make_dtype_from_obj(np.dtype("int64")): str_cast.ltos,
-    make_dtype_from_obj(np.dtype("uint8")): str_cast.ui8tos,
-    make_dtype_from_obj(np.dtype("uint16")): str_cast.ui16tos,
-    make_dtype_from_obj(np.dtype("uint32")): str_cast.uitos,
-    make_dtype_from_obj(np.dtype("uint64")): str_cast.ultos,
-    make_dtype_from_obj(np.dtype("float32")): str_cast.ftos,
-    make_dtype_from_obj(np.dtype("float64")): str_cast.dtos,
-    make_dtype_from_obj(np.dtype("bool")): str_cast.from_booleans,
+    dtype(np.dtype("int8")): str_cast.i8tos,
+    dtype(np.dtype("int16")): str_cast.i16tos,
+    dtype(np.dtype("int32")): str_cast.itos,
+    dtype(np.dtype("int64")): str_cast.ltos,
+    dtype(np.dtype("uint8")): str_cast.ui8tos,
+    dtype(np.dtype("uint16")): str_cast.ui16tos,
+    dtype(np.dtype("uint32")): str_cast.uitos,
+    dtype(np.dtype("uint64")): str_cast.ultos,
+    dtype(np.dtype("float32")): str_cast.ftos,
+    dtype(np.dtype("float64")): str_cast.dtos,
+    dtype(np.dtype("bool")): str_cast.from_booleans,
     # TODO: support Date32 UNIX days
     # np.dtype("datetime64[D]"): str_cast.int2timestamp,
-    make_dtype_from_obj(np.dtype("datetime64[s]")): str_cast.int2timestamp,
-    make_dtype_from_obj(np.dtype("datetime64[ms]")): str_cast.int2timestamp,
-    make_dtype_from_obj(np.dtype("datetime64[us]")): str_cast.int2timestamp,
-    make_dtype_from_obj(np.dtype("datetime64[ns]")): str_cast.int2timestamp,
+    dtype(np.dtype("datetime64[s]")): str_cast.int2timestamp,
+    dtype(np.dtype("datetime64[ms]")): str_cast.int2timestamp,
+    dtype(np.dtype("datetime64[us]")): str_cast.int2timestamp,
+    dtype(np.dtype("datetime64[ns]")): str_cast.int2timestamp,
 }
 
 

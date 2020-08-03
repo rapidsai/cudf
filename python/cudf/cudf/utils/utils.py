@@ -417,7 +417,7 @@ def time_col_replace_nulls(input_col):
         input_col,
         column.as_column(
             Buffer(
-                np.array([np.datetime64("NaT")], dtype=input_col.dtype).view(
+                np.array([np.datetime64("NaT")], dtype=input_col.dtype.to_numpy).view(
                     "|u1"
                 )
             ),

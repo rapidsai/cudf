@@ -123,7 +123,7 @@ class NullHandling(IntEnum):
 
 
 cdef class _Dtype:
-    cdef data_type get_libcudf_type(self):
+    cdef data_type get_libcudf_type(self) except *:
         np_dtype = self.to_numpy
         cdef libcudf_types.type_id tid = <libcudf_types.type_id> (
                 <underlying_type_t_type_id> (

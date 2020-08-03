@@ -32,7 +32,12 @@ from cudf.core import (
     merge,
 )
 from cudf.core.dtypes import (
-    Dtype,
+    dtype,
+    Generic,
+    Datetime,
+    Floating,
+    Number,
+    Flexible,
     CategoricalDtype, 
     Int8Dtype,
     Int16Dtype, 
@@ -49,7 +54,7 @@ from cudf.core.dtypes import (
     Datetime64NSDtype,
     Datetime64USDtype, 
     Datetime64MSDtype,
-    Datetime64SDtype
+    Datetime64SDtype,
 )
 
 from cudf.core.groupby import Grouper

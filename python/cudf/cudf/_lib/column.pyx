@@ -349,7 +349,7 @@ cdef class Column:
         return self._view(c_null_count)
 
     cdef column_view _view(self, libcudf_types.size_type null_count) except *:
-        if self.dtype.is_categorical:
+        if is_categorical_dtype(self.dtype):
             col = self.base_children[0]
         else:
             col = self

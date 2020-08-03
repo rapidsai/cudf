@@ -37,7 +37,6 @@ from cudf.utils.dtypes import (
     np_to_pa_dtype,
 )
 from cudf.utils.utils import buffers_from_pyarrow, mask_dtype
-from cudf.core.dtypes import make_dtype_from_obj
 
 class ColumnBase(Column, Serializable):
     def __init__(
@@ -81,10 +80,10 @@ class ColumnBase(Column, Serializable):
         """
         View the data as a device array object
         """
-        if self.dtype.is_string:
+        if isinstance(self.dtype, cudf.StringDtype):
             raise ValueError("Cannot get an array view of a StringColumn")
 
-        if self.dtype.is_categorical:
+        if is_categorical_dtype(self.dtype):
             return self.codes.data_array_view
         else:
             dtype = self.dtype
@@ -187,7 +186,7 @@ class ColumnBase(Column, Serializable):
 
         if len(objs) == 0:
             dtype = pd.api.types.pandas_dtype(dtype)
-            if dtype.is_categorical:
+            if is_categorical_dtype(dtype):
                 dtype = CategoricalDtype()
             return column_empty(0, dtype=dtype, masked=True)
 
@@ -200,8 +199,7 @@ class ColumnBase(Column, Serializable):
                 [
                     o
                     for o in not_null_cols
-                    if not o.dtype.is_numeric
-                    or o.dtype.is_datetime
+                    if not isinstance(o.dtype, (cudf.Number, cudf.Datetime))
                 ]
             )
             == 0
@@ -211,7 +209,7 @@ class ColumnBase(Column, Serializable):
             np_common_dtype = np.find_common_type(np_col_dtypes, [])
             # Cast all columns to the common dtype
             for i in range(len(objs)):
-                objs[i] = objs[i].astype(make_dtype_from_obj(np_common_dtype))
+                objs[i] = objs[i].astype(cudf.dtype(np_common_dtype))
 
         # Find the first non-null column:
         head = objs[0]
@@ -232,7 +230,7 @@ class ColumnBase(Column, Serializable):
                     raise ValueError("All columns must be the same type")
 
         cats = None
-        is_categorical = all(o.dtype.is_categorical for o in objs)
+        is_categorical = all(is_categorical_dtype(o.dtype) for o in objs)
 
         # Combine CategoricalColumn categories
         if is_categorical:
@@ -878,12 +876,12 @@ class ColumnBase(Column, Serializable):
         return cpp_distinct_count(self, ignore_nulls=dropna)
 
     def astype(self, dtype, **kwargs):
-        dtype = make_dtype_from_obj(dtype)
-        if dtype.is_categorical:
+        dtype = cudf.dtype(dtype)
+        if is_categorical_dtype(dtype):
             return self.as_categorical_column(dtype, **kwargs)
-        elif dtype.is_datetime:
+        elif isinstance(dtype, cudf.Datetime):
             return self.as_datetime_column(dtype, **kwargs)
-        elif dtype.is_string:
+        elif isinstance(dtype, cudf.StringDtype):
             return self.as_string_column(dtype, **kwargs)
         else:
             return self.as_numerical_column(dtype, **kwargs)
@@ -1129,9 +1127,9 @@ def build_column(
     offset : int, optional
     children : tuple, optional
     """
-    dtype = make_dtype_from_obj(dtype)
+    dtype = cudf.dtype(dtype)
 
-    if dtype.is_categorical:
+    if is_categorical_dtype(dtype):
         if not len(children) == 1:
             raise ValueError(
                 "Must specify exactly one child column for CategoricalColumn"
@@ -1146,7 +1144,7 @@ def build_column(
             null_count=null_count,
             children=children,
         )
-    elif dtype.is_datetime:
+    elif isinstance(dtype, cudf.Datetime):
         return cudf.core.column.DatetimeColumn(
             data=data,
             dtype=dtype,
@@ -1155,7 +1153,7 @@ def build_column(
             offset=offset,
             null_count=null_count,
         )
-    elif dtype.is_string:
+    elif isinstance(dtype, cudf.StringDtype):
         return cudf.core.column.StringColumn(
             mask=mask,
             size=size,
@@ -1265,7 +1263,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
     * pandas.Categorical objects
     """
 
-    dtype = make_dtype_from_obj(dtype) if dtype is not None else None
+    dtype = cudf.dtype(dtype) if dtype is not None else None
 
     if isinstance(arbitrary, ColumnBase):
         if dtype is not None:
@@ -1324,11 +1322,11 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
 
         if isinstance(col, cudf.core.column.CategoricalColumn):
             return col
-        elif col.dtype.is_float:
+        elif isinstance(col.dtype, cudf.Floating):
             if nan_as_null or (mask is None and nan_as_null is None):
                 mask = libcudf.transform.nans_to_nulls(col.fillna(np.nan))
                 col = col.set_mask(mask)
-        elif col.dtype.is_datetime:
+        elif isinstance(col.dtype, cudf.Datetime):
             if nan_as_null or (mask is None and nan_as_null is None):
                 col = utils.time_col_replace_nulls(col)
         return col
@@ -1451,7 +1449,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             )
             data = cudf.core.column.NumericalColumn(
                 data=padata,
-                dtype=make_dtype_from_obj(arbitrary.type),
+                dtype=cudf.dtype(arbitrary.type),
                 mask=pamask,
                 size=pa_size,
                 offset=pa_offset,
@@ -1517,15 +1515,15 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         ):
             arbitrary = None
             if dtype is None:
-                dtype = np.dtype("float64")
+                dtype = cudf.Float64Dtype()
 
         data = as_column(
             utils.scalar_broadcast_to(arbitrary, length, dtype=dtype)
         )
         if not nan_as_null:
-            if np.issubdtype(data.dtype, np.floating):
+            if isinstance(data.dtype, cudf.Floating):
                 data = data.fillna(np.nan)
-            elif np.issubdtype(data.dtype, np.datetime64):
+            elif isinstance(data.dtype, cudf.Datetime):
                 data = data.fillna(np.datetime64("NaT"))
 
     elif hasattr(arbitrary, "__array_interface__"):
@@ -1582,7 +1580,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
 
             pa_data = pa.Array.from_pandas(arbitrary)
             data = as_column(
-                pa_data, dtype=make_dtype_from_obj(pa_data.type)
+                pa_data, dtype=cudf.dtype(pa_data.type)
             )
             # There is no cast operation available for pa.Array from int to
             # str, Hence instead of handling in pa.Array block, we
@@ -1633,9 +1631,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         data = as_column(data, dtype=cudf_dtype)
 
         mask = arbitrary._mask
-        mask = bools_to_mask(
-            as_column(mask).binary_operator("eq", np.bool_(False))
-        )
+        mask = bools_to_mask(as_column(mask).unary_operator("not"))
 
         data = data.set_mask(mask)
 
@@ -1648,20 +1644,20 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             try:
                 if dtype is not None:
                     dtype = pd.api.types.pandas_dtype(dtype)
-                    if dtype.is_categorical:
+                    if is_categorical_dtype(dtype):
                         raise TypeError
                 pa_data = pa.array(arbitrary, type=dtype.pa_type if dtype is not None else None, from_pandas=True if nan_as_null is None else nan_as_null)
-                data = as_column(pa_data, dtype=make_dtype_from_obj(pa_data.type), nan_as_null=nan_as_null)
+                data = as_column(pa_data, dtype=cudf.dtype(pa_data.type), nan_as_null=nan_as_null)
 
             except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError):
-                if dtype.is_categorical:
+                if is_categorical_dtype(dtype):
                     sr = pd.Series(arbitrary, dtype="category")
                     data = as_column(sr, nan_as_null=nan_as_null, dtype=dtype)
-                elif dtype.to_numpy == np.str_:
+                elif isinstance(cudf.dtype(dtype), cudf.StringDtype):
                     sr = pd.Series(arbitrary, dtype="str")
                     data = as_column(sr, nan_as_null=nan_as_null)
                 else:
-                    native_dtype = dtype.to_numpy
+                    native_dtype = dtype.to_numpy if dtype is not None else None
                     if dtype is None and pd.api.types.infer_dtype(
                         arbitrary
                     ) in ("mixed", "mixed-integer"):

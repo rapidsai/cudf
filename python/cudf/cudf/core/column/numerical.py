@@ -18,7 +18,6 @@ from cudf.utils.dtypes import (
     np_to_pa_dtype,
     numeric_normalize_types,
 )
-from cudf.core.dtypes import make_dtype_from_obj
 
 class NumericalColumn(column.ColumnBase):
     def __init__(
@@ -32,7 +31,7 @@ class NumericalColumn(column.ColumnBase):
             The dtype associated with the data Buffer
         mask : Buffer, optional
         """
-        dtype = make_dtype_from_obj(dtype)
+        dtype = cudf.dtype(dtype)
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
         if size is None:
@@ -83,8 +82,8 @@ class NumericalColumn(column.ColumnBase):
         if reflect:
             tmp = self
         if isinstance(rhs, (NumericalColumn, Scalar)) or np.isscalar(rhs):
-            out_dtype = np.result_type(make_dtype_from_obj(self.dtype).to_numpy, make_dtype_from_obj(rhs.dtype).to_numpy)
-            out_dtype = make_dtype_from_obj(out_dtype)
+            out_dtype = np.result_type(cudf.dtype(self.dtype).to_numpy, cudf.dtype(rhs.dtype).to_numpy)
+            out_dtype = cudf.dtype(out_dtype)
             if binop in ["mod", "floordiv"]:
                 if (tmp.dtype in int_dtypes) and (
                     (np.isscalar(tmp) and (0 == tmp))
@@ -454,7 +453,6 @@ def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
 
     if is_op_comparison:
         out_dtype = "bool"
-        
     out = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
 
     if is_op_comparison:
