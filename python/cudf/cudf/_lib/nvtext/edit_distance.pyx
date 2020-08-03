@@ -21,4 +21,3 @@ def edit_distance(Column strings, Column targets):
         c_result = move(cpp_edit_distance(c_strings, c_targets))
 
     return Column.from_unique_ptr(move(c_result))
-
