@@ -853,9 +853,12 @@ class Series(Frame, Serializable):
         return out
 
     def tolist(self):
-        # TODO: This needs to raise an error instead.
-        # xref: https://github.com/rapidsai/cudf/issues/5689
-        return self.to_arrow().to_pylist()
+
+        raise TypeError(
+            "cuDF does not support conversion to host memory "
+            "via `tolist()` method. Consider using "
+            "`.to_arrow().to_pylist()` to construct a Python list."
+        )
 
     to_list = tolist
 
