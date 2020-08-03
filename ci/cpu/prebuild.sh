@@ -22,7 +22,7 @@ else
 fi
 
 #We only want to upload libcudf_kafka once per python/CUDA combo
-if [ "$PYTHON" == "3.7" && "$CUDA" == "10.1" ]; then
+if [[ "$PYTHON" == "3.7" && "$CUDA" == "10.1" ]]; then
     export UPLOAD_LIBCUDF_KAFKA=1
 else
     export UPLOAD_LIBCUDF_KAFKA=0

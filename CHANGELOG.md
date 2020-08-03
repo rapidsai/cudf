@@ -59,7 +59,9 @@
 - PR #5568 Add support for `Series.keys()` and `DataFrame.keys()`
 - PR #5782 Add Kafka support to custreamz
 - PR #5642 Add `GroupBy.groups()`
+- PR #5789 Add groupby support for duration types
 - PR #5810 Make Cython subdirs packages and simplify package_data
+- PR #5822 Add `cudf_kafka` to `custreamz` run time conda dependency and fix bash syntax issue
 
 ## Improvements
 
@@ -163,6 +165,7 @@
 - PR #5803 Add in Java support for the repeat command
 - PR #5825 Enable ORC statistics generation by default
 - PR #5834 Add support for dictionary column in concatenate
+- PR #5833 Pin `dask` and `distributed` version to `2.22.0`
 
 ## Bug Fixes
 
