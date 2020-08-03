@@ -6,7 +6,7 @@ import pyarrow as pa
 
 from dask.dataframe.categorical import categorical_dtype_dispatch
 from dask.dataframe.core import get_parallel_type, make_meta, meta_nonempty
-from dask.dataframe.methods import concat_dispatch
+from dask.dataframe.methods import concat_dispatch, tolist_dispatch
 from dask.dataframe.utils import (
     UNKNOWN_CATEGORIES,
     _nonempty_scalar,
@@ -14,13 +14,6 @@ from dask.dataframe.utils import (
     is_arraylike,
     is_scalar,
 )
-
-try:
-    from dask.dataframe.methods import tolist_dispatch
-except ImportError:  # Fallback for Dask without `tolist` dispatch
-    from dask.utils import Dispatch
-
-    tolist_dispatch = Dispatch("tolist")
 
 import cudf
 from cudf.utils.dtypes import is_string_dtype
