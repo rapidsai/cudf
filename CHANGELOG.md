@@ -51,6 +51,7 @@
 - PR #5673 Always build and test with per-thread default stream enabled in the GPU CI build
 - PR #5716 Add `double_type_dispatcher` to libcudf
 - PR #5572 Add `cudf::encode` API.
+- PR #5804 Add filtered reading
 
 ## Improvements
 
