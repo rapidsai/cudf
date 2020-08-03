@@ -279,7 +279,7 @@ struct binary_return_type_functor {
             typename RHS,
             typename Out = simt::std::invoke_result_t<OperatorFunctor, LHS, RHS>,
             std::enable_if_t<cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(cudf::data_type* result)
+  CUDA_HOST_DEVICE_CALLABLE void operator()(cudf::data_type* result)
   {
     *result = cudf::data_type(cudf::type_to_id<Out>());
   }
@@ -289,7 +289,7 @@ struct binary_return_type_functor {
             typename RHS,
             typename Out                                                                 = void,
             std::enable_if_t<!cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(cudf::data_type* result)
+  CUDA_HOST_DEVICE_CALLABLE void operator()(cudf::data_type* result)
   {
     *result = cudf::data_type(cudf::type_id::EMPTY);
   }
@@ -300,7 +300,7 @@ struct unary_return_type_functor {
             typename T,
             typename Out = simt::std::invoke_result_t<OperatorFunctor, T>,
             std::enable_if_t<cudf::ast::is_valid_unary_op<OperatorFunctor, T>>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(cudf::data_type* result)
+  CUDA_HOST_DEVICE_CALLABLE void operator()(cudf::data_type* result)
   {
     *result = cudf::data_type(cudf::type_to_id<Out>());
   }
@@ -309,7 +309,7 @@ struct unary_return_type_functor {
             typename T,
             typename Out                                                         = void,
             std::enable_if_t<!cudf::ast::is_valid_unary_op<OperatorFunctor, T>>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(cudf::data_type* result)
+  CUDA_HOST_DEVICE_CALLABLE void operator()(cudf::data_type* result)
   {
     *result = cudf::data_type(cudf::type_id::EMPTY);
   }
