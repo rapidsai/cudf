@@ -24,7 +24,6 @@ import ai.rapids.cudf.WindowOptions.FrameType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.xml.datatype.DatatypeConfigurationException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -90,13 +89,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
     @Override
     public void close() {
-      if (getDataType() == DType.LIST) {
-        ColumnViewPointerAccess child = getChildColumnView();
-        if (child != null) {
-          child.close();
-        }
-      }
-      deleteColumnView(viewHandle);
     }
   }
 
