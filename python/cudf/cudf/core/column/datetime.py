@@ -119,9 +119,7 @@ class DatetimeColumn(column.ColumnBase):
             )
         elif isinstance(other, np.datetime64):
             other = other.astype(self.dtype)
-            ary = utils.scalar_broadcast_to(
-                other, size=len(self), dtype=self.dtype
-            )
+            return as_scalar(other)
         elif isinstance(other, np.timedelta64):
             return as_scalar(other)
         else:
@@ -227,8 +225,10 @@ class DatetimeColumn(column.ColumnBase):
                 f"Series of dtype {self.dtype} cannot perform "
                 f" the operation {op}"
             )
+
         if reflect:
             lhs, rhs = rhs, lhs
+
         return binop(lhs, rhs, op=op, out_dtype=out_dtype)
 
     def fillna(self, fill_value):

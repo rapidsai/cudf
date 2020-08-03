@@ -976,7 +976,11 @@ class Series(Frame, Serializable):
 
         preprocess.index = preprocess.index._clean_nulls_from_index()
 
-        if (
+        if isinstance(preprocess._column, cudf.core.column.TimeDeltaColumn):
+            # TODO: Temporary work-around until
+            # TimedeltaColumn.as_string_column is implemented
+            output = preprocess.to_pandas().__repr__()
+        elif (
             preprocess.nullable
             and not isinstance(
                 preprocess._column, cudf.core.column.CategoricalColumn

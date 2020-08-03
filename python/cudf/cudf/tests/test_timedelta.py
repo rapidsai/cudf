@@ -1,3 +1,4 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
 import datetime
 
 import cupy as cp
@@ -331,8 +332,7 @@ def test_timedelta_dataframe_ops(df, op):
         [None],
         [None, None, None, None, None],
         [12, 12, 22, 343, 4353534, 435342],
-        # np.array([10, 20, 30, None, 100]),
-        # TODO: Will get fixed with str type-cast implementation
+        np.array([10, 20, 30, None, 100]),
         cp.asarray([10, 20, 30, 100]),
         [1000000, 200000, 3000000],
         [1000000, 200000, None],
@@ -348,15 +348,14 @@ def test_timedelta_dataframe_ops(df, op):
     [
         datetime.timedelta(days=768),
         datetime.timedelta(seconds=768),
-        # datetime.timedelta(microseconds=7), #TODO: Fix
+        datetime.timedelta(microseconds=7),  # TODO: Fix
         datetime.timedelta(minutes=447),
         datetime.timedelta(hours=447),
         datetime.timedelta(weeks=734),
         np.timedelta64(4, "s"),
         np.timedelta64(456, "D"),
         np.timedelta64(46, "h"),
-        # np.timedelta64('nat'),
-        # TODO Will get fixed with str type-cast implementation
+        np.timedelta64("nat"),
     ],
 )
 @pytest.mark.parametrize("dtype", dtypeutils.TIMEDELTA_TYPES)
@@ -379,16 +378,15 @@ def test_timedelta_series_ops_with_scalars(data, other_scalars, dtype, op):
     "data",
     [
         [1000000, 200000, 3000000],
-        # [1000000, 200000, None],
+        [1000000, 200000, None],
         [],
-        # [None],
-        # [None, None, None, None, None],
+        [None],
+        [None, None, None, None, None],
         [12, 12, 22, 343, 4353534, 435342],
-        # np.array([10, 20, 30, None, 100]),
-        # TODO: Will get fixed with str type-cast implementation
+        np.array([10, 20, 30, None, 100]),
         cp.asarray([10, 20, 30, 100]),
         [1000000, 200000, 3000000],
-        # [1000000, 200000, None],
+        [1000000, 200000, None],
         [1],
         [12, 11, 232, 223432411, 2343241, 234324, 23234],
         [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
@@ -521,3 +519,40 @@ def test_timedelta_dt_properties(data, dtype):
     actual_nanoseconds = gsr.dt.nanoseconds
 
     local_assert(expected_nanoseconds, actual_nanoseconds)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [],
+        [None],
+        [None, None, None, None, None],
+        [12, 12, 22, 343, 4353534, 435342],
+        np.array([10, 20, 30, None, 100]),
+        cp.asarray([10, 20, 30, 100]),
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [1],
+        [12, 11, 232, 223432411, 2343241, 234324, 23234],
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+        [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
+        [
+            136457654736252,
+            134736784364431,
+            245345345545332,
+            223432411,
+            2343241,
+            3634548734,
+            23234,
+        ],
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+    ],
+)
+@pytest.mark.parametrize("dtype", dtypeutils.TIMEDELTA_TYPES)
+def test_timedelta_index(data, dtype):
+    gdi = cudf.Index(data, dtype=dtype)
+    pdi = gdi.to_pandas()
+
+    assert_eq(pdi, gdi)

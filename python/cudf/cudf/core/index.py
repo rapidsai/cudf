@@ -2024,11 +2024,10 @@ class TimedeltaIndex(GenericIndex):
         return out
 
     def to_pandas(self):
-        nanos = self._values  # .astype("timedelta64[ns]")
         return pd.TimedeltaIndex(
-            nanos.to_pandas(nullable_pd_dtype=False),
+            self._values.to_pandas(nullable_pd_dtype=False),
             name=self.name,
-            unit=self._value.time_unit,
+            unit=self._values.time_unit,
         )
 
 

@@ -1,4 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 from numbers import Number
 
 import numpy as np
@@ -103,3 +103,13 @@ def floor_divide(lhs, rhs):
         return np.floor_divide(lhs, rhs)
     else:
         return getattr(lhs, "floordiv")(rhs)
+
+
+def subtract(lhs, rhs):
+    if isinstance(lhs, Number) and isinstance(rhs, Number):
+        return np.subtract(lhs, rhs)
+    else:
+        try:
+            return getattr(lhs, "sub")(rhs)
+        except AttributeError:
+            return getattr(rhs, "rsub")(lhs)

@@ -48,6 +48,7 @@ from cudf.core.ops import (
     remainder,
     sin,
     sqrt,
+    subtract,
     tan,
 )
 from cudf.core.reshape import concat, get_dummies, melt, merge_sorted

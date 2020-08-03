@@ -65,7 +65,10 @@ def scalar_broadcast_to(scalar, size, dtype=None):
     if isinstance(size, (tuple, list)):
         size = size[0]
 
-    if scalar is None:
+    if scalar is None or (
+        isinstance(scalar, (np.datetime64, np.timedelta64))
+        and np.isnat(scalar)
+    ):
         if dtype is None:
             dtype = "object"
         return column.column_empty(size, dtype=dtype, masked=True)

@@ -105,7 +105,7 @@ class TimeDeltaColumn(column.ColumnBase):
             if op in ("eq", "ne", "lt", "gt", "le", "ge"):
                 out_dtype = np.bool
             elif op in ("add", "sub"):
-                out_dtype = self.dtype
+                out_dtype = determine_out_dtype(lhs.dtype, rhs.dtype)
             elif op in ("mod"):
                 out_dtype = np.dtype("timedelta64[ns]")
             elif op == "truediv":
@@ -114,7 +114,7 @@ class TimeDeltaColumn(column.ColumnBase):
                 if isinstance(rhs, Scalar):
                     rhs = as_scalar(rhs, dtype="float64")
                 else:
-                    rhs = rhs.astype("float64")
+                    rhs = rhs.astype("timedelta64[ns]").astype("float64")
                 out_dtype = np.dtype("float_")
             elif op == "floordiv":
                 op = "truediv"
@@ -122,7 +122,7 @@ class TimeDeltaColumn(column.ColumnBase):
                 if isinstance(rhs, Scalar):
                     rhs = as_scalar(rhs, dtype="float64")
                 else:
-                    rhs = rhs.astype("float64")
+                    rhs = rhs.astype("timedelta64[ns]").astype("float64")
                 out_dtype = np.dtype("int_")
             else:
                 raise TypeError(
@@ -313,3 +313,12 @@ class TimeDeltaColumn(column.ColumnBase):
 def binop(lhs, rhs, op, out_dtype):
     out = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
     return out
+
+
+def determine_out_dtype(lhs_dtype, rhs_dtype):
+    if np.can_cast(np.dtype(lhs_dtype), np.dtype(rhs_dtype)):
+        return rhs_dtype
+    elif np.can_cast(np.dtype(rhs_dtype), np.dtype(lhs_dtype)):
+        return lhs_dtype
+    else:
+        raise np.dtype("timedelta64[ns]")
