@@ -110,7 +110,7 @@ low_cardinality = Parameters(num_rows=2048, column_params=low_cardinality_column
 
 # Simple
 # This generates data for 2048 people regarding their age, city, industry,
-# and name. There should be 4 row groups of 512 rows each.
+# and name. There should be 4 row groups of 512 rows each. Sorting is by age.
 simple_column_params = list(default_column_params)
 simple_column_params[0].ty = g.person.age
 simple_column_params[0].is_sorted = True

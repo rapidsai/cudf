@@ -913,6 +913,8 @@ table_with_metadata reader::impl::read_filtered(
   // // Get predicate for filtering
   // std::reference_wrapper<cudf::ast::expression> predicate = _predicate->get();
 
+  std::cerr << "hi!" << std::endl;
+
   // Select only row groups required
   const auto selected_row_groups =
     _metadata->select_row_groups(row_group_list, skip_rows, num_rows);
