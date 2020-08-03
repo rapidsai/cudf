@@ -126,6 +126,13 @@ cdef class Scalar:
                 "Could not convert cudf::scalar to a Python value"
             )
 
+    @property
+    def valid(self):
+        """
+        Returns if the Scalar is valid or not(i.e., <NA>).
+        """
+        return self.c_value.get()[0].is_valid()
+
     def __repr__(self):
         if self.value is None:
             return f"Scalar({self.value}, {self.dtype.__repr__()})"

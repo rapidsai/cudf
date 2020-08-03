@@ -181,6 +181,8 @@ def test_null_scalar(dtype):
 def test_scalar_valid(value, valid):
     s = Scalar(value, valid=valid)
 
+    assert s.valid == valid
+
     if valid is False:
         np.testing.assert_equal(s.value, None)
     else:
