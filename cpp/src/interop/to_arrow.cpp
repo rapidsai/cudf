@@ -160,9 +160,10 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::string_view>(
   if (child_arrays.size() == 0) {
     std::shared_ptr<arrow::Buffer> tmp_offset_buffer;
     // Empty string will have only one value in offset of 4 bytes
-    int offset = 0;
     CUDF_EXPECTS(arrow::AllocateBuffer(ar_mr, 4, &tmp_offset_buffer).ok(),
                  "Failed to allocate buffer");
+    tmp_offset_buffer->mutable_data()[0] = 0;
+
     std::shared_ptr<arrow::Buffer> tmp_data_buffer;
     CUDF_EXPECTS(arrow::AllocateBuffer(ar_mr, 0, &tmp_data_buffer).ok(),
                  "Failed to allocate buffer");

@@ -67,9 +67,9 @@ data_type arrow_to_cudf_type(arrow::DataType const& arrow_type)
 
 namespace {
 /**
- * @brief Functor to return pair of column and column view for a corresponding arrow array. column
- * is formed from buffer underneath the arrow array, and if the array is resized or has an offset,
- * that is taken care by the column view provided along with it
+ * @brief Functor to return column for a corresponding arrow array. column
+ * is formed from buffer underneath the arrow array along with any offset and
+ * change in length that array has.
  */
 struct dispatch_to_cudf_column {
   /**
