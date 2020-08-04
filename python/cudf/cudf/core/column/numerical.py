@@ -85,7 +85,7 @@ class NumericalColumn(column.ColumnBase):
             out_dtype = np.result_type(cudf.dtype(self.dtype).to_numpy, cudf.dtype(rhs.dtype).to_numpy)
             out_dtype = cudf.dtype(out_dtype)
             if binop in ["mod", "floordiv"]:
-                if (tmp.dtype in int_dtypes) and (
+                if (cudf.dtype(tmp.dtype) in int_dtypes) and (
                     (np.isscalar(tmp) and (0 == tmp))
                     or ((isinstance(tmp, NumericalColumn)) and (0.0 in tmp))
                 ):
@@ -107,7 +107,7 @@ class NumericalColumn(column.ColumnBase):
             return other
         other_dtype = np.min_scalar_type(other)
         if other_dtype.kind in {"b", "i", "u", "f"}:
-            other_dtype = np.promote_types(self.dtype, other_dtype)
+            other_dtype = np.promote_types(self.dtype.to_numpy, other_dtype)
             if other_dtype == np.dtype("float16"):
                 other = np.dtype("float32").type(other)
                 other_dtype = other.dtype
