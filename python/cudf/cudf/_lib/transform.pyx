@@ -1,5 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+import cudf
 import numpy as np
 from cudf.utils import cudautils
 
@@ -60,8 +61,9 @@ def mask_to_bools(object mask_buffer, size_type begin_bit, size_type end_bit):
     Given a mask buffer, returns a boolean column representng bit 0 -> False
     and 1 -> True within range of [begin_bit, end_bit),
     """
-    cdef bitmask_type* bit_mask
-    bit_mask= <bitmask_type*><uintptr_t>(mask_buffer.ptr)
+    if not isinstance(mask_buffer, cudf.core.Buffer):
+        raise TypeError("mask_buffer is not an instance of cudf.core.Buffer")
+    cdef bitmask_type* bit_mask = <bitmask_type*><uintptr_t>(mask_buffer.ptr)
 
     cdef unique_ptr[column] result
     with nogil:
