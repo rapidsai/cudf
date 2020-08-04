@@ -22,6 +22,7 @@
 
 #include "cuda_runtime_api.h"
 #include "cudf/types.hpp"
+#include "sm_35_intrinsics.h"
 
 using hash_value_type = uint32_t;
 
@@ -72,9 +73,7 @@ void CUDA_DEVICE_CALLABLE md5_hash_step(md5_intermediate_data* hash_state,
     A = D;
     D = C;
     C = B;
-
-    uint32_t shift = shift_constants[((j / 16) * 4) + (j % 4)];
-    B              = B + ((F << shift) | (F >> (32 - shift)));
+    B = B + __funnelshift_l(F, F, shift_constants[((j / 16) * 4) + (j % 4)]);
   }
 
   hash_state->hash_value[0] += A;

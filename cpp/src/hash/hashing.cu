@@ -715,11 +715,14 @@ std::unique_ptr<column> md5_hash(table_view const& input,
     return output;
   }
 
-  std::for_each(input.begin(), input.end(), [](auto col) {
-    CUDF_EXPECTS(!is_chrono(col.type()), "MD5 does not support chrono column types");
-    CUDF_EXPECTS(is_fixed_width(col.type()) || (col.type().id() == type_id::STRING),
-                 "MD5 requires fixed width column types except for strings");
-  });
+  CUDF_EXPECTS(
+    std::all_of(input.begin(),
+                input.end(),
+                [](auto col) {
+                  return !is_chrono(col.type()) &&
+                         (is_fixed_width(col.type()) || (col.type().id() == type_id::STRING));
+                }),
+    "MD5 unsupported column type");
 
   // Result column allocation and creation
   auto begin = thrust::make_constant_iterator(32);
