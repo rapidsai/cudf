@@ -422,10 +422,10 @@ class StringMethods(ColumnMethodsMixin):
             data = [""]
         out = self._return_or_inplace(data, **kwargs)
         if len(out) == 1 and others is None:
-            if isinstance(out, StringColumn):
-                out = out[0]
-            else:
+            if isinstance(out, cudf.Series):
                 out = out.iloc[0]
+            else:
+                out = out[0]
         return out
 
     def join(self, sep):
@@ -4622,6 +4622,9 @@ def _string_column_binop(lhs, rhs, op, out_dtype):
 
 def _get_cols_list(parent_obj, others):
 
+    if isinstance(parent_obj, cudf.Index):
+        parent_obj = parent_obj.to_series()
+
     if (
         can_convert_to_column(others)
         and len(others) > 0
@@ -4637,8 +4640,6 @@ def _get_cols_list(parent_obj, others):
         If others is a list-like object (in our case lists & tuples)
         just another Series/Index, great go ahead with concatenation.
         """
-        if isinstance(parent_obj, cudf.Index):
-            parent_obj = parent_obj.to_series()
 
         cols_list = []
 
@@ -4655,7 +4656,6 @@ def _get_cols_list(parent_obj, others):
 
         return cols_list
     elif others is not None:
-        # import pdb;pdb.set_trace()
         if isinstance(others, cudf.Index):
             others = others.to_series()
 
