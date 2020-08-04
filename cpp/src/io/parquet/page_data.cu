@@ -71,14 +71,14 @@ struct page_state_s {
   uint32_t str_len[NZ_BFRSZ];   // String length for plain encoding of strings
 
   // repetition/definition level decoding
-  int input_value_count;                      // how many values of the input we've processed
-  int input_row_count;                        // how many rows of the input we've processed
-  int input_leaf_count;                       // how many leaf values of the input we've processed
+  int32_t input_value_count;                  // how many values of the input we've processed
+  int32_t input_row_count;                    // how many rows of the input we've processed
+  int32_t input_leaf_count;                   // how many leaf values of the input we've processed
   uint32_t rep[NZ_BFRSZ];                     // circular buffer of repetition level values
   uint32_t def[NZ_BFRSZ];                     // circular buffer of definition level values
   const uint8_t *lvl_start[NUM_LEVEL_TYPES];  // [def,rep]
   int32_t lvl_count[NUM_LEVEL_TYPES];         // how many of each of the streams we've decoded
-  int row_index_lower_bound;                  // lower bound of row indices we should process
+  int32_t row_index_lower_bound;              // lower bound of row indices we should process
 };
 
 /**
@@ -1030,7 +1030,7 @@ static __device__ bool setupLocalPageInfo(page_state_s *const s,
           }
 
           // anything below max depth is an offset
-          uint32_t len = idx < max_depth ? sizeof(int32_t) : s->dtype_len;
+          uint32_t len = idx < max_depth ? sizeof(cudf::size_type) : s->dtype_len;
 
           pni->data_out =
             reinterpret_cast<uint8_t *>(s->col.column_data_base[idx]) + (output_offset * len);
@@ -1301,10 +1301,10 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
 
         // if we're -not- at a leaf column, and we're within row bounds, emit an offset
         if (in_bounds) {
-          int idx = pni->value_count + thread_value_count;
-          int ofs = s->page.nesting[s_idx + 1].value_count + next_thread_value_count +
-                    s->page.nesting[s_idx + 1].page_start_value;
-          (reinterpret_cast<int *>(pni->data_out))[idx] = ofs;
+          int idx             = pni->value_count + thread_value_count;
+          cudf::size_type ofs = s->page.nesting[s_idx + 1].value_count + next_thread_value_count +
+                                s->page.nesting[s_idx + 1].page_start_value;
+          (reinterpret_cast<cudf::size_type *>(pni->data_out))[idx] = ofs;
         }
       }
 
@@ -1630,8 +1630,8 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
         int leaf_level_index = s->col.max_level[level_type::REPETITION];
 
         uint32_t dtype_len = s->dtype_len;
-        uint8_t *dst =
-          s->page.nesting[leaf_level_index].data_out + (size_t)output_value_idx * dtype_len;
+        uint8_t *dst       = s->page.nesting[leaf_level_index].data_out +
+                       static_cast<size_t>(output_value_idx) * dtype_len;
         if (dtype == BYTE_ARRAY)
           gpuOutputString(s, src_pos, dst);
         else if (dtype == BOOLEAN)
