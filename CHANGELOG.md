@@ -250,6 +250,7 @@
 - PR #5813 Fix normalizer exception with all-null strings column
 - PR #5820 Fix ListColumn.to_arrow for all null case
 - PR #5837 Bash syntax error in prebuild.sh preventing `cudf_kafka` and `libcudf_kafka` from being uploaded to Anaconda
+- PR #5841 Added custreamz functions that were missing in interface layer
 - PR #5844 Fix `.str.cat` when objects with different index are passed
 
 
