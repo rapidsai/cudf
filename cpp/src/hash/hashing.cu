@@ -610,62 +610,6 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
   }
 }
 
-/**
- * Modified GPU implementation of
- * https://johnnylee-sde.github.io/Fast-unsigned-integer-to-hex-string/ that is lowercase only and
- * does not flip the endianness of the input.
- */
-void __device__ uint32ToLowercaseHexString(uint32_t num, char* destination)
-{
-  // Transform 0xABCD1234 => 0x0000ABCD00001234 => 0x0B0A0D0C02010403
-  uint64_t x = num;
-  x          = ((x & 0xFFFF0000) << 16) | ((x & 0xFFFF));
-  x          = ((x & 0xF0000000F) << 8) | ((x & 0xF0000000F0) >> 4) | ((x & 0xF0000000F00) << 16) |
-      ((x & 0xF0000000F000) << 4);
-
-  // Calculate a mask of ascii value offsets for bytes that contain alphabetical hex digits
-  uint64_t offsets = (((x + 0x0606060606060606) >> 4) & 0x0101010101010101) * 0x27;
-
-  x |= 0x3030303030303030;
-  x += offsets;
-  thrust::copy_n(thrust::seq, reinterpret_cast<uint8_t*>(&x), 8, destination);
-}
-
-/**
- * @brief Finalize MD5 hash including converstion to hex string.
- */
-void __device__ finalize_md5_hash(detail::md5_intermediate_data* hash_state,
-                                  char* result_location,
-                                  const detail::md5_hash_constants_type* hash_constants,
-                                  const detail::md5_shift_constants_type* shift_constants)
-{
-  auto const full_length = (static_cast<uint64_t>(hash_state->message_length)) << 3;
-  thrust::fill_n(thrust::seq, hash_state->buffer + hash_state->buffer_length, 1, 0x80);
-
-  if (hash_state->buffer_length < 56) {
-    thrust::fill_n(thrust::seq,
-                   hash_state->buffer + hash_state->buffer_length + 1,
-                   (55 - hash_state->buffer_length),
-                   0x00);
-  } else {
-    thrust::fill_n(thrust::seq,
-                   hash_state->buffer + hash_state->buffer_length + 1,
-                   (64 - hash_state->buffer_length),
-                   0x00);
-    detail::md5_hash_step(hash_state, hash_constants, shift_constants);
-
-    thrust::fill_n(thrust::seq, hash_state->buffer, 56, 0x00);
-  }
-
-  thrust::copy_n(
-    thrust::seq, reinterpret_cast<uint8_t const*>(&full_length), 8, hash_state->buffer + 56);
-  detail::md5_hash_step(hash_state, hash_constants, shift_constants);
-
-#pragma unroll
-  for (int i = 0; i < 4; ++i)
-    uint32ToLowercaseHexString(hash_state->hash_value[i], result_location + (8 * i));
-}
-
 }  // namespace
 
 namespace detail {
@@ -755,19 +699,17 @@ std::unique_ptr<column> md5_hash(table_view const& input,
                     shift_constants = shift_constants,
                     has_nulls       = nullable] __device__(auto row_index) {
                      md5_intermediate_data hash_state;
+                     MD5Hash hasher = MD5Hash(hash_constants, shift_constants);
                      for (int col_index = 0; col_index < device_input.num_columns(); col_index++) {
                        if (device_input.column(col_index).is_valid(row_index)) {
                          cudf::type_dispatcher(device_input.column(col_index).type(),
-                                               MD5Hash{},
+                                               hasher,
                                                device_input.column(col_index),
                                                row_index,
-                                               &hash_state,
-                                               hash_constants,
-                                               shift_constants);
+                                               &hash_state);
                        }
                      }
-                     finalize_md5_hash(
-                       &hash_state, d_chars + (row_index * 32), hash_constants, shift_constants);
+                     hasher.finalize(&hash_state, d_chars + (row_index * 32));
                    });
 
   return make_strings_column(input.num_rows(),
