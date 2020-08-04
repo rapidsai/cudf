@@ -17,7 +17,9 @@
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
+#include <tests/utilities/type_lists.hpp>
 
+#include <cudf/fixed_point/fixed_point.hpp>
 #include "cudf/search.hpp"
 
 struct SearchTest : public cudf::test::BaseFixture {
@@ -1811,6 +1813,60 @@ TEST_F(SearchTest, multi_contains_empty_input_set_string)
   fixed_width_column_wrapper<bool> expect{0, 0, 0, 0, 0, 0, 0};
 
   auto result = cudf::contains(haystack, needles);
+
+  expect_columns_equal(*result, expect);
+}
+
+template <typename T>
+struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+};
+
+TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointLowerBound)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+
+  auto vec = std::vector<decimalXX>(1000);
+  std::iota(std::begin(vec), std::end(vec), decimalXX{});
+
+  auto const values =
+    cudf::test::fixed_width_column_wrapper<decimalXX>{decimalXX{200, scale_type{0}},
+                                                      decimalXX{400, scale_type{0}},
+                                                      decimalXX{600, scale_type{0}},
+                                                      decimalXX{800, scale_type{0}}};
+  auto const expect = cudf::test::fixed_width_column_wrapper<cudf::size_type>{200, 400, 600, 800};
+  auto const column = cudf::test::fixed_width_column_wrapper<decimalXX>(vec.begin(), vec.end());
+
+  auto result = cudf::lower_bound({cudf::table_view{{column}}},
+                                  {cudf::table_view{{values}}},
+                                  {cudf::order::ASCENDING},
+                                  {cudf::null_order::BEFORE});
+
+  expect_columns_equal(*result, expect);
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointUpperBound)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+
+  auto vec = std::vector<decimalXX>(1000);
+  std::iota(std::begin(vec), std::end(vec), decimalXX{});
+
+  auto const values =
+    cudf::test::fixed_width_column_wrapper<decimalXX>{decimalXX{200, scale_type{0}},
+                                                      decimalXX{400, scale_type{0}},
+                                                      decimalXX{600, scale_type{0}},
+                                                      decimalXX{800, scale_type{0}}};
+  auto const expect = cudf::test::fixed_width_column_wrapper<cudf::size_type>{201, 401, 601, 801};
+  auto const column = cudf::test::fixed_width_column_wrapper<decimalXX>(vec.begin(), vec.end());
+
+  auto result = cudf::upper_bound({cudf::table_view{{column}}},
+                                  {cudf::table_view{{values}}},
+                                  {cudf::order::ASCENDING},
+                                  {cudf::null_order::BEFORE});
 
   expect_columns_equal(*result, expect);
 }
