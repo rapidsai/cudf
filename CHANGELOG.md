@@ -63,6 +63,8 @@
 - PR #5789 Add groupby support for duration types
 - PR #5810 Make Cython subdirs packages and simplify package_data
 - PR #5822 Add `cudf_kafka` to `custreamz` run time conda dependency and fix bash syntax issue
+- PR #5781 Add duration types support in cudf(python/cython)
+
 
 ## Improvements
 
