@@ -38,7 +38,7 @@ struct reduce_functor {
   static constexpr bool is_supported()
   {
     if (K == aggregation::SUM)
-      return cudf::is_numeric<T>();
+      return cudf::is_numeric<T>() || cudf::is_duration<T>();
     else if (K == aggregation::MIN or K == aggregation::MAX)
       return cudf::is_fixed_width<T>() and is_relationally_comparable<T, T>();
     else if (K == aggregation::ARGMIN or K == aggregation::ARGMAX)
