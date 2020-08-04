@@ -90,17 +90,13 @@ class hostdevice_vector {
   void host_to_device(cudaStream_t stream, bool synchronize = false)
   {
     cudaMemcpyAsync(d_data.data(), h_data, memory_size(), cudaMemcpyHostToDevice, stream);
-    if(synchronize){
-      cudaStreamSynchronize(stream);
-    }
+    if (synchronize) { cudaStreamSynchronize(stream); }
   }
 
   void device_to_host(cudaStream_t stream, bool synchronize = false)
   {
     cudaMemcpyAsync(h_data, d_data.data(), memory_size(), cudaMemcpyDeviceToHost, stream);
-    if(synchronize){
-      cudaStreamSynchronize(stream);
-    }
+    if (synchronize) { cudaStreamSynchronize(stream); }
   }
 
  private:
