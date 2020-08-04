@@ -86,7 +86,7 @@ std::unique_ptr<column> make_numeric_column(
   cudaStream_t stream                 = 0,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
 {
-  CUDF_EXPECTS(is_numeric(type), "Invalid, non-numeric type.");
+  CUDF_EXPECTS(is_numeric(type) || is_fixed_point(type), "Invalid, non-numeric type.");
   return std::make_unique<column>(type,
                                   size,
                                   rmm::device_buffer{size * cudf::size_of(type), stream, mr},
