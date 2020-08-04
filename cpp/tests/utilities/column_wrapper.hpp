@@ -992,11 +992,6 @@ class structs_column_wrapper : public detail::column_wrapper
       init(std::move(child_columns), validity);
     }
 
-    static auto ref(detail::column_wrapper& column_wrapper)
-    {
-      return std::ref(column_wrapper);
-    }
-
   private:
 
     void init(std::vector<std::unique_ptr<cudf::column>>&& child_columns, std::vector<bool> const& validity)

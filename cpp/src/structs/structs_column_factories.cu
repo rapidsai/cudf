@@ -115,6 +115,11 @@ namespace cudf
                     [&](auto const& child_col){ return num_rows == child_col->size(); }), 
         "Child columns must have the same number of rows as the Struct column.");
 
+      CUDF_EXPECTS(
+        null_count == 0 || !null_mask.is_empty(),
+        "Struct column with nulls must be nullable."
+      );
+
       if (!null_mask.is_empty())
       {
         for (auto& child : child_columns) {
