@@ -4836,7 +4836,7 @@ class DataFrame(Frame, Serializable):
         return pa.Table.from_arrays(arrays, names=names, metadata=metadata)
 
     @classmethod
-    def __from_arrow(cls, table):
+    def _from_arrow(cls, table):
         """Convert from a PyArrow Table.
 
         Parameters

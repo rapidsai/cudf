@@ -1926,6 +1926,7 @@ def test_1row_arrow_table():
 
 
 def test_arrow_handle_no_index_name(pdf, gdf):
+    breakpoint()
     gdf_arrow = gdf.to_arrow()
     pdf_arrow = pa.Table.from_pandas(pdf)
     assert pa.Table.equals(pdf_arrow, gdf_arrow)

@@ -20,6 +20,7 @@ cimport cudf._lib.cpp.types as libcudf_types
 
 
 class TypeId(IntEnum):
+    EMPTY = <underlying_type_t_type_id> libcudf_types.type_id.EMPTY
     INT8 = <underlying_type_t_type_id> libcudf_types.type_id.INT8
     INT16 = <underlying_type_t_type_id> libcudf_types.type_id.INT16
     INT32 = <underlying_type_t_type_id> libcudf_types.type_id.INT32
@@ -70,6 +71,7 @@ np_to_cudf_types = {
 }
 
 cudf_to_np_types = {
+    TypeId.EMPTY: np.dtype("object"),
     TypeId.INT8: np.dtype("int8"),
     TypeId.INT16: np.dtype("int16"),
     TypeId.INT32: np.dtype("int32"),

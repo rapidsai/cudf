@@ -22,7 +22,7 @@ def to_arrow(Table input_table, object column_names, bool keep_index=True):
     cdef table_view input = input_table.view() if keep_index else input_table.data_view()
     cpp_column_names.reserve(len(column_names))
     for name in column_names:
-        cpp_column_names.push_back(str.encode(name))
+        cpp_column_names.push_back(str.encode(str(name)))
 
     cdef shared_ptr[CTable] cpp_arrow_table
     with nogil:

@@ -1836,15 +1836,21 @@ class Frame(libcudf.table.Table):
                 )
             data = pa.table([data], [None])
 
+        index_col = None
+        if isinstance(data, pa.Table) and isinstance(data.schema.pandas_metadata, dict):
+            index_col = data.schema.pandas_metadata["index_columns"]
+            if index_col and isinstance(index_col[0], dict):
+                data = data.drop(index_col[0]["name"])
+
         dict_indices = {}
         dict_dictionaries = {}
         for field in data.schema:
             if isinstance(field.type, pa.DictionaryType):
                 dict_indices[field.name] = pa.chunked_array(
-                    [chunk.indices for chunk in data[field.name].chunks]
+                    [chunk.indices for chunk in data[field.name].chunks], type=field.type.index_type
                 )
                 dict_dictionaries[field.name] = pa.chunked_array(
-                    [chunk.dictionary for chunk in data[field.name].chunks]
+                    [chunk.dictionary for chunk in data[field.name].chunks], type=field.type.value_type
                 )
 
         cudf_dict_table = cudf.DataFrame()
@@ -1897,15 +1903,44 @@ class Frame(libcudf.table.Table):
             result = cudf.Index(result)
         elif cls in (cudf.Series, cudf.Index):
             result = cls(result._data.columns[0])
+        else:
+            if index_col:
+                if isinstance(index_col[0], dict):
+                    result = result.set_index(cudf.RangeIndex(
+                        index_col[0]["start"],
+                        index_col[0]["stop"],
+                        name=index_col[0]["name"],
+                        )
+                    )
+                else:
+                    result = result.set_index(index_col[0])
 
         return result
 
     def to_arrow(self, preserve_index=True):
-        data = self
+        data = self.copy()
         codes = {}
+        codes_keys = []
         categories = {}
-        if preserve_index and isinstance(self, (cudf.DataFrame, cudf.Series)):
-            data = data.reset_index()
+        RangeIndexMetaData = None
+        if preserve_index and isinstance(self, (cudf.DataFrame)):
+            if isinstance(self.index, cudf.RangeIndex):
+                RangeIndexMetaData = {
+                    "kind": "range",
+                    "name": self.index.name,
+                    "start": self.index._start,
+                    "stop": self.index._stop,
+                    "step": 1,
+                }
+            else:
+                if isinstance(self.index, cudf.MultiIndex):
+                    names = tuple(
+                        f"level_{i}" for i, _ in enumerate(self.index.names)
+                    )
+                else:
+                    names = data.index.names if data.index.name is not None else ("index",)
+                for name, column in zip(names, self.index._data.columns):
+                    data.insert(data.ndim, name, column)
 
         for name in self._data.names:
             if isinstance(
@@ -1913,26 +1948,34 @@ class Frame(libcudf.table.Table):
                 cudf.core.column.CategoricalColumn,
             ):
                 # arrow doesn't support unsigned codes
-                signed_type = min_signed_type(self._data[name].codes.max())
-                codes[name] = self._data[name].codes.astype(signed_type)
-                categories[name] = self._data[name].categories
+                signed_type = min_signed_type(self._data[name].codes.max()) if self._data[name].codes.size > 0 else np.int8
+                codes[str(name)] = self._data[name].codes.astype(signed_type)
+                categories[str(name)] = self._data[name].categories
+                codes_keys.append(name)
         
         data = cudf.DataFrame(data._data)
-        data = data.drop(codes.keys())
+        data = data.drop(codes_keys)
 
         out_table = pa.table([])
-        if data.ndim > 0:
+        if data.shape[1] > 0:
             out_table = libcudf.interop.to_arrow(data, data._data.names, keep_index=False)
+        def get_dictionary_array(array):
+            if isinstance(array, pa.StringArray) and len(array) == 0:
+                return pa.array([], type=pa.null())
+            else:
+                return array
 
         if len(codes) > 0:
             codes_df = cudf.DataFrame(codes)
             indices = libcudf.interop.to_arrow(codes_df, codes_df._data.names, keep_index=False)
             dictionaries = dict((name, libcudf.interop.to_arrow(cudf.DataFrame({name: categories[name]}), [name], keep_index=False)[name]) for name in categories.keys())
             for name in codes.keys():
-                if out_table is None:
+                if out_table.num_columns == 0:
                     out_table = pa.table({name: pa.DictionaryArray.from_arrays(indices[name].chunk(0), dictionaries[name].chunk(0))})
                 else:
-                    out_table = out_table.append_column(name, pa.DictionaryArray.from_arrays(indices[name].chunk(0), dictionaries[name].chunk(0), ordered=self._data[name].ordered))
+                    out_table = out_table.append_column(name, pa.DictionaryArray.from_arrays(indices[name].chunk(0), get_dictionary_array(dictionaries[name].chunk(0)), ordered=self._data[name].ordered))
+        if out_table.num_columns == 1 and isinstance (self, (cudf.Series, cudf.Index)) and not isinstance(self, cudf.MultiIndex):
+            return out_table.columns[0].chunk(0)
 
         return out_table
 
