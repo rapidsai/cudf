@@ -2563,10 +2563,6 @@ public class ColumnVectorTest extends CudfTestBase {
     HostColumnVector hcv = res.copyToHost()) {
       List<List<Integer>> ret1 = hcv.getList(0);
       List<List<Integer>> ret2 = hcv.getList(1);
-      System.out.println(" ret1 " + hcv.getList(0));
-      System.out.println(" ret2 " + hcv.getList(1));
-      System.out.println(" hcv lens" + hcv.children.get(0).getData().length);
-      System.out.println(" hcv lens" + hcv.children.get(0).getOffsets().length);
       assertEquals(mainList1, ret1, "Lists don't match");
       assertEquals(mainList2, ret2, "Lists don't match");
     }
@@ -2697,7 +2693,7 @@ public class ColumnVectorTest extends CudfTestBase {
     list2.add(null);
     list2.add("6");
     list2.add(null);
-    List<String> list3 = new ArrayList<>();
+    List<String> list3 = null;
     try (ColumnVector res1 = ColumnVector.fromLists(new HostColumnVector.ColumnBuilder.ListType(true, 2,
         new HostColumnVector.ColumnBuilder.BasicType(true, 4, DType.STRING)), list, list3);
          ColumnVector res2 = ColumnVector.fromLists(new HostColumnVector.ColumnBuilder.ListType(true, 1,
@@ -2705,14 +2701,6 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector v = ColumnVector.concatenate(res1, res2);
          ColumnVector expected = ColumnVector.fromLists(new HostColumnVector.ColumnBuilder.ListType(true, 3,
              new HostColumnVector.ColumnBuilder.BasicType(true, 8, DType.STRING)) , list, list3, list2)) {
-      HostColumnVector hostColumnVector = v.copyToHost();
-      List ret1 = hostColumnVector.getList(0);
-//      List ret2 = hostColumnVector.getList(1);
-      List ret3 = hostColumnVector.getList(2);
-      System.out.println("KUHU ret1" + ret1);
-//      System.out.println("KUHU ret2" + ret2);
-      System.out.println("KUHU ret3" + ret3);
-      //TODO FIX me validity is null on concatenated column
       assertColumnsAreEqual(expected, v);
     }
   }

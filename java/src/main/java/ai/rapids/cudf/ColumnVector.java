@@ -23,7 +23,6 @@ import ai.rapids.cudf.WindowOptions.FrameType;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sun.invoke.empty.Empty;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -3099,12 +3098,12 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
   private static class NestedColumnVector {
 
-    private DeviceMemoryBuffer data;
-    private DeviceMemoryBuffer valid;
-    private DeviceMemoryBuffer offsets;
-    private DType dataType;
-    private int rows;
-    private Optional<Long> nullCount = Optional.empty();
+    private final DeviceMemoryBuffer data;
+    private final DeviceMemoryBuffer valid;
+    private final DeviceMemoryBuffer offsets;
+    private final DType dataType;
+    private final int rows;
+    private final Optional<Long> nullCount;
     NestedColumnVector child;
 
     private NestedColumnVector(DType type, int rows, Optional<Long> nullCount,
@@ -3117,7 +3116,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       this.valid = valid;
       this.offsets = offsets;
       this.child = child;
-      this.data = data;
     }
 
     static ColumnVector createColumnVector(DType type, int rows, HostMemoryBuffer data, HostMemoryBuffer valid, HostMemoryBuffer offsets,

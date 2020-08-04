@@ -436,7 +436,6 @@ public final class HostColumnVector implements AutoCloseable {
         offsets = null;
         return ret;
       } else {
-        System.out.println("KUHU off heap data on host len =" + offHeap.data);
         return ColumnVector.createNestedColumnVector(type, (int)rows,
             offHeap.data, offHeap.valid, offHeap.offsets, nullCount, children.get(0));
       }
@@ -1208,7 +1207,7 @@ public final class HostColumnVector implements AutoCloseable {
     private HostMemoryBuffer data;
     private HostMemoryBuffer valid;
     private HostMemoryBuffer offsets;
-    private Optional<Long> nullCount = Optional.empty();
+    private long nullCount = 0l;
     //TODO nullable currently not used
     private boolean nullable;
     private long rows;
@@ -1233,7 +1232,7 @@ public final class HostColumnVector implements AutoCloseable {
       for (ColumnBuilder childBuilder : childBuilders) {
         nestedHostColumnVectorList.add(childBuilder.buildNestedInternal());
       }
-      HostColumnVector hostColumnVector = new HostColumnVector(type, rows, nullCount, data, valid, offsets,
+      HostColumnVector hostColumnVector = new HostColumnVector(type, rows, Optional.of(nullCount), data, valid, offsets,
           nestedHostColumnVectorList);
       return hostColumnVector;
     }
@@ -1243,7 +1242,7 @@ public final class HostColumnVector implements AutoCloseable {
       for (ColumnBuilder childBuilder : childBuilders) {
         nestedHostColumnVectorList.add(childBuilder.buildNestedInternal());
       }
-      NestedHostColumnVector ret = new NestedHostColumnVector(type, rows, nullCount, data, valid, offsets, nestedHostColumnVectorList);
+      NestedHostColumnVector ret = new NestedHostColumnVector(type, rows, Optional.of(nullCount), data, valid, offsets, nestedHostColumnVectorList);
       return ret;
     }
     private void allocateBitmaskAndSetDefaultValues() {
@@ -1291,10 +1290,7 @@ public final class HostColumnVector implements AutoCloseable {
     private void setNullAt(int index) {
       initValidBuffer();
       //TODO does this work
-      if (!nullCount.isPresent()) {
-        nullCount = Optional.of(0l);
-      }
-      nullCount.map((v) -> v + BitVectorHelper.setNullAt(valid, index));
+      nullCount += BitVectorHelper.setNullAt(valid, index);
     }
 
     public final ColumnBuilder appendNull() {
