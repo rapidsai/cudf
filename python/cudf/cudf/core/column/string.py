@@ -4623,7 +4623,14 @@ def _string_column_binop(lhs, rhs, op, out_dtype):
 def _get_cols_list(parent_obj, others):
 
     if isinstance(parent_obj, cudf.Index):
-        parent_obj = parent_obj.to_series()
+        # TODO: We might have to change
+        # this incase the fix of the below
+        # issue alters behaviour incase of
+        # Index object being parent_obj
+        # https://github.com/pandas-dev/pandas/issues/35556
+        parent_obj = parent_obj.to_series(
+            index=cudf.RangeIndex(len(parent_obj))
+        )
 
     if (
         can_convert_to_column(others)
@@ -4640,19 +4647,15 @@ def _get_cols_list(parent_obj, others):
         If others is a list-like object (in our case lists & tuples)
         just another Series/Index, great go ahead with concatenation.
         """
-
-        cols_list = []
-
-        for frame in others:
-            if isinstance(frame, cudf.Index):
-                frame = frame.to_series()
-
-            if isinstance(frame, cudf.Series) and not frame.index.equals(
-                parent_obj.index
-            ):
-                frame = frame.reindex(parent_obj.index)
-
-            cols_list.append(column.as_column(frame, dtype="str"))
+        cols_list = [
+            column.as_column(frame.reindex(parent_obj.index), dtype="str")
+            if (
+                isinstance(frame, cudf.Series)
+                and not frame.index.equals(parent_obj.index)
+            )
+            else column.as_column(frame, dtype="str")
+            for frame in others
+        ]
 
         return cols_list
     elif others is not None:

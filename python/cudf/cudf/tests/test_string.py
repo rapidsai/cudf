@@ -337,26 +337,36 @@ def test_string_len(ps_gs):
             pd.Series(["f", "g", "h", "i", "j"]),
             np.array(["f", "g", "h", "i", "j"]),
         ),
-        (
-            pd.Series(["f", "g", "h", "i", "j"]),
-            np.array(["f", "a", "b", "f", "a"]),
-            pd.Series(["f", "g", "h", "i", "j"]),
-            np.array(["f", "a", "b", "f", "a"]),
-            np.array(["f", "a", "b", "f", "a"]),
-            pd.Index(["1", "2", "3", "4", "5"]),
-            np.array(["f", "a", "b", "f", "a"]),
-            pd.Index(["f", "g", "h", "i", "j"]),
+        pytest.param(
+            (
+                pd.Series(["f", "g", "h", "i", "j"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Series(["f", "g", "h", "i", "j"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Index(["1", "2", "3", "4", "5"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Index(["f", "g", "h", "i", "j"]),
+            ),
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/35556"
+            ),
         ),
-        [
-            pd.Index(["f", "g", "h", "i", "j"]),
-            np.array(["f", "a", "b", "f", "a"]),
-            pd.Series(["f", "g", "h", "i", "j"]),
-            np.array(["f", "a", "b", "f", "a"]),
-            np.array(["f", "a", "b", "f", "a"]),
-            pd.Index(["f", "g", "h", "i", "j"]),
-            np.array(["f", "a", "b", "f", "a"]),
-            pd.Index(["f", "g", "h", "i", "j"]),
-        ],
+        pytest.param(
+            [
+                pd.Index(["f", "g", "h", "i", "j"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Series(["f", "g", "h", "i", "j"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Index(["f", "g", "h", "i", "j"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Index(["f", "g", "h", "i", "j"]),
+            ],
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/35556"
+            ),
+        ),
         [
             pd.Series(["hello", "world", "abc", "xyz", "pqr"]),
             pd.Series(["abc", "xyz", "hello", "pqr", "world"]),
@@ -415,6 +425,7 @@ def test_string_len(ps_gs):
 )
 def test_string_cat(ps_gs, others, sep, na_rep, index):
     ps, gs = ps_gs
+    pi, gi = pd.Index(ps), cudf.Index(gs)  # noqa: F841
 
     pd_others = others
     if isinstance(pd_others, (pd.Series, pd.Index)):
@@ -423,17 +434,32 @@ def test_string_cat(ps_gs, others, sep, na_rep, index):
         gd_others = pd_others
 
     if isinstance(gd_others, (list, tuple)):
-        temp_tuple = []
-        for elem in gd_others:
-            if isinstance(elem, (pd.Series, pd.Index)):
-                temp_tuple.append(cudf.from_pandas(elem))
-            else:
-                temp_tuple.append(elem)
+        temp_tuple = [
+            cudf.from_pandas(elem)
+            if isinstance(elem, (pd.Series, pd.Index))
+            else elem
+            for elem in gd_others
+        ]
 
         if isinstance(gd_others, tuple):
             gd_others = tuple(temp_tuple)
         else:
             gd_others = list(temp_tuple)
+
+    # TODO: Pandas has a bug incase of Index object
+    # https://github.com/pandas-dev/pandas/issues/35556
+    # Once this issue is fixed, change the below ``ps.str.cat``
+    # call to ``pi.str.cat```
+    expect = ps.reset_index(drop=True).str.cat(
+        others=pd_others, sep=sep, na_rep=na_rep
+    )
+    got = gi.str.cat(others=gd_others, sep=sep, na_rep=na_rep)
+
+    assert_eq(
+        cudf.Index(expect) if not isinstance(expect, str) else expect,
+        got,
+        exact=False,
+    )
 
     expect = ps.str.cat(others=pd_others, sep=sep, na_rep=na_rep)
     got = gs.str.cat(others=gd_others, sep=sep, na_rep=na_rep)
