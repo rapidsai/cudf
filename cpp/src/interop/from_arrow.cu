@@ -20,6 +20,7 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/interop.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/transform.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/interop.hpp>
@@ -35,6 +36,8 @@ namespace detail {
 data_type arrow_to_cudf_type(arrow::DataType const& arrow_type)
 {
   switch (arrow_type.id()) {
+    case arrow::Type::type::NA:
+        return data_type(type_id::EMPTY);
     case arrow::Type::type::BOOL: return data_type(type_id::BOOL8);
     case arrow::Type::type::INT8: return data_type(type_id::INT8);
     case arrow::Type::type::INT16: return data_type(type_id::INT16);
@@ -77,21 +80,20 @@ struct dispatch_to_cudf_column {
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
   {
+    std::cout<<"RGSL : In fixed width "<<std::endl;
     auto data_buffer                = array.data()->buffers[1];
-    auto mask_buffer                = array.data()->buffers[0];
     size_type unsliced_array_length = data_buffer->size() / sizeof(T);
     size_type num_rows              = array.length();
     auto has_nulls                  = skip_mask ? false : array.null_bitmap_data() != nullptr;
     auto col = make_fixed_width_column(type, num_rows, mask_state::UNALLOCATED, stream, mr);
     auto mutable_column_view = col->mutable_view();
     CUDA_TRY(cudaMemcpyAsync(mutable_column_view.data<void*>(),
-                             //(static_cast<T*>(data_buffer->data()) + array.offset()),
                              data_buffer->data() + array.offset() * sizeof(T),
                              sizeof(T) * num_rows,
                              cudaMemcpyHostToDevice,
                              stream));
     if (has_nulls) {
-      auto tmp_mask = rmm::device_buffer(mask_buffer->size(), stream, mr);
+      auto tmp_mask = rmm::device_buffer(bitmask_allocation_size_bytes(unsliced_array_length), stream, mr);
       CUDA_TRY(cudaMemcpyAsync(tmp_mask.data(),
                                array.null_bitmap_data(),
                                array.null_bitmap()->size(),
@@ -104,6 +106,8 @@ struct dispatch_to_cudf_column {
           ? tmp_mask
           : copy_bitmask(
               static_cast<bitmask_type*>(tmp_mask.data()), array.offset(), num_rows, stream, mr);
+
+      std::cout<<"RGSL : The mask size is "<< out_mask.size()<<std::endl;
 
       col->set_null_mask(std::move(out_mask));
     }
@@ -121,7 +125,7 @@ struct dispatch_to_cudf_column {
     if (array.null_bitmap_data() == nullptr) {
       return std::make_unique<rmm::device_buffer>(0, stream, mr);
     }
-    auto mask = std::make_unique<rmm::device_buffer>(array.null_bitmap()->size(), stream, mr);
+    auto mask = std::make_unique<rmm::device_buffer>(bitmask_allocation_size_bytes(static_cast<size_type>(array.null_bitmap()->size()*8)), stream, mr);
     CUDA_TRY(cudaMemcpyAsync(mask->data(),
                              array.null_bitmap_data(),
                              array.null_bitmap()->size(),
@@ -143,6 +147,36 @@ std::unique_ptr<column> get_column(arrow::Array const& array,
                                    cudaStream_t stream);
 
 template <>
+std::unique_ptr<column> dispatch_to_cudf_column::operator()<bool>(
+  arrow::Array const& array,
+  data_type type,
+  bool skip_mask,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
+{
+  auto data_buffer = array.data()->buffers[1];
+  auto data        = rmm::device_buffer(data_buffer->size(), stream, mr);
+  CUDA_TRY(cudaMemcpyAsync(
+    data.data(), data_buffer->data(), data_buffer->size(), cudaMemcpyHostToDevice, stream));
+  auto out_col = mask_to_bools(
+    static_cast<bitmask_type*>(data.data()), array.offset(), array.length(), stream, mr);
+
+  auto has_nulls = skip_mask ? false : array.null_bitmap_data() != nullptr;
+  if (has_nulls) {
+    auto out_mask =
+      copy_bitmask(static_cast<bitmask_type*>(get_mask_buffer(array, mr, stream)->data()),
+                   array.offset(),
+                   array.length(),
+                   stream,
+                   mr);
+
+    out_col->set_null_mask(std::move(out_mask));
+  }
+
+  return out_col;
+}
+
+template <>
 std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::string_view>(
   arrow::Array const& array,
   data_type type,
@@ -150,6 +184,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::string_view>(
   rmm::mr::device_memory_resource* mr,
   cudaStream_t stream)
 {
+  std::cout<<"RGSL : In string view "<<std::endl;
   auto str_array    = static_cast<arrow::StringArray const*>(&array);
   auto offset_array = std::make_unique<arrow::Int32Array>(
     str_array->value_offsets()->size() / sizeof(int32_t), str_array->value_offsets(), nullptr);
@@ -254,6 +289,11 @@ std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
                                   rmm::mr::device_memory_resource* mr,
                                   cudaStream_t stream)
 {
+  if (input_table.num_columns() == 0){
+      return std::make_unique<table>();
+  }
+  std::cout<<"RGSL : Number of table columns "<<input_table.num_columns()<<std::endl;
+  std::cout<<"RGSL : Number of rows "<<input_table.num_rows()<<std::endl;
   std::vector<std::unique_ptr<column>> columns;
   auto chunked_arrays = input_table.columns();
   std::transform(chunked_arrays.begin(),
@@ -263,14 +303,21 @@ std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
                    std::vector<std::unique_ptr<column>> concat_columns;
                    auto cudf_type    = arrow_to_cudf_type(*(chunked_array->type()));
                    auto array_chunks = chunked_array->chunks();
+                   std::cout<<"RGSL : Getting through chunks "<<std::endl;
+                   if (cudf_type.id() == type_id::EMPTY) {
+                       
+                       std::cout<<"RGSL : In empty "<<std::endl;
+                       return std::make_unique<column>(cudf_type, 0, std::move(rmm::device_buffer(0)));
+                   }
                    transform(array_chunks.begin(),
                              array_chunks.end(),
                              std::back_inserter(concat_columns),
                              [&cudf_type, &mr, &stream](auto const& array_chunk) {
                                return get_column(*array_chunk, cudf_type, false, mr, stream);
                              });
-
-                   if (concat_columns.size() == 1) { return std::move(concat_columns[0]); }
+                   if (concat_columns.size() == 0){
+                       return std::make_unique<column>(cudf_type, 0, rmm::device_buffer(0));
+                   } else if (concat_columns.size() == 1) { return std::move(concat_columns[0]); }
 
                    std::vector<cudf::column_view> column_views;
                    std::transform(concat_columns.begin(),

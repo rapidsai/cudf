@@ -32,8 +32,9 @@
 #pragma once
 
 template <typename T>
-std::enable_if_t<cudf::is_fixed_width<T>(), std::shared_ptr<arrow::Array>> get_arrow_array(
-  std::initializer_list<T> elements, std::initializer_list<uint8_t> validity = {})
+std::enable_if_t<cudf::is_fixed_width<T>() and !std::is_same<T, bool>::value,
+                 std::shared_ptr<arrow::Array>>
+get_arrow_array(std::initializer_list<T> elements, std::initializer_list<uint8_t> validity = {})
 {
   std::vector<T> data(elements);
   std::vector<uint8_t> mask(validity);
@@ -47,6 +48,21 @@ std::enable_if_t<cudf::is_fixed_width<T>(), std::shared_ptr<arrow::Array>> get_a
     mask.size() > 0 ? arrow::BitUtil::BytesToBits(mask).ValueOrDie() : nullptr;
 
   return cudf::detail::to_arrow_array(cudf::type_to_id<T>(), data.size(), data_buffer, mask_buffer);
+}
+
+template <typename T>
+std::enable_if_t<std::is_same<T, bool>::value, std::shared_ptr<arrow::Array>> get_arrow_array(
+  std::initializer_list<bool> elements, std::initializer_list<bool> validity = {})
+{
+  std::vector<bool> valid_bytes(validity);
+  std::vector<bool> data(elements);
+  std::shared_ptr<arrow::BooleanArray> boolean_array;
+  arrow::BooleanBuilder boolean_builder;
+
+  boolean_builder.AppendValues(data, valid_bytes);
+  CUDF_EXPECTS(boolean_builder.Finish(&boolean_array).ok(), "Failed to create arrow boolean array");
+
+  return boolean_array;
 }
 
 template <typename T>

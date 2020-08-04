@@ -48,6 +48,7 @@ template <typename... Ts>
 std::shared_ptr<arrow::Array> to_arrow_array(cudf::type_id id, Ts&&... args)
 {
   switch (id) {
+    case type_id::EMPTY: return std::make_shared<arrow::NullArray>(0);
     case type_id::BOOL8: return std::make_shared<arrow::BooleanArray>(std::forward<Ts>(args)...);
     case type_id::INT8: return std::make_shared<arrow::Int8Array>(std::forward<Ts>(args)...);
     case type_id::INT16: return std::make_shared<arrow::Int16Array>(std::forward<Ts>(args)...);
