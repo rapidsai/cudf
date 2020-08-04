@@ -839,3 +839,50 @@ def test_timedelta_index_properties(data, dtype, name):
             actual_components,
             check_index_type=not actual_components.empty,
         )
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [],
+        [None],
+        [None, None, None, None, None],
+        np.array([10, 20, 30, None, 100]),
+        [1000000, 200000, None],
+        [1],
+        [
+            136457654736252,
+            134736784364431,
+            245345345545332,
+            223432411,
+            None,
+            3634548734,
+            None,
+        ],
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+    ],
+)
+@pytest.mark.parametrize("dtype", dtypeutils.TIMEDELTA_TYPES)
+@pytest.mark.parametrize(
+    "fill_value",
+    [
+        np.timedelta64(4, "s"),
+        np.timedelta64(456, "D"),
+        np.timedelta64(46, "h"),
+        np.timedelta64("nat"),
+        np.timedelta64(1, "s"),
+        np.timedelta64(1, "ms"),
+        np.timedelta64(1, "us"),
+        np.timedelta64(1, "ns"),
+    ],
+)
+def test_timedelta_fillna(data, dtype, fill_value):
+    sr = cudf.Series(data, dtype=dtype)
+    psr = sr.to_pandas()
+
+    expected = psr.fillna(fill_value)
+    actual = sr.fillna(fill_value)
+
+    assert_eq(expected, actual)

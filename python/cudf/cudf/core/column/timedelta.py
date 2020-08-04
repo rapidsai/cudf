@@ -194,13 +194,18 @@ class TimeDeltaColumn(column.ColumnBase):
         return self._time_unit
 
     def fillna(self, fill_value):
+        col = self
         if is_scalar(fill_value):
-            if not isinstance(fill_value, Scalar):
-                fill_value = np.timedelta64(fill_value, self.time_unit)
+            if isinstance(fill_value, np.timedelta64):
+                dtype = determine_out_dtype(self.dtype, fill_value.dtype)
+                fill_value = fill_value.astype(dtype)
+                col = col.astype(dtype)
+            elif not isinstance(fill_value, Scalar):
+                fill_value = np.timedelta64(fill_value)
         else:
             fill_value = column.as_column(fill_value, nan_as_null=False)
 
-        result = libcudf.replace.replace_nulls(self, fill_value)
+        result = libcudf.replace.replace_nulls(col, fill_value)
 
         return result
 

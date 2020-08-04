@@ -1,4 +1,5 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
@@ -560,3 +561,43 @@ def test_series_null_index_repr(sr, pandas_special_case):
         # to be printed as `None` everywhere.
         actual_repr = gsr.__repr__().replace("None", "<NA>")
     assert expected_repr.split() == actual_repr.split()
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [],
+        [None],
+        [None, None, None, None, None],
+        [12, 12, 22, 343, 4353534, 435342],
+        np.array([10, 20, 30, None, 100]),
+        cp.asarray([10, 20, 30, 100]),
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [1],
+        [12, 11, 232, 223432411, 2343241, 234324, 23234],
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+        [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
+        [
+            136457654736252,
+            134736784364431,
+            245345345545332,
+            223432411,
+            2343241,
+            3634548734,
+            23234,
+        ],
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+    ],
+)
+@pytest.mark.parametrize("dtype", utils.TIMEDELTA_TYPES)
+def test_timedelta_series_repr(data, dtype):
+    sr = cudf.Series(data, dtype=dtype)
+    psr = sr.to_pandas()
+
+    expected = psr.__repr__()
+    actual = sr.__repr__()
+
+    assert expected == actual
