@@ -153,7 +153,7 @@ class Consumer(CudfKafkaClient):
         # TODO: Ideally the C++ destructor should handle the
         # unsubscribe and closing the socket connection.
         kafka_datasource.unsubscribe()
-        kafka_datasource.close(10000)
+        kafka_datasource.close(batch_timeout)
 
         if result is not None:
             return cudf.DataFrame._from_table(result)
