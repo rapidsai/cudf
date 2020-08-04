@@ -25,6 +25,7 @@
 #include <nvtext/edit_distance.hpp>
 
 #include <thrust/transform.h>
+#include <rmm/device_uvector.hpp>
 
 namespace nvtext {
 namespace detail {
@@ -124,7 +125,7 @@ std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& str
   cudf::size_type strings_count = strings.size();
   if (strings_count == 0) return cudf::make_empty_column(cudf::data_type{cudf::type_id::INT32});
   if (targets.size() > 1)
-    CUDF_EXPECTS(strings.size() == targets.size(), "targets.size() must equal strings.size()");
+    CUDF_EXPECTS(strings_count == targets.size(), "targets.size() must equal strings.size()");
 
   // create device column
   auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
@@ -141,7 +142,7 @@ std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& str
                                                stream,
                                                mr);
   auto d_results = results->mutable_view().data<int32_t>();
-  auto execpol   = rmm::exec_policy(0);
+  auto execpol   = rmm::exec_policy(stream);
   thrust::transform(
     execpol->on(stream),
     thrust::make_counting_iterator<cudf::size_type>(0),
@@ -175,6 +176,72 @@ std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& str
   return results;
 }
 
+/**
+ * @copydoc nvtext::edit_distance_matrix
+ */
+std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view const& strings,
+                                                   cudaStream_t stream,
+                                                   rmm::mr::device_memory_resource* mr)
+{
+  cudf::size_type strings_count = strings.size();
+  if (strings_count == 0) return cudf::make_empty_column(cudf::data_type{cudf::type_id::INT32});
+  CUDF_EXPECTS(strings_count > 1, "the input strings must include at least 2 strings");
+  CUDF_EXPECTS(size_t{strings_count} * size_t{strings_count} < std::numeric_limits<int32_t>().max(),
+               "too many strings to create the output column");
+
+  // create device column
+  auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
+  auto d_strings      = *strings_column;
+  auto execpol        = rmm::exec_policy(stream);
+
+  // calculate the size of the compute-buffer
+  cudf::size_type n_upper = (strings_count * (strings_count - 1)) / 2;
+  rmm::device_uvector<cudf::size_type> sizes(n_upper, stream);
+  auto d_sizes = sizes.data();
+  CUDA_TRY(cudaMemsetAsync(d_sizes, 0, n_upper * sizeof(cudf::size_type), stream));
+  thrust::for_each_n(execpol->on(stream),
+                     thrust::make_counting_iterator<cudf::size_type>(0),
+                     strings_count * strings_count,
+                     [d_strings, d_sizes, strings_count] __device__(cudf::size_type idx) {
+                       cudf::size_type row = idx / strings_count;
+                       cudf::size_type col = idx % strings_count;
+                       if (row >= col) return;
+                       cudf::string_view d_str1 = d_strings.is_null(row)
+                                                    ? cudf::string_view{}
+                                                    : d_strings.element<cudf::string_view>(row);
+                       cudf::string_view d_str2 = d_strings.is_null(col)
+                                                    ? cudf::string_view{}
+                                                    : d_strings.element<cudf::string_view>(col);
+                       if (d_str1.empty() || d_str2.empty()) return;
+                       cudf::size_type length = std::min(d_str1.length(), d_str2.length());
+                       d_sizes[idx - ((row + 1) * (row + 2)) / 2] = length * 3;
+                     });
+
+  // get the total size
+  size_t compute_size = thrust::reduce(execpol->on(stream), sizes.begin(), sizes.end(), size_t{0});
+
+  // convert sizes to offsets in-place
+  thrust::exclusive_scan(execpol->on(stream), sizes.begin(), sizes.end(), sizes.begin());
+  rmm::device_uvector<int16_t> compute_buffer(compute_size, stream);
+  auto d_buffer = compute_buffer.data();
+
+  // compute the edit distance into the output column in-place
+  auto results   = cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT32},
+                                               strings_count * strings_count,
+                                               rmm::device_buffer{0, stream, mr},
+                                               0,
+                                               stream,
+                                               mr);
+  auto d_results = results->mutable_view().data<int32_t>();
+  thrust::transform(execpol->on(stream),
+                    thrust::make_counting_iterator<cudf::size_type>(0),
+                    thrust::make_counting_iterator<cudf::size_type>(strings_count),
+                    d_results,
+                    edit_distance_levenshtein_algorithm{d_strings, d_strings, d_buffer, d_results});
+
+  return results;
+}
+
 }  // namespace detail
 
 // external APIs
@@ -188,6 +255,16 @@ std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& str
 {
   CUDF_FUNC_RANGE();
   return detail::edit_distance(strings, targets, 0, mr);
+}
+
+/**
+ * @copydoc nvtext::edit_distance_matrix
+ */
+std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view const& strings,
+                                                   rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::edit_distance_matrix(strings, 0, mr);
 }
 
 }  // namespace nvtext

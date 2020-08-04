@@ -61,5 +61,37 @@ std::unique_ptr<cudf::column> edit_distance(
   cudf::strings_column_view const& targets,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/**
+ * @brief Compute the edit distance between all the strings in the input column.
+ *
+ * This uses the Levenshtein algorithm to calculate the edit distance between
+ * two strings as documented here: https://www.cuelogic.com/blog/the-levenshtein-algorithm
+ *
+ *
+ * @code{.pseudo}
+ * Example:
+ * s = ["hello", "hallo", "hella"]
+ * d = edit_distance_matrix_matrix(s)
+ * d is now [[0, 1, 1],
+ *           [1, 0, 2]
+ *           [1, 2, 0]]
+ * @endcode
+ *
+ * Null entries for `strings` are ignored and the edit distance
+ * is computed as though the null entry is an empty string.
+ *
+ * The output is a lists column of size `strings.size()` and where each list item
+ * is `strings.size()` elements.
+ *
+ * @throw cudf::logic_error if `strings.size() == 1`
+ *
+ * @param strings Strings column of input strings
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return New lists column of edit distance values.
+ */
+std::unique_ptr<cudf::column> edit_distance_matrix(
+  cudf::strings_column_view const& strings,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
 /** @} */  // end of group
 }  // namespace nvtext
