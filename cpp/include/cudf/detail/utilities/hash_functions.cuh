@@ -22,7 +22,6 @@
 
 #include "cuda_runtime_api.h"
 #include "cudf/types.hpp"
-#include "sm_35_intrinsics.h"
 
 using hash_value_type = uint32_t;
 
