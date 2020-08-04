@@ -28,7 +28,8 @@ namespace cudf
     // Helper function to superimpose validity of parent struct
     // over the specified member (child) column.
     void superimpose_parent_nullmask(
-      rmm::device_buffer const& parent_null_mask, 
+      bitmask_type const* parent_null_mask,
+      std::size_t parent_null_mask_size,
       size_type parent_null_count,
       column& child,
       cudaStream_t stream,
@@ -37,40 +38,59 @@ namespace cudf
     {
       if (!child.nullable())
       {
-        child.set_null_mask(std::move(rmm::device_buffer{parent_null_mask, stream, mr})); 
+        // Child currently has no null mask. Copy parent's null mask.
+        child.set_null_mask(
+          std::move(
+            rmm::device_buffer{parent_null_mask, parent_null_mask_size, stream, mr}
+          )
+        ); 
         child.set_null_count(parent_null_count);
       }
       else {
 
+        // Child should have a null mask.
+        // `AND` the child's null mask with the parent's.
+
         auto data_type{child.type()};
         auto num_rows{child.size()};
 
-        auto new_child_mask =
-          cudf::detail::bitmask_and(
-            {
-              reinterpret_cast<bitmask_type const*>(parent_null_mask.data()),
-              reinterpret_cast<bitmask_type const*>(child.mutable_view().null_mask())
-            },
-            {0, 0},
-            child.size(),
-            stream,
-            mr
-          );
+        auto current_child_mask = child.mutable_view().null_mask();
 
-        if (child.type().id() == cudf::type_id::STRUCT)
-        {
-          std::for_each(
-            thrust::make_counting_iterator(0),
-            thrust::make_counting_iterator(child.num_children()),
-            [&new_child_mask, &child, stream, mr](auto i) 
-            {
-              superimpose_parent_nullmask(new_child_mask, UNKNOWN_NULL_COUNT, child.child(i), stream, mr);
-            }
-          );
-        }
-
-        child.set_null_mask(std::move(new_child_mask));
+        cudf::detail::inplace_bitmask_and(
+          current_child_mask,
+          {
+            reinterpret_cast<bitmask_type const*>(parent_null_mask),
+            reinterpret_cast<bitmask_type const*>(current_child_mask)
+          },
+          {0, 0},
+          child.size(),
+          stream,
+          mr
+        );
         child.set_null_count(UNKNOWN_NULL_COUNT);
+      }
+
+      // If the child is also a struct, repeat for all grandchildren.
+      if (child.type().id() == cudf::type_id::STRUCT)
+      {
+        const auto current_child_mask = child.mutable_view().null_mask();
+        std::for_each(
+          thrust::make_counting_iterator(0),
+          thrust::make_counting_iterator(child.num_children()),
+          [&current_child_mask, 
+           &child, 
+            parent_null_mask_size, 
+            stream, 
+            mr](auto i) 
+          {
+            superimpose_parent_nullmask(current_child_mask, 
+                                        parent_null_mask_size, 
+                                        UNKNOWN_NULL_COUNT, 
+                                        child.child(i), 
+                                        stream, 
+                                        mr);
+          }
+        );
       }
     }
   }
@@ -105,7 +125,13 @@ namespace cudf
              stream,
              mr
           ](auto & p_child) {
-            superimpose_parent_nullmask(null_mask, null_count, *p_child, stream, mr);
+            superimpose_parent_nullmask(
+              static_cast<bitmask_type const*>(null_mask.data()), 
+              null_mask.size(), 
+              null_count, 
+              *p_child, 
+              stream, 
+              mr);
           }
         );
       }

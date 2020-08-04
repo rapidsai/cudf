@@ -372,6 +372,39 @@ struct to_word_index : public thrust::unary_function<size_type, size_type> {
 namespace detail {
 
 // Bitwise AND of the masks
+void inplace_bitmask_and(bitmask_type* dest_mask,
+                         std::vector<bitmask_type const *> const &masks,
+                         std::vector<size_type> const &begin_bits,
+                         size_type mask_size,
+                         cudaStream_t stream,
+                         rmm::mr::device_memory_resource *mr)
+{
+  CUDF_EXPECTS(std::all_of(begin_bits.begin(), begin_bits.end(), [](auto b) { return b >= 0; }),
+               "Invalid range.");
+  CUDF_EXPECTS(mask_size > 0, "Invalid bit range.");
+  CUDF_EXPECTS(std::all_of(masks.begin(), masks.end(), [](auto p) { return p != nullptr; }),
+               "Mask pointer cannot be null");
+
+  auto num_bytes = bitmask_allocation_size_bytes(mask_size);
+
+  auto number_of_mask_words = num_bitmask_words(mask_size);
+
+  rmm::device_vector<bitmask_type const *> d_masks(masks);
+  rmm::device_vector<size_type> d_begin_bits(begin_bits);
+
+  cudf::detail::grid_1d config(number_of_mask_words, 256);
+  offset_bitmask_and<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
+    dest_mask,
+    d_masks.data().get(),
+    d_begin_bits.data().get(),
+    d_masks.size(),
+    mask_size,
+    number_of_mask_words);
+
+  CHECK_CUDA(stream);
+}
+
+// Bitwise AND of the masks
 rmm::device_buffer bitmask_and(std::vector<bitmask_type const *> const &masks,
                                std::vector<size_type> const &begin_bits,
                                size_type mask_size,
@@ -390,20 +423,7 @@ rmm::device_buffer bitmask_and(std::vector<bitmask_type const *> const &masks,
   auto number_of_mask_words = num_bitmask_words(mask_size);
 
   dest_mask = rmm::device_buffer{num_bytes, stream, mr};
-
-  rmm::device_vector<bitmask_type const *> d_masks(masks);
-  rmm::device_vector<size_type> d_begin_bits(begin_bits);
-
-  cudf::detail::grid_1d config(number_of_mask_words, 256);
-  offset_bitmask_and<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
-    static_cast<bitmask_type *>(dest_mask.data()),
-    d_masks.data().get(),
-    d_begin_bits.data().get(),
-    d_masks.size(),
-    mask_size,
-    number_of_mask_words);
-
-  CHECK_CUDA(stream);
+  inplace_bitmask_and(static_cast<bitmask_type*>(dest_mask.data()), masks, begin_bits, mask_size, stream, mr);
 
   return dest_mask;
 }
