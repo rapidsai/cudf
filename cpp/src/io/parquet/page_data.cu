@@ -948,7 +948,12 @@ static __device__ bool setupLocalPageInfo(page_state_s *const s,
     // page.chunk-row == relative row index within the chunk
     size_t page_start_row = s->col.start_row + s->page.chunk_row;
 
-    if (s->page.num_input_values > 0 && s->page.num_rows > 0) {
+    // IMPORTANT : nested schemas can have 0 rows in a page but still have
+    // values. The case is:
+    // - On page N-1, the last row starts, with 2/6 values encoded
+    // - On page N, the remaining 4/6 values are encoded, but there are no new rows.
+    // if (s->page.num_input_values > 0 && s->page.num_rows > 0) {
+    if (s->page.num_input_values > 0) {
       uint8_t *cur = s->page.page_data;
       uint8_t *end = cur + s->page.uncompressed_page_size;
 
@@ -1026,8 +1031,12 @@ static __device__ bool setupLocalPageInfo(page_state_s *const s,
           else {
             output_offset = pni->page_start_value;
           }
-          pni->data_out = reinterpret_cast<uint8_t *>(s->col.column_data_base[idx]) +
-                          (output_offset * s->dtype_len);
+
+          // anything below max depth is an offset
+          uint32_t len = idx < max_depth ? sizeof(int32_t) : s->dtype_len;
+
+          pni->data_out =
+            reinterpret_cast<uint8_t *>(s->col.column_data_base[idx]) + (output_offset * len);
           pni->valid_map = s->col.valid_map_base[idx];
           if (pni->valid_map != nullptr) {
             pni->valid_map += output_offset >> 5;
@@ -1380,8 +1389,10 @@ __device__ void gpuDecodeLevels(page_state_s *s, int32_t target_leaf_count, int 
  * @param[in] target_input_value_count The # of repetition/definition levels to process up to
  * @param[in] t Thread index
  */
-static __device__ void gpuUpdatePageSizes(
-  page_state_s *s, int32_t target_input_value_count, int t, bool bounds_set, int page_idx)
+static __device__ void gpuUpdatePageSizes(page_state_s *s,
+                                          int32_t target_input_value_count,
+                                          int t,
+                                          bool bounds_set)
 {
   // max nesting depth of the column
   int max_depth = s->col.max_level[level_type::REPETITION];
@@ -1423,6 +1434,7 @@ static __device__ void gpuUpdatePageSizes(
                           thread_row_index < (s->first_row + s->num_rows)
                         ? 1
                         : 0;
+
       uint32_t row_bounds_mask  = BALLOT(in_row_bounds);
       int first_thread_in_range = __ffs(row_bounds_mask) - 1;
 
@@ -1526,7 +1538,7 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
         min(s->lvl_count[level_type::REPETITION], s->lvl_count[level_type::DEFINITION]);
 
       // process what we got back
-      gpuUpdatePageSizes(s, actual_input_count, t, trim_pass, page_idx);
+      gpuUpdatePageSizes(s, actual_input_count, t, trim_pass);
       target_input_count = actual_input_count + batch_size;
       SYNCWARP();
     }

@@ -117,7 +117,6 @@ def pdf(request):
 def gdf(pdf):
     return cudf.DataFrame.from_pandas(pdf)
 
-
 @pytest.fixture(params=["snappy", "gzip", "brotli", None])
 def parquet_file(request, tmp_path_factory, pdf):
     fname = tmp_path_factory.mktemp("parquet") / "test.parquet"
@@ -141,7 +140,6 @@ def make_pdf(nrows, ncolumns=1, nvalids=0, dtype=np.int64):
     test_pdf[test_pdf.index.isin(mask)] = np.NaN
 
     return test_pdf
-
 
 @pytest.fixture
 def parquet_path_or_buf(datadir):
@@ -374,6 +372,7 @@ def test_parquet_read_rows(tmpdir, pdf, row_group_size):
 
     num_rows = total_rows // 4
     skip_rows = (total_rows - num_rows) // 2
+    print("rg size: ", row_group_size, " skip_rows: ", skip_rows, " num_rows: ", num_rows)
     gdf = cudf.read_parquet(fname, skip_rows=skip_rows, num_rows=num_rows)
 
     for row in range(num_rows):
@@ -432,7 +431,6 @@ def test_parquet_reader_invalids(tmpdir):
 
     assert_eq(expect, got)
 
-
 def test_parquet_chunked_skiprows(tmpdir):
     processed = 0
     batch = 10000
@@ -455,7 +453,6 @@ def test_parquet_chunked_skiprows(tmpdir):
         assert_eq(chunk.reset_index(drop=True), expect)
         processed += batch
         del chunk
-
 
 def test_parquet_reader_filenotfound(tmpdir):
     with pytest.raises(FileNotFoundError):
@@ -517,6 +514,77 @@ def test_parquet_reader_multiple_files(tmpdir, src):
 
     assert_eq(expect, got)
 
+def test_parquet_reader_list_basic(tmpdir):
+    expect = pd.DataFrame({"a": [ [[1, 2], [3, 4]], None, [[5, 6], None] ]})
+    fname = tmpdir.join("test_parquet_reader_list_basic.parquet")
+    expect.to_parquet(fname)
+    assert os.path.exists(fname)
+    got = cudf.read_parquet(fname)
+    assert_eq(expect, got)
+
+def test_parquet_reader_list_table(tmpdir):
+    expect = pd.DataFrame({"a": [ [[1, 2], [3, 4]], None, [[5, 6], None] ]},
+                          {"b": [ [None, None], None, [None, None] ]},
+                          {"c": [ [[1, 2, 3]], [[None]], [None], [[], None], None, [[]] ]} )
+    fname = tmpdir.join("test_parquet_reader_list_table.parquet")
+    expect.to_parquet(fname)
+    assert os.path.exists(fname)
+    got = cudf.read_parquet(fname)
+    assert_eq(expect, got, nullable_pd_dtype=True, check_dtype=False)
+
+def list_gen(skip_rows, num_rows, lists_per_row, list_size, include_validity = False):        
+    def L(list_size, first_val):
+        return [((i + first_val) if i % 2 == 0 else None) if include_validity else (i + first_val)
+            for i in range(list_size)]
+
+    def R(first_val, lists_per_row, list_size):
+        return [L(list_size, first_val + (list_size * i)) for i in range(lists_per_row) ]
+
+    return [(R(lists_per_row * list_size * (i + skip_rows), lists_per_row, list_size) if i % 2 == 0 else None) if include_validity
+            else R(lists_per_row * list_size * (i + skip_rows), lists_per_row, list_size)
+            for i in range(num_rows)]
+
+def test_parquet_reader_list_large(tmpdir):
+    expect = pd.DataFrame({"a": list_gen(0, 256, 80, 50)} )
+    fname = tmpdir.join("test_parquet_reader_list_large.parquet")
+    expect.to_parquet(fname)
+    assert os.path.exists(fname)
+    got = cudf.read_parquet(fname)    
+    assert_eq(expect, got, nullable_pd_dtype=True, check_dtype=False)
+
+def test_parquet_reader_list_validity(tmpdir):
+    expect = pd.DataFrame({"a": list_gen(0, 256, 80, 50, include_validity = True)} )
+    fname = tmpdir.join("test_parquet_reader_list_validity.parquet")
+    expect.to_parquet(fname)
+    assert os.path.exists(fname)
+    got = cudf.read_parquet(fname)    
+    assert_eq(expect, got, nullable_pd_dtype=True, check_dtype=False)
+
+def test_parquet_reader_list_skiprows(tmpdir):
+    num_rows = 128
+    src = pd.DataFrame({"a": list_gen(0, num_rows, 80, 50)} )
+    fname = tmpdir.join("test_parquet_reader_list_skiprows.parquet")
+    print(fname)
+    src.to_parquet(fname)
+    assert os.path.exists(fname)
+    
+    for i in range(num_rows):
+        expect = pd.DataFrame({"a": list_gen(i, num_rows - i, 80, 50)} )
+        got = cudf.read_parquet(fname, skip_rows = i)
+        assert_eq(expect, got, nullable_pd_dtype=True, check_dtype=False)
+
+def test_parquet_reader_list_num_rows(tmpdir):
+    num_rows = 128
+    src = pd.DataFrame({"a": list_gen(0, num_rows, 80, 50)} )
+    fname = tmpdir.join("test_parquet_reader_list_num_rows.parquet")
+    src.to_parquet(fname)
+    assert os.path.exists(fname)
+    
+    for i in range(num_rows):
+        rows_to_read = min(3, num_rows - i)
+        expect = pd.DataFrame({"a": list_gen(i, rows_to_read, 80, 50)} )
+        got = cudf.read_parquet(fname, skip_rows = i, num_rows = rows_to_read)
+        assert_eq(expect, got, nullable_pd_dtype=True, check_dtype=False)
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
 def test_parquet_writer_cpu_pyarrow(tmpdir, pdf, gdf):
@@ -846,14 +914,3 @@ def test_parquet_writer_criteo(tmpdir):
     df = df.drop(columns=cont_names)
 
     df.to_parquet(cudf_path)
-
-
-def test_trailing_nans(datadir, tmpdir):
-    fname = "trailing_nans.parquet"
-    file_path = datadir / fname
-    cu_df = cudf.read_parquet(file_path)
-
-    tmp_file_path = tmpdir.join(fname)
-    cu_df.to_parquet(tmp_file_path)
-
-    pd.read_parquet(tmp_file_path)
