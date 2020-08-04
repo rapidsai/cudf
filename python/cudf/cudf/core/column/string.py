@@ -4409,13 +4409,11 @@ class StringColumn(column.ColumnBase):
                 len(self), obuf, sbuf, nbuf, self.null_count
             )
 
-    def to_pandas(self, index=None, nullable_pd_dtype=False):
+    def to_pandas(self, index=None):
         pd_series = self.to_arrow().to_pandas()
         if index is not None:
             pd_series.index = index
-        if nullable_pd_dtype:
-            return pd_series.astype(pd.StringDtype(), copy=False)
-        return pd_series
+        return pd_series.astype(pd.StringDtype(), copy=False)
 
     @property
     def values_host(self):

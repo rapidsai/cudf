@@ -1007,7 +1007,7 @@ class Series(Frame, Serializable):
                 na_rep=cudf._NA_REP,
             )
         else:
-            output = preprocess.to_pandas(nullable_pd_dtype=False).__repr__()
+            output = preprocess.to_pandas().__repr__()
 
         lines = output.split("\n")
 
@@ -2006,11 +2006,10 @@ class Series(Frame, Serializable):
         >>> type(pds)
         <class 'pandas.core.series.Series'>
         """
-        nullable_pd_dtype = kwargs.get("nullable_pd_dtype", True)
         if index is True:
             index = self.index.to_pandas()
         s = self._column.to_pandas(
-            index=index, nullable_pd_dtype=nullable_pd_dtype
+            index=index
         )
         s.name = self.name
         return s

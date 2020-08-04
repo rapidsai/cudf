@@ -121,8 +121,8 @@ class ColumnBase(Column, Serializable):
     def __len__(self):
         return self.size
 
-    def to_pandas(self, index=None, nullable_pd_dtype=False, **kwargs):
-        pd_series = self.to_arrow().to_pandas(**kwargs)
+    def to_pandas(self, index=None):
+        pd_series = self.to_arrow().to_pandas()
         if index is not None:
             pd_series.index = index
         return pd_series
