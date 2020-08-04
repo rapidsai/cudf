@@ -21,7 +21,6 @@ package ai.rapids.cudf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.*;
 import java.util.ArrayList;
 
 import java.util.List;
@@ -201,41 +200,6 @@ public final class HostColumnVector implements AutoCloseable {
    *                           the hostDataBuffer indicating the start and end of a string
    *                           entry. It should be (rows + 1) ints.
    */
-
-  //Constructor for lists
-  HostColumnVector(List<DType> type, List<Long> rows, Optional<Long> nullCount,
-                   HostMemoryBuffer hostDataBuffer, List<HostMemoryBuffer> hostValidityBuffer,
-                   List<HostMemoryBuffer> offsetBuffer) {
-    List<NestedHostColumnVector> nestedHostColumnVector = null;
-    for (int i = type.size() - 1 ; i > 0; i--) {
-      DType currType = type.get(i);
-      long currRows = rows.get(i);
-      HostMemoryBuffer currData = null;
-      HostMemoryBuffer currValid = hostValidityBuffer.get(i);
-      HostMemoryBuffer currOffset = offsetBuffer.get(i);
-      if (i == type.size() - 1) {
-        currData = hostDataBuffer;
-      }
-      //TODO fix nullcount
-      List<NestedHostColumnVector> finalNhcv = null;
-      finalNhcv = new ArrayList<>();
-      finalNhcv.add(new NestedHostColumnVector(currType, currRows, nullCount, currData, currValid, currOffset, nestedHostColumnVector));
-      nestedHostColumnVector = finalNhcv;
-    }
-    DType currType = type.get(0);
-    long currRows = rows.get(0);
-    HostMemoryBuffer currData = null;
-    HostMemoryBuffer currValid = hostValidityBuffer.get(0);
-    HostMemoryBuffer currOffset = offsetBuffer.get(0);
-    this.offHeap = new OffHeapState(currData, currValid, currOffset);
-    MemoryCleaner.register(this, offHeap);
-    this.rows = currRows;
-    this.nullCount = nullCount;
-    this.type = currType;
-    this.children = nestedHostColumnVector;
-    refCount = 0;
-    incRefCountInternal(true);
-  }
 
   //Constructor for lists
   HostColumnVector(DType type, long rows, Optional<Long> nullCount,
@@ -462,6 +426,7 @@ public final class HostColumnVector implements AutoCloseable {
     assert rowIndex < rows;
     assert type == DType.LIST;
     List retList = new ArrayList();
+    printBuffer(offHeap.offsets);
     int start = offHeap.offsets.getInt(rowIndex * DType.INT32.getSizeInBytes());
     int end = offHeap.offsets.getInt((rowIndex + 1) * DType.INT32.getSizeInBytes());
     // check if null or empty
@@ -470,7 +435,7 @@ public final class HostColumnVector implements AutoCloseable {
         return null;
       }
     }
-    for(int j = start;j < end;j++) {
+    for(int j = start; j < end; j++) {
       retList.add(children.get(0).getElement(j));
     }
     return retList;
@@ -1198,6 +1163,24 @@ public final class HostColumnVector implements AutoCloseable {
   }
 
   /**
+   * WARNING: Debug only method to print a passed in buffer
+   */
+  private static void printBuffer(HostMemoryBuffer buffer) {
+    if (buffer == null) {
+      return;
+    }
+    byte[] offsetbytes = new byte[(int)buffer.length];
+    System.out.println("BUFFER length =" + offsetbytes.length);
+    buffer.getBytes(offsetbytes, 0, 0, buffer.length);
+    for (int i = 0; i < offsetbytes.length; i++) {
+      System.out.print(offsetbytes[i]);
+      if (i%4 == 0) {
+        System.out.print(" ");
+      }
+    }
+    System.out.println();
+  }
+  /**
    * Build
    */
 
@@ -1257,6 +1240,7 @@ public final class HostColumnVector implements AutoCloseable {
         // one row
         append(inputList);
       }
+      printBuffer(offsets);
       return this;
     }
 
@@ -1324,6 +1308,11 @@ public final class HostColumnVector implements AutoCloseable {
             childBuilder.append((List) listElement);
           }
         }
+        if (inputList.isEmpty()) {
+          if (childBuilder.type == DType.STRING) {
+            childBuilder.append("");
+          }
+        }
       }
       currentIndex++;
       initAndResizeOffsetBuffer();
@@ -1361,6 +1350,7 @@ public final class HostColumnVector implements AutoCloseable {
     }
 
     public ColumnBuilder appendUTF8String(byte[] value) {
+      printBuffer(offsets);
       return appendUTF8String(value, 0, value.length);
     }
 
@@ -1369,7 +1359,7 @@ public final class HostColumnVector implements AutoCloseable {
       assert srcOffset >= 0;
       assert length >= 0;
       assert value.length + srcOffset <= length;
-      assert type == DType.STRING;
+      assert type == DType.STRING : " type " + type + " is not String";
       assert currentIndex < rows;
       resizeDataBuffer(length);
       if (length > 0) {

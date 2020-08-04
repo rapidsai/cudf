@@ -3199,53 +3199,53 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       return offsets.getInt((index + 1) * 4);
     }
 
+    static void printBuffer(HostMemoryBuffer buffer) {
+      byte[] offsetbytes = new byte[(int)buffer.length];
+      System.out.println("BUFFER" + offsetbytes.length);
+      buffer.getBytes(offsetbytes, 0, 0, buffer.length);
+      for (int i = 0; i < offsetbytes.length; i++) {
+        System.out.print(offsetbytes[i]);
+        if (i%4 == 0) {
+          System.out.print(" ");
+        }
+      }
+      System.out.println();
+    }
     private static NestedColumnVector createNestedColumnVector(DType type, int rows, Optional<Long> nullCount,
                                                                HostMemoryBuffer dataBuffer, HostMemoryBuffer validityBuffer,
                                                                HostMemoryBuffer offsetBuffer, NestedColumnVector child) {
-      try {
-        DeviceMemoryBuffer data = null;
-        DeviceMemoryBuffer valid = null;
-        DeviceMemoryBuffer offsets = null;
-        if (dataBuffer != null) {
-          long dataLen = rows * type.sizeInBytes;
-          if (type == DType.STRING) {
-            // This needs a different type
-            dataLen = getEndStringOffset(rows - 1, offsetBuffer);
-            //TODO check nullcount
-            if (dataLen == 0 && nullCount.get() == 0) {
-              // This is a work around to an issue where a column of all empty strings must have at
-              // least one byte or it will not be interpreted correctly.
-              dataLen = 1;
-            }
-          } else if (type == DType.LIST) {
-            dataLen = dataBuffer.length;
+      DeviceMemoryBuffer data = null;
+      DeviceMemoryBuffer valid = null;
+      DeviceMemoryBuffer offsets = null;
+      if (dataBuffer != null) {
+        long dataLen = rows * type.sizeInBytes;
+        if (type == DType.STRING) {
+          // This needs a different type
+          dataLen = getEndStringOffset(rows - 1, offsetBuffer);
+          //TODO check nullcount
+          if (dataLen == 0 && nullCount.get() == 0) {
+            // This is a work around to an issue where a column of all empty strings must have at
+            // least one byte or it will not be interpreted correctly.
+            dataLen = 1;
           }
-          data = DeviceMemoryBuffer.allocate(dataLen);
-          data.copyFromHostBuffer(dataBuffer, 0, dataLen);
+        } else if (type == DType.LIST) {
+          dataLen = dataBuffer.length;
         }
-        if (validityBuffer != null) {
-          long validLen = ColumnVector.getNativeValidPointerSize(rows);
-          valid = DeviceMemoryBuffer.allocate(validLen);
-          valid.copyFromHostBuffer(validityBuffer, 0, validLen);
-        }
-        if (offsetBuffer != null) {
-          long offsetsLen = OFFSET_SIZE * (rows + 1);
-          offsets = DeviceMemoryBuffer.allocate(offsetsLen);
-          offsets.copyFromHostBuffer(offsetBuffer, 0, offsetsLen);
-        }
-        NestedColumnVector ret = new NestedColumnVector(type, rows, nullCount, data, valid, offsets, child);
-        return ret;
-      } finally {
-//        if (dataBuffer != null) {
-//          dataBuffer.close();
-//        }
-//        if (validityBuffer != null) {
-//          validityBuffer.close();
-//        }
-//        if (offsetBuffer != null) {
-//          offsetBuffer.close();
-//        }
+        data = DeviceMemoryBuffer.allocate(dataLen);
+        data.copyFromHostBuffer(dataBuffer, 0, dataLen);
       }
+      if (validityBuffer != null) {
+        long validLen = ColumnVector.getNativeValidPointerSize(rows);
+        valid = DeviceMemoryBuffer.allocate(validLen);
+        valid.copyFromHostBuffer(validityBuffer, 0, validLen);
+      }
+      if (offsetBuffer != null) {
+        long offsetsLen = OFFSET_SIZE * (rows + 1);
+        offsets = DeviceMemoryBuffer.allocate(offsetsLen);
+        offsets.copyFromHostBuffer(offsetBuffer, 0, offsetsLen);
+      }
+      NestedColumnVector ret = new NestedColumnVector(type, rows, nullCount, data, valid, offsets, child);
+      return ret;
     }
   }
   /////////////////////////////////////////////////////////////////////////////

@@ -2476,7 +2476,7 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testListCvStrings() throws Exception {
+  void testListCvStrings() {
     List<String> list1 = new ArrayList<>();
     list1.add("0");
     list1.add("1");
@@ -2702,6 +2702,36 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector expected = ColumnVector.fromLists(new HostColumnVector.ColumnBuilder.ListType(true, 3,
              new HostColumnVector.ColumnBuilder.BasicType(true, 8, DType.STRING)) , list, list3, list2)) {
       assertColumnsAreEqual(expected, v);
+    }
+  }
+
+  @Test
+  void testNullsInLists() {
+    try(ColumnVector expected = ColumnVector.fromLists(
+        new HostColumnVector.ColumnBuilder.ListType(true, 6,
+            new HostColumnVector.ColumnBuilder.BasicType(true, 8, DType.STRING)),
+        Arrays.asList("Hello", "there"),
+        Arrays.asList("these"),
+        null,
+        Arrays.asList(),
+        Arrays.asList("ARe", "some"),
+        Arrays.asList("test", "strings"))) {
+
+    }
+  }
+
+  @Test
+  void testHcvOfInts() {
+    try(ColumnVector expected = ColumnVector.fromLists(
+        new HostColumnVector.ColumnBuilder.ListType(true, 6,
+            new HostColumnVector.ColumnBuilder.BasicType(true, 8, DType.INT32)),
+        Arrays.asList(1, 22),
+        Arrays.asList(333),
+        null,
+        Arrays.asList(),
+        Arrays.asList(4444, 55555),
+        Arrays.asList(666666, 7777777))) {
+
     }
   }
 
