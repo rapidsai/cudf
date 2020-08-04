@@ -169,6 +169,7 @@ def read_parquet(
     filepath_or_buffer,
     engine="cudf",
     columns=None,
+    filters=None,
     row_groups=None,
     skip_rows=None,
     num_rows=None,
