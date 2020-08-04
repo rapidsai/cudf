@@ -1652,7 +1652,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                         data = pa.array(arbitrary)
                         if type(data) not in (pa.ListArray, pa.NullArray):
                             raise ValueError(
-                                "Cannot create list column " "from given data"
+                                "Cannot create list column from given data"
                             )
                         return as_column(data, nan_as_null=nan_as_null)
                     dtype = pd.api.types.pandas_dtype(dtype)
