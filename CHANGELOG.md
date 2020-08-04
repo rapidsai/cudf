@@ -65,7 +65,6 @@
 - PR #5822 Add `cudf_kafka` to `custreamz` run time conda dependency and fix bash syntax issue
 - PR #5781 Add duration types support in cudf(python/cython)
 
-
 ## Improvements
 
 - PR #5605 Automatically flush RMM allocate/free logs in JNI
