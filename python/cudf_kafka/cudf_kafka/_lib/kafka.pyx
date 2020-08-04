@@ -58,4 +58,4 @@ cdef class KafkaDatasource(Datasource):
         (<kafka_consumer *> self.c_datasource.get()).unsubscribe()
 
     cpdef void close(int timeout):
-        (<kafka_consumer *> self.c_datasource.get()).close()
+        (<kafka_consumer *> self.c_datasource.get()).close(timeout)
