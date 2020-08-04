@@ -68,9 +68,9 @@ struct compute_children_offsets_fn {
    */
   data_type get_keys_type()
   {
-    dictionary_column_view dict_view(**std::find_if(
+    auto const view(*std::find_if(
       columns_ptrs.begin(), columns_ptrs.end(), [](auto pcv) { return pcv->size() > 0; }));
-    return dict_view.keys().type();
+    return dictionary_column_view(*view).keys().type();
   }
 
   /**
@@ -105,6 +105,7 @@ struct compute_children_offsets_fn {
                              offsets.size() * sizeof(offsets_pair),
                              cudaMemcpyHostToDevice,
                              stream));
+    CUDA_TRY(cudaStreamSynchronize(stream));
     return d_offsets;
   }
 
@@ -132,32 +133,28 @@ struct dispatch_compute_indices {
              rmm::mr::device_memory_resource* mr)
   {
     auto keys_view     = column_device_view::create(all_keys, stream);
-    auto d_all_keys    = *keys_view;
     auto indices_view  = column_device_view::create(all_indices, stream);
     auto d_all_indices = *indices_view;
 
-    auto all_itr = thrust::make_transform_iterator(
-      thrust::make_counting_iterator<size_type>(0),
-      [d_all_keys, d_offsets, d_map_to_keys, d_all_indices] __device__(size_type idx) {
-        if (d_all_indices.is_null(idx)) return Element{};
-        size_type index =
-          d_all_indices.template element<int32_t>(idx) + d_offsets[d_map_to_keys[idx]].first;
-        return d_all_keys.template element<Element>(index);
-      });
+    // map the concatenated indices to the concatenated keys
+    auto all_itr = thrust::make_permutation_iterator(
+      keys_view->begin<Element>(),
+      thrust::make_transform_iterator(
+        thrust::make_counting_iterator<size_type>(0),
+        [d_offsets, d_map_to_keys, d_all_indices] __device__(size_type idx) {
+          if (d_all_indices.is_null(idx)) return 0;
+          return d_all_indices.template element<int32_t>(idx) + d_offsets[d_map_to_keys[idx]].first;
+        }));
 
     auto new_keys_view = column_device_view::create(new_keys, stream);
-    auto d_new_keys    = *new_keys_view;
-    auto keys_itr      = thrust::make_transform_iterator(
-      thrust::make_counting_iterator<size_type>(0),
-      [d_new_keys] __device__(size_type idx) { return d_new_keys.template element<Element>(idx); });
-
-    // compute new indices values into output column
+    // create the indices output column
     auto result = make_numeric_column(
       data_type{type_id::INT32}, all_indices.size(), mask_state::UNALLOCATED, stream, mr);
     auto d_result = result->mutable_view().data<int32_t>();
+    // new indices values are computed by matching the concatenated keys to the new key set
     thrust::lower_bound(rmm::exec_policy(stream)->on(stream),
-                        keys_itr,
-                        keys_itr + new_keys.size(),
+                        new_keys_view->begin<Element>(),
+                        new_keys_view->end<Element>(),
                         all_itr,
                         all_itr + all_indices.size(),
                         d_result,
@@ -197,7 +194,7 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
     // empty column may not have keys so we create an empty column_view place-holder
     if (dict_view.size() == 0) return column_view{keys_type, 0, nullptr};
     auto keys = dict_view.keys();
-    CUDF_EXPECTS(keys.type() == keys_type, "key types of each dictionary column must match");
+    CUDF_EXPECTS(keys.type() == keys_type, "key types of all dictionary columns must match");
     return keys;
   });
   auto all_keys = cudf::detail::concatenate(keys_views, rmm::mr::get_default_resource(), stream);
