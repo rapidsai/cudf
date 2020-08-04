@@ -1231,7 +1231,22 @@ def test_dataframe_iloc_index(gdf, slice):
 
     assert_eq(actual, expected)
 
-def test_iloc_list_series():
-    gsr = cudf.Series([[]], dtype="list")
-    psr = gsr.to_pandas()
-    assert_eq(gsr[[]], psr[[]])
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [[0], [1], [2]],
+        [[0, 1], [2, 3], [4, 5]],
+        [[[0, 1], [2]], [[3, 4]], [[5, 6]]],
+        [None, [[0, 1], [2]], [[3, 4], [5, 6]]],
+        [[], [[0, 1], [2]], [[3, 4], [5, 6]]],
+        [[], [["a", "b"], None], [["c", "d"], []]],
+    ],
+)
+@pytest.mark.parametrize(
+    "key", [[], [0], [0, 1], [0, 1, 0], slice(None), slice(0, 2)]
+)
+def test_iloc_lists(data, key):
+    psr = pd.Series(data)
+    gsr = cudf.Series(data)
+    assert_eq(psr.iloc[key], gsr.iloc[key])
