@@ -18,6 +18,7 @@
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/concatenate.hpp>
+#include <cudf/lists/extract.hpp>
 #include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/datetime.hpp>
 #include <cudf/filling.hpp>
@@ -367,6 +368,20 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_slice(JNIEnv *env,
   CATCH_STD(env, NULL);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_extractListElement(JNIEnv *env, jclass,
+                                                                            jlong column_view,
+                                                                            jint index) {
+  JNI_NULL_CHECK(env, column_view, "column is null", 0);
+  try {
+    cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(column_view);
+    cudf::lists_column_view lcv(*cv);
+
+    std::unique_ptr<cudf::column> ret = cudf::lists::extract_list_element(lcv, index);
+    return reinterpret_cast<jlong>(ret.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_stringSplit(JNIEnv *env, jclass,
                                                                           jlong column_view,
                                                                           jlong delimiter) {
@@ -379,6 +394,23 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_stringSplit(JNIEnv
 
     std::unique_ptr<cudf::table> table_result = cudf::strings::split(scv, *ss_scalar);
     return cudf::jni::convert_table_for_return(env, table_result);
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringSplitRecord(JNIEnv *env, jclass,
+                                                                           jlong column_view,
+                                                                           jlong delimiter,
+                                                                           jint max_split) {
+  JNI_NULL_CHECK(env, column_view, "column is null", 0);
+  JNI_NULL_CHECK(env, delimiter, "string scalar delimiter is null", 0);
+  try {
+    cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(column_view);
+    cudf::strings_column_view scv(*cv);
+    cudf::string_scalar *ss_scalar = reinterpret_cast<cudf::string_scalar *>(delimiter);
+
+    std::unique_ptr<cudf::column> ret = cudf::strings::split_record(scv, *ss_scalar, max_split);
+    return reinterpret_cast<jlong>(ret.release());
   }
   CATCH_STD(env, 0);
 }
