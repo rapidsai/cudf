@@ -485,7 +485,7 @@ TEST_F(JoinTest, LeftSemiJoin_empty_result)
 
   expect_columns_equal(join_table2->get_column(0), expect_0);
   expect_columns_equal(join_table2->get_column(1), expect_1);
-  expect_columns_equal(join_table2->get_column(2), expect_3);
+  expect_columns_equivalent(join_table2->get_column(2), expect_3);
 }
 
 TEST_F(JoinTest, LeftAntiJoin_empty_result)
@@ -549,7 +549,7 @@ TEST_F(JoinTest, LeftAntiJoin_empty_result)
 
   expect_columns_equal(join_table2->get_column(0), expect_0);
   expect_columns_equal(join_table2->get_column(1), expect_1);
-  expect_columns_equal(join_table2->get_column(2), expect_3);
+  expect_columns_equivalent(join_table2->get_column(2), expect_3);
 }
 
 TEST_F(JoinTest, LeftSemiAntiJoin_empty_table)
@@ -605,35 +605,35 @@ TEST_F(JoinTest, LeftSemiAntiJoin_empty_table)
   expect_columns_equal(join_table->get_column(0), expect_0);
   expect_columns_equal(join_table->get_column(1), expect_1);
   expect_columns_equal(join_table->get_column(2), expect_2);
-  expect_columns_equal(join_table->get_column(3), expect_3);
+  expect_columns_equivalent(join_table->get_column(3), expect_3);
 
   auto join_table2 = cudf::left_semi_join(table_b, table_a, {0, 1, 3}, {0, 1, 3}, {0, 1, 2, 3});
 
   expect_columns_equal(join_table2->get_column(0), expect_0);
   expect_columns_equal(join_table2->get_column(1), expect_1);
   expect_columns_equal(join_table2->get_column(2), expect_2);
-  expect_columns_equal(join_table2->get_column(3), expect_3);
+  expect_columns_equivalent(join_table2->get_column(3), expect_3);
 
   auto join_table3 = cudf::left_anti_join(table_a, table_b, {0, 1, 3}, {0, 1, 3}, {0, 1, 2, 3});
 
   expect_columns_equal(join_table3->get_column(0), expect_0);
   expect_columns_equal(join_table3->get_column(1), expect_1);
   expect_columns_equal(join_table3->get_column(2), expect_2);
-  expect_columns_equal(join_table3->get_column(3), expect_3);
+  expect_columns_equivalent(join_table3->get_column(3), expect_3);
 
   auto join_table4 = cudf::left_anti_join(table_a, table_a, {0, 1, 3}, {0, 1, 3}, {0, 1, 2, 3});
 
   expect_columns_equal(join_table4->get_column(0), expect_0);
   expect_columns_equal(join_table4->get_column(1), expect_1);
   expect_columns_equal(join_table4->get_column(2), expect_2);
-  expect_columns_equal(join_table4->get_column(3), expect_3);
+  expect_columns_equivalent(join_table4->get_column(3), expect_3);
 
   auto join_table5 = cudf::left_anti_join(table_a, table_a, {0, 1, 3}, {0, 1, 3}, {0, 1, 2, 3});
 
   expect_columns_equal(join_table5->get_column(0), expect_0);
   expect_columns_equal(join_table5->get_column(1), expect_1);
   expect_columns_equal(join_table5->get_column(2), expect_2);
-  expect_columns_equal(join_table5->get_column(3), expect_3);
+  expect_columns_equivalent(join_table5->get_column(3), expect_3);
 }
 
 TEST_F(JoinTest, LeftAntiJoin_empty_right_table)

@@ -143,6 +143,9 @@ std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
     thrust::make_counting_iterator<size_type>(0), list_gatherer{gd});
   size_type gather_map_size = gd.gather_map_size;
 
+  // if the gather map is empty, return an empty column
+  if (gather_map_size == 0) { return empty_like(list.parent()); }
+
   // gather the bitmask, if relevant
   rmm::device_buffer null_mask{0, stream, mr};
   size_type null_count = list.null_count();
