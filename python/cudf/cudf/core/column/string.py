@@ -4659,9 +4659,6 @@ def _get_cols_list(parent_obj, others):
 
         return cols_list
     elif others is not None:
-        if isinstance(others, cudf.Index):
-            others = others.to_series()
-
         if isinstance(others, cudf.Series) and not others.index.equals(
             parent_obj.index
         ):

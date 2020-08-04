@@ -311,8 +311,18 @@ def test_string_len(ps_gs):
         ("f", "g", "h", "i", "j"),
         pd.Series(["f", "g", "h", "i", "j"]),
         pd.Series(["AbC", "de", "FGHI", "j", "kLm"]),
-        pd.Index(["f", "g", "h", "i", "j"]),
-        pd.Index(["AbC", "de", "FGHI", "j", "kLm"]),
+        pytest.param(
+            pd.Index(["f", "g", "h", "i", "j"]),
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/35556"
+            ),
+        ),
+        pytest.param(
+            pd.Index(["AbC", "de", "FGHI", "j", "kLm"]),
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/35556"
+            ),
+        ),
         (
             np.array(["f", "g", "h", "i", "j"]),
             np.array(["f", "g", "h", "i", "j"]),
