@@ -1246,7 +1246,7 @@ def test_dataframe_iloc_index(gdf, slice):
 @pytest.mark.parametrize(
     "key", [[], [0], [0, 1], [0, 1, 0], slice(None), slice(0, 2)]
 )
-def test_iloc_lists(data, key):
+def test_iloc_with_lists(data, key):
     psr = pd.Series(data)
     gsr = cudf.Series(data)
     assert_eq(psr.iloc[key], gsr.iloc[key])
