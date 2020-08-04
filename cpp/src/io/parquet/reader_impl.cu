@@ -574,7 +574,7 @@ size_t reader::impl::count_page_headers(hostdevice_vector<gpu::ColumnChunkDesc> 
 
   chunks.host_to_device(stream);
   CUDA_TRY(gpu::DecodePageHeaders(chunks.device_ptr(), chunks.size(), stream));
-  chunks.device_to_host(stream);
+  chunks.device_to_host(stream, true);
 
   for (size_t c = 0; c < chunks.size(); c++) {
     total_pages += chunks[c].num_data_pages + chunks[c].num_dict_pages;
@@ -600,7 +600,7 @@ void reader::impl::decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc> &
 
   chunks.host_to_device(stream);
   CUDA_TRY(gpu::DecodePageHeaders(chunks.device_ptr(), chunks.size(), stream));
-  pages.device_to_host(stream);
+  pages.device_to_host(stream, true);
 }
 
 /**
@@ -749,7 +749,7 @@ void reader::impl::allocate_nesting_info(
   page_nesting_info = std::move(pni);
 
   // retrieve from the gpu so we can update
-  pages.device_to_host(stream);
+  pages.device_to_host(stream, true);
 
   // update pointers in the PageInfos
   int target_page_index = 0;
@@ -937,6 +937,7 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
   CUDA_TRY(gpu::DecodePageData(pages, chunks, total_rows, min_row, stream));
   pages.device_to_host(stream);
   page_nesting.device_to_host(stream);
+  cudaStreamSynchronize(stream);
 
   // for nested schemas, add the final offset to every offset buffer.
   // TODO : make this happen in more efficiently. Maybe use thrust::for_each

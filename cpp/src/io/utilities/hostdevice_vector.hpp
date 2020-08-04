@@ -87,16 +87,20 @@ class hostdevice_vector {
     return reinterpret_cast<T const *>(d_data.data()) + offset;
   }
 
-  void host_to_device(cudaStream_t stream)
+  void host_to_device(cudaStream_t stream, bool synchronize = false)
   {
     cudaMemcpyAsync(d_data.data(), h_data, memory_size(), cudaMemcpyHostToDevice, stream);
-    cudaStreamSynchronize(stream);
+    if(synchronize){
+      cudaStreamSynchronize(stream);
+    }
   }
 
-  void device_to_host(cudaStream_t stream)
+  void device_to_host(cudaStream_t stream, bool synchronize = false)
   {
     cudaMemcpyAsync(h_data, d_data.data(), memory_size(), cudaMemcpyDeviceToHost, stream);
-    cudaStreamSynchronize(stream);
+    if(synchronize){
+      cudaStreamSynchronize(stream);
+    }
   }
 
  private:

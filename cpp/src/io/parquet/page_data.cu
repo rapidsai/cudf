@@ -1751,7 +1751,7 @@ cudaError_t PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
 
   // retrieve pages back (PageInfo::num_rows has been set. if we don't bring it
   // back, this value will get overwritten later on).
-  pages.device_to_host(stream);
+  pages.device_to_host(stream, true);
 
   // computes:
   // output column sizes for each level of nesting (summing PageNestingInfo::size)
