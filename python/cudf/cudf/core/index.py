@@ -2122,6 +2122,10 @@ class TimedeltaIndex(GenericIndex):
         """
         return self._values.components()
 
+    @property
+    def inferred_freq(self):
+        raise NotImplementedError("inferred_freq is not yet supported")
+
 
 class CategoricalIndex(GenericIndex):
     """An categorical of orderable values that represent the indices of another
