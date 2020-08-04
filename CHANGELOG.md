@@ -89,6 +89,7 @@
 - PR #5373 Remove legacy nvstrings/nvcategory/nvtext
 - PR #5362 Remove dependency on `rmm._DevicePointer`
 - PR #5302 Add missing comparison operators to `fixed_point` type
+- PR #5824 Mark host frames as not needing to be writeable
 - PR #5354 Split Dask deserialization methods by dask/cuda
 - PR #5363 Handle `0-dim` inputs while broadcasting to a column
 - PR #5396 Remove legacy tests env variable from build.sh
