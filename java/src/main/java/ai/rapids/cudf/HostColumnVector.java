@@ -49,6 +49,7 @@ public final class HostColumnVector implements AutoCloseable {
   }
 
   protected static class NestedHostColumnVector implements AutoCloseable {
+
     private HostMemoryBuffer data;
     private HostMemoryBuffer offsets;
     private HostMemoryBuffer validity;
@@ -87,47 +88,35 @@ public final class HostColumnVector implements AutoCloseable {
       }
     }
 
-    private HostMemoryBuffer getData() {
-      if (nestedChildren.size() > 0)
-        return nestedChildren.get(0).getData();
-      else return data;
+    HostMemoryBuffer getData() {
+      return data;
     }
 
-    private List<HostMemoryBuffer> getValids() {
-      List<HostMemoryBuffer> ret = new ArrayList<>();
-      ret.add(validity);
-      for (NestedHostColumnVector child : nestedChildren) {
-        ret.addAll(child.getValids());
-      }
-      return ret;
+    HostMemoryBuffer getValidity() {
+      return validity;
     }
 
-    private List<HostMemoryBuffer> getOffsets() {
-      List<HostMemoryBuffer> ret = new ArrayList<>();
-      ret.add(offsets);
-      for (NestedHostColumnVector child : nestedChildren) {
-        ret.addAll(child.getOffsets());
-      }
-      return ret;
+    DType getType() {
+      return type;
     }
 
-    private List<Long> getRows() {
-      List<Long> ret = new ArrayList<>();
-      ret.add(rows);
-      for (NestedHostColumnVector child : nestedChildren) {
-        ret.addAll(child.getRows());
-      }
-      return ret;
+    Optional<Long> getNullCount() {
+      return nullCount;
     }
 
-    private List<DType> getTypes() {
-      List<DType> ret = new ArrayList<>();
-      ret.add(type);
-      for (NestedHostColumnVector child : nestedChildren) {
-        ret.addAll(child.getTypes());
-      }
-      return ret;
+    List<NestedHostColumnVector> getNestedChildren() {
+      return nestedChildren;
     }
+
+
+    public HostMemoryBuffer getOffsets() {
+      return offsets;
+    }
+
+    public long getRows() {
+      return rows;
+    }
+
 
     private Object getElement(int rowIndex) {
       if (type == DType.LIST) {
@@ -447,8 +436,9 @@ public final class HostColumnVector implements AutoCloseable {
         offsets = null;
         return ret;
       } else {
-        return ColumnVector.createNestedColumnVector(
-            getData(), getValids(), getOffsets(), getTypes(), getRows(), nullCount);
+        System.out.println("KUHU off heap data on host len =" + offHeap.data);
+        return ColumnVector.createNestedColumnVector(type, (int)rows,
+            offHeap.data, offHeap.valid, offHeap.offsets, nullCount, children.get(0));
       }
     } finally {
       if (data != null) {
@@ -462,49 +452,6 @@ public final class HostColumnVector implements AutoCloseable {
       }
     }
   }
-
-  private HostMemoryBuffer getData() {
-    HostMemoryBuffer ret = null;
-    if (children.size() > 0)
-      return children.get(0).getData();
-    else return offHeap.data;
-  }
-
-  private List<HostMemoryBuffer> getValids() {
-    List<HostMemoryBuffer> ret = new ArrayList<>();
-    ret.add(offHeap.valid);
-    for (NestedHostColumnVector child : children) {
-      ret.addAll(child.getValids());
-    }
-    return ret;
-  }
-
-  private List<HostMemoryBuffer> getOffsets() {
-    List<HostMemoryBuffer> ret = new ArrayList<>();
-    ret.add(offHeap.offsets);
-    for (NestedHostColumnVector child : children) {
-      ret.addAll(child.getOffsets());
-    }
-    return ret;
-  }
-
-  private List<Long> getRows() {
-    List<Long> ret = new ArrayList<>();
-    ret.add(rows);
-    for (NestedHostColumnVector child : children) {
-      ret.addAll(child.getRows());
-    }
-    return ret;
-  }
-
-  private List<DType> getTypes() {
-    List<DType> ret = new ArrayList<>();
-    ret.add(type);
-    for (NestedHostColumnVector child : children) {
-      ret.addAll(child.getTypes());
-    }
-    return ret;
-  }
   /////////////////////////////////////////////////////////////////////////////
   // DATA ACCESS
   /////////////////////////////////////////////////////////////////////////////
@@ -516,8 +463,8 @@ public final class HostColumnVector implements AutoCloseable {
     assert rowIndex < rows;
     assert type == DType.LIST;
     List retList = new ArrayList();
-    int start = offHeap.offsets.getInt(rowIndex*DType.INT32.getSizeInBytes());
-    int end = offHeap.offsets.getInt((rowIndex+1)*DType.INT32.getSizeInBytes());
+    int start = offHeap.offsets.getInt(rowIndex * DType.INT32.getSizeInBytes());
+    int end = offHeap.offsets.getInt((rowIndex + 1) * DType.INT32.getSizeInBytes());
     // check if null or empty
     if (start == end) {
       if (isNull(rowIndex)) {

@@ -59,7 +59,7 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
         neededCleanup = true;
       }
       if (neededCleanup && logErrorIfNotClean) {
-        log.error("A DEVICE BUFFER WAS LEAKED (ID: " + lengthInBytes + " " + Long.toHexString(origAddress) + ")");
+        log.error("A DEVICE BUFFER WAS LEAKED (ID: " + lengthInBytes + " " + origAddress + ")");
         logRefCountDebug("Leaked device buffer");
       }
       return neededCleanup;
