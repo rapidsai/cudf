@@ -105,30 +105,6 @@ public class Rmm {
   }
 
   /**
-   * Initialize memory manager state and storage.
-   * @param allocationMode Allocation strategy to use. Bit set using
-   *                       {@link RmmAllocationMode#CUDA_DEFAULT},
-   *                       {@link RmmAllocationMode#POOL} and
-   *                       {@link RmmAllocationMode#CUDA_MANAGED_MEMORY}
-   * @param enableLogging  Enable logging memory manager events. If the environment variable
-   *                       RMM_LOG_FILE is defined allocation logs will be written here,
-   *                       otherwise they will be written to standard error.
-   * @param poolSize       The initial pool size in bytes
-   * @param gpuId          The GPU that RMM should use.
-   * @throws IllegalStateException if RMM has already been initialized
-   * @deprecated use {@link #initialize(int, boolean, long)}
-   */
-  @Deprecated
-  public static synchronized void initialize(int allocationMode, boolean enableLogging,
-      long poolSize, int gpuId) throws RmmException {
-    if (initialized) {
-      throw new IllegalStateException("RMM is already initialized");
-    }
-    Cuda.setDevice(gpuId);
-    initialize(allocationMode, enableLogging, poolSize);
-  }
-
-  /**
    * Initialize memory manager state and storage. This will always initialize
    * the CUDA context for the calling thread if it is not already set. The
    * caller is responsible for setting the desired CUDA device prior to this
@@ -160,28 +136,6 @@ public class Rmm {
     initializeInternal(allocationMode, loc.internalId, path, poolSize);
     MemoryCleaner.setDefaultGpu(Cuda.getDevice());
     initialized = true;
-  }
-
-  /**
-   * Initialize memory manager state and storage.
-   * @param allocationMode Allocation strategy to use. Bit set using
-   *                       {@link RmmAllocationMode#CUDA_DEFAULT},
-   *                       {@link RmmAllocationMode#POOL} and
-   *                       {@link RmmAllocationMode#CUDA_MANAGED_MEMORY}
-   * @param logConf        How to do logging or null if you don't want to
-   * @param poolSize       The initial pool size in bytes
-   * @param gpuId          The GPU that RMM should use.
-   * @throws IllegalStateException if RMM has already been initialized
-   * @deprecated use {@link #initialize(int, LogConf, long)}
-   */
-  @Deprecated
-  public static synchronized void initialize(int allocationMode, LogConf logConf, long poolSize, int gpuId)
-      throws RmmException {
-    if (initialized) {
-      throw new IllegalStateException("RMM is already initialized");
-    }
-    Cuda.setDevice(gpuId);
-    initialize(allocationMode, logConf, poolSize);
   }
 
   /**
@@ -321,13 +275,4 @@ public class Rmm {
 
   static native void setEventHandlerInternal(RmmEventHandler handler,
       long[] allocThresholds, long[] deallocThresholds) throws RmmException;
-
-  /**
-   * Getting the results of alloc and free logging as a string is no longer supported.
-   * @deprecated
-   */
-  @Deprecated
-  public static String getLog() throws RmmException {
-    throw new RuntimeException("In memory logging is no longer supported");
-  }
 }
