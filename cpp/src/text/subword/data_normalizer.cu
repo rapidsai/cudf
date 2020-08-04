@@ -408,6 +408,8 @@ std::pair<ptr_length_pair, ptr_length_pair> data_normalizer::normalize(char cons
                            cudaMemcpyDeviceToDevice,
                            stream));
   uint32_t const bytes_count = device_strings_offsets.element(num_offsets - 1, stream);
+  if (bytes_count == 0)  // if no bytes, nothing to do
+    return std::make_pair(cp_and_length, offset_and_length);
 
   cudf::detail::grid_1d const grid{static_cast<cudf::size_type>(bytes_count), THREADS_PER_BLOCK, 1};
   size_t const threads_on_device  = grid.num_threads_per_block * grid.num_blocks;
