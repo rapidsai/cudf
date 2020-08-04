@@ -4315,22 +4315,37 @@ class TimedeltaProperties(object):
 
     @property
     def days(self):
+        """
+        Number of days.
+        """
         return self._get_td_field("days")
 
     @property
     def seconds(self):
+        """
+        Number of seconds (>= 0 and less than 1 day).
+        """
         return self._get_td_field("seconds")
 
     @property
     def microseconds(self):
+        """
+        Number of microseconds (>= 0 and less than 1 second).
+        """
         return self._get_td_field("microseconds")
 
     @property
     def nanoseconds(self):
+        """
+        Return the number of nanoseconds (n), where 0 <= n < 1 microsecond.
+        """
         return self._get_td_field("nanoseconds")
 
     @property
     def components(self):
+        """
+        Return a components namedtuple-like.
+        """
         return self.series._column.components(index=self.series._index)
 
     def _get_td_field(self, field):

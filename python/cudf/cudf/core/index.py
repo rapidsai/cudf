@@ -2006,7 +2006,44 @@ class DatetimeIndex(GenericIndex):
 
 
 class TimedeltaIndex(GenericIndex):
-    # TODO: Add tests and handle unit vs dtype conversions
+    """
+    Immutable, ordered and sliceable sequence of timedelta64 data,
+    represented internally as int64.
+
+    Parameters
+    ----------
+    data : array-like (1-dimensional), optional
+        Optional datetime-like data to construct index with.
+    unit : str, optional
+        This is not yet supported
+    copy : bool
+        Make a copy of input.
+    freq : str, optional
+        This is not yet supported
+    dtype : str or numpy.dtype, optional
+        Data type for the output Index. If not specified, the
+        default dtype will be ``timedelta64[ns]``.
+    name : object
+        Name to be stored in the index.
+
+    Returns
+    -------
+    TimedeltaIndex
+
+    Examples
+    --------
+    >>> import cudf
+    >>> cudf.TimedeltaIndex([1132223, 2023232, 342234324, 4234324],
+    ...     dtype='timedelta64[ns]')
+    TimedeltaIndex(['00:00:00.001132', '00:00:00.002023', '00:00:00.342234',
+                    '00:00:00.004234'],
+                dtype='timedelta64[ns]')
+    >>> cudf.TimedeltaIndex([1, 2, 3, 4], dtype='timedelta64[s]',
+    ...     name="delta-index")
+    TimedeltaIndex(['00:00:01', '00:00:02', '00:00:03', '00:00:04'],
+                dtype='timedelta64[s]', name='delta-index')
+    """
+
     def __new__(
         cls,
         data=None,
@@ -2022,6 +2059,12 @@ class TimedeltaIndex(GenericIndex):
 
         if freq is not None:
             raise NotImplementedError("freq is not yet supported")
+
+        if unit is not None:
+            raise NotImplementedError(
+                "unit is not yet supported, alternatively "
+                "dtype parameter is supported"
+            )
 
         if copy:
             data = column.as_column(data).copy()
@@ -2044,22 +2087,39 @@ class TimedeltaIndex(GenericIndex):
 
     @property
     def days(self):
+        """
+        Number of days for each element.
+        """
         return as_index(arbitrary=self._values.days, name=self.name)
 
     @property
     def seconds(self):
+        """
+        Number of seconds (>= 0 and less than 1 day) for each element.
+        """
         return as_index(arbitrary=self._values.seconds, name=self.name)
 
     @property
     def microseconds(self):
+        """
+        Number of microseconds (>= 0 and less than 1 second) for each element.
+        """
         return as_index(arbitrary=self._values.microseconds, name=self.name)
 
     @property
     def nanoseconds(self):
+        """
+        Number of nanoseconds (>= 0 and less than 1 microsecond) for each
+        element.
+        """
         return as_index(arbitrary=self._values.nanoseconds, name=self.name)
 
     @property
     def components(self):
+        """
+        Return a dataframe of the components (days, hours, minutes,
+        seconds, milliseconds, microseconds, nanoseconds) of the Timedeltas.
+        """
         return self._values.components()
 
 

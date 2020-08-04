@@ -12,6 +12,7 @@ from cudf._lib.nvtx import annotate
 from cudf._lib.scalar import Scalar, as_scalar
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
+from cudf.core.column.datetime import _numpy_to_pandas_conversion
 from cudf.utils.dtypes import is_scalar, np_to_pa_dtype
 
 
@@ -23,11 +24,18 @@ class TimeDeltaColumn(column.ColumnBase):
         Parameters
         ----------
         data : Buffer
-            The datetime values
+            The Timedelta values
         dtype : np.dtype
             The data type
         mask : Buffer; optional
             The validity mask
+        size : int, optional
+            Size of memory allocation.
+        offset : int
+            Data offset
+        null_count : int, optional
+            The number of null values.
+            If None, it is calculated automatically.
         """
         dtype = np.dtype(dtype)
         if data.size % dtype.itemsize:
@@ -246,37 +254,76 @@ class TimeDeltaColumn(column.ColumnBase):
         return cudf.DataFrame(
             data={
                 "days": self.binary_operator(
-                    "floordiv", as_scalar(np.timedelta64(86400000000000, "ns"))
+                    "floordiv",
+                    as_scalar(
+                        np.timedelta64(_numpy_to_pandas_conversion["D"], "ns")
+                    ),
                 ),
                 "hours": self.binary_operator(
-                    "mod", as_scalar(np.timedelta64(86400000000000, "ns"))
+                    "mod",
+                    as_scalar(
+                        np.timedelta64(_numpy_to_pandas_conversion["D"], "ns")
+                    ),
                 ).binary_operator(
-                    "floordiv", as_scalar(np.timedelta64(3600000000000, "ns"))
+                    "floordiv",
+                    as_scalar(
+                        np.timedelta64(_numpy_to_pandas_conversion["h"], "ns")
+                    ),
                 ),
                 "minutes": self.binary_operator(
-                    "mod", as_scalar(np.timedelta64(3600000000000, "ns"))
+                    "mod",
+                    as_scalar(
+                        np.timedelta64(_numpy_to_pandas_conversion["h"], "ns")
+                    ),
                 ).binary_operator(
-                    "floordiv", as_scalar(np.timedelta64(60000000000, "ns"))
+                    "floordiv",
+                    as_scalar(
+                        np.timedelta64(_numpy_to_pandas_conversion["m"], "ns")
+                    ),
                 ),
                 "seconds": self.binary_operator(
-                    "mod", as_scalar(np.timedelta64(60000000000, "ns"))
+                    "mod",
+                    as_scalar(
+                        np.timedelta64(_numpy_to_pandas_conversion["m"], "ns")
+                    ),
                 ).binary_operator(
-                    "floordiv", as_scalar(np.timedelta64(1000000000, "ns"))
+                    "floordiv",
+                    as_scalar(
+                        np.timedelta64(_numpy_to_pandas_conversion["s"], "ns")
+                    ),
                 ),
                 "milliseconds": self.binary_operator(
-                    "mod", as_scalar(np.timedelta64(1000000000, "ns"))
+                    "mod",
+                    as_scalar(
+                        np.timedelta64(_numpy_to_pandas_conversion["s"], "ns")
+                    ),
                 ).binary_operator(
-                    "floordiv", as_scalar(np.timedelta64(1000000, "ns"))
+                    "floordiv",
+                    as_scalar(
+                        np.timedelta64(_numpy_to_pandas_conversion["ms"], "ns")
+                    ),
                 ),
                 "microseconds": self.binary_operator(
-                    "mod", as_scalar(np.timedelta64(1000000, "ns"))
+                    "mod",
+                    as_scalar(
+                        np.timedelta64(_numpy_to_pandas_conversion["ms"], "ns")
+                    ),
                 ).binary_operator(
-                    "floordiv", as_scalar(np.timedelta64(1000, "ns"))
+                    "floordiv",
+                    as_scalar(
+                        np.timedelta64(_numpy_to_pandas_conversion["us"], "ns")
+                    ),
                 ),
                 "nanoseconds": self.binary_operator(
-                    "mod", as_scalar(np.timedelta64(1000, "ns"))
+                    "mod",
+                    as_scalar(
+                        np.timedelta64(_numpy_to_pandas_conversion["us"], "ns")
+                    ),
                 ).binary_operator(
-                    "floordiv", as_scalar(np.timedelta64(1, "ns"))
+                    "floordiv",
+                    as_scalar(
+                        np.timedelta64(_numpy_to_pandas_conversion["ns"], "ns")
+                    ),
                 ),
             },
             index=index,
@@ -285,28 +332,54 @@ class TimeDeltaColumn(column.ColumnBase):
     @property
     def days(self):
         return self.binary_operator(
-            "floordiv", as_scalar(np.timedelta64(86400000000000, "ns"))
+            "floordiv",
+            as_scalar(np.timedelta64(_numpy_to_pandas_conversion["D"], "ns")),
         )
 
     @property
     def seconds(self):
+        # This property must return the number of seconds (>= 0 and
+        # less than 1 day) for each element, hence first performing
+        # mod operation to remove the number of days and then performing
+        # division operation to extract the number of seconds.
+
         return self.binary_operator(
-            "mod", as_scalar(np.timedelta64(86400000000000, "ns"))
+            "mod",
+            as_scalar(np.timedelta64(_numpy_to_pandas_conversion["D"], "ns")),
         ).binary_operator(
-            "floordiv", as_scalar(np.timedelta64(1000000000, "ns"))
+            "floordiv",
+            as_scalar(np.timedelta64(_numpy_to_pandas_conversion["s"], "ns")),
         )
 
     @property
     def microseconds(self):
+        # This property must return the number of microseconds (>= 0 and
+        # less than 1 second) for each element, hence first performing
+        # mod operation to remove the number of seconds and then performing
+        # division operation to extract the number of microseconds.
+
         return self.binary_operator(
-            "mod", np.timedelta64(1000000000, "ns")
-        ).binary_operator("floordiv", as_scalar(np.timedelta64(1000, "ns")))
+            "mod", np.timedelta64(_numpy_to_pandas_conversion["s"], "ns")
+        ).binary_operator(
+            "floordiv",
+            as_scalar(np.timedelta64(_numpy_to_pandas_conversion["us"], "ns")),
+        )
 
     @property
     def nanoseconds(self):
+        # This property must return the number of nanoseconds (>= 0 and
+        # less than 1 microsecond) for each element, hence first performing
+        # mod operation to remove the number of microseconds and then
+        # performing division operation to extract the number
+        # of nanoseconds.
+
         return self.binary_operator(
-            "mod", as_scalar(np.timedelta64(1000, "ns"))
-        ).binary_operator("floordiv", as_scalar(np.timedelta64(1, "ns")))
+            "mod",
+            as_scalar(np.timedelta64(_numpy_to_pandas_conversion["us"], "ns")),
+        ).binary_operator(
+            "floordiv",
+            as_scalar(np.timedelta64(_numpy_to_pandas_conversion["ns"], "ns")),
+        )
 
 
 @annotate("BINARY_OP", color="orange", domain="cudf_python")

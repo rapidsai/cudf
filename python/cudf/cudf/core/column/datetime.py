@@ -21,7 +21,7 @@ _numpy_to_pandas_conversion = {
     "s": 1000000000,
     "m": 60000000000,
     "h": 3600000000000,
-    "D": 1000000000 * 86400,
+    "D": 86400000000000,
 }
 
 _dtype_to_format_conversion = {
