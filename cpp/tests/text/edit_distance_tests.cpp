@@ -55,11 +55,37 @@ TEST_F(TextEditDistanceTest, EditDistance)
   }
 }
 
+TEST_F(TextEditDistanceTest, EditDistanceMatrix)
+{
+  std::vector<const char*> h_strings{"dog", nullptr, "hog", "frog", "cat", "", "hat", "clog"};
+  cudf::test::strings_column_wrapper strings(
+    h_strings.begin(),
+    h_strings.end(),
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+
+  {
+    auto results = nvtext::edit_distance_matrix(cudf::strings_column_view(strings));
+    // clang-format off
+    cudf::test::fixed_width_column_wrapper<int32_t> expected({0,3,1,2,3,3,3,2,
+                                                              3,0,3,4,3,0,3,4,
+                                                              1,3,0,2,3,3,2,2,
+                                                              2,4,2,0,4,4,4,2,
+                                                              3,3,3,4,0,3,1,3,
+                                                              3,0,3,4,3,0,3,4,
+                                                              3,3,2,4,1,3,0,4,
+                                                              2,4,2,2,3,4,4,0});
+    // clang-format on                                                              
+    cudf::test::expect_columns_equal(*results, expected);
+  }
+}
+
 TEST_F(TextEditDistanceTest, EmptyTest)
 {
   auto strings = cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
   cudf::strings_column_view strings_view(strings->view());
   auto results = nvtext::edit_distance(strings_view, strings_view);
+  EXPECT_EQ(results->size(), 0);
+  results = nvtext::edit_distance_matrix(strings_view);
   EXPECT_EQ(results->size(), 0);
 }
 
@@ -70,4 +96,5 @@ TEST_F(TextEditDistanceTest, ErrorsTest)
   EXPECT_THROW(
     nvtext::edit_distance(cudf::strings_column_view(strings), cudf::strings_column_view(targets)),
     cudf::logic_error);
+  EXPECT_THROW(nvtext::edit_distance_matrix(cudf::strings_column_view(strings)), cudf::logic_error);
 }

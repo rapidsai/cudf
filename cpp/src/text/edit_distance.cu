@@ -31,7 +31,61 @@ namespace nvtext {
 namespace detail {
 namespace {
 
-using strings_iterator = cudf::column_device_view::const_iterator<cudf::string_view>;
+/**
+ */
+__device__ int32_t compute_distance(cudf::string_view const& d_str,
+                                    cudf::string_view const& d_tgt,
+                                    int16_t* buffer)
+{
+  if (d_str.empty()) return d_tgt.length();
+  if (d_tgt.empty()) return d_str.length();
+
+  auto itr_A = d_str.begin();
+  auto itr_B = d_tgt.begin();
+  auto len_A = d_str.length();
+  auto len_B = d_tgt.length();
+  if (len_A > len_B) {
+    len_B = len_A;
+    len_A = d_tgt.length();
+    itr_A = d_tgt.begin();
+    itr_B = d_str.begin();
+  }
+  auto line2 = buffer;
+  auto line1 = line2 + len_A;
+  auto line0 = line1 + len_A;
+  int range  = len_A + len_B - 1;
+  for (int i = 0; i < range; i++) {
+    auto tmp = line2;
+    line2    = line1;
+    line1    = line0;
+    line0    = tmp;
+
+    for (int x = (i < len_B ? 0 : i - len_B + 1); (x < len_A) && (x < i + 1); x++) {
+      int y     = i - x;
+      int16_t u = y > 0 ? line1[x] : x + 1;
+      int16_t v = x > 0 ? line1[x - 1] : y + 1;
+      int16_t w;
+      if ((x > 0) && (y > 0))
+        w = line2[x - 1];
+      else if (x > y)
+        w = x;
+      else
+        w = y;
+      u++;
+      v++;
+      itr_A += (x - itr_A.position());
+      itr_B += (y - itr_B.position());
+      auto c1 = *itr_A;
+      auto c2 = *itr_B;
+      if (c1 != c2) w++;
+      int16_t value = u;
+      if (v < value) value = v;
+      if (w < value) value = w;
+      line0[x] = value;
+    }
+  }
+  return static_cast<int32_t>(line0[len_A - 1]);
+}
 
 /**
  * @brief Compute the Levenshtein distance for each string.
@@ -56,59 +110,28 @@ struct edit_distance_levenshtein_algorithm {
     }();
     return compute_distance(d_str, d_tgt, d_buffer + d_offsets[idx]);
   }
+};
 
-  __device__ int32_t compute_distance(cudf::string_view const& d_str,
-                                      cudf::string_view const& d_tgt,
-                                      int16_t* buffer)
+struct edit_distance_matrix_levenshtein_algorithm {
+  cudf::column_device_view d_strings;  // computing these against itself
+  int16_t* d_buffer;                   // compute buffer for each string
+  int32_t const* d_offsets;            // locate sub-buffer for each string
+  int32_t* d_results;
+
+  __device__ void operator()(cudf::size_type idx)
   {
-    if (d_str.empty()) return d_tgt.length();
-    if (d_tgt.empty()) return d_str.length();
-
-    auto itr_A = d_str.begin();
-    auto itr_B = d_tgt.begin();
-    auto len_A = d_str.length();
-    auto len_B = d_tgt.length();
-    if (len_A > len_B) {
-      len_B = len_A;
-      len_A = d_tgt.length();
-      itr_A = d_tgt.begin();
-      itr_B = d_str.begin();
-    }
-    auto line2 = buffer;
-    auto line1 = line2 + len_A;
-    auto line0 = line1 + len_A;
-    int range  = len_A + len_B - 1;
-    for (int i = 0; i < range; i++) {
-      auto tmp = line2;
-      line2    = line1;
-      line1    = line0;
-      line0    = tmp;
-
-      for (int x = (i < len_B ? 0 : i - len_B + 1); (x < len_A) && (x < i + 1); x++) {
-        int y     = i - x;
-        int16_t u = y > 0 ? line1[x] : x + 1;
-        int16_t v = x > 0 ? line1[x - 1] : y + 1;
-        int16_t w;
-        if ((x > 0) && (y > 0))
-          w = line2[x - 1];
-        else if (x > y)
-          w = x;
-        else
-          w = y;
-        u++;
-        v++;
-        itr_A += (x - itr_A.position());
-        itr_B += (y - itr_B.position());
-        auto c1 = *itr_A;
-        auto c2 = *itr_B;
-        if (c1 != c2) w++;
-        int16_t value = u;
-        if (v < value) value = v;
-        if (w < value) value = w;
-        line0[x] = value;
-      }
-    }
-    return static_cast<int32_t>(line0[len_A - 1]);
+    auto const strings_count = d_strings.size();
+    auto const row           = idx / strings_count;
+    auto const col           = idx % strings_count;
+    if (row > col) return;  // bottom half is computed with the top half of matrix
+    cudf::string_view d_str1 =
+      d_strings.is_null(row) ? cudf::string_view{} : d_strings.element<cudf::string_view>(row);
+    cudf::string_view d_str2 =
+      d_strings.is_null(col) ? cudf::string_view{} : d_strings.element<cudf::string_view>(col);
+    auto work_buffer       = d_buffer + d_offsets[idx - ((row + 1) * (row + 2)) / 2];
+    int32_t const distance = (row == col) ? 0 : compute_distance(d_str1, d_str2, work_buffer);
+    d_results[idx]         = distance;                // top half
+    d_results[col * strings_count + row] = distance;  // bottom half
   }
 };
 
@@ -196,13 +219,13 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
 
   // calculate the size of the compute-buffer
   cudf::size_type n_upper = (strings_count * (strings_count - 1)) / 2;
-  rmm::device_uvector<cudf::size_type> sizes(n_upper, stream);
-  auto d_sizes = sizes.data();
-  CUDA_TRY(cudaMemsetAsync(d_sizes, 0, n_upper * sizeof(cudf::size_type), stream));
+  rmm::device_uvector<cudf::size_type> offsets(n_upper, stream);
+  auto d_offsets = offsets.data();
+  CUDA_TRY(cudaMemsetAsync(d_offsets, 0, n_upper * sizeof(cudf::size_type), stream));
   thrust::for_each_n(execpol->on(stream),
                      thrust::make_counting_iterator<cudf::size_type>(0),
                      strings_count * strings_count,
-                     [d_strings, d_sizes, strings_count] __device__(cudf::size_type idx) {
+                     [d_strings, d_offsets, strings_count] __device__(cudf::size_type idx) {
                        cudf::size_type row = idx / strings_count;
                        cudf::size_type col = idx % strings_count;
                        if (row >= col) return;
@@ -214,18 +237,18 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
                                                     : d_strings.element<cudf::string_view>(col);
                        if (d_str1.empty() || d_str2.empty()) return;
                        cudf::size_type length = std::min(d_str1.length(), d_str2.length());
-                       d_sizes[idx - ((row + 1) * (row + 2)) / 2] = length * 3;
+                       d_offsets[idx - ((row + 1) * (row + 2)) / 2] = length * 3;
                      });
 
   // get the total size
-  size_t compute_size = thrust::reduce(execpol->on(stream), sizes.begin(), sizes.end(), size_t{0});
-
+  size_t compute_size =
+    thrust::reduce(execpol->on(stream), offsets.begin(), offsets.end(), size_t{0});
   // convert sizes to offsets in-place
-  thrust::exclusive_scan(execpol->on(stream), sizes.begin(), sizes.end(), sizes.begin());
+  thrust::exclusive_scan(execpol->on(stream), offsets.begin(), offsets.end(), offsets.begin());
   rmm::device_uvector<int16_t> compute_buffer(compute_size, stream);
   auto d_buffer = compute_buffer.data();
 
-  // compute the edit distance into the output column in-place
+  // compute the edit distance into the output column
   auto results   = cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT32},
                                                strings_count * strings_count,
                                                rmm::device_buffer{0, stream, mr},
@@ -233,11 +256,11 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
                                                stream,
                                                mr);
   auto d_results = results->mutable_view().data<int32_t>();
-  thrust::transform(execpol->on(stream),
-                    thrust::make_counting_iterator<cudf::size_type>(0),
-                    thrust::make_counting_iterator<cudf::size_type>(strings_count),
-                    d_results,
-                    edit_distance_levenshtein_algorithm{d_strings, d_strings, d_buffer, d_results});
+  thrust::for_each_n(
+    execpol->on(stream),
+    thrust::make_counting_iterator<cudf::size_type>(0),
+    strings_count * strings_count,
+    edit_distance_matrix_levenshtein_algorithm{d_strings, d_buffer, d_offsets, d_results});
 
   return results;
 }
