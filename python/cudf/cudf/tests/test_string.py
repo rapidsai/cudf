@@ -8,6 +8,7 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 
+import cudf
 from cudf import concat
 from cudf.core import DataFrame, Series
 from cudf.core.column.string import StringColumn
@@ -309,67 +310,97 @@ def test_string_len(ps_gs):
         ["f", "g", "h", "i", "j"],
         ("f", "g", "h", "i", "j"),
         pd.Series(["f", "g", "h", "i", "j"]),
-        # xref pandas-dev/#33436
-        pytest.param(
+        pd.Series(["AbC", "de", "FGHI", "j", "kLm"]),
+        pd.Index(["f", "g", "h", "i", "j"]),
+        pd.Index(["AbC", "de", "FGHI", "j", "kLm"]),
+        (
+            np.array(["f", "g", "h", "i", "j"]),
+            np.array(["f", "g", "h", "i", "j"]),
+        ),
+        [
+            np.array(["f", "g", "h", "i", "j"]),
+            np.array(["f", "g", "h", "i", "j"]),
+        ],
+        [
+            pd.Series(["f", "g", "h", "i", "j"]),
+            pd.Series(["f", "g", "h", "i", "j"]),
+        ],
+        (
+            pd.Series(["f", "g", "h", "i", "j"]),
+            pd.Series(["f", "g", "h", "i", "j"]),
+        ),
+        [
+            pd.Series(["f", "g", "h", "i", "j"]),
+            np.array(["f", "g", "h", "i", "j"]),
+        ],
+        (
+            pd.Series(["f", "g", "h", "i", "j"]),
+            np.array(["f", "g", "h", "i", "j"]),
+        ),
+        (
+            pd.Series(["f", "g", "h", "i", "j"]),
+            np.array(["f", "a", "b", "f", "a"]),
+            pd.Series(["f", "g", "h", "i", "j"]),
+            np.array(["f", "a", "b", "f", "a"]),
+            np.array(["f", "a", "b", "f", "a"]),
+            pd.Index(["1", "2", "3", "4", "5"]),
+            np.array(["f", "a", "b", "f", "a"]),
             pd.Index(["f", "g", "h", "i", "j"]),
-            marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/pull/33436"
-            ),
-        ),
-        (
-            np.array(["f", "g", "h", "i", "j"]),
-            np.array(["f", "g", "h", "i", "j"]),
         ),
         [
-            np.array(["f", "g", "h", "i", "j"]),
-            np.array(["f", "g", "h", "i", "j"]),
+            pd.Index(["f", "g", "h", "i", "j"]),
+            np.array(["f", "a", "b", "f", "a"]),
+            pd.Series(["f", "g", "h", "i", "j"]),
+            np.array(["f", "a", "b", "f", "a"]),
+            np.array(["f", "a", "b", "f", "a"]),
+            pd.Index(["f", "g", "h", "i", "j"]),
+            np.array(["f", "a", "b", "f", "a"]),
+            pd.Index(["f", "g", "h", "i", "j"]),
         ],
         [
-            pd.Series(["f", "g", "h", "i", "j"]),
-            pd.Series(["f", "g", "h", "i", "j"]),
+            pd.Series(["hello", "world", "abc", "xyz", "pqr"]),
+            pd.Series(["abc", "xyz", "hello", "pqr", "world"]),
         ],
-        (
-            pd.Series(["f", "g", "h", "i", "j"]),
-            pd.Series(["f", "g", "h", "i", "j"]),
-        ),
         [
-            pd.Series(["f", "g", "h", "i", "j"]),
-            np.array(["f", "g", "h", "i", "j"]),
+            pd.Series(
+                ["hello", "world", "abc", "xyz", "pqr"],
+                index=[10, 11, 12, 13, 14],
+            ),
+            pd.Series(
+                ["abc", "xyz", "hello", "pqr", "world"],
+                index=[10, 15, 11, 13, 14],
+            ),
         ],
-        (
-            pd.Series(["f", "g", "h", "i", "j"]),
-            np.array(["f", "g", "h", "i", "j"]),
-        ),
-        pytest.param(
-            (
-                pd.Series(["f", "g", "h", "i", "j"]),
-                np.array(["f", "a", "b", "f", "a"]),
-                pd.Series(["f", "g", "h", "i", "j"]),
-                np.array(["f", "a", "b", "f", "a"]),
-                np.array(["f", "a", "b", "f", "a"]),
-                pd.Index(["1", "2", "3", "4", "5"]),
-                np.array(["f", "a", "b", "f", "a"]),
-                pd.Index(["f", "g", "h", "i", "j"]),
+        [
+            pd.Series(
+                ["hello", "world", "abc", "xyz", "pqr"],
+                index=["10", "11", "12", "13", "14"],
             ),
-            marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/pull/33436"
+            pd.Series(
+                ["abc", "xyz", "hello", "pqr", "world"],
+                index=["10", "11", "12", "13", "14"],
             ),
-        ),
-        pytest.param(
-            [
-                pd.Index(["f", "g", "h", "i", "j"]),
-                np.array(["f", "a", "b", "f", "a"]),
-                pd.Series(["f", "g", "h", "i", "j"]),
-                np.array(["f", "a", "b", "f", "a"]),
-                np.array(["f", "a", "b", "f", "a"]),
-                pd.Index(["f", "g", "h", "i", "j"]),
-                np.array(["f", "a", "b", "f", "a"]),
-                pd.Index(["f", "g", "h", "i", "j"]),
-            ],
-            marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/pull/33436"
+        ],
+        [
+            pd.Series(
+                ["hello", "world", "abc", "xyz", "pqr"],
+                index=["10", "11", "12", "13", "14"],
             ),
-        ),
+            pd.Series(
+                ["abc", "xyz", "hello", "pqr", "world"],
+                index=["10", "15", "11", "13", "14"],
+            ),
+        ],
+        [
+            pd.Series(
+                ["hello", "world", "abc", "xyz", "pqr"],
+                index=["1", "2", "3", "4", "5"],
+            ),
+            pd.Series(
+                ["abc", "xyz", "hello", "pqr", "world"],
+                index=["10", "11", "12", "13", "14"],
+            ),
+        ],
     ],
 )
 @pytest.mark.parametrize("sep", [None, "", " ", "|", ",", "|||"])
@@ -386,16 +417,26 @@ def test_string_cat(ps_gs, others, sep, na_rep, index):
     ps, gs = ps_gs
 
     pd_others = others
-    if isinstance(pd_others, pd.Series):
-        pd_others = pd_others.values
-    if isinstance(pd_others, (list, tuple)):
-        for elem in pd_others:
-            if isinstance(elem, (pd.Series, Series)):
-                elem.index = ps.index
+    if isinstance(pd_others, (pd.Series, pd.Index)):
+        gd_others = cudf.from_pandas(pd_others)
+    else:
+        gd_others = pd_others
+
+    if isinstance(gd_others, (list, tuple)):
+        temp_tuple = []
+        for elem in gd_others:
+            if isinstance(elem, (pd.Series, pd.Index)):
+                temp_tuple.append(cudf.from_pandas(elem))
+            else:
+                temp_tuple.append(elem)
+
+        if isinstance(gd_others, tuple):
+            gd_others = tuple(temp_tuple)
+        else:
+            gd_others = list(temp_tuple)
 
     expect = ps.str.cat(others=pd_others, sep=sep, na_rep=na_rep)
-    got = gs.str.cat(others=others, sep=sep, na_rep=na_rep)
-
+    got = gs.str.cat(others=gd_others, sep=sep, na_rep=na_rep)
     assert_eq(expect, got)
 
     ps.index = index

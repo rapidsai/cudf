@@ -408,7 +408,7 @@ class StringMethods(ColumnMethodsMixin):
                 self._column, as_scalar(sep), as_scalar(na_rep, "str")
             )
         else:
-            other_cols = _get_cols_list(others)
+            other_cols = _get_cols_list(self._parent, others)
             all_cols = [self._column] + other_cols
             data = cpp_concatenate(
                 cudf.DataFrame(
@@ -4620,7 +4620,7 @@ def _string_column_binop(lhs, rhs, op, out_dtype):
     return out
 
 
-def _get_cols_list(others):
+def _get_cols_list(parent_obj, others):
 
     if (
         can_convert_to_column(others)
@@ -4637,9 +4637,33 @@ def _get_cols_list(others):
         If others is a list-like object (in our case lists & tuples)
         just another Series/Index, great go ahead with concatenation.
         """
-        cols_list = [column.as_column(frame, dtype="str") for frame in others]
+        if isinstance(parent_obj, cudf.Index):
+            parent_obj = parent_obj.to_series()
+
+        cols_list = []
+
+        for frame in others:
+            if isinstance(frame, cudf.Index):
+                frame = frame.to_series()
+
+            if isinstance(frame, cudf.Series) and not frame.index.equals(
+                parent_obj.index
+            ):
+                frame = frame.reindex(parent_obj.index)
+
+            cols_list.append(column.as_column(frame, dtype="str"))
+
         return cols_list
     elif others is not None:
+        # import pdb;pdb.set_trace()
+        if isinstance(others, cudf.Index):
+            others = others.to_series()
+
+        if isinstance(others, cudf.Series) and not others.index.equals(
+            parent_obj.index
+        ):
+            others = others.reindex(parent_obj.index)
+
         return [column.as_column(others, dtype="str")]
     else:
         raise TypeError(
