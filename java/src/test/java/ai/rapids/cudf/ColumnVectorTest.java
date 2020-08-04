@@ -2714,6 +2714,7 @@ public class ColumnVectorTest extends CudfTestBase {
         Arrays.asList("these"),
         null,
         Arrays.asList(),
+        Arrays.asList(""),
         Arrays.asList("ARe", "some"),
         Arrays.asList("test", "strings"))) {
 

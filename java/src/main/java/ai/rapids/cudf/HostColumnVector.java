@@ -426,7 +426,6 @@ public final class HostColumnVector implements AutoCloseable {
     assert rowIndex < rows;
     assert type == DType.LIST;
     List retList = new ArrayList();
-    printBuffer(offHeap.offsets);
     int start = offHeap.offsets.getInt(rowIndex * DType.INT32.getSizeInBytes());
     int end = offHeap.offsets.getInt((rowIndex + 1) * DType.INT32.getSizeInBytes());
     // check if null or empty
@@ -1240,7 +1239,6 @@ public final class HostColumnVector implements AutoCloseable {
         // one row
         append(inputList);
       }
-      printBuffer(offsets);
       return this;
     }
 
@@ -1350,7 +1348,6 @@ public final class HostColumnVector implements AutoCloseable {
     }
 
     public ColumnBuilder appendUTF8String(byte[] value) {
-      printBuffer(offsets);
       return appendUTF8String(value, 0, value.length);
     }
 
@@ -1360,7 +1357,7 @@ public final class HostColumnVector implements AutoCloseable {
       assert length >= 0;
       assert value.length + srcOffset <= length;
       assert type == DType.STRING : " type " + type + " is not String";
-      assert currentIndex < rows;
+      assert currentIndex < rows + 1;
       resizeDataBuffer(length);
       if (length > 0) {
         data.setBytes(currentByteIndex, value, srcOffset, length);
