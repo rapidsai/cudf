@@ -507,10 +507,7 @@ __device__ void gpuInitStringDescriptors(volatile page_state_s *s, int target_po
  * @param[in] src_pos Source position
  * @param[in] dstv Pointer to row output data (string descriptor or 32-bit hash)
  */
-inline __device__ void gpuOutputString(volatile page_state_s *s,
-                                       int src_pos,
-                                       void *dstv,
-                                       int value_idx)
+inline __device__ void gpuOutputString(volatile page_state_s *s, int src_pos, void *dstv)
 {
   const char *ptr = NULL;
   size_t len      = 0;
@@ -1636,7 +1633,7 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
         uint8_t *dst =
           s->page.nesting[leaf_level_index].data_out + (size_t)output_value_idx * dtype_len;
         if (dtype == BYTE_ARRAY)
-          gpuOutputString(s, src_pos, dst, output_value_idx);
+          gpuOutputString(s, src_pos, dst);
         else if (dtype == BOOLEAN)
           gpuOutputBoolean(s, src_pos, dst);
         else if (s->col.converted_type == DECIMAL)

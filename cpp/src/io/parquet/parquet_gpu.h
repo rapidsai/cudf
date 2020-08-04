@@ -317,7 +317,7 @@ cudaError_t BuildStringDictionaryIndex(ColumnChunkDesc *chunks,
  * For flat schemas, these values are computed during header decoding (see gpuDecodePageHeaders)
  *
  * @param[in,out] pages All pages to be decoded
- * @param[in,out] chunks All chunks to be decoded
+ * @param[in] chunks All chunks to be decoded
  * @param[in,out] nested_info Per-output column nesting information (size, nullability)
  * @param[in] num_rows Maximum number of rows to read
  * @param[in] min_rows crop all rows below min_row
@@ -339,7 +339,7 @@ cudaError_t PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
  * associated column chunk.
  *
  * @param[in,out] pages All pages to be decoded
- * @param[in,out] chunks All chunks to be decoded
+ * @param[in] chunks All chunks to be decoded
  * @param[in] num_rows Total number of rows to read
  * @param[in] min_row Minimum number of rows to read, default 0
  * @param[in] stream CUDA stream to use, default 0

@@ -298,28 +298,28 @@ bool CompactProtocolReader::InitSchema(FileMetaData *md)
    * mapping the columns to the schema.
    */
   for (auto &row_group : md->row_groups) {
-    int current_row_group = 0;
+    int current_schema_index = 0;
     for (auto &column : row_group.columns) {
       int parent = 0;  // root of schema
       for (auto const &path : column.meta_data.path_in_schema) {
         auto const it = [&] {
-          // find_if starting at (current_row_group + 1) and then wrapping
+          // find_if starting at (current_schema_index + 1) and then wrapping
           auto schema = [&](auto const &e) { return e.parent_idx == parent && e.name == path; };
-          auto mid    = md->schema.cbegin() + current_row_group + 1;
+          auto mid    = md->schema.cbegin() + current_schema_index + 1;
           auto it     = std::find_if(mid, md->schema.cend(), schema);
           if (it != md->schema.cend()) return it;
           return std::find_if(md->schema.cbegin(), mid, schema);
         }();
         if (it == md->schema.cend()) return false;
-        current_row_group = std::distance(md->schema.cbegin(), it);
+        current_schema_index = std::distance(md->schema.cbegin(), it);
 
         // if the schema index is already pointing at a nested type, we'll leave it alone.
         if (column.schema_idx < 0 ||
             md->schema[column.schema_idx].converted_type != parquet::LIST) {
-          column.schema_idx = current_row_group;
+          column.schema_idx = current_schema_index;
         }
-        column.leaf_schema_idx = current_row_group;
-        parent                 = current_row_group;
+        column.leaf_schema_idx = current_schema_index;
+        parent                 = current_schema_index;
       }
     }
   }

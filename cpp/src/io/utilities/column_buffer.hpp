@@ -78,10 +78,8 @@ struct column_buffer {
                 bool is_nullable                    = true,
                 cudaStream_t stream                 = 0,
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+    : type(_type), size(_size), _null_count(0)
   {
-    type = _type;
-    size = _size;
-
     switch (type.id()) {
       case type_id::STRING: _strings.resize(size); break;
 
@@ -92,7 +90,6 @@ struct column_buffer {
       default: _data = create_data(type, size, stream, mr); break;
     }
     if (is_nullable) { _null_mask = create_null_mask(size, mask_state::ALL_NULL, stream, mr); }
-    _null_count = 0;
   }
 
   auto data() { return _strings.size() ? _strings.data().get() : _data.data(); }
@@ -160,12 +157,11 @@ std::unique_ptr<column> make_column(
     } break;
 
     default: {
-      auto chk = std::make_unique<column>(buffer.type,
-                                          buffer.size,
-                                          std::move(buffer._data),
-                                          std::move(buffer._null_mask),
-                                          buffer._null_count);
-      return chk;
+      return std::make_unique<column>(buffer.type,
+                                      buffer.size,
+                                      std::move(buffer._data),
+                                      std::move(buffer._null_mask),
+                                      buffer._null_count);
     }
   }
 }

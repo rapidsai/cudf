@@ -170,13 +170,11 @@ class reader::impl {
    * @param[in] num_rows Maximum number of rows to read
    * @param[in] min_rows crop all rows below min_row
    * @param[in] stream Cuda stream
-   *
-   * @return cudaSuccess if successful, a CUDA error code otherwise
    */
   void preprocess_nested_columns(hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
                                  hostdevice_vector<gpu::PageInfo> &pages,
                                  hostdevice_vector<gpu::PageNestingInfo> &page_nesting_info,
-                                 std::vector<std::vector<std::pair<int, bool>>> &nested_sizes,
+                                 std::vector<std::vector<std::pair<size_type, bool>>> &nested_info,
                                  size_t min_row,
                                  size_t total_rows,
                                  cudaStream_t stream);

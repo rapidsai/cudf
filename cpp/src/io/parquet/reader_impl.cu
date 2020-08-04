@@ -839,9 +839,6 @@ void reader::impl::allocate_nesting_info(
 
   // copy nesting info to the device
   page_nesting_info.host_to_device(stream);
-
-  // we have also updated the pages, so copy/update them on the device
-  pages.host_to_device(stream);
 }
 
 /**
@@ -851,13 +848,13 @@ void reader::impl::preprocess_nested_columns(
   hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
   hostdevice_vector<gpu::PageInfo> &pages,
   hostdevice_vector<gpu::PageNestingInfo> &page_nesting_info,
-  std::vector<std::vector<std::pair<int, bool>>> &nested_sizes,
+  std::vector<std::vector<std::pair<size_type, bool>>> &nested_info,
   size_t min_row,
   size_t total_rows,
   cudaStream_t stream)
 {
   // preprocess per-nesting level sizes by page
-  CUDA_TRY(gpu::PreprocessColumnData(pages, chunks, nested_sizes, total_rows, min_row, stream));
+  CUDA_TRY(gpu::PreprocessColumnData(pages, chunks, nested_info, total_rows, min_row, stream));
 
   CUDA_TRY(cudaStreamSynchronize(stream));
 }
@@ -1055,9 +1052,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         auto col       = _selected_columns[i];
         auto &col_meta = row_group.columns[col.first].meta_data;
 
-        // the root schema (which in the case of nested types is different from the leaf schema).
-        // the # of rows in the row group is relative to the root
-        auto &root_schema = _metadata->get_column_schema(col.first);
         // the leaf schema represents the -values- encoded in the data, which in the case
         // of nested types, is different from the # of rows
         auto &leaf_schema = _metadata->get_column_leaf_schema(col.first);
