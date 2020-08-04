@@ -112,28 +112,16 @@ namespace cudf
       CUDF_EXPECTS(
         std::all_of(child_columns.begin(), 
                     child_columns.end(), 
-                    [&](auto const& i){ return num_rows == i->size(); }), 
+                    [&](auto const& child_col){ return num_rows == child_col->size(); }), 
         "Child columns must have the same number of rows as the Struct column.");
 
       if (!null_mask.is_empty())
       {
-        std::for_each(
-          child_columns.begin(),
-          child_columns.end(),
-          [& null_mask,
-             null_count,
-             stream,
-             mr
-          ](auto & p_child) {
-            superimpose_parent_nullmask(
-              static_cast<bitmask_type const*>(null_mask.data()), 
-              null_mask.size(), 
-              null_count, 
-              *p_child, 
-              stream, 
-              mr);
-          }
-        );
+        for (auto& child : child_columns) {
+          superimpose_parent_nullmask(
+            static_cast<bitmask_type const*>(null_mask.data()), null_mask.size(), 
+            null_count, *child, stream, mr);
+        }
       }
 
       return std::make_unique<column>(

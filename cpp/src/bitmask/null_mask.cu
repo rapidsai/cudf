@@ -371,7 +371,7 @@ struct to_word_index : public thrust::unary_function<size_type, size_type> {
 
 namespace detail {
 
-// Bitwise AND of the masks
+// Inplace Bitwise AND of the masks
 void inplace_bitmask_and(bitmask_type* dest_mask,
                          std::vector<bitmask_type const *> const &masks,
                          std::vector<size_type> const &begin_bits,
@@ -411,12 +411,6 @@ rmm::device_buffer bitmask_and(std::vector<bitmask_type const *> const &masks,
                                cudaStream_t stream,
                                rmm::mr::device_memory_resource *mr)
 {
-  CUDF_EXPECTS(std::all_of(begin_bits.begin(), begin_bits.end(), [](auto b) { return b >= 0; }),
-               "Invalid range.");
-  CUDF_EXPECTS(mask_size > 0, "Invalid bit range.");
-  CUDF_EXPECTS(std::all_of(masks.begin(), masks.end(), [](auto p) { return p != nullptr; }),
-               "Mask pointer cannot be null");
-
   rmm::device_buffer dest_mask{};
   auto num_bytes = bitmask_allocation_size_bytes(mask_size);
 
