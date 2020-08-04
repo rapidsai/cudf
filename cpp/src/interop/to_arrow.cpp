@@ -93,7 +93,6 @@ struct dispatch_to_arrow {
                                                                cudaStream_t stream)
   {
     std::vector<std::shared_ptr<arrow::Array>> child_arrays;
-    std::cout<<"RGSL  :Child arrays are "<< input_view.num_children()<< std::endl;
     std::vector<size_type> child_indices(input_view.num_children());
     std::iota(child_indices.begin(), child_indices.end(), 0);
     std::transform(child_indices.begin(),
@@ -150,22 +149,23 @@ template <>
 std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::string_view>(
   column_view input, cudf::type_id id, arrow::MemoryPool* ar_mr, cudaStream_t stream)
 {
-  std::cout<<"RGSL : Coming to string "<<std::endl;
   std::unique_ptr<column> tmp_column = nullptr;
-  if ((input.offset() != 0) or ((input.num_children()==2) and (input.child(0).size() - 1 != input.size()))) {
+  if ((input.offset() != 0) or
+      ((input.num_children() == 2) and (input.child(0).size() - 1 != input.size()))) {
     tmp_column = std::make_unique<cudf::column>(input);
   }
 
   column_view input_view = (tmp_column != nullptr) ? tmp_column->view() : input;
   auto child_arrays      = fetch_child_array(input_view, ar_mr, stream);
-  std::cout<<"RGSL : Get child arrays "<<std::endl;
   if (child_arrays.size() == 0) {
     std::shared_ptr<arrow::Buffer> tmp_offset_buffer;
     // Empty string will have only one value in offset of 4 bytes
     int offset = 0;
-    CUDF_EXPECTS(arrow::AllocateBuffer(ar_mr, 4, &tmp_offset_buffer).ok(), "Failed to allocate buffer");
+    CUDF_EXPECTS(arrow::AllocateBuffer(ar_mr, 4, &tmp_offset_buffer).ok(),
+                 "Failed to allocate buffer");
     std::shared_ptr<arrow::Buffer> tmp_data_buffer;
-    CUDF_EXPECTS(arrow::AllocateBuffer(ar_mr, 0, &tmp_data_buffer).ok(), "Failed to allocate buffer");
+    CUDF_EXPECTS(arrow::AllocateBuffer(ar_mr, 0, &tmp_data_buffer).ok(),
+                 "Failed to allocate buffer");
 
     return std::make_shared<arrow::StringArray>(0, tmp_offset_buffer, tmp_data_buffer);
   }

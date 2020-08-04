@@ -25,6 +25,22 @@
 #include <tests/utilities/type_lists.hpp>
 
 struct MaskToBools : public cudf::test::BaseFixture {
+  cudf::test::fixed_width_column_wrapper<bool> col_data{{false,
+                                                         true,
+                                                         false,
+                                                         true,
+                                                         false,
+                                                         true,
+                                                         false,
+                                                         true,
+                                                         true,
+                                                         false,
+                                                         true,
+                                                         false,
+                                                         true,
+                                                         false,
+                                                         true,
+                                                         false}};
 };
 
 TEST_F(MaskToBools, BasicTest)
@@ -32,22 +48,7 @@ TEST_F(MaskToBools, BasicTest)
   auto data  = std::vector<uint8_t>{170, 85};
   auto input = rmm::device_buffer(data.data(), sizeof(uint8_t) * data.size());
 
-  auto expected = cudf::test::fixed_width_column_wrapper<bool>{{false,
-                                                                true,
-                                                                false,
-                                                                true,
-                                                                false,
-                                                                true,
-                                                                false,
-                                                                true,
-                                                                true,
-                                                                false,
-                                                                true,
-                                                                false,
-                                                                true,
-                                                                false,
-                                                                true,
-                                                                false}};
+  auto const& expected = this->col_data;
 
   auto out = cudf::mask_to_bools(static_cast<const cudf::bitmask_type*>(input.data()), 0, 16);
 
@@ -59,23 +60,8 @@ TEST_F(MaskToBools, SlicedTest)
   auto data  = std::vector<uint8_t>{170, 85};
   auto input = rmm::device_buffer(data.data(), sizeof(uint8_t) * data.size());
 
-  auto col      = cudf::test::fixed_width_column_wrapper<bool>{{false,
-                                                           true,
-                                                           false,
-                                                           true,
-                                                           false,
-                                                           true,
-                                                           false,
-                                                           true,
-                                                           true,
-                                                           false,
-                                                           true,
-                                                           false,
-                                                           true,
-                                                           false,
-                                                           true,
-                                                           false}};
-  auto expected = cudf::detail::slice(static_cast<cudf::column_view>(col), 5, 5 + 7);
+  auto const& col = this->col_data;
+  auto expected   = cudf::detail::slice(static_cast<cudf::column_view>(col), 5, 5 + 7);
 
   auto out = cudf::mask_to_bools(static_cast<const cudf::bitmask_type*>(input.data()), 5, 7);
 
@@ -95,23 +81,8 @@ TEST_F(MaskToBools, DataWithZeroLength)
   auto data  = std::vector<uint8_t>{170, 85};
   auto input = rmm::device_buffer(data.data(), sizeof(uint8_t) * data.size());
 
-  auto col      = cudf::test::fixed_width_column_wrapper<bool>{{false,
-                                                           true,
-                                                           false,
-                                                           true,
-                                                           false,
-                                                           true,
-                                                           false,
-                                                           true,
-                                                           true,
-                                                           false,
-                                                           true,
-                                                           false,
-                                                           true,
-                                                           false,
-                                                           true,
-                                                           false}};
-  auto expected = cudf::detail::slice(static_cast<cudf::column_view>(col), 0, 0);
+  auto const& col = this->col_data;
+  auto expected   = cudf::detail::slice(static_cast<cudf::column_view>(col), 0, 0);
 
   auto out = cudf::mask_to_bools(static_cast<const cudf::bitmask_type*>(input.data()), 0, 0);
 

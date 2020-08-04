@@ -115,7 +115,7 @@ std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> encode(
  * @brief Creates a boolean column from given bitmask.
  *
  * Each bit represents one value, 0 - false and 1 - true.
- * Its user's responsibility to make sure the bitmask agrees
+ * It is user's responsibility to make sure the bitmask agrees
  * with given offset and length.
  *
  * Examples:
@@ -127,8 +127,8 @@ std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> encode(
  * @param bitmask A device pointer to the bitmask which needs to be converted
  * @param offset position of the bit from which the conversion should start
  * @param length Number of bits needs to be converted from offset position
- *
  * @param mr Device memory resource used to allocate the returned columns's device memory
+ * @return A boolean column representing the given mask from [offset, offset+length).
  */
 std::unique_ptr<column> mask_to_bools(
   bitmask_type const* bitmask,

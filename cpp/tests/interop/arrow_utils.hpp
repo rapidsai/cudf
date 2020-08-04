@@ -75,7 +75,6 @@ get_arrow_array(std::initializer_list<std::string> elements,
   arrow::StringBuilder string_builder;
 
   string_builder.AppendValues(elements, valid_bytes.data());
-  // string_builder.AppendValues(elements);
   CUDF_EXPECTS(string_builder.Finish(&string_array).ok(), "Failed to create arrow string array");
 
   return string_array;
