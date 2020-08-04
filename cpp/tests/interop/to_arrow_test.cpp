@@ -44,6 +44,9 @@ std::unique_ptr<cudf::table> get_cudf_table()
       .release());
   auto col4 = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 5, 2, 7}, {1, 0, 1, 1, 1});
   columns.emplace_back(std::move(cudf::dictionary::encode(col4)));
+  columns.emplace_back(
+    cudf::test::fixed_width_column_wrapper<bool>({true, false, true, false, true}, {1, 0, 1, 1, 0})
+      .release());
   // columns.emplace_back(cudf::test::lists_column_wrapper<int>({{1, 2}, {3, 4}, {}, {6}, {7, 8,
   // 9}}).release());
   return std::make_unique<cudf::table>(std::move(columns));
@@ -56,6 +59,7 @@ std::shared_ptr<arrow::Table> get_arrow_table()
   auto string_array =
     get_arrow_array<cudf::string_view>({"fff", "aaa", "", "fff", "ccc"}, {1, 1, 1, 0, 1});
   auto dict_array = get_arrow_dict_array({1, 2, 5, 7}, {0, 1, 2, 1, 3}, {1, 0, 1, 1, 1});
+  auto boolarray  = get_arrow_array<bool>({true, false, true, false, true}, {1, 0, 1, 1, 0});
   // auto list_array = get_arrow_list_array({1, 2, 3, 4, 5, 6, 7, 8, 9}, {0, 2, 4, 5, 6, 9}, {1, 1,
   // 0, 1, 1});
 
@@ -67,12 +71,13 @@ std::shared_ptr<arrow::Table> get_arrow_table()
     arrow::field("a", int32array->type()),
     arrow::field("b", int64array->type()),
     arrow::field("c", string_array->type()),
-    arrow::field("d", dict_array->type())};
+    arrow::field("d", dict_array->type()),
+    arrow::field("e", boolarray->type())};
 
   auto schema = std::make_shared<arrow::Schema>(schema_vector);
   // return arrow::Table::Make(schema, {int32array, int64array, string_array, dict_array,
   // list_array});
-  return arrow::Table::Make(schema, {int32array, int64array, string_array, dict_array});
+  return arrow::Table::Make(schema, {int32array, int64array, string_array, dict_array, boolarray});
 }
 
 TEST_F(CUDFToArrowTest, DateTimeTable)
@@ -133,7 +138,7 @@ TEST_P(CUDFToArrowTestSlice, SliceTest)
 
   auto sliced_cudf_table    = cudf::slice(cudf_table->view(), {start, end})[0];
   auto expected_arrow_table = arrow_table->Slice(start, end - start);
-  auto got_arrow_table      = cudf::to_arrow(sliced_cudf_table, {"a", "b", "c", "d"});
+  auto got_arrow_table      = cudf::to_arrow(sliced_cudf_table, {"a", "b", "c", "d", "e"});
 
   ASSERT_EQ(expected_arrow_table->Equals(*got_arrow_table, true), true);
 }

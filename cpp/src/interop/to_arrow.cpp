@@ -121,18 +121,54 @@ struct dispatch_to_arrow {
 };
 
 template <>
+std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<bool>(column_view input,
+                                                                  cudf::type_id id,
+                                                                  arrow::MemoryPool* ar_mr,
+                                                                  cudaStream_t stream)
+{
+  auto bitmask = bools_to_mask(input, rmm::mr::get_default_resource(), stream);
+
+  std::shared_ptr<arrow::Buffer> data_buffer;
+
+  CUDF_EXPECTS(
+    arrow::AllocateBuffer(ar_mr, static_cast<int64_t>(bitmask.first->size()), &data_buffer).ok(),
+    "Failed to allocate Arrow buffer for data");
+  CUDA_TRY(cudaMemcpyAsync(data_buffer->mutable_data(),
+                           bitmask.first->data(),
+                           bitmask.first->size(),
+                           cudaMemcpyDeviceToHost,
+                           stream));
+  return to_arrow_array(id,
+                        static_cast<int64_t>(input.size()),
+                        data_buffer,
+                        fetch_mask_buffer(input, ar_mr, stream),
+                        static_cast<int64_t>(input.null_count()));
+}
+
+template <>
 std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::string_view>(
   column_view input, cudf::type_id id, arrow::MemoryPool* ar_mr, cudaStream_t stream)
 {
   std::unique_ptr<column> tmp_column = nullptr;
-  if ((input.offset() != 0) or (input.child(0).size() - 1 != input.size())) {
+  if ((input.offset() != 0) or
+      ((input.num_children() == 2) and (input.child(0).size() - 1 != input.size()))) {
     tmp_column = std::make_unique<cudf::column>(input);
   }
 
   column_view input_view = (tmp_column != nullptr) ? tmp_column->view() : input;
   auto child_arrays      = fetch_child_array(input_view, ar_mr, stream);
   if (child_arrays.size() == 0) {
-    return std::make_shared<arrow::StringArray>(0, nullptr, nullptr);
+    std::shared_ptr<arrow::Buffer> tmp_offset_buffer;
+    // Empty string will have only one value in offset of 4 bytes
+    CUDF_EXPECTS(arrow::AllocateBuffer(ar_mr, 4, &tmp_offset_buffer).ok(),
+                 "Failed to allocate buffer");
+    tmp_offset_buffer->mutable_data()[0] = 0;
+
+    std::shared_ptr<arrow::Buffer> tmp_data_buffer;
+    CUDF_EXPECTS(arrow::AllocateBuffer(ar_mr, 0, &tmp_data_buffer).ok(),
+                 "Failed to allocate buffer");
+
+    return std::make_shared<arrow::StringArray>(0, tmp_offset_buffer, tmp_data_buffer);
   }
   auto offset_buffer = child_arrays[0]->data()->buffers[1];
   auto data_buffer   = child_arrays[1]->data()->buffers[1];

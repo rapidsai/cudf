@@ -133,16 +133,23 @@ TEST_F(ArrowToCUDFTest, ChunkedArray)
   auto string_chunked_array = std::make_shared<arrow::ChunkedArray>(
     std::vector<std::shared_ptr<arrow::Array>>{string_array_1, string_array_2});
   auto dict_chunked_array = std::make_shared<arrow::ChunkedArray>(dict_array);
+  auto boolean_array = get_arrow_array<bool>({true, false, true, false, true}, {1, 0, 1, 1, 0});
+  auto boolean_chunked_array = std::make_shared<arrow::ChunkedArray>(boolean_array);
 
   std::vector<std::shared_ptr<arrow::Field>> schema_vector(
     {arrow::field("a", int32_chunked_array->type()),
      arrow::field("b", int64array->type()),
      arrow::field("c", string_array_1->type()),
-     arrow::field("d", dict_chunked_array->type())});
+     arrow::field("d", dict_chunked_array->type()),
+     arrow::field("e", boolean_chunked_array->type())});
   auto schema = std::make_shared<arrow::Schema>(schema_vector);
 
-  auto arrow_table = arrow::Table::Make(
-    schema, {int32_chunked_array, int64_chunked_array, string_chunked_array, dict_chunked_array});
+  auto arrow_table = arrow::Table::Make(schema,
+                                        {int32_chunked_array,
+                                         int64_chunked_array,
+                                         string_chunked_array,
+                                         dict_chunked_array,
+                                         boolean_chunked_array});
 
   auto expected_cudf_table = get_cudf_table();
 
