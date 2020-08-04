@@ -220,7 +220,7 @@ class Consumer(CudfKafkaClient):
 
         try:
             offsets = self.kafka_meta_client.get_watermark_offset(
-                topic=partition.topic,
+                topic=partition.topic.encode(),
                 partition=partition.partition,
                 timeout=timeout,
                 cached=cached,
