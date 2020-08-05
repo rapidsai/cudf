@@ -169,6 +169,7 @@
 - PR #5825 Enable ORC statistics generation by default
 - PR #5832 Make dictionary_wrapper constructor from a value explicit
 - PR #5833 Pin `dask` and `distributed` version to `2.22.0`
+- PR #5856 Bump Pandas support to >=1.0,<1.2
 
 ## Bug Fixes
 
