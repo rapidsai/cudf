@@ -24,8 +24,6 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <memory>
 
-// #include "../tests/utilities/column_utilities.hpp"
-
 namespace cudf {
 namespace lists {
 namespace detail {
