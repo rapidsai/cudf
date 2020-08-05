@@ -4331,7 +4331,8 @@ class StringMethods(ColumnMethodsMixin):
             )
 
         return self._return_or_inplace(
-            cpp_edit_distance(self._column, targets_column), **kwargs,
+            cpp_edit_distance(self._column, targets_column), **kwargs
+        )
 
 
 def _massage_string_arg(value, name, allow_col=False):
