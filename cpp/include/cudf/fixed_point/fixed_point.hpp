@@ -39,7 +39,7 @@ namespace numeric {
 template <typename T>
 struct strong_typedef {
   T _t;
-  CUDA_HOST_DEVICE_CALLABLE explicit strong_typedef(T t) : _t(t) {}
+  CUDA_HOST_DEVICE_CALLABLE explicit constexpr strong_typedef(T t) : _t(t) {}
   CUDA_HOST_DEVICE_CALLABLE operator T() const { return _t; }
 };
 /** \endcond */
