@@ -61,31 +61,21 @@ class string_view;
 class list_view;
 
 class scalar;
-template <typename T>
-class numeric_scalar;
 
-template <typename T>
-class fixed_point_scalar;
-
+// clang-format off
+class list_scalar;
 class string_scalar;
-template <typename T>
-class timestamp_scalar;
-template <typename T>
-class duration_scalar;
-
-template <typename T>
-class numeric_scalar_device_view;
-
-template <typename T>
-class fixed_point_scalar_device_view;
+template <typename T> class numeric_scalar;
+template <typename T> class fixed_point_scalar;
+template <typename T> class timestamp_scalar;
+template <typename T> class duration_scalar;
 
 class string_scalar_device_view;
-template <typename T>
-class timestamp_scalar_device_view;
-template <typename T>
-class duration_scalar_device_view;
-
-class list_scalar;
+template <typename T> class numeric_scalar_device_view;
+template <typename T> class fixed_point_scalar_device_view;
+template <typename T> class timestamp_scalar_device_view;
+template <typename T> class duration_scalar_device_view;
+// clang-format on
 
 class table;
 class table_view;
