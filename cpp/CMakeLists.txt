@@ -567,6 +567,7 @@ add_library(cudf
             src/text/edit_distance.cu
             src/text/generate_ngrams.cu
             src/text/normalize.cu
+            src/text/stemmer.cu
             src/text/tokenize.cu
             src/text/ngrams_tokenize.cu
             src/text/replace.cu
