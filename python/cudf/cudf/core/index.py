@@ -716,9 +716,18 @@ class Index(Frame, Serializable):
                 difference = difference.astype(self.dtype)
 
         if sort is None:
-            _, inds = difference._values.sort_by_values()
-            return as_index(difference.take(inds))
+            return difference.sort_values()
+
         return difference
+
+    def _apply_op(self, fn, other=None):
+
+        idx_series = cudf.Series(self, name=self.name)
+        op = getattr(idx_series, fn)
+        if other is not None:
+            return as_index(op(other))
+        else:
+            return as_index(op())
 
     def sort_values(self, return_indexer=False, ascending=True, key=None):
         """
