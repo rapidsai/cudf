@@ -139,6 +139,54 @@ CUDA_HOST_DEVICE_CALLABLE constexpr void ast_operator_dispatcher_data_type(ast_o
     case ast_operator::DIV:
       f.template operator()<ast_operator::DIV>(std::forward<Ts>(args)...);
       break;
+    case ast_operator::TRUE_DIV:
+      f.template operator()<ast_operator::TRUE_DIV>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::FLOOR_DIV:
+      f.template operator()<ast_operator::FLOOR_DIV>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::MOD:
+      f.template operator()<ast_operator::MOD>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::PYMOD:
+      f.template operator()<ast_operator::PYMOD>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::POW:
+      f.template operator()<ast_operator::POW>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::EQUAL:
+      f.template operator()<ast_operator::EQUAL>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::NOT_EQUAL:
+      f.template operator()<ast_operator::NOT_EQUAL>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::LESS:
+      f.template operator()<ast_operator::LESS>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::GREATER:
+      f.template operator()<ast_operator::GREATER>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::LESS_EQUAL:
+      f.template operator()<ast_operator::LESS_EQUAL>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::GREATER_EQUAL:
+      f.template operator()<ast_operator::GREATER_EQUAL>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::BITWISE_AND:
+      f.template operator()<ast_operator::BITWISE_AND>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::BITWISE_OR:
+      f.template operator()<ast_operator::BITWISE_OR>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::BITWISE_XOR:
+      f.template operator()<ast_operator::BITWISE_XOR>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::LOGICAL_AND:
+      f.template operator()<ast_operator::LOGICAL_AND>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::LOGICAL_OR:
+      f.template operator()<ast_operator::LOGICAL_OR>(std::forward<Ts>(args)...);
+      break;
     default:
       // TODO: Error handling?
       break;
@@ -167,7 +215,6 @@ struct operator_functor<ast_operator::SUB> {
   }
 };
 
-/*
 template <>
 struct operator_functor<ast_operator::MUL> {
   template <typename LHS, typename RHS>
@@ -187,6 +234,28 @@ struct operator_functor<ast_operator::DIV> {
 };
 
 template <>
+struct operator_functor<ast_operator::TRUE_DIV> {
+  template <typename LHS, typename RHS>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs)
+    -> decltype(static_cast<double>(lhs) / static_cast<double>(rhs))
+  {
+    return static_cast<double>(lhs) / static_cast<double>(rhs);
+  }
+};
+
+template <>
+struct operator_functor<ast_operator::FLOOR_DIV> {
+  template <typename LHS, typename RHS>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs)
+    -> decltype(floor(static_cast<double>(lhs) / static_cast<double>(rhs)))
+  {
+    return floor(static_cast<double>(lhs) / static_cast<double>(rhs));
+  }
+};
+
+/* TODO: MOD, PYMOD, POW */
+
+template <>
 struct operator_functor<ast_operator::EQUAL> {
   template <typename LHS, typename RHS>
   CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs) -> decltype(lhs == rhs)
@@ -194,7 +263,96 @@ struct operator_functor<ast_operator::EQUAL> {
     return lhs == rhs;
   }
 };
-*/
+
+template <>
+struct operator_functor<ast_operator::NOT_EQUAL> {
+  template <typename LHS, typename RHS>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs) -> decltype(lhs != rhs)
+  {
+    return lhs != rhs;
+  }
+};
+
+template <>
+struct operator_functor<ast_operator::LESS> {
+  template <typename LHS, typename RHS>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs) -> decltype(lhs < rhs)
+  {
+    return lhs < rhs;
+  }
+};
+
+template <>
+struct operator_functor<ast_operator::GREATER> {
+  template <typename LHS, typename RHS>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs) -> decltype(lhs > rhs)
+  {
+    return lhs > rhs;
+  }
+};
+
+template <>
+struct operator_functor<ast_operator::LESS_EQUAL> {
+  template <typename LHS, typename RHS>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs) -> decltype(lhs <= rhs)
+  {
+    return lhs <= rhs;
+  }
+};
+
+template <>
+struct operator_functor<ast_operator::GREATER_EQUAL> {
+  template <typename LHS, typename RHS>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs) -> decltype(lhs >= rhs)
+  {
+    return lhs >= rhs;
+  }
+};
+
+template <>
+struct operator_functor<ast_operator::BITWISE_AND> {
+  template <typename LHS, typename RHS>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs) -> decltype(lhs & rhs)
+  {
+    return lhs & rhs;
+  }
+};
+
+template <>
+struct operator_functor<ast_operator::BITWISE_OR> {
+  template <typename LHS, typename RHS>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs) -> decltype(lhs | rhs)
+  {
+    return lhs | rhs;
+  }
+};
+
+template <>
+struct operator_functor<ast_operator::BITWISE_XOR> {
+  template <typename LHS, typename RHS>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs) -> decltype(lhs ^ rhs)
+  {
+    return lhs ^ rhs;
+  }
+};
+
+template <>
+struct operator_functor<ast_operator::LOGICAL_AND> {
+  template <typename LHS, typename RHS>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs) -> decltype(lhs && rhs)
+  {
+    return lhs && rhs;
+  }
+};
+
+template <>
+struct operator_functor<ast_operator::LOGICAL_OR> {
+  template <typename LHS, typename RHS>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs) -> decltype(lhs || rhs)
+  {
+    return lhs || rhs;
+  }
+};
 
 namespace detail {
 
