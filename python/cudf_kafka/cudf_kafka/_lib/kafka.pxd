@@ -41,7 +41,7 @@ cdef extern from "kafka_consumer.hpp" \
 
         void unsubscribe() except +
 
-        void close(int timeout) except +
+        void close(int32_t timeout) except +
 
 cdef class KafkaDatasource(Datasource):
 
@@ -70,4 +70,4 @@ cdef class KafkaDatasource(Datasource):
 
     cpdef void unsubscribe(self)
 
-    cpdef void close(self, int timeout)
+    cpdef void close(self, int32_t timeout)
