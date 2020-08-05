@@ -14,5 +14,6 @@ The following table lists all of cudf types. For methods requiring dtype argumen
 
 .. csv-table:: Supported dtypes in cudf
    :file: dtypes.csv
-   :widths: 30, 30, 40, 50
+   :align: center
+   :widths: 30, 5, 30, 40, 50
    :header-rows: 1
