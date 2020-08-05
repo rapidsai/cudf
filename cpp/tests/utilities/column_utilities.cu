@@ -444,6 +444,23 @@ struct column_view_printer {
     this->template operator()<cudf::string_view>(*col_as_strings, out, indent);
   }
 
+  template <typename Element, typename std::enable_if_t<cudf::is_fixed_point<Element>()>* = nullptr>
+  void operator()(cudf::column_view const& col,
+                  std::vector<std::string>& out,
+                  std::string const& indent)
+  {
+    auto const h_data = cudf::test::to_host<Element>(col);
+
+    out.resize(col.size());
+    std::transform(thrust::make_counting_iterator(size_type{0}),
+                   thrust::make_counting_iterator(col.size()),
+                   out.begin(),
+                   [&](auto idx) {
+                     auto const d = static_cast<double>(h_data.first[idx]);
+                     return std::to_string(d);
+                   });
+  }
+
   template <typename Element,
             typename std::enable_if_t<std::is_same<Element, cudf::string_view>::value>* = nullptr>
   void operator()(cudf::column_view const& col,

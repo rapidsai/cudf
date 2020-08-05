@@ -50,14 +50,22 @@
 - PR #5658 Add `filter_tokens` nvtext API
 - PR #5666 Add `filter_characters_of_type` strings API
 - PR #5673 Always build and test with per-thread default stream enabled in the GPU CI build
+- PR #5704 Initial `fixed_point` Column Support
 - PR #5716 Add `double_type_dispatcher` to libcudf
 - PR #5739 Add `nvtext::detokenize` API
 - PR #5645 Enforce pd.NA and Pandas nullable dtype parity
 - PR #5729 Create nvtext normalize_characters API from the subword_tokenize internal function
 - PR #5572 Add `cudf::encode` API.
+- PR #5767 Add `nvtext::porter_stemmer_measure` and `nvtext::is_letter` APIs
+- PR #5753 Add `cudf::lists::extract_list_element` API
 - PR #5568 Add support for `Series.keys()` and `DataFrame.keys()`
+- PR #5782 Add Kafka support to custreamz
 - PR #5642 Add `GroupBy.groups()`
+- PR #5789 Add groupby support for duration types
 - PR #5810 Make Cython subdirs packages and simplify package_data
+- PR #5817 Enable more `fixed_point` unit tests by introducing "scale-less" constructor
+- PR #5822 Add `cudf_kafka` to `custreamz` run time conda dependency and fix bash syntax issue
+- PR #5851 Add support for `Index.sort_values`
 
 ## Improvements
 
@@ -84,6 +92,7 @@
 - PR #5373 Remove legacy nvstrings/nvcategory/nvtext
 - PR #5362 Remove dependency on `rmm._DevicePointer`
 - PR #5302 Add missing comparison operators to `fixed_point` type
+- PR #5824 Mark host frames as not needing to be writeable
 - PR #5354 Split Dask deserialization methods by dask/cuda
 - PR #5363 Handle `0-dim` inputs while broadcasting to a column
 - PR #5396 Remove legacy tests env variable from build.sh
@@ -159,6 +168,11 @@
 - PR #5800 Expose arrow datasource instead of directly taking a RandomAccessFile
 - PR #5795 Clarify documentation on Boost dependency
 - PR #5803 Add in Java support for the repeat command
+- PR #5806 Expose the error message from native exception when throwing an OOM exception
+- PR #5825 Enable ORC statistics generation by default
+- PR #5832 Make dictionary_wrapper constructor from a value explicit
+- PR #5833 Pin `dask` and `distributed` version to `2.22.0`
+- PR #5854 Raise informative error in `DataFrame.iterrows` and `DataFrame.itertuples`
 
 ## Bug Fixes
 
@@ -233,10 +247,16 @@
 - PR #5763 Update Java slf4j version to match Spark 3.0
 - PR #5816 Always preserve list column hierarchies across operations.
 - PR #5766 Fix issue related to `iloc` and slicing a `DataFrame`
+- PR #5827 Revert fallback for `tolist` being absent
 - PR #5774 Add fallback for when `tolist` is absent
 - PR #5319 Disallow SUM and specialize MEAN of timestamp types
 - PR #5797 Fix a missing data issue in some Parquet files
 - PR #5787 Fix column create from dictionary column view
+- PR #5813 Fix normalizer exception with all-null strings column
+- PR #5820 Fix ListColumn.to_arrow for all null case
+- PR #5837 Bash syntax error in prebuild.sh preventing `cudf_kafka` and `libcudf_kafka` from being uploaded to Anaconda
+- PR #5841 Added custreamz functions that were missing in interface layer
+- PR #5849 Modify custreamz api to integrate seamlessly with python streamz
 
 
 # cuDF 0.14.0 (03 Jun 2020)
