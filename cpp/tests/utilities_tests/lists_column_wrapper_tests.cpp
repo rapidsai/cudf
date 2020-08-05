@@ -1502,7 +1502,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, LargeListsOfStructsWithValidity)
   auto num_list_rows = num_struct_rows/50;
   auto list_offset_iterator = test::make_counting_transform_iterator(0, [](auto i){ return i*50; });
   auto list_offset_column = test::fixed_width_column_wrapper<size_type>(list_offset_iterator, list_offset_iterator+num_list_rows+1).release();
-  auto list_column = make_lists_column(num_list_rows, std::move(list_offset_column), std::move(struct_column), cudf::UNKNOWN_NULL_COUNT, {});
+  auto lists_column = make_lists_column(num_list_rows, std::move(list_offset_column), std::move(struct_column), cudf::UNKNOWN_NULL_COUNT, {});
 
   // List construction succeeded.
   // Verify that the child is unchanged.
@@ -1520,12 +1520,8 @@ TYPED_TEST(ListColumnWrapperTestTyped, LargeListsOfStructsWithValidity)
     std::vector<bool>(struct_validity_iterator, struct_validity_iterator+num_struct_rows)
   }.release();
   
-  /*
-
-
   cudf::test::expect_columns_equal(
     *expected_struct_column,
     lists_column_view(*lists_column).child()
   );
-  */
 }
