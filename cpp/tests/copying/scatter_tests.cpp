@@ -302,7 +302,7 @@ template <typename T>
 class ScatterDataTypeTests : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(ScatterDataTypeTests, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_CASE(ScatterDataTypeTests, cudf::test::FixedWidthTypes);
 
 // Empty scatter map returns copy of input
 TYPED_TEST(ScatterDataTypeTests, EmptyScatterMap)
