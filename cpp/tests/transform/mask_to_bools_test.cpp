@@ -25,22 +25,6 @@
 #include <tests/utilities/type_lists.hpp>
 
 struct MaskToBools : public cudf::test::BaseFixture {
-  cudf::test::fixed_width_column_wrapper<bool> col_data{{false,
-                                                         true,
-                                                         false,
-                                                         true,
-                                                         false,
-                                                         true,
-                                                         false,
-                                                         true,
-                                                         true,
-                                                         false,
-                                                         true,
-                                                         false,
-                                                         true,
-                                                         false,
-                                                         true,
-                                                         false}};
 };
 
 TEST_F(MaskToBools, NullDataWithZeroLength)
