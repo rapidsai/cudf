@@ -76,9 +76,23 @@ TEST_F(MaskToBools, NullDataWithZeroLength)
   cudf::test::expect_columns_equal(expected, out->view());
 }
 
+TEST_F(MaskToBools, NullDataWithNonZeroLength)
+{
+  auto expected = cudf::test::fixed_width_column_wrapper<bool>({});
+
+  EXPECT_THROW(cudf::mask_to_bools(nullptr, 0, 2), cudf::logic_error);
+}
+
+TEST_F(MaskToBools, ImproperBitRange)
+{
+  auto expected = cudf::test::fixed_width_column_wrapper<bool>({});
+
+  EXPECT_THROW(cudf::mask_to_bools(nullptr, 2, 1), cudf::logic_error);
+}
+
 TEST_F(MaskToBools, DataWithZeroLength)
 {
-  auto data  = std::vector<uint8_t>{170, 85};
+  auto data  = std::vector<uint8_t>{0b10101010, 0b01010101};
   auto input = rmm::device_buffer(data.data(), sizeof(uint8_t) * data.size());
 
   auto const& col = this->col_data;
@@ -88,3 +102,36 @@ TEST_F(MaskToBools, DataWithZeroLength)
 
   cudf::test::expect_columns_equal(expected, out->view());
 }
+
+struct MaskToBoolsTest
+  : public MaskToBools,
+    public ::testing::WithParamInterface<std::tuple<cudf::size_type, cudf::size_type>> {
+};
+
+TEST_P(MaskToBoolsTest, LargeDataSizeTest)
+{
+  auto data                       = std::vector<bool>(10000);
+  cudf::size_type const begin_bit = std::get<0>(GetParam());
+  cudf::size_type const end_bit   = std::get<1>(GetParam());
+  std::transform(data.cbegin(), data.cend(), data.begin(), [](auto val) {
+    return rand() % 2 == 0 ? true : false;
+  });
+
+  auto col      = cudf::test::fixed_width_column_wrapper<bool>(data.begin(), data.end());
+  auto expected = cudf::detail::slice(static_cast<cudf::column_view>(col), begin_bit, end_bit);
+
+  auto mask = cudf::bools_to_mask(col);
+
+  auto out = cudf::mask_to_bools(
+    static_cast<const cudf::bitmask_type*>(mask.first->data()), begin_bit, end_bit);
+
+  cudf::test::expect_columns_equal(expected, out->view());
+}
+
+INSTANTIATE_TEST_CASE_P(MaskToBools,
+                        MaskToBoolsTest,
+                        ::testing::Values(std::make_tuple(0, 0),
+                                          std::make_tuple(0, 500),
+                                          std::make_tuple(500, 7456),
+                                          std::make_tuple(7456, 10000),
+                                          std::make_tuple(0, 10000)));

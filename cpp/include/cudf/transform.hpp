@@ -117,6 +117,9 @@ std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> encode(
  * Returns a `bool` for each bit in `[begin_bit, end_bit)`. If bit `i` in least-significant bit
  * numbering is set (1), then element `i` in the output is `true`, otherwise `false`.
  *
+ * @throws cudf::logic_error if `bitmask` is null and end_bit-begin_bit > 0
+ * @throws cudf::logic_error if begin_bit > end_bit
+ *
  * Examples:
  * @code{.pseudo}
  * input: {0b10101010}

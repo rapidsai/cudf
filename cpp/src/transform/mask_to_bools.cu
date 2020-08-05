@@ -31,27 +31,24 @@ std::unique_ptr<column> mask_to_bools(bitmask_type const* bitmask,
                                       cudaStream_t stream,
                                       rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS((begin_bit <= end_bit), "begin_bit should be less than or equal to end_bit");
-
   auto const length = end_bit - begin_bit;
-  if (length == 0)
-    return make_fixed_width_column(
-      data_type(type_id::BOOL8), 0, mask_state::UNALLOCATED, stream, mr);
-
-  CUDF_EXPECTS((bitmask != nullptr), "nullmask is null");
+  CUDF_EXPECTS(length >= 0, "begin_bit should be less than or equal to end_bit");
+  CUDF_EXPECTS((bitmask != nullptr) or (length == 0), "nullmask is null");
 
   auto out_col =
     make_fixed_width_column(data_type(type_id::BOOL8), length, mask_state::UNALLOCATED, stream, mr);
 
-  auto mutable_view = out_col->mutable_view();
+  if (length > 0) {
+    auto mutable_view = out_col->mutable_view();
 
-  thrust::transform(rmm::exec_policy(stream)->on(stream),
-                    thrust::make_counting_iterator<cudf::size_type>(begin_bit),
-                    thrust::make_counting_iterator<cudf::size_type>(end_bit),
-                    mutable_view.begin<bool>(),
-                    [bitmask] __device__(auto index) { return bit_is_set(bitmask, index); });
+    thrust::transform(rmm::exec_policy(stream)->on(stream),
+                      thrust::make_counting_iterator<cudf::size_type>(begin_bit),
+                      thrust::make_counting_iterator<cudf::size_type>(end_bit),
+                      mutable_view.begin<bool>(),
+                      [bitmask] __device__(auto index) { return bit_is_set(bitmask, index); });
+  }
 
-  return std::move(out_col);
+  return out_col;
 }
 }  // namespace detail
 
