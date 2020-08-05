@@ -5,6 +5,7 @@ import warnings
 from fsspec.core import get_fs_token_paths
 from pyarrow import parquet as pq
 from pyarrow.compat import guid
+from pyarrow import dataset as ds
 
 import cudf
 from cudf._lib import parquet as libparquet
@@ -203,6 +204,17 @@ def read_parquet(
                 "URL content-encoding decompression is not supported"
             )
         filepaths_or_buffers.append(tmp_source)
+    
+    if filters is not None:
+        if not isinstance(filters, ds.Expression):
+            filters = pq._filters_to_expression(filters)
+        
+        dataset = ds.dataset(filepaths_or_buffers, format="parquet")
+        row_groups_info = []
+        for fragment in dataset.get_fragments(filters):
+            for row_group_fragment in fragment.split_by_row_group(filters):
+                for row_group_info in row_group_fragment.row_groups:
+                    row_groups_info.append(row_group_info)
 
     if engine == "cudf":
         return libparquet.read_parquet(
