@@ -74,8 +74,8 @@ struct is_letter_fn {
     if (d_strings.is_null(idx)) return false;
     auto const d_str = d_strings.element<cudf::string_view>(idx);
     if (d_str.empty()) return false;
-    cudf::size_type position = position_itr[idx];
-    auto const length        = d_str.length();
+    auto const position = position_itr[idx];
+    auto const length   = d_str.length();
     if ((position >= length) || (position < -length)) return false;
     return is_consonant(d_str.begin() + ((position + length) % length))
              ? ltype == letter_type::CONSONANT
