@@ -221,8 +221,7 @@ class GroupBy(Serializable):
         """
         Return the number of unique values per group.
         """
-        # Pandas includes key columns for nunique:
-        return self.agg(dict.fromkeys(self.obj._data.keys(), "nunique"))
+        return self.agg("nunique")
 
     def serialize(self):
         header = {}
