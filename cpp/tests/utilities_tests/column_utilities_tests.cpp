@@ -44,7 +44,7 @@ template <typename T>
 struct ColumnUtilitiesTestFloatingPoint : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(ColumnUtilitiesTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_CASE(ColumnUtilitiesTest, cudf::test::FixedWidthTypes);
 TYPED_TEST_CASE(ColumnUtilitiesTestIntegral, cudf::test::IntegralTypes);
 TYPED_TEST_CASE(ColumnUtilitiesTestFloatingPoint, cudf::test::FloatingPointTypes);
 
