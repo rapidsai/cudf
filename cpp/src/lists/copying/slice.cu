@@ -28,26 +28,38 @@ std::unique_ptr<cudf::column> slice(lists_column_view const& lists,
   cudf::size_type end_offset{0};
   auto offsets = lists.offsets().data<cudf::size_type>();
 
-  CUDA_TRY(cudaMemcpyAsync(
-    &start_offset, offsets + start, sizeof(cudf::size_type), cudaMemcpyDeviceToHost, stream));
-  CUDA_TRY(cudaMemcpyAsync(
-    &end_offset, offsets + end, sizeof(cudf::size_type), cudaMemcpyDeviceToHost, stream));
+  CUDA_TRY(cudaMemcpyAsync(&start_offset,
+                           offsets + start + lists.offset(),
+                           sizeof(cudf::size_type),
+                           cudaMemcpyDeviceToHost,
+                           stream));
+  CUDA_TRY(cudaMemcpyAsync(&end_offset,
+                           offsets + end + lists.offset(),
+                           sizeof(cudf::size_type),
+                           cudaMemcpyDeviceToHost,
+                           stream));
 
   rmm::device_uvector<cudf::size_type> out_offsets(lists_count + 1, stream);
 
   thrust::transform(execpol->on(stream),
-                    offsets + start,
-                    offsets + end + 1,
+                    offsets + start + lists.offset(),
+                    offsets + end + 1 + lists.offset(),
                     out_offsets.data(),
                     [start_offset] __device__(cudf::size_type i) { return i - start_offset; });
 
   auto offsets_column = std::make_unique<cudf::column>(
     cudf::data_type{cudf::type_id::INT32}, lists_count + 1, out_offsets.release());
 
-  std::unique_ptr<cudf::column> child_column =
-    (lists.child().type() == cudf::data_type{type_id::LIST})
-      ? slice(lists_column_view(lists.child()), start_offset, end_offset, stream, mr)
-      : std::make_unique<cudf::column>(lists.child(), stream, mr);
+  std::vector<cudf::size_type> slice_indices{start_offset, end_offset};
+  std::unique_ptr<cudf::column> child_column;
+
+  if (lists.child().type() == cudf::data_type{type_id::LIST}) {
+    child_column = slice(lists_column_view(lists.child()), start_offset, end_offset, stream, mr);
+  } else {
+    auto child_without_offset = std::make_unique<cudf::column>(lists.child(), stream, mr);
+    child_column              = std::make_unique<cudf::column>(
+      cudf::detail::slice(child_without_offset->view(), slice_indices, stream).front());
+  }
 
   auto null_mask = cudf::copy_bitmask(lists.null_mask(), start_offset, end_offset, stream, mr);
 
