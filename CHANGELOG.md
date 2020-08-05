@@ -65,7 +65,6 @@
 - PR #5822 Add `cudf_kafka` to `custreamz` run time conda dependency and fix bash syntax issue
 - PR #5851 Add support for `Index.sort_values`
 
-
 ## Improvements
 
 - PR #5605 Automatically flush RMM allocate/free logs in JNI
