@@ -881,10 +881,11 @@ class ColumnBase(Column, Serializable):
         if is_categorical_dtype(dtype):
             return self.as_categorical_column(dtype, **kwargs)
         elif is_list_dtype(dtype):
-            if not is_list_dtype(self.dtype):
-                raise ValueError(f"Cannot cast list column to {dtype}")
-            else:
-                return self
+            if not self.dtype == dtype:
+                raise NotImplementedError(
+                    "Casting list columns not currently supported"
+                )
+            return self
         elif np.issubdtype(dtype, np.datetime64):
             return self.as_datetime_column(dtype, **kwargs)
         elif pd.api.types.pandas_dtype(dtype).type in (np.str_, np.object_):
