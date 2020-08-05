@@ -30,7 +30,7 @@ struct FixedWidthColumnWrapperTest : public cudf::test::BaseFixture,
   auto data_type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
-TYPED_TEST_CASE(FixedWidthColumnWrapperTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_CASE(FixedWidthColumnWrapperTest, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(FixedWidthColumnWrapperTest, EmptyIterator)
 {
