@@ -14,11 +14,20 @@
  * limitations under the License.
  */
 
+#pragma once
+
+#define _LIBCUDACXX_USE_CXX17_TYPE_TRAITS
+
+// Note: The <simt/*> versions are used in order for Jitify to work with our fixed_point type.
+//       Jitify is needed for several algorithms (binaryop, rolling, etc)
+#include <simt/limits>
+#include <simt/type_traits>  // add simt namespace
+
+#include <algorithm>
 #include <cassert>
 #include <cmath>
-#include <functional>
-#include <iostream>
-#include <limits>
+
+#include <string>
 
 //! `fixed_point` and supporting types
 namespace numeric {
@@ -51,13 +60,13 @@ enum class Radix : int32_t { BASE_2 = 2, BASE_10 = 10 };
 template <typename T>
 constexpr inline auto is_supported_representation_type()
 {
-  return std::is_same<T, int32_t>::value || std::is_same<T, int64_t>::value;
+  return simt::std::is_same<T, int32_t>::value || simt::std::is_same<T, int64_t>::value;
 }
 
 template <typename T>
 constexpr inline auto is_supported_construction_value_type()
 {
-  return std::is_integral<T>::value || std::is_floating_point<T>::value;
+  return simt::std::is_integral<T>::value || simt::std::is_floating_point<T>::value;
 }
 
 // Helper functions for `fixed_point` type
@@ -78,8 +87,8 @@ namespace detail {
 template <typename Rep,
           Radix Base,
           typename T,
-          typename std::enable_if_t<(std::is_same<int32_t, T>::value &&
-                                     is_supported_representation_type<Rep>())>* = nullptr>
+          typename simt::std::enable_if_t<(simt::std::is_same<int32_t, T>::value &&
+                                           is_supported_representation_type<Rep>())>* = nullptr>
 CUDA_HOST_DEVICE_CALLABLE Rep ipow(T exponent)
 {
   if (exponent == 0) return static_cast<Rep>(1);
@@ -200,7 +209,7 @@ CUDA_HOST_DEVICE_CALLABLE constexpr T shift(T const& val, scale_type const& scal
 template <typename Rep,
           Radix Rad,
           typename T,
-          typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
+          typename simt::std::enable_if_t<simt::std::is_integral<T>::value>* = nullptr>
 CUDA_HOST_DEVICE_CALLABLE auto shift_with_precise_round(T const& value, scale_type const& scale)
   -> Rep
 {
@@ -228,7 +237,7 @@ CUDA_HOST_DEVICE_CALLABLE auto shift_with_precise_round(T const& value, scale_ty
 template <typename Rep,
           Radix Rad,
           typename T,
-          typename std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
+          typename simt::std::enable_if_t<simt::std::is_floating_point<T>::value>* = nullptr>
 CUDA_HOST_DEVICE_CALLABLE auto shift_with_precise_round(T const& value, scale_type const& scale)
   -> Rep
 {
@@ -256,7 +265,7 @@ CUDA_HOST_DEVICE_CALLABLE auto shift_with_precise_round(T const& value, scale_ty
  * @tparam Rep The representation type (either `int32_t` or `int64_t`)
  */
 template <typename Rep,
-          typename std::enable_if_t<is_supported_representation_type<Rep>()>* = nullptr>
+          typename simt::std::enable_if_t<is_supported_representation_type<Rep>()>* = nullptr>
 struct scaled_integer {
   Rep value;
   scale_type scale;
@@ -286,8 +295,8 @@ class fixed_point {
    * @param scale The exponent that is applied to Rad to perform shifting
    */
   template <typename T,
-            typename std::enable_if_t<is_supported_construction_value_type<T>() &&
-                                      is_supported_representation_type<Rep>()>* = nullptr>
+            typename simt::std::enable_if_t<is_supported_construction_value_type<T>() &&
+                                            is_supported_representation_type<Rep>()>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE explicit fixed_point(T const& value, scale_type const& scale)
     : _value{detail::shift_with_precise_round<Rep, Rad>(value, scale)}, _scale{scale}
   {
@@ -316,7 +325,7 @@ class fixed_point {
    * @return The `fixed_point` number in base 10 (aka human readable format)
    */
   template <typename U,
-            typename std::enable_if_t<is_supported_construction_value_type<U>()>* = nullptr>
+            typename simt::std::enable_if_t<is_supported_construction_value_type<U>()>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE explicit constexpr operator U() const
   {
     return detail::shift<Rep, Rad>(static_cast<U>(_value), detail::negate(_scale));
@@ -562,9 +571,9 @@ class fixed_point {
 template <typename Rep>
 std::string print_rep()
 {
-  if (std::is_same<Rep, int32_t>::value)
+  if (simt::std::is_same<Rep, int32_t>::value)
     return "int32_t";
-  else if (std::is_same<Rep, int64_t>::value)
+  else if (simt::std::is_same<Rep, int64_t>::value)
     return "int64_t";
   else
     return "unknown type";
@@ -581,8 +590,8 @@ std::string print_rep()
 template <typename Rep, typename T>
 CUDA_HOST_DEVICE_CALLABLE auto addition_overflow(T lhs, T rhs)
 {
-  return rhs > 0 ? lhs > std::numeric_limits<Rep>::max() - rhs
-                 : lhs < std::numeric_limits<Rep>::min() - rhs;
+  return rhs > 0 ? lhs > simt::std::numeric_limits<Rep>::max() - rhs
+                 : lhs < simt::std::numeric_limits<Rep>::min() - rhs;
 }
 
 /** @brief Function for identifying integer overflow when subtracting
@@ -596,8 +605,8 @@ CUDA_HOST_DEVICE_CALLABLE auto addition_overflow(T lhs, T rhs)
 template <typename Rep, typename T>
 CUDA_HOST_DEVICE_CALLABLE auto subtraction_overflow(T lhs, T rhs)
 {
-  return rhs > 0 ? lhs < std::numeric_limits<Rep>::min() + rhs
-                 : lhs > std::numeric_limits<Rep>::max() + rhs;
+  return rhs > 0 ? lhs < simt::std::numeric_limits<Rep>::min() + rhs
+                 : lhs > simt::std::numeric_limits<Rep>::max() + rhs;
 }
 
 /** @brief Function for identifying integer overflow when dividing
@@ -611,7 +620,7 @@ CUDA_HOST_DEVICE_CALLABLE auto subtraction_overflow(T lhs, T rhs)
 template <typename Rep, typename T>
 CUDA_HOST_DEVICE_CALLABLE auto division_overflow(T lhs, T rhs)
 {
-  return lhs == std::numeric_limits<Rep>::min() && rhs == -1;
+  return lhs == simt::std::numeric_limits<Rep>::min() && rhs == -1;
 }
 
 /** @brief Function for identifying integer overflow when multiplying
@@ -625,8 +634,8 @@ CUDA_HOST_DEVICE_CALLABLE auto division_overflow(T lhs, T rhs)
 template <typename Rep, typename T>
 CUDA_HOST_DEVICE_CALLABLE auto multiplication_overflow(T lhs, T rhs)
 {
-  auto const min = std::numeric_limits<Rep>::min();
-  auto const max = std::numeric_limits<Rep>::max();
+  auto const min = simt::std::numeric_limits<Rep>::min();
+  auto const max = simt::std::numeric_limits<Rep>::max();
   if (rhs > 0)
     return lhs > max / rhs || lhs < min / rhs;
   else if (rhs < -1)
@@ -757,19 +766,8 @@ CUDA_HOST_DEVICE_CALLABLE bool operator>(fixed_point<Rep1, Rad1> const& lhs,
   return lhs.rescaled(scale)._value > rhs.rescaled(scale)._value;
 }
 
-/**
- * @brief ostream operator for outputting `fixed_point` number
- *
- * @tparam Rep Representation type of number being output
- * @tparam Rad Radix (base) type of number being output
- * @param os target ostream
- * @return fp `fixed_point` number being output
- */
-template <typename Rep, Radix Radix>
-std::ostream& operator<<(std::ostream& os, fixed_point<Rep, Radix> const& fp)
-{
-  return os << static_cast<double>(fp);
-}
+using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
+using decimal64 = fixed_point<int64_t, Radix::BASE_10>;
 
 /** @} */  // end of group
 }  // namespace numeric

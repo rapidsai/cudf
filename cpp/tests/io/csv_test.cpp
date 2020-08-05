@@ -801,7 +801,8 @@ TEST_F(CsvReaderTest, ArrowFileSource)
   std::shared_ptr<arrow::io::ReadableFile> infile;
   ASSERT_TRUE(arrow::io::ReadableFile::Open(filepath).Value(&infile).ok());
 
-  cudf_io::read_csv_args in_args{cudf_io::source_info{infile}};
+  auto arrow_source = cudf_io::arrow_io_source{infile};
+  cudf_io::read_csv_args in_args{cudf_io::source_info{&arrow_source}};
   in_args.dtype = {"int8"};
   auto result   = cudf_io::read_csv(in_args);
 

@@ -544,8 +544,9 @@ set(TEXT_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/text/ngrams_tokenize_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/text/normalize_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/text/replace_tests.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/text/tokenize_tests.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/text/subword_tests.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/text/stemmer_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/text/subword_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/text/tokenize_tests.cpp")
 
 ConfigureTest(TEXT_TEST "${TEXT_TEST_SRC}")
 
@@ -585,6 +586,14 @@ set(ENCODE_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/encode/encode_tests.cpp")
 
 ConfigureTest(ENCODE_TEST "${ENCODE_TEST_SRC}")
+
+###################################################################################################
+# - lists tests ----------------------------------------------------------------------------------
+
+set(LISTS_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/lists/extract_tests.cpp")
+
+ConfigureTest(LISTS_TEST "${LISTS_TEST_SRC}")
 
 ###################################################################################################
 ### enable testing ################################################################################

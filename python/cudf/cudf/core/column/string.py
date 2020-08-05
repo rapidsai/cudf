@@ -26,6 +26,12 @@ from cudf._lib.nvtext.replace import (
     filter_tokens as cpp_filter_tokens,
     replace_tokens as cpp_replace_tokens,
 )
+from cudf._lib.nvtext.stemmer import (
+    LetterType,
+    is_letter as cpp_is_letter,
+    is_letter_multi as cpp_is_letter_multi,
+    porter_stemmer_measure as cpp_porter_stemmer_measure,
+)
 from cudf._lib.nvtext.subword_tokenize import (
     subword_tokenize as cpp_subword_tokenize,
 )
@@ -1989,9 +1995,9 @@ class StringMethods(ColumnMethodsMixin):
 
         result_table = cpp_split(self._column, as_scalar(pat, "str"), n)
         if len(result_table._data) == 1:
-            if result_table._data[0].null_count == len(self._column):
+            if result_table._data[0].null_count == len(self._parent):
                 result_table = []
-            elif self._column.null_count == len(self._column):
+            if self._column.null_count == len(self._column):
                 result_table = [self._column.copy()]
 
         return self._return_or_inplace(result_table, **kwargs,)
@@ -4174,6 +4180,119 @@ class StringMethods(ColumnMethodsMixin):
             cupy.asarray(metadata),
         )
 
+    def porter_stemmer_measure(self, **kwargs):
+        """
+        Compute the Porter Stemmer measure for each string.
+        The Porter Stemmer algorithm is described `here
+        <https://tartarus.org/martin/PorterStemmer/def.txt>`_.
+
+        Returns
+        -------
+        Series or Index of object.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series(["hello", "super"])
+        >>> ser.str.porter_stemmer_measure()
+        0    1
+        1    2
+        dtype: int32
+        """
+        return self._return_or_inplace(
+            cpp_porter_stemmer_measure(self._column), **kwargs
+        )
+
+    def is_consonant(self, position, **kwargs):
+        """
+        Return true for strings where the character at ``position`` is a
+        consonant. The ``position`` parameter may also be a list of integers
+        to check different characters per string.
+        If the ``position`` is larger than the string length, False is
+        returned for that string.
+
+        Parameters
+        ----------
+        position: int or list-like
+           The character position to check within each string.
+
+        Returns
+        -------
+        Series or Index of bool dtype.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series(["toy", "trouble"])
+        >>> ser.str.is_consonant(1)
+        0    False
+        1     True
+        dtype: bool
+        >>> positions = cudf.Series([2, 3])
+        >>> ser.str.is_consonant(positions)
+        0     True
+        1    False
+        dtype: bool
+         """
+        ltype = LetterType.CONSONANT
+
+        if can_convert_to_column(position):
+            return self._return_or_inplace(
+                cpp_is_letter_multi(
+                    self._column, ltype, column.as_column(position)
+                ),
+                **kwargs,
+            )
+
+        return self._return_or_inplace(
+            cpp_is_letter(self._column, ltype, position), **kwargs
+        )
+
+    def is_vowel(self, position, **kwargs):
+        """
+        Return true for strings where the character at ``position`` is a
+        vowel -- not a consonant. The ``position`` parameter may also be
+        a list of integers to check different characters per string.
+        If the ``position`` is larger than the string length, False is
+        returned for that string.
+
+        Parameters
+        ----------
+        position: int or list-like
+           The character position to check within each string.
+
+        Returns
+        -------
+        Series or Index of bool dtype.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series(["toy", "trouble"])
+        >>> ser.str.is_vowel(1)
+        0     True
+        1    False
+        dtype: bool
+        >>> positions = cudf.Series([2, 3])
+        >>> ser.str.is_vowel(positions)
+        0    False
+        1     True
+        dtype: bool
+        """
+        ltype = LetterType.VOWEL
+
+        if can_convert_to_column(position):
+            return self._return_or_inplace(
+                cpp_is_letter_multi(
+                    self._column, ltype, column.as_column(position)
+                ),
+                **kwargs,
+            )
+
+        return self._return_or_inplace(
+            cpp_is_letter(self._column, ltype, position), **kwargs
+        )
+
 
 def _massage_string_arg(value, name, allow_col=False):
     if isinstance(value, str):
@@ -4241,6 +4360,14 @@ class StringColumn(column.ColumnBase):
                 size = children[0].size - 1
             size = size - offset
 
+        if len(children) == 0 and size != 0:
+            # all nulls-column:
+            offsets = cudf.core.column.as_column(
+                cupy.zeros(size + 1, dtype="int32")
+            )
+            chars = cudf.core.column.as_column([], dtype="int8")
+            children = (offsets, chars)
+
         super().__init__(
             None,
             size,
@@ -4293,54 +4420,6 @@ class StringColumn(column.ColumnBase):
     def set_base_children(self, value):
         # TODO: Implement dtype validation of the children here somehow
         super().set_base_children(value)
-
-    @property
-    def children(self):
-        if self._children is None:
-            if len(self.base_children) == 0:
-                self._children = ()
-            elif self.offset == 0 and self.base_children[0].size == (
-                self.size + 1
-            ):
-                self._children = self.base_children
-            else:
-                # First get the base columns for chars and offsets
-                chars_column = self.base_children[1]
-                offsets_column = self.base_children[0]
-
-                # Shift offsets column by the parent offset.
-                offsets_column = column.build_column(
-                    data=offsets_column.base_data,
-                    dtype=offsets_column.dtype,
-                    mask=offsets_column.base_mask,
-                    size=self.size + 1,
-                    offset=self.offset,
-                )
-
-                # Now run a subtraction binary op to shift all of the offsets
-                # by the respective number of characters relative to the
-                # parent offset
-                chars_offset = libcudf.copying.get_element(offsets_column, 0)
-                offsets_column = offsets_column.binary_operator(
-                    "sub", chars_offset
-                )
-
-                # Shift the chars offset by the new first element of the
-                # offsets column
-                chars_size = libcudf.copying.get_element(
-                    offsets_column, self.size
-                )
-
-                chars_column = column.build_column(
-                    data=chars_column.base_data,
-                    dtype=chars_column.dtype,
-                    mask=chars_column.base_mask,
-                    size=chars_size.value,
-                    offset=chars_offset.value,
-                )
-
-                self._children = (offsets_column, chars_column)
-        return self._children
 
     def __contains__(self, item):
         return True in self.str().contains(f"^{item}$")
@@ -4509,6 +4588,8 @@ class StringColumn(column.ColumnBase):
     def serialize(self):
         header = {"null_count": self.null_count}
         header["type-serialized"] = pickle.dumps(type(self))
+        header["size"] = pickle.dumps(self.size)
+
         frames = []
         sub_headers = []
 
@@ -4526,6 +4607,7 @@ class StringColumn(column.ColumnBase):
 
     @classmethod
     def deserialize(cls, header, frames):
+        size = pickle.loads(header["size"])
         # Deserialize the mask, value, and offset frames
         buffers = [Buffer(each_frame) for each_frame in frames]
 
@@ -4540,7 +4622,11 @@ class StringColumn(column.ColumnBase):
             children.append(column_type.deserialize(h, [b]))
 
         col = column.build_column(
-            data=None, dtype="str", mask=nbuf, children=tuple(children)
+            data=None,
+            dtype="str",
+            mask=nbuf,
+            children=tuple(children),
+            size=size,
         )
         return col
 

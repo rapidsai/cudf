@@ -95,6 +95,7 @@ class Serializable(abc.ABC):
         :meta private:
         """
         header, frames = self.device_serialize()
+        header["writeable"] = len(frames) * (None,)
         frames = [
             f.to_host_array().data if c else memoryview(f)
             for c, f in zip(header["is-cuda"], frames)
