@@ -66,6 +66,7 @@
 - PR #5817 Enable more `fixed_point` unit tests by introducing "scale-less" constructor
 - PR #5822 Add `cudf_kafka` to `custreamz` run time conda dependency and fix bash syntax issue
 - PR #5851 Add support for `Index.sort_values`
+- PR #5859 Add conversion form `fixed_point` to `bool`
 
 ## Improvements
 
