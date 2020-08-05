@@ -65,16 +65,16 @@ TEST_F(TextEditDistanceTest, EditDistanceMatrix)
 
   {
     auto results = nvtext::edit_distance_matrix(cudf::strings_column_view(strings));
-    // clang-format off
-    cudf::test::fixed_width_column_wrapper<int32_t> expected({0,3,1,2,3,3,3,2,
-                                                              3,0,3,4,3,0,3,4,
-                                                              1,3,0,2,3,3,2,2,
-                                                              2,4,2,0,4,4,4,2,
-                                                              3,3,3,4,0,3,1,3,
-                                                              3,0,3,4,3,0,3,4,
-                                                              3,3,2,4,1,3,0,4,
-                                                              2,4,2,2,3,4,4,0});
-    // clang-format on                                                              
+
+    using LCW = cudf::test::lists_column_wrapper<int32_t>;
+    LCW expected({LCW{0, 3, 1, 2, 3, 3, 3, 2},
+                  LCW{3, 0, 3, 4, 3, 0, 3, 4},
+                  LCW{1, 3, 0, 2, 3, 3, 2, 2},
+                  LCW{2, 4, 2, 0, 4, 4, 4, 2},
+                  LCW{3, 3, 3, 4, 0, 3, 1, 3},
+                  LCW{3, 0, 3, 4, 3, 0, 3, 4},
+                  LCW{3, 3, 2, 4, 1, 3, 0, 4},
+                  LCW{2, 4, 2, 2, 3, 4, 4, 0}});
     cudf::test::expect_columns_equal(*results, expected);
   }
 }

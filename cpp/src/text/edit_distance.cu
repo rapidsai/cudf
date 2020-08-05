@@ -25,6 +25,7 @@
 #include <nvtext/edit_distance.hpp>
 
 #include <thrust/transform.h>
+#include <thrust/transform_scan.h>
 #include <rmm/device_uvector.hpp>
 
 namespace nvtext {
@@ -32,59 +33,57 @@ namespace detail {
 namespace {
 
 /**
+ * @brief Compute the edit-distance between two strings
+ *
+ * The temporary buffer must be able to hold 3 int16 values for each character
+ * in the smaller of the two provided strings.
+ *
+ * @param d_str First string
+ * @param d_tgt Second string
+ * @param buffer Temporary memory buffer used for calculation.
+ * @return Edit distance value
  */
 __device__ int32_t compute_distance(cudf::string_view const& d_str,
                                     cudf::string_view const& d_tgt,
                                     int16_t* buffer)
 {
-  if (d_str.empty()) return d_tgt.length();
-  if (d_tgt.empty()) return d_str.length();
+  auto const str_length = d_str.length();
+  auto const tgt_length = d_tgt.length();
+  if (str_length == 0) return tgt_length;
+  if (tgt_length == 0) return str_length;
 
-  auto itr_A = d_str.begin();
-  auto itr_B = d_tgt.begin();
-  auto len_A = d_str.length();
-  auto len_B = d_tgt.length();
-  if (len_A > len_B) {
-    len_B = len_A;
-    len_A = d_tgt.length();
-    itr_A = d_tgt.begin();
-    itr_B = d_str.begin();
-  }
+  auto itr_A = str_length < tgt_length ? d_str.begin() : d_tgt.begin();
+  auto itr_B = str_length < tgt_length ? d_tgt.begin() : d_str.begin();
+  // .first is min and .second is max
+  auto const lengths = std::minmax(str_length, tgt_length);
+  // setup compute buffer pointers
   auto line2 = buffer;
-  auto line1 = line2 + len_A;
-  auto line0 = line1 + len_A;
-  int range  = len_A + len_B - 1;
-  for (int i = 0; i < range; i++) {
+  auto line1 = line2 + lengths.first;
+  auto line0 = line1 + lengths.first;
+  // range is both lengths
+  auto const range = lengths.first + lengths.second - 1;
+  for (cudf::size_type i = 0; i < range; ++i) {
     auto tmp = line2;
     line2    = line1;
     line1    = line0;
     line0    = tmp;
-
-    for (int x = (i < len_B ? 0 : i - len_B + 1); (x < len_A) && (x < i + 1); x++) {
-      int y     = i - x;
-      int16_t u = y > 0 ? line1[x] : x + 1;
-      int16_t v = x > 0 ? line1[x - 1] : y + 1;
-      int16_t w;
-      if ((x > 0) && (y > 0))
-        w = line2[x - 1];
-      else if (x > y)
-        w = x;
-      else
-        w = y;
-      u++;
-      v++;
-      itr_A += (x - itr_A.position());
-      itr_B += (y - itr_B.position());
-      auto c1 = *itr_A;
-      auto c2 = *itr_B;
-      if (c1 != c2) w++;
-      int16_t value = u;
-      if (v < value) value = v;
-      if (w < value) value = w;
-      line0[x] = value;
+    // checking pairs of characters
+    for (int x = (i < lengths.second ? 0 : i - lengths.second + 1);
+         (x < lengths.first) && (x < i + 1);
+         ++x) {
+      int const y = i - x;
+      itr_A += (x - itr_A.position());  // point to next
+      itr_B += (y - itr_B.position());  // characters to check
+      int16_t const w =
+        (((x > 0) && (y > 0)) ? line2[x - 1] : static_cast<int16_t>(std::max(x, y))) +
+        static_cast<int16_t>(*itr_A != *itr_B);  // add 1 if characters do not match
+      int16_t const u = (y > 0 ? line1[x] : x + 1) + 1;
+      int16_t const v = (x > 0 ? line1[x - 1] : y + 1) + 1;
+      // store min(u,v,w)
+      line0[x] = std::min(std::min(u, v), w);
     }
   }
-  return static_cast<int32_t>(line0[len_A - 1]);
+  return static_cast<int32_t>(line0[lengths.first - 1]);
 }
 
 /**
@@ -97,9 +96,9 @@ struct edit_distance_levenshtein_algorithm {
   cudf::column_device_view d_strings;  // computing these
   cudf::column_device_view d_targets;  // with these;
   int16_t* d_buffer;                   // compute buffer for each string
-  int32_t const* d_offsets;            // locate sub-buffer for each string
+  int32_t* d_results;                  // input is offset, output is distance
 
-  __device__ int32_t operator()(cudf::size_type idx)
+  __device__ void operator()(cudf::size_type idx)
   {
     auto d_str =
       d_strings.is_null(idx) ? cudf::string_view{} : d_strings.element<cudf::string_view>(idx);
@@ -108,7 +107,7 @@ struct edit_distance_levenshtein_algorithm {
       return d_targets.size() == 1 ? d_targets.element<cudf::string_view>(0)
                                    : d_targets.element<cudf::string_view>(idx);
     }();
-    return compute_distance(d_str, d_tgt, d_buffer + d_offsets[idx]);
+    d_results[idx] = compute_distance(d_str, d_tgt, d_buffer + d_results[idx]);
   }
 };
 
@@ -157,7 +156,7 @@ std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& str
   auto d_targets      = *targets_column;
 
   // calculate the size of the compute-buffer
-  // we can use the output column buffer to hold these values temporarily
+  // we can use the output column buffer to hold the size/offset values temporarily
   auto results   = cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT32},
                                                strings_count,
                                                rmm::device_buffer{0, stream, mr},
@@ -166,36 +165,35 @@ std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& str
                                                mr);
   auto d_results = results->mutable_view().data<int32_t>();
   auto execpol   = rmm::exec_policy(stream);
-  thrust::transform(
-    execpol->on(stream),
-    thrust::make_counting_iterator<cudf::size_type>(0),
-    thrust::make_counting_iterator<cudf::size_type>(strings_count),
-    d_results,
-    [d_strings, d_targets] __device__(auto idx) {
-      if (d_strings.is_null(idx) || d_targets.is_null(idx)) return int32_t{0};
-      auto d_str = d_strings.element<cudf::string_view>(idx);
-      auto d_tgt = d_targets.size() == 1 ? d_targets.element<cudf::string_view>(0)
-                                         : d_targets.element<cudf::string_view>(idx);
-      // just need 3 int16's for each character of the shorter string
-      return static_cast<int32_t>(std::min(d_str.length(), d_tgt.length()) * (3 * sizeof(int16_t)));
-    });
-
-  // get the total size
-  size_t compute_size =
-    thrust::reduce(execpol->on(stream), d_results, d_results + strings_count, size_t{0});
-
-  // convert sizes to offsets in-place
-  thrust::exclusive_scan(execpol->on(stream), d_results, d_results + strings_count, d_results);
-  rmm::device_buffer compute_buffer(compute_size, stream);
-  auto d_buffer = reinterpret_cast<int16_t*>(compute_buffer.data());
-
-  // compute the edit distance into the output column in-place
   thrust::transform(execpol->on(stream),
                     thrust::make_counting_iterator<cudf::size_type>(0),
                     thrust::make_counting_iterator<cudf::size_type>(strings_count),
                     d_results,
-                    edit_distance_levenshtein_algorithm{d_strings, d_targets, d_buffer, d_results});
+                    [d_strings, d_targets] __device__(auto idx) {
+                      if (d_strings.is_null(idx) || d_targets.is_null(idx)) return int32_t{0};
+                      auto d_str = d_strings.element<cudf::string_view>(idx);
+                      auto d_tgt = d_targets.size() == 1
+                                     ? d_targets.element<cudf::string_view>(0)
+                                     : d_targets.element<cudf::string_view>(idx);
+                      // just need 3 int16's for each character of the shorter string
+                      return static_cast<int32_t>(std::min(d_str.length(), d_tgt.length()) * 3);
+                    });
 
+  // get the total size of the temporary compute buffer
+  size_t compute_size =
+    thrust::reduce(execpol->on(stream), d_results, d_results + strings_count, size_t{0});
+  // convert sizes to offsets in-place
+  thrust::exclusive_scan(execpol->on(stream), d_results, d_results + strings_count, d_results);
+  // create the temporary compute buffer
+  rmm::device_uvector<int16_t> compute_buffer(compute_size, stream);
+  auto d_buffer = compute_buffer.data();
+
+  // compute the edit distance into the output column in-place
+  thrust::for_each_n(
+    execpol->on(stream),
+    thrust::make_counting_iterator<cudf::size_type>(0),
+    strings_count,
+    edit_distance_levenshtein_algorithm{d_strings, d_targets, d_buffer, d_results});
   return results;
 }
 
@@ -217,34 +215,36 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
   auto d_strings      = *strings_column;
   auto execpol        = rmm::exec_policy(stream);
 
-  // calculate the size of the compute-buffer
+  // Calculate the size of the compute-buffer.
+  // We only need memory half the size of the output matrix since the edit-distance calculation
+  // is commutative -- `distance(strings[i],strings[j]) == distance(strings[j],strings[i])`
   cudf::size_type n_upper = (strings_count * (strings_count - 1)) / 2;
   rmm::device_uvector<cudf::size_type> offsets(n_upper, stream);
   auto d_offsets = offsets.data();
   CUDA_TRY(cudaMemsetAsync(d_offsets, 0, n_upper * sizeof(cudf::size_type), stream));
-  thrust::for_each_n(execpol->on(stream),
-                     thrust::make_counting_iterator<cudf::size_type>(0),
-                     strings_count * strings_count,
-                     [d_strings, d_offsets, strings_count] __device__(cudf::size_type idx) {
-                       cudf::size_type row = idx / strings_count;
-                       cudf::size_type col = idx % strings_count;
-                       if (row >= col) return;
-                       cudf::string_view d_str1 = d_strings.is_null(row)
-                                                    ? cudf::string_view{}
-                                                    : d_strings.element<cudf::string_view>(row);
-                       cudf::string_view d_str2 = d_strings.is_null(col)
-                                                    ? cudf::string_view{}
-                                                    : d_strings.element<cudf::string_view>(col);
-                       if (d_str1.empty() || d_str2.empty()) return;
-                       cudf::size_type length = std::min(d_str1.length(), d_str2.length());
-                       d_offsets[idx - ((row + 1) * (row + 2)) / 2] = length * 3;
-                     });
+  thrust::for_each_n(
+    execpol->on(stream),
+    thrust::make_counting_iterator<cudf::size_type>(0),
+    strings_count * strings_count,
+    [d_strings, d_offsets, strings_count] __device__(cudf::size_type idx) {
+      auto const row = idx / strings_count;
+      auto const col = idx % strings_count;
+      if (row >= col) return;  // compute only the top half
+      cudf::string_view const d_str1 =
+        d_strings.is_null(row) ? cudf::string_view{} : d_strings.element<cudf::string_view>(row);
+      cudf::string_view const d_str2 =
+        d_strings.is_null(col) ? cudf::string_view{} : d_strings.element<cudf::string_view>(col);
+      if (d_str1.empty() || d_str2.empty()) return;
+      // temp size needed is based on the smaller of the two strings
+      d_offsets[idx - ((row + 1) * (row + 2)) / 2] = std::min(d_str1.length(), d_str2.length()) * 3;
+    });
 
-  // get the total size
+  // get the total size for the compute buffer
   size_t compute_size =
     thrust::reduce(execpol->on(stream), offsets.begin(), offsets.end(), size_t{0});
   // convert sizes to offsets in-place
   thrust::exclusive_scan(execpol->on(stream), offsets.begin(), offsets.end(), offsets.begin());
+  // create the compute buffer
   rmm::device_uvector<int16_t> compute_buffer(compute_size, stream);
   auto d_buffer = compute_buffer.data();
 
@@ -262,7 +262,28 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
     strings_count * strings_count,
     edit_distance_matrix_levenshtein_algorithm{d_strings, d_buffer, d_offsets, d_results});
 
-  return results;
+  // build a lists column of the results
+  auto offsets_column = cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT32},
+                                                      strings_count + 1,
+                                                      rmm::device_buffer{0, stream, mr},
+                                                      0,
+                                                      stream,
+                                                      mr);
+  thrust::transform_exclusive_scan(
+    execpol->on(stream),
+    thrust::make_counting_iterator<int32_t>(0),
+    thrust::make_counting_iterator<int32_t>(strings_count + 1),
+    offsets_column->mutable_view().data<int32_t>(),
+    [strings_count] __device__(auto idx) { return strings_count; },
+    int32_t{0},
+    thrust::plus<int32_t>());
+  return cudf::make_lists_column(strings_count,
+                                 std::move(offsets_column),
+                                 std::move(results),
+                                 0,
+                                 rmm::device_buffer{0, stream, mr},
+                                 stream,
+                                 mr);
 }
 
 }  // namespace detail

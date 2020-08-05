@@ -67,6 +67,10 @@ std::unique_ptr<cudf::column> edit_distance(
  * This uses the Levenshtein algorithm to calculate the edit distance between
  * two strings as documented here: https://www.cuelogic.com/blog/the-levenshtein-algorithm
  *
+ * The output is essentially a `strings.size()  x strings.size()` matrix of integers.
+ * All values at diagonal `row == col` are 0 since the strings there are compared to themselves.
+ * All values above the diagonal are reflected below since the distance calculation is
+ * commutative.
  *
  * @code{.pseudo}
  * Example:
