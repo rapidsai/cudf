@@ -43,31 +43,6 @@ struct MaskToBools : public cudf::test::BaseFixture {
                                                          false}};
 };
 
-TEST_F(MaskToBools, BasicTest)
-{
-  auto data  = std::vector<uint8_t>{0b10101010, 0b01010101};
-  auto input = rmm::device_buffer(data.data(), sizeof(uint8_t) * data.size());
-
-  auto const& expected = this->col_data;
-
-  auto out = cudf::mask_to_bools(static_cast<const cudf::bitmask_type*>(input.data()), 0, 16);
-
-  cudf::test::expect_columns_equal(expected, out->view());
-}
-
-TEST_F(MaskToBools, SlicedTest)
-{
-  auto data  = std::vector<uint8_t>{0b10101010, 0b01010101};
-  auto input = rmm::device_buffer(data.data(), sizeof(uint8_t) * data.size());
-
-  auto const& col = this->col_data;
-  auto expected   = cudf::detail::slice(static_cast<cudf::column_view>(col), 5, 12);
-
-  auto out = cudf::mask_to_bools(static_cast<const cudf::bitmask_type*>(input.data()), 5, 12);
-
-  cudf::test::expect_columns_equal(expected, out->view());
-}
-
 TEST_F(MaskToBools, NullDataWithZeroLength)
 {
   auto expected = cudf::test::fixed_width_column_wrapper<bool>({});
@@ -88,19 +63,6 @@ TEST_F(MaskToBools, ImproperBitRange)
   auto expected = cudf::test::fixed_width_column_wrapper<bool>({});
 
   EXPECT_THROW(cudf::mask_to_bools(nullptr, 2, 1), cudf::logic_error);
-}
-
-TEST_F(MaskToBools, DataWithZeroLength)
-{
-  auto data  = std::vector<uint8_t>{0b10101010, 0b01010101};
-  auto input = rmm::device_buffer(data.data(), sizeof(uint8_t) * data.size());
-
-  auto const& col = this->col_data;
-  auto expected   = cudf::detail::slice(static_cast<cudf::column_view>(col), 0, 0);
-
-  auto out = cudf::mask_to_bools(static_cast<const cudf::bitmask_type*>(input.data()), 0, 0);
-
-  cudf::test::expect_columns_equal(expected, out->view());
 }
 
 struct MaskToBoolsTest
