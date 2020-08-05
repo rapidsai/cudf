@@ -343,8 +343,8 @@ TYPED_TEST(FixedPointTestBothReps, BoolConversion)
   decimalXX falsy_value{0, scale_type{0}};
 
   // Test explicit conversions
-  EXPECT_EQ(bool(truthy_value), true);
-  EXPECT_EQ(bool(falsy_value), false);
+  EXPECT_EQ(static_cast<bool>(truthy_value), true);
+  EXPECT_EQ(static_cast<bool>(falsy_value), false);
 
   // These operators also *explicitly* convert to bool
   EXPECT_EQ(truthy_value && true, true);
