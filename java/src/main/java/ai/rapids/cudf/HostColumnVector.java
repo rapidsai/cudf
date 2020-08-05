@@ -1306,11 +1306,14 @@ public final class HostColumnVector implements AutoCloseable {
             childBuilder.append((List) listElement);
           }
         }
-        if (inputList.isEmpty()) {
-          if (childBuilder.type == DType.STRING) {
-            childBuilder.append("");
-          }
-        }
+//        if (inputList.isEmpty()) {
+//          //increment the string column's offsets
+//          if (childBuilder.type == DType.STRING) {
+//            childBuilder.incrCurrentIndex();
+//            childBuilder.offsets.setInt(childBuilder.getCurrentIndex() * OFFSET_SIZE,
+//                childBuilder.getCurrentByteIndex());
+//          }
+//        }
       }
       currentIndex++;
       initAndResizeOffsetBuffer();
@@ -1318,8 +1321,16 @@ public final class HostColumnVector implements AutoCloseable {
       return this;
     }
 
+    public void incrCurrentIndex() {
+      currentIndex =  currentIndex + 1;
+    }
+
     public int getCurrentIndex() {
       return currentIndex;
+    }
+
+    public int getCurrentByteIndex() {
+      return currentByteIndex;
     }
 
     public final ColumnBuilder append(int value) {
