@@ -62,7 +62,7 @@ std::unique_ptr<column> make_numeric_column(data_type type,
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  CUDF_EXPECTS(is_numeric(type), "Invalid, non-numeric type.");
+  CUDF_EXPECTS(is_numeric(type) || is_fixed_point(type), "Invalid, non-numeric type.");
 
   return std::make_unique<column>(type,
                                   size,
