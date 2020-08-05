@@ -133,18 +133,6 @@ struct fixed_width_type_converter {
     std::transform(begin, end, out, [](auto const& e) { return static_cast<ToT>(e); });
   }
 
-  // Is the target type a fixed_point type
-  template <typename FromT = From,
-            typename ToT   = To,
-            typename InputIterator,
-            typename OutputIterator,
-            typename std::enable_if<!std::is_same<FromT, ToT>::value &&
-                                    cudf::is_fixed_point<ToT>()>::type* = nullptr>
-  void operator()(InputIterator begin, InputIterator end, OutputIterator out) const
-  {
-    std::transform(begin, end, out, [](auto const& e) { return ToT{e, numeric::scale_type{0}}; });
-  }
-
 #if 0
   // This is to be used when timestamp disallows construction from tick counts; presently,
   // this conflicts with the convertible/constructible overload

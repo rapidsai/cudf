@@ -114,26 +114,28 @@ std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> encode(
 /**
  * @brief Creates a boolean column from given bitmask.
  *
- * Each bit represents one value, 0 - false and 1 - true.
- * It is user's responsibility to make sure the bitmask agrees
- * with given offset and length.
+ * Returns a `bool` for each bit in `[begin_bit, end_bit)`. If bit `i` in least-significant bit
+ * numbering is set (1), then element `i` in the output is `true`, otherwise `false`.
+ *
+ * @throws cudf::logic_error if `bitmask` is null and end_bit-begin_bit > 0
+ * @throws cudf::logic_error if begin_bit > end_bit
  *
  * Examples:
  * @code{.pseudo}
- * input: {147}
+ * input: {0b10101010}
  * output: [{false, true, false, true, false, true, false, true}]
  * @endcode
  *
  * @param bitmask A device pointer to the bitmask which needs to be converted
- * @param offset position of the bit from which the conversion should start
- * @param length Number of bits needs to be converted from offset position
+ * @param begin_bit position of the bit from which the conversion should start
+ * @param end_bit position of the bit before which the conversion should stop
  * @param mr Device memory resource used to allocate the returned columns's device memory
- * @return A boolean column representing the given mask from [offset, offset+length).
+ * @return A boolean column representing the given mask from [begin_bit, end_bit).
  */
 std::unique_ptr<column> mask_to_bools(
   bitmask_type const* bitmask,
-  size_type offset,
-  size_type length,
+  size_type begin_bit,
+  size_type end_bit,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** @} */  // end of group

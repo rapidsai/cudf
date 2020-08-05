@@ -70,8 +70,8 @@ std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> encode(
  **/
 std::unique_ptr<column> mask_to_bools(
   bitmask_type const* null_mask,
-  size_type offset,
-  size_type length,
+  size_type begin_bit,
+  size_type end_bit,
   cudaStream_t stream                 = 0,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 

@@ -285,8 +285,8 @@ ConfigureTest(BINARY_TEST "${BINARY_TEST_SRC}")
 set(TRANSFORM_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/transform/integration/unary-transform-test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/transform/nans_to_null_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/transform/mask_to_bools.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/transform/bools_to_mask.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/transform/mask_to_bools_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/transform/bools_to_mask_test.cpp")
 
 ConfigureTest(TRANSFORM_TEST "${TRANSFORM_TEST_SRC}")
 

@@ -26,38 +26,37 @@
 namespace cudf {
 namespace detail {
 std::unique_ptr<column> mask_to_bools(bitmask_type const* bitmask,
-                                      size_type offset,
-                                      size_type length,
+                                      size_type begin_bit,
+                                      size_type end_bit,
                                       cudaStream_t stream,
                                       rmm::mr::device_memory_resource* mr)
 {
-  if (length == 0)
-    return make_fixed_width_column(
-      data_type(type_id::BOOL8), 0, mask_state::UNALLOCATED, stream, mr);
-
-  CUDF_EXPECTS((bitmask != nullptr), "nullmask is null");
+  auto const length = end_bit - begin_bit;
+  CUDF_EXPECTS(length >= 0, "begin_bit should be less than or equal to end_bit");
+  CUDF_EXPECTS((bitmask != nullptr) or (length == 0), "nullmask is null");
 
   auto out_col =
     make_fixed_width_column(data_type(type_id::BOOL8), length, mask_state::UNALLOCATED, stream, mr);
 
-  auto mutable_view = out_col->mutable_view();
+  if (length > 0) {
+    auto mutable_view = out_col->mutable_view();
 
-  thrust::transform(
-    rmm::exec_policy(stream)->on(stream),
-    thrust::make_counting_iterator<cudf::size_type>(0),
-    thrust::make_counting_iterator<cudf::size_type>(mutable_view.size()),
-    mutable_view.begin<bool>(),
-    [bitmask, offset] __device__(auto index) { return bit_is_set(bitmask, offset + index); });
+    thrust::transform(rmm::exec_policy(stream)->on(stream),
+                      thrust::make_counting_iterator<cudf::size_type>(begin_bit),
+                      thrust::make_counting_iterator<cudf::size_type>(end_bit),
+                      mutable_view.begin<bool>(),
+                      [bitmask] __device__(auto index) { return bit_is_set(bitmask, index); });
+  }
 
-  return std::move(out_col);
+  return out_col;
 }
 }  // namespace detail
 
 std::unique_ptr<column> mask_to_bools(bitmask_type const* bitmask,
-                                      size_type offset,
-                                      size_type length,
+                                      size_type begin_bit,
+                                      size_type end_bit,
                                       rmm::mr::device_memory_resource* mr)
 {
-  return detail::mask_to_bools(bitmask, offset, length, 0, mr);
+  return detail::mask_to_bools(bitmask, begin_bit, end_bit, 0, mr);
 }
 }  // namespace cudf
