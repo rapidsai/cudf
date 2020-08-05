@@ -6,6 +6,7 @@ Welcome to cuDF's documentation!
    :caption: Contents:
 
    api.rst
+   basics.rst
    10min.ipynb
    dask-cudf.md
    dask-xgb-10min.ipynb
