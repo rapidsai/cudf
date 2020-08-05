@@ -92,6 +92,28 @@ public class Rmm {
    */
   public static void initialize(int allocationMode, boolean enableLogging, long poolSize)
       throws RmmException {
+    initialize(allocationMode, enableLogging, poolSize, 0);
+  }
+
+  /**
+   * Initialize memory manager state and storage. This will always initialize
+   * the CUDA context for the calling thread if it is not already set. The
+   * caller is responsible for setting the desired CUDA device prior to this
+   * call if a specific device is already set.
+   * <p>NOTE: All cudf methods will set the chosen CUDA device in the CUDA
+   * context of the calling thread after this returns.
+   * @param allocationMode Allocation strategy to use. Bit set using
+   *                       {@link RmmAllocationMode#CUDA_DEFAULT},
+   *                       {@link RmmAllocationMode#POOL} and
+   *                       {@link RmmAllocationMode#CUDA_MANAGED_MEMORY}
+   * @param enableLogging  Enable logging memory manager events
+   * @param poolSize       The initial pool size in bytes
+   * @param maxPoolSize    The maximum size the pool is allowed to grow. If the specified value
+   *                       is <= 0 then the maximum pool size will not be artificially limited.
+   * @throws IllegalStateException if RMM has already been initialized
+   */
+  public static void initialize(int allocationMode, boolean enableLogging, long poolSize,
+      long maxPoolSize) throws RmmException {
     LogConf lc = null;
     if (enableLogging) {
       String f = System.getenv("RMM_LOG_FILE");
@@ -101,7 +123,7 @@ public class Rmm {
         lc = logToStderr();
       }
     }
-    initialize(allocationMode, lc, poolSize);
+    initialize(allocationMode, lc, poolSize, maxPoolSize);
   }
 
   /**
@@ -121,8 +143,42 @@ public class Rmm {
    */
   public static synchronized void initialize(int allocationMode, LogConf logConf, long poolSize)
       throws RmmException {
+    initialize(allocationMode, logConf, poolSize, 0);
+  }
+
+  /**
+   * Initialize memory manager state and storage. This will always initialize
+   * the CUDA context for the calling thread if it is not already set. The
+   * caller is responsible for setting the desired CUDA device prior to this
+   * call if a specific device is already set.
+   * <p>NOTE: All cudf methods will set the chosen CUDA device in the CUDA
+   * context of the calling thread after this returns.
+   * @param allocationMode Allocation strategy to use. Bit set using
+   *                       {@link RmmAllocationMode#CUDA_DEFAULT},
+   *                       {@link RmmAllocationMode#POOL} and
+   *                       {@link RmmAllocationMode#CUDA_MANAGED_MEMORY}
+   * @param logConf        How to do logging or null if you don't want to
+   * @param poolSize       The initial pool size in bytes
+   * @param maxPoolSize    The maximum size the pool is allowed to grow. If the specified value
+   *                       is <= 0 then the pool size will not be artificially limited.
+   * @throws IllegalStateException if RMM has already been initialized
+   * @throws IllegalArgumentException if a max pool size is specified but the allocation mode
+   *                                  is not {@link RmmAllocationMode#POOL} or the maximum pool
+   *                                  size is below the initial size.
+   */
+  public static synchronized void initialize(int allocationMode, LogConf logConf, long poolSize,
+      long maxPoolSize) throws RmmException {
     if (initialized) {
       throw new IllegalStateException("RMM is already initialized");
+    }
+    if (maxPoolSize > 0) {
+      if (allocationMode != RmmAllocationMode.POOL) {
+        throw new IllegalArgumentException("Pool limit only supported in POOL allocation mode");
+      }
+      if (maxPoolSize < poolSize) {
+        throw new IllegalArgumentException("Pool limit of " + maxPoolSize
+            + " is less than initial pool size of " + poolSize);
+      }
     }
     LogLoc loc = LogLoc.NONE;
     String path = null;
@@ -133,7 +189,7 @@ public class Rmm {
       loc = logConf.loc;
     }
 
-    initializeInternal(allocationMode, loc.internalId, path, poolSize);
+    initializeInternal(allocationMode, loc.internalId, path, poolSize, maxPoolSize);
     MemoryCleaner.setDefaultGpu(Cuda.getDevice());
     initialized = true;
   }
@@ -179,7 +235,7 @@ public class Rmm {
   }
 
   private static native void initializeInternal(int allocationMode, int logTo, String path,
-      long poolSize) throws RmmException;
+      long poolSize, long maxPoolSize) throws RmmException;
 
   /**
    * Shut down any initialized RMM instance.  This should be used very rarely.  It does not need to
