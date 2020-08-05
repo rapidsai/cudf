@@ -162,7 +162,11 @@ def test_rolling_getitem_window():
     )
     pdf = pd.DataFrame({"x": np.arange(len(index))}, index=index)
     gdf = cudf.from_pandas(pdf)
-    assert_eq(pdf.rolling("2h").x.mean(), gdf.rolling("2h").x.mean(), check_freq=False)
+    assert_eq(
+        pdf.rolling("2h").x.mean(),
+        gdf.rolling("2h").x.mean(),
+        check_freq=False,
+    )
 
 
 @pytest.mark.parametrize(

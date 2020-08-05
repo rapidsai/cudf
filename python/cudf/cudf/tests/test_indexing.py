@@ -401,8 +401,9 @@ def test_series_loc_datetime():
     )
 
     assert_eq(
-        ps.loc["2001-01-02":"2001-01-05"], gs.loc["2001-01-02":"2001-01-05"],
-        check_freq=False
+        ps.loc["2001-01-02":"2001-01-05"],
+        gs.loc["2001-01-02":"2001-01-05"],
+        check_freq=False,
     )
     assert_eq(ps.loc["2001-01-02":], gs.loc["2001-01-02":], check_freq=False)
     assert_eq(ps.loc[:"2001-01-04"], gs.loc[:"2001-01-04"], check_freq=False)
@@ -431,7 +432,7 @@ def test_series_loc_datetime():
     assert_eq(
         ps.loc[[True, False, True, False, True]],
         gs.loc[[True, False, True, False, True]],
-        check_freq=False
+        check_freq=False,
     )
 
 

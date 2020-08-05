@@ -2297,7 +2297,7 @@ def test_dataframe_reindex_change_dtype(copy):
     assert_eq(
         pdf.reindex(index=index, columns=columns, copy=True),
         gdf.reindex(index=index, columns=columns, copy=copy),
-        check_freq=False
+        check_freq=False,
     )
 
 
