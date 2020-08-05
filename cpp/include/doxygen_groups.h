@@ -118,6 +118,10 @@
  *   @defgroup io_readers Readers
  *   @defgroup io_writers Writers
  * @}
+ * @defgroup lists_apis Lists
+ * @{
+ *   @defgroup lists_extract Extracting
+ * @}
  * @defgroup nvtext_apis NVText
  * @{
  *   @defgroup nvtext_ngrams NGrams

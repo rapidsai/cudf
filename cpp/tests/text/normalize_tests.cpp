@@ -75,6 +75,14 @@ TEST_F(TextNormalizeTest, NormalizeEmptyTest)
   EXPECT_EQ(results->size(), 0);
 }
 
+TEST_F(TextNormalizeTest, AllNullStrings)
+{
+  cudf::test::strings_column_wrapper strings({"", "", ""}, {0, 0, 0});
+  cudf::strings_column_view strings_view(strings);
+  auto results = nvtext::normalize_characters(strings_view, false);
+  EXPECT_EQ(results->size(), 0);
+}
+
 TEST_F(TextNormalizeTest, NormalizeCharacters)
 {
   // These include punctuation, accents, whitespace, and CJK characters
