@@ -1,4 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 """
 Test related to MultiIndex
@@ -407,7 +407,7 @@ def test_multiindex_index_and_columns():
     gdf = cudf.DataFrame()
     gdf["x"] = np.random.randint(0, 5, 5)
     gdf["y"] = np.random.randint(0, 5, 5)
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
     mi = cudf.MultiIndex(
         levels=[[0, 1, 2], [3, 4]],
         codes=[[0, 0, 1, 1, 2], [0, 1, 0, 1, 1]],
@@ -418,8 +418,8 @@ def test_multiindex_index_and_columns():
         levels=[["val"], ["mean", "min"]], codes=[[0, 0], [0, 1]]
     )
     gdf.columns = mc
-    pdf.index = mi.to_pandas()
-    pdf.columns = mc.to_pandas()
+    pdf.index = mi.to_pandas(nullable_pd_dtype=False)
+    pdf.columns = mc.to_pandas(nullable_pd_dtype=False)
     assert_eq(pdf, gdf)
 
 
@@ -691,7 +691,7 @@ def test_multicolumn_item():
     )
     gdg = gdf.groupby(["x", "y"]).min()
     gdgT = gdg.T
-    pdgT = gdgT.to_pandas()
+    pdgT = gdgT.to_pandas(nullable_pd_dtype=False)
     assert_eq(gdgT[(0, 0)], pdgT[(0, 0)])
 
 
@@ -710,7 +710,7 @@ def test_multiindex_groupby_to_frame():
     gdf = cudf.DataFrame(
         {"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5], "z": [0, 1, 0, 1, 0]}
     )
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
     gdg = gdf.groupby(["x", "y"]).count()
     pdg = pdf.groupby(["x", "y"]).count()
     assert_eq(pdg.index.to_frame(), gdg.index.to_frame())
@@ -727,7 +727,7 @@ def test_multiindex_groupby_reset_index():
     gdf = cudf.DataFrame(
         {"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5], "z": [0, 1, 0, 1, 0]}
     )
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
     gdg = gdf.groupby(["x", "y"]).sum()
     pdg = pdf.groupby(["x", "y"]).sum()
     assert_eq(pdg.reset_index(), gdg.reset_index())
@@ -799,7 +799,7 @@ def test_multiindex_multicolumn_zero_row_slice():
     gdf = cudf.DataFrame(
         {"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5], "z": [1, 2, 3, 4, 5]}
     )
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
     gdg = gdf.groupby(["x", "y"]).agg({"z": ["count"]}).iloc[:0]
     pdg = pdf.groupby(["x", "y"]).agg({"z": ["count"]}).iloc[:0]
     assert_eq(pdg, gdg, check_dtype=False)
@@ -879,3 +879,141 @@ def test_multiindex_to_arrow():
         match=re.escape("MultiIndex.to_arrow() is not yet implemented"),
     ):
         midx.to_arrow()
+
+
+@pytest.mark.parametrize(
+    "pdi, fill_value, expected",
+    [
+        (
+            pd.MultiIndex(
+                levels=[[1, 3, 4, None], [1, 2, 5]],
+                codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+                names=["x", "y"],
+            ),
+            5,
+            pd.MultiIndex(
+                levels=[[1, 3, 4, 5], [1, 2, 5]],
+                codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+                names=["x", "y"],
+            ),
+        ),
+        (
+            pd.MultiIndex(
+                levels=[[1, 3, 4, None], [1, None, 5]],
+                codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+                names=["x", "y"],
+            ),
+            100,
+            pd.MultiIndex(
+                levels=[[1, 3, 4, 100], [1, 100, 5]],
+                codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+                names=["x", "y"],
+            ),
+        ),
+        (
+            pd.MultiIndex(
+                levels=[["a", "b", "c", None], ["1", None, "5"]],
+                codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+                names=["x", "y"],
+            ),
+            "100",
+            pd.MultiIndex(
+                levels=[["a", "b", "c", "100"], ["1", "100", "5"]],
+                codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+                names=["x", "y"],
+            ),
+        ),
+    ],
+)
+def test_multiIndex_fillna(pdi, fill_value, expected):
+    gdi = cudf.from_pandas(pdi)
+
+    assert_eq(expected, gdi.fillna(fill_value))
+
+
+@pytest.mark.parametrize(
+    "pdi",
+    [
+        pd.MultiIndex(
+            levels=[[], [], []],
+            codes=[[], [], []],
+            names=["one", "two", "three"],
+        ),
+        pd.MultiIndex.from_tuples(
+            list(
+                zip(
+                    *[
+                        [
+                            "bar",
+                            "bar",
+                            "baz",
+                            "baz",
+                            "foo",
+                            "foo",
+                            "qux",
+                            "qux",
+                        ],
+                        [
+                            "one",
+                            "two",
+                            "one",
+                            "two",
+                            "one",
+                            "two",
+                            "one",
+                            "two",
+                        ],
+                    ]
+                )
+            )
+        ),
+    ],
+)
+def test_multiIndex_empty(pdi):
+    gdi = cudf.from_pandas(pdi)
+
+    assert_eq(pdi.empty, gdi.empty)
+
+
+@pytest.mark.parametrize(
+    "pdi",
+    [
+        pd.MultiIndex(
+            levels=[[], [], []],
+            codes=[[], [], []],
+            names=["one", "two", "three"],
+        ),
+        pd.MultiIndex.from_tuples(
+            list(
+                zip(
+                    *[
+                        [
+                            "bar",
+                            "bar",
+                            "baz",
+                            "baz",
+                            "foo",
+                            "foo",
+                            "qux",
+                            "qux",
+                        ],
+                        [
+                            "one",
+                            "two",
+                            "one",
+                            "two",
+                            "one",
+                            "two",
+                            "one",
+                            "two",
+                        ],
+                    ]
+                )
+            )
+        ),
+    ],
+)
+def test_multiIndex_size(pdi):
+    gdi = cudf.from_pandas(pdi)
+
+    assert_eq(pdi.size, gdi.size)

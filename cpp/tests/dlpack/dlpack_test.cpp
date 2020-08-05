@@ -210,11 +210,11 @@ template <typename T>
 class DLPackTimestampTests : public BaseFixture {
 };
 
-TYPED_TEST_CASE(DLPackTimestampTests, TimestampTypes);
+TYPED_TEST_CASE(DLPackTimestampTests, ChronoTypes);
 
-TYPED_TEST(DLPackTimestampTests, TimestampTypesToDlpack)
+TYPED_TEST(DLPackTimestampTests, ChronoTypesToDlpack)
 {
-  fixed_width_column_wrapper<TypeParam> col({1, 2, 3, 4});
+  fixed_width_column_wrapper<TypeParam, int32_t> col({1, 2, 3, 4});
   cudf::table_view input({col});
   EXPECT_THROW(cudf::to_dlpack(input), cudf::logic_error);
 }

@@ -106,10 +106,8 @@ def test_dataframe_join_how(aa, bb, how, method):
             # TODO: What is the less hacky way?
             expect.index.name = "bob"
             got.index.name = "mary"
-            pd.util.testing.assert_frame_equal(
-                got.to_pandas()
-                .sort_values(got.columns.to_list())
-                .reset_index(drop=True),
+            assert_eq(
+                got.sort_values(got.columns.to_list()).reset_index(drop=True),
                 expect.sort_values(expect.columns.to_list()).reset_index(
                     drop=True
                 ),
@@ -180,14 +178,13 @@ def test_dataframe_join_cats():
     rhs = rhs.set_index("a")
 
     got = lhs.join(rhs)
-    expect = lhs.to_pandas().join(rhs.to_pandas())
+    expect = lhs.to_pandas(nullable_pd_dtype=False).join(
+        rhs.to_pandas(nullable_pd_dtype=False)
+    )
 
     # Note: pandas make an object Index after joining
-    pd.util.testing.assert_frame_equal(
-        got.sort_values(by="b")
-        .to_pandas()
-        .sort_index()
-        .reset_index(drop=True),
+    assert_eq(
+        got.sort_values(by="b").sort_index().reset_index(drop=True),
         expect.reset_index(drop=True),
     )
 
@@ -251,7 +248,7 @@ def test_dataframe_join_mismatch_cats(how):
     join_gdf = gdf1.join(gdf2, how=how, sort=True, method="hash")
     join_pdf = pdf1.join(pdf2, how=how)
 
-    got = join_gdf.fillna(-1).to_pandas()
+    got = join_gdf.fillna(-1).to_pandas(nullable_pd_dtype=False)
     expect = join_pdf.fillna(-1)  # note: cudf join doesn't mask NA
 
     # We yield a categorical here whereas pandas gives Object.
@@ -284,8 +281,8 @@ def test_dataframe_merge_on(on):
     df_right["right_val"] = np.arange(nelem)
 
     # Make pandas DF
-    pddf_left = df_left.to_pandas()
-    pddf_right = df_right.to_pandas()
+    pddf_left = df_left.to_pandas(nullable_pd_dtype=False)
+    pddf_right = df_right.to_pandas(nullable_pd_dtype=False)
 
     # Expected result (from pandas)
     pddf_joined = pddf_left.merge(pddf_right, on=on, how="left")
@@ -313,7 +310,7 @@ def test_dataframe_merge_on(on):
 
     # Test dataframe equality (ignore order of rows and columns)
     cdf_result = (
-        join_result.to_pandas()
+        join_result.to_pandas(nullable_pd_dtype=False)
         .sort_values(list(pddf_joined.columns))
         .reset_index(drop=True)
     )
@@ -322,17 +319,15 @@ def test_dataframe_merge_on(on):
         list(pddf_joined.columns)
     ).reset_index(drop=True)
 
-    pd.util.testing.assert_frame_equal(cdf_result, pdf_result, check_like=True)
+    assert_eq(cdf_result, pdf_result, check_like=True)
 
     merge_func_result_cdf = (
-        join_result_cudf.to_pandas()
+        join_result_cudf.to_pandas(nullable_pd_dtype=False)
         .sort_values(list(pddf_joined.columns))
         .reset_index(drop=True)
     )
 
-    pd.util.testing.assert_frame_equal(
-        merge_func_result_cdf, cdf_result, check_like=True
-    )
+    assert_eq(merge_func_result_cdf, cdf_result, check_like=True)
 
 
 def test_dataframe_merge_on_unknown_column():
@@ -642,8 +637,8 @@ def test_merge_on_index_retained():
     df2["a2"] = [1, 2, 3, 4, 5]
     df2["res"] = ["a", "b", "c", "d", "e"]
 
-    pdf = df.to_pandas()
-    pdf2 = df2.to_pandas()
+    pdf = df.to_pandas(nullable_pd_dtype=False)
+    pdf2 = df2.to_pandas(nullable_pd_dtype=False)
 
     gdm = df.merge(df2, left_index=True, right_index=True, how="left")
     pdm = pdf.merge(pdf2, left_index=True, right_index=True, how="left")
@@ -748,7 +743,9 @@ def test_merge_sort_on_indexes(kwargs):
     gd_merge = gleft.merge(gright, **kwargs)
 
     if left_index and right_index:
-        check_if_sorted = gd_merge[["a", "b"]].to_pandas()
+        check_if_sorted = gd_merge[["a", "b"]].to_pandas(
+            nullable_pd_dtype=False
+        )
         check_if_sorted.index.name = "index"
         definitely_sorted = check_if_sorted.sort_values(["index", "a", "b"])
         definitely_sorted.index.name = None
@@ -947,8 +944,8 @@ def test_merge_multi(kwargs):
         left = left.set_index(["a", "b"])
         right = right.set_index(["c", "d"])
 
-    gleft = left.to_pandas()
-    gright = right.to_pandas()
+    gleft = left.to_pandas(nullable_pd_dtype=False)
+    gright = right.to_pandas(nullable_pd_dtype=False)
 
     kwargs["sort"] = True
     expect = gleft.merge(gright, **kwargs)

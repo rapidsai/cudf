@@ -201,12 +201,12 @@ class RollingTest : public cudf::test::BaseFixture {
                  cudf::make_count_aggregation(cudf::null_policy::INCLUDE));
     run_test_col(
       input, preceding_window, following_window, min_periods, cudf::make_max_aggregation());
-    run_test_col(
-      input, preceding_window, following_window, min_periods, cudf::make_mean_aggregation());
 
     if (not cudf::is_timestamp(input.type())) {
       run_test_col(
         input, preceding_window, following_window, min_periods, cudf::make_sum_aggregation());
+      run_test_col(
+        input, preceding_window, following_window, min_periods, cudf::make_mean_aggregation());
     }
   }
 
@@ -496,7 +496,34 @@ TEST_F(RollingErrorTest, SumTimestampNotSupported)
                cudf::logic_error);
 }
 
-TYPED_TEST_CASE(RollingTest, cudf::test::FixedWidthTypes);
+// incorrect type/aggregation combo: mean of timestamps
+TEST_F(RollingErrorTest, MeanTimestampNotSupported)
+{
+  constexpr size_type size{10};
+  fixed_width_column_wrapper<cudf::timestamp_D> input_D(thrust::make_counting_iterator(0),
+                                                        thrust::make_counting_iterator(size));
+  fixed_width_column_wrapper<cudf::timestamp_s> input_s(thrust::make_counting_iterator(0),
+                                                        thrust::make_counting_iterator(size));
+  fixed_width_column_wrapper<cudf::timestamp_ms> input_ms(thrust::make_counting_iterator(0),
+                                                          thrust::make_counting_iterator(size));
+  fixed_width_column_wrapper<cudf::timestamp_us> input_us(thrust::make_counting_iterator(0),
+                                                          thrust::make_counting_iterator(size));
+  fixed_width_column_wrapper<cudf::timestamp_ns> input_ns(thrust::make_counting_iterator(0),
+                                                          thrust::make_counting_iterator(size));
+
+  EXPECT_THROW(cudf::rolling_window(input_D, 2, 2, 0, cudf::make_mean_aggregation()),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::rolling_window(input_s, 2, 2, 0, cudf::make_mean_aggregation()),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::rolling_window(input_ms, 2, 2, 0, cudf::make_mean_aggregation()),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::rolling_window(input_us, 2, 2, 0, cudf::make_mean_aggregation()),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::rolling_window(input_ns, 2, 2, 0, cudf::make_mean_aggregation()),
+               cudf::logic_error);
+}
+
+TYPED_TEST_CASE(RollingTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 // simple example from Pandas docs
 TYPED_TEST(RollingTest, SimpleStatic)
@@ -578,7 +605,7 @@ TYPED_TEST(RollingTest, ZeroWindow)
 {
   size_type num_rows = 1000;
 
-  std::vector<TypeParam> col_data(num_rows, 1);
+  std::vector<TypeParam> col_data(num_rows, TypeParam(1));
   std::vector<bool> col_mask(num_rows, 1);
 
   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
@@ -593,7 +620,7 @@ TYPED_TEST(RollingTest, ZeroPeriods)
 {
   size_type num_rows = 1000;
 
-  std::vector<TypeParam> col_data(num_rows, 1);
+  std::vector<TypeParam> col_data(num_rows, TypeParam(1));
   std::vector<bool> col_mask(num_rows, 1);
 
   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
@@ -611,7 +638,7 @@ TYPED_TEST(RollingTest, BackwardForwardWindow)
 {
   size_type num_rows = 1000;
 
-  std::vector<TypeParam> col_data(num_rows, 1);
+  std::vector<TypeParam> col_data(num_rows, TypeParam(1));
   std::vector<bool> col_mask(num_rows, 1);
 
   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());

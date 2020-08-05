@@ -44,7 +44,7 @@ template <typename T>
 struct ColumnUtilitiesTestFloatingPoint : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(ColumnUtilitiesTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_CASE(ColumnUtilitiesTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 TYPED_TEST_CASE(ColumnUtilitiesTestIntegral, cudf::test::IntegralTypes);
 TYPED_TEST_CASE(ColumnUtilitiesTestFloatingPoint, cudf::test::FloatingPointTypes);
 
@@ -177,6 +177,17 @@ TEST_F(ColumnUtilitiesStringsTest, StringsToHostAllNulls)
   auto results   = host_data.first;
   EXPECT_EQ(3, host_data.first.size());
   EXPECT_TRUE(std::all_of(results.begin(), results.end(), [](auto s) { return s.empty(); }));
+}
+
+TEST_F(ColumnUtilitiesStringsTest, PrintColumnDuration)
+{
+  const char* delimiter = ",";
+
+  cudf::test::fixed_width_column_wrapper<cudf::duration_s, int32_t> cudf_col({100, 0, 7, 140000});
+
+  auto expected = "100 seconds,0 seconds,7 seconds,140000 seconds";
+
+  EXPECT_EQ(cudf::test::to_string(cudf_col, delimiter), expected);
 }
 
 TYPED_TEST(ColumnUtilitiesTestIntegral, PrintColumnNumeric)

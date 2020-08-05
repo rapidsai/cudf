@@ -13,16 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/column/column.hpp>
-#include <cudf/concatenate.hpp>
-#include <cudf/copying.hpp>
-#include <cudf/table/table.hpp>
 
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
+
+#include <cudf/column/column.hpp>
+#include <cudf/concatenate.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/table/table.hpp>
 
 #include <thrust/sequence.h>
 
@@ -324,9 +326,10 @@ TEST_F(ListsColumnTest, ConcatenateLists)
 
 TEST_F(ListsColumnTest, ConcatenateEmptyLists)
 {
-  // to disambiguiate between {} == 0 and {} == List{0}
+  // to disambiguate between {} == 0 and {} == List{0}
+  // Also, see note about compiler issues when declaring nested
+  // empty lists in lists_column_wrapper documentation
   using LCW = cudf::test::lists_column_wrapper<int>;
-
   {
     cudf::test::lists_column_wrapper<int> a{};
     cudf::test::lists_column_wrapper<int> b{4, 5, 6, 7};
@@ -437,7 +440,9 @@ TEST_F(ListsColumnTest, ConcatenateNestedLists)
 TEST_F(ListsColumnTest, ConcatenateNestedEmptyLists)
 {
   using T = int;
-  // to disambiguiate between {} == 0 and {} == List{0}
+  // to disambiguate between {} == 0 and {} == List{0}
+  // Also, see note about compiler issues when declaring nested
+  // empty lists in lists_column_wrapper documentation
   using LCW = cudf::test::lists_column_wrapper<T>;
 
   {
@@ -509,4 +514,64 @@ TEST_F(ListsColumnTest, ConcatenateNestedListsWithNulls)
 
     cudf::test::expect_columns_equal(*result, expected);
   }
+}
+
+TEST_F(ListsColumnTest, ConcatenateIncompleteHierarchies)
+{
+  // to disambiguate between {} == 0 and {} == List{0}
+  // Also, see note about compiler issues when declaring nested
+  // empty lists in lists_column_wrapper documentation
+  using LCW = cudf::test::lists_column_wrapper<int>;
+
+  {
+    std::vector<bool> valids{false};
+    cudf::test::lists_column_wrapper<int> a{{{{LCW{}}}}};
+    cudf::test::lists_column_wrapper<int> b{{{LCW{}}}};
+    cudf::test::lists_column_wrapper<int> c{{LCW{}}};
+    auto result = cudf::concatenate({a, b, c});
+
+    cudf::test::lists_column_wrapper<int> expected{{{{LCW{}}}}, {{LCW{}}}, {LCW{}}};
+
+    cudf::test::expect_columns_equal(*result, expected);
+  }
+
+  {
+    std::vector<bool> valids{false};
+    cudf::test::lists_column_wrapper<int> a{{{{{LCW{}}}}, valids.begin()}};
+    cudf::test::lists_column_wrapper<int> b{{{LCW{}}}};
+    cudf::test::lists_column_wrapper<int> c{{LCW{}}};
+    auto result = cudf::concatenate({a, b, c});
+
+    cudf::test::lists_column_wrapper<int> expected{
+      {{{{LCW{}}}}, valids.begin()}, {{LCW{}}}, {LCW{}}};
+
+    cudf::test::expect_columns_equal(*result, expected);
+  }
+}
+
+template <typename T>
+struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+};
+
+template <typename T>
+using wrapper = cudf::test::fixed_width_column_wrapper<T>;
+TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointConcatentate)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+
+  auto vec = std::vector<decimalXX>(1000);
+  std::iota(std::begin(vec), std::end(vec), decimalXX{});
+
+  auto const a = wrapper<decimalXX>(vec.begin(), /***/ vec.begin() + 300);
+  auto const b = wrapper<decimalXX>(vec.begin() + 300, vec.begin() + 700);
+  auto const c = wrapper<decimalXX>(vec.begin() + 700, vec.end());
+
+  auto const fixed_point_columns = std::vector<cudf::column_view>{a, b, c};
+  auto const results             = cudf::concatenate(fixed_point_columns);
+  auto const expected            = wrapper<decimalXX>(vec.begin(), vec.end());
+
+  cudf::test::expect_columns_equal(*results, expected);
 }

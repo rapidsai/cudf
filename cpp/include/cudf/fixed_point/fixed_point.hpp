@@ -18,6 +18,8 @@
 
 #define _LIBCUDACXX_USE_CXX17_TYPE_TRAITS
 
+// Note: The <simt/*> versions are used in order for Jitify to work with our fixed_point type.
+//       Jitify is needed for several algorithms (binaryop, rolling, etc)
 #include <simt/limits>
 #include <simt/type_traits>  // add simt namespace
 
@@ -765,6 +767,7 @@ CUDA_HOST_DEVICE_CALLABLE bool operator>(fixed_point<Rep1, Rad1> const& lhs,
 }
 
 using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
+using decimal64 = fixed_point<int64_t, Radix::BASE_10>;
 
 /** @} */  // end of group
 }  // namespace numeric

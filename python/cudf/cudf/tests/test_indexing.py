@@ -165,7 +165,9 @@ def test_dataframe_column_name_indexing():
 
     for i in range(1, len(pdf.columns) + 1):
         for idx in combinations(pdf.columns, i):
-            assert pdf[list(idx)].equals(df[list(idx)].to_pandas())
+            assert pdf[list(idx)].equals(
+                df[list(idx)].to_pandas(nullable_pd_dtype=False)
+            )
 
     # test for only numeric columns
     df = pd.DataFrame()
@@ -698,7 +700,7 @@ def test_dataframe_masked_slicing(nelem, slice_start, slice_end):
     expect = do_slice(gdf.to_pandas())
     got = do_slice(gdf).to_pandas()
 
-    pd.testing.assert_frame_equal(expect, got)
+    assert_eq(expect, got)
 
 
 def test_dataframe_boolean_mask_with_None():
@@ -715,7 +717,7 @@ def test_dataframe_boolean_mask_with_None():
 @pytest.mark.parametrize("dtype", [int, float, str])
 def test_empty_boolean_mask(dtype):
     gdf = cudf.datasets.randomdata(nrows=0, dtypes={"a": dtype})
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
 
     compare_val = dtype(1)
 
@@ -1098,7 +1100,7 @@ def test_sliced_indexing():
 def test_iloc_categorical_index(index):
     gdf = cudf.DataFrame({"data": range(len(index))}, index=index)
     gdf.index = gdf.index.astype("category")
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
     expect = pdf.iloc[:, 0]
     got = gdf.iloc[:, 0]
     assert_eq(expect, got)
@@ -1134,3 +1136,97 @@ def test_loc_datetime_index(sli, is_dataframe):
     got = gd_data.loc[sli]
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "gdf",
+    [
+        cudf.DataFrame({"a": range(1000000)}),
+        cudf.DataFrame({"a": range(1000000), "b": range(1000000)}),
+        cudf.DataFrame({"a": range(20), "b": range(20)}),
+        cudf.DataFrame(
+            {
+                "a": range(20),
+                "b": range(20),
+                "c": ["abc", "def", "xyz", "def", "pqr"] * 4,
+            }
+        ),
+        cudf.DataFrame(index=[1, 2, 3]),
+        cudf.DataFrame(index=range(1000000)),
+        cudf.DataFrame(columns=["a", "b", "c", "d"]),
+        cudf.DataFrame(columns=["a"], index=range(1000000)),
+        cudf.DataFrame(
+            columns=["a", "col2", "...col n"], index=range(1000000)
+        ),
+        cudf.DataFrame(index=cudf.Series(range(1000000)).astype("str")),
+        cudf.DataFrame(
+            columns=["a", "b", "c", "d"],
+            index=cudf.Series(range(1000000)).astype("str"),
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "slice",
+    [
+        slice(250000, 500000),
+        slice(250000, 250001),
+        slice(500000),
+        slice(1, 10),
+        slice(10, 20),
+        slice(15, 24000),
+        slice(6),
+    ],
+)
+def test_dataframe_sliced(gdf, slice):
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+
+    actual = gdf[slice]
+    expected = pdf[slice]
+
+    assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "gdf",
+    [
+        cudf.DataFrame({"a": range(10000)}),
+        cudf.DataFrame(
+            {
+                "a": range(10000),
+                "b": range(10000),
+                "c": range(10000),
+                "d": range(10000),
+                "e": range(10000),
+                "f": range(10000),
+            }
+        ),
+        cudf.DataFrame({"a": range(20), "b": range(20)}),
+        cudf.DataFrame(
+            {
+                "a": range(20),
+                "b": range(20),
+                "c": ["abc", "def", "xyz", "def", "pqr"] * 4,
+            }
+        ),
+        cudf.DataFrame(index=[1, 2, 3]),
+        cudf.DataFrame(index=range(10000)),
+        cudf.DataFrame(columns=["a", "b", "c", "d"]),
+        cudf.DataFrame(columns=["a"], index=range(10000)),
+        cudf.DataFrame(columns=["a", "col2", "...col n"], index=range(10000)),
+        cudf.DataFrame(index=cudf.Series(range(10000)).astype("str")),
+        cudf.DataFrame(
+            columns=["a", "b", "c", "d"],
+            index=cudf.Series(range(10000)).astype("str"),
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "slice", [slice(6), slice(1), slice(7), slice(1, 3)],
+)
+def test_dataframe_iloc_index(gdf, slice):
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+
+    actual = gdf.iloc[:, slice]
+    expected = pdf.iloc[:, slice]
+
+    assert_eq(actual, expected)

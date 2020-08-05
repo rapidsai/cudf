@@ -9,6 +9,7 @@ from cudf._lib.cpp.types cimport size_type
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.nvtext.tokenize cimport (
     tokenize as cpp_tokenize,
+    detokenize as cpp_detokenize,
     count_tokens as cpp_count_tokens,
     character_tokenize as cpp_character_tokenize
 )
@@ -115,6 +116,19 @@ def character_tokenize(Column strings):
     with nogil:
         c_result = move(
             cpp_character_tokenize(c_strings)
+        )
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def detokenize(Column strings, Column indices, Scalar separator):
+    cdef column_view c_strings = strings.view()
+    cdef column_view c_indices = indices.view()
+    cdef string_scalar* c_separator = <string_scalar*>separator.c_value.get()
+    cdef unique_ptr[column] c_result
+    with nogil:
+        c_result = move(
+            cpp_detokenize(c_strings, c_indices, c_separator[0])
         )
 
     return Column.from_unique_ptr(move(c_result))

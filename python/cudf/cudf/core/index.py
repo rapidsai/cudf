@@ -347,6 +347,56 @@ class Index(Frame, Serializable):
         """
         return super().dropna(how=how)
 
+    def _clean_nulls_from_index(self):
+        """
+        Convert all na values(if any) in Index object
+        to `<NA>` as a preprocessing step to `__repr__` methods.
+
+        This will involve changing type of Index object
+        to StringIndex but it is the responsibility of the `__repr__`
+        methods using this method to replace or handle representation
+        of the actual types correctly.
+        """
+        if self._values.has_nulls:
+            return cudf.Index(
+                self._values.astype("str").fillna(cudf._NA_REP), name=self.name
+            )
+        else:
+            return self
+
+    def fillna(self, value, downcast=None):
+        """
+        Fill null values with the specified value.
+
+        Parameters
+        ----------
+        value : scalar
+            Scalar value to use to fill nulls. This value cannot be a
+            list-likes.
+
+        downcast : dict, default is None
+            This Parameter is currently NON-FUNCTIONAL.
+
+        Returns
+        -------
+        filled : Index
+
+        Examples
+        --------
+        >>> import cudf
+        >>> index = cudf.Index([1, 2, None, 4])
+        >>> index
+        Int64Index([1, 2, null, 4], dtype='int64')
+        >>> index.fillna(3)
+        Int64Index([1, 2, 3, 4], dtype='int64')
+        """
+        if downcast is not None:
+            raise NotImplementedError(
+                "`downcast` parameter is not yet supported"
+            )
+
+        return super().fillna(value=value)
+
     def take(self, indices):
         """Gather only the specific subset of indices
 
@@ -407,7 +457,7 @@ class Index(Frame, Serializable):
         Examples
         --------
         >>> import cudf
-        >>> idx = cudf.core.index.as_index([-3, 10, 15, 20])
+        >>> idx = cudf.Index([-3, 10, 15, 20])
         >>> idx
         Int64Index([-3, 10, 15, 20], dtype='int64')
         >>> idx.to_pandas()
@@ -417,7 +467,9 @@ class Index(Frame, Serializable):
         >>> type(idx)
         <class 'cudf.core.index.GenericIndex'>
         """
-        return pd.Index(self._values.to_pandas(), name=self.name)
+        return pd.Index(
+            self._values.to_pandas(nullable_pd_dtype=False), name=self.name
+        )
 
     def to_arrow(self):
         """
@@ -426,7 +478,7 @@ class Index(Frame, Serializable):
         Examples
         --------
         >>> import cudf
-        >>> idx = cudf.core.index.as_index([-3, 10, 15, 20])
+        >>> idx = cudf.Index([-3, 10, 15, 20])
         >>> idx.to_arrow()
         <pyarrow.lib.Int64Array object at 0x7fcaa6f53440>
         [
@@ -439,16 +491,12 @@ class Index(Frame, Serializable):
         return self._values.to_arrow()
 
     def tolist(self):
-        """
-        Return a list type from index data.
 
-        Returns
-        -------
-        list
-        """
-        # TODO: Raise error as part
-        # of https://github.com/rapidsai/cudf/issues/5689
-        return self.to_arrow().to_pylist()
+        raise TypeError(
+            "cuDF does not support conversion to host memory "
+            "via `tolist()` method. Consider using "
+            "`.to_arrow().to_pylist()` to construct a Python list."
+        )
 
     to_list = tolist
 
@@ -485,7 +533,7 @@ class Index(Frame, Serializable):
         Examples
         --------
         >>> import cudf
-        >>> idx = cudf.core.index.as_index([3, 2, 1])
+        >>> idx = cudf.Index([3, 2, 1])
         >>> idx.min()
         1
         """
@@ -510,7 +558,7 @@ class Index(Frame, Serializable):
         Examples
         --------
         >>> import cudf
-        >>> idx = cudf.core.index.as_index([3, 2, 1])
+        >>> idx = cudf.Index([3, 2, 1])
         >>> idx.max()
         3
         """
@@ -528,7 +576,7 @@ class Index(Frame, Serializable):
         Examples
         --------
         >>> import cudf
-        >>> idx = cudf.core.index.as_index([3, 2, 1])
+        >>> idx = cudf.Index([3, 2, 1])
         >>> idx.sum()
         6
         """
@@ -856,7 +904,7 @@ class Index(Frame, Serializable):
         # in case of MultiIndex
         if isinstance(lhs, cudf.MultiIndex):
             if level is not None and isinstance(level, int):
-                on = lhs._data.get_by_index(level).names[0]
+                on = lhs._data.select_by_index(level).names[0]
             right_names = (on,) or right_names
             on = right_names[0]
             if how == "outer":
@@ -1387,7 +1435,7 @@ class RangeIndex(Index):
         elif isinstance(other, cudf.core.index.RangeIndex):
             return self._start == other._start and self._stop == other._stop
         else:
-            return (self == other)._values.all()
+            return super().equals(other)
 
     def serialize(self):
         header = {}
@@ -1431,9 +1479,6 @@ class RangeIndex(Index):
 
     @property
     def size(self):
-        """
-        Return the number of elements in the underlying data.
-        """
         return max(0, self._stop - self._start)
 
     def find_label_range(self, first, last):
@@ -1617,13 +1662,6 @@ class GenericIndex(Index):
     def __len__(self):
         return len(self._values)
 
-    @property
-    def size(self):
-        """
-        Return the number of elements in the underlying data.
-        """
-        return len(self)
-
     def __repr__(self):
         from pandas._config import get_option
 
@@ -1640,27 +1678,46 @@ class GenericIndex(Index):
             preprocess = concat([top, bottom])
         else:
             preprocess = self
-        if preprocess._values.nullable:
-            output = (
-                self.__class__(preprocess._values.astype("O").fillna("null"))
-                .to_pandas()
-                .__repr__()
-            )
+
+        # TODO: Change below usages accordingly to
+        # utilize `Index.to_string` once it is implemented
+        # related issue : https://github.com/pandas-dev/pandas/issues/35389
+        if isinstance(preprocess, CategoricalIndex):
+            output = preprocess.to_pandas().__repr__()
+            output = output.replace("nan", cudf._NA_REP)
+        elif preprocess._values.nullable:
+            output = self._clean_nulls_from_index().to_pandas().__repr__()
+
+            if not isinstance(self, StringIndex):
+                # We should remove all the single quotes
+                # from the output due to the type-cast to
+                # object dtype happening above.
+                # Note : The replacing of single quotes has
+                # to happen only incase of non-StringIndex types,
+                # as we want to preserve single quotes incase
+                # of StringIndex and it is valid to have them.
+                output = output.replace("'", "")
         else:
             output = preprocess.to_pandas().__repr__()
 
+        # Fix and correct the class name of the output
+        # string by finding first occurrence of "(" in the output
+        index_class_split_index = output.find("(")
+        output = self.__class__.__name__ + output[index_class_split_index:]
+
         lines = output.split("\n")
-        if len(lines) > 1:
-            tmp_meta = lines[-1]
-            prior_to_dtype = lines[-1].split("dtype")[0]
-            lines = lines[:-1]
-            lines.append(prior_to_dtype + "dtype='%s'" % self.dtype)
-            if self.name is not None:
-                lines[-1] = lines[-1] + ", name='%s'" % self.name
-            if "length" in tmp_meta:
-                lines[-1] = lines[-1] + ", length=%d)" % len(self)
-            else:
-                lines[-1] = lines[-1] + ")"
+
+        tmp_meta = lines[-1]
+        dtype_index = lines[-1].rfind(" dtype=")
+        prior_to_dtype = lines[-1][:dtype_index]
+        lines = lines[:-1]
+        lines.append(prior_to_dtype + " dtype='%s'" % self.dtype)
+        if self.name is not None:
+            lines[-1] = lines[-1] + ", name='%s'" % self.name
+        if "length" in tmp_meta:
+            lines[-1] = lines[-1] + ", length=%d)" % len(self)
+        else:
+            lines[-1] = lines[-1] + ")"
 
         return "\n".join(lines)
 
@@ -1920,7 +1977,9 @@ class DatetimeIndex(GenericIndex):
 
     def to_pandas(self):
         nanos = self._values.astype("datetime64[ns]")
-        return pd.DatetimeIndex(nanos.to_pandas(), name=self.name)
+        return pd.DatetimeIndex(
+            nanos.to_pandas(nullable_pd_dtype=False), name=self.name
+        )
 
     def get_dt_field(self, field):
         out_column = self._values.get_dt_field(field)
@@ -2139,6 +2198,16 @@ class StringIndex(GenericIndex):
     @property
     def _constructor_expanddim(self):
         return cudf.MultiIndex
+
+    def _clean_nulls_from_index(self):
+        """
+        Convert all na values(if any) in Index object
+        to `<NA>` as a preprocessing step to `__repr__` methods.
+        """
+        if self._values.has_nulls:
+            return self.fillna(cudf._NA_REP)
+        else:
+            return self
 
 
 def as_index(arbitrary, **kwargs):

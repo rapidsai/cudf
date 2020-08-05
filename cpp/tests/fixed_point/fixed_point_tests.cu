@@ -15,19 +15,11 @@
  */
 
 #include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/type_lists.hpp>
-#include "tests/utilities/column_utilities.hpp"
-#include "tests/utilities/table_utilities.hpp"
 
-#include <cudf/binaryop.hpp>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/copying.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
-#include <cudf/sorting.hpp>
-#include <cudf/unary.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include "cudf/types.hpp"
 
 #include <algorithm>
 #include <limits>
@@ -522,61 +514,6 @@ TEST_F(FixedPointTest, DecimalXXThrustOnDevice)
   thrust::host_vector<int32_t> vec3_host = vec3;
 
   EXPECT_EQ(vec2, vec3);
-}
-
-template <typename T>
-using wrapper = cudf::test::fixed_width_column_wrapper<T>;
-
-TEST_F(FixedPointTest, FixedPointSortedOrderGather)
-{
-  auto const ZERO  = decimal32{0, scale_type{0}};
-  auto const ONE   = decimal32{1, scale_type{0}};
-  auto const TWO   = decimal32{2, scale_type{0}};
-  auto const THREE = decimal32{3, scale_type{0}};
-  auto const FOUR  = decimal32{4, scale_type{0}};
-
-  auto const input_vec  = std::vector<decimal32>{TWO, ONE, ZERO, FOUR, THREE};
-  auto const index_vec  = std::vector<cudf::size_type>{2, 1, 0, 4, 3};
-  auto const sorted_vec = std::vector<decimal32>{ZERO, ONE, TWO, THREE, FOUR};
-
-  auto const input_col  = wrapper<decimal32>(input_vec.begin(), input_vec.end());
-  auto const index_col  = wrapper<cudf::size_type>(index_vec.begin(), index_vec.end());
-  auto const sorted_col = wrapper<decimal32>(sorted_vec.begin(), sorted_vec.end());
-
-  auto const sorted_table = cudf::table_view{{sorted_col}};
-  auto const input_table  = cudf::table_view{{input_col}};
-
-  auto const indices = cudf::sorted_order(input_table);
-  auto const sorted  = cudf::gather(input_table, indices->view());
-
-  cudf::test::expect_columns_equal(index_col, indices->view());
-  cudf::test::expect_tables_equal(sorted_table, sorted->view());
-}
-
-TEST_F(FixedPointTest, FixedPointBinaryOpAdd)
-{
-  auto const sz = std::size_t{1000};
-
-  auto vec1       = std::vector<decimal32>(sz);
-  auto const vec2 = std::vector<decimal32>(sz, decimal32{1, scale_type{-1}});
-  auto expected   = std::vector<decimal32>(sz);
-
-  std::iota(std::begin(vec1), std::end(vec1), decimal32{});
-
-  std::transform(std::cbegin(vec1),
-                 std::cend(vec1),
-                 std::cbegin(vec2),
-                 std::begin(expected),
-                 std::plus<decimal32>());
-
-  auto const lhs          = wrapper<decimal32>(vec1.begin(), vec1.end());
-  auto const rhs          = wrapper<decimal32>(vec2.begin(), vec2.end());
-  auto const expected_col = wrapper<decimal32>(expected.begin(), expected.end());
-
-  auto const result = cudf::binary_operation(
-    lhs, rhs, cudf::binary_operator::ADD, cudf::data_type(cudf::type_id::DECIMAL32));
-
-  cudf::test::expect_columns_equal(expected_col, result->view());
 }
 
 CUDF_TEST_PROGRAM_MAIN()

@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -62,8 +62,8 @@ def test_categorical_integer():
     string = str(sr)
     expect_str = """
 0 a
-1 null
-2 null
+1 <NA>
+2 <NA>
 3 c
 4 a
 dtype: category
@@ -213,7 +213,7 @@ def test_df_cat_set_index():
     df["b"] = np.arange(len(df))
     got = df.set_index("a")
 
-    pddf = df.to_pandas()
+    pddf = df.to_pandas(nullable_pd_dtype=False)
     expect = pddf.set_index("a")
 
     assert_eq(got, expect)
@@ -225,7 +225,7 @@ def test_df_cat_sort_index():
     df["b"] = np.arange(len(df))
 
     got = df.set_index("a").sort_index()
-    expect = df.to_pandas().set_index("a").sort_index()
+    expect = df.to_pandas(nullable_pd_dtype=False).set_index("a").sort_index()
 
     assert_eq(got, expect)
 
@@ -424,7 +424,7 @@ def test_categorical_add_categories(pd_str_cat, inplace):
     cd_sr_1 = cd_sr if cd_sr_1 is None else cd_sr_1
 
     assert "d" in pd_sr_1.cat.categories.to_list()
-    assert "d" in cd_sr_1.cat.categories.to_list()
+    assert "d" in cd_sr_1.cat.categories.to_pandas().to_list()
 
     assert_eq(pd_sr_1, cd_sr_1)
 
@@ -445,7 +445,7 @@ def test_categorical_remove_categories(pd_str_cat, inplace):
     cd_sr_1 = cd_sr if cd_sr_1 is None else cd_sr_1
 
     assert "a" not in pd_sr_1.cat.categories.to_list()
-    assert "a" not in cd_sr_1.cat.categories.to_list()
+    assert "a" not in cd_sr_1.cat.categories.to_pandas().to_list()
 
     assert_eq(pd_sr_1, cd_sr_1)
 

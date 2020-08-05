@@ -846,3 +846,14 @@ def test_parquet_writer_criteo(tmpdir):
     df = df.drop(columns=cont_names)
 
     df.to_parquet(cudf_path)
+
+
+def test_trailing_nans(datadir, tmpdir):
+    fname = "trailing_nans.parquet"
+    file_path = datadir / fname
+    cu_df = cudf.read_parquet(file_path)
+
+    tmp_file_path = tmpdir.join(fname)
+    cu_df.to_parquet(tmp_file_path)
+
+    pd.read_parquet(tmp_file_path)

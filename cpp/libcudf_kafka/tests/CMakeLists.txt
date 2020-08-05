@@ -2,9 +2,12 @@ cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
 project(KAFKA_TESTS LANGUAGES C CXX CUDA)
 
+# TODO: Since we have no actual CUDA code in cudf_kafka this should be removed in the future
+# in favor of using FindCUDAToolkit to get the needed CUDA include headers
 if(NOT CMAKE_CUDA_COMPILER)
   message(SEND_ERROR "CMake cannot locate a CUDA compiler")
-endif()
+endif(NOT CMAKE_CUDA_COMPILER)
+
 
 ###################################################################################################
 # - conda environment -----------------------------------------------------------------------------
@@ -30,7 +33,7 @@ function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
     add_executable(${CMAKE_TEST_NAME}
                     ${CMAKE_TEST_SRC})
     set_target_properties(${CMAKE_TEST_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
-    target_link_libraries(${CMAKE_TEST_NAME} gmock gtest gtest_main cudf pthread libcudf_kafka)
+    target_link_libraries(${CMAKE_TEST_NAME} gmock gtest gtest_main cudf pthread cudf_kafka "${RDKAFKA++_LIBRARY}")
     set_target_properties(${CMAKE_TEST_NAME} PROPERTIES
                             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gtests")
     add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
@@ -38,11 +41,20 @@ function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
 endfunction(ConfigureTest)
 
 ###################################################################################################
+# cudf_kafka - librdkafka -------------------------------------------------------------------------
+
+find_path(RDKAFKA_INCLUDE "librdkafka" HINTS "$ENV{RDKAFKA_ROOT}/include")
+find_library(RDKAFKA++_LIBRARY "rdkafka++" HINTS "$ENV{RDKAFKA_ROOT}/lib" "$ENV{RDKAFKA_ROOT}/build")
+
+message(STATUS "RDKAFKA: RDKAFKA++_LIBRARY set to ${RDKAFKA++_LIBRARY}")
+message(STATUS "RDKAFKA: RDKAFKA_INCLUDE set to ${RDKAFKA_INCLUDE}")
+
+###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
 if(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
-    include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
-endif()
+	include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
+endif(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
 
 include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
@@ -72,12 +84,8 @@ if(CONDA_LINK_DIRS)
 endif(CONDA_LINK_DIRS)
 
 ###################################################################################################
-### test sources ##################################################################################
-###################################################################################################
-
-###################################################################################################
 # - create tests ----------------------------------------------------------------------------------
 
-ConfigureTest(CUDF_KAFKA_HOST_READ   "${CMAKE_CURRENT_SOURCE_DIR}/kafka_consumer_tests.cpp")
+ConfigureTest(CUDF_KAFKA_HOST_READ  "${CMAKE_CURRENT_SOURCE_DIR}/kafka_consumer_tests.cpp")
 
 enable_testing()

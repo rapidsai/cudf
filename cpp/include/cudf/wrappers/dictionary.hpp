@@ -53,7 +53,7 @@ struct dictionary_wrapper {
   dictionary_wrapper& operator=(const dictionary_wrapper&) = default;
 
   // construct object from type
-  CUDA_HOST_DEVICE_CALLABLE constexpr dictionary_wrapper(value_type v) : _value{v} {}
+  CUDA_HOST_DEVICE_CALLABLE constexpr explicit dictionary_wrapper(value_type v) : _value{v} {}
 
   // conversion operator
   CUDA_HOST_DEVICE_CALLABLE explicit operator value_type() const { return _value; }

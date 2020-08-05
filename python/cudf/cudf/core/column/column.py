@@ -121,7 +121,7 @@ class ColumnBase(Column, Serializable):
     def __len__(self):
         return self.size
 
-    def to_pandas(self, index=None, **kwargs):
+    def to_pandas(self, index=None, nullable_pd_dtype=False, **kwargs):
         pd_series = self.to_arrow().to_pandas(**kwargs)
         if index is not None:
             pd_series.index = index
@@ -1470,6 +1470,10 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         data = ColumnBase._concat(gpu_cols, dtype=new_dtype)
 
     elif isinstance(arbitrary, (pd.Series, pd.Categorical)):
+        if isinstance(arbitrary, pd.Series) and isinstance(
+            arbitrary.array, pd.core.arrays.masked.BaseMaskedArray
+        ):
+            return as_column(arbitrary.array)
         if is_categorical_dtype(arbitrary):
             data = as_column(pa.array(arbitrary, from_pandas=True))
         elif arbitrary.dtype == np.bool:
@@ -1594,9 +1598,12 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         if is_categorical_dtype(arbitrary.dtype):
             arb_dtype = arbitrary.dtype
         else:
-            arb_dtype = check_cast_unsupported_dtype(arbitrary.dtype)
-            if arb_dtype != arbitrary.dtype.numpy_dtype:
-                arbitrary = arbitrary.astype(arb_dtype)
+            if arbitrary.dtype == pd.StringDtype():
+                arb_dtype = np.dtype("O")
+            else:
+                arb_dtype = check_cast_unsupported_dtype(arbitrary.dtype)
+                if arb_dtype != arbitrary.dtype.numpy_dtype:
+                    arbitrary = arbitrary.astype(arb_dtype)
         if arb_dtype.kind in ("O", "U"):
             data = as_column(pa.Array.from_pandas(arbitrary), dtype=arb_dtype)
         else:
@@ -1613,6 +1620,16 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         data = as_column(
             np.asarray(arbitrary), dtype=dtype, nan_as_null=nan_as_null
         )
+    elif isinstance(arbitrary, pd.core.arrays.masked.BaseMaskedArray):
+        cudf_dtype = arbitrary._data.dtype
+
+        data = Buffer(arbitrary._data.view("|u1"))
+        data = as_column(data, dtype=cudf_dtype)
+
+        mask = arbitrary._mask
+        mask = bools_to_mask(as_column(mask).unary_operator("not"))
+
+        data = data.set_mask(mask)
 
     else:
         try:
@@ -1652,13 +1669,19 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                     sr = pd.Series(arbitrary, dtype="str")
                     data = as_column(sr, nan_as_null=nan_as_null)
                 else:
+                    native_dtype = dtype
+                    if dtype is None and pd.api.types.infer_dtype(
+                        arbitrary
+                    ) in ("mixed", "mixed-integer"):
+                        native_dtype = "object"
+                    data = np.asarray(
+                        arbitrary,
+                        dtype=native_dtype
+                        if native_dtype is None
+                        else np.dtype(native_dtype),
+                    )
                     data = as_column(
-                        np.asarray(
-                            arbitrary,
-                            dtype=dtype if dtype is None else np.dtype(dtype),
-                        ),
-                        dtype=dtype,
-                        nan_as_null=nan_as_null,
+                        data, dtype=dtype, nan_as_null=nan_as_null
                     )
     return data
 

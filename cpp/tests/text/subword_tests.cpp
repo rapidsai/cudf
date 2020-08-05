@@ -196,6 +196,26 @@ TEST(TextSubwordTest, EmptyStrings)
   EXPECT_EQ(0, result.tensor_metadata->size());
 }
 
+TEST(TextSubwordTest, AllNullStrings)
+{
+  cudf::test::strings_column_wrapper strings({"", "", ""}, {0, 0, 0});
+  std::string hash_file = temp_env->get_temp_filepath("hashed_vocab.txt");
+  create_hashed_vocab(hash_file);
+  auto result = nvtext::subword_tokenize(cudf::strings_column_view{strings},
+                                         hash_file,
+                                         16,
+                                         16,
+                                         true,   // do_lower_case
+                                         false,  // do_truncate
+                                         MAX_NUM_SENTENCES,
+                                         MAX_NUM_CHARS,
+                                         MAX_ROWS_TENSOR);
+  EXPECT_EQ(0, result.nrows_tensor);
+  EXPECT_EQ(0, result.tensor_token_ids->size());
+  EXPECT_EQ(0, result.tensor_attention_mask->size());
+  EXPECT_EQ(0, result.tensor_metadata->size());
+}
+
 TEST(TextSubwordTest, TokenizeFromVocabStruct)
 {
   std::string hash_file = temp_env->get_temp_filepath("hashed_vocab.txt");
