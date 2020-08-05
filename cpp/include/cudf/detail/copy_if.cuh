@@ -24,6 +24,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/null_mask.hpp>
+#include <cudf/strings/string_view.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -197,41 +198,8 @@ __launch_bounds__(block_size) __global__
   }
 }
 
-// Dispatch functor which performs the scatter for fixed column types and gather for other
-template <typename Filter, int block_size>
-struct scatter_gather_functor {
-  // There are two operator functions, one for fixed-width column types and another for columns that
-  // can have children such as string_view. fixed-width column gatherer is simpler and the kernel is
-  // specifically designed for better performance compared to the generic gather used for strings.
-
-  // operator for non-fixed-width types.
-  template <typename T, std::enable_if_t<not cudf::is_fixed_width<T>()>* = nullptr>
-  std::unique_ptr<cudf::column> operator()(
-    cudf::column_view const& input,
-    cudf::size_type const& output_size,
-    cudf::size_type const* block_offsets,
-    Filter filter,
-    cudf::size_type per_thread,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream                 = 0)
-  {
-    rmm::device_uvector<cudf::size_type> indices(output_size, stream);
-
-    thrust::copy_if(rmm::exec_policy(stream)->on(stream),
-                    thrust::counting_iterator<cudf::size_type>(0),
-                    thrust::counting_iterator<cudf::size_type>(input.size()),
-                    indices.begin(),
-                    filter);
-
-    auto output_table = cudf::detail::gather(
-      cudf::table_view{{input}}, indices.begin(), indices.end(), false, mr, stream);
-
-    // There will be only one column
-    return std::make_unique<cudf::column>(std::move(output_table->get_column(0)));
-  }
-
-  // operator template for fixed-width types
-  template <typename T, std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
+template <typename T, typename Filter, int block_size>
+struct scatter_gather_functor_impl {
   std::unique_ptr<cudf::column> operator()(
     cudf::column_view const& input,
     cudf::size_type const& output_size,
@@ -276,6 +244,82 @@ struct scatter_gather_functor {
     return output_column;
   }
 };
+
+template <typename Filter, int block_size>
+struct scatter_gather_functor_impl<cudf::string_view, Filter, block_size> {
+  std::unique_ptr<cudf::column> operator()(
+    cudf::column_view const& input,
+    cudf::size_type const& output_size,
+    cudf::size_type const* block_offsets,
+    Filter filter,
+    cudf::size_type per_thread,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+    cudaStream_t stream                 = 0)
+  {
+    rmm::device_uvector<cudf::size_type> indices(output_size, stream);
+
+    thrust::copy_if(rmm::exec_policy(stream)->on(stream),
+                    thrust::counting_iterator<cudf::size_type>(0),
+                    thrust::counting_iterator<cudf::size_type>(input.size()),
+                    indices.begin(),
+                    filter);
+
+    auto output_table = cudf::detail::gather(
+      cudf::table_view{{input}}, indices.begin(), indices.end(), false, mr, stream);
+
+    // There will be only one column
+    return std::make_unique<cudf::column>(std::move(output_table->get_column(0)));
+  }
+};
+
+template <typename Filter, int block_size>
+struct scatter_gather_functor_impl<numeric::decimal32, Filter, block_size> {
+  std::unique_ptr<cudf::column> operator()(
+    cudf::column_view const& input,
+    cudf::size_type const& output_size,
+    cudf::size_type const* block_offsets,
+    Filter filter,
+    cudf::size_type per_thread,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+    cudaStream_t stream                 = 0)
+  {
+    CUDF_FAIL("fixed_point type not supported for this operation yet");
+  }
+};
+
+template <typename Filter, int block_size>
+struct scatter_gather_functor_impl<numeric::decimal64, Filter, block_size> {
+  std::unique_ptr<cudf::column> operator()(
+    cudf::column_view const& input,
+    cudf::size_type const& output_size,
+    cudf::size_type const* block_offsets,
+    Filter filter,
+    cudf::size_type per_thread,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+    cudaStream_t stream                 = 0)
+  {
+    CUDF_FAIL("fixed_point type not supported for this operation yet");
+  }
+};
+
+// Dispatch functor which performs the scatter for fixed column types and gather for other
+template <typename Filter, int block_size>
+struct scatter_gather_functor {
+  template <typename Element>
+  std::unique_ptr<cudf::column> operator()(
+    cudf::column_view const& input,
+    cudf::size_type const& output_size,
+    cudf::size_type const* block_offsets,
+    Filter filter,
+    cudf::size_type per_thread,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+    cudaStream_t stream                 = 0)
+  {
+    scatter_gather_functor_impl<Element, Filter, block_size> copier{};
+    return copier(input, output_size, block_offsets, filter, per_thread, mr, stream);
+  }
+};
+
 }  // namespace
 
 namespace cudf {

@@ -283,8 +283,8 @@ struct scaled_integer {
  */
 template <typename Rep, Radix Rad>
 class fixed_point {
-  Rep _value{};
-  scale_type _scale{0};
+  Rep _value;
+  scale_type _scale;
 
  public:
   /**
@@ -326,7 +326,8 @@ class fixed_point {
    * @brief Default constructor that constructs `fixed_point` number with a
    * value and scale of zero
    */
-  fixed_point() = default;
+  CUDA_HOST_DEVICE_CALLABLE
+  fixed_point() : _value{0}, _scale{scale_type{0}} {}
 
   /**
    * @brief Explicit conversion operator
