@@ -43,7 +43,7 @@ def test_rollling_series_basic(data, index, agg, nulls, center):
                 gsr.rolling(window_size, min_periods, center), agg
             )().fillna(-1)
             try:
-                assert_eq(expect, got, check_dtype=False)
+                assert_eq(expect, got, check_dtype=False, check_freq=False)
             except AssertionError as e:
                 if agg == "count" and data != []:
                     pytest.xfail(
@@ -162,7 +162,7 @@ def test_rolling_getitem_window():
     )
     pdf = pd.DataFrame({"x": np.arange(len(index))}, index=index)
     gdf = cudf.from_pandas(pdf)
-    assert_eq(pdf.rolling("2h").x.mean(), gdf.rolling("2h").x.mean())
+    assert_eq(pdf.rolling("2h").x.mean(), gdf.rolling("2h").x.mean(), check_freq=False)
 
 
 @pytest.mark.parametrize(
