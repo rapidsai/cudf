@@ -5,6 +5,7 @@ import warnings
 from fsspec.core import get_fs_token_paths
 from pyarrow import parquet as pq
 from pyarrow.compat import guid
+from pyarrow import dataset as ds
 
 import cudf
 from cudf._lib import parquet as libparquet

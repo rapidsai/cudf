@@ -10,6 +10,8 @@
 
 import pandas as pd
 import numpy as np
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 from prettytable import PrettyTable
 from mimesis import Generic
@@ -80,7 +82,15 @@ def synthesize(name, parameters):
 
     # Store in Parquet file
     file_to_store_in = name + ".parquet" if not name.endswith(".parquet") else name
-    df.to_parquet(file_to_store_in, allow_truncated_timestamps=True, row_group_size=512)
+    tbl = pa.Table.from_pandas(df)
+    pq.write_to_dataset(
+        tbl,
+        root_path=file_to_store_in,
+        row_group_size=64,
+        partition_cols=['3'],
+    )
+    #df.to_parquet(file_to_store_in, allow_truncated_timestamps=True, row_group_size=512)
+    #df.to_parquet(file_to_store_in, engine='fastparquet', file_scheme='hive')
     print("done")
     print("synthesized dataset stored in " + file_to_store_in)
 
