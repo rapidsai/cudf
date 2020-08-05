@@ -312,7 +312,7 @@ class fixed_point {
   explicit fixed_point(scaled_integer<Rep> s) : _value{s.value}, _scale{s.scale} {}
 
   /**
-   * @brief "Scale-less" constructor that constructs `fixed_point` number with a speficied
+   * @brief "Scale-less" constructor that constructs `fixed_point` number with a specified
    * value and scale of zero
    */
   template <typename T,
