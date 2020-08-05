@@ -237,8 +237,7 @@ struct create_column_from_view {
   std::unique_ptr<column> operator()()
   {
     auto lists_view = lists_column_view(view);
-    return cudf::lists::detail::slice(
-      lists_view, view.offset(), view.offset() + view.size(), stream, mr);
+    return cudf::lists::detail::slice(lists_view, 0, view.size(), stream, mr);
   }
 };
 }  // anonymous namespace
