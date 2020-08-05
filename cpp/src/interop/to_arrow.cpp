@@ -237,7 +237,10 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
   bool const has_names = not column_names.empty();
 
   std::transform(input.begin(), input.end(), std::back_inserter(arrays), [&](auto const& c) {
-    return type_dispatcher(c.type(), detail::dispatch_to_arrow{}, c, c.type().id(), ar_mr, stream);
+    return c.type().id() != type_id::EMPTY
+             ? type_dispatcher(
+                 c.type(), detail::dispatch_to_arrow{}, c, c.type().id(), ar_mr, stream)
+             : std::make_shared<arrow::NullArray>(c.size());
   });
 
   std::transform(

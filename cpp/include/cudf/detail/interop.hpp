@@ -48,7 +48,6 @@ template <typename... Ts>
 std::shared_ptr<arrow::Array> to_arrow_array(cudf::type_id id, Ts&&... args)
 {
   switch (id) {
-    case type_id::EMPTY: return std::make_shared<arrow::NullArray>(0);
     case type_id::BOOL8: return std::make_shared<arrow::BooleanArray>(std::forward<Ts>(args)...);
     case type_id::INT8: return std::make_shared<arrow::Int8Array>(std::forward<Ts>(args)...);
     case type_id::INT16: return std::make_shared<arrow::Int16Array>(std::forward<Ts>(args)...);
@@ -60,6 +59,9 @@ std::shared_ptr<arrow::Array> to_arrow_array(cudf::type_id id, Ts&&... args)
     case type_id::UINT64: return std::make_shared<arrow::UInt64Array>(std::forward<Ts>(args)...);
     case type_id::FLOAT32: return std::make_shared<arrow::FloatArray>(std::forward<Ts>(args)...);
     case type_id::FLOAT64: return std::make_shared<arrow::DoubleArray>(std::forward<Ts>(args)...);
+    case type_id::TIMESTAMP_DAYS:
+      return std::make_shared<arrow::Date32Array>(std::make_shared<arrow::Date32Type>(),
+                                                  std::forward<Ts>(args)...);
     case type_id::TIMESTAMP_SECONDS:
       return std::make_shared<arrow::TimestampArray>(arrow::timestamp(arrow::TimeUnit::SECOND),
                                                      std::forward<Ts>(args)...);

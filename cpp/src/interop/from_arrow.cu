@@ -48,6 +48,7 @@ data_type arrow_to_cudf_type(arrow::DataType const& arrow_type)
     case arrow::Type::UINT64: return data_type(type_id::UINT64);
     case arrow::Type::FLOAT: return data_type(type_id::FLOAT32);
     case arrow::Type::DOUBLE: return data_type(type_id::FLOAT64);
+    case arrow::Type::DATE32: return data_type(type_id::TIMESTAMP_DAYS);
     case arrow::Type::TIMESTAMP: {
       arrow::TimestampType const* type = static_cast<arrow::TimestampType const*>(&arrow_type);
       switch (type->unit()) {
