@@ -403,4 +403,53 @@ TYPED_TEST(TypedColumnTest, ColumnViewConstructorWithMask)
   EXPECT_NE(original_view.null_mask(), copy_view.null_mask());
 }
 
+template <typename T>
+struct ListsColumnTest : public cudf::test::BaseFixture {
+};
+
+using NumericTypesNotBool =
+  cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
+
+TYPED_TEST_CASE(ListsColumnTest, NumericTypesNotBool);
+
+TYPED_TEST(ListsColumnTest, ListsColumnViewConstructor)
+{
+  cudf::test::lists_column_wrapper<TypeParam> list{{1, 2}, {3, 4}, {5, 6, 7}, {8, 9}};
+
+  auto result = std::make_unique<cudf::column>(list);
+
+  cudf::test::expect_columns_equal(list, result->view());
+}
+
+TYPED_TEST(ListsColumnTest, ListsSlicedColumnViewConstructor)
+{
+  cudf::test::lists_column_wrapper<TypeParam> list{{1, 2}, {3, 4}, {5, 6, 7}, {8, 9}};
+  cudf::test::lists_column_wrapper<TypeParam> expect{{3, 4}, {5, 6, 7}};
+
+  auto sliced = cudf::slice(list, {1, 3}).front();
+  auto result = std::make_unique<cudf::column>(sliced);
+
+  cudf::test::expect_columns_equal(expect, result->view());
+}
+
+TYPED_TEST(ListsColumnTest, ListsSlicedColumnViewConstructorWithNulls)
+{
+  auto valids = cudf::test::make_counting_transform_iterator(
+    0, [](auto i) { return i % 2 == 0 ? true : false; });
+
+  using LCW = cudf::test::lists_column_wrapper<TypeParam>;
+
+  cudf::test::lists_column_wrapper<TypeParam> list{
+    {{{{1, 2}, {3, 4}}, valids}, LCW{}, {{{5, 6, 7}, LCW{}, {8, 9}}, valids}, LCW{}, LCW{}},
+    valids};
+
+  cudf::test::lists_column_wrapper<TypeParam> expect{
+    {{{{5, 6, 7}, LCW{}, {8, 9}}, valids}, LCW{}, LCW{}}, valids};
+
+  auto sliced = cudf::slice(list, {2, 5}).front();
+  auto result = std::make_unique<cudf::column>(sliced);
+
+  cudf::test::expect_columns_equal(expect, result->view());
+}
+
 CUDF_TEST_PROGRAM_MAIN()
