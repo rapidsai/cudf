@@ -67,7 +67,7 @@ def test_categorical_integer():
 3 c
 4 a
 dtype: category
-Categories (3, object): [a, b, c]
+Categories (3, object): ['a', 'b', 'c']
 """
     assert string.split() == expect_str.split()
 
