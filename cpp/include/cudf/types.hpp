@@ -240,8 +240,8 @@ class data_type {
 
  private:
   type_id _id{type_id::EMPTY};
-  // Store additional type specific metadata, timezone, decimal precision and
-  // scale, etc.
+  // Store additional type specific metadata, timezone, decimal precision and scale, etc.
+  int32_t scale{};  // can't use numeric::scale_type at this point
 };
 
 /**
