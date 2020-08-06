@@ -118,9 +118,15 @@ class DatetimeColumn(column.ColumnBase):
                 other.value * m, size=len(self), dtype=self.dtype
             )
         elif isinstance(other, np.datetime64):
+            if np.isnat(other):
+                return as_scalar(val=None, dtype=self.dtype)
+
             other = other.astype(self.dtype)
             return as_scalar(other)
         elif isinstance(other, np.timedelta64):
+            if np.isnat(other):
+                return as_scalar(val=None, dtype=other.dtype)
+
             return as_scalar(other)
         else:
             raise TypeError("cannot broadcast {}".format(type(other)))
@@ -188,17 +194,12 @@ class DatetimeColumn(column.ColumnBase):
             null_count=self.null_count,
         )
 
-    def default_na_value(self, **kwargs):
+    def default_na_value(self):
         """Returns the default NA value for this column
         """
         dkind = self.dtype.kind
         if dkind == "M":
-            valid_scalar = kwargs.pop("valid_scalar", False)
-            na_value = np.datetime64("nat", self.time_unit)
-            if valid_scalar:
-                return Scalar(na_value, valid=True)
-            else:
-                return na_value
+            return np.datetime64("nat", self.time_unit)
         else:
             raise TypeError(
                 "datetime column of {} has no NaN value".format(self.dtype)

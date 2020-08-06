@@ -150,6 +150,9 @@ class TimeDeltaColumn(column.ColumnBase):
             # TODO
             pass
         elif isinstance(other, np.timedelta64):
+            if np.isnat(other):
+                return as_scalar(val=None, dtype="timedelta64[ns]")
+
             other = other.astype("timedelta64[ns]")
             return as_scalar(other)
         elif np.isscalar(other):
@@ -173,17 +176,12 @@ class TimeDeltaColumn(column.ColumnBase):
             size=self.size,
         )
 
-    def default_na_value(self, **kwargs):
+    def default_na_value(self):
         """Returns the default NA value for this column
         """
         dkind = self.dtype.kind
         if dkind == "m":
-            valid_scalar = kwargs.pop("valid_scalar", False)
-            na_value = np.timedelta64("nat", self.time_unit)
-            if valid_scalar:
-                return Scalar(na_value, valid=True)
-            else:
-                return na_value
+            return np.timedelta64("nat", self.time_unit)
         else:
             raise TypeError(
                 "datetime column of {} has no NaN value".format(self.dtype)

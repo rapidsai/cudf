@@ -310,9 +310,7 @@ class ColumnBase(Column, Serializable):
         output size could be smaller.
         """
         if fillna:
-            return self.fillna(
-                self.default_na_value(valid_scalar=True)
-            ).data_array_view
+            return self.fillna(self.default_na_value()).data_array_view
         else:
             return self.dropna().data_array_view
 

@@ -44,7 +44,7 @@ cimport cudf._lib.cpp.types as libcudf_types
 
 cdef class Scalar:
 
-    def __init__(self, value, dtype=None, valid=None):
+    def __init__(self, value, dtype=None):
         """
         cudf.Scalar: Type representing a scalar value on the device
 
@@ -62,13 +62,7 @@ cdef class Scalar:
 
         value = to_cudf_compatible_scalar(value, dtype=dtype)
 
-        if valid is None:
-            if isinstance(
-                value, (np.timedelta64, np.datetime64)
-            ) and np.isnat(value):
-                valid = False if valid is None else valid
-            else:
-                valid = value is not None
+        valid = value is not None
 
         if dtype is None:
             if value is None:
@@ -94,9 +88,8 @@ cdef class Scalar:
             )
         else:
             raise ValueError(
-                "Cannot convert value of type {} to cudf scalar".format(
-                    type(value).__name__
-                )
+                f"Cannot convert value of type "
+                f"{type(value).__name__} to cudf scalar"
             )
 
     @property
@@ -126,8 +119,7 @@ cdef class Scalar:
                 "Could not convert cudf::scalar to a Python value"
             )
 
-    @property
-    def valid(self):
+    cpdef bool is_valid(self):
         """
         Returns if the Scalar is valid or not(i.e., <NA>).
         """
@@ -155,8 +147,8 @@ cdef _set_string_from_np_string(unique_ptr[scalar]& s, value, bool valid=True):
 
 
 cdef _set_numeric_from_np_scalar(unique_ptr[scalar]& s,
-                                 value,
-                                 dtype,
+                                 object value,
+                                 object dtype,
                                  bool valid=True):
     value = value if valid else 0
     if dtype == "int8":
@@ -182,12 +174,12 @@ cdef _set_numeric_from_np_scalar(unique_ptr[scalar]& s,
     elif dtype == "bool":
         s.reset(new numeric_scalar[bool](<bool>value, valid))
     else:
-        raise ValueError("dtype not supported: {}".format(dtype))
+        raise ValueError(f"dtype not supported: {dtype}")
 
 
 cdef _set_datetime64_from_np_scalar(unique_ptr[scalar]& s,
-                                    value,
-                                    dtype,
+                                    object value,
+                                    object dtype,
                                     bool valid=True):
 
     value = value if valid else 0
@@ -209,11 +201,11 @@ cdef _set_datetime64_from_np_scalar(unique_ptr[scalar]& s,
             new timestamp_scalar[timestamp_ns](<int64_t>np.int64(value), valid)
         )
     else:
-        raise ValueError("dtype not supported: {}".format(dtype))
+        raise ValueError(f"dtype not supported: {dtype}")
 
 cdef _set_timedelta64_from_np_scalar(unique_ptr[scalar]& s,
-                                     value,
-                                     dtype,
+                                     object value,
+                                     object dtype,
                                      bool valid=True):
 
     value = value if valid else 0
@@ -235,7 +227,7 @@ cdef _set_timedelta64_from_np_scalar(unique_ptr[scalar]& s,
             new duration_scalar[duration_ns](<int64_t>np.int64(value), valid)
         )
     else:
-        raise ValueError("dtype not supported: {}".format(dtype))
+        raise ValueError(f"dtype not supported: {dtype}")
 
 cdef _get_py_string_from_string(unique_ptr[scalar]& s):
     if not s.get()[0].is_valid():
@@ -358,11 +350,11 @@ cdef _get_np_scalar_from_timedelta64(unique_ptr[scalar]& s):
         raise ValueError("Could not convert cudf::scalar to numpy scalar")
 
 
-def as_scalar(val, dtype=None, valid=None):
+def as_scalar(val, dtype=None):
     if isinstance(val, Scalar):
         if (dtype is None or dtype == val.dtype):
             return val
         else:
-            return Scalar(val.value, dtype, valid=valid)
+            return Scalar(val.value, dtype)
     else:
-        return Scalar(value=val, dtype=dtype, valid=valid)
+        return Scalar(value=val, dtype=dtype)

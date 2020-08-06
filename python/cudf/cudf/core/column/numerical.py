@@ -9,7 +9,7 @@ from cudf import _lib as libcudf
 from cudf._lib.nvtx import annotate
 from cudf._lib.scalar import Scalar
 from cudf.core.buffer import Buffer
-from cudf.core.column import as_column, column
+from cudf.core.column import as_column, build_column, column, string
 from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import (
     cudf_dtypes_to_pandas_dtypes,
@@ -135,7 +135,6 @@ class NumericalColumn(column.ColumnBase):
         return libcudf.string_casting.int2ip(self)
 
     def as_string_column(self, dtype, **kwargs):
-        from cudf.core.column import as_column, string
 
         if len(self) > 0:
             return string._numeric_to_str_typecast_functions[
@@ -145,7 +144,6 @@ class NumericalColumn(column.ColumnBase):
             return as_column([], dtype="object")
 
     def as_datetime_column(self, dtype, **kwargs):
-        from cudf.core.column import build_column
 
         return build_column(
             data=self.astype("int64").base_data,
@@ -156,7 +154,6 @@ class NumericalColumn(column.ColumnBase):
         )
 
     def as_timedelta_column(self, dtype, **kwargs):
-        from cudf.core.column import build_column
 
         return build_column(
             data=self.astype("int64").base_data,
@@ -270,7 +267,7 @@ class NumericalColumn(column.ColumnBase):
         out = column.column_applymap(udf=udf, column=self, out_dtype=out_dtype)
         return out
 
-    def default_na_value(self, **kwargs):
+    def default_na_value(self):
         """Returns the default NA value for this column
         """
         dkind = self.dtype.kind
