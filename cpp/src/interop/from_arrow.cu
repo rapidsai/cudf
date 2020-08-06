@@ -29,6 +29,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 
 namespace cudf {
 
@@ -120,7 +121,7 @@ struct dispatch_to_cudf_column {
         (num_rows == static_cast<size_type>(data_buffer->size() / sizeof(T)))
           ? *tmp_mask
           : copy_bitmask(
-              static_cast<bitmask_type*>(tmp_mask->data()), array.offset(), num_rows, stream, mr);
+              static_cast<bitmask_type*>(tmp_mask->data()), array.offset(), array.offset()+num_rows, stream, mr);
 
       col->set_null_mask(std::move(out_mask));
     }
@@ -160,7 +161,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<bool>(
     auto out_mask =
       copy_bitmask(static_cast<bitmask_type*>(get_mask_buffer(array, mr, stream)->data()),
                    array.offset(),
-                   array.length(),
+                   array.offset()+array.length(),
                    stream,
                    mr);
 
@@ -178,6 +179,9 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::string_view>(
   rmm::mr::device_memory_resource* mr,
   cudaStream_t stream)
 {
+  if (array.length() == 0){
+      return cudf::strings::detail::make_empty_strings_column(mr, stream);
+  }
   auto str_array    = static_cast<arrow::StringArray const*>(&array);
   auto offset_array = std::make_unique<arrow::Int32Array>(
     str_array->value_offsets()->size() / sizeof(int32_t), str_array->value_offsets(), nullptr);

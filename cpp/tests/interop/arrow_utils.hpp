@@ -34,11 +34,8 @@
 template <typename T>
 std::enable_if_t<cudf::is_fixed_width<T>() and !std::is_same<T, bool>::value,
                  std::shared_ptr<arrow::Array>>
-get_arrow_array(std::initializer_list<T> elements, std::initializer_list<uint8_t> validity = {})
+get_arrow_array(std::vector<T> const& data, std::vector<uint8_t> const& mask = {})
 {
-  std::vector<T> data(elements);
-  std::vector<uint8_t> mask(validity);
-
   std::shared_ptr<arrow::Buffer> data_buffer;
   arrow::BufferBuilder buff_builder;
   buff_builder.Append(data.data(), sizeof(T) * data.size());
@@ -51,18 +48,51 @@ get_arrow_array(std::initializer_list<T> elements, std::initializer_list<uint8_t
 }
 
 template <typename T>
-std::enable_if_t<std::is_same<T, bool>::value, std::shared_ptr<arrow::Array>> get_arrow_array(
-  std::initializer_list<bool> elements, std::initializer_list<bool> validity = {})
+std::enable_if_t<cudf::is_fixed_width<T>() and !std::is_same<T, bool>::value,
+                 std::shared_ptr<arrow::Array>>
+get_arrow_array(std::initializer_list<T> elements, std::initializer_list<uint8_t> validity = {})
 {
-  std::vector<bool> valid_bytes(validity);
-  std::vector<bool> data(elements);
+  std::vector<T> data(elements);
+  std::vector<uint8_t> mask(validity);
+
+  return get_arrow_array<T>(data, mask);
+}
+
+template <typename T>
+std::enable_if_t<std::is_same<T, bool>::value, std::shared_ptr<arrow::Array>> get_arrow_array(
+  std::vector<bool> const& data, std::vector<bool> const& mask = {})
+{
   std::shared_ptr<arrow::BooleanArray> boolean_array;
   arrow::BooleanBuilder boolean_builder;
 
-  boolean_builder.AppendValues(data, valid_bytes);
+  boolean_builder.AppendValues(data, mask);
   CUDF_EXPECTS(boolean_builder.Finish(&boolean_array).ok(), "Failed to create arrow boolean array");
 
   return boolean_array;
+}
+
+template <typename T>
+std::enable_if_t<std::is_same<T, bool>::value, std::shared_ptr<arrow::Array>> get_arrow_array(
+  std::initializer_list<bool> elements, std::initializer_list<bool> validity = {})
+{
+  std::vector<bool> mask(validity);
+  std::vector<bool> data(elements);
+  
+  return get_arrow_array<T>(data, mask);
+}
+
+template <typename T>
+std::enable_if_t<std::is_same<T, cudf::string_view>::value, std::shared_ptr<arrow::Array>>
+get_arrow_array(std::vector<std::string> const& data,
+                std::vector<uint8_t> const& mask = {})
+{
+  std::shared_ptr<arrow::StringArray> string_array;
+  arrow::StringBuilder string_builder;
+
+  string_builder.AppendValues(data, mask.data());
+  CUDF_EXPECTS(string_builder.Finish(&string_array).ok(), "Failed to create arrow string array");
+
+  return string_array;
 }
 
 template <typename T>
@@ -70,23 +100,22 @@ std::enable_if_t<std::is_same<T, cudf::string_view>::value, std::shared_ptr<arro
 get_arrow_array(std::initializer_list<std::string> elements,
                 std::initializer_list<uint8_t> validity = {})
 {
-  std::vector<uint8_t> valid_bytes(validity);
-  std::shared_ptr<arrow::StringArray> string_array;
-  arrow::StringBuilder string_builder;
-
-  string_builder.AppendValues(elements, valid_bytes.data());
-  CUDF_EXPECTS(string_builder.Finish(&string_array).ok(), "Failed to create arrow string array");
-
-  return string_array;
+  std::vector<uint8_t> mask(validity);
+  std::vector<std::string> data(elements);
+  
+  return get_arrow_array<T>(data, mask);
 }
 
-template <typename T>
-std::enable_if_t<!std::is_same<T, cudf::string_view>::value and !cudf::is_fixed_width<T>(),
-                 std::shared_ptr<arrow::Array>>
-get_arrow_string_array(std::initializer_list<std::string> elements,
-                       std::initializer_list<uint8_t> validity = {})
+template <typename KEY_TYPE, typename IND_TYPE>
+std::shared_ptr<arrow::Array> get_arrow_dict_array(std::vector<KEY_TYPE> const& keys,
+                                                   std::vector<IND_TYPE> const& ind,
+                                                   std::vector<uint8_t> const& validity = {})
 {
-  CUDF_EXPECTS(false, "Trying to get an unsupported type");
+  auto keys_array    = get_arrow_array<KEY_TYPE>(keys);
+  auto indices_array = get_arrow_array<IND_TYPE>(ind, validity);
+
+  return std::make_shared<arrow::DictionaryArray>(
+    arrow::dictionary(indices_array->type(), keys_array->type()), indices_array, keys_array);
 }
 
 template <typename KEY_TYPE, typename IND_TYPE>
@@ -100,6 +129,7 @@ std::shared_ptr<arrow::Array> get_arrow_dict_array(std::initializer_list<KEY_TYP
   return std::make_shared<arrow::DictionaryArray>(
     arrow::dictionary(indices_array->type(), keys_array->type()), indices_array, keys_array);
 }
+
 
 // Creates only single layered list
 template <typename T>
@@ -123,6 +153,4 @@ std::shared_ptr<arrow::Array> get_arrow_list_array(std::initializer_list<T> data
     mask.size() == 0 ? nullptr : arrow::BitUtil::BytesToBits(mask).ValueOrDie());
 }
 
-std::unique_ptr<cudf::table> get_cudf_table();
-
-std::shared_ptr<arrow::Table> get_arrow_table();
+std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_tables(cudf::size_type length=10000);
