@@ -57,7 +57,7 @@ resolve_input_data_reference(const detail::device_data_reference device_data_ref
       return Element();
     }
     case detail::device_data_reference_type::INTERMEDIATE: {
-      return *reinterpret_cast<const Element* const>(
+      return *reinterpret_cast<const Element*>(
         &thread_intermediate_storage[device_data_reference.data_index]);
     }
     default: {
