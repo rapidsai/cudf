@@ -4494,7 +4494,10 @@ class StringColumn(column.ColumnBase):
             # TODO: Add once
             # https://github.com/rapidsai/cudf/pull/5625/
             # is merged.
-            pass
+            raise NotImplementedError(
+                "Type conversion to string is not implemented for duration "
+                "types"
+            )
         elif out_dtype.kind in {"i", "u"}:
             if not cpp_is_integer(self).all():
                 raise ValueError(

@@ -19,7 +19,7 @@ from cudf.utils.utils import buffers_from_pyarrow
 
 class TimeDeltaColumn(column.ColumnBase):
     def __init__(
-        self, data, dtype, mask=None, size=None, offset=0, null_count=None
+        self, data, dtype, size, mask=None, offset=0, null_count=None
     ):
         """
         Parameters
@@ -28,10 +28,10 @@ class TimeDeltaColumn(column.ColumnBase):
             The Timedelta values
         dtype : np.dtype
             The data type
+        size : int
+            Size of memory allocation.
         mask : Buffer; optional
             The validity mask
-        size : int, optional
-            Size of memory allocation.
         offset : int
             Data offset
         null_count : int, optional
@@ -41,9 +41,7 @@ class TimeDeltaColumn(column.ColumnBase):
         dtype = np.dtype(dtype)
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
-        if size is None:
-            size = data.size // dtype.itemsize
-            size = size - offset
+
         super().__init__(
             data,
             size=size,
@@ -235,7 +233,9 @@ class TimeDeltaColumn(column.ColumnBase):
         # TODO: To be implemented once
         # https://github.com/rapidsai/cudf/pull/5625/
         # is merged.
-        raise NotImplementedError
+        raise NotImplementedError(
+            "Type conversion to string is not implemented for duration types"
+        )
 
     def as_timedelta_column(self, dtype, **kwargs):
         dtype = np.dtype(dtype)
