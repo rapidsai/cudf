@@ -14,14 +14,14 @@ import pytest
 
 import cudf
 from cudf import read_csv
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import assert_eq, promote_to_pd_nullable_dtype
 
 
 def make_numeric_dataframe(nrows, dtype):
     df = pd.DataFrame()
     df["col1"] = np.arange(nrows, dtype=dtype)
     df["col2"] = np.arange(1, 1 + nrows, dtype=dtype)
-    return df
+    return promote_to_pd_nullable_dtype(df)
 
 
 def make_datetime_dataframe(include_non_standard=False):
@@ -58,7 +58,7 @@ def make_datetime_dataframe(include_non_standard=False):
                 "15-May-2009",
             ]
         )
-    return df
+    return promote_to_pd_nullable_dtype(df)
 
 
 def make_numpy_mixed_dataframe():
@@ -115,13 +115,31 @@ def make_all_numeric_dataframe():
         np.uint64,
     ]
 
+    pd_dtypes = [
+        np.float32,
+        np.float32,
+        np.float64,
+        np.float64,
+        pd.Int8Dtype(),
+        pd.Int16Dtype(),
+        pd.Int16Dtype(),
+        pd.Int32Dtype(),
+        pd.Int32Dtype(),
+        pd.Int64Dtype(),
+        pd.Int64Dtype(),
+        pd.UInt8Dtype(),
+        pd.UInt16Dtype(),
+        pd.UInt32Dtype(),
+        pd.UInt64Dtype(),
+    ]
+
     for i in range(len(gdf_dtypes)):
         df[gdf_dtypes[i]] = np.arange(10, dtype=np_dtypes[i])
 
     return (
         df,
         OrderedDict(zip(gdf_dtypes, gdf_dtypes)),
-        OrderedDict(zip(gdf_dtypes, np_dtypes)),
+        OrderedDict(zip(gdf_dtypes, pd_dtypes)),
     )
 
 
@@ -189,7 +207,7 @@ def test_csv_reader_datetime(parse_dates):
         dayfirst=True,
     )
 
-    assert_eq(gdf, pdf)
+    assert_eq(gdf, pdf, downcast=True)
 
 
 @pytest.mark.parametrize("pandas_arg", [{"delimiter": "|"}, {"sep": "|"}])
@@ -292,6 +310,8 @@ def test_csv_reader_skiprows_skipfooter(tmpdir):
         skipfooter=1,
         engine="python",
     )
+    # Sadly can't read directly into nullable pandas dtypes
+    df_out = promote_to_pd_nullable_dtype(df_out)
     out = read_csv(
         str(fname),
         names=["1", "2", "3"],
@@ -398,6 +418,7 @@ def test_csv_reader_usecols_int_char(tmpdir):
     )
 
     df_out = pd.read_csv(fname, usecols=[0, 1, 3])
+    df_out = promote_to_pd_nullable_dtype(df_out)
     out = read_csv(fname, usecols=[0, 1, 3])
 
     assert len(out.columns) == len(df_out.columns)
@@ -410,6 +431,7 @@ def test_csv_reader_mangle_dupe_cols(tmpdir):
 
     # Default: mangle_dupe_cols=True
     pd_df = pd.read_csv(StringIO(buffer))
+    pd_df = promote_to_pd_nullable_dtype(pd_df)
     cu_df = read_csv(StringIO(buffer))
     assert_eq(cu_df, pd_df)
 
@@ -596,6 +618,7 @@ def test_csv_reader_compression(tmpdir, ext, out_comp, in_comp):
     pdf = pd.read_csv(
         fname, names=list(df.columns.values), compression=in_comp
     )
+    pdf = promote_to_pd_nullable_dtype(pdf)
 
     assert_eq(gdf, pdf)
 
@@ -645,7 +668,7 @@ def test_csv_reader_bools(tmpdir, names, dtypes, data, trues, falses):
         true_values=trues,
         false_values=falses,
     )
-
+    df_out = promote_to_pd_nullable_dtype(df_out)
     out = read_csv(
         fname,
         names=names,
@@ -886,6 +909,7 @@ def test_csv_reader_filenotfound(tmpdir):
 )
 def test_csv_reader_filepath_or_buffer(tmpdir, path_or_buf, src):
     expect = pd.read_csv(path_or_buf("filepath"))
+    expect = promote_to_pd_nullable_dtype(expect)
     got = cudf.read_csv(path_or_buf(src))
 
     assert_eq(expect, got)
@@ -1054,7 +1078,7 @@ def test_csv_reader_delim_whitespace():
     # with header row
     cu_df = read_csv(StringIO(buffer), delim_whitespace=True)
     pd_df = pd.read_csv(StringIO(buffer), delim_whitespace=True)
-    assert_eq(pd_df, cu_df)
+    assert_eq(pd_df, cu_df, downcast=True)
 
     # without header row
     cu_df = read_csv(StringIO(buffer), delim_whitespace=True, header=None)
@@ -1085,7 +1109,7 @@ def test_csv_reader_header_quotation():
     cu_df = read_csv(StringIO(buffer))
     pd_df = pd.read_csv(StringIO(buffer))
     assert cu_df.shape == (1, 3)
-    assert_eq(pd_df, cu_df)
+    assert_eq(pd_df, cu_df, downcast=True)
 
     # test cases that fail with pandas
     buffer_pd_fail = '"1,one," , ",2,two" ,3\n4,5,6'
@@ -1110,7 +1134,7 @@ def test_csv_reader_index_col():
     # using a column name
     cu_df = read_csv(StringIO(buffer), names=names, index_col="int1")
     pd_df = pd.read_csv(StringIO(buffer), names=names, index_col="int1")
-    assert_eq(pd_df, cu_df)
+    assert_eq(pd_df, cu_df, downcast=True)
 
     # using a column index
     cu_df = read_csv(StringIO(buffer), header=None, index_col=0)
@@ -1190,7 +1214,7 @@ def test_csv_reader_hexadecimals(pdf_dtype, gdf_dtype):
         # otherwise, dtype inference returns as object (string)
         pdf = pd.read_csv(StringIO(buffer), names=["hex_int"])
         gdf = read_csv(StringIO(buffer), names=["hex_int"])
-        assert_eq(pdf, gdf)
+        assert_eq(pdf, gdf, downcast=True)
 
 
 @pytest.mark.parametrize("quoting", [0, 1, 2, 3])
@@ -1206,7 +1230,7 @@ def test_csv_reader_pd_consistent_quotes(quoting):
     )
     pd_df = pd.read_csv(StringIO(buffer), names=names, quoting=quoting)
 
-    assert_eq(pd_df, gd_df)
+    assert_eq(pd_df, gd_df, downcast=True)
 
 
 def test_read_csv_names_header_combination():
@@ -1217,6 +1241,7 @@ def test_read_csv_names_header_combination():
             "gender": ["F", "F", "F"],
         }
     )
+    pdf = promote_to_pd_nullable_dtype(pdf)
     buffer = pdf.to_csv(header=True, index=False)
     names = pdf.columns
 
@@ -1343,7 +1368,7 @@ def test_csv_writer_file_handle(tmpdir):
     assert os.path.exists(gdf_df_fname)
 
     gdf2 = pd.read_csv(gdf_df_fname)
-    assert_eq(gdf, gdf2)
+    assert_eq(gdf, gdf2, downcast=True)
 
 
 def test_csv_writer_file_append(tmpdir):

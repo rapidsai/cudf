@@ -6,14 +6,14 @@ import pytest
 
 import cudf
 from cudf.core import Series
-from cudf.tests.utils import NUMERIC_TYPES, OTHER_TYPES, assert_eq
+from cudf.tests.utils import NUMERIC_TYPES, OTHER_TYPES, assert_eq, promote_to_pd_nullable_dtype
 
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + OTHER_TYPES)
 def test_repeat(dtype):
     arr = np.random.rand(10) * 10
     repeats = np.random.randint(10, size=10)
-    psr = pd.Series(arr).astype(dtype)
+    psr = promote_to_pd_nullable_dtype(pd.Series(arr).astype(dtype))
     gsr = cudf.from_pandas(psr)
 
     assert_eq(psr.repeat(repeats), gsr.repeat(repeats))
@@ -29,7 +29,7 @@ def test_repeat_index():
 
 
 def test_repeat_dataframe():
-    psr = pd.DataFrame({"a": [1, 1, 2, 2]})
+    psr = pd.DataFrame({"a": [1, 1, 2, 2]}, dtype=pd.Int64Dtype())
     gsr = cudf.from_pandas(psr)
     repeats = np.random.randint(10, size=4)
 
@@ -42,7 +42,7 @@ def test_repeat_dataframe():
 def test_repeat_scalar(dtype):
     arr = np.random.rand(10) * 10
     repeats = 10
-    psr = pd.Series(arr).astype(dtype)
+    psr = promote_to_pd_nullable_dtype(pd.Series(arr).astype(dtype))
     gsr = cudf.from_pandas(psr)
 
     assert_eq(psr.repeat(repeats), gsr.repeat(repeats))
