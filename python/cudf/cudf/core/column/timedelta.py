@@ -123,7 +123,7 @@ class TimeDeltaColumn(column.ColumnBase):
                     rhs = as_scalar(rhs, dtype="float64")
                 else:
                     rhs = rhs.astype("timedelta64[ns]").astype("float64")
-                out_dtype = np.dtype("float_")
+                out_dtype = np.dtype("float64")
             elif op == "floordiv":
                 op = "truediv"
                 lhs = lhs.astype("timedelta64[ns]").astype("float64")
