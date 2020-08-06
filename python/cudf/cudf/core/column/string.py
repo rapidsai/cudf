@@ -4742,14 +4742,7 @@ def _string_column_binop(lhs, rhs, op, out_dtype):
 def _get_cols_list(parent_obj, others):
 
     if isinstance(parent_obj, cudf.Index):
-        # TODO: We might have to change
-        # this incase the fix of the below
-        # issue alters behaviour incase of
-        # Index object being parent_obj
-        # https://github.com/pandas-dev/pandas/issues/35556
-        parent_obj = parent_obj.to_series(
-            index=cudf.RangeIndex(len(parent_obj))
-        )
+        parent_obj = parent_obj.to_series()
 
     if (
         can_convert_to_column(others)
