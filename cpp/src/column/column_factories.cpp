@@ -22,22 +22,31 @@
 #include <cudf/strings/detail/fill.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include "cudf/fixed_point/fixed_point.hpp"
 
 #include <thrust/iterator/constant_iterator.h>
 
 namespace cudf {
 namespace {
 struct size_of_helper {
-  template <typename T>
-  constexpr std::enable_if_t<not is_fixed_width<T>(), int> operator()() const
+  template <typename T, typename std::enable_if_t<not is_fixed_width<T>()>* = nullptr>
+  constexpr int operator()() const
   {
     CUDF_FAIL("Invalid, non fixed-width element type.");
   }
 
-  template <typename T>
-  constexpr std::enable_if_t<is_fixed_width<T>(), int> operator()() const noexcept
+  template <typename T,
+            typename std::enable_if_t<is_fixed_width<T>() && not is_fixed_point<T>()>* = nullptr>
+  constexpr int operator()() const noexcept
   {
     return sizeof(T);
+  }
+
+  template <typename T, typename std::enable_if_t<is_fixed_point<T>()>* = nullptr>
+  constexpr int operator()() const noexcept
+  {
+    // Only want the sizeof fixed_point::Rep as fixed_point::scale is stored in data_type
+    return sizeof(typename T::representation_type);
   }
 };
 }  // namespace
@@ -63,6 +72,24 @@ std::unique_ptr<column> make_numeric_column(data_type type,
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(is_numeric(type), "Invalid, non-numeric type.");
+
+  return std::make_unique<column>(type,
+                                  size,
+                                  rmm::device_buffer{size * cudf::size_of(type), stream, mr},
+                                  create_null_mask(size, state, stream, mr),
+                                  state_null_count(state, size),
+                                  std::vector<std::unique_ptr<column>>{});
+}
+
+// Allocate storage for a specified number of numeric elements
+std::unique_ptr<column> make_fixed_point_column(data_type type,
+                                                size_type size,
+                                                mask_state state,
+                                                cudaStream_t stream,
+                                                rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  CUDF_EXPECTS(is_fixed_point(type), "Invalid, non-fixed_point type.");
 
   return std::make_unique<column>(type,
                                   size,
@@ -122,6 +149,8 @@ std::unique_ptr<column> make_fixed_width_column(data_type type,
     return make_timestamp_column(type, size, state, stream, mr);
   } else if (is_duration(type)) {
     return make_duration_column(type, size, state, stream, mr);
+  } else if (is_fixed_point(type)) {
+    return make_fixed_point_column(type, size, state, stream, mr);
   }
   return make_numeric_column(type, size, state, stream, mr);
 }
