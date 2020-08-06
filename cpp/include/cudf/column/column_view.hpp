@@ -335,8 +335,15 @@ class column_view : public detail::column_view_base {
    **/
   size_type num_children() const noexcept { return _children.size(); }
 
-  auto child_begin() const noexcept { return _children.begin(); }
-  auto child_end() const noexcept { return _children.end(); }
+  /**
+   * @brief Returns iterator to the beginning of the ordered sequence of child column-views.
+   */
+  auto child_begin() const noexcept { return _children.cbegin(); }
+
+  /**
+   * @brief Returns iterator to the end of the ordered sequence of child column-views.
+   */
+  auto child_end() const noexcept { return _children.cend(); }
 
  private:
   std::vector<column_view> _children{};  ///< Based on element type, children

@@ -425,8 +425,6 @@ std::string get_nested_type_str(cudf::column_view const& view)
     std::ostringstream out;
 
     out << cudf::jit::get_type_name(view.type()) + "<";
-    // std::for_each(view.child_begin(), view.child_end(), [&out](auto col){ out <<
-    // get_nested_type_str(col);});
     std::transform(view.child_begin(),
                    view.child_end(),
                    std::ostream_iterator<std::string>(out, ","),
