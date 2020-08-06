@@ -253,7 +253,92 @@ struct operator_functor<ast_operator::FLOOR_DIV> {
   }
 };
 
-/* TODO: MOD, PYMOD, POW */
+template <>
+struct operator_functor<ast_operator::MOD> {
+  template <typename LHS,
+            typename RHS,
+            typename CommonType                                    = std::common_type_t<LHS, RHS>,
+            std::enable_if_t<std::is_integral<CommonType>::value>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs)
+    -> decltype(static_cast<CommonType>(lhs) % static_cast<CommonType>(rhs))
+  {
+    return static_cast<CommonType>(lhs) % static_cast<CommonType>(rhs);
+  }
+
+  template <typename LHS,
+            typename RHS,
+            typename CommonType = std::common_type_t<LHS, RHS>,
+            std::enable_if_t<std::is_same<CommonType, float>::value>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs)
+    -> decltype(fmodf(static_cast<CommonType>(lhs), static_cast<CommonType>(rhs)))
+  {
+    return fmodf(static_cast<CommonType>(lhs), static_cast<CommonType>(rhs));
+  }
+
+  template <typename LHS,
+            typename RHS,
+            typename CommonType = std::common_type_t<LHS, RHS>,
+            std::enable_if_t<std::is_same<CommonType, double>::value>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs)
+    -> decltype(fmod(static_cast<CommonType>(lhs), static_cast<CommonType>(rhs)))
+  {
+    return fmod(static_cast<CommonType>(lhs), static_cast<CommonType>(rhs));
+  }
+};
+
+template <>
+struct operator_functor<ast_operator::PYMOD> {
+  template <typename LHS,
+            typename RHS,
+            typename CommonType                                    = std::common_type_t<LHS, RHS>,
+            std::enable_if_t<std::is_integral<CommonType>::value>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs)
+    -> decltype(((static_cast<CommonType>(lhs) % static_cast<CommonType>(rhs)) +
+                 static_cast<CommonType>(rhs)) %
+                static_cast<CommonType>(rhs))
+  {
+    return ((static_cast<CommonType>(lhs) % static_cast<CommonType>(rhs)) +
+            static_cast<CommonType>(rhs)) %
+           static_cast<CommonType>(rhs);
+  }
+
+  template <typename LHS,
+            typename RHS,
+            typename CommonType = std::common_type_t<LHS, RHS>,
+            std::enable_if_t<std::is_same<CommonType, float>::value>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs)
+    -> decltype(fmodf(fmodf(static_cast<CommonType>(lhs), static_cast<CommonType>(rhs)) +
+                        static_cast<CommonType>(rhs),
+                      static_cast<CommonType>(rhs)))
+  {
+    return fmodf(fmodf(static_cast<CommonType>(lhs), static_cast<CommonType>(rhs)) +
+                   static_cast<CommonType>(rhs),
+                 static_cast<CommonType>(rhs));
+  }
+
+  template <typename LHS,
+            typename RHS,
+            typename CommonType = std::common_type_t<LHS, RHS>,
+            std::enable_if_t<std::is_same<CommonType, double>::value>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs)
+    -> decltype(fmod(fmod(static_cast<CommonType>(lhs), static_cast<CommonType>(rhs)) +
+                       static_cast<CommonType>(rhs),
+                     static_cast<CommonType>(rhs)))
+  {
+    return fmod(fmod(static_cast<CommonType>(lhs), static_cast<CommonType>(rhs)) +
+                  static_cast<CommonType>(rhs),
+                static_cast<CommonType>(rhs));
+  }
+};
+
+template <>
+struct operator_functor<ast_operator::POW> {
+  template <typename LHS, typename RHS>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs) -> decltype(std::pow(lhs, rhs))
+  {
+    return std::pow(lhs, rhs);
+  }
+};
 
 template <>
 struct operator_functor<ast_operator::EQUAL> {
