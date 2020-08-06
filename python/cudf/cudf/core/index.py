@@ -716,8 +716,8 @@ class Index(Frame, Serializable):
                 difference = difference.astype(self.dtype)
 
         if sort is None:
-            _, inds = difference._values.sort_by_values()
-            return as_index(difference.take(inds))
+            return difference.sort_values()
+
         return difference
 
     def _apply_op(self, fn, other=None):
@@ -728,6 +728,60 @@ class Index(Frame, Serializable):
             return as_index(op(other))
         else:
             return as_index(op())
+
+    def sort_values(self, return_indexer=False, ascending=True, key=None):
+        """
+        Return a sorted copy of the index, and optionally return the indices
+        that sorted the index itself.
+
+        Parameters
+        ----------
+        return_indexer : bool, default False
+            Should the indices that would sort the index be returned.
+        ascending : bool, default True
+            Should the index values be sorted in an ascending order.
+        key : None, optional
+            This parameter is NON-FUNCTIONAL.
+
+        Returns
+        -------
+        sorted_index : Index
+            Sorted copy of the index.
+        indexer : cupy.ndarray, optional
+            The indices that the index itself was sorted by.
+
+        See Also
+        --------
+        cudf.core.series.Series.min : Sort values of a Series.
+        cudf.core.dataframe.DataFrame.sort_values : Sort values in a DataFrame.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx = cudf.Index([10, 100, 1, 1000])
+        >>> idx
+        Int64Index([10, 100, 1, 1000], dtype='int64')
+
+        Sort values in ascending order (default behavior).
+        >>> idx.sort_values()
+        Int64Index([1, 10, 100, 1000], dtype='int64')
+
+        Sort values in descending order, and also get the indices `idx` was
+        sorted by.
+        >>> idx.sort_values(ascending=False, return_indexer=True)
+        (Int64Index([1000, 100, 10, 1], dtype='int64'), array([3, 1, 0, 2],
+                                                            dtype=int32))
+        """
+        if key is not None:
+            raise NotImplementedError("key parameter is not yet implemented.")
+
+        indices = self._values.argsort(ascending=ascending)
+        index_sorted = as_index(self.take(indices), name=self.name)
+
+        if return_indexer:
+            return index_sorted, cupy.asarray(indices)
+        else:
+            return index_sorted
 
     def unique(self):
         """

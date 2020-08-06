@@ -46,3 +46,16 @@ cdef class KafkaDatasource(Datasource):
                                        int32_t partition):
         return (<kafka_consumer *> self.c_datasource.get()). \
             get_committed_offset(topic, partition)
+
+    cpdef map[string, int64_t] get_watermark_offset(self, string topic,
+                                                    int32_t partition,
+                                                    int32_t timeout,
+                                                    bool cached):
+        return (<kafka_consumer *> self.c_datasource.get()). \
+            get_watermark_offset(topic, partition, timeout, cached)
+
+    cpdef void unsubscribe(self):
+        (<kafka_consumer *> self.c_datasource.get()).unsubscribe()
+
+    cpdef void close(self, int32_t timeout):
+        (<kafka_consumer *> self.c_datasource.get()).close(timeout)

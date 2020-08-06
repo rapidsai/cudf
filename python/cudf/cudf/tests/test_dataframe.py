@@ -6923,5 +6923,31 @@ def test_dataframe_init_from_series_list_duplicate_index_error(data):
             gd.DataFrame(gd_data)
     else:
         raise AssertionError(
-            "expected pd.DataFrame to because of " "duplicates in index"
+            "expected pd.DataFrame to because of duplicates in index"
         )
+
+
+def test_dataframe_iterrows_itertuples():
+    df = gd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            "cuDF does not support iteration of DataFrame "
+            "via itertuples. Consider using "
+            "`.to_pandas().itertuples()` "
+            "if you wish to iterate over namedtuples."
+        ),
+    ):
+        df.itertuples()
+
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            "cuDF does not support iteration of DataFrame "
+            "via iterrows. Consider using "
+            "`.to_pandas().iterrows()` "
+            "if you wish to iterate over each row."
+        ),
+    ):
+        df.iterrows()

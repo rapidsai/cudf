@@ -416,6 +416,7 @@ add_library(cudf
             src/transform/transform.cpp
             src/transform/nans_to_nulls.cu
             src/transform/bools_to_mask.cu
+            src/transform/mask_to_bools.cu
             src/transform/encode.cpp
             src/stream_compaction/apply_boolean_mask.cu
             src/stream_compaction/drop_nulls.cu
@@ -566,6 +567,7 @@ add_library(cudf
             src/text/detokenize.cu
             src/text/generate_ngrams.cu
             src/text/normalize.cu
+            src/text/stemmer.cu
             src/text/tokenize.cu
             src/text/ngrams_tokenize.cu
             src/text/replace.cu
