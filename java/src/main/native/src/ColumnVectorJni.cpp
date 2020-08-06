@@ -1245,7 +1245,8 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_ColumnVector_getNativeNumChildren(JNI
     try {
       cudf::jni::auto_set_device(env);
       cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
-      return static_cast<jint>(column->num_children());
+      // first child is always offsets which we do not want to count here
+      return static_cast<jint>(column->num_children() - 1);
     }
     CATCH_STD(env, 0);
 
@@ -1258,8 +1259,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_getChildCvPointer(JNIEn
     cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
     //TODO: assert a list
     std::unique_ptr<cudf::lists_column_view> view = std::make_unique<cudf::lists_column_view>(*column);
-    // child(1) will change when structs go in with column::child(child_index adjusted to account for offsets)
-    std::unique_ptr<cudf::column_view> next_view = std::make_unique<cudf::column_view>(column->child(1));
+    // first child is always offsets which we do not want to get from this call
+    std::unique_ptr<cudf::column_view> next_view = std::make_unique<cudf::column_view>(column->child(1 + child_index));
     return reinterpret_cast<jlong>(next_view.release());
 }
 
