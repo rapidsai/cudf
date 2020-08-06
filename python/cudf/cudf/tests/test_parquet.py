@@ -315,6 +315,10 @@ def test_parquet_read_metadata(tmpdir, pdf):
     for a, b in zip(col_names, pdf.columns):
         assert a == b
 
+def test_parquet_read_filtered(tmpdir, pdf):
+    fname = tmpdir.join("filtered.parquet")
+    row_group_size = 5
+    pdf.to_parquet(fname, compression="snappy", row_group_size=row_group_size)
 
 @pytest.mark.parametrize("row_group_size", [1, 5, 100])
 def test_parquet_read_row_groups(tmpdir, pdf, row_group_size):

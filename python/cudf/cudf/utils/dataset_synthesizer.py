@@ -10,6 +10,8 @@
 
 import pandas as pd
 import numpy as np
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 from prettytable import PrettyTable
 from mimesis import Generic
@@ -76,11 +78,19 @@ def synthesize(name, parameters):
     
     # Create DataFrame and sort columns appropriately
     df = pd.DataFrame(data)
-    df.sort_values(columns_to_sort)
+    df = df.sort_values(columns_to_sort)
 
     # Store in Parquet file
     file_to_store_in = name + ".parquet" if not name.endswith(".parquet") else name
-    df.to_parquet(file_to_store_in, allow_truncated_timestamps=True)
+    tbl = pa.Table.from_pandas(df)
+    pq.write_to_dataset(
+        tbl,
+        root_path=file_to_store_in,
+        row_group_size=64,
+        partition_cols=['3'],
+    )
+    #df.to_parquet(file_to_store_in, allow_truncated_timestamps=True, row_group_size=512)
+    #df.to_parquet(file_to_store_in, engine='fastparquet', file_scheme='hive')
     print("done")
     print("synthesized dataset stored in " + file_to_store_in)
 
@@ -96,20 +106,23 @@ very_sparse = Parameters(num_rows=2048 << 4, column_params=very_sparse_column_pa
 dates_sorted_column_params = list(default_column_params)
 dates_sorted_column_params[0].is_sorted = True
 dates_sorted_column_params[0].cardinality = 1.0 / (2048 << 4)
-dates_sorted = Parameters(num_rows=2048 << 4, column_params=dates_sorted_column_params)
+dates_sorted = Parameters(num_rows=2048, column_params=dates_sorted_column_params)
 high_cardinality_column_params = list(default_column_params)
 high_cardinality_column_params[0].is_sorted = True
 high_cardinality_column_params[0].cardinality = 1.0 / (2048 << 5)
-high_cardinality = Parameters(num_rows=2048 << 4, column_params=high_cardinality_column_params)
+high_cardinality = Parameters(num_rows=2048, column_params=high_cardinality_column_params)
 
 # Focusing on the city column...
 low_cardinality_column_params = list(default_column_params)
 low_cardinality_column_params[1].is_sorted = True
 low_cardinality_column_params[1].cardinality = 1.0 / 20.0
-low_cardinality = Parameters(num_rows=2048 << 4, column_params=low_cardinality_column_params)
+low_cardinality = Parameters(num_rows=2048, column_params=low_cardinality_column_params)
 
 # Simple
+# This generates data for 2048 people regarding their age, city, industry,
+# and name. There should be 4 row groups of 512 rows each. Sorting is by age.
 simple_column_params = list(default_column_params)
 simple_column_params[0].ty = g.person.age
-simple_column_params[1].is_sorted = True
-simple = Parameters(num_rows=2048 << 4, column_params=simple_column_params)
+simple_column_params[0].is_sorted = True
+simple_column_params[1].is_sorted = False
+simple = Parameters(num_rows=2048, column_params=simple_column_params)

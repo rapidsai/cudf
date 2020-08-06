@@ -25,7 +25,7 @@ def _get_partition_groups(df, partition_cols, preserve_index=False):
     splits = df[partition_cols].searchsorted(divisions, side="left")
     splits = splits.tolist() + [len(df[partition_cols])]
     return [
-        df.iloc[splits[i] : splits[i + 1]].copy(deep=False)
+        df.iloc[splits[i]: splits[i + 1]].copy(deep=False)
         for i in range(0, len(splits) - 1)
     ]
 
@@ -204,17 +204,36 @@ def read_parquet(
                 "URL content-encoding decompression is not supported"
             )
         filepaths_or_buffers.append(tmp_source)
-    
+
     if filters is not None:
-        if not isinstance(filters, ds.Expression):
-            filters = pq._filters_to_expression(filters)
-        
+        # Convert filters to ds.Expression
+        filters = pq._filters_to_expression(filters)
+
+        # Initialize ds.FilesystemDataset
         dataset = ds.dataset(filepaths_or_buffers, format="parquet")
-        row_groups_info = []
+
+        # Load IDs of filtered row groups for each file in dataset
+        filtered_row_group_ids = {}
         for fragment in dataset.get_fragments(filters):
             for row_group_fragment in fragment.split_by_row_group(filters):
                 for row_group_info in row_group_fragment.row_groups:
-                    row_groups_info.append(row_group_info)
+                    path = row_group_fragment.path
+                    if not path in filtered_row_group_ids:
+                        filtered_row_group_ids[path] = [row_group_info.id]
+                    else:
+                        filtered_row_group_ids[path].append(row_group_info.id)
+
+        # Initialize row_groups to be selected
+        if row_groups is None:
+            row_groups = [None for _ in dataset.files]
+
+        # Store IDs of selected row groups for each file
+        for i, file in enumerate(dataset.files):
+            if row_groups[i] is None:
+                row_groups[i] = filtered_row_group_ids[file]
+            else:
+                row_groups[i] = filter(
+                    lambda id: id in row_groups[i], filtered_row_group_ids[file])
 
     if engine == "cudf":
         return libparquet.read_parquet(
