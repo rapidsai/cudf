@@ -21,10 +21,13 @@
 #include <tests/utilities/cudf_gtest.hpp>
 #include <tests/utilities/cxxopts.hpp>
 
-#include <rmm/mr/device/cnmem_memory_resource.hpp>
+#include <rmm/mr/device/binning_memory_resource.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/default_memory_resource.hpp>
+#include <rmm/mr/device/fixed_size_memory_resource.hpp>
 #include <rmm/mr/device/managed_memory_resource.hpp>
+#include <rmm/mr/device/owning_wrapper.hpp>
+#include <rmm/mr/device/pool_memory_resource.hpp>
 
 #include <ftw.h>
 #include <random>
@@ -219,6 +222,29 @@ class TempDirTestEnvironment : public ::testing::Environment {
   std::string get_temp_filepath(std::string filename) { return tmpdir.path() + filename; }
 };
 
+/// MR factory functions
+inline auto make_cuda() { return std::make_shared<rmm::mr::cuda_memory_resource>(); }
+
+inline auto make_managed() { return std::make_shared<rmm::mr::managed_memory_resource>(); }
+
+inline auto make_pool()
+{
+  return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(make_cuda());
+}
+
+inline auto make_fixed_size()
+{
+  return rmm::mr::make_owning_wrapper<rmm::mr::fixed_size_memory_resource>(make_cuda());
+}
+
+inline auto make_binning()
+{
+  auto pool = make_pool();
+  auto mr   = rmm::mr::make_owning_wrapper<rmm::mr::binning_memory_resource>(pool);
+  for (std::size_t i = 18; i <= 22; i++) { mr->wrapped().add_bin(1 << i); }
+  return mr;
+}
+
 /**
  * @brief Creates a memory resource for the unit test environment
  * given the name of the allocation mode.
@@ -234,12 +260,13 @@ class TempDirTestEnvironment : public ::testing::Environment {
  *        Accepted types are "pool", "cuda", and "managed" only.
  * @return Memory resource instance
  */
-inline std::unique_ptr<rmm::mr::device_memory_resource> create_memory_resource(
+inline std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
   std::string const &allocation_mode)
 {
-  if (allocation_mode == "cuda") return std::make_unique<rmm::mr::cuda_memory_resource>();
-  if (allocation_mode == "pool") return std::make_unique<rmm::mr::cnmem_memory_resource>();
-  if (allocation_mode == "managed") return std::make_unique<rmm::mr::managed_memory_resource>();
+  if (allocation_mode == "binning") return make_binning();
+  if (allocation_mode == "cuda") return make_cuda();
+  if (allocation_mode == "pool") return make_pool();
+  if (allocation_mode == "managed") make_managed();
   CUDF_FAIL("Invalid RMM allocation mode: " + allocation_mode);
 }
 

@@ -15,8 +15,10 @@
  */
 
 #include <benchmark/benchmark.h>
-#include "rmm/mr/device/cnmem_memory_resource.hpp"
-#include "rmm/mr/device/default_memory_resource.hpp"
+#include <rmm/mr/device/cuda_memory_resource.hpp>
+#include <rmm/mr/device/default_memory_resource.hpp>
+#include <rmm/mr/device/owning_wrapper.hpp>
+#include <rmm/mr/device/pool_memory_resource.hpp>
 
 namespace cudf {
 /**
@@ -50,17 +52,24 @@ namespace cudf {
  *
  * BENCHMARK_REGISTER_F(my_benchmark, my_test_name)->Range(128, 512);
  */
+
+inline auto make_cuda() { return std::make_shared<rmm::mr::cuda_memory_resource>(); }
+
+inline auto make_pool()
+{
+  return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(make_cuda());
+}
+
 class benchmark : public ::benchmark::Fixture {
  public:
   virtual void SetUp(const ::benchmark::State& state)
   {
-    auto mr = new rmm::mr::cnmem_memory_resource;
-    rmm::mr::set_default_resource(mr);  // set default resource to cnmem
+    auto mr = make_pool();
+    rmm::mr::set_default_resource(mr.get());  // set default resource to pool
   }
 
   virtual void TearDown(const ::benchmark::State& state)
   {
-    delete rmm::mr::get_default_resource();
     rmm::mr::set_default_resource(nullptr);  // reset default resource to the initial resource
   }
 
@@ -70,6 +79,8 @@ class benchmark : public ::benchmark::Fixture {
   {
     TearDown(const_cast<const ::benchmark::State&>(st));
   }
+
+  std::shared_ptr<rmm::mr::device_memory_resource> mr;
 };
 
 };  // namespace cudf
