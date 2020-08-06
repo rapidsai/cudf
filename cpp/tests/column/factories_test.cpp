@@ -199,7 +199,7 @@ template <typename T>
 class FixedWidthFactoryTest : public ColumnFactoryTest {
 };
 
-TYPED_TEST_CASE(FixedWidthFactoryTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_CASE(FixedWidthFactoryTest, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(FixedWidthFactoryTest, EmptyNoMask)
 {
