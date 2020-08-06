@@ -60,7 +60,7 @@ class TimeDeltaColumn(column.ColumnBase):
             item = np.timedelta64(item, self._time_unit)
         except Exception:
             return False
-        return item.astype("int_") in self.as_numerical
+        return item.view("int64") in self.as_numerical
 
     def to_pandas(self, index=None, nullable_pd_dtype=False):
         return pd.Series(
