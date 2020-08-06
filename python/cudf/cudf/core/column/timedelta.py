@@ -59,7 +59,7 @@ class TimeDeltaColumn(column.ColumnBase):
             item = np.timedelta64(item, self._time_unit)
         except Exception:
             return False
-        return item.astype("int_") in self.as_numerical
+        return item.view("int64") in self.as_numerical
 
     def to_pandas(self, index=None, nullable_pd_dtype=False):
         return pd.Series(
@@ -122,7 +122,7 @@ class TimeDeltaColumn(column.ColumnBase):
                     rhs = as_scalar(rhs, dtype="float64")
                 else:
                     rhs = rhs.astype("timedelta64[ns]").astype("float64")
-                out_dtype = np.dtype("float_")
+                out_dtype = np.dtype("float64")
             elif op == "floordiv":
                 op = "truediv"
                 lhs = lhs.astype("timedelta64[ns]").astype("float64")
@@ -130,7 +130,7 @@ class TimeDeltaColumn(column.ColumnBase):
                     rhs = as_scalar(rhs, dtype="float64")
                 else:
                     rhs = rhs.astype("timedelta64[ns]").astype("float64")
-                out_dtype = np.dtype("int_")
+                out_dtype = np.dtype("int64")
             else:
                 raise TypeError(
                     f"Series of dtype {self.dtype} cannot perform "
