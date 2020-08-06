@@ -184,6 +184,7 @@
 - PR #5833 Pin `dask` and `distributed` version to `2.22.0`
 - PR #5853 Disable `fixed_point` for use in `copy_if`
 - PR #5854 Raise informative error in `DataFrame.iterrows` and `DataFrame.itertuples`
+- PR #5863 Explicitly require `ucx-py` on CI
 
 ## Bug Fixes
 
