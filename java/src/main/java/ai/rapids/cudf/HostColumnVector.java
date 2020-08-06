@@ -1306,16 +1306,18 @@ public final class HostColumnVector implements AutoCloseable {
             childBuilder.append((Double) listElement);
           } else if (listElement instanceof List) {
             childBuilder.append((List) listElement);
+          } else if (listElement instanceof Float) {
+            childBuilder.append((Float) listElement);
+          } else if (listElement instanceof Boolean) {
+            childBuilder.append((Boolean) listElement);
+          } else if (listElement instanceof Long) {
+            childBuilder.append((Long) listElement);
+          } else if (listElement instanceof Byte) {
+            childBuilder.append((Byte) listElement);
+          } else if (listElement instanceof Short) {
+            childBuilder.append((Short) listElement);
           }
         }
-//        if (inputList.isEmpty()) {
-//          //increment the string column's offsets
-//          if (childBuilder.type == DType.STRING) {
-//            childBuilder.incrCurrentIndex();
-//            childBuilder.offsets.setInt(childBuilder.getCurrentIndex() * OFFSET_SIZE,
-//                childBuilder.getCurrentByteIndex());
-//          }
-//        }
       }
       currentIndex++;
       initAndResizeOffsetBuffer();
@@ -1335,6 +1337,26 @@ public final class HostColumnVector implements AutoCloseable {
       return currentByteIndex;
     }
 
+    public final ColumnBuilder append(byte value) {
+      assert type == DType.INT8;
+      assert currentIndex < rows;
+      resizeDataBuffer(currentIndex * type.sizeInBytes + type.getSizeInBytes());
+      data.setByte(currentIndex * type.sizeInBytes, value);
+      currentIndex++;
+      currentByteIndex += type.sizeInBytes;
+      return this;
+    }
+
+    public final ColumnBuilder append(short value) {
+      assert type == DType.INT16;
+      assert currentIndex < rows;
+      resizeDataBuffer(currentIndex * type.sizeInBytes + type.getSizeInBytes());
+      data.setShort(currentIndex * type.sizeInBytes, value);
+      currentIndex++;
+      currentByteIndex += type.sizeInBytes;
+      return this;
+    }
+
     public final ColumnBuilder append(int value) {
       assert type.isBackedByInt();
       assert currentIndex < rows;
@@ -1345,11 +1367,41 @@ public final class HostColumnVector implements AutoCloseable {
       return this;
     }
 
+    public final ColumnBuilder append(long value) {
+      assert type == DType.INT64;
+      assert currentIndex < rows;
+      resizeDataBuffer(currentIndex * type.sizeInBytes + type.getSizeInBytes());
+      data.setLong(currentIndex * type.sizeInBytes, value);
+      currentIndex++;
+      currentByteIndex += type.sizeInBytes;
+      return this;
+    }
+
+    public final ColumnBuilder append(float value) {
+      assert type == DType.FLOAT32;
+      assert currentIndex < rows;
+      resizeDataBuffer(currentIndex * type.sizeInBytes + type.getSizeInBytes());
+      data.setFloat(currentIndex * type.sizeInBytes, value);
+      currentIndex++;
+      currentByteIndex += type.sizeInBytes;
+      return this;
+    }
+
     public final ColumnBuilder append(double value) {
       assert type == DType.FLOAT64;
       assert currentIndex < rows;
       resizeDataBuffer(currentIndex * type.sizeInBytes + type.getSizeInBytes());
       data.setDouble(currentIndex * type.sizeInBytes, value);
+      currentIndex++;
+      currentByteIndex += type.sizeInBytes;
+      return this;
+    }
+
+    public final ColumnBuilder append(boolean value) {
+      assert type == DType.BOOL8;
+      assert currentIndex < rows;
+      resizeDataBuffer(currentIndex * type.sizeInBytes + type.getSizeInBytes());
+      data.setBoolean(currentIndex * type.sizeInBytes, value);
       currentIndex++;
       currentByteIndex += type.sizeInBytes;
       return this;

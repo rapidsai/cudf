@@ -2491,6 +2491,86 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testListCvBytes() {
+    List<Byte> list1 = Arrays.asList((byte)1, (byte)3, (byte)5, (byte)7);
+    List<Byte> list2 = Arrays.asList((byte)0, (byte)2, (byte)4, (byte)6);
+    List<Byte> list3 = Arrays.asList((byte)1, (byte)4, (byte)9, (byte)0);
+
+    try(ColumnVector res = ColumnVector.fromLists(new HostColumnVector.ColumnBuilder.ListType(true, 3,
+        new HostColumnVector.ColumnBuilder.BasicType(true, 13, DType.INT8)), list1, list2, list3);
+        HostColumnVector hcv = res.copyToHost()) {
+      List<Byte> ret1 = hcv.getList(0);
+      List<Byte> ret2 = hcv.getList(1);
+      assertEquals(list1, ret1, "Lists don't match");
+      assertEquals(list2, ret2, "Lists don't match");
+    }
+  }
+
+  @Test
+  void testListCvShorts() {
+    List<Short> list1 = Arrays.asList((short)1, (short)3, (short)5, (short)7);
+    List<Short> list2 = Arrays.asList((short)0, (short)2, (short)4, (short)6);
+    List<Short> list3 = Arrays.asList((short)1, (short)4, (short)9, (short)0);
+
+    try(ColumnVector res = ColumnVector.fromLists(new HostColumnVector.ColumnBuilder.ListType(true, 3,
+        new HostColumnVector.ColumnBuilder.BasicType(true, 13, DType.INT16)), list1, list2, list3);
+        HostColumnVector hcv = res.copyToHost()) {
+      List<Short> ret1 = hcv.getList(0);
+      List<Short> ret2 = hcv.getList(1);
+      assertEquals(list1, ret1, "Lists don't match");
+      assertEquals(list2, ret2, "Lists don't match");
+    }
+  }
+
+  @Test
+  void testListCvFloats() {
+    List<Float> list1 = Arrays.asList(0.1F, 1.2F, 2.3F, 3.4F);
+    List<Float> list2 = Arrays.asList(6.7F, 7.8F, 8.9F, 5.6F);
+    List<Float> list3 = Arrays.asList(0.1F, 7.8F, 3.4F, 4.5F, 2.3F);
+
+    try(ColumnVector res = ColumnVector.fromLists(new HostColumnVector.ColumnBuilder.ListType(true, 3,
+        new HostColumnVector.ColumnBuilder.BasicType(true, 13, DType.FLOAT32)), list1, list2, list3);
+        HostColumnVector hcv = res.copyToHost()) {
+      List<Double> ret1 = hcv.getList(0);
+      List<Double> ret2 = hcv.getList(1);
+      assertEquals(list1, ret1, "Lists don't match");
+      assertEquals(list2, ret2, "Lists don't match");
+    }
+  }
+
+  @Test
+  void testListCvLongs() {
+    List<Long> list1 = Arrays.asList(10L, 20L, 30L, 40L);
+    List<Long> list2 = Arrays.asList(6L, 7L, 8L, 9L);
+    List<Long> list3 = Arrays.asList(1L, 100L, 200L, 300L, 400L);
+
+    try(ColumnVector res = ColumnVector.fromLists(new HostColumnVector.ColumnBuilder.ListType(true, 3,
+        new HostColumnVector.ColumnBuilder.BasicType(true, 13, DType.INT64)), list1, list2, list3);
+        HostColumnVector hcv = res.copyToHost()) {
+      List<Long> ret1 = hcv.getList(0);
+      List<Long> ret2 = hcv.getList(1);
+      assertEquals(list1, ret1, "Lists don't match");
+      assertEquals(list2, ret2, "Lists don't match");
+    }
+  }
+
+  @Test
+  void testListCvBools() {
+    List<Boolean> list1 = Arrays.asList(true, false, false, true);
+    List<Boolean> list2 = Arrays.asList(false, true, false, false);
+    List<Boolean> list3 = Arrays.asList(true, true, true, true);
+
+    try(ColumnVector res = ColumnVector.fromLists(new HostColumnVector.ColumnBuilder.ListType(true, 3,
+        new HostColumnVector.ColumnBuilder.BasicType(true, 13, DType.BOOL8)), list1, list2, list3);
+        HostColumnVector hcv = res.copyToHost()) {
+      List<Boolean> ret1 = hcv.getList(0);
+      List<Boolean> ret2 = hcv.getList(1);
+      assertEquals(list1, ret1, "Lists don't match");
+      assertEquals(list2, ret2, "Lists don't match");
+    }
+  }
+
+  @Test
   void testListOfListsCv() {
     List<Integer> list1 = Arrays.asList(1, 2, 3);
     List<Integer> list2 = Arrays.asList(4, 5, 6);
