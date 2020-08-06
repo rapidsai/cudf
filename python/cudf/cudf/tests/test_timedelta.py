@@ -445,8 +445,6 @@ def test_timedelta_reduction_ops(data, dtype, reduction_op):
             == actual.round(gsr._column.time_unit).value
         )
     else:
-        print(expected, type(expected))
-        print(actual, type(actual))
         assert_eq(expected, actual)
 
 
