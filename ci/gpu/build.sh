@@ -66,7 +66,8 @@ fi
 
 conda install "rmm=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
               "rapids-build-env=$MINOR_VERSION.*" \
-              "rapids-notebook-env=$MINOR_VERSION.*"
+              "rapids-notebook-env=$MINOR_VERSION.*" \
+              "ucx-py=${MINOR_VERSION}" \
 
 # https://docs.rapids.ai/maintainers/depmgmt/
 # conda remove -f rapids-build-env rapids-notebook-env
