@@ -4296,9 +4296,13 @@ class StringMethods(ColumnMethodsMixin):
 
     def edit_distance(self, targets, **kwargs):
         """
-        The targets strings are measured against the strings in this column
-        using the Levenshtein edit distance algorithm.
+        The ``targets`` strings are measured against the strings in this
+        instance using the Levenshtein edit distance algorithm.
         https://www.cuelogic.com/blog/the-levenshtein-algorithm
+
+        The ``targets`` parameter may also be a single string in which
+        case the edit distance is computed for all the strings against
+        that single string.
 
         Parameters
         ----------
@@ -4318,6 +4322,11 @@ class StringMethods(ColumnMethodsMixin):
         0    2
         1    2
         2    2
+        dtype: int32
+        >>> sr.str.edit_distance("puppy")
+        0    0
+        1    4
+        2    4
         dtype: int32
         """
         if is_scalar(targets):
