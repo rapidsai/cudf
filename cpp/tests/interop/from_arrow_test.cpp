@@ -31,10 +31,41 @@
 #include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
 
-struct ArrowToCUDFTest : public cudf::test::BaseFixture {
+std::unique_ptr<cudf::table> get_cudf_table()
+{
+  std::vector<std::unique_ptr<cudf::column>> columns;
+  columns.emplace_back(
+    cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 5, 2, 7}, {1, 0, 1, 1, 1}).release());
+  columns.emplace_back(cudf::test::fixed_width_column_wrapper<int64_t>({1, 2, 3, 4, 5}).release());
+  columns.emplace_back(
+    cudf::test::strings_column_wrapper({"fff", "aaa", "", "fff", "ccc"}, {1, 1, 1, 0, 1})
+      .release());
+  auto col4 = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 5, 2, 7}, {1, 0, 1, 1, 1});
+  columns.emplace_back(std::move(cudf::dictionary::encode(col4)));
+  columns.emplace_back(
+    cudf::test::fixed_width_column_wrapper<bool>({true, false, true, false, true}, {1, 0, 1, 1, 0})
+      .release());
+  // columns.emplace_back(cudf::test::lists_column_wrapper<int>({{1, 2}, {3, 4}, {}, {6}, {7, 8,
+  // 9}}).release());
+  return std::make_unique<cudf::table>(std::move(columns));
+}
+
+struct FromArrowTest : public cudf::test::BaseFixture {
 };
 
-TEST_F(ArrowToCUDFTest, DateTimeTable)
+TEST_F(FromArrowTest, EmptyTable)
+{
+  auto tables = get_tables(0);
+
+  auto expected_cudf_table = tables.first->view();
+  auto arrow_table         = tables.second;
+
+  auto got_cudf_table = cudf::from_arrow(*arrow_table);
+
+  cudf::test::expect_tables_equal(expected_cudf_table, got_cudf_table->view());
+}
+
+TEST_F(FromArrowTest, DateTimeTable)
 {
   auto data = {1, 2, 3, 4, 5, 6};
 
@@ -58,7 +89,7 @@ TEST_F(ArrowToCUDFTest, DateTimeTable)
   cudf::test::expect_tables_equal(expected_table_view, got_cudf_table->view());
 }
 
-TEST_F(ArrowToCUDFTest, NestedList)
+TEST_F(FromArrowTest, NestedList)
 {
   auto valids =
     cudf::test::make_counting_transform_iterator(0, [](auto i) { return i == 2 ? false : true; });
@@ -80,7 +111,7 @@ TEST_F(ArrowToCUDFTest, NestedList)
   cudf::test::expect_tables_equal(expected_table_view, got_cudf_table->view());
 }
 
-TEST_F(ArrowToCUDFTest, DictionaryIndicesType)
+TEST_F(FromArrowTest, DictionaryIndicesType)
 {
   auto array1 =
     get_arrow_dict_array<int64_t, int8_t>({1, 2, 5, 7}, {0, 1, 2, 1, 3}, {1, 0, 1, 1, 1});
@@ -109,7 +140,7 @@ TEST_F(ArrowToCUDFTest, DictionaryIndicesType)
   cudf::test::expect_tables_equal(expected_table.view(), got_cudf_table->view());
 }
 
-TEST_F(ArrowToCUDFTest, ChunkedArray)
+TEST_F(FromArrowTest, ChunkedArray)
 {
   auto int64array     = get_arrow_array<int64_t>({1, 2, 3, 4, 5});
   auto int32array_1   = get_arrow_array<int32_t>({1, 2}, {1, 0});
@@ -158,19 +189,20 @@ TEST_F(ArrowToCUDFTest, ChunkedArray)
   cudf::test::expect_tables_equal(expected_cudf_table->view(), got_cudf_table->view());
 }
 
-struct ArrowToCUDFTestSlice
-  : public ArrowToCUDFTest,
+struct FromArrowTestSlice
+  : public FromArrowTest,
     public ::testing::WithParamInterface<std::tuple<cudf::size_type, cudf::size_type>> {
 };
 
-TEST_P(ArrowToCUDFTestSlice, SliceTest)
+TEST_P(FromArrowTestSlice, SliceTest)
 {
-  auto cudf_table  = get_cudf_table();
-  auto arrow_table = get_arrow_table();
-  auto start       = std::get<0>(GetParam());
-  auto end         = std::get<1>(GetParam());
+  auto tables          = get_tables(10000);
+  auto cudf_table_view = tables.first->view();
+  auto arrow_table     = tables.second;
+  auto start           = std::get<0>(GetParam());
+  auto end             = std::get<1>(GetParam());
 
-  auto sliced_cudf_table = cudf::slice(cudf_table->view(), {start, end})[0];
+  auto sliced_cudf_table = cudf::slice(cudf_table_view, {start, end})[0];
   cudf::table expected_cudf_table{sliced_cudf_table};
   auto sliced_arrow_table = arrow_table->Slice(start, end - start);
   auto got_cudf_table     = cudf::from_arrow(*sliced_arrow_table);
@@ -178,10 +210,11 @@ TEST_P(ArrowToCUDFTestSlice, SliceTest)
   cudf::test::expect_tables_equal(expected_cudf_table.view(), got_cudf_table->view());
 }
 
-INSTANTIATE_TEST_CASE_P(ArrowToCUDFTest,
-                        ArrowToCUDFTestSlice,
-                        ::testing::Values(std::make_tuple(0, 5),
-                                          std::make_tuple(1, 3),
+INSTANTIATE_TEST_CASE_P(FromArrowTest,
+                        FromArrowTestSlice,
+                        ::testing::Values(std::make_tuple(0, 10000),
+                                          std::make_tuple(2912, 2915),
+                                          std::make_tuple(100, 3000),
                                           std::make_tuple(0, 0),
-                                          std::make_tuple(0, 2),
-                                          std::make_tuple(4, 4)));
+                                          std::make_tuple(0, 3000),
+                                          std::make_tuple(10000, 10000)));
