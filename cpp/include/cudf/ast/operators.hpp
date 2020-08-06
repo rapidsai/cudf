@@ -501,18 +501,18 @@ struct dispatch_op {
                                             Ts&&... args)
   {
     // Double dispatch
+    /*
     double_type_dispatcher(lhs_t,
                            rhs_t,
                            detail::dispatch_operator_functor_types<operator_functor<op>>{},
                            std::forward<F>(f),
                            std::forward<Ts>(args)...);
+    */
     // Single dispatch (assume lhs_t == rhs_t)
-    /*
     type_dispatcher(lhs_t,
                     detail::dispatch_operator_functor_types_single<operator_functor<op>>{},
                     std::forward<F>(f),
                     std::forward<Ts>(args)...);
-    */
   }
 };
 
