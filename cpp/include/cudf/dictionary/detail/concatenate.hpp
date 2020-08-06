@@ -25,6 +25,9 @@ namespace detail {
  * @brief Returns a single column by vertically concatenating the given vector of
  * dictionary columns.
  *
+ * @throw cudf::logic_error if `columns.size()==0`
+ * @throw cudf::logic_error if dictionary column keys are not all the same type.
+ *
  * @param columns Vector of dictionary columns to concatenate.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.

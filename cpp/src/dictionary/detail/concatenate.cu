@@ -183,7 +183,8 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
                                     cudaStream_t stream,
                                     rmm::mr::device_memory_resource* mr)
 {
-  if (columns.size() == 0) return make_empty_column(data_type{type_id::DICTIONARY32});
+  // exception here is the same behavior as in cudf::concatenate
+  CUDF_EXPECTS(not columns.empty(), "Unexpected empty list of columns to concatenate.");
 
   // concatenate the keys (and check the keys match)
   compute_children_offsets_fn child_offsets_fn{columns};
