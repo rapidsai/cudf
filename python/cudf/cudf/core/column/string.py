@@ -144,6 +144,7 @@ from cudf.utils.dtypes import (
     is_scalar,
     is_string_dtype,
 )
+from cudf.utils.utils import buffers_from_pyarrow
 
 _str_to_numeric_typecast_functions = {
     np.dtype("int8"): str_cast.stoi8,
@@ -4452,6 +4453,18 @@ class StringColumn(column.ColumnBase):
 
     def _set_mask(self, value):
         super()._set_mask(value)
+
+    @classmethod
+    def from_arrow(cls, array):
+        pa_size, pa_offset, nbuf, obuf, sbuf = buffers_from_pyarrow(array)
+        children = (
+            column.build_column(data=obuf, dtype="int32"),
+            column.build_column(data=sbuf, dtype="int8"),
+        )
+
+        return StringColumn(
+            mask=nbuf, children=children, size=pa_size, offset=pa_offset
+        )
 
     @property
     def _nbytes(self):

@@ -36,7 +36,7 @@ from cudf.utils.dtypes import (
     min_unsigned_type,
     np_to_pa_dtype,
 )
-from cudf.utils.utils import buffers_from_pyarrow, mask_dtype
+from cudf.utils.utils import mask_dtype
 
 
 class ColumnBase(Column, Serializable):
@@ -1345,18 +1345,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
 
     elif isinstance(arbitrary, pa.Array):
         if isinstance(arbitrary, pa.StringArray):
-            pa_size, pa_offset, nbuf, obuf, sbuf = buffers_from_pyarrow(
-                arbitrary
-            )
-            children = (
-                build_column(data=obuf, dtype="int32"),
-                build_column(data=sbuf, dtype="int8"),
-            )
-
-            data = cudf.core.column.string.StringColumn(
-                mask=nbuf, children=children, size=pa_size, offset=pa_offset
-            )
-
+            data = cudf.core.column.StringColumn.from_arrow(arbitrary)
         elif isinstance(arbitrary, pa.NullArray):
             if type(dtype) == str and dtype == "empty":
                 new_dtype = pd.api.types.pandas_dtype(
@@ -1383,60 +1372,15 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                     arbitrary = arbitrary.cast(np_to_pa_dtype(new_dtype))
             data = as_column(arbitrary, nan_as_null=nan_as_null)
         elif isinstance(arbitrary, pa.DictionaryArray):
-            codes_dtype = min_unsigned_type(len(arbitrary.indices))
-            codes = as_column(arbitrary.indices).astype(codes_dtype)
-            if isinstance(arbitrary.dictionary, pa.NullArray):
-                categories = as_column([], dtype="object")
-            else:
-                categories = as_column(arbitrary.dictionary)
-
-            dtype = CategoricalDtype(
-                categories=categories, ordered=arbitrary.type.ordered
-            )
-            data = cudf.core.column.categorical.CategoricalColumn(
-                dtype=dtype,
-                mask=codes.base_mask,
-                children=(codes,),
-                size=codes.size,
-                offset=codes.offset,
-            )
+            data = cudf.core.column.CategoricalColumn.from_arrow(arbitrary)
         elif isinstance(arbitrary, pa.TimestampArray):
-            dtype = np.dtype("M8[{}]".format(arbitrary.type.unit))
-            pa_size, pa_offset, pamask, padata, _ = buffers_from_pyarrow(
-                arbitrary, dtype=dtype
-            )
-
-            data = cudf.core.column.datetime.DatetimeColumn(
-                data=padata,
-                mask=pamask,
-                dtype=dtype,
-                size=pa_size,
-                offset=pa_offset,
-            )
+            data = cudf.core.column.DatetimeColumn.from_arrow(arbitrary)
         elif isinstance(arbitrary, pa.DurationArray):
-            dtype = np.dtype("m8[{}]".format(arbitrary.type.unit))
-            pa_size, pa_offset, pamask, padata, _ = buffers_from_pyarrow(
-                arbitrary, dtype=dtype
-            )
-
-            data = cudf.core.column.timedelta.TimeDeltaColumn(
-                data=padata,
-                mask=pamask,
-                dtype=dtype,
-                size=pa_size,
-                offset=pa_offset,
-            )
+            data = cudf.core.column.TimeDeltaColumn.from_arrow(arbitrary)
         elif isinstance(arbitrary, pa.Date64Array):
             raise NotImplementedError
-            pa_size, pa_offset, pamask, padata, _ = buffers_from_pyarrow(
-                arbitrary, dtype="M8[ms]"
-            )
-            data = cudf.core.column.datetime.DatetimeColumn(
-                data=padata,
-                mask=pamask,
-                dtype=np.dtype("M8[ms]"),
-                size=pa_size,
-                offset=pa_offset,
+            data = cudf.core.column.DatetimeColumn.from_arrow(
+                arbitrary, dtype=np.dtype("M8[ms]")
             )
         elif isinstance(arbitrary, pa.Date32Array):
             # No equivalent np dtype and not yet supported
@@ -1449,36 +1393,14 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         elif isinstance(arbitrary, pa.BooleanArray):
             # Arrow uses 1 bit per value while we use int8
             dtype = np.dtype(np.bool)
-            # Needed because of bug in PyArrow
-            # https://issues.apache.org/jira/browse/ARROW-4766
-            if len(arbitrary) > 0:
-                arbitrary = arbitrary.cast(pa.int8())
-            else:
-                arbitrary = pa.array([], type=pa.int8())
-
-            pa_size, pa_offset, pamask, padata, _ = buffers_from_pyarrow(
+            arbitrary = arbitrary.cast(pa.int8())
+            data = cudf.core.column.NumericalColumn.from_arrow(
                 arbitrary, dtype=dtype
-            )
-            data = cudf.core.column.NumericalColumn(
-                data=padata,
-                mask=pamask,
-                dtype=dtype,
-                size=pa_size,
-                offset=pa_offset,
             )
         elif isinstance(arbitrary, pa.ListArray):
             data = cudf.core.column.ListColumn.from_arrow(arbitrary)
         else:
-            pa_size, pa_offset, pamask, padata, _ = buffers_from_pyarrow(
-                arbitrary
-            )
-            data = cudf.core.column.NumericalColumn(
-                data=padata,
-                dtype=np.dtype(arbitrary.type.to_pandas_dtype()),
-                mask=pamask,
-                size=pa_size,
-                offset=pa_offset,
-            )
+            data = cudf.core.column.NumericalColumn.from_arrow(arbitrary)
 
     elif isinstance(arbitrary, pa.ChunkedArray):
         gpu_cols = [

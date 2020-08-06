@@ -103,7 +103,7 @@ def normalize_index(index, size, doraise=True):
 list_types_tuple = (list, np.array)
 
 
-def buffers_from_pyarrow(pa_arr, dtype=None):
+def buffers_from_pyarrow(pa_arr):
     """
     Given a pyarrow array returns a 5 length tuple of:
         - size

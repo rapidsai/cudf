@@ -14,6 +14,7 @@ from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.core.column.datetime import _numpy_to_pandas_conversion
 from cudf.utils.dtypes import is_scalar, np_to_pa_dtype
+from cudf.utils.utils import buffers_from_pyarrow
 
 
 class TimeDeltaColumn(column.ColumnBase):
@@ -174,6 +175,21 @@ class TimeDeltaColumn(column.ColumnBase):
             mask=self.base_mask,
             offset=self.offset,
             size=self.size,
+        )
+
+    @classmethod
+    def from_arrow(cls, array, dtype=None):
+        if dtype is None:
+            dtype = np.dtype("m8[{}]".format(array.type.unit))
+
+        pa_size, pa_offset, pamask, padata, _ = buffers_from_pyarrow(array)
+
+        return TimeDeltaColumn(
+            data=padata,
+            mask=pamask,
+            dtype=dtype,
+            size=pa_size,
+            offset=pa_offset,
         )
 
     def default_na_value(self):

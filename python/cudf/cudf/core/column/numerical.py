@@ -18,6 +18,7 @@ from cudf.utils.dtypes import (
     np_to_pa_dtype,
     numeric_normalize_types,
 )
+from cudf.utils.utils import buffers_from_pyarrow
 
 
 class NumericalColumn(column.ColumnBase):
@@ -168,6 +169,20 @@ class NumericalColumn(column.ColumnBase):
         if dtype == self.dtype:
             return self
         return libcudf.unary.cast(self, dtype)
+
+    @classmethod
+    def from_arrow(cls, array, dtype=None):
+        if dtype is None:
+            dtype = np.dtype(array.type.to_pandas_dtype())
+
+        pa_size, pa_offset, pamask, padata, _ = buffers_from_pyarrow(array)
+        return NumericalColumn(
+            data=padata,
+            mask=pamask,
+            dtype=dtype,
+            size=pa_size,
+            offset=pa_offset,
+        )
 
     def to_pandas(self, index=None, nullable_pd_dtype=False):
         if nullable_pd_dtype:
