@@ -44,7 +44,7 @@ template <typename T>
 class MergeStringTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(MergeStringTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_CASE(MergeStringTest, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(MergeStringTest, Merge1StringKeyColumns)
 {

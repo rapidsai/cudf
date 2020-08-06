@@ -29,7 +29,7 @@ template <typename T>
 struct TypedScalarTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(TypedScalarTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_CASE(TypedScalarTest, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(TypedScalarTest, DefaultValidity)
 {
