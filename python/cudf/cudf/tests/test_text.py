@@ -772,3 +772,67 @@ def test_text_subword_tokenize(tmpdir):
         [0, 0, 3, 1, 0, 3, 2, 0, 3, 3, 0, 1, 4, 0, 1], dtype=np.uint32
     )
     assert_eq(expected_metadata, metadata)
+
+
+def test_porter_stemmer_measure():
+    strings = cudf.Series(
+        [
+            "tr",
+            "ee",
+            "tree",
+            "y",
+            "by",
+            "trouble",
+            "oats",
+            "trees",
+            "ivy",
+            "troubles",
+            "private",
+            "oaten",
+            "orrery",
+            None,
+            "",
+        ]
+    )
+    expected = cudf.Series(
+        [0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, None, 0], dtype=np.int32
+    )
+
+    actual = strings.str.porter_stemmer_measure()
+
+    assert type(expected) == type(actual)
+    assert_eq(expected, actual)
+
+
+def test_is_vowel_consonant():
+    strings = cudf.Series(
+        ["tr", "ee", "tree", "y", "by", "oats", "ivy", "orrery", None, ""]
+    )
+    expected = cudf.Series(
+        [False, False, True, False, False, False, True, False, None, False]
+    )
+    actual = strings.str.is_vowel(2)
+    assert type(expected) == type(actual)
+    assert_eq(expected, actual)
+
+    expected = cudf.Series(
+        [True, False, True, False, False, False, True, True, None, False]
+    )
+    actual = strings.str.is_consonant(1)
+    assert type(expected) == type(actual)
+    assert_eq(expected, actual)
+
+    indices = cudf.Series([2, 1, 0, 0, 1, 2, 0, 3, 0, 0])
+    expected = cudf.Series(
+        [False, True, False, False, True, False, True, True, None, False]
+    )
+    actual = strings.str.is_vowel(indices)
+    assert type(expected) == type(actual)
+    assert_eq(expected, actual)
+
+    expected = cudf.Series(
+        [False, False, True, True, False, True, False, False, None, False]
+    )
+    actual = strings.str.is_consonant(indices)
+    assert type(expected) == type(actual)
+    assert_eq(expected, actual)
