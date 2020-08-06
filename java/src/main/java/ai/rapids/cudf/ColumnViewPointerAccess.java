@@ -18,11 +18,12 @@
 
 package ai.rapids.cudf;
 
-public interface ColumnViewPointerAccess {
+//Evolving and Unstable
+interface ColumnViewPointerAccess {
 
   long getColumnView();
 
-  ColumnViewPointerAccess getChildColumnView();
+  ColumnViewPointerAccess getChildColumnView(int childIndex);
 
   MemoryBuffer getDataBuffer();
 
@@ -32,7 +33,9 @@ public interface ColumnViewPointerAccess {
 
   DType getDataType();
 
-  long getRows();
+  long getNumRows();
+
+  int getNumChildren();
 
   void close();
 

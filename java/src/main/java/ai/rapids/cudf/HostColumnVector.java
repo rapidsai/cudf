@@ -218,6 +218,7 @@ public final class HostColumnVector implements AutoCloseable {
   HostColumnVector(DType type, long rows, Optional<Long> nullCount,
                    HostMemoryBuffer hostDataBuffer, HostMemoryBuffer hostValidityBuffer,
                    HostMemoryBuffer offsetBuffer) {
+    assert type != DType.LIST : "This constructor should not be used for list type";
     if (nullCount.isPresent() && nullCount.get() > 0 && hostValidityBuffer == null) {
       throw new IllegalStateException("Buffer cannot have a nullCount without a validity buffer");
     }
@@ -1227,6 +1228,7 @@ public final class HostColumnVector implements AutoCloseable {
       NestedHostColumnVector ret = new NestedHostColumnVector(type, rows, Optional.of(nullCount), data, valid, offsets, nestedHostColumnVectorList);
       return ret;
     }
+
     private void allocateBitmaskAndSetDefaultValues() {
       long bitmaskSize = ColumnVector.getNativeValidPointerSize((int) rows);
       valid = (HostMemoryBuffer.allocate(bitmaskSize));
