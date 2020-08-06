@@ -415,7 +415,7 @@ class StringMethods(ColumnMethodsMixin):
                 self._column, as_scalar(sep), as_scalar(na_rep, "str")
             )
         else:
-            other_cols = _get_cols_list(others)
+            other_cols = _get_cols_list(self._parent, others)
             all_cols = [self._column] + other_cols
             data = cpp_concatenate(
                 cudf.DataFrame(
@@ -429,10 +429,10 @@ class StringMethods(ColumnMethodsMixin):
             data = [""]
         out = self._return_or_inplace(data, **kwargs)
         if len(out) == 1 and others is None:
-            if isinstance(out, StringColumn):
-                out = out[0]
-            else:
+            if isinstance(out, cudf.Series):
                 out = out.iloc[0]
+            else:
+                out = out[0]
         return out
 
     def join(self, sep):
@@ -4763,7 +4763,11 @@ def _string_column_binop(lhs, rhs, op, out_dtype):
     return out
 
 
-def _get_cols_list(others):
+def _get_cols_list(parent_obj, others):
+
+    parent_index = (
+        parent_obj.index if isinstance(parent_obj, cudf.Series) else parent_obj
+    )
 
     if (
         can_convert_to_column(others)
@@ -4780,9 +4784,26 @@ def _get_cols_list(others):
         If others is a list-like object (in our case lists & tuples)
         just another Series/Index, great go ahead with concatenation.
         """
-        cols_list = [column.as_column(frame, dtype="str") for frame in others]
+        cols_list = [
+            column.as_column(frame.reindex(parent_index), dtype="str")
+            if (
+                parent_index is not None
+                and isinstance(frame, cudf.Series)
+                and not frame.index.equals(parent_index)
+            )
+            else column.as_column(frame, dtype="str")
+            for frame in others
+        ]
+
         return cols_list
     elif others is not None:
+        if (
+            parent_index is not None
+            and isinstance(others, cudf.Series)
+            and not others.index.equals(parent_index)
+        ):
+            others = others.reindex(parent_index)
+
         return [column.as_column(others, dtype="str")]
     else:
         raise TypeError(
