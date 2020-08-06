@@ -27,12 +27,11 @@ namespace nvtext {
  */
 
 /**
- * @brief Compute the edit distance between the target strings and the strings
- * in the input column.
+ * @brief Compute the edit distance between individual strings in two strings columns.
  *
- * This uses the Levenshtein algorithm to calculate the edit distance between
- * two strings as documented here: https://www.cuelogic.com/blog/the-levenshtein-algorithm
- *
+ * The `output[i]` is the edit distance between `strings[i]` and `targets[i]`.
+ * This edit distance calculation uses the Levenshtein algorithm as documented here:
+ * https://www.cuelogic.com/blog/the-levenshtein-algorithm
  *
  * @code{.pseudo}
  * Example:
@@ -67,10 +66,10 @@ std::unique_ptr<cudf::column> edit_distance(
  * This uses the Levenshtein algorithm to calculate the edit distance between
  * two strings as documented here: https://www.cuelogic.com/blog/the-levenshtein-algorithm
  *
- * The output is essentially a `strings.size()  x strings.size()` matrix of integers.
- * All values at diagonal `row == col` are 0 since the strings there are compared to themselves.
- * All values above the diagonal are reflected below since the distance calculation is
- * commutative.
+ * The output is essentially a `strings.size() x strings.size()` square matrix of integers.
+ * All values at diagonal `row == col` are 0 since the edit distance between two identical
+ * strings is zero. All values above the diagonal are reflected below since the edit distance
+ * calculation is also commutative.
  *
  * @code{.pseudo}
  * Example:

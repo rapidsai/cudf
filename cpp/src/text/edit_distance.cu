@@ -40,7 +40,7 @@ namespace {
  *
  * @param d_str First string
  * @param d_tgt Second string
- * @param buffer Temporary memory buffer used for calculation.
+ * @param buffer Temporary memory buffer used for the calculation.
  * @return Edit distance value
  */
 __device__ int32_t compute_distance(cudf::string_view const& d_str,
@@ -94,15 +94,15 @@ __device__ int32_t compute_distance(cudf::string_view const& d_str,
  */
 struct edit_distance_levenshtein_algorithm {
   cudf::column_device_view d_strings;  // computing these
-  cudf::column_device_view d_targets;  // with these;
+  cudf::column_device_view d_targets;  // against these;
   int16_t* d_buffer;                   // compute buffer for each string
-  int32_t* d_results;                  // input is offset, output is distance
+  int32_t* d_results;                  // input is buffer offset; output is edit distance
 
   __device__ void operator()(cudf::size_type idx)
   {
     auto d_str =
       d_strings.is_null(idx) ? cudf::string_view{} : d_strings.element<cudf::string_view>(idx);
-    auto d_tgt = [&] __device__ {
+    auto d_tgt = [&] __device__ {  // d_targets is also allowed to have only one entry
       if (d_targets.is_null(idx)) return cudf::string_view{};
       return d_targets.size() == 1 ? d_targets.element<cudf::string_view>(0)
                                    : d_targets.element<cudf::string_view>(idx);
@@ -115,7 +115,7 @@ struct edit_distance_matrix_levenshtein_algorithm {
   cudf::column_device_view d_strings;  // computing these against itself
   int16_t* d_buffer;                   // compute buffer for each string
   int32_t const* d_offsets;            // locate sub-buffer for each string
-  int32_t* d_results;
+  int32_t* d_results;                  // edit distance values
 
   __device__ void operator()(cudf::size_type idx)
   {
@@ -129,8 +129,8 @@ struct edit_distance_matrix_levenshtein_algorithm {
       d_strings.is_null(col) ? cudf::string_view{} : d_strings.element<cudf::string_view>(col);
     auto work_buffer       = d_buffer + d_offsets[idx - ((row + 1) * (row + 2)) / 2];
     int32_t const distance = (row == col) ? 0 : compute_distance(d_str1, d_str2, work_buffer);
-    d_results[idx]         = distance;                // top half
-    d_results[col * strings_count + row] = distance;  // bottom half
+    d_results[idx]         = distance;                // top half of matrix
+    d_results[col * strings_count + row] = distance;  // bottom half of matrix
   }
 };
 
@@ -149,13 +149,13 @@ std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& str
   if (targets.size() > 1)
     CUDF_EXPECTS(strings_count == targets.size(), "targets.size() must equal strings.size()");
 
-  // create device column
+  // create device columns from the input columns
   auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
   auto targets_column = cudf::column_device_view::create(targets.parent(), stream);
   auto d_targets      = *targets_column;
 
-  // calculate the size of the compute-buffer
+  // calculate the size of the compute-buffer;
   // we can use the output column buffer to hold the size/offset values temporarily
   auto results   = cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT32},
                                                strings_count,
@@ -189,6 +189,8 @@ std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& str
   auto d_buffer = compute_buffer.data();
 
   // compute the edit distance into the output column in-place
+  // - on input, d_results is the offset to the working section of d_buffer for each row
+  // - on output, d_results is the calculated edit distance for that row
   thrust::for_each_n(
     execpol->on(stream),
     thrust::make_counting_iterator<cudf::size_type>(0),
@@ -210,13 +212,13 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
   CUDF_EXPECTS(size_t{strings_count} * size_t{strings_count} < std::numeric_limits<int32_t>().max(),
                "too many strings to create the output column");
 
-  // create device column
+  // create device column of the input strings column
   auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
   auto execpol        = rmm::exec_policy(stream);
 
   // Calculate the size of the compute-buffer.
-  // We only need memory half the size of the output matrix since the edit-distance calculation
+  // We only need memory for half the size of the output matrix since the edit distance calculation
   // is commutative -- `distance(strings[i],strings[j]) == distance(strings[j],strings[i])`
   cudf::size_type n_upper = (strings_count * (strings_count - 1)) / 2;
   rmm::device_uvector<cudf::size_type> offsets(n_upper, stream);
@@ -235,7 +237,7 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
       cudf::string_view const d_str2 =
         d_strings.is_null(col) ? cudf::string_view{} : d_strings.element<cudf::string_view>(col);
       if (d_str1.empty() || d_str2.empty()) return;
-      // temp size needed is based on the smaller of the two strings
+      // the temp size needed is 3 int16s per character of the shorter string
       d_offsets[idx - ((row + 1) * (row + 2)) / 2] = std::min(d_str1.length(), d_str2.length()) * 3;
     });
 
@@ -280,7 +282,7 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
   return cudf::make_lists_column(strings_count,
                                  std::move(offsets_column),
                                  std::move(results),
-                                 0,
+                                 0,  // no nulls
                                  rmm::device_buffer{0, stream, mr},
                                  stream,
                                  mr);
