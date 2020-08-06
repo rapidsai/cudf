@@ -131,7 +131,7 @@ class TimeDeltaColumn(column.ColumnBase):
                     rhs = as_scalar(rhs, dtype="float64")
                 else:
                     rhs = rhs.astype("timedelta64[ns]").astype("float64")
-                out_dtype = np.dtype("int_")
+                out_dtype = np.dtype("int64")
             else:
                 raise TypeError(
                     f"Series of dtype {self.dtype} cannot perform "
