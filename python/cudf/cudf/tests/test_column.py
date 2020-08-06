@@ -34,6 +34,7 @@ def str_host_view(list_of_str, to_dtype):
 @pytest.mark.parametrize("offset", [0, 1, 15])
 @pytest.mark.parametrize("size", [None, 50, 10, 0])
 def test_column_offset_and_size(pandas_input, offset, size):
+    pandas_input = cudf.tests.utils.promote_to_pd_nullable_dtype(pandas_input)
     col = cudf.core.column.as_column(pandas_input)
     col = cudf.core.column.build_column(
         data=col.base_data,
@@ -190,7 +191,7 @@ def test_column_view_valid_numeric_to_numeric(data, from_dtype, to_dtype):
     cpu_data_view = cpu_data.view(to_dtype)
     gpu_data_view = gpu_data.view(to_dtype)
 
-    expect = pd.Series(cpu_data_view, dtype=cpu_data_view.dtype)
+    expect = cudf.tests.utils.promote_to_pd_nullable_dtype(pd.Series(cpu_data_view, dtype=cpu_data_view.dtype))
     got = cudf.Series(gpu_data_view, dtype=gpu_data_view.dtype)
 
     gpu_ptr = gpu_data.data.ptr

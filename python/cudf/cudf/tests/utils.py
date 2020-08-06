@@ -187,6 +187,8 @@ def promote_to_pd_nullable_dtype(obj):
             dt = mapping.get(col.dtype, col.dtype)
             obj[colname] = col.astype(dt)
         return obj
+    else:
+        return obj
 
 @contextmanager
 def does_not_raise():

@@ -850,7 +850,9 @@ class MultiIndex(Index):
 
     def to_pandas(self, **kwargs):
         if hasattr(self, "_source_data"):
-            result = self._source_data.to_pandas(nullable_pd_dtype=False)
+            result = pd.DataFrame()
+            for colname in self._source_data.columns:
+                result[colname] = self._source_data[colname].to_array()
             result.columns = self.names
             return pd.MultiIndex.from_frame(result)
 
@@ -863,7 +865,7 @@ class MultiIndex(Index):
         # 2. convert levels to numpy array so empty levels become Float64Index
         levels = np.array(
             [
-                as_index(level).to_pandas(nullable_pd_dtype=False)
+                as_index(level).to_array()
                 for level in self.levels
             ]
         )
