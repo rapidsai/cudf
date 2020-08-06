@@ -30,7 +30,7 @@ namespace detail {
 namespace {
 
 /**
- * @brief Create arrow buffer of data from given cudf column
+ * @brief Create arrow data buffer from given cudf column
  */
 template <typename T>
 std::shared_ptr<arrow::Buffer> fetch_data_buffer(column_view input_view,

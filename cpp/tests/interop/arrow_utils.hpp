@@ -77,14 +77,13 @@ std::enable_if_t<std::is_same<T, bool>::value, std::shared_ptr<arrow::Array>> ge
 {
   std::vector<bool> mask(validity);
   std::vector<bool> data(elements);
-  
+
   return get_arrow_array<T>(data, mask);
 }
 
 template <typename T>
 std::enable_if_t<std::is_same<T, cudf::string_view>::value, std::shared_ptr<arrow::Array>>
-get_arrow_array(std::vector<std::string> const& data,
-                std::vector<uint8_t> const& mask = {})
+get_arrow_array(std::vector<std::string> const& data, std::vector<uint8_t> const& mask = {})
 {
   std::shared_ptr<arrow::StringArray> string_array;
   arrow::StringBuilder string_builder;
@@ -102,7 +101,7 @@ get_arrow_array(std::initializer_list<std::string> elements,
 {
   std::vector<uint8_t> mask(validity);
   std::vector<std::string> data(elements);
-  
+
   return get_arrow_array<T>(data, mask);
 }
 
@@ -130,7 +129,6 @@ std::shared_ptr<arrow::Array> get_arrow_dict_array(std::initializer_list<KEY_TYP
     arrow::dictionary(indices_array->type(), keys_array->type()), indices_array, keys_array);
 }
 
-
 // Creates only single layered list
 template <typename T>
 std::shared_ptr<arrow::Array> get_arrow_list_array(std::initializer_list<T> data,
@@ -153,4 +151,5 @@ std::shared_ptr<arrow::Array> get_arrow_list_array(std::initializer_list<T> data
     mask.size() == 0 ? nullptr : arrow::BitUtil::BytesToBits(mask).ValueOrDie());
 }
 
-std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_tables(cudf::size_type length=10000);
+std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_tables(
+  cudf::size_type length = 10000);

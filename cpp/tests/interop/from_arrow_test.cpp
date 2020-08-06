@@ -53,13 +53,14 @@ std::unique_ptr<cudf::table> get_cudf_table()
 struct FromArrowTest : public cudf::test::BaseFixture {
 };
 
-TEST_F(FromArrowTest, EmptyTable) {
+TEST_F(FromArrowTest, EmptyTable)
+{
   auto tables = get_tables(0);
 
   auto expected_cudf_table = tables.first->view();
-  auto arrow_table = tables.second;
+  auto arrow_table         = tables.second;
 
-  auto got_cudf_table     = cudf::from_arrow(*arrow_table);
+  auto got_cudf_table = cudf::from_arrow(*arrow_table);
 
   cudf::test::expect_tables_equal(expected_cudf_table, got_cudf_table->view());
 }
@@ -195,11 +196,11 @@ struct FromArrowTestSlice
 
 TEST_P(FromArrowTestSlice, SliceTest)
 {
-  auto tables = get_tables(10000);
+  auto tables          = get_tables(10000);
   auto cudf_table_view = tables.first->view();
-  auto arrow_table = tables.second;
-  auto start       = std::get<0>(GetParam());
-  auto end         = std::get<1>(GetParam());
+  auto arrow_table     = tables.second;
+  auto start           = std::get<0>(GetParam());
+  auto end             = std::get<1>(GetParam());
 
   auto sliced_cudf_table = cudf::slice(cudf_table_view, {start, end})[0];
   cudf::table expected_cudf_table{sliced_cudf_table};

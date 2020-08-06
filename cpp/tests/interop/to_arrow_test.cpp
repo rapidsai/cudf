@@ -30,71 +30,78 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/type_lists.hpp>
 
-std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_tables(cudf::size_type length)
+std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_tables(
+  cudf::size_type length)
 {
-    std::vector<int64_t> int64_data(length);
-    std::vector<bool> bool_data(length);
-    std::vector<std::string> string_data(length);
-    std::vector<uint8_t> validity(length);
-    std::vector<bool> bool_validity(length);
-    
-    std::vector<std::unique_ptr<cudf::column>> columns;
+  std::vector<int64_t> int64_data(length);
+  std::vector<bool> bool_data(length);
+  std::vector<std::string> string_data(length);
+  std::vector<uint8_t> validity(length);
+  std::vector<bool> bool_validity(length);
 
-    std::transform(int64_data.cbegin(), int64_data.cend(), int64_data.begin(), [](auto val) {
-        return rand()%500000;
-    });
-    std::transform(bool_data.cbegin(), bool_data.cend(), bool_data.begin(), [](auto val) {
-        return rand() % 7 != 0 ? true : false;
-    });
-    std::transform(string_data.cbegin(), string_data.cend(), string_data.begin(), [](auto val) {
-        return rand() % 7 != 0 ? "CUDF": "Rocks";
-    });
-    std::transform(validity.cbegin(), validity.cend(), validity.begin(), [](auto val) {
-        return rand() % 7 != 0 ? 1: 0;
-    });
-    std::transform(bool_validity.cbegin(), bool_validity.cend(), bool_validity.begin(), [](auto val) {
-        return rand() % 7 != 0 ? true: false;
-    });
+  std::vector<std::unique_ptr<cudf::column>> columns;
 
-    columns.emplace_back(
-    cudf::test::fixed_width_column_wrapper<int64_t>(int64_data.begin(), int64_data.end(), validity.begin()).release());
-    columns.emplace_back(
-        cudf::test::strings_column_wrapper(string_data.begin(), string_data.end(), validity.begin())
-        .release());
-    auto col4 = cudf::test::fixed_width_column_wrapper<int64_t>(int64_data.begin(), int64_data.end(), validity.begin());
-    auto dict_col = cudf::dictionary::encode(col4);
-    columns.emplace_back(std::move(cudf::dictionary::encode(col4)));
-    columns.emplace_back(
-       cudf::test::fixed_width_column_wrapper<bool>(bool_data.begin(), bool_data.end(), bool_validity.begin())
-         .release());
+  std::transform(int64_data.cbegin(), int64_data.cend(), int64_data.begin(), [](auto val) {
+    return rand() % 500000;
+  });
+  std::transform(bool_data.cbegin(), bool_data.cend(), bool_data.begin(), [](auto val) {
+    return rand() % 7 != 0 ? true : false;
+  });
+  std::transform(string_data.cbegin(), string_data.cend(), string_data.begin(), [](auto val) {
+    return rand() % 7 != 0 ? "CUDF" : "Rocks";
+  });
+  std::transform(validity.cbegin(), validity.cend(), validity.begin(), [](auto val) {
+    return rand() % 7 != 0 ? 1 : 0;
+  });
+  std::transform(bool_validity.cbegin(), bool_validity.cend(), bool_validity.begin(), [](auto val) {
+    return rand() % 7 != 0 ? true : false;
+  });
 
-    auto int64array = get_arrow_array<int64_t>(int64_data, validity);
-    auto string_array =
-        get_arrow_array<cudf::string_view>(string_data, validity);
-    cudf::dictionary_column_view view(dict_col->view());
-    auto keys = cudf::test::to_host<int64_t>(view.keys()).first;
-    auto indices = cudf::test::to_host<int32_t>(view.indices()).first;
-    auto dict_array = get_arrow_dict_array(std::vector<int64_t>(keys.begin(), keys.end()), std::vector<int32_t>(indices.begin(), indices.end()), validity);
-    auto boolarray  = get_arrow_array<bool>(bool_data, bool_validity);
+  columns.emplace_back(cudf::test::fixed_width_column_wrapper<int64_t>(
+                         int64_data.begin(), int64_data.end(), validity.begin())
+                         .release());
+  columns.emplace_back(
+    cudf::test::strings_column_wrapper(string_data.begin(), string_data.end(), validity.begin())
+      .release());
+  auto col4 = cudf::test::fixed_width_column_wrapper<int64_t>(
+    int64_data.begin(), int64_data.end(), validity.begin());
+  auto dict_col = cudf::dictionary::encode(col4);
+  columns.emplace_back(std::move(cudf::dictionary::encode(col4)));
+  columns.emplace_back(cudf::test::fixed_width_column_wrapper<bool>(
+                         bool_data.begin(), bool_data.end(), bool_validity.begin())
+                         .release());
 
-    std::vector<std::shared_ptr<arrow::Field>> schema_vector = {
-        arrow::field("a", int64array->type()),
-        arrow::field("b", string_array->type()),
-        arrow::field("c", dict_array->type()),
-        arrow::field("d", boolarray->type())};
+  auto int64array   = get_arrow_array<int64_t>(int64_data, validity);
+  auto string_array = get_arrow_array<cudf::string_view>(string_data, validity);
+  cudf::dictionary_column_view view(dict_col->view());
+  auto keys       = cudf::test::to_host<int64_t>(view.keys()).first;
+  auto indices    = cudf::test::to_host<int32_t>(view.indices()).first;
+  auto dict_array = get_arrow_dict_array(std::vector<int64_t>(keys.begin(), keys.end()),
+                                         std::vector<int32_t>(indices.begin(), indices.end()),
+                                         validity);
+  auto boolarray  = get_arrow_array<bool>(bool_data, bool_validity);
 
-    auto schema = std::make_shared<arrow::Schema>(schema_vector);
+  std::vector<std::shared_ptr<arrow::Field>> schema_vector = {
+    arrow::field("a", int64array->type()),
+    arrow::field("b", string_array->type()),
+    arrow::field("c", dict_array->type()),
+    arrow::field("d", boolarray->type())};
 
-    return std::make_pair(std::make_unique<cudf::table>(std::move(columns)), arrow::Table::Make(schema, {int64array, string_array, dict_array, boolarray}));
+  auto schema = std::make_shared<arrow::Schema>(schema_vector);
+
+  return std::make_pair(
+    std::make_unique<cudf::table>(std::move(columns)),
+    arrow::Table::Make(schema, {int64array, string_array, dict_array, boolarray}));
 }
 
 struct ToArrowTest : public cudf::test::BaseFixture {
 };
 
-TEST_F(ToArrowTest, EmptyTable) {
+TEST_F(ToArrowTest, EmptyTable)
+{
   auto tables = get_tables(0);
 
-  auto cudf_table_view = tables.first->view();
+  auto cudf_table_view      = tables.first->view();
   auto expected_arrow_table = tables.second;
 
   auto got_arrow_table = cudf::to_arrow(cudf_table_view, {"a", "b", "c", "d"});
@@ -153,11 +160,11 @@ struct ToArrowTestSlice
 
 TEST_P(ToArrowTestSlice, SliceTest)
 {
-  auto tables = get_tables(10000);
-  auto cudf_table_view  = tables.first->view();
-  auto arrow_table = tables.second;
-  auto start       = std::get<0>(GetParam());
-  auto end         = std::get<1>(GetParam());
+  auto tables          = get_tables(10000);
+  auto cudf_table_view = tables.first->view();
+  auto arrow_table     = tables.second;
+  auto start           = std::get<0>(GetParam());
+  auto end             = std::get<1>(GetParam());
 
   auto sliced_cudf_table    = cudf::slice(cudf_table_view, {start, end})[0];
   auto expected_arrow_table = arrow_table->Slice(start, end - start);
