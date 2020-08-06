@@ -1,5 +1,5 @@
-# This repository is for storing "synthetic" datasets for testing predicate
-# pushdown.
+# This module is for generating "synthetic" datasets. It has been designed
+# for testing filtered reading.
 #
 # The purpose of synthetic datasets is for ensuring that when
 # certain phenomena (e.g., cardinality) are exaggurated, we perform better
@@ -8,12 +8,14 @@
 #
 # For general comparison, we should use "real" datasets. 
 
+DEBUG = False
+
 import pandas as pd
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from prettytable import PrettyTable
+if DEBUG: from prettytable import PrettyTable
 from mimesis import Generic
 g = Generic('es')
 
@@ -47,7 +49,7 @@ class Parameters:
         self.column_params = column_params
 
     def __str__(self):
-        print("table with " + str(self.num_cols) + " columns and " + str(self.num_rows) + " rows:")
+        if DEBUG: print("table with " + str(self.num_cols) + " columns and " + str(self.num_rows) + " rows:")
         params_info = PrettyTable()
         params_info.add_column("", ["type", "cardinality", "null frequency", "sorted?"])
         for i in range(self.num_cols):
@@ -62,10 +64,11 @@ class Parameters:
 
 # Synthesizes a new dataset and stores it in a Parquet file:
 def synthesize(name, parameters):
-    print("synthesizer with following parameters:")
-    print(parameters)
+    if DEBUG:
+        print("synthesizer with following parameters:")
+        print(parameters)
 
-    print("synthesizing...")
+    if DEBUG: print("synthesizing...")
     data = {}
     columns_to_sort = []
     for i in range(parameters.num_cols):
@@ -91,8 +94,9 @@ def synthesize(name, parameters):
     )
     #df.to_parquet(file_to_store_in, allow_truncated_timestamps=True, row_group_size=512)
     #df.to_parquet(file_to_store_in, engine='fastparquet', file_scheme='hive')
-    print("done")
-    print("synthesized dataset stored in " + file_to_store_in)
+    if DEBUG:
+        print("done")
+        print("synthesized dataset stored in " + file_to_store_in)
 
 default = Parameters()
 
