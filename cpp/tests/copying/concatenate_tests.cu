@@ -623,4 +623,6 @@ TEST_F(DictionaryConcatTest, ErrorsTest)
   auto dictionary2 = cudf::dictionary::encode(integers);
   std::vector<cudf::column_view> views({dictionary1->view(), dictionary2->view()});
   EXPECT_THROW(cudf::concatenate(views), cudf::logic_error);
+  std::vector<cudf::column_view> empty;
+  EXPECT_THROW(cudf::concatenate(empty), cudf::logic_error);
 }
