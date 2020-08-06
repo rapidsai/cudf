@@ -29,7 +29,7 @@ requirements:
   host:
     - librmm {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
-    - arrow-cpp 1.0.0.*
+    - arrow-cpp 0.17.1.*
     - arrow-cpp-proc * cuda
     - double-conversion
     - rapidjson
