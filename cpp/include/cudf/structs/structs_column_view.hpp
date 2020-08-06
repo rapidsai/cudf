@@ -20,29 +20,25 @@
 
 namespace cudf {
 
+class structs_column_view : private column_view {
+ public:
+  // Foundation members:
+  structs_column_view(structs_column_view const&) = default;
+  structs_column_view(structs_column_view&&)      = default;
+  ~structs_column_view()                          = default;
+  structs_column_view& operator=(structs_column_view const&) = default;
+  structs_column_view& operator=(structs_column_view&&) = default;
 
-class structs_column_view : private column_view 
-{
+  explicit structs_column_view(column_view const& rhs);
 
-    public:
+  using column_view::child_begin;
+  using column_view::child_end;
+  using column_view::has_nulls;
+  using column_view::null_count;
+  using column_view::null_mask;
+  using column_view::offset;
+  using column_view::size;
 
-        // Foundation members:
-        structs_column_view(structs_column_view const&) = default;
-        structs_column_view(structs_column_view &&) = default;
-        ~structs_column_view() = default;
-        structs_column_view& operator=(structs_column_view const&) = default;
-        structs_column_view& operator=(structs_column_view &&) = default;
+};  // class structs_column_view;
 
-        explicit structs_column_view(column_view const& rhs);
-
-        using column_view::has_nulls;
-        using column_view::null_count;
-        using column_view::null_mask;
-        using column_view::offset;
-        using column_view::size;
-        using column_view::child_begin;
-        using column_view::child_end;
-
-}; // class structs_column_view;
-
-} // namespace cudf;
+}  // namespace cudf

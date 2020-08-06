@@ -121,8 +121,8 @@ struct element_type_dispatcher {
               !(std::is_same<Op, cudf::reduction::op::min>::value ||
                 std::is_same<Op, cudf::reduction::op::max>::value))
              // disable for list/struct views
-             || std::is_same<ElementType, cudf::list_view>::value
-             || std::is_same<ElementType, cudf::struct_view>::value);
+             || std::is_same<ElementType, cudf::list_view>::value ||
+             std::is_same<ElementType, cudf::struct_view>::value);
   }
 
  public:

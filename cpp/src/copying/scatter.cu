@@ -25,10 +25,10 @@
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/lists/list_view.cuh>
-#include <cudf/structs/struct_view.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/strings/detail/scatter.cuh>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/structs/struct_view.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/traits.hpp>
 

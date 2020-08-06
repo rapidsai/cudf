@@ -23,9 +23,9 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/lists/lists_column_view.hpp>
-#include <cudf/structs/structs_column_view.hpp>
-#include <cudf/structs/struct_view.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
+#include <cudf/structs/struct_view.hpp>
+#include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/bit.hpp>
@@ -272,21 +272,19 @@ struct column_comparator_impl<struct_view, check_exact_equality> {
                   bool print_all_differences,
                   int depth)
   {
-    std::for_each(
-      thrust::make_counting_iterator(0),
-      thrust::make_counting_iterator(0) + lhs.num_children(),
-      [&](auto i) {
-        cudf::type_dispatcher(
-          lhs.child(i).type(), 
-          column_comparator<check_exact_equality>{}, 
-          lhs.child(i), 
-          rhs.child(i), 
-          print_all_differences, depth+1);
-      }
-    );
+    std::for_each(thrust::make_counting_iterator(0),
+                  thrust::make_counting_iterator(0) + lhs.num_children(),
+                  [&](auto i) {
+                    cudf::type_dispatcher(lhs.child(i).type(),
+                                          column_comparator<check_exact_equality>{},
+                                          lhs.child(i),
+                                          rhs.child(i),
+                                          print_all_differences,
+                                          depth + 1);
+                  });
   }
 };
- 
+
 template <bool check_exact_equality>
 struct column_comparator {
   template <typename T>
@@ -422,19 +420,17 @@ std::string get_nested_type_str(cudf::column_view const& view)
     return cudf::jit::get_type_name(view.type()) + "<" +
            (lcv.size() > 0 ? get_nested_type_str(lcv.child()) : "") + ">";
   }
-  
-  if (view.type().id() == cudf::type_id::STRUCT) {
 
+  if (view.type().id() == cudf::type_id::STRUCT) {
     std::ostringstream out;
 
     out << cudf::jit::get_type_name(view.type()) + "<";
-    // std::for_each(view.child_begin(), view.child_end(), [&out](auto col){ out << get_nested_type_str(col);});
-    std::transform(
-      view.child_begin(),
-      view.child_end(),
-      std::ostream_iterator<std::string>(out, ","),
-      [&out](auto const col) {return get_nested_type_str(col);}
-    );
+    // std::for_each(view.child_begin(), view.child_end(), [&out](auto col){ out <<
+    // get_nested_type_str(col);});
+    std::transform(view.child_begin(),
+                   view.child_end(),
+                   std::ostream_iterator<std::string>(out, ","),
+                   [&out](auto const col) { return get_nested_type_str(col); });
     out << ">";
     return out.str();
   }
@@ -616,10 +612,10 @@ struct column_view_printer {
     }
 
     std::transform(
-      view.child_begin(), view.child_end(), 
+      view.child_begin(),
+      view.child_end(),
       std::ostream_iterator<std::string>(out_stream, "\n"),
-      [&](auto child_column) {return detail::to_string(child_column, ", ", indent + "    ");}
-    );
+      [&](auto child_column) { return detail::to_string(child_column, ", ", indent + "    "); });
 
     out.push_back(out_stream.str());
   }

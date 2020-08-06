@@ -72,7 +72,7 @@ void compare_scalar_functor::operator()<cudf::list_view>(cudf::scalar const& lhs
 
 template <>
 void compare_scalar_functor::operator()<cudf::struct_view>(cudf::scalar const& lhs,
-                                                         cudf::scalar const& rhs)
+                                                           cudf::scalar const& rhs)
 {
   CUDF_FAIL("Unsupported scalar compare type: struct_view");
 }

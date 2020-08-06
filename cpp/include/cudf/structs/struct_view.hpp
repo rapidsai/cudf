@@ -24,12 +24,11 @@ namespace cudf {
 
 /**
  * @brief A non-owning, immutable view of device data that represents
- * a struct with fields of arbitrary types (including primitives, lists, 
+ * a struct with fields of arbitrary types (including primitives, lists,
  * and other structs)
  *
  */
 class struct_view {
-
 };
 
 }  // namespace cudf

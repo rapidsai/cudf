@@ -326,14 +326,13 @@ std::unique_ptr<column> dispatch_clamp::operator()<numeric::decimal64>(
 }
 
 template <>
-std::unique_ptr<column> dispatch_clamp::operator()<struct_view>(
-  column_view const& input,
-  scalar const& lo,
-  scalar const& lo_replace,
-  scalar const& hi,
-  scalar const& hi_replace,
-  rmm::mr::device_memory_resource* mr,
-  cudaStream_t stream)
+std::unique_ptr<column> dispatch_clamp::operator()<struct_view>(column_view const& input,
+                                                                scalar const& lo,
+                                                                scalar const& lo_replace,
+                                                                scalar const& hi,
+                                                                scalar const& hi_replace,
+                                                                rmm::mr::device_memory_resource* mr,
+                                                                cudaStream_t stream)
 {
   CUDF_FAIL("clamp for struct_view not supported");
 }

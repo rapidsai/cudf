@@ -144,7 +144,6 @@ struct get_element_functor {
   {
     CUDF_FAIL("get_element_functor not supported for struct_view");
   }
-
 };
 
 }  // namespace

@@ -187,12 +187,11 @@ bool contains_scalar_dispatch::operator()<cudf::list_view>(column_view const& co
   CUDF_FAIL("list_view type not supported yet");
 }
 
-
 template <>
 bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const& col,
-                                                           scalar const& value,
-                                                           cudaStream_t stream,
-                                                           rmm::mr::device_memory_resource* mr)
+                                                             scalar const& value,
+                                                             cudaStream_t stream,
+                                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FAIL("struct_view type not supported yet");
 }

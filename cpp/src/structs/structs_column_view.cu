@@ -14,17 +14,15 @@
  * limitations under the License.
  */
 
-#include <cudf/structs/structs_column_view.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/structs/structs_column_view.hpp>
 #include "cudf/utilities/error.hpp"
 
- namespace cudf
- {
+namespace cudf {
 
-    structs_column_view::structs_column_view(column_view const& rhs)
-        : column_view{rhs}
-    {
-        CUDF_EXPECTS(type().id() == type_id::STRUCT, "structs_column_view only supports struct columns");
-    }
+structs_column_view::structs_column_view(column_view const& rhs) : column_view{rhs}
+{
+  CUDF_EXPECTS(type().id() == type_id::STRUCT, "structs_column_view only supports struct columns");
+}
 
- }
+}  // namespace cudf

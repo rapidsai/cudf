@@ -372,7 +372,7 @@ struct to_word_index : public thrust::unary_function<size_type, size_type> {
 namespace detail {
 
 // Inplace Bitwise AND of the masks
-void inplace_bitmask_and(bitmask_type* dest_mask,
+void inplace_bitmask_and(bitmask_type *dest_mask,
                          std::vector<bitmask_type const *> const &masks,
                          std::vector<size_type> const &begin_bits,
                          size_type mask_size,
@@ -417,7 +417,8 @@ rmm::device_buffer bitmask_and(std::vector<bitmask_type const *> const &masks,
   auto number_of_mask_words = num_bitmask_words(mask_size);
 
   dest_mask = rmm::device_buffer{num_bytes, stream, mr};
-  inplace_bitmask_and(static_cast<bitmask_type*>(dest_mask.data()), masks, begin_bits, mask_size, stream, mr);
+  inplace_bitmask_and(
+    static_cast<bitmask_type *>(dest_mask.data()), masks, begin_bits, mask_size, stream, mr);
 
   return dest_mask;
 }
@@ -677,7 +678,9 @@ rmm::device_buffer bitmask_and(table_view const &view,
     }
   }
 
-  if (masks.size() > 0) { return cudf::detail::bitmask_and(masks, offsets, view.num_rows(), stream, mr); }
+  if (masks.size() > 0) {
+    return cudf::detail::bitmask_and(masks, offsets, view.num_rows(), stream, mr);
+  }
 
   return null_mask;
 }

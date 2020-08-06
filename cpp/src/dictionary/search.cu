@@ -80,7 +80,8 @@ struct find_index_fn {
     CUDF_FAIL("list_view column cannot be the keys column of a dictionary");
   }
 
-  template <typename Element, std::enable_if_t<std::is_same<Element, struct_view>::value>* = nullptr>
+  template <typename Element,
+            std::enable_if_t<std::is_same<Element, struct_view>::value>* = nullptr>
   std::unique_ptr<numeric_scalar<int32_t>> operator()(dictionary_column_view const& input,
                                                       scalar const& key,
                                                       rmm::mr::device_memory_resource* mr,
