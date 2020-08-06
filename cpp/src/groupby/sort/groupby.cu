@@ -404,7 +404,7 @@ void store_result_functor::operator()<aggregation::COLLECT>(aggregation const& a
   if (cache.has_result(col_idx, agg)) return;
 
   auto result = detail::group_collect(
-    get_sorted_values(), helper.group_offsets(), helper.num_groups(), mr, stream);
+    get_grouped_values(), helper.group_offsets(), helper.num_groups(), mr, stream);
 
   cache.add_result(col_idx, agg, std::move(result));
 };
