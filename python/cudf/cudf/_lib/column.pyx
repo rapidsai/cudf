@@ -31,6 +31,7 @@ from cudf._lib.cpp.column.column cimport column, column_contents
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
 cimport cudf._lib.cpp.types as libcudf_types
+cimport cudf._lib.cpp.unary as libcudf_unary
 
 
 cdef class Column:
@@ -407,6 +408,22 @@ cdef class Column:
 
     @staticmethod
     cdef Column from_unique_ptr(unique_ptr[column] c_col):
+        cdef column_view view = c_col.get()[0].view()
+        cdef libcudf_types.type_id tid = view.type().id()
+        cdef libcudf_types.type_id expected_tid
+        cdef libcudf_types.data_type c_dtype
+        if tid == libcudf_types.type_id.TIMESTAMP_DAYS:
+            expected_tid = (
+                <libcudf_types.type_id> (
+                    <underlying_type_t_type_id> (
+                        np_to_cudf_types[np.dtype("datetime64[s]")]
+                    )
+                )
+            )
+            c_dtype = libcudf_types.data_type(expected_tid)
+            with nogil:
+                c_col = move(libcudf_unary.cast(view, c_dtype))
+        
         size = c_col.get()[0].size()
         dtype = dtype_from_column_view(c_col.get()[0].view())
         has_nulls = c_col.get()[0].has_nulls()
