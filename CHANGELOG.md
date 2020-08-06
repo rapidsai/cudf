@@ -67,6 +67,7 @@
 - PR #5822 Add `cudf_kafka` to `custreamz` run time conda dependency and fix bash syntax issue
 - PR #5845 Add support for `mask_to_bools`
 - PR #5851 Add support for `Index.sort_values`
+- PR #5859 Add conversion form `fixed_point` to `bool`
 
 ## Improvements
 
@@ -258,6 +259,7 @@
 - PR #5820 Fix ListColumn.to_arrow for all null case
 - PR #5837 Bash syntax error in prebuild.sh preventing `cudf_kafka` and `libcudf_kafka` from being uploaded to Anaconda
 - PR #5841 Added custreamz functions that were missing in interface layer
+- PR #5844 Fix `.str.cat` when objects with different index are passed
 - PR #5849 Modify custreamz api to integrate seamlessly with python streamz
 
 
