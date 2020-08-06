@@ -261,7 +261,7 @@
 - PR #5844 Fix `.str.cat` when objects with different index are passed
 - PR #5849 Modify custreamz api to integrate seamlessly with python streamz
 - PR #5866 cudf_kafka python version inconsistencies in Anaconda packages
-
+- PR #5872 libcudf_kafka r_path is causing docker build failures on centos7
 
 # cuDF 0.14.0 (03 Jun 2020)
 
