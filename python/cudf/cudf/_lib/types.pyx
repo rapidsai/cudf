@@ -31,6 +31,9 @@ class TypeId(IntEnum):
     UINT64 = <underlying_type_t_type_id> libcudf_types.type_id.UINT64
     FLOAT32 = <underlying_type_t_type_id> libcudf_types.type_id.FLOAT32
     FLOAT64 = <underlying_type_t_type_id> libcudf_types.type_id.FLOAT64
+    TIMESTAMP_DAYS = (
+        <underlying_type_t_type_id> libcudf_types.type_id.TIMESTAMP_DAYS
+    )
     TIMESTAMP_SECONDS = (
         <underlying_type_t_type_id> libcudf_types.type_id.TIMESTAMP_SECONDS
     )

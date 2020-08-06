@@ -1837,10 +1837,17 @@ class Frame(libcudf.table.Table):
             data = pa.table([data], [None])
 
         index_col = None
+        dtypes = None
         if isinstance(data, pa.Table) and isinstance(data.schema.pandas_metadata, dict):
-            index_col = data.schema.pandas_metadata["index_columns"]
-            if index_col and isinstance(index_col[0], dict):
-                data = data.drop(index_col[0]["name"])
+            metadata = data.schema.pandas_metadata
+            index_col = metadata["index_columns"]
+ #           if index_col and not isinstance(index_col[0], dict):
+ #               data = data.drop(index_col[0])
+            dtypes = {
+                col["field_name"]: col["pandas_type"]
+                for col in metadata["columns"]
+                if "field_name" in col
+            }
 
         dict_indices = {}
         dict_dictionaries = {}
@@ -1899,6 +1906,18 @@ class Frame(libcudf.table.Table):
             [cudf_non_dict_table, cudf_dict_table], axis=1
         )
 
+        if dtypes:
+            for name in result._data.names:
+                dtype = dtypes[name]
+                if dtype == "categorical":
+                    dtype = "category"
+                elif dtype == "date" or dtype == "datetime":
+                    dtype = "datetime64[ms]"
+                elif dtype == "empty":
+                    dtype = "object"
+                
+                result._data[name] = result._data[name].astype(dtype)
+
         if cls == cudf.MultiIndex:
             result = cudf.Index(result)
         elif cls in (cudf.Series, cudf.Index):
@@ -1922,10 +1941,13 @@ class Frame(libcudf.table.Table):
         codes = {}
         codes_keys = []
         categories = {}
-        RangeIndexMetaData = None
+        index_descriptors = []
+        names = self._data.names
+        index_descr = []
+        null_arrays_names = []
         if preserve_index and isinstance(self, (cudf.DataFrame)):
             if isinstance(self.index, cudf.RangeIndex):
-                RangeIndexMetaData = {
+                descr = {
                     "kind": "range",
                     "name": self.index.name,
                     "start": self.index._start,
@@ -1935,26 +1957,33 @@ class Frame(libcudf.table.Table):
             else:
                 if isinstance(self.index, cudf.MultiIndex):
                     names = tuple(
-                        f"level_{i}" for i, _ in enumerate(self.index.names)
+                        f"level_{i}" for i, _ in enumerate(self.index._data.names)
                     )
                 else:
                     names = data.index.names if data.index.name is not None else ("index",)
-                for name, column in zip(names, self.index._data.columns):
-                    data.insert(data.ndim, name, column)
+                for gen_name, col_name in zip(names, self.index._data.names):
+                    data.insert(data.shape[1], gen_name, self.index._data[col_name])
+
+                descr = names[0]
+                names = data._data.names
+            index_descr.append(descr)
 
         for name in self._data.names:
+            col = self._data[name]
             if isinstance(
-                self._data[name],
+                col,
                 cudf.core.column.CategoricalColumn,
             ):
                 # arrow doesn't support unsigned codes
-                signed_type = min_signed_type(self._data[name].codes.max()) if self._data[name].codes.size > 0 else np.int8
-                codes[str(name)] = self._data[name].codes.astype(signed_type)
-                categories[str(name)] = self._data[name].categories
+                signed_type = min_signed_type(col.codes.max()) if self._data[name].codes.size > 0 else np.int8
+                codes[str(name)] = col.codes.astype(signed_type)
+                categories[str(name)] = col.categories
                 codes_keys.append(name)
+            elif isinstance(col, cudf.core.column.StringColumn) and col.null_count == len(col):
+                null_arrays_names.append(name)
         
         data = cudf.DataFrame(data._data)
-        data = data.drop(codes_keys)
+        data = data.drop(codes_keys + null_arrays_names)
 
         out_table = pa.table([])
         if data.shape[1] > 0:
@@ -1973,11 +2002,30 @@ class Frame(libcudf.table.Table):
                 if out_table.num_columns == 0:
                     out_table = pa.table({name: pa.DictionaryArray.from_arrays(indices[name].chunk(0), dictionaries[name].chunk(0))})
                 else:
-                    out_table = out_table.append_column(name, pa.DictionaryArray.from_arrays(indices[name].chunk(0), get_dictionary_array(dictionaries[name].chunk(0)), ordered=self._data[name].ordered))
+                    try:
+                        out_table = out_table.add_column(names.index(name), name, pa.DictionaryArray.from_arrays(indices[name].chunk(0), get_dictionary_array(dictionaries[name].chunk(0)), ordered=self._data[name].ordered))
+                    except pa.lib.ArrowInvalid:
+                        out_table = out_table.append_column(name, pa.DictionaryArray.from_arrays(indices[name].chunk(0), get_dictionary_array(dictionaries[name].chunk(0)), ordered=self._data[name].ordered))
+
+        if len(null_arrays_names):
+            for name in null_arrays_names:
+                if out_table.num_columns == 0:
+                    out_table = pa.table({name: pa.NullArray.from_buffers(pa.null(), len(self), [pa.py_buffer((b""))])});
+                else:
+                    out_table = out_table.add_column(names.index(name), name, pa.NullArray.from_buffers(pa.null(), len(self), [pa.py_buffer((b""))]));
         if out_table.num_columns == 1 and isinstance (self, (cudf.Series, cudf.Index)) and not isinstance(self, cudf.MultiIndex):
             return out_table.columns[0].chunk(0)
+        
+        metadata = pa.pandas_compat.construct_metadata(
+                self,
+                out_table.schema.names,
+                [self.index],
+                index_descr,
+                preserve_index,
+                types = out_table.schema.types
+                )
 
-        return out_table
+        return out_table.replace_schema_metadata(metadata)
 
     def drop_duplicates(
         self,
