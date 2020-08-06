@@ -40,7 +40,7 @@ class CudfKafkaClient:
         to topic/partition instances
         """
 
-        return self.kafka_meta_client.unsubscribe()
+        self.kafka_meta_client.unsubscribe()
 
     def close(self, timeout=10000):
 
@@ -49,7 +49,7 @@ class CudfKafkaClient:
         clean up system resources
         """
 
-        return self.kafka_meta_client.close(timeout=timeout)
+        self.kafka_meta_client.close(timeout)
 
 
 # Apache Kafka Consumer implementation
@@ -145,13 +145,15 @@ class Consumer(CudfKafkaClient):
             "parquet": cudf.io.read_parquet,
         }
 
-        result = cudf_readers[message_format](self.kafka_datasource)
+        result = cudf_readers[message_format](
+            kafka_datasource, engine="cudf", lines=True
+        )
 
         # Close up the cudf datasource instance
         # TODO: Ideally the C++ destructor should handle the
         # unsubscribe and closing the socket connection.
         kafka_datasource.unsubscribe()
-        kafka_datasource.close()
+        kafka_datasource.close(batch_timeout)
 
         if result is not None:
             return cudf.DataFrame._from_table(result)
@@ -220,7 +222,7 @@ class Consumer(CudfKafkaClient):
 
         try:
             offsets = self.kafka_meta_client.get_watermark_offset(
-                topic=partition.topic,
+                topic=partition.topic.encode(),
                 partition=partition.partition,
                 timeout=timeout,
                 cached=cached,
