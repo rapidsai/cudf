@@ -74,7 +74,7 @@ std::unique_ptr<cudf::column> edit_distance(
  * @code{.pseudo}
  * Example:
  * s = ["hello", "hallo", "hella"]
- * d = edit_distance_matrix_matrix(s)
+ * d = edit_distance_matrix(s)
  * d is now [[0, 1, 1],
  *           [1, 0, 2]
  *           [1, 2, 0]]
