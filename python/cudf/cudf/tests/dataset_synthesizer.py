@@ -1,3 +1,5 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 # This module is for generating "synthetic" datasets. It has been designed
 # for testing filtered reading.
 #
@@ -63,7 +65,7 @@ class Parameters:
         return str(params_info)
 
 # Synthesizes a new dataset and stores it in a Parquet file:
-def synthesize(name, parameters):
+def synthesize(filepath, parameters):
     if DEBUG:
         print("synthesizer with following parameters:")
         print(parameters)
@@ -84,16 +86,14 @@ def synthesize(name, parameters):
     df = df.sort_values(columns_to_sort)
 
     # Store in Parquet file
-    file_to_store_in = name + ".parquet" if not name.endswith(".parquet") else name
-    tbl = pa.Table.from_pandas(df)
-    pq.write_to_dataset(
-        tbl,
-        root_path=file_to_store_in,
-        row_group_size=64,
-        partition_cols=['3'],
-    )
-    #df.to_parquet(file_to_store_in, allow_truncated_timestamps=True, row_group_size=512)
-    #df.to_parquet(file_to_store_in, engine='fastparquet', file_scheme='hive')
+    df.to_parquet(filepath, row_group_size=64)
+    # tbl = pa.Table.from_pandas(df)
+    # pq.write_to_dataset(
+    #     tbl,
+    #     root_path=str(filepath),
+    #     row_group_size=64,
+    #     # partition_cols=['3'],
+    # )
     if DEBUG:
         print("done")
         print("synthesized dataset stored in " + file_to_store_in)

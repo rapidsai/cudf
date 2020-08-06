@@ -16,7 +16,7 @@ import cudf
 from cudf.io.parquet import ParquetWriter, merge_parquet_filemetadata
 from cudf.tests.utils import assert_eq
 
-import dataset_synthesizer as ds
+import cudf.tests.dataset_synthesizer as ds
 
 
 @pytest.fixture(scope="module")
@@ -317,10 +317,16 @@ def test_parquet_read_metadata(tmpdir, pdf):
     for a, b in zip(col_names, pdf.columns):
         assert a == b
 
-# @pytest.mark.parametrize("row_group_size", [1, 5, 100])
-# def test_parquet_read_filtered(tmpdir, pdf, row_group_size):
-#     fname = tmpdir.join("filtered.parquet")
-#     pdf.to_parquet(fname, compression="gzip", row_group_size=row_group_size)
+def test_parquet_read_filtered(tmpdir):
+    # Generate data
+    fname = tmpdir.join("filtered.parquet")
+    ds.synthesize(fname, ds.simple)
+
+    # Get dataframes to compare
+    df = cudf.read_parquet(fname)
+    df_filtered = cudf.read_parquet(fname, filters=[('0', '>', '60')])
+
+    assert df_filtered.shape[0] < df.shape[0]
 
 @pytest.mark.parametrize("row_group_size", [1, 5, 100])
 def test_parquet_read_row_groups(tmpdir, pdf, row_group_size):
