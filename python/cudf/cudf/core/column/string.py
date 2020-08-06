@@ -4741,8 +4741,9 @@ def _string_column_binop(lhs, rhs, op, out_dtype):
 
 def _get_cols_list(parent_obj, others):
 
-    if isinstance(parent_obj, cudf.Index):
-        parent_obj = parent_obj.to_series()
+    parent_index = (
+        parent_obj.index if isinstance(parent_obj, cudf.Series) else parent_obj
+    )
 
     if (
         can_convert_to_column(others)
@@ -4760,10 +4761,10 @@ def _get_cols_list(parent_obj, others):
         just another Series/Index, great go ahead with concatenation.
         """
         cols_list = [
-            column.as_column(frame.reindex(parent_obj.index), dtype="str")
+            column.as_column(frame.reindex(parent_index), dtype="str")
             if (
                 isinstance(frame, cudf.Series)
-                and not frame.index.equals(parent_obj.index)
+                and not frame.index.equals(parent_index)
             )
             else column.as_column(frame, dtype="str")
             for frame in others
@@ -4772,9 +4773,9 @@ def _get_cols_list(parent_obj, others):
         return cols_list
     elif others is not None:
         if isinstance(others, cudf.Series) and not others.index.equals(
-            parent_obj.index
+            parent_index
         ):
-            others = others.reindex(parent_obj.index)
+            others = others.reindex(parent_index)
 
         return [column.as_column(others, dtype="str")]
     else:
