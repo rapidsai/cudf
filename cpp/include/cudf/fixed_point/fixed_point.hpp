@@ -343,6 +343,16 @@ class fixed_point {
   }
 
   /**
+   * @brief Explicit conversion operator to `bool`
+   *
+   * @return The `fixed_point` value as a boolean (zero is `false`, nonzero is `true`)
+   */
+  CUDA_HOST_DEVICE_CALLABLE explicit constexpr operator bool() const
+  {
+    return static_cast<bool>(_value);
+  }
+
+  /**
    * @brief operator +=
    *
    * @tparam Rep1 Representation type of number being added to `this`
