@@ -4763,7 +4763,8 @@ def _get_cols_list(parent_obj, others):
         cols_list = [
             column.as_column(frame.reindex(parent_index), dtype="str")
             if (
-                isinstance(frame, cudf.Series)
+                parent_index is not None
+                and isinstance(frame, cudf.Series)
                 and not frame.index.equals(parent_index)
             )
             else column.as_column(frame, dtype="str")
@@ -4772,8 +4773,10 @@ def _get_cols_list(parent_obj, others):
 
         return cols_list
     elif others is not None:
-        if isinstance(others, cudf.Series) and not others.index.equals(
-            parent_index
+        if (
+            parent_index is not None
+            and isinstance(others, cudf.Series)
+            and not others.index.equals(parent_index)
         ):
             others = others.reindex(parent_index)
 
