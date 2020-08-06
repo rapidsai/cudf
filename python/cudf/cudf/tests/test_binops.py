@@ -25,6 +25,16 @@ _binops = [
     operator.pow,
 ]
 
+_nullable_pd_numeric_types = [
+    pd.UInt8Dtype(),
+    pd.UInt16Dtype(),
+    pd.UInt32Dtype(),
+    pd.UInt64Dtype(),
+    pd.Int8Dtype(),
+    pd.Int16Dtype(),
+    pd.Int32Dtype(),
+    pd.Int64Dtype()
+]
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
 @pytest.mark.parametrize("binop", _binops)
@@ -148,7 +158,7 @@ def test_series_logical_binop(lhstype, rhstype, binop, cubinop):
     result = cubinop(sr1, sr2)
     expect = binop(arr1, arr2)
 
-    utils.assert_eq(result, expect)
+    utils.assert_eq(result, expect, downcast=True)
 
 
 _cmpops = [
@@ -167,8 +177,8 @@ _cmpops = [
     "dtype", ["int8", "int32", "int64", "float32", "float64", "datetime64[ms]"]
 )
 def test_series_compare(cmpop, obj_class, dtype):
-    arr1 = np.random.randint(0, 100, 100).astype(dtype)
-    arr2 = np.random.randint(0, 100, 100).astype(dtype)
+    arr1 = np.random.randint(0, 100, 100)
+    arr2 = np.random.randint(0, 100, 100)
     sr1 = Series(arr1)
     sr2 = Series(arr2)
 
@@ -191,11 +201,11 @@ def test_series_compare(cmpop, obj_class, dtype):
 
 
 @pytest.mark.parametrize(
-    "obj", [pd.Series(["a", "b", None, "d", "e", None]), "a"]
+    "obj", [pd.Series(["a", "b", None, "d", "e", None]).astype(pd.StringDtype()), "a"]
 )
 @pytest.mark.parametrize("cmpop", _cmpops)
 @pytest.mark.parametrize(
-    "cmp_obj", [pd.Series(["b", "a", None, "d", "f", None]), "a"]
+    "cmp_obj", [pd.Series(["b", "a", None, "d", "f", None]).astype(pd.StringDtype()), "a"]
 )
 def test_string_series_compare(obj, cmpop, cmp_obj):
 
@@ -513,7 +523,7 @@ def test_df_different_index_shape(df2, binop):
 
 @pytest.mark.parametrize("op", [operator.eq, operator.ne])
 def test_boolean_scalar_binop(op):
-    psr = pd.Series(np.random.choice([True, False], 10))
+    psr = pd.Series(np.random.choice([True, False], 10)).astype(pd.BooleanDtype())
     gsr = cudf.from_pandas(psr)
     utils.assert_eq(op(psr, True), op(gsr, True))
     utils.assert_eq(op(psr, False), op(gsr, False))
@@ -617,7 +627,7 @@ def test_operator_func_between_series_logical(
         # to account for this, we use fillna.
         gdf_series_result.fillna(func == "ne", inplace=True)
 
-    utils.assert_eq(pdf_series_result, gdf_series_result)
+    utils.assert_eq(pdf_series_result, gdf_series_result, downcast=True)
 
 
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
@@ -632,6 +642,7 @@ def test_operator_func_series_and_scalar_logical(
         dtype, 1000, has_nulls=has_nulls, stride=10000
     )
     pdf_series = gdf_series.to_pandas()
+    pdf_series = utils.promote_to_pd_nullable_dtype(pdf_series)
 
     gdf_series_result = getattr(gdf_series, func)(
         scalar, fill_value=fill_value
@@ -640,7 +651,7 @@ def test_operator_func_series_and_scalar_logical(
         scalar, fill_value=fill_value
     )
 
-    utils.assert_eq(pdf_series_result, gdf_series_result)
+    utils.assert_eq(pdf_series_result, gdf_series_result, downcast=True)
 
 
 @pytest.mark.parametrize("func", _operators_arithmetic)

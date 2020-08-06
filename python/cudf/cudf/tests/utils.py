@@ -68,16 +68,20 @@ def assert_eq(left, right, **kwargs):
     functions.
     """
     __tracebackhide__ = True
+    downcast = kwargs.pop('downcast', False)
 
     if hasattr(left, "to_pandas"):
         left = left.to_pandas()
+        if downcast: 
+            left = downcast_to_lowercase(left)
     if hasattr(right, "to_pandas"):
         right = right.to_pandas()
+        if downcast:
+            right = downcast_to_lowercase(right)
     if isinstance(left, cupy.ndarray):
         left = cupy.asnumpy(left)
     if isinstance(right, cupy.ndarray):
         right = cupy.asnumpy(right)
-
     if isinstance(left, pd.DataFrame):
         tm.assert_frame_equal(left, right, **kwargs)
     elif isinstance(left, pd.Series):
@@ -101,7 +105,15 @@ def assert_eq(left, right, **kwargs):
                 assert np.allclose(left, right, equal_nan=True)
     return True
 
-
+def downcast_to_lowercase(obj):
+    if isinstance(obj, pd.Series):
+        if isinstance(obj.dtype, pd.core.dtypes.base.ExtensionDtype):
+            obj = obj.astype(obj.dtype.type)
+    elif isinstance(obj, pd.DataFrame):
+        for col in obj.columns:
+            if isinstance(obj[col].dtype, pd.core.dtypes.base.ExtensionDtype):
+                obj[col] = obj[col].astype(obj[col].dtype.type)
+    return obj
 def assert_neq(left, right, **kwargs):
     __tracebackhide__ = True
     try:
@@ -150,6 +162,31 @@ def gen_rand_series(dtype, size, **kwargs):
 
     return cudf.Series(values)
 
+def promote_to_pd_nullable_dtype(obj):
+
+    mapping = {
+        np.dtype('uint8'): pd.UInt8Dtype(),
+        np.dtype('uint16'): pd.UInt16Dtype(),
+        np.dtype('uint32'): pd.UInt32Dtype(),
+        np.dtype('uint64'): pd.UInt64Dtype(),
+        np.dtype('int8'): pd.Int8Dtype(),
+        np.dtype('int16'): pd.Int16Dtype(),
+        np.dtype('int32'): pd.Int32Dtype(),
+        np.dtype('int64'): pd.Int64Dtype(),
+        np.dtype('object'): pd.StringDtype(),
+        np.dtype('bool'): pd.BooleanDtype(),
+    }
+
+    if isinstance(obj, pd.Series):
+        dt = mapping.get(obj.dtype, obj.dtype)
+        obj = obj.astype(dt)
+        return obj
+    elif isinstance(obj, pd.DataFrame):
+        for colname in obj.columns:
+            col = obj[colname]
+            dt = mapping.get(col.dtype, col.dtype)
+            obj[colname] = col.astype(dt)
+        return obj
 
 @contextmanager
 def does_not_raise():

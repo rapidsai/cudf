@@ -4656,7 +4656,7 @@ class DataFrame(Frame, Serializable):
 
         return output_frame
 
-    def to_pandas(self, **kwargs):
+    def to_pandas(self):
         """
         Convert to a Pandas DataFrame.
 

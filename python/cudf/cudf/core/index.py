@@ -467,9 +467,12 @@ class Index(Frame, Serializable):
         >>> type(idx)
         <class 'cudf.core.index.GenericIndex'>
         """
+        out_dtype = self.dtype
+        if isinstance(self.dtype, cudf.CategoricalDtype):
+            out_dtype = out_dtype.to_pandas()
         return pd.Index(
             self._values.to_pandas(), name=self.name
-        )
+        ).astype(out_dtype)
 
     def to_arrow(self):
         """
