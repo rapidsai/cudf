@@ -944,6 +944,18 @@ class MultiIndex(Index):
     def argsort(self, ascending=True, **kwargs):
         return self._source_data.argsort(ascending=ascending, **kwargs)
 
+    def sort_values(self, return_indexer=False, ascending=True, key=None):
+        if key is not None:
+            raise NotImplementedError("key parameter is not yet implemented.")
+
+        indices = self._source_data.argsort(ascending=ascending)
+        index_sorted = as_index(self.take(indices), name=self.names)
+
+        if return_indexer:
+            return index_sorted, cupy.asarray(indices)
+        else:
+            return index_sorted
+
     def fillna(self, value):
         """
         Fill null values with the specified value.

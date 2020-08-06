@@ -56,13 +56,17 @@
 - PR #5645 Enforce pd.NA and Pandas nullable dtype parity
 - PR #5729 Create nvtext normalize_characters API from the subword_tokenize internal function
 - PR #5572 Add `cudf::encode` API.
+- PR #5767 Add `nvtext::porter_stemmer_measure` and `nvtext::is_letter` APIs
 - PR #5753 Add `cudf::lists::extract_list_element` API
 - PR #5568 Add support for `Series.keys()` and `DataFrame.keys()`
 - PR #5782 Add Kafka support to custreamz
 - PR #5642 Add `GroupBy.groups()`
 - PR #5789 Add groupby support for duration types
 - PR #5810 Make Cython subdirs packages and simplify package_data
+- PR #5817 Enable more `fixed_point` unit tests by introducing "scale-less" constructor
 - PR #5822 Add `cudf_kafka` to `custreamz` run time conda dependency and fix bash syntax issue
+- PR #5845 Add support for `mask_to_bools`
+- PR #5851 Add support for `Index.sort_values`
 
 ## Improvements
 
@@ -169,6 +173,8 @@
 - PR #5825 Enable ORC statistics generation by default
 - PR #5832 Make dictionary_wrapper constructor from a value explicit
 - PR #5833 Pin `dask` and `distributed` version to `2.22.0`
+- PR #5853 Disable `fixed_point` for use in `copy_if`
+- PR #5854 Raise informative error in `DataFrame.iterrows` and `DataFrame.itertuples`
 
 ## Bug Fixes
 
