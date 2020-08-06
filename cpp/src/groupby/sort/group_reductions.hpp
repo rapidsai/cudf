@@ -219,6 +219,13 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
                                           null_policy null_handling,
                                           rmm::mr::device_memory_resource* mr,
                                           cudaStream_t stream = 0);
+
+std::unique_ptr<column> group_collect(column_view const& values,
+                                      rmm::device_vector<size_type> const& group_offsets,
+                                      size_type num_groups,
+                                      rmm::mr::device_memory_resource* mr,
+                                      cudaStream_t stream = 0);
+
 }  // namespace detail
 }  // namespace groupby
 }  // namespace cudf

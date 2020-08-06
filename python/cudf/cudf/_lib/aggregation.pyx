@@ -49,6 +49,7 @@ class AggregationKind(Enum):
     ARGMIN = libcudf_aggregation.aggregation.Kind.ARGMIN
     NUNIQUE = libcudf_aggregation.aggregation.Kind.NUNIQUE
     NTH = libcudf_aggregation.aggregation.Kind.NTH_ELEMENT
+    COLLECT = libcudf_aggregation.aggregation.Kind.COLLECT
     PTX = libcudf_aggregation.aggregation.Kind.PTX
     CUDA = libcudf_aggregation.aggregation.Kind.CUDA
 
@@ -213,6 +214,12 @@ cdef class _AggregationFactory:
         agg.c_obj = move(
             libcudf_aggregation.make_quantile_aggregation(c_q, c_interp)
         )
+        return agg
+
+    @classmethod
+    def collect(cls):
+        cdef Aggregation agg = Aggregation.__new__(Aggregation)
+        agg.c_obj = move(libcudf_aggregation.make_collect_aggregation())
         return agg
 
     @classmethod
