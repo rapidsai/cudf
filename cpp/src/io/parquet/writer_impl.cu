@@ -208,7 +208,7 @@ class parquet_column_view {
       _indexes = rmm::device_buffer(_data_count * sizeof(gpu::nvstrdesc_s), stream);
       stringdata_to_nvstrdesc<<<((_data_count - 1) >> 8) + 1, 256, 0, stream>>>(
         reinterpret_cast<gpu::nvstrdesc_s *>(_indexes.data()),
-        view.offsets().data<size_type>(),
+        view.offsets().data<size_type>() + view.offset(),
         view.chars().data<char>(),
         _nulls,
         _data_count);
