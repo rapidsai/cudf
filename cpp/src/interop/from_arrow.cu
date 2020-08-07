@@ -301,7 +301,7 @@ std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
                    auto array_chunks = chunked_array->chunks();
                    if (cudf_type.id() == type_id::EMPTY) {
                      return std::make_unique<column>(
-                       cudf_type, 0, std::move(rmm::device_buffer(0)));
+                       cudf_type, chunked_array->length(), std::move(rmm::device_buffer(0)));
                    }
                    transform(array_chunks.begin(),
                              array_chunks.end(),

@@ -206,14 +206,19 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::list_view>(
   column_view input, cudf::type_id id, arrow::MemoryPool* ar_mr, cudaStream_t stream)
 {
   std::unique_ptr<column> tmp_column = nullptr;
-  if ((input.offset() != 0) or (input.child(0).size() - 1 != input.size())) {
+  if ((input.offset() != 0) or
+      ((input.num_children() == 2) and (input.child(0).size() - 1 != input.size()))) {
     tmp_column = std::make_unique<cudf::column>(input);
   }
 
   column_view input_view = (tmp_column != nullptr) ? tmp_column->view() : input;
   auto child_arrays      = fetch_child_array(input_view, ar_mr, stream);
-  auto offset_buffer     = child_arrays[0]->data()->buffers[1];
-  auto data              = child_arrays[1];
+  if (child_arrays.size() == 0) {
+    return std::make_shared<arrow::ListArray>(arrow::list(arrow::null()), 0, nullptr, nullptr);
+  }
+
+  auto offset_buffer = child_arrays[0]->data()->buffers[1];
+  auto data          = child_arrays[1];
   return std::make_shared<arrow::ListArray>(arrow::list(data->type()),
                                             static_cast<int64_t>(input_view.size()),
                                             offset_buffer,

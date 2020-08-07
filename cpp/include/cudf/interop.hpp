@@ -91,7 +91,7 @@ DLManagedTensor* to_dlpack(table_view const& input,
  * @param input table_view that needs to be converted to arrow Table
  * @param column_names Vector of column names for metadata of arrow Table
  * @param ar_mr arrow memory pool to allocate memory for arrow Table
- * @return arrow Table generated from given input cudf table
+ * @return arrow Table generated from `input`
  **/
 std::shared_ptr<arrow::Table> to_arrow(table_view input,
                                        std::vector<std::string> const& column_names = {},
@@ -100,14 +100,13 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
 /**
  * @brief Create `cudf::table` from given arrow Table input
  *
- * @param input_table  arrow:Table that needs to be converted to `cudf::table`
- * @param mr           Device memory resource used to allocate `cudf::table`
+ * @param input arrow:Table that needs to be converted to `cudf::table`
+ * @param mr    Device memory resource used to allocate `cudf::table`
  * @return cudf table generated from given arrow Table.
  **/
 
 std::unique_ptr<table> from_arrow(
-  arrow::Table const& input_table,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  arrow::Table const& input, rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** @} */  // end of group
 }  // namespace cudf
