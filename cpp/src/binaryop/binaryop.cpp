@@ -36,6 +36,8 @@
 #include "compiled/binary_ops.hpp"
 
 #include <bit.hpp.jit>
+#include <durations.hpp.jit>
+#include <fixed_point.hpp.jit>
 #include <jit/common_headers.hpp>
 #include <string>
 #include <timestamps.hpp.jit>
@@ -69,8 +71,13 @@ namespace jit {
 
 const std::string hash = "prog_binop";
 
-const std::vector<std::string> header_names{
-  "operation.h", "traits.h", cudf_types_hpp, cudf_utilities_bit_hpp, cudf_wrappers_timestamps_hpp};
+const std::vector<std::string> header_names{"operation.h",
+                                            "traits.h",
+                                            cudf_types_hpp,
+                                            cudf_utilities_bit_hpp,
+                                            cudf_wrappers_timestamps_hpp,
+                                            cudf_wrappers_durations_hpp,
+                                            cudf_fixed_point_fixed_point_hpp};
 
 std::istream* headers_code(std::string filename, std::iostream& stream)
 {
@@ -325,14 +332,15 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   CUDF_EXPECTS(is_fixed_width(lhs.type()), "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(is_fixed_width(rhs.type()), "Invalid/Unsupported rhs datatype");
 
-  std::unique_ptr<column> out;
-  if (binops::null_using_binop(op)) {
-    out = make_fixed_width_column(output_type, rhs.size(), mask_state::ALL_VALID, stream, mr);
-  } else {
-    auto new_mask = bitmask_and(table_view({lhs, rhs}), mr, stream);
-    out           = make_fixed_width_column(
-      output_type, lhs.size(), std::move(new_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
-  }
+  std::unique_ptr<column> out = [&] {
+    if (binops::null_using_binop(op)) {
+      return make_fixed_width_column(output_type, rhs.size(), mask_state::ALL_VALID, stream, mr);
+    } else {
+      auto new_mask = bitmask_and(table_view({lhs, rhs}), mr, stream);
+      return make_fixed_width_column(
+        output_type, lhs.size(), std::move(new_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
+    }
+  }();
 
   // Check for 0 sized data
   if (lhs.size() == 0 || rhs.size() == 0) { return out; }

@@ -36,7 +36,9 @@ namespace testdata {
 // ----- most numerics
 
 template <typename T>
-auto ascending()
+typename std::enable_if<std::is_arithmetic<T>::value && !std::is_same<T, bool>::value,
+                        fixed_width_column_wrapper<T>>::type
+ascending()
 {
   return std::is_signed<T>::value ? fixed_width_column_wrapper<T>({std::numeric_limits<T>::lowest(),
                                                                    T(-100),
@@ -56,7 +58,9 @@ auto ascending()
 }
 
 template <typename T>
-auto descending()
+typename std::enable_if<std::is_arithmetic<T>::value && !std::is_same<T, bool>::value,
+                        fixed_width_column_wrapper<T>>::type
+descending()
 {
   return std::is_signed<T>::value
            ? fixed_width_column_wrapper<T>({std::numeric_limits<T>::max(),
@@ -85,107 +89,57 @@ auto empty()
 template <typename T>
 auto nulls_after()
 {
-  return fixed_width_column_wrapper<T>({0, 0}, {1, 0});
+  return fixed_width_column_wrapper<T, int32_t>({0, 0}, {1, 0});
 }
 
 template <typename T>
 auto nulls_before()
 {
-  return fixed_width_column_wrapper<T>({0, 0}, {0, 1});
+  return fixed_width_column_wrapper<T, int32_t>({0, 0}, {0, 1});
 }
 
 // ----- bool
 
-template <>
-auto ascending<bool>()
+template <typename T>
+typename std::enable_if<std::is_same<T, bool>::value, fixed_width_column_wrapper<bool>>::type
+ascending()
 {
   return fixed_width_column_wrapper<bool>({false, false, true, true});
 }
 
-template <>
-auto descending<bool>()
+template <typename T>
+typename std::enable_if<std::is_same<T, bool>::value, fixed_width_column_wrapper<bool>>::type
+descending()
 {
   return fixed_width_column_wrapper<bool>({true, true, false, false});
 }
 
-// ----- timestamp
+// ----- chrono types
 
 template <typename T>
-fixed_width_column_wrapper<T> ascending_timestamp()
+typename std::enable_if<cudf::is_chrono<T>(), fixed_width_column_wrapper<T>>::type ascending()
 {
-  return fixed_width_column_wrapper<T>(
-    {T::min().time_since_epoch().count(), T::max().time_since_epoch().count()});
+  return fixed_width_column_wrapper<T>({T::min(), T::max()});
 }
 
 template <typename T>
-fixed_width_column_wrapper<T> descending_timestamp()
+typename std::enable_if<cudf::is_chrono<T>(), fixed_width_column_wrapper<T>>::type descending()
 {
-  return fixed_width_column_wrapper<T>(
-    {T::max().time_since_epoch().count(), T::min().time_since_epoch().count()});
-}
-
-template <>
-auto ascending<cudf::timestamp_D>()
-{
-  return ascending_timestamp<cudf::timestamp_D>();
-}
-template <>
-auto ascending<cudf::timestamp_s>()
-{
-  return ascending_timestamp<cudf::timestamp_s>();
-}
-template <>
-auto ascending<cudf::timestamp_ms>()
-{
-  return ascending_timestamp<cudf::timestamp_ms>();
-}
-template <>
-auto ascending<cudf::timestamp_us>()
-{
-  return ascending_timestamp<cudf::timestamp_us>();
-}
-template <>
-auto ascending<cudf::timestamp_ns>()
-{
-  return ascending_timestamp<cudf::timestamp_ns>();
-}
-
-template <>
-auto descending<cudf::timestamp_D>()
-{
-  return descending_timestamp<cudf::timestamp_D>();
-}
-template <>
-auto descending<cudf::timestamp_s>()
-{
-  return descending_timestamp<cudf::timestamp_s>();
-}
-template <>
-auto descending<cudf::timestamp_ms>()
-{
-  return descending_timestamp<cudf::timestamp_ms>();
-}
-template <>
-auto descending<cudf::timestamp_us>()
-{
-  return descending_timestamp<cudf::timestamp_us>();
-}
-template <>
-auto descending<cudf::timestamp_ns>()
-{
-  return descending_timestamp<cudf::timestamp_ns>();
+  return fixed_width_column_wrapper<T>({T::max(), T::min()});
 }
 
 // ----- string_view
 
-template <>
-auto ascending<cudf::string_view>()
+template <typename T>
+typename std::enable_if<std::is_same<T, cudf::string_view>::value, strings_column_wrapper>::type
+ascending()
 {
   return strings_column_wrapper({"A", "B"});
 }
 
-template <>
-auto descending<cudf::string_view>()
+template <typename T>
+typename std::enable_if<std::is_same<T, cudf::string_view>::value, strings_column_wrapper>::type
+descending()
 {
   return strings_column_wrapper({"B", "A"});
 }

@@ -30,7 +30,7 @@ def test_series_reductions(method, dtype, skipna):
     if dtype in (np.float32, np.float64):
         arr[[2, 5, 14, 19, 50, 70]] = np.nan
     sr = Series.from_masked_array(arr, Series(mask).as_mask())
-    psr = sr.to_pandas()
+    psr = sr.to_pandas(nullable_pd_dtype=False)
     psr[~mask] = np.nan
 
     def call_test(sr, skipna):
@@ -131,7 +131,7 @@ def test_series_scale():
     scaled = (arr - vmin) / (vmax - vmin)
     assert scaled.min() == 0
     assert scaled.max() == 1
-    pd.testing.assert_series_equal(sr.scale().to_pandas(), scaled)
+    assert_eq(sr.scale(), scaled)
 
 
 @pytest.mark.parametrize("int_method", interpolation_methods)
@@ -231,7 +231,7 @@ def test_misc_quantiles(data, q):
 )
 @pytest.mark.parametrize("null_flag", [False, True])
 def test_kurtosis(data, null_flag):
-    pdata = data.to_pandas()
+    pdata = data.to_pandas(nullable_pd_dtype=False)
 
     if null_flag and len(data) > 2:
         data.iloc[[0, 2]] = None
@@ -272,7 +272,7 @@ def test_kurtosis(data, null_flag):
 )
 @pytest.mark.parametrize("null_flag", [False, True])
 def test_skew(data, null_flag):
-    pdata = data.to_pandas()
+    pdata = data.to_pandas(nullable_pd_dtype=False)
 
     if null_flag and len(data) > 2:
         data.iloc[[0, 2]] = None
@@ -345,8 +345,8 @@ def test_cov1d(data1, data2):
     gs1 = Series(data1)
     gs2 = Series(data2)
 
-    ps1 = gs1.to_pandas()
-    ps2 = gs2.to_pandas()
+    ps1 = gs1.to_pandas(nullable_pd_dtype=False)
+    ps2 = gs2.to_pandas(nullable_pd_dtype=False)
 
     got = gs1.cov(gs2)
     expected = ps1.cov(ps2)
@@ -383,8 +383,8 @@ def test_corr1d(data1, data2):
     gs1 = Series(data1)
     gs2 = Series(data2)
 
-    ps1 = gs1.to_pandas()
-    ps2 = gs2.to_pandas()
+    ps1 = gs1.to_pandas(nullable_pd_dtype=False)
+    ps2 = gs2.to_pandas(nullable_pd_dtype=False)
 
     got = gs1.corr(gs2)
     expected = ps1.corr(ps2)

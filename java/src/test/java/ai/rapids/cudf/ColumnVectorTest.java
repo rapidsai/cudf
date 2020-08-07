@@ -1610,13 +1610,13 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector expectedDays = ColumnVector.daysFromInts(values);
          ColumnVector days = cv.asTimestampDays();
          ColumnVector expectedUs = ColumnVector.timestampMicroSecondsFromLongs(longValues);
-         ColumnVector us = cv.asTimestampMicroseconds();
+         ColumnVector us = longs.asTimestampMicroseconds();
          ColumnVector expectedNs = ColumnVector.timestampNanoSecondsFromLongs(longValues);
-         ColumnVector ns = cv.asTimestampNanoseconds();
+         ColumnVector ns = longs.asTimestampNanoseconds();
          ColumnVector expectedMs = ColumnVector.timestampMilliSecondsFromLongs(longValues);
-         ColumnVector ms = cv.asTimestampMilliseconds();
+         ColumnVector ms = longs.asTimestampMilliseconds();
          ColumnVector expectedS = ColumnVector.timestampSecondsFromLongs(longValues);
-         ColumnVector s = cv.asTimestampSeconds();) {
+         ColumnVector s = longs.asTimestampSeconds();) {
       assertColumnsAreEqual(expectedUnsignedInts, unsignedInts);
       assertColumnsAreEqual(expectedBytes, bytes);
       assertColumnsAreEqual(expectedUnsignedBytes, unsignedBytes);
@@ -2219,6 +2219,48 @@ public class ColumnVectorTest extends CudfTestBase {
       assertColumnsAreEqual(expected, actual);
     }
 
+  }
+
+  @Test
+  void testLPad() {
+      try (ColumnVector v = ColumnVector.fromStrings("1", "23", "45678", null);
+           ColumnVector expected = ColumnVector.fromStrings("A1", "23", "45678", null);
+           ColumnVector actual = v.pad(2, PadSide.LEFT, "A")) {
+          assertColumnsAreEqual(expected, actual);
+      }
+      try (ColumnVector v = ColumnVector.fromStrings("1", "23", "45678", null);
+           ColumnVector expected = ColumnVector.fromStrings("___1", "__23", "45678", null);
+           ColumnVector actual = v.pad(4, PadSide.LEFT, "_")) {
+          assertColumnsAreEqual(expected, actual);
+      }
+  }
+
+  @Test
+  void testRPad() {
+      try (ColumnVector v = ColumnVector.fromStrings("1", "23", "45678", null);
+           ColumnVector expected = ColumnVector.fromStrings("1A", "23", "45678", null);
+           ColumnVector actual = v.pad(2, PadSide.RIGHT, "A")) {
+          assertColumnsAreEqual(expected, actual);
+      }
+      try (ColumnVector v = ColumnVector.fromStrings("1", "23", "45678", null);
+           ColumnVector expected = ColumnVector.fromStrings("1___", "23__", "45678", null);
+           ColumnVector actual = v.pad(4, PadSide.RIGHT, "_")) {
+          assertColumnsAreEqual(expected, actual);
+      }
+  }
+
+  @Test
+  void testPad() {
+      try (ColumnVector v = ColumnVector.fromStrings("1", "23", "45678", null);
+           ColumnVector expected = ColumnVector.fromStrings("1A", "23", "45678", null);
+           ColumnVector actual = v.pad(2, PadSide.BOTH, "A")) {
+          assertColumnsAreEqual(expected, actual);
+      }
+      try (ColumnVector v = ColumnVector.fromStrings("1", "23", "45678", null);
+           ColumnVector expected = ColumnVector.fromStrings("_1__", "_23_", "45678", null);
+           ColumnVector actual = v.pad(4, PadSide.BOTH, "_")) {
+          assertColumnsAreEqual(expected, actual);
+      }
   }
 
   @Test

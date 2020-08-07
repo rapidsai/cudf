@@ -372,6 +372,12 @@ public final class Table implements AutoCloseable {
 
   private static native long[] filter(long input, long mask);
 
+  private static native long[] repeatStaticCount(long tableHandle, int count);
+
+  private static native long[] repeatColumnCount(long tableHandle,
+                                                 long columnHandle,
+                                                 boolean checkCount);
+
   private native long createCudfTableView(long[] nativeColumnViewHandles);
 
   /////////////////////////////////////////////////////////////////////////////
@@ -859,6 +865,41 @@ public final class Table implements AutoCloseable {
     return new ColumnVector(interleaveColumns(this.nativeHandle));
   }
 
+  /**
+   * Repeat each row of this table count times.
+   * @param count the number of times to repeat each row.
+   * @return the new Table.
+   */
+  public Table repeat(int count) {
+    return new Table(repeatStaticCount(this.nativeHandle, count));
+  }
+
+  /**
+   * Create a new table by repeating each row of this table. The number of
+   * repetitions of each row is defined by the corresponding value in counts.
+   * @param counts the number of times to repeat each row. Cannot have nulls, must be an
+   *               Integer type, and must have one entry for each row in the table.
+   * @return the new Table.
+   * @throws CudfException on any error.
+   */
+  public Table repeat(ColumnVector counts) {
+    return repeat(counts, true);
+  }
+
+  /**
+   * Create a new table by repeating each row of this table. The number of
+   * repetitions of each row is defined by the corresponding value in counts.
+   * @param counts the number of times to repeat each row. Cannot have nulls, must be an
+   *               Integer type, and must have one entry for each row in the table.
+   * @param checkCount should counts be checked for errors before processing. Be careful if you
+   *                   disable this because if you pass in bad data you might just get back an
+   *                   empty table or bad data.
+   * @return the new Table.
+   * @throws CudfException on any error.
+   */
+  public Table repeat(ColumnVector counts, boolean checkCount) {
+    return new Table(repeatColumnCount(this.nativeHandle, counts.getNativeView(), checkCount));
+  }
 
   /**
    * Given a sorted table return the lower bound.

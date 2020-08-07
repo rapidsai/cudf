@@ -3,7 +3,6 @@
 import cupy
 import numpy as np
 import pytest
-from pandas.util.testing import assert_series_equal
 
 import cudf
 from cudf.tests.utils import assert_eq
@@ -42,7 +41,58 @@ def test_tokenize():
     actual = strings.str.tokenize()
 
     assert type(expected) == type(actual)
-    assert_series_equal(expected.to_pandas(), actual.to_pandas())
+    assert_eq(expected, actual)
+
+
+def test_detokenize():
+    strings = cudf.Series(
+        [
+            "the",
+            "quick",
+            "fox",
+            "jumped",
+            "over",
+            "the",
+            "lazy",
+            "dog",
+            "the",
+            "siamésé",
+            "cat",
+            "jumped",
+            "under",
+            "the",
+            "sofa",
+        ]
+    )
+
+    indices = cudf.Series([0, 0, 0, 1, 1, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3])
+    actual = strings.str.detokenize(indices)
+    expected = cudf.Series(
+        [
+            "the quick fox",
+            "jumped over",
+            "the lazy dog",
+            "the siamésé cat jumped under the sofa",
+        ]
+    )
+    assert type(expected) == type(actual)
+    assert_eq(expected, actual)
+
+    indices = cudf.Series(
+        [4, 0, 0, 0, 0, 4, 1, 1, 4, 2, 2, 2, 2, 4, 3], dtype=np.int8
+    )
+    actual = strings.str.detokenize(indices, "+")
+    expected = cudf.Series(
+        [
+            "quick+fox+jumped+over",
+            "lazy+dog",
+            "siamésé+cat+jumped+under",
+            "sofa",
+            "the+the+the+the",
+        ]
+    )
+    assert type(expected) == type(actual)
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize(
@@ -70,9 +120,7 @@ def test_token_count(delimiter, expected_token_counts):
     actual = strings.str.token_count(delimiter)
 
     assert type(expected) == type(actual)
-    assert_series_equal(
-        expected.to_pandas(), actual.to_pandas(), check_dtype=False
-    )
+    assert_eq(expected, actual, check_dtype=False)
 
 
 def test_normalize_spaces():
@@ -96,7 +144,41 @@ def test_normalize_spaces():
     actual = strings.str.normalize_spaces()
 
     assert type(expected) == type(actual)
-    assert_series_equal(expected.to_pandas(), actual.to_pandas())
+    assert_eq(expected, actual)
+
+
+def test_normalize_characters():
+    strings = cudf.Series(
+        ["乾 \t 乿", "ĂĆCĖÑTÜATE", "âscénd, Descend", "", None, "Stock^ $1"]
+    )
+    expected = cudf.Series(
+        [
+            " 乾     乿 ",
+            "accentuate",
+            "ascend ,  descend",
+            "",
+            None,
+            "stock ^   $ 1",
+        ]
+    )
+
+    actual = strings.str.normalize_characters()
+    assert type(expected) == type(actual)
+    assert_eq(expected, actual)
+
+    expected = cudf.Series(
+        [
+            " 乾     乿 ",
+            "ĂĆCĖÑTÜATE",
+            "âscénd ,  Descend",
+            "",
+            None,
+            "Stock ^   $ 1",
+        ]
+    )
+    actual = strings.str.normalize_characters(do_lower=False)
+    assert type(expected) == type(actual)
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize(
@@ -139,7 +221,7 @@ def test_ngrams(n, separator, expected_values):
     actual = strings.str.ngrams(n=n, separator=separator)
 
     assert type(expected) == type(actual)
-    assert_series_equal(expected.to_pandas(), actual.to_pandas())
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize(
@@ -172,7 +254,7 @@ def test_character_ngrams(n, expected_values):
     actual = strings.str.character_ngrams(n=n)
 
     assert type(expected) == type(actual)
-    assert_series_equal(expected.to_pandas(), actual.to_pandas())
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize(
@@ -205,7 +287,7 @@ def test_ngrams_tokenize(n, separator, expected_values):
     actual = strings.str.ngrams_tokenize(n=n, separator=separator)
 
     assert type(expected) == type(actual)
-    assert_series_equal(expected.to_pandas(), actual.to_pandas())
+    assert_eq(expected, actual)
 
 
 def test_character_tokenize_series():
@@ -690,3 +772,67 @@ def test_text_subword_tokenize(tmpdir):
         [0, 0, 3, 1, 0, 3, 2, 0, 3, 3, 0, 1, 4, 0, 1], dtype=np.uint32
     )
     assert_eq(expected_metadata, metadata)
+
+
+def test_porter_stemmer_measure():
+    strings = cudf.Series(
+        [
+            "tr",
+            "ee",
+            "tree",
+            "y",
+            "by",
+            "trouble",
+            "oats",
+            "trees",
+            "ivy",
+            "troubles",
+            "private",
+            "oaten",
+            "orrery",
+            None,
+            "",
+        ]
+    )
+    expected = cudf.Series(
+        [0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, None, 0], dtype=np.int32
+    )
+
+    actual = strings.str.porter_stemmer_measure()
+
+    assert type(expected) == type(actual)
+    assert_eq(expected, actual)
+
+
+def test_is_vowel_consonant():
+    strings = cudf.Series(
+        ["tr", "ee", "tree", "y", "by", "oats", "ivy", "orrery", None, ""]
+    )
+    expected = cudf.Series(
+        [False, False, True, False, False, False, True, False, None, False]
+    )
+    actual = strings.str.is_vowel(2)
+    assert type(expected) == type(actual)
+    assert_eq(expected, actual)
+
+    expected = cudf.Series(
+        [True, False, True, False, False, False, True, True, None, False]
+    )
+    actual = strings.str.is_consonant(1)
+    assert type(expected) == type(actual)
+    assert_eq(expected, actual)
+
+    indices = cudf.Series([2, 1, 0, 0, 1, 2, 0, 3, 0, 0])
+    expected = cudf.Series(
+        [False, True, False, False, True, False, True, True, None, False]
+    )
+    actual = strings.str.is_vowel(indices)
+    assert type(expected) == type(actual)
+    assert_eq(expected, actual)
+
+    expected = cudf.Series(
+        [False, False, True, True, False, True, False, False, None, False]
+    )
+    actual = strings.str.is_consonant(indices)
+    assert type(expected) == type(actual)
+    assert_eq(expected, actual)

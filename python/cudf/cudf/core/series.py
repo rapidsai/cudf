@@ -1,6 +1,7 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
 import pickle
 import warnings
+from collections import abc as abc
 from numbers import Number
 from shutil import get_terminal_size
 
@@ -37,7 +38,6 @@ from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     can_convert_to_column,
-    is_datetime_dtype,
     is_list_dtype,
     is_list_like,
     is_mixed_with_object_dtype,
@@ -512,7 +512,9 @@ class Series(Frame, Serializable):
     def __copy__(self, deep=True):
         return self.copy(deep)
 
-    def __deepcopy__(self):
+    def __deepcopy__(self, memo=None):
+        if memo is None:
+            memo = {}
         return self.copy()
 
     def append(self, to_append, ignore_index=False, verify_integrity=False):
@@ -810,9 +812,9 @@ class Series(Frame, Serializable):
 
     def to_dict(self, into=dict):
         raise TypeError(
-            "Implicit conversion to a host memory via to_dict() is not "
-            "allowed, To explicitly construct a dictionary object, "
-            "consider using .to_pandas().to_dict()"
+            "cuDF does not support conversion to host memory "
+            "via `to_dict()` method. Consider using "
+            "`.to_pandas().to_dict()` to construct a Python dictionary."
         )
 
     def __setitem__(self, key, value):
@@ -848,16 +850,12 @@ class Series(Frame, Serializable):
         return out
 
     def tolist(self):
-        """
-        Return a list type from series data.
 
-        Returns
-        -------
-        list
-        """
-        # TODO: Raise error as part
-        # of https://github.com/rapidsai/cudf/issues/5689
-        return self.to_arrow().to_pylist()
+        raise TypeError(
+            "cuDF does not support conversion to host memory "
+            "via `tolist()` method. Consider using "
+            "`.to_arrow().to_pylist()` to construct a Python list."
+        )
 
     to_list = tolist
 
@@ -975,17 +973,21 @@ class Series(Frame, Serializable):
             preprocess = cudf.concat([top, bottom])
         else:
             preprocess = self
+
+        preprocess.index = preprocess.index._clean_nulls_from_index()
+
         if (
             preprocess.nullable
-            and not preprocess.dtype == "O"
             and not isinstance(
                 preprocess._column, cudf.core.column.CategoricalColumn
             )
-            and not is_datetime_dtype(preprocess.dtype)
             and not is_list_dtype(preprocess.dtype)
         ):
             output = (
-                preprocess.astype("O").fillna("null").to_pandas().__repr__()
+                preprocess.astype("O")
+                .fillna(cudf._NA_REP)
+                .to_pandas()
+                .__repr__()
             )
         elif isinstance(
             preprocess._column, cudf.core.column.CategoricalColumn
@@ -1002,12 +1004,10 @@ class Series(Frame, Serializable):
                 min_rows=min_rows,
                 max_rows=max_rows,
                 length=show_dimensions,
-                na_rep="null",
+                na_rep=cudf._NA_REP,
             )
-        elif is_datetime_dtype(preprocess.dtype):
-            output = preprocess.to_pandas().fillna("null").__repr__()
         else:
-            output = preprocess.to_pandas().__repr__()
+            output = preprocess.to_pandas(nullable_pd_dtype=False).__repr__()
 
         lines = output.split("\n")
 
@@ -1813,34 +1813,25 @@ class Series(Frame, Serializable):
         return self._fill([fill_value], begin, end, inplace)
 
     def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
-        """Fill null values with ``value`` without changing the series' type.
+        if isinstance(value, pd.Series):
+            value = Series.from_pandas(value)
 
-        Parameters
-        ----------
-        value : scalar or Series-like
-            Value to use to fill nulls. If `value`'s dtype differs from the
-            series, the fill value will be cast to the column's dtype before
-            applying the fill. If Series-like, null values are filled with the
-            values in corresponding indices of the given Series.
+        if not (is_scalar(value) or isinstance(value, (abc.Mapping, Series))):
+            raise TypeError(
+                f'"value" parameter must be a scalar, dict '
+                f"or Series, but you passed a "
+                f'"{type(value).__name__}"'
+            )
 
-        Returns
-        -------
-        result : Series
-            Copy with nulls filled.
-        """
-        if method is not None:
-            raise NotImplementedError("The method keyword is not supported")
-        if limit is not None:
-            raise NotImplementedError("The limit keyword is not supported")
-        if axis:
-            raise NotImplementedError("The axis keyword is not supported")
+        if isinstance(value, (abc.Mapping, Series)):
+            value = Series(value)
+            if not self.index.equals(value.index):
+                value = value.reindex(self.index)
+            value = value._column
 
-        data = self._column.fillna(value)
-
-        if inplace:
-            self._column._mimic_inplace(data, inplace=True)
-        else:
-            return self._copy_construct(data=data)
+        return super().fillna(
+            value=value, method=method, axis=axis, inplace=inplace, limit=limit
+        )
 
     def to_array(self, fillna=None):
         """Get a dense numpy array for the data.
@@ -1990,7 +1981,7 @@ class Series(Frame, Serializable):
         """
         return self._column.to_gpu_array(fillna=fillna)
 
-    def to_pandas(self, index=True):
+    def to_pandas(self, index=True, **kwargs):
         """
         Convert to a Pandas Series.
 
@@ -2015,9 +2006,12 @@ class Series(Frame, Serializable):
         >>> type(pds)
         <class 'pandas.core.series.Series'>
         """
+        nullable_pd_dtype = kwargs.get("nullable_pd_dtype", True)
         if index is True:
             index = self.index.to_pandas()
-        s = self._column.to_pandas(index=index)
+        s = self._column.to_pandas(
+            index=index, nullable_pd_dtype=nullable_pd_dtype
+        )
         s.name = self.name
         return s
 
@@ -3918,7 +3912,7 @@ class Series(Frame, Serializable):
             data = _format_stats_values(data)
 
             return Series(
-                data=data, index=names, nan_as_null=False, name=self.name
+                data=data, index=names, nan_as_null=False, name=self.name,
             )
 
         def describe_categorical(self):
@@ -4210,6 +4204,49 @@ class Series(Frame, Serializable):
         )
 
         return result
+
+    def keys(self):
+        """
+        Return alias for index.
+
+        Returns
+        -------
+        Index
+            Index of the Series.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> sr = cudf.Series([10, 11, 12, 13, 14, 15])
+        >>> sr
+        0    10
+        1    11
+        2    12
+        3    13
+        4    14
+        5    15
+        dtype: int64
+
+        >>> sr.keys()
+        RangeIndex(start=0, stop=6)
+        >>> sr = cudf.Series(['a', 'b', 'c'])
+        >>> sr
+        0    a
+        1    b
+        2    c
+        dtype: object
+        >>> sr.keys()
+        RangeIndex(start=0, stop=3)
+        >>> sr = cudf.Series([1, 2, 3], index=['a', 'b', 'c'])
+        >>> sr
+        a    1
+        b    2
+        c    3
+        dtype: int64
+        >>> sr.keys()
+        StringIndex(['a' 'b' 'c'], dtype='object')
+        """
+        return self.index
 
 
 truediv_int_dtype_corrections = {

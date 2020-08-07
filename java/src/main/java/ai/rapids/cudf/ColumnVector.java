@@ -2174,6 +2174,56 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   }
 
   /**
+   * Pad the Strings column until it reaches the desired length with spaces " " on the right.
+   *
+   * If the string is already width or more characters, no padding is performed.
+   * No strings are truncated.
+   *
+   * Null string entries result in null entries in the output column.
+   *
+   * @param width the minimum number of characters for each string.
+   * @return the new strings column.
+   */
+  public ColumnVector pad(int width) {
+    return pad(width, PadSide.RIGHT, " ");
+  }
+
+  /**
+   * Pad the Strings column until it reaches the desired length with spaces " ".
+   *
+   * If the string is already width or more characters, no padding is performed.
+   * No strings are truncated.
+   *
+   * Null string entries result in null entries in the output column.
+   *
+   * @param width the minimum number of characters for each string.
+   * @param side where to add new characters.
+   * @return the new strings column.
+   */
+  public ColumnVector pad(int width, PadSide side) {
+    return pad(width, side, " ");
+  }
+
+  /**
+   * Pad the Strings column until it reaches the desired length.
+   *
+   * If the string is already width or more characters, no padding is performed.
+   * No strings are truncated.
+   *
+   * Null string entries result in null entries in the output column.
+   *
+   * @param width the minimum number of characters for each string.
+   * @param side where to add new characters.
+   * @param fillChar a single character string that holds what should be added.
+   * @return the new strings column.
+   */
+  public ColumnVector pad(int width, PadSide side, String fillChar) {
+    assert fillChar != null;
+    assert fillChar.length() == 1;
+    return new ColumnVector(pad(getNativeView(), width, side.getNativeId(), fillChar));
+  }
+
+  /**
    * Checks if each string in a column starts with a specified comparison string, resulting in a
    * parallel column of the boolean results.
    * @param pattern scalar containing the string being searched for at the beginning of the column's strings.
@@ -2642,6 +2692,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * Native method to add zeros as padding to the left of each string.
    */
   private static native long zfill(long nativeHandle, int width);
+
+  private static native long pad(long nativeHandle, int width, int side, String fillChar);
 
   private static native long binaryOpVS(long lhs, long rhs, int op, int dtype);
 
