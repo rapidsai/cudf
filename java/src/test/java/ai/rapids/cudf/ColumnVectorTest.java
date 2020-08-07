@@ -2502,7 +2502,6 @@ public class ColumnVectorTest extends CudfTestBase {
     try(ColumnVector res = ColumnVector.fromLists(new HostColumnVector.ColumnBuilder.ListType(true, 3,
         new HostColumnVector.ColumnBuilder.BasicType(true, 13, DType.INT32)), list1, list2, list3);
     HostColumnVector hcv = res.copyToHost()) {
-      System.out.println("res child data len =" + res.getChildColumnView(0).getDataBuffer().length);
       List<Integer> ret1 = hcv.getList(0);
       List<Integer> ret2 = hcv.getList(1);
       List<Integer> ret3 = hcv.getList(2);
