@@ -15,11 +15,10 @@ std::unique_ptr<cudf::column> slice(lists_column_view const& lists,
                                     cudaStream_t stream,
                                     rmm::mr::device_memory_resource* mr)
 {
-  size_type lists_count = lists.size();
-  if (lists_count == 0) { return cudf::empty_like(lists.parent()); }
-  if (end < 0 || end > lists_count) end = lists_count;
-  CUDF_EXPECTS(((start >= 0) && (start < end)), "Invalid start parameter value.");
-  lists_count = end - start;
+  if (lists.is_empty() == 0) { return cudf::empty_like(lists.parent()); }
+  if (end < 0 || end > lists.size()) end = lists.size();
+  CUDF_EXPECTS(((start >= 0) && (start < end)), "Invalid slice range.");
+  auto lists_count = end - start;
 
   auto execpol = rmm::exec_policy(stream);
 
