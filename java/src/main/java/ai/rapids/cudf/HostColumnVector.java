@@ -184,7 +184,6 @@ public final class HostColumnVector implements AutoCloseable {
     }
   }
 
-
   private final OffHeapState offHeap;
   private final DType type;
   private long rows;
@@ -1255,7 +1254,6 @@ public final class HostColumnVector implements AutoCloseable {
       valid.setMemory(0, bitmaskSize, (byte) 0xFF);
     }
 
-
     public ColumnBuilder appendLists(List... inputLists) {
       for (List inputList : inputLists) {
         // one row
@@ -1588,7 +1586,6 @@ public final class HostColumnVector implements AutoCloseable {
         return 0;
       }
     }
-
   }
 
   public static final class Builder implements AutoCloseable {

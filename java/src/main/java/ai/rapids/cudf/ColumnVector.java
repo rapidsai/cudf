@@ -524,7 +524,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
             hostValidityBuffer.close();
           }
         }
-
       }
     }
   }
@@ -2957,9 +2956,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     // This must be kept in sync with the native code
     public static final long UNKNOWN_NULL_COUNT = -1;
     private long columnHandle;
-
     private long viewHandle = 0;
-
     private List<MemoryBuffer> toClose = new ArrayList<>();
 
 
@@ -3034,7 +3031,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     public long getNativeRowCount(long someViewHandle) {
       return ColumnVector.getNativeRowCount(someViewHandle);
     }
-
 
     public long getNativeNullCount() {
       if (viewHandle != 0) {
@@ -3247,7 +3243,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       this.offsets = offsets;
       this.child = child;
     }
-
 
     /**
      * Returns a LIST ColumnVector, for now, after constructing the NestedColumnVector from the host side
