@@ -98,11 +98,14 @@ class TimeDeltaColumn(column.ColumnBase):
                 op = "truediv"
                 out_dtype = self.dtype
             elif op in ("add", "sub"):
-                out_dtype = self.dtype
                 if isinstance(rhs, Scalar) and rhs.value is None:
                     return column.column_empty(
                         row_count=len(self), dtype=self.dtype, masked=True
                     )
+                elif pd.api.types.is_datetime64_dtype(rhs.dtype):
+                    out_dtype = rhs.dtype
+                else:
+                    out_dtype = self.dtype
             else:
                 raise TypeError(
                     f"Series of dtype {self.dtype} cannot perform "
