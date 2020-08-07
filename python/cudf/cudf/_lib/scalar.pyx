@@ -17,7 +17,8 @@ from libcpp.memory cimport unique_ptr
 from libcpp cimport bool
 
 import cudf
-from cudf._lib.types import np_to_cudf_types, cudf_to_np_types
+from cudf._lib.types import cudf_to_np_types, duration_unit_map
+from cudf._lib.types import datetime_unit_map
 from cudf._lib.types cimport underlying_type_t_type_id
 from cudf._lib.move cimport move
 
@@ -282,28 +283,28 @@ cdef _get_np_scalar_from_timestamp64(unique_ptr[scalar]& s):
             (
                 <timestamp_scalar[timestamp_ms]*> s_ptr
             )[0].ticks_since_epoch_64(),
-            "s"
+            datetime_unit_map[<underlying_type_t_type_id>(cdtype.id())]
         )
     elif cdtype.id() == libcudf_types.TIMESTAMP_MILLISECONDS:
         return np.datetime64(
             (
                 <timestamp_scalar[timestamp_ms]*> s_ptr
             )[0].ticks_since_epoch_64(),
-            "ms"
+            datetime_unit_map[<underlying_type_t_type_id>(cdtype.id())]
         )
     elif cdtype.id() == libcudf_types.TIMESTAMP_MICROSECONDS:
         return np.datetime64(
             (
                 <timestamp_scalar[timestamp_ms]*> s_ptr
             )[0].ticks_since_epoch_64(),
-            "us"
+            datetime_unit_map[<underlying_type_t_type_id>(cdtype.id())]
         )
     elif cdtype.id() == libcudf_types.TIMESTAMP_NANOSECONDS:
         return np.datetime64(
             (
                 <timestamp_scalar[timestamp_ms]*> s_ptr
             )[0].ticks_since_epoch_64(),
-            "ns"
+            datetime_unit_map[<underlying_type_t_type_id>(cdtype.id())]
         )
     else:
         raise ValueError("Could not convert cudf::scalar to numpy scalar")
@@ -323,28 +324,28 @@ cdef _get_np_scalar_from_timedelta64(unique_ptr[scalar]& s):
             (
                 <duration_scalar[duration_s]*> s_ptr
             )[0].ticks(),
-            "s"
+            duration_unit_map[<underlying_type_t_type_id>(cdtype.id())]
         )
     elif cdtype.id() == libcudf_types.DURATION_MILLISECONDS:
         return np.timedelta64(
             (
                 <duration_scalar[duration_ms]*> s_ptr
             )[0].ticks(),
-            "ms"
+            duration_unit_map[<underlying_type_t_type_id>(cdtype.id())]
         )
     elif cdtype.id() == libcudf_types.DURATION_MICROSECONDS:
         return np.timedelta64(
             (
                 <duration_scalar[duration_us]*> s_ptr
             )[0].ticks(),
-            "us"
+            duration_unit_map[<underlying_type_t_type_id>(cdtype.id())]
         )
     elif cdtype.id() == libcudf_types.DURATION_NANOSECONDS:
         return np.timedelta64(
             (
                 <duration_scalar[duration_ns]*> s_ptr
             )[0].ticks(),
-            "ns"
+            duration_unit_map[<underlying_type_t_type_id>(cdtype.id())]
         )
     else:
         raise ValueError("Could not convert cudf::scalar to numpy scalar")

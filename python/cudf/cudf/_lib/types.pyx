@@ -108,6 +108,20 @@ cudf_to_np_types = {
     TypeId.DURATION_NANOSECONDS: np.dtype("timedelta64[ns]"),
 }
 
+duration_unit_map = {
+    TypeId.DURATION_SECONDS: "s",
+    TypeId.DURATION_MILLISECONDS: "ms",
+    TypeId.DURATION_MICROSECONDS: "us",
+    TypeId.DURATION_NANOSECONDS: "ns"
+}
+
+datetime_unit_map = {
+    TypeId.TIMESTAMP_SECONDS: "s",
+    TypeId.TIMESTAMP_MILLISECONDS: "ms",
+    TypeId.TIMESTAMP_MICROSECONDS: "us",
+    TypeId.TIMESTAMP_NANOSECONDS: "ns",
+}
+
 
 class Interpolation(IntEnum):
     LINEAR = (
