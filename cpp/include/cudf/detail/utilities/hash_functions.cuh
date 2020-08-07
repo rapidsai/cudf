@@ -29,8 +29,10 @@ namespace cudf {
 namespace detail {
 /**
  * Modified GPU implementation of
- * https://johnnylee-sde.github.io/Fast-unsigned-integer-to-hex-string/ that is lowercase only and
- * does not flip the endianness of the input.
+ * https://johnnylee-sde.github.io/Fast-unsigned-integer-to-hex-string/
+ * Copyright (c) 2015 Barry Clark
+ * Licensed under the MIT license.
+ * See file LICENSE for detail or copy at https://opensource.org/licenses/MIT
  */
 void CUDA_DEVICE_CALLABLE uint32ToLowercaseHexString(uint32_t num, char* destination)
 {
