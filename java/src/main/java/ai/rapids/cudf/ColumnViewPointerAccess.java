@@ -21,12 +21,17 @@ package ai.rapids.cudf;
 //Evolving and Unstable
 
 /**
- * Interface that allows access only methods to cudf column_views
+ * Interface that provides access only methods to cudf column_views.
  */
-interface ColumnViewPointerAccess<T> {
+public interface ColumnViewPointerAccess<T> extends AutoCloseable {
 
   long getColumnView();
 
+  /**
+   * IMPORTANT: It creates a new ColumnView, so you MUST close it once you are done.
+   * @param childIndex the child index
+   * @return a new ColumnViewPointerAccess which should be closed afterwards.
+   */
   ColumnViewPointerAccess<T> getChildColumnView(int childIndex);
 
   T getDataBuffer();
@@ -42,4 +47,7 @@ interface ColumnViewPointerAccess<T> {
   long getNumRows();
 
   int getNumChildren();
+
+  @Override
+  void close();
 }

@@ -20,7 +20,6 @@ package ai.rapids.cudf;
 
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
-import sun.reflect.generics.tree.BaseType;
 
 import java.util.ArrayList;
 import java.util.Arrays;
