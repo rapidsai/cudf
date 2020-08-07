@@ -1,5 +1,6 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
 import datetime as dt
+import re
 
 import numpy as np
 import pandas as pd
@@ -9,7 +10,7 @@ from cudf import _lib as libcudf
 from cudf._lib.nvtx import annotate
 from cudf._lib.scalar import Scalar, as_scalar
 from cudf.core.buffer import Buffer
-from cudf.core.column import column
+from cudf.core.column import column, string
 from cudf.utils import utils
 from cudf.utils.dtypes import is_scalar, np_to_pa_dtype
 from cudf.utils.utils import buffers_from_pyarrow
@@ -138,9 +139,7 @@ class DatetimeColumn(column.ColumnBase):
 
     @property
     def as_numerical(self):
-        from cudf.core.column import build_column
-
-        return build_column(
+        return column.build_column(
             data=self.base_data,
             dtype=np.int64,
             mask=self.base_mask,
@@ -163,7 +162,6 @@ class DatetimeColumn(column.ColumnBase):
         return self.as_numerical.astype(dtype)
 
     def as_string_column(self, dtype, **kwargs):
-        from cudf.core.column import string
 
         if not kwargs.get("format"):
             fmt = _dtype_to_format_conversion.get(
@@ -317,7 +315,6 @@ def infer_format(element, **kwargs):
     """
     Infers datetime format from a string, also takes cares for `ms` and `ns`
     """
-    import re
 
     fmt = pd.core.tools.datetimes._guess_datetime_format(element, **kwargs)
 

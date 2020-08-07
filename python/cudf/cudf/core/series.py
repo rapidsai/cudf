@@ -4,6 +4,7 @@ import warnings
 from collections import abc as abc
 from numbers import Number
 from shutil import get_terminal_size
+from uuid import uuid4
 
 import cupy
 import numpy as np
@@ -62,9 +63,7 @@ class Series(Frame, Serializable):
 
     @property
     def _constructor_expanddim(self):
-        from cudf import DataFrame
-
-        return DataFrame
+        return cudf.DataFrame
 
     @classmethod
     def from_categorical(cls, categorical, codes=None):
@@ -72,9 +71,9 @@ class Series(Frame, Serializable):
 
         If ``codes`` is defined, use it instead of ``categorical.codes``
         """
-        from cudf.core.column.categorical import pandas_categorical_as_column
-
-        col = pandas_categorical_as_column(categorical, codes=codes)
+        col = cudf.core.column.categorical.pandas_categorical_as_column(
+            categorical, codes=codes
+        )
         return Series(data=col)
 
     @classmethod
@@ -149,8 +148,6 @@ class Series(Frame, Serializable):
             if name is None:
                 name = data.name
             if isinstance(data.index, pd.MultiIndex):
-                import cudf
-
                 index = cudf.from_pandas(data.index)
             else:
                 index = as_index(data.index)
@@ -681,8 +678,6 @@ class Series(Frame, Serializable):
             cudf DataFrame
         """
 
-        from cudf import DataFrame
-
         if name is not None:
             col = name
         elif self.name is None:
@@ -690,7 +685,7 @@ class Series(Frame, Serializable):
         else:
             col = self.name
 
-        return DataFrame({col: self._column}, index=self.index)
+        return cudf.DataFrame({col: self._column}, index=self.index)
 
     def set_mask(self, mask, null_count=None):
         """Create new Series by setting a mask array.
@@ -764,8 +759,6 @@ class Series(Frame, Serializable):
         return len(self._column)
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        import cudf
-
         if method == "__call__" and hasattr(cudf, ufunc.__name__):
             func = getattr(cudf, ufunc.__name__)
             return func(*inputs)
@@ -1052,9 +1045,7 @@ class Series(Frame, Serializable):
 
         If ``reflect`` is ``True``, swap the order of the operands.
         """
-        from cudf import DataFrame
-
-        if isinstance(other, DataFrame):
+        if isinstance(other, cudf.DataFrame):
             # TODO: fn is not the same as arg expected by _apply_op
             # e.g. for fn = 'and', _apply_op equivalent is '__and__'
             return other._apply_op(self, fn)
@@ -1647,10 +1638,8 @@ class Series(Frame, Serializable):
     def _concat(cls, objs, axis=0, index=True):
         # Concatenate index if not provided
         if index is True:
-            from cudf.core.multiindex import MultiIndex
-
-            if isinstance(objs[0].index, MultiIndex):
-                index = MultiIndex._concat([o.index for o in objs])
+            if isinstance(objs[0].index, cudf.MultiIndex):
+                index = cudf.MultiIndex._concat([o.index for o in objs])
             else:
                 index = Index._concat([o.index for o in objs])
 
@@ -2421,7 +2410,6 @@ class Series(Frame, Serializable):
         4   -1
         dtype: int8
         """
-        from cudf import DataFrame
 
         def _return_sentinel_series():
             return Series(
@@ -2451,8 +2439,8 @@ class Series(Frame, Serializable):
         order = column.as_column(cupy.arange(len(self)))
         codes = column.as_column(cupy.arange(len(cats), dtype=dtype))
 
-        value = DataFrame({"value": cats, "code": codes})
-        codes = DataFrame(
+        value = cudf.DataFrame({"value": cats, "code": codes})
+        codes = cudf.DataFrame(
             {"value": self._data.columns[0].copy(deep=False), "order": order}
         )
 
@@ -3832,8 +3820,6 @@ class Series(Frame, Serializable):
                 self._column.quantile(q, interpolation, exact), name=self.name
             )
         else:
-            from cudf.core.column import column_empty_like
-
             np_array_q = np.asarray(q)
             if len(self) == 0:
                 result = column_empty_like(
@@ -3958,9 +3944,9 @@ class Series(Frame, Serializable):
         -------
         A new Series containing the indices.
         """
-        from cudf.core.column import numerical
-
-        return Series(numerical.digitize(self._column, bins, right))
+        return Series(
+            cudf.core.column.numerical.digitize(self._column, bins, right)
+        )
 
     def diff(self, periods=1):
         """Calculate the difference between values at positions i and i - N in
@@ -4040,23 +4026,22 @@ class Series(Frame, Serializable):
     @ioutils.doc_to_json()
     def to_json(self, path_or_buf=None, *args, **kwargs):
         """{docstring}"""
-        from cudf.io import json as json
 
-        return json.to_json(self, path_or_buf=path_or_buf, *args, **kwargs)
+        return cudf.io.json.to_json(
+            self, path_or_buf=path_or_buf, *args, **kwargs
+        )
 
     @ioutils.doc_to_hdf()
     def to_hdf(self, path_or_buf, key, *args, **kwargs):
         """{docstring}"""
-        from cudf.io import hdf as hdf
 
-        hdf.to_hdf(path_or_buf, key, self, *args, **kwargs)
+        cudf.io.hdf.to_hdf(path_or_buf, key, self, *args, **kwargs)
 
     @ioutils.doc_to_dlpack()
     def to_dlpack(self):
         """{docstring}"""
-        from cudf.io import dlpack as dlpack
 
-        return dlpack.to_dlpack(self)
+        return cudf.io.dlpack.to_dlpack(self)
 
     def rename(self, index=None, copy=True):
         """
@@ -4142,7 +4127,6 @@ class Series(Frame, Serializable):
         """
         Align to the given Index. See _align_indices below.
         """
-        from uuid import uuid4
 
         index = as_index(index)
         if self.index.equals(index):

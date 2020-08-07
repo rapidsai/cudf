@@ -69,12 +69,10 @@ class ColumnBase(Column, Serializable):
         )
 
     def as_frame(self):
-        from cudf.core.frame import Frame
-
         """
         Converts a Column to Frame
         """
-        return Frame({None: self.copy(deep=False)})
+        return cudf.core.frame.Frame({None: self.copy(deep=False)})
 
     @property
     def data_array_view(self):
@@ -470,7 +468,6 @@ class ColumnBase(Column, Serializable):
         return libcudf.copying.get_element(self, index).value
 
     def __getitem__(self, arg):
-        from cudf.core.column import column
 
         if isinstance(arg, Number):
             arg = int(arg)
@@ -513,9 +510,9 @@ class ColumnBase(Column, Serializable):
                 )
                 return self.take(gather_map)
         else:
-            arg = column.as_column(arg)
+            arg = as_column(arg)
             if len(arg) == 0:
-                arg = column.as_column([], dtype="int32")
+                arg = as_column([], dtype="int32")
             if pd.api.types.is_integer_dtype(arg.dtype):
                 return self.take(arg)
             if pd.api.types.is_bool_dtype(arg.dtype):
@@ -529,7 +526,6 @@ class ColumnBase(Column, Serializable):
         If value and self are of different types,
         value is coerced to self.dtype
         """
-        from cudf.core import column
 
         if isinstance(key, slice):
             key_start, key_stop, key_stride = key.indices(len(self))
@@ -554,15 +550,15 @@ class ColumnBase(Column, Serializable):
             else:
                 nelem = abs(key_stop - key_start)
         else:
-            key = column.as_column(key)
+            key = as_column(key)
             if pd.api.types.is_bool_dtype(key.dtype):
                 if not len(key) == len(self):
                     raise ValueError(
                         "Boolean mask must be of same length as column"
                     )
-                key = column.as_column(cupy.arange(len(self)))[key]
+                key = as_column(cupy.arange(len(self)))[key]
                 if hasattr(value, "__len__") and len(value) == len(self):
-                    value = column.as_column(value)[key]
+                    value = as_column(value)[key]
             nelem = len(key)
 
         if is_scalar(value):
@@ -578,7 +574,7 @@ class ColumnBase(Column, Serializable):
                     f"{nelem}"
                 )
                 raise ValueError(msg)
-            value = column.as_column(value).astype(self.dtype)
+            value = as_column(value).astype(self.dtype)
             if is_categorical_dtype(value.dtype):
                 value = value.cat().set_categories(self.categories)
                 assert self.dtype == value.dtype
@@ -687,8 +683,6 @@ class ColumnBase(Column, Serializable):
         return indices[-1]
 
     def append(self, other):
-        from cudf.core.column import as_column
-
         return ColumnBase._concat([self, as_column(other)])
 
     def quantile(self, q, interpolation, exact):
@@ -807,9 +801,8 @@ class ColumnBase(Column, Serializable):
     @ioutils.doc_to_dlpack()
     def to_dlpack(self):
         """{docstring}"""
-        from cudf.io import dlpack as dlpack
 
-        return dlpack.to_dlpack(self)
+        return cudf.io.dlpack.to_dlpack(self)
 
     @property
     def is_unique(self):

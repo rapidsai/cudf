@@ -87,9 +87,7 @@ class CategoricalAccessor(ColumnMethodsMixin):
         """
         The categories of this categorical.
         """
-        from cudf.core.index import as_index
-
-        return as_index(self._column.categories)
+        return cudf.core.index.as_index(self._column.categories)
 
     @property
     def codes(self):
@@ -917,9 +915,8 @@ class CategoricalColumn(column.ColumnBase):
         return self.as_numerical.binary_operator(op, rhs.as_numerical)
 
     def normalize_binop_value(self, other):
-        from cudf.utils import utils
 
-        ary = utils.scalar_broadcast_to(
+        ary = cudf.utils.utils.scalar_broadcast_to(
             self._encode(other), size=len(self), dtype=self.codes.dtype
         )
         col = column.build_categorical_column(

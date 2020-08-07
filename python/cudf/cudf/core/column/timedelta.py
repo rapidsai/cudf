@@ -168,9 +168,8 @@ class TimeDeltaColumn(column.ColumnBase):
 
     @property
     def as_numerical(self):
-        from cudf.core.column import build_column
 
-        return build_column(
+        return column.build_column(
             data=self.base_data,
             dtype=np.int64,
             mask=self.base_mask,

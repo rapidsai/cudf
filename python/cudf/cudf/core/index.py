@@ -2,10 +2,12 @@
 from __future__ import division, print_function
 
 import pickle
+from numbers import Number
 
 import cupy
 import numpy as np
 import pandas as pd
+from pandas._config import get_option
 
 import cudf
 from cudf._lib.nvtx import annotate
@@ -49,8 +51,6 @@ def _to_frame(this_index, index=True, name=None):
         cudf DataFrame
     """
 
-    from cudf import DataFrame
-
     if name is not None:
         col_name = name
     elif this_index.name is None:
@@ -58,7 +58,7 @@ def _to_frame(this_index, index=True, name=None):
     else:
         col_name = this_index.name
 
-    return DataFrame(
+    return cudf.DataFrame(
         {col_name: this_index._values}, index=this_index if index else None
     )
 
@@ -81,7 +81,6 @@ class Index(Frame, Serializable):
         return as_index(data, copy=copy, dtype=dtype, name=name, **kwargs)
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        import cudf
 
         if method == "__call__" and hasattr(cudf, ufunc.__name__):
             func = getattr(cudf, ufunc.__name__)
@@ -513,9 +512,8 @@ class Index(Frame, Serializable):
     @ioutils.doc_to_dlpack()
     def to_dlpack(self):
         """{docstring}"""
-        from cudf.io import dlpack as dlpack
 
-        return dlpack.to_dlpack(self)
+        return cudf.io.dlpack.to_dlpack(self)
 
     @property
     def gpu_values(self):
@@ -1424,9 +1422,9 @@ class RangeIndex(Index):
 
     @property
     def _data(self):
-        from cudf.core.column_accessor import ColumnAccessor
-
-        return ColumnAccessor({self.name: self._values})
+        return cudf.core.column_accessor.ColumnAccessor(
+            {self.name: self._values}
+        )
 
     def __contains__(self, item):
         if not isinstance(
@@ -1461,8 +1459,6 @@ class RangeIndex(Index):
         return max(0, self._stop - self._start)
 
     def __getitem__(self, index):
-        from numbers import Number
-
         if isinstance(index, slice):
             start, stop, step = index.indices(len(self))
             sln = (stop - start) // step
@@ -1727,8 +1723,6 @@ class GenericIndex(Index):
         return len(self._values)
 
     def __repr__(self):
-        from pandas._config import get_option
-
         max_seq_items = get_option("max_seq_items") or len(self)
         mr = 0
         if 2 * max_seq_items < len(self):
@@ -1737,9 +1731,8 @@ class GenericIndex(Index):
         if len(self) > mr and mr != 0:
             top = self[0:mr]
             bottom = self[-1 * mr :]
-            from cudf import concat
 
-            preprocess = concat([top, bottom])
+            preprocess = cudf.concat([top, bottom])
         else:
             preprocess = self
 

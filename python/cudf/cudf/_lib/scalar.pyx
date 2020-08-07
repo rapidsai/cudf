@@ -16,6 +16,7 @@ from libc.stdint cimport (
 from libcpp.memory cimport unique_ptr
 from libcpp cimport bool
 
+import cudf
 from cudf._lib.types import np_to_cudf_types, cudf_to_np_types
 from cudf._lib.types cimport underlying_type_t_type_id
 from cudf._lib.move cimport move
@@ -58,9 +59,8 @@ cdef class Scalar:
         dtype : dtype
             A NumPy dtype.
         """
-        from cudf.utils.dtypes import to_cudf_compatible_scalar
 
-        value = to_cudf_compatible_scalar(value, dtype=dtype)
+        value = cudf.utils.dtypes.to_cudf_compatible_scalar(value, dtype=dtype)
 
         valid = value is not None
 

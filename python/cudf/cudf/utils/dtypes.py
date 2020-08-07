@@ -6,6 +6,7 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from pandas.core.dtypes.common import infer_dtype_from_object
 from pandas.core.dtypes.dtypes import CategoricalDtype, CategoricalDtypeType
 
 import cudf
@@ -189,7 +190,6 @@ def cudf_dtype_from_pydata_dtype(dtype):
     """ Given a numpy or pandas dtype, converts it into the equivalent cuDF
         Python dtype.
     """
-    from pandas.core.dtypes.common import infer_dtype_from_object
 
     if is_categorical_dtype(dtype):
         return cudf.core.dtypes.CategoricalDtype
@@ -363,9 +363,8 @@ def min_column_type(x, expected_type):
     If the column is not a subtype of `np.signedinteger` or `np.floating`
     returns the same dtype as the dtype of `x` without modification
     """
-    from cudf.core.column import NumericalColumn
 
-    if not isinstance(x, NumericalColumn):
+    if not isinstance(x, cudf.core.column.NumericalColumn):
         raise TypeError("Argument x must be of type column.NumericalColumn")
     if x.valid_count == 0:
         return x.dtype
@@ -388,8 +387,6 @@ def min_column_type(x, expected_type):
 
 
 def check_cast_unsupported_dtype(dtype):
-    from cudf._lib.types import np_to_cudf_types
-
     if is_categorical_dtype(dtype):
         return dtype
 
@@ -398,7 +395,7 @@ def check_cast_unsupported_dtype(dtype):
     else:
         dtype = np.dtype(dtype)
 
-    if dtype in np_to_cudf_types:
+    if dtype in cudf._lib.types.np_to_cudf_types:
         return dtype
 
     if dtype == np.dtype("float16"):
