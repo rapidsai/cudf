@@ -14,14 +14,16 @@
  * limitations under the License.
  */
 #include <algorithm>
-#include <cudf/ast/linearizer.hpp>
+#include <cudf/ast/linearizer.cuh>
 #include <cudf/ast/operators.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <functional>
 #include <iterator>
+#include "cudf/utilities/type_dispatcher.hpp"
 
 namespace cudf {
 
@@ -66,14 +68,15 @@ cudf::size_type intermediate_counter::find_first_missing(cudf::size_type start,
 
 cudf::size_type linearizer::visit(literal const& expr)
 {
-  // Track the node index
-  auto const node_index = this->node_count++;
+  // Increment the node index
+  this->node_count++;
   // Resolve node type
   auto const data_type = expr.get_data_type();
-  // TODO: Use scalar device view (?)
+  // Construct a scalar device view
+  auto device_view = expr.get_value();
   // Push literal
   auto const literal_index = cudf::size_type(this->literals.size());
-  this->literals.push_back(expr.get_value());
+  this->literals.push_back(device_view);
   // Push data reference
   auto const source = detail::device_data_reference{
     detail::device_data_reference_type::LITERAL, data_type, literal_index};
@@ -82,8 +85,8 @@ cudf::size_type linearizer::visit(literal const& expr)
 
 cudf::size_type linearizer::visit(column_reference const& expr)
 {
-  // Track the node index
-  auto const node_index = this->node_count++;
+  // Increment the node index
+  this->node_count++;
   // Resolve node type
   auto const data_type = expr.get_data_type(this->table);
   // Push data reference
@@ -96,7 +99,7 @@ cudf::size_type linearizer::visit(column_reference const& expr)
 
 cudf::size_type linearizer::visit(operator_expression const& expr)
 {
-  // Track the node index
+  // Increment the node index
   auto const node_index = this->node_count++;
   // Visit children (operands) of this node
   auto const operand_data_reference_indices = this->visit_operands(expr.get_operands());

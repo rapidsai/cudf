@@ -19,6 +19,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -155,7 +156,8 @@ TEST_F(ASTTest, LiteralComparison)
 
   auto col_ref_0     = cudf::ast::column_reference(0);
   auto literal_value = cudf::numeric_scalar<int32_t>(41);
-  auto literal       = cudf::ast::literal(literal_value);
+  auto literal_view  = cudf::get_scalar_device_view(literal_value);
+  auto literal       = cudf::ast::literal(literal_view);
 
   auto expression =
     cudf::ast::binary_expression(cudf::ast::ast_operator::GREATER, col_ref_0, literal);

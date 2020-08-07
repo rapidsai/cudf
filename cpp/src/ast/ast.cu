@@ -16,7 +16,7 @@
 
 #include <thrust/detail/raw_pointer_cast.h>
 #include <cudf/ast/ast.cuh>
-#include <cudf/ast/linearizer.hpp>
+#include <cudf/ast/linearizer.cuh>
 #include <cudf/ast/operators.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -35,6 +35,8 @@
 #include <functional>
 #include <iterator>
 #include <type_traits>
+#include "cudf/scalar/scalar_device_view.cuh"
+#include "cudf/utilities/type_dispatcher.hpp"
 
 namespace cudf {
 
@@ -44,6 +46,7 @@ template <typename Element>
 __device__ Element
 resolve_input_data_reference(const detail::device_data_reference device_data_reference,
                              const table_device_view table,
+                             const cudf::detail::fixed_width_scalar_device_view_base* literals,
                              const std::int64_t* thread_intermediate_storage,
                              cudf::size_type row_index)
 {
@@ -53,8 +56,7 @@ resolve_input_data_reference(const detail::device_data_reference device_data_ref
       return column.data<Element>()[row_index];
     }
     case detail::device_data_reference_type::LITERAL: {
-      // TODO: Fetch and return literal.
-      return Element();
+      return literals[device_data_reference.data_index].value<Element>();
     }
     case detail::device_data_reference_type::INTERMEDIATE: {
       return *reinterpret_cast<const Element*>(
@@ -99,6 +101,7 @@ template <typename OperatorFunctor,
 CUDA_HOST_DEVICE_CALLABLE decltype(auto) typed_operator_dispatch_functor::operator()(
   const table_device_view table,
   mutable_column_device_view output_column,
+  const cudf::detail::fixed_width_scalar_device_view_base* literals,
   std::int64_t* thread_intermediate_storage,
   cudf::size_type row_index,
   const detail::device_data_reference lhs,
@@ -106,9 +109,9 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) typed_operator_dispatch_functor::operat
   const detail::device_data_reference output)
 {
   auto const typed_lhs =
-    resolve_input_data_reference<LHS>(lhs, table, thread_intermediate_storage, row_index);
+    resolve_input_data_reference<LHS>(lhs, table, literals, thread_intermediate_storage, row_index);
   auto const typed_rhs =
-    resolve_input_data_reference<RHS>(rhs, table, thread_intermediate_storage, row_index);
+    resolve_input_data_reference<RHS>(rhs, table, literals, thread_intermediate_storage, row_index);
   auto typed_output = resolve_output_data_reference<Out>(
     output, table, output_column, thread_intermediate_storage, row_index);
   *typed_output = OperatorFunctor{}(typed_lhs, typed_rhs);
@@ -122,6 +125,7 @@ template <typename OperatorFunctor,
 CUDA_HOST_DEVICE_CALLABLE decltype(auto) typed_operator_dispatch_functor::operator()(
   const table_device_view table,
   mutable_column_device_view output_column,
+  const cudf::detail::fixed_width_scalar_device_view_base* literals,
   std::int64_t* thread_intermediate_storage,
   cudf::size_type row_index,
   const detail::device_data_reference lhs,
@@ -135,6 +139,7 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) typed_operator_dispatch_functor::operat
 __device__ void operate(ast_operator op,
                         const table_device_view table,
                         mutable_column_device_view output_column,
+                        const cudf::detail::fixed_width_scalar_device_view_base* literals,
                         std::int64_t* thread_intermediate_storage,
                         cudf::size_type row_index,
                         const detail::device_data_reference lhs,
@@ -147,6 +152,7 @@ __device__ void operate(ast_operator op,
                           typed_operator_dispatch_functor{},
                           table,
                           output_column,
+                          literals,
                           thread_intermediate_storage,
                           row_index,
                           lhs,
@@ -154,15 +160,16 @@ __device__ void operate(ast_operator op,
                           output);
 }
 
-__device__ void evaluate_row_expression(const table_device_view table,
-                                        const detail::device_data_reference* data_references,
-                                        // const scalar* literals,
-                                        const ast_operator* operators,
-                                        const cudf::size_type* operator_source_indices,
-                                        cudf::size_type num_operators,
-                                        cudf::size_type row_index,
-                                        std::int64_t* thread_intermediate_storage,
-                                        mutable_column_device_view output_column)
+__device__ void evaluate_row_expression(
+  const table_device_view table,
+  const detail::device_data_reference* data_references,
+  const cudf::detail::fixed_width_scalar_device_view_base* literals,
+  const ast_operator* operators,
+  const cudf::size_type* operator_source_indices,
+  cudf::size_type num_operators,
+  cudf::size_type row_index,
+  std::int64_t* thread_intermediate_storage,
+  mutable_column_device_view output_column)
 {
   auto operator_source_index = cudf::size_type(0);
   for (cudf::size_type operator_index(0); operator_index < num_operators; operator_index++) {
@@ -179,6 +186,7 @@ __device__ void evaluate_row_expression(const table_device_view table,
       operate(op,
               table,
               output_column,
+              literals,
               thread_intermediate_storage,
               row_index,
               lhs_data_ref,
@@ -201,7 +209,7 @@ template <size_type block_size>
 __launch_bounds__(block_size) __global__
   void compute_column_kernel(const table_device_view table,
                              const detail::device_data_reference* data_references,
-                             // const scalar* literals,
+                             const cudf::detail::fixed_width_scalar_device_view_base* literals,
                              const ast_operator* operators,
                              const cudf::size_type* operator_source_indices,
                              cudf::size_type num_operators,
@@ -217,7 +225,7 @@ __launch_bounds__(block_size) __global__
   for (cudf::size_type row_index = start_idx; row_index < num_rows; row_index += stride) {
     evaluate_row_expression(table,
                             data_references,
-                            // literals,
+                            literals,
                             operators,
                             operator_source_indices,
                             num_operators,
@@ -254,8 +262,14 @@ std::unique_ptr<column> compute_column(table_view const table,
                            sizeof(detail::device_data_reference) * data_references.size(),
                            cudaMemcpyHostToDevice,
                            stream));
-  // TODO: Literals
-  // auto device_literals = thrust::device_vector<const scalar>();
+  auto device_literals =
+    rmm::device_uvector<cudf::detail::fixed_width_scalar_device_view_base>(literals.size(), stream);
+  CUDA_TRY(
+    cudaMemcpyAsync(device_literals.data(),
+                    literals.data(),
+                    sizeof(cudf::detail::fixed_width_scalar_device_view_base) * literals.size(),
+                    cudaMemcpyHostToDevice,
+                    stream));
   auto device_operators = rmm::device_uvector<cudf::ast::ast_operator>(operators.size(), stream);
   CUDA_TRY(cudaMemcpyAsync(device_operators.data(),
                            operators.data(),
@@ -329,7 +343,7 @@ std::unique_ptr<column> compute_column(table_view const table,
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream>>>(
       *table_device,
       thrust::raw_pointer_cast(device_data_references.data()),
-      // device_literals,
+      thrust::raw_pointer_cast(device_literals.data()),
       thrust::raw_pointer_cast(device_operators.data()),
       thrust::raw_pointer_cast(device_operator_source_indices.data()),
       num_operators,

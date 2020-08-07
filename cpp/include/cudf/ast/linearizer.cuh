@@ -19,6 +19,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include "cudf/scalar/scalar_device_view.cuh"
 #include "operators.hpp"
 
 namespace cudf {
@@ -101,13 +102,13 @@ class abstract_visitor {
 
 class literal : public expression {
  public:
-  literal(std::reference_wrapper<const cudf::scalar> value) : value(std::cref(value)) {}
-  std::reference_wrapper<const cudf::scalar> get_value() const { return this->value; }
+  literal(const cudf::detail::fixed_width_scalar_device_view_base value) : value(value) {}
+  cudf::detail::fixed_width_scalar_device_view_base get_value() const { return this->value; }
   cudf::size_type accept(abstract_visitor& visitor) const override { return visitor.visit(*this); }
-  cudf::data_type get_data_type() const { return this->get_value().get().type(); }
+  cudf::data_type get_data_type() const { return this->get_value().type(); }
 
  private:
-  std::reference_wrapper<const cudf::scalar> value;
+  const cudf::detail::fixed_width_scalar_device_view_base value;
 };
 
 class column_reference : public expression {
@@ -197,7 +198,10 @@ class linearizer : public abstract_visitor {
   {
     return this->operator_source_indices;
   }
-  std::vector<std::reference_wrapper<const scalar>> get_literals() const { return this->literals; }
+  std::vector<cudf::detail::fixed_width_scalar_device_view_base> get_literals() const
+  {
+    return this->literals;
+  }
 
  private:
   std::vector<cudf::size_type> visit_operands(
@@ -211,7 +215,7 @@ class linearizer : public abstract_visitor {
   std::vector<detail::device_data_reference> data_references;
   std::vector<ast_operator> operators;
   std::vector<cudf::size_type> operator_source_indices;
-  std::vector<std::reference_wrapper<const scalar>> literals;
+  std::vector<cudf::detail::fixed_width_scalar_device_view_base> literals;
 };
 
 }  // namespace ast
