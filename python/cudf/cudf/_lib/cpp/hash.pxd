@@ -11,7 +11,7 @@ cimport cudf._lib.cpp.types as libcudf_types
 
 
 cdef extern from "cudf/hashing.hpp" namespace "cudf" nogil:
-    cdef unique_ptr[column] hash "cudf::hash" (
+    cdef unique_ptr[column] murmur_hash3_32 "cudf::murmur_hash3_32" (
         const table_view& input,
         const vector[uint32_t]& initial_hash
     ) except +

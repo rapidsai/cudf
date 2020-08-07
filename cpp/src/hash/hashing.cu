@@ -784,4 +784,12 @@ std::unique_ptr<column> hash(table_view const& input,
   return detail::hash(input, hash_function, initial_hash, mr);
 }
 
+std::unique_ptr<column> murmur_hash3_32(table_view const& input,
+                                        std::vector<uint32_t> const& initial_hash,
+                                        rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::murmur_hash3_32(input, initial_hash, mr);
+}
+
 }  // namespace cudf

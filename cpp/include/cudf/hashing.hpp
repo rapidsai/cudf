@@ -39,5 +39,10 @@ std::unique_ptr<column> hash(table_view const& input,
                              std::vector<uint32_t> const& initial_hash = {},
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+std::unique_ptr<column> murmur_hash3_32(
+  table_view const& input,
+  std::vector<uint32_t> const& initial_hash = {},
+  rmm::mr::device_memory_resource* mr       = rmm::mr::get_default_resource());
+
 /** @} */  // end of group
 }  // namespace cudf

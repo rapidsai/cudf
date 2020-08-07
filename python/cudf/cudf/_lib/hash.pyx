@@ -14,7 +14,7 @@ from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.hash cimport (
-    hash as cpp_hash
+    murmur_hash3_32 as cpp_hash
 )
 from cudf._lib.cpp.partitioning cimport (
     hash_partition as cpp_hash_partition,
