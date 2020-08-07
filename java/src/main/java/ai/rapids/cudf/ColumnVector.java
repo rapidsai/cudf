@@ -37,30 +37,30 @@ import static ai.rapids.cudf.HostColumnVector.OFFSET_SIZE;
  * close to decrement the reference count when you are done with the column, and call incRefCount
  * to increment the reference count.
  */
-public final class ColumnVector implements AutoCloseable, BinaryOperable, ColumnViewPointerAccess<BaseDeviceMemoryBuffer> {
+public final class ColumnVector implements AutoCloseable, BinaryOperable, ColumnViewAccess<BaseDeviceMemoryBuffer> {
   private static final Logger log = LoggerFactory.getLogger(ColumnVector.class);
 
-  public class DeviceColumnViewPointerAccess implements ColumnViewPointerAccess<BaseDeviceMemoryBuffer> {
+  public class DeviceColumnViewAccess implements ColumnViewAccess<BaseDeviceMemoryBuffer> {
 
     protected long viewHandle;
 
-    public DeviceColumnViewPointerAccess(long viewHandle) {
+    public DeviceColumnViewAccess(long viewHandle) {
       this.viewHandle = viewHandle;
     }
 
     @Override
-    public long getColumnView() {
+    public long getColumnViewAddress() {
       return viewHandle;
     }
 
     @Override
-    public ColumnViewPointerAccess<BaseDeviceMemoryBuffer> getChildColumnView(int childIndex) {
+    public ColumnViewAccess<BaseDeviceMemoryBuffer> getChildColumnViewAccess(int childIndex) {
       if (getDataType() != DType.LIST) {
         return null;
       }
       long childColumnView = getChildCvPointer(viewHandle, childIndex);
       //this is returning a new ColumnView - must close this!
-      return new DeviceColumnViewPointerAccess(childColumnView);
+      return new DeviceColumnViewAccess(childColumnView);
     }
 
     /**
@@ -357,7 +357,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   /////////////////////////////////////////////////////////////////////////////
 
   private final static HostColumnVector.NestedHostColumnVector copyToHostNestedHelper(
-      ColumnViewPointerAccess<BaseDeviceMemoryBuffer> deviceCvPointer) {
+      ColumnViewAccess<BaseDeviceMemoryBuffer> deviceCvPointer) {
     if (deviceCvPointer == null) {
       return null;
     }
@@ -390,7 +390,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       }
       int numChildren = deviceCvPointer.getNumChildren();
       for (int i = 0; i < numChildren; i++) {
-        try(ColumnViewPointerAccess childDevPtr = deviceCvPointer.getChildColumnView(i)) {
+        try(ColumnViewAccess childDevPtr = deviceCvPointer.getChildColumnViewAccess(i)) {
           children.add(copyToHostNestedHelper(childDevPtr));
         }
       }
@@ -439,11 +439,11 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       DType type = this.type;
       Long rows = this.rows;
       // hardcoded for lists for now
-      ColumnViewPointerAccess leafChildWithData = getChildColumnView(0);
+      ColumnViewAccess leafChildWithData = getChildColumnViewAccess(0);
       // Data sits in the leaf column of the list, we get that data buffer for copying,
       // identifying leaf column by the fact that its child is null
       while (leafChildWithData != null && leafChildWithData.getNumChildren() != 0) {
-        ColumnViewPointerAccess tmp = leafChildWithData.getChildColumnView(0);
+        ColumnViewAccess tmp = leafChildWithData.getChildColumnViewAccess(0);
         leafChildWithData.close();
         leafChildWithData = tmp;
       }
@@ -493,7 +493,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
               hOffset.copyFromDeviceBuffer(offsets);
           }
             List<HostColumnVector.NestedHostColumnVector> children = new ArrayList<>();
-            try(ColumnViewPointerAccess childDevPtr = getChildColumnView(0)) {
+            try(ColumnViewAccess childDevPtr = getChildColumnViewAccess(0)) {
               children.add(copyToHostNestedHelper(childDevPtr));
             }
           HostColumnVector ret = new HostColumnVector(type, rows, nullCount,
@@ -2881,18 +2881,18 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   private static native long makeEmptyCudfColumn(int type);
 
   @Override
-  public long getColumnView() {
+  public long getColumnViewAddress() {
     return offHeap.viewHandle;
   }
 
   @Override
-  public ColumnViewPointerAccess getChildColumnView(int childIndex) {
+  public ColumnViewAccess getChildColumnViewAccess(int childIndex) {
     if (getDataType() != DType.LIST) {
       return null;
     }
     long childColumnView = getChildCvPointer(getNativeView(), childIndex);
     //this is returning a new ColumnView - must close this!
-    return new DeviceColumnViewPointerAccess(childColumnView);
+    return new DeviceColumnViewAccess(childColumnView);
   }
 
   @Override
