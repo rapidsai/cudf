@@ -94,11 +94,48 @@ __device__ Element* resolve_output_data_reference(
 }
 
 template <typename OperatorFunctor,
+          typename Input,
+          typename Out,
+          std::enable_if_t<cudf::ast::is_valid_unary_op<OperatorFunctor, Input>>*>
+CUDA_HOST_DEVICE_CALLABLE decltype(auto) typed_unary_operator_dispatch_functor::operator()(
+  const table_device_view table,
+  mutable_column_device_view output_column,
+  const cudf::detail::fixed_width_scalar_device_view_base* literals,
+  std::int64_t* thread_intermediate_storage,
+  cudf::size_type row_index,
+  const detail::device_data_reference input,
+  const detail::device_data_reference output)
+{
+  auto const typed_input = resolve_input_data_reference<Input>(
+    input, table, literals, thread_intermediate_storage, row_index);
+  auto typed_output = resolve_output_data_reference<Out>(
+    output, table, output_column, thread_intermediate_storage, row_index);
+  *typed_output = OperatorFunctor{}(typed_input);
+}
+
+template <typename OperatorFunctor,
+          typename Input,
+          typename Out,
+          std::enable_if_t<!cudf::ast::is_valid_unary_op<OperatorFunctor, Input>>*>
+CUDA_HOST_DEVICE_CALLABLE decltype(auto) typed_unary_operator_dispatch_functor::operator()(
+  const table_device_view table,
+  mutable_column_device_view output_column,
+  const cudf::detail::fixed_width_scalar_device_view_base* literals,
+  std::int64_t* thread_intermediate_storage,
+  cudf::size_type row_index,
+  const detail::device_data_reference input,
+  const detail::device_data_reference output)
+{
+  // TODO: Need a template to match unsupported types, or prevent the compiler from attempting to
+  // compile unsupported types here.
+}
+
+template <typename OperatorFunctor,
           typename LHS,
           typename RHS,
           typename Out,
           std::enable_if_t<cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>*>
-CUDA_HOST_DEVICE_CALLABLE decltype(auto) typed_operator_dispatch_functor::operator()(
+CUDA_HOST_DEVICE_CALLABLE decltype(auto) typed_binary_operator_dispatch_functor::operator()(
   const table_device_view table,
   mutable_column_device_view output_column,
   const cudf::detail::fixed_width_scalar_device_view_base* literals,
@@ -122,7 +159,7 @@ template <typename OperatorFunctor,
           typename RHS,
           typename Out,
           std::enable_if_t<!cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>*>
-CUDA_HOST_DEVICE_CALLABLE decltype(auto) typed_operator_dispatch_functor::operator()(
+CUDA_HOST_DEVICE_CALLABLE decltype(auto) typed_binary_operator_dispatch_functor::operator()(
   const table_device_view table,
   mutable_column_device_view output_column,
   const cudf::detail::fixed_width_scalar_device_view_base* literals,
@@ -148,7 +185,7 @@ __device__ void call_unary_operator(
 {
   unary_operator_dispatcher(op,
                             input.data_type,
-                            typed_operator_dispatch_functor{},
+                            typed_unary_operator_dispatch_functor{},
                             table,
                             output_column,
                             literals,
@@ -172,7 +209,7 @@ __device__ void call_binary_operator(
   binary_operator_dispatcher(op,
                              lhs.data_type,
                              rhs.data_type,
-                             typed_operator_dispatch_functor{},
+                             typed_binary_operator_dispatch_functor{},
                              table,
                              output_column,
                              literals,

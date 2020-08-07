@@ -46,7 +46,35 @@ __device__ Element* resolve_output_data_reference(
   std::int64_t* thread_intermediate_storage,
   cudf::size_type row_index);
 
-struct typed_operator_dispatch_functor {
+struct typed_unary_operator_dispatch_functor {
+  template <typename OperatorFunctor,
+            typename Input,
+            typename Out = simt::std::invoke_result_t<OperatorFunctor, Input>,
+            std::enable_if_t<cudf::ast::is_valid_unary_op<OperatorFunctor, Input>>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(
+    const table_device_view table,
+    mutable_column_device_view output_column,
+    const cudf::detail::fixed_width_scalar_device_view_base* literals,
+    std::int64_t* thread_intermediate_storage,
+    cudf::size_type row_index,
+    const detail::device_data_reference input,
+    const detail::device_data_reference output);
+
+  template <typename OperatorFunctor,
+            typename Input,
+            typename Out                                                             = void,
+            std::enable_if_t<!cudf::ast::is_valid_unary_op<OperatorFunctor, Input>>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(
+    const table_device_view table,
+    mutable_column_device_view output_column,
+    const cudf::detail::fixed_width_scalar_device_view_base* literals,
+    std::int64_t* thread_intermediate_storage,
+    cudf::size_type row_index,
+    const detail::device_data_reference input,
+    const detail::device_data_reference output);
+};
+
+struct typed_binary_operator_dispatch_functor {
   template <typename OperatorFunctor,
             typename LHS,
             typename RHS,
@@ -78,14 +106,26 @@ struct typed_operator_dispatch_functor {
     const detail::device_data_reference output);
 };
 
-__device__ void operate(ast_operator op,
-                        const table_device_view table,
-                        mutable_column_device_view output_column,
-                        std::int64_t* thread_intermediate_storage,
-                        cudf::size_type row_index,
-                        const detail::device_data_reference lhs,
-                        const detail::device_data_reference rhs,
-                        const detail::device_data_reference output);
+__device__ void call_unary_operator(
+  ast_operator op,
+  const table_device_view table,
+  mutable_column_device_view output_column,
+  const cudf::detail::fixed_width_scalar_device_view_base* literals,
+  std::int64_t* thread_intermediate_storage,
+  cudf::size_type row_index,
+  const detail::device_data_reference input,
+  const detail::device_data_reference output);
+
+__device__ void call_binary_operator(
+  ast_operator op,
+  const table_device_view table,
+  mutable_column_device_view output_column,
+  const cudf::detail::fixed_width_scalar_device_view_base* literals,
+  std::int64_t* thread_intermediate_storage,
+  cudf::size_type row_index,
+  const detail::device_data_reference lhs,
+  const detail::device_data_reference rhs,
+  const detail::device_data_reference output);
 
 __device__ void evaluate_row_expression(
   const table_device_view table,

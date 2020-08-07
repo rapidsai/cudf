@@ -155,6 +155,23 @@ class operator_expression : public expression {
   const ast_operator op;
 };
 
+class unary_expression : public operator_expression {
+ public:
+  unary_expression(ast_operator op, std::reference_wrapper<const expression> input)
+    : operator_expression(op), input(input)
+  {
+  }
+  std::reference_wrapper<const expression> get_input() const { return this->input; }
+  std::vector<std::reference_wrapper<const expression>> get_operands() const override
+  {
+    return std::vector<std::reference_wrapper<const expression>>{this->get_input()};
+  }
+  cudf::size_type accept(abstract_visitor& visitor) const override { return visitor.visit(*this); }
+
+ private:
+  std::reference_wrapper<const expression> input;
+};
+
 class binary_expression : public operator_expression {
  public:
   binary_expression(ast_operator op,

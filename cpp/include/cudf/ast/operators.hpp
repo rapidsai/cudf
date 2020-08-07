@@ -51,6 +51,7 @@ enum class ast_operator {
   BITWISE_XOR,    ///< operator ^
   LOGICAL_AND,    ///< operator &&
   LOGICAL_OR,     ///< operator ||
+  /*
   COALESCE,       ///< operator x,y  x is null ? y : x
   // GENERIC_BINARY,        ///< generic binary operator to be generated with input
   //                       ///< ptx code
@@ -69,6 +70,7 @@ enum class ast_operator {
                          ///< operand when one is null; or invalid when both are null
   NULL_MIN,              ///< Returns min of operands when both are non-null; returns the non-null
                          ///< operand when one is null; or invalid when both are null
+  */
   // Unary operators
   SIN,         ///< Trigonometric sine
   COS,         ///< Trigonometric cosine
@@ -93,6 +95,7 @@ enum class ast_operator {
   BIT_INVERT,  ///< Bitwise Not (~)
   NOT,         ///< Logical Not (!)
   // Other operators included in BlazingSQL (TODO: may or may not implement)
+  /*
   IS_NULL,            ///< Unary comparator returning whether the value is null
   COMPONENT_YEAR,     ///< Get year from a timestamp
   COMPONENT_MONTH,    ///< Get month from a timestamp
@@ -111,6 +114,7 @@ enum class ast_operator {
   ROW,                ///< Current row of the table
   THREAD_ID,          ///< Could be useful for debugging
   BLOCK_ID            ///< Could be useful for debugging
+  */
 };
 
 // Traits for valid operator / type combinations
@@ -186,6 +190,72 @@ CUDA_HOST_DEVICE_CALLABLE constexpr void ast_operator_dispatcher(ast_operator op
       break;
     case ast_operator::LOGICAL_OR:
       f.template operator()<ast_operator::LOGICAL_OR>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::SIN:
+      f.template operator()<ast_operator::SIN>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::COS:
+      f.template operator()<ast_operator::COS>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::TAN:
+      f.template operator()<ast_operator::TAN>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::ARCSIN:
+      f.template operator()<ast_operator::ARCSIN>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::ARCCOS:
+      f.template operator()<ast_operator::ARCCOS>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::ARCTAN:
+      f.template operator()<ast_operator::ARCTAN>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::SINH:
+      f.template operator()<ast_operator::SINH>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::COSH:
+      f.template operator()<ast_operator::COSH>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::TANH:
+      f.template operator()<ast_operator::TANH>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::ARCSINH:
+      f.template operator()<ast_operator::ARCSINH>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::ARCCOSH:
+      f.template operator()<ast_operator::ARCCOSH>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::ARCTANH:
+      f.template operator()<ast_operator::ARCTANH>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::EXP:
+      f.template operator()<ast_operator::EXP>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::LOG:
+      f.template operator()<ast_operator::LOG>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::SQRT:
+      f.template operator()<ast_operator::SQRT>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::CBRT:
+      f.template operator()<ast_operator::CBRT>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::CEIL:
+      f.template operator()<ast_operator::CEIL>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::FLOOR:
+      f.template operator()<ast_operator::FLOOR>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::ABS:
+      f.template operator()<ast_operator::ABS>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::RINT:
+      f.template operator()<ast_operator::RINT>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::BIT_INVERT:
+      f.template operator()<ast_operator::BIT_INVERT>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::NOT:
+      f.template operator()<ast_operator::NOT>(std::forward<Ts>(args)...);
       break;
     default:
       // TODO: Error handling?
@@ -479,6 +549,248 @@ struct operator_functor<ast_operator::LOGICAL_OR> {
   }
 };
 
+template <>
+struct operator_functor<ast_operator::SIN> {
+  static constexpr auto arity{1};
+
+  template <typename InputT>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(std::sin(input))
+  {
+    return std::sin(input);
+  }
+};
+
+template <>
+struct operator_functor<ast_operator::COS> {
+  static constexpr auto arity{1};
+
+  template <typename InputT>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(std::cos(input))
+  {
+    return std::cos(input);
+  }
+};
+
+template <>
+struct operator_functor<ast_operator::TAN> {
+  static constexpr auto arity{1};
+
+  template <typename InputT>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(std::tan(input))
+  {
+    return std::tan(input);
+  }
+};
+
+template <>
+struct operator_functor<ast_operator::ARCSIN> {
+  static constexpr auto arity{1};
+
+  template <typename InputT>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(std::asin(input))
+  {
+    return std::asin(input);
+  }
+};
+
+template <>
+struct operator_functor<ast_operator::ARCCOS> {
+  static constexpr auto arity{1};
+
+  template <typename InputT>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(std::acos(input))
+  {
+    return std::acos(input);
+  }
+};
+
+template <>
+struct operator_functor<ast_operator::ARCTAN> {
+  static constexpr auto arity{1};
+
+  template <typename InputT>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(std::atan(input))
+  {
+    return std::atan(input);
+  }
+};
+
+template <>
+struct operator_functor<ast_operator::SINH> {
+  static constexpr auto arity{1};
+
+  template <typename InputT>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(std::sinh(input))
+  {
+    return std::sinh(input);
+  }
+};
+
+template <>
+struct operator_functor<ast_operator::COSH> {
+  static constexpr auto arity{1};
+
+  template <typename InputT>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(std::cosh(input))
+  {
+    return std::cosh(input);
+  }
+};
+
+template <>
+struct operator_functor<ast_operator::TANH> {
+  static constexpr auto arity{1};
+
+  template <typename InputT>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(std::tanh(input))
+  {
+    return std::tanh(input);
+  }
+};
+
+template <>
+struct operator_functor<ast_operator::ARCSINH> {
+  static constexpr auto arity{1};
+
+  template <typename InputT>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(std::asinh(input))
+  {
+    return std::asinh(input);
+  }
+};
+
+template <>
+struct operator_functor<ast_operator::ARCCOSH> {
+  static constexpr auto arity{1};
+
+  template <typename InputT>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(std::acosh(input))
+  {
+    return std::acosh(input);
+  }
+};
+
+template <>
+struct operator_functor<ast_operator::ARCTANH> {
+  static constexpr auto arity{1};
+
+  template <typename InputT>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(std::atanh(input))
+  {
+    return std::atanh(input);
+  }
+};
+
+template <>
+struct operator_functor<ast_operator::EXP> {
+  static constexpr auto arity{1};
+
+  template <typename InputT>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(std::exp(input))
+  {
+    return std::exp(input);
+  }
+};
+
+template <>
+struct operator_functor<ast_operator::LOG> {
+  static constexpr auto arity{1};
+
+  template <typename InputT>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(std::log(input))
+  {
+    return std::log(input);
+  }
+};
+
+template <>
+struct operator_functor<ast_operator::SQRT> {
+  static constexpr auto arity{1};
+
+  template <typename InputT>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(std::sqrt(input))
+  {
+    return std::sqrt(input);
+  }
+};
+
+template <>
+struct operator_functor<ast_operator::CBRT> {
+  static constexpr auto arity{1};
+
+  template <typename InputT>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(std::cbrt(input))
+  {
+    return std::cbrt(input);
+  }
+};
+
+template <>
+struct operator_functor<ast_operator::CEIL> {
+  static constexpr auto arity{1};
+
+  template <typename InputT>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(std::ceil(input))
+  {
+    return std::ceil(input);
+  }
+};
+
+template <>
+struct operator_functor<ast_operator::FLOOR> {
+  static constexpr auto arity{1};
+
+  template <typename InputT>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(std::floor(input))
+  {
+    return std::floor(input);
+  }
+};
+
+template <>
+struct operator_functor<ast_operator::ABS> {
+  static constexpr auto arity{1};
+
+  template <typename InputT>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(std::abs(input))
+  {
+    return std::abs(input);
+  }
+};
+
+template <>
+struct operator_functor<ast_operator::RINT> {
+  static constexpr auto arity{1};
+
+  template <typename InputT>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(std::rint(input))
+  {
+    return std::rint(input);
+  }
+};
+
+template <>
+struct operator_functor<ast_operator::BIT_INVERT> {
+  static constexpr auto arity{1};
+
+  template <typename InputT>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(~input)
+  {
+    return ~input;
+  }
+};
+
+template <>
+struct operator_functor<ast_operator::NOT> {
+  static constexpr auto arity{1};
+
+  template <typename InputT>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(!input)
+  {
+    return !input;
+  }
+};
+
 namespace detail {
 
 template <typename OperatorFunctor>
@@ -689,7 +1001,8 @@ inline cudf::data_type ast_operator_return_type(ast_operator op,
       // TODO: Nullary return type functor
       break;
     case 1:
-      // TODO: Unary return type functor
+      unary_operator_dispatcher(
+        op, operand_types.at(0), detail::unary_return_type_functor{}, &result);
       break;
     case 2:
       binary_operator_dispatcher(op,
@@ -733,6 +1046,28 @@ CUDA_HOST_DEVICE_CALLABLE cudf::size_type ast_operator_arity(ast_operator op)
     case ast_operator::BITWISE_XOR: return operator_functor<ast_operator::BITWISE_XOR>::arity;
     case ast_operator::LOGICAL_AND: return operator_functor<ast_operator::LOGICAL_AND>::arity;
     case ast_operator::LOGICAL_OR: return operator_functor<ast_operator::LOGICAL_OR>::arity;
+    case ast_operator::SIN: return operator_functor<ast_operator::SIN>::arity;
+    case ast_operator::COS: return operator_functor<ast_operator::COS>::arity;
+    case ast_operator::TAN: return operator_functor<ast_operator::TAN>::arity;
+    case ast_operator::ARCSIN: return operator_functor<ast_operator::ARCSIN>::arity;
+    case ast_operator::ARCCOS: return operator_functor<ast_operator::ARCCOS>::arity;
+    case ast_operator::ARCTAN: return operator_functor<ast_operator::ARCTAN>::arity;
+    case ast_operator::SINH: return operator_functor<ast_operator::SINH>::arity;
+    case ast_operator::COSH: return operator_functor<ast_operator::COSH>::arity;
+    case ast_operator::TANH: return operator_functor<ast_operator::TANH>::arity;
+    case ast_operator::ARCSINH: return operator_functor<ast_operator::ARCSINH>::arity;
+    case ast_operator::ARCCOSH: return operator_functor<ast_operator::ARCCOSH>::arity;
+    case ast_operator::ARCTANH: return operator_functor<ast_operator::ARCTANH>::arity;
+    case ast_operator::EXP: return operator_functor<ast_operator::EXP>::arity;
+    case ast_operator::LOG: return operator_functor<ast_operator::LOG>::arity;
+    case ast_operator::SQRT: return operator_functor<ast_operator::SQRT>::arity;
+    case ast_operator::CBRT: return operator_functor<ast_operator::CBRT>::arity;
+    case ast_operator::CEIL: return operator_functor<ast_operator::CEIL>::arity;
+    case ast_operator::FLOOR: return operator_functor<ast_operator::FLOOR>::arity;
+    case ast_operator::ABS: return operator_functor<ast_operator::ABS>::arity;
+    case ast_operator::RINT: return operator_functor<ast_operator::RINT>::arity;
+    case ast_operator::BIT_INVERT: return operator_functor<ast_operator::BIT_INVERT>::arity;
+    case ast_operator::NOT: return operator_functor<ast_operator::NOT>::arity;
     default: return 0;
   }
 }

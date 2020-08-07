@@ -25,6 +25,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
+#include <limits>
 #include <simt/type_traits>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
@@ -166,6 +167,44 @@ TEST_F(ASTTest, LiteralComparison)
   auto expected = column_wrapper<bool>{false, false, false, true};
 
   cudf::test::expect_columns_equal(expected, result->view(), true);
+}
+
+TEST_F(ASTTest, UnaryNot)
+{
+  auto c_0   = column_wrapper<int32_t>{3, 0, 1, 50};
+  auto table = cudf::table_view{{c_0}};
+
+  auto col_ref_0 = cudf::ast::column_reference(0);
+
+  auto expression = cudf::ast::unary_expression(cudf::ast::ast_operator::NOT, col_ref_0);
+
+  auto result   = cudf::ast::compute_column(table, expression);
+  auto expected = column_wrapper<bool>{false, true, false, false};
+
+  cudf::test::expect_columns_equal(expected, result->view(), true);
+}
+
+TEST_F(ASTTest, UnaryTrigonometry)
+{
+  auto c_0   = column_wrapper<double>{0.0, M_PI / 4, M_PI / 3};
+  auto table = cudf::table_view{{c_0}};
+
+  auto col_ref_0 = cudf::ast::column_reference(0);
+
+  auto expected_sin   = column_wrapper<double>{0.0, std::sqrt(2) / 2, std::sqrt(3.0) / 2.0};
+  auto expression_sin = cudf::ast::unary_expression(cudf::ast::ast_operator::SIN, col_ref_0);
+  auto result_sin     = cudf::ast::compute_column(table, expression_sin);
+  cudf::test::expect_columns_equivalent(expected_sin, result_sin->view(), true);
+
+  auto expected_cos   = column_wrapper<double>{1.0, std::sqrt(2) / 2, 0.5};
+  auto expression_cos = cudf::ast::unary_expression(cudf::ast::ast_operator::COS, col_ref_0);
+  auto result_cos     = cudf::ast::compute_column(table, expression_cos);
+  cudf::test::expect_columns_equivalent(expected_cos, result_cos->view(), true);
+
+  auto expected_tan   = column_wrapper<double>{0.0, 1.0, std::sqrt(3.0)};
+  auto expression_tan = cudf::ast::unary_expression(cudf::ast::ast_operator::TAN, col_ref_0);
+  auto result_tan     = cudf::ast::compute_column(table, expression_tan);
+  cudf::test::expect_columns_equivalent(expected_tan, result_tan->view(), true);
 }
 
 struct custom_functor {
