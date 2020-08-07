@@ -133,6 +133,8 @@ add_library(cudf_kafka SHARED
     src/kafka_consumer.cpp
 )
 
+set_target_properties(cudf_kafka PROPERTIES BUILD_RPATH "\$ORIGIN")
+
 # Include paths
 include_directories("${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_CURRENT_SOURCE_DIR}/include/cudf")

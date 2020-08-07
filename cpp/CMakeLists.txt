@@ -527,6 +527,7 @@ add_library(cudf
             src/strings/contains.cu
             src/strings/convert/convert_booleans.cu
             src/strings/convert/convert_datetime.cu
+            src/strings/convert/convert_durations.cu
             src/strings/convert/convert_floats.cu
             src/strings/convert/convert_hex.cu
             src/strings/convert/convert_integers.cu
@@ -579,6 +580,7 @@ add_library(cudf
             src/scalar/scalar.cpp
             src/scalar/scalar_factories.cpp
             src/dictionary/add_keys.cu
+            src/dictionary/detail/concatenate.cu
             src/dictionary/dictionary_column_view.cpp
             src/dictionary/dictionary_factories.cu
             src/dictionary/decode.cu

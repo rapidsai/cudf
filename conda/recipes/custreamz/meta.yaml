@@ -21,6 +21,7 @@ requirements:
   host:
     - python
     - python-confluent-kafka
+    - cudf_kafka {{ version }}
   run:
     - python
     - streamz 
