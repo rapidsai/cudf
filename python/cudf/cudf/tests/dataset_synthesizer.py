@@ -96,7 +96,7 @@ def synthesize(filepath, parameters):
     # )
     if DEBUG:
         print("done")
-        print("synthesized dataset stored in " + file_to_store_in)
+        print("synthesized dataset stored in " + filepath)
 
 default = Parameters()
 
