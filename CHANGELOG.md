@@ -63,7 +63,6 @@
 - PR #5789 Add groupby support for duration types
 - PR #5810 Make Cython subdirs packages and simplify package_data
 - PR #5822 Add `cudf_kafka` to `custreamz` run time conda dependency and fix bash syntax issue
-- PR #5843 Add `filters` parameter to Python `read_parquet` function for filtered reading
 
 ## Improvements
 
