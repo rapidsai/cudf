@@ -66,7 +66,7 @@ class ListColumn(ColumnBase):
                 children=(offsets, ListColumn.from_arrow(array.values)),
             )
 
-    def to_arrow(self):
+    def _to_arrow(self):
         offsets = self.offsets.to_arrow()
         elements = self.elements.to_arrow()
         pa_type = self.dtype.to_arrow()

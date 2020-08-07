@@ -284,6 +284,13 @@ class ColumnBase(Column, Serializable):
     def dropna(self):
         dropped_col = self.as_frame().dropna()._as_column()
         return dropped_col
+    
+    def to_arrow(self):
+        return self.as_frame().to_arrow()['None'].chunk(0)
+
+    @classmethod
+    def from_arrow(cls, array):
+        return cudf.Series.from_arrow(array)._column
 
     def _get_mask_as_column(self):
         data = Buffer(cupy.ones(len(self), dtype=np.bool_))

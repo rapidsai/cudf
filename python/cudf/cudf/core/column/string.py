@@ -4503,7 +4503,7 @@ class StringColumn(column.ColumnBase):
     def as_string_column(self, dtype, **kwargs):
         return self
 
-    def to_arrow(self):
+    def _to_arrow(self):
         if len(self) == 0:
             sbuf = np.empty(0, dtype="int8")
             obuf = np.empty(0, dtype="int32")

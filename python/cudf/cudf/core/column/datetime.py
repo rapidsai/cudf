@@ -167,7 +167,7 @@ class DatetimeColumn(column.ColumnBase):
             self.to_array(fillna="pandas").astype(self.dtype), index=index
         )
 
-    def to_arrow(self):
+    def _to_arrow(self):
         mask = None
         if self.nullable:
             mask = pa.py_buffer(self.mask_array_view.copy_to_host())

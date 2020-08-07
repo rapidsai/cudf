@@ -190,7 +190,7 @@ class NumericalColumn(column.ColumnBase):
             else:
                 return pd.Series(self.to_array(fillna="pandas"), index=index)
 
-    def to_arrow(self):
+    def _to_arrow(self):
         mask = None
         if self.nullable:
             mask = pa.py_buffer(self.mask_array_view.copy_to_host())

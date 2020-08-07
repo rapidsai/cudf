@@ -198,6 +198,9 @@ class Frame(libcudf.table.Table):
         True
         """
         return self.size == 0
+    
+    def __len__(self):
+        return self._num_rows
 
     @classmethod
     @annotate("CONCAT", color="orange", domain="cudf_python")
@@ -1936,8 +1939,11 @@ class Frame(libcudf.table.Table):
 
         return result
 
+    def copy(self, deep=True):
+        return Frame(self._data.copy(deep=deep))
+
     def to_arrow(self, preserve_index=True):
-        data = self.copy()
+        data = self.copy(deep=False)
         codes = {}
         codes_keys = []
         categories = {}
@@ -1983,7 +1989,7 @@ class Frame(libcudf.table.Table):
                 null_arrays_names.append(name)
         
         data = cudf.DataFrame(data._data)
-        data = data.drop(codes_keys + null_arrays_names)
+        data = data.drop(codes_keys + null_arrays_names, inplace=True)
 
         out_table = pa.table([])
         if data.shape[1] > 0:
@@ -2015,17 +2021,19 @@ class Frame(libcudf.table.Table):
                     out_table = out_table.add_column(names.index(name), name, pa.NullArray.from_buffers(pa.null(), len(self), [pa.py_buffer((b""))]));
         if out_table.num_columns == 1 and isinstance (self, (cudf.Series, cudf.Index)) and not isinstance(self, cudf.MultiIndex):
             return out_table.columns[0].chunk(0)
-        
-        metadata = pa.pandas_compat.construct_metadata(
-                self,
-                out_table.schema.names,
-                [self.index],
-                index_descr,
-                preserve_index,
-                types = out_table.schema.types
-                )
+       
+        if isinstance(self, (cudf.DataFrame, cudf.Series)):
+            metadata = pa.pandas_compat.construct_metadata(
+                    self,
+                    out_table.schema.names,
+                    [self.index],
+                    index_descr,
+                    preserve_index,
+                    types = out_table.schema.types
+                    )
 
-        return out_table.replace_schema_metadata(metadata)
+            return out_table.replace_schema_metadata(metadata)
+        return out_table
 
     def drop_duplicates(
         self,

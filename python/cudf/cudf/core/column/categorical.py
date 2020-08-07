@@ -942,7 +942,7 @@ class CategoricalColumn(column.ColumnBase):
         )
         return pd.Series(data, index=index)
 
-    def to_arrow(self):
+    def _to_arrow(self):
         signed_codes_dtypes = min_signed_type(len(self.categories))
         return pa.DictionaryArray.from_arrays(
             from_pandas=True,
