@@ -373,6 +373,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_extractListElement(JNIE
                                                                             jint index) {
   JNI_NULL_CHECK(env, column_view, "column is null", 0);
   try {
+    cudf::jni::auto_set_device(env);
     cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(column_view);
     cudf::lists_column_view lcv(*cv);
 
@@ -388,6 +389,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_stringSplit(JNIEnv
   JNI_NULL_CHECK(env, column_view, "column is null", 0);
   JNI_NULL_CHECK(env, delimiter, "string scalar delimiter is null", 0);
   try {
+    cudf::jni::auto_set_device(env);
     cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(column_view);
     cudf::strings_column_view scv(*cv);
     cudf::string_scalar *ss_scalar = reinterpret_cast<cudf::string_scalar *>(delimiter);
@@ -405,6 +407,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringSplitRecord(JNIEn
   JNI_NULL_CHECK(env, column_view, "column is null", 0);
   JNI_NULL_CHECK(env, delimiter, "string scalar delimiter is null", 0);
   try {
+    cudf::jni::auto_set_device(env);
     cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(column_view);
     cudf::strings_column_view scv(*cv);
     cudf::string_scalar *ss_scalar = reinterpret_cast<cudf::string_scalar *>(delimiter);

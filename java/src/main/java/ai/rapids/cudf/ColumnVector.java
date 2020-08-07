@@ -2060,7 +2060,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * Null entries are added for a row where split results have been exhausted.
    * Null string entries return corresponding null output columns.
    * @param delimiter UTF-8 encoded string identifying the split points in each string.
-   *                  Default of empty string indicates split on whitespace.
+   *                  An empty string indicates split on whitespace.
    * @return New table of strings columns.
    */
   public Table stringSplit(Scalar delimiter) {
@@ -2101,19 +2101,19 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   }
 
   /**
-   * Returns a column of lists of strings by splitting each string using whitespace as the delimiter.
+   * Returns a column of lists of strings by splitting each string using the specified delimiter.
    * @param delimiter UTF-8 encoded string identifying the split points in each string.
-   *                  Default of empty string indicates split on whitespace.
+   *                  An empty string indicates split on whitespace.
    */
   public ColumnVector stringSplitRecord(Scalar delimiter) {
     return stringSplitRecord(delimiter, -1);
   }
 
   /**
-   * Returns a column that is a list of strings. each string list is made by splitting each string
-   * using the specified delimiter.
+   * Returns a column that is a list of strings. Each string list is made by splitting each input
+   * string using the specified delimiter.
    * @param delimiter UTF-8 encoded string identifying the split points in each string.
-   *                  Default of empty string indicates split on whitespace.
+   *                  An empty string indicates split on whitespace.
    * @param maxSplit the maximum number of records to split, or -1 for all of them.
    * @return New table of strings columns.
    */
