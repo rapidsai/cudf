@@ -2074,6 +2074,8 @@ class TimedeltaIndex(GenericIndex):
         Make a copy of input.
     freq : str, optional
         This is not yet supported
+    closed : str, optional
+        This is not yet supported
     dtype : str or numpy.dtype, optional
         Data type for the output Index. If not specified, the
         default dtype will be ``timedelta64[ns]``.
