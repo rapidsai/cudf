@@ -2,6 +2,8 @@
 
 ## New Features
 
+- PR #5843 Add `filters` parameter to Python `read_parquet` function for filtering row groups
+
 ## Improvements
 
 ## Bug Fixes
