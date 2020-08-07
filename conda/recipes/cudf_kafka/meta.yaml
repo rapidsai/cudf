@@ -2,6 +2,7 @@
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
 {% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
+{% set py_version=environ.get('CONDA_PY', 36) %}
 
 package:
   name: cudf_kafka
@@ -12,7 +13,7 @@ source:
 
 build:
   number: {{ GIT_DESCRIBE_NUMBER }}
-  string: {{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+  string: py{{ py_version }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
   script_env:
     - CC
     - CXX
@@ -24,6 +25,7 @@ requirements:
   build:
     - cmake >=3.14.0
   host:
+    - python
     - cython >=0.29,<0.30
     - setuptools
     - cudf {{ version }}

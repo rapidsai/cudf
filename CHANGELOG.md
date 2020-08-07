@@ -271,6 +271,7 @@
 - PR #5844 Fix `.str.cat` when objects with different index are passed
 - PR #5849 Modify custreamz api to integrate seamlessly with python streamz
 - PR #5866 cudf_kafka python version inconsistencies in Anaconda packages
+- PR #5872 libcudf_kafka r_path is causing docker build failures on centos7
 - PR #5869 Fix bug in parquet writer in writing string column with offset
 
 
