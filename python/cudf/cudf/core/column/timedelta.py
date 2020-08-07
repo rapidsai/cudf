@@ -57,10 +57,12 @@ class TimeDeltaColumn(column.ColumnBase):
         self._time_unit, _ = np.datetime_data(self.dtype)
 
     def __contains__(self, item):
-        # Handles improper item types
         try:
             item = np.timedelta64(item, self._time_unit)
-        except Exception:
+        except ValueError:
+            # If item cannot be converted to duration type
+            # np.timedelta64 raises ValueError, hence `item`
+            # cannot exist in `self`.
             return False
         return item.view("int64") in self.as_numerical
 

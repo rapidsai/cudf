@@ -69,12 +69,14 @@ class DatetimeColumn(column.ColumnBase):
         self._time_unit, _ = np.datetime_data(self.dtype)
 
     def __contains__(self, item):
-        # Handles improper item types
         try:
             item = np.datetime64(item, self._time_unit)
-        except Exception:
+        except ValueError:
+            # If item cannot be converted to datetime type
+            # np.datetime64 raises ValueError, hence `item`
+            # cannot exist in `self`.
             return False
-        return item.astype("int_") in self.as_numerical
+        return item.astype("int64") in self.as_numerical
 
     @property
     def time_unit(self):

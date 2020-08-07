@@ -59,7 +59,7 @@ class NumericalColumn(column.ColumnBase):
                 item = self.data_array_view.dtype.type(item)
             else:
                 return False
-        except Exception:
+        except (TypeError, ValueError):
             return False
         # TODO: Use `scalar`-based `contains` wrapper
         return libcudf.search.contains(
@@ -90,7 +90,7 @@ class NumericalColumn(column.ColumnBase):
                     (np.isscalar(tmp) and (0 == tmp))
                     or ((isinstance(tmp, NumericalColumn)) and (0.0 in tmp))
                 ):
-                    out_dtype = np.dtype("float_")
+                    out_dtype = np.dtype("float64")
         elif rhs is None:
             out_dtype = self.dtype
         else:
