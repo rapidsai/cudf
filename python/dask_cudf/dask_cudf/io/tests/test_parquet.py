@@ -202,13 +202,13 @@ def test_filters_at_row_group_level(tmpdir):
     assert ddf.npartitions == 5
 
     ddf.to_parquet(tmp_path, engine="pyarrow", row_group_size=10 / 5)
-    
+
     a = dask_cudf.read_parquet(tmp_path, filters=[("x", "==", 1)])
     assert a.npartitions == 1
     assert (a.shape[0] == 2).compute()
 
     ddf.to_parquet(tmp_path, engine="pyarrow", row_group_size=1)
-    
+
     b = dask_cudf.read_parquet(tmp_path, filters=[("x", "==", 1)])
     assert b.npartitions == 1
     assert (b.shape[0] == 1).compute()

@@ -213,15 +213,15 @@ def read_parquet(
         dataset = ds.dataset(filepaths_or_buffers, format="parquet")
 
         # Load IDs of filtered row groups for each file in dataset
-        filtered_row_group_ids = {}
+        filtered_rg_ids = {}
         for fragment in dataset.get_fragments(filter=filters):
-            for row_group_fragment in fragment.get_row_group_fragments(filters):
-                for row_group_info in row_group_fragment.row_groups:
-                    path = row_group_fragment.path
-                    if not path in filtered_row_group_ids:
-                        filtered_row_group_ids[path] = [row_group_info]
+            for rg_fragment in fragment.get_row_group_fragments(filters):
+                for rg_id in rg_fragment.row_groups:
+                    path = rg_fragment.path
+                    if path not in filtered_rg_ids:
+                        filtered_rg_ids[path] = [rg_id]
                     else:
-                        filtered_row_group_ids[path].append(row_group_info)
+                        filtered_rg_ids[path].append(rg_id)
 
         # TODO: Use this with pyarrow 1.0.0
         # # Load IDs of filtered row groups for each file in dataset
@@ -230,7 +230,7 @@ def read_parquet(
         #     for row_group_fragment in fragment.split_by_row_group(filters):
         #         for row_group_info in row_group_fragment.row_groups:
         #             path = row_group_fragment.path
-        #             if not path in filtered_row_group_ids:
+        #             if path not in filtered_row_group_ids:
         #                 filtered_row_group_ids[path] = [row_group_info.id]
         #             else:
         #                 filtered_row_group_ids[path].append(row_group_info.id)
@@ -242,10 +242,11 @@ def read_parquet(
         # Store IDs of selected row groups for each file
         for i, file in enumerate(dataset.files):
             if row_groups[i] is None:
-                row_groups[i] = filtered_row_group_ids[file]
+                row_groups[i] = filtered_rg_ids[file]
             else:
                 row_groups[i] = filter(
-                    lambda id: id in row_groups[i], filtered_row_group_ids[file])
+                    lambda id: id in row_groups[i],
+                    filtered_rg_ids[file])
 
     if engine == "cudf":
         return libparquet.read_parquet(

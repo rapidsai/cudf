@@ -317,6 +317,7 @@ def test_parquet_read_metadata(tmpdir, pdf):
     for a, b in zip(col_names, pdf.columns):
         assert a == b
 
+
 def test_parquet_read_filtered(tmpdir):
     # Generate data
     fname = tmpdir.join("filtered.parquet")
@@ -327,6 +328,7 @@ def test_parquet_read_filtered(tmpdir):
     df_filtered = cudf.read_parquet(fname, filters=[('0', '>', '60')])
 
     assert df_filtered.shape[0] < df.shape[0]
+
 
 @pytest.mark.parametrize("row_group_size", [1, 5, 100])
 def test_parquet_read_row_groups(tmpdir, pdf, row_group_size):

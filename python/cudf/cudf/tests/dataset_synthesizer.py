@@ -5,16 +5,12 @@
 # if you want to generate data where certain phenomena (e.g., cardinality)
 # are exaggurated.
 
-DEBUG = False
-
 import pandas as pd
 import numpy as np
-import pyarrow as pa
-import pyarrow.parquet as pq
 
-if DEBUG: from prettytable import PrettyTable
 from mimesis import Generic
 g = Generic('es')
+
 
 class ColumnParameters:
     # There might be a case where we want to try out different distributions
@@ -22,13 +18,18 @@ class ColumnParameters:
     # cardinality and presence of nulls in different columns.
     #
     # ty is a callable function, specifically a Mimesis provider
-    def __init__(self, cardinality=0.2, null_frequency=0.1, ty=g.food.fruit, is_sorted=False):
+    def __init__(self, cardinality=0.2, null_frequency=0.1,
+                 ty=g.food.fruit, is_sorted=False):
         self.cardinality = cardinality
         self.null_frequency = null_frequency
         self.ty = ty
         self.is_sorted = is_sorted
 
-default_column_params = [ColumnParameters(ty=x) for x in [g.datetime.datetime, g.address.city, g.business.company_type, g.person.first_name]]
+
+default_column_params = [ColumnParameters(ty=x) for x in [
+    g.datetime.datetime, g.address.city,
+    g.business.company_type, g.person.first_name]]
+
 
 # The construction of these datasets should vary along the following
 # dimensions-
@@ -40,51 +41,43 @@ default_column_params = [ColumnParameters(ty=x) for x in [g.datetime.datetime, g
 # - Size in # of rows
 # - Size in # of columns
 class Parameters:
-    def __init__(self, num_rows=2048, num_cols=4, column_params=default_column_params):
+    def __init__(self, num_rows=2048, num_cols=4,
+                 column_params=default_column_params):
         self.num_rows = num_rows
         self.num_cols = num_cols
         self.column_params = column_params
 
-    def __str__(self):
-        if DEBUG: print("table with " + str(self.num_cols) + " columns and " + str(self.num_rows) + " rows:")
-        params_info = PrettyTable()
-        params_info.add_column("", ["type", "cardinality", "null frequency", "sorted?"])
-        for i in range(self.num_cols):
-            col_params = self.column_params[i]
-            params_info.add_column("column " + str(i), [
-                col_params.ty.__name__,
-                '{:.1%}'.format(col_params.cardinality) + " unique",
-                '{:.1%}'.format(col_params.null_frequency) + " null",
-                "sorted" if col_params.is_sorted else "not sorted"
-            ])
-        return str(params_info)
 
 # Synthesizes a new dataset and stores it in a Parquet file:
 def synthesize(filepath, parameters):
-    if DEBUG:
-        print("synthesizer with following parameters:")
-        print(parameters)
-
-    if DEBUG: print("synthesizing...")
     data = {}
     columns_to_sort = []
     for i in range(parameters.num_cols):
         column_parameters = parameters.column_params[i]
-        vals = np.array([column_parameters.ty() for _ in range(int(1 / column_parameters.cardinality))])
-        generate_cell = lambda: None if np.random.rand() < column_parameters.null_frequency else np.random.choice(vals)
-        data[str(i)] = np.array([generate_cell() for _ in range(parameters.num_rows)])
+        vals = np.array([column_parameters.ty() for _ in
+                         range(int(1 / column_parameters.cardinality))])
+
+        # Make generator function
+        def generate_cell():
+            (None
+             if np.random.rand() < column_parameters.null_frequency
+             else np.random.choice(vals))
+
+        # Generate data for current column
+        data[str(i)] = np.array([generate_cell() for _ in
+                                 range(parameters.num_rows)])
+
+        # Check if marked for sorting
         if column_parameters.is_sorted:
-             columns_to_sort.append(str(i))
-    
+            columns_to_sort.append(str(i))
+
     # Create DataFrame and sort columns appropriately
     df = pd.DataFrame(data)
     df = df.sort_values(columns_to_sort)
 
     # Store in Parquet file
     df.to_parquet(filepath, row_group_size=64)
-    if DEBUG:
-        print("done")
-        print("synthesized dataset stored in " + filepath)
+
 
 default = Parameters()
 
@@ -92,23 +85,27 @@ default = Parameters()
 very_sparse_column_params = list(default_column_params)
 very_sparse_column_params[2].null_frequency = 0.8
 very_sparse_column_params[2].cardinality = 1.0 / 16.0
-very_sparse = Parameters(num_rows=2048 << 4, column_params=very_sparse_column_params)
+very_sparse = Parameters(num_rows=2048 << 4,
+                         column_params=very_sparse_column_params)
 
 # Focusing on the date column...
 dates_sorted_column_params = list(default_column_params)
 dates_sorted_column_params[0].is_sorted = True
 dates_sorted_column_params[0].cardinality = 1.0 / (2048 << 4)
-dates_sorted = Parameters(num_rows=2048, column_params=dates_sorted_column_params)
+dates_sorted = Parameters(num_rows=2048,
+                          column_params=dates_sorted_column_params)
 high_cardinality_column_params = list(default_column_params)
 high_cardinality_column_params[0].is_sorted = True
 high_cardinality_column_params[0].cardinality = 1.0 / (2048 << 5)
-high_cardinality = Parameters(num_rows=2048, column_params=high_cardinality_column_params)
+high_cardinality = Parameters(num_rows=2048,
+                              column_params=high_cardinality_column_params)
 
 # Focusing on the city column...
 low_cardinality_column_params = list(default_column_params)
 low_cardinality_column_params[1].is_sorted = True
 low_cardinality_column_params[1].cardinality = 1.0 / 20.0
-low_cardinality = Parameters(num_rows=2048, column_params=low_cardinality_column_params)
+low_cardinality = Parameters(num_rows=2048,
+                             column_params=low_cardinality_column_params)
 
 # Simple
 # This generates data for 2048 people regarding their age, city, industry,
