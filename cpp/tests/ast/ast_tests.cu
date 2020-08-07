@@ -192,11 +192,11 @@ struct custom_functor {
 TEST_F(ASTTest, CustomASTFunctor)
 {
   int result = 0;
-  cudf::ast::ast_operator_dispatcher(cudf::ast::ast_operator::ADD,
-                                     cudf::data_type(cudf::type_id::INT32),
-                                     cudf::data_type(cudf::type_id::INT32),
-                                     custom_functor{},
-                                     &result);
+  cudf::ast::binary_operator_dispatcher(cudf::ast::ast_operator::ADD,
+                                        cudf::data_type(cudf::type_id::INT32),
+                                        cudf::data_type(cudf::type_id::INT32),
+                                        custom_functor{},
+                                        &result);
   EXPECT_EQ(result, 42);
 }
 

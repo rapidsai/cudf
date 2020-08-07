@@ -122,9 +122,9 @@ constexpr bool is_valid_unary_op = simt::std::is_invocable<Op, T>::value;
 
 // Operator dispatcher
 template <typename F, typename... Ts>
-CUDA_HOST_DEVICE_CALLABLE constexpr void ast_operator_dispatcher_data_type(ast_operator op,
-                                                                           F&& f,
-                                                                           Ts&&... args)
+CUDA_HOST_DEVICE_CALLABLE constexpr void ast_operator_dispatcher(ast_operator op,
+                                                                 F&& f,
+                                                                 Ts&&... args)
 {
   switch (op) {
     case ast_operator::ADD:
@@ -199,6 +199,8 @@ struct operator_functor {
 
 template <>
 struct operator_functor<ast_operator::ADD> {
+  static constexpr auto arity{2};
+
   template <typename LHS, typename RHS>
   CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs) -> decltype(lhs + rhs)
   {
@@ -208,6 +210,8 @@ struct operator_functor<ast_operator::ADD> {
 
 template <>
 struct operator_functor<ast_operator::SUB> {
+  static constexpr auto arity{2};
+
   template <typename LHS, typename RHS>
   CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs) -> decltype(lhs - rhs)
   {
@@ -217,6 +221,8 @@ struct operator_functor<ast_operator::SUB> {
 
 template <>
 struct operator_functor<ast_operator::MUL> {
+  static constexpr auto arity{2};
+
   template <typename LHS, typename RHS>
   CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs) -> decltype(lhs * rhs)
   {
@@ -226,6 +232,8 @@ struct operator_functor<ast_operator::MUL> {
 
 template <>
 struct operator_functor<ast_operator::DIV> {
+  static constexpr auto arity{2};
+
   template <typename LHS, typename RHS>
   CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs) -> decltype(lhs / rhs)
   {
@@ -235,6 +243,8 @@ struct operator_functor<ast_operator::DIV> {
 
 template <>
 struct operator_functor<ast_operator::TRUE_DIV> {
+  static constexpr auto arity{2};
+
   template <typename LHS, typename RHS>
   CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs)
     -> decltype(static_cast<double>(lhs) / static_cast<double>(rhs))
@@ -245,6 +255,8 @@ struct operator_functor<ast_operator::TRUE_DIV> {
 
 template <>
 struct operator_functor<ast_operator::FLOOR_DIV> {
+  static constexpr auto arity{2};
+
   template <typename LHS, typename RHS>
   CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs)
     -> decltype(floor(static_cast<double>(lhs) / static_cast<double>(rhs)))
@@ -255,6 +267,8 @@ struct operator_functor<ast_operator::FLOOR_DIV> {
 
 template <>
 struct operator_functor<ast_operator::MOD> {
+  static constexpr auto arity{2};
+
   template <typename LHS,
             typename RHS,
             typename CommonType                                    = std::common_type_t<LHS, RHS>,
@@ -288,6 +302,8 @@ struct operator_functor<ast_operator::MOD> {
 
 template <>
 struct operator_functor<ast_operator::PYMOD> {
+  static constexpr auto arity{2};
+
   template <typename LHS,
             typename RHS,
             typename CommonType                                    = std::common_type_t<LHS, RHS>,
@@ -333,6 +349,8 @@ struct operator_functor<ast_operator::PYMOD> {
 
 template <>
 struct operator_functor<ast_operator::POW> {
+  static constexpr auto arity{2};
+
   template <typename LHS, typename RHS>
   CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs) -> decltype(std::pow(lhs, rhs))
   {
@@ -342,6 +360,8 @@ struct operator_functor<ast_operator::POW> {
 
 template <>
 struct operator_functor<ast_operator::EQUAL> {
+  static constexpr auto arity{2};
+
   template <typename LHS, typename RHS>
   CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs) -> decltype(lhs == rhs)
   {
@@ -351,6 +371,8 @@ struct operator_functor<ast_operator::EQUAL> {
 
 template <>
 struct operator_functor<ast_operator::NOT_EQUAL> {
+  static constexpr auto arity{2};
+
   template <typename LHS, typename RHS>
   CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs) -> decltype(lhs != rhs)
   {
@@ -360,6 +382,8 @@ struct operator_functor<ast_operator::NOT_EQUAL> {
 
 template <>
 struct operator_functor<ast_operator::LESS> {
+  static constexpr auto arity{2};
+
   template <typename LHS, typename RHS>
   CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs) -> decltype(lhs < rhs)
   {
@@ -369,6 +393,8 @@ struct operator_functor<ast_operator::LESS> {
 
 template <>
 struct operator_functor<ast_operator::GREATER> {
+  static constexpr auto arity{2};
+
   template <typename LHS, typename RHS>
   CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs) -> decltype(lhs > rhs)
   {
@@ -378,6 +404,8 @@ struct operator_functor<ast_operator::GREATER> {
 
 template <>
 struct operator_functor<ast_operator::LESS_EQUAL> {
+  static constexpr auto arity{2};
+
   template <typename LHS, typename RHS>
   CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs) -> decltype(lhs <= rhs)
   {
@@ -387,6 +415,8 @@ struct operator_functor<ast_operator::LESS_EQUAL> {
 
 template <>
 struct operator_functor<ast_operator::GREATER_EQUAL> {
+  static constexpr auto arity{2};
+
   template <typename LHS, typename RHS>
   CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs) -> decltype(lhs >= rhs)
   {
@@ -396,6 +426,8 @@ struct operator_functor<ast_operator::GREATER_EQUAL> {
 
 template <>
 struct operator_functor<ast_operator::BITWISE_AND> {
+  static constexpr auto arity{2};
+
   template <typename LHS, typename RHS>
   CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs) -> decltype(lhs & rhs)
   {
@@ -405,6 +437,8 @@ struct operator_functor<ast_operator::BITWISE_AND> {
 
 template <>
 struct operator_functor<ast_operator::BITWISE_OR> {
+  static constexpr auto arity{2};
+
   template <typename LHS, typename RHS>
   CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs) -> decltype(lhs | rhs)
   {
@@ -414,6 +448,8 @@ struct operator_functor<ast_operator::BITWISE_OR> {
 
 template <>
 struct operator_functor<ast_operator::BITWISE_XOR> {
+  static constexpr auto arity{2};
+
   template <typename LHS, typename RHS>
   CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs) -> decltype(lhs ^ rhs)
   {
@@ -423,6 +459,8 @@ struct operator_functor<ast_operator::BITWISE_XOR> {
 
 template <>
 struct operator_functor<ast_operator::LOGICAL_AND> {
+  static constexpr auto arity{2};
+
   template <typename LHS, typename RHS>
   CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs) -> decltype(lhs && rhs)
   {
@@ -432,6 +470,8 @@ struct operator_functor<ast_operator::LOGICAL_AND> {
 
 template <>
 struct operator_functor<ast_operator::LOGICAL_OR> {
+  static constexpr auto arity{2};
+
   template <typename LHS, typename RHS>
   CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs) -> decltype(lhs || rhs)
   {
@@ -442,7 +482,32 @@ struct operator_functor<ast_operator::LOGICAL_OR> {
 namespace detail {
 
 template <typename OperatorFunctor>
-struct dispatch_operator_functor_types {
+struct dispatch_unary_operator_types {
+  template <typename InputT,
+            typename F,
+            typename... Ts,
+            std::enable_if_t<is_valid_unary_op<OperatorFunctor, InputT>>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE void operator()(F&& f, Ts&&... args)
+  {
+    f.template operator()<OperatorFunctor, InputT>(std::forward<Ts>(args)...);
+  }
+
+  template <typename InputT,
+            typename F,
+            typename... Ts,
+            std::enable_if_t<!is_valid_unary_op<OperatorFunctor, InputT>>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE void operator()(F&& f, Ts&&... args)
+  {
+#ifndef __CUDA_ARCH__
+    CUDF_FAIL("Invalid unary operation.");
+#else
+    release_assert(false && "Invalid unary operation.");
+#endif
+  }
+};
+
+template <typename OperatorFunctor>
+struct double_dispatch_binary_operator_types {
   template <typename LHS,
             typename RHS,
             typename F,
@@ -469,7 +534,7 @@ struct dispatch_operator_functor_types {
 };
 
 template <typename OperatorFunctor>
-struct dispatch_operator_functor_types_single {
+struct single_dispatch_binary_operator_types {
   template <typename LHS,
             typename F,
             typename... Ts,
@@ -493,7 +558,18 @@ struct dispatch_operator_functor_types_single {
   }
 };
 
-struct dispatch_op {
+struct type_dispatch_unary_op {
+  template <ast_operator op, typename F, typename... Ts>
+  CUDA_HOST_DEVICE_CALLABLE void operator()(cudf::data_type input_t, F&& f, Ts&&... args)
+  {
+    type_dispatcher(input_t,
+                    detail::dispatch_unary_operator_types<operator_functor<op>>{},
+                    std::forward<F>(f),
+                    std::forward<Ts>(args)...);
+  }
+};
+
+struct type_dispatch_binary_op {
   template <ast_operator op, typename F, typename... Ts>
   CUDA_HOST_DEVICE_CALLABLE void operator()(cudf::data_type lhs_t,
                                             cudf::data_type rhs_t,
@@ -504,13 +580,13 @@ struct dispatch_op {
     /*
     double_type_dispatcher(lhs_t,
                            rhs_t,
-                           detail::dispatch_operator_functor_types<operator_functor<op>>{},
+                           detail::double_dispatch_binary_operator_types<operator_functor<op>>{},
                            std::forward<F>(f),
                            std::forward<Ts>(args)...);
     */
     // Single dispatch (assume lhs_t == rhs_t)
     type_dispatcher(lhs_t,
-                    detail::dispatch_operator_functor_types_single<operator_functor<op>>{},
+                    detail::single_dispatch_binary_operator_types<operator_functor<op>>{},
                     std::forward<F>(f),
                     std::forward<Ts>(args)...);
   }
@@ -558,19 +634,46 @@ struct unary_return_type_functor {
   }
 };
 
+struct arity_functor {
+  template <typename OperatorFunctor>
+  CUDA_HOST_DEVICE_CALLABLE void operator()(cudf::size_type* result)
+  {
+    *result = OperatorFunctor::arity;
+  }
+};
+
 }  // namespace detail
 
 /**
- * @brief Dispatches two type template parameters to a callable.
+ * @brief Dispatches a single type template parameters to a unary operator.
  *
  */
 #pragma nv_exec_check_disable
 template <typename F, typename... Ts>
-CUDA_HOST_DEVICE_CALLABLE constexpr void ast_operator_dispatcher(
+CUDA_HOST_DEVICE_CALLABLE constexpr void unary_operator_dispatcher(ast_operator op,
+                                                                   cudf::data_type input_t,
+                                                                   F&& f,
+                                                                   Ts&&... args)
+{
+  ast_operator_dispatcher(
+    op, detail::type_dispatch_unary_op{}, input_t, std::forward<F>(f), std::forward<Ts>(args)...);
+}
+
+/**
+ * @brief Dispatches two type template parameters to a binary operator.
+ *
+ */
+#pragma nv_exec_check_disable
+template <typename F, typename... Ts>
+CUDA_HOST_DEVICE_CALLABLE constexpr void binary_operator_dispatcher(
   ast_operator op, cudf::data_type lhs_t, cudf::data_type rhs_t, F&& f, Ts&&... args)
 {
-  ast_operator_dispatcher_data_type(
-    op, detail::dispatch_op{}, lhs_t, rhs_t, std::forward<F>(f), std::forward<Ts>(args)...);
+  ast_operator_dispatcher(op,
+                          detail::type_dispatch_binary_op{},
+                          lhs_t,
+                          rhs_t,
+                          std::forward<F>(f),
+                          std::forward<Ts>(args)...);
 }
 
 /**
@@ -589,11 +692,11 @@ inline cudf::data_type ast_operator_return_type(ast_operator op,
       // TODO: Unary return type functor
       break;
     case 2:
-      ast_operator_dispatcher(op,
-                              operand_types.at(0),
-                              operand_types.at(1),
-                              detail::binary_return_type_functor{},
-                              &result);
+      binary_operator_dispatcher(op,
+                                 operand_types.at(0),
+                                 operand_types.at(1),
+                                 detail::binary_return_type_functor{},
+                                 &result);
       break;
     case 3:
       // TODO: Ternary return type functor
@@ -601,6 +704,37 @@ inline cudf::data_type ast_operator_return_type(ast_operator op,
     default: break;
   }
   return result;
+}
+
+/**
+ * @brief Gets the arity of an AST operator.
+ *
+ */
+CUDA_HOST_DEVICE_CALLABLE cudf::size_type ast_operator_arity(ast_operator op)
+{
+  switch (op) {
+    case ast_operator::ADD: return operator_functor<ast_operator::ADD>::arity;
+    case ast_operator::SUB: return operator_functor<ast_operator::SUB>::arity;
+    case ast_operator::MUL: return operator_functor<ast_operator::MUL>::arity;
+    case ast_operator::DIV: return operator_functor<ast_operator::DIV>::arity;
+    case ast_operator::TRUE_DIV: return operator_functor<ast_operator::TRUE_DIV>::arity;
+    case ast_operator::FLOOR_DIV: return operator_functor<ast_operator::FLOOR_DIV>::arity;
+    case ast_operator::MOD: return operator_functor<ast_operator::MOD>::arity;
+    case ast_operator::PYMOD: return operator_functor<ast_operator::PYMOD>::arity;
+    case ast_operator::POW: return operator_functor<ast_operator::POW>::arity;
+    case ast_operator::EQUAL: return operator_functor<ast_operator::EQUAL>::arity;
+    case ast_operator::NOT_EQUAL: return operator_functor<ast_operator::NOT_EQUAL>::arity;
+    case ast_operator::LESS: return operator_functor<ast_operator::LESS>::arity;
+    case ast_operator::GREATER: return operator_functor<ast_operator::GREATER>::arity;
+    case ast_operator::LESS_EQUAL: return operator_functor<ast_operator::LESS_EQUAL>::arity;
+    case ast_operator::GREATER_EQUAL: return operator_functor<ast_operator::GREATER_EQUAL>::arity;
+    case ast_operator::BITWISE_AND: return operator_functor<ast_operator::BITWISE_AND>::arity;
+    case ast_operator::BITWISE_OR: return operator_functor<ast_operator::BITWISE_OR>::arity;
+    case ast_operator::BITWISE_XOR: return operator_functor<ast_operator::BITWISE_XOR>::arity;
+    case ast_operator::LOGICAL_AND: return operator_functor<ast_operator::LOGICAL_AND>::arity;
+    case ast_operator::LOGICAL_OR: return operator_functor<ast_operator::LOGICAL_OR>::arity;
+    default: return 0;
+  }
 }
 
 }  // namespace ast

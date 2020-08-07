@@ -136,28 +136,51 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) typed_operator_dispatch_functor::operat
   // compile unsupported types here.
 }
 
-__device__ void operate(ast_operator op,
-                        const table_device_view table,
-                        mutable_column_device_view output_column,
-                        const cudf::detail::fixed_width_scalar_device_view_base* literals,
-                        std::int64_t* thread_intermediate_storage,
-                        cudf::size_type row_index,
-                        const detail::device_data_reference lhs,
-                        const detail::device_data_reference rhs,
-                        const detail::device_data_reference output)
+__device__ void call_unary_operator(
+  ast_operator op,
+  const table_device_view table,
+  mutable_column_device_view output_column,
+  const cudf::detail::fixed_width_scalar_device_view_base* literals,
+  std::int64_t* thread_intermediate_storage,
+  cudf::size_type row_index,
+  const detail::device_data_reference input,
+  const detail::device_data_reference output)
 {
-  ast_operator_dispatcher(op,
-                          lhs.data_type,
-                          rhs.data_type,
-                          typed_operator_dispatch_functor{},
-                          table,
-                          output_column,
-                          literals,
-                          thread_intermediate_storage,
-                          row_index,
-                          lhs,
-                          rhs,
-                          output);
+  unary_operator_dispatcher(op,
+                            input.data_type,
+                            typed_operator_dispatch_functor{},
+                            table,
+                            output_column,
+                            literals,
+                            thread_intermediate_storage,
+                            row_index,
+                            input,
+                            output);
+}
+
+__device__ void call_binary_operator(
+  ast_operator op,
+  const table_device_view table,
+  mutable_column_device_view output_column,
+  const cudf::detail::fixed_width_scalar_device_view_base* literals,
+  std::int64_t* thread_intermediate_storage,
+  cudf::size_type row_index,
+  const detail::device_data_reference lhs,
+  const detail::device_data_reference rhs,
+  const detail::device_data_reference output)
+{
+  binary_operator_dispatcher(op,
+                             lhs.data_type,
+                             rhs.data_type,
+                             typed_operator_dispatch_functor{},
+                             table,
+                             output_column,
+                             literals,
+                             thread_intermediate_storage,
+                             row_index,
+                             lhs,
+                             rhs,
+                             output);
 }
 
 __device__ void evaluate_row_expression(
@@ -174,34 +197,59 @@ __device__ void evaluate_row_expression(
   auto operator_source_index = cudf::size_type(0);
   for (cudf::size_type operator_index(0); operator_index < num_operators; operator_index++) {
     // Execute operator
-    auto const op = operators[operator_index];
-    // TODO: Fix binary operator trait for new dispatch
-    // if (is_binary_operator(op)) {
-    if (true) {
+    auto const op    = operators[operator_index];
+    auto const arity = cudf::ast::ast_operator_arity(op);
+    if (arity == 1) {
+      // Unary operator
+      auto const input_data_ref = data_references[operator_source_indices[operator_source_index]];
+      auto const output_data_ref =
+        data_references[operator_source_indices[operator_source_index + 1]];
+      call_unary_operator(op,
+                          table,
+                          output_column,
+                          literals,
+                          thread_intermediate_storage,
+                          row_index,
+                          input_data_ref,
+                          output_data_ref);
+
+    } else if (arity == 2) {
+      // Binary operator
       auto const lhs_data_ref = data_references[operator_source_indices[operator_source_index]];
       auto const rhs_data_ref = data_references[operator_source_indices[operator_source_index + 1]];
       auto const output_data_ref =
         data_references[operator_source_indices[operator_source_index + 2]];
-      operator_source_index += 3;
+      call_binary_operator(op,
+                           table,
+                           output_column,
+                           literals,
+                           thread_intermediate_storage,
+                           row_index,
+                           lhs_data_ref,
+                           rhs_data_ref,
+                           output_data_ref);
+    } else {
+      // Ternary operator
+      /*
+      auto const condition_data_ref =
+        data_references[operator_source_indices[operator_source_index]];
+      auto const lhs_data_ref = data_references[operator_source_indices[operator_source_index + 1]];
+      auto const rhs_data_ref = data_references[operator_source_indices[operator_source_index + 2]];
+      auto const output_data_ref =
+        data_references[operator_source_indices[operator_source_index + 3]];
       operate(op,
               table,
               output_column,
               literals,
               thread_intermediate_storage,
               row_index,
+              condition_data_ref,
               lhs_data_ref,
               rhs_data_ref,
               output_data_ref);
-    } else {
-      // TODO: Support unary/ternary operators
-      // Assume operator is unary
-      /*
-      auto const input_data_ref = data_references[operator_source_indices[operator_source_index]];
-      auto const output_data_ref =
-        data_references[operator_source_indices[operator_source_index + 1]];
-      operator_source_index += 2;
       */
     }
+    operator_source_index += (arity + 1);
   }
 }
 
