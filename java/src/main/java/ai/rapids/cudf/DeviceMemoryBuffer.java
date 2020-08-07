@@ -53,7 +53,7 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
           // We cannot know how far it progressed before the exception, and
           // therefore it is unsafe to retry.
           address = 0;
-          lengthInBytes = 0;
+//          lengthInBytes = 0;
           stream = null;
         }
         neededCleanup = true;
