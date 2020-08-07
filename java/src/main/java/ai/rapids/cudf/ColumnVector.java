@@ -53,6 +53,9 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       return viewHandle;
     }
 
+    /**
+     * IMPORTANT: This returns a new Column View, so you MUST close it once you are done with this.
+     */
     @Override
     public ColumnViewPointerAccess<BaseDeviceMemoryBuffer> getChildColumnView(int childIndex) {
       if (getDataType() != DType.LIST) {
@@ -2883,6 +2886,9 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     return offHeap.viewHandle;
   }
 
+  /**
+   * IMPORTANT: This returns a new Column View, so you MUST close it once you are done with this.
+   */
   @Override
   public ColumnViewPointerAccess getChildColumnView(int childIndex) {
     if (getDataType() != DType.LIST) {
