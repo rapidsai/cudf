@@ -92,12 +92,18 @@ conda list
 # BUILD - Build libcudf, cuDF, libcudf_kafka, and dask_cudf from source
 ################################################################################
 
+logger "Check ccache status..."
+ccache -s
+
 logger "Build libcudf..."
 if [[ ${BUILD_MODE} == "pull-request" ]]; then
     $WORKSPACE/build.sh clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests --ptds
 else
     $WORKSPACE/build.sh clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests -l --ptds
 fi
+
+logger "Check ccache status..."
+ccache -s
 
 ################################################################################
 # TEST - Run GoogleTest and py.tests for libcudf, and
