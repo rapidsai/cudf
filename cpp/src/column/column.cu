@@ -21,7 +21,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
-#include <cudf/lists/detail/slice.hpp>
+#include <cudf/lists/detail/copying.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/copying.hpp>
@@ -184,7 +184,7 @@ struct create_column_from_view {
   std::unique_ptr<column> operator()()
   {
     cudf::strings_column_view sview(view);
-    return cudf::strings::detail::slice(sview, 0, view.size(), 1, stream, mr);
+    return cudf::strings::detail::copy_slice(sview, 0, view.size(), 1, stream, mr);
   }
 
   template <typename ColumnType,
@@ -237,7 +237,7 @@ struct create_column_from_view {
   std::unique_ptr<column> operator()()
   {
     auto lists_view = lists_column_view(view);
-    return cudf::lists::detail::slice(lists_view, 0, view.size(), stream, mr);
+    return cudf::lists::detail::copy_slice(lists_view, 0, view.size(), stream, mr);
   }
 };
 }  // anonymous namespace

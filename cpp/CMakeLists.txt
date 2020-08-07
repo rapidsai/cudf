@@ -562,6 +562,7 @@ add_library(cudf
             src/lists/lists_column_view.cu
             src/lists/copying/concatenate.cu
             src/lists/copying/gather.cu
+            src/lists/copying/copying.cu
             src/text/detokenize.cu
             src/lists/copying/slice.cu
             src/text/generate_ngrams.cu
