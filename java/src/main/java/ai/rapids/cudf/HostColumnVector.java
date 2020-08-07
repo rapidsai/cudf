@@ -21,6 +21,7 @@ package ai.rapids.cudf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 
 import java.util.List;
@@ -107,7 +108,6 @@ public final class HostColumnVector implements AutoCloseable {
       return nestedChildren;
     }
 
-
     public HostMemoryBuffer getOffsets() {
       return offsets;
     }
@@ -158,16 +158,33 @@ public final class HostColumnVector implements AutoCloseable {
 
     private Object readValue(int index){
       assert index < rows * type.getSizeInBytes();
-        switch (type) {
-          case INT32: return data.getInt(index);
-          case INT64: return data.getLong(index);
-          case FLOAT32: return data.getFloat(index);
-          case FLOAT64: return data.getDouble(index);
-          case INT8: return data.getByte(index);
-          case INT16: return data.getShort(index);
-          case BOOL8: return data.getBoolean(index);
-          default: throw new UnsupportedOperationException("Do not support " + type);
-        }
+      switch (type) {
+        case INT32: return data.getInt(index);
+        case INT64: return data.getLong(index);
+        case FLOAT32: return data.getFloat(index);
+        case FLOAT64: return data.getDouble(index);
+        case INT8: return data.getByte(index);
+        case INT16: return data.getShort(index);
+        case BOOL8: return data.getBoolean(index);
+        default: throw new UnsupportedOperationException("Do not support " + type);
+      }
+    }
+
+    public long getHostMemorySize() {
+      long totalSize = 0;
+      if (data != null) {
+        totalSize += data.length;
+      }
+      if (offsets != null) {
+        totalSize += offsets.length;
+      }
+      if (data != null) {
+        totalSize += validity.length;
+      }
+      for (NestedHostColumnVector nhcv : nestedChildren) {
+        totalSize += nhcv.getHostMemorySize();
+      }
+      return totalSize;
     }
   }
 
@@ -199,18 +216,19 @@ public final class HostColumnVector implements AutoCloseable {
    * @param offsetBuffer       only valid for STRING this is the offsets into
    *                           the hostDataBuffer indicating the start and end of a string
    *                           entry. It should be (rows + 1) ints.
+   * @param nestedHcv          list of child NestedHostColumnVector(s) for complex types
    */
 
   //Constructor for lists
   HostColumnVector(DType type, long rows, Optional<Long> nullCount,
                    HostMemoryBuffer hostDataBuffer, HostMemoryBuffer hostValidityBuffer,
-                   HostMemoryBuffer offsetBuffer, List<NestedHostColumnVector> nestedHostColumnVector) {
+                   HostMemoryBuffer offsetBuffer, List<NestedHostColumnVector> nestedHcv) {
     this.offHeap = new OffHeapState(hostDataBuffer, hostValidityBuffer, offsetBuffer);
     MemoryCleaner.register(this, offHeap);
     this.rows = rows;
     this.nullCount = nullCount;
     this.type = type;
-    this.children = nestedHostColumnVector;
+    this.children = nestedHcv;
     refCount = 0;
     incRefCountInternal(true);
   }
@@ -223,7 +241,7 @@ public final class HostColumnVector implements AutoCloseable {
       throw new IllegalStateException("Buffer cannot have a nullCount without a validity buffer");
     }
     if (type != DType.STRING && type != DType.LIST) {
-      assert offsetBuffer == null : "offsets are only supported for STRING";
+      assert offsetBuffer == null : "offsets are only supported for STRING and LIST";
     }
     offHeap = new OffHeapState(hostDataBuffer, hostValidityBuffer, offsetBuffer);
     MemoryCleaner.register(this, offHeap);
@@ -234,6 +252,7 @@ public final class HostColumnVector implements AutoCloseable {
     refCount = 0;
     incRefCountInternal(true);
   }
+
   /**
    * This is a really ugly API, but it is possible that the lifecycle of a column of
    * data may not have a clear lifecycle thanks to java and GC. This API informs the leak
@@ -305,7 +324,13 @@ public final class HostColumnVector implements AutoCloseable {
    * Returns the amount of host memory used to store column/validity data (not metadata).
    */
   public long getHostMemorySize() {
-    return offHeap.getHostMemorySize();
+    long childTotalSize = 0;
+    if (!children.isEmpty()) {
+      for (NestedHostColumnVector nhcv : children) {
+        childTotalSize += nhcv.getHostMemorySize();
+      }
+    }
+    return offHeap.getHostMemorySize() + childTotalSize;
   }
 
   /**
@@ -349,6 +374,7 @@ public final class HostColumnVector implements AutoCloseable {
   public boolean hasNulls() {
     return getNullCount() > 0;
   }
+
   /////////////////////////////////////////////////////////////////////////////
   // DATA MOVEMENT
   /////////////////////////////////////////////////////////////////////////////
@@ -401,8 +427,7 @@ public final class HostColumnVector implements AutoCloseable {
         offsets = null;
         return ret;
       } else {
-        return ColumnVector.createNestedColumnVector(type, (int)rows,
-            offHeap.data, offHeap.valid, offHeap.offsets, nullCount, children.get(0));
+        return ColumnVector.createNestedColumnVector(type, (int)rows, offHeap.valid, offHeap.offsets, nullCount, children.get(0));
       }
     } finally {
       if (data != null) {
@@ -703,7 +728,6 @@ public final class HostColumnVector implements AutoCloseable {
     public long getHostMemorySize() {
       long total = 0;
       if (valid != null) {
-        //TODO: fix for lists
         total += valid.length;
       }
       if (data != null) {
@@ -771,9 +795,9 @@ public final class HostColumnVector implements AutoCloseable {
   }
 
   public static<T> HostColumnVector fromLists(ColumnBuilder.DataType dataType, List<T>... values) {
-   ColumnBuilder cb = new ColumnBuilder(dataType);
-   cb.appendLists(values);
-   return cb.build();
+    ColumnBuilder cb = new ColumnBuilder(dataType);
+    cb.appendLists(values);
+    return cb.build();
   }
   /**
    * Create a new vector from the given values.
@@ -1180,6 +1204,7 @@ public final class HostColumnVector implements AutoCloseable {
     }
     System.out.println();
   }
+
   /**
    * Build
    */
