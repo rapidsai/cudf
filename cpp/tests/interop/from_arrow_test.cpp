@@ -156,14 +156,16 @@ TEST_F(FromArrowTest, ChunkedArray)
       "ccc",
     },
     {0, 1});
-  auto dict_array = get_arrow_dict_array({1, 2, 5, 7}, {0, 1, 2, 1, 3}, {1, 0, 1, 1, 1});
+  auto dict_array1 = get_arrow_dict_array({1, 2, 5, 7}, {0, 1, 2}, {1, 0, 1});
+  auto dict_array2 = get_arrow_dict_array({1, 2, 5, 7}, {1, 3});
 
   auto int64_chunked_array = std::make_shared<arrow::ChunkedArray>(int64array);
   auto int32_chunked_array = std::make_shared<arrow::ChunkedArray>(
     std::vector<std::shared_ptr<arrow::Array>>{int32array_1, int32array_2});
   auto string_chunked_array = std::make_shared<arrow::ChunkedArray>(
     std::vector<std::shared_ptr<arrow::Array>>{string_array_1, string_array_2});
-  auto dict_chunked_array = std::make_shared<arrow::ChunkedArray>(dict_array);
+  auto dict_chunked_array = std::make_shared<arrow::ChunkedArray>(
+    std::vector<std::shared_ptr<arrow::Array>>{dict_array1, dict_array2});
   auto boolean_array = get_arrow_array<bool>({true, false, true, false, true}, {1, 0, 1, 1, 0});
   auto boolean_chunked_array = std::make_shared<arrow::ChunkedArray>(boolean_array);
 
