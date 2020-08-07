@@ -349,6 +349,9 @@ public final class Table implements AutoCloseable {
   private static native long[] orderBy(long inputTable, long[] sortKeys, boolean[] isDescending,
                                        boolean[] areNullsSmallest) throws CudfException;
 
+  private static native long[] merge(long[] tableHandles, int[] sortKeyIndexes,
+                                     boolean[] isDescending, boolean[] areNullsSmallest) throws CudfException;
+
   private static native long[] leftJoin(long leftTable, int[] leftJoinCols, long rightTable,
                                         int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
 
@@ -1021,6 +1024,32 @@ public final class Table implements AutoCloseable {
     }
 
     return new Table(orderBy(nativeHandle, sortKeys, isDescending, areNullsSmallest));
+  }
+
+  public static Table merge(List<Table> tables, OrderByArg... args) {
+    assert !tables.isEmpty();
+    long[] tableHandles = new long[tables.size()];
+    Table first = tables.get(0);
+    assert args.length <= first.columns.length;
+    for (int i = 0; i < tables.size(); i++) {
+      Table t = tables.get(i);
+      assert t != null;
+      assert t.columns.length == first.columns.length;
+      tableHandles[i] = t.nativeHandle;
+    }
+    int[] sortKeyIndexes = new int[args.length];
+    boolean[] isDescending = new boolean[args.length];
+    boolean[] areNullsSmallest = new boolean[args.length];
+    for (int i = 0; i < args.length; i++) {
+      int index = args[i].index;
+      assert (index >= 0 && index < first.columns.length) :
+              "index is out of range 0 <= " + index + " < " + first.columns.length;
+      isDescending[i] = args[i].isDescending;
+      areNullsSmallest[i] = args[i].isNullSmallest;
+      sortKeyIndexes[i] = index;
+    }
+
+    return new Table(merge(tableHandles, sortKeyIndexes, isDescending, areNullsSmallest));
   }
 
   public static OrderByArg asc(final int index) {
