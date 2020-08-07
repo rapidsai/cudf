@@ -349,8 +349,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   /////////////////////////////////////////////////////////////////////////////
 
   private final static HostColumnVector.NestedHostColumnVector copyToHostNestedHelper(ColumnViewPointerAccess<BaseDeviceMemoryBuffer> deviceCvPointer) {
-    // Now some of this we could speed up with caching, but conceptually it should be like the following...
-    // None of these need to be closed because they do not own any data, just views conceptually.
     if (deviceCvPointer == null) {
       return null;
     }
@@ -387,8 +385,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       }
       currNullCount = deviceCvPointer.getNullCount();
       Optional<Long> nullCount = Optional.of(currNullCount);
-      // copy offset, valid and data to host as needed
-      // Ownership of children and host buffers is transferred to new HostColumnVectorStandIn
       HostColumnVector.NestedHostColumnVector ret = new HostColumnVector.NestedHostColumnVector(currType, currRows, nullCount, hostData,
           hostValid, hostOffsets, children);
       needsCleanup = false;
