@@ -977,6 +977,18 @@ class lists_column_wrapper : public cudf::test::detail::column_wrapper {
                      // set of input
                      if (l.depth < expected_depth) {
                        if (l.root) {
+                         // this exception distinguishes between the following two cases:
+                         //
+                         // { {{{1, 2, 3}}}, {} }
+                         // In this case, row 0 is a List<List<List<int>>>, whereas row 1 is
+                         // just a List<> which is an apparent mismatch.  However, because row 1
+                         // is empty we will allow that to semantically mean
+                         // "a List<List<List<int>>> that's empty at the top level"
+                         //
+                         // { {{{1, 2, 3}}}, {4, 5, 6} }
+                         // In this case, row 1 is a a concrete List<int> with actual values.  There
+                         // is no way to rectify the differences so we will treat it as a true
+                         // column mismatch.
                          CUDF_EXPECTS(l.wrapped->size() == 0, "Mismatch in column types!");
                          stubs.push_back(empty_like(expected_hierarchy));
                        } else {
