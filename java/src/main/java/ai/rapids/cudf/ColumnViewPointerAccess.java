@@ -38,7 +38,4 @@ interface ColumnViewPointerAccess<T> {
   long getNumRows();
 
   int getNumChildren();
-
-  void close();
-
 }

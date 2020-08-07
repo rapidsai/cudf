@@ -107,11 +107,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       }
       return offHeap.getNumChildren(viewHandle);
     }
-
-    @Override
-    public void close() {
-      //TODO TBD
-    }
   }
 
   static {
@@ -3349,6 +3344,11 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     return build(DType.BOOL8, values.length, (b) -> b.appendArray(values));
   }
 
+  /**
+   * This method is evolving and unstable and currently test only.
+   * Please use with caution and expect it to change in the future.
+   *
+   */
   public static<T> ColumnVector fromLists(HostColumnVector.ColumnBuilder.DataType dataType, List<T>... lists) {
     try (HostColumnVector host = HostColumnVector.fromLists(dataType, lists)) {
       return host.copyToDevice();
