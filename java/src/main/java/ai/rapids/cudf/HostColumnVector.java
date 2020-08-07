@@ -23,11 +23,9 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
-
 
 /**
  * Similar to a ColumnVector, but the data is stored in host memory and accessible directly from

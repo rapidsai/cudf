@@ -1205,7 +1205,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeCudfColumnView(
   CATCH_STD(env, 0);
 }
 
-
 JNIEXPORT jint JNICALL Java_ai_rapids_cudf_ColumnVector_getNativeTypeId(JNIEnv *env,
                                                                         jobject j_object,
                                                                         jlong handle) {
