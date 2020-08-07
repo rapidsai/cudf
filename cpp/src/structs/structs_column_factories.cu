@@ -82,17 +82,13 @@ std::unique_ptr<cudf::column> make_structs_column(
   cudaStream_t stream,
   rmm::mr::device_memory_resource* mr)
 {
-  if (null_count > 0) {
-    CUDF_EXPECTS(!null_mask.is_empty(), "Column with nulls must be nullable.");
-  }
+  CUDF_EXPECTS(null_count <= 0 || !null_mask.is_empty(),
+               "Struct column with nulls must be nullable.");
 
   CUDF_EXPECTS(std::all_of(child_columns.begin(),
                            child_columns.end(),
                            [&](auto const& child_col) { return num_rows == child_col->size(); }),
                "Child columns must have the same number of rows as the Struct column.");
-
-  CUDF_EXPECTS(null_count == 0 || !null_mask.is_empty(),
-               "Struct column with nulls must be nullable.");
 
   if (!null_mask.is_empty()) {
     for (auto& child : child_columns) {
