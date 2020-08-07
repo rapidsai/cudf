@@ -9,9 +9,7 @@ import pyarrow as pa
 from cudf import _lib as libcudf
 from cudf._lib.nvtx import annotate
 from cudf._lib.scalar import Scalar, as_scalar
-from cudf.core.buffer import Buffer
 from cudf.core.column import column, string
-from cudf.utils import utils
 from cudf.utils.dtypes import is_scalar, np_to_pa_dtype
 from cudf.utils.utils import buffers_from_pyarrow
 
@@ -118,13 +116,12 @@ class DatetimeColumn(column.ColumnBase):
             other = np.datetime64(other)
         elif isinstance(other, dt.timedelta):
             other = np.timedelta64(other)
+        elif isinstance(other, pd.Timestamp):
+            other = other.to_datetime64()
+        elif isinstance(other, pd.Timedelta):
+            other = other.to_timedelta64()
 
-        if isinstance(other, pd.Timestamp):
-            m = _numpy_to_pandas_conversion[self.time_unit]
-            ary = utils.scalar_broadcast_to(
-                other.value * m, size=len(self), dtype=self.dtype
-            )
-        elif isinstance(other, np.datetime64):
+        if isinstance(other, np.datetime64):
             if np.isnat(other):
                 return as_scalar(val=None, dtype=self.dtype)
 
@@ -136,11 +133,7 @@ class DatetimeColumn(column.ColumnBase):
 
             return as_scalar(other)
         else:
-            raise TypeError("cannot broadcast {}".format(type(other)))
-
-        return column.build_column(
-            data=Buffer(ary.data_array_view.view("|u1")), dtype=self.dtype
-        )
+            raise TypeError("cannot normalize {}".format(type(other)))
 
     @property
     def as_numerical(self):
