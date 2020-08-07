@@ -195,13 +195,7 @@ class TimeDeltaColumn(column.ColumnBase):
     def default_na_value(self):
         """Returns the default NA value for this column
         """
-        dkind = self.dtype.kind
-        if dkind == "m":
-            return np.timedelta64("nat", self.time_unit)
-        else:
-            raise TypeError(
-                "datetime column of {} has no NaN value".format(self.dtype)
-            )
+        return np.timedelta64("nat", self.time_unit)
 
     @property
     def time_unit(self):
