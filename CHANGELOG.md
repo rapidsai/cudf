@@ -40,6 +40,7 @@
 - PR #5654 Adding support for `cudf.DataFrame.sample` and `cudf.Series.sample`
 - PR #5607 Add Java bindings for duration types
 - PR #5612 Add `is_hex` strings API
+- PR #5625 String conversion to and from duration types
 - PR #5659 Added support for rapids-compose for Java bindings and other enhancements
 - PR #5637 Parameterize Null comparator behaviour in Joins
 - PR #5623 Add `is_ipv4` strings API
@@ -172,10 +173,12 @@
 - PR #5803 Add in Java support for the repeat command
 - PR #5806 Expose the error message from native exception when throwing an OOM exception
 - PR #5825 Enable ORC statistics generation by default
+- PR #5834 Add support for dictionary column in concatenate
 - PR #5832 Make dictionary_wrapper constructor from a value explicit
 - PR #5833 Pin `dask` and `distributed` version to `2.22.0`
 - PR #5853 Disable `fixed_point` for use in `copy_if`
 - PR #5854 Raise informative error in `DataFrame.iterrows` and `DataFrame.itertuples`
+- PR #5863 Explicitly require `ucx-py` on CI
 
 ## Bug Fixes
 
@@ -260,6 +263,9 @@
 - PR #5841 Added custreamz functions that were missing in interface layer
 - PR #5844 Fix `.str.cat` when objects with different index are passed
 - PR #5849 Modify custreamz api to integrate seamlessly with python streamz
+- PR #5866 cudf_kafka python version inconsistencies in Anaconda packages
+- PR #5872 libcudf_kafka r_path is causing docker build failures on centos7
+- PR #5869 Fix bug in parquet writer in writing string column with offset
 
 
 # cuDF 0.14.0 (03 Jun 2020)
