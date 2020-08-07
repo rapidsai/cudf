@@ -1026,6 +1026,15 @@ public final class Table implements AutoCloseable {
     return new Table(orderBy(nativeHandle, sortKeys, isDescending, areNullsSmallest));
   }
 
+  /**
+   * Merge multiple already sorted tables keeping the sort order the same.
+   * This is a more efficient version of concatenate followed by orderBy, but requires that
+   * the input already be sorted.
+   * @param tables the tables that should be merged.
+   * @param args the ordering of the tables.  Should match how they were sorted
+   *             initially.
+   * @return a combined sorted table.
+   */
   public static Table merge(List<Table> tables, OrderByArg... args) {
     assert !tables.isEmpty();
     long[] tableHandles = new long[tables.size()];
