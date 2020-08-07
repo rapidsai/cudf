@@ -53,15 +53,13 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       return viewHandle;
     }
 
-    /**
-     * IMPORTANT: This returns a new Column View, so you MUST close it once you are done with this.
-     */
     @Override
     public ColumnViewPointerAccess<BaseDeviceMemoryBuffer> getChildColumnView(int childIndex) {
       if (getDataType() != DType.LIST) {
         return null;
       }
       long childColumnView = getChildCvPointer(viewHandle, childIndex);
+      //this is returning a new ColumnView - must close this!
       return new DeviceColumnViewPointerAccess(childColumnView);
     }
 
@@ -113,6 +111,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       return offHeap.getNumChildren(viewHandle);
     }
 
+    @Override
     public void close() {
       deleteColumnView(viewHandle);
     }
@@ -389,10 +388,11 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
         hostOffsets = HostMemoryBuffer.allocate(currOffsets.length);
         hostOffsets.copyFromDeviceBuffer(currOffsets);
       }
-      for (int i = 0; i < deviceCvPointer.getNumChildren(); i++) {
-        ColumnViewPointerAccess childDevPtr = deviceCvPointer.getChildColumnView(i);
-        children.add(copyToHostNestedHelper(childDevPtr));
-        childDevPtr.close();
+      int numChildren = deviceCvPointer.getNumChildren();
+      for (int i = 0; i < numChildren; i++) {
+        try(ColumnViewPointerAccess childDevPtr = deviceCvPointer.getChildColumnView(i)) {
+          children.add(copyToHostNestedHelper(childDevPtr));
+        }
       }
       currNullCount = deviceCvPointer.getNullCount();
       Optional<Long> nullCount = Optional.of(currNullCount);
@@ -493,9 +493,9 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
               hOffset.copyFromDeviceBuffer(offsets);
           }
             List<HostColumnVector.NestedHostColumnVector> children = new ArrayList<>();
-            ColumnViewPointerAccess childDevPtr = getChildColumnView(0);
-            children.add(copyToHostNestedHelper(childDevPtr));
-            childDevPtr.close();
+            try(ColumnViewPointerAccess childDevPtr = getChildColumnView(0)) {
+              children.add(copyToHostNestedHelper(childDevPtr));
+            }
           HostColumnVector ret = new HostColumnVector(type, rows, nullCount,
               hData, hValid, hOffset, children);
           return ret;
@@ -2886,15 +2886,13 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     return offHeap.viewHandle;
   }
 
-  /**
-   * IMPORTANT: This returns a new Column View, so you MUST close it once you are done with this.
-   */
   @Override
   public ColumnViewPointerAccess getChildColumnView(int childIndex) {
     if (getDataType() != DType.LIST) {
       return null;
     }
     long childColumnView = getChildCvPointer(getNativeView(), childIndex);
+    //this is returning a new ColumnView - must close this!
     return new DeviceColumnViewPointerAccess(childColumnView);
   }
 
