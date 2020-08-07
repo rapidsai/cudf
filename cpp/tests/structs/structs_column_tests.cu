@@ -99,7 +99,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestColumnFactoryConstruction)
                 thrust::make_counting_iterator(0) + expected_children.size(),
                 [&](auto idx) {
                   cudf::test::expect_columns_equivalent(struct_col_view.child(idx),
-                                                   expected_children[idx]->view());
+                                                        expected_children[idx]->view());
                 });
 }
 
@@ -150,7 +150,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestColumnWrapperConstruction)
                 thrust::make_counting_iterator(0) + expected_children.size(),
                 [&](auto idx) {
                   cudf::test::expect_columns_equivalent(struct_col_view.child(idx),
-                                                   expected_children[idx]->view());
+                                                        expected_children[idx]->view());
                 });
 
   auto expected_struct_col =
@@ -419,7 +419,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestListsOfStructs)
   // Verify that child columns is as it was set.
 
   cudf::test::expect_columns_equivalent(expected_unchanged_struct_col,
-                                   cudf::lists_column_view(*list_col).child());
+                                        cudf::lists_column_view(*list_col).child());
 
 #ifndef NDEBUG
   std::cout << "Printing list col: \n";
