@@ -62,7 +62,10 @@ class DatetimeColumn(column.ColumnBase):
             offset=offset,
             null_count=null_count,
         )
-        assert self.dtype.type is np.datetime64
+
+        if not (self.dtype.type is np.datetime64):
+            raise TypeError(f"{self.dtype} is not a supported datetime type")
+
         self._time_unit, _ = np.datetime_data(self.dtype)
 
     def __contains__(self, item):
