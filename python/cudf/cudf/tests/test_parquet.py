@@ -325,7 +325,7 @@ def test_parquet_read_filtered(tmpdir):
 
     # Get dataframes to compare
     df = cudf.read_parquet(fname)
-    df_filtered = cudf.read_parquet(fname, filters=[('0', '>', '60')])
+    df_filtered = cudf.read_parquet(fname, filters=[("0", ">", "60")])
 
     assert df_filtered.shape[0] < df.shape[0]
 

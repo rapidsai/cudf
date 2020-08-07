@@ -25,7 +25,7 @@ def _get_partition_groups(df, partition_cols, preserve_index=False):
     splits = df[partition_cols].searchsorted(divisions, side="left")
     splits = splits.tolist() + [len(df[partition_cols])]
     return [
-        df.iloc[splits[i]: splits[i + 1]].copy(deep=False)
+        df.iloc[splits[i] : splits[i + 1]].copy(deep=False)
         for i in range(0, len(splits) - 1)
     ]
 
@@ -245,8 +245,8 @@ def read_parquet(
                 row_groups[i] = filtered_rg_ids[file]
             else:
                 row_groups[i] = filter(
-                    lambda id: id in row_groups[i],
-                    filtered_rg_ids[file])
+                    lambda id: id in row_groups[i], filtered_rg_ids[file]
+                )
 
     if engine == "cudf":
         return libparquet.read_parquet(

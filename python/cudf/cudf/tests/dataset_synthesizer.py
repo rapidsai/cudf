@@ -9,7 +9,8 @@ import pandas as pd
 import numpy as np
 
 from mimesis import Generic
-g = Generic('es')
+
+g = Generic("es")
 
 
 class ColumnParameters:
@@ -18,17 +19,28 @@ class ColumnParameters:
     # cardinality and presence of nulls in different columns.
     #
     # ty is a callable function, specifically a Mimesis provider
-    def __init__(self, cardinality=0.2, null_frequency=0.1,
-                 ty=g.food.fruit, is_sorted=False):
+    def __init__(
+        self,
+        cardinality=0.2,
+        null_frequency=0.1,
+        ty=g.food.fruit,
+        is_sorted=False,
+    ):
         self.cardinality = cardinality
         self.null_frequency = null_frequency
         self.ty = ty
         self.is_sorted = is_sorted
 
 
-default_column_params = [ColumnParameters(ty=x) for x in [
-    g.datetime.datetime, g.address.city,
-    g.business.company_type, g.person.first_name]]
+default_column_params = [
+    ColumnParameters(ty=x)
+    for x in [
+        g.datetime.datetime,
+        g.address.city,
+        g.business.company_type,
+        g.person.first_name,
+    ]
+]
 
 
 # The construction of these datasets should vary along the following
@@ -41,8 +53,9 @@ default_column_params = [ColumnParameters(ty=x) for x in [
 # - Size in # of rows
 # - Size in # of columns
 class Parameters:
-    def __init__(self, num_rows=2048, num_cols=4,
-                 column_params=default_column_params):
+    def __init__(
+        self, num_rows=2048, num_cols=4, column_params=default_column_params
+    ):
         self.num_rows = num_rows
         self.num_cols = num_cols
         self.column_params = column_params
@@ -54,18 +67,25 @@ def synthesize(filepath, parameters):
     columns_to_sort = []
     for i in range(parameters.num_cols):
         column_parameters = parameters.column_params[i]
-        vals = np.array([column_parameters.ty() for _ in
-                         range(int(1 / column_parameters.cardinality))])
+        vals = np.array(
+            [
+                column_parameters.ty()
+                for _ in range(int(1 / column_parameters.cardinality))
+            ]
+        )
 
         # Make generator function
         def generate_cell():
-            (None
-             if np.random.rand() < column_parameters.null_frequency
-             else np.random.choice(vals))
+            (
+                None
+                if np.random.rand() < column_parameters.null_frequency
+                else np.random.choice(vals)
+            )
 
         # Generate data for current column
-        data[str(i)] = np.array([generate_cell() for _ in
-                                 range(parameters.num_rows)])
+        data[str(i)] = np.array(
+            [generate_cell() for _ in range(parameters.num_rows)]
+        )
 
         # Check if marked for sorting
         if column_parameters.is_sorted:
@@ -85,27 +105,31 @@ default = Parameters()
 very_sparse_column_params = list(default_column_params)
 very_sparse_column_params[2].null_frequency = 0.8
 very_sparse_column_params[2].cardinality = 1.0 / 16.0
-very_sparse = Parameters(num_rows=2048 << 4,
-                         column_params=very_sparse_column_params)
+very_sparse = Parameters(
+    num_rows=2048 << 4, column_params=very_sparse_column_params
+)
 
 # Focusing on the date column...
 dates_sorted_column_params = list(default_column_params)
 dates_sorted_column_params[0].is_sorted = True
 dates_sorted_column_params[0].cardinality = 1.0 / (2048 << 4)
-dates_sorted = Parameters(num_rows=2048,
-                          column_params=dates_sorted_column_params)
+dates_sorted = Parameters(
+    num_rows=2048, column_params=dates_sorted_column_params
+)
 high_cardinality_column_params = list(default_column_params)
 high_cardinality_column_params[0].is_sorted = True
 high_cardinality_column_params[0].cardinality = 1.0 / (2048 << 5)
-high_cardinality = Parameters(num_rows=2048,
-                              column_params=high_cardinality_column_params)
+high_cardinality = Parameters(
+    num_rows=2048, column_params=high_cardinality_column_params
+)
 
 # Focusing on the city column...
 low_cardinality_column_params = list(default_column_params)
 low_cardinality_column_params[1].is_sorted = True
 low_cardinality_column_params[1].cardinality = 1.0 / 20.0
-low_cardinality = Parameters(num_rows=2048,
-                             column_params=low_cardinality_column_params)
+low_cardinality = Parameters(
+    num_rows=2048, column_params=low_cardinality_column_params
+)
 
 # Simple
 # This generates data for 2048 people regarding their age, city, industry,
