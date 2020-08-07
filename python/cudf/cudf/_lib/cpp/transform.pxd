@@ -8,8 +8,9 @@ from libcpp.memory cimport unique_ptr
 from rmm._lib.device_buffer cimport device_buffer
 
 from cudf._lib.cpp.types cimport (
-    size_type,
+    bitmask_type,
     data_type,
+    size_type,
 )
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
@@ -18,6 +19,10 @@ from cudf._lib.cpp.column.column_view cimport column_view
 cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
     cdef pair[unique_ptr[device_buffer], size_type] bools_to_mask (
         column_view input
+    ) except +
+
+    cdef unique_ptr[column] mask_to_bools (
+        bitmask_type* bitmask, size_type begin_bit, size_type end_bit
     ) except +
 
     cdef pair[unique_ptr[device_buffer], size_type] nans_to_nulls(
