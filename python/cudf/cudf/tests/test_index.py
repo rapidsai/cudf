@@ -26,6 +26,7 @@ from cudf.tests.utils import (
     SIGNED_INTEGER_TYPES,
     UNSIGNED_TYPES,
     assert_eq,
+    promote_to_pd_nullable_dtype
 )
 
 
@@ -130,6 +131,7 @@ def test_categorical_index():
     pdf["index"] = pd.Categorical(["a", "b", "c"])
     initial_df = DataFrame.from_pandas(pdf)
     pdf = pdf.set_index("index")
+    pdf = promote_to_pd_nullable_dtype(pdf)
     gdf1 = DataFrame.from_pandas(pdf)
     gdf2 = DataFrame()
     gdf2["a"] = [1, 2, 3]

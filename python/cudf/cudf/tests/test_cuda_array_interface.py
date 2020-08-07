@@ -10,7 +10,7 @@ import pytest
 from numba import cuda
 
 import cudf
-from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
+from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq, promote_to_pd_nullable_dtype
 
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES)
@@ -30,6 +30,7 @@ def test_cuda_array_interface_interop_in(dtype, module):
         module_data = module_constructor(np_data)
 
         pd_data = pd.Series(np_data)
+        pd_data = promote_to_pd_nullable_dtype(pd_data)
         # Test using a specific function for __cuda_array_interface__ here
         cudf_data = cudf.Series(module_data)
 
@@ -151,8 +152,8 @@ def test_column_from_ephemeral_cupy():
     # CuPy's caching allocator
     a = cudf.Series(cupy.asarray([1, 2, 3]))
     b = cudf.Series(cupy.asarray([1, 1, 1]))
-    assert_eq(pd.Series([1, 2, 3]), a)
-    assert_eq(pd.Series([1, 1, 1]), b)
+    assert_eq(pd.Series([1, 2, 3]).astype(pd.Int64Dtype()), a)
+    assert_eq(pd.Series([1, 1, 1]).astype(pd.Int64Dtype()), b)
 
 
 def test_column_from_ephemeral_cupy_try_lose_reference():
@@ -161,12 +162,12 @@ def test_column_from_ephemeral_cupy_try_lose_reference():
     a = cudf.Series(cupy.asarray([1, 2, 3]))._column
     a = cudf.core.column.as_column(a)
     b = cupy.asarray([1, 1, 1])  # noqa: F841
-    assert_eq(pd.Series([1, 2, 3]), a.to_pandas())
+    assert_eq(pd.Series([1, 2, 3]).astype(pd.Int64Dtype()), a.to_pandas())
 
     a = cudf.Series(cupy.asarray([1, 2, 3]))._column
     a.name = "b"
     b = cupy.asarray([1, 1, 1])  # noqa: F841
-    assert_eq(pd.Series([1, 2, 3]), a.to_pandas())
+    assert_eq(pd.Series([1, 2, 3]).astype(pd.Int64Dtype()), a.to_pandas())
 
 
 def test_cuda_array_interface_pytorch():

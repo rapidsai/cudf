@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import assert_eq, promote_to_pd_nullable_dtype
 
 
 @pytest.mark.parametrize(
@@ -22,6 +22,7 @@ from cudf.tests.utils import assert_eq
 def test_dropna_series(data, nulls, inplace):
 
     psr = pd.Series(data)
+    psr = promote_to_pd_nullable_dtype(psr)
 
     if len(data) > 0:
         if nulls == "one":

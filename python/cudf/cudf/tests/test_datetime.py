@@ -94,11 +94,11 @@ def test_datetime_series_binops_pandas(lhs_dtype, rhs_dtype):
     gdf_data_2 = Series(pd_data_2).astype(rhs_dtype)
     assert_eq(pd_data_1, gdf_data_1.astype("datetime64[ns]"))
     assert_eq(pd_data_2, gdf_data_2.astype("datetime64[ns]"))
-    assert_eq(pd_data_1 < pd_data_2, gdf_data_1 < gdf_data_2)
-    assert_eq(pd_data_1 > pd_data_2, gdf_data_1 > gdf_data_2)
-    assert_eq(pd_data_1 == pd_data_2, gdf_data_1 == gdf_data_2)
-    assert_eq(pd_data_1 <= pd_data_2, gdf_data_1 <= gdf_data_2)
-    assert_eq(pd_data_1 >= pd_data_2, gdf_data_1 >= gdf_data_2)
+    assert_eq(pd_data_1 < pd_data_2, gdf_data_1 < gdf_data_2, downcast=True)
+    assert_eq(pd_data_1 > pd_data_2, gdf_data_1 > gdf_data_2, downcast=True)
+    assert_eq(pd_data_1 == pd_data_2, gdf_data_1 == gdf_data_2, downcast=True)
+    assert_eq(pd_data_1 <= pd_data_2, gdf_data_1 <= gdf_data_2, downcast=True)
+    assert_eq(pd_data_1 >= pd_data_2, gdf_data_1 >= gdf_data_2, downcast=True)
 
 
 @pytest.mark.parametrize(

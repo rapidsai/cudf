@@ -1626,11 +1626,11 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         data = Buffer(arbitrary._data.view("|u1"))
         data = as_column(data, dtype=cudf_dtype)
 
-        mask = arbitrary._mask
-        mask = bools_to_mask(as_column(mask).unary_operator("not"))
+        if arbitrary._hasna:
+            mask = arbitrary._mask
+            mask = bools_to_mask(as_column(mask).unary_operator("not"))
 
-        data = data.set_mask(mask)
-
+            data = data.set_mask(mask)
     else:
         try:
             data = as_column(
