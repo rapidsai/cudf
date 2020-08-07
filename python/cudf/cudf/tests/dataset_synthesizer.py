@@ -1,14 +1,9 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-# This module is for generating "synthetic" datasets. It has been designed
-# for testing filtered reading.
-#
-# The purpose of synthetic datasets is for ensuring that when
-# certain phenomena (e.g., cardinality) are exaggurated, we perform better
-# than cuIO and pyarrow. We want to be able to note in what cases do we
-# perform better.
-#
-# For general comparison, we should use "real" datasets. 
+# This module is for generating "synthetic" datasets. It was originally
+# designed for testing filtered reading. Generally, it should be useful
+# if you want to generate data where certain phenomena (e.g., cardinality)
+# are exaggurated.
 
 DEBUG = False
 
@@ -87,13 +82,6 @@ def synthesize(filepath, parameters):
 
     # Store in Parquet file
     df.to_parquet(filepath, row_group_size=64)
-    # tbl = pa.Table.from_pandas(df)
-    # pq.write_to_dataset(
-    #     tbl,
-    #     root_path=str(filepath),
-    #     row_group_size=64,
-    #     # partition_cols=['3'],
-    # )
     if DEBUG:
         print("done")
         print("synthesized dataset stored in " + filepath)
