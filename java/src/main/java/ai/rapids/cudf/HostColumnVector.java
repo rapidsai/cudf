@@ -21,14 +21,12 @@ package ai.rapids.cudf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.lang.reflect.Type;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
-
-import static java.nio.charset.StandardCharsets.UTF_8;
 
 
 /**
@@ -441,6 +439,7 @@ public final class HostColumnVector implements AutoCloseable {
       }
     }
   }
+
   /////////////////////////////////////////////////////////////////////////////
   // DATA ACCESS
   /////////////////////////////////////////////////////////////////////////////
@@ -465,8 +464,6 @@ public final class HostColumnVector implements AutoCloseable {
     }
     return retList;
   }
-
-
 
   /**
    * Check if the value at index is null or not.
@@ -656,7 +653,7 @@ public final class HostColumnVector implements AutoCloseable {
    */
   public String getJavaString(long index) {
     byte[] rawData = getUTF8(index);
-    return new String(rawData, UTF_8);
+    return new String(rawData, StandardCharsets.UTF_8);
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -713,7 +710,6 @@ public final class HostColumnVector implements AutoCloseable {
       }
       if (offsets != null) {
         offsets.noWarnLeakExpected();
-
       }
     }
 
@@ -972,7 +968,7 @@ public final class HostColumnVector implements AutoCloseable {
       if (s == null) {
         nullCount++;
       } else {
-        bufferSize += s.getBytes(UTF_8).length;
+        bufferSize += s.getBytes(StandardCharsets.UTF_8).length;
       }
     }
     if (nullCount > 0) {
@@ -1210,6 +1206,7 @@ public final class HostColumnVector implements AutoCloseable {
    */
 
   public static final class ColumnBuilder implements  AutoCloseable {
+
     public static final int INIT_OFFSET_SIZE = 10;
     private DType type;
     private HostMemoryBuffer data;
@@ -1219,7 +1216,7 @@ public final class HostColumnVector implements AutoCloseable {
     //TODO nullable currently not used
     private boolean nullable;
     private long rows;
-    private boolean built;
+    private boolean built = false;
     private List<ColumnBuilder> childBuilders = new ArrayList<>();
 
     private int currentIndex = 0;
@@ -1256,7 +1253,7 @@ public final class HostColumnVector implements AutoCloseable {
 
     private void allocateBitmaskAndSetDefaultValues() {
       long bitmaskSize = ColumnVector.getNativeValidPointerSize((int) rows);
-      valid = (HostMemoryBuffer.allocate(bitmaskSize));
+      valid = HostMemoryBuffer.allocate(bitmaskSize);
       valid.setMemory(0, bitmaskSize, (byte) 0xFF);
     }
 
@@ -1298,7 +1295,6 @@ public final class HostColumnVector implements AutoCloseable {
 
     private void setNullAt(int index) {
       initValidBuffer();
-      //TODO does this work
       nullCount += BitVectorHelper.setNullAt(valid, index);
     }
 
@@ -1434,7 +1430,7 @@ public final class HostColumnVector implements AutoCloseable {
 
     public ColumnBuilder append(String value) {
       assert value != null : "appendNull must be used to append null strings";
-      return appendUTF8String(value.getBytes(UTF_8));
+      return appendUTF8String(value.getBytes(StandardCharsets.UTF_8));
     }
 
     public ColumnBuilder appendUTF8String(byte[] value) {
@@ -1495,7 +1491,19 @@ public final class HostColumnVector implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
-      //TODO
+      if (!built) {
+        data.close();
+        data = null;
+        if (valid != null) {
+          valid.close();
+          valid = null;
+        }
+        if (offsets != null) {
+          offsets.close();
+          offsets = null;
+        }
+        built = true;
+      }
     }
 
     public static abstract class DataType {
@@ -1708,7 +1716,7 @@ public final class HostColumnVector implements AutoCloseable {
 
     public Builder append(String value) {
       assert value != null : "appendNull must be used to append null strings";
-      return appendUTF8String(value.getBytes(UTF_8));
+      return appendUTF8String(value.getBytes(StandardCharsets.UTF_8));
     }
 
     public Builder appendUTF8String(byte[] value) {
@@ -1974,7 +1982,7 @@ public final class HostColumnVector implements AutoCloseable {
 
     private void allocateBitmaskAndSetDefaultValues() {
       long bitmaskSize = ColumnVector.getNativeValidPointerSize((int) rows);
-      valid = (HostMemoryBuffer.allocate(bitmaskSize));
+      valid = HostMemoryBuffer.allocate(bitmaskSize);
       valid.setMemory(0, bitmaskSize, (byte) 0xFF);
     }
 

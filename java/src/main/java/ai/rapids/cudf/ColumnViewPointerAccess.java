@@ -21,9 +21,9 @@ package ai.rapids.cudf;
 //Evolving and Unstable
 
 /**
- * Interface that allows access only methods to cudf column_views
+ * Interface that provides access only methods to cudf column_views
  */
-interface ColumnViewPointerAccess<T> {
+public interface ColumnViewPointerAccess<T> {
 
   long getColumnView();
 
@@ -42,4 +42,6 @@ interface ColumnViewPointerAccess<T> {
   long getNumRows();
 
   int getNumChildren();
+
+  void close();
 }
