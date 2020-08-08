@@ -40,7 +40,7 @@ def _check_contains_null(val):
             if byte == compare_to:
                 return True
     elif isinstance(val, str):
-        return '\x00' in val
+        return "\x00" in val
     return False
 
 
