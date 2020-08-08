@@ -327,6 +327,7 @@ def test_parquet_read_filtered(tmpdir):
     df = cudf.read_parquet(fname)
     df_filtered = cudf.read_parquet(fname, filters=[("0", ">", "60")])
 
+    assert cudf.io.read_parquet_metadata(fname)[1] == 2048 / 64
     assert df_filtered.shape[0] < df.shape[0]
 
 

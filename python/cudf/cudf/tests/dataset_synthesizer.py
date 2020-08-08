@@ -74,17 +74,14 @@ def synthesize(filepath, parameters):
             ]
         )
 
-        # Make generator function
-        def generate_cell():
-            (
+        # Generate data for current column
+        data[str(i)] = np.array(
+            [
                 None
                 if np.random.rand() < column_parameters.null_frequency
                 else np.random.choice(vals)
-            )
-
-        # Generate data for current column
-        data[str(i)] = np.array(
-            [generate_cell() for _ in range(parameters.num_rows)]
+                for _ in range(parameters.num_rows)
+            ]
         )
 
         # Check if marked for sorting
