@@ -15,7 +15,7 @@
  */
 
 #include <algorithm>
-#include <map>
+#include <unordered_set>
 #include <vector>
 
 #include <cudf/utilities/error.hpp>
@@ -120,16 +120,14 @@ constexpr uint16_t primes[] = {
 // find a prime number that generates no collisions for all possible input data
 uint16_t find_collision_proof_prime()
 {
-  size_t codepoints_in_size = std::end(codepoints_in) - std::begin(codepoints_in);
+  size_t const codepoints_in_size = std::end(codepoints_in) - std::begin(codepoints_in);
 
-  for (auto pitr = std::begin(primes); pitr < std::end(primes); ++pitr) {
-    std::map<uint16_t, uint16_t> keys;
-    std::for_each(std::begin(codepoints_in), std::end(codepoints_in), [&](uint16_t codepoint) {
-      int key = codepoint % *pitr;
-      if (keys.find(key) == keys.end()) { keys[key] = codepoint; }
+  for (auto pitr = std::cbegin(primes); pitr < std::cend(primes); ++pitr) {
+    std::unordered_set<uint16_t> keys;
+    std::for_each(std::cbegin(codepoints_in), std::cend(codepoints_in), [&](uint16_t codepoint) {
+      keys.insert(codepoint % *pitr);
     });
-
-    if (keys.size() == codepoints_in_size) { return *pitr; }
+    if (keys.size() == codepoints_in_size) return *pitr;
   }
 
   // couldn't find a collision-proof prime
