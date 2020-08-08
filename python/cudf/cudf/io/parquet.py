@@ -30,6 +30,20 @@ def _get_partition_groups(df, partition_cols, preserve_index=False):
     ]
 
 
+def _check_contains_null(val):
+    if isinstance(val, bytes):
+        for byte in val:
+            if isinstance(byte, bytes):
+                compare_to = chr(0)
+            else:
+                compare_to = 0
+            if byte == compare_to:
+                return True
+    elif isinstance(val, str):
+        return '\x00' in val
+    return False
+
+
 def _check_filters(filters, check_null_strings=True):
     """
     Check if filters are well-formed.
