@@ -76,22 +76,24 @@ def _filters_to_expression(filters):
             return field == val
         elif op == "!=":
             return field != val
-        elif op == '<':
+        elif op == "<":
             return field < val
-        elif op == '>':
+        elif op == ">":
             return field > val
-        elif op == '<=':
+        elif op == "<=":
             return field <= val
-        elif op == '>=':
+        elif op == ">=":
             return field >= val
-        elif op == 'in':
+        elif op == "in":
             return field.isin(val)
-        elif op == 'not in':
+        elif op == "not in":
             return ~field.isin(val)
         else:
             raise ValueError(
                 '"{0}" is not a valid operator in predicates.'.format(
-                    (col, op, val)))
+                    (col, op, val)
+                )
+            )
 
     or_exprs = []
 
