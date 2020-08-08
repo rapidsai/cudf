@@ -1,4 +1,6 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
+import textwrap
+
 import cupy as cp
 import numpy as np
 import pandas as pd
@@ -581,9 +583,9 @@ def test_series_null_index_repr(sr, pandas_special_case):
         [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
         [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
         [
-            136457654736252,
-            134736784364431,
-            245345345545332,
+            136457654,
+            134736784,
+            245345345,
             223432411,
             2343241,
             3634548734,
@@ -592,12 +594,291 @@ def test_series_null_index_repr(sr, pandas_special_case):
         [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
     ],
 )
-@pytest.mark.parametrize("dtype", utils.TIMEDELTA_TYPES)
+@pytest.mark.parametrize("dtype", ["timedelta64[s]", "timedelta64[us]"])
 def test_timedelta_series_repr(data, dtype):
     sr = cudf.Series(data, dtype=dtype)
     psr = sr.to_pandas()
 
-    expected = psr.__repr__()
+    expected = (
+        psr.__repr__().replace("timedelta64[ns]", dtype).replace("NaT", "<NA>")
+    )
     actual = sr.__repr__()
 
-    assert expected == actual
+    assert expected.split() == actual.split()
+
+
+@pytest.mark.parametrize(
+    "ser, expected_repr",
+    [
+        (
+            cudf.Series([], dtype="timedelta64[ns]"),
+            textwrap.dedent(
+                """
+            Series([], dtype: timedelta64[ns])
+            """
+            ),
+        ),
+        (
+            cudf.Series([], dtype="timedelta64[ms]"),
+            textwrap.dedent(
+                """
+            Series([], dtype: timedelta64[ms])
+            """
+            ),
+        ),
+        (
+            cudf.Series([1000000, 200000, 3000000], dtype="timedelta64[ns]"),
+            textwrap.dedent(
+                """
+            0    00:00:00.001000000
+            1    00:00:00.000200000
+            2    00:00:00.003000000
+            dtype: timedelta64[ns]
+            """
+            ),
+        ),
+        (
+            cudf.Series([1000000, 200000, 3000000], dtype="timedelta64[ms]"),
+            textwrap.dedent(
+                """
+            0    00:16:40
+            1    00:03:20
+            2    00:50:00
+            dtype: timedelta64[ms]
+            """
+            ),
+        ),
+        (
+            cudf.Series([1000000, 200000, None], dtype="timedelta64[ns]"),
+            textwrap.dedent(
+                """
+            0    00:00:00.001000000
+            1    00:00:00.000200000
+            2                  <NA>
+            dtype: timedelta64[ns]
+            """
+            ),
+        ),
+        (
+            cudf.Series([1000000, 200000, None], dtype="timedelta64[ms]"),
+            textwrap.dedent(
+                """
+            0    00:16:40
+            1    00:03:20
+            2        <NA>
+            dtype: timedelta64[ms]
+            """
+            ),
+        ),
+        (
+            cudf.Series(
+                [None, None, None, None, None], dtype="timedelta64[ns]"
+            ),
+            textwrap.dedent(
+                """
+            0    <NA>
+            1    <NA>
+            2    <NA>
+            3    <NA>
+            4    <NA>
+            dtype: timedelta64[ns]
+            """
+            ),
+        ),
+        (
+            cudf.Series(
+                [None, None, None, None, None], dtype="timedelta64[ms]"
+            ),
+            textwrap.dedent(
+                """
+            0    <NA>
+            1    <NA>
+            2    <NA>
+            3    <NA>
+            4    <NA>
+            dtype: timedelta64[ms]
+            """
+            ),
+        ),
+        (
+            cudf.Series(
+                [12, 12, 22, 343, 4353534, 435342], dtype="timedelta64[ns]"
+            ),
+            textwrap.dedent(
+                """
+            0    00:00:00.000000012
+            1    00:00:00.000000012
+            2    00:00:00.000000022
+            3    00:00:00.000000343
+            4    00:00:00.004353534
+            5    00:00:00.000435342
+            dtype: timedelta64[ns]
+            """
+            ),
+        ),
+        (
+            cudf.Series(
+                [12, 12, 22, 343, 4353534, 435342], dtype="timedelta64[ms]"
+            ),
+            textwrap.dedent(
+                """
+            0    00:00:00.012
+            1    00:00:00.012
+            2    00:00:00.022
+            3    00:00:00.343
+            4    01:12:33.534
+            5    00:07:15.342
+            dtype: timedelta64[ms]
+            """
+            ),
+        ),
+        (
+            cudf.Series(
+                [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
+                dtype="timedelta64[ns]",
+            ),
+            textwrap.dedent(
+                """
+            0    00:00:00.000000001
+            1    00:00:00.000001132
+            2    00:00:00.023223231
+            3    00:00:00.000000233
+            4              00:00:00
+            5    00:00:00.000000332
+            6    00:00:00.000000323
+            dtype: timedelta64[ns]
+            """
+            ),
+        ),
+        (
+            cudf.Series(
+                [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
+                dtype="timedelta64[ms]",
+            ),
+            textwrap.dedent(
+                """
+            0    00:00:00.001
+            1    00:00:01.132
+            2    06:27:03.231
+            3    00:00:00.233
+            4        00:00:00
+            5    00:00:00.332
+            6    00:00:00.323
+            dtype: timedelta64[ms]
+            """
+            ),
+        ),
+        (
+            cudf.Series(
+                [
+                    13645765432432,
+                    134736784,
+                    245345345,
+                    223432411,
+                    999992343241,
+                    3634548734,
+                    23234,
+                ],
+                dtype="timedelta64[ms]",
+            ),
+            textwrap.dedent(
+                """
+            0    157937 days 02:23:52.432
+            1         1 days 13:25:36.784
+            2         2 days 20:09:05.345
+            3         2 days 14:03:52.411
+            4     11573 days 23:39:03.241
+            5        42 days 01:35:48.734
+            6         0 days 00:00:23.234
+            dtype: timedelta64[ms]
+            """
+            ),
+        ),
+        (
+            cudf.Series(
+                [
+                    13645765432432,
+                    134736784,
+                    245345345,
+                    223432411,
+                    999992343241,
+                    3634548734,
+                    23234,
+                ],
+                dtype="timedelta64[ns]",
+            ),
+            textwrap.dedent(
+                """
+            0    03:47:25.765432432
+            1    00:00:00.134736784
+            2    00:00:00.245345345
+            3    00:00:00.223432411
+            4    00:16:39.992343241
+            5    00:00:03.634548734
+            6    00:00:00.000023234
+            dtype: timedelta64[ns]
+            """
+            ),
+        ),
+        (
+            cudf.Series(
+                [
+                    13645765432432,
+                    134736784,
+                    245345345,
+                    223432411,
+                    999992343241,
+                    3634548734,
+                    23234,
+                ],
+                dtype="timedelta64[ms]",
+                name="abc",
+            ),
+            textwrap.dedent(
+                """
+            0    157937 days 02:23:52.432
+            1         1 days 13:25:36.784
+            2         2 days 20:09:05.345
+            3         2 days 14:03:52.411
+            4     11573 days 23:39:03.241
+            5        42 days 01:35:48.734
+            6         0 days 00:00:23.234
+            Name: abc, dtype: timedelta64[ms]
+            """
+            ),
+        ),
+        (
+            cudf.Series(
+                [
+                    13645765432432,
+                    134736784,
+                    245345345,
+                    223432411,
+                    999992343241,
+                    3634548734,
+                    23234,
+                ],
+                dtype="timedelta64[ns]",
+                index=["a", "b", "z", "x", "y", "l", "m"],
+                name="hello",
+            ),
+            textwrap.dedent(
+                """
+            a    03:47:25.765432432
+            b    00:00:00.134736784
+            z    00:00:00.245345345
+            x    00:00:00.223432411
+            y    00:16:39.992343241
+            l    00:00:03.634548734
+            m    00:00:00.000023234
+            Name: hello, dtype: timedelta64[ns]
+            """
+            ),
+        ),
+    ],
+)
+def test_timedelta_series_ns_ms_repr(ser, expected_repr):
+    expected = expected_repr
+    actual = ser.__repr__()
+
+    assert expected.split() == actual.split()
