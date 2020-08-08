@@ -222,6 +222,30 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testMergeSimple() {
+    try (Table table1 = new Table.TestBuilder()
+            .column(5, 3, 3, 1, 1)
+            .column(5, 3, null, 1, 2)
+            .column(1, 3, 5, 7, 9)
+            .build();
+         Table table2 = new Table.TestBuilder()
+                 .column(1, 2, 7)
+                 .column(3, 2, 2)
+                 .column(1, 3, 10)
+                 .build();
+         Table expected = new Table.TestBuilder()
+                 .column(1, 1, 1, 2, 3, 3, 5, 7)
+                 .column(3, 2, 1, 2, null, 3, 5, 2)
+                 .column(1, 9, 7, 3, 5, 3, 1, 10)
+                 .build();
+         Table sortedTable1 = table1.orderBy(Table.asc(0), Table.desc(1));
+         Table sortedTable2 = table2.orderBy(Table.asc(0), Table.desc(1));
+         Table merged = Table.merge(Arrays.asList(sortedTable1, sortedTable2), Table.asc(0), Table.desc(1))) {
+      assertTablesAreEqual(expected, merged);
+    }
+  }
+
+  @Test
   void testOrderByAD() {
     try (Table table = new Table.TestBuilder()
         .column(5, 3, 3, 1, 1)
