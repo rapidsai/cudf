@@ -116,19 +116,21 @@ struct MD5Hash {
     uint8_t const* data = reinterpret_cast<uint8_t const*>(&key);
     hash_state->message_length += len;
 
-    if (hash_state->buffer_length + len < 64) {
+    // 64 bytes for the number of bytes processed in a given step
+    constexpr int md5_chunk_size = 64;
+    if (hash_state->buffer_length + len < md5_chunk_size) {
       thrust::copy_n(thrust::seq, data, len, hash_state->buffer + hash_state->buffer_length);
       hash_state->buffer_length += len;
     } else {
-      uint32_t copylen = 64 - hash_state->buffer_length;
+      uint32_t copylen = md5_chunk_size - hash_state->buffer_length;
 
       thrust::copy_n(thrust::seq, data, copylen, hash_state->buffer + hash_state->buffer_length);
       hash_step(hash_state);
 
-      while (len > 64 + copylen) {
-        thrust::copy_n(thrust::seq, data + copylen, 64, hash_state->buffer);
+      while (len > md5_chunk_size + copylen) {
+        thrust::copy_n(thrust::seq, data + copylen, md5_chunk_size, hash_state->buffer);
         hash_step(hash_state);
-        copylen += 64;
+        copylen += md5_chunk_size;
       }
 
       thrust::copy_n(thrust::seq, data + copylen, len - copylen, hash_state->buffer);
@@ -141,23 +143,32 @@ struct MD5Hash {
     auto const full_length = (static_cast<uint64_t>(hash_state->message_length)) << 3;
     thrust::fill_n(thrust::seq, hash_state->buffer + hash_state->buffer_length, 1, 0x80);
 
-    if (hash_state->buffer_length < 56) {
-      thrust::fill_n(thrust::seq,
-                     hash_state->buffer + hash_state->buffer_length + 1,
-                     (55 - hash_state->buffer_length),
-                     0x00);
+    // 64 bytes for the number of bytes processed in a given step
+    constexpr int md5_chunk_size = 64;
+    // 8 bytes for the total message length, appended to the end of the last chunk processed
+    constexpr int message_length_size = 8;
+    // 1 byte for the end of the message flag
+    constexpr int end_of_message_size = 1;
+    if (hash_state->buffer_length + message_length_size + end_of_message_size <= md5_chunk_size) {
+      thrust::fill_n(
+        thrust::seq,
+        hash_state->buffer + hash_state->buffer_length + 1,
+        (md5_chunk_size - message_length_size - end_of_message_size - hash_state->buffer_length),
+        0x00);
     } else {
       thrust::fill_n(thrust::seq,
                      hash_state->buffer + hash_state->buffer_length + 1,
-                     (64 - hash_state->buffer_length),
+                     (md5_chunk_size - hash_state->buffer_length),
                      0x00);
       hash_step(hash_state);
 
-      thrust::fill_n(thrust::seq, hash_state->buffer, 56, 0x00);
+      thrust::fill_n(thrust::seq, hash_state->buffer, md5_chunk_size - message_length_size, 0x00);
     }
 
-    thrust::copy_n(
-      thrust::seq, reinterpret_cast<uint8_t const*>(&full_length), 8, hash_state->buffer + 56);
+    thrust::copy_n(thrust::seq,
+                   reinterpret_cast<uint8_t const*>(&full_length),
+                   message_length_size,
+                   hash_state->buffer + md5_chunk_size - message_length_size);
     hash_step(hash_state);
 
 #pragma unroll
