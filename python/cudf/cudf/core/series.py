@@ -968,13 +968,11 @@ class Series(Frame, Serializable):
 
             preprocess = cudf.concat([top, bottom])
         else:
-            preprocess = self
+            preprocess = self.copy()
 
         preprocess.index = preprocess.index._clean_nulls_from_index()
-
         if isinstance(preprocess._column, cudf.core.column.TimeDeltaColumn):
-            # TODO: Temporary work-around until
-            # TimedeltaColumn.as_string_column is implemented
+            preprocess._column = preprocess._column._repr_str_col()
             output = preprocess.to_pandas().__repr__()
         elif (
             preprocess.nullable

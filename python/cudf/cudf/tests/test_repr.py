@@ -595,7 +595,7 @@ def test_series_null_index_repr(sr, pandas_special_case):
     ],
 )
 @pytest.mark.parametrize("dtype", ["timedelta64[s]", "timedelta64[us]"])
-def test_timedelta_series_repr(data, dtype):
+def test_timedelta_series_s_us_repr(data, dtype):
     sr = cudf.Series(data, dtype=dtype)
     psr = sr.to_pandas()
 

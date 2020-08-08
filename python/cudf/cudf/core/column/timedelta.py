@@ -10,10 +10,17 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib.nvtx import annotate
 from cudf._lib.scalar import Scalar, as_scalar
-from cudf.core.column import column
+from cudf.core.column import column, string
 from cudf.core.column.datetime import _numpy_to_pandas_conversion
 from cudf.utils.dtypes import is_scalar, np_to_pa_dtype
 from cudf.utils.utils import buffers_from_pyarrow
+
+_dtype_to_format_conversion = {
+    "timedelta64[ns]": "%D days %H:%M:%S",
+    "timedelta64[us]": "%D days %H:%M:%S",
+    "timedelta64[ms]": "%D days %H:%M:%S",
+    "timedelta64[s]": "%D days %H:%M:%S",
+}
 
 
 class TimeDeltaColumn(column.ColumnBase):
@@ -64,6 +71,27 @@ class TimeDeltaColumn(column.ColumnBase):
             # cannot exist in `self`.
             return False
         return item.view("int64") in self.as_numerical
+
+    def _repr_str_col(self):
+        # NOTE: This is for __repr__ purposes only.
+        # Typecasting to "str" yields different output
+        # when compared to __repr__ output of a duration type
+        # A Typecast to "str" preserves "Days" field even if
+        # the number of days in all rows are <= 0, whereas
+        # in __repr__ output the number of "Days" are truncated
+        # from the output if the number of days in all the rows
+        # are <= 0, hence this is an interal API which truncates "Days"
+        # from the output repr to both match pandas and have
+        # cleaner output.
+
+        if not (
+            self.binary_operator(op="gt", rhs=np.timedelta64(1, "D"))
+        ).any():
+            format = "%H:%M:%S"
+        else:
+            format = None
+
+        return self.as_string_column(dtype="str", format=format)
 
     def to_pandas(self, index=None, nullable_pd_dtype=False):
         return pd.Series(
@@ -227,12 +255,18 @@ class TimeDeltaColumn(column.ColumnBase):
         )
 
     def as_string_column(self, dtype, **kwargs):
-        # TODO: To be implemented once
-        # https://github.com/rapidsai/cudf/pull/5625/
-        # is merged.
-        raise NotImplementedError(
-            "Type conversion to string is not implemented for duration types"
-        )
+
+        if not kwargs.get("format"):
+            fmt = _dtype_to_format_conversion.get(
+                self.dtype.name, "%D days %H:%M:%S"
+            )
+            kwargs["format"] = fmt
+        if len(self) > 0:
+            return string._numeric_to_str_typecast_functions[
+                np.dtype(self.dtype)
+            ](self, **kwargs)
+        else:
+            return column.column_empty(0, dtype="object", masked=False)
 
     def as_timedelta_column(self, dtype, **kwargs):
         dtype = np.dtype(dtype)
