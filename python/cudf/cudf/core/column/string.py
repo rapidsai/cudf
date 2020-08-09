@@ -164,6 +164,10 @@ _str_to_numeric_typecast_functions = {
     np.dtype("datetime64[ms]"): str_cast.timestamp2int,
     np.dtype("datetime64[us]"): str_cast.timestamp2int,
     np.dtype("datetime64[ns]"): str_cast.timestamp2int,
+    np.dtype("timedelta64[s]"): str_cast.timedelta2int,
+    np.dtype("timedelta64[ms]"): str_cast.timedelta2int,
+    np.dtype("timedelta64[us]"): str_cast.timedelta2int,
+    np.dtype("timedelta64[ns]"): str_cast.timedelta2int,
 }
 
 _numeric_to_str_typecast_functions = {
@@ -184,6 +188,10 @@ _numeric_to_str_typecast_functions = {
     np.dtype("datetime64[ms]"): str_cast.int2timestamp,
     np.dtype("datetime64[us]"): str_cast.int2timestamp,
     np.dtype("datetime64[ns]"): str_cast.int2timestamp,
+    np.dtype("timedelta64[s]"): str_cast.int2timedelta,
+    np.dtype("timedelta64[ms]"): str_cast.int2timedelta,
+    np.dtype("timedelta64[us]"): str_cast.int2timedelta,
+    np.dtype("timedelta64[ns]"): str_cast.int2timedelta,
 }
 
 
@@ -4491,13 +4499,11 @@ class StringColumn(column.ColumnBase):
 
             boolean_match = self.binary_operator("eq", "NaT")
         elif out_dtype.type is np.timedelta64:
-            # TODO: Add once
-            # https://github.com/rapidsai/cudf/pull/5625/
-            # is merged.
-            raise NotImplementedError(
-                "Type conversion to string is not implemented for duration "
-                "types"
-            )
+            if "format" not in kwargs:
+                if len(self) > 0:
+                    kwargs.update(format="%D %H:%M:%S")
+
+            boolean_match = self.binary_operator("eq", "NaT")
         elif out_dtype.kind in {"i", "u"}:
             if not cpp_is_integer(self).all():
                 raise ValueError(
@@ -4515,8 +4521,7 @@ class StringColumn(column.ColumnBase):
             self, **kwargs
         )
         if (
-            (out_dtype.type is np.datetime64)
-            or (out_dtype.type is np.timedelta64)
+            out_dtype.type in (np.datetime64, np.timedelta64)
         ) and boolean_match.any():
             result_col[boolean_match] = None
         return result_col

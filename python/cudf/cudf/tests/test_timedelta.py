@@ -884,3 +884,133 @@ def test_timedelta_fillna(data, dtype, fill_value):
     actual = sr.fillna(fill_value)
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "gsr,expected_series",
+    [
+        (
+            cudf.Series([1000000, 200000, 3000000], dtype="timedelta64[ms]"),
+            cudf.Series(
+                ["0 days 00:16:40", "0 days 00:03:20", "0 days 00:50:00"]
+            ),
+        ),
+        (
+            cudf.Series([1000000, 200000, 3000000], dtype="timedelta64[s]"),
+            cudf.Series(
+                ["11 days 13:46:40", "2 days 07:33:20", "34 days 17:20:00"]
+            ),
+        ),
+        (
+            cudf.Series(
+                [None, None, None, None, None], dtype="timedelta64[us]"
+            ),
+            cudf.Series([None, None, None, None, None], dtype="str"),
+        ),
+        (
+            cudf.Series(
+                [
+                    136457654,
+                    None,
+                    245345345,
+                    223432411,
+                    None,
+                    3634548734,
+                    23234,
+                ],
+                dtype="timedelta64[us]",
+            ),
+            cudf.Series(
+                [
+                    "0 days 00:02:16.457654",
+                    None,
+                    "0 days 00:04:05.345345",
+                    "0 days 00:03:43.432411",
+                    None,
+                    "0 days 01:00:34.548734",
+                    "0 days 00:00:00.023234",
+                ]
+            ),
+        ),
+        (
+            cudf.Series(
+                [
+                    136457654,
+                    None,
+                    245345345,
+                    223432411,
+                    None,
+                    3634548734,
+                    23234,
+                ],
+                dtype="timedelta64[ms]",
+            ),
+            cudf.Series(
+                [
+                    "1 days 13:54:17.654",
+                    None,
+                    "2 days 20:09:05.345",
+                    "2 days 14:03:52.411",
+                    None,
+                    "42 days 01:35:48.734",
+                    "0 days 00:00:23.234",
+                ]
+            ),
+        ),
+        (
+            cudf.Series(
+                [
+                    136457654,
+                    None,
+                    245345345,
+                    223432411,
+                    None,
+                    3634548734,
+                    23234,
+                ],
+                dtype="timedelta64[s]",
+            ),
+            cudf.Series(
+                [
+                    "1579 days 08:54:14",
+                    None,
+                    "2839 days 15:29:05",
+                    "2586 days 00:33:31",
+                    None,
+                    "42066 days 12:52:14",
+                    "0 days 06:27:14",
+                ]
+            ),
+        ),
+        (
+            cudf.Series(
+                [
+                    136457654,
+                    None,
+                    245345345,
+                    223432411,
+                    None,
+                    3634548734,
+                    23234,
+                ],
+                dtype="timedelta64[ns]",
+            ),
+            cudf.Series(
+                [
+                    "0 days 00:00:00.136457654",
+                    None,
+                    "0 days 00:00:00.245345345",
+                    "0 days 00:00:00.223432411",
+                    None,
+                    "0 days 00:00:03.634548734",
+                    "0 days 00:00:00.000023234",
+                ]
+            ),
+        ),
+    ],
+)
+def test_timedelta_to_str(gsr, expected_series):
+
+    actual_series = gsr.astype("str")
+
+    assert_eq(expected_series, actual_series)

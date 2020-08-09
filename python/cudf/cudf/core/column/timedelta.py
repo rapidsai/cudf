@@ -91,7 +91,10 @@ class TimeDeltaColumn(column.ColumnBase):
         else:
             format = None
 
-        return self.as_string_column(dtype="str", format=format)
+        result = self.as_string_column(dtype="str", format=format)
+        if self.has_nulls:
+            result = result.fillna(cudf._NA_REP)
+        return result
 
     def to_pandas(self, index=None, nullable_pd_dtype=False):
         return pd.Series(
