@@ -1164,10 +1164,12 @@ class DataFrame(Frame, Serializable):
         filling with `<NA>` values.
         """
         for col in df._data:
-            if is_list_dtype(self._data[col]):
+            if is_list_dtype(df._data[col]):
                 # TODO we need to handle this
                 pass
-            elif self._data[col].has_nulls:
+            elif isinstance(df._data[col], cudf.core.column.TimeDeltaColumn):
+                df[col] = df._data[col]._repr_str_col()
+            elif df._data[col].has_nulls:
                 df[col] = df._data[col].astype("str").fillna(cudf._NA_REP)
             else:
                 df[col] = df._data[col]

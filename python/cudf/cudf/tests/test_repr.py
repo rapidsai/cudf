@@ -882,3 +882,218 @@ def test_timedelta_series_ns_ms_repr(ser, expected_repr):
     actual = ser.__repr__()
 
     assert expected.split() == actual.split()
+
+
+@pytest.mark.parametrize(
+    "df,expected_repr",
+    [
+        (
+            cudf.DataFrame(
+                {
+                    "a": cudf.Series(
+                        [1000000, 200000, 3000000], dtype="timedelta64[s]"
+                    )
+                }
+            ),
+            textwrap.dedent(
+                """
+                                  a
+                0  11 days 13:46:40
+                1   2 days 07:33:20
+                2  34 days 17:20:00
+                """
+            ),
+        ),
+        (
+            cudf.DataFrame(
+                {
+                    "a": cudf.Series(
+                        [
+                            136457654,
+                            None,
+                            245345345,
+                            223432411,
+                            None,
+                            3634548734,
+                            23234,
+                        ],
+                        dtype="timedelta64[s]",
+                    ),
+                    "b": [10, 11, 22, 33, 44, 55, 66],
+                }
+            ),
+            textwrap.dedent(
+                """
+                                     a   b
+                0   1579 days 08:54:14  10
+                1                 <NA>  11
+                2   2839 days 15:29:05  22
+                3   2586 days 00:33:31  33
+                4                 <NA>  44
+                5  42066 days 12:52:14  55
+                6      0 days 06:27:14  66
+                """
+            ),
+        ),
+        (
+            cudf.DataFrame(
+                {
+                    "a": cudf.Series(
+                        [
+                            136457654,
+                            None,
+                            245345345,
+                            223432411,
+                            None,
+                            3634548734,
+                            23234,
+                        ],
+                        dtype="timedelta64[s]",
+                        index=["a", "b", "c", "d", "e", "f", "g"],
+                    )
+                }
+            ),
+            textwrap.dedent(
+                """
+                                     a
+                a   1579 days 08:54:14
+                b                 <NA>
+                c   2839 days 15:29:05
+                d   2586 days 00:33:31
+                e                 <NA>
+                f  42066 days 12:52:14
+                g      0 days 06:27:14
+                """
+            ),
+        ),
+        (
+            cudf.DataFrame(
+                {
+                    "a": cudf.Series(
+                        [1, 2, 3, 4, 5, 6, 7],
+                        index=cudf.Index(
+                            [
+                                136457654,
+                                None,
+                                245345345,
+                                223432411,
+                                None,
+                                3634548734,
+                                23234,
+                            ],
+                            dtype="timedelta64[ms]",
+                        ),
+                    )
+                }
+            ),
+            textwrap.dedent(
+                """
+                                      a
+                1 days 13:54:17.654   1
+                <NA>                  2
+                2 days 20:09:05.345   3
+                2 days 14:03:52.411   4
+                <NA>                  5
+                42 days 01:35:48.734  6
+                0 days 00:00:23.234   7
+                """
+            ),
+        ),
+        (
+            cudf.DataFrame(
+                {
+                    "a": cudf.Series(
+                        ["a", "f", "q", "e", "w", "e", "t"],
+                        index=cudf.Index(
+                            [
+                                136457654,
+                                None,
+                                245345345,
+                                223432411,
+                                None,
+                                3634548734,
+                                23234,
+                            ],
+                            dtype="timedelta64[ns]",
+                        ),
+                    )
+                }
+            ),
+            textwrap.dedent(
+                """
+                                    a
+                00:00:00.136457654  a
+                <NA>                f
+                00:00:00.245345345  q
+                00:00:00.223432411  e
+                <NA>                w
+                00:00:03.634548734  e
+                00:00:00.000023234  t
+                """
+            ),
+        ),
+    ],
+)
+def test_timedelta_dataframe_repr(df, expected_repr):
+    actual_repr = df.__repr__()
+
+    assert actual_repr.split() == expected_repr.split()
+
+
+@pytest.mark.parametrize(
+    "index, expected_repr",
+    [
+        (
+            cudf.Index([1000000, 200000, 3000000], dtype="timedelta64[ms]"),
+            "TimedeltaIndex(['00:16:40', '00:03:20', '00:50:00'], "
+            "dtype='timedelta64[ms]')",
+        ),
+        (
+            cudf.Index(
+                [None, None, None, None, None], dtype="timedelta64[us]"
+            ),
+            "TimedeltaIndex([<NA>, <NA>, <NA>, <NA>, <NA>], "
+            "dtype='timedelta64[us]')",
+        ),
+        (
+            cudf.Index(
+                [
+                    136457654,
+                    None,
+                    245345345,
+                    223432411,
+                    None,
+                    3634548734,
+                    23234,
+                ],
+                dtype="timedelta64[us]",
+            ),
+            "TimedeltaIndex([00:02:16.457654, <NA>, 00:04:05.345345, "
+            "00:03:43.432411, <NA>,"
+            "       01:00:34.548734, 00:00:00.023234],"
+            "      dtype='timedelta64[us]')",
+        ),
+        (
+            cudf.Index(
+                [
+                    136457654,
+                    None,
+                    245345345,
+                    223432411,
+                    None,
+                    3634548734,
+                    23234,
+                ],
+                dtype="timedelta64[s]",
+            ),
+            "TimedeltaIndex([1579 days 08:54:14, <NA>, 2839 days 15:29:05,"
+            "       2586 days 00:33:31, <NA>, 42066 days 12:52:14, "
+            "0 days 06:27:14],"
+            "      dtype='timedelta64[s]')",
+        ),
+    ],
+)
+def test_timedelta_index_repr(index, expected_repr):
+    actual_repr = index.__repr__()
+
+    assert actual_repr.split() == expected_repr.split()
