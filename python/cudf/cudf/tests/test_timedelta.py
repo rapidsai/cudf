@@ -49,7 +49,7 @@ def test_timedelta_series_create(data, dtype):
     ],
 )
 @pytest.mark.parametrize("dtype", dtypeutils.TIMEDELTA_TYPES)
-@pytest.mark.parametrize("cast_dtype", ["int64", "category", "object"])
+@pytest.mark.parametrize("cast_dtype", ["int64", "category"])
 def test_timedelta_from_typecast(data, dtype, cast_dtype):
     if dtype not in ("timedelta64[ns]"):
         pytest.skip(
@@ -899,6 +899,16 @@ def test_timedelta_fillna(data, dtype, fill_value):
 @pytest.mark.parametrize(
     "gsr,expected_series",
     [
+        (
+            cudf.Series([1, 2, 3], dtype="timedelta64[ns]"),
+            cudf.Series(
+                [
+                    "0 days 00:00:00.000000001",
+                    "0 days 00:00:00.000000002",
+                    "0 days 00:00:00.000000003",
+                ]
+            ),
+        ),
         (
             cudf.Series([1000000, 200000, 3000000], dtype="timedelta64[ms]"),
             cudf.Series(
