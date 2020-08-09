@@ -10,6 +10,33 @@ import cudf
 from cudf.tests.utils import assert_eq
 from cudf.utils import dtypes as dtypeutils
 
+_TIMEDELTA_DATA = [
+    [1000000, 200000, 3000000],
+    [1000000, 200000, None],
+    [],
+    [None],
+    [None, None, None, None, None],
+    [12, 12, 22, 343, 4353534, 435342],
+    np.array([10, 20, 30, None, 100]),
+    cp.asarray([10, 20, 30, 100]),
+    [1000000, 200000, 3000000],
+    [1000000, 200000, None],
+    [1],
+    [12, 11, 232, 223432411, 2343241, 234324, 23234],
+    [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+    [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
+    [
+        136457654736252,
+        134736784364431,
+        245345345545332,
+        223432411,
+        2343241,
+        3634548734,
+        23234,
+    ],
+    [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+]
+
 
 @pytest.mark.parametrize(
     "data",
@@ -464,33 +491,7 @@ def test_timedelta_reduction_ops(data, dtype, reduction_op):
 
 
 @pytest.mark.parametrize(
-    "data",
-    [
-        [1000000, 200000, 3000000],
-        [1000000, 200000, None],
-        [],
-        [None],
-        [None, None, None, None, None],
-        [12, 12, 22, 343, 4353534, 435342],
-        np.array([10, 20, 30, None, 100]),
-        cp.asarray([10, 20, 30, 100]),
-        [1000000, 200000, 3000000],
-        [1000000, 200000, None],
-        [1],
-        [12, 11, 232, 223432411, 2343241, 234324, 23234],
-        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
-        [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
-        [
-            136457654736252,
-            134736784364431,
-            245345345545332,
-            223432411,
-            2343241,
-            3634548734,
-            23234,
-        ],
-        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
-    ],
+    "data", _TIMEDELTA_DATA,
 )
 @pytest.mark.parametrize("dtype", dtypeutils.TIMEDELTA_TYPES)
 def test_timedelta_dt_components(data, dtype):
@@ -507,33 +508,7 @@ def test_timedelta_dt_components(data, dtype):
 
 
 @pytest.mark.parametrize(
-    "data",
-    [
-        [1000000, 200000, 3000000],
-        [1000000, 200000, None],
-        [],
-        [None],
-        [None, None, None, None, None],
-        [12, 12, 22, 343, 4353534, 435342],
-        np.array([10, 20, 30, None, 100]),
-        cp.asarray([10, 20, 30, 100]),
-        [1000000, 200000, 3000000],
-        [1000000, 200000, None],
-        [1],
-        [12, 11, 232, 223432411, 2343241, 234324, 23234],
-        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
-        [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
-        [
-            136457654736252,
-            134736784364431,
-            245345345545332,
-            223432411,
-            2343241,
-            3634548734,
-            23234,
-        ],
-        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
-    ],
+    "data", _TIMEDELTA_DATA,
 )
 @pytest.mark.parametrize("dtype", dtypeutils.TIMEDELTA_TYPES)
 def test_timedelta_dt_properties(data, dtype):
@@ -568,33 +543,7 @@ def test_timedelta_dt_properties(data, dtype):
 
 
 @pytest.mark.parametrize(
-    "data",
-    [
-        [1000000, 200000, 3000000],
-        [1000000, 200000, None],
-        [],
-        [None],
-        [None, None, None, None, None],
-        [12, 12, 22, 343, 4353534, 435342],
-        np.array([10, 20, 30, None, 100]),
-        cp.asarray([10, 20, 30, 100]),
-        [1000000, 200000, 3000000],
-        [1000000, 200000, None],
-        [1],
-        [12, 11, 232, 223432411, 2343241, 234324, 23234],
-        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
-        [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
-        [
-            136457654736252,
-            134736784364431,
-            245345345545332,
-            223432411,
-            2343241,
-            3634548734,
-            23234,
-        ],
-        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
-    ],
+    "data", _TIMEDELTA_DATA,
 )
 @pytest.mark.parametrize("dtype", dtypeutils.TIMEDELTA_TYPES)
 def test_timedelta_index(data, dtype):
@@ -785,35 +734,7 @@ def test_timedelta_index_ops_with_scalars(data, other_scalars, dtype, op):
     assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize(
-    "data",
-    [
-        [1000000, 200000, 3000000],
-        [1000000, 200000, None],
-        [],
-        [None],
-        [None, None, None, None, None],
-        [12, 12, 22, 343, 4353534, 435342],
-        np.array([10, 20, 30, None, 100]),
-        cp.asarray([10, 20, 30, 100]),
-        [1000000, 200000, 3000000],
-        [1000000, 200000, None],
-        [1],
-        [12, 11, 232, 223432411, 2343241, 234324, 23234],
-        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
-        [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
-        [
-            136457654736252,
-            134736784364431,
-            245345345545332,
-            223432411,
-            2343241,
-            3634548734,
-            23234,
-        ],
-        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
-    ],
-)
+@pytest.mark.parametrize("data", _TIMEDELTA_DATA)
 @pytest.mark.parametrize("dtype", dtypeutils.TIMEDELTA_TYPES)
 @pytest.mark.parametrize("name", ["abcd", None])
 def test_timedelta_index_properties(data, dtype, name):
