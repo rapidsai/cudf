@@ -114,69 +114,143 @@ class TimeDeltaColumn(column.ColumnBase):
             null_count=self.null_count,
         )
 
+    def _binary_op_add_sub(self, rhs):
+        if pd.api.types.is_timedelta64_dtype(rhs.dtype):
+            out_dtype = determine_out_dtype(self.dtype, rhs.dtype)
+        elif pd.api.types.is_timedelta64_dtype(rhs.dtype):
+            out_dtype = rhs.dtype
+        else:
+            raise TypeError(
+                f"Addition/subtraction of {self.dtype} with {rhs.dtype} "
+                f"cannot be performed."
+            )
+
+        return out_dtype
+
+    def _binary_op_floordiv(self, rhs):
+        lhs, rhs = self, rhs
+        if pd.api.types.is_timedelta64_dtype(rhs.dtype):
+            common_dtype = determine_out_dtype(self.dtype, rhs.dtype)
+            lhs = lhs.astype(common_dtype).astype("float64")
+
+            if isinstance(rhs, Scalar):
+                if rhs.is_valid():
+                    if isinstance(rhs, Scalar):
+                        rhs = np.timedelta64(rhs.value)
+
+                    rhs = rhs.astype(common_dtype).astype("float64")
+                else:
+                    rhs = as_scalar(None, "float64")
+            else:
+                rhs = rhs.astype(common_dtype).astype("float64")
+
+            out_dtype = np.dtype("int64")
+        elif rhs.dtype.kind in ("f", "i", "u"):
+            out_dtype = self.dtype
+        else:
+            raise TypeError(
+                f"Floor Division of {self.dtype} with {rhs.dtype} "
+                f"cannot be performed."
+            )
+
+        return lhs, rhs, out_dtype
+
+    def _binary_op_mul(self, rhs):
+        if rhs.dtype.kind in ("f", "i", "u"):
+            out_dtype = self.dtype
+        else:
+            raise TypeError(
+                f"Multiplication of {self.dtype} with {rhs.dtype} "
+                f"cannot be performed."
+            )
+        return out_dtype
+
+    def _binary_op_mod(self, rhs):
+        if pd.api.types.is_timedelta64_dtype(rhs.dtype):
+            out_dtype = determine_out_dtype(self.dtype, rhs.dtype)
+        elif rhs.dtype.kind in ("f", "i", "u"):
+            out_dtype = self.dtype
+        else:
+            raise TypeError(
+                f"Modulus of {self.dtype} with {rhs.dtype} "
+                f"cannot be performed."
+            )
+        return out_dtype
+
+    def _binary_op_eq_ne(self, rhs):
+        if pd.api.types.is_timedelta64_dtype(rhs.dtype):
+            out_dtype = np.bool
+        else:
+            raise TypeError(
+                f"Equality of {self.dtype} with {rhs.dtype} "
+                f"cannot be performed."
+            )
+        return out_dtype
+
+    def _binary_op_lt_gt_le_ge(self, rhs):
+        if pd.api.types.is_timedelta64_dtype(rhs.dtype):
+            return np.bool
+        else:
+            raise TypeError(
+                f"Invalid comparison between dtype={self.dtype}"
+                f" and {type(rhs).__name__}"
+            )
+
+    def _binary_op_truediv(self, rhs):
+        lhs, rhs = self, rhs
+        if pd.api.types.is_timedelta64_dtype(rhs.dtype):
+            common_dtype = determine_out_dtype(self.dtype, rhs.dtype)
+            lhs = lhs.astype(common_dtype).astype("float64")
+
+            if isinstance(rhs, Scalar):
+                if rhs.is_valid():
+                    if isinstance(rhs, Scalar):
+                        rhs = np.timedelta64(rhs.value)
+
+                    rhs = rhs.astype(common_dtype).astype("float64")
+                else:
+                    rhs = as_scalar(None, "float64")
+            else:
+                rhs = rhs.astype(common_dtype).astype("float64")
+
+            out_dtype = np.dtype("float64")
+        elif rhs.dtype.kind in ("f", "i", "u"):
+            out_dtype = self.dtype
+        else:
+            raise TypeError(
+                f"Division of {self.dtype} with {rhs.dtype} "
+                f"cannot be performed."
+            )
+
+        return lhs, rhs, out_dtype
+
     def binary_operator(self, op, rhs, reflect=False):
         lhs, rhs = self, rhs
 
-        if not pd.api.types.is_timedelta64_dtype(rhs.dtype):
-            if op in ("eq", "ne"):
-                out_dtype = np.bool
-            elif op in ("lt", "gt", "le", "ge"):
-                raise TypeError(
-                    f"Invalid comparison between dtype={self.dtype}"
-                    f" and {type(rhs).__name__}"
-                )
-            elif op in ("mul", "mod"):
-                out_dtype = self.dtype
-            elif op == "truediv":
-                out_dtype = self.dtype
-            elif op == "floordiv":
-                op = "truediv"
-                out_dtype = self.dtype
-            elif op in ("add", "sub"):
-                if isinstance(rhs, Scalar) and rhs.value is None:
-                    return column.column_empty(
-                        row_count=len(self), dtype=self.dtype, masked=True
-                    )
-                elif pd.api.types.is_datetime64_dtype(rhs.dtype):
-                    out_dtype = rhs.dtype
-                else:
-                    out_dtype = self.dtype
-            else:
-                raise TypeError(
-                    f"Series of dtype {self.dtype} cannot perform "
-                    f" the operation {op}"
-                )
+        if op in ("eq", "ne"):
+            out_dtype = self._binary_op_eq_ne(rhs)
+        elif op in ("lt", "gt", "le", "ge"):
+            out_dtype = self._binary_op_lt_gt_le_ge(rhs)
+        elif op == "mul":
+            out_dtype = self._binary_op_mul(rhs)
+        elif op == "mod":
+            out_dtype = self._binary_op_mod(rhs)
+        elif op == "truediv":
+            lhs, rhs, out_dtype = self._binary_op_truediv(rhs)
+        elif op == "floordiv":
+            lhs, rhs, out_dtype = self._binary_op_floordiv(rhs)
+            op = "truediv"
+        elif op in ("add", "sub"):
+            out_dtype = self._binary_op_add_sub(rhs)
         else:
-            if op in ("eq", "ne", "lt", "gt", "le", "ge"):
-                out_dtype = np.bool
-            elif op in ("add", "sub"):
-                out_dtype = determine_out_dtype(lhs.dtype, rhs.dtype)
-            elif op in ("mod"):
-                out_dtype = np.dtype("timedelta64[ns]")
-            elif op == "truediv":
-                lhs = lhs.astype("timedelta64[ns]").astype("float64")
-
-                if isinstance(rhs, Scalar):
-                    rhs = as_scalar(rhs, dtype="float64")
-                else:
-                    rhs = rhs.astype("timedelta64[ns]").astype("float64")
-                out_dtype = np.dtype("float64")
-            elif op == "floordiv":
-                op = "truediv"
-                lhs = lhs.astype("timedelta64[ns]").astype("float64")
-                if isinstance(rhs, Scalar):
-                    rhs = as_scalar(rhs, dtype="float64")
-                else:
-                    rhs = rhs.astype("timedelta64[ns]").astype("float64")
-                out_dtype = np.dtype("int64")
-            else:
-                raise TypeError(
-                    f"Series of dtype {self.dtype} cannot perform "
-                    f" the operation {op}"
-                )
+            raise TypeError(
+                f"Series of dtype {self.dtype} cannot perform "
+                f" the operation {op}"
+            )
 
         if reflect:
             lhs, rhs = rhs, lhs
+
         return binop(lhs, rhs, op=op, out_dtype=out_dtype)
 
     def normalize_binop_value(self, other):
@@ -188,10 +262,15 @@ class TimeDeltaColumn(column.ColumnBase):
             other = other.to_timedelta64()
 
         if isinstance(other, np.timedelta64):
+            other_time_unit, _ = np.datetime_data(other.dtype)
             if np.isnat(other):
-                return as_scalar(val=None, dtype="timedelta64[ns]")
+                return as_scalar(val=None, dtype=self.dtype)
 
-            other = other.astype("timedelta64[ns]")
+            if other_time_unit not in ("s", "ms", "ns", "us"):
+                other = other.astype("timedelta64[s]")
+            else:
+                common_dtype = determine_out_dtype(self.dtype, other.dtype)
+                other = other.astype(common_dtype)
             return as_scalar(other)
         elif np.isscalar(other):
             return as_scalar(other)
@@ -447,4 +526,6 @@ def determine_out_dtype(lhs_dtype, rhs_dtype):
     elif np.can_cast(np.dtype(rhs_dtype), np.dtype(lhs_dtype)):
         return lhs_dtype
     else:
-        raise np.dtype("timedelta64[ns]")
+        raise TypeError(
+            f"Cannot determine operation between {lhs_dtype} and {rhs_dtype}"
+        )
