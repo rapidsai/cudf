@@ -363,7 +363,20 @@ def test_timedelta_dataframe_ops(df, op):
     ],
 )
 @pytest.mark.parametrize("dtype", dtypeutils.TIMEDELTA_TYPES)
-@pytest.mark.parametrize("op", ["add", "sub", "truediv", "floordiv"])
+@pytest.mark.parametrize(
+    "op",
+    [
+        "add",
+        "sub",
+        "truediv",
+        pytest.param(
+            "floordiv",
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/35529"
+            ),
+        ),
+    ],
+)
 def test_timedelta_series_ops_with_scalars(data, other_scalars, dtype, op):
     gsr = cudf.Series(data=data, dtype=dtype)
     psr = gsr.to_pandas(nullable_pd_dtype=True)
@@ -378,11 +391,7 @@ def test_timedelta_series_ops_with_scalars(data, other_scalars, dtype, op):
         expected = psr / other_scalars
         actual = gsr / other_scalars
     elif op == "floordiv":
-        # TODO: https://github.com/pandas-dev/pandas/issues/35529
-        # uncomment this below line once above bug is fixed
-
-        # expected = psr // other_scalars
-        expected = (gsr / other_scalars).astype("int64")
+        expected = psr // other_scalars
         actual = gsr // other_scalars
 
     assert_eq(expected, actual, nullable_pd_dtype=True)
@@ -397,11 +406,7 @@ def test_timedelta_series_ops_with_scalars(data, other_scalars, dtype, op):
         expected = other_scalars / psr
         actual = other_scalars / gsr
     elif op == "floordiv":
-        # TODO: https://github.com/pandas-dev/pandas/issues/35529
-        # uncomment this below line once above bug is fixed
-
-        # expected = psr // other_scalars
-        expected = (other_scalars / gsr).astype("int64")
+        expected = psr // other_scalars
         actual = other_scalars // gsr
 
     assert_eq(expected, actual, nullable_pd_dtype=True)
@@ -731,7 +736,20 @@ def test_timedelta_datetime_index_ops_misc(
     ],
 )
 @pytest.mark.parametrize("dtype", dtypeutils.TIMEDELTA_TYPES)
-@pytest.mark.parametrize("op", ["add", "sub", "truediv", "floordiv"])
+@pytest.mark.parametrize(
+    "op",
+    [
+        "add",
+        "sub",
+        "truediv",
+        pytest.param(
+            "floordiv",
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/35529"
+            ),
+        ),
+    ],
+)
 def test_timedelta_index_ops_with_scalars(data, other_scalars, dtype, op):
     gtdi = cudf.Index(data=data, dtype=dtype)
     ptdi = gtdi.to_pandas()
@@ -746,11 +764,7 @@ def test_timedelta_index_ops_with_scalars(data, other_scalars, dtype, op):
         expected = ptdi / other_scalars
         actual = gtdi / other_scalars
     elif op == "floordiv":
-        # TODO: https://github.com/pandas-dev/pandas/issues/35529
-        # uncomment this below line once above bug is fixed
-
-        # expected = psr // other_scalars
-        expected = (gtdi / other_scalars).astype("int64")
+        expected = ptdi // other_scalars
         actual = gtdi // other_scalars
 
     assert_eq(expected, actual)
@@ -765,11 +779,7 @@ def test_timedelta_index_ops_with_scalars(data, other_scalars, dtype, op):
         expected = other_scalars / ptdi
         actual = other_scalars / gtdi
     elif op == "floordiv":
-        # TODO: https://github.com/pandas-dev/pandas/issues/35529
-        # uncomment this below line once above bug is fixed
-
-        # expected = other_scalars // psr
-        expected = (other_scalars / gtdi).astype("int64")
+        expected = other_scalars // ptdi
         actual = other_scalars // gtdi
 
     assert_eq(expected, actual)

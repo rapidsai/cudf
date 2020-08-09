@@ -117,7 +117,7 @@ class TimeDeltaColumn(column.ColumnBase):
     def _binary_op_add_sub(self, rhs):
         if pd.api.types.is_timedelta64_dtype(rhs.dtype):
             out_dtype = determine_out_dtype(self.dtype, rhs.dtype)
-        elif pd.api.types.is_timedelta64_dtype(rhs.dtype):
+        elif pd.api.types.is_datetime64_dtype(rhs.dtype):
             out_dtype = rhs.dtype
         else:
             raise TypeError(
@@ -526,6 +526,4 @@ def determine_out_dtype(lhs_dtype, rhs_dtype):
     elif np.can_cast(np.dtype(rhs_dtype), np.dtype(lhs_dtype)):
         return lhs_dtype
     else:
-        raise TypeError(
-            f"Cannot determine operation between {lhs_dtype} and {rhs_dtype}"
-        )
+        raise TypeError(f"Cannot type-cast {lhs_dtype} and {rhs_dtype}")
