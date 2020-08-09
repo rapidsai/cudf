@@ -413,8 +413,18 @@ def test_timedelta_series_ops_with_scalars(data, other_scalars, dtype, op):
         [1000000, 200000, 3000000],
         [1000000, 200000, None],
         [],
-        [None],
-        [None, None, None, None, None],
+        pytest.param(
+            [None],
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/35644"
+            ),
+        ),
+        pytest.param(
+            [None, None, None, None, None],
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/35644"
+            ),
+        ),
         [12, 12, 22, 343, 4353534, 435342],
         np.array([10, 20, 30, None, 100]),
         cp.asarray([10, 20, 30, 100]),
