@@ -158,6 +158,10 @@ public class TableTest extends CudfTestBase {
             assertArrayEquals(expected.getUTF8(expectedRow), cv.getUTF8(tableRow),
                 "Column " + colName + " Row " + tableRow);
             break;
+          case LIST:
+            assertArrayEquals(expected.getList(expectedRow).toString().getBytes(), cv.getList(tableRow).toString().getBytes(),
+                "Column " + colName + " Row " + tableRow);
+            break;
           default:
             throw new IllegalArgumentException(type + " is not supported yet");
         }
@@ -218,6 +222,30 @@ public class TableTest extends CudfTestBase {
       ColumnVector vec = t.getColumn(i);
       DType type = vec.getType();
       assertEquals(expectedTypes[i], type, "Types don't match at " + i);
+    }
+  }
+
+  @Test
+  void testMergeSimple() {
+    try (Table table1 = new Table.TestBuilder()
+            .column(5, 3, 3, 1, 1)
+            .column(5, 3, null, 1, 2)
+            .column(1, 3, 5, 7, 9)
+            .build();
+         Table table2 = new Table.TestBuilder()
+                 .column(1, 2, 7)
+                 .column(3, 2, 2)
+                 .column(1, 3, 10)
+                 .build();
+         Table expected = new Table.TestBuilder()
+                 .column(1, 1, 1, 2, 3, 3, 5, 7)
+                 .column(3, 2, 1, 2, null, 3, 5, 2)
+                 .column(1, 9, 7, 3, 5, 3, 1, 10)
+                 .build();
+         Table sortedTable1 = table1.orderBy(Table.asc(0), Table.desc(1));
+         Table sortedTable2 = table2.orderBy(Table.asc(0), Table.desc(1));
+         Table merged = Table.merge(Arrays.asList(sortedTable1, sortedTable2), Table.asc(0), Table.desc(1))) {
+      assertTablesAreEqual(expected, merged);
     }
   }
 
@@ -2851,6 +2879,21 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  @Test
+  void testSimpleGather() {
+    try (Table testTable = new Table.TestBuilder()
+            .column(1, 2, 3, 4, 5)
+            .column("A", "AA", "AAA", "AAAA", "AAAAA")
+            .build();
+         ColumnVector gatherMap = ColumnVector.fromInts(0, 2, 4, -2);
+         Table expected = new Table.TestBuilder()
+                 .column(1, 3, 5, 4)
+                 .column("A", "AAA", "AAAAA", "AAAA")
+                 .build();
+         Table found = testTable.gather(gatherMap)) {
+      assertTablesAreEqual(expected, found);
+    }
+  }
 
   @Test
   void testMaskWithoutValidity() {
