@@ -40,8 +40,6 @@ requirements:
     - fsspec>=0.6.0
 
 test:
-  requires:
-    - mimesis
   commands:
     - python -c "import cudf"
 
