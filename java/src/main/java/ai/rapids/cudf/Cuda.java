@@ -269,10 +269,22 @@ public class Cuda {
    * @param kind  - Type of transfer. {@link CudaMemcpyKind}
    */
   static void memcpy(long dst, long src, long count, CudaMemcpyKind kind) {
-    memcpy(dst, src, count, kind.getValue());
+    memcpy(dst, src, count, kind, DEFAULT_STREAM);
   }
 
-  private static native void memcpy(long dst, long src, long count, int kind) throws CudaException;
+  /**
+   * Copies count bytes from the memory area pointed to by src to the memory area pointed to by
+   * dst.
+   * Calling cudaMemcpy() with dst and src pointers that do not
+   * match the direction of the copy results in an undefined behavior.
+   * @param dst   - Destination memory address
+   * @param src   - Source memory address
+   * @param count - Size in bytes to copy
+   * @param kind  - Type of transfer. {@link CudaMemcpyKind}
+   */
+  static void asyncMemcpy(long dst, long src, long count, CudaMemcpyKind kind) {
+    asyncMemcpy(dst, src, count, kind, DEFAULT_STREAM);
+  }
 
   /**
    * Sets count bytes starting at the memory area pointed to by dst, with value.
@@ -280,7 +292,7 @@ public class Cuda {
    * @param value - Byte value to set dst with
    * @param count - Size in bytes to set
    */
-  public static native void memset(long dst, byte value, long count) throws CudaException;
+  public static native void asyncMemset(long dst, byte value, long count) throws CudaException;
 
   /**
    * Get the id of the current device.
