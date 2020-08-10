@@ -6566,6 +6566,22 @@ class DataFrame(Frame, Serializable):
         """
         return self.columns
 
+    def itertuples(self, index=True, name="Pandas"):
+        raise TypeError(
+            "cuDF does not support iteration of DataFrame "
+            "via itertuples. Consider using "
+            "`.to_pandas().itertuples()` "
+            "if you wish to iterate over namedtuples."
+        )
+
+    def iterrows(self):
+        raise TypeError(
+            "cuDF does not support iteration of DataFrame "
+            "via iterrows. Consider using "
+            "`.to_pandas().iterrows()` "
+            "if you wish to iterate over each row."
+        )
+
     def append(
         self, other, ignore_index=False, verify_integrity=False, sort=False
     ):

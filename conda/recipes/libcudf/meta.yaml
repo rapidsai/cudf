@@ -80,6 +80,7 @@ test:
     - test -f $PREFIX/include/cudf/detail/unary.hpp
     - test -f $PREFIX/include/cudf/detail/utilities/integer_utils.hpp
     - test -f $PREFIX/include/cudf/detail/utilities/int_fastdiv.h
+    - test -f $PREFIX/include/cudf/dictionary/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/dictionary/detail/encode.hpp
     - test -f $PREFIX/include/cudf/dictionary/detail/search.hpp
     - test -f $PREFIX/include/cudf/dictionary/detail/update_keys.hpp
@@ -102,6 +103,7 @@ test:
     - test -f $PREFIX/include/cudf/ipc.hpp
     - test -f $PREFIX/include/cudf/join.hpp
     - test -f $PREFIX/include/cudf/lists/detail/concatenate.hpp
+    - test -f $PREFIX/include/cudf/lists/extract.hpp
     - test -f $PREFIX/include/cudf/lists/lists_column_view.hpp
     - test -f $PREFIX/include/cudf/merge.hpp
     - test -f $PREFIX/include/cudf/null_mask.hpp
@@ -125,6 +127,7 @@ test:
     - test -f $PREFIX/include/cudf/strings/contains.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_booleans.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_datetime.hpp
+    - test -f $PREFIX/include/cudf/strings/convert/convert_durations.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_floats.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_integers.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_ipv4.hpp

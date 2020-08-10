@@ -364,6 +364,41 @@ public class RmmTest {
     Cuda.autoSetDevice();
   }
 
+  @Test
+  public void testPoolGrowth() {
+    Rmm.initialize(RmmAllocationMode.POOL, false, 1024);
+    try (DeviceMemoryBuffer ignored1 = Rmm.alloc(1024);
+         DeviceMemoryBuffer ignored2 = Rmm.alloc(2048);
+         DeviceMemoryBuffer ignored3 = Rmm.alloc(4096)) {
+      assertEquals(7168, Rmm.getTotalBytesAllocated());
+    }
+  }
+
+  @Test
+  public void testPoolLimit() {
+    Rmm.initialize(RmmAllocationMode.POOL, false, 1024, 2048);
+    try (DeviceMemoryBuffer ignored1 = Rmm.alloc(512);
+         DeviceMemoryBuffer ignored2 = Rmm.alloc(1024)) {
+      assertThrows(OutOfMemoryError.class,
+          () -> {
+            DeviceMemoryBuffer ignored3 = Rmm.alloc(1024);
+            ignored3.close();
+      });
+    }
+  }
+
+  @Test
+  public void testPoolLimitLessThanInitialSize() {
+    assertThrows(IllegalArgumentException.class,
+        () -> Rmm.initialize(RmmAllocationMode.POOL, false, 10240, 1024));
+  }
+
+  @Test
+  public void testPoolLimitNonPoolMode() {
+    assertThrows(IllegalArgumentException.class,
+        () -> Rmm.initialize(RmmAllocationMode.CUDA_DEFAULT, false, 1024, 2048));
+  }
+
   private static class AllocFailException extends RuntimeException {}
   private static class AllocThresholdException extends RuntimeException {}
   private static class DeallocThresholdException extends RuntimeException {}

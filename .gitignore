@@ -33,6 +33,8 @@ python/cudf/.ipynb_checkpoints
 python/*/record.txt
 python/cudf_kafka/*/_lib/**/*\.cpp
 python/cudf_kafka/*/_lib/**/*.h
+python/custreamz/*/_lib/**/*\.cpp
+python/custreamz/*/_lib/**/*.h
 .Python
 env/
 develop-eggs/

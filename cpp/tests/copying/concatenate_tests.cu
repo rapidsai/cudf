@@ -13,16 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/column/column.hpp>
-#include <cudf/concatenate.hpp>
-#include <cudf/copying.hpp>
-#include <cudf/table/table.hpp>
 
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
+
+#include <cudf/column/column.hpp>
+#include <cudf/concatenate.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/dictionary/encode.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/table/table.hpp>
 
 #include <thrust/sequence.h>
 
@@ -545,4 +549,80 @@ TEST_F(ListsColumnTest, ConcatenateIncompleteHierarchies)
 
     cudf::test::expect_columns_equal(*result, expected);
   }
+}
+
+template <typename T>
+struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+};
+
+template <typename T>
+using wrapper = cudf::test::fixed_width_column_wrapper<T>;
+TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointConcatentate)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+
+  auto vec = std::vector<decimalXX>(1000);
+  std::iota(std::begin(vec), std::end(vec), decimalXX{});
+
+  auto const a = wrapper<decimalXX>(vec.begin(), /***/ vec.begin() + 300);
+  auto const b = wrapper<decimalXX>(vec.begin() + 300, vec.begin() + 700);
+  auto const c = wrapper<decimalXX>(vec.begin() + 700, vec.end());
+
+  auto const fixed_point_columns = std::vector<cudf::column_view>{a, b, c};
+  auto const results             = cudf::concatenate(fixed_point_columns);
+  auto const expected            = wrapper<decimalXX>(vec.begin(), vec.end());
+
+  cudf::test::expect_columns_equal(*results, expected);
+}
+
+struct DictionaryConcatTest : public cudf::test::BaseFixture {
+};
+
+TEST_F(DictionaryConcatTest, StringsKeys)
+{
+  cudf::test::strings_column_wrapper strings(
+    {"eee", "aaa", "ddd", "bbb", "", "", "ccc", "ccc", "ccc", "eee", "aaa"},
+    {1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1});
+  auto dictionary = cudf::dictionary::encode(strings);
+
+  std::vector<cudf::size_type> splits{0, 2, 2, 5, 5, 7, 7, 7, 7, 11};
+  std::vector<cudf::column_view> views = cudf::slice(dictionary->view(), splits);
+  // concatenate should recreate the original column
+  auto result  = cudf::concatenate(views);
+  auto decoded = cudf::dictionary::decode(result->view());
+  cudf::test::expect_columns_equal(*decoded, strings);
+}
+
+template <typename T>
+struct DictionaryConcatTestFW : public cudf::test::BaseFixture {
+};
+
+TYPED_TEST_CASE(DictionaryConcatTestFW, cudf::test::FixedWidthTypes);
+
+TYPED_TEST(DictionaryConcatTestFW, FixedWidthKeys)
+{
+  cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> original(
+    {20, 10, 0, 5, 15, 15, 10, 5, 20}, {1, 1, 0, 1, 1, 1, 1, 1, 1});
+  auto dictionary = cudf::dictionary::encode(original);
+  std::vector<cudf::size_type> splits{0, 3, 3, 5, 5, 9};
+  std::vector<cudf::column_view> views = cudf::slice(dictionary->view(), splits);
+  // concatenated result should equal the original column
+  auto result  = cudf::concatenate(views);
+  auto decoded = cudf::dictionary::decode(result->view());
+  cudf::test::expect_columns_equal(*decoded, original);
+}
+
+TEST_F(DictionaryConcatTest, ErrorsTest)
+{
+  cudf::test::strings_column_wrapper strings({"aaa", "ddd", "bbb"});
+  auto dictionary1 = cudf::dictionary::encode(strings);
+  cudf::test::fixed_width_column_wrapper<int32_t> integers({10, 30, 20});
+  auto dictionary2 = cudf::dictionary::encode(integers);
+  std::vector<cudf::column_view> views({dictionary1->view(), dictionary2->view()});
+  EXPECT_THROW(cudf::concatenate(views), cudf::logic_error);
+  std::vector<cudf::column_view> empty;
+  EXPECT_THROW(cudf::concatenate(empty), cudf::logic_error);
 }
