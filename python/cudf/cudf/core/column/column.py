@@ -1034,18 +1034,42 @@ class ColumnBase(Column, Serializable):
     def encode(self):
         return libcudf.transform.encode(self)
 
-    def scatter_to_table(self, index, columns, names):
-        nrows = ncols = 0
+    def scatter_to_table(
+        self, row_indices, column_indices, names, nrows=None, ncols=None
+    ):
+        """
+        Scatters values from the column into a table.
 
-        if len(index) > 0:
-            nrows = int(index.max() + 1)
-        if len(columns) > 0:
-            ncols = int(columns.max() + 1)
+        Parameters
+        ----------
+        row_indices
+            A column of the same size as `self` specifying the
+            row index to scatter each value to
+        column_indices
+            A column of the same size as `self` specifying the
+            column index to scatter each value to
+        names
+            The column names of the resulting table
+
+        Returns
+        -------
+        """
+        if nrows is None:
+            nrows = 0
+            if len(row_indices) > 0:
+                nrows = int(row_indices.max() + 1)
+
+        if ncols is None:
+            ncols = 0
+            if len(column_indices) > 0:
+                ncols = int(column_indices.max() + 1)
 
         if nrows * ncols == 0:
             return cudf.core.frame.Frame({})
 
-        scatter_map = cudf.Series(columns) * nrows + cudf.Series(index)
+        scatter_map = cudf.Series(column_indices) * nrows + cudf.Series(
+            row_indices
+        )
         target = cudf.core.frame.Frame(
             {None: column_empty_like(self, masked=True, newsize=nrows * ncols)}
         )
