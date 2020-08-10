@@ -1039,14 +1039,6 @@ class Frame(libcudf.table.Table):
 
         return self.where(cond=~cond, other=other, inplace=inplace)
 
-    def _split(self, splits, keep_index=True):
-        result = libcudf.copying.table_split(
-            self, splits, keep_index=keep_index
-        )
-
-        result = [self.__class__._from_table(tbl) for tbl in result]
-        return result
-
     def _partition(self, scatter_map, npartitions, keep_index=True):
 
         output_table, output_offsets = libcudf.partitioning.partition(
