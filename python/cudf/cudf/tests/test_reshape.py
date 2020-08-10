@@ -394,8 +394,14 @@ def test_pivot_multi_values():
         [0, 1],
         ["foo"],
         ["foo", "bar"],
-        pytest.param([0, 1, 2], marks=pytest.mark.xfail),
-        pytest.param(["foo", "bar", "baz"], marks=pytest.mark.xfail),
+        pytest.param(
+            [0, 1, 2],
+            marks=pytest.mark.xfail(reason="Pandas behaviour unclear"),
+        ),
+        pytest.param(
+            ["foo", "bar", "baz"],
+            marks=pytest.mark.xfail(reason="Pandas behaviour unclear"),
+        ),
     ],
 )
 def test_unstack(level):
