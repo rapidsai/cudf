@@ -13,10 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <cudf/table/table.hpp>
 #include <cudf/transform.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
+#include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
 
 template <typename T>
@@ -114,6 +116,25 @@ TEST_F(EncodeStringTest, UnorderedWithNulls)
   auto const result = cudf::encode(input);
 
   cudf::test::expect_columns_equal(result.first->view(), expect_keys);
+  cudf::test::expect_columns_equal(result.second->view(), expect);
+}
+
+TYPED_TEST(EncodeNumericTests, TableEncodeWithNulls)
+{
+  auto col_1 = cudf::test::fixed_width_column_wrapper<TypeParam>({1, 0, 2, 0, 1}, {1, 0, 1, 0, 1});
+  auto col_2 = cudf::test::fixed_width_column_wrapper<TypeParam>({1, 3, 2, 0, 1}, {1, 1, 1, 0, 1});
+  auto input = cudf::table_view({col_1, col_2});
+
+  auto expect_keys_col1 =
+    cudf::test::fixed_width_column_wrapper<TypeParam>({1, 2, 0, 0}, {1, 1, 0, 0});
+  auto expect_keys_col2 =
+    cudf::test::fixed_width_column_wrapper<TypeParam>({1, 2, 3, 0}, {1, 1, 1, 0});
+  auto expect_keys = cudf::table_view({expect_keys_col1, expect_keys_col2});
+  auto expect      = cudf::test::fixed_width_column_wrapper<cudf::size_type>({0, 2, 1, 3, 0});
+
+  auto const result = cudf::encode(input);
+
+  cudf::test::expect_tables_equivalent(result.first->view(), expect_keys);
   cudf::test::expect_columns_equal(result.second->view(), expect);
 }
 
