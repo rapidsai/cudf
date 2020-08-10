@@ -182,6 +182,7 @@
 - PR #5854 Raise informative error in `DataFrame.iterrows` and `DataFrame.itertuples`
 - PR #5863 Explicitly require `ucx-py` on CI
 - PR #5885 Add in java support for merge sort
+- PR #5894 Small code improvement / cleanup
 
 ## Bug Fixes
 
