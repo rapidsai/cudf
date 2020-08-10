@@ -46,9 +46,11 @@ public class ScalarTest extends CudfTestBase {
   @Test
   public void testNull() {
     for (DType type : DType.values()) {
-      try (Scalar s = Scalar.fromNull(type)) {
-        assertEquals(type, s.getType());
-        assertFalse(s.isValid(), "null validity for " + type);
+      if (type != DType.LIST) {
+        try (Scalar s = Scalar.fromNull(type)) {
+          assertEquals(type, s.getType());
+          assertFalse(s.isValid(), "null validity for " + type);
+        }
       }
     }
   }
