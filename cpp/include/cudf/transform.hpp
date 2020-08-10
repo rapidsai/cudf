@@ -118,7 +118,8 @@ std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> encode(
  * is the number of distinct rows in the input table.
  * The result table is such that keys[result[i]] == input[i],
  * where `keys` is a table containing the distinct rows  in `input` in
- * sorted ascending order.
+ * sorted ascending order. Nulls, if any, are sorted to the end of
+ * the `keys` table.
  *
  * Examples:
  * @code{.pseudo}
