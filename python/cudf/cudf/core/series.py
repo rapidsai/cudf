@@ -4253,6 +4253,55 @@ truediv_int_dtype_corrections = {
 
 
 class DatetimeProperties(object):
+    """
+    Accessor object for datetimelike properties of the Series values.
+
+    Returns
+    -------
+    Returns a Series indexed like the original Series.
+
+    Examples
+    --------
+    >>> import cudf
+    >>> import pandas as pd
+    >>> seconds_series = cudf.Series(pd.date_range("2000-01-01", periods=3,
+    ...     freq="s"))
+    >>> seconds_series
+    0   2000-01-01 00:00:00
+    1   2000-01-01 00:00:01
+    2   2000-01-01 00:00:02
+    dtype: datetime64[ns]
+    >>> seconds_series.dt.second
+    0    0
+    1    1
+    2    2
+    dtype: int16
+    >>> hours_series = cudf.Series(pd.date_range("2000-01-01", periods=3,
+    ...     freq="h"))
+    >>> hours_series
+    0   2000-01-01 00:00:00
+    1   2000-01-01 01:00:00
+    2   2000-01-01 02:00:00
+    dtype: datetime64[ns]
+    >>> hours_series.dt.hour
+    0    0
+    1    1
+    2    2
+    dtype: int16
+    >>> weekday_series = cudf.Series(pd.date_range("2000-01-01", periods=3,
+    ...     freq="q"))
+    >>> weekday_series
+    0   2000-03-31
+    1   2000-06-30
+    2   2000-09-30
+    dtype: datetime64[ns]
+    >>> weekday_series.dt.weekday
+    0    4
+    1    4
+    2    5
+    dtype: int16
+    """
+
     def __init__(self, series):
         self.series = series
 
@@ -4292,6 +4341,29 @@ class DatetimeProperties(object):
 
 
 class TimedeltaProperties(object):
+    """
+    Accessor object for timedeltalike properties of the Series values.
+
+    Returns
+    -------
+    Returns a Series indexed like the original Series.
+
+    Examples
+    --------
+    >>> import cudf
+    >>> seconds_series = cudf.Series([1, 2, 3], dtype='timedelta64[s]')
+    >>> seconds_series
+    0    00:00:01
+    1    00:00:02
+    2    00:00:03
+    dtype: timedelta64[s]
+    >>> seconds_series.dt.seconds
+    0    1
+    1    2
+    2    3
+    dtype: int64
+    """
+
     def __init__(self, series):
         self.series = series
 
