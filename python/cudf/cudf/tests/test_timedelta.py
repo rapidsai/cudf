@@ -684,6 +684,8 @@ def test_timedelta_datetime_index_ops_misc(
 @pytest.mark.parametrize(
     "other_scalars",
     [
+        pd.Timedelta(1513393355.5, unit="s"),
+        pd.Timedelta(34765, unit="D"),
         datetime.timedelta(days=768),
         datetime.timedelta(seconds=768),
         datetime.timedelta(microseconds=7),
@@ -1173,3 +1175,27 @@ def test_timedelta_invalid_ops():
             sr ^ sr
     else:
         raise AssertionError("Expected psr ^ psr to fail")
+
+
+def test_timedelta_datetime_cast_invalid():
+    sr = cudf.Series([1, 2, 3], dtype="timedelta64[ns]")
+    psr = sr.to_pandas()
+
+    try:
+        psr.astype("datetime64[ns]")
+    except TypeError as e:
+        with pytest.raises(type(e), match=re.escape(e.__str__())):
+            sr.astype("datetime64[ns]")
+    else:
+        raise AssertionError("Expected timedelta to datetime typecast to fail")
+
+    sr = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
+    psr = sr.to_pandas()
+
+    try:
+        psr.astype("timedelta64[ns]")
+    except TypeError as e:
+        with pytest.raises(type(e), match=re.escape(e.__str__())):
+            sr.astype("timedelta64[ns]")
+    else:
+        raise AssertionError("Expected datetime to timedelta typecast to fail")
