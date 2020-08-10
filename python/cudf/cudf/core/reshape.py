@@ -195,19 +195,17 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     # types directly
     typs = set()
     for o in objs:
-        if isinstance(o, DataFrame):
+        if isinstance(o, cudf.MultiIndex):
+            typs.add(cudf.MultiIndex)
+        if issubclass(type(o), Index):
+            typs.add(type(o))
+        elif isinstance(o, DataFrame):
             typs.add(DataFrame)
         elif isinstance(o, Series):
             typs.add(Series)
-        elif isinstance(o, cudf.MultiIndex):
-            typs.add(cudf.MultiIndex)
-        elif issubclass(type(o), Index):
-            typs.add(Index)
         else:
             raise ValueError(
-                "`concat` cannot concatenate object of type: {0!r}".format(
-                    type(o)
-                )
+                f"cannot concatenate object of type {type(o)}"
             )
 
     allowed_typs = {Series, DataFrame}
@@ -266,6 +264,11 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
             # both Series & DataFrame kind of inputs.
             _normalize_series_and_dataframe(objs, axis=axis)
             typ = DataFrame
+        else:
+            raise ValueError(
+                "`concat` cannot concatenate objects of "
+                "types: %r." % sorted([t.__name__ for t in typs])
+            )
 
     if typ is DataFrame:
         objs = [obj for obj in objs if obj.shape != (0, 0)]
