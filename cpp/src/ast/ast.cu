@@ -320,6 +320,20 @@ __launch_bounds__(block_size) __global__
   }
 }
 
+namespace detail {
+template <typename T>
+rmm::device_uvector<T> async_create_device_data(std::vector<T> host_data, cudaStream_t stream)
+{
+  auto device_data = rmm::device_uvector<T>(host_data.size(), stream);
+  CUDA_TRY(cudaMemcpyAsync(device_data.data(),
+                           host_data.data(),
+                           sizeof(T) * host_data.size(),
+                           cudaMemcpyHostToDevice,
+                           stream));
+  return device_data;
+}
+}  // namespace detail
+
 std::unique_ptr<column> compute_column(table_view const table,
                                        std::reference_wrapper<const expression> expr,
                                        cudaStream_t stream,
@@ -340,36 +354,13 @@ std::unique_ptr<column> compute_column(table_view const table,
 
   // Create device data
   nvtxRangePush("Creating device data...");
-  auto device_data_references =
-    rmm::device_uvector<detail::device_data_reference>(data_references.size(), stream);
-  CUDA_TRY(cudaMemcpyAsync(device_data_references.data(),
-                           data_references.data(),
-                           sizeof(detail::device_data_reference) * data_references.size(),
-                           cudaMemcpyHostToDevice,
-                           stream));
-  auto device_literals =
-    rmm::device_uvector<cudf::detail::fixed_width_scalar_device_view_base>(literals.size(), stream);
-  CUDA_TRY(
-    cudaMemcpyAsync(device_literals.data(),
-                    literals.data(),
-                    sizeof(cudf::detail::fixed_width_scalar_device_view_base) * literals.size(),
-                    cudaMemcpyHostToDevice,
-                    stream));
-  auto device_operators = rmm::device_uvector<cudf::ast::ast_operator>(operators.size(), stream);
-  CUDA_TRY(cudaMemcpyAsync(device_operators.data(),
-                           operators.data(),
-                           sizeof(cudf::ast::ast_operator) * operators.size(),
-                           cudaMemcpyHostToDevice,
-                           stream));
-  auto device_operator_source_indices =
-    rmm::device_uvector<cudf::size_type>(operator_source_indices.size(), stream);
-  CUDA_TRY(cudaMemcpyAsync(device_operator_source_indices.data(),
-                           operator_source_indices.data(),
-                           sizeof(cudf::size_type) * operator_source_indices.size(),
-                           cudaMemcpyHostToDevice,
-                           stream));
+  auto const device_data_references = detail::async_create_device_data(data_references, stream);
+  auto const device_literals        = detail::async_create_device_data(literals, stream);
+  auto const device_operators       = detail::async_create_device_data(operators, stream);
+  auto const device_operator_source_indices =
+    detail::async_create_device_data(operator_source_indices, stream);
   // The stream is synced later when the table_device_view is created.
-  // CUDA_TRY(cudaStreamSynchronize(stream));
+  // To reduce overhead, we don't call a stream sync here.
   nvtxRangePop();
 
   // Output linearizer info
@@ -402,8 +393,8 @@ std::unique_ptr<column> compute_column(table_view const table,
 
   // Prepare output column
   nvtxRangePush("Preparing output column...");
-  auto output_column =
-    make_fixed_width_column(expr_data_type, table_num_rows, mask_state::UNALLOCATED, stream, mr);
+  auto output_column = cudf::make_fixed_width_column(
+    expr_data_type, table_num_rows, mask_state::UNALLOCATED, stream, mr);
   auto mutable_output_device =
     cudf::mutable_column_device_view::create(output_column->mutable_view(), stream);
   nvtxRangePop();
