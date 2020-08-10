@@ -732,7 +732,14 @@ def test_vector_to_none_binops(dtype):
 @pytest.mark.parametrize("rhs", [1, 3, 4, pd.Series([5, 6, 2])])
 @pytest.mark.parametrize(
     "ops",
-    [(np.remainder, cudf.remainder), (np.floor_divide, cudf.floor_divide)],
+    [
+        (np.remainder, cudf.remainder),
+        (np.floor_divide, cudf.floor_divide),
+        (np.subtract, cudf.subtract),
+        (np.add, cudf.add),
+        (np.true_divide, cudf.true_divide),
+        (np.multiply, cudf.multiply),
+    ],
 )
 def test_ufunc_ops(lhs, rhs, ops):
     np_op, cu_op = ops
