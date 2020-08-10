@@ -578,7 +578,7 @@ class MultiIndex(Index):
             return tuples, slice(None)
 
     def __len__(self):
-        return len(next(iter(self._data.columns)))
+        return self._data.nrows
 
     def equals(self, other):
         if self is other:
