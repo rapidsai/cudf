@@ -1,7 +1,9 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/gather.hpp>
 #include <cudf/detail/search.hpp>
+#include <cudf/detail/sorting.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/table/table_view.hpp>
@@ -22,6 +24,21 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(
 
   auto keys_table = cudf::detail::drop_duplicates(
     input_table, columns, duplicate_keep_option::KEEP_FIRST, null_equality::EQUAL, mr, stream);
+
+  if (cudf::has_nulls(keys_table->view())) {
+    auto sort_order = cudf::detail::sorted_order(
+      keys_table->view(),
+      {},
+      std::vector<null_order>(keys_table->num_columns(), null_order::AFTER),
+      rmm::mr::get_default_resource(),
+      stream);
+    keys_table = cudf::detail::gather(keys_table->view(),
+                                      sort_order->view(),
+                                      cudf::detail::out_of_bounds_policy::FAIL,
+                                      cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                      mr,
+                                      stream);
+  }
 
   auto indices_column =
     cudf::detail::lower_bound(keys_table->view(),

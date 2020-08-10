@@ -111,6 +111,29 @@ std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> encode(
   cudf::column_view const& input,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/**
+ * @brief Encode the rows of the given table as integers
+ *
+ * The encoded values are integers in the range [0, n), where `n`
+ * is the number of distinct rows in the input table.
+ * The result table is such that keys[result[i]] == input[i],
+ * where `keys` is a table containing the distinct rows  in `input` in
+ * sorted ascending order.
+ *
+ * Examples:
+ * @code{.pseudo}
+ * input: [{'a', 'b', 'b', 'a'}]
+ * output: [{'a', 'b'}], {0, 1, 1, 0}
+ *
+ * input: [{1, 3, 1, 2, 9}, {1, 2, 1, 3, 5}]
+ * output: [{1, 2, 3, 9}, {1, 3, 2, 5}], {0, 2, 0, 1, 3}
+ * @endcode
+ *
+ * @param input        Table containing values to be encoded
+ * @param mr           Device memory resource used to allocate the returned table's device memory
+ * @return A pair containing the distinct row of the input table  in sorter order,
+ * and a column of integer indices representing the encoded rows.
+ */
 std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>> encode(
   cudf::table_view const& input,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
