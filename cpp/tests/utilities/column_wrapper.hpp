@@ -30,6 +30,7 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <iterator>
 #include <memory>
+#include <numeric>
 
 #include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
@@ -852,17 +853,16 @@ class lists_column_wrapper : public cudf::test::detail::column_wrapper {
     auto valids = cudf::test::make_counting_transform_iterator(
       0, [&v](auto i) { return v.empty() ? true : v[i]; });
 
-    // compute the expected hierarchy
-    column_view expected_hierarchy;
-    int expected_depth = -1;
-    std::for_each(elements.begin(),
-                  elements.end(),
-                  [&expected_depth, &expected_hierarchy](lists_column_wrapper const& lcw) {
-                    if (lcw.depth > expected_depth) {
-                      expected_depth     = lcw.depth;
-                      expected_hierarchy = lcw.get_view();
-                    }
-                  });
+    // compute the expected hierarchy and depth
+    auto const hierarchy_and_depth = std::accumulate(
+      elements.begin(),
+      elements.end(),
+      std::pair<column_view, int32_t>{{}, -1},
+      [](auto acc, lists_column_wrapper const& lcw) {
+        return lcw.depth > acc.second ? std::make_pair(lcw.get_view(), lcw.depth) : acc;
+      });
+    column_view expected_hierarchy = hierarchy_and_depth.first;
+    int32_t const expected_depth   = hierarchy_and_depth.second;
 
     // preprocess columns so that every column_view in 'cols' is an equivalent hierarchy
     std::vector<std::unique_ptr<column>> stubs;
