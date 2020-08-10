@@ -309,6 +309,8 @@ def read_parquet(
 
     if filters is not None:
         # Convert filters to ds.Expression
+        # TODO: Use pyarrow once filters-to-expression conversion is added to
+        # API by resolving https://issues.apache.org/jira/browse/ARROW-9672
         filters = _filters_to_expression(filters)
 
         # Initialize ds.FilesystemDataset
