@@ -958,14 +958,64 @@ class lists_column_wrapper : public detail::column_wrapper {
   bool root = false;
 };
 
+/**
+ * @brief `column_wrapper` derived class for wrapping columns of structs.
+ */
 class structs_column_wrapper : public detail::column_wrapper {
  public:
+  /**
+   * @brief Constructs a struct column from the specified list of pre-constructed child columns.
+   *
+   * The child columns are "adopted" by the struct column constructed here.
+   *
+   * Example usage:
+   * @code{.cpp}
+   * // The following constructs a column for struct< int, string >.
+   * auto child_int_col = fixed_width_column_wrapper<int32_t>{ 1, 2, 3, 4, 5 }.release();
+   * auto child_string_col = string_column_wrapper {"All", "the", "leaves", "are",
+   * "brown"}.release();
+   *
+   * std::vector<std::unique_ptr<column>> child_columns;
+   * child_columns.push_back(std::move(child_int_col));
+   * child_columns.push_back(std::move(child_string_col));
+   *
+   * struct_column_wrapper struct_column_wrapper{
+   *  child_cols,
+   *  {1,0,1,0,1} // Validity.
+   * };
+   *
+   * auto struct_col {struct_column_wrapper.release()};
+   * @endcode
+   *
+   * @param child_columns The vector of pre-constructed child columns
+   * @param validity The vector of bools representing the column validity values
+   */
   structs_column_wrapper(std::vector<std::unique_ptr<cudf::column>>&& child_columns,
                          std::vector<bool> const& validity = {})
   {
     init(std::move(child_columns), validity);
   }
 
+  /**
+   * @brief Constructs a struct column from the list of column wrappers for child columns.
+   *
+   * Example usage:
+   * @code{.cpp}
+   * // The following constructs a column for struct< int, string >.
+   * fixed_width_column_wrapper<int32_t> child_int_col_wrapper{ 1, 2, 3, 4, 5 };
+   * string_column_wrapper child_string_col_wrapper {"All", "the", "leaves", "are", "brown"};
+   *
+   * struct_column_wrapper struct_column_wrapper{
+   *  {child_int_col_wrapper, child_string_col_wrapper}
+   *  {1,0,1,0,1} // Validity.
+   * };
+   *
+   * auto struct_col {struct_column_wrapper.release()};
+   * @endcode
+   *
+   * @param child_columns_wrappers The list of child column wrappers
+   * @param validity The vector of bools representing the column validity values
+   */
   structs_column_wrapper(
     std::initializer_list<std::reference_wrapper<detail::column_wrapper>> child_column_wrappers,
     std::vector<bool> const& validity = {})

@@ -34,8 +34,7 @@ void superimpose_parent_nullmask(bitmask_type const* parent_null_mask,
 {
   if (!child.nullable()) {
     // Child currently has no null mask. Copy parent's null mask.
-    child.set_null_mask(
-      std::move(rmm::device_buffer{parent_null_mask, parent_null_mask_size, stream, mr}));
+    child.set_null_mask(rmm::device_buffer{parent_null_mask, parent_null_mask_size, stream, mr});
     child.set_null_count(parent_null_count);
   } else {
     // Child should have a null mask.
