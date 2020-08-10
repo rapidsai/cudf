@@ -606,6 +606,7 @@ def test_cudf_to_datetime(data, dayfirst, infer_datetime_format):
         "2",
         ["1", "2", "3"],
         ["1/1/1", "2/2/2", "1"],
+        pd.Series([1, 2, 3], dtype="timedelta64[ns]"),
         pd.DataFrame(
             {
                 "year": [2015, 2016],
