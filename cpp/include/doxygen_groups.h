@@ -86,6 +86,7 @@
  *   @defgroup column_interop Interop
  *   @{
  *     @defgroup interop_dlpack DLPack
+ *     @defgroup interop_arrow Arrow
  *   @}
  * @}
  * @defgroup datetime_apis DateTime
