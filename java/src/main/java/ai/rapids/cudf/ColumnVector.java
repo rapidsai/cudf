@@ -55,6 +55,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
     @Override
     public ColumnViewAccess<BaseDeviceMemoryBuffer> getChildColumnViewAccess(int childIndex) {
+      int numChildren = getNumChildren();
+      assert childIndex < numChildren : "child index should be less than " + numChildren;
       if (getDataType() != DType.LIST) {
         return null;
       }
@@ -488,14 +490,14 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
             hValid = HostMemoryBuffer.allocate(valid.getLength());
             hValid.copyFromDeviceBuffer(valid);
           }
-            if (offsets != null) {
-              hOffset = HostMemoryBuffer.allocate(offsets.getLength());
-              hOffset.copyFromDeviceBuffer(offsets);
+          if (offsets != null) {
+            hOffset = HostMemoryBuffer.allocate(offsets.getLength());
+            hOffset.copyFromDeviceBuffer(offsets);
           }
-            List<HostColumnVector.NestedHostColumnVector> children = new ArrayList<>();
-            try(ColumnViewAccess childDevPtr = getChildColumnViewAccess(0)) {
-              children.add(copyToHostNestedHelper(childDevPtr));
-            }
+          List<HostColumnVector.NestedHostColumnVector> children = new ArrayList<>();
+          try(ColumnViewAccess childDevPtr = getChildColumnViewAccess(0)) {
+            children.add(copyToHostNestedHelper(childDevPtr));
+          }
           HostColumnVector ret = new HostColumnVector(type, rows, nullCount,
               hData, hValid, hOffset, children);
           return ret;
