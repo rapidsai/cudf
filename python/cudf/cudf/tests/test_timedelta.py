@@ -1152,3 +1152,31 @@ def test_numeric_to_timedelta(data, dtype, timedelta_dtype):
     expected = pd.Series(psr.to_numpy().astype(timedelta_dtype))
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("data", [[], [1, 2, 3, 4, 5]])
+@pytest.mark.parametrize("dtype", dtypeutils.TIMEDELTA_TYPES)
+@pytest.mark.parametrize(
+    "scalar",
+    [
+        1,
+        2,
+        3,
+        np.timedelta64(1, "s"),
+        np.timedelta64(2, "s"),
+        np.timedelta64(2, "D"),
+        np.timedelta64(3, "ms"),
+        np.timedelta64(4, "us"),
+        np.timedelta64(5, "ns"),
+        np.timedelta64(6, "ns"),
+        np.datetime64(6, "s"),
+    ],
+)
+def test_timedelta_contains(data, dtype, scalar):
+    sr = cudf.Series(data, dtype=dtype)
+    psr = sr.to_pandas()
+
+    expected = scalar in sr
+    actual = scalar in psr
+
+    assert_eq(expected, actual)
