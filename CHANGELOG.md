@@ -190,6 +190,7 @@
 - PR #5863 Explicitly require `ucx-py` on CI
 - PR #5885 Add in java support for merge sort
 - PR #5894 Small code improvement / cleanup
+- PR #5899 Add in gather support for Java
 
 ## Bug Fixes
 

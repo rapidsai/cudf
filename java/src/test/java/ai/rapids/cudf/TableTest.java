@@ -2875,6 +2875,21 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  @Test
+  void testSimpleGather() {
+    try (Table testTable = new Table.TestBuilder()
+            .column(1, 2, 3, 4, 5)
+            .column("A", "AA", "AAA", "AAAA", "AAAAA")
+            .build();
+         ColumnVector gatherMap = ColumnVector.fromInts(0, 2, 4, -2);
+         Table expected = new Table.TestBuilder()
+                 .column(1, 3, 5, 4)
+                 .column("A", "AAA", "AAAAA", "AAAA")
+                 .build();
+         Table found = testTable.gather(gatherMap)) {
+      assertTablesAreEqual(expected, found);
+    }
+  }
 
   @Test
   void testMaskWithoutValidity() {
