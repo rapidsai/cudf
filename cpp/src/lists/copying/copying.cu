@@ -29,7 +29,7 @@ std::unique_ptr<cudf::column> copy_slice(lists_column_view const& lists,
   cudf::size_type start_offset{0};
   cudf::size_type end_offset{0};
   auto offsets_data = lists.offsets().data<cudf::size_type>();
-  CUDA_TRY(cudaMemcpyAsync(
+start_offset = cudf::detail::get_value<size_type>(lists.offsets(), start, stream)
     &start_offset, offsets_data + start, sizeof(cudf::size_type), cudaMemcpyDeviceToHost, stream));
   CUDA_TRY(cudaMemcpyAsync(
     &end_offset, offsets_data + end, sizeof(cudf::size_type), cudaMemcpyDeviceToHost, stream));
