@@ -43,16 +43,25 @@ std::unique_ptr<table> inner_join(
     std::for_each(actual_columns_in_common.begin(), actual_columns_in_common.end(), [](auto& pair) {
       std::swap(pair.first, pair.second);
     });
-    return hj_obj.inner_join(right,
-                             right_on,
-                             actual_columns_in_common,
-                             cudf::hash_join::probe_output_side::RIGHT,
-                             compare_nulls,
-                             mr);
+    auto probe_build_pair = hj_obj.inner_join(right,
+                                              right_on,
+                                              actual_columns_in_common,
+                                              cudf::hash_join::common_columns_output_side::BUILD,
+                                              compare_nulls,
+                                              mr);
+    return cudf::detail::combine_table_pair(std::move(probe_build_pair.second),
+                                            std::move(probe_build_pair.first));
+  } else {
+    cudf::hash_join hj_obj(right, right_on);
+    auto probe_build_pair = hj_obj.inner_join(left,
+                                              left_on,
+                                              columns_in_common,
+                                              cudf::hash_join::common_columns_output_side::PROBE,
+                                              compare_nulls,
+                                              mr);
+    return cudf::detail::combine_table_pair(std::move(probe_build_pair.first),
+                                            std::move(probe_build_pair.second));
   }
-  cudf::hash_join hj_obj(right, right_on);
-  return hj_obj.inner_join(
-    left, left_on, columns_in_common, cudf::hash_join::probe_output_side::LEFT, compare_nulls, mr);
 }
 
 std::unique_ptr<table> left_join(
@@ -90,15 +99,16 @@ hash_join::hash_join(cudf::table_view const& build, std::vector<size_type> const
 {
 }
 
-std::unique_ptr<cudf::table> hash_join::inner_join(
+std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> hash_join::inner_join(
   cudf::table_view const& probe,
   std::vector<size_type> const& probe_on,
   std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
-  probe_output_side probe_output_side,
+  common_columns_output_side common_columns_output_side,
   null_equality compare_nulls,
   rmm::mr::device_memory_resource* mr) const
 {
-  return impl->inner_join(probe, probe_on, columns_in_common, probe_output_side, compare_nulls, mr);
+  return impl->inner_join(
+    probe, probe_on, columns_in_common, common_columns_output_side, compare_nulls, mr);
 }
 
 std::unique_ptr<cudf::table> hash_join::left_join(

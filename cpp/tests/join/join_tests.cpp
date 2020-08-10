@@ -1129,7 +1129,13 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
 
     Table t0(std::move(cols0));
 
-    auto result            = hash_join.inner_join(t0, {1, 2}, {{1, 0}, {2, 1}});
+    auto probe_build_pair = hash_join.inner_join(t0, {1, 2}, {{1, 0}, {2, 1}});
+    auto joined_cols      = probe_build_pair.first->release();
+    auto build_cols       = probe_build_pair.second->release();
+    joined_cols.insert(joined_cols.end(),
+                       std::make_move_iterator(build_cols.begin()),
+                       std::make_move_iterator(build_cols.end()));
+    auto result            = std::make_unique<cudf::table>(std::move(joined_cols));
     auto result_sort_order = cudf::sorted_order(result->view());
     auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
@@ -1165,8 +1171,14 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
 
     Table t0(std::move(cols0));
 
-    auto result =
-      hash_join.inner_join(t0, {1, 2}, {{1, 0}, {2, 1}}, cudf::hash_join::probe_output_side::RIGHT);
+    auto probe_build_pair = hash_join.inner_join(
+      t0, {1, 2}, {{1, 0}, {2, 1}}, cudf::hash_join::common_columns_output_side::BUILD);
+    auto joined_cols = probe_build_pair.second->release();
+    auto probe_cols  = probe_build_pair.first->release();
+    joined_cols.insert(joined_cols.end(),
+                       std::make_move_iterator(probe_cols.begin()),
+                       std::make_move_iterator(probe_cols.end()));
+    auto result            = std::make_unique<cudf::table>(std::move(joined_cols));
     auto result_sort_order = cudf::sorted_order(result->view());
     auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 

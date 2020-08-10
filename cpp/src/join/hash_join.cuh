@@ -164,14 +164,12 @@ size_type estimate_join_output_size(table_device_view build_table,
  * JoinNoneValue, i.e. -1.
  *
  * @param left Table of left columns to join
- * @param flip_join_indices Flag that indicates whether the left and right
- * tables have been flipped, meaning the output indices should also be flipped
  * @param stream CUDA stream used for device memory operations and kernel launches
  *
  * @return Join output indices vector pair
  */
 inline std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>>
-get_trivial_left_join_indices(table_view const& left, bool flip_join_indices, cudaStream_t stream)
+get_trivial_left_join_indices(table_view const& left, cudaStream_t stream)
 {
   rmm::device_vector<size_type> left_indices(left.num_rows());
   thrust::sequence(
@@ -181,10 +179,11 @@ get_trivial_left_join_indices(table_view const& left, bool flip_join_indices, cu
                right_indices.begin(),
                right_indices.end(),
                JoinNoneValue);
-  using std::swap;
-  if (flip_join_indices) swap(left_indices, right_indices);
   return std::make_pair(std::move(left_indices), std::move(right_indices));
 }
+
+std::unique_ptr<cudf::table> combine_table_pair(std::unique_ptr<cudf::table>&& left,
+                                                std::unique_ptr<cudf::table>&& right);
 
 }  // namespace detail
 
@@ -219,11 +218,11 @@ struct hash_join::hash_join_impl {
    */
   hash_join_impl(cudf::table_view const& build, std::vector<size_type> const& build_on);
 
-  std::unique_ptr<cudf::table> inner_join(
+  std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> inner_join(
     cudf::table_view const& probe,
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
-    cudf::hash_join::probe_output_side probe_output_side,
+    common_columns_output_side common_columns_output_side,
     null_equality compare_nulls,
     rmm::mr::device_memory_resource* mr) const;
 
@@ -244,7 +243,8 @@ struct hash_join::hash_join_impl {
  private:
   /**
    * @brief Performs hash join by probing the columns provided in `probe` as per
-   * the joining indices given in `probe_on` and creates a single table.
+   * the joining indices given in `probe_on` and returns a (`probe`, `_build`) table pair, which
+   * contains the probe and build portions of the logical joined table respectively.
    *
    * @throw cudf::logic_error if `columns_in_common` contains a pair of indices
    * (`P`, `B`) where `P` does not exist in `probe_on` or `B` does not exist in
@@ -271,23 +271,23 @@ struct hash_join::hash_join_impl {
    * from `probe_on` columns. Else, for every column in `probe_on` and `_build_on`,
    * an output column will be produced. For each of these pairs (P, B), P
    * should exist in `probe_on` and B should exist in `_build_on`.
-   * @param probe_output_side @see cudf::hash_join::probe_output_side.
+   * @param common_columns_output_side @see cudf::hash_join::common_columns_output_side.
    * @param compare_nulls Controls whether null join-key values should match or not.
    * @param mr Device memory resource used to allocate the returned table's device memory.
    * @param stream CUDA stream used for device memory operations and kernel launches.
    *
-   * @return Result of joining `_build` and `probe` tables on the columns
-   * specified by `_build_on` and `probe_on`. The resulting table will be joined columns of
-   * `probe(including common columns)+_build(excluding common columns)` if `probe_output_side` is
-   * LEFT, `_build(including common columns)+probe(excluding common columns)` if `probe_output_side`
-   * is RIGHT,
+   * @return Table pair of (`probe`, `_build`) of joining both tables on the columns
+   * specified by `probe_on` and `_build_on`. The resulting table pair will be joined columns of
+   * (`probe(including common columns)`, `_build(excluding common columns)`) if
+   * `common_columns_output_side` is `PROBE`, or (`probe(excluding common columns)`,
+   * `_build(including common columns)`) if `common_columns_output_side` is `BUILD`.
    */
   template <cudf::detail::join_kind JoinKind>
-  std::unique_ptr<table> compute_hash_join(
+  std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> compute_hash_join(
     cudf::table_view const& probe,
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
-    cudf::hash_join::probe_output_side probe_output_side,
+    common_columns_output_side common_columns_output_side,
     null_equality compare_nulls,
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream = 0) const;
@@ -302,8 +302,6 @@ struct hash_join::hash_join_impl {
    * @tparam JoinKind The type of join to be performed.
    *
    * @param probe_table Table of probe side columns to join.
-   * @param flip_join_indices Flag that indicates whether the left (probe) and right (build)
-   * tables have been flipped, meaning the output indices should also be flipped.
    * @param compare_nulls Controls whether null join-key values should match or not.
    * @param stream CUDA stream used for device memory operations and kernel launches.
    *
@@ -313,7 +311,6 @@ struct hash_join::hash_join_impl {
   std::enable_if_t<JoinKind != cudf::detail::join_kind::FULL_JOIN,
                    std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>>>
   probe_join_indices(cudf::table_view const& probe,
-                     bool flip_join_indices,
                      null_equality compare_nulls,
                      cudaStream_t stream) const;
 };

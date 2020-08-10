@@ -395,24 +395,26 @@ class hash_join {
   hash_join(cudf::table_view const& build, std::vector<size_type> const& build_on);
 
   /**
-   * @brief Controls the location in the output of the columns from the `probe` table.
+   * @brief Controls where common columns will be output for a inner join.
    */
-  enum class probe_output_side {
-    LEFT,  ///< Columns from the probe table appear as the leftmost in the output table
-    RIGHT  ///< Columns from the probe table appear as the rightmost in the output table
+  enum class common_columns_output_side {
+    PROBE,  ///< Common columns is output in the probe portion of the table pair returned by
+            ///< `inner_join`.
+    BUILD   ///< Common columns is output in the build portion of the table pair returned by
+            ///< `inner_join`.
   };
 
   /**
    * @brief Performs an inner join by probing in the internal hash table.
    *
    * Given that it is sometimes desired to choose the small table to be the `build` side for an
-   * inner join (which is automatically done in cudf::innner_join()), it is handy to be able to
-   * specify which side in the joined table the `probe` portion is on. That is, one can check
-   * whether to use `left` or `right` table to be the build side by comparing their row counts ahead
-   * of `hash_join` object, but still preserve the logical order of the `left`/`right` in the joined
-   * table. For instance, if the `left` table is the small one (and thus the `build` side),
-   * specifying the `probe_output_side` to `RIGHT` will output the `right` table (probe side) on the
-   * right side in the joined table.
+   * inner join，a (`probe`, `build`) table pair, which contains the probe and build portions of the
+   * logical joined table respectively, is returned so that caller can freely rearrange them to
+   * restore the logical `left` `right` order. This introduces some extra logic about where "common"
+   * columns should go, i.e. the legacy `cudf::inner_join()` API always outputs "common" columns in
+   * the `left` portion and the corresponding columns in the `right` portion are omitted. To better
+   * align with the legacy `cudf::inner_join()` API, a `common_columns_output_side` parameter is
+   * introduced to specify whether "common" columns should go in `probe` or `build` portion.
    *
    * More details please @see cudf::inner_join().
    *
@@ -425,24 +427,24 @@ class hash_join {
    * Else, for every column in `probe_on` and `build_on`,
    * an output column will be produced. For each of these pairs (P, B), P
    * should exist in `probe_on` and B should exist in `build_on`.
-   * @param probe_output_side @see probe_output_side.
+   * @param common_columns_output_side @see `common_columns_output_side`.
    * @param compare_nulls Controls whether null join-key values should match or not.
    * @param mr Device memory resource used to allocate the returned table and columns' device
    * memory.
    *
-   * @return Result of joining `build` and `probe` tables on the columns
-   * specified by `build_on` and `probe_on`. The resulting table will be joined columns of
-   * `probe(including common columns)+build(excluding common columns)` if `probe_output_side` is
-   * LEFT, `build(including common columns)+probe(excluding common columns)` if `probe_output_side`
-   * is RIGHT,
+   * @return Table pair of (`probe`, `build`) of joining both tables on the columns
+   * specified by `probe_on` and `build_on`. The resulting table pair will be joined columns of
+   * (`probe(including common columns)`, `build(excluding common columns)`) if
+   * `common_columns_output_side` is `PROBE`, or (`probe(excluding common columns)`,
+   * `build(including common columns)`) if `common_columns_output_side` is `BUILD`.
    */
-  std::unique_ptr<cudf::table> inner_join(
+  std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> inner_join(
     cudf::table_view const& probe,
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
-    probe_output_side probe_output_side = hash_join::probe_output_side::LEFT,
-    null_equality compare_nulls         = null_equality::EQUAL,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) const;
+    common_columns_output_side common_columns_output_side = common_columns_output_side::PROBE,
+    null_equality compare_nulls                           = null_equality::EQUAL,
+    rmm::mr::device_memory_resource* mr                   = rmm::mr::get_default_resource()) const;
 
   /**
    * @brief Performs a left join by probing in the internal hash table.
