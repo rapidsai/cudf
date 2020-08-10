@@ -253,8 +253,8 @@ def test_timedelta_ops_misc_inputs(data, other, dtype, ops):
     gsr = cudf.Series(data, dtype=dtype)
     other_gsr = cudf.Series(other, dtype=dtype)
 
-    psr = gsr.to_pandas(nullable_pd_dtype=True)
-    other_psr = other_gsr.to_pandas(nullable_pd_dtype=True)
+    psr = gsr.to_pandas()
+    other_psr = other_gsr.to_pandas()
 
     expected = getattr(psr, ops)(other_psr)
     actual = getattr(gsr, ops)(other_gsr)
@@ -326,19 +326,19 @@ def test_timedelta_ops_datetime_inputs(
     gsr_datetime = cudf.Series(datetime_data, dtype=datetime_dtype)
     gsr_timedelta = cudf.Series(timedelta_data, dtype=timedelta_dtype)
 
-    psr_datetime = gsr_datetime.to_pandas(nullable_pd_dtype=True)
-    psr_timedelta = gsr_timedelta.to_pandas(nullable_pd_dtype=True)
+    psr_datetime = gsr_datetime.to_pandas()
+    psr_timedelta = gsr_timedelta.to_pandas()
 
     expected = getattr(psr_datetime, ops)(psr_timedelta)
     actual = getattr(gsr_datetime, ops)(gsr_timedelta)
 
-    assert_eq(expected, actual, nullable_pd_dtype=True)
+    assert_eq(expected, actual)
 
     if ops == "add":
         expected = getattr(psr_timedelta, ops)(psr_datetime)
         actual = getattr(gsr_timedelta, ops)(gsr_datetime)
 
-        assert_eq(expected, actual, nullable_pd_dtype=True)
+        assert_eq(expected, actual)
     elif ops == "sub":
         with pytest.raises(
             TypeError,
@@ -423,7 +423,7 @@ def test_timedelta_dataframe_ops(df, op):
 )
 def test_timedelta_series_ops_with_scalars(data, other_scalars, dtype, op):
     gsr = cudf.Series(data=data, dtype=dtype)
-    psr = gsr.to_pandas(nullable_pd_dtype=True)
+    psr = gsr.to_pandas()
 
     if op == "add":
         expected = psr + other_scalars
@@ -438,7 +438,7 @@ def test_timedelta_series_ops_with_scalars(data, other_scalars, dtype, op):
         expected = psr // other_scalars
         actual = gsr // other_scalars
 
-    assert_eq(expected, actual, nullable_pd_dtype=True)
+    assert_eq(expected, actual)
 
     if op == "add":
         expected = other_scalars + psr
@@ -453,7 +453,7 @@ def test_timedelta_series_ops_with_scalars(data, other_scalars, dtype, op):
         expected = psr // other_scalars
         actual = other_scalars // gsr
 
-    assert_eq(expected, actual, nullable_pd_dtype=True)
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize(
@@ -513,7 +513,7 @@ def test_timedelta_reduction_ops(data, dtype, reduction_op):
 @pytest.mark.parametrize("dtype", dtypeutils.TIMEDELTA_TYPES)
 def test_timedelta_dt_components(data, dtype):
     gsr = cudf.Series(data, dtype=dtype)
-    psr = gsr.to_pandas(nullable_pd_dtype=True)
+    psr = gsr.to_pandas()
 
     expected = psr.dt.components
     actual = gsr.dt.components
@@ -530,7 +530,7 @@ def test_timedelta_dt_components(data, dtype):
 @pytest.mark.parametrize("dtype", dtypeutils.TIMEDELTA_TYPES)
 def test_timedelta_dt_properties(data, dtype):
     gsr = cudf.Series(data, dtype=dtype)
-    psr = gsr.to_pandas(nullable_pd_dtype=True)
+    psr = gsr.to_pandas()
 
     def local_assert(expected, actual):
         if gsr.isnull().any():

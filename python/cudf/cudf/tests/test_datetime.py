@@ -905,7 +905,7 @@ def test_datetime_subtract(data, other, data_dtype, other_dtype):
 )
 def test_datetime_series_ops_with_scalars(data, other_scalars, dtype, op):
     gsr = cudf.Series(data=data, dtype=dtype)
-    psr = gsr.to_pandas(nullable_pd_dtype=True)
+    psr = gsr.to_pandas()
 
     if op == "add":
         expected = psr + other_scalars
@@ -914,13 +914,13 @@ def test_datetime_series_ops_with_scalars(data, other_scalars, dtype, op):
         expected = psr - other_scalars
         actual = gsr - other_scalars
 
-    assert_eq(expected, actual, nullable_pd_dtype=True)
+    assert_eq(expected, actual)
 
     if op == "add":
         expected = other_scalars + psr
         actual = other_scalars + gsr
 
-        assert_eq(expected, actual, nullable_pd_dtype=True)
+        assert_eq(expected, actual)
 
     elif op == "sub":
         with pytest.raises(TypeError):

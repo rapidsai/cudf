@@ -4675,7 +4675,7 @@ class DataFrame(Frame, Serializable):
         >>> type(pdf)
         <class 'pandas.core.frame.DataFrame'>
         """
-        nullable_pd_dtype = kwargs.get("nullable_pd_dtype", True)
+        nullable_pd_dtype = kwargs.get("nullable_pd_dtype", None)
 
         out_data = {}
         out_index = self.index.to_pandas()

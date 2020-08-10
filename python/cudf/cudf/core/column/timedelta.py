@@ -97,6 +97,11 @@ class TimeDeltaColumn(column.ColumnBase):
         return result
 
     def to_pandas(self, index=None, nullable_pd_dtype=False):
+        if nullable_pd_dtype:
+            raise NotImplementedError(
+                f"nullable_pd_dtype=True is " f"not supported for {self.dtype}"
+            )
+
         return pd.Series(
             self.to_array(fillna="pandas").astype(self.dtype), index=index
         )
