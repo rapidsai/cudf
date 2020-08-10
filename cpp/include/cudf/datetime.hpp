@@ -177,17 +177,16 @@ std::unique_ptr<cudf::column> day_of_year(
  * r[5] is [7/30/20 14:12:13]
  * @endcode
 
- * @param timestamp_column cudf::column_view of the input datetime values
- * @param months_column cudf::column_view of the number of months to add or subtract
+ * @param[in] timestamps cudf::column_view of timestamp type.
+ * @param[in] months cudf::column_view of integer type containing the number of months to add.
  *
- * @returns cudf::column of datatype `timestamp_column` containing the number of months
- * before or after the input datetime value.
- * @throw cudf::logic_error if `timestamp_column` datatype is not a TIMESTAMP or if
- * `months_column` datatype is not INT16
+ * @returns cudf::column of timestamp type containing the computed timestamps.
+ * @throw cudf::logic_error if `timestamps` datatype is not a TIMESTAMP or if `months` datatype
+ * is not INT16.
  */
 std::unique_ptr<cudf::column> add_months(
-  cudf::column_view const& timestamp_column,
-  cudf::column_view const& months_column,
+  cudf::column_view const& timestamps,
+  cudf::column_view const& months,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** @} */  // end of group
