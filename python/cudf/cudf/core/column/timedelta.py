@@ -114,19 +114,6 @@ class TimeDeltaColumn(column.ColumnBase):
             null_count=self.null_count,
         )
 
-    def _binary_op_add_sub(self, rhs):
-        if pd.api.types.is_timedelta64_dtype(rhs.dtype):
-            out_dtype = determine_out_dtype(self.dtype, rhs.dtype)
-        elif pd.api.types.is_datetime64_dtype(rhs.dtype):
-            out_dtype = rhs.dtype
-        else:
-            raise TypeError(
-                f"Addition/subtraction of {self.dtype} with {rhs.dtype} "
-                f"cannot be performed."
-            )
-
-        return out_dtype
-
     def _binary_op_floordiv(self, rhs):
         lhs, rhs = self, rhs
         if pd.api.types.is_timedelta64_dtype(rhs.dtype):
@@ -240,8 +227,10 @@ class TimeDeltaColumn(column.ColumnBase):
         elif op == "floordiv":
             lhs, rhs, out_dtype = self._binary_op_floordiv(rhs)
             op = "truediv"
-        elif op in ("add", "sub"):
-            out_dtype = self._binary_op_add_sub(rhs)
+        elif op == "add":
+            out_dtype = _timedelta_binary_op_add(lhs, rhs)
+        elif op == "sub":
+            out_dtype = _timedelta_binary_op_sub(lhs, rhs)
         else:
             raise TypeError(
                 f"Series of dtype {self.dtype} cannot perform "
@@ -527,3 +516,43 @@ def determine_out_dtype(lhs_dtype, rhs_dtype):
         return lhs_dtype
     else:
         raise TypeError(f"Cannot type-cast {lhs_dtype} and {rhs_dtype}")
+
+
+def _timedelta_binary_op_add(lhs, rhs):
+    if pd.api.types.is_timedelta64_dtype(rhs.dtype):
+        out_dtype = determine_out_dtype(lhs.dtype, rhs.dtype)
+    elif pd.api.types.is_datetime64_dtype(rhs.dtype):
+        units = ["s", "ms", "us", "ns"]
+        lhs_unit = units.index(lhs.time_unit)
+        rhs_time_unit, _ = np.datetime_data(rhs.dtype)
+        rhs_unit = units.index(rhs_time_unit)
+        out_dtype = np.dtype(f"datetime64[{units[max(lhs_unit, rhs_unit)]}]")
+    else:
+        raise TypeError(
+            f"Addition of {lhs.dtype} with {rhs.dtype} "
+            f"cannot be performed."
+        )
+
+    return out_dtype
+
+
+def _timedelta_binary_op_sub(lhs, rhs):
+    if pd.api.types.is_timedelta64_dtype(
+        lhs.dtype
+    ) and pd.api.types.is_timedelta64_dtype(rhs.dtype):
+        out_dtype = determine_out_dtype(lhs.dtype, rhs.dtype)
+    elif pd.api.types.is_timedelta64_dtype(
+        rhs.dtype
+    ) and pd.api.types.is_datetime64_dtype(lhs.dtype):
+        units = ["s", "ms", "us", "ns"]
+        lhs_unit = units.index(lhs.time_unit)
+        rhs_time_unit, _ = np.datetime_data(rhs.dtype)
+        rhs_unit = units.index(rhs_time_unit)
+        out_dtype = np.dtype(f"datetime64[{units[max(lhs_unit, rhs_unit)]}]")
+    else:
+        raise TypeError(
+            f"Subtraction of {lhs.dtype} with {rhs.dtype} "
+            f"cannot be performed."
+        )
+
+    return out_dtype

@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
+import cudf
 from cudf import _lib as libcudf
 from cudf._lib.nvtx import annotate
 from cudf._lib.scalar import Scalar, as_scalar
@@ -200,18 +201,22 @@ class DatetimeColumn(column.ColumnBase):
         lhs, rhs = self, rhs
         if op in ("eq", "ne", "lt", "gt", "le", "ge"):
             out_dtype = np.bool
-        elif op in ("add", "sub") and pd.api.types.is_timedelta64_dtype(
-            rhs.dtype
-        ):
+        elif op == "add" and pd.api.types.is_timedelta64_dtype(rhs.dtype):
+            out_dtype = cudf.core.column.timedelta._timedelta_binary_op_add(
+                rhs, lhs
+            )
+        elif op == "sub" and pd.api.types.is_timedelta64_dtype(rhs.dtype):
+            out_dtype = cudf.core.column.timedelta._timedelta_binary_op_sub(
+                lhs, rhs
+            )
+        elif op == "sub" and pd.api.types.is_datetime64_dtype(rhs.dtype):
             units = ["s", "ms", "us", "ns"]
-            lhs_unit = units.index(self.time_unit)
+            lhs_unit = units.index(lhs.time_unit)
             rhs_time_unit, _ = np.datetime_data(rhs.dtype)
             rhs_unit = units.index(rhs_time_unit)
             out_dtype = np.dtype(
-                f"datetime64[{units[max(lhs_unit, rhs_unit)]}]"
+                f"timedelta64[{units[max(lhs_unit, rhs_unit)]}]"
             )
-        elif op == "sub" and pd.api.types.is_datetime64_dtype(rhs.dtype):
-            out_dtype = np.dtype("timedelta64[ns]")
         else:
             raise TypeError(
                 f"Series of dtype {self.dtype} cannot perform "

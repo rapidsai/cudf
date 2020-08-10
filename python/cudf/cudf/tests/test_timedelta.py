@@ -1,5 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 import datetime
+import re
 
 import cupy as cp
 import numpy as np
@@ -314,6 +315,21 @@ def test_timedelta_ops_datetime_inputs(
     actual = getattr(gsr_datetime, ops)(gsr_timedelta)
 
     assert_eq(expected, actual, nullable_pd_dtype=True)
+
+    if ops == "add":
+        expected = getattr(psr_timedelta, ops)(psr_datetime)
+        actual = getattr(gsr_timedelta, ops)(gsr_datetime)
+
+        assert_eq(expected, actual, nullable_pd_dtype=True)
+    elif ops == "sub":
+        with pytest.raises(
+            TypeError,
+            match=re.escape(
+                f"Subtraction of {gsr_timedelta.dtype} with "
+                f"{gsr_datetime.dtype} cannot be performed."
+            ),
+        ):
+            actual = getattr(gsr_timedelta, ops)(gsr_datetime)
 
 
 @pytest.mark.parametrize(
