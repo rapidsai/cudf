@@ -983,3 +983,193 @@ def test_timedelta_str_roundtrip(gsr, expected_series):
     assert_eq(expected_series, actual_series)
 
     assert_eq(gsr, actual_series.astype(gsr.dtype))
+
+
+def test_timedelta_invalid_ops():
+    sr = cudf.Series([1, 2, 3], dtype="timedelta64[ns]")
+    psr = sr.to_pandas()
+
+    try:
+        psr + 1
+    except TypeError:
+        with pytest.raises(
+            TypeError,
+            match=re.escape(
+                f"Addition of {sr.dtype} with {np.dtype('int64')} "
+                f"cannot be performed."
+            ),
+        ):
+            sr + 1
+    else:
+        raise AssertionError("Expected psr+1 to fail")
+
+    try:
+        psr + "a"
+    except TypeError:
+        with pytest.raises(
+            TypeError,
+            match=re.escape(
+                f"Addition of {sr.dtype} with {np.dtype('object')} "
+                f"cannot be performed."
+            ),
+        ):
+            sr + "a"
+    else:
+        raise AssertionError("Expected psr + 'a' to fail")
+
+    dt_sr = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
+    dt_psr = dt_sr.to_pandas()
+
+    try:
+        psr % dt_psr
+    except TypeError:
+        with pytest.raises(
+            TypeError,
+            match=re.escape(
+                f"Modulus of {sr.dtype} with {dt_sr.dtype} "
+                f"cannot be performed."
+            ),
+        ):
+            sr % dt_sr
+    else:
+        raise AssertionError("Expected psr \\%d t_psr to fail")
+
+    try:
+        psr % "a"
+    except TypeError:
+        with pytest.raises(
+            TypeError,
+            match=re.escape(
+                f"Modulus of {sr.dtype} with {np.dtype('object')} "
+                f"cannot be performed."
+            ),
+        ):
+            sr % "a"
+    else:
+        raise AssertionError("Expected psr \\%d 'a' to fail")
+
+    try:
+        psr > dt_psr
+    except TypeError:
+        with pytest.raises(
+            TypeError,
+            match=re.escape(
+                f"Invalid comparison between dtype={sr.dtype}"
+                f" and {dt_sr.dtype}"
+            ),
+        ):
+            sr > dt_sr
+    else:
+        raise AssertionError("Expected psr > t_psr to fail")
+
+    try:
+        psr < dt_psr
+    except TypeError:
+        with pytest.raises(
+            TypeError,
+            match=re.escape(
+                f"Invalid comparison between dtype={sr.dtype}"
+                f" and {dt_sr.dtype}"
+            ),
+        ):
+            sr < dt_sr
+    else:
+        raise AssertionError("Expected psr < t_psr to fail")
+
+    try:
+        psr >= dt_psr
+    except TypeError:
+        with pytest.raises(
+            TypeError,
+            match=re.escape(
+                f"Invalid comparison between dtype={sr.dtype}"
+                f" and {dt_sr.dtype}"
+            ),
+        ):
+            sr >= dt_sr
+    else:
+        raise AssertionError("Expected psr >= t_psr to fail")
+
+    try:
+        psr <= dt_psr
+    except TypeError:
+        with pytest.raises(
+            TypeError,
+            match=re.escape(
+                f"Invalid comparison between dtype={sr.dtype}"
+                f" and {dt_sr.dtype}"
+            ),
+        ):
+            sr <= dt_sr
+    else:
+        raise AssertionError("Expected psr <= t_psr to fail")
+
+    try:
+        psr / dt_psr
+    except TypeError:
+        with pytest.raises(
+            TypeError,
+            match=re.escape(
+                f"Division of {sr.dtype} with {dt_sr.dtype} "
+                f"cannot be performed."
+            ),
+        ):
+            sr / dt_sr
+    else:
+        raise AssertionError("Expected psr / t_psr to fail")
+
+    try:
+        psr // dt_psr
+    except TypeError:
+        with pytest.raises(
+            TypeError,
+            match=re.escape(
+                f"Floor Division of {sr.dtype} with {dt_sr.dtype} "
+                f"cannot be performed."
+            ),
+        ):
+            sr // dt_sr
+    else:
+        raise AssertionError("Expected psr // t_psr to fail")
+
+    try:
+        psr * dt_psr
+    except TypeError:
+        with pytest.raises(
+            TypeError,
+            match=re.escape(
+                f"Multiplication of {sr.dtype} with {dt_sr.dtype} "
+                f"cannot be performed."
+            ),
+        ):
+            sr * dt_sr
+    else:
+        raise AssertionError("Expected psr * t_psr to fail")
+
+    try:
+        psr * psr
+    except TypeError:
+        with pytest.raises(
+            TypeError,
+            match=re.escape(
+                f"Multiplication of {sr.dtype} with {sr.dtype} "
+                f"cannot be performed."
+            ),
+        ):
+            sr * sr
+    else:
+        raise AssertionError("Expected psr * psr to fail")
+
+    try:
+        psr ^ psr
+    except TypeError:
+        with pytest.raises(
+            TypeError,
+            match=re.escape(
+                f"Series of dtype {sr.dtype} cannot perform "
+                f"the operation xor"
+            ),
+        ):
+            sr ^ sr
+    else:
+        raise AssertionError("Expected psr ^ psr to fail")

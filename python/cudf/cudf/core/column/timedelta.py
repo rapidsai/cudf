@@ -180,7 +180,7 @@ class TimeDeltaColumn(column.ColumnBase):
         else:
             raise TypeError(
                 f"Invalid comparison between dtype={self.dtype}"
-                f" and {type(rhs).__name__}"
+                f" and {rhs.dtype}"
             )
 
     def _binary_op_truediv(self, rhs):
@@ -234,7 +234,7 @@ class TimeDeltaColumn(column.ColumnBase):
         else:
             raise TypeError(
                 f"Series of dtype {self.dtype} cannot perform "
-                f" the operation {op}"
+                f"the operation {op}"
             )
 
         if reflect:
