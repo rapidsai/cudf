@@ -113,10 +113,11 @@ def test_get_dummies(data):
     encoded_expected = pd.get_dummies(pdf, prefix="test")
     encoded_actual = cudf.get_dummies(gdf, prefix="test")
 
-    utils.assert_eq(encoded_expected, encoded_actual)
+    # pandas get_dummies doesn't work for StringDtype
+    utils.assert_eq(encoded_expected, encoded_actual, downcast=True)
     encoded_actual = cudf.get_dummies(gdf, prefix="test", dtype=np.uint8)
 
-    utils.assert_eq(encoded_expected, encoded_actual)
+    utils.assert_eq(encoded_expected, encoded_actual, downcast=True)
 
 
 @pytest.mark.parametrize("n_cols", [5, 10, 20])
@@ -132,7 +133,7 @@ def test_onehot_get_dummies_multicol(n_cols):
     encoded_expected = pd.get_dummies(pdf, prefix="test")
     encoded_actual = cudf.get_dummies(gdf, prefix="test")
 
-    utils.assert_eq(encoded_expected, encoded_actual)
+    utils.assert_eq(encoded_expected, encoded_actual, downcast=True)
 
 
 @pytest.mark.parametrize("nan_as_null", [True, False])
@@ -147,7 +148,7 @@ def test_onehost_get_dummies_dummy_na(nan_as_null, dummy_na):
     if dummy_na and nan_as_null:
         got = got.rename(columns={"a_null": "a_nan"})[expected.columns]
 
-    utils.assert_eq(expected, got)
+    utils.assert_eq(expected, got, downcast=True)
 
 
 @pytest.mark.parametrize(
@@ -186,7 +187,7 @@ def test_get_dummies_prefix_sep(prefix, prefix_sep):
         gdf, prefix=prefix, prefix_sep=prefix_sep
     )
 
-    utils.assert_eq(encoded_expected, encoded_actual)
+    utils.assert_eq(encoded_expected, encoded_actual, downcast=True)
 
 
 if __name__ == "__main__":

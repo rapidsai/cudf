@@ -5,7 +5,7 @@ import pytest
 
 import cudf
 from cudf.core import DataFrame, Series
-from cudf.tests.utils import INTEGER_TYPES, NUMERIC_TYPES, assert_eq
+from cudf.tests.utils import INTEGER_TYPES, NUMERIC_TYPES, assert_eq, promote_to_pd_nullable_dtype
 
 
 def make_params():
@@ -178,8 +178,8 @@ def test_dataframe_join_cats():
     rhs = rhs.set_index("a")
 
     got = lhs.join(rhs)
-    expect = lhs.to_pandas(nullable_pd_dtype=False).join(
-        rhs.to_pandas(nullable_pd_dtype=False)
+    expect = lhs.to_pandas().join(
+        rhs.to_pandas()
     )
 
     # Note: pandas make an object Index after joining
@@ -237,6 +237,8 @@ def test_dataframe_join_mismatch_cats(how):
     pdf1["join_col"] = pdf1["join_col"].astype("category")
     pdf2["join_col"] = pdf2["join_col"].astype("category")
 
+    pdf1 = promote_to_pd_nullable_dtype(pdf1)
+    pdf2 = promote_to_pd_nullable_dtype(pdf2)
     gdf1 = DataFrame.from_pandas(pdf1)
     gdf2 = DataFrame.from_pandas(pdf2)
 
@@ -248,7 +250,7 @@ def test_dataframe_join_mismatch_cats(how):
     join_gdf = gdf1.join(gdf2, how=how, sort=True, method="hash")
     join_pdf = pdf1.join(pdf2, how=how)
 
-    got = join_gdf.fillna(-1).to_pandas(nullable_pd_dtype=False)
+    got = join_gdf.fillna(-1).to_pandas()
     expect = join_pdf.fillna(-1)  # note: cudf join doesn't mask NA
 
     # We yield a categorical here whereas pandas gives Object.
@@ -257,8 +259,8 @@ def test_dataframe_join_mismatch_cats(how):
     if how == "right":
         got = got[["data_col_left", "data_col_right"]]
 
-    expect.data_col_right = expect.data_col_right.astype(np.int64)
-    expect.data_col_left = expect.data_col_left.astype(np.int64)
+    expect.data_col_right = expect.data_col_right.astype(pd.Int64Dtype())
+    expect.data_col_left = expect.data_col_left.astype(pd.Int64Dtype())
 
     assert_eq(expect, got)
 
@@ -281,8 +283,8 @@ def test_dataframe_merge_on(on):
     df_right["right_val"] = np.arange(nelem)
 
     # Make pandas DF
-    pddf_left = df_left.to_pandas(nullable_pd_dtype=False)
-    pddf_right = df_right.to_pandas(nullable_pd_dtype=False)
+    pddf_left = df_left.to_pandas()
+    pddf_right = df_right.to_pandas()
 
     # Expected result (from pandas)
     pddf_joined = pddf_left.merge(pddf_right, on=on, how="left")
@@ -291,26 +293,10 @@ def test_dataframe_merge_on(on):
     join_result = df_left.merge(df_right, on=on, how="left")
     join_result_cudf = cudf.merge(df_left, df_right, on=on, how="left")
 
-    join_result["right_val"] = (
-        join_result["right_val"].astype(np.float64).fillna(np.nan)
-    )
-
-    join_result_cudf["right_val"] = (
-        join_result_cudf["right_val"].astype(np.float64).fillna(np.nan)
-    )
-
-    for col in list(pddf_joined.columns):
-        if col.count("_y") > 0:
-            join_result[col] = (
-                join_result[col].astype(np.float64).fillna(np.nan)
-            )
-            join_result_cudf[col] = (
-                join_result_cudf[col].astype(np.float64).fillna(np.nan)
-            )
-
+    
     # Test dataframe equality (ignore order of rows and columns)
     cdf_result = (
-        join_result.to_pandas(nullable_pd_dtype=False)
+        join_result.to_pandas()
         .sort_values(list(pddf_joined.columns))
         .reset_index(drop=True)
     )
@@ -322,7 +308,7 @@ def test_dataframe_merge_on(on):
     assert_eq(cdf_result, pdf_result, check_like=True)
 
     merge_func_result_cdf = (
-        join_result_cudf.to_pandas(nullable_pd_dtype=False)
+        join_result_cudf.to_pandas()
         .sort_values(list(pddf_joined.columns))
         .reset_index(drop=True)
     )
@@ -402,6 +388,8 @@ def test_dataframe_merge_order():
 
     df2["id"] = [4, 5]
     df2["a"] = [7, 8]
+    df1 = promote_to_pd_nullable_dtype(df1)
+    df2 = promote_to_pd_nullable_dtype(df2)
 
     df = df1.merge(df2, how="left", on=["id", "a"])
     assert_eq(gdf, df)
@@ -560,6 +548,8 @@ def test_merge_left_right_index_left_right_on_zero_kwargs(kwargs):
     right = pd.DataFrame(
         {"y": [10, 20, 30, 6, 5, 4]}, index=[0, 1, 2, 3, 4, 6]
     )
+    left = promote_to_pd_nullable_dtype(left)
+    right = promote_to_pd_nullable_dtype(right)
     gleft = DataFrame.from_pandas(left)
     gright = DataFrame.from_pandas(right)
     pd_merge = left.merge(right, **kwargs)
@@ -581,6 +571,8 @@ def test_merge_left_right_index_left_right_on_kwargs(kwargs):
     right = pd.DataFrame(
         {"y": [10, 20, 30, 6, 5, 4]}, index=[1, 2, 3, 4, 5, 7]
     )
+    left = promote_to_pd_nullable_dtype(left)
+    right = promote_to_pd_nullable_dtype(right)
     gleft = DataFrame.from_pandas(left)
     gright = DataFrame.from_pandas(right)
     pd_merge = left.merge(right, **kwargs)
@@ -613,8 +605,8 @@ def test_merge_suffixes():
 
 
 def test_merge_left_on_right_on():
-    left = pd.DataFrame({"xx": [1, 2, 3, 4, 5, 6]})
-    right = pd.DataFrame({"xx": [10, 20, 30, 6, 5, 4]})
+    left = pd.DataFrame({"xx": [1, 2, 3, 4, 5, 6]}, dtype=pd.Int64Dtype())
+    right = pd.DataFrame({"xx": [10, 20, 30, 6, 5, 4]}, dtype=pd.Int64Dtype())
 
     gleft = cudf.from_pandas(left)
     gright = cudf.from_pandas(right)
@@ -632,17 +624,17 @@ def test_merge_on_index_retained():
     df["a"] = [1, 2, 3, 4, 5]
     df["b"] = ["a", "b", "c", "d", "e"]
     df.index = [5, 3, 4, 2, 1]
+    df = promote_to_pd_nullable_dtype(df)
 
     df2 = cudf.DataFrame()
     df2["a2"] = [1, 2, 3, 4, 5]
     df2["res"] = ["a", "b", "c", "d", "e"]
 
-    pdf = df.to_pandas(nullable_pd_dtype=False)
-    pdf2 = df2.to_pandas(nullable_pd_dtype=False)
+    pdf = df.to_pandas()
+    pdf2 = df2.to_pandas()
 
     gdm = df.merge(df2, left_index=True, right_index=True, how="left")
     pdm = pdf.merge(pdf2, left_index=True, right_index=True, how="left")
-    gdm["a2"] = gdm["a2"].astype("float64")
     assert_eq(gdm.sort_index(), pdm.sort_index())
 
 
@@ -688,6 +680,8 @@ def test_merge_sort(ons, hows):
     aa = [8, 9, 2, 9, 3, 1, 2, 3, 4]
     left = pd.DataFrame({"a": a, "b": b, "aa": aa})
     right = left.copy(deep=True)
+    left = promote_to_pd_nullable_dtype(left)
+    right = promote_to_pd_nullable_dtype(right)
 
     left.index = [6, 5, 4, 7, 5, 5, 5, 4, 4]
     right.index = [5, 4, 1, 9, 4, 3, 5, 4, 4]
@@ -744,7 +738,7 @@ def test_merge_sort_on_indexes(kwargs):
 
     if left_index and right_index:
         check_if_sorted = gd_merge[["a", "b"]].to_pandas(
-            nullable_pd_dtype=False
+            
         )
         check_if_sorted.index.name = "index"
         definitely_sorted = check_if_sorted.sort_values(["index", "a", "b"])
@@ -788,8 +782,8 @@ def test_join_with_different_names():
 
 
 def test_join_same_name_different_order():
-    left = pd.DataFrame({"a": [0, 0], "b": [1, 2]})
-    right = pd.DataFrame({"a": [1, 2], "b": [0, 0]})
+    left = pd.DataFrame({"a": [0, 0], "b": [1, 2]}, dtype=pd.Int64Dtype())
+    right = pd.DataFrame({"a": [1, 2], "b": [0, 0]}, dtype=pd.Int64Dtype())
     gleft = DataFrame.from_pandas(left)
     gright = DataFrame.from_pandas(right)
     pd_merge = left.merge(right, left_on=["a", "b"], right_on=["b", "a"])
@@ -944,8 +938,8 @@ def test_merge_multi(kwargs):
         left = left.set_index(["a", "b"])
         right = right.set_index(["c", "d"])
 
-    gleft = left.to_pandas(nullable_pd_dtype=False)
-    gright = right.to_pandas(nullable_pd_dtype=False)
+    gleft = left.to_pandas()
+    gright = right.to_pandas()
 
     kwargs["sort"] = True
     expect = gleft.merge(gright, **kwargs)
@@ -1215,6 +1209,7 @@ def test_index_join(lhs, rhs, how, level):
     r_df = DataFrame.from_pandas(r_pdf)
     p_lhs = l_pdf.set_index(lhs).index
     p_rhs = r_pdf.set_index(rhs).index
+
     g_lhs = l_df.set_index(lhs).index
     g_rhs = r_df.set_index(rhs).index
 
@@ -1231,7 +1226,7 @@ def test_index_join(lhs, rhs, how, level):
         .reset_index(drop=True)
     )
 
-    assert_eq(expected, got)
+    assert_eq(expected, got, downcast=True)
 
 
 def test_index_join_corner_cases():
@@ -1265,7 +1260,7 @@ def test_index_join_corner_cases():
         .reset_index(drop=True)
     )
 
-    assert_eq(expected, got)
+    assert_eq(expected, got, downcast=True)
 
     # sort is supported only in case of two non-MultiIndex join
     # Join when column name doesn't match with level
@@ -1281,7 +1276,7 @@ def test_index_join_corner_cases():
     expected = p_lhs.join(p_rhs, how=how, sort=True)
     got = g_lhs.join(g_rhs, how=how, sort=True)
 
-    assert_eq(expected, got)
+    assert_eq(expected, got, downcast=True)
 
     # Pandas Index.join on categorical column returns generic column
     # but cudf will be returning a categorical column itself.
@@ -1310,7 +1305,7 @@ def test_index_join_corner_cases():
 
     got["a"] = got["a"].astype(expected["a"].dtype)
 
-    assert_eq(expected, got)
+    assert_eq(expected, got, downcast=True)
 
 
 def test_index_join_exception_cases():

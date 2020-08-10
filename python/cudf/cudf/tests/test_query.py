@@ -52,8 +52,9 @@ def test_query(data, fn, nulls):
     pdf["b"] = np.random.random(nelem) * nelem
     if nulls:
         pdf["a"][::2] = None
+    
     gdf = cudf.from_pandas(pdf)
-    assert_eq(pdf.query(query_expr), gdf.query(query_expr))
+    assert_eq(pdf.query(query_expr), gdf.query(query_expr), downcast=True)
 
 
 params_query_env_fn = [
@@ -181,7 +182,7 @@ def test_query_with_index_name(index, query, a_val, b_val, c_val):
     out = gdf.query(query)
     expect = pdf.query(query)
 
-    assert_eq(out, expect)
+    assert_eq(out, expect, downcast=True)
 
 
 @pytest.mark.parametrize(("a_val", "b_val", "c_val"), [(4, 3, 15)])
@@ -207,5 +208,5 @@ def test_query_with_index_keyword(query, a_val, b_val, c_val):
 
     out = gdf.query(query)
     expect = pdf.query(query)
-
-    assert_eq(out, expect)
+    # pandas query doesn't work for nullable types
+    assert_eq(out, expect, downcast=True)

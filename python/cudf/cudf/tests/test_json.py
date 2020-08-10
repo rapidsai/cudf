@@ -11,7 +11,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
+from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq, promote_to_pd_nullable_dtype
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -88,7 +88,7 @@ def test_json_reader(json_files):
     if len(got_df) == 0:
         got_df = got_df.reset_index(drop=True)
 
-    assert_eq(expect_df, got_df, check_categorical=False)
+    assert_eq(expect_df, got_df, check_categorical=False, downcast=True)
 
     # Only these orients are allowed for Series, but isn't enforced by Pandas
     if orient in ("split", "records", "index"):
@@ -103,7 +103,7 @@ def test_json_reader(json_files):
         if len(got_df) == 0:
             got_series = got_series.reset_index(drop=True)
 
-        assert_eq(expect_series, got_series)
+        assert_eq(expect_series, got_series, downcast=True)
 
 
 @pytest.mark.filterwarnings("ignore:Can't infer compression")
@@ -243,6 +243,7 @@ def test_json_lines_compression(tmpdir, ext, out_comp, in_comp):
 
     nrows = 20
     pd_df = make_numeric_dataframe(nrows, np.int32)
+    pd_df = promote_to_pd_nullable_dtype(pd_df)
     pd_df.to_json(fname, compression=out_comp, lines=True, orient="records")
 
     cu_df = cudf.read_json(

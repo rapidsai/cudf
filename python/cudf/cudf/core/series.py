@@ -1028,10 +1028,10 @@ class Series(Frame, Serializable):
             else:
                 lines = lines[:-1]
                 lines[-1] = lines[-1] + "\n"
-            lines[-1] = lines[-1] + "dtype: %s" % self.dtype
+            lines[-1] = lines[-1] + "dtype: %s" % str(self.dtype)
         else:
             lines = output.split(",")
-            return lines[0] + ", dtype: %s)" % self.dtype
+            return lines[0] + ", dtype: %s)" % str(self.dtype)
         if isinstance(preprocess._column, cudf.core.column.CategoricalColumn):
             lines.append(category_memory)
         return "\n".join(lines)

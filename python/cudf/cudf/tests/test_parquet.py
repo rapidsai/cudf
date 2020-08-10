@@ -25,16 +25,16 @@ def datadir(datadir):
 @pytest.fixture(params=[1, 5, 10, 100])
 def simple_pdf(request):
     types = [
-        "bool",
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "uint8",
-        "uint16",
+        "Boolean",
+        "Int8",
+        "Int16",
+        "Int32",
+        "Int64",
+        "UInt8",
+        "UInt16",
         # "uint32", pandas promotes uint32 to int64
         # https://issues.apache.org/jira/browse/ARROW-9215
-        "uint64",
+        "UInt64",
         "float32",
         "float64",
     ]
@@ -68,20 +68,20 @@ def simple_gdf(simple_pdf):
 @pytest.fixture(params=[0, 1, 10, 100])
 def pdf(request):
     types = [
-        "bool",
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "uint8",
-        "uint16",
+        "boolean",
+        "Int8",
+        "Int16",
+        "Int32",
+        "Int64",
+        "UInt8",
+        "UInt16",
         # "uint32", pandas promotes uint32 to int64
         # https://issues.apache.org/jira/browse/ARROW-9215
-        "uint64",
+        "UInt64",
         "float32",
         "float64",
         "datetime64[ms]",
-        "str",
+        "string",
     ]
     renamer = {
         "C_l0_g" + str(idx): "col_" + val for (idx, val) in enumerate(types)
@@ -108,7 +108,7 @@ def pdf(request):
 
     # Create non-numeric str data
     data = [ascii_letters[np.random.randint(0, 52)] for i in range(nrows)]
-    test_pdf["col_str"] = pd.Series(data, dtype="str")
+    test_pdf["col_str"] = pd.Series(data, dtype="string")
 
     return test_pdf
 
@@ -121,6 +121,8 @@ def gdf(pdf):
 @pytest.fixture(params=["snappy", "gzip", "brotli", None])
 def parquet_file(request, tmp_path_factory, pdf):
     fname = tmp_path_factory.mktemp("parquet") / "test.parquet"
+    import pdb
+    pdb.set_trace()
     pdf.to_parquet(fname, engine="pyarrow", compression=request.param)
     return fname
 
@@ -199,7 +201,8 @@ def test_parquet_reader_basic(parquet_file, columns, engine):
             expect = expect.drop(columns=["col_category"])
         if "col_category" in got.columns:
             got = got.drop("col_category")
-
+    import pdb
+    pdb.set_trace()
     assert_eq(expect, got, check_categorical=False)
 
 

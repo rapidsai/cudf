@@ -561,7 +561,8 @@ def test_index_to_series(data):
     pdi = pd.Index(data)
     gdi = cudf.from_pandas(pdi)
 
-    assert_eq(pdi.to_series(), gdi.to_series())
+    # pandas does not convert to nullable dtype
+    assert_eq(pdi.to_series(), gdi.to_series(), downcast=True)
 
 
 @pytest.mark.parametrize(

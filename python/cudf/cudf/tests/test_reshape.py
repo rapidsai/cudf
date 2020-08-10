@@ -10,6 +10,7 @@ from cudf.tests.utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
     assert_eq,
+    promote_to_pd_nullable_dtype
 )
 
 
@@ -50,7 +51,7 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
             data[:] = np.nan
         pdf[colname] = data
         value_vars.append(colname)
-
+    pdf = promote_to_pd_nullable_dtype(pdf)
     gdf = DataFrame.from_pandas(pdf)
 
     got = cudf_melt(frame=gdf, id_vars=id_vars, value_vars=value_vars)

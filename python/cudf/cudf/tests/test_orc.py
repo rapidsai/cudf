@@ -10,7 +10,7 @@ import pyarrow.orc
 import pytest
 
 import cudf
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import assert_eq, promote_to_pd_nullable_dtype
 
 
 @pytest.fixture(scope="module")
@@ -84,7 +84,7 @@ def test_orc_reader_basic(datadir, inputfile, columns, use_index, engine):
         path, engine=engine, columns=columns, use_index=use_index
     )
 
-    assert_eq(expect, got, check_categorical=False)
+    assert_eq(expect, got, check_categorical=False, downcast=True)
 
 
 def test_orc_reader_decimal(datadir):
@@ -140,7 +140,7 @@ def test_orc_reader_filepath_or_buffer(path_or_buf, src):
     expect = orcfile.read(columns=cols).to_pandas()
     got = cudf.read_orc(path_or_buf(src), columns=cols)
 
-    assert_eq(expect, got)
+    assert_eq(expect, got, downcast=True)
 
 
 def test_orc_reader_trailing_nulls(datadir):
@@ -150,11 +150,10 @@ def test_orc_reader_trailing_nulls(datadir):
     except pa.ArrowIOError as e:
         pytest.skip(".orc file is not found: %s" % e)
 
-    expect = orcfile.read().to_pandas().fillna(0)
-    got = cudf.read_orc(path, engine="cudf").fillna(0)
+    expect = orcfile.read().to_pandas()
+    got = cudf.read_orc(path, engine="cudf").to_pandas()
 
-    # PANDAS uses NaN to represent invalid data, which forces float dtype
-    # For comparison, we can replace NaN with 0 and cast to the cuDF dtype
+    # orcfile.read() from above makes everything f64 for some reason
     for col in expect.columns:
         expect[col] = expect[col].astype(got[col].dtype)
 
@@ -186,9 +185,9 @@ def test_orc_reader_strings(datadir):
     except pa.ArrowIOError as e:
         pytest.skip(".orc file is not found: %s" % e)
 
-    expect = orcfile.read(columns=["string1"])
+    expect = orcfile.read(columns=["string1"]).to_pandas()
+    expect['string1'] = expect['string1'].astype(pd.StringDtype())
     got = cudf.read_orc(path, engine="cudf", columns=["string1"])
-
     assert_eq(expect, got, check_categorical=False)
 
 
@@ -243,6 +242,7 @@ def test_orc_reader_uncompressed_block(datadir):
         pytest.skip(".orc file is not found: %s" % e)
 
     expect = orcfile.read().to_pandas()
+    expect = promote_to_pd_nullable_dtype(expect)
     got = cudf.read_orc(path, engine="cudf")
 
     assert_eq(expect, got, check_categorical=False)
@@ -259,6 +259,7 @@ def test_orc_reader_nodata_block(datadir):
             print(type(excpr).__name__)
 
     expect = orcfile.read().to_pandas()
+    expect = promote_to_pd_nullable_dtype(expect)
     got = cudf.read_orc(path, engine="cudf", num_rows=1)
 
     assert_eq(expect, got, check_categorical=False)
@@ -317,5 +318,6 @@ def test_orc_writer_strings(tmpdir, dtypes):
     expect = cudf.datasets.randomdata(nrows=10, dtypes=dtypes, seed=1)
     expect.to_orc(gdf_fname)
     got = pa.orc.ORCFile(gdf_fname).read().to_pandas()
+    got = promote_to_pd_nullable_dtype(got)
 
     assert_eq(expect, got)

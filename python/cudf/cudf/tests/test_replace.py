@@ -5,7 +5,7 @@ import pytest
 
 import cudf
 from cudf.core import DataFrame, Series
-from cudf.tests.utils import INTEGER_TYPES, NUMERIC_TYPES, assert_eq
+from cudf.tests.utils import INTEGER_TYPES, NUMERIC_TYPES, assert_eq, promote_to_pd_nullable_dtype
 
 
 def test_series_replace():
@@ -93,7 +93,7 @@ def test_series_replace_with_nulls():
 
 def test_dataframe_replace():
     # numerical
-    pdf1 = pd.DataFrame({"a": [0, 1, 2, 3], "b": [0, 1, 2, 3]})
+    pdf1 = pd.DataFrame({"a": [0, 1, 2, 3], "b": [0, 1, 2, 3]}, dtype=pd.Int64Dtype())
     gdf1 = DataFrame.from_pandas(pdf1)
     pdf2 = pdf1.replace(0, 4)
     gdf2 = gdf1.replace(0, 4)
@@ -112,7 +112,8 @@ def test_dataframe_replace():
     # list input
     pdf6 = pdf1.replace([0, 1], [4, 5])
     gdf6 = gdf1.replace([0, 1], [4, 5])
-    assert_eq(gdf6, pdf6)
+    # this case downcasts for some reason?
+    assert_eq(gdf6, pdf6, downcast=True)
 
     pdf7 = pdf1.replace([0, 1], 4)
     gdf7 = gdf1.replace([0, 1], 4)
@@ -130,7 +131,7 @@ def test_dataframe_replace():
 
 def test_dataframe_replace_with_nulls():
     # numerical
-    pdf1 = pd.DataFrame({"a": [0, 1, 2, 3], "b": [0, 1, 2, 3]})
+    pdf1 = pd.DataFrame({"a": [0, 1, 2, 3], "b": [0, 1, 2, 3]}, dtype=pd.Int64Dtype())
     gdf1 = DataFrame.from_pandas(pdf1)
     pdf2 = pdf1.replace(0, 4)
     gdf2 = gdf1.replace(0, None).fillna(4)
@@ -139,7 +140,8 @@ def test_dataframe_replace_with_nulls():
     # list input
     pdf6 = pdf1.replace([0, 1], [4, 5])
     gdf6 = gdf1.replace([0, 1], [4, None]).fillna(5)
-    assert_eq(gdf6, pdf6)
+    # ?? this downcasts to int64
+    assert_eq(gdf6, pdf6, downcast=True)
 
     pdf7 = pdf1.replace([0, 1], 4)
     gdf7 = gdf1.replace([0, 1], None).fillna(4)
@@ -152,11 +154,11 @@ def test_dataframe_replace_with_nulls():
 
     gdf1 = DataFrame({"a": [0, 1, 2, 3], "b": [0, 1, 2, None]})
     gdf9 = gdf1.replace([0, 1], [4, 5]).fillna(3)
-    assert_eq(gdf9, pdf6)
+    assert_eq(gdf9, pdf6, downcast=True)
 
 
 def test_replace_strings():
-    pdf = pd.Series(["a", "b", "c", "d"])
+    pdf = pd.Series(["a", "b", "c", "d"], dtype=pd.StringDtype())
     gdf = Series(["a", "b", "c", "d"])
     assert_eq(pdf.replace("a", "e"), gdf.replace("a", "e"))
 
@@ -172,12 +174,8 @@ def test_replace_strings():
 def test_series_fillna_numerical(
     psr, data_dtype, fill_dtype, fill_value, inplace
 ):
-    # TODO: These tests should use Pandas' nullable int type
-    # when we support a recent enough version of Pandas
-    # https://pandas.pydata.org/pandas-docs/stable/user_guide/integer_na.html
-    if np.dtype(data_dtype).kind not in ("i"):
-        psr = psr.astype(data_dtype)
 
+    psr = promote_to_pd_nullable_dtype(psr)
     gsr = cudf.from_pandas(psr)
 
     if isinstance(fill_value, pd.Series):
@@ -410,22 +408,22 @@ def test_fillna_dataframe(df, value, inplace):
 @pytest.mark.parametrize(
     "psr",
     [
-        pd.Series(["a", "b", "c", "d"]),
-        pd.Series([None] * 4, dtype="object"),
-        pd.Series(["z", None, "z", None]),
-        pd.Series(["x", "y", None, None, None]),
-        pd.Series([None, None, None, "i", "P"]),
+        pd.Series(["a", "b", "c", "d"], dtype=pd.StringDtype()),
+        pd.Series([None] * 4, dtype=pd.StringDtype()),
+        pd.Series(["z", None, "z", None], dtype=pd.StringDtype()),
+        pd.Series(["x", "y", None, None, None], dtype=pd.StringDtype()),
+        pd.Series([None, None, None, "i", "P"], dtype=pd.StringDtype()),
     ],
 )
 @pytest.mark.parametrize(
     "fill_value",
     [
         "a",
-        pd.Series(["a", "b", "c", "d"]),
-        pd.Series(["z", None, "z", None]),
-        pd.Series([None] * 4, dtype="object"),
-        pd.Series(["x", "y", None, None, None]),
-        pd.Series([None, None, None, "i", "P"]),
+        pd.Series(["a", "b", "c", "d"], dtype=pd.StringDtype()),
+        pd.Series(["z", None, "z", None], dtype=pd.StringDtype()),
+        pd.Series([None] * 4, dtype=pd.StringDtype()),
+        pd.Series(["x", "y", None, None, None], dtype=pd.StringDtype()),
+        pd.Series([None, None, None, "i", "P"], dtype=pd.StringDtype()),
     ],
 )
 @pytest.mark.parametrize("inplace", [True, False])
@@ -464,6 +462,7 @@ def test_series_fillna_invalid_dtype(data_dtype):
 @pytest.mark.parametrize("fill_value", [100, 100.0, 128.5])
 def test_series_where(data_dtype, fill_value):
     psr = pd.Series(list(range(10)), dtype=data_dtype)
+    psr = promote_to_pd_nullable_dtype(psr)
     sr = Series.from_pandas(psr)
 
     if sr.dtype.type(fill_value) != fill_value:
@@ -536,7 +535,7 @@ def test_dataframe_with_different_types():
     expect = pdf.where(pdf > 50, -pdf)
     got = gdf.where(gdf > 50, -gdf)
 
-    assert_eq(expect, got)
+    assert_eq(expect, got, downcast=True)
 
     # Testing for string
     pdf = pd.DataFrame({"A": ["a", "bc", "cde", "fghi"]})
@@ -546,7 +545,7 @@ def test_dataframe_with_different_types():
     expect = pdf.where(pdf_mask, ["cudf"])
     got = gdf.where(gdf_mask, ["cudf"])
 
-    assert_eq(expect, got)
+    assert_eq(expect, got, downcast=True)
 
     # Testing for categoriacal
     pdf = pd.DataFrame({"A": ["a", "b", "b", "c"]})
@@ -555,7 +554,7 @@ def test_dataframe_with_different_types():
     expect = pdf.where(pdf_mask, "c")
     got = gdf.where(gdf_mask, ["c"])
 
-    assert_eq(expect, got)
+    assert_eq(expect, got, downcast=True)
 
 
 def test_dataframe_where_with_different_options():

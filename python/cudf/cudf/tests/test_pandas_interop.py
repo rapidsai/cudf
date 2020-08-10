@@ -6,7 +6,7 @@ import pytest
 
 import cudf
 from cudf.core import DataFrame
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import assert_eq, promote_to_pd_nullable_dtype
 
 
 def test_to_pandas():
@@ -15,17 +15,12 @@ def test_to_pandas():
     df["b"] = np.arange(10, 15, dtype=np.float64)
     df["c"] = np.array([True, False, None, True, True])
 
-    pdf = df.to_pandas(nullable_pd_dtype=False)
+    pdf = df.to_pandas()
 
     assert tuple(df.columns) == tuple(pdf.columns)
-
-    assert df["a"].dtype == pdf["a"].dtype
-    assert df["b"].dtype == pdf["b"].dtype
-
-    # Notice, the dtype differ when Pandas and cudf boolean series
-    # contains None/NaN
-    assert df["c"].dtype == np.bool
-    assert pdf["c"].dtype == np.object
+    assert df["a"].dtype.type == pdf["a"].dtype.type
+    assert df["b"].dtype.type == pdf["b"].dtype.type
+    assert df["c"].dtype.type == pdf["c"].dtype.type
 
     assert len(df["a"]) == len(pdf["a"])
     assert len(df["b"]) == len(pdf["b"])
@@ -63,6 +58,7 @@ def test_from_pandas_ex1():
 
 def test_from_pandas_with_index():
     pdf = pd.DataFrame({"a": [0, 1, 2, 3], "b": [0.1, 0.2, None, 0.3]})
+    pdf = promote_to_pd_nullable_dtype(pdf)
     pdf = pdf.set_index(np.asarray([4, 3, 2, 1]))
     df = DataFrame.from_pandas(pdf)
 

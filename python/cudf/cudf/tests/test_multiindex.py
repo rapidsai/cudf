@@ -13,7 +13,7 @@ import pytest
 import cudf
 from cudf.core.column import as_column
 from cudf.core.index import as_index
-from cudf.tests.utils import assert_eq, assert_neq
+from cudf.tests.utils import assert_eq, assert_neq, promote_to_pd_nullable_dtype
 
 
 def test_multiindex_levels_codes_validation():
@@ -78,7 +78,7 @@ def test_multiindex_types():
 
 
 def test_multiindex_df_assignment():
-    pdf = pd.DataFrame({"x": [1, 2, 3]})
+    pdf = pd.DataFrame({"x": [1, 2, 3]}, dtype=pd.Int64Dtype())
     gdf = cudf.from_pandas(pdf)
     pdf.index = pd.MultiIndex([["a", "b"], ["c", "d"]], [[0, 1, 0], [1, 0, 1]])
     gdf.index = cudf.MultiIndex(
@@ -88,7 +88,7 @@ def test_multiindex_df_assignment():
 
 
 def test_multiindex_series_assignment():
-    ps = pd.Series([1, 2, 3])
+    ps = pd.Series([1, 2, 3], dtype=pd.Int64Dtype())
     gs = cudf.from_pandas(ps)
     ps.index = pd.MultiIndex([["a", "b"], ["c", "d"]], [[0, 1, 0], [1, 0, 1]])
     gs.index = cudf.MultiIndex(
@@ -203,7 +203,7 @@ def test_from_pandas_series():
     pdf = pd.DataFrame(
         {"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}
     ).set_index(["a", "b"])
-
+    pdf['c'] = pdf['c'].astype(pd.Int64Dtype())
     result = cudf.from_pandas(pdf)
     assert_eq(pdf, result)
 
@@ -407,7 +407,7 @@ def test_multiindex_index_and_columns():
     gdf = cudf.DataFrame()
     gdf["x"] = np.random.randint(0, 5, 5)
     gdf["y"] = np.random.randint(0, 5, 5)
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
     mi = cudf.MultiIndex(
         levels=[[0, 1, 2], [3, 4]],
         codes=[[0, 0, 1, 1, 2], [0, 1, 0, 1, 1]],
@@ -418,8 +418,8 @@ def test_multiindex_index_and_columns():
         levels=[["val"], ["mean", "min"]], codes=[[0, 0], [0, 1]]
     )
     gdf.columns = mc
-    pdf.index = mi.to_pandas(nullable_pd_dtype=False)
-    pdf.columns = mc.to_pandas(nullable_pd_dtype=False)
+    pdf.index = mi.to_pandas()
+    pdf.columns = mc.to_pandas()
     assert_eq(pdf, gdf)
 
 
@@ -691,18 +691,19 @@ def test_multicolumn_item():
     )
     gdg = gdf.groupby(["x", "y"]).min()
     gdgT = gdg.T
-    pdgT = gdgT.to_pandas(nullable_pd_dtype=False)
+    pdgT = gdgT.to_pandas()
     assert_eq(gdgT[(0, 0)], pdgT[(0, 0)])
 
 
 def test_multiindex_to_frame(pdfIndex, pdfIndexNulls):
     gdfIndex = cudf.from_pandas(pdfIndex)
-    assert_eq(pdfIndex.to_frame(), gdfIndex.to_frame())
+    assert_eq(pdfIndex.to_frame(), gdfIndex.to_frame(), downcast=True)
 
     gdfIndex = cudf.from_pandas(pdfIndexNulls)
     assert_eq(
         pdfIndexNulls.to_frame().fillna("nan"),
         gdfIndex.to_frame().fillna("nan"),
+        downcast=True
     )
 
 
@@ -710,27 +711,42 @@ def test_multiindex_groupby_to_frame():
     gdf = cudf.DataFrame(
         {"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5], "z": [0, 1, 0, 1, 0]}
     )
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
+
+    # Nullable types at this point, if we don't downcast
+    # they will be upcast to object during set_index()
+    for col in pdf.columns:
+        pdf[col] = pdf[col].astype(np.dtype('int64'))
+
     gdg = gdf.groupby(["x", "y"]).count()
     pdg = pdf.groupby(["x", "y"]).count()
-    assert_eq(pdg.index.to_frame(), gdg.index.to_frame())
+    assert_eq(pdg.index.to_frame(), gdg.index.to_frame(), downcast=True)
 
 
 def test_multiindex_reset_index(pdf, gdf, pdfIndex):
     gdfIndex = cudf.from_pandas(pdfIndex)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
-    assert_eq(pdf.reset_index(), gdf.reset_index())
+    assert_eq(pdf.reset_index(), gdf.reset_index(), downcast=True)
 
 
 def test_multiindex_groupby_reset_index():
     gdf = cudf.DataFrame(
         {"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5], "z": [0, 1, 0, 1, 0]}
     )
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
     gdg = gdf.groupby(["x", "y"]).sum()
     pdg = pdf.groupby(["x", "y"]).sum()
-    assert_eq(pdg.reset_index(), gdg.reset_index())
+
+    expect = pdg.reset_index()
+    got = gdg.reset_index()
+
+    # We can't set previously pd.Int64Dtype() columns into 
+    # then index, or they will become `object` dtype
+    # Need to upcast them AFTER the op. 
+    expect = promote_to_pd_nullable_dtype(expect)
+
+    assert_eq(expect, got)
 
 
 def test_multicolumn_reset_index():
@@ -799,9 +815,15 @@ def test_multiindex_multicolumn_zero_row_slice():
     gdf = cudf.DataFrame(
         {"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5], "z": [1, 2, 3, 4, 5]}
     )
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
+    # can't set the resulting pd.Int64Dtype() columns as an index
+    # or else we will get different index classes
+    for col in pdf.columns:
+        pdf[col] = pdf[col].astype(np.dtype('int64'))
+
     gdg = gdf.groupby(["x", "y"]).agg({"z": ["count"]}).iloc[:0]
     pdg = pdf.groupby(["x", "y"]).agg({"z": ["count"]}).iloc[:0]
+
     assert_eq(pdg, gdg, check_dtype=False)
 
 
@@ -821,6 +843,9 @@ def test_multicolumn_set_item(pdf, pdfIndex):
     gdf = cudf.from_pandas(pdf)
     pdf["d"] = [1, 2, 3, 4, 5]
     gdf["d"] = [1, 2, 3, 4, 5]
+
+    # setting a list into pandas does not default to pd.Int64Dtype
+    pdf['d'] = pdf['d'].astype(pd.Int64Dtype())
     assert_eq(pdf, gdf)
 
 
