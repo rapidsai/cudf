@@ -22,6 +22,7 @@
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/functions.hpp>
 #include <cudf/join.hpp>
+#include <cudf/merge.hpp>
 #include <cudf/partitioning.hpp>
 #include <cudf/reshape.hpp>
 #include <cudf/rolling.hpp>
@@ -367,6 +368,70 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_orderBy(JNIEnv *env, jcla
 
     cudf::table_view *input_table = reinterpret_cast<cudf::table_view *>(j_input_table);
     std::unique_ptr<cudf::table> result = cudf::gather(*input_table, sorted_col->view());
+    return cudf::jni::convert_table_for_return(env, result);
+  }
+  CATCH_STD(env, NULL);
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_merge(JNIEnv *env, jclass j_class_object,
+                                                             jlongArray j_table_handles,
+                                                             jintArray j_sort_key_indexes,
+                                                             jbooleanArray j_is_descending,
+                                                             jbooleanArray j_are_nulls_smallest) {
+
+  // input validations & verifications
+  JNI_NULL_CHECK(env, j_table_handles, "input tables are null", NULL);
+  JNI_NULL_CHECK(env, j_sort_key_indexes, "key indexes is null", NULL);
+  JNI_NULL_CHECK(env, j_is_descending, "sort order array is null", NULL);
+  JNI_NULL_CHECK(env, j_are_nulls_smallest, "null order array is null", NULL);
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::jni::native_jpointerArray<cudf::table_view> n_table_handles(env,
+                                                                      j_table_handles);
+
+    const cudf::jni::native_jintArray n_sort_key_indexes(env, j_sort_key_indexes);
+    jsize num_columns = n_sort_key_indexes.size();
+    const cudf::jni::native_jbooleanArray n_is_descending(env, j_is_descending);
+    jsize num_columns_is_desc = n_is_descending.size();
+
+    if (num_columns_is_desc != num_columns) {
+      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+                    "columns and is_descending lengths don't match", NULL);
+    }
+
+    const cudf::jni::native_jbooleanArray n_are_nulls_smallest(env, j_are_nulls_smallest);
+    jsize num_columns_null_smallest = n_are_nulls_smallest.size();
+
+    if (num_columns_null_smallest != num_columns) {
+      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+                    "columns and areNullsSmallest lengths don't match", NULL);
+    }
+
+    std::vector<int> indexes(n_sort_key_indexes.size());
+    for (int i = 0; i < n_sort_key_indexes.size(); i++) {
+      indexes[i] = n_sort_key_indexes[i];
+    }
+    std::vector<cudf::order> order(n_is_descending.size());
+    for (int i = 0; i < n_is_descending.size(); i++) {
+      order[i] = n_is_descending[i] ? cudf::order::DESCENDING : cudf::order::ASCENDING;
+    }
+    std::vector<cudf::null_order> null_order(n_are_nulls_smallest.size());
+    for (int i = 0; i < n_are_nulls_smallest.size(); i++) {
+      null_order[i] = n_are_nulls_smallest[i] ? cudf::null_order::BEFORE : cudf::null_order::AFTER;
+    }
+
+    jsize num_tables = n_table_handles.size();
+    std::vector<cudf::table_view> tables;
+    tables.reserve(num_tables);
+    for (int i = 0; i < num_tables; i++) {
+      tables.push_back(*n_table_handles[i]);
+    }
+
+    std::unique_ptr<cudf::table> result = cudf::merge(tables,
+            indexes,
+            order,
+            null_order);
     return cudf::jni::convert_table_for_return(env, result);
   }
   CATCH_STD(env, NULL);
@@ -1137,6 +1202,22 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_filter(JNIEnv *env, jclas
     cudf::table_view *input = reinterpret_cast<cudf::table_view *>(input_jtable);
     cudf::column_view *mask = reinterpret_cast<cudf::column_view *>(mask_jcol);
     std::unique_ptr<cudf::table> result = cudf::apply_boolean_mask(*input, *mask);
+    return cudf::jni::convert_table_for_return(env, result);
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gather(JNIEnv *env, jclass,
+                                                              jlong j_input,
+                                                              jlong j_map,
+                                                              jboolean check_bounds) {
+  JNI_NULL_CHECK(env, j_input, "input table is null", 0);
+  JNI_NULL_CHECK(env, j_map, "map column is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::table_view *input = reinterpret_cast<cudf::table_view *>(j_input);
+    cudf::column_view *map = reinterpret_cast<cudf::column_view *>(j_map);
+    std::unique_ptr<cudf::table> result = cudf::gather(*input, *map);
     return cudf::jni::convert_table_for_return(env, result);
   }
   CATCH_STD(env, 0);
