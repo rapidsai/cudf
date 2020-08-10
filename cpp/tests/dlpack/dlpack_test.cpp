@@ -253,7 +253,7 @@ TYPED_TEST(DLPackNumericTests, ToDlpack1D)
   // Verify that data matches input column
   constexpr cudf::data_type type{cudf::type_to_id<TypeParam>()};
   cudf::column_view const result_view(type, tensor.shape[0], tensor.data, col_view.null_mask());
-  expect_columns_equal(col_view, result_view);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(col_view, result_view);
 }
 
 TYPED_TEST(DLPackNumericTests, ToDlpack2D)
@@ -291,7 +291,7 @@ TYPED_TEST(DLPackNumericTests, ToDlpack2D)
   for (auto const& col : input) {
     constexpr cudf::data_type type{cudf::type_to_id<TypeParam>()};
     cudf::column_view const result_view(type, tensor.shape[0], tensor.data, nullptr, 0, offset);
-    expect_columns_equal(col, result_view);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(col, result_view);
     offset += tensor.strides[1];
   }
 }
@@ -305,7 +305,7 @@ TYPED_TEST(DLPackNumericTests, FromDlpack1D)
 
   // Verify that from_dlpack(to_dlpack(input)) == input
   auto result = cudf::from_dlpack(tensor.get());
-  expect_tables_equal(input, result->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(input, result->view());
 }
 
 TYPED_TEST(DLPackNumericTests, FromDlpack2D)
@@ -328,7 +328,7 @@ TYPED_TEST(DLPackNumericTests, FromDlpack2D)
 
   // Verify that from_dlpack(to_dlpack(input)) == input
   auto result = cudf::from_dlpack(tensor.get());
-  expect_tables_equal(input, result->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(input, result->view());
 }
 
 TYPED_TEST(DLPackNumericTests, FromDlpackCpu)
@@ -356,7 +356,7 @@ TYPED_TEST(DLPackNumericTests, FromDlpackCpu)
   cudf::table_view expected({col1, col2});
 
   auto result = cudf::from_dlpack(&tensor);
-  expect_tables_equal(expected, result->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result->view());
 }
 
 TYPED_TEST(DLPackNumericTests, FromDlpackEmpty1D)

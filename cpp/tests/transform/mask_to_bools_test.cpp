@@ -32,7 +32,7 @@ TEST_F(MaskToBools, NullDataWithZeroLength)
   auto expected = cudf::test::fixed_width_column_wrapper<bool>({});
   auto out      = cudf::mask_to_bools(nullptr, 0, 0);
 
-  cudf::test::expect_columns_equal(expected, out->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, out->view());
 }
 
 TEST_F(MaskToBools, NullDataWithNonZeroLength)
@@ -71,7 +71,7 @@ TEST_P(MaskToBoolsTest, LargeDataSizeTest)
   auto out = cudf::mask_to_bools(
     static_cast<const cudf::bitmask_type*>(mask.first->data()), begin_bit, end_bit);
 
-  cudf::test::expect_columns_equal(expected, out->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, out->view());
 }
 
 INSTANTIATE_TEST_CASE_P(MaskToBools,

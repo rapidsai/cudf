@@ -201,16 +201,16 @@ inline std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to
     cudf::test::expect_column_properties_equivalent(lhs, rhs);  \
   }
 
-#define CUDF_TEST_EXPECT_COLUMNS_EQUAL(lhs, rhs) \
-  {                                              \
-    SCOPED_TRACE(" <--  line of failure\n");     \
-    cudf::test::expect_columns_equal(lhs, rhs);  \
+#define CUDF_TEST_EXPECT_COLUMNS_EQUAL(lhs, rhs...) \
+  {                                                 \
+    SCOPED_TRACE(" <--  line of failure\n");        \
+    cudf::test::expect_columns_equal(lhs, rhs);     \
   }
 
-#define CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(lhs, rhs) \
-  {                                                   \
-    SCOPED_TRACE(" <--  line of failure\n");          \
-    cudf::test::expect_columns_equivalent(lhs, rhs);  \
+#define CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(lhs, rhs...) \
+  {                                                      \
+    SCOPED_TRACE(" <--  line of failure\n");             \
+    cudf::test::expect_columns_equivalent(lhs, rhs);     \
   }
 
 #define CUDF_TEST_EXPECT_EQUAL_BUFFERS(lhs, rhs, size_bytes) \

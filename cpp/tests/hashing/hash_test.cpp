@@ -19,8 +19,6 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/type_lists.hpp>
 
-using cudf::test::expect_column_properties_equal;
-using cudf::test::expect_columns_equal;
 using cudf::test::fixed_width_column_wrapper;
 using cudf::test::strings_column_wrapper;
 
@@ -56,7 +54,7 @@ TEST_F(HashTest, MultiValue)
   auto const output2 = cudf::hash(input2);
 
   EXPECT_EQ(input1.num_rows(), output1->size());
-  expect_columns_equal(output1->view(), output2->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
 TEST_F(HashTest, MultiValueNulls)
@@ -109,7 +107,7 @@ TEST_F(HashTest, MultiValueNulls)
   auto const output2 = cudf::hash(input2);
 
   EXPECT_EQ(input1.num_rows(), output1->size());
-  expect_columns_equal(output1->view(), output2->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
 template <typename T>
@@ -128,7 +126,7 @@ TYPED_TEST(HashTestTyped, Equality)
   auto const output2 = cudf::hash(input);
 
   EXPECT_EQ(input.num_rows(), output1->size());
-  expect_columns_equal(output1->view(), output2->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
 TYPED_TEST(HashTestTyped, EqualityNulls)
@@ -146,7 +144,7 @@ TYPED_TEST(HashTestTyped, EqualityNulls)
   auto const output2 = cudf::hash(input2);
 
   EXPECT_EQ(input1.num_rows(), output1->size());
-  expect_columns_equal(output1->view(), output2->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
 template <typename T>
@@ -173,7 +171,7 @@ TYPED_TEST(HashTestFloatTyped, TestExtremes)
   auto const output1 = cudf::hash(input1);
   auto const output2 = cudf::hash(input2);
 
-  expect_columns_equal(output1->view(), output2->view(), true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view(), true);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

@@ -48,7 +48,7 @@ TYPED_TEST(GatherTestList, Gather)
 
   cudf::test::lists_column_wrapper<T> expected{{1, 2, 3, 4}, {6, 7}};
 
-  cudf::test::expect_columns_equal(results->view().column(0), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
 }
 
 TYPED_TEST(GatherTestList, GatherNulls)
@@ -68,7 +68,7 @@ TYPED_TEST(GatherTestList, GatherNulls)
 
   cudf::test::lists_column_wrapper<T> expected{{{1, 2, 3, 4}, valids}, {{6, 7}, valids}};
 
-  cudf::test::expect_columns_equal(results->view().column(0), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
 }
 
 TYPED_TEST(GatherTestList, GatherNested)
@@ -92,7 +92,7 @@ TYPED_TEST(GatherTestList, GatherNested)
     cudf::test::lists_column_wrapper<T> expected{
       {{2, 3}, {4, 5}}, {{15, 16}, {17, 18}, {17, 18}, {17, 18}, {17, 18}}};
 
-    cudf::test::expect_columns_equal(results->view().column(0), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
   }
 
   // List<List<List<T>>>
@@ -115,7 +115,7 @@ TYPED_TEST(GatherTestList, GatherNested)
       {{LCW{0}}},
       {{{10, 20}}, {LCW{30}}, {{40, 50}, {60, 70, 80}}}};
 
-    cudf::test::expect_columns_equal(results->view().column(0), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
   }
 }
 
@@ -143,7 +143,7 @@ TYPED_TEST(GatherTestList, GatherNestedForceRecycle)
 
     cudf::test::lists_column_wrapper<T> expected{{{LCW{2}}}, {{LCW{3}}}, {{LCW{5}}}};
 
-    cudf::test::expect_columns_equal(results->view().column(0), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
   }
 
   // recycled on first level but not second
@@ -159,7 +159,7 @@ TYPED_TEST(GatherTestList, GatherNestedForceRecycle)
 
     cudf::test::lists_column_wrapper<T> expected{{{LCW{2}}}, {{LCW{3}, LCW{4}}}, {{LCW{5}}}};
 
-    cudf::test::expect_columns_equal(results->view().column(0), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
   }
 
   // recycled on both levels
@@ -175,7 +175,7 @@ TYPED_TEST(GatherTestList, GatherNestedForceRecycle)
 
     cudf::test::lists_column_wrapper<T> expected{{{LCW{2}}}, {{LCW{}}}, {{LCW{5}}}};
 
-    cudf::test::expect_columns_equal(results->view().column(0), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
   }
 }
 
@@ -201,7 +201,7 @@ TYPED_TEST(GatherTestList, GatherOutOfOrder)
                                                  {{15, 16}, {17, 18}, {17, 18}, {17, 18}, {17, 18}},
                                                  {{2, 3}, {4, 5}}};
 
-    cudf::test::expect_columns_equal(results->view().column(0), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
   }
 }
 
@@ -234,7 +234,7 @@ TYPED_TEST(GatherTestList, GatherNestedNulls)
       {{{6, 7, 8}, {9, 10, 11}, {12, 13, 14}}, valids},
       {{{{25, 26}, valids}, {27, 28}, {{29, 30}, valids}, {31, 32}, {33, 34}}, valids}};
 
-    cudf::test::expect_columns_equal(results->view().column(0), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
   }
 
   // List<List<List<T>>>
@@ -258,7 +258,7 @@ TYPED_TEST(GatherTestList, GatherNestedNulls)
       {{LCW{0}}},
       {{{{{10, 20}, valids}}, {LCW{30}}, {{40, 50}, {60, 70, 80}}}, valids}};
 
-    cudf::test::expect_columns_equal(results->view().column(0), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
   }
 }
 
@@ -279,7 +279,7 @@ TYPED_TEST(GatherTestList, GatherNestedWithEmpties)
 
   cudf::test::lists_column_wrapper<T> expected{{{2, 3}, LCW{}}, {LCW{}}};
 
-  cudf::test::expect_columns_equal(results->view().column(0), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
 }
 
 TYPED_TEST(GatherTestList, GatherDetailInvalidIndex)
@@ -308,6 +308,6 @@ TYPED_TEST(GatherTestList, GatherDetailInvalidIndex)
       {{{2, 3}, {4, 5}}, {LCW{}}, {LCW{}}, {{15, 16}, {17, 18}, {17, 18}, {17, 18}, {17, 18}}},
       expected_validity.begin()};
 
-    cudf::test::expect_columns_equal(results->view().column(0), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
   }
 }

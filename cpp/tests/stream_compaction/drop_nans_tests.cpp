@@ -48,7 +48,7 @@ TEST_F(DropNANsTest, MixedNANsAndNull)
 
   auto got = cudf::drop_nans(input, keys);
 
-  cudf::test::expect_tables_equal(expected, got->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got->view());
 }
 
 TEST_F(DropNANsTest, NoNANs)
@@ -62,7 +62,7 @@ TEST_F(DropNANsTest, NoNANs)
 
   auto got = cudf::drop_nans(input, keys);
 
-  cudf::test::expect_tables_equal(input, got->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(input, got->view());
 }
 
 TEST_F(DropNANsTest, MixedWithThreshold)
@@ -86,7 +86,7 @@ TEST_F(DropNANsTest, MixedWithThreshold)
 
   auto got = cudf::drop_nans(input, keys, 1);
 
-  cudf::test::expect_tables_equal(expected, got->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got->view());
 }
 
 TEST_F(DropNANsTest, EmptyTable)
@@ -97,7 +97,7 @@ TEST_F(DropNANsTest, EmptyTable)
 
   auto got = cudf::drop_nans(input, keys);
 
-  cudf::test::expect_tables_equal(expected, got->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got->view());
 }
 
 TEST_F(DropNANsTest, EmptyColumns)
@@ -114,7 +114,7 @@ TEST_F(DropNANsTest, EmptyColumns)
 
   auto got = cudf::drop_nans(input, keys);
 
-  cudf::test::expect_tables_equal(expected, got->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got->view());
 }
 
 TEST_F(DropNANsTest, EmptyKeys)
@@ -126,7 +126,7 @@ TEST_F(DropNANsTest, EmptyKeys)
   std::vector<cudf::size_type> keys{};
 
   auto got = cudf::drop_nans(input, keys);
-  cudf::test::expect_tables_equal(input, got->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(input, got->view());
 }
 
 TEST_F(DropNANsTest, NonFloatingKey)

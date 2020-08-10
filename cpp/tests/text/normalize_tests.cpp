@@ -60,7 +60,7 @@ TEST_F(TextNormalizeTest, NormalizeSpaces)
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
 
   auto const results = nvtext::normalize_spaces(strings_view);
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(TextNormalizeTest, NormalizeEmptyTest)
@@ -113,7 +113,7 @@ TEST_F(TextNormalizeTest, NormalizeCharacters)
                                                  " 丏  丟 ",
                                                  ""},
                                                 validity);
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     auto results = nvtext::normalize_characters(cudf::strings_column_view(strings), false);
@@ -128,6 +128,6 @@ TEST_F(TextNormalizeTest, NormalizeCharacters)
                                                  " 丏  丟 ",
                                                  ""},
                                                 validity);
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
