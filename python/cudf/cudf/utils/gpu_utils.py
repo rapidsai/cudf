@@ -24,7 +24,11 @@ def validate_setup(check_dask=True):
 
     try:
         gpus_count = getDeviceCount()
-    except CUDARuntimeError:
+    except CUDARuntimeError as e:
+        if e.status == 35:
+            # status = 35 Indicates CUDA driver
+            # is older than CUDA runtime library
+            raise e
         # If there is no GPU detected, set `gpus_count` to -1
         gpus_count = -1
 
