@@ -150,6 +150,25 @@ TEST_F(ASTTest, MultiLevelTreeComparator)
   cudf::test::expect_columns_equal(expected, result->view(), true);
 }
 
+TEST_F(ASTTest, MultiTypeOperationFailure)
+{
+  auto c_0   = column_wrapper<int32_t>{3, 20, 1, 50};
+  auto c_1   = column_wrapper<double>{0.15, 0.77, 4.2, 21.3};
+  auto table = cudf::table_view{{c_0, c_1}};
+
+  auto col_ref_0 = cudf::ast::column_reference(0);
+  auto col_ref_1 = cudf::ast::column_reference(1);
+
+  auto expression_0_plus_1 =
+    cudf::ast::binary_expression(cudf::ast::ast_operator::ADD, col_ref_0, col_ref_1);
+  auto expression_1_plus_0 =
+    cudf::ast::binary_expression(cudf::ast::ast_operator::ADD, col_ref_1, col_ref_0);
+
+  // Operations on different types are not allowed
+  EXPECT_THROW(cudf::ast::compute_column(table, expression_0_plus_1), cudf::logic_error);
+  EXPECT_THROW(cudf::ast::compute_column(table, expression_1_plus_0), cudf::logic_error);
+}
+
 TEST_F(ASTTest, LiteralComparison)
 {
   auto c_0   = column_wrapper<int32_t>{3, 20, 1, 50};
