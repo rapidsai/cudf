@@ -149,11 +149,11 @@ template <>
 std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::string_view>(
   column_view input, cudf::type_id id, arrow::MemoryPool* ar_mr, cudaStream_t stream)
 {
-  std::unique_ptr<column> tmp_column = nullptr;
-  if ((input.offset() != 0) or
-      ((input.num_children() == 2) and (input.child(0).size() - 1 != input.size()))) {
-    tmp_column = std::make_unique<cudf::column>(input);
-  }
+  std::unique_ptr<column> tmp_column =
+    ((input.offset() != 0) or
+     ((input.num_children() == 2) and (input.child(0).size() - 1 != input.size())))
+      ? std::make_unique<cudf::column>(input)
+      : nullptr;
 
   column_view input_view = (tmp_column != nullptr) ? tmp_column->view() : input;
   auto child_arrays      = fetch_child_array(input_view, ar_mr, stream);
