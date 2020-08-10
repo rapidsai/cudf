@@ -69,6 +69,11 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         LIST "cudf::type_id::LIST"
         NUM_TYPE_IDS "cudf::type_id::NUM_TYPE_IDS"
 
+    ctypedef enum hash_id "cudf::hash_id":
+        HASH_IDENTITY "cudf::hash_id::HASH_IDENTITY"
+        HASH_MURMUR3 "cudf::hash_id::HASH_MURMUR3"
+        HASH_MD5 "cudf::hash_id::HASH_MD5"
+
     cdef cppclass data_type:
         data_type() except +
         data_type(const data_type&) except +

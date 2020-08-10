@@ -14,7 +14,7 @@ from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.hash cimport (
-    murmur_hash3_32 as cpp_hash
+    hash as cpp_hash
 )
 from cudf._lib.cpp.partitioning cimport (
     hash_partition as cpp_hash_partition,
@@ -64,6 +64,7 @@ def hash(Table source_table, object initial_hash_values=None):
         c_result = move(
             cpp_hash(
                 c_source_view,
+                libcudf_types.hash_id.HASH_MURMUR3,
                 c_initial_hash
             )
         )

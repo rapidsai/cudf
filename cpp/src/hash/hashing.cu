@@ -27,7 +27,6 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 
-#include <sys/types.h>
 #include <thrust/tabulate.h>
 
 namespace cudf {
@@ -645,7 +644,7 @@ std::unique_ptr<column> hash(table_view const& input,
   switch (hash_function) {
     case (hash_id::HASH_MURMUR3): return murmur_hash3_32(input, initial_hash, mr, stream);
     case (hash_id::HASH_MD5): return md5_hash(input, mr, stream);
-    default: return NULL;
+    default: return nullptr;
   }
 }
 
