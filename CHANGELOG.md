@@ -182,6 +182,7 @@
 - PR #5853 Disable `fixed_point` for use in `copy_if`
 - PR #5854 Raise informative error in `DataFrame.iterrows` and `DataFrame.itertuples`
 - PR #5863 Explicitly require `ucx-py` on CI
+- PR #5881 Add in JVM extractListElement and stringSplitRecord
 - PR #5885 Add in java support for merge sort
 - PR #5894 Small code improvement / cleanup
 - PR #5899 Add in gather support for Java

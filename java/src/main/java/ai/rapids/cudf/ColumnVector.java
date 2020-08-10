@@ -1970,6 +1970,22 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   }
 
   /////////////////////////////////////////////////////////////////////////////
+  // LISTS
+  /////////////////////////////////////////////////////////////////////////////
+
+  /**
+   * For each list in this column pull out the entry at the given index. If the entry would
+   * go off the end of the list a NULL is returned instead.
+   * @param index 0 based offset into the list. Negative values go backwards from the end of the
+   *              list.
+   * @return a new column of the values at those indexes.
+   */
+  public ColumnVector extractListElement(int index) {
+    assert type == DType.LIST : "A column of type LIST is required for .extractListElement()";
+    return new ColumnVector(extractListElement(getNativeView(), index));
+  }
+
+  /////////////////////////////////////////////////////////////////////////////
   // STRINGS
   /////////////////////////////////////////////////////////////////////////////
 
@@ -2078,7 +2094,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * Null entries are added for a row where split results have been exhausted.
    * Null string entries return corresponding null output columns.
    * @param delimiter UTF-8 encoded string identifying the split points in each string.
-   *                  Default of empty string indicates split on whitespace.
+   *                  An empty string indicates split on whitespace.
    * @return New table of strings columns.
    */
   public Table stringSplit(Scalar delimiter) {
@@ -2099,6 +2115,48 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     try (Scalar emptyString = Scalar.fromString("")) {
       return stringSplit(emptyString);
     }
+  }
+
+  /**
+   * Returns a column of lists of strings by splitting each string using whitespace as the delimiter.
+   */
+  public ColumnVector stringSplitRecord() {
+    return stringSplitRecord(-1);
+  }
+
+  /**
+   * Returns a column of lists of strings by splitting each string using whitespace as the delimiter.
+   * @param maxSplit the maximum number of records to split, or -1 for all of them.
+   */
+  public ColumnVector stringSplitRecord(int maxSplit) {
+    try (Scalar emptyString = Scalar.fromString("")) {
+      return stringSplitRecord(emptyString, maxSplit);
+    }
+  }
+
+  /**
+   * Returns a column of lists of strings by splitting each string using the specified delimiter.
+   * @param delimiter UTF-8 encoded string identifying the split points in each string.
+   *                  An empty string indicates split on whitespace.
+   */
+  public ColumnVector stringSplitRecord(Scalar delimiter) {
+    return stringSplitRecord(delimiter, -1);
+  }
+
+  /**
+   * Returns a column that is a list of strings. Each string list is made by splitting each input
+   * string using the specified delimiter.
+   * @param delimiter UTF-8 encoded string identifying the split points in each string.
+   *                  An empty string indicates split on whitespace.
+   * @param maxSplit the maximum number of records to split, or -1 for all of them.
+   * @return New table of strings columns.
+   */
+  public ColumnVector stringSplitRecord(Scalar delimiter, int maxSplit) {
+    assert type == DType.STRING : "column type must be a String";
+    assert delimiter != null : "delimiter may not be null";
+    assert delimiter.getType() == DType.STRING : "delimiter must be a string scalar";
+    return new ColumnVector(
+            stringSplitRecord(this.getNativeView(), delimiter.getScalarHandle(), maxSplit));
   }
 
   /**
@@ -2604,6 +2662,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    */
   private static native long[] stringSplit(long columnView, long delimiter);
 
+  private static native long stringSplitRecord(long nativeView, long scalarHandle, int maxSplit);
+
   /**
    * Native method to calculate substring from a given string column. 0 indexing.
    * @param columnView native handle of the cudf::column_view being operated on.
@@ -2720,6 +2780,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   private static native long binaryOpVV(long lhs, long rhs, int op, int dtype);
 
   private static native long byteCount(long viewHandle) throws CudfException;
+
+  private static native long extractListElement(long nativeView, int index);
 
   private static native long castTo(long nativeHandle, int type);
 
