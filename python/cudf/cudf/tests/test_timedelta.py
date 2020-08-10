@@ -1199,3 +1199,16 @@ def test_timedelta_datetime_cast_invalid():
             sr.astype("timedelta64[ns]")
     else:
         raise AssertionError("Expected datetime to timedelta typecast to fail")
+
+
+@pytest.mark.parametrize("data", [[], [1, 2, 3, 4, 5]])
+@pytest.mark.parametrize("dtype", dtypeutils.NUMERIC_TYPES)
+@pytest.mark.parametrize("timedelta_dtype", dtypeutils.TIMEDELTA_TYPES)
+def test_numeric_to_timedelta(data, dtype, timedelta_dtype):
+    sr = cudf.Series(data, dtype=dtype)
+    psr = sr.to_pandas()
+
+    actual = sr.astype(timedelta_dtype)
+    expected = pd.Series(psr.to_numpy().astype(timedelta_dtype))
+
+    assert_eq(expected, actual)
