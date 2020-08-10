@@ -1207,6 +1207,22 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_filter(JNIEnv *env, jclas
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gather(JNIEnv *env, jclass,
+                                                              jlong j_input,
+                                                              jlong j_map,
+                                                              jboolean check_bounds) {
+  JNI_NULL_CHECK(env, j_input, "input table is null", 0);
+  JNI_NULL_CHECK(env, j_map, "map column is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::table_view *input = reinterpret_cast<cudf::table_view *>(j_input);
+    cudf::column_view *map = reinterpret_cast<cudf::column_view *>(j_map);
+    std::unique_ptr<cudf::table> result = cudf::gather(*input, *map);
+    return cudf::jni::convert_table_for_return(env, result);
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_repeatStaticCount(JNIEnv *env, jclass,
                                                                          jlong input_jtable,
                                                                          jint count) {
