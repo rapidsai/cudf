@@ -180,6 +180,7 @@
 - PR #5853 Disable `fixed_point` for use in `copy_if`
 - PR #5854 Raise informative error in `DataFrame.iterrows` and `DataFrame.itertuples`
 - PR #5863 Explicitly require `ucx-py` on CI
+- PR #5884 Use S3 bucket directly for benchmark plugni
 
 ## Bug Fixes
 
