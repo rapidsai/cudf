@@ -108,8 +108,8 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
                     });
 
   // now that we are done using the gather_map, we can release the underlying prev_base_offsets.
-  // we will do it before allocating the new buffer (instead of letting the destructor clear it up
-  // at the end of the function) to keep peak memory usage down.
+  // doing this prevents this (potentially large) memory buffer from sitting around unused as the
+  // recursion continues.
   prev_base_offsets.release();
 
   // Retrieve size of the resulting gather map for level N+1 (the last offset)
