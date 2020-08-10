@@ -1324,6 +1324,10 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_ColumnVector_getNativeNumChildren(JNI
     try {
       cudf::jni::auto_set_device(env);
       cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
+      // Strings has children(offsets and chars) but not a nested child() we care about here.
+      if (column->type().id() == cudf::type_id::STRING) {
+        return 0;
+      }
       // first child is always offsets which we do not want to count here
       return static_cast<jint>(column->num_children() - 1);
     }
