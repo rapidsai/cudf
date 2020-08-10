@@ -176,9 +176,13 @@
 - PR #5834 Add support for dictionary column in concatenate
 - PR #5832 Make dictionary_wrapper constructor from a value explicit
 - PR #5833 Pin `dask` and `distributed` version to `2.22.0`
+- PR #5855 Java interface to limit RMM maximum pool size
 - PR #5853 Disable `fixed_point` for use in `copy_if`
 - PR #5854 Raise informative error in `DataFrame.iterrows` and `DataFrame.itertuples`
 - PR #5863 Explicitly require `ucx-py` on CI
+- PR #5885 Add in java support for merge sort
+- PR #5894 Small code improvement / cleanup
+- PR #5899 Add in gather support for Java
 
 ## Bug Fixes
 
