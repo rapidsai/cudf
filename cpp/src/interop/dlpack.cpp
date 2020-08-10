@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/dlpack.hpp>
+#include <cudf/detail/interop.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
