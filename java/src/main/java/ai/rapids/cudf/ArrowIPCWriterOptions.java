@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2020, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,21 +18,24 @@
 
 package ai.rapids.cudf;
 
-public class ORCWriterOptions extends CompressedMetadataWriterOptions {
+/**
+ * Settings for writing Arrow IPC data.
+ */
+public class ArrowIPCWriterOptions extends WriterOptions {
 
-  public static ORCWriterOptions DEFAULT = new ORCWriterOptions(new Builder());
-
-  private ORCWriterOptions(Builder builder) {
-    super(builder);
+  public static class Builder extends WriterBuilder<Builder> {
+    public ArrowIPCWriterOptions build() {
+      return new ArrowIPCWriterOptions(this);
+    }
   }
+
+  public static final ArrowIPCWriterOptions DEFAULT = new ArrowIPCWriterOptions(new Builder());
 
   public static Builder builder() {
     return new Builder();
   }
 
-  public static class Builder extends CMWriterBuilder<Builder> {
-    public ORCWriterOptions build() {
-      return new ORCWriterOptions(this);
-    }
+  private ArrowIPCWriterOptions(Builder builder) {
+    super(builder);
   }
 }

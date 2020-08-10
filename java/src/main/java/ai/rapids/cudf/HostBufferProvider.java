@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2020, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,21 +18,20 @@
 
 package ai.rapids.cudf;
 
-public class ORCWriterOptions extends CompressedMetadataWriterOptions {
+/**
+ * Provides a set of APIs for providing host buffers to be read.
+ */
+public interface HostBufferProvider {
+  /**
+   * Place data into the given buffer.
+   * @param buffer the buffer to put data into.
+   * @param len the maximum amount of data to put into buffer.  Less is okay if at EOF.
+   * @return the actual amount of data put into the buffer.
+   */
+  long readInto(HostMemoryBuffer buffer, long len);
 
-  public static ORCWriterOptions DEFAULT = new ORCWriterOptions(new Builder());
-
-  private ORCWriterOptions(Builder builder) {
-    super(builder);
-  }
-
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  public static class Builder extends CMWriterBuilder<Builder> {
-    public ORCWriterOptions build() {
-      return new ORCWriterOptions(this);
-    }
-  }
+  /**
+   * Indicates that no more buffers will be supplied.
+   */
+  default void done() {}
 }

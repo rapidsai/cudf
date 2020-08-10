@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2020, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,21 +18,19 @@
 
 package ai.rapids.cudf;
 
-public class ORCWriterOptions extends CompressedMetadataWriterOptions {
+import java.util.Iterator;
 
-  public static ORCWriterOptions DEFAULT = new ORCWriterOptions(new Builder());
+/**
+ * Provides an interface for reading multiple tables from a single input source.
+ */
+public interface StreamedTableReader extends AutoCloseable {
+    /**
+     * Get the next table if available.
+     * @return the next Table or null if done reading tables.
+     * @throws CudfException on any error.
+     */
+    Table getNextIfAvailable() throws CudfException;
 
-  private ORCWriterOptions(Builder builder) {
-    super(builder);
-  }
-
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  public static class Builder extends CMWriterBuilder<Builder> {
-    public ORCWriterOptions build() {
-      return new ORCWriterOptions(this);
-    }
-  }
+    @Override
+    void close() throws CudfException;
 }
