@@ -204,9 +204,7 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
         elif isinstance(o, Series):
             typs.add(Series)
         else:
-            raise ValueError(
-                f"cannot concatenate object of type {type(o)}"
-            )
+            raise ValueError(f"cannot concatenate object of type {type(o)}")
 
     allowed_typs = {Series, DataFrame}
 
