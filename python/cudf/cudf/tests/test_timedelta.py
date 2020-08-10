@@ -1162,6 +1162,7 @@ def test_numeric_to_timedelta(data, dtype, timedelta_dtype):
         1,
         2,
         3,
+        "a",
         np.timedelta64(1, "s"),
         np.timedelta64(2, "s"),
         np.timedelta64(2, "D"),

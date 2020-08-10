@@ -1,4 +1,5 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
+import datetime
 import datetime as dt
 import re
 
@@ -856,3 +857,141 @@ def test_datetime_subtract(data, other, data_dtype, other_dtype):
     actual = gsr_other - gsr
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [],
+        [None],
+        [None, None, None, None, None],
+        [12, 12, 22, 343, 4353534, 435342],
+        np.array([10, 20, 30, None, 100]),
+        cp.asarray([10, 20, 30, 100]),
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [1],
+        [12, 11, 232, 223432411, 2343241, 234324, 23234],
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+        [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+    ],
+)
+@pytest.mark.parametrize(
+    "other_scalars",
+    [
+        datetime.timedelta(days=768),
+        datetime.timedelta(seconds=768),
+        datetime.timedelta(microseconds=7),
+        datetime.timedelta(minutes=447),
+        datetime.timedelta(hours=447),
+        datetime.timedelta(weeks=734),
+        np.timedelta64(4, "s"),
+        np.timedelta64(456, "D"),
+        np.timedelta64(46, "h"),
+        np.timedelta64("nat"),
+        np.timedelta64(1, "s"),
+        np.timedelta64(1, "ms"),
+        np.timedelta64(1, "us"),
+        np.timedelta64(1, "ns"),
+    ],
+)
+@pytest.mark.parametrize("dtype", DATETIME_TYPES)
+@pytest.mark.parametrize(
+    "op", ["add", "sub"],
+)
+def test_datetime_series_ops_with_scalars(data, other_scalars, dtype, op):
+    gsr = cudf.Series(data=data, dtype=dtype)
+    psr = gsr.to_pandas(nullable_pd_dtype=True)
+
+    if op == "add":
+        expected = psr + other_scalars
+        actual = gsr + other_scalars
+    elif op == "sub":
+        expected = psr - other_scalars
+        actual = gsr - other_scalars
+
+    assert_eq(expected, actual, nullable_pd_dtype=True)
+
+    if op == "add":
+        expected = other_scalars + psr
+        actual = other_scalars + gsr
+
+        assert_eq(expected, actual, nullable_pd_dtype=True)
+
+    elif op == "sub":
+        with pytest.raises(TypeError):
+            expected = other_scalars - psr
+        with pytest.raises(TypeError):
+            actual = other_scalars - gsr
+
+
+def test_datetime_invalid_ops():
+    sr = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
+    psr = sr.to_pandas()
+
+    try:
+        psr + pd.Timestamp(1513393355.5, unit="s")
+    except TypeError:
+        with pytest.raises(TypeError):
+            sr + pd.Timestamp(1513393355.5, unit="s")
+    else:
+        raise AssertionError("Expected psr + pd.Timestamp to fail")
+
+    try:
+        psr / pd.Timestamp(1513393355.5, unit="s")
+    except TypeError:
+        with pytest.raises(TypeError):
+            sr / pd.Timestamp(1513393355.5, unit="s")
+    else:
+        raise AssertionError("Expected psr / pd.Timestamp to fail")
+
+    try:
+        psr + psr
+    except TypeError:
+        with pytest.raises(TypeError):
+            sr + sr
+    else:
+        raise AssertionError("Expected psr + psr to fail")
+
+    try:
+        psr // psr
+    except TypeError:
+        with pytest.raises(TypeError):
+            sr // sr
+    else:
+        raise AssertionError("Expected psr // psr to fail")
+
+    try:
+        psr // pd.Timestamp(1513393355.5, unit="s")
+    except TypeError:
+        with pytest.raises(TypeError):
+            sr // pd.Timestamp(1513393355.5, unit="s")
+    else:
+        raise AssertionError("Expected psr // pd.Timestamp to fail")
+
+    try:
+        psr + 1
+    except TypeError:
+        with pytest.raises(TypeError):
+            sr + 1
+    else:
+        raise AssertionError("Expected psr + 1 to fail")
+
+    try:
+        psr / "a"
+    except TypeError:
+        with pytest.raises(TypeError):
+            sr / "a"
+    else:
+        raise AssertionError("Expected psr / 'a' to fail")
+
+    try:
+        psr * 1
+    except TypeError:
+        with pytest.raises(TypeError):
+            sr * 1
+    else:
+        raise AssertionError("Expected psr * 1 to fail")
