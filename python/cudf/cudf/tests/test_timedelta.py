@@ -976,8 +976,10 @@ def test_timedelta_fillna(data, dtype, fill_value):
         ),
     ],
 )
-def test_timedelta_to_str(gsr, expected_series):
+def test_timedelta_str_roundtrip(gsr, expected_series):
 
     actual_series = gsr.astype("str")
 
     assert_eq(expected_series, actual_series)
+
+    assert_eq(gsr, actual_series.astype(gsr.dtype))

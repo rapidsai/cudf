@@ -4501,7 +4501,7 @@ class StringColumn(column.ColumnBase):
         elif out_dtype.type is np.timedelta64:
             if "format" not in kwargs:
                 if len(self) > 0:
-                    kwargs.update(format="%D %H:%M:%S")
+                    kwargs.update(format="%D days %H:%M:%S")
 
             boolean_match = self.binary_operator("eq", "NaT")
         elif out_dtype.kind in {"i", "u"}:
