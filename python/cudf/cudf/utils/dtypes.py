@@ -410,3 +410,17 @@ def is_mixed_with_object_dtype(lhs, rhs):
     return (lhs.dtype == "object" and rhs.dtype != "object") or (
         rhs.dtype == "object" and lhs.dtype != "object"
     )
+
+
+def get_time_unit(obj):
+    if isinstance(
+        obj,
+        (
+            cudf.core.column.datetime.DatetimeColumn,
+            cudf.core.column.timedelta.TimeDeltaColumn,
+        ),
+    ):
+        return obj.time_unit
+
+    time_unit, _ = np.datetime_data(obj.dtype)
+    return time_unit

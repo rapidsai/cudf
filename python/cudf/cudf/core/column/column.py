@@ -28,6 +28,7 @@ from cudf.core.dtypes import CategoricalDtype
 from cudf.utils import ioutils, utils
 from cudf.utils.dtypes import (
     check_cast_unsupported_dtype,
+    get_time_unit,
     is_categorical_dtype,
     is_list_dtype,
     is_numerical_dtype,
@@ -1498,7 +1499,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
 
         if arb_dtype.kind == "M":
 
-            time_unit, _ = np.datetime_data(arbitrary.dtype)
+            time_unit = get_time_unit(arbitrary)
             cast_dtype = time_unit in ("D", "W", "M", "Y")
 
             if cast_dtype:
@@ -1518,7 +1519,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             )
         elif arb_dtype.kind == "m":
 
-            time_unit, _ = np.datetime_data(arbitrary.dtype)
+            time_unit = get_time_unit(arbitrary)
             cast_dtype = time_unit in ("D", "W", "M", "Y")
 
             if cast_dtype:

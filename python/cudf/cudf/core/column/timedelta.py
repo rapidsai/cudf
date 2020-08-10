@@ -251,7 +251,7 @@ class TimeDeltaColumn(column.ColumnBase):
             other = other.to_timedelta64()
 
         if isinstance(other, np.timedelta64):
-            other_time_unit, _ = np.datetime_data(other.dtype)
+            other_time_unit = cudf.utils.dtypes.get_time_unit(other)
             if np.isnat(other):
                 return as_scalar(val=None, dtype=self.dtype)
 
@@ -523,8 +523,9 @@ def _timedelta_binary_op_add(lhs, rhs):
         out_dtype = determine_out_dtype(lhs.dtype, rhs.dtype)
     elif pd.api.types.is_datetime64_dtype(rhs.dtype):
         units = ["s", "ms", "us", "ns"]
-        lhs_unit = units.index(lhs.time_unit)
-        rhs_time_unit, _ = np.datetime_data(rhs.dtype)
+        lhs_time_unit = cudf.utils.dtypes.get_time_unit(lhs)
+        lhs_unit = units.index(lhs_time_unit)
+        rhs_time_unit = cudf.utils.dtypes.get_time_unit(rhs)
         rhs_unit = units.index(rhs_time_unit)
         out_dtype = np.dtype(f"datetime64[{units[max(lhs_unit, rhs_unit)]}]")
     else:
@@ -545,8 +546,9 @@ def _timedelta_binary_op_sub(lhs, rhs):
         rhs.dtype
     ) and pd.api.types.is_datetime64_dtype(lhs.dtype):
         units = ["s", "ms", "us", "ns"]
-        lhs_unit = units.index(lhs.time_unit)
-        rhs_time_unit, _ = np.datetime_data(rhs.dtype)
+        lhs_time_unit = cudf.utils.dtypes.get_time_unit(lhs)
+        lhs_unit = units.index(lhs_time_unit)
+        rhs_time_unit = cudf.utils.dtypes.get_time_unit(rhs)
         rhs_unit = units.index(rhs_time_unit)
         out_dtype = np.dtype(f"datetime64[{units[max(lhs_unit, rhs_unit)]}]")
     else:

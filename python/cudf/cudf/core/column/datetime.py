@@ -129,6 +129,11 @@ class DatetimeColumn(column.ColumnBase):
             other = other.astype(self.dtype)
             return as_scalar(other)
         elif isinstance(other, np.timedelta64):
+            other_time_unit = cudf.utils.dtypes.get_time_unit(other)
+
+            if other_time_unit not in ("s", "ms", "ns", "us"):
+                other = other.astype("timedelta64[s]")
+
             if np.isnat(other):
                 return as_scalar(val=None, dtype=other.dtype)
 
@@ -207,12 +212,13 @@ class DatetimeColumn(column.ColumnBase):
             )
         elif op == "sub" and pd.api.types.is_timedelta64_dtype(rhs.dtype):
             out_dtype = cudf.core.column.timedelta._timedelta_binary_op_sub(
-                lhs, rhs
+                rhs if reflect else lhs, lhs if reflect else rhs
             )
         elif op == "sub" and pd.api.types.is_datetime64_dtype(rhs.dtype):
             units = ["s", "ms", "us", "ns"]
-            lhs_unit = units.index(lhs.time_unit)
-            rhs_time_unit, _ = np.datetime_data(rhs.dtype)
+            lhs_time_unit = cudf.utils.dtypes.get_time_unit(lhs)
+            lhs_unit = units.index(lhs_time_unit)
+            rhs_time_unit = cudf.utils.dtypes.get_time_unit(rhs)
             rhs_unit = units.index(rhs_time_unit)
             out_dtype = np.dtype(
                 f"timedelta64[{units[max(lhs_unit, rhs_unit)]}]"
