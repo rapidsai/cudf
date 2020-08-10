@@ -675,19 +675,28 @@ def _pivot(df, index, columns):
     """
     columns_labels, columns_idx = columns._encode()
     index_labels, index_idx = index._encode()
-    column_labels = pd.DataFrame(columns_labels.to_pandas())
+    column_labels = columns_labels.to_pandas().to_flat_index()
 
     # the result of pivot always has a multicolumn
     result = cudf.core.column_accessor.ColumnAccessor(
         multiindex=True, level_names=(None,) + columns._data.names
     )
 
+    def as_tuple(x):
+        return x if isinstance(x, tuple) else (x,)
+
     for v in df:
-        names = [(v,) + name for name in column_labels.itertuples(index=False)]
+        names = [as_tuple(v) + as_tuple(name) for name in column_labels]
         col = df._data[v]
         result.update(
             cudf.DataFrame._from_table(
-                col.scatter_to_table(index_idx, columns_idx, names)
+                col.scatter_to_table(
+                    index_idx,
+                    columns_idx,
+                    names,
+                    nrows=len(index_labels),
+                    ncols=len(names),
+                )
             )._data
         )
 
