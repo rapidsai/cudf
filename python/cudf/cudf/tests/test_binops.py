@@ -728,7 +728,17 @@ def test_vector_to_none_binops(dtype):
     utils.assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("lhs", [pd.Series([0, 10, 20, 30, 3, 4, 5, 6, 2])])
+@pytest.mark.parametrize(
+    "lhs",
+    [
+        1,
+        3,
+        4,
+        pd.Series([5, 6, 2]),
+        pd.Series([0, 10, 20, 30, 3, 4, 5, 6, 2]),
+        6,
+    ],
+)
 @pytest.mark.parametrize("rhs", [1, 3, 4, pd.Series([5, 6, 2])])
 @pytest.mark.parametrize(
     "ops",
@@ -746,6 +756,8 @@ def test_ufunc_ops(lhs, rhs, ops):
 
     if isinstance(lhs, pd.Series):
         culhs = cudf.from_pandas(lhs)
+    else:
+        culhs = lhs
 
     if isinstance(rhs, pd.Series):
         curhs = cudf.from_pandas(rhs)
@@ -754,6 +766,11 @@ def test_ufunc_ops(lhs, rhs, ops):
 
     expect = np_op(lhs, rhs)
     got = cu_op(culhs, curhs)
-    utils.assert_eq(
-        expect.fillna(got._column.default_na_value()), got, check_dtype=False
-    )
+    if np.isscalar(expect):
+        assert got == expect
+    else:
+        utils.assert_eq(
+            expect.fillna(got._column.default_na_value()),
+            got,
+            check_dtype=False,
+        )

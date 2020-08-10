@@ -96,8 +96,10 @@ def logical_or(lhs, rhs):
 def remainder(lhs, rhs):
     if isinstance(lhs, Number) and isinstance(rhs, Number):
         return np.mod(lhs, rhs)
-    else:
+    elif isinstance(lhs, Frame):
         return getattr(lhs, "remainder")(rhs)
+    else:
+        return getattr(rhs, "__rmod__")(lhs)
 
 
 def floor_divide(lhs, rhs):
@@ -138,7 +140,7 @@ def true_divide(lhs, rhs):
 
 def multiply(lhs, rhs):
     if isinstance(lhs, Number) and isinstance(rhs, Number):
-        return np.true_divide(lhs, rhs)
+        return np.multiply(lhs, rhs)
     elif isinstance(rhs, Frame):
         return getattr(rhs, "__rmul__")(lhs)
     else:
