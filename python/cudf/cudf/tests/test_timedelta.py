@@ -38,6 +38,24 @@ _TIMEDELTA_DATA = [
     [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
 ]
 
+_TIMEDELTA_DATA_NON_OVERFLOW = [
+    [1000000, 200000, 3000000],
+    [1000000, 200000, None],
+    [],
+    [None],
+    [None, None, None, None, None],
+    [12, 12, 22, 343, 4353534, 435342],
+    np.array([10, 20, 30, None, 100]),
+    cp.asarray([10, 20, 30, 100]),
+    [1000000, 200000, 3000000],
+    [1000000, 200000, None],
+    [1],
+    [12, 11, 232, 223432411, 2343241, 234324, 23234],
+    [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+    [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
+    [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+]
+
 
 @pytest.mark.parametrize(
     "data",
@@ -367,24 +385,7 @@ def test_timedelta_dataframe_ops(df, op):
 
 
 @pytest.mark.parametrize(
-    "data",
-    [
-        [1000000, 200000, 3000000],
-        [1000000, 200000, None],
-        [],
-        [None],
-        [None, None, None, None, None],
-        [12, 12, 22, 343, 4353534, 435342],
-        np.array([10, 20, 30, None, 100]),
-        cp.asarray([10, 20, 30, 100]),
-        [1000000, 200000, 3000000],
-        [1000000, 200000, None],
-        [1],
-        [12, 11, 232, 223432411, 2343241, 234324, 23234],
-        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
-        [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
-        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
-    ],
+    "data", _TIMEDELTA_DATA_NON_OVERFLOW,
 )
 @pytest.mark.parametrize(
     "other_scalars",
@@ -569,27 +570,7 @@ def test_timedelta_index(data, dtype):
     assert_eq(pdi, gdi)
 
 
-@pytest.mark.parametrize(
-    "data",
-    [
-        [1000000, 200000, 3000000],
-        [1000000, 200000, None],
-        [],
-        [None],
-        [None, None, None, None, None],
-        [12, 12, 22, 343, 4353534, 435342],
-        np.array([10, 20, 30, None, 100]),
-        cp.asarray([10, 20, 30, 100]),
-        [1000000, 200000, 3000000],
-        [1000000, 200000, None],
-        [1],
-        [12, 11, 232, 223432411, 2343241, 234324, 23234],
-        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
-        [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
-        [13645765, 13473678, 24534534, 22343241, 2343241, 36345487, 23234],
-        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
-    ],
-)
+@pytest.mark.parametrize("data", _TIMEDELTA_DATA_NON_OVERFLOW)
 @pytest.mark.parametrize("datetime_dtype", dtypeutils.DATETIME_TYPES)
 @pytest.mark.parametrize("timedelta_dtype", dtypeutils.TIMEDELTA_TYPES)
 def test_timedelta_index_datetime_index_ops(
@@ -661,26 +642,7 @@ def test_timedelta_datetime_index_ops_misc(
     assert_eq(gdt + gtd, pdt + ptd)
 
 
-@pytest.mark.parametrize(
-    "data",
-    [
-        [1000000, 200000, 3000000],
-        [1000000, 200000, None],
-        [],
-        [None],
-        [None, None, None, None, None],
-        [12, 12, 22, 343, 4353534, 435342],
-        np.array([10, 20, 30, None, 100]),
-        cp.asarray([10, 20, 30, 100]),
-        [1000000, 200000, 3000000],
-        [1000000, 200000, None],
-        [1],
-        [12, 11, 232, 223432411, 2343241, 234324, 23234],
-        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
-        [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
-        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
-    ],
-)
+@pytest.mark.parametrize("data", _TIMEDELTA_DATA_NON_OVERFLOW)
 @pytest.mark.parametrize(
     "other_scalars",
     [
@@ -798,29 +760,7 @@ def test_timedelta_index_properties(data, dtype, name):
         )
 
 
-@pytest.mark.parametrize(
-    "data",
-    [
-        [1000000, 200000, 3000000],
-        [1000000, 200000, None],
-        [],
-        [None],
-        [None, None, None, None, None],
-        np.array([10, 20, 30, None, 100]),
-        [1000000, 200000, None],
-        [1],
-        [
-            136457654736252,
-            134736784364431,
-            245345345545332,
-            223432411,
-            None,
-            3634548734,
-            None,
-        ],
-        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
-    ],
-)
+@pytest.mark.parametrize("data", _TIMEDELTA_DATA)
 @pytest.mark.parametrize("dtype", dtypeutils.TIMEDELTA_TYPES)
 @pytest.mark.parametrize(
     "fill_value",
