@@ -336,7 +336,7 @@ struct column_gatherer_impl<list_view, MapItRoot> {
     // the nesting case.
     if (list.child().type() == cudf::data_type{type_id::LIST}) {
       // gather children
-      auto child = lists::detail::gather_list_nested(list.child(), gd, stream, mr);
+      auto child = lists::detail::gather_list_nested(list.get_sliced_child(stream), gd, stream, mr);
 
       // return the final column
       return make_lists_column(gather_map_size,
@@ -347,7 +347,7 @@ struct column_gatherer_impl<list_view, MapItRoot> {
     }
 
     // it's a leaf.  do a regular gather
-    auto child = lists::detail::gather_list_leaf(list.child(), gd, stream, mr);
+    auto child = lists::detail::gather_list_leaf(list.get_sliced_child(stream), gd, stream, mr);
 
     // assemble final column
     return make_lists_column(gather_map_size,
