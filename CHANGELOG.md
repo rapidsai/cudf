@@ -2,6 +2,8 @@
 
 ## New Features
 
+- PR #5779 Add DataFrame.pivot() and DataFrame.unstack()
+
 ## Improvements
 
 ## Bug Fixes
