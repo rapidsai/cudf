@@ -416,6 +416,7 @@ add_library(cudf
             src/transform/transform.cpp
             src/transform/nans_to_nulls.cu
             src/transform/bools_to_mask.cu
+            src/transform/mask_to_bools.cu
             src/transform/encode.cpp
             src/stream_compaction/apply_boolean_mask.cu
             src/stream_compaction/drop_nulls.cu
@@ -526,6 +527,7 @@ add_library(cudf
             src/strings/contains.cu
             src/strings/convert/convert_booleans.cu
             src/strings/convert/convert_datetime.cu
+            src/strings/convert/convert_durations.cu
             src/strings/convert/convert_floats.cu
             src/strings/convert/convert_hex.cu
             src/strings/convert/convert_integers.cu
@@ -566,6 +568,7 @@ add_library(cudf
             src/text/detokenize.cu
             src/text/generate_ngrams.cu
             src/text/normalize.cu
+            src/text/stemmer.cu
             src/text/tokenize.cu
             src/text/ngrams_tokenize.cu
             src/text/replace.cu
@@ -576,6 +579,7 @@ add_library(cudf
             src/scalar/scalar.cpp
             src/scalar/scalar_factories.cpp
             src/dictionary/add_keys.cu
+            src/dictionary/detail/concatenate.cu
             src/dictionary/dictionary_column_view.cpp
             src/dictionary/dictionary_factories.cu
             src/dictionary/decode.cu

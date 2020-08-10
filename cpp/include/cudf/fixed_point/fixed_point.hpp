@@ -312,6 +312,17 @@ class fixed_point {
   explicit fixed_point(scaled_integer<Rep> s) : _value{s.value}, _scale{s.scale} {}
 
   /**
+   * @brief "Scale-less" constructor that constructs `fixed_point` number with a specified
+   * value and scale of zero
+   */
+  template <typename T,
+            typename simt::std::enable_if_t<is_supported_construction_value_type<T>()>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE fixed_point(T const& value)
+    : _value{static_cast<Rep>(value)}, _scale{scale_type{0}}
+  {
+  }
+
+  /**
    * @brief Default constructor that constructs `fixed_point` number with a
    * value and scale of zero
    */
@@ -329,6 +340,16 @@ class fixed_point {
   CUDA_HOST_DEVICE_CALLABLE explicit constexpr operator U() const
   {
     return detail::shift<Rep, Rad>(static_cast<U>(_value), detail::negate(_scale));
+  }
+
+  /**
+   * @brief Explicit conversion operator to `bool`
+   *
+   * @return The `fixed_point` value as a boolean (zero is `false`, nonzero is `true`)
+   */
+  CUDA_HOST_DEVICE_CALLABLE explicit constexpr operator bool() const
+  {
+    return static_cast<bool>(_value);
   }
 
   /**

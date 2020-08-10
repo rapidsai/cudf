@@ -285,7 +285,8 @@ ConfigureTest(BINARY_TEST "${BINARY_TEST_SRC}")
 set(TRANSFORM_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/transform/integration/unary-transform-test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/transform/nans_to_null_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/transform/bools_to_mask.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/transform/mask_to_bools_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/transform/bools_to_mask_test.cpp")
 
 ConfigureTest(TRANSFORM_TEST "${TRANSFORM_TEST_SRC}")
 
@@ -513,6 +514,7 @@ set(STRINGS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/concatenate_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/contains_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/datetime_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/durations_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/extract_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/fill_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/findall_tests.cpp"
@@ -541,8 +543,9 @@ set(TEXT_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/text/ngrams_tokenize_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/text/normalize_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/text/replace_tests.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/text/tokenize_tests.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/text/subword_tests.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/text/stemmer_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/text/subword_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/text/tokenize_tests.cpp")
 
 ConfigureTest(TEXT_TEST "${TEXT_TEST_SRC}")
 
