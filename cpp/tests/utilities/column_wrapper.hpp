@@ -937,6 +937,40 @@ class lists_column_wrapper : public cudf::test::detail::column_wrapper {
       make_lists_column(num_elements, std::move(offsets), std::move(c), 0, rmm::device_buffer{0});
   }
 
+  /**
+   * @brief Given an input column that may be an "incomplete hierarchy" due to being empty
+   * at a level before the leaf, normalize it so that it matches the expected hierarchy of
+   * sibling columns.
+   *
+   * cudf functions that handle lists expect that all columns are fully formed hierarchies,
+   * even if they are empty somewhere in the middle of the hierarchy.
+   * If we had the following lists_column_wrapper<int> declaration:
+   *
+   * @code{.pseudo}
+   * [ {{{1, 2, 3}}}, {} ]
+   * Row 0 in this case is a List<List<List<int>>>, where row 1 appears to be just a List<>.
+   * @endcode
+   *
+   * These two columns will end up getting passed to cudf::concatenate() to merge. But
+   * concatenate() will throw an exception because row 1 will appear to have a child type
+   * of nothing, while row 0 will appear to have a child type of List<List<int>>.
+   * To handle this cleanly, we want to "normalize" row 1 so that it appears as a
+   * List<List<List<int>>> column even though it has 0 elements at the top level.
+   *
+   * This function also detects the case where the user has constructed a truly invalid
+   * pair of columns, such as
+   *
+   * @code{.pseudo}
+   * [ {{{1, 2, 3}}}, {4, 5} ]
+   * Row 0 in this case is a List<List<List<int>>>, and row 1 is a concrete List<int> with
+   * elements. This is purely an invalid way of constructing a lists column.
+   * @endcode
+   *
+   * @param col Input column to be normalized
+   * @param expected_hierarchy Input column which represents the expected hierarchy
+   *
+   * @return A new column representing a normalized copy of col
+   */
   std::unique_ptr<column> normalize_column(column_view const& col,
                                            column_view const& expected_hierarchy)
   {
