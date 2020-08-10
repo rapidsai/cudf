@@ -375,6 +375,8 @@ public final class Table implements AutoCloseable {
 
   private static native long[] filter(long input, long mask);
 
+  private static native long[] gather(long tableHandle, long gatherView, boolean checkBounds);
+
   private static native long[] repeatStaticCount(long tableHandle, int count);
 
   private static native long[] repeatColumnCount(long tableHandle,
@@ -1263,6 +1265,41 @@ public final class Table implements AutoCloseable {
    */
   public ContiguousTable[] contiguousSplit(int... indices) {
     return contiguousSplit(nativeHandle, indices);
+  }
+
+
+  /**
+   * Gathers the rows of this table according to `gatherMap` such that row "i"
+   * in the resulting table's columns will contain row "gatherMap[i]" from this table.
+   * The number of rows in the result table will be equal to the number of elements in
+   * `gatherMap`.
+   *
+   * A negative value `i` in the `gatherMap` is interpreted as `i+n`, where
+   * `n` is the number of rows in this table.
+
+   * @param gatherMap the map of indexes.  Must be non-nullable and integral type.
+   * @return the resulting Table.
+   */
+  public Table gather(ColumnVector gatherMap) {
+    return gather(gatherMap, true);
+  }
+
+  /**
+   * Gathers the rows of this table according to `gatherMap` such that row "i"
+   * in the resulting table's columns will contain row "gatherMap[i]" from this table.
+   * The number of rows in the result table will be equal to the number of elements in
+   * `gatherMap`.
+   *
+   * A negative value `i` in the `gatherMap` is interpreted as `i+n`, where
+   * `n` is the number of rows in this table.
+
+   * @param gatherMap the map of indexes.  Must be non-nullable and integral type.
+   * @param checkBounds if true bounds checking is performed on the value. Be very careful
+   *                    when setting this to false.
+   * @return the resulting Table.
+   */
+  public Table gather(ColumnVector gatherMap, boolean checkBounds) {
+    return new Table(gather(nativeHandle, gatherMap.getNativeView(), checkBounds));
   }
 
   /////////////////////////////////////////////////////////////////////////////

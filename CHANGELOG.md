@@ -1,3 +1,11 @@
+# cuDF 0.16.0 (Date TBD)
+
+## New Features
+
+## Improvements
+
+## Bug Fixes
+
 # cuDF 0.15.0 (Date TBD)
 
 ## New Features
@@ -50,6 +58,7 @@
 - PR #5629 Add `ListColumn` and `ListDtype`
 - PR #5658 Add `filter_tokens` nvtext API
 - PR #5666 Add `filter_characters_of_type` strings API
+- PR #5778 Add support for `cudf::table` to `arrow::Table` and `arrow::Table` to `cudf::table`
 - PR #5673 Always build and test with per-thread default stream enabled in the GPU CI build
 - PR #5704 Initial `fixed_point` Column Support
 - PR #5716 Add `double_type_dispatcher` to libcudf
@@ -69,6 +78,7 @@
 - PR #5845 Add support for `mask_to_bools`
 - PR #5851 Add support for `Index.sort_values`
 - PR #5859 Add conversion form `fixed_point` to `bool`
+- PR #5815 LIST Support for ColumnVector
 
 ## Improvements
 
@@ -180,8 +190,11 @@
 - PR #5853 Disable `fixed_point` for use in `copy_if`
 - PR #5854 Raise informative error in `DataFrame.iterrows` and `DataFrame.itertuples`
 - PR #5863 Explicitly require `ucx-py` on CI
+- PR #5884 Use S3 bucket directly for benchmark plugni
+- PR #5881 Add in JVM extractListElement and stringSplitRecord
 - PR #5885 Add in java support for merge sort
 - PR #5894 Small code improvement / cleanup
+- PR #5899 Add in gather support for Java
 
 ## Bug Fixes
 
@@ -2019,7 +2032,8 @@
 - PR #1607 Revert change of `column.to_dense_buffer` always return by copy for performance concerns
 - PR #1618 ORC reader: fix assert & data output when nrows/skiprows isn't aligned to stripe boundaries
 - PR #1631 Fix failure of TYPES_TEST on some gcc-7 based systems.
-- PR #1641 CSV Reader: Fix skip_blank_lines behavior with Windows line terminators (\r\n)
+- PR #1641 CSV Reader: Fix skip_blank_lines behavior with Windows line terminators (
+)
 - PR #1648 ORC reader: fix non-deterministic output when skiprows is non-zero
 - PR #1676 Fix groupby `as_index` behaviour with `MultiIndex`
 - PR #1659 Fix bug caused by empty groupbys and multiindex slicing throwing exceptions
