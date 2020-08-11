@@ -121,8 +121,6 @@ def gdf(pdf):
 @pytest.fixture(params=["snappy", "gzip", "brotli", None])
 def parquet_file(request, tmp_path_factory, pdf):
     fname = tmp_path_factory.mktemp("parquet") / "test.parquet"
-    import pdb
-    pdb.set_trace()
     pdf.to_parquet(fname, engine="pyarrow", compression=request.param)
     return fname
 
@@ -201,8 +199,6 @@ def test_parquet_reader_basic(parquet_file, columns, engine):
             expect = expect.drop(columns=["col_category"])
         if "col_category" in got.columns:
             got = got.drop("col_category")
-    import pdb
-    pdb.set_trace()
     assert_eq(expect, got, check_categorical=False)
 
 
