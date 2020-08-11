@@ -812,6 +812,59 @@ class Index(Frame, Serializable):
         >>> idx.sort_values(ascending=False, return_indexer=True)
         (Int64Index([1000, 100, 10, 1], dtype='int64'), array([3, 1, 0, 2],
                                                             dtype=int32))
+
+        Sorting values in a MultiIndex:
+
+        >>> midx = cudf.MultiIndex(
+        ...      levels=[[1, 3, 4, -10], [1, 11, 5]],
+        ...      codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        ...      names=["x", "y"],
+        ... )
+        >>> midx
+        MultiIndex(levels=[0     1
+        1     3
+        2     4
+        3   -10
+        dtype: int64, 0     1
+        1    11
+        2     5
+        dtype: int64],
+        codes=   x  y
+        0  0  0
+        1  0  2
+        2  1  1
+        3  2  1
+        4  3  0)
+        >>> midx.sort_values()
+        MultiIndex(levels=[0     1
+        1     3
+        2     4
+        3   -10
+        dtype: int64, 0     1
+        1    11
+        2     5
+        dtype: int64],
+        codes=   x  y
+        4  3  0
+        0  0  0
+        1  0  2
+        2  1  1
+        3  2  1)
+        >>> midx.sort_values(ascending=False)
+        MultiIndex(levels=[0     1
+        1     3
+        2     4
+        3   -10
+        dtype: int64, 0     1
+        1    11
+        2     5
+        dtype: int64],
+        codes=   x  y
+        3  2  1
+        2  1  1
+        1  0  2
+        0  0  0
+        4  3  0)
         """
         if key is not None:
             raise NotImplementedError("key parameter is not yet implemented.")
