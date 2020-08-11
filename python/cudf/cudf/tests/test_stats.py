@@ -6,7 +6,7 @@ import pytest
 
 from cudf.core import Series
 from cudf.datasets import randomdata
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import assert_eq, promote_to_pd_nullable_dtype
 
 params_dtypes = [np.int32, np.uint32, np.float32, np.float64]
 methods = ["min", "max", "sum", "mean", "var", "std"]
@@ -30,15 +30,16 @@ def test_series_reductions(method, dtype, skipna):
     if dtype in (np.float32, np.float64):
         arr[[2, 5, 14, 19, 50, 70]] = np.nan
     sr = Series.from_masked_array(arr, Series(mask).as_mask())
-    psr = sr.to_pandas(nullable_pd_dtype=False)
-    psr[~mask] = np.nan
+    psr = sr.to_pandas()
+    psr[~mask] = pd.NA
 
     def call_test(sr, skipna):
         fn = getattr(sr, method)
         if method in ["std", "var"]:
-            return fn(ddof=1, skipna=skipna)
+            result = fn(ddof=1, skipna=skipna)
         else:
-            return fn(skipna=skipna)
+            result = fn(skipna=skipna)
+        return result if result is not pd.NA else np.nan
 
     expect, got = call_test(psr, skipna=skipna), call_test(sr, skipna=skipna)
     print(expect, got)
@@ -224,14 +225,15 @@ def test_misc_quantiles(data, q):
         Series([1.1032, 2.32, 43.4, 13, -312.0], index=[0, 4, 3, 19, 6]),
         Series([]),
         Series([-3]),
+        pytest.param(
         randomdata(
             nrows=1000, dtypes={"a": float, "b": int, "c": float, "d": str}
-        ),
+        ), marks=pytest.mark.xfail(reason='pandas bug')),
     ],
 )
 @pytest.mark.parametrize("null_flag", [False, True])
 def test_kurtosis(data, null_flag):
-    pdata = data.to_pandas(nullable_pd_dtype=False)
+    pdata = data.to_pandas()
 
     if null_flag and len(data) > 2:
         data.iloc[[0, 2]] = None
@@ -240,12 +242,12 @@ def test_kurtosis(data, null_flag):
     got = data.kurtosis()
     got = got if np.isscalar(got) else got.to_array()
     expected = pdata.kurtosis()
-    np.testing.assert_array_almost_equal(got, expected)
+    np.testing.assert_array_almost_equal(got, expected if expected is not pd.NA else np.nan)
 
     got = data.kurt()
     got = got if np.isscalar(got) else got.to_array()
     expected = pdata.kurt()
-    np.testing.assert_array_almost_equal(got, expected)
+    np.testing.assert_array_almost_equal(got, expected if expected is not pd.NA else np.nan)
 
     with pytest.raises(NotImplementedError):
         data.kurt(numeric_only=False)
@@ -272,7 +274,7 @@ def test_kurtosis(data, null_flag):
 )
 @pytest.mark.parametrize("null_flag", [False, True])
 def test_skew(data, null_flag):
-    pdata = data.to_pandas(nullable_pd_dtype=False)
+    pdata = data.to_pandas()
 
     if null_flag and len(data) > 2:
         data.iloc[[0, 2]] = None
@@ -281,7 +283,7 @@ def test_skew(data, null_flag):
     got = data.skew()
     expected = pdata.skew()
     got = got if np.isscalar(got) else got.to_array()
-    np.testing.assert_array_almost_equal(got, expected)
+    np.testing.assert_array_almost_equal(got, expected if expected is not pd.NA else np.nan)
 
     with pytest.raises(NotImplementedError):
         data.skew(numeric_only=False)
@@ -345,11 +347,18 @@ def test_cov1d(data1, data2):
     gs1 = Series(data1)
     gs2 = Series(data2)
 
-    ps1 = gs1.to_pandas(nullable_pd_dtype=False)
-    ps2 = gs2.to_pandas(nullable_pd_dtype=False)
+    ps1 = gs1.to_pandas()
+    ps2 = gs2.to_pandas()
 
-    got = gs1.cov(gs2)
+    try:
+        expected = ps1.corr(ps2)
+    except AttributeError as e:
+        assert("object has no attribute" in str(e))
+        ps1 = ps1.astype(ps1.dtype.type)
+        ps2 = ps2.astype(ps2.dtype.type)
+        
     expected = ps1.cov(ps2)
+    got = gs1.cov(gs2)
     np.testing.assert_approx_equal(got, expected, significant=8)
 
 
@@ -382,9 +391,15 @@ def test_cov1d(data1, data2):
 def test_corr1d(data1, data2):
     gs1 = Series(data1)
     gs2 = Series(data2)
+    ps1 = gs1.to_pandas()
+    ps2 = gs2.to_pandas()
 
-    ps1 = gs1.to_pandas(nullable_pd_dtype=False)
-    ps2 = gs2.to_pandas(nullable_pd_dtype=False)
+    try:
+        expected = ps1.corr(ps2)
+    except AttributeError as e:
+        assert("object has no attribute" in str(e))
+        ps1 = ps1.astype(ps1.dtype.type)
+        ps2 = ps2.astype(ps2.dtype.type)
 
     got = gs1.corr(gs2)
     expected = ps1.corr(ps2)

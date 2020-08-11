@@ -7,7 +7,7 @@ import pytest
 
 import cudf
 from cudf.tests import utils
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import assert_eq, promote_to_pd_nullable_dtype
 
 
 @pytest.mark.parametrize(
@@ -186,6 +186,7 @@ def test_serialize_datetime():
     df = pd.DataFrame(
         {"x": np.random.randint(0, 5, size=20), "y": np.random.normal(size=20)}
     )
+    df = promote_to_pd_nullable_dtype(df)
     ts = np.arange(0, len(df), dtype=np.dtype("datetime64[ms]"))
     df["timestamp"] = ts
     gdf = cudf.DataFrame.from_pandas(df)
@@ -202,6 +203,7 @@ def test_serialize_string():
     )
     str_data = ["a", "bc", "def", "ghij", "klmno"]
     df["timestamp"] = str_data
+    df = promote_to_pd_nullable_dtype(df)
     gdf = cudf.DataFrame.from_pandas(df)
     # (De)serialize roundtrip
     recreated = cudf.DataFrame.deserialize(*gdf.serialize())
@@ -236,7 +238,7 @@ def test_serialize_empty(frames):
 
 def test_serialize_all_null_string():
     data = [None, None, None, None, None]
-    pd_series = pd.Series(data, dtype="str")
+    pd_series = pd.Series(data, dtype=pd.StringDtype())
     gd_series = cudf.Series(data, dtype="str")
 
     recreated = cudf.Series.deserialize(*gd_series.serialize())

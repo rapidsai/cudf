@@ -45,6 +45,7 @@ from cudf.utils.dtypes import (
     is_string_dtype,
     min_scalar_type,
     numeric_normalize_types,
+    cudf_dtypes_to_pandas_dtypes
 )
 
 
@@ -1028,10 +1029,10 @@ class Series(Frame, Serializable):
             else:
                 lines = lines[:-1]
                 lines[-1] = lines[-1] + "\n"
-            lines[-1] = lines[-1] + "dtype: %s" % str(self.dtype)
+            lines[-1] = lines[-1] + "dtype: %s" % str(cudf_dtypes_to_pandas_dtypes.get(self.dtype, self.dtype))
         else:
             lines = output.split(",")
-            return lines[0] + ", dtype: %s)" % str(self.dtype)
+            return lines[0] + ", dtype: %s)" % str(cudf_dtypes_to_pandas_dtypes.get(self.dtype, self.dtype))
         if isinstance(preprocess._column, cudf.core.column.CategoricalColumn):
             lines.append(category_memory)
         return "\n".join(lines)

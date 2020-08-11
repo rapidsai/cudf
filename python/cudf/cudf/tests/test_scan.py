@@ -58,7 +58,7 @@ def test_cumsum_masked():
         gs = Series(data).astype(type_)
         got = gs.cumsum()
         expected = pd.Series(
-            [1, 3, got._column.default_na_value(), 7, 12], dtype="int64"
+            [1, 3, pd.NA, 7, 12], dtype=pd.Int64Dtype()
         )
         assert_eq(got, expected)
 
@@ -102,8 +102,8 @@ def test_cummin_masked():
     for type_ in INTEGER_TYPES:
         gs = Series(data).astype(type_)
         expected = pd.Series(
-            [1, 1, gs._column.default_na_value(), 1, 1]
-        ).astype(type_)
+            [1, 1, pd.NA, 1, 1]
+        ).astype(gs.to_pandas().dtype)
         assert_eq(gs.cummin(), expected)
 
 
@@ -146,8 +146,8 @@ def test_cummax_masked():
     for type_ in INTEGER_TYPES:
         gs = Series(data).astype(type_)
         expected = pd.Series(
-            [1, 2, gs._column.default_na_value(), 4, 5]
-        ).astype(type_)
+            [1, 2, pd.NA, 4, 5]
+        ).astype(gs.to_pandas().dtype)
         assert_eq(gs.cummax(), expected)
 
 
@@ -191,26 +191,31 @@ def test_cumprod_masked():
         gs = Series(data).astype(type_)
         got = gs.cumprod()
         expected = pd.Series(
-            [1, 2, got._column.default_na_value(), 8, 40], dtype="int64"
+            [1, 2, pd.NA, 8, 40], dtype=pd.Int64Dtype()
         )
         assert_eq(got, expected)
 
 
 def test_scan_boolean_cumsum():
-    s = Series([0, -1, -300, 23, 4, -3, 0, 0, 100])
+    data = [0, -1, -300, 23, 4, -3, 0, 0, 100]
 
+    p_s = Series(data)
+    g_s = pd.Series(data)
     # cumsum test
-    got = (s > 0).cumsum()
-    expect = (s > 0).to_pandas(nullable_pd_dtype=False).cumsum()
+    got = (g_s > 0).cumsum()
+    expect = (p_s > 0).cumsum()
 
-    assert_eq(expect, got)
+    # cumsum and cumprod don't work with BooleanArray
+    assert_eq(expect, got, downcast=True)
 
 
 def test_scan_boolean_cumprod():
-    s = Series([0, -1, -300, 23, 4, -3, 0, 0, 100])
+    data = [0, -1, -300, 23, 4, -3, 0, 0, 100]
+    g_s = Series(data)
+    p_s = pd.Series(data)
 
     # cumprod test
-    got = (s > 0).cumprod()
-    expect = (s > 0).to_pandas(nullable_pd_dtype=False).cumprod()
+    got = (g_s > 0).cumprod()
+    expect = (p_s > 0).cumprod()
 
-    assert_eq(expect, got)
+    assert_eq(expect, got, downcast=True)

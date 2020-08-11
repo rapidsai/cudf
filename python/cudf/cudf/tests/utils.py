@@ -163,18 +163,8 @@ def gen_rand_series(dtype, size, **kwargs):
     return cudf.Series(values)
 
 def promote_to_pd_nullable_dtype(obj):
-    mapping = {
-        np.dtype('uint8'): pd.UInt8Dtype(),
-        np.dtype('uint16'): pd.UInt16Dtype(),
-        np.dtype('uint32'): pd.UInt32Dtype(),
-        np.dtype('uint64'): pd.UInt64Dtype(),
-        np.dtype('int8'): pd.Int8Dtype(),
-        np.dtype('int16'): pd.Int16Dtype(),
-        np.dtype('int32'): pd.Int32Dtype(),
-        np.dtype('int64'): pd.Int64Dtype(),
-        np.dtype('object'): pd.StringDtype(),
-        np.dtype('bool'): pd.BooleanDtype(),
-    }
+
+    mapping = dtypeutils.cudf_dtypes_to_pandas_dtypes
 
     if isinstance(obj, pd.Series):
         dt = mapping.get(obj.dtype, obj.dtype)

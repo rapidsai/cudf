@@ -8,7 +8,7 @@ import pytest
 
 from cudf.core import DataFrame, Series
 from cudf.core.column import NumericalColumn
-from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
+from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq, promote_to_pd_nullable_dtype
 
 sort_nelem_args = [2, 257]
 sort_dtype_args = [
@@ -46,7 +46,7 @@ def test_dataframe_sort_values_ignore_index(index, ignore_index):
     )
     gdf = gdf.set_index(index)
 
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
 
     expect = pdf.sort_values(list(pdf.columns), ignore_index=ignore_index)
     got = gdf.sort_values((gdf.columns), ignore_index=ignore_index)
@@ -57,7 +57,7 @@ def test_dataframe_sort_values_ignore_index(index, ignore_index):
 @pytest.mark.parametrize("ignore_index", [True, False])
 def test_series_sort_values_ignore_index(ignore_index):
     gsr = Series([1, 3, 5, 2, 4])
-    psr = gsr.to_pandas(nullable_pd_dtype=False)
+    psr = gsr.to_pandas()
 
     expect = psr.sort_values(ignore_index=ignore_index)
     got = gsr.sort_values(ignore_index=ignore_index)
@@ -115,6 +115,7 @@ def test_series_nlargest(data, n):
     """
     sr = Series(data)
     psr = pd.Series(data)
+    psr = promote_to_pd_nullable_dtype(psr)
     assert_eq(sr.nlargest(n), psr.nlargest(n))
     assert_eq(sr.nlargest(n, keep="last"), psr.nlargest(n, keep="last"))
 
@@ -130,6 +131,7 @@ def test_series_nsmallest(data, n):
     """
     sr = Series(data)
     psr = pd.Series(data)
+    psr = promote_to_pd_nullable_dtype(psr)
     assert_eq(sr.nsmallest(n), psr.nsmallest(n))
     assert_eq(sr.nsmallest(n, keep="last"), psr.nsmallest(n, keep="last"))
 
@@ -210,7 +212,7 @@ def test_dataframe_multi_column(
 ):
 
     from string import ascii_lowercase
-
+    downcast=False
     np.random.seed(0)
     by = list(ascii_lowercase[:num_cols])
     pdf = pd.DataFrame()
@@ -219,14 +221,23 @@ def test_dataframe_multi_column(
         colname = ascii_lowercase[i]
         data = np.random.randint(0, 26, num_rows).astype(dtype)
         pdf[colname] = data
-
+    pdf = promote_to_pd_nullable_dtype(pdf)
     gdf = DataFrame.from_pandas(pdf)
 
     got = gdf.sort_values(by, ascending=ascending, na_position=na_position)
-    expect = pdf.sort_values(by, ascending=ascending, na_position=na_position)
+
+    if num_rows == 0:
+        try:
+            expect = pdf.sort_values(by, ascending=ascending, na_position=na_position)
+        except ValueError as e:
+            assert("zero-size array to reduction" in str(e))
+            expect = pdf.astype(np.dtype(dtype).type).sort_values(by, ascending=ascending, na_position=na_position)
+            downcast=True
+    else:
+        expect = pdf.sort_values(by, ascending=ascending, na_position=na_position)
 
     assert_eq(
-        got[by].reset_index(drop=True), expect[by].reset_index(drop=True)
+        got[by].reset_index(drop=True), expect[by].reset_index(drop=True), downcast=downcast
     )
 
 

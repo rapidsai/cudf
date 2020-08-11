@@ -12,7 +12,7 @@ from cudf import concat
 from cudf.core import DataFrame, Series
 from cudf.core.column.string import StringColumn
 from cudf.core.index import StringIndex, as_index
-from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
+from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq, promote_to_pd_nullable_dtype
 from cudf.utils import dtypes as dtypeutils
 
 data_list = [
@@ -47,7 +47,7 @@ def index(request):
 
 @pytest.fixture
 def ps_gs(data, index):
-    ps = pd.Series(data, index=index, dtype="str", name="nice name")
+    ps = pd.Series(data, index=index, dtype=pd.StringDtype(), name="nice name")
     gs = Series(data, index=index, dtype="str", name="nice name")
     return (ps, gs)
 
@@ -67,15 +67,22 @@ def test_string_export(ps_gs):
     ps, gs = ps_gs
 
     expect = ps
-    got = gs.to_pandas(nullable_pd_dtype=False)
+    got = gs.to_pandas()
     assert_eq(expect, got)
 
-    expect = np.array(ps)
+    expect = ps.to_numpy(na_value=None)
     got = gs.to_array()
     assert_eq(expect, got)
 
     expect = pa.Array.from_pandas(ps)
+    if isinstance(expect, pa.lib.StringArray):
+        ps = ps.astype('object')
+        ps[ps.isnull()] = None
+        expect = pa.Array.from_pandas(ps)
     got = gs.to_arrow()
+
+    # pd.StringArray -> arrow gives StringArray of nulls
+    # not NullArray
 
     assert pa.Array.equals(expect, got)
 
@@ -108,7 +115,7 @@ def test_string_get_item(ps_gs, item):
         expect = pa.Array.from_pandas(expect)
         pa.Array.equals(expect, got)
     else:
-        assert expect == got
+        assert got == expect if expect is not pd.NA else np.nan
 
 
 @pytest.mark.parametrize(
@@ -150,13 +157,13 @@ def test_string_repr(ps_gs, item):
     got_out = gs.iloc[item]
     expect_out = ps.iloc[item]
 
-    expect = str(expect_out)
+    expect = str(expect_out) if expect_out is not pd.NA else 'None'
     got = str(got_out)
 
     if got_out is not None and len(got_out) > 1:
         expect = expect.replace("None", "<NA>")
 
-    assert expect == got
+    assert got == expect
 
 
 @pytest.mark.parametrize(
@@ -194,7 +201,7 @@ def test_string_astype(dtype):
         expect = ps.astype(dtype)
     got = gs.astype(dtype)
 
-    assert_eq(expect, got)
+    assert_eq(expect, got, downcast=True)
 
 
 @pytest.mark.parametrize(
@@ -208,7 +215,7 @@ def test_string_empty_astype(dtype):
     expect = ps.astype(dtype)
     got = gs.astype(dtype)
 
-    assert_eq(expect, got)
+    assert_eq(expect, got, downcast=True)
 
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES + ["bool"])
@@ -239,7 +246,7 @@ def test_string_numeric_astype(dtype):
     expect = pd.Series(ps.astype("str"))
     got = gs.astype("str")
 
-    assert_eq(expect, got)
+    assert_eq(expect, got, downcast=True)
 
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES + ["bool"])
@@ -255,7 +262,7 @@ def test_string_empty_numeric_astype(dtype):
     expect = ps.astype("str")
     got = gs.astype("str")
 
-    assert_eq(expect, got)
+    assert_eq(expect, got, downcast=True)
 
 
 def test_string_concat():
@@ -263,8 +270,8 @@ def test_string_concat():
     data2 = ["f", "g", "h", "i", "j"]
     index = [1, 2, 3, 4, 5]
 
-    ps1 = pd.Series(data1, index=index)
-    ps2 = pd.Series(data2, index=index)
+    ps1 = pd.Series(data1, index=index, dtype=pd.StringDtype())
+    ps2 = pd.Series(data2, index=index, dtype=pd.StringDtype())
     gs1 = Series(data1, index=index)
     gs2 = Series(data2, index=index)
 
@@ -536,7 +543,7 @@ def test_string_split(data, pat, n, expand, expand_raise):
     if data in (["a b", " c ", "   d", "e   ", "f"],) and pat is None:
         pytest.xfail("None pattern split algorithm not implemented yet")
 
-    ps = pd.Series(data, dtype="str")
+    ps = pd.Series(data, dtype=pd.StringDtype())
     gs = Series(data, dtype="str")
 
     expectation = raise_builder([expand_raise], NotImplementedError)
@@ -564,9 +571,10 @@ def test_string_join_key(str_data, str_data_raise, num_keys, how):
     pdf = pd.DataFrame()
     gdf = DataFrame()
     for i in range(num_keys):
-        pdf[i] = pd.Series(str_data, dtype="str")
+        pdf[i] = pd.Series(str_data, dtype=pd.StringDtype())
         gdf[i] = Series(str_data, dtype="str")
     pdf["a"] = other_data
+    pdf["a"] = pdf["a"].astype(pd.Int64Dtype())
     gdf["a"] = other_data
 
     pdf2 = pdf.copy()
@@ -575,16 +583,17 @@ def test_string_join_key(str_data, str_data_raise, num_keys, how):
     expectation = raise_builder(
         [0 if how == "right" else str_data_raise], (AssertionError)
     )
-
+    check_dtype = True
     with expectation:
         expect = pdf.merge(pdf2, on=list(range(num_keys)), how=how)
         got = gdf.merge(gdf2, on=list(range(num_keys)), how=how)
-
+    
         if len(expect) == 0 and len(got) == 0:
             expect = expect.reset_index(drop=True)
             got = got[expect.columns]
-
-        assert_eq(expect, got)
+        if len(pdf) == 0:
+            check_dtype = False
+        assert_eq(expect, got, check_dtype=check_dtype)
 
 
 @pytest.mark.parametrize(
@@ -606,27 +615,26 @@ def test_string_join_key_nulls(str_data_nulls):
 
     pdf = pd.DataFrame()
     gdf = DataFrame()
-    pdf["key"] = pd.Series(str_data, dtype="str")
+    pdf["key"] = pd.Series(str_data, dtype=pd.StringDtype())
     gdf["key"] = Series(str_data, dtype="str")
     pdf["vals"] = other_data
+    pdf["vals"] = pdf["vals"].astype(pd.Int64Dtype())
     gdf["vals"] = other_data
 
     pdf2 = pd.DataFrame()
     gdf2 = DataFrame()
-    pdf2["key"] = pd.Series(str_data_nulls, dtype="str")
+    pdf2["key"] = pd.Series(str_data_nulls, dtype=pd.StringDtype())
     gdf2["key"] = Series(str_data_nulls, dtype="str")
-    pdf2["vals"] = pd.Series(other_data_nulls, dtype="int64")
+    pdf2["vals"] = pd.Series(other_data_nulls, dtype=pd.Int64Dtype())
     gdf2["vals"] = Series(other_data_nulls, dtype="int64")
 
     expect = pdf.merge(pdf2, on="key", how="left")
     got = gdf.merge(gdf2, on="key", how="left")
-    got["vals_y"] = got["vals_y"].fillna(-1)
 
     if len(expect) == 0 and len(got) == 0:
         expect = expect.reset_index(drop=True)
         got = got[expect.columns]
 
-    expect["vals_y"] = expect["vals_y"].fillna(-1).astype("int64")
 
     assert_eq(expect, got)
 
@@ -642,9 +650,10 @@ def test_string_join_non_key(str_data, num_cols, how):
     pdf = pd.DataFrame()
     gdf = DataFrame()
     for i in range(num_cols):
-        pdf[i] = pd.Series(str_data, dtype="str")
+        pdf[i] = pd.Series(str_data, dtype=pd.StringDtype())
         gdf[i] = Series(str_data, dtype="str")
     pdf["a"] = other_data
+    pdf["a"] = pdf["a"].astype(pd.Int64Dtype())
     gdf["a"] = other_data
 
     pdf2 = pdf.copy()
@@ -653,11 +662,14 @@ def test_string_join_non_key(str_data, num_cols, how):
     expect = pdf.merge(pdf2, on=["a"], how=how)
     got = gdf.merge(gdf2, on=["a"], how=how)
 
+    check_dtype = True
     if len(expect) == 0 and len(got) == 0:
         expect = expect.reset_index(drop=True)
         got = got[expect.columns]
+    if len(got) == 0:
+        check_dtype = False
 
-    assert_eq(expect, got)
+    assert_eq(expect, got, check_dtype=check_dtype)
 
 
 @pytest.mark.parametrize(
@@ -679,16 +691,17 @@ def test_string_join_non_key_nulls(str_data_nulls):
 
     pdf = pd.DataFrame()
     gdf = DataFrame()
-    pdf["vals"] = pd.Series(str_data, dtype="str")
+    pdf["vals"] = pd.Series(str_data, dtype=pd.StringDtype())
     gdf["vals"] = Series(str_data, dtype="str")
     pdf["key"] = other_data
+    pdf["key"] = pdf["key"].astype(pd.Int64Dtype())
     gdf["key"] = other_data
 
     pdf2 = pd.DataFrame()
     gdf2 = DataFrame()
-    pdf2["vals"] = pd.Series(str_data_nulls, dtype="str")
+    pdf2["vals"] = pd.Series(str_data_nulls, dtype=pd.StringDtype())
     gdf2["vals"] = Series(str_data_nulls, dtype="str")
-    pdf2["key"] = pd.Series(other_data_nulls, dtype="int64")
+    pdf2["key"] = pd.Series(other_data_nulls, dtype=pd.Int64Dtype())
     gdf2["key"] = Series(other_data_nulls, dtype="int64")
 
     expect = pdf.merge(pdf2, on="key", how="left")
@@ -697,8 +710,11 @@ def test_string_join_non_key_nulls(str_data_nulls):
     if len(expect) == 0 and len(got) == 0:
         expect = expect.reset_index(drop=True)
         got = got[expect.columns]
+    check_dtype = True
+    if len(pdf) == 0 or len(pdf2) == 0:
+        check_dtype=False
 
-    assert_eq(expect, got)
+    assert_eq(expect, got, check_dtype=check_dtype)
 
 
 def test_string_join_values_nulls():
@@ -727,7 +743,10 @@ def test_string_join_values_nulls():
     ]
 
     left_pdf = pd.DataFrame(left_dict)
+    left_pdf = promote_to_pd_nullable_dtype(left_pdf)
     right_pdf = pd.DataFrame(right_dict)
+    right_pdf = promote_to_pd_nullable_dtype(right_pdf)
+
 
     left_gdf = DataFrame.from_pandas(left_pdf)
     right_gdf = DataFrame.from_pandas(right_pdf)
@@ -820,6 +839,8 @@ def test_string_set_scalar(scalar):
     pdf["b"] = "a"
     gdf["b"] = "a"
 
+    pdf = promote_to_pd_nullable_dtype(pdf)
+
     assert_eq(pdf["b"], gdf["b"])
     assert_eq(pdf, gdf)
 
@@ -858,7 +879,7 @@ def test_string_index():
     ],
 )
 def test_string_unique(item):
-    ps = pd.Series(item)
+    ps = pd.Series(item, dtype=pd.StringDtype())
     gs = Series(item)
     # Pandas `unique` returns a numpy array
     pres = pd.Series(ps.unique())
@@ -870,7 +891,7 @@ def test_string_unique(item):
 
 def test_string_slice():
     df = DataFrame({"a": ["hello", "world"]})
-    pdf = pd.DataFrame({"a": ["hello", "world"]})
+    pdf = pd.DataFrame({"a": ["hello", "world"]}, dtype=pd.StringDtype())
     a_slice_got = df.a.str.slice(0, 2)
     a_slice_expected = pdf.a.str.slice(0, 2)
 
@@ -882,8 +903,8 @@ def test_string_equality():
     data1 = ["b", "c", "d", "a", "c"]
     data2 = ["a", None, "c", "a", "c"]
 
-    ps1 = pd.Series(data1)
-    ps2 = pd.Series(data2)
+    ps1 = pd.Series(data1, dtype=pd.StringDtype())
+    ps2 = pd.Series(data2, dtype=pd.StringDtype())
     gs1 = Series(data1)
     gs2 = Series(data2)
 
@@ -966,7 +987,7 @@ def test_string_no_children_properties():
     "index", [-100, -5, -2, -6, -1, 0, 1, 2, 3, 9, 10, 100]
 )
 def test_string_get(string, index):
-    pds = pd.Series(string)
+    pds = pd.Series(string, dtype=pd.StringDtype())
     gds = Series(string)
 
     assert_eq(
@@ -989,7 +1010,7 @@ def test_string_get(string, index):
     "diff", [0, 2, 5, 9],
 )
 def test_string_slice_str(string, number, diff):
-    pds = pd.Series(string)
+    pds = pd.Series(string, dtype=pd.StringDtype())
     gds = Series(string)
 
     assert_eq(pds.str.slice(start=number), gds.str.slice(start=number))
@@ -1028,7 +1049,7 @@ def test_string_slice_from():
 @pytest.mark.parametrize("diff", [0, 2, 9])
 @pytest.mark.parametrize("repr", ["2", "!!"])
 def test_string_slice_replace(string, number, diff, repr):
-    pds = pd.Series(string)
+    pds = pd.Series(string, dtype=pd.StringDtype())
     gds = Series(string)
 
     assert_eq(
@@ -1055,7 +1076,7 @@ def test_string_slice_replace(string, number, diff, repr):
 def test_string_insert():
     gs = Series(["hello world", "holy accéntéd", "batman", None, ""])
 
-    ps = pd.Series(["hello world", "holy accéntéd", "batman", None, ""])
+    ps = pd.Series(["hello world", "holy accéntéd", "batman", None, ""], dtype=pd.StringDtype())
 
     assert_eq(gs.str.insert(0, ""), gs)
     assert_eq(gs.str.insert(0, "+"), "+" + ps)
@@ -1108,7 +1129,7 @@ _string_char_types_data = [
 @pytest.mark.parametrize("data", _string_char_types_data)
 def test_string_char_types(type_op, data):
     gs = Series(data)
-    ps = pd.Series(data)
+    ps = pd.Series(data).astype(pd.StringDtype())
 
     assert_eq(getattr(gs.str, type_op)(), getattr(ps.str, type_op)())
 
@@ -1175,7 +1196,7 @@ def test_string_filter_alphanum():
 )
 def test_string_char_case(case_op, data):
     gs = Series(data)
-    ps = pd.Series(data)
+    ps = pd.Series(data, dtype=pd.StringDtype())
 
     s = gs.str
     a = getattr(s, case_op)
@@ -1189,8 +1210,7 @@ def test_string_char_case(case_op, data):
     assert_eq(gs.str.isdigit(), ps.str.isdigit())
     assert_eq(gs.str.isnumeric(), ps.str.isnumeric())
     assert_eq(gs.str.isspace(), ps.str.isspace())
-
-    assert_eq(gs.str.isempty(), ps == "")
+    assert_eq(gs.str.isempty(), (ps == "").fillna(False))
 
 
 @pytest.mark.parametrize(
@@ -1205,7 +1225,7 @@ def test_string_char_case(case_op, data):
 )
 def test_strings_rpartition(data):
     gs = Series(data)
-    ps = pd.Series(data)
+    ps = pd.Series(data, dtype=pd.StringDtype())
 
     assert_eq(ps.str.rpartition(), gs.str.rpartition())
     assert_eq(ps.str.rpartition("-"), gs.str.rpartition("-"))
@@ -1224,7 +1244,7 @@ def test_strings_rpartition(data):
 )
 def test_strings_partition(data):
     gs = Series(data, name="str_name")
-    ps = pd.Series(data, name="str_name")
+    ps = pd.Series(data, name="str_name", dtype=pd.StringDtype())
 
     assert_eq(ps.str.partition(), gs.str.partition())
     assert_eq(ps.str.partition(","), gs.str.partition(","))
@@ -1256,7 +1276,7 @@ def test_strings_partition(data):
 @pytest.mark.parametrize("expand", [True])
 def test_strings_rsplit(data, n, expand):
     gs = Series(data)
-    ps = pd.Series(data)
+    ps = pd.Series(data, dtype=pd.StringDtype())
 
     assert_eq(
         ps.str.rsplit(n=n, expand=expand).reset_index(),
@@ -1292,7 +1312,7 @@ def test_strings_rsplit(data, n, expand):
 @pytest.mark.parametrize("expand", [True])
 def test_strings_split(data, n, expand):
     gs = Series(data)
-    ps = pd.Series(data)
+    ps = pd.Series(data, dtype=pd.StringDtype())
 
     assert_eq(
         ps.str.split(n=n, expand=expand).reset_index(),
@@ -1331,7 +1351,7 @@ def test_strings_split(data, n, expand):
 )
 def test_strings_strip_tests(data, to_strip):
     gs = Series(data)
-    ps = pd.Series(data)
+    ps = pd.Series(data, dtype=pd.StringDtype())
 
     assert_eq(ps.str.strip(to_strip=to_strip), gs.str.strip(to_strip=to_strip))
     assert_eq(
@@ -1373,7 +1393,7 @@ def test_strings_strip_tests(data, to_strip):
 @pytest.mark.parametrize("fillchar", ["⅕", "1", ".", "t", " ", ","])
 def test_strings_filling_tests(data, width, fillchar):
     gs = Series(data)
-    ps = pd.Series(data)
+    ps = pd.Series(data, dtype=pd.StringDtype())
 
     assert_eq(
         ps.str.center(width=width, fillchar=fillchar),
@@ -1419,7 +1439,7 @@ def test_strings_filling_tests(data, width, fillchar):
 @pytest.mark.parametrize("width", [0, 1, 4, 6, 9, 100])
 def test_strings_zfill_tests(data, width):
     gs = Series(data)
-    ps = pd.Series(data)
+    ps = pd.Series(data, dtype=pd.StringDtype())
 
     assert_eq(ps.str.zfill(width=width), gs.str.zfill(width=width))
 
@@ -1447,7 +1467,7 @@ def test_strings_zfill_tests(data, width):
 @pytest.mark.parametrize("fillchar", [" ", ".", "\n", "+", "\t"])
 def test_strings_pad_tests(data, width, side, fillchar):
     gs = Series(data)
-    ps = pd.Series(data)
+    ps = pd.Series(data, dtype=pd.StringDtype())
 
     assert_eq(
         ps.str.pad(width=width, side=side, fillchar=fillchar),
@@ -1589,7 +1609,7 @@ def test_string_replace_with_backrefs(find, replace):
         "abcd-éfgh",
         "tést-string-again",
     ]
-    ps = pd.Series(s)
+    ps = pd.Series(s, dtype=pd.stringDtype())
     gs = Series(s)
     got = gs.str.replace_with_backrefs(find, replace)
     expected = ps.str.replace(find, replace, regex=True)
@@ -1704,7 +1724,7 @@ def test_string_starts_ends_list_like_pat(data, pat):
     "sub", ["", " ", "a", "abc", "cat", "$", "\n"],
 )
 def test_string_find(data, sub):
-    ps = pd.Series(data)
+    ps = pd.Series(data, dtype=pd.StringDtype())
     gs = Series(data)
 
     got = gs.str.find(sub)
@@ -1854,7 +1874,7 @@ def test_string_str_rindex(data, sub, er):
 )
 @pytest.mark.parametrize("pat", ["", " ", "a", "abc", "cat", "$", "\n"])
 def test_string_str_match(data, pat):
-    ps = pd.Series(data)
+    ps = pd.Series(data, dtype=pd.StringDtype())
     gs = Series(data)
 
     assert_eq(ps.str.match(pat), gs.str.match(pat))
@@ -2199,7 +2219,7 @@ def test_string_int_to_ipv4_dtype_fail(dtype):
     ],
 )
 def test_string_str_subscriptable(data, index):
-    psr = pd.Series(data)
+    psr = pd.Series(data, dtype=pd.StringDtype())
     gsr = Series(data)
 
     assert_eq(psr.str[index], gsr.str[index])

@@ -4,13 +4,13 @@ import pandas as pd
 import pytest
 
 from cudf.core.dataframe import DataFrame, Series
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import assert_eq, promote_to_pd_nullable_dtype
 
 
-@pytest.mark.parametrize("df", [pd.DataFrame({"a": [1, 2, 3]})])
+@pytest.mark.parametrize("df", [pd.DataFrame({"a": [1, 2, 3]}, dtype=pd.Int64Dtype())])
 @pytest.mark.parametrize("arg", [[True, False, True], [True, True, True]])
 @pytest.mark.parametrize("value", [0, -1])
-def test_dataframe_setitem_bool_mask_scaler(df, arg, value):
+def test_dataframe_setitem_bool_mask_scalar(df, arg, value):
     gdf = DataFrame.from_pandas(df)
 
     df[arg] = value
@@ -45,10 +45,10 @@ def test_dataframe_setitem_columns(df, arg, value):
     assert_eq(df, gdf, check_dtype=False)
 
 
-@pytest.mark.parametrize("df", [pd.DataFrame({"a": [1, 2, 3]})])
+@pytest.mark.parametrize("df", [pd.DataFrame({"a": [1, 2, 3]}, dtype=pd.Int64Dtype())])
 @pytest.mark.parametrize("arg", [["b", "c"]])
 @pytest.mark.parametrize(
-    "value", [pd.DataFrame({"0": [-1, -2, -3], "1": [-0, -10, -1]})]
+    "value", [pd.DataFrame({"0": [-1, -2, -3], "1": [-0, -10, -1]}, dtype=pd.Int64Dtype())]
 )
 def test_dataframe_setitem_new_columns(df, arg, value):
     gdf = DataFrame.from_pandas(df)
@@ -84,7 +84,7 @@ def test_series_setitem_index():
     assert_eq(df, gdf, check_dtype=False)
 
 
-@pytest.mark.parametrize("psr", [pd.Series([1, 2, 3], index=["a", "b", "c"])])
+@pytest.mark.parametrize("psr", [pd.Series([1, 2, 3], index=["a", "b", "c"], dtype=pd.Int64Dtype())])
 @pytest.mark.parametrize(
     "arg", ["b", ["a", "c"], slice(1, 2, 1), [True, False, True]]
 )
@@ -110,7 +110,7 @@ def test_series_set_item(psr, arg):
     ],
 )
 def test_setitem_dataframe_series_inplace(df):
-    pdf = df
+    pdf = promote_to_pd_nullable_dtype(df)
     gdf = DataFrame.from_pandas(pdf)
 
     pdf["a"].replace(1, 500, inplace=True)
@@ -145,7 +145,7 @@ def test_series_set_equal_length_object_by_mask(replace_data):
     gd_bool_col = Series.from_pandas(pd_bool_col)
 
     psr[pd_bool_col] = (
-        replace_data.to_pandas(nullable_pd_dtype=False)
+        replace_data.to_pandas()
         if hasattr(replace_data, "to_pandas")
         else replace_data
     )

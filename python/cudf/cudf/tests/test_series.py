@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import assert_eq, promote_to_pd_nullable_dtype
 
 
 @pytest.mark.parametrize(
@@ -20,6 +20,7 @@ from cudf.tests.utils import assert_eq
 )
 def test_series_init_dict(data):
     pandas_series = pd.Series(data)
+    pandas_series = promote_to_pd_nullable_dtype(pandas_series)
     cudf_series = cudf.Series(data)
 
     assert_eq(pandas_series, cudf_series)
@@ -60,12 +61,19 @@ def test_series_init_dict_lists(data):
 @pytest.mark.parametrize("ignore_index", [True, False])
 def test_series_append_basic(data, others, ignore_index):
     psr = pd.Series(data)
+    psr = promote_to_pd_nullable_dtype(psr)
     gsr = cudf.Series(data)
 
     other_ps = pd.Series(others)
+    other_ps = promote_to_pd_nullable_dtype(other_ps)
     other_gs = cudf.Series(others)
 
     expected = psr.append(other_ps, ignore_index=ignore_index)
+    if psr.dtype.kind != other_ps.dtype.kind:
+        # appending Int64 to float gives object currently
+        assert(expected.dtype == np.dtype('object'))
+        expected = psr.astype(psr.dtype.type).append(other_ps.astype(other_ps.dtype.type), ignore_index=ignore_index)
+
     actual = gsr.append(other_gs, ignore_index=ignore_index)
     assert_eq(expected, actual)
 
@@ -105,9 +113,11 @@ def test_series_append_basic(data, others, ignore_index):
 @pytest.mark.parametrize("ignore_index", [True, False])
 def test_series_append_basic_str(data, others, ignore_index):
     psr = pd.Series(data)
+    psr = promote_to_pd_nullable_dtype(psr)
     gsr = cudf.Series(data)
 
     other_ps = pd.Series(others)
+    other_ps = promote_to_pd_nullable_dtype(other_ps)
     other_gs = cudf.Series(others)
 
     expected = psr.append(other_ps, ignore_index=ignore_index)
@@ -156,9 +166,11 @@ def test_series_append_basic_str(data, others, ignore_index):
 @pytest.mark.parametrize("ignore_index", [True, False])
 def test_series_append_series_with_index(data, others, ignore_index):
     psr = pd.Series(data)
+    psr = promote_to_pd_nullable_dtype(psr)
     gsr = cudf.Series(data)
 
     other_ps = others
+    other_ps = promote_to_pd_nullable_dtype(other_ps)
     other_gs = cudf.from_pandas(others)
 
     expected = psr.append(other_ps, ignore_index=ignore_index)
@@ -235,12 +247,24 @@ def test_series_append_error_mixed_types():
 @pytest.mark.parametrize("ignore_index", [True, False])
 def test_series_append_list_series_with_index(data, others, ignore_index):
     psr = pd.Series(data)
+    psr = promote_to_pd_nullable_dtype(psr)
     gsr = cudf.Series(data)
 
     other_ps = others
+    other_ps = [promote_to_pd_nullable_dtype(obj) for obj in other_ps]
     other_gs = [cudf.from_pandas(obj) for obj in others]
 
     expected = psr.append(other_ps, ignore_index=ignore_index)
+    different_kinds = [False] * len(other_ps)
+    for i, obj in enumerate(other_ps):
+        if psr.dtype.kind != other_ps[i].dtype.kind:
+            different_kinds[i] = True
+    if np.any(different_kinds):
+        assert(expected.dtype == np.dtype('object'))
+        other_ps = [obj.astype(np.float64) for obj in other_ps]
+        psr = psr.astype(np.float64)
+        expected = psr.append(other_ps, ignore_index=ignore_index)
+
     actual = gsr.append(other_gs, ignore_index=ignore_index)
     assert_eq(expected, actual)
 

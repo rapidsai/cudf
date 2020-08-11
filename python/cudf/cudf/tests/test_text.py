@@ -3,7 +3,7 @@
 import cupy
 import numpy as np
 import pytest
-
+import pandas as pd
 import cudf
 from cudf.tests.utils import assert_eq
 
@@ -120,7 +120,7 @@ def test_token_count(delimiter, expected_token_counts):
     actual = strings.str.token_count(delimiter)
 
     assert type(expected) == type(actual)
-    assert_eq(expected, actual, check_dtype=False)
+    assert_eq(expected, actual, check_dtype=False, downcast=True)
 
 
 def test_normalize_spaces():

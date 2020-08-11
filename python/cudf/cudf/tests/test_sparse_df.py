@@ -73,4 +73,5 @@ def test_reading_arrow_sparse_data():
     pdf, schema, darr = read_data()
     gar = GpuArrowReader(schema, darr)
     gdf = DataFrame(gar.to_dict())
-    assert_eq(pdf, gdf)
+    # arrow object to_pandas() gives non-nullable dtypes
+    assert_eq(pdf, gdf, downcast=True)
