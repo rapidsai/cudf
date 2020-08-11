@@ -23,71 +23,65 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 #include <rmm/device_uvector.hpp>
 
 #include <algorithm>
 #include <functional>
 #include <iterator>
 #include <type_traits>
-#include "cudf/scalar/scalar_device_view.cuh"
-#include "cudf/utilities/type_dispatcher.hpp"
 
 namespace cudf {
 
 namespace ast {
 
+namespace detail {
+
 template <typename Element>
-__device__ Element
-resolve_input_data_reference(const detail::device_data_reference device_data_reference,
-                             const table_device_view table,
-                             const cudf::detail::fixed_width_scalar_device_view_base* literals,
-                             const std::int64_t* thread_intermediate_storage,
-                             cudf::size_type row_index)
+__device__ Element data_reference_resolver::resolve_input(
+  const detail::device_data_reference device_data_reference, cudf::size_type row_index) const
 {
+  auto const data_index = device_data_reference.data_index;
   switch (device_data_reference.reference_type) {
     case detail::device_data_reference_type::COLUMN: {
-      auto column = table.column(device_data_reference.data_index);
+      auto column = this->table.column(data_index);
       return column.data<Element>()[row_index];
     }
     case detail::device_data_reference_type::LITERAL: {
-      return literals[device_data_reference.data_index].value<Element>();
+      return this->literals[data_index].value<Element>();
     }
     case detail::device_data_reference_type::INTERMEDIATE: {
-      return *reinterpret_cast<const Element*>(
-        &thread_intermediate_storage[device_data_reference.data_index]);
+      return *reinterpret_cast<const Element*>(&this->thread_intermediate_storage[data_index]);
     }
     default: {
-      // TODO: Error
+      release_assert(false && "Invalid input device data reference type.");
       return Element();
     }
   }
 }
 
 template <typename Element>
-__device__ Element* resolve_output_data_reference(
-  const detail::device_data_reference device_data_reference,
-  const table_device_view table,
-  mutable_column_device_view output_column,
-  std::int64_t* thread_intermediate_storage,
-  cudf::size_type row_index)
+__device__ Element* data_reference_resolver::resolve_output(
+  const detail::device_data_reference device_data_reference, cudf::size_type row_index) const
 {
   switch (device_data_reference.reference_type) {
     case detail::device_data_reference_type::COLUMN: {
       // TODO: Could refactor to support output tables (multiple output columns)
-      return &(output_column.element<Element>(row_index));
+      return &(this->output_column->element<Element>(row_index));
     }
     case detail::device_data_reference_type::INTERMEDIATE: {
       return reinterpret_cast<Element*>(
-        &thread_intermediate_storage[device_data_reference.data_index]);
+        &this->thread_intermediate_storage[device_data_reference.data_index]);
     }
     default: {
-      // TODO: Error
+      release_assert(false && "Invalid output device data reference type.");
       return nullptr;
     }
   }
@@ -98,19 +92,14 @@ template <typename OperatorFunctor,
           typename Out,
           std::enable_if_t<cudf::ast::is_valid_unary_op<OperatorFunctor, Input>>*>
 CUDA_HOST_DEVICE_CALLABLE decltype(auto) typed_unary_operator_dispatch_functor::operator()(
-  const table_device_view table,
-  mutable_column_device_view output_column,
-  const cudf::detail::fixed_width_scalar_device_view_base* literals,
-  std::int64_t* thread_intermediate_storage,
+  const data_reference_resolver resolver,
   cudf::size_type row_index,
   const detail::device_data_reference input,
   const detail::device_data_reference output)
 {
-  auto const typed_input = resolve_input_data_reference<Input>(
-    input, table, literals, thread_intermediate_storage, row_index);
-  auto typed_output = resolve_output_data_reference<Out>(
-    output, table, output_column, thread_intermediate_storage, row_index);
-  *typed_output = OperatorFunctor{}(typed_input);
+  auto const typed_input = resolver.resolve_input<Input>(input, row_index);
+  auto typed_output      = resolver.resolve_output<Out>(output, row_index);
+  *typed_output          = OperatorFunctor{}(typed_input);
 }
 
 template <typename OperatorFunctor,
@@ -118,16 +107,16 @@ template <typename OperatorFunctor,
           typename Out,
           std::enable_if_t<!cudf::ast::is_valid_unary_op<OperatorFunctor, Input>>*>
 CUDA_HOST_DEVICE_CALLABLE decltype(auto) typed_unary_operator_dispatch_functor::operator()(
-  const table_device_view table,
-  mutable_column_device_view output_column,
-  const cudf::detail::fixed_width_scalar_device_view_base* literals,
-  std::int64_t* thread_intermediate_storage,
+  const data_reference_resolver resolver,
   cudf::size_type row_index,
   const detail::device_data_reference input,
   const detail::device_data_reference output)
 {
-  // TODO: Need a template to match unsupported types, or prevent the compiler from attempting to
-  // compile unsupported types here.
+#ifndef __CUDA_ARCH__
+  CUDF_FAIL("Invalid unary dispatch operator for the provided input.");
+#else
+  release_assert(false && "Invalid unary dispatch operator for the provided input.");
+#endif
 }
 
 template <typename OperatorFunctor,
@@ -136,22 +125,16 @@ template <typename OperatorFunctor,
           typename Out,
           std::enable_if_t<cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>*>
 CUDA_HOST_DEVICE_CALLABLE decltype(auto) typed_binary_operator_dispatch_functor::operator()(
-  const table_device_view table,
-  mutable_column_device_view output_column,
-  const cudf::detail::fixed_width_scalar_device_view_base* literals,
-  std::int64_t* thread_intermediate_storage,
+  const data_reference_resolver resolver,
   cudf::size_type row_index,
   const detail::device_data_reference lhs,
   const detail::device_data_reference rhs,
   const detail::device_data_reference output)
 {
-  auto const typed_lhs =
-    resolve_input_data_reference<LHS>(lhs, table, literals, thread_intermediate_storage, row_index);
-  auto const typed_rhs =
-    resolve_input_data_reference<RHS>(rhs, table, literals, thread_intermediate_storage, row_index);
-  auto typed_output = resolve_output_data_reference<Out>(
-    output, table, output_column, thread_intermediate_storage, row_index);
-  *typed_output = OperatorFunctor{}(typed_lhs, typed_rhs);
+  auto const typed_lhs = resolver.resolve_input<LHS>(lhs, row_index);
+  auto const typed_rhs = resolver.resolve_input<RHS>(rhs, row_index);
+  auto typed_output    = resolver.resolve_output<Out>(output, row_index);
+  *typed_output        = OperatorFunctor{}(typed_lhs, typed_rhs);
 }
 
 template <typename OperatorFunctor,
@@ -160,76 +143,42 @@ template <typename OperatorFunctor,
           typename Out,
           std::enable_if_t<!cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>*>
 CUDA_HOST_DEVICE_CALLABLE decltype(auto) typed_binary_operator_dispatch_functor::operator()(
-  const table_device_view table,
-  mutable_column_device_view output_column,
-  const cudf::detail::fixed_width_scalar_device_view_base* literals,
-  std::int64_t* thread_intermediate_storage,
+  const data_reference_resolver resolver,
   cudf::size_type row_index,
   const detail::device_data_reference lhs,
   const detail::device_data_reference rhs,
   const detail::device_data_reference output)
 {
-  // TODO: Need a template to match unsupported types, or prevent the compiler from attempting to
-  // compile unsupported types here.
+#ifndef __CUDA_ARCH__
+  CUDF_FAIL("Invalid binary dispatch operator for the provided input.");
+#else
+  release_assert(false && "Invalid binary dispatch operator for the provided input.");
+#endif
 }
 
-__device__ void call_unary_operator(
-  ast_operator op,
-  const table_device_view table,
-  mutable_column_device_view output_column,
-  const cudf::detail::fixed_width_scalar_device_view_base* literals,
-  std::int64_t* thread_intermediate_storage,
-  cudf::size_type row_index,
-  const detail::device_data_reference input,
-  const detail::device_data_reference output)
+__device__ void call_unary_operator(ast_operator op,
+                                    data_reference_resolver resolver,
+                                    cudf::size_type row_index,
+                                    const detail::device_data_reference input,
+                                    const detail::device_data_reference output)
 {
-  unary_operator_dispatcher(op,
-                            input.data_type,
-                            typed_unary_operator_dispatch_functor{},
-                            table,
-                            output_column,
-                            literals,
-                            thread_intermediate_storage,
-                            row_index,
-                            input,
-                            output);
 }
 
-__device__ void call_binary_operator(
-  ast_operator op,
-  const table_device_view table,
-  mutable_column_device_view output_column,
-  const cudf::detail::fixed_width_scalar_device_view_base* literals,
-  std::int64_t* thread_intermediate_storage,
-  cudf::size_type row_index,
-  const detail::device_data_reference lhs,
-  const detail::device_data_reference rhs,
-  const detail::device_data_reference output)
+__device__ void call_binary_operator(ast_operator op,
+                                     data_reference_resolver resolver,
+                                     cudf::size_type row_index,
+                                     const detail::device_data_reference lhs,
+                                     const detail::device_data_reference rhs,
+                                     const detail::device_data_reference output)
 {
-  binary_operator_dispatcher(op,
-                             lhs.data_type,
-                             rhs.data_type,
-                             typed_binary_operator_dispatch_functor{},
-                             table,
-                             output_column,
-                             literals,
-                             thread_intermediate_storage,
-                             row_index,
-                             lhs,
-                             rhs,
-                             output);
 }
 
-__device__ void evaluate_row_expression(
-  const table_device_view table,
-  const detail::device_data_reference* data_references,
-  const cudf::detail::fixed_width_scalar_device_view_base* literals,
-  const ast_operator* operators,
-  const cudf::size_type* operator_source_indices,
-  cudf::size_type num_operators,
-  cudf::size_type row_index,
-  std::int64_t* thread_intermediate_storage,
-  mutable_column_device_view output_column)
+__device__ void evaluate_row_expression(const data_reference_resolver resolver,
+                                        const detail::device_data_reference* data_references,
+                                        const ast_operator* operators,
+                                        const cudf::size_type* operator_source_indices,
+                                        cudf::size_type num_operators,
+                                        cudf::size_type row_index)
 {
   auto operator_source_index = cudf::size_type(0);
   for (cudf::size_type operator_index(0); operator_index < num_operators; operator_index++) {
@@ -238,33 +187,30 @@ __device__ void evaluate_row_expression(
     auto const arity = cudf::ast::ast_operator_arity(op);
     if (arity == 1) {
       // Unary operator
-      auto const input_data_ref = data_references[operator_source_indices[operator_source_index]];
-      auto const output_data_ref =
-        data_references[operator_source_indices[operator_source_index + 1]];
-      call_unary_operator(op,
-                          table,
-                          output_column,
-                          literals,
-                          thread_intermediate_storage,
-                          row_index,
-                          input_data_ref,
-                          output_data_ref);
-
+      auto const input  = data_references[operator_source_indices[operator_source_index]];
+      auto const output = data_references[operator_source_indices[operator_source_index + 1]];
+      unary_operator_dispatcher(op,
+                                input.data_type,
+                                typed_unary_operator_dispatch_functor{},
+                                resolver,
+                                row_index,
+                                input,
+                                output);
     } else if (arity == 2) {
       // Binary operator
-      auto const lhs_data_ref = data_references[operator_source_indices[operator_source_index]];
-      auto const rhs_data_ref = data_references[operator_source_indices[operator_source_index + 1]];
-      auto const output_data_ref =
-        data_references[operator_source_indices[operator_source_index + 2]];
-      call_binary_operator(op,
-                           table,
-                           output_column,
-                           literals,
-                           thread_intermediate_storage,
-                           row_index,
-                           lhs_data_ref,
-                           rhs_data_ref,
-                           output_data_ref);
+      auto const lhs    = data_references[operator_source_indices[operator_source_index]];
+      auto const rhs    = data_references[operator_source_indices[operator_source_index + 1]];
+      auto const output = data_references[operator_source_indices[operator_source_index + 2]];
+      binary_operator_dispatcher(op,
+                                 lhs.data_type,
+                                 rhs.data_type,
+                                 typed_binary_operator_dispatch_functor{},
+                                 resolver,
+                                 row_index,
+                                 lhs,
+                                 rhs,
+                                 output);
+
     } else {
       // Ternary operator
       /*
@@ -293,34 +239,28 @@ __device__ void evaluate_row_expression(
 template <size_type block_size>
 __launch_bounds__(block_size) __global__
   void compute_column_kernel(const table_device_view table,
-                             const detail::device_data_reference* data_references,
                              const cudf::detail::fixed_width_scalar_device_view_base* literals,
+                             mutable_column_device_view output_column,
+                             const detail::device_data_reference* data_references,
                              const ast_operator* operators,
                              const cudf::size_type* operator_source_indices,
                              cudf::size_type num_operators,
-                             cudf::size_type num_intermediates,
-                             mutable_column_device_view output_column)
+                             cudf::size_type num_intermediates)
 {
   extern __shared__ std::int64_t intermediate_storage[];
   auto thread_intermediate_storage = &intermediate_storage[threadIdx.x * num_intermediates];
   const cudf::size_type start_idx  = threadIdx.x + blockIdx.x * blockDim.x;
   const cudf::size_type stride     = blockDim.x * gridDim.x;
   auto const num_rows              = table.num_rows();
+  auto const resolver              = cudf::ast::detail::data_reference_resolver(
+    table, literals, thread_intermediate_storage, &output_column);
 
   for (cudf::size_type row_index = start_idx; row_index < num_rows; row_index += stride) {
-    evaluate_row_expression(table,
-                            data_references,
-                            literals,
-                            operators,
-                            operator_source_indices,
-                            num_operators,
-                            row_index,
-                            thread_intermediate_storage,
-                            output_column);
+    evaluate_row_expression(
+      resolver, data_references, operators, operator_source_indices, num_operators, row_index);
   }
 }
 
-namespace detail {
 template <typename T>
 rmm::device_uvector<T> async_create_device_data(std::vector<T> host_data, cudaStream_t stream)
 {
@@ -415,16 +355,16 @@ std::unique_ptr<column> compute_column(table_view const table,
 
   // Execute the kernel
   nvtxRangePush("Executing AST kernel...");
-  compute_column_kernel<block_size>
+  cudf::ast::detail::compute_column_kernel<block_size>
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream>>>(
       *table_device,
-      thrust::raw_pointer_cast(device_data_references.data()),
       thrust::raw_pointer_cast(device_literals.data()),
+      *mutable_output_device,
+      thrust::raw_pointer_cast(device_data_references.data()),
       thrust::raw_pointer_cast(device_operators.data()),
       thrust::raw_pointer_cast(device_operator_source_indices.data()),
       num_operators,
-      num_intermediates,
-      *mutable_output_device);
+      num_intermediates);
   CHECK_CUDA(stream);
   nvtxRangePop();
   return output_column;
