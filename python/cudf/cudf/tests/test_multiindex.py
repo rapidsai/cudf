@@ -1109,6 +1109,18 @@ def test_multiindex_sort_values(pmidx, ascending, return_indexer):
             codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
             names=["x", "y"],
         ),
+        pytest.param(
+            pd.MultiIndex(
+                levels=[[None, "b", "c", "a"], ["1", None, "5"]],
+                codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+                names=["x", "y"],
+            ),
+            marks=[
+                pytest.mark.xfail(
+                    reason="https://github.com/pandas-dev/pandas/issues/35584"
+                )
+            ],
+        ),
     ],
 )
 @pytest.mark.parametrize("ascending", [True, False])
