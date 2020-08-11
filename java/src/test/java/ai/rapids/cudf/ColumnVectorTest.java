@@ -2829,4 +2829,13 @@ public class ColumnVectorTest extends CudfTestBase {
       assertColumnsAreEqual(expected, v);
     }
   }
+
+  @Test
+  void testContiguousSplitConstructor() {
+    try (Table tmp = new Table.TestBuilder().column(1, 2).column(3, 4).build();
+         ContiguousTable ct = tmp.contiguousSplit()[0]) {
+      // one reference for the device buffer itself, two more for the column using it
+      assertEquals(3, ct.getBuffer().getRefCount());
+    }
+  }
 }
