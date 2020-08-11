@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/dlpack.hpp>
+#include <cudf/interop.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
@@ -368,5 +368,3 @@ TYPED_TEST(DLPackNumericTests, FromDlpackEmpty1D)
   // Verify that from_dlpack(to_dlpack(input)) == input
   EXPECT_THROW(cudf::from_dlpack(tensor.get()), cudf::logic_error);
 }
-
-CUDF_TEST_PROGRAM_MAIN()

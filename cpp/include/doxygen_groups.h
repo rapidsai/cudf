@@ -86,6 +86,7 @@
  *   @defgroup column_interop Interop
  *   @{
  *     @defgroup interop_dlpack DLPack
+ *     @defgroup interop_arrow Arrow
  *   @}
  * @}
  * @defgroup datetime_apis DateTime
@@ -127,6 +128,7 @@
  *   @defgroup nvtext_ngrams NGrams
  *   @defgroup nvtext_normalize Normalizing
  *   @defgroup nvtext_stemmer Stemming
+ *   @defgroup nvtext_edit_distance Edit Distance
  *   @defgroup nvtext_tokenize Tokenizing
  *   @defgroup nvtext_replace Replacing
  * @}
