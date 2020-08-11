@@ -158,6 +158,10 @@ public class TableTest extends CudfTestBase {
             assertArrayEquals(expected.getUTF8(expectedRow), cv.getUTF8(tableRow),
                 "Column " + colName + " Row " + tableRow);
             break;
+          case LIST:
+            assertArrayEquals(expected.getList(expectedRow).toString().getBytes(), cv.getList(tableRow).toString().getBytes(),
+                "Column " + colName + " Row " + tableRow);
+            break;
           default:
             throw new IllegalArgumentException(type + " is not supported yet");
         }
@@ -2875,6 +2879,21 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  @Test
+  void testSimpleGather() {
+    try (Table testTable = new Table.TestBuilder()
+            .column(1, 2, 3, 4, 5)
+            .column("A", "AA", "AAA", "AAAA", "AAAAA")
+            .build();
+         ColumnVector gatherMap = ColumnVector.fromInts(0, 2, 4, -2);
+         Table expected = new Table.TestBuilder()
+                 .column(1, 3, 5, 4)
+                 .column("A", "AAA", "AAAAA", "AAAA")
+                 .build();
+         Table found = testTable.gather(gatherMap)) {
+      assertTablesAreEqual(expected, found);
+    }
+  }
 
   @Test
   void testMaskWithoutValidity() {

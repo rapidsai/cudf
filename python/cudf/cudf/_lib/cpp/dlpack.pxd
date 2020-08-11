@@ -11,7 +11,7 @@ cdef extern from "dlpack/dlpack.h" nogil:
     ctypedef struct DLManagedTensor:
         void(*deleter)(DLManagedTensor*) except +
 
-cdef extern from "cudf/dlpack.hpp" namespace "cudf" \
+cdef extern from "cudf/interop.hpp" namespace "cudf" \
         nogil:
     cdef unique_ptr[table] from_dlpack(const DLManagedTensor* tensor
                                        ) except +
