@@ -117,6 +117,7 @@
 - PR #5381 Change numpy usages to cupy in `10min.ipynb`
 - PR #5408 Update pyrrow and arrow-cpp to 0.17.1
 - PR #5366 Add benchmarks for cuIO writers
+- PR #5913 Call cudaMemcpyAsync/cudaMemsetAsync in JNI
 - PR #5405 Add Error message to `StringColumn.unary_operator`
 - PR #5424 Add python plumbing for `.str.character_tokenize`
 - PR #5420 Aligning signature of `Series.value_counts` to Pandas
