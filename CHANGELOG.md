@@ -1,3 +1,11 @@
+# cuDF 0.16.0 (Date TBD)
+
+## New Features
+
+## Improvements
+
+## Bug Fixes
+
 # cuDF 0.15.0 (Date TBD)
 
 ## New Features
@@ -276,6 +284,8 @@
 - PR #5866 cudf_kafka python version inconsistencies in Anaconda packages
 - PR #5872 libcudf_kafka r_path is causing docker build failures on centos7
 - PR #5869 Fix bug in parquet writer in writing string column with offset
+- PR #5914 Link CUDA against libcudf_kafka
+- PR #5895 Do not break kafka client consumption loop on local client timeout
 
 
 # cuDF 0.14.0 (03 Jun 2020)
@@ -2026,7 +2036,8 @@
 - PR #1607 Revert change of `column.to_dense_buffer` always return by copy for performance concerns
 - PR #1618 ORC reader: fix assert & data output when nrows/skiprows isn't aligned to stripe boundaries
 - PR #1631 Fix failure of TYPES_TEST on some gcc-7 based systems.
-- PR #1641 CSV Reader: Fix skip_blank_lines behavior with Windows line terminators (\r\n)
+- PR #1641 CSV Reader: Fix skip_blank_lines behavior with Windows line terminators (
+)
 - PR #1648 ORC reader: fix non-deterministic output when skiprows is non-zero
 - PR #1676 Fix groupby `as_index` behaviour with `MultiIndex`
 - PR #1659 Fix bug caused by empty groupbys and multiindex slicing throwing exceptions
