@@ -31,13 +31,12 @@ namespace cudf {
 namespace ast {
 
 namespace detail {
-struct data_reference_resolver {
+struct row_evaluator {
  public:
-  __device__ data_reference_resolver(
-    const table_device_view table,
-    const cudf::detail::fixed_width_scalar_device_view_base* literals,
-    std::int64_t* thread_intermediate_storage,
-    mutable_column_device_view* output_column)
+  __device__ row_evaluator(const table_device_view table,
+                           const cudf::detail::fixed_width_scalar_device_view_base* literals,
+                           std::int64_t* thread_intermediate_storage,
+                           mutable_column_device_view* output_column)
     : table(table),
       literals(literals),
       thread_intermediate_storage(thread_intermediate_storage),
@@ -48,9 +47,46 @@ struct data_reference_resolver {
   template <typename Element>
   __device__ Element resolve_input(const detail::device_data_reference device_data_reference,
                                    cudf::size_type row_index) const;
+
   template <typename Element>
   __device__ Element* resolve_output(const detail::device_data_reference device_data_reference,
                                      cudf::size_type row_index) const;
+
+  template <typename OperatorFunctor,
+            typename Input,
+            typename Out = simt::std::invoke_result_t<OperatorFunctor, Input>,
+            std::enable_if_t<cudf::ast::is_valid_unary_op<OperatorFunctor, Input>>* = nullptr>
+  __device__ void operator()(cudf::size_type row_index,
+                             const detail::device_data_reference input,
+                             const detail::device_data_reference output) const;
+
+  template <typename OperatorFunctor,
+            typename Input,
+            typename Out                                                             = void,
+            std::enable_if_t<!cudf::ast::is_valid_unary_op<OperatorFunctor, Input>>* = nullptr>
+  __device__ void operator()(cudf::size_type row_index,
+                             const detail::device_data_reference input,
+                             const detail::device_data_reference output) const;
+
+  template <typename OperatorFunctor,
+            typename LHS,
+            typename RHS,
+            typename Out = simt::std::invoke_result_t<OperatorFunctor, LHS, RHS>,
+            std::enable_if_t<cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
+  __device__ void operator()(cudf::size_type row_index,
+                             const detail::device_data_reference lhs,
+                             const detail::device_data_reference rhs,
+                             const detail::device_data_reference output) const;
+
+  template <typename OperatorFunctor,
+            typename LHS,
+            typename RHS,
+            typename Out                                                                 = void,
+            std::enable_if_t<!cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
+  __device__ void operator()(cudf::size_type row_index,
+                             const detail::device_data_reference lhs,
+                             const detail::device_data_reference rhs,
+                             const detail::device_data_reference output) const;
 
  private:
   const table_device_view table;
@@ -59,55 +95,7 @@ struct data_reference_resolver {
   mutable_column_device_view* output_column;
 };
 
-struct typed_unary_operator_dispatch_functor {
-  template <typename OperatorFunctor,
-            typename Input,
-            typename Out = simt::std::invoke_result_t<OperatorFunctor, Input>,
-            std::enable_if_t<cudf::ast::is_valid_unary_op<OperatorFunctor, Input>>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(
-    const detail::data_reference_resolver resolver,
-    cudf::size_type row_index,
-    const detail::device_data_reference input,
-    const detail::device_data_reference output);
-
-  template <typename OperatorFunctor,
-            typename Input,
-            typename Out                                                             = void,
-            std::enable_if_t<!cudf::ast::is_valid_unary_op<OperatorFunctor, Input>>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(
-    const detail::data_reference_resolver resolver,
-    cudf::size_type row_index,
-    const detail::device_data_reference input,
-    const detail::device_data_reference output);
-};
-
-struct typed_binary_operator_dispatch_functor {
-  template <typename OperatorFunctor,
-            typename LHS,
-            typename RHS,
-            typename Out = simt::std::invoke_result_t<OperatorFunctor, LHS, RHS>,
-            std::enable_if_t<cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(
-    const detail::data_reference_resolver resolver,
-    cudf::size_type row_index,
-    const detail::device_data_reference lhs,
-    const detail::device_data_reference rhs,
-    const detail::device_data_reference output);
-
-  template <typename OperatorFunctor,
-            typename LHS,
-            typename RHS,
-            typename Out                                                                 = void,
-            std::enable_if_t<!cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(
-    const detail::data_reference_resolver resolver,
-    cudf::size_type row_index,
-    const detail::device_data_reference lhs,
-    const detail::device_data_reference rhs,
-    const detail::device_data_reference output);
-};
-
-__device__ void evaluate_row_expression(const detail::data_reference_resolver resolver,
+__device__ void evaluate_row_expression(const detail::row_evaluator evaluator,
                                         const detail::device_data_reference* data_references,
                                         const ast_operator* operators,
                                         const cudf::size_type* operator_source_indices,

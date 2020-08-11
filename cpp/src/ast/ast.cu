@@ -45,7 +45,7 @@ namespace ast {
 namespace detail {
 
 template <typename Element>
-__device__ Element data_reference_resolver::resolve_input(
+__device__ Element row_evaluator::resolve_input(
   const detail::device_data_reference device_data_reference, cudf::size_type row_index) const
 {
   auto const data_index = device_data_reference.data_index;
@@ -68,7 +68,7 @@ __device__ Element data_reference_resolver::resolve_input(
 }
 
 template <typename Element>
-__device__ Element* data_reference_resolver::resolve_output(
+__device__ Element* row_evaluator::resolve_output(
   const detail::device_data_reference device_data_reference, cudf::size_type row_index) const
 {
   switch (device_data_reference.reference_type) {
@@ -91,14 +91,12 @@ template <typename OperatorFunctor,
           typename Input,
           typename Out,
           std::enable_if_t<cudf::ast::is_valid_unary_op<OperatorFunctor, Input>>*>
-CUDA_HOST_DEVICE_CALLABLE decltype(auto) typed_unary_operator_dispatch_functor::operator()(
-  const detail::data_reference_resolver resolver,
-  cudf::size_type row_index,
-  const detail::device_data_reference input,
-  const detail::device_data_reference output)
+__device__ void row_evaluator::operator()(cudf::size_type row_index,
+                                          const detail::device_data_reference input,
+                                          const detail::device_data_reference output) const
 {
-  auto const typed_input = resolver.resolve_input<Input>(input, row_index);
-  auto typed_output      = resolver.resolve_output<Out>(output, row_index);
+  auto const typed_input = this->resolve_input<Input>(input, row_index);
+  auto typed_output      = this->resolve_output<Out>(output, row_index);
   *typed_output          = OperatorFunctor{}(typed_input);
 }
 
@@ -106,17 +104,11 @@ template <typename OperatorFunctor,
           typename Input,
           typename Out,
           std::enable_if_t<!cudf::ast::is_valid_unary_op<OperatorFunctor, Input>>*>
-CUDA_HOST_DEVICE_CALLABLE decltype(auto) typed_unary_operator_dispatch_functor::operator()(
-  const detail::data_reference_resolver resolver,
-  cudf::size_type row_index,
-  const detail::device_data_reference input,
-  const detail::device_data_reference output)
+__device__ void row_evaluator::operator()(cudf::size_type row_index,
+                                          const detail::device_data_reference input,
+                                          const detail::device_data_reference output) const
 {
-#ifndef __CUDA_ARCH__
-  CUDF_FAIL("Invalid unary dispatch operator for the provided input.");
-#else
   release_assert(false && "Invalid unary dispatch operator for the provided input.");
-#endif
 }
 
 template <typename OperatorFunctor,
@@ -124,16 +116,14 @@ template <typename OperatorFunctor,
           typename RHS,
           typename Out,
           std::enable_if_t<cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>*>
-CUDA_HOST_DEVICE_CALLABLE decltype(auto) typed_binary_operator_dispatch_functor::operator()(
-  const detail::data_reference_resolver resolver,
-  cudf::size_type row_index,
-  const detail::device_data_reference lhs,
-  const detail::device_data_reference rhs,
-  const detail::device_data_reference output)
+__device__ void row_evaluator::operator()(cudf::size_type row_index,
+                                          const detail::device_data_reference lhs,
+                                          const detail::device_data_reference rhs,
+                                          const detail::device_data_reference output) const
 {
-  auto const typed_lhs = resolver.resolve_input<LHS>(lhs, row_index);
-  auto const typed_rhs = resolver.resolve_input<RHS>(rhs, row_index);
-  auto typed_output    = resolver.resolve_output<Out>(output, row_index);
+  auto const typed_lhs = this->resolve_input<LHS>(lhs, row_index);
+  auto const typed_rhs = this->resolve_input<RHS>(rhs, row_index);
+  auto typed_output    = this->resolve_output<Out>(output, row_index);
   *typed_output        = OperatorFunctor{}(typed_lhs, typed_rhs);
 }
 
@@ -142,21 +132,15 @@ template <typename OperatorFunctor,
           typename RHS,
           typename Out,
           std::enable_if_t<!cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>*>
-CUDA_HOST_DEVICE_CALLABLE decltype(auto) typed_binary_operator_dispatch_functor::operator()(
-  const detail::data_reference_resolver resolver,
-  cudf::size_type row_index,
-  const detail::device_data_reference lhs,
-  const detail::device_data_reference rhs,
-  const detail::device_data_reference output)
+__device__ void row_evaluator::operator()(cudf::size_type row_index,
+                                          const detail::device_data_reference lhs,
+                                          const detail::device_data_reference rhs,
+                                          const detail::device_data_reference output) const
 {
-#ifndef __CUDA_ARCH__
-  CUDF_FAIL("Invalid binary dispatch operator for the provided input.");
-#else
   release_assert(false && "Invalid binary dispatch operator for the provided input.");
-#endif
 }
 
-__device__ void evaluate_row_expression(const detail::data_reference_resolver resolver,
+__device__ void evaluate_row_expression(const detail::row_evaluator evaluator,
                                         const detail::device_data_reference* data_references,
                                         const ast_operator* operators,
                                         const cudf::size_type* operator_source_indices,
@@ -172,27 +156,15 @@ __device__ void evaluate_row_expression(const detail::data_reference_resolver re
       // Unary operator
       auto const input  = data_references[operator_source_indices[operator_source_index]];
       auto const output = data_references[operator_source_indices[operator_source_index + 1]];
-      unary_operator_dispatcher(op,
-                                input.data_type,
-                                typed_unary_operator_dispatch_functor{},
-                                resolver,
-                                row_index,
-                                input,
-                                output);
+
+      unary_operator_dispatcher(op, input.data_type, evaluator, row_index, input, output);
     } else if (arity == 2) {
       // Binary operator
       auto const lhs    = data_references[operator_source_indices[operator_source_index]];
       auto const rhs    = data_references[operator_source_indices[operator_source_index + 1]];
       auto const output = data_references[operator_source_indices[operator_source_index + 2]];
-      binary_operator_dispatcher(op,
-                                 lhs.data_type,
-                                 rhs.data_type,
-                                 typed_binary_operator_dispatch_functor{},
-                                 resolver,
-                                 row_index,
-                                 lhs,
-                                 rhs,
-                                 output);
+      binary_operator_dispatcher(
+        op, lhs.data_type, rhs.data_type, evaluator, row_index, lhs, rhs, output);
     } else {
       release_assert(false && "Invalid operator arity.");
       // Ternary operator
@@ -235,12 +207,12 @@ __launch_bounds__(block_size) __global__
   const cudf::size_type start_idx  = threadIdx.x + blockIdx.x * blockDim.x;
   const cudf::size_type stride     = blockDim.x * gridDim.x;
   auto const num_rows              = table.num_rows();
-  auto const resolver              = cudf::ast::detail::data_reference_resolver(
-    table, literals, thread_intermediate_storage, &output_column);
+  auto const evaluator =
+    cudf::ast::detail::row_evaluator(table, literals, thread_intermediate_storage, &output_column);
 
   for (cudf::size_type row_index = start_idx; row_index < num_rows; row_index += stride) {
     evaluate_row_expression(
-      resolver, data_references, operators, operator_source_indices, num_operators, row_index);
+      evaluator, data_references, operators, operator_source_indices, num_operators, row_index);
   }
 }
 
