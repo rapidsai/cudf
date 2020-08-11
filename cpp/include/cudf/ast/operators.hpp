@@ -28,6 +28,10 @@ namespace cudf {
 
 namespace ast {
 
+/**
+ * @brief Enum of supported operators.
+ *
+ */
 enum class ast_operator {
   // Binary operators
   ADD,            ///< operator +
@@ -124,7 +128,14 @@ constexpr bool is_valid_binary_op = simt::std::is_invocable<Op, LHS, RHS>::value
 template <typename Op, typename T>
 constexpr bool is_valid_unary_op = simt::std::is_invocable<Op, T>::value;
 
-// Operator dispatcher
+/**
+ * @brief Operator dispatcher
+ *
+ * @tparam F Type of forwarded functor.
+ * @tparam Ts Parameter pack of forwarded arguments.
+ * @param f Forwarded functor to be called.
+ * @param args Forwarded arguments to `operator()` of `f`.
+ */
 template <typename F, typename... Ts>
 CUDA_HOST_DEVICE_CALLABLE constexpr void ast_operator_dispatcher(ast_operator op,
                                                                  F&& f,
@@ -263,6 +274,20 @@ CUDA_HOST_DEVICE_CALLABLE constexpr void ast_operator_dispatcher(ast_operator op
   }
 }
 
+/**
+ * @brief Operator functor.
+ *
+ * This functor is templated on an `ast_operator`, with each template specialization defining a
+ * callable `operator()` that executes the operation. The functor specialization also has a member
+ * `arity` defining the number of operands that are accepted by the call to `operator()`. The
+ * `operator()` is templated on the types of its inputs (e.g. `typename LHS` and `typename RHS` for
+ * a binary operator). Trailing return types are defined as `decltype(result)` where `result` is
+ * the returned value. The trailing return types allow SFINAE to only consider template
+ * instantiations for valid combinations of types. This, in turn, allows the operator functors to be
+ * used with traits like `is_valid_binary_op` that rely on `std::is_invocable` and related features.
+ *
+ * @tparam op AST operator.
+ */
 template <ast_operator op>
 struct operator_functor {
 };
@@ -793,6 +818,14 @@ struct operator_functor<ast_operator::NOT> {
 
 namespace detail {
 
+/**
+ * @brief Functor used to type-dispatch unary operators.
+ *
+ * This functor's `operator()` is templated to validate calls to its operators based on the input
+ * type, as determined by the is_valid_unary_op` trait.
+ *
+ * @tparam OperatorFunctor Unary operator functor.
+ */
 template <typename OperatorFunctor>
 struct dispatch_unary_operator_types {
   template <typename InputT,
@@ -818,6 +851,14 @@ struct dispatch_unary_operator_types {
   }
 };
 
+/**
+ * @brief Functor used to double-type-dispatch binary operators.
+ *
+ * This functor's `operator()` is templated to validate calls to its operators based on the input
+ * type, as determined by the is_valid_binary_op` trait.
+ *
+ * @tparam OperatorFunctor Binary operator functor.
+ */
 template <typename OperatorFunctor>
 struct double_dispatch_binary_operator_types {
   template <typename LHS,
@@ -845,6 +886,15 @@ struct double_dispatch_binary_operator_types {
   }
 };
 
+/**
+ * @brief Functor used to single-type-dispatch binary operators.
+ *
+ * This functor's `operator()` is templated to validate calls to its operators based on the input
+ * type, as determined by the is_valid_binary_op` trait. This function assumes that both inputs are
+ * the same type, and dispatches based on the type of the left input.
+ *
+ * @tparam OperatorFunctor Binary operator functor.
+ */
 template <typename OperatorFunctor>
 struct single_dispatch_binary_operator_types {
   template <typename LHS,
@@ -870,6 +920,10 @@ struct single_dispatch_binary_operator_types {
   }
 };
 
+/**
+ * @brief Functor performing a type dispatch for a unary operator.
+ *
+ */
 struct type_dispatch_unary_op {
   template <ast_operator op, typename F, typename... Ts>
   CUDA_HOST_DEVICE_CALLABLE void operator()(cudf::data_type input_t, F&& f, Ts&&... args)
@@ -881,6 +935,10 @@ struct type_dispatch_unary_op {
   }
 };
 
+/**
+ * @brief Functor performing a type dispatch for a binary operator.
+ *
+ */
 struct type_dispatch_binary_op {
   template <ast_operator op, typename F, typename... Ts>
   CUDA_HOST_DEVICE_CALLABLE void operator()(cudf::data_type lhs_t,
@@ -904,6 +962,10 @@ struct type_dispatch_binary_op {
   }
 };
 
+/**
+ * @brief Functor to determine the return type of a binary operator from its input types.
+ *
+ */
 struct binary_return_type_functor {
   template <typename OperatorFunctor,
             typename LHS,
@@ -926,6 +988,10 @@ struct binary_return_type_functor {
   }
 };
 
+/**
+ * @brief Functor to determine the return type of a unary operator from its input types.
+ *
+ */
 struct unary_return_type_functor {
   template <typename OperatorFunctor,
             typename T,
@@ -946,6 +1012,10 @@ struct unary_return_type_functor {
   }
 };
 
+/**
+ * @brief Functor to determine the arity (number of operands) of an operator.
+ *
+ */
 struct arity_functor {
   template <ast_operator op>
   CUDA_HOST_DEVICE_CALLABLE void operator()(cudf::size_type* result)
@@ -957,8 +1027,13 @@ struct arity_functor {
 }  // namespace detail
 
 /**
- * @brief Dispatches a single type template parameters to a unary operator.
+ * @brief Dispatches a runtime unary operator to a templated type dispatcher.
  *
+ * @tparam F Type of forwarded functor.
+ * @tparam Ts Parameter pack of forwarded arguments.
+ * @param input_t Type of input data.
+ * @param f Forwarded functor to be called.
+ * @param args Forwarded arguments to `operator()` of `f`.
  */
 template <typename F, typename... Ts>
 CUDA_HOST_DEVICE_CALLABLE constexpr void unary_operator_dispatcher(ast_operator op,
@@ -971,8 +1046,14 @@ CUDA_HOST_DEVICE_CALLABLE constexpr void unary_operator_dispatcher(ast_operator 
 }
 
 /**
- * @brief Dispatches two type template parameters to a binary operator.
+ * @brief Dispatches a runtime binary operator to a templated type dispatcher.
  *
+ * @tparam F Type of forwarded functor.
+ * @tparam Ts Parameter pack of forwarded arguments.
+ * @param lhs_t Type of left input data.
+ * @param rhs_t Type of right input data.
+ * @param f Forwarded functor to be called.
+ * @param args Forwarded arguments to `operator()` of `f`.
  */
 template <typename F, typename... Ts>
 CUDA_HOST_DEVICE_CALLABLE constexpr void binary_operator_dispatcher(
@@ -989,6 +1070,9 @@ CUDA_HOST_DEVICE_CALLABLE constexpr void binary_operator_dispatcher(
 /**
  * @brief Gets the return type of an AST operator.
  *
+ * @param op Operator used to evaluate return type.
+ * @param operand_types Vector of input types to the operator.
+ * @return cudf::data_type Return type of the operator.
  */
 inline cudf::data_type ast_operator_return_type(ast_operator op,
                                                 std::vector<cudf::data_type> const& operand_types)
@@ -1018,8 +1102,10 @@ inline cudf::data_type ast_operator_return_type(ast_operator op,
 }
 
 /**
- * @brief Gets the arity of an AST operator.
+ * @brief Gets the arity (number of operands) of an AST operator.
  *
+ * @param op Operator used to determine arity.
+ * @return Arity of the operator.
  */
 CUDA_HOST_DEVICE_CALLABLE cudf::size_type ast_operator_arity(ast_operator op)
 {
