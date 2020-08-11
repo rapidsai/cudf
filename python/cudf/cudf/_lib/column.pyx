@@ -29,6 +29,7 @@ from cudf._lib.move cimport move
 
 from cudf._lib.cpp.column.column cimport column, column_contents
 from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.column.column_factories cimport make_numeric_column
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
 cimport cudf._lib.cpp.types as libcudf_types
 cimport cudf._lib.cpp.unary as libcudf_unary
@@ -412,6 +413,8 @@ cdef class Column:
         cdef libcudf_types.type_id tid = view.type().id()
         cdef libcudf_types.type_id expected_tid
         cdef libcudf_types.data_type c_dtype
+        cdef size_type length = view.size()
+        cdef libcudf_types.mask_state mask_state
         if tid == libcudf_types.type_id.TIMESTAMP_DAYS:
             expected_tid = (
                 <libcudf_types.type_id> (
@@ -423,6 +426,18 @@ cdef class Column:
             c_dtype = libcudf_types.data_type(expected_tid)
             with nogil:
                 c_col = move(libcudf_unary.cast(view, c_dtype))
+        elif tid == libcudf_types.type_id.EMPTY:
+            expected_tid = (
+                <libcudf_types.type_id> (
+                    <underlying_type_t_type_id> (
+                        np_to_cudf_types[np.dtype("float64")]
+                    )
+                )
+            )
+            c_dtype = libcudf_types.data_type(expected_tid)
+            mask_state = libcudf_types.mask_state.ALL_NULL
+            with nogil:
+                c_col = move(make_numeric_column(c_dtype, length, mask_state))
         
         size = c_col.get()[0].size()
         dtype = dtype_from_column_view(c_col.get()[0].view())

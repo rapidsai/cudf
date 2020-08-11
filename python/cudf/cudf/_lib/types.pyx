@@ -74,7 +74,6 @@ np_to_cudf_types = {
 }
 
 cudf_to_np_types = {
-    TypeId.EMPTY: np.dtype("object"),
     TypeId.INT8: np.dtype("int8"),
     TypeId.INT16: np.dtype("int16"),
     TypeId.INT32: np.dtype("int32"),
@@ -141,6 +140,8 @@ cdef dtype_from_lists_column_view(column_view cv):
 
     if child.type().id() == libcudf_types.type_id.LIST:
         return ListDtype(dtype_from_lists_column_view(child))
+    elif child.type().id() == libcudf_types.type_id.EMPTY:
+        return ListDtype(np.dtype("float64"))
     else:
         return ListDtype(
             cudf_to_np_types[<underlying_type_t_type_id> child.type().id()]

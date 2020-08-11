@@ -887,10 +887,12 @@ class ColumnBase(Column, Serializable):
     def astype(self, dtype, **kwargs):
         if is_categorical_dtype(dtype):
             return self.as_categorical_column(dtype, **kwargs)
+        elif isinstance(self, cudf.core.column.ListColumn) and isinstance(dtype, cudf.core.dtypes.ListDtype):
+            return self
+        elif pd.api.types.pandas_dtype(dtype).type in (np.str_, np.object_, str):
+            return self.as_string_column(dtype, **kwargs)
         elif np.issubdtype(dtype, np.datetime64):
             return self.as_datetime_column(dtype, **kwargs)
-        elif pd.api.types.pandas_dtype(dtype).type in (np.str_, np.object_):
-            return self.as_string_column(dtype, **kwargs)
         else:
             return self.as_numerical_column(dtype, **kwargs)
 
@@ -1336,7 +1338,19 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 col = utils.time_col_replace_nulls(col)
         return col
 
-    elif isinstance(arbitrary, pa.Array):
+    elif isinstance(arbitrary, (pa.Array, pa.ChunkedArray)):
+        breakpoint()
+        col = ColumnBase.from_arrow(arbitrary)
+        if isinstance(col, cudf.core.column.NumericalColumn) and np.issubdtype(col.dtype, np.floating):
+            if nan_as_null is not False:
+                mask = libcudf.transform.nans_to_nulls(col)
+                col = col.set_mask(mask)
+        elif isinstance(col, cudf.core.column.DatetimeColumn) and np.issubdtype(col.dtype, np.datetime64):
+            if nan_as_null is not False:
+                col = utils.time_col_replace_nulls(col)
+        #return col if dtype is None else col.astype(dtype)
+        return col
+
         if isinstance(arbitrary, pa.StringArray):
             pa_size, pa_offset, nbuf, obuf, sbuf = buffers_from_pyarrow(
                 arbitrary
@@ -1499,7 +1513,6 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         else:
             data = as_column(
                 pa.array(arbitrary, from_pandas=nan_as_null),
-                dtype=arbitrary.dtype,
             )
         if dtype is not None:
             data = data.astype(dtype)

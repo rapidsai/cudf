@@ -1826,6 +1826,7 @@ class Frame(libcudf.table.Table):
 
     @classmethod
     def from_arrow(cls, data):
+        #breakpoint()
         if cls in (cudf.DataFrame, cudf.MultiIndex) and not isinstance(
             data, (pa.Table)
         ):
@@ -1833,7 +1834,7 @@ class Frame(libcudf.table.Table):
                 "To create a multicolumn cudf data, the data should be an arrow Table"
             )
         elif cls in (cudf.Series, cudf.Index):
-            if not isinstance(data, (pa.Array)):
+            if not isinstance(data, (pa.Array, pa.ChunkedArray)):
                 raise TypeError(
                     "To create a cudf Series, the data should be an arrow Array"
                 )
@@ -1854,8 +1855,10 @@ class Frame(libcudf.table.Table):
 
         dict_indices = {}
         dict_dictionaries = {}
+        dict_ordered = {}
         for field in data.schema:
             if isinstance(field.type, pa.DictionaryType):
+                dict_ordered[field.name] = field.type.ordered
                 dict_indices[field.name] = pa.chunked_array(
                     [chunk.indices for chunk in data[field.name].chunks], type=field.type.index_type
                 )
@@ -1895,6 +1898,7 @@ class Frame(libcudf.table.Table):
                     codes,
                     mask=codes.base_mask,
                     size=codes.size,
+                    ordered=dict_ordered[field.name]
                 )
 
         cudf_non_dict_table = (
@@ -1943,6 +1947,7 @@ class Frame(libcudf.table.Table):
         return Frame(self._data.copy(deep=deep))
 
     def to_arrow(self, preserve_index=True):
+        #breakpoint()
         data = self.copy(deep=False)
         codes = {}
         codes_keys = []
