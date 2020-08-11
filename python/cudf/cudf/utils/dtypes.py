@@ -1,3 +1,4 @@
+import datetime as dt
 import numbers
 from collections import namedtuple
 from collections.abc import Sequence
@@ -209,6 +210,10 @@ def is_scalar(val):
         or (isinstance(val, (np.ndarray, cp.ndarray)) and val.ndim == 0)
         or isinstance(val, pd.Timestamp)
         or (isinstance(val, pd.Categorical) and len(val) == 1)
+        or (isinstance(val, pd.Timedelta))
+        or (isinstance(val, pd.Timestamp))
+        or (isinstance(val, dt.datetime))
+        or (isinstance(val, dt.timedelta))
     )
 
 
@@ -233,6 +238,15 @@ def to_cudf_compatible_scalar(val, dtype=None):
 
     if ((dtype is None) and isinstance(val, str)) or is_string_dtype(dtype):
         dtype = "str"
+
+    if isinstance(val, dt.datetime):
+        val = np.datetime64(val)
+    elif isinstance(val, dt.timedelta):
+        val = np.timedelta64(val)
+    elif isinstance(val, pd.Timestamp):
+        val = val.to_datetime64()
+    elif isinstance(val, pd.Timedelta):
+        val = val.to_timedelta64()
 
     val = pd.api.types.pandas_dtype(type(val)).type(val)
 
