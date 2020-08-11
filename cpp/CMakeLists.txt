@@ -408,6 +408,9 @@ add_library(cudf
             src/binaryop/jit/code/kernel.cpp
             src/binaryop/jit/code/operation.cpp
             src/binaryop/jit/code/traits.cpp
+            src/interop/from_arrow.cu
+            src/interop/to_arrow.cpp
+            src/interop/dlpack.cpp
             src/jit/type.cpp
             src/jit/parser.cpp
             src/jit/cache.cpp
@@ -448,7 +451,6 @@ add_library(cudf
             src/unary/nan_ops.cu
             src/unary/math_ops.cu
             src/unary/unary_ops.cuh
-            src/dlpack/dlpack.cpp
             src/io/avro/avro_gpu.cu
             src/io/avro/avro.cpp
             src/io/avro/reader_impl.cu
