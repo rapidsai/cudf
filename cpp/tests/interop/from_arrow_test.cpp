@@ -89,6 +89,30 @@ TEST_F(FromArrowTest, DateTimeTable)
   cudf::test::expect_tables_equal(expected_table_view, got_cudf_table->view());
 }
 
+TEST_F(FromArrowTest, DurationTable)
+{
+  using ms  = cudf::duration_ms;
+  auto data = {ms{1}, ms{2}, ms{3}, ms{4}, ms{5}, ms{6}};
+  auto col  = cudf::test::fixed_width_column_wrapper<cudf::duration_ms>(data);
+
+  cudf::table_view expected_table_view({col});
+
+  std::shared_ptr<arrow::Array> arr;
+  arrow::DurationBuilder duration_builder(duration(arrow::TimeUnit::type::MILLI),
+                                          arrow::default_memory_pool());
+  duration_builder.AppendValues(std::vector<int64_t>{1, 2, 3, 4, 5, 6});
+  CUDF_EXPECTS(duration_builder.Finish(&arr).ok(), "Failed to build array");
+
+  std::vector<std::shared_ptr<arrow::Field>> schema_vector({arrow::field("a", arr->type())});
+  auto schema = std::make_shared<arrow::Schema>(schema_vector);
+
+  auto arrow_table = arrow::Table::Make(schema, {arr});
+
+  auto got_cudf_table = cudf::from_arrow(*arrow_table);
+
+  cudf::test::expect_tables_equal(expected_table_view, got_cudf_table->view());
+}
+
 TEST_F(FromArrowTest, NestedList)
 {
   auto valids =
