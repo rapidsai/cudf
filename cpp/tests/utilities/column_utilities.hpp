@@ -208,10 +208,10 @@ inline std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to
   } while(0)
 
 #define CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(lhs, rhs...) \
-  {                                                      \
+  do {                                                      \
     SCOPED_TRACE(" <--  line of failure\n");             \
     cudf::test::expect_columns_equivalent(lhs, rhs);     \
-  }
+  } while(0)
 
 #define CUDF_TEST_EXPECT_EQUAL_BUFFERS(lhs, rhs, size_bytes) \
   {                                                          \
