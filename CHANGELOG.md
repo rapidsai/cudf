@@ -110,6 +110,7 @@
 - PR #5381 Change numpy usages to cupy in `10min.ipynb`
 - PR #5408 Update pyrrow and arrow-cpp to 0.17.1
 - PR #5366 Add benchmarks for cuIO writers
+- PR #5913 Call cudaMemcpyAsync/cudaMemsetAsync in JNI
 - PR #5405 Add Error message to `StringColumn.unary_operator`
 - PR #5424 Add python plumbing for `.str.character_tokenize`
 - PR #5420 Aligning signature of `Series.value_counts` to Pandas
@@ -184,6 +185,7 @@
 - PR #5853 Disable `fixed_point` for use in `copy_if`
 - PR #5854 Raise informative error in `DataFrame.iterrows` and `DataFrame.itertuples`
 - PR #5863 Explicitly require `ucx-py` on CI
+- PR #5879 Added support of sub-types and object wrappers in concat()
 - PR #5884 Use S3 bucket directly for benchmark plugni
 - PR #5881 Add in JVM extractListElement and stringSplitRecord
 - PR #5885 Add in java support for merge sort
