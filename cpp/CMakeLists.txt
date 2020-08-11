@@ -570,6 +570,7 @@ add_library(cudf
             src/structs/structs_column_view.cu
             src/structs/structs_column_factories.cu
             src/text/detokenize.cu
+            src/text/edit_distance.cu
             src/text/generate_ngrams.cu
             src/text/normalize.cu
             src/text/stemmer.cu
