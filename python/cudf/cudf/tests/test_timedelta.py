@@ -271,7 +271,11 @@ def test_timedelta_ops_misc_inputs(data, other, dtype, ops):
     if ops == "floordiv":
         expected[actual.isna().to_pandas()] = pd.NA
 
-    assert_eq(expected, actual, nullable_pd_dtype=True)
+    assert_eq(
+        expected,
+        actual,
+        nullable_pd_dtype=False if actual.dtype.kind == "m" else True,
+    )
 
 
 @pytest.mark.parametrize(
