@@ -18,8 +18,6 @@
 
 package ai.rapids.cudf;
 
-import java.util.Iterator;
-
 /**
  * Provides an interface for reading multiple tables from a single input source.
  */

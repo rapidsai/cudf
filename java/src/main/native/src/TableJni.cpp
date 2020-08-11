@@ -134,6 +134,9 @@ public:
     if (current_buffer_written > 0) {
       JNIEnv *env = cudf::jni::get_jni_env(jvm);
       handle_buffer(env, current_buffer, current_buffer_written);
+      if (current_buffer != nullptr) {
+        env->DeleteGlobalRef(current_buffer);
+      }
       current_buffer = nullptr;
       current_buffer_len = 0;
       current_buffer_data = nullptr;
@@ -318,6 +321,9 @@ public:
     if (current_buffer_written > 0) {
       JNIEnv *env = cudf::jni::get_jni_env(jvm);
       handle_buffer(env, current_buffer, current_buffer_written);
+      if (current_buffer != nullptr) {
+        env->DeleteGlobalRef(current_buffer);
+      }
       current_buffer = nullptr;
       current_buffer_len = 0;
       current_buffer_data = nullptr;

@@ -21,7 +21,7 @@ package ai.rapids.cudf;
 /**
  * Provides a set of APIs for providing host buffers to be read.
  */
-public interface HostBufferProvider {
+public interface HostBufferProvider extends AutoCloseable {
   /**
    * Place data into the given buffer.
    * @param buffer the buffer to put data into.
@@ -33,5 +33,6 @@ public interface HostBufferProvider {
   /**
    * Indicates that no more buffers will be supplied.
    */
-  default void done() {}
+  @Override
+  default void close() {}
 }

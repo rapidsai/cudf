@@ -232,12 +232,12 @@ public final class Table implements AutoCloseable {
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
   private static native long writeParquetFileBegin(String[] columnNames,
-                                               boolean[] nullable,
-                                               String[] metadataKeys,
-                                               String[] metadataValues,
-                                               int compression,
-                                               int statsFreq,
-                                               String filename) throws CudfException;
+                                                   boolean[] nullable,
+                                                   String[] metadataKeys,
+                                                   String[] metadataValues,
+                                                   int compression,
+                                                   int statsFreq,
+                                                   String filename) throws CudfException;
 
   /**
    * Setup everything to write parquet formatted data to a buffer.
@@ -251,12 +251,12 @@ public final class Table implements AutoCloseable {
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
   private static native long writeParquetBufferBegin(String[] columnNames,
-                                                   boolean[] nullable,
-                                                   String[] metadataKeys,
-                                                   String[] metadataValues,
-                                                   int compression,
-                                                   int statsFreq,
-                                                   HostBufferConsumer consumer) throws CudfException;
+                                                     boolean[] nullable,
+                                                     String[] metadataKeys,
+                                                     String[] metadataValues,
+                                                     int compression,
+                                                     int statsFreq,
+                                                     HostBufferConsumer consumer) throws CudfException;
 
   /**
    * Write out a table to an open handle.
@@ -298,11 +298,11 @@ public final class Table implements AutoCloseable {
    * @return a handle that is used in later calls to writeORCChunk and writeORCEnd.
    */
   private static native long writeORCFileBegin(String[] columnNames,
-                                                   boolean[] nullable,
-                                                   String[] metadataKeys,
-                                                   String[] metadataValues,
-                                                   int compression,
-                                                   String filename) throws CudfException;
+                                               boolean[] nullable,
+                                               String[] metadataKeys,
+                                               String[] metadataValues,
+                                               int compression,
+                                               String filename) throws CudfException;
 
   /**
    * Setup everything to write ORC formatted data to a buffer.
@@ -315,11 +315,11 @@ public final class Table implements AutoCloseable {
    * @return a handle that is used in later calls to writeORCChunk and writeORCEnd.
    */
   private static native long writeORCBufferBegin(String[] columnNames,
-                                                     boolean[] nullable,
-                                                     String[] metadataKeys,
-                                                     String[] metadataValues,
-                                                     int compression,
-                                                     HostBufferConsumer consumer) throws CudfException;
+                                                 boolean[] nullable,
+                                                 String[] metadataKeys,
+                                                 String[] metadataValues,
+                                                 int compression,
+                                                 HostBufferConsumer consumer) throws CudfException;
 
   /**
    * Write out a table to an open handle.
@@ -341,9 +341,7 @@ public final class Table implements AutoCloseable {
    * @param filename local output path
    * @return a handle that is used in later calls to writeArrowIPCChunk and writeArrowIPCEnd.
    */
-  private static native long writeArrowIPCFileBegin(
-          String[] columnNames,
-          String filename);
+  private static native long writeArrowIPCFileBegin(String[] columnNames, String filename);
 
   /**
    * Setup everything to write Arrow IPC formatted data to a buffer.
@@ -351,18 +349,15 @@ public final class Table implements AutoCloseable {
    * @param consumer consumer of host buffers produced.
    * @return a handle that is used in later calls to writeArrowIPCChunk and writeArrowIPCEnd.
    */
-  private static native long writeArrowIPCBufferBegin(
-          String[] columnNames,
-          HostBufferConsumer consumer);
+  private static native long writeArrowIPCBufferBegin(String[] columnNames,
+                                                      HostBufferConsumer consumer);
 
   /**
    * Write out a table to an open handle.
    * @param handle the handle to the writer.
    * @param table the table to write out.
    */
-  private static native void writeArrowIPCChunk(
-          long handle,
-          long table);
+  private static native void writeArrowIPCChunk(long handle, long table);
 
   /**
    * Finish writing out Arrow IPC.
@@ -979,7 +974,7 @@ public final class Table implements AutoCloseable {
     @Override
     public void close()  {
       if (provider != null) {
-        provider.done();
+        provider.close();
         provider = null;
       }
 
