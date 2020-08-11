@@ -516,6 +516,7 @@ set(STRINGS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/concatenate_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/contains_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/datetime_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/durations_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/extract_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/fill_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/findall_tests.cpp"
@@ -540,6 +541,7 @@ ConfigureTest(STRINGS_TEST "${STRINGS_TEST_SRC}")
 # - nvtext test ----------------------------------------------------------------------------------
 
 set(TEXT_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/text/edit_distance_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/text/ngrams_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/text/ngrams_tokenize_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/text/normalize_tests.cpp"
