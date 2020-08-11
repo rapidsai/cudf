@@ -159,12 +159,56 @@ public class TableTest extends CudfTestBase {
                 "Column " + colName + " Row " + tableRow);
             break;
           case LIST:
-            assertArrayEquals(expected.getList(expectedRow).toString().getBytes(), cv.getList(tableRow).toString().getBytes(),
-                "Column " + colName + " Row " + tableRow);
+            assertListColumnsEquals(expected, cv);
             break;
           default:
             throw new IllegalArgumentException(type + " is not supported yet");
         }
+      }
+    }
+  }
+
+  private static void assertListColumnsEquals(HostColumnVector expected, HostColumnVector input) {
+    for (int rowIndex =0; rowIndex < expected.getRowCount(); rowIndex++) {
+      assertEquals(expected.isNull(rowIndex), input.isNull(rowIndex));
+      if (expected.getList(rowIndex) != null) {
+        assertArrayEquals(expected.getList(rowIndex).toString().getBytes(),
+          input.getList(rowIndex).toString().getBytes());
+      }
+    }
+    for (int j = 0; j < expected.children.size(); j++) {
+      assertListColumnsEquals(expected.children.get(j), input.children.get(j));
+    }
+  }
+
+  private static void assertListColumnsEquals(HostColumnVector.NestedHostColumnVector expected,
+                                             HostColumnVector.NestedHostColumnVector input) {
+    assertEquals(expected.getType(), input.getType());
+    assertEquals(expected.getRows(), input.getRows());
+    assertEquals(expected.getNullCount().isPresent(), input.getNullCount().isPresent());
+    if (expected.getNullCount().isPresent()) {
+      assertEquals(expected.getNullCount().get(), input.getNullCount().get());
+    }
+    assertEquals(expected.getNestedChildren().size(), input.getNestedChildren().size());
+    compareBuffers(expected.getData(), input.getData());
+    compareBuffers(expected.getOffsets(), input.getOffsets());
+    for (int rowIndex =0; rowIndex < expected.getRows(); rowIndex++) {
+      assertEquals(expected.isNull(rowIndex), input.isNull(rowIndex));
+    }
+    for (int j = 0; j < expected.getNestedChildren().size(); j++) {
+      assertListColumnsEquals(expected.getNestedChildren().get(j), input.getNestedChildren().get(j));
+    }
+  }
+
+  private static void compareBuffers(HostMemoryBuffer expected, HostMemoryBuffer input) {
+    if (expected != null) {
+      byte[] expectedBuffer = new byte[(int)expected.length];
+      byte[] inputBuffer = new byte[(int)input.length];
+      assert expected.length == input.length;
+      expected.getBytes(expectedBuffer, 0, 0, expectedBuffer.length);
+      input.getBytes(inputBuffer, 0, 0, inputBuffer.length);
+      for (int k = 0; k < input.length; k++) {
+        assert expectedBuffer[k] == inputBuffer[k];
       }
     }
   }
