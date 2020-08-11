@@ -249,6 +249,14 @@ const char* operation =
             double y1 = static_cast<double>(y);
             return fmod(fmod(y1, x1) + x1, x1);
         }
+
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs,
+                  enable_if_t<(is_duration_v<TypeLhs> && is_duration_v<TypeOut>)>* = nullptr>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return ((y % x) + x) % x;
+        }
     };
 
     struct Pow {

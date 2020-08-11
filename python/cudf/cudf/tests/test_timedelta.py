@@ -247,6 +247,7 @@ def test_timedelta_series_to_pandas(data, dtype):
         "rsub",
         "floordiv",
         "truediv",
+        "mod",
     ],
 )
 def test_timedelta_ops_misc_inputs(data, other, dtype, ops):
@@ -389,7 +390,29 @@ def test_timedelta_dataframe_ops(df, op):
 
 
 @pytest.mark.parametrize(
-    "data", _TIMEDELTA_DATA_NON_OVERFLOW,
+    "data",
+    [
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [],
+        [None],
+        [None, None, None, None, None],
+        [12, 12, 22, 343, 4353534, 435342],
+        np.array([10, 20, 30, None, 100]),
+        cp.asarray([10, 20, 30, 100]),
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [1],
+        [12, 11, 232, 223432411, 2343241, 234324, 23234],
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+        pytest.param(
+            [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/5938"
+            ),
+        ),
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+    ],
 )
 @pytest.mark.parametrize(
     "other_scalars",
@@ -403,7 +426,12 @@ def test_timedelta_dataframe_ops(df, op):
         np.timedelta64(4, "s"),
         np.timedelta64(456, "D"),
         np.timedelta64(46, "h"),
-        np.timedelta64("nat"),
+        pytest.param(
+            np.timedelta64("nat"),
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/35529"
+            ),
+        ),
         np.timedelta64(1, "s"),
         np.timedelta64(1, "ms"),
         np.timedelta64(1, "us"),
@@ -417,6 +445,7 @@ def test_timedelta_dataframe_ops(df, op):
         "add",
         "sub",
         "truediv",
+        "mod",
         pytest.param(
             "floordiv",
             marks=pytest.mark.xfail(
@@ -441,6 +470,9 @@ def test_timedelta_series_ops_with_scalars(data, other_scalars, dtype, op):
     elif op == "floordiv":
         expected = psr // other_scalars
         actual = gsr // other_scalars
+    elif op == "mod":
+        expected = psr % other_scalars
+        actual = gsr % other_scalars
 
     assert_eq(expected, actual)
 
@@ -454,8 +486,11 @@ def test_timedelta_series_ops_with_scalars(data, other_scalars, dtype, op):
         expected = other_scalars / psr
         actual = other_scalars / gsr
     elif op == "floordiv":
-        expected = psr // other_scalars
+        expected = other_scalars // psr
         actual = other_scalars // gsr
+    elif op == "mod":
+        expected = other_scalars % psr
+        actual = other_scalars % gsr
 
     assert_eq(expected, actual)
 
