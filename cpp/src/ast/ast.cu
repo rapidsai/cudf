@@ -227,7 +227,6 @@ rmm::device_uvector<T> async_create_device_data(std::vector<T> host_data, cudaSt
                            stream));
   return device_data;
 }
-}  // namespace detail
 
 std::unique_ptr<column> compute_column(table_view const table,
                                        std::reference_wrapper<const expression> expr,
@@ -323,6 +322,15 @@ std::unique_ptr<column> compute_column(table_view const table,
   CHECK_CUDA(stream);
   nvtxRangePop();
   return output_column;
+}
+
+}  // namespace detail
+
+std::unique_ptr<column> compute_column(table_view const table,
+                                       std::reference_wrapper<const expression> expr,
+                                       rmm::mr::device_memory_resource* mr)
+{
+  return detail::compute_column(table, expr, 0, mr);
 }
 
 }  // namespace ast
