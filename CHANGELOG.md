@@ -51,7 +51,6 @@
 - PR #5666 Add `filter_characters_of_type` strings API
 - PR #5778 Add support for `cudf::table` to `arrow::Table` and `arrow::Table` to `cudf::table`
 - PR #5673 Always build and test with per-thread default stream enabled in the GPU CI build
-- PR #5735 Add support for `add_months` API; force timestamp creation only with duration
 - PR #5704 Initial `fixed_point` Column Support
 - PR #5716 Add `double_type_dispatcher` to libcudf
 - PR #5739 Add `nvtext::detokenize` API
@@ -159,6 +158,7 @@
 - PR #5720 Replace owning raw pointers with std::unique_ptr
 - PR #5702 Add inherited methods to python docs and other docs fixes
 - PR #5733 Add support for `size` property in `DataFrame`/ `Series` / `Index`/ `MultiIndex`
+- PR #5735 Force timestamp creation only with duration
 - PR #5743 Reduce number of test cases in concatenate benchmark
 - PR #5748 Disable `tolist` API in `Series` & `Index` and add `tolist` dispatch in `dask-cudf`
 - PR #5744 Reduce number of test cases in reduction benchmark
