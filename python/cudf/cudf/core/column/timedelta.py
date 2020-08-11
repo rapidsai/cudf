@@ -377,6 +377,34 @@ class TimeDeltaColumn(column.ColumnBase):
             )
 
     def components(self, index=None):
+        """
+        Return a Dataframe of the components of the Timedeltas.
+
+        Returns
+        -------
+        DataFrame
+
+        Examples
+        --------
+        >>> s = pd.Series(pd.to_timedelta(np.arange(5), unit='s'))
+        >>> s = cudf.Series([12231312123, 1231231231, 1123236768712, 2135656,
+        ...     3244334234], dtype='timedelta64[ms]')
+        >>> s
+        0      141 days 13:35:12.123
+        1       14 days 06:00:31.231
+        2    13000 days 10:12:48.712
+        3        0 days 00:35:35.656
+        4       37 days 13:12:14.234
+        dtype: timedelta64[ms]
+        >>> s.dt.components
+            days  hours  minutes  seconds  milliseconds  microseconds  nanoseconds
+        0    141     13       35       12           123             0            0
+        1     14      6        0       31           231             0            0
+        2  13000     10       12       48           712             0            0
+        3      0      0       35       35           656             0            0
+        4     37     13       12       14           234             0            0
+        """  # noqa: E501
+
         return cudf.DataFrame(
             data={
                 "days": self.binary_operator(
@@ -457,6 +485,13 @@ class TimeDeltaColumn(column.ColumnBase):
 
     @property
     def days(self):
+        """
+        Number of days for each element.
+
+        Returns
+        -------
+        NumericalColumn
+        """
         return self.binary_operator(
             "floordiv",
             as_scalar(np.timedelta64(_numpy_to_pandas_conversion["D"], "ns")),
@@ -464,6 +499,13 @@ class TimeDeltaColumn(column.ColumnBase):
 
     @property
     def seconds(self):
+        """
+        Number of seconds (>= 0 and less than 1 day).
+
+        Returns
+        -------
+        NumericalColumn
+        """
         # This property must return the number of seconds (>= 0 and
         # less than 1 day) for each element, hence first performing
         # mod operation to remove the number of days and then performing
@@ -479,6 +521,13 @@ class TimeDeltaColumn(column.ColumnBase):
 
     @property
     def microseconds(self):
+        """
+        Number of microseconds (>= 0 and less than 1 second).
+
+        Returns
+        -------
+        NumericalColumn
+        """
         # This property must return the number of microseconds (>= 0 and
         # less than 1 second) for each element, hence first performing
         # mod operation to remove the number of seconds and then performing
@@ -493,6 +542,13 @@ class TimeDeltaColumn(column.ColumnBase):
 
     @property
     def nanoseconds(self):
+        """
+        Return the number of nanoseconds (n), where 0 <= n < 1 microsecond.
+
+        Returns
+        -------
+        NumericalColumn
+        """
         # This property must return the number of nanoseconds (>= 0 and
         # less than 1 microsecond) for each element, hence first performing
         # mod operation to remove the number of microseconds and then

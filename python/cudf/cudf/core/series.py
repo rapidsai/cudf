@@ -4369,6 +4369,50 @@ class TimedeltaProperties(object):
     1    2
     2    3
     dtype: int64
+    >>> series = cudf.Series([12231312123, 1231231231, 1123236768712, 2135656,
+    ...     3244334234], dtype='timedelta64[ms]')
+    >>> series
+    0      141 days 13:35:12.123
+    1       14 days 06:00:31.231
+    2    13000 days 10:12:48.712
+    3        0 days 00:35:35.656
+    4       37 days 13:12:14.234
+    dtype: timedelta64[ms]
+    >>> series.dt.components
+        days  hours  minutes  seconds  milliseconds  microseconds  nanoseconds
+    0    141     13       35       12           123             0            0
+    1     14      6        0       31           231             0            0
+    2  13000     10       12       48           712             0            0
+    3      0      0       35       35           656             0            0
+    4     37     13       12       14           234             0            0
+    >>> series.dt.days
+    0      141
+    1       14
+    2    13000
+    3        0
+    4       37
+    dtype: int64
+    >>> series.dt.seconds
+    0    48912
+    1    21631
+    2    36768
+    3     2135
+    4    47534
+    dtype: int64
+    >>> series.dt.microseconds
+    0    123000
+    1    231000
+    2    712000
+    3    656000
+    4    234000
+    dtype: int64
+    >>> s.dt.nanoseconds
+    0    0
+    1    0
+    2    0
+    3    0
+    4    0
+    dtype: int64
     """
 
     def __init__(self, series):
@@ -4378,6 +4422,30 @@ class TimedeltaProperties(object):
     def days(self):
         """
         Number of days.
+
+        Returns
+        -------
+        Series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([12231312123, 1231231231, 1123236768712, 2135656,
+        ...     3244334234], dtype='timedelta64[ms]')
+        >>> s
+        0      141 days 13:35:12.123
+        1       14 days 06:00:31.231
+        2    13000 days 10:12:48.712
+        3        0 days 00:35:35.656
+        4       37 days 13:12:14.234
+        dtype: timedelta64[ms]
+        >>> s.dt.days
+        0      141
+        1       14
+        2    13000
+        3        0
+        4       37
+        dtype: int64
         """
         return self._get_td_field("days")
 
@@ -4385,6 +4453,37 @@ class TimedeltaProperties(object):
     def seconds(self):
         """
         Number of seconds (>= 0 and less than 1 day).
+
+        Returns
+        -------
+        Series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([12231312123, 1231231231, 1123236768712, 2135656,
+        ...     3244334234], dtype='timedelta64[ms]')
+        >>> s
+        0      141 days 13:35:12.123
+        1       14 days 06:00:31.231
+        2    13000 days 10:12:48.712
+        3        0 days 00:35:35.656
+        4       37 days 13:12:14.234
+        dtype: timedelta64[ms]
+        >>> s.dt.seconds
+        0    48912
+        1    21631
+        2    36768
+        3     2135
+        4    47534
+        dtype: int64
+        >>> s.dt.microseconds
+        0    123000
+        1    231000
+        2    712000
+        3    656000
+        4    234000
+        dtype: int64
         """
         return self._get_td_field("seconds")
 
@@ -4392,6 +4491,30 @@ class TimedeltaProperties(object):
     def microseconds(self):
         """
         Number of microseconds (>= 0 and less than 1 second).
+
+        Returns
+        -------
+        Series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([12231312123, 1231231231, 1123236768712, 2135656,
+        ...     3244334234], dtype='timedelta64[ms]')
+        >>> s
+        0      141 days 13:35:12.123
+        1       14 days 06:00:31.231
+        2    13000 days 10:12:48.712
+        3        0 days 00:35:35.656
+        4       37 days 13:12:14.234
+        dtype: timedelta64[ms]
+        >>> s.dt.microseconds
+        0    123000
+        1    231000
+        2    712000
+        3    656000
+        4    234000
+        dtype: int64
         """
         return self._get_td_field("microseconds")
 
@@ -4399,14 +4522,60 @@ class TimedeltaProperties(object):
     def nanoseconds(self):
         """
         Return the number of nanoseconds (n), where 0 <= n < 1 microsecond.
+
+        Returns
+        -------
+        Series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([12231312123, 1231231231, 1123236768712, 2135656,
+        ...     3244334234], dtype='timedelta64[ns]')
+        >>> s
+        0    00:00:12.231312123
+        1    00:00:01.231231231
+        2    00:18:43.236768712
+        3    00:00:00.002135656
+        4    00:00:03.244334234
+        dtype: timedelta64[ns]
+        >>> s.dt.nanoseconds
+        0    123
+        1    231
+        2    712
+        3    656
+        4    234
+        dtype: int64
         """
         return self._get_td_field("nanoseconds")
 
     @property
     def components(self):
         """
-        Return a components namedtuple-like.
-        """
+        Return a Dataframe of the components of the Timedeltas.
+
+        Returns
+        -------
+        DataFrame
+
+        Examples
+        --------
+        >>> s = cudf.Series([12231312123, 1231231231, 1123236768712, 2135656, 3244334234], dtype='timedelta64[ms]')
+        >>> s
+        0      141 days 13:35:12.123
+        1       14 days 06:00:31.231
+        2    13000 days 10:12:48.712
+        3        0 days 00:35:35.656
+        4       37 days 13:12:14.234
+        dtype: timedelta64[ms]
+        >>> s.dt.components
+            days  hours  minutes  seconds  milliseconds  microseconds  nanoseconds
+        0    141     13       35       12           123             0            0
+        1     14      6        0       31           231             0            0
+        2  13000     10       12       48           712             0            0
+        3      0      0       35       35           656             0            0
+        4     37     13       12       14           234             0            0
+        """  # noqa: E501
         return self.series._column.components(index=self.series._index)
 
     def _get_td_field(self, field):
