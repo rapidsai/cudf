@@ -423,7 +423,6 @@ add_library(cudf
             src/stream_compaction/drop_duplicates.cu
             src/datetime/datetime_ops.cu
             src/hash/hashing.cu
-            src/hash/hash_constants.cu
             src/partitioning/partitioning.cu
             src/quantiles/quantile.cu
             src/quantiles/quantiles.cu

@@ -51,12 +51,6 @@ void CUDA_DEVICE_CALLABLE uint32ToLowercaseHexString(uint32_t num, char* destina
 }
 
 struct MD5Hash {
-  __device__ MD5Hash(md5_hash_constants_type const* hash_constants,
-                     md5_shift_constants_type const* shift_constants)
-    : d_hash_constants(hash_constants), d_shift_constants(shift_constants)
-  {
-  }
-
   /**
    * @brief Core MD5 algorithm implementation. Processes a single 512-bit chunk,
    * updating the hash value so far. Does not zero out the buffer contents.
@@ -92,11 +86,11 @@ struct MD5Hash {
 
       uint32_t buffer_element_as_int;
       std::memcpy(&buffer_element_as_int, hash_state->buffer + g * 4, 4);
-      F = F + A + d_hash_constants[j] + buffer_element_as_int;
+      F = F + A + md5_hash_constants[j] + buffer_element_as_int;
       A = D;
       D = C;
       C = B;
-      B = B + __funnelshift_l(F, F, d_shift_constants[((j / 16) * 4) + (j % 4)]);
+      B = B + __funnelshift_l(F, F, md5_shift_constants[((j / 16) * 4) + (j % 4)]);
     }
 
     hash_state->hash_value[0] += A;
@@ -106,6 +100,7 @@ struct MD5Hash {
 
     hash_state->buffer_length = 0;
   }
+
   /**
    * @brief Core MD5 element processing function
    */
@@ -217,10 +212,6 @@ struct MD5Hash {
   {
     process(col.element<T>(row_index), hash_state);
   }
-
- private:
-  md5_hash_constants_type const* d_hash_constants;
-  md5_shift_constants_type const* d_shift_constants;
 };
 
 template <>

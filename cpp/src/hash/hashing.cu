@@ -684,32 +684,25 @@ std::unique_ptr<column> md5_hash(table_view const& input,
   bool const nullable     = has_nulls(input);
   auto const device_input = table_device_view::create(input, stream);
 
-  // Fetch hash constants
-  md5_shift_constants_type const* shift_constants = get_md5_shift_constants();
-  md5_hash_constants_type const* hash_constants   = get_md5_hash_constants();
-
   // Hash each row, hashing each element sequentially left to right
-  thrust::for_each(rmm::exec_policy(stream)->on(stream),
-                   thrust::make_counting_iterator(0),
-                   thrust::make_counting_iterator(input.num_rows()),
-                   [d_chars,
-                    device_input    = *device_input,
-                    hash_constants  = hash_constants,
-                    shift_constants = shift_constants,
-                    has_nulls       = nullable] __device__(auto row_index) {
-                     md5_intermediate_data hash_state;
-                     MD5Hash hasher = MD5Hash(hash_constants, shift_constants);
-                     for (int col_index = 0; col_index < device_input.num_columns(); col_index++) {
-                       if (device_input.column(col_index).is_valid(row_index)) {
-                         cudf::type_dispatcher(device_input.column(col_index).type(),
-                                               hasher,
-                                               device_input.column(col_index),
-                                               row_index,
-                                               &hash_state);
-                       }
-                     }
-                     hasher.finalize(&hash_state, d_chars + (row_index * 32));
-                   });
+  thrust::for_each(
+    rmm::exec_policy(stream)->on(stream),
+    thrust::make_counting_iterator(0),
+    thrust::make_counting_iterator(input.num_rows()),
+    [d_chars, device_input = *device_input, has_nulls = nullable] __device__(auto row_index) {
+      md5_intermediate_data hash_state;
+      MD5Hash hasher = MD5Hash{};
+      for (int col_index = 0; col_index < device_input.num_columns(); col_index++) {
+        if (device_input.column(col_index).is_valid(row_index)) {
+          cudf::type_dispatcher(device_input.column(col_index).type(),
+                                hasher,
+                                device_input.column(col_index),
+                                row_index,
+                                &hash_state);
+        }
+      }
+      hasher.finalize(&hash_state, d_chars + (row_index * 32));
+    });
 
   return make_strings_column(input.num_rows(),
                              std::move(offsets_column),
