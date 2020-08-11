@@ -134,22 +134,9 @@ const char* operation =
     };
 
     struct TrueDiv {
-        template <typename TypeOut, typename TypeLhs, typename TypeRhs,
-                    enable_if_t<(!is_duration_v<TypeLhs>)>* = nullptr>
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
             return (static_cast<double>(x) / static_cast<double>(y));
-        }
-        
-        template <typename TypeOut, typename TypeLhs, typename TypeRhs,
-                  enable_if_t<(is_duration_v<TypeLhs>)>* = nullptr>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return DurationDivide<TypeOut>(x, y);
-        }
-
-        template <typename TypeOut, typename TypeLhs, typename TypeRhs,
-                  enable_if_t<(is_integral_v<TypeRhs> || is_duration_v<TypeRhs>)>* = nullptr>
-        static TypeOut DurationDivide(TypeLhs x, TypeRhs y) {
-            return x / y;
         }
     };
 
