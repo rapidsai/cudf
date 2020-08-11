@@ -1345,7 +1345,6 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         return col
 
     elif isinstance(arbitrary, (pa.Array, pa.ChunkedArray)):
-        breakpoint()
         col = ColumnBase.from_arrow(arbitrary)
         if isinstance(col, cudf.core.column.NumericalColumn) and np.issubdtype(col.dtype, np.floating):
             if nan_as_null is not False:
@@ -1354,7 +1353,15 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         elif isinstance(col, cudf.core.column.DatetimeColumn) and np.issubdtype(col.dtype, np.datetime64):
             if nan_as_null is not False:
                 col = utils.time_col_replace_nulls(col)
-        #return col if dtype is None else col.astype(dtype)
+        if isinstance(arbitrary, pa.NullArray):
+            if type(dtype) == str and dtype == "empty":
+                new_dtype = pd.api.types.pandas_dtype(
+                    arbitrary.type.to_pandas_dtype()
+                )
+            else:
+                new_dtype = pd.api.types.pandas_dtype(dtype)
+            col = col.astype(new_dtype)
+
         return col
 
         if isinstance(arbitrary, pa.StringArray):
@@ -1519,6 +1526,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         else:
             data = as_column(
                 pa.array(arbitrary, from_pandas=nan_as_null),
+                dtype = arbitrary.dtype
             )
         if dtype is not None:
             data = data.astype(dtype)

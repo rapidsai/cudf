@@ -16,6 +16,7 @@ from libcpp.pair cimport pair
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr, make_unique
 from libcpp.vector cimport vector
+from cudf._lib.cpp.strings.convert.convert_integers cimport from_integers as cpp_from_integers
 
 from rmm._lib.device_buffer cimport DeviceBuffer
 

@@ -1826,7 +1826,6 @@ class Frame(libcudf.table.Table):
 
     @classmethod
     def from_arrow(cls, data):
-        #breakpoint()
         if cls in (cudf.DataFrame, cudf.MultiIndex) and not isinstance(
             data, (pa.Table)
         ):
@@ -1898,7 +1897,7 @@ class Frame(libcudf.table.Table):
                     codes,
                     mask=codes.base_mask,
                     size=codes.size,
-                    ordered=dict_ordered[field.name]
+                    ordered=dict_ordered[name]
                 )
 
         cudf_non_dict_table = (
@@ -1910,8 +1909,7 @@ class Frame(libcudf.table.Table):
         )
 
         result = cudf.concat(
-            [cudf_non_dict_table, cudf_dict_table], axis=1
-        )
+            [cudf_non_dict_table, cudf_dict_table], axis=1) if cudf_non_dict_table.shape[1] > 0 and cudf_dict_table.shape[1] >0 else (cudf_non_dict_table if cudf_non_dict_table.shape[1] > 0 else cudf_dict_table)
 
         if dtypes:
             for name in result._data.names:
@@ -1947,7 +1945,6 @@ class Frame(libcudf.table.Table):
         return Frame(self._data.copy(deep=deep))
 
     def to_arrow(self, preserve_index=True):
-        #breakpoint()
         data = self.copy(deep=False)
         codes = {}
         codes_keys = []
