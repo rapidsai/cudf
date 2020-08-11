@@ -4,6 +4,8 @@
 
 ## Improvements
 
+- PR #5919 Remove max_strings and max_chars from nvtext::subword_tokenize
+
 ## Bug Fixes
 
 # cuDF 0.15.0 (Date TBD)
