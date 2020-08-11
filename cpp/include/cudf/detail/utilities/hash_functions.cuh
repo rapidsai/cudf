@@ -20,7 +20,6 @@
 #include <cudf/strings/string_view.cuh>
 #include <hash/hash_constants.hpp>
 
-#include "cuda_runtime_api.h"
 #include "cudf/types.hpp"
 
 using hash_value_type = uint32_t;
