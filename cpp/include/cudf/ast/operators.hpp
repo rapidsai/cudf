@@ -947,10 +947,10 @@ struct unary_return_type_functor {
 };
 
 struct arity_functor {
-  template <typename OperatorFunctor>
+  template <ast_operator op>
   CUDA_HOST_DEVICE_CALLABLE void operator()(cudf::size_type* result)
   {
-    *result = OperatorFunctor::arity;
+    *result = operator_functor<op>::arity;
   }
 };
 
@@ -1023,51 +1023,9 @@ inline cudf::data_type ast_operator_return_type(ast_operator op,
  */
 CUDA_HOST_DEVICE_CALLABLE cudf::size_type ast_operator_arity(ast_operator op)
 {
-  switch (op) {
-    case ast_operator::ADD: return operator_functor<ast_operator::ADD>::arity;
-    case ast_operator::SUB: return operator_functor<ast_operator::SUB>::arity;
-    case ast_operator::MUL: return operator_functor<ast_operator::MUL>::arity;
-    case ast_operator::DIV: return operator_functor<ast_operator::DIV>::arity;
-    case ast_operator::TRUE_DIV: return operator_functor<ast_operator::TRUE_DIV>::arity;
-    case ast_operator::FLOOR_DIV: return operator_functor<ast_operator::FLOOR_DIV>::arity;
-    case ast_operator::MOD: return operator_functor<ast_operator::MOD>::arity;
-    case ast_operator::PYMOD: return operator_functor<ast_operator::PYMOD>::arity;
-    case ast_operator::POW: return operator_functor<ast_operator::POW>::arity;
-    case ast_operator::EQUAL: return operator_functor<ast_operator::EQUAL>::arity;
-    case ast_operator::NOT_EQUAL: return operator_functor<ast_operator::NOT_EQUAL>::arity;
-    case ast_operator::LESS: return operator_functor<ast_operator::LESS>::arity;
-    case ast_operator::GREATER: return operator_functor<ast_operator::GREATER>::arity;
-    case ast_operator::LESS_EQUAL: return operator_functor<ast_operator::LESS_EQUAL>::arity;
-    case ast_operator::GREATER_EQUAL: return operator_functor<ast_operator::GREATER_EQUAL>::arity;
-    case ast_operator::BITWISE_AND: return operator_functor<ast_operator::BITWISE_AND>::arity;
-    case ast_operator::BITWISE_OR: return operator_functor<ast_operator::BITWISE_OR>::arity;
-    case ast_operator::BITWISE_XOR: return operator_functor<ast_operator::BITWISE_XOR>::arity;
-    case ast_operator::LOGICAL_AND: return operator_functor<ast_operator::LOGICAL_AND>::arity;
-    case ast_operator::LOGICAL_OR: return operator_functor<ast_operator::LOGICAL_OR>::arity;
-    case ast_operator::SIN: return operator_functor<ast_operator::SIN>::arity;
-    case ast_operator::COS: return operator_functor<ast_operator::COS>::arity;
-    case ast_operator::TAN: return operator_functor<ast_operator::TAN>::arity;
-    case ast_operator::ARCSIN: return operator_functor<ast_operator::ARCSIN>::arity;
-    case ast_operator::ARCCOS: return operator_functor<ast_operator::ARCCOS>::arity;
-    case ast_operator::ARCTAN: return operator_functor<ast_operator::ARCTAN>::arity;
-    case ast_operator::SINH: return operator_functor<ast_operator::SINH>::arity;
-    case ast_operator::COSH: return operator_functor<ast_operator::COSH>::arity;
-    case ast_operator::TANH: return operator_functor<ast_operator::TANH>::arity;
-    case ast_operator::ARCSINH: return operator_functor<ast_operator::ARCSINH>::arity;
-    case ast_operator::ARCCOSH: return operator_functor<ast_operator::ARCCOSH>::arity;
-    case ast_operator::ARCTANH: return operator_functor<ast_operator::ARCTANH>::arity;
-    case ast_operator::EXP: return operator_functor<ast_operator::EXP>::arity;
-    case ast_operator::LOG: return operator_functor<ast_operator::LOG>::arity;
-    case ast_operator::SQRT: return operator_functor<ast_operator::SQRT>::arity;
-    case ast_operator::CBRT: return operator_functor<ast_operator::CBRT>::arity;
-    case ast_operator::CEIL: return operator_functor<ast_operator::CEIL>::arity;
-    case ast_operator::FLOOR: return operator_functor<ast_operator::FLOOR>::arity;
-    case ast_operator::ABS: return operator_functor<ast_operator::ABS>::arity;
-    case ast_operator::RINT: return operator_functor<ast_operator::RINT>::arity;
-    case ast_operator::BIT_INVERT: return operator_functor<ast_operator::BIT_INVERT>::arity;
-    case ast_operator::NOT: return operator_functor<ast_operator::NOT>::arity;
-    default: return 0;
-  }
+  auto result = cudf::size_type(0);
+  ast_operator_dispatcher(op, detail::arity_functor{}, &result);
+  return result;
 }
 
 }  // namespace ast
