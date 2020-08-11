@@ -109,17 +109,16 @@ make_type_param_vector(std::initializer_list<T> const& init_list)
  *         value specified
  */
 template <typename TypeParam, typename T>
-typename std::enable_if<cudf::is_fixed_width<TypeParam>() &&
-                          !cudf::is_timestamp_t<TypeParam>::value,
-                        TypeParam>::type
+std::enable_if_t<cudf::is_fixed_width<TypeParam>() && !cudf::is_timestamp_t<TypeParam>::value,
+                 TypeParam>
 make_type_param_scalar(T const init_value)
 {
   return static_cast<TypeParam>(init_value);
 }
 
 template <typename TypeParam, typename T>
-typename std::enable_if<cudf::is_timestamp_t<TypeParam>::value, TypeParam>::type
-make_type_param_scalar(T const init_value)
+std::enable_if_t<cudf::is_timestamp_t<TypeParam>::value, TypeParam> make_type_param_scalar(
+  T const init_value)
 {
   return TypeParam{typename TypeParam::duration(init_value)};
 }
