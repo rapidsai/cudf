@@ -124,9 +124,8 @@ void kafka_consumer::consume_to_buffer()
       buffer.append(static_cast<char *>(msg->payload()));
       buffer.append(delimiter);
       messages_read++;
-    } else if (msg->err() == RdKafka::ErrorCode::ERR__TIMED_OUT ||
-               msg->err() == RdKafka::ErrorCode::ERR__PARTITION_EOF) {
-      // If there are no more messages or a timeout reading a message occurs then return
+    } else if (msg->err() == RdKafka::ErrorCode::ERR__PARTITION_EOF) {
+      // If there are no more messages return
       break;
     }
   }
