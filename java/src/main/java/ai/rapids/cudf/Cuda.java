@@ -259,10 +259,10 @@ public class Cuda {
   static native void freePinned(long ptr) throws CudaException;
 
   /**
-   * Copies count bytes from the memory area pointed to by src to the memory area pointed to by
-   * dst.
-   * Calling cudaMemcpy() with dst and src pointers that do not
-   * match the direction of the copy results in an undefined behavior.
+   * Copies bytes between buffers using the default CUDA stream.
+   * The copy has completed when this returns, but the memory copy could overlap with
+   * operations occurring on other streams.
+   * Specifying pointers that do not match the copy direction results in undefined behavior.
    * @param dst   - Destination memory address
    * @param src   - Source memory address
    * @param count - Size in bytes to copy
@@ -273,10 +273,10 @@ public class Cuda {
   }
 
   /**
-   * Copies count bytes from the memory area pointed to by src to the memory area pointed to by
-   * dst.
-   * Calling cudaMemcpy() with dst and src pointers that do not
-   * match the direction of the copy results in an undefined behavior.
+   * Copies bytes between buffers using the default CUDA stream.
+   * The copy has not necessarily completed when this returns, but the memory copy could
+   * overlap with operations occurring on other streams.
+   * Specifying pointers that do not match the copy direction results in undefined behavior.
    * @param dst   - Destination memory address
    * @param src   - Source memory address
    * @param count - Size in bytes to copy
@@ -288,6 +288,18 @@ public class Cuda {
 
   /**
    * Sets count bytes starting at the memory area pointed to by dst, with value.
+   * The operation has completed when this returns, but it could overlap with operations occurring
+   * on other streams.
+   * @param dst   - Destination memory address
+   * @param value - Byte value to set dst with
+   * @param count - Size in bytes to set
+   */
+  public static native void memset(long dst, byte value, long count) throws CudaException;
+
+  /**
+   * Sets count bytes starting at the memory area pointed to by dst, with value.
+   * The operation has not necessarily completed when this returns, but it could overlap with
+   * operations occurring on other streams.
    * @param dst   - Destination memory address
    * @param value - Byte value to set dst with
    * @param count - Size in bytes to set

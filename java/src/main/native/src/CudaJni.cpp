@@ -71,7 +71,7 @@ JNIEXPORT jobject JNICALL Java_ai_rapids_cudf_Cuda_memGetInfo(JNIEnv *env, jclas
 
     jobject info_obj = env->NewObject(info_class, ctor_id, (jlong)free, (jlong)total);
     // No need to check for exceptions of null return value as we are just handing the object back
-    // to the JVM. which will handle throwing any exceptions that happened in the constructor.
+    // to the JVM which will handle throwing any exceptions that happened in the constructor.
     return info_obj;
   }
   CATCH_STD(env, nullptr);
@@ -91,6 +91,17 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_freePinned(JNIEnv *env, jclass, 
   try {
     cudf::jni::auto_set_device(env);
     JNI_CUDA_TRY(env, , cudaFreeHost(reinterpret_cast<void *>(ptr)));
+  }
+  CATCH_STD(env, );
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_memset(JNIEnv *env, jclass, jlong dst, jbyte value,
+                                                       jlong count, jint kind) {
+  JNI_NULL_CHECK(env, dst, "dst memory pointer is null", );
+  try {
+    cudf::jni::auto_set_device(env);
+    JNI_CUDA_TRY(env, , cudaMemsetAsync((void *)dst, value, count));
+    JNI_CUDA_TRY(env, , cudaStreamSynchronize(0));
   }
   CATCH_STD(env, );
 }
