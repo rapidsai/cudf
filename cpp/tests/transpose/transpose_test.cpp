@@ -153,7 +153,7 @@ template <typename T>
 class TransposeTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(TransposeTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_CASE(TransposeTest, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(TransposeTest, SingleValue) { run_test<TypeParam>(1, 1, false); }
 

@@ -8,7 +8,7 @@ DataFrame
 .. autoclass:: DataFrame
     :members:
     :inherited-members:
-    :exclude-members: serialize, deserialize, device_deserialize, device_serialize, host_deserialize, host_serialize, to_dict
+    :exclude-members: serialize, deserialize, device_deserialize, device_serialize, host_deserialize, host_serialize, to_dict, itertuples, iterrows
 
 Series
 ------
