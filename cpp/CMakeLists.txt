@@ -15,7 +15,7 @@
 #=============================================================================
 cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
 
-project(CUDA_DATAFRAME VERSION 0.15.0 LANGUAGES C CXX CUDA)
+project(CUDA_DATAFRAME VERSION 0.16.0 LANGUAGES C CXX CUDA)
 
 if(NOT CMAKE_CUDA_COMPILER)
   message(SEND_ERROR "CMake cannot locate a CUDA compiler")
@@ -567,6 +567,7 @@ add_library(cudf
             src/lists/lists_column_view.cu
             src/lists/copying/concatenate.cu
             src/lists/copying/gather.cu
+            src/lists/copying/copying.cu
             src/text/detokenize.cu
             src/text/edit_distance.cu
             src/text/generate_ngrams.cu

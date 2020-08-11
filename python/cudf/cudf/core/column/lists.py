@@ -96,7 +96,7 @@ class ListMethods(ColumnMethodsMixin):
     def __init__(self, column, parent=None):
         if not is_list_dtype(column.dtype):
             raise AttributeError(
-                "Can only use .cat accessor with a 'list' dtype"
+                "Can only use .list accessor with a 'list' dtype"
             )
         self._column = column
         self._parent = parent

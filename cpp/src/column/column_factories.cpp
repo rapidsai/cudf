@@ -51,6 +51,8 @@ std::size_t size_of(data_type element_type)
 // Empty column of specified type
 std::unique_ptr<column> make_empty_column(data_type type)
 {
+  CUDF_EXPECTS(type.id() == type_id::EMPTY || !cudf::is_nested(type),
+               "Make empty column is invalid to call on nested types");
   return std::make_unique<column>(type, 0, rmm::device_buffer{});
 }
 

@@ -1,3 +1,11 @@
+# cuDF 0.16.0 (Date TBD)
+
+## New Features
+
+## Improvements
+
+## Bug Fixes
+
 # cuDF 0.15.0 (Date TBD)
 
 ## New Features
@@ -179,6 +187,7 @@
 - PR #5834 Add support for dictionary column in concatenate
 - PR #5832 Make dictionary_wrapper constructor from a value explicit
 - PR #5833 Pin `dask` and `distributed` version to `2.22.0`
+- PR #5771 Enable gather/slicing/joins with ListColumns in Python
 - PR #5855 Java interface to limit RMM maximum pool size
 - PR #5853 Disable `fixed_point` for use in `copy_if`
 - PR #5854 Raise informative error in `DataFrame.iterrows` and `DataFrame.itertuples`
@@ -260,6 +269,7 @@
 - PR #5745 Update JNI cast for inability to cast timestamp and integer types
 - PR #5750 Add RMM_ROOT/include to the spdlog search path in JNI build
 - PR #5763 Update Java slf4j version to match Spark 3.0
+- PR #5816 Always preserve list column hierarchies across operations.
 - PR #5766 Fix issue related to `iloc` and slicing a `DataFrame`
 - PR #5827 Revert fallback for `tolist` being absent
 - PR #5774 Add fallback for when `tolist` is absent
@@ -2028,7 +2038,8 @@
 - PR #1607 Revert change of `column.to_dense_buffer` always return by copy for performance concerns
 - PR #1618 ORC reader: fix assert & data output when nrows/skiprows isn't aligned to stripe boundaries
 - PR #1631 Fix failure of TYPES_TEST on some gcc-7 based systems.
-- PR #1641 CSV Reader: Fix skip_blank_lines behavior with Windows line terminators (\r\n)
+- PR #1641 CSV Reader: Fix skip_blank_lines behavior with Windows line terminators (
+)
 - PR #1648 ORC reader: fix non-deterministic output when skiprows is non-zero
 - PR #1676 Fix groupby `as_index` behaviour with `MultiIndex`
 - PR #1659 Fix bug caused by empty groupbys and multiindex slicing throwing exceptions
