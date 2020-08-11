@@ -92,7 +92,7 @@ template <typename OperatorFunctor,
           typename Out,
           std::enable_if_t<cudf::ast::is_valid_unary_op<OperatorFunctor, Input>>*>
 CUDA_HOST_DEVICE_CALLABLE decltype(auto) typed_unary_operator_dispatch_functor::operator()(
-  const data_reference_resolver resolver,
+  const detail::data_reference_resolver resolver,
   cudf::size_type row_index,
   const detail::device_data_reference input,
   const detail::device_data_reference output)
@@ -107,7 +107,7 @@ template <typename OperatorFunctor,
           typename Out,
           std::enable_if_t<!cudf::ast::is_valid_unary_op<OperatorFunctor, Input>>*>
 CUDA_HOST_DEVICE_CALLABLE decltype(auto) typed_unary_operator_dispatch_functor::operator()(
-  const data_reference_resolver resolver,
+  const detail::data_reference_resolver resolver,
   cudf::size_type row_index,
   const detail::device_data_reference input,
   const detail::device_data_reference output)
@@ -125,7 +125,7 @@ template <typename OperatorFunctor,
           typename Out,
           std::enable_if_t<cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>*>
 CUDA_HOST_DEVICE_CALLABLE decltype(auto) typed_binary_operator_dispatch_functor::operator()(
-  const data_reference_resolver resolver,
+  const detail::data_reference_resolver resolver,
   cudf::size_type row_index,
   const detail::device_data_reference lhs,
   const detail::device_data_reference rhs,
@@ -143,7 +143,7 @@ template <typename OperatorFunctor,
           typename Out,
           std::enable_if_t<!cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>*>
 CUDA_HOST_DEVICE_CALLABLE decltype(auto) typed_binary_operator_dispatch_functor::operator()(
-  const data_reference_resolver resolver,
+  const detail::data_reference_resolver resolver,
   cudf::size_type row_index,
   const detail::device_data_reference lhs,
   const detail::device_data_reference rhs,
@@ -156,24 +156,7 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) typed_binary_operator_dispatch_functor:
 #endif
 }
 
-__device__ void call_unary_operator(ast_operator op,
-                                    data_reference_resolver resolver,
-                                    cudf::size_type row_index,
-                                    const detail::device_data_reference input,
-                                    const detail::device_data_reference output)
-{
-}
-
-__device__ void call_binary_operator(ast_operator op,
-                                     data_reference_resolver resolver,
-                                     cudf::size_type row_index,
-                                     const detail::device_data_reference lhs,
-                                     const detail::device_data_reference rhs,
-                                     const detail::device_data_reference output)
-{
-}
-
-__device__ void evaluate_row_expression(const data_reference_resolver resolver,
+__device__ void evaluate_row_expression(const detail::data_reference_resolver resolver,
                                         const detail::device_data_reference* data_references,
                                         const ast_operator* operators,
                                         const cudf::size_type* operator_source_indices,
@@ -210,8 +193,8 @@ __device__ void evaluate_row_expression(const data_reference_resolver resolver,
                                  lhs,
                                  rhs,
                                  output);
-
     } else {
+      release_assert(false && "Invalid operator arity.");
       // Ternary operator
       /*
       auto const condition_data_ref =
