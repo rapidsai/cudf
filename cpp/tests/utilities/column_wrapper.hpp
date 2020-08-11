@@ -35,6 +35,7 @@
 #include <tests/utilities/column_utilities.hpp>
 
 #include <cudf/lists/lists_column_view.hpp>
+#include "cudf/fixed_point/fixed_point.hpp"
 
 namespace cudf {
 namespace test {

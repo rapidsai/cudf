@@ -37,8 +37,8 @@ dependencies:
   - black=19.10
   - isort=5.0.7
   - pre_commit
-  - dask>=2.15.0
-  - distributed>=2.15.0
+  - dask>=2.22.0
+  - distributed>=2.22.0
   - streamz
   - dlpack
   - arrow-cpp=0.17.1

@@ -101,7 +101,7 @@ def test_dropna_dataframe(data, how, axis, inplace):
 @pytest.mark.parametrize("axis", [0, 1])
 def test_dropna_with_all_nulls(how, data, axis):
     gdf = cudf.DataFrame({"a": data})
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable_pd_dtype=False)
 
     assert_eq(pdf.dropna(axis=axis, how=how), gdf.dropna(axis=axis, how=how))
 

@@ -349,6 +349,9 @@ public final class Table implements AutoCloseable {
   private static native long[] orderBy(long inputTable, long[] sortKeys, boolean[] isDescending,
                                        boolean[] areNullsSmallest) throws CudfException;
 
+  private static native long[] merge(long[] tableHandles, int[] sortKeyIndexes,
+                                     boolean[] isDescending, boolean[] areNullsSmallest) throws CudfException;
+
   private static native long[] leftJoin(long leftTable, int[] leftJoinCols, long rightTable,
                                         int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
 
@@ -371,6 +374,14 @@ public final class Table implements AutoCloseable {
   private static native long interleaveColumns(long input);
 
   private static native long[] filter(long input, long mask);
+
+  private static native long[] gather(long tableHandle, long gatherView, boolean checkBounds);
+
+  private static native long[] repeatStaticCount(long tableHandle, int count);
+
+  private static native long[] repeatColumnCount(long tableHandle,
+                                                 long columnHandle,
+                                                 boolean checkCount);
 
   private native long createCudfTableView(long[] nativeColumnViewHandles);
 
@@ -859,6 +870,41 @@ public final class Table implements AutoCloseable {
     return new ColumnVector(interleaveColumns(this.nativeHandle));
   }
 
+  /**
+   * Repeat each row of this table count times.
+   * @param count the number of times to repeat each row.
+   * @return the new Table.
+   */
+  public Table repeat(int count) {
+    return new Table(repeatStaticCount(this.nativeHandle, count));
+  }
+
+  /**
+   * Create a new table by repeating each row of this table. The number of
+   * repetitions of each row is defined by the corresponding value in counts.
+   * @param counts the number of times to repeat each row. Cannot have nulls, must be an
+   *               Integer type, and must have one entry for each row in the table.
+   * @return the new Table.
+   * @throws CudfException on any error.
+   */
+  public Table repeat(ColumnVector counts) {
+    return repeat(counts, true);
+  }
+
+  /**
+   * Create a new table by repeating each row of this table. The number of
+   * repetitions of each row is defined by the corresponding value in counts.
+   * @param counts the number of times to repeat each row. Cannot have nulls, must be an
+   *               Integer type, and must have one entry for each row in the table.
+   * @param checkCount should counts be checked for errors before processing. Be careful if you
+   *                   disable this because if you pass in bad data you might just get back an
+   *                   empty table or bad data.
+   * @return the new Table.
+   * @throws CudfException on any error.
+   */
+  public Table repeat(ColumnVector counts, boolean checkCount) {
+    return new Table(repeatColumnCount(this.nativeHandle, counts.getNativeView(), checkCount));
+  }
 
   /**
    * Given a sorted table return the lower bound.
@@ -980,6 +1026,41 @@ public final class Table implements AutoCloseable {
     }
 
     return new Table(orderBy(nativeHandle, sortKeys, isDescending, areNullsSmallest));
+  }
+
+  /**
+   * Merge multiple already sorted tables keeping the sort order the same.
+   * This is a more efficient version of concatenate followed by orderBy, but requires that
+   * the input already be sorted.
+   * @param tables the tables that should be merged.
+   * @param args the ordering of the tables.  Should match how they were sorted
+   *             initially.
+   * @return a combined sorted table.
+   */
+  public static Table merge(List<Table> tables, OrderByArg... args) {
+    assert !tables.isEmpty();
+    long[] tableHandles = new long[tables.size()];
+    Table first = tables.get(0);
+    assert args.length <= first.columns.length;
+    for (int i = 0; i < tables.size(); i++) {
+      Table t = tables.get(i);
+      assert t != null;
+      assert t.columns.length == first.columns.length;
+      tableHandles[i] = t.nativeHandle;
+    }
+    int[] sortKeyIndexes = new int[args.length];
+    boolean[] isDescending = new boolean[args.length];
+    boolean[] areNullsSmallest = new boolean[args.length];
+    for (int i = 0; i < args.length; i++) {
+      int index = args[i].index;
+      assert (index >= 0 && index < first.columns.length) :
+              "index is out of range 0 <= " + index + " < " + first.columns.length;
+      isDescending[i] = args[i].isDescending;
+      areNullsSmallest[i] = args[i].isNullSmallest;
+      sortKeyIndexes[i] = index;
+    }
+
+    return new Table(merge(tableHandles, sortKeyIndexes, isDescending, areNullsSmallest));
   }
 
   public static OrderByArg asc(final int index) {
@@ -1184,6 +1265,41 @@ public final class Table implements AutoCloseable {
    */
   public ContiguousTable[] contiguousSplit(int... indices) {
     return contiguousSplit(nativeHandle, indices);
+  }
+
+
+  /**
+   * Gathers the rows of this table according to `gatherMap` such that row "i"
+   * in the resulting table's columns will contain row "gatherMap[i]" from this table.
+   * The number of rows in the result table will be equal to the number of elements in
+   * `gatherMap`.
+   *
+   * A negative value `i` in the `gatherMap` is interpreted as `i+n`, where
+   * `n` is the number of rows in this table.
+
+   * @param gatherMap the map of indexes.  Must be non-nullable and integral type.
+   * @return the resulting Table.
+   */
+  public Table gather(ColumnVector gatherMap) {
+    return gather(gatherMap, true);
+  }
+
+  /**
+   * Gathers the rows of this table according to `gatherMap` such that row "i"
+   * in the resulting table's columns will contain row "gatherMap[i]" from this table.
+   * The number of rows in the result table will be equal to the number of elements in
+   * `gatherMap`.
+   *
+   * A negative value `i` in the `gatherMap` is interpreted as `i+n`, where
+   * `n` is the number of rows in this table.
+
+   * @param gatherMap the map of indexes.  Must be non-nullable and integral type.
+   * @param checkBounds if true bounds checking is performed on the value. Be very careful
+   *                    when setting this to false.
+   * @return the resulting Table.
+   */
+  public Table gather(ColumnVector gatherMap, boolean checkBounds) {
+    return new Table(gather(nativeHandle, gatherMap.getNativeView(), checkBounds));
   }
 
   /////////////////////////////////////////////////////////////////////////////

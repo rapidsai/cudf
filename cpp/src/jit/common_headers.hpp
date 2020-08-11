@@ -21,14 +21,18 @@
 #include <libcudacxx/details/__config.jit>
 #include <libcudacxx/libcxx/include/__config.jit>
 #include <libcudacxx/libcxx/include/__undef_macros.jit>
+#include <libcudacxx/libcxx/include/cassert.jit>
 #include <libcudacxx/libcxx/include/cfloat.jit>
 #include <libcudacxx/libcxx/include/chrono.jit>
+#include <libcudacxx/libcxx/include/cmath.jit>
 #include <libcudacxx/libcxx/include/ctime.jit>
 #include <libcudacxx/libcxx/include/limits.jit>
 #include <libcudacxx/libcxx/include/ratio.jit>
 #include <libcudacxx/libcxx/include/type_traits.jit>
+#include <libcudacxx/simt/cassert.jit>
 #include <libcudacxx/simt/cfloat.jit>
 #include <libcudacxx/simt/chrono.jit>
+#include <libcudacxx/simt/cmath.jit>
 #include <libcudacxx/simt/ctime.jit>
 #include <libcudacxx/simt/limits.jit>
 #include <libcudacxx/simt/ratio.jit>
@@ -69,6 +73,8 @@ const std::unordered_map<std::string, char const*> stringified_headers{
   {"simt/../../libcxx/include/ctime", libcxx_ctime},
   {"simt/../../libcxx/include/limits", libcxx_limits},
   {"simt/../../libcxx/include/ratio", libcxx_ratio},
+  {"simt/../../libcxx/include/cmath", libcxx_cmath},
+  {"simt/../../libcxx/include/cassert", libcxx_cassert},
   {"simt/../../libcxx/include/type_traits", libcxx_type_traits},
   {"simt/../details/__config", libcudacxx_details_config},
   {"simt/cfloat", libcudacxx_simt_cfloat},

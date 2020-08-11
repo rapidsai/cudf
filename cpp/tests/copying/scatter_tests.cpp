@@ -255,8 +255,9 @@ class ScatterInvalidIndexTypeTests : public cudf::test::BaseFixture {
 };
 
 // NOTE string types hit static assert in fixed_width_column_wrapper
-using InvalidIndexTypes =
-  cudf::test::Concat<cudf::test::Types<float, double, bool>, cudf::test::ChronoTypes>;
+using InvalidIndexTypes = cudf::test::Concat<cudf::test::Types<float, double, bool>,
+                                             cudf::test::ChronoTypes,
+                                             cudf::test::FixedPointTypes>;
 TYPED_TEST_CASE(ScatterInvalidIndexTypeTests, InvalidIndexTypes);
 
 // Throw logic error if scatter map column has invalid data type
@@ -795,7 +796,7 @@ struct BooleanMaskScalarScatter : public cudf::test::BaseFixture {
   }
 };
 
-TYPED_TEST_CASE(BooleanMaskScalarScatter, cudf::test::FixedWidthTypes);
+TYPED_TEST_CASE(BooleanMaskScalarScatter, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(BooleanMaskScalarScatter, WithNoNullElementsInTarget)
 {
@@ -947,4 +948,37 @@ TEST_F(BooleanMaskScatterScalarFails, NumberOfColumnAndScalarMismatch)
   auto target_table = cudf::table_view({target});
 
   EXPECT_THROW(cudf::boolean_mask_scatter(scalar_vect, target_table, mask), cudf::logic_error);
+}
+
+template <typename T>
+struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+};
+
+template <typename T>
+using wrapper = cudf::test::fixed_width_column_wrapper<T>;
+TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointScatter)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+
+  auto const ONE   = decimalXX{1, scale_type{0}};
+  auto const TWO   = decimalXX{2, scale_type{0}};
+  auto const THREE = decimalXX{3, scale_type{0}};
+  auto const FOUR  = decimalXX{4, scale_type{0}};
+  auto const FIVE  = decimalXX{5, scale_type{0}};
+
+  auto const source      = wrapper<decimalXX>({ONE, TWO, THREE, FOUR, FIVE});
+  auto const target      = wrapper<decimalXX>({ONE, TWO, THREE, FOUR, FIVE, FOUR, THREE, TWO, ONE});
+  auto const scatter_map = wrapper<int32_t>({1, 2, -1, -3, -4});
+  auto const expected    = wrapper<decimalXX>({ONE, ONE, TWO, FOUR, FIVE, FIVE, FOUR, TWO, THREE});
+
+  auto const source_table   = cudf::table_view({source, source});
+  auto const target_table   = cudf::table_view({target, target});
+  auto const expected_table = cudf::table_view({expected, expected});
+
+  auto const result = cudf::scatter(source_table, scatter_map, target_table, true);
+
+  cudf::test::expect_tables_equal(expected_table, result->view());
 }
