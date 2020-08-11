@@ -63,6 +63,7 @@
 - PR #5568 Add support for `Series.keys()` and `DataFrame.keys()`
 - PR #5782 Add Kafka support to custreamz
 - PR #5642 Add `GroupBy.groups()`
+- PR #5811 Add `nvtext::edit_distance` API
 - PR #5789 Add groupby support for duration types
 - PR #5810 Make Cython subdirs packages and simplify package_data
 - PR #5817 Enable more `fixed_point` unit tests by introducing "scale-less" constructor
@@ -274,7 +275,9 @@
 - PR #5866 cudf_kafka python version inconsistencies in Anaconda packages
 - PR #5872 libcudf_kafka r_path is causing docker build failures on centos7
 - PR #5869 Fix bug in parquet writer in writing string column with offset
+- PR #5914 Link CUDA against libcudf_kafka
 - PR #5895 Do not break kafka client consumption loop on local client timeout
+- PR #5915 Fix reference count on Java DeviceMemoryBuffer after contiguousSplit
 
 
 # cuDF 0.14.0 (03 Jun 2020)
