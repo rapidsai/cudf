@@ -72,6 +72,7 @@
 - PR #5851 Add support for `Index.sort_values`
 - PR #5859 Add conversion form `fixed_point` to `bool`
 - PR #5815 LIST Support for ColumnVector
+- PR #5931 Support for `add_calendrical_months` API
 
 ## Improvements
 
