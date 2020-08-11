@@ -6,6 +6,9 @@
 
 ## Bug Fixes
 
+- PR #5921 Fix SeriesGroupBy.nunique() to return a Series
+
+
 # cuDF 0.15.0 (Date TBD)
 
 ## New Features
