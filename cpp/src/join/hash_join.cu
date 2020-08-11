@@ -38,7 +38,7 @@ namespace detail {
 auto non_common_column_indices(size_type num_columns,
                                std::vector<size_type> const &common_column_indices)
 {
-  CUDF_EXPECTS(common_column_indices.size() <= static_cast<unsigned long>(num_columns),
+  CUDF_EXPECTS(common_column_indices.size() <= static_cast<uint64_t>(num_columns),
                "Too many columns in common");
   std::vector<size_type> all_column_indices(num_columns);
   std::iota(std::begin(all_column_indices), std::end(all_column_indices), 0);
