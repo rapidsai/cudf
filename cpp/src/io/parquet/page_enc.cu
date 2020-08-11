@@ -50,6 +50,7 @@ struct page_enc_state_s {
   uint32_t rle_numvals;  //!< RLE input value count
   uint32_t rle_lit_count;
   uint32_t rle_rpt_count;
+  uint32_t page_start_val;
   volatile uint32_t rpt_map[4];
   volatile uint32_t scratch_red[32];
   EncPage page;
@@ -115,7 +116,10 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
   __syncthreads();
   start_row = blockIdx.y * fragment_size;
   if (!t) {
-    s->col.num_rows            = min(s->col.num_rows, max_num_rows);
+    s->col.num_rows = min(s->col.num_rows, max_num_rows);
+    // fragment size = 5000. max_num_rows = total num rows in column. So frag num rows = 5000 except
+    // for the last page fragment which can be smaller.
+    // num_rows is fixed but fragment size could be larger if the data is strings
     s->frag.num_rows           = min(fragment_size, max_num_rows - min(start_row, max_num_rows));
     s->frag.non_nulls          = 0;
     s->frag.num_dict_vals      = 0;
@@ -131,38 +135,63 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
     dtype_len_in = (dtype == BYTE_ARRAY) ? sizeof(nvstrdesc_s) : dtype_len;
   }
   __syncthreads();
-  nrows = s->frag.num_rows;
-  for (uint32_t i = 0; i < nrows; i += 512) {
+  // To use num_vals instead of num_rows, we need to calculate num_vals on the fly.
+  // For list<list<int>>, values between i and i+50 can be calculated by
+  // off_11 = off[i], off_12 = off[i+50]
+  // off_21 = child.off[off_11], off_22 = child.off[off_12]
+
+  // Fragment definitely needs frag.num_vals along with num_rows. Both are needed because num_vals
+  // will be passed on to pages and num_rows will be used to check against number of rows in chunk
+  // Although, even chunk metadata does not care about num_rows, only num values. Perhaps it also
+  // needs both
+  nrows                     = s->frag.num_rows;
+  size_type start_value_idx = start_row;
+  size_type end_value_idx   = start_row + nrows;
+  for (size_type i = 0; i < s->col.nesting_levels; i++) {
+    start_value_idx = s->col.nesting_offsets[i][start_value_idx];
+    end_value_idx   = s->col.nesting_offsets[i][end_value_idx];
+  }
+  size_type nvals = end_value_idx - start_value_idx;
+  if (!t) { s->frag.num_values = nvals; }
+  if (!t) { printf("start_val %d, end_val %d, nvals %d\n", start_value_idx, end_value_idx, nvals); }
+
+  for (uint32_t i = 0; i < nvals; i += 512) {
     const uint32_t *valid = s->col.valid_map_base;
-    uint32_t row          = start_row + i + t;
-    uint32_t is_valid     = (i + t < nrows && row < s->col.num_rows)
-                          ? (valid) ? (valid[row >> 5] >> (row & 0x1f)) & 1 : 1
+    uint32_t val_idx      = start_value_idx + i + t;
+    uint32_t is_valid     = (i + t < nvals && val_idx < s->col.num_values)
+                          ? (valid) ? (valid[val_idx >> 5] >> (val_idx & 0x1f)) & 1 : 1
                           : 0;
     uint32_t valid_warp = BALLOT(is_valid);
     uint32_t len, nz_pos, hash;
+    if (is_valid) printf("t %d, isvlaid %d, idx %d\n", t, is_valid, val_idx);
     if (is_valid) {
       len = dtype_len;
       if (dtype != BOOLEAN) {
         if (dtype == BYTE_ARRAY) {
-          const char *ptr = reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base)[row].ptr;
+          const char *ptr =
+            reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base)[val_idx].ptr;
           uint32_t count =
-            (uint32_t) reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base)[row].count;
+            (uint32_t) reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base)[val_idx]
+              .count;
           len += count;
           hash = nvstr_init_hash(reinterpret_cast<const uint8_t *>(ptr), count);
         } else if (dtype_len_in == 8) {
-          hash = uint64_init_hash(reinterpret_cast<const uint64_t *>(s->col.column_data_base)[row]);
+          hash =
+            uint64_init_hash(reinterpret_cast<const uint64_t *>(s->col.column_data_base)[val_idx]);
         } else {
           hash = uint32_init_hash(
             (dtype_len_in == 4)
-              ? reinterpret_cast<const uint32_t *>(s->col.column_data_base)[row]
+              ? reinterpret_cast<const uint32_t *>(s->col.column_data_base)[val_idx]
               : (dtype_len_in == 2)
-                  ? reinterpret_cast<const uint16_t *>(s->col.column_data_base)[row]
-                  : reinterpret_cast<const uint8_t *>(s->col.column_data_base)[row]);
+                  ? reinterpret_cast<const uint16_t *>(s->col.column_data_base)[val_idx]
+                  : reinterpret_cast<const uint8_t *>(s->col.column_data_base)[val_idx]);
         }
       }
     } else {
       len = 0;
     }
+    if (is_valid) printf("t %d, len %d\n", t, len);
+
     nz_pos =
       s->frag.non_nulls + __popc(valid_warp & (0x7fffffffu >> (0x1fu - ((uint32_t)t & 0x1f))));
     len = WarpReduceSum32(len);
@@ -187,7 +216,7 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
       if (t >= 32) { nz_pos += s->scratch_red[(t - 32) >> 5]; }
       if (dict_index) {
         atomicAdd(&s->map.u32[hash >> 1], (hash & 1) ? 1 << 16 : 1);
-        dict_index[start_row + nz_pos] =
+        dict_index[start_value_idx + nz_pos] =
           ((i + t) << INIT_HASH_BITS) |
           hash;  // Store the hash along with the index, so we don't have to recompute it
       }
@@ -402,9 +431,10 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
   if (t < 32) {
     uint32_t fragments_in_chunk = 0;
     uint32_t rows_in_page       = 0;
+    uint32_t values_in_page     = 0;
     uint32_t page_size          = 0;
     uint32_t num_pages          = 0;
-    uint32_t num_rows           = 0;
+    uint32_t num_values         = 0;
     uint32_t page_start         = 0;
     uint32_t page_offset        = ck_g.ck_stat_size;
     uint32_t num_dict_entries   = 0;
@@ -431,6 +461,7 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
         page_g.max_data_size   = ck_g.dictionary_size;
         page_g.start_row       = cur_row;
         page_g.num_rows        = ck_g.total_dict_entries;
+        page_g.num_values      = ck_g.total_dict_entries;
         page_offset += page_g.max_hdr_size + page_g.max_data_size;
         comp_page_offset += page_g.max_hdr_size + GetMaxCompressedBfrSize(page_g.max_data_size);
       }
@@ -446,10 +477,16 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
       num_pages = 1;
     }
     SYNCWARP();
+    // This loop seems to be going over one page fragment at a time and adding them to pages.
+    // When page size crosses a particular limit, then it moves on to the next page and then next
+    // page fragment gets added to that one.
+
+    // This doesn't actually deal with data. It's agnostic. It only cares about number of rows and
+    // page size.
     do {
       uint32_t fragment_data_size, max_page_size, minmax_len = 0;
       SYNCWARP();
-      if (num_rows < ck_g.num_rows) {
+      if (num_values < ck_g.num_values) {
         if (t < sizeof(PageFragment) / sizeof(uint32_t)) {
           reinterpret_cast<uint32_t *>(&frag_g)[t] =
             reinterpret_cast<const uint32_t *>(&ck_g.fragments[fragments_in_chunk])[t];
@@ -465,15 +502,15 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
       SYNCWARP();
       if (ck_g.has_dictionary && fragments_in_chunk < ck_g.num_dict_fragments) {
         fragment_data_size =
-          frag_g.num_rows * 2;  // Assume worst-case of 2-bytes per dictionary index
+          frag_g.num_values * 2;  // Assume worst-case of 2-bytes per dictionary index
       } else {
         fragment_data_size = frag_g.fragment_data_size;
       }
-      max_page_size = (rows_in_page * 2 >= ck_g.num_rows)
+      max_page_size = (values_in_page * 2 >= ck_g.num_values)
                         ? 256 * 1024
-                        : (rows_in_page * 3 >= ck_g.num_rows) ? 384 * 1024 : 512 * 1024;
-      if (num_rows >= ck_g.num_rows ||
-          (rows_in_page > 0 &&
+                        : (values_in_page * 3 >= ck_g.num_values) ? 384 * 1024 : 512 * 1024;
+      if (num_values >= ck_g.num_values ||
+          (values_in_page > 0 &&
            (page_size + fragment_data_size > max_page_size ||
             (ck_g.has_dictionary && fragments_in_chunk == ck_g.num_dict_fragments)))) {
         uint32_t dict_bits_plus1;
@@ -493,16 +530,19 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
           } else {
             dict_bits = 16;
           }
-          page_size       = 1 + 5 + ((rows_in_page * dict_bits + 7) >> 3) + (rows_in_page >> 8);
+          page_size       = 1 + 5 + ((values_in_page * dict_bits + 7) >> 3) + (values_in_page >> 8);
           dict_bits_plus1 = dict_bits + 1;
         } else {
           dict_bits_plus1 = 0;
         }
         if (!t) {
           uint32_t def_level_bits = col_g.level_bits & 0xf;
+          // This is no longer tied to number of values in page. In list, there can be def level
+          // values to indicate empty list which will not show up in the leaf column values.
+          // So num def_level_size can be more
           uint32_t def_level_size =
             (def_level_bits)
-              ? 4 + 5 + ((def_level_bits * rows_in_page + 7) >> 3) + (rows_in_page >> 8)
+              ? 4 + 5 + ((def_level_bits * values_in_page + 7) >> 3) + (values_in_page >> 8)
               : 0;
           page_g.num_fragments   = fragments_in_chunk - page_start;
           page_g.chunk_id        = blockIdx.y * num_columns + blockIdx.x;
@@ -524,6 +564,7 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
           page_g.compressed_data  = ck_g.compressed_bfr + comp_page_offset;
           page_g.start_row        = cur_row;
           page_g.num_rows         = rows_in_page;
+          page_g.num_values       = values_in_page;
           pagestats_g.start_chunk = ck_g.first_fragment + page_start;
           pagestats_g.num_chunks  = page_g.num_fragments;
           page_offset += page_g.max_hdr_size + page_g.max_data_size;
@@ -541,16 +582,18 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
             reinterpret_cast<uint32_t *>(&pagestats_g)[t];
         }
         num_pages++;
-        page_size     = 0;
-        rows_in_page  = 0;
-        page_start    = fragments_in_chunk;
-        max_stats_len = 0;
+        page_size      = 0;
+        rows_in_page   = 0;
+        values_in_page = 0;
+        page_start     = fragments_in_chunk;
+        max_stats_len  = 0;
       }
       max_stats_len = max(max_stats_len, minmax_len);
       num_dict_entries += frag_g.num_dict_vals;
       page_size += fragment_data_size;
       rows_in_page += frag_g.num_rows;
-      num_rows += frag_g.num_rows;
+      values_in_page += frag_g.num_values;
+      num_values += frag_g.num_values;
       fragments_in_chunk++;
     } while (frag_g.num_rows != 0);
     SYNCWARP();
@@ -846,8 +889,15 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
   __syncthreads();
   if (!t) { s->cur = s->page.page_data + s->page.max_hdr_size; }
   __syncthreads();
+  // Starting here, I can bypass all the following code in case of list columns. List columns will
+  // set definition levels and repetition levels on their own.
+  // For a simple start, I can have the list column's definition, repetition level pre-generated and
+  // this kernel would just have to write it out.
+
   // Encode NULLs
-  if (s->page.page_type != DICTIONARY_PAGE && s->col.level_bits != 0) {
+  // This is just treating definition levels as validity.
+  if (s->page.page_type != DICTIONARY_PAGE && s->col.level_bits != 0 &&
+      s->col.nesting_levels == 0) {
     const uint32_t *valid = s->col.valid_map_base;
     uint32_t def_lvl_bits = s->col.level_bits & 0xf;
     if (def_lvl_bits != 0) {
@@ -862,7 +912,9 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
         uint32_t rle_numvals = s->rle_numvals;
         uint32_t nrows       = min(s->page.num_rows - rle_numvals, 128);
         uint32_t row         = s->page.start_row + rle_numvals + t;
-        uint32_t def_lvl     = (rle_numvals + t < s->page.num_rows && row < s->col.num_rows)
+        // Definition level encodes validity. Checks the valid map and if it is valid, then sets the
+        // def_lvl accordingly and sets it in s->vals which is then given to RleEncode to encode
+        uint32_t def_lvl = (rle_numvals + t < s->page.num_rows && row < s->col.num_rows)
                              ? (valid) ? (valid[row >> 5] >> (row & 0x1f)) & 1 : 1
                              : 0;
         s->vals[(rle_numvals + t) & (RLE_BFRSZ - 1)] = def_lvl;
@@ -882,6 +934,52 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
         if (t == 0) { s->cur = rle_out; }
       }
     }
+  } else if (s->page.page_type != DICTIONARY_PAGE && s->col.nesting_levels > 0) {
+    auto encode_levels = [&](uint32_t const *lvl_val_data, uint32_t nbits) {
+      // For list types, the repetition and definition levels are pre-calculated. We just need to
+      // encode and write them now.
+      if (!t) {
+        s->rle_run     = 0;
+        s->rle_pos     = 0;
+        s->rle_numvals = 0;
+        s->rle_out     = s->cur + 4;
+      }
+      __syncthreads();
+      // The number of rep/def values can be more than num data values because data values do not
+      // contain nulls but rep/def values have an entry for null/empty.
+      // For any row, the location of these pre-calc level values can be obtained from level_offsets
+      // which are per-row offsets into these values. But they only contain offsets from the top
+      // level of nesting. So List<List<int>> will only contain one level_offsets.
+      size_type page_first_val_idx = s->col.level_offsets[s->page.start_row];
+      size_type page_last_val_idx  = s->col.level_offsets[s->page.start_row + s->page.num_rows];
+      size_type page_nvals         = page_last_val_idx - page_first_val_idx;
+      size_type col_last_val_idx   = s->col.level_offsets[s->col.num_rows];
+      while (s->rle_numvals < page_nvals) {
+        uint32_t rle_numvals = s->rle_numvals;
+        uint32_t nvals       = min(page_nvals - rle_numvals, 128);
+        uint32_t idx         = s->page.start_row + rle_numvals + t;
+        uint32_t lvl_val =
+          (rle_numvals + t < page_nvals && idx < col_last_val_idx) ? lvl_val_data[idx] : 0;
+        s->vals[(rle_numvals + t) & (RLE_BFRSZ - 1)] = lvl_val;
+        __syncthreads();
+        rle_numvals += nvals;
+        RleEncode(s, rle_numvals, nbits, (rle_numvals == page_nvals), t);
+        __syncthreads();
+      }
+      if (t < 32) {
+        uint8_t *cur     = s->cur;
+        uint8_t *rle_out = s->rle_out;
+        if (t < 4) {
+          uint32_t rle_bytes = (uint32_t)(rle_out - cur) - 4;
+          cur[t]             = rle_bytes >> (t * 8);
+        }
+        SYNCWARP();
+        if (t == 0) { s->cur = rle_out; }
+      }
+    };
+    if (t == 0) printf("nbits rep: %d, def %d\n", s->col.level_bits >> 4, s->col.level_bits & 0xf);
+    encode_levels(s->col.rep_values, s->col.level_bits >> 4);
+    encode_levels(s->col.def_values, s->col.level_bits & 0xf);
   }
   // Encode data values
   __syncthreads();
@@ -903,25 +1001,42 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
       dst[0]     = dict_bits;
       s->rle_out = dst + 1;
     }
+    s->page_start_val = s->page.start_row;
+    for (size_type i = 0; i < s->col.nesting_levels; i++) {
+      s->page_start_val = s->col.nesting_offsets[i][s->page_start_val];
+    }
   }
   __syncthreads();
-  for (uint32_t cur_row = 0; cur_row < s->page.num_rows;) {
-    uint32_t nrows = min(s->page.num_rows - cur_row, 128);
-    uint32_t row   = s->page.start_row + cur_row + t;
+  // Instead of page->num_rows, it should be called page->num_values. The values and rows are
+  // decoupled and there can be multiple values per row.
+  // Also, metadata diagram says DataPageHeader containes num_values and not num_rows
+
+  // However, num_values may include NULLs. These NULLs may come from list structure that's not
+  // known in leaf column. For this, we need a distinction between nulls in dremel encoded columns
+  // and nulls in leaf column. For now, num_nulls refers to only leaf.
+  for (uint32_t cur_val_idx = 0; cur_val_idx < s->page.num_values;) {
+    uint32_t nvals   = min(s->page.num_values - cur_val_idx, 128);
+    uint32_t val_idx = s->page_start_val + cur_val_idx + t;
     uint32_t is_valid, warp_valids, len, pos;
 
     if (s->page.page_type == DICTIONARY_PAGE) {
-      is_valid = (cur_row + t < s->page.num_rows);
-      row      = (is_valid) ? s->col.dict_data[row] : row;
+      is_valid = (cur_val_idx + t < s->page.num_values);
+      val_idx  = (is_valid) ? s->col.dict_data[val_idx] : val_idx;
     } else {
       const uint32_t *valid = s->col.valid_map_base;
-      is_valid              = (row < s->col.num_rows && cur_row + t < s->page.num_rows)
-                   ? (valid) ? (valid[row >> 5] >> (row & 0x1f)) & 1 : 1
+      // EncColDesc also needs a col.num_vals because list may have more vals than rows and it
+      // doesn't hurt to have them both.
+      // Later I can evaluate whether to keep num_rows
+      is_valid = (val_idx < s->col.num_values && cur_val_idx + t < s->page.num_values)
+                   ? (valid) ? (valid[val_idx >> 5] >> (val_idx & 0x1f)) & 1 : 1
                    : 0;
     }
+    // printf("val_idx %d, isvalid %d\n", val_idx, is_valid);
     warp_valids = BALLOT(is_valid);
-    cur_row += nrows;
+    cur_val_idx += nvals;
     if (dict_bits >= 0) {
+      if (t == 0) { printf("dict\n"); }
+
       // Dictionary encoding
       if (dict_bits > 0) {
         uint32_t rle_numvals;
@@ -936,9 +1051,9 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
         if (is_valid) {
           uint32_t v;
           if (dtype == BOOLEAN) {
-            v = reinterpret_cast<const uint8_t *>(s->col.column_data_base)[row];
+            v = reinterpret_cast<const uint8_t *>(s->col.column_data_base)[val_idx];
           } else {
-            v = s->col.dict_index[row];
+            v = s->col.dict_index[val_idx];
           }
           s->vals[(rle_numvals + pos) & (RLE_BFRSZ - 1)] = v;
         }
@@ -946,25 +1061,26 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
         __syncthreads();
 #if !ENABLE_BOOL_RLE
         if (dtype == BOOLEAN) {
-          PlainBoolEncode(s, rle_numvals, (cur_row == s->page.num_rows), t);
+          PlainBoolEncode(s, rle_numvals, (cur_val_idx == s->page.num_values), t);
         } else
 #endif
         {
-          RleEncode(s, rle_numvals, dict_bits, (cur_row == s->page.num_rows), t);
+          RleEncode(s, rle_numvals, dict_bits, (cur_val_idx == s->page.num_values), t);
         }
         __syncthreads();
       }
       if (t == 0) { s->cur = s->rle_out; }
       __syncthreads();
     } else {
+      if (t == 0) { printf("non-dict, type: %d\n", dtype); }
       // Non-dictionary encoding
       uint8_t *dst = s->cur;
 
       if (is_valid) {
         len = dtype_len_out;
         if (dtype == BYTE_ARRAY) {
-          len +=
-            (uint32_t) reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base)[row].count;
+          len += (uint32_t) reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base)[val_idx]
+                   .count;
         }
       } else {
         len = 0;
@@ -977,8 +1093,8 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
       if (t == 0) { s->cur = dst + s->scratch_red[3]; }
       pos = pos + ((t >= 32) ? s->scratch_red[(t - 32) >> 5] : 0) - len;
       if (is_valid) {
-        const uint8_t *src8 =
-          reinterpret_cast<const uint8_t *>(s->col.column_data_base) + row * (size_t)dtype_len_in;
+        const uint8_t *src8 = reinterpret_cast<const uint8_t *>(s->col.column_data_base) +
+                              val_idx * (size_t)dtype_len_in;
         switch (dtype) {
           case INT32:
           case FLOAT: {
@@ -989,6 +1105,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
               v = *reinterpret_cast<const int16_t *>(src8);
             else
               v = *reinterpret_cast<const int8_t *>(src8);
+            printf("val_idx %d, val %d\n", val_idx, v);
             dst[pos + 0] = v;
             dst[pos + 1] = v >> 8;
             dst[pos + 2] = v >> 16;
@@ -1311,10 +1428,10 @@ __global__ void __launch_bounds__(128) gpuEncodePageHeaders(EncPage *pages,
     if (page_type == DATA_PAGE) {
       // DataPageHeader
       CPW_FLD_STRUCT_BEGIN(5)
-      CPW_FLD_INT32(1, page_g.num_rows)  // NOTE: num_values != num_rows for list types
-      CPW_FLD_INT32(2, encoding)         // encoding
-      CPW_FLD_INT32(3, RLE)              // definition_level_encoding
-      CPW_FLD_INT32(4, RLE)              // repetition_level_encoding
+      CPW_FLD_INT32(1, 10)        // NOTE: num_values != num_rows for list types
+      CPW_FLD_INT32(2, encoding)  // encoding
+      CPW_FLD_INT32(3, RLE)       // definition_level_encoding
+      CPW_FLD_INT32(4, RLE)       // repetition_level_encoding
       // Optionally encode page-level statistics
       if (page_stats) {
         CPW_FLD_STRUCT_BEGIN(5)
@@ -1395,7 +1512,7 @@ __global__ void __launch_bounds__(1024) gpuGatherPages(EncColumnChunk *chunks, c
 /**
  * @brief Launches kernel for initializing encoder page fragments
  *
- * @param[in] frag Fragment array [column_id][fragment_id]
+ * @param[in,out] frag Fragment array [column_id][fragment_id]
  * @param[in] col_desc Column description array [column_id]
  * @param[in] num_fragments Number of fragments per column
  * @param[in] num_columns Number of columns
@@ -1452,8 +1569,8 @@ cudaError_t InitFragmentStatistics(statistics_group *groups,
  * @param[in] col_desc Column description array [column_id]
  * @param[in] num_rowgroups Number of fragments per column
  * @param[in] num_columns Number of columns
- * @param[in] page_grstats Setup for page-level stats
- * @param[in] chunk_grstats Setup for chunk-level stats
+ * @param[out] page_grstats Setup for page-level stats
+ * @param[out] chunk_grstats Setup for chunk-level stats
  * @param[in] stream CUDA stream to use, default 0
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
@@ -1494,6 +1611,8 @@ cudaError_t EncodePages(EncPage *pages,
                         gpu_inflate_status_s *comp_out,
                         cudaStream_t stream)
 {
+  // A page is part of one column. This is launching 1 block per page. 1 block will exclusively deal
+  // with one datatype. I can safely add an if condition such that list column takes the if branch
   gpuEncodePages<<<num_pages, 128, 0, stream>>>(pages, chunks, comp_in, comp_out, start_page);
   return cudaSuccess;
 }

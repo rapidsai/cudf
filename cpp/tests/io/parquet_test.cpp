@@ -117,6 +117,7 @@ struct ParquetWriterTimestampTypeTest : public ParquetWriterTest {
 
 // Declare typed test cases
 // TODO: Replace with `NumericTypes` when unsigned support is added. Issue #5352
+// I forgot to do this. Need to test unsigned types
 using SupportedTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, bool, float, double>;
 TYPED_TEST_CASE(ParquetWriterNumericTypeTest, SupportedTypes);
 using SupportedTimestampTypes = cudf::test::TimestampTypes;
@@ -454,6 +455,37 @@ TEST_F(ParquetWriterTest, SlicedTable)
 
   expect_tables_equal(expected_slice, result.tbl->view());
   EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
+}
+
+TEST_F(ParquetWriterTest, ListColumn)
+{
+  auto valids  = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+  auto valids2 = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
+
+  using lcw = cudf::test::lists_column_wrapper<int32_t>;
+  cudf::test::lists_column_wrapper<int32_t> col1{{{1, 2, 3}, {}, {4, 5}, {}, {{0, 6, 0}, valids}},
+                                                 valids2};
+
+  cudf::test::print(col1);
+
+  cudf_io::table_metadata expected_metadata;
+  expected_metadata.column_names.emplace_back("col_list");
+
+  std::vector<std::unique_ptr<column>> cols;
+  cols.push_back(col1.release());
+  auto expected = std::make_unique<table>(std::move(cols));
+  EXPECT_EQ(1, expected->num_columns());
+
+  auto filepath = ("ListColumn.parquet");
+  cudf_io::write_parquet_args out_args{
+    cudf_io::sink_info{filepath}, expected->view(), &expected_metadata};
+  cudf_io::write_parquet(out_args);
+
+  // cudf_io::read_parquet_args in_args{cudf_io::source_info{filepath}};
+  // auto result = cudf_io::read_parquet(in_args);
+
+  // expect_tables_equal(expected->view(), result.tbl->view());
+  // EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
 
 TEST_F(ParquetWriterTest, MultiIndex)

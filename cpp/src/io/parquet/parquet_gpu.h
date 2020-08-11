@@ -20,6 +20,7 @@
 #include <cuda_runtime.h>
 #include <io/comp/gpuinflate.h>
 #include <io/statistics/column_stats.h>
+#include <cudf/types.hpp>
 #include "parquet_common.h"
 
 namespace cudf {
@@ -138,9 +139,21 @@ struct EncColumnDesc : stats_column_desc {
   uint32_t *dict_data;     //!< Dictionary data (unique row indices)
   uint8_t physical_type;   //!< physical data type
   uint8_t converted_type;  //!< logical data type
+  // TODO (dm): Evaluate if this is sufficient. At 4 bits, this allows a maximum 16 level nesting
   uint8_t level_bits;  //!< bits to encode max definition (lower nibble) & repetition (upper nibble)
                        //!< levels
-  uint8_t pad;
+  bool is_list;
+  size_type const *const *nesting_offsets;
+  // TODO (dm): Look into replacing this with max repetition level in level_bits
+  size_type nesting_levels;
+  size_type num_values;  //!< Number of data values in column. Different from num_rows in case of
+                         //!< nested columns
+
+  // TODO (dm): docs for these
+  size_type const *level_offsets;
+  uint32_t const *rep_values;
+  uint32_t const *def_values;
+  size_type num_level_values;
 };
 
 #define MAX_PAGE_FRAGMENT_SIZE 5000  //!< Max number of rows in a page fragment
@@ -151,10 +164,10 @@ struct EncColumnDesc : stats_column_desc {
 struct PageFragment {
   uint32_t fragment_data_size;  //!< Size of fragment data in bytes
   uint32_t dict_data_size;      //!< Size of dictionary for this fragment
+  uint32_t num_values;          //!< Number of values in fragment. Different from num_rows for list
+  uint32_t non_nulls;           //!< Number of non-null values
   uint16_t num_rows;            //!< Number of rows in fragment
-  uint16_t non_nulls;           //!< Number of non-null values
   uint16_t num_dict_vals;       //!< Number of unique dictionary entries
-  uint16_t pad;
 };
 
 /**
@@ -172,6 +185,8 @@ struct EncPage {
   uint32_t max_data_size;    //!< Maximum size of coded page data (excluding header)
   uint32_t start_row;        //!< First row of page
   uint32_t num_rows;         //!< Rows in page
+  // TODO (dm): rename to nnz
+  uint32_t num_values;  //!< Values in page. Different from num_rows in case of list
 };
 
 /// Size of hash used for building dictionaries
@@ -214,6 +229,7 @@ struct EncColumnChunk {
   uint32_t compressed_size;       //!< Compressed buffer size
   uint32_t start_row;             //!< First row of chunk
   uint32_t num_rows;              //!< Number of rows in chunk
+  uint32_t num_values;            //!< Number of values in chunk. Different from num_rows for list.
   uint32_t first_fragment;        //!< First fragment of chunk
   uint32_t first_page;            //!< First page of chunk
   uint32_t num_pages;             //!< Number of pages in chunk

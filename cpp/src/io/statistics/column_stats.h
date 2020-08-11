@@ -18,6 +18,8 @@
 
 namespace cudf {
 namespace io {
+
+// Does this need to include unsigned types?
 enum statistics_dtype {
   dtype_none,
   dtype_bool,
@@ -35,7 +37,10 @@ enum statistics_dtype {
 };
 
 struct stats_column_desc {
-  statistics_dtype stats_dtype;    //!< physical data type of column
+  statistics_dtype stats_dtype;  //!< physical data type of column
+
+  // TODO (dm): should this be num_vals because it needs to signify the number of values in
+  // column_data_base. Parquet statistics don't contain num_rows/num_values anyway
   uint32_t num_rows;               //!< number of rows in column
   const uint32_t *valid_map_base;  //!< base of valid bit map for this column (null if not present)
   const void *column_data_base;    //!< base ptr to column data
