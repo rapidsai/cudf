@@ -960,7 +960,6 @@ struct arity_functor {
  * @brief Dispatches a single type template parameters to a unary operator.
  *
  */
-#pragma nv_exec_check_disable
 template <typename F, typename... Ts>
 CUDA_HOST_DEVICE_CALLABLE constexpr void unary_operator_dispatcher(ast_operator op,
                                                                    cudf::data_type input_t,
@@ -975,7 +974,6 @@ CUDA_HOST_DEVICE_CALLABLE constexpr void unary_operator_dispatcher(ast_operator 
  * @brief Dispatches two type template parameters to a binary operator.
  *
  */
-#pragma nv_exec_check_disable
 template <typename F, typename... Ts>
 CUDA_HOST_DEVICE_CALLABLE constexpr void binary_operator_dispatcher(
   ast_operator op, cudf::data_type lhs_t, cudf::data_type rhs_t, F&& f, Ts&&... args)
