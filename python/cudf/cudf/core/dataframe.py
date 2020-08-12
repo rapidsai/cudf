@@ -5420,7 +5420,6 @@ class DataFrame(Frame, Serializable):
         self,
         axis=None,
         skipna=None,
-        dtype=None,
         level=None,
         numeric_only=None,
         **kwargs,
@@ -5430,12 +5429,16 @@ class DataFrame(Frame, Serializable):
 
         Parameters
         ----------
-
+        axis: {index (0), columns(1)}
+            Axis for the function to be applied on.
         skipna: bool, default True
             Exclude NA/null values when computing the result.
-
-        dtype: data type
-            Data type to cast the result to.
+        level: int or level name, default None
+            If the axis is a MultiIndex (hierarchical), count along a
+            particular level, collapsing into a Series.
+        numeric_only: bool, default None
+            Include only float, int, boolean columns. If None, will attempt to
+            use everything, then use only numeric data.
 
         Returns
         -------
@@ -5458,7 +5461,6 @@ class DataFrame(Frame, Serializable):
             "min",
             axis=axis,
             skipna=skipna,
-            dtype=dtype,
             level=level,
             numeric_only=numeric_only,
             **kwargs,
@@ -5468,7 +5470,6 @@ class DataFrame(Frame, Serializable):
         self,
         axis=None,
         skipna=None,
-        dtype=None,
         level=None,
         numeric_only=None,
         **kwargs,
@@ -5478,12 +5479,16 @@ class DataFrame(Frame, Serializable):
 
         Parameters
         ----------
-
+        axis: {index (0), columns(1)}
+            Axis for the function to be applied on.
         skipna: bool, default True
             Exclude NA/null values when computing the result.
-
-        dtype: data type
-            Data type to cast the result to.
+        level: int or level name, default None
+            If the axis is a MultiIndex (hierarchical), count along a
+            particular level, collapsing into a Series.
+        numeric_only: bool, default None
+            Include only float, int, boolean columns. If None, will attempt to
+            use everything, then use only numeric data.
 
         Returns
         -------
@@ -5506,7 +5511,6 @@ class DataFrame(Frame, Serializable):
             "max",
             axis=axis,
             skipna=skipna,
-            dtype=dtype,
             level=level,
             numeric_only=numeric_only,
             **kwargs,
