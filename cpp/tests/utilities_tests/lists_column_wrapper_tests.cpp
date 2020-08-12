@@ -458,7 +458,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyLists)
   using namespace cudf;
   using T = TypeParam;
 
-  // to disambiguiate between {} == 0 and {} == List{0}
+  // to disambiguate between {} == 0 and {} == List{0}
   // Also, see note about compiler issues when declaring nested
   // empty lists in lists_column_wrapper documentation
   using LCW = test::lists_column_wrapper<T, int32_t>;
@@ -586,7 +586,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyListsWithValidity)
   using namespace cudf;
   using T = TypeParam;
 
-  // to disambiguiate between {} == 0 and {} == List{0}
+  // to disambiguate between {} == 0 and {} == List{0}
   // Also, see note about compiler issues when declaring nested
   // empty lists in lists_column_wrapper documentation
   using LCW = test::lists_column_wrapper<T, int32_t>;
