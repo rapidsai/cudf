@@ -91,7 +91,6 @@ struct row_evaluator {
    *
    * @tparam OperatorFunctor Functor that performs desired operation when `operator()` is called.
    * @tparam Input Type of input value.
-   * @tparam Out Type of output value, determined by `std::invoke_result_t<OperatorFunctor, Input>`.
    * @param row_index Row index of data column(s).
    * @param input Input data reference.
    * @param output Output data reference.
@@ -116,7 +115,6 @@ struct row_evaluator {
    * @tparam OperatorFunctor Functor that performs desired operation when `operator()` is called.
    * @tparam LHS Type of left input value.
    * @tparam RHS Type of right input value.
-   * @tparam Out Type of output value, determined by `std::invoke_result_t<OperatorFunctor, Input>`.
    * @param row_index Row index of data column(s).
    * @param lhs Left input data reference.
    * @param rhs Right input data reference.

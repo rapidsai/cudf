@@ -235,7 +235,6 @@ struct custom_functor {
   template <typename OperatorFunctor,
             typename LHS,
             typename RHS,
-            typename Out = simt::std::invoke_result_t<OperatorFunctor, LHS, RHS>,
             std::enable_if_t<cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(int* result)
   {
@@ -245,7 +244,6 @@ struct custom_functor {
   template <typename OperatorFunctor,
             typename LHS,
             typename RHS,
-            typename Out                                                                 = void,
             std::enable_if_t<!cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(int* result)
   {
