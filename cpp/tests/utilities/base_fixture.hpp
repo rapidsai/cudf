@@ -23,9 +23,9 @@
 
 #include <rmm/mr/device/binning_memory_resource.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
-#include <rmm/mr/device/default_memory_resource.hpp>
 #include <rmm/mr/device/managed_memory_resource.hpp>
 #include <rmm/mr/device/owning_wrapper.hpp>
+#include <rmm/mr/device/per_device_memory_resource.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
 
 #include <ftw.h>
@@ -42,7 +42,7 @@ namespace test {
  * ```
  **/
 class BaseFixture : public ::testing::Test {
-  rmm::mr::device_memory_resource *_mr{rmm::mr::get_default_resource()};
+  rmm::mr::device_memory_resource *_mr{rmm::mr::get_current_device_resource()};
 
  public:
   /**
