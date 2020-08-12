@@ -14,14 +14,35 @@ def validate_setup(check_dask=True):
 
     from cudf._cuda.gpu import (
         CudaDeviceAttr,
+        CudaError,
         CUDARuntimeError,
         deviceGetName,
         driverGetVersion,
         getDeviceAttribute,
         getDeviceCount,
-        notify_caller_errors,
         runtimeGetVersion,
     )
+
+    notify_caller_errors = {
+        CudaError.cudaErrorInitializationError,
+        CudaError.cudaErrorInsufficientDriver,
+        CudaError.cudaErrorInvalidDeviceFunction,
+        CudaError.cudaErrorNoDevice,
+        CudaError.cudaErrorInvalidDevice,
+        CudaError.cudaErrorStartupFailure,
+        CudaError.cudaErrorInvalidKernelImage,
+        CudaError.cudaErrorDeviceUninitialized,
+        CudaError.cudaErrorAlreadyAcquired,
+        CudaError.cudaErrorOperatingSystem,
+        CudaError.cudaErrorNotPermitted,
+        CudaError.cudaErrorNotSupported,
+        CudaError.cudaErrorSystemNotReady,
+        CudaError.cudaErrorSystemDriverMismatch,
+        CudaError.cudaErrorCompatNotSupportedOnDevice,
+        CudaError.cudaErrorTimeout,
+        CudaError.cudaErrorUnknown,
+        CudaError.cudaErrorApiFailureBase,
+    }
 
     try:
         gpus_count = getDeviceCount()

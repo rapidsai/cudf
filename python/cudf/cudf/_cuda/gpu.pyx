@@ -18,28 +18,7 @@ from cudf._cuda.gpu cimport (
 )
 from enum import IntEnum
 from cudf._cuda.gpu cimport underlying_type_attribute as c_attr
-
-
-notify_caller_errors = {
-    cudaErrorInitializationError,
-    cudaErrorInsufficientDriver,
-    cudaErrorInvalidDeviceFunction,
-    cudaErrorNoDevice,
-    cudaErrorInvalidDevice,
-    cudaErrorStartupFailure,
-    cudaErrorInvalidKernelImage,
-    cudaErrorDeviceUninitialized,
-    cudaErrorAlreadyAcquired,
-    cudaErrorOperatingSystem,
-    cudaErrorNotPermitted,
-    cudaErrorNotSupported,
-    cudaErrorSystemNotReady,
-    cudaErrorSystemDriverMismatch,
-    cudaErrorCompatNotSupportedOnDevice,
-    cudaErrorTimeout,
-    cudaErrorUnknown,
-    cudaErrorApiFailureBase
-}
+from cudf._cuda.gpu cimport underlying_type_error
 
 
 class CUDARuntimeError(RuntimeError):
@@ -78,6 +57,229 @@ class CUDADriverError(RuntimeError):
 
     def __reduce__(self):
         return (type(self), (self.status,))
+
+
+class CudaError(IntEnum):
+    cudaSuccess = \
+        <underlying_type_error> cudaError.cudaSuccess
+    cudaErrorInvalidValue = \
+        <underlying_type_error> cudaError.cudaErrorInvalidValue
+    cudaErrorMemoryAllocation = \
+        <underlying_type_error> cudaError.cudaErrorMemoryAllocation
+    cudaErrorInitializationError = \
+        <underlying_type_error> cudaError.cudaErrorInitializationError
+    cudaErrorCudartUnloading = \
+        <underlying_type_error> cudaError.cudaErrorCudartUnloading
+    cudaErrorProfilerDisabled = \
+        <underlying_type_error> cudaError.cudaErrorProfilerDisabled
+    cudaErrorProfilerNotInitialized = \
+        <underlying_type_error> cudaError.cudaErrorProfilerNotInitialized
+    cudaErrorProfilerAlreadyStarted = \
+        <underlying_type_error> cudaError.cudaErrorProfilerAlreadyStarted
+    cudaErrorProfilerAlreadyStopped = \
+        <underlying_type_error> cudaError.cudaErrorProfilerAlreadyStopped
+    cudaErrorInvalidConfiguration = \
+        <underlying_type_error> cudaError.cudaErrorInvalidConfiguration
+    cudaErrorInvalidPitchValue = \
+        <underlying_type_error> cudaError.cudaErrorInvalidPitchValue
+    cudaErrorInvalidSymbol = \
+        <underlying_type_error> cudaError.cudaErrorInvalidSymbol
+    cudaErrorInvalidHostPointer = \
+        <underlying_type_error> cudaError.cudaErrorInvalidHostPointer
+    cudaErrorInvalidDevicePointer = \
+        <underlying_type_error> cudaError.cudaErrorInvalidDevicePointer
+    cudaErrorInvalidTexture = \
+        <underlying_type_error> cudaError.cudaErrorInvalidTexture
+    cudaErrorInvalidTextureBinding = \
+        <underlying_type_error> cudaError.cudaErrorInvalidTextureBinding
+    cudaErrorInvalidChannelDescriptor = \
+        <underlying_type_error> cudaError.cudaErrorInvalidChannelDescriptor
+    cudaErrorInvalidMemcpyDirection = \
+        <underlying_type_error> cudaError.cudaErrorInvalidMemcpyDirection
+    cudaErrorAddressOfConstant = \
+        <underlying_type_error> cudaError.cudaErrorAddressOfConstant
+    cudaErrorTextureFetchFailed = \
+        <underlying_type_error> cudaError.cudaErrorTextureFetchFailed
+    cudaErrorTextureNotBound = \
+        <underlying_type_error> cudaError.cudaErrorTextureNotBound
+    cudaErrorSynchronizationError = \
+        <underlying_type_error> cudaError.cudaErrorSynchronizationError
+    cudaErrorInvalidFilterSetting = \
+        <underlying_type_error> cudaError.cudaErrorInvalidFilterSetting
+    cudaErrorInvalidNormSetting = \
+        <underlying_type_error> cudaError.cudaErrorInvalidNormSetting
+    cudaErrorMixedDeviceExecution = \
+        <underlying_type_error> cudaError.cudaErrorMixedDeviceExecution
+    cudaErrorNotYetImplemented = \
+        <underlying_type_error> cudaError.cudaErrorNotYetImplemented
+    cudaErrorMemoryValueTooLarge = \
+        <underlying_type_error> cudaError.cudaErrorMemoryValueTooLarge
+    cudaErrorInsufficientDriver = \
+        <underlying_type_error> cudaError.cudaErrorInsufficientDriver
+    cudaErrorInvalidSurface = \
+        <underlying_type_error> cudaError.cudaErrorInvalidSurface
+    cudaErrorDuplicateVariableName = \
+        <underlying_type_error> cudaError.cudaErrorDuplicateVariableName
+    cudaErrorDuplicateTextureName = \
+        <underlying_type_error> cudaError.cudaErrorDuplicateTextureName
+    cudaErrorDuplicateSurfaceName = \
+        <underlying_type_error> cudaError.cudaErrorDuplicateSurfaceName
+    cudaErrorDevicesUnavailable = \
+        <underlying_type_error> cudaError.cudaErrorDevicesUnavailable
+    cudaErrorIncompatibleDriverContext = \
+        <underlying_type_error> cudaError.cudaErrorIncompatibleDriverContext
+    cudaErrorMissingConfiguration = \
+        <underlying_type_error> cudaError.cudaErrorMissingConfiguration
+    cudaErrorPriorLaunchFailure = \
+        <underlying_type_error> cudaError.cudaErrorPriorLaunchFailure
+    cudaErrorLaunchMaxDepthExceeded = \
+        <underlying_type_error> cudaError.cudaErrorLaunchMaxDepthExceeded
+    cudaErrorLaunchFileScopedTex = \
+        <underlying_type_error> cudaError.cudaErrorLaunchFileScopedTex
+    cudaErrorLaunchFileScopedSurf = \
+        <underlying_type_error> cudaError.cudaErrorLaunchFileScopedSurf
+    cudaErrorSyncDepthExceeded = \
+        <underlying_type_error> cudaError.cudaErrorSyncDepthExceeded
+    cudaErrorLaunchPendingCountExceeded = \
+        <underlying_type_error> cudaError.cudaErrorLaunchPendingCountExceeded
+    cudaErrorInvalidDeviceFunction = \
+        <underlying_type_error> cudaError.cudaErrorInvalidDeviceFunction
+    cudaErrorNoDevice = \
+        <underlying_type_error> cudaError.cudaErrorNoDevice
+    cudaErrorInvalidDevice = \
+        <underlying_type_error> cudaError.cudaErrorInvalidDevice
+    cudaErrorStartupFailure = \
+        <underlying_type_error> cudaError.cudaErrorStartupFailure
+    cudaErrorInvalidKernelImage = \
+        <underlying_type_error> cudaError.cudaErrorInvalidKernelImage
+    cudaErrorDeviceUninitialized = \
+        <underlying_type_error> cudaError.cudaErrorDeviceUninitialized
+    cudaErrorMapBufferObjectFailed = \
+        <underlying_type_error> cudaError.cudaErrorMapBufferObjectFailed
+    cudaErrorUnmapBufferObjectFailed = \
+        <underlying_type_error> cudaError.cudaErrorUnmapBufferObjectFailed
+    cudaErrorArrayIsMapped = \
+        <underlying_type_error> cudaError.cudaErrorArrayIsMapped
+    cudaErrorAlreadyMapped = \
+        <underlying_type_error> cudaError.cudaErrorAlreadyMapped
+    cudaErrorNoKernelImageForDevice = \
+        <underlying_type_error> cudaError.cudaErrorNoKernelImageForDevice
+    cudaErrorAlreadyAcquired = \
+        <underlying_type_error> cudaError.cudaErrorAlreadyAcquired
+    cudaErrorNotMapped = \
+        <underlying_type_error> cudaError.cudaErrorNotMapped
+    cudaErrorNotMappedAsArray = \
+        <underlying_type_error> cudaError.cudaErrorNotMappedAsArray
+    cudaErrorNotMappedAsPointer = \
+        <underlying_type_error> cudaError.cudaErrorNotMappedAsPointer
+    cudaErrorECCUncorrectable = \
+        <underlying_type_error> cudaError.cudaErrorECCUncorrectable
+    cudaErrorUnsupportedLimit = \
+        <underlying_type_error> cudaError.cudaErrorUnsupportedLimit
+    cudaErrorDeviceAlreadyInUse = \
+        <underlying_type_error> cudaError.cudaErrorDeviceAlreadyInUse
+    cudaErrorPeerAccessUnsupported = \
+        <underlying_type_error> cudaError.cudaErrorPeerAccessUnsupported
+    cudaErrorInvalidPtx = \
+        <underlying_type_error> cudaError.cudaErrorInvalidPtx
+    cudaErrorInvalidGraphicsContext = \
+        <underlying_type_error> cudaError.cudaErrorInvalidGraphicsContext
+    cudaErrorNvlinkUncorrectable = \
+        <underlying_type_error> cudaError.cudaErrorNvlinkUncorrectable
+    cudaErrorJitCompilerNotFound = \
+        <underlying_type_error> cudaError.cudaErrorJitCompilerNotFound
+    cudaErrorInvalidSource = \
+        <underlying_type_error> cudaError.cudaErrorInvalidSource
+    cudaErrorFileNotFound = \
+        <underlying_type_error> cudaError.cudaErrorFileNotFound
+    cudaErrorSharedObjectSymbolNotFound = \
+        <underlying_type_error> cudaError.cudaErrorSharedObjectSymbolNotFound
+    cudaErrorSharedObjectInitFailed = \
+        <underlying_type_error> cudaError.cudaErrorSharedObjectInitFailed
+    cudaErrorOperatingSystem = \
+        <underlying_type_error> cudaError.cudaErrorOperatingSystem
+    cudaErrorInvalidResourceHandle = \
+        <underlying_type_error> cudaError.cudaErrorInvalidResourceHandle
+    cudaErrorIllegalState = \
+        <underlying_type_error> cudaError.cudaErrorIllegalState
+    cudaErrorSymbolNotFound = \
+        <underlying_type_error> cudaError.cudaErrorSymbolNotFound
+    cudaErrorNotReady = \
+        <underlying_type_error> cudaError.cudaErrorNotReady
+    cudaErrorIllegalAddress = \
+        <underlying_type_error> cudaError.cudaErrorIllegalAddress
+    cudaErrorLaunchOutOfResources = \
+        <underlying_type_error> cudaError.cudaErrorLaunchOutOfResources
+    cudaErrorLaunchTimeout = \
+        <underlying_type_error> cudaError.cudaErrorLaunchTimeout
+    cudaErrorLaunchIncompatibleTexturing = \
+        <underlying_type_error> cudaError.cudaErrorLaunchIncompatibleTexturing
+    cudaErrorPeerAccessAlreadyEnabled = \
+        <underlying_type_error> cudaError.cudaErrorPeerAccessAlreadyEnabled
+    cudaErrorPeerAccessNotEnabled = \
+        <underlying_type_error> cudaError.cudaErrorPeerAccessNotEnabled
+    cudaErrorSetOnActiveProcess = \
+        <underlying_type_error> cudaError.cudaErrorSetOnActiveProcess
+    cudaErrorContextIsDestroyed = \
+        <underlying_type_error> cudaError.cudaErrorContextIsDestroyed
+    cudaErrorAssert = \
+        <underlying_type_error> cudaError.cudaErrorAssert
+    cudaErrorTooManyPeers = \
+        <underlying_type_error> cudaError.cudaErrorTooManyPeers
+    cudaErrorHostMemoryAlreadyRegistered = \
+        <underlying_type_error> cudaError.cudaErrorHostMemoryAlreadyRegistered
+    cudaErrorHostMemoryNotRegistered = \
+        <underlying_type_error> cudaError.cudaErrorHostMemoryNotRegistered
+    cudaErrorHardwareStackError = \
+        <underlying_type_error> cudaError.cudaErrorHardwareStackError
+    cudaErrorIllegalInstruction = \
+        <underlying_type_error> cudaError.cudaErrorIllegalInstruction
+    cudaErrorMisalignedAddress = \
+        <underlying_type_error> cudaError.cudaErrorMisalignedAddress
+    cudaErrorInvalidAddressSpace = \
+        <underlying_type_error> cudaError.cudaErrorInvalidAddressSpace
+    cudaErrorInvalidPc = \
+        <underlying_type_error> cudaError.cudaErrorInvalidPc
+    cudaErrorLaunchFailure = \
+        <underlying_type_error> cudaError.cudaErrorLaunchFailure
+    cudaErrorCooperativeLaunchTooLarge = \
+        <underlying_type_error> cudaError.cudaErrorCooperativeLaunchTooLarge
+    cudaErrorNotPermitted = \
+        <underlying_type_error> cudaError.cudaErrorNotPermitted
+    cudaErrorNotSupported = \
+        <underlying_type_error> cudaError.cudaErrorNotSupported
+    cudaErrorSystemNotReady = \
+        <underlying_type_error> cudaError.cudaErrorSystemNotReady
+    cudaErrorSystemDriverMismatch = \
+        <underlying_type_error> cudaError.cudaErrorSystemDriverMismatch
+    cudaErrorCompatNotSupportedOnDevice = \
+        <underlying_type_error> cudaError.cudaErrorCompatNotSupportedOnDevice
+    cudaErrorStreamCaptureUnsupported = \
+        <underlying_type_error> cudaError.cudaErrorStreamCaptureUnsupported
+    cudaErrorStreamCaptureInvalidated = \
+        <underlying_type_error> cudaError.cudaErrorStreamCaptureInvalidated
+    cudaErrorStreamCaptureMerge = \
+        <underlying_type_error> cudaError.cudaErrorStreamCaptureMerge
+    cudaErrorStreamCaptureUnmatched = \
+        <underlying_type_error> cudaError.cudaErrorStreamCaptureUnmatched
+    cudaErrorStreamCaptureUnjoined = \
+        <underlying_type_error> cudaError.cudaErrorStreamCaptureUnjoined
+    cudaErrorStreamCaptureIsolation = \
+        <underlying_type_error> cudaError.cudaErrorStreamCaptureIsolation
+    cudaErrorStreamCaptureImplicit = \
+        <underlying_type_error> cudaError.cudaErrorStreamCaptureImplicit
+    cudaErrorCapturedEvent = \
+        <underlying_type_error> cudaError.cudaErrorCapturedEvent
+    cudaErrorStreamCaptureWrongThread = \
+        <underlying_type_error> cudaError.cudaErrorStreamCaptureWrongThread
+    cudaErrorTimeout = \
+        <underlying_type_error> cudaError.cudaErrorTimeout
+    cudaErrorGraphExecUpdateFailure = \
+        <underlying_type_error> cudaError.cudaErrorGraphExecUpdateFailure
+    cudaErrorUnknown = \
+        <underlying_type_error> cudaError.cudaErrorUnknown
+    cudaErrorApiFailureBase = \
+        <underlying_type_error> cudaError.cudaErrorApiFailureBase
 
 
 class CudaDeviceAttr(IntEnum):
