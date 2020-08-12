@@ -524,6 +524,63 @@ TYPED_TEST(TypedStructColumnWrapperTest, StructOfListOfStruct)
                                         *struct_of_list_of_struct);
 }
 
+TYPED_TEST(TypedStructColumnWrapperTest, EmptyColumnsOfStructs)
+{
+  using namespace cudf::test;
+
+  {
+    // Empty struct column.
+    auto empty_struct_column = structs_column_wrapper{}.release();
+    EXPECT_TRUE(empty_struct_column->num_children() == 0);
+    EXPECT_TRUE(empty_struct_column->size() == 0);
+    EXPECT_TRUE(empty_struct_column->null_count() == 0);
+  }
+
+  {
+    // Empty struct<list> column.
+    auto empty_list_column = lists_column_wrapper<TypeParam>{};
+    auto struct_column     = structs_column_wrapper{{empty_list_column}}.release();
+    EXPECT_TRUE(struct_column->num_children() == 1);
+    EXPECT_TRUE(struct_column->size() == 0);
+    EXPECT_TRUE(struct_column->null_count() == 0);
+
+    auto empty_list_of_structs =
+      cudf::make_lists_column(0,
+                              fixed_width_column_wrapper<size_type>{0}.release(),
+                              std::move(struct_column),
+                              cudf::UNKNOWN_NULL_COUNT,
+                              {});
+
+    EXPECT_TRUE(empty_list_of_structs->size() == 0);
+    EXPECT_TRUE(empty_list_of_structs->null_count() == 0);
+
+    auto child_struct_column = cudf::lists_column_view(*empty_list_of_structs).child();
+    EXPECT_TRUE(child_struct_column.num_children() == 1);
+    EXPECT_TRUE(child_struct_column.size() == 0);
+    EXPECT_TRUE(child_struct_column.null_count() == 0);
+  }
+
+  // TODO: Uncomment test after adding support to compare empty
+  //   lists whose child columns may not be empty.
+  // {
+  //   auto non_empty_column_of_numbers =
+  //     fixed_width_column_wrapper<TypeParam>{1,2,3,4,5}.release();
+  //
+  //   auto list_offsets =
+  //     fixed_width_column_wrapper<size_type>{0}.release();
+  //
+  //   auto empty_list_column =
+  //     cudf::make_lists_column(
+  //       0, std::move(list_offsets), std::move(non_empty_column_of_numbers), 0, {});
+  //
+  //   expect_columns_equivalent(*lists_column_wrapper<TypeParam>{}.release(), *empty_list_column);
+  //   auto struct_column = structs_column_wrapper{{empty_list_column}}.release();
+  //   EXPECT_TRUE(struct_column->num_children() == 1);
+  //   EXPECT_TRUE(struct_column->size() == 0);
+  //   EXPECT_TRUE(struct_column->null_count() == 0);
+  // }
+}
+
 TEST_F(StructColumnWrapperTest, SimpleTestExpectStructColumnsEqual)
 {
   auto ints_col = cudf::test::fixed_width_column_wrapper<int32_t>{{0, 1}, {0, 0}}.release();
