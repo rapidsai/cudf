@@ -4,6 +4,8 @@
 
 ## Improvements
 
+- PR #5946  Add cython and python support for libcudf `to_arrow` and `from_arrow`
+
 ## Bug Fixes
 
 # cuDF 0.15.0 (Date TBD)
