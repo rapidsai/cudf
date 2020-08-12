@@ -26,13 +26,9 @@ std::unique_ptr<cudf::column> copy_slice(lists_column_view const& lists,
   end += lists.offset();
 
   // Offsets at the beginning and end of the slice:
-  cudf::size_type start_offset{0};
-  cudf::size_type end_offset{0};
   auto offsets_data = lists.offsets().data<cudf::size_type>();
-start_offset = cudf::detail::get_value<size_type>(lists.offsets(), start, stream)
-    &start_offset, offsets_data + start, sizeof(cudf::size_type), cudaMemcpyDeviceToHost, stream));
-end_offset = cudf::detail::get_value<size_type>(lists.offsets(), end, stream)
-    &end_offset, offsets_data + end, sizeof(cudf::size_type), cudaMemcpyDeviceToHost, stream));
+  auto start_offset = cudf::detail::get_value<size_type>(lists.offsets(), start, stream);
+  auto end_offset   = cudf::detail::get_value<size_type>(lists.offsets(), end, stream);
 
   rmm::device_uvector<cudf::size_type> out_offsets(offsets_count, stream);
   auto execpol = rmm::exec_policy(stream);
