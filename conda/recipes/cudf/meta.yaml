@@ -3,7 +3,7 @@
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
 {% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
 {% set py_version=environ.get('CONDA_PY', 36) %}
-{% set cuda_version='.'.join(environ.get('CUDA_VERSION', '10.2').split('.')[:2]) %}
+{% set cuda_version='.'.join(environ.get('CUDA_VERSION', '10.1').split('.')[:2]) %}
 
 package:
   name: cudf
@@ -31,7 +31,7 @@ requirements:
   run:
     - python
     - pandas >=1.0,<1.1.0dev0
-    - cupy >=6.6.0,<8.0.0dev0,!=7.1.0
+    - cupy >=6.6.0,<8.0.0a0,!=7.1.0
     - numba >=0.49.0
     - numpy
     - pyarrow 0.17.1.*
