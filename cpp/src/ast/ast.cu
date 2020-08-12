@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <thrust/detail/raw_pointer_cast.h>
 #include <cudf/ast/ast.cuh>
 #include <cudf/ast/linearizer.cuh>
 #include <cudf/ast/operators.hpp>
@@ -300,11 +299,11 @@ std::unique_ptr<column> compute_column(table_view const table,
   cudf::ast::detail::compute_column_kernel<block_size>
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream>>>(
       *table_device,
-      thrust::raw_pointer_cast(device_literals.data()),
+      device_literals.data(),
       *mutable_output_device,
-      thrust::raw_pointer_cast(device_data_references.data()),
-      thrust::raw_pointer_cast(device_operators.data()),
-      thrust::raw_pointer_cast(device_operator_source_indices.data()),
+      device_data_references.data(),
+      device_operators.data(),
+      device_operator_source_indices.data(),
       num_operators,
       num_intermediates);
   CHECK_CUDA(stream);
