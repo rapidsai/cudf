@@ -18,6 +18,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <tests/utilities/base_fixture.hpp>
@@ -437,6 +438,9 @@ TYPED_TEST(ListsColumnTest, ListsSlicedColumnViewConstructorWithNulls)
   auto valids = cudf::test::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
 
+  auto expect_valids = cudf::test::make_counting_transform_iterator(
+    0, [](auto i) { return i % 2 == 0 ? false : true; });
+
   using LCW = cudf::test::lists_column_wrapper<TypeParam>;
 
   cudf::test::lists_column_wrapper<TypeParam> list{
@@ -444,12 +448,20 @@ TYPED_TEST(ListsColumnTest, ListsSlicedColumnViewConstructorWithNulls)
     valids};
 
   cudf::test::lists_column_wrapper<TypeParam> expect{
-    {{{{5, 6, 7}, LCW{}, {8, 9}}, valids}, LCW{}, LCW{}}, valids};
+    {LCW{}, {{{5, 6, 7}, LCW{}, {8, 9}}, valids}, LCW{}, LCW{}}, expect_valids};
 
-  auto sliced = cudf::slice(list, {2, 5}).front();
+  auto sliced = cudf::slice(list, {1, 5}).front();
   auto result = std::make_unique<cudf::column>(sliced);
 
   cudf::test::expect_columns_equal(expect, result->view());
+
+  // TODO: null mask equality is being checked separately because
+  // expect_columns_equal doesn't do the check for lists columns.
+  // This is fixed in https://github.com/rapidsai/cudf/pull/5904,
+  // so we should remove this check after that's merged:
+  cudf::test::expect_columns_equal(
+    cudf::mask_to_bools(result->view().null_mask(), 0, 4)->view(),
+    cudf::mask_to_bools(static_cast<cudf::column_view>(expect).null_mask(), 0, 4)->view());
 }
 
 CUDF_TEST_PROGRAM_MAIN()

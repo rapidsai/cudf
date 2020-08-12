@@ -54,7 +54,7 @@ std::unique_ptr<cudf::column> copy_slice(lists_column_view const& lists,
           cudf::detail::slice(lists.child(), {start_offset, end_offset}, stream).front());
 
   // Compute the null mask of the result:
-  auto null_mask = cudf::copy_bitmask(lists.null_mask(), start_offset, end_offset, stream, mr);
+  auto null_mask = cudf::copy_bitmask(lists.null_mask(), start, end, stream, mr);
 
   return make_lists_column(lists_count,
                            std::move(offsets),
