@@ -13,8 +13,8 @@ def validate_setup(check_dask=True):
     import warnings
 
     from cudf._cuda.gpu import (
-        CudaDeviceAttr,
         CUDARuntimeError,
+        cudaDeviceAttr,
         cudaError,
         deviceGetName,
         driverGetVersion,
@@ -59,7 +59,7 @@ def validate_setup(check_dask=True):
         # 75 - Indicates to get "cudaDevAttrComputeCapabilityMajor" attribute
         # 0 - Get GPU 0
         major_version = getDeviceAttribute(
-            CudaDeviceAttr.cudaDevAttrComputeCapabilityMajor, 0
+            cudaDeviceAttr.cudaDevAttrComputeCapabilityMajor, 0
         )
 
         if major_version >= 6:
@@ -75,7 +75,7 @@ def validate_setup(check_dask=True):
         else:
             device_name = deviceGetName(0)
             minor_version = getDeviceAttribute(
-                CudaDeviceAttr.cudaDevAttrComputeCapabilityMinor, 0
+                cudaDeviceAttr.cudaDevAttrComputeCapabilityMinor, 0
             )
             warnings.warn(
                 f"You will need a GPU with NVIDIA Pascal™ or "

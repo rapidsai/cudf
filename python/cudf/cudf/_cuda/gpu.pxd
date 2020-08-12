@@ -1,7 +1,7 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 cdef extern from "cuda.h" nogil:
-    cdef enum cudaDeviceAttr:
+    cpdef enum cudaDeviceAttr:
         cudaDevAttrMaxThreadsPerBlock = 1
         cudaDevAttrMaxBlockDimX = 2
         cudaDevAttrMaxBlockDimY = 3
@@ -395,5 +395,3 @@ cdef extern from "cuda_runtime_api.h" nogil:
 
     const char* cudaGetErrorName(cudaError_t error)
     const char* cudaGetErrorString(cudaError_t error)
-
-ctypedef int underlying_type_attribute
