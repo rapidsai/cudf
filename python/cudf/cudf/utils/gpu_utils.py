@@ -19,12 +19,15 @@ def validate_setup(check_dask=True):
         driverGetVersion,
         getDeviceAttribute,
         getDeviceCount,
+        notify_caller_errors,
         runtimeGetVersion,
     )
 
     try:
         gpus_count = getDeviceCount()
-    except CUDARuntimeError:
+    except CUDARuntimeError as e:
+        if e.status in notify_caller_errors:
+            raise e
         # If there is no GPU detected, set `gpus_count` to -1
         gpus_count = -1
 

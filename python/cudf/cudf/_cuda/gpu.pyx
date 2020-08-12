@@ -20,17 +20,26 @@ from enum import IntEnum
 from cudf._cuda.gpu cimport underlying_type_attribute as c_attr
 
 
-class CUDAError(RuntimeError):
-
-    def __init__(self, cudaError_t status):
-        self.status = status
-        cdef str name = cudaGetErrorName(status).decode()
-        cdef str msg = cudaGetErrorString(status).decode()
-        super(CUDAError, self).__init__(
-            '%s: %s' % (name, msg))
-
-    def __reduce__(self):
-        return (type(self), (self.status,))
+notify_caller_errors = {
+    cudaErrorInitializationError,
+    cudaErrorInsufficientDriver,
+    cudaErrorInvalidDeviceFunction,
+    cudaErrorNoDevice,
+    cudaErrorInvalidDevice,
+    cudaErrorStartupFailure,
+    cudaErrorInvalidKernelImage,
+    cudaErrorDeviceUninitialized,
+    cudaErrorAlreadyAcquired,
+    cudaErrorOperatingSystem,
+    cudaErrorNotPermitted,
+    cudaErrorNotSupported,
+    cudaErrorSystemNotReady,
+    cudaErrorSystemDriverMismatch,
+    cudaErrorCompatNotSupportedOnDevice,
+    cudaErrorTimeout,
+    cudaErrorUnknown,
+    cudaErrorApiFailureBase
+}
 
 
 class CUDARuntimeError(RuntimeError):
@@ -322,30 +331,7 @@ def getDeviceCount():
     cdef cudaError_t status = cudaGetDeviceCount(&count)
 
     if status != 0:
-        notify_caller_errors = {
-            cudaErrorInitializationError,
-            cudaErrorInsufficientDriver,
-            cudaErrorInvalidDeviceFunction,
-            cudaErrorNoDevice,
-            cudaErrorInvalidDevice,
-            cudaErrorStartupFailure,
-            cudaErrorInvalidKernelImage,
-            cudaErrorDeviceUninitialized,
-            cudaErrorAlreadyAcquired,
-            cudaErrorOperatingSystem,
-            cudaErrorNotPermitted,
-            cudaErrorNotSupported,
-            cudaErrorSystemNotReady,
-            cudaErrorSystemDriverMismatch,
-            cudaErrorCompatNotSupportedOnDevice,
-            cudaErrorTimeout,
-            cudaErrorUnknown,
-            cudaErrorApiFailureBase
-        }
-        if status in notify_caller_errors:
-            raise CUDAError(status)
-        else:
-            raise CUDARuntimeError(status)
+        raise CUDARuntimeError(status)
     return count
 
 
