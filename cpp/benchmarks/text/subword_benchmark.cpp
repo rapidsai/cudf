@@ -55,7 +55,6 @@ static void BM_cuda_tokenizer_cudf(benchmark::State& state)
   uint32_t nrows = 1000;
   std::vector<const char*> h_strings(nrows, "This is a test ");
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
-  // cudf::test::strings_column_wrapper strings{"This is a test."};
   std::string hash_file = create_hash_vocab_file();
   std::vector<uint32_t> offsets{14};
   uint32_t max_sequence_length = 64;
