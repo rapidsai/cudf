@@ -143,7 +143,7 @@ const char* operation =
     struct RTrueDiv {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (static_cast<double>(y) / static_cast<double>(x));
+            return TrueDiv::operate<TypeOut, TypeRhs, TypeLhs>(y, x);
         }
     };
 
@@ -157,7 +157,7 @@ const char* operation =
     struct RFloorDiv {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return floor(static_cast<double>(y) / static_cast<double>(x));
+            return FloorDiv::operate<TypeOut, TypeRhs, TypeLhs>(y, x);
         }
     };
 
@@ -232,30 +232,9 @@ const char* operation =
     };
 
     struct RPyMod {
-        template <typename TypeOut,
-                  typename TypeLhs,
-                  typename TypeRhs,
-                  enable_if_t<(is_integral_v<TypeOut>)>* = nullptr>
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return ((y % x) + x) % x;
-        }
-
-        template <typename TypeOut,
-                  typename TypeLhs,
-                  typename TypeRhs,
-                  enable_if_t<(is_floating_point_v<TypeOut>)>* = nullptr>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
-            double x1 = static_cast<double>(x);
-            double y1 = static_cast<double>(y);
-            return fmod(fmod(y1, x1) + x1, x1);
-        }
-
-        template <typename TypeOut,
-                  typename TypeLhs,
-                  typename TypeRhs,
-                  enable_if_t<(is_duration_v<TypeLhs> && is_duration_v<TypeOut>)>* = nullptr>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return ((y % x) + x) % x;
+            return PyMod::operate<TypeOut, TypeRhs, TypeLhs>(y, x);
         }
     };
 
@@ -269,7 +248,7 @@ const char* operation =
     struct RPow {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return pow(static_cast<double>(y), static_cast<double>(x));
+            return Pow::operate<TypeOut, TypeRhs, TypeLhs>(y, x);
         }
     };
 
