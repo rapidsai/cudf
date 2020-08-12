@@ -97,7 +97,7 @@ cudf::size_type linearizer::visit(column_reference const& expr)
   return this->add_data_reference(source);
 }
 
-cudf::size_type linearizer::visit(operator_expression const& expr)
+cudf::size_type linearizer::visit(expression const& expr)
 {
   // Increment the node index
   auto const node_index = this->node_count++;
@@ -114,7 +114,7 @@ cudf::size_type linearizer::visit(operator_expression const& expr)
   // Validate types of operand data references match
   if (std::adjacent_find(operand_types.cbegin(), operand_types.cend(), std::not_equal_to<>()) !=
       operand_types.cend()) {
-    CUDF_FAIL("An AST operator expression was provided non-matching operand types.");
+    CUDF_FAIL("An AST expression was provided non-matching operand types.");
   }
   // Give back intermediate storage locations that are consumed by this operation
   std::for_each(
@@ -165,7 +165,7 @@ cudf::data_type linearizer::get_root_data_type() const
 }
 
 std::vector<cudf::size_type> linearizer::visit_operands(
-  std::vector<std::reference_wrapper<const expression>> operands)
+  std::vector<std::reference_wrapper<const node>> operands)
 {
   auto operand_data_reference_indices = std::vector<cudf::size_type>();
   for (auto const& operand : operands) {

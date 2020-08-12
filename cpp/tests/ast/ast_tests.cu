@@ -46,10 +46,9 @@ TEST_F(ASTTest, BasicAddition)
   auto c_1   = column_wrapper<int32_t>{10, 7, 20, 0};
   auto table = cudf::table_view{{c_0, c_1}};
 
-  auto col_ref_0 = cudf::ast::column_reference(0);
-  auto col_ref_1 = cudf::ast::column_reference(1);
-  auto expression =
-    cudf::ast::binary_expression(cudf::ast::ast_operator::ADD, col_ref_0, col_ref_1);
+  auto col_ref_0  = cudf::ast::column_reference(0);
+  auto col_ref_1  = cudf::ast::column_reference(1);
+  auto expression = cudf::ast::expression(cudf::ast::ast_operator::ADD, col_ref_0, col_ref_1);
 
   auto expected = column_wrapper<int32_t>{13, 27, 21, 50};
   auto result   = cudf::ast::compute_column(table, expression);
@@ -63,10 +62,9 @@ TEST_F(ASTTest, LessComparator)
   auto c_1   = column_wrapper<int32_t>{10, 7, 20, 0};
   auto table = cudf::table_view{{c_0, c_1}};
 
-  auto col_ref_0 = cudf::ast::column_reference(0);
-  auto col_ref_1 = cudf::ast::column_reference(1);
-  auto expression =
-    cudf::ast::binary_expression(cudf::ast::ast_operator::LESS, col_ref_0, col_ref_1);
+  auto col_ref_0  = cudf::ast::column_reference(0);
+  auto col_ref_1  = cudf::ast::column_reference(1);
+  auto expression = cudf::ast::expression(cudf::ast::ast_operator::LESS, col_ref_0, col_ref_1);
 
   auto expected = column_wrapper<bool>{true, false, true, false};
   auto result   = cudf::ast::compute_column(table, expression);
@@ -86,12 +84,12 @@ TEST_F(ASTTest, MultiLevelTreeArithmetic)
   auto col_ref_2 = cudf::ast::column_reference(2);
 
   auto expression_left_subtree =
-    cudf::ast::binary_expression(cudf::ast::ast_operator::ADD, col_ref_0, col_ref_1);
+    cudf::ast::expression(cudf::ast::ast_operator::ADD, col_ref_0, col_ref_1);
 
   auto expression_right_subtree =
-    cudf::ast::binary_expression(cudf::ast::ast_operator::SUB, col_ref_2, col_ref_0);
+    cudf::ast::expression(cudf::ast::ast_operator::SUB, col_ref_2, col_ref_0);
 
-  auto expression_tree = cudf::ast::binary_expression(
+  auto expression_tree = cudf::ast::expression(
     cudf::ast::ast_operator::ADD, expression_left_subtree, expression_right_subtree);
 
   auto result   = cudf::ast::compute_column(table, expression_tree);
@@ -112,10 +110,10 @@ TEST_F(ASTTest, ImbalancedTreeArithmetic)
   auto col_ref_2 = cudf::ast::column_reference(2);
 
   auto expression_right_subtree =
-    cudf::ast::binary_expression(cudf::ast::ast_operator::MUL, col_ref_0, col_ref_1);
+    cudf::ast::expression(cudf::ast::ast_operator::MUL, col_ref_0, col_ref_1);
 
   auto expression_tree =
-    cudf::ast::binary_expression(cudf::ast::ast_operator::SUB, col_ref_2, expression_right_subtree);
+    cudf::ast::expression(cudf::ast::ast_operator::SUB, col_ref_2, expression_right_subtree);
 
   auto result = cudf::ast::compute_column(table, expression_tree);
   auto expected =
@@ -136,12 +134,12 @@ TEST_F(ASTTest, MultiLevelTreeComparator)
   auto col_ref_2 = cudf::ast::column_reference(2);
 
   auto expression_left_subtree =
-    cudf::ast::binary_expression(cudf::ast::ast_operator::GREATER_EQUAL, col_ref_0, col_ref_1);
+    cudf::ast::expression(cudf::ast::ast_operator::GREATER_EQUAL, col_ref_0, col_ref_1);
 
   auto expression_right_subtree =
-    cudf::ast::binary_expression(cudf::ast::ast_operator::GREATER, col_ref_2, col_ref_0);
+    cudf::ast::expression(cudf::ast::ast_operator::GREATER, col_ref_2, col_ref_0);
 
-  auto expression_tree = cudf::ast::binary_expression(
+  auto expression_tree = cudf::ast::expression(
     cudf::ast::ast_operator::LOGICAL_AND, expression_left_subtree, expression_right_subtree);
 
   auto result   = cudf::ast::compute_column(table, expression_tree);
@@ -160,9 +158,9 @@ TEST_F(ASTTest, MultiTypeOperationFailure)
   auto col_ref_1 = cudf::ast::column_reference(1);
 
   auto expression_0_plus_1 =
-    cudf::ast::binary_expression(cudf::ast::ast_operator::ADD, col_ref_0, col_ref_1);
+    cudf::ast::expression(cudf::ast::ast_operator::ADD, col_ref_0, col_ref_1);
   auto expression_1_plus_0 =
-    cudf::ast::binary_expression(cudf::ast::ast_operator::ADD, col_ref_1, col_ref_0);
+    cudf::ast::expression(cudf::ast::ast_operator::ADD, col_ref_1, col_ref_0);
 
   // Operations on different types are not allowed
   EXPECT_THROW(cudf::ast::compute_column(table, expression_0_plus_1), cudf::logic_error);
@@ -179,8 +177,7 @@ TEST_F(ASTTest, LiteralComparison)
   auto literal_view  = cudf::get_scalar_device_view(literal_value);
   auto literal       = cudf::ast::literal(literal_view);
 
-  auto expression =
-    cudf::ast::binary_expression(cudf::ast::ast_operator::GREATER, col_ref_0, literal);
+  auto expression = cudf::ast::expression(cudf::ast::ast_operator::GREATER, col_ref_0, literal);
 
   auto result   = cudf::ast::compute_column(table, expression);
   auto expected = column_wrapper<bool>{false, false, false, true};
@@ -195,7 +192,7 @@ TEST_F(ASTTest, UnaryNot)
 
   auto col_ref_0 = cudf::ast::column_reference(0);
 
-  auto expression = cudf::ast::unary_expression(cudf::ast::ast_operator::NOT, col_ref_0);
+  auto expression = cudf::ast::expression(cudf::ast::ast_operator::NOT, col_ref_0);
 
   auto result   = cudf::ast::compute_column(table, expression);
   auto expected = column_wrapper<bool>{false, true, false, false};
@@ -211,19 +208,27 @@ TEST_F(ASTTest, UnaryTrigonometry)
   auto col_ref_0 = cudf::ast::column_reference(0);
 
   auto expected_sin   = column_wrapper<double>{0.0, std::sqrt(2) / 2, std::sqrt(3.0) / 2.0};
-  auto expression_sin = cudf::ast::unary_expression(cudf::ast::ast_operator::SIN, col_ref_0);
+  auto expression_sin = cudf::ast::expression(cudf::ast::ast_operator::SIN, col_ref_0);
   auto result_sin     = cudf::ast::compute_column(table, expression_sin);
   cudf::test::expect_columns_equivalent(expected_sin, result_sin->view(), true);
 
   auto expected_cos   = column_wrapper<double>{1.0, std::sqrt(2) / 2, 0.5};
-  auto expression_cos = cudf::ast::unary_expression(cudf::ast::ast_operator::COS, col_ref_0);
+  auto expression_cos = cudf::ast::expression(cudf::ast::ast_operator::COS, col_ref_0);
   auto result_cos     = cudf::ast::compute_column(table, expression_cos);
   cudf::test::expect_columns_equivalent(expected_cos, result_cos->view(), true);
 
   auto expected_tan   = column_wrapper<double>{0.0, 1.0, std::sqrt(3.0)};
-  auto expression_tan = cudf::ast::unary_expression(cudf::ast::ast_operator::TAN, col_ref_0);
+  auto expression_tan = cudf::ast::expression(cudf::ast::ast_operator::TAN, col_ref_0);
   auto result_tan     = cudf::ast::compute_column(table, expression_tan);
   cudf::test::expect_columns_equivalent(expected_tan, result_tan->view(), true);
+}
+
+TEST_F(ASTTest, ArityCheckFailure)
+{
+  auto col_ref_0 = cudf::ast::column_reference(0);
+  EXPECT_THROW(cudf::ast::expression(cudf::ast::ast_operator::ADD, col_ref_0), cudf::logic_error);
+  EXPECT_THROW(cudf::ast::expression(cudf::ast::ast_operator::ABS, col_ref_0, col_ref_0),
+               cudf::logic_error);
 }
 
 struct custom_functor {
