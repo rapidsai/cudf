@@ -57,12 +57,12 @@ test:
     - test -f $PREFIX/include/cudf/detail/aggregation/result_cache.hpp
     - test -f $PREFIX/include/cudf/detail/binaryop.hpp
     - test -f $PREFIX/include/cudf/detail/copy.hpp
-    - test -f $PREFIX/include/cudf/detail/dlpack.hpp
     - test -f $PREFIX/include/cudf/detail/fill.hpp
     - test -f $PREFIX/include/cudf/detail/gather.hpp
     - test -f $PREFIX/include/cudf/detail/groupby.hpp
     - test -f $PREFIX/include/cudf/detail/groupby/sort_helper.hpp
     - test -f $PREFIX/include/cudf/detail/hashing.hpp
+    - test -f $PREFIX/include/cudf/detail/interop.hpp
     - test -f $PREFIX/include/cudf/detail/null_mask.hpp
     - test -f $PREFIX/include/cudf/detail/nvtx/nvtx3.hpp
     - test -f $PREFIX/include/cudf/detail/nvtx/ranges.hpp
@@ -80,6 +80,7 @@ test:
     - test -f $PREFIX/include/cudf/detail/unary.hpp
     - test -f $PREFIX/include/cudf/detail/utilities/integer_utils.hpp
     - test -f $PREFIX/include/cudf/detail/utilities/int_fastdiv.h
+    - test -f $PREFIX/include/cudf/dictionary/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/dictionary/detail/encode.hpp
     - test -f $PREFIX/include/cudf/dictionary/detail/search.hpp
     - test -f $PREFIX/include/cudf/dictionary/detail/update_keys.hpp
@@ -88,11 +89,11 @@ test:
     - test -f $PREFIX/include/cudf/dictionary/encode.hpp
     - test -f $PREFIX/include/cudf/dictionary/search.hpp
     - test -f $PREFIX/include/cudf/dictionary/update_keys.hpp
-    - test -f $PREFIX/include/cudf/dlpack.hpp
     - test -f $PREFIX/include/cudf/filling.hpp
     - test -f $PREFIX/include/cudf/fixed_point/fixed_point.hpp
     - test -f $PREFIX/include/cudf/groupby.hpp
     - test -f $PREFIX/include/cudf/hashing.hpp
+    - test -f $PREFIX/include/cudf/interop.hpp
     - test -f $PREFIX/include/cudf/io/data_sink.hpp
     - test -f $PREFIX/include/cudf/io/datasource.hpp
     - test -f $PREFIX/include/cudf/io/functions.hpp
@@ -126,6 +127,7 @@ test:
     - test -f $PREFIX/include/cudf/strings/contains.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_booleans.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_datetime.hpp
+    - test -f $PREFIX/include/cudf/strings/convert/convert_durations.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_floats.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_integers.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_ipv4.hpp
