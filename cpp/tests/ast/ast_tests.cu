@@ -25,13 +25,13 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
-#include <limits>
-#include <simt/type_traits>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
+
+#include <limits>
 #include <type_traits>
 
 template <typename T>

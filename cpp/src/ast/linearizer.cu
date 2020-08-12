@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <algorithm>
 #include <cudf/ast/linearizer.cuh>
 #include <cudf/ast/operators.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -21,9 +20,11 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include "cudf/utilities/type_dispatcher.hpp"
+
+#include <algorithm>
 #include <functional>
 #include <iterator>
-#include "cudf/utilities/type_dispatcher.hpp"
 
 namespace cudf {
 
