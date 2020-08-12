@@ -72,7 +72,26 @@ struct row_evaluator {
    */
   template <typename Element>
   __device__ Element resolve_input(const detail::device_data_reference device_data_reference,
-                                   cudf::size_type row_index) const;
+                                   cudf::size_type row_index) const
+  {
+    auto const data_index = device_data_reference.data_index;
+    switch (device_data_reference.reference_type) {
+      case detail::device_data_reference_type::COLUMN: {
+        auto column = this->table.column(data_index);
+        return column.data<Element>()[row_index];
+      }
+      case detail::device_data_reference_type::LITERAL: {
+        return this->literals[data_index].value<Element>();
+      }
+      case detail::device_data_reference_type::INTERMEDIATE: {
+        return *reinterpret_cast<const Element*>(&this->thread_intermediate_storage[data_index]);
+      }
+      default: {
+        release_assert(false && "Invalid input device data reference type.");
+        return Element();
+      }
+    }
+  }
 
   /**
    * @brief Resolves a data reference into a pointer to an output.
@@ -84,7 +103,23 @@ struct row_evaluator {
    */
   template <typename Element>
   __device__ Element* resolve_output(const detail::device_data_reference device_data_reference,
-                                     cudf::size_type row_index) const;
+                                     cudf::size_type row_index) const
+  {
+    switch (device_data_reference.reference_type) {
+      case detail::device_data_reference_type::COLUMN: {
+        // TODO: Could refactor to support output tables (multiple output columns)
+        return &(this->output_column->element<Element>(row_index));
+      }
+      case detail::device_data_reference_type::INTERMEDIATE: {
+        return reinterpret_cast<Element*>(
+          &this->thread_intermediate_storage[device_data_reference.data_index]);
+      }
+      default: {
+        release_assert(false && "Invalid output device data reference type.");
+        return nullptr;
+      }
+    }
+  }
 
   /**
    * @brief Callable to perform a unary operation.
@@ -100,14 +135,23 @@ struct row_evaluator {
             std::enable_if_t<cudf::ast::is_valid_unary_op<OperatorFunctor, Input>>* = nullptr>
   __device__ void operator()(cudf::size_type row_index,
                              const detail::device_data_reference input,
-                             const detail::device_data_reference output) const;
+                             const detail::device_data_reference output) const
+  {
+    using Out              = simt::std::invoke_result_t<OperatorFunctor, Input>;
+    auto const typed_input = this->resolve_input<Input>(input, row_index);
+    auto typed_output      = this->resolve_output<Out>(output, row_index);
+    *typed_output          = OperatorFunctor{}(typed_input);
+  }
 
   template <typename OperatorFunctor,
             typename Input,
             std::enable_if_t<!cudf::ast::is_valid_unary_op<OperatorFunctor, Input>>* = nullptr>
   __device__ void operator()(cudf::size_type row_index,
                              const detail::device_data_reference input,
-                             const detail::device_data_reference output) const;
+                             const detail::device_data_reference output) const
+  {
+    release_assert(false && "Invalid unary dispatch operator for the provided input.");
+  }
 
   /**
    * @brief Callable to perform a binary operation.
@@ -127,7 +171,14 @@ struct row_evaluator {
   __device__ void operator()(cudf::size_type row_index,
                              const detail::device_data_reference lhs,
                              const detail::device_data_reference rhs,
-                             const detail::device_data_reference output) const;
+                             const detail::device_data_reference output) const
+  {
+    using Out            = simt::std::invoke_result_t<OperatorFunctor, LHS, RHS>;
+    auto const typed_lhs = this->resolve_input<LHS>(lhs, row_index);
+    auto const typed_rhs = this->resolve_input<RHS>(rhs, row_index);
+    auto typed_output    = this->resolve_output<Out>(output, row_index);
+    *typed_output        = OperatorFunctor{}(typed_lhs, typed_rhs);
+  }
 
   template <typename OperatorFunctor,
             typename LHS,
@@ -136,7 +187,10 @@ struct row_evaluator {
   __device__ void operator()(cudf::size_type row_index,
                              const detail::device_data_reference lhs,
                              const detail::device_data_reference rhs,
-                             const detail::device_data_reference output) const;
+                             const detail::device_data_reference output) const
+  {
+    release_assert(false && "Invalid binary dispatch operator for the provided input.");
+  }
 
  private:
   const table_device_view table;
@@ -162,7 +216,32 @@ __device__ void evaluate_row_expression(const detail::row_evaluator evaluator,
                                         const ast_operator* operators,
                                         const cudf::size_type* operator_source_indices,
                                         cudf::size_type num_operators,
-                                        cudf::size_type row_index);
+                                        cudf::size_type row_index)
+{
+  auto operator_source_index = cudf::size_type(0);
+  for (cudf::size_type operator_index(0); operator_index < num_operators; operator_index++) {
+    // Execute operator
+    auto const op    = operators[operator_index];
+    auto const arity = cudf::ast::ast_operator_arity(op);
+    if (arity == 1) {
+      // Unary operator
+      auto const input  = data_references[operator_source_indices[operator_source_index]];
+      auto const output = data_references[operator_source_indices[operator_source_index + 1]];
+
+      unary_operator_dispatcher(op, input.data_type, evaluator, row_index, input, output);
+    } else if (arity == 2) {
+      // Binary operator
+      auto const lhs    = data_references[operator_source_indices[operator_source_index]];
+      auto const rhs    = data_references[operator_source_indices[operator_source_index + 1]];
+      auto const output = data_references[operator_source_indices[operator_source_index + 2]];
+      binary_operator_dispatcher(
+        op, lhs.data_type, rhs.data_type, evaluator, row_index, lhs, rhs, output);
+    } else {
+      release_assert(false && "Invalid operator arity.");
+    }
+    operator_source_index += (arity + 1);
+  }
+}
 
 /**
  * @brief Kernel for evaluating an expression on a table to produce a new column.
