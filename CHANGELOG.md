@@ -283,6 +283,7 @@
 - PR #5915 Fix reference count on Java DeviceMemoryBuffer after contiguousSplit
 - PR #5942 Fix JIT cache multiprocess test failure
 
+
 # cuDF 0.14.0 (03 Jun 2020)
 
 ## New Features
