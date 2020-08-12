@@ -68,12 +68,13 @@ class benchmark : public ::benchmark::Fixture {
   virtual void SetUp(const ::benchmark::State& state)
   {
     auto mr = make_pool();
-    rmm::mr::set_default_resource(mr.get());  // set default resource to pool
+    rmm::mr::set_current_device_resource(mr.get());  // set default resource to pool
   }
 
   virtual void TearDown(const ::benchmark::State& state)
   {
-    rmm::mr::set_default_resource(nullptr);  // reset default resource to the initial resource
+    // reset default resource to the initial resource
+    rmm::mr::set_current_device_resource(nullptr);
   }
 
   // eliminate partial override warnings (see benchmark/benchmark.h)

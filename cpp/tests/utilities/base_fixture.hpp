@@ -307,6 +307,6 @@ inline auto parse_cudf_test_opts(int argc, char **argv)
     auto const cmd_opts = parse_cudf_test_opts(argc, argv);             \
     auto const rmm_mode = cmd_opts["rmm_mode"].as<std::string>();       \
     auto resource       = cudf::test::create_memory_resource(rmm_mode); \
-    rmm::mr::set_default_resource(resource.get());                      \
+    rmm::mr::set_current_device_resource(resource.get());               \
     return RUN_ALL_TESTS();                                             \
   }
