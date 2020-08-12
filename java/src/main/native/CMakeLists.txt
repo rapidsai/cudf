@@ -170,6 +170,18 @@ find_path(ARROW_INCLUDE "arrow"
 
 message(STATUS "ARROW: ARROW_INCLUDE set to ${ARROW_INCLUDE}")
 
+# Find static version of Arrow lib
+find_library(ARROW_LIBRARY libarrow.a
+  HINTS "$ENV{ARROW_ROOT}/lib"
+        "$ENV{CONDA_PREFIX}/lib"
+        "${CUDF_CPP_BUILD_DIR}/arrow/install/lib")
+
+if(NOT ARROW_LIBRARY)
+  message(FATAL_ERROR "Arrow static libs not found. Was libcudf built with ARROW_STATIC_LIB=ON?")
+else()
+  message(STATUS "ARROW: ARROW_LIBRARY set to ${ARROW_LIBRARY}")
+endif(NOT ARROW_LIBRARY)
+
 ###################################################################################################
 # - find JNI -------------------------------------------------------------------------------------
 find_package(JNI REQUIRED)
@@ -240,4 +252,4 @@ endif(PER_THREAD_DEFAULT_STREAM)
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudfjni cudf ${CUDART_LIBRARY} cuda nvrtc)
+target_link_libraries(cudfjni cudf ${ARROW_LIBRARY} ${CUDART_LIBRARY} cuda nvrtc)
