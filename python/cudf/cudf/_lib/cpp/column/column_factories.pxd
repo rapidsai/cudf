@@ -10,4 +10,6 @@ from cudf._lib.cpp.column.column cimport column
 from libcpp.memory cimport unique_ptr
 
 cdef extern from "cudf/column/column_factories.hpp" namespace "cudf" nogil:
-    cdef unique_ptr[column] make_numeric_column(data_type type, size_type size, mask_state state) except +
+    cdef unique_ptr[column] make_numeric_column(data_type type,
+                                                size_type size,
+                                                mask_state state) except +

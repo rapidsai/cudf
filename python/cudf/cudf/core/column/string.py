@@ -5,7 +5,6 @@ import warnings
 import cupy
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 
 import cudf
 from cudf import _lib as libcudf

@@ -210,7 +210,6 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::list_view>(
       ((input.num_children() == 2) and (input.child(0).size() - 1 != input.size()))) {
     tmp_column = std::make_unique<cudf::column>(input);
   }
-  
 
   column_view input_view = (tmp_column != nullptr) ? tmp_column->view() : input;
   auto child_arrays      = fetch_child_array(input_view, ar_mr, stream);

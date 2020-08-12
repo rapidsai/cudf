@@ -483,7 +483,7 @@ def test_datetime_has_null_test_pyarrow():
     # np.iinfo("int64").min is NAT in libcudf
     data = Series(
         pa.array(
-            [0, np.iinfo("int64").min+1, np.iinfo("int64").max, None],
+            [0, np.iinfo("int64").min + 1, np.iinfo("int64").max, None],
             type=pa.timestamp("ns"),
         )
     )

@@ -471,25 +471,6 @@ class Index(Frame, Serializable):
             self._values.to_pandas(nullable_pd_dtype=False), name=self.name
         )
 
-    def to_arrow(self):
-        """
-        Convert Index to a PyArrow Array.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> idx = cudf.Index([-3, 10, 15, 20])
-        >>> idx.to_arrow()
-        <pyarrow.lib.Int64Array object at 0x7fcaa6f53440>
-        [
-        -3,
-        10,
-        15,
-        20
-        ]
-        """
-        return self._values.to_arrow()
-
     def tolist(self):
 
         raise TypeError(

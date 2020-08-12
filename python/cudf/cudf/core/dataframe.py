@@ -15,7 +15,6 @@ from types import GeneratorType
 import cupy
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 from numba import cuda
 from pandas._config import get_option
 from pandas.api.types import is_dict_like

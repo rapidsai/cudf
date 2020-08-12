@@ -16,7 +16,9 @@ from libcpp.pair cimport pair
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr, make_unique
 from libcpp.vector cimport vector
-from cudf._lib.cpp.strings.convert.convert_integers cimport from_integers as cpp_from_integers
+from cudf._lib.cpp.strings.convert.convert_integers cimport (
+    from_integers as cpp_from_integers
+)
 
 from rmm._lib.device_buffer cimport DeviceBuffer
 
@@ -439,7 +441,7 @@ cdef class Column:
             mask_state = libcudf_types.mask_state.ALL_NULL
             with nogil:
                 c_col = move(make_numeric_column(c_dtype, length, mask_state))
-        
+
         size = c_col.get()[0].size()
         dtype = dtype_from_column_view(c_col.get()[0].view())
         has_nulls = c_col.get()[0].has_nulls()

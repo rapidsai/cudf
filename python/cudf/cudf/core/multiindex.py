@@ -774,11 +774,6 @@ class MultiIndex(Index):
         result = cls.from_pandas(pdi)
         return result
 
-    def to_arrow(self):
-        raise NotImplementedError(
-            "MultiIndex.to_arrow() is not yet implemented"
-        )
-
     @property
     def values_host(self):
         """

@@ -3,14 +3,13 @@ import datetime as dt
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 
 from cudf import _lib as libcudf
 from cudf._lib.nvtx import annotate
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.utils import utils
-from cudf.utils.dtypes import is_scalar, np_to_pa_dtype
+from cudf.utils.dtypes import is_scalar
 
 # nanoseconds per time_unit
 _numpy_to_pandas_conversion = {
