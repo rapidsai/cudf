@@ -18,7 +18,6 @@ from cudf._cuda.gpu cimport (
 )
 from enum import IntEnum
 from cudf._cuda.gpu cimport underlying_type_attribute as c_attr
-from cudf._cuda.gpu cimport underlying_type_error
 
 
 class CUDARuntimeError(RuntimeError):

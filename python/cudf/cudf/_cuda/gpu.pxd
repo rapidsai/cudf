@@ -397,4 +397,3 @@ cdef extern from "cuda_runtime_api.h" nogil:
     const char* cudaGetErrorString(cudaError_t error)
 
 ctypedef int underlying_type_attribute
-ctypedef int underlying_type_error
