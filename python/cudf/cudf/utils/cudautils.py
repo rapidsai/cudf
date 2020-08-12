@@ -9,8 +9,6 @@ import cudf
 from cudf.utils.utils import (
     check_equals_float,
     check_equals_int,
-    mask_bitsize,
-    mask_get,
     rint,
 )
 
@@ -47,27 +45,6 @@ def full(size, value, dtype):
 
     out = cupy.full(size, value, cupy_dtype)
     return cuda.as_cuda_array(out).view(dtype)
-
-
-@cuda.jit
-def gpu_expand_mask_bits(bits, out):
-    """Expand each bits in bitmask *bits* into an element in out.
-    This is a flexible kernel that can be launch with any number of blocks
-    and threads.
-    """
-    for i in range(cuda.grid(1), out.size, cuda.gridsize(1)):
-        if i < bits.size * mask_bitsize:
-            out[i] = mask_get(bits, i)
-
-
-def expand_mask_bits(size, bits):
-    """Expand bit-mask into byte-mask
-    """
-    expanded_mask = full(size, 0, dtype=np.bool_)
-    numtasks = min(1024, expanded_mask.size)
-    if numtasks > 0:
-        gpu_expand_mask_bits.forall(numtasks)(bits, expanded_mask)
-    return expanded_mask
 
 
 #

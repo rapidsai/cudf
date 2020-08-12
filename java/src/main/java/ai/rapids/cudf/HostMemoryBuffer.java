@@ -531,6 +531,16 @@ public class HostMemoryBuffer extends MemoryBuffer {
   }
 
   /**
+   * Copy data from this buffer to the given address.
+   * @param toAddress where the data should go
+   * @param len how much data to copy
+   */
+  final void copyToMemory(long toAddress, long len) {
+    addressOutOfBoundsCheck(address, len, "copy to memory");
+    UnsafeMemoryAccessor.copyMemory(null, address, null, toAddress, len);
+  }
+
+  /**
    * Synchronously copy from a DeviceMemoryBuffer to a HostMemoryBuffer
    * @param deviceMemoryBuffer buffer to copy data from
    */
