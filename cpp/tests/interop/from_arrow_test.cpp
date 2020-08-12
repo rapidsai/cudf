@@ -53,6 +53,12 @@ std::unique_ptr<cudf::table> get_cudf_table()
 struct FromArrowTest : public cudf::test::BaseFixture {
 };
 
+template <typename T>
+struct FromArrowTestDurationsTest : public cudf::test::BaseFixture {
+};
+
+TYPED_TEST_CASE(FromArrowTestDurationsTest, cudf::test::DurationTypes);
+
 TEST_F(FromArrowTest, EmptyTable)
 {
   auto tables = get_tables(0);
@@ -89,17 +95,26 @@ TEST_F(FromArrowTest, DateTimeTable)
   cudf::test::expect_tables_equal(expected_table_view, got_cudf_table->view());
 }
 
-TEST_F(FromArrowTest, DurationTable)
+TYPED_TEST(FromArrowTestDurationsTest, DurationTable)
 {
-  using ms  = cudf::duration_ms;
-  auto data = {ms{1}, ms{2}, ms{3}, ms{4}, ms{5}, ms{6}};
-  auto col  = cudf::test::fixed_width_column_wrapper<cudf::duration_ms>(data);
+  using T = TypeParam;
 
-  cudf::table_view expected_table_view({col});
+  auto data = {T{1}, T{2}, T{3}, T{4}, T{5}, T{6}};
+  auto col  = cudf::test::fixed_width_column_wrapper<T>(data);
 
   std::shared_ptr<arrow::Array> arr;
-  arrow::DurationBuilder duration_builder(duration(arrow::TimeUnit::type::MILLI),
-                                          arrow::default_memory_pool());
+  cudf::table_view expected_table_view({col});
+  arrow::TimeUnit::type arrow_unit;
+
+  switch (cudf::type_to_id<TypeParam>()) {
+    case cudf::type_id::DURATION_SECONDS: arrow_unit = arrow::TimeUnit::type::SECOND; break;
+    case cudf::type_id::DURATION_MILLISECONDS: arrow_unit = arrow::TimeUnit::type::MILLI; break;
+    case cudf::type_id::DURATION_MICROSECONDS: arrow_unit = arrow::TimeUnit::type::MICRO; break;
+    case cudf::type_id::DURATION_NANOSECONDS: arrow_unit = arrow::TimeUnit::type::NANO; break;
+    case cudf::type_id::DURATION_DAYS: return;
+    default: CUDF_FAIL("Unsupported duration unit in arrow");
+  }
+  arrow::DurationBuilder duration_builder(duration(arrow_unit), arrow::default_memory_pool());
   duration_builder.AppendValues(std::vector<int64_t>{1, 2, 3, 4, 5, 6});
   CUDF_EXPECTS(duration_builder.Finish(&arr).ok(), "Failed to build array");
 
