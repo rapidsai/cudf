@@ -2119,11 +2119,11 @@ public class ColumnVectorTest extends CudfTestBase {
       try (ColumnVector v = ColumnVector.fromStrings("Héllo there", "thésé", "null", "", "ARé some", "test strings");
            ColumnVector expected = ColumnVector.fromLists(
                    new HostColumnVector.ColumnBuilder.ListType(true, 6,
-                           new HostColumnVector.ColumnBuilder.BasicType(true, 8, DType.STRING)),
+                           new HostColumnVector.ColumnBuilder.BasicType(true, 9, DType.STRING)),
                    Arrays.asList("Héllo", "there"),
                    Arrays.asList("thésé"),
                    Arrays.asList("null"),
-                   Arrays.asList(),
+                   Arrays.asList(""),
                    Arrays.asList("ARé", "some"),
                    Arrays.asList("test", "strings"));
            Scalar pattern = Scalar.fromString(" ");
