@@ -322,7 +322,7 @@ def getDeviceCount():
     cdef cudaError_t status = cudaGetDeviceCount(&count)
 
     if status != 0:
-        notify_caller_errors = set([
+        notify_caller_errors = {
             cudaErrorInitializationError,
             cudaErrorInsufficientDriver,
             cudaErrorInvalidDeviceFunction,
@@ -341,7 +341,7 @@ def getDeviceCount():
             cudaErrorTimeout,
             cudaErrorUnknown,
             cudaErrorApiFailureBase
-        ])
+        }
         if status in notify_caller_errors:
             raise CUDAError(status)
         else:
