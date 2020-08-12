@@ -242,7 +242,7 @@ struct column_comparator_impl<list_view, check_exact_equality> {
 
     // TODO : determine how equals/equivalency should work for columns with divergent underlying
     // data, but equivalent null masks. Example:
-    // 
+    //
     // List<int32_t>:
     // Length : 3
     // Offsets : 0, 3, 5, 5
@@ -256,11 +256,11 @@ struct column_comparator_impl<list_view, check_exact_equality> {
     // Nulls: 011
     // Children :
     //   1, 2, 3, 4, 5, 7, 8
-    // 
+    //
     // These two columns are seemingly equivalent, since their top level rows are the same, with
     // just the last element being null. However, pyArrow will say these are -not- equal and
     // does not appear to have an equivalent() check.  so the question is : should we be handling
-    // this case when someone calls expect_columns_equivalent()?  
+    // this case when someone calls expect_columns_equivalent()?
 
     // compare offsets, taking slicing into account
 
@@ -269,38 +269,39 @@ struct column_comparator_impl<list_view, check_exact_equality> {
     auto lhs_offsets    = thrust::make_transform_iterator(
       lhs_l.offsets().begin<size_type>() + lhs_l.offset(),
       [lhs_shift] __device__(size_type offset) { return offset - lhs_shift; });
-    auto lhs_valids = thrust::make_transform_iterator(thrust::make_counting_iterator(0), [mask = lhs_l.null_mask(), offset = lhs_l.offset()] __device__(size_type index){
-      return mask == nullptr ? true : cudf::bit_is_set(mask, index + offset);
-    });
+    auto lhs_valids = thrust::make_transform_iterator(
+      thrust::make_counting_iterator(0),
+      [mask = lhs_l.null_mask(), offset = lhs_l.offset()] __device__(size_type index) {
+        return mask == nullptr ? true : cudf::bit_is_set(mask, index + offset);
+      });
 
     // right side
     size_type rhs_shift = cudf::detail::get_value<size_type>(rhs_l.offsets(), rhs_l.offset(), 0);
     auto rhs_offsets    = thrust::make_transform_iterator(
       rhs_l.offsets().begin<size_type>() + rhs_l.offset(),
       [rhs_shift] __device__(size_type offset) { return offset - rhs_shift; });
-    auto rhs_valids = thrust::make_transform_iterator(thrust::make_counting_iterator(0), [mask = rhs_l.null_mask(), offset = rhs_l.offset()] __device__(size_type index){
-      return mask == nullptr ? true : cudf::bit_is_set(mask, index + offset);
-    });
+    auto rhs_valids = thrust::make_transform_iterator(
+      thrust::make_counting_iterator(0),
+      [mask = rhs_l.null_mask(), offset = rhs_l.offset()] __device__(size_type index) {
+        return mask == nullptr ? true : cudf::bit_is_set(mask, index + offset);
+      });
 
-    auto diff_iter =
-      thrust::copy_if(thrust::device,
-                      thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(lhs_l.size() + 1),
-                      differences.begin(),
-                      [lhs_offsets, rhs_offsets, lhs_valids, rhs_valids, num_rows = lhs_l.size()] __device__(size_type index) {                        
-                        // last offset has no validity associated with it
-                        if(index < num_rows-1){
-                          if(lhs_valids[index] != rhs_valids[index]){
-                            return true;
-                          }
-                          // if validity matches -and- is false, we can ignore the actual values. this
-                          // is technically not checking "equal()", but it's how the non-list code path handles it
-                          if(!lhs_valids[index]){
-                            return false;
-                          }
-                        }
-                        return lhs_offsets[index] == rhs_offsets[index] ? false : true;
-                      });
+    auto diff_iter = thrust::copy_if(
+      thrust::device,
+      thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(lhs_l.size() + 1),
+      differences.begin(),
+      [lhs_offsets, rhs_offsets, lhs_valids, rhs_valids, num_rows = lhs_l.size()] __device__(
+        size_type index) {
+        // last offset has no validity associated with it
+        if (index < num_rows - 1) {
+          if (lhs_valids[index] != rhs_valids[index]) { return true; }
+          // if validity matches -and- is false, we can ignore the actual values. this
+          // is technically not checking "equal()", but it's how the non-list code path handles it
+          if (!lhs_valids[index]) { return false; }
+        }
+        return lhs_offsets[index] == rhs_offsets[index] ? false : true;
+      });
 
     // shrink back down
     differences.resize(thrust::distance(differences.begin(), diff_iter));
@@ -627,8 +628,8 @@ struct column_view_printer {
     lists_column_view lcv(col);
 
     // propage slicing to the child if necessary
-    column_view child = lcv.get_sliced_child(0);
-    bool is_sliced = lcv.offset() > 0 || child.offset() > 0;
+    column_view child    = lcv.get_sliced_child(0);
+    bool const is_sliced = lcv.offset() > 0 || child.offset() > 0;
 
     std::string tmp =
       get_nested_type_str(col) + (is_sliced ? "(sliced)" : "") + ":\n" + indent +
@@ -757,5 +758,3 @@ bool validate_host_masks(std::vector<bitmask_type> const& expected_mask,
 
 }  // namespace test
 }  // namespace cudf
-
-

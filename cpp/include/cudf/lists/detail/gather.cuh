@@ -96,7 +96,7 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
     thrust::plus<int32_t>());
 
   // handle sliced columns
-  size_type shift =
+  size_type const shift =
     source_column.offset() > 0
       ? cudf::detail::get_value<size_type>(source_column.offsets(), source_column.offset(), stream)
       : 0;
