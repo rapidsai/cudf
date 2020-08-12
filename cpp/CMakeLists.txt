@@ -15,6 +15,12 @@
 #=============================================================================
 cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
 
+include("cmake/HunterGate.cmake")
+HunterGate(
+    URL "https://github.com/cpp-pm/hunter/archive/v0.23.263.tar.gz"
+    SHA1 "9b96c376bf3526163e81b7adb8db5a0ea8c7e1bf"
+)
+
 project(CUDA_DATAFRAME VERSION 0.15.0 LANGUAGES C CXX CUDA)
 
 if(NOT CMAKE_CUDA_COMPILER)
@@ -183,6 +189,11 @@ elseif(DEFINED ENV{CONDA_PREFIX})
 endif("$ENV{CONDA_BUILD}" STREQUAL "1")
 
 ###################################################################################################
+# - find CIDAToolkit ------------------------------------------------------------------------------------
+
+find_package(CUDAToolkit)
+
+###################################################################################################
 # - find arrow ------------------------------------------------------------------------------------
 
 option(ARROW_STATIC_LIB "Build and statically link with Arrow libraries" OFF)
@@ -236,7 +247,8 @@ file(INSTALL ${LIBCXX_INCLUDE_DIR}     DESTINATION ${CMAKE_BINARY_DIR}/include/l
 ###################################################################################################
 # - find zlib -------------------------------------------------------------------------------------
 
-find_package(ZLIB REQUIRED)
+hunter_add_package(ZLIB)
+find_package(ZLIB CONFIG REQUIRED)
 
 message(STATUS "ZLIB: ZLIB_LIBRARIES set to ${ZLIB_LIBRARIES}")
 message(STATUS "ZLIB: ZLIB_INCLUDE_DIRS set to ${ZLIB_INCLUDE_DIRS}")
@@ -244,7 +256,8 @@ message(STATUS "ZLIB: ZLIB_INCLUDE_DIRS set to ${ZLIB_INCLUDE_DIRS}")
 if(ZLIB_FOUND)
     message(STATUS "ZLib found in ${ZLIB_INCLUDE_DIRS}")
 else()
-    message(FATAL_ERROR "ZLib not found, please check your settings.")
+    message(FATAL_ERROR "ZLib not found. Building from source.")
+    
 endif(ZLIB_FOUND)
 
 ###################################################################################################
@@ -253,10 +266,9 @@ endif(ZLIB_FOUND)
 # Don't look for a CMake configuration file
 set(Boost_NO_BOOST_CMAKE ON)
 
-find_package(
-    Boost REQUIRED MODULE
-    COMPONENTS filesystem
-)
+
+hunter_add_package(Boost COMPONENTS system filesystem)
+find_package(Boost CONFIG REQUIRED system filesystem)
 
 message(STATUS "BOOST: Boost_LIBRARIES set to ${Boost_LIBRARIES}")
 message(STATUS "BOOST: Boost_INCLUDE_DIRS set to ${Boost_INCLUDE_DIRS}")
@@ -267,7 +279,8 @@ if(Boost_FOUND)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBOOST_NO_CXX14_CONSTEXPR")
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DBOOST_NO_CXX14_CONSTEXPR")
 else()
-    message(FATAL_ERROR "Boost not found, please check your settings.")
+    message(FATAL_ERROR "Boost not found, building from source.")
+    
 endif(Boost_FOUND)
 
 ###################################################################################################
@@ -321,15 +334,18 @@ endif(PER_THREAD_DEFAULT_STREAM)
 
 if(BUILD_TESTS)
     include(CTest)
-    include(ConfigureGoogleTest)
+    hunter_add_package(GTest)
+    find_package(GTest CONFIG REQUIRED)
 
-    if(GTEST_FOUND)
+    if(GTest_FOUND)
         message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
+        set(GTEST_INCLUDE_DIR "${GTEST_ROOT}/include")
         include_directories(${GTEST_INCLUDE_DIR})
         add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
+        
     else()
         message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
-    endif(GTEST_FOUND)
+    endif(GTest_FOUND)
 endif(BUILD_TESTS)
 
 message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
@@ -339,19 +355,21 @@ message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
 
 if(BUILD_BENCHMARKS)
 
-  include(ConfigureGoogleBenchmark)
+  hunter_add_package(benchmark)
 
-  if(GBENCH_FOUND)
-    message(STATUS "Google C++ Benchmarking Framework (Google Benchmark) found in ${GBENCH_ROOT}")
+  find_package(benchmark CONFIG REQUIRED)
+
+  if(benchmark_FOUND)
+    message(STATUS "Google C++ Benchmarking Framework (Google Benchmark) found in ${benchmark_ROOT}")
     include_directories(${GBENCH_INCLUDE_DIR})
     add_subdirectory(${CMAKE_SOURCE_DIR}/benchmarks)
   else()
     message(AUTHOR_WARNING "Google C++ Benchmarking Framework (Google Benchmark) not found: automated tests are disabled.")
-  endif(GBENCH_FOUND)
+  endif(benchmark_FOUND)
 
 endif(BUILD_BENCHMARKS)
 
-message(STATUS "BENCHMARK_LIST set to: ${BENCHMARK_LIST}")
+message(STATUS "BENCHMARK_LIST set to: ${benchmark_LIST}")
 
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
@@ -360,6 +378,7 @@ include_directories("${CUB_INCLUDE_DIR}"
                     "${THRUST_INCLUDE_DIR}"
                     "${JITIFY_INCLUDE_DIR}"
                     "${LIBCUDACXX_INCLUDE_DIR}")
+
 
 if(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
 	include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
@@ -370,8 +389,7 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${ARROW_INCLUDE_DIR}"
-                    "${ZLIB_INCLUDE_DIRS}"
-                    "${Boost_INCLUDE_DIRS}"
+                    "${HUNTER_ROOT}/include"
                     "${RMM_INCLUDE}"
                     "${DLPACK_INCLUDE}")
 
@@ -764,7 +782,7 @@ endif(HT_DEFAULT_ALLOCATOR)
 # - link libraries --------------------------------------------------------------------------------
 
 # link targets for cuDF
-target_link_libraries(cudf rmm arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+target_link_libraries(cudf rmm arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES} GTest::gtest_main GTest::gmock benchmark)
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
