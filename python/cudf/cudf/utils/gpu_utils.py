@@ -14,8 +14,8 @@ def validate_setup(check_dask=True):
 
     from cudf._cuda.gpu import (
         CudaDeviceAttr,
-        CudaError,
         CUDARuntimeError,
+        cudaError,
         deviceGetName,
         driverGetVersion,
         getDeviceAttribute,
@@ -24,24 +24,24 @@ def validate_setup(check_dask=True):
     )
 
     notify_caller_errors = {
-        CudaError.cudaErrorInitializationError,
-        CudaError.cudaErrorInsufficientDriver,
-        CudaError.cudaErrorInvalidDeviceFunction,
-        CudaError.cudaErrorNoDevice,
-        CudaError.cudaErrorInvalidDevice,
-        CudaError.cudaErrorStartupFailure,
-        CudaError.cudaErrorInvalidKernelImage,
-        CudaError.cudaErrorDeviceUninitialized,
-        CudaError.cudaErrorAlreadyAcquired,
-        CudaError.cudaErrorOperatingSystem,
-        CudaError.cudaErrorNotPermitted,
-        CudaError.cudaErrorNotSupported,
-        CudaError.cudaErrorSystemNotReady,
-        CudaError.cudaErrorSystemDriverMismatch,
-        CudaError.cudaErrorCompatNotSupportedOnDevice,
-        CudaError.cudaErrorTimeout,
-        CudaError.cudaErrorUnknown,
-        CudaError.cudaErrorApiFailureBase,
+        cudaError.cudaErrorInitializationError,
+        cudaError.cudaErrorInsufficientDriver,
+        cudaError.cudaErrorInvalidDeviceFunction,
+        cudaError.cudaErrorNoDevice,
+        cudaError.cudaErrorInvalidDevice,
+        cudaError.cudaErrorStartupFailure,
+        cudaError.cudaErrorInvalidKernelImage,
+        cudaError.cudaErrorDeviceUninitialized,
+        cudaError.cudaErrorAlreadyAcquired,
+        cudaError.cudaErrorOperatingSystem,
+        cudaError.cudaErrorNotPermitted,
+        cudaError.cudaErrorNotSupported,
+        cudaError.cudaErrorSystemNotReady,
+        cudaError.cudaErrorSystemDriverMismatch,
+        cudaError.cudaErrorCompatNotSupportedOnDevice,
+        cudaError.cudaErrorTimeout,
+        cudaError.cudaErrorUnknown,
+        cudaError.cudaErrorApiFailureBase,
     }
 
     try:

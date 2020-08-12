@@ -103,7 +103,7 @@ cdef extern from "cuda.h" nogil:
         cudaDevAttrPageableMemoryAccessUsesHostPageTables = 100
         cudaDevAttrDirectManagedMemAccessFromHost = 101
 
-    ctypedef enum cudaError:
+    cpdef enum cudaError:
         cudaSuccess = 0
         cudaErrorInvalidValue = 1
         cudaErrorMemoryAllocation = 2
