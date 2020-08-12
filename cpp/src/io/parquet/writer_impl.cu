@@ -458,7 +458,7 @@ class parquet_column_view {
     uint16_t num_def_level = 0;
     auto curr_col          = cudf_col();
     while (curr_col.type().id() == type_id::LIST) {
-      num_def_level += curr_col.nullable();
+      num_def_level += curr_col.nullable() + 1;
       lists_column_view lcw(curr_col);
       curr_col = lcw.child();
     }
@@ -782,53 +782,33 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
     for (auto i = 0; i < num_columns; i++) {
       auto &col = parquet_columns[i];
       if (col.is_list()) {
-        // size_type nesting_depth = col.nesting_levels();
-        // // Each level of nesting requires two levels of Schema. The leaf level needs one schema
-        // // element
-        // std::vector<SchemaElement> list_schema(nesting_depth * 2 + 1);
-        // column_view cudf_col = col.cudf_col();
-        // for (size_type j = 0; j < nesting_depth; j++) {
-        //   list_schema[2 * j].repetition_type = (cudf_col.nullable()) ? OPTIONAL : REQUIRED;
-        //   list_schema[2 * j].num_children    = 1;
-        //   list_schema[2 * j].name            = "list";
+        size_type nesting_depth = col.nesting_levels();
+        // Each level of nesting requires two levels of Schema. The leaf level needs one schema
+        // element
+        std::vector<SchemaElement> list_schema(nesting_depth * 2 + 1);
+        column_view cudf_col = col.cudf_col();
+        for (size_type j = 0; j < nesting_depth; j++) {
+          list_schema[2 * j].name            = (j == 0) ? col.name() : "element";
+          list_schema[2 * j].repetition_type = (cudf_col.nullable()) ? OPTIONAL : REQUIRED;
+          list_schema[2 * j].converted_type  = ConvertedType::LIST;
+          list_schema[2 * j].num_children    = 1;
 
-        //   list_schema[2 * j + 1].repetition_type = REPEATED;
-        //   list_schema[2 * j + 1].converted_type  = ConvertedType::LIST;
-        //   list_schema[2 * j + 1].num_children    = 1;
-        //   list_schema[2 * j + 1].name            = "element";
+          list_schema[2 * j + 1].name            = "list";
+          list_schema[2 * j + 1].repetition_type = REPEATED;
+          list_schema[2 * j + 1].num_children    = 1;
 
-        //   // Move on to next child
-        //   lists_column_view lcw(cudf_col);
-        //   cudf_col = lcw.child();
-        // }
-        // list_schema[nesting_depth * 2].type           = col.physical_type();
-        // list_schema[nesting_depth * 2].converted_type = col.converted_type();
-        // list_schema[nesting_depth * 2].repetition_type =
-        //   col.leaf_col().nullable() ? OPTIONAL : REQUIRED;
-        // list_schema[nesting_depth * 2].num_children = 0;
+          // Move on to next child
+          lists_column_view lcw(cudf_col);
+          cudf_col = lcw.child();
+        }
+        list_schema[nesting_depth * 2].name = "element";
+        list_schema[nesting_depth * 2].repetition_type =
+          col.leaf_col().nullable() ? OPTIONAL : REQUIRED;
+        list_schema[nesting_depth * 2].type           = col.physical_type();
+        list_schema[nesting_depth * 2].converted_type = col.converted_type();
+        list_schema[nesting_depth * 2].num_children   = 0;
 
-        // state.md.schema.insert(state.md.schema.end(), list_schema.begin(), list_schema.end());
-        SchemaElement col_schema{};
-        col_schema.name            = "mylist";
-        col_schema.repetition_type = OPTIONAL;
-        col_schema.converted_type  = ConvertedType::LIST;
-        col_schema.num_children    = 1;
-        state.md.schema.push_back(col_schema);
-
-        col_schema                 = SchemaElement{};
-        col_schema.name            = "list";
-        col_schema.repetition_type = parquet::REPEATED;
-        col_schema.num_children    = 1;
-        state.md.schema.push_back(col_schema);
-
-        col_schema                 = SchemaElement{};
-        col_schema.name            = "element";
-        col_schema.repetition_type = parquet::OPTIONAL;
-        col_schema.converted_type  = ConvertedType::INT_32;
-        col_schema.type            = Type::INT32;
-        col_schema.num_children    = 0;
-        state.md.schema.push_back(col_schema);
-
+        state.md.schema.insert(state.md.schema.end(), list_schema.begin(), list_schema.end());
       } else {
         SchemaElement col_schema{};
         // Column metadata

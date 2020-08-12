@@ -187,6 +187,7 @@ struct EncPage {
   uint32_t num_rows;         //!< Rows in page
   // TODO (dm): rename to nnz
   uint32_t num_values;  //!< Values in page. Different from num_rows in case of list
+  uint32_t num_level_vals;
 };
 
 /// Size of hash used for building dictionaries

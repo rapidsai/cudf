@@ -190,7 +190,6 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
     } else {
       len = 0;
     }
-    if (is_valid) printf("t %d, len %d\n", t, len);
 
     nz_pos =
       s->frag.non_nulls + __popc(valid_warp & (0x7fffffffu >> (0x1fu - ((uint32_t)t & 0x1f))));
@@ -953,7 +952,11 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
       size_type page_first_val_idx = s->col.level_offsets[s->page.start_row];
       size_type page_last_val_idx  = s->col.level_offsets[s->page.start_row + s->page.num_rows];
       size_type page_nvals         = page_last_val_idx - page_first_val_idx;
-      size_type col_last_val_idx   = s->col.level_offsets[s->col.num_rows];
+
+      // TODO (dm): This is not the right place for this. Put it in initPages.
+      if (!t) { s->page.num_level_vals = page_nvals; }
+
+      size_type col_last_val_idx = s->col.level_offsets[s->col.num_rows];
       while (s->rle_numvals < page_nvals) {
         uint32_t rle_numvals = s->rle_numvals;
         uint32_t nvals       = min(page_nvals - rle_numvals, 128);
@@ -1428,10 +1431,10 @@ __global__ void __launch_bounds__(128) gpuEncodePageHeaders(EncPage *pages,
     if (page_type == DATA_PAGE) {
       // DataPageHeader
       CPW_FLD_STRUCT_BEGIN(5)
-      CPW_FLD_INT32(1, 10)        // NOTE: num_values != num_rows for list types
-      CPW_FLD_INT32(2, encoding)  // encoding
-      CPW_FLD_INT32(3, RLE)       // definition_level_encoding
-      CPW_FLD_INT32(4, RLE)       // repetition_level_encoding
+      CPW_FLD_INT32(1, page_g.num_level_vals)  // NOTE: num_values != num_rows for list types
+      CPW_FLD_INT32(2, encoding)               // encoding
+      CPW_FLD_INT32(3, RLE)                    // definition_level_encoding
+      CPW_FLD_INT32(4, RLE)                    // repetition_level_encoding
       // Optionally encode page-level statistics
       if (page_stats) {
         CPW_FLD_STRUCT_BEGIN(5)

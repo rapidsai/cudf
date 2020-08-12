@@ -463,8 +463,19 @@ TEST_F(ParquetWriterTest, ListColumn)
   auto valids2 = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
 
   using lcw = cudf::test::lists_column_wrapper<int32_t>;
-  cudf::test::lists_column_wrapper<int32_t> col1{{{1, 2, 3}, {}, {4, 5}, {}, {{0, 6, 0}, valids}},
-                                                 valids2};
+  // cudf::test::lists_column_wrapper<int32_t> col1{{{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}},
+  // valids2},
+  //                                                {{7, 8}}};
+
+  // TODO (dm): Following case still fails with
+  // "Invalid: List child array invalid: Invalid: Length spanned by list offsets (5) larger than
+  // values array (length 4)"
+
+  // cudf::test::lists_column_wrapper<int32_t> col1{
+  //   {{{1, 2, 3}, {}, {4, 5}, {}, {{0, 6, 0}, valids}}, valids2}, {{7, 8}}};
+  cudf::test::lists_column_wrapper<int32_t> col1{
+    {{{{1, 2, 3}, {}, {4, 5}, {}, {{0, 6, 0}, valids}}, valids2}, {{7, 8}}, lcw{}, lcw{lcw{}}},
+    valids2};
 
   cudf::test::print(col1);
 
