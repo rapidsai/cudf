@@ -44,7 +44,7 @@ static void BM_sort(benchmark::State& state)
   const cudf::size_type n_cols{(cudf::size_type)state.range(1)};
   auto type_size = cudf::size_of(cudf::data_type(cudf::type_to_id<Type>()));
 
-  // Create columns
+  // Create columns with values in the range [0,100)
   std::vector<column_wrapper> columns;
   columns.reserve(n_cols);
   std::generate_n(std::back_inserter(columns), n_cols, [n_rows]() {
@@ -57,10 +57,10 @@ static void BM_sort(benchmark::State& state)
     return column_wrapper(elements, elements + n_rows, valids);
   });
 
-  // Column views
+  // Create column views
   auto column_views = std::vector<cudf::column_view>(columns.begin(), columns.end());
 
-  // Table view
+  // Create table view
   auto input = cudf::table_view(column_views);
 
   for (auto _ : state) {
