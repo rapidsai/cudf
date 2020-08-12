@@ -23,7 +23,6 @@
 #include <rmm/mr/device/managed_memory_resource.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 
-
 template <class T>
 struct managed_allocator {
   typedef T value_type;
