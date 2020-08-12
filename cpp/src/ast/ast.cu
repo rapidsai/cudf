@@ -88,12 +88,12 @@ __device__ Element* row_evaluator::resolve_output(
 
 template <typename OperatorFunctor,
           typename Input,
-          typename Out,
           std::enable_if_t<cudf::ast::is_valid_unary_op<OperatorFunctor, Input>>*>
 __device__ void row_evaluator::operator()(cudf::size_type row_index,
                                           const detail::device_data_reference input,
                                           const detail::device_data_reference output) const
 {
+  using Out              = simt::std::invoke_result_t<OperatorFunctor, Input>;
   auto const typed_input = this->resolve_input<Input>(input, row_index);
   auto typed_output      = this->resolve_output<Out>(output, row_index);
   *typed_output          = OperatorFunctor{}(typed_input);
@@ -101,7 +101,6 @@ __device__ void row_evaluator::operator()(cudf::size_type row_index,
 
 template <typename OperatorFunctor,
           typename Input,
-          typename Out,
           std::enable_if_t<!cudf::ast::is_valid_unary_op<OperatorFunctor, Input>>*>
 __device__ void row_evaluator::operator()(cudf::size_type row_index,
                                           const detail::device_data_reference input,
@@ -113,13 +112,13 @@ __device__ void row_evaluator::operator()(cudf::size_type row_index,
 template <typename OperatorFunctor,
           typename LHS,
           typename RHS,
-          typename Out,
           std::enable_if_t<cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>*>
 __device__ void row_evaluator::operator()(cudf::size_type row_index,
                                           const detail::device_data_reference lhs,
                                           const detail::device_data_reference rhs,
                                           const detail::device_data_reference output) const
 {
+  using Out            = simt::std::invoke_result_t<OperatorFunctor, LHS, RHS>;
   auto const typed_lhs = this->resolve_input<LHS>(lhs, row_index);
   auto const typed_rhs = this->resolve_input<RHS>(rhs, row_index);
   auto typed_output    = this->resolve_output<Out>(output, row_index);
@@ -129,7 +128,6 @@ __device__ void row_evaluator::operator()(cudf::size_type row_index,
 template <typename OperatorFunctor,
           typename LHS,
           typename RHS,
-          typename Out,
           std::enable_if_t<!cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>*>
 __device__ void row_evaluator::operator()(cudf::size_type row_index,
                                           const detail::device_data_reference lhs,
