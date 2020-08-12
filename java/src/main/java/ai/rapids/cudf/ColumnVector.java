@@ -3079,6 +3079,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       toClose.add(data);
       toClose.add(valid);
       toClose.add(offsets);
+      contiguousBuffer.incRefCount();
+      toClose.add(contiguousBuffer);
     }
 
     public long getViewHandle() {

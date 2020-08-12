@@ -21,7 +21,7 @@ package ai.rapids.cudf;
 /**
  * Settings for writing Parquet files.
  */
-public class ParquetWriterOptions extends WriterOptions {
+public class ParquetWriterOptions extends CompressedMetadataWriterOptions {
   public enum StatisticsFrequency {
     /** Do not generate statistics */
     NONE(0),
@@ -39,7 +39,7 @@ public class ParquetWriterOptions extends WriterOptions {
     }
   }
 
-  public static class Builder extends WriterBuilder<Builder> {
+  public static class Builder extends CMWriterBuilder<Builder> {
     private StatisticsFrequency statsGranularity = StatisticsFrequency.ROWGROUP;
 
     public Builder withStatisticsFrequency(StatisticsFrequency statsGranularity) {
