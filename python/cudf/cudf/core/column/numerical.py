@@ -190,23 +190,6 @@ class NumericalColumn(column.ColumnBase):
             else:
                 return pd.Series(self.to_array(fillna="pandas"), index=index)
 
-    def _to_arrow(self):
-        mask = None
-        if self.nullable:
-            mask = pa.py_buffer(self.mask_array_view.copy_to_host())
-        data = pa.py_buffer(self.data_array_view.copy_to_host())
-        pa_dtype = np_to_pa_dtype(self.dtype)
-        out = pa.Array.from_buffers(
-            type=pa_dtype,
-            length=len(self),
-            buffers=[mask, data],
-            null_count=self.null_count,
-        )
-        if self.dtype == np.bool:
-            return out.cast(pa.bool_())
-        else:
-            return out
-
     def sum(self, dtype=None):
         return libcudf.reduce.reduce("sum", self, dtype=dtype)
 

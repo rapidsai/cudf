@@ -167,19 +167,6 @@ class DatetimeColumn(column.ColumnBase):
             self.to_array(fillna="pandas").astype(self.dtype), index=index
         )
 
-    def _to_arrow(self):
-        mask = None
-        if self.nullable:
-            mask = pa.py_buffer(self.mask_array_view.copy_to_host())
-        data = pa.py_buffer(self.as_numerical.data_array_view.copy_to_host())
-        pa_dtype = np_to_pa_dtype(self.dtype)
-        return pa.Array.from_buffers(
-            type=pa_dtype,
-            length=len(self),
-            buffers=[mask, data],
-            null_count=self.null_count,
-        )
-
     def default_na_value(self):
         """Returns the default NA value for this column
         """

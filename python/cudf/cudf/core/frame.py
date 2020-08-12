@@ -1841,17 +1841,19 @@ class Frame(libcudf.table.Table):
 
         index_col = None
         dtypes = None
+        # Find if there is a column in Table that should be treated as an Index
         if isinstance(data, pa.Table) and isinstance(data.schema.pandas_metadata, dict):
             metadata = data.schema.pandas_metadata
             index_col = metadata["index_columns"]
- #           if index_col and not isinstance(index_col[0], dict):
- #               data = data.drop(index_col[0])
             dtypes = {
                 col["field_name"]: col["pandas_type"]
                 for col in metadata["columns"]
                 if "field_name" in col
             }
 
+        # Currently we don't have support for pyarrow.Dictionary32 -> cudf Categorical column,
+        # so handling indices and dictionary as two different columns. This needs be removed
+        # once we have hooked libcudf dictionary32 with categorical.
         dict_indices = {}
         dict_dictionaries = {}
         dict_ordered = {}
@@ -1867,11 +1869,9 @@ class Frame(libcudf.table.Table):
 
         cudf_dict_table = cudf.DataFrame()
         if len(dict_indices) != 0:
+
             dict_indices_table = pa.table(dict_indices)
-            # dict_dictionaries_table = pa.table(dict_dictionaries);
-
             data = data.drop(dict_indices_table.column_names)
-
             cudf_indices_frame = cudf.DataFrame._from_table(
                 libcudf.interop.from_arrow(
                     dict_indices_table, dict_indices_table.column_names
@@ -1945,11 +1945,12 @@ class Frame(libcudf.table.Table):
         return Frame(self._data.copy(deep=deep))
 
     def to_arrow(self, preserve_index=True):
+
         data = self.copy(deep=False)
+
         codes = {}
         codes_keys = []
         categories = {}
-        index_descriptors = []
         names = self._data.names
         index_descr = []
         null_arrays_names = []

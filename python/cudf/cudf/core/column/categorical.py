@@ -942,15 +942,6 @@ class CategoricalColumn(column.ColumnBase):
         )
         return pd.Series(data, index=index)
 
-    def _to_arrow(self):
-        signed_codes_dtypes = min_signed_type(len(self.categories))
-        return pa.DictionaryArray.from_arrays(
-            from_pandas=True,
-            ordered=self.ordered,
-            indices=self.as_numerical.astype(signed_codes_dtypes).to_arrow(),
-            dictionary=self.categories.to_arrow(),
-        )
-
     @property
     def values_host(self):
         """

@@ -4553,31 +4553,6 @@ class StringColumn(column.ColumnBase):
     def as_string_column(self, dtype, **kwargs):
         return self
 
-    def _to_arrow(self):
-        if len(self) == 0:
-            sbuf = np.empty(0, dtype="int8")
-            obuf = np.empty(0, dtype="int32")
-            nbuf = None
-        else:
-            sbuf = self.children[1].data.to_host_array().view("int8")
-            obuf = self.children[0].data.to_host_array().view("int32")
-            nbuf = None
-            if self.null_count > 0:
-                nbuf = self.mask.to_host_array().view("int8")
-                nbuf = pa.py_buffer(nbuf)
-
-        sbuf = pa.py_buffer(sbuf)
-        obuf = pa.py_buffer(obuf)
-
-        if self.null_count == len(self):
-            return pa.NullArray.from_buffers(
-                pa.null(), len(self), [pa.py_buffer((b""))], self.null_count
-            )
-        else:
-            return pa.StringArray.from_buffers(
-                len(self), obuf, sbuf, nbuf, self.null_count
-            )
-
     def to_pandas(self, index=None, nullable_pd_dtype=False):
         pd_series = self.to_arrow().to_pandas()
         if index is not None:
