@@ -3058,6 +3058,26 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  private final class MyBufferProvider implements HostBufferProvider {
+    private final MyBufferConsumer wrapped;
+    long offset = 0;
+
+    private MyBufferProvider(MyBufferConsumer wrapped) {
+      this.wrapped = wrapped;
+    }
+
+    @Override
+    public long readInto(HostMemoryBuffer buffer, long len) {
+      long amountLeft = wrapped.offset - offset;
+      long amountToCopy = Math.max(0, Math.min(len, amountLeft));
+      if (amountToCopy > 0) {
+        buffer.copyFromHostBuffer(0, wrapped.buffer, offset, amountToCopy);
+        offset += amountToCopy;
+      }
+      return amountToCopy;
+    }
+  }
+
   @Test
   void testParquetWriteToBufferChunked() {
     try (Table table0 = getExpectedFileTable();
@@ -3131,6 +3151,66 @@ public class TableTest extends CudfTestBase {
       }
     } finally {
       tempFile.delete();
+    }
+  }
+
+  @Test
+  void testArrowIPCWriteToFileWithNamesAndMetadata() throws IOException {
+    File tempFile = File.createTempFile("test-names-metadata", ".arrow");
+    try (Table table0 = getExpectedFileTable()) {
+      ArrowIPCWriterOptions options = ArrowIPCWriterOptions.builder()
+              .withColumnNames("first", "second", "third", "fourth", "fifth", "sixth", "seventh")
+              .build();
+      try (TableWriter writer = Table.writeArrowIPCChunked(options, tempFile.getAbsoluteFile())) {
+        writer.write(table0);
+      }
+      try (StreamedTableReader reader = Table.readArrowIPCChunked(tempFile)) {
+        boolean done = false;
+        int count = 0;
+        while (!done) {
+          try (Table t = reader.getNextIfAvailable()) {
+            if (t == null) {
+              done = true;
+            } else {
+              assertTablesAreEqual(table0, t);
+              count++;
+            }
+          }
+        }
+        assertEquals(1, count);
+      }
+    } finally {
+      tempFile.delete();
+    }
+  }
+
+  @Test
+  void testArrowIPCWriteToBufferChunked() {
+    try (Table table0 = getExpectedFileTable();
+         MyBufferConsumer consumer = new MyBufferConsumer()) {
+      ArrowIPCWriterOptions options = ArrowIPCWriterOptions.builder()
+              .withColumnNames("first", "second", "third", "fourth", "fifth", "sixth", "seventh")
+              .build();
+      try (TableWriter writer = Table.writeArrowIPCChunked(options, consumer)) {
+        writer.write(table0);
+        writer.write(table0);
+        writer.write(table0);
+      }
+      try (StreamedTableReader reader = Table.readArrowIPCChunked(new MyBufferProvider(consumer))) {
+        boolean done = false;
+        int count = 0;
+        while (!done) {
+          try (Table t = reader.getNextIfAvailable()) {
+            if (t == null) {
+              done = true;
+            } else {
+              assertTablesAreEqual(table0, t);
+              count++;
+            }
+          }
+        }
+        assertEquals(3, count);
+      }
     }
   }
 
