@@ -4,6 +4,8 @@
 
 ## Improvements
 
+- PR #5953 Use stable sort when doing a sort groupby
+
 ## Bug Fixes
 
 # cuDF 0.15.0 (Date TBD)
