@@ -5417,12 +5417,7 @@ class DataFrame(Frame, Serializable):
         )
 
     def min(
-        self,
-        axis=None,
-        skipna=None,
-        level=None,
-        numeric_only=None,
-        **kwargs,
+        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs,
     ):
         """
         Return the minimum of the values in the DataFrame.
@@ -5467,12 +5462,7 @@ class DataFrame(Frame, Serializable):
         )
 
     def max(
-        self,
-        axis=None,
-        skipna=None,
-        level=None,
-        numeric_only=None,
-        **kwargs,
+        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs,
     ):
         """
         Return the maximum of the values in the DataFrame.
