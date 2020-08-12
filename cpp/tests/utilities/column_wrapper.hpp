@@ -1050,22 +1050,21 @@ class structs_column_wrapper : public detail::column_wrapper {
    * @param child_columns_wrappers The list of child column wrappers
    * @param validity Iterator returning the per-row validity bool
    */
-  template<typename V>
+  template <typename V>
   structs_column_wrapper(
     std::initializer_list<std::reference_wrapper<detail::column_wrapper>> child_column_wrappers,
-    V validity_iter
-  ) {
+    V validity_iter)
+  {
     std::vector<std::unique_ptr<cudf::column>> child_columns;
     child_columns.reserve(child_column_wrappers.size());
     std::transform(child_column_wrappers.begin(),
                    child_column_wrappers.end(),
                    std::back_inserter(child_columns),
                    [&](auto column_wrapper) { return column_wrapper.get().release(); });
-    init(std::move(child_columns), validity_iter);  
+    init(std::move(child_columns), validity_iter);
   }
 
  private:
-
   void init(std::vector<std::unique_ptr<cudf::column>>&& child_columns,
             std::vector<bool> const& validity)
   {
@@ -1087,9 +1086,8 @@ class structs_column_wrapper : public detail::column_wrapper {
                            : detail::make_null_mask(validity.begin(), validity.end()));
   }
 
-  template<typename V>
-  void init(std::vector<std::unique_ptr<cudf::column>>&& child_columns,
-            V validity_iterator)
+  template <typename V>
+  void init(std::vector<std::unique_ptr<cudf::column>>&& child_columns, V validity_iterator)
   {
     size_type num_rows = child_columns.empty() ? 0 : child_columns[0]->size();
 
@@ -1099,11 +1097,10 @@ class structs_column_wrapper : public detail::column_wrapper {
                  "All struct member columns must have the same row count.");
 
     std::vector<bool> validity(num_rows);
-    std::copy(validity_iterator, validity_iterator+num_rows, validity.begin());
+    std::copy(validity_iterator, validity_iterator + num_rows, validity.begin());
 
     init(std::move(child_columns), validity);
   }
-
 };
 
 }  // namespace test
