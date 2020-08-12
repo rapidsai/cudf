@@ -104,10 +104,10 @@ cudf::size_type linearizer::visit(expression const& expr)
   // Visit children (operands) of this node
   auto const operand_data_reference_indices = this->visit_operands(expr.get_operands());
   // Resolve operand types
-  auto operand_types = std::vector<cudf::data_type>();
+  auto operand_types = std::vector<cudf::data_type>(operand_data_reference_indices.size());
   std::transform(operand_data_reference_indices.cbegin(),
                  operand_data_reference_indices.cend(),
-                 std::back_inserter(operand_types),
+                 operand_types.begin(),
                  [this](auto const& data_reference_index) -> cudf::data_type {
                    return this->get_data_references()[data_reference_index].data_type;
                  });
