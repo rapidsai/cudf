@@ -226,13 +226,12 @@ rmm::device_uvector<T> async_create_device_data(std::vector<T> host_data, cudaSt
 }
 
 std::unique_ptr<column> compute_column(table_view const table,
-                                       std::reference_wrapper<const expression> expr,
+                                       expression const& expr,
                                        cudaStream_t stream,
                                        rmm::mr::device_memory_resource* mr)
 {
   // Linearize the AST
-  auto expr_linearizer = linearizer(table);
-  expr.get().accept(expr_linearizer);
+  auto const expr_linearizer         = linearizer(expr, table);
   auto const data_references         = expr_linearizer.get_data_references();
   auto const literals                = expr_linearizer.get_literals();
   auto const operators               = expr_linearizer.get_operators();
@@ -248,6 +247,23 @@ std::unique_ptr<column> compute_column(table_view const table,
     detail::async_create_device_data(operator_source_indices, stream);
   // The stream is synced later when the table_device_view is created.
   // To reduce overhead, we don't call a stream sync here.
+
+  // Create table device view
+  auto table_device         = table_device_view::create(table, stream);
+  auto const table_num_rows = table.num_rows();
+
+  // Prepare output column
+  auto output_column = cudf::make_fixed_width_column(
+    expr_data_type, table_num_rows, mask_state::UNALLOCATED, stream, mr);
+  auto mutable_output_device =
+    cudf::mutable_column_device_view::create(output_column->mutable_view(), stream);
+
+  // Configure kernel parameters
+  auto constexpr block_size = 512;
+  cudf::detail::grid_1d config(table_num_rows, block_size);
+  auto const num_intermediates = expr_linearizer.get_intermediate_count();
+  auto const shmem_size_per_block =
+    sizeof(std::int64_t) * num_intermediates * config.num_threads_per_block;
 
   // Output linearizer info
   /*
@@ -269,25 +285,6 @@ std::unique_ptr<column> compute_column(table_view const table,
   std::cout << "Operator source indices: ";
   for (auto const& v : operator_source_indices) { std::cout << v << ", "; }
   std::cout << std::endl;
-  */
-
-  // Create table device view
-  auto table_device         = table_device_view::create(table, stream);
-  auto const table_num_rows = table.num_rows();
-
-  // Prepare output column
-  auto output_column = cudf::make_fixed_width_column(
-    expr_data_type, table_num_rows, mask_state::UNALLOCATED, stream, mr);
-  auto mutable_output_device =
-    cudf::mutable_column_device_view::create(output_column->mutable_view(), stream);
-
-  // Configure kernel parameters
-  auto constexpr block_size = 512;
-  cudf::detail::grid_1d config(table_num_rows, block_size);
-  auto const num_intermediates = expr_linearizer.get_intermediate_count();
-  auto const shmem_size_per_block =
-    sizeof(std::int64_t) * num_intermediates * config.num_threads_per_block;
-  /*
   std::cout << "Requesting " << config.num_blocks << " blocks, ";
   std::cout << config.num_threads_per_block << " threads/block, ";
   std::cout << shmem_size_per_block << " bytes of shared memory." << std::endl;
@@ -311,7 +308,7 @@ std::unique_ptr<column> compute_column(table_view const table,
 }  // namespace detail
 
 std::unique_ptr<column> compute_column(table_view const table,
-                                       std::reference_wrapper<const expression> expr,
+                                       expression const& expr,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();

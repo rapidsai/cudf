@@ -420,31 +420,11 @@ class linearizer : public abstract_visitor {
    *
    * @param table The table used for evaluating the expression tree.
    */
-  linearizer(cudf::table_view table) : table(table), node_count(0), intermediate_counter() {}
-
-  /**
-   * @brief Visit a literal node.
-   *
-   * @param expr Literal node.
-   * @return cudf::size_type Index of device data reference for the node.
-   */
-  cudf::size_type visit(literal const& expr) override;
-
-  /**
-   * @brief Visit a column reference node.
-   *
-   * @param expr Column reference node.
-   * @return cudf::size_type Index of device data reference for the node.
-   */
-  cudf::size_type visit(column_reference const& expr) override;
-
-  /**
-   * @brief Visit an operator expression node.
-   *
-   * @param expr Operator expression node.
-   * @return cudf::size_type Index of device data reference for the node.
-   */
-  cudf::size_type visit(operator_expression const& expr) override;
+  linearizer(expression const& expr, cudf::table_view table)
+    : table(table), node_count(0), intermediate_counter()
+  {
+    expr.accept(*this);
+  }
 
   /**
    * @brief Get the root data type of the expression tree.
@@ -501,6 +481,30 @@ class linearizer : public abstract_visitor {
   }
 
  private:
+  /**
+   * @brief Visit a literal node.
+   *
+   * @param expr Literal node.
+   * @return cudf::size_type Index of device data reference for the node.
+   */
+  cudf::size_type visit(literal const& expr) override;
+
+  /**
+   * @brief Visit a column reference node.
+   *
+   * @param expr Column reference node.
+   * @return cudf::size_type Index of device data reference for the node.
+   */
+  cudf::size_type visit(column_reference const& expr) override;
+
+  /**
+   * @brief Visit an operator expression node.
+   *
+   * @param expr Operator expression node.
+   * @return cudf::size_type Index of device data reference for the node.
+   */
+  cudf::size_type visit(operator_expression const& expr) override;
+
   std::vector<cudf::size_type> visit_operands(
     std::vector<std::reference_wrapper<const expression>> operands);
   cudf::size_type add_data_reference(detail::device_data_reference data_ref);

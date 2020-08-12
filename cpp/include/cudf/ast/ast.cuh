@@ -208,7 +208,7 @@ __launch_bounds__(block_size) __global__
  */
 std::unique_ptr<column> compute_column(
   table_view const table,
-  std::reference_wrapper<const expression> expr,
+  expression const& expr,
   cudaStream_t stream                 = 0,  // TODO use detail API
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
@@ -227,7 +227,7 @@ std::unique_ptr<column> compute_column(
  */
 std::unique_ptr<column> compute_column(
   table_view const table,
-  std::reference_wrapper<const expression> expr,
+  expression const& expr,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace ast
