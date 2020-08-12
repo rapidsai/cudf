@@ -619,15 +619,18 @@ def test_operator_func_between_series_logical(
         pdf_series_b, fill_value=fill_value
     )
 
-    if scalar_a in [None, np.nan] and scalar_b in [None, np.nan]:
-        # cudf binary operations will return `None` when both left- and right-
-        # side values are `None`. It will return `np.nan` when either side is
-        # `np.nan`. As a consequence, when we convert our gdf => pdf during
-        # assert_eq, we get a pdf with dtype='object' (all inputs are none).
-        # to account for this, we use fillna.
-        gdf_series_result.fillna(func == "ne", inplace=True)
+    if ((scalar_a in {None, np.nan}) or (scalar_b in {None, np.nan})):
+        if fill_value is None or (scalar_a in {None, np.nan} and (scalar_b in {None, np.nan})):
+            pdf_series_result = pd.Series([pd.NA], dtype=pd.BooleanDtype())
 
-    utils.assert_eq(pdf_series_result, gdf_series_result, downcast=True)
+        # At least one operand will be a float pandas series with nan
+        # nan has different comparison behavior then null. This means
+        # that pandas won't produce the result we want to test for in
+        # this situation. 
+        # Any comparison involving null should produce null
+
+    pdf_series_result = pdf_series_result.astype(pd.BooleanDtype())
+    utils.assert_eq(pdf_series_result, gdf_series_result)
 
 
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
