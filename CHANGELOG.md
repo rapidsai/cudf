@@ -283,7 +283,7 @@
 - PR #5915 Fix reference count on Java DeviceMemoryBuffer after contiguousSplit
 - PR #5929 Revised assertEquals for List Columns in java tests
 - PR #5947 Fix null count for child device column vector
-
+- PR #5951 Fix mkdir error in benchmark build
 
 # cuDF 0.14.0 (03 Jun 2020)
 
