@@ -17,8 +17,10 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include "jit-cache-test.hpp"
+#include "rmm/mr/device/per_device_resource.hpp"
 
 #if defined(JITIFY_USE_CACHE)
+
 /**
  * @brief This test runs two processes that try to access the same kernel
  *
@@ -112,11 +114,14 @@ int main(int argc, char **argv)
   ::testing::InitGoogleTest(&argc, argv);
 
   // This test relies on the fact that the cuda context will be created in
-  // each process separately after the fork. Using rmm_mode=pool will cause
-  // the cuda context to be created at rmmInitialize, which happens before
-  // the fork. So we hardcode the rmm_mode to "cuda"
+  // each process separately after the fork. With the default CUDF_TEST_MAIN,
+  // using rmm_mode=pool will cause the cuda context to be created at startup,
+  // before the fork. So we hardcode the rmm_mode to "cuda" for this test
+  // and explicitly set the device 0 resource to it. Note that using
+  // `set_current_device_resource` would result in a call to `cudaGetDevice()`
+  // which would also initialize the CUDA context before the fork.
   auto const rmm_mode = "cuda";
   auto resource       = cudf::test::create_memory_resource(rmm_mode);
-  rmm::mr::set_default_resource(resource.get());
+  rmm::mr::set_per_device_resource(rmm::cuda_device_id{0}, resource.get());
   return RUN_ALL_TESTS();
 }

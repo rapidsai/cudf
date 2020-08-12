@@ -2119,11 +2119,11 @@ public class ColumnVectorTest extends CudfTestBase {
       try (ColumnVector v = ColumnVector.fromStrings("Héllo there", "thésé", "null", "", "ARé some", "test strings");
            ColumnVector expected = ColumnVector.fromLists(
                    new HostColumnVector.ColumnBuilder.ListType(true, 6,
-                           new HostColumnVector.ColumnBuilder.BasicType(true, 8, DType.STRING)),
+                           new HostColumnVector.ColumnBuilder.BasicType(true, 9, DType.STRING)),
                    Arrays.asList("Héllo", "there"),
                    Arrays.asList("thésé"),
                    Arrays.asList("null"),
-                   Arrays.asList(),
+                   Arrays.asList(""),
                    Arrays.asList("ARé", "some"),
                    Arrays.asList("test", "strings"));
            Scalar pattern = Scalar.fromString(" ");
@@ -2746,6 +2746,10 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector v = ColumnVector.concatenate(res1, res2);
          ColumnVector expected = ColumnVector.fromLists(new HostColumnVector.ColumnBuilder.ListType(true, 3,
              new HostColumnVector.ColumnBuilder.BasicType(true, 8, DType.STRING)) , list, list3, list2)) {
+      assert res1.getNullCount() == 1: "Null count is incorrect on input column";
+      assert res1.getChildColumnViewAccess(0).getNullCount() == 0 : "Null count is incorrect on input column";
+      assert res2.getNullCount() == 0 : "Null count is incorrect on input column";
+      assert res2.getChildColumnViewAccess(0).getNullCount() == 2 : "Null count is incorrect on input column";
       assertColumnsAreEqual(expected, v);
     }
   }
