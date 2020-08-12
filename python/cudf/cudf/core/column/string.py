@@ -4519,8 +4519,15 @@ class StringColumn(column.ColumnBase):
             if "format" not in kwargs:
                 if len(self) > 0:
                     # infer on host from the first not na element
-                    fmt = datetime.infer_format(self[self.notna()][0])
-                    kwargs.update(format=fmt)
+                    # or return all null column if all values
+                    # are null in current column
+                    if self.null_count == len(self):
+                        return column.column_empty(
+                            len(self), dtype=out_dtype, masked=True
+                        )
+                    else:
+                        fmt = datetime.infer_format(self[self.notna()][0])
+                        kwargs.update(format=fmt)
 
             # Check for None strings
             if len(self) > 0 and self.binary_operator("eq", "None").any():
