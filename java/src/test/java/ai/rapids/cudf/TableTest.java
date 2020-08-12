@@ -84,23 +84,23 @@ public class TableTest extends CudfTestBase {
   }
 
   public static void assertColumnsAreEqual(ColumnVector expected, ColumnVector cv, String colName) {
-    assertPartialNestedColumnsAreEqual(expected, 0, expected.getRowCount(), cv, colName, true);
+    assertPartialColumnsAreEqual(expected, 0, expected.getRowCount(), cv, colName, true);
   }
 
   public static void assertColumnsAreEqual(HostColumnVector expected, HostColumnVector cv, String colName) {
-    assertPartialNestedColumnsAreEqual(expected, 0, expected.getRowCount(), cv, colName, true);
+    assertPartialColumnsAreEqual(expected, 0, expected.getRowCount(), cv, colName, true);
   }
 
-  public static void assertPartialNestedColumnsAreEqual(ColumnVector expected, long rowOffset, long length,
-                                                        ColumnVector cv, String colName, boolean enableNullCheck) {
+  public static void assertPartialColumnsAreEqual(ColumnVector expected, long rowOffset, long length,
+                                                  ColumnVector cv, String colName, boolean enableNullCheck) {
     try (HostColumnVector hostExpected = expected.copyToHost();
          HostColumnVector hostcv = cv.copyToHost()) {
-      assertPartialNestedColumnsAreEqual(hostExpected, rowOffset, length, hostcv, colName, enableNullCheck);
+      assertPartialColumnsAreEqual(hostExpected, rowOffset, length, hostcv, colName, enableNullCheck);
     }
   }
 
-  public static void assertPartialNestedColumnsAreEqual(HostColumnVector expected, long rowOffset, long length,
-                                                        HostColumnVector cv, String colName, boolean enableNullCheck) {
+  public static void assertPartialColumnsAreEqual(HostColumnVector expected, long rowOffset, long length,
+                                                  HostColumnVector cv, String colName, boolean enableNullCheck) {
     assertEquals(expected.getType(), cv.getType(), "Type For Column " + colName);
     assertEquals(length, cv.getRowCount(), "Row Count For Column " + colName);
     if (enableNullCheck) {
@@ -168,9 +168,9 @@ public class TableTest extends CudfTestBase {
     }
   }
 
-  public static void assertPartialNestedColumnsAreEqual(HostColumnVector.NestedHostColumnVector expected,
-                                                        HostColumnVector.NestedHostColumnVector cv,
-                                                        String colName, boolean enableNullCheck) {
+  public static void assertPartialColumnsAreEqual(HostColumnVector.NestedHostColumnVector expected,
+                                                  HostColumnVector.NestedHostColumnVector cv,
+                                                  String colName, boolean enableNullCheck) {
     assertEquals(expected.getType(), cv.getType(), "Type For Column " + colName);
     assertEquals(expected.getRows(), cv.getRows(), "Row Count For Column " + colName);
     if (enableNullCheck) {
@@ -222,7 +222,7 @@ public class TableTest extends CudfTestBase {
             assertEquals(expected.getNestedChildren().size(),
                 cv.getNestedChildren().size(), " num children don't match");
             for (int k = 0; k < expected.getNestedChildren().size(); k++)
-            assertPartialNestedColumnsAreEqual(expected.getNestedChildren().get(k),
+            assertPartialColumnsAreEqual(expected.getNestedChildren().get(k),
                 cv.getNestedChildren().get(k), colName, enableNullCheck);
             break;
           default:
@@ -242,7 +242,7 @@ public class TableTest extends CudfTestBase {
       }
     }
     for (int j = 0; j < expected.children.size(); j++) {
-      assertPartialNestedColumnsAreEqual(expected.children.get(j), input.children.get(j), colName, enableNullCheck);
+      assertPartialColumnsAreEqual(expected.children.get(j), input.children.get(j), colName, enableNullCheck);
     }
   }
 
@@ -256,7 +256,7 @@ public class TableTest extends CudfTestBase {
       if (rowOffset != 0 || length != expected.getRowCount()) {
         name = name + " PART " + rowOffset + "-" + (rowOffset + length - 1);
       }
-      assertPartialNestedColumnsAreEqual(expect, rowOffset, length, cv, name, enableNullCheck);
+      assertPartialColumnsAreEqual(expect, rowOffset, length, cv, name, enableNullCheck);
     }
   }
 
