@@ -45,7 +45,7 @@ template <typename T>
 class RoundRobinTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(RoundRobinTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_CASE(RoundRobinTest, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(RoundRobinTest, RoundRobinPartitions13_3)
 {

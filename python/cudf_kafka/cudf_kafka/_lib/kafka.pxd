@@ -41,7 +41,7 @@ cdef extern from "kafka_consumer.hpp" \
 
         void unsubscribe() except +
 
-        void close(int timeout) except +
+        void close(int32_t timeout) except +
 
 cdef class KafkaDatasource(Datasource):
 
@@ -62,3 +62,12 @@ cdef class KafkaDatasource(Datasource):
                              int64_t offset)
 
     cpdef int64_t get_committed_offset(self, string topic, int32_t partition)
+
+    cpdef map[string, int64_t] get_watermark_offset(self, string topic,
+                                                    int32_t partition,
+                                                    int32_t timeout,
+                                                    bool cached)
+
+    cpdef void unsubscribe(self)
+
+    cpdef void close(self, int32_t timeout)

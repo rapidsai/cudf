@@ -117,7 +117,8 @@ endif(CONDA_INCLUDE_DIRS)
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
 
-link_directories("${CMAKE_BINARY_DIR}/lib"
+link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
+                 "${CMAKE_BINARY_DIR}/lib"
                  "${CMAKE_BINARY_DIR}"
                  "${GTEST_LIBRARY_DIR}"
                  "${RMM_LIBRARY}")
@@ -132,6 +133,8 @@ endif(CONDA_LINK_DIRS)
 add_library(cudf_kafka SHARED
     src/kafka_consumer.cpp
 )
+
+set_target_properties(cudf_kafka PROPERTIES BUILD_RPATH "\$ORIGIN")
 
 # Include paths
 include_directories("${CMAKE_SOURCE_DIR}/include"
