@@ -281,6 +281,7 @@
 - PR #5914 Link CUDA against libcudf_kafka
 - PR #5895 Do not break kafka client consumption loop on local client timeout
 - PR #5915 Fix reference count on Java DeviceMemoryBuffer after contiguousSplit
+- PR #5929 Revised assertEquals for List Columns in java tests
 
 
 # cuDF 0.14.0 (03 Jun 2020)
