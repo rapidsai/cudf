@@ -31,9 +31,6 @@ export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
 # Set Benchmark Vars
 export GBENCH_BENCHMARKS_DIR=${WORKSPACE}/cpp/build/gbenchmarks/
 
-# Ensure ASV results directory exists
-mkdir -p ${ASVRESULTS_DIR}
-
 # Set `LIBCUDF_KERNEL_CACHE_PATH` environment variable to $HOME/.jitify-cache because
 # it's local to the container's virtual file system, and not shared with other CI jobs
 # like `/tmp` is.
