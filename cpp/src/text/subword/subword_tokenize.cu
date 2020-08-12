@@ -25,9 +25,6 @@
 
 #include <thrust/for_each.h>
 #include <thrust/transform_scan.h>
-#include <fstream>
-#include <iostream>
-#include <vector>
 
 namespace nvtext {
 namespace detail {

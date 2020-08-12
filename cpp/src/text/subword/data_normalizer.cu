@@ -22,8 +22,6 @@
 
 #include <thrust/for_each.h>
 #include <thrust/remove.h>
-#include <string>
-#include <vector>
 
 namespace nvtext {
 namespace detail {

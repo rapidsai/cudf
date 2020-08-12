@@ -24,7 +24,6 @@
 #include <thrust/for_each.h>
 #include <thrust/remove.h>
 #include <thrust/transform_scan.h>
-#include <iostream>
 
 namespace nvtext {
 namespace detail {

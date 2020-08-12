@@ -18,10 +18,6 @@
 
 #include <text/subword/detail/data_normalizer.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
-#include <rmm/device_uvector.hpp>
-#include <vector>
-
 namespace nvtext {
 
 struct hashed_vocabulary;

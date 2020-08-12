@@ -18,9 +18,7 @@
 
 #include <text/subword/detail/cp_data.h>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/device_uvector.hpp>
-#include <vector>
 
 using uvector_pair = std::pair<std::unique_ptr<rmm::device_uvector<uint32_t>>,
                                std::unique_ptr<rmm::device_uvector<uint32_t>>>;

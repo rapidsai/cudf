@@ -19,7 +19,6 @@
 #include <text/subword/detail/cp_data.h>
 
 #include <stdint.h>
-#include <vector>
 
 namespace nvtext {
 namespace detail {
