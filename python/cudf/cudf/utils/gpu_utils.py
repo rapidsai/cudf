@@ -24,28 +24,7 @@ def validate_setup(check_dask=True):
 
     try:
         gpus_count = getDeviceCount()
-    except CUDARuntimeError as e:
-        if e.status in (
-            3,
-            35,
-            98,
-            100,
-            101,
-            127,
-            200,
-            201,
-            210,
-            304,
-            800,
-            801,
-            802,
-            803,
-            804,
-        ):
-            # Error statuses which need to be throw to the
-            # user, codes determined from docs below:
-            # https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html#group__CUDART__TYPES_1g3f51e3575c2178246db0a94a430e0038
-            raise e
+    except CUDARuntimeError:
         # If there is no GPU detected, set `gpus_count` to -1
         gpus_count = -1
 
