@@ -284,6 +284,7 @@
 - PR #5942 Fix JIT cache multiprocess test failure
 - PR #5929 Revised assertEquals for List Columns in java tests
 - PR #5947 Fix null count for child device column vector
+- PR #5951 Fix mkdir error in benchmark build
 - PR #5949 Find Arrow include directory for JNI builds
 
 
