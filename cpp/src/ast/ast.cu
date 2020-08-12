@@ -233,9 +233,7 @@ std::unique_ptr<column> compute_column(table_view const table,
                                        cudaStream_t stream,
                                        rmm::mr::device_memory_resource* mr)
 {
-  CUDF_FUNC_RANGE();
   // Linearize the AST
-  nvtxRangePush("Linearizing...");
   auto expr_linearizer = linearizer(table);
   expr.get().accept(expr_linearizer);
   auto const data_references         = expr_linearizer.get_data_references();
@@ -244,10 +242,8 @@ std::unique_ptr<column> compute_column(table_view const table,
   auto const num_operators           = cudf::size_type(operators.size());
   auto const operator_source_indices = expr_linearizer.get_operator_source_indices();
   auto const expr_data_type          = expr_linearizer.get_root_data_type();
-  nvtxRangePop();
 
   // Create device data
-  nvtxRangePush("Creating device data...");
   auto const device_data_references = detail::async_create_device_data(data_references, stream);
   auto const device_literals        = detail::async_create_device_data(literals, stream);
   auto const device_operators       = detail::async_create_device_data(operators, stream);
@@ -255,7 +251,6 @@ std::unique_ptr<column> compute_column(table_view const table,
     detail::async_create_device_data(operator_source_indices, stream);
   // The stream is synced later when the table_device_view is created.
   // To reduce overhead, we don't call a stream sync here.
-  nvtxRangePop();
 
   // Output linearizer info
   /*
@@ -280,21 +275,16 @@ std::unique_ptr<column> compute_column(table_view const table,
   */
 
   // Create table device view
-  nvtxRangePush("Creating table device view...");
   auto table_device         = table_device_view::create(table, stream);
   auto const table_num_rows = table.num_rows();
-  nvtxRangePop();
 
   // Prepare output column
-  nvtxRangePush("Preparing output column...");
   auto output_column = cudf::make_fixed_width_column(
     expr_data_type, table_num_rows, mask_state::UNALLOCATED, stream, mr);
   auto mutable_output_device =
     cudf::mutable_column_device_view::create(output_column->mutable_view(), stream);
-  nvtxRangePop();
 
   // Configure kernel parameters
-  nvtxRangePush("Configuring kernel parameters...");
   auto constexpr block_size = 512;
   cudf::detail::grid_1d config(table_num_rows, block_size);
   auto const num_intermediates = expr_linearizer.get_intermediate_count();
@@ -305,10 +295,8 @@ std::unique_ptr<column> compute_column(table_view const table,
   std::cout << config.num_threads_per_block << " threads/block, ";
   std::cout << shmem_size_per_block << " bytes of shared memory." << std::endl;
   */
-  nvtxRangePop();
 
   // Execute the kernel
-  nvtxRangePush("Executing AST kernel...");
   cudf::ast::detail::compute_column_kernel<block_size>
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream>>>(
       *table_device,
@@ -320,7 +308,6 @@ std::unique_ptr<column> compute_column(table_view const table,
       num_operators,
       num_intermediates);
   CHECK_CUDA(stream);
-  nvtxRangePop();
   return output_column;
 }
 
@@ -330,6 +317,7 @@ std::unique_ptr<column> compute_column(table_view const table,
                                        std::reference_wrapper<const expression> expr,
                                        rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::compute_column(table, expr, 0, mr);
 }
 
