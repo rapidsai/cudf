@@ -216,7 +216,6 @@ TEST_F(ListsExtractTest, ExtractElementEmpty)
   LCW empty{};
   auto result = cudf::lists::extract_list_element(cudf::lists_column_view(empty), 1);
   EXPECT_EQ(0, result->size());
-
   LCW empty_strings({LCW{"", "", ""}});
   result = cudf::lists::extract_list_element(cudf::lists_column_view(empty_strings), 1);
   cudf::test::strings_column_wrapper expected({""});
