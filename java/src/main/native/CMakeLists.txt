@@ -17,6 +17,8 @@ cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
 project(CUDF_JNI VERSION 0.7.0 LANGUAGES C CXX CUDA)
 
+set(CUDF_CPP_BUILD_DIR "${PROJECT_SOURCE_DIR}/../../../../cpp/build")
+
 ###################################################################################################
 # - build type ------------------------------------------------------------------------------------
 
@@ -109,17 +111,17 @@ include(CheckLibraryExists)
 
 find_path(THRUST_INCLUDE "thrust"
     HINTS "$ENV{CUDF_ROOT}/_deps/thrust-src"
-          "${PROJECT_SOURCE_DIR}/../../../../cpp/build/_deps/thrust-src"
+          "${CUDF_CPP_BUILD_DIR}/_deps/thrust-src"
           "$ENV{CONDA_PREFIX}/include")
 
 find_path(CUB_INCLUDE "cub"
     HINTS "$ENV{CUDF_ROOT}/_deps/cub-src"
-          "${PROJECT_SOURCE_DIR}/../../../../cpp/build/_deps/cub-src"
+          "${CUDF_CPP_BUILD_DIR}/_deps/cub-src"
           "$ENV{CONDA_PREFIX}/include")
 
 find_path(LIBCUDACXX_INCLUDE "simt"
     HINTS "$ENV{CUDF_ROOT}/_deps/libcudacxx-src/include"
-          "${PROJECT_SOURCE_DIR}/../../../../cpp/build/_deps/libcudacxx-src/include")
+          "${CUDF_CPP_BUILD_DIR}/_deps/libcudacxx-src/include")
 
 find_path(SPDLOG_INCLUDE "spdlog"
     HINTS "$ENV{RMM_ROOT}/_deps/spdlog-src/include"
@@ -136,7 +138,7 @@ find_library(CUDF_LIBRARY "cudf"
     HINTS "$ENV{CUDF_ROOT}"
           "$ENV{CUDF_ROOT}/lib"
           "$ENV{CONDA_PREFIX}/lib"
-          "../../../../cpp/build")
+          "${CUDF_CPP_BUILD_DIR}")
 
 message(STATUS "CUDF: CUDF_LIBRARY set to ${CUDF_LIBRARY}")
 message(STATUS "CUDF: CUDF_INCLUDE set to ${CUDF_INCLUDE}")
@@ -157,6 +159,16 @@ find_path(RMM_INCLUDE "rmm"
                 "$ENV{CONDA_PREFIX}/include")
 
 message(STATUS "RMM: RMM_INCLUDE set to ${RMM_INCLUDE}")
+
+###################################################################################################
+# - ARROW -----------------------------------------------------------------------------------------
+
+find_path(ARROW_INCLUDE "arrow"
+          HINTS "$ENV{ARROW_ROOT}/include"
+                "$ENV{CONDA_PREFIX}/include"
+                "${CUDF_CPP_BUILD_DIR}/arrow/install/include")
+
+message(STATUS "ARROW: ARROW_INCLUDE set to ${ARROW_INCLUDE}")
 
 ###################################################################################################
 # - find JNI -------------------------------------------------------------------------------------
@@ -180,7 +192,8 @@ include_directories("${THRUST_INCLUDE}"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${JNI_INCLUDE_DIRS}"
                     "${CUDF_INCLUDE}"
-                    "${RMM_INCLUDE}")
+                    "${RMM_INCLUDE}"
+                    "${ARROW_INCLUDE}")
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
