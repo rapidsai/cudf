@@ -104,7 +104,7 @@ std::unique_ptr<cudf::scalar> default_scalar_functor::operator()<list_view>()
 template <>
 std::unique_ptr<cudf::scalar> default_scalar_functor::operator()<struct_view>()
 {
-  CUDF_FAIL("list_view type not supported");
+  CUDF_FAIL("struct_view type not supported");
 }
 
 }  // namespace

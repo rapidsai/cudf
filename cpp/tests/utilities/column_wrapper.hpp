@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/null_mask.hpp>
@@ -1029,7 +1030,42 @@ class structs_column_wrapper : public detail::column_wrapper {
     init(std::move(child_columns), validity);
   }
 
+  /**
+   * @brief Constructs a struct column from the list of column wrappers for child columns.
+   *
+   * Example usage:
+   * @code{.cpp}
+   * // The following constructs a column for struct< int, string >.
+   * fixed_width_column_wrapper<int32_t> child_int_col_wrapper{ 1, 2, 3, 4, 5 };
+   * string_column_wrapper child_string_col_wrapper {"All", "the", "leaves", "are", "brown"};
+   *
+   * struct_column_wrapper struct_column_wrapper{
+   *  {child_int_col_wrapper, child_string_col_wrapper}
+   *  cudf::test::make_counting_transform_iterator(0, [](auto i){ return i%2; }) // Validity.
+   * };
+   *
+   * auto struct_col {struct_column_wrapper.release()};
+   * @endcode
+   *
+   * @param child_columns_wrappers The list of child column wrappers
+   * @param validity Iterator returning the per-row validity bool
+   */
+  template<typename V>
+  structs_column_wrapper(
+    std::initializer_list<std::reference_wrapper<detail::column_wrapper>> child_column_wrappers,
+    V validity_iter
+  ) {
+    std::vector<std::unique_ptr<cudf::column>> child_columns;
+    child_columns.reserve(child_column_wrappers.size());
+    std::transform(child_column_wrappers.begin(),
+                   child_column_wrappers.end(),
+                   std::back_inserter(child_columns),
+                   [&](auto column_wrapper) { return column_wrapper.get().release(); });
+    init(std::move(child_columns), validity_iter);  
+  }
+
  private:
+
   void init(std::vector<std::unique_ptr<cudf::column>>&& child_columns,
             std::vector<bool> const& validity)
   {
@@ -1050,6 +1086,24 @@ class structs_column_wrapper : public detail::column_wrapper {
       validity.size() <= 0 ? rmm::device_buffer{0}
                            : detail::make_null_mask(validity.begin(), validity.end()));
   }
+
+  template<typename V>
+  void init(std::vector<std::unique_ptr<cudf::column>>&& child_columns,
+            V validity_iterator)
+  {
+    size_type num_rows = child_columns.empty() ? 0 : child_columns[0]->size();
+
+    CUDF_EXPECTS(std::all_of(child_columns.begin(),
+                             child_columns.end(),
+                             [&](auto const& p_column) { return p_column->size() == num_rows; }),
+                 "All struct member columns must have the same row count.");
+
+    std::vector<bool> validity(num_rows);
+    std::copy(validity_iterator, validity_iterator+num_rows, validity.begin());
+
+    init(std::move(child_columns), validity);
+  }
+
 };
 
 }  // namespace test

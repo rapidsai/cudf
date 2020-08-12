@@ -295,7 +295,7 @@ std::unique_ptr<column> multi_contains_dispatch::operator()<struct_view>(
   rmm::mr::device_memory_resource* mr,
   cudaStream_t stream)
 {
-  CUDF_FAIL("list_view type not supported");
+  CUDF_FAIL("struct_view type not supported");
 }
 
 std::unique_ptr<column> contains(column_view const& haystack,
