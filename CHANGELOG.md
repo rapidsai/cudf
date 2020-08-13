@@ -71,6 +71,7 @@
 - PR #5845 Add support for `mask_to_bools`
 - PR #5851 Add support for `Index.sort_values`
 - PR #5859 Add conversion form `fixed_point` to `bool`
+- PR #5781 Add duration types support in cudf(python/cython)
 - PR #5815 LIST Support for ColumnVector
 
 ## Improvements

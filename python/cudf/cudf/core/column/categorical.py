@@ -87,9 +87,7 @@ class CategoricalAccessor(ColumnMethodsMixin):
         """
         The categories of this categorical.
         """
-        from cudf.core.index import as_index
-
-        return as_index(self._column.categories)
+        return cudf.core.index.as_index(self._column.categories)
 
     @property
     def codes(self):
@@ -872,6 +870,26 @@ class CategoricalColumn(column.ColumnBase):
     def cat(self, parent=None):
         return CategoricalAccessor(self, parent=parent)
 
+    @classmethod
+    def from_arrow(cls, array):
+        codes_dtype = min_unsigned_type(len(array.indices))
+        codes = column.as_column(array.indices).astype(codes_dtype)
+        if isinstance(array.dictionary, pa.NullArray):
+            categories = column.as_column([], dtype="object")
+        else:
+            categories = column.as_column(array.dictionary)
+
+        dtype = CategoricalDtype(
+            categories=categories, ordered=array.type.ordered
+        )
+        return CategoricalColumn(
+            dtype=dtype,
+            mask=codes.base_mask,
+            children=(codes,),
+            size=codes.size,
+            offset=codes.offset,
+        )
+
     def unary_operator(self, unaryop):
         raise TypeError(
             f"Series of dtype `category` cannot perform the operation: "
@@ -897,9 +915,8 @@ class CategoricalColumn(column.ColumnBase):
         return self.as_numerical.binary_operator(op, rhs.as_numerical)
 
     def normalize_binop_value(self, other):
-        from cudf.utils import utils
 
-        ary = utils.scalar_broadcast_to(
+        ary = cudf.utils.utils.scalar_broadcast_to(
             self._encode(other), size=len(self), dtype=self.codes.dtype
         )
         col = column.build_categorical_column(
@@ -1160,6 +1177,11 @@ class CategoricalColumn(column.ColumnBase):
 
     def as_datetime_column(self, dtype, **kwargs):
         return self._get_decategorized_column().as_datetime_column(
+            dtype, **kwargs
+        )
+
+    def as_timedelta_column(self, dtype, **kwargs):
+        return self._get_decategorized_column().as_timedelta_column(
             dtype, **kwargs
         )
 
