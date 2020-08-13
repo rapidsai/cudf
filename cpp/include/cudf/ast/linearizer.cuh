@@ -38,6 +38,11 @@ enum class table_reference {
   OUTPUT  // Column index in the output table
 };
 
+// Forward declaration
+class literal;
+class column_reference;
+class expression;
+
 namespace detail {
 
 /**
@@ -98,45 +103,32 @@ class intermediate_counter {
   cudf::size_type max_used;
 };
 
-}  // namespace detail
-
 // Forward declaration
-class abstract_visitor;
-class literal;
-class column_reference;
-class expression;
+class linearizer;
 
 /**
  * @brief A generic node that can be evaluated to return a value.
  *
- * This class is a part of a "visitor" pattern with the `abstract_visitor` class.
+ * This class is a part of a "visitor" pattern with the `linearizer` class.
  * Nodes inheriting from this class can accept visitors.
  *
  */
 class node {
- public:
-  virtual cudf::size_type accept(abstract_visitor& visitor) const = 0;
+  friend class detail::linearizer;
+
+ private:
+  virtual cudf::size_type accept(detail::linearizer& visitor) const = 0;
 };
 
-/**
- * @brief An abstract class capable of visiting nodes.
- *
- * This class is part of a "visitor" pattern with the `node` class.
- * Visitors inheriting from this class can visit nodes.
- *
- */
-class abstract_visitor {
- public:
-  virtual cudf::size_type visit(literal const& expr)          = 0;
-  virtual cudf::size_type visit(column_reference const& expr) = 0;
-  virtual cudf::size_type visit(expression const& expr)       = 0;
-};
+}  // namespace detail
 
 /**
  * @brief A literal value used in an abstract syntax tree.
  *
  */
-class literal : public node {
+class literal : public detail::node {
+  friend class detail::linearizer;
+
  public:
   /**
    * @brief Construct a new literal object.
@@ -146,6 +138,14 @@ class literal : public node {
   literal(const cudf::detail::fixed_width_scalar_device_view_base value) : value(value) {}
 
   /**
+   * @brief Get the data type.
+   *
+   * @return cudf::data_type
+   */
+  cudf::data_type get_data_type() const { return this->get_value().type(); }
+
+ private:
+  /**
    * @brief Get the value object.
    *
    * @return cudf::detail::fixed_width_scalar_device_view_base
@@ -153,21 +153,13 @@ class literal : public node {
   cudf::detail::fixed_width_scalar_device_view_base get_value() const { return this->value; }
 
   /**
-   * @brief Get the data type.
-   *
-   * @return cudf::data_type
-   */
-  cudf::data_type get_data_type() const { return this->get_value().type(); }
-
-  /**
    * @brief Accepts a visitor class.
    *
    * @param visitor Visitor.
    * @return cudf::size_type Index of device data reference for this instance.
    */
-  cudf::size_type accept(abstract_visitor& visitor) const override { return visitor.visit(*this); }
+  cudf::size_type accept(detail::linearizer& visitor) const override;
 
- private:
   const cudf::detail::fixed_width_scalar_device_view_base value;
 };
 
@@ -175,7 +167,9 @@ class literal : public node {
  * @brief A node referring to data from a column in a table.
  *
  */
-class column_reference : public node {
+class column_reference : public detail::node {
+  friend class detail::linearizer;
+
  public:
   /**
    * @brief Construct a new column reference object
@@ -236,15 +230,15 @@ class column_reference : public node {
     return table.column(this->get_column_index()).type();
   }
 
+ private:
   /**
    * @brief Accepts a visitor class.
    *
    * @param visitor Visitor.
    * @return cudf::size_type Index of device data reference for this instance.
    */
-  cudf::size_type accept(abstract_visitor& visitor) const override { return visitor.visit(*this); }
+  cudf::size_type accept(detail::linearizer& visitor) const override;
 
- private:
   cudf::size_type column_index;
   table_reference table_source;
 };
@@ -253,7 +247,9 @@ class column_reference : public node {
  * @brief An expression node holds an operator and zero or more operands.
  *
  */
-class expression : public node {
+class expression : public detail::node {
+  friend class detail::linearizer;
+
  public:
   /**
    * @brief Construct a new unary expression object.
@@ -296,21 +292,25 @@ class expression : public node {
    */
   std::vector<std::reference_wrapper<const node>> get_operands() const { return this->operands; }
 
+ private:
   /**
    * @brief Accepts a visitor class.
    *
    * @param visitor Visitor.
    * @return cudf::size_type Index of device data reference for this instance.
    */
-  cudf::size_type accept(abstract_visitor& visitor) const override { return visitor.visit(*this); }
+  cudf::size_type accept(detail::linearizer& visitor) const override;
 
- private:
   const ast_operator op;
   const std::vector<std::reference_wrapper<const node>> operands;
 };
 
+namespace detail {
+
 /**
  * @brief The linearizer traverses an abstract syntax tree to prepare for execution on the device.
+ *
+ * This class is part of a "visitor" pattern with the `node` class.
  *
  * This class does pre-processing work on the host, validating operators and operand data types. It
  * traverses downward from a root node in a depth-first fashion, capturing information about
@@ -319,14 +319,19 @@ class expression : public node {
  * resolved into intermediate data storage in shared memory.
  *
  */
-class linearizer : public abstract_visitor {
+class linearizer {
+  friend class detail::node;
+  friend class literal;
+  friend class column_reference;
+  friend class expression;
+
  public:
   /**
    * @brief Construct a new linearizer object
    *
    * @param table The table used for evaluating the abstract syntax tree.
    */
-  linearizer(node const& expr, cudf::table_view table)
+  linearizer(detail::node const& expr, cudf::table_view table)
     : table(table), node_count(0), intermediate_counter()
   {
     expr.accept(*this);
@@ -386,14 +391,13 @@ class linearizer : public abstract_visitor {
     return this->literals;
   }
 
- private:
   /**
    * @brief Visit a literal node.
    *
    * @param expr Literal node.
    * @return cudf::size_type Index of device data reference for the node.
    */
-  cudf::size_type visit(literal const& expr) override;
+  cudf::size_type visit(literal const& expr);
 
   /**
    * @brief Visit a column reference node.
@@ -401,7 +405,7 @@ class linearizer : public abstract_visitor {
    * @param expr Column reference node.
    * @return cudf::size_type Index of device data reference for the node.
    */
-  cudf::size_type visit(column_reference const& expr) override;
+  cudf::size_type visit(column_reference const& expr);
 
   /**
    * @brief Visit an expression node.
@@ -409,8 +413,9 @@ class linearizer : public abstract_visitor {
    * @param expr Expression node.
    * @return cudf::size_type Index of device data reference for the node.
    */
-  cudf::size_type visit(expression const& expr) override;
+  cudf::size_type visit(expression const& expr);
 
+ private:
   std::vector<cudf::size_type> visit_operands(
     std::vector<std::reference_wrapper<const node>> operands);
   cudf::size_type add_data_reference(detail::device_data_reference data_ref);
@@ -424,6 +429,8 @@ class linearizer : public abstract_visitor {
   std::vector<cudf::size_type> operator_source_indices;
   std::vector<cudf::detail::fixed_width_scalar_device_view_base> literals;
 };
+
+}  // namespace detail
 
 }  // namespace ast
 

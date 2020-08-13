@@ -65,8 +65,6 @@ cudf::size_type intermediate_counter::find_first_missing(cudf::size_type start,
   return this->find_first_missing(start, mid);
 }
 
-}  // namespace detail
-
 cudf::size_type linearizer::visit(literal const& expr)
 {
   // Increment the node index
@@ -194,6 +192,18 @@ cudf::size_type linearizer::add_data_reference(detail::device_data_reference dat
     this->data_references.push_back(data_ref);
     return this->data_references.size() - 1;
   }
+}
+
+}  // namespace detail
+
+cudf::size_type literal::accept(detail::linearizer& visitor) const { return visitor.visit(*this); }
+cudf::size_type column_reference::accept(detail::linearizer& visitor) const
+{
+  return visitor.visit(*this);
+}
+cudf::size_type expression::accept(detail::linearizer& visitor) const
+{
+  return visitor.visit(*this);
 }
 
 }  // namespace ast
