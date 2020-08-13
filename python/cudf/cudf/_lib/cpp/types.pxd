@@ -73,6 +73,11 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         DURATION_MICROSECONDS "cudf::type_id::DURATION_MICROSECONDS"
         DURATION_NANOSECONDS "cudf::type_id::DURATION_NANOSECONDS"
 
+    ctypedef enum hash_id "cudf::hash_id":
+        HASH_IDENTITY "cudf::hash_id::HASH_IDENTITY"
+        HASH_MURMUR3 "cudf::hash_id::HASH_MURMUR3"
+        HASH_MD5 "cudf::hash_id::HASH_MD5"
+
     cdef cppclass data_type:
         data_type() except +
         data_type(const data_type&) except +

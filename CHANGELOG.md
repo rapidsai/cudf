@@ -52,6 +52,7 @@
 - PR #5666 Add `filter_characters_of_type` strings API
 - PR #5778 Add support for `cudf::table` to `arrow::Table` and `arrow::Table` to `cudf::table`
 - PR #5673 Always build and test with per-thread default stream enabled in the GPU CI build
+- PR #5438 Add MD5 hash support
 - PR #5704 Initial `fixed_point` Column Support
 - PR #5716 Add `double_type_dispatcher` to libcudf
 - PR #5739 Add `nvtext::detokenize` API
