@@ -544,6 +544,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyLists)
     EXPECT_EQ(child_data.size(), 4);
     test::fixed_width_column_wrapper<T, int32_t> e_child_data({1, 2, 3, 4});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_data, child_data);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(e_child_data, child_data);
   }
 
   // List<List<T>>, mixed

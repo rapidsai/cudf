@@ -15,6 +15,7 @@
  */
 
 #include "column_utilities.hpp"
+#include "cudf/utilities/error.hpp"
 #include "cudf/utilities/type_dispatcher.hpp"
 #include "detail/column_utilities.hpp"
 #include "thrust/iterator/counting_iterator.h"
@@ -47,12 +48,17 @@ namespace test {
 
 namespace {
 
-template <bool check_exact_equality>
+template <bool check_exact_equality, bool compare_sizes=true> 
 struct column_property_comparator {
+<<<<<<< HEAD
   void compare_common(cudf::column_view const& lhs, cudf::column_view const& rhs)
+=======
+  template <typename T>
+  void operator()(cudf::column_view const& lhs, cudf::column_view const& rhs) 
+>>>>>>> [WIP] [list_eq] Initial commit:
   {
     EXPECT_EQ(lhs.type(), rhs.type());
-    EXPECT_EQ(lhs.size(), rhs.size());
+    if (compare_sizes) { EXPECT_EQ(lhs.size(), rhs.size()); }
     if (lhs.size() > 0 && check_exact_equality) { EXPECT_EQ(lhs.nullable(), rhs.nullable()); }
 
     // equivalent, but not exactly equal columns can have a different number of children if their
@@ -62,6 +68,7 @@ struct column_property_comparator {
     }
   }
 
+<<<<<<< HEAD
   template <typename T, std::enable_if_t<!std::is_same<T, cudf::list_view>::value>* = nullptr>
   void operator()(cudf::column_view const& lhs, cudf::column_view const& rhs)
   {
@@ -81,6 +88,28 @@ struct column_property_comparator {
                           column_property_comparator<check_exact_equality>{},
                           lhs_l.get_sliced_child(0),
                           rhs_l.get_sliced_child(0));
+=======
+    // only recurse for true nested types.
+    // - strings are an odd case of not being a nested type which do have children. but because
+    //   of the way strings handle offsets (sliced/split columns), direct comparison between two
+    //   sets of child columns can produce false failures - the sizes may not match.  the truly
+    //   correct way to do this would be to implement a specialization for strings (and
+    //   dictionaries, lists, etc) that explicitly understand this structure.  but for now, this
+    //   seems to be ok.
+    if (cudf::is_nested<T>()) {
+      for (size_type idx = 0; idx < lhs.num_children(); idx++) {
+        cudf::type_dispatcher(
+          lhs.child(idx).type(),
+          column_property_comparator<
+            check_exact_equality, 
+            check_exact_equality 
+            || !std::is_same<T, cudf::list_view>::value>{}, // Skip child-col size checks for
+                                                            // equivalence checks on lists. 
+          lhs.child(idx),
+          rhs.child(idx));
+      }
+    }
+>>>>>>> [WIP] [list_eq] Initial commit:
   }
 };
 
@@ -236,6 +265,7 @@ struct column_comparator_impl<list_view, check_exact_equality> {
                   bool print_all_differences,
                   int depth)
   {
+    printf("CALEB: EQUALITY! column_property_comparator_impl()\n");
     lists_column_view lhs_l(lhs);
     lists_column_view rhs_l(rhs);
 
@@ -324,6 +354,37 @@ struct column_comparator_impl<list_view, check_exact_equality> {
   }
 };
 
+template <>
+struct column_comparator_impl<list_view, false>
+{
+  void operator()(column_view const& lhs, column_view const& rhs, bool print_all_differences, int depth)
+  {
+    printf("CALEB: EQUIVALENCE! column_comparator_impl<list_view, false>()!\n");
+    using ComparatorType = corresponding_rows_not_equivalent;
+
+    // If lhs and rhs are of different types, fail.
+    CUDF_EXPECTS(lhs.type().id() == rhs.type().id(), "Expected same data-type.");
+
+    // If lhs and rhs have different row-counts, fail also.
+    CUDF_EXPECTS(lhs.size() == rhs.size(), "Expected same row-count!"); // TODO: More descriptive message.
+
+    auto d_lhs = cudf::table_device_view::create(table_view{{lhs}});
+    auto d_rhs = cudf::table_device_view::create(table_view{{rhs}});
+
+    // worst case - everything is different
+    thrust::device_vector<int> differences(lhs.size());
+
+    auto diff_iter = thrust::copy_if(thrust::device,
+                                     thrust::make_counting_iterator(0),
+                                     thrust::make_counting_iterator(lhs.size()),
+                                     differences.begin(),
+                                     ComparatorType(*d_lhs, *d_rhs));
+
+    // shrink back down
+    differences.resize(thrust::distance(differences.begin(), diff_iter));
+    print_differences(differences, lhs, rhs, print_all_differences, depth);}
+};
+
 template <bool check_exact_equality>
 struct column_comparator_impl<struct_view, check_exact_equality> {
   void operator()(column_view const& lhs,
@@ -352,9 +413,14 @@ struct column_comparator {
                   bool print_all_differences,
                   int depth = 0)
   {
+    printf("CALEB: column_comparator: About to check column properties!\n");
+    printf("CALEB: lhs size == %d\n", static_cast<int>(lhs.size()));
+    printf("CALEB: rhs size == %d\n", static_cast<int>(rhs.size()));
+    printf("CALEB: type == %d\n", static_cast<int>(lhs.type().id()));
     // compare properties
     cudf::type_dispatcher(lhs.type(), column_property_comparator<check_exact_equality>{}, lhs, rhs);
 
+    printf("CALEB: column_comparator: About to check column values!\n");
     // compare values
     column_comparator_impl<T, check_exact_equality> comparator{};
     comparator(lhs, rhs, print_all_differences, depth);

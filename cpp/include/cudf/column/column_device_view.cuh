@@ -18,7 +18,6 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <cudf/column/column_view.hpp>
-#include <cudf/lists/list_view.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/structs/struct_view.hpp>
@@ -407,6 +406,11 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   __device__ column_device_view child(size_type child_index) const noexcept
   {
     return d_children[child_index];
+  }
+
+  __device__ size_type num_children() const noexcept
+  {
+    return _num_children;
   }
 
  protected:
