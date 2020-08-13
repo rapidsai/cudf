@@ -170,15 +170,15 @@ std::string name_from_path(const std::vector<std::string> &path_in_schema)
   // In short, this means : return the highest level of the schema that does not have list
   // definitions underneath it.
   //
-  std::string s   = (path_in_schema.size() > 0) ? path_in_schema[0] : "";
+  std::string s = (path_in_schema.size() > 0) ? path_in_schema[0] : "";
   for (size_t i = 1; i < path_in_schema.size(); i++) {
     // if we encounter a field named "list", do some checking to ensure that this
     // is actually a list field.
     if (path_in_schema[i] == "list") {
-      // strictly speaking, the Parquet spec says the inner field should be named 
-      // "element", but some libraries seem to get this wrong.  Pandas names it 
+      // strictly speaking, the Parquet spec says the inner field should be named
+      // "element", but some libraries seem to get this wrong.  Pandas names it
       // "item". So for now we'll just let it be anything.
-      i++;      
+      i++;
       continue;
     }
     // otherwise, we've got a real nested column. update the name
@@ -729,13 +729,14 @@ void reader::impl::allocate_nesting_info(
 
   // compute total # of page_nesting infos needed and allocate space. doing this in one
   // buffer to keep it to a single gpu allocation
-  size_t const total_page_nesting_infos = std::accumulate(chunks.host_ptr(), chunks.host_ptr() + chunks.size(), 0, [&](int total, auto& chunk){
-    auto const col_index = chunk.col_index;
-    // the leaf schema represents the bottom of the nested hierarchy
-    auto const& leaf_schema              = _metadata->get_column_leaf_schema(col_index);
-    auto const per_page_nesting_info_size = leaf_schema.max_definition_level + 1;
-    return total + (per_page_nesting_info_size * chunk.num_data_pages);
-  });
+  size_t const total_page_nesting_infos = std::accumulate(
+    chunks.host_ptr(), chunks.host_ptr() + chunks.size(), 0, [&](int total, auto &chunk) {
+      auto const col_index = chunk.col_index;
+      // the leaf schema represents the bottom of the nested hierarchy
+      auto const &leaf_schema               = _metadata->get_column_leaf_schema(col_index);
+      auto const per_page_nesting_info_size = leaf_schema.max_definition_level + 1;
+      return total + (per_page_nesting_info_size * chunk.num_data_pages);
+    });
 
   page_nesting_info = hostdevice_vector<gpu::PageNestingInfo>{total_page_nesting_infos, stream};
 

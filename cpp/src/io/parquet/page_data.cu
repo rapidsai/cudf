@@ -1385,7 +1385,7 @@ __device__ void gpuDecodeLevels(page_state_s *s, int32_t target_leaf_count, int 
  * @param[in] s The local page info
  * @param[in] target_input_value_count The # of repetition/definition levels to process up to
  * @param[in] t Thread index
- * @param[in] bounds_set Whether or not s->row_index_lower_bound, s->first_row and s->num_rows 
+ * @param[in] bounds_set Whether or not s->row_index_lower_bound, s->first_row and s->num_rows
  * have been computed for this page (they will only be set in the second/trim pass).
  */
 static __device__ void gpuUpdatePageSizes(page_state_s *s,
@@ -1677,13 +1677,12 @@ struct chunk_row_output_iter {
   {
     return chunk_row_output_iter{p + i};
   }
-  chunk_row_output_iter operator[] __host__ __device__(int i)
-  {
-    return chunk_row_output_iter{p + i};
-  }
+
   void operator++ __host__ __device__() { p++; }
-  reference operator*__host__ __device__() { return p->chunk_row; }
-  void operator= __host__ __device__(value_type v) { p->chunk_row = v; }
+
+  reference operator[] __device__(int i) { return p[i].chunk_row; }
+  reference operator*__device__() { return p->chunk_row; }
+  void operator= __device__(value_type v) { p->chunk_row = v; }
 };
 
 struct start_offset_output_iterator {
@@ -1701,21 +1700,23 @@ struct start_offset_output_iterator {
   {
     return start_offset_output_iterator{p + i, col_index, nesting_depth};
   }
-  start_offset_output_iterator operator[] __host__ __device__(int i)
-  {
-    return start_offset_output_iterator{p + i, col_index, nesting_depth};
-  }
+
   void operator++ __host__ __device__() { p++; }
-  reference operator*__host__ __device__()
+
+  reference operator[] __device__(int i) { return dereference(p + i); }
+  reference operator*__device__() { return dereference(p); }
+  void operator= __device__(value_type v)
+  {
+    if (p->column_idx == col_index && !(p->flags & PAGEINFO_FLAGS_DICTIONARY)) {
+      p->nesting[nesting_depth].page_start_value = 2;
+    }
+  }
+
+ private:
+  reference __device__ dereference(PageInfo *p)
   {
     if (p->column_idx != col_index || p->flags & PAGEINFO_FLAGS_DICTIONARY) { return empty; }
     return p->nesting[nesting_depth].page_start_value;
-  }
-  void operator= __host__ __device__(value_type v)
-  {
-    if (p->column_idx == col_index && !(p->flags & PAGEINFO_FLAGS_DICTIONARY)) {
-      p->nesting[nesting_depth].page_start_value = v;
-    }
   }
 };
 

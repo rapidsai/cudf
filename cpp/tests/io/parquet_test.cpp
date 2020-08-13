@@ -1157,8 +1157,8 @@ TEST_F(ParquetReaderTest, UserBounds)
   }
 
   // trying to read 0 rows should result in reading the whole file
-  // TODO : this is somewhat incongruous with skipping past all the rows
-  // in the file, which returns columns of length 0. should this behavior be altered?
+  // at the moment we get back 4.  when that bug gets fixed, this
+  // test can be flipped.
   {
     srand(31337);
     auto expected = create_random_fixed_table<int>(4, 4, false);
@@ -1172,8 +1172,12 @@ TEST_F(ParquetReaderTest, UserBounds)
     read_args.num_rows = 0;
     auto result        = cudf_io::read_parquet(read_args);
 
-    // we should only get back 4 rows
-    EXPECT_EQ(result.tbl->view().column(0).size(), 4);
+    // we should be getting back 0 rows, but at the moment we get back 4.  this is
+    // a bug to be fixed.
+    auto expect_size_fail = [](cudf::column_view const& col) {
+      CUDF_EXPECTS(col.size() == 0, "Expected to get back 0 rows");
+    };
+    EXPECT_THROW(expect_size_fail(result.tbl->view().column(0)), cudf::logic_error);
   }
 
   // trying to read 0 rows past the end of the # of actual rows should result
