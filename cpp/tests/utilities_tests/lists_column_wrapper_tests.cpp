@@ -1097,7 +1097,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, IncompleteHierarchies)
 
   {
     // { {{{1, 2, 3}, {4, 5}}}, {{}, {{}}}, {}, {{}, {}} }
-    cudf::test::lists_column_wrapper<T> list{
+    cudf::test::lists_column_wrapper<T, int32_t> list{
       {{{1, 2, 3}, {4, 5}}}, {LCW{}, {LCW{}}}, LCW{}, {LCW{}, LCW{}}};
     lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 4);
