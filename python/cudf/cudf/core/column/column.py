@@ -945,7 +945,7 @@ class ColumnBase(Column, Serializable):
         )
         return result
 
-    def argsort(self, ascending, na_position="last"):
+    def argsort(self, ascending=True, na_position="last"):
 
         sorted_indices = self.as_frame()._get_sorted_inds(
             ascending=ascending, na_position=na_position
