@@ -6,15 +6,22 @@ import pyarrow as pa
 import pytest
 
 import cudf
+from cudf._lib.transform import mask_to_bools
 from cudf.core.column.column import as_column
 from cudf.tests.utils import assert_eq
 from cudf.utils import dtypes as dtypeutils
-from cudf._lib.transform import mask_to_bools
 
 dtypes = sorted(
     list(
         dtypeutils.ALL_TYPES
-        - {"datetime64[s]", "datetime64[ms]", "datetime64[us]"}
+        - {
+            "datetime64[s]",
+            "datetime64[ms]",
+            "datetime64[us]",
+            "timedelta64[s]",
+            "timedelta64[ms]",
+            "timedelta64[us]",
+        }
     )
 )
 
@@ -32,7 +39,7 @@ def str_host_view(list_of_str, to_dtype):
 
 
 @pytest.mark.parametrize("offset", [0, 1, 15])
-@pytest.mark.parametrize("size", [None, 50, 10, 0])
+@pytest.mark.parametrize("size", [50, 10, 0])
 def test_column_offset_and_size(pandas_input, offset, size):
     col = cudf.core.column.as_column(pandas_input)
     col = cudf.core.column.build_column(

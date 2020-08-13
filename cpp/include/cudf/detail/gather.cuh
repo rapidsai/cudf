@@ -323,7 +323,8 @@ struct column_gatherer_impl<list_view, MapItRoot> {
   {
     lists_column_view list(column);
     auto gather_map_size = std::distance(gather_map_begin, gather_map_end);
-    if (gather_map_size == 0) { return make_empty_column(data_type{type_id::LIST}); }
+    // if the gather map is empty, return an empty column
+    if (gather_map_size == 0) { return empty_like(column); }
 
     // generate gather_data for the next level (N+1)
     lists::detail::gather_data gd = nullify_out_of_bounds

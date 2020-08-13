@@ -24,7 +24,12 @@
 
 #include <jit/cache.h>
 
-struct JitCacheTest : public cudf::test::BaseFixture, public cudf::jit::cudfJitCache {
+// Note that this test does not inherit from cudf::test::BaseFixture because
+// doing so would cause the CUDA context to be created before the fork in
+// the JitCacheMultiProcessTest, where we need it to be created after the fork
+// to ensure the forked child has a context. These tests do not need the
+// memory_resource member of BaseFixture.
+struct JitCacheTest : public ::testing::Test, public cudf::jit::cudfJitCache {
   JitCacheTest() : grid(1), block(1) {}
 
   virtual ~JitCacheTest() {}
