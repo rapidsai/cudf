@@ -58,10 +58,10 @@ TEST_F(RollingStringTest, NoNullStringMinMaxCount)
   auto got_count_all = cudf::rolling_window(
     input, window[0], window[0], 1, cudf::make_count_aggregation(cudf::null_policy::INCLUDE));
 
-  cudf::test::expect_columns_equal(expected_min, got_min->view());
-  cudf::test::expect_columns_equal(expected_max, got_max->view());
-  cudf::test::expect_columns_equal(expected_count, got_count_valid->view());
-  cudf::test::expect_columns_equal(expected_count, got_count_all->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_min, got_min->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_max, got_max->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_count, got_count_valid->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_count, got_count_all->view());
 }
 
 TEST_F(RollingStringTest, NullStringMinMaxCount)
@@ -88,10 +88,10 @@ TEST_F(RollingStringTest, NullStringMinMaxCount)
   auto got_count_all = cudf::rolling_window(
     input, window[0], window[0], 1, cudf::make_count_aggregation(cudf::null_policy::INCLUDE));
 
-  cudf::test::expect_columns_equal(expected_min, got_min->view());
-  cudf::test::expect_columns_equal(expected_max, got_max->view());
-  cudf::test::expect_columns_equal(expected_count_val, got_count_valid->view());
-  cudf::test::expect_columns_equal(expected_count_all, got_count_all->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_min, got_min->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_max, got_max->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_count_val, got_count_valid->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_count_all, got_count_all->view());
 }
 
 TEST_F(RollingStringTest, MinPeriods)
@@ -118,10 +118,10 @@ TEST_F(RollingStringTest, MinPeriods)
   auto got_count_all = cudf::rolling_window(
     input, window[0], window[0], 4, cudf::make_count_aggregation(cudf::null_policy::INCLUDE));
 
-  cudf::test::expect_columns_equal(expected_min, got_min->view());
-  cudf::test::expect_columns_equal(expected_max, got_max->view());
-  cudf::test::expect_columns_equal(expected_count_val, got_count_valid->view());
-  cudf::test::expect_columns_equal(expected_count_all, got_count_all->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_min, got_min->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_max, got_max->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_count_val, got_count_valid->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_count_all, got_count_all->view());
 }
 
 TEST_F(RollingStringTest, ZeroWindowSize)
@@ -134,7 +134,7 @@ TEST_F(RollingStringTest, ZeroWindowSize)
 
   auto got_count = cudf::rolling_window(input, 0, 0, 0, cudf::make_count_aggregation());
 
-  cudf::test::expect_columns_equal(expected_count, got_count->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_count, got_count->view());
 }
 
 template <typename T>
@@ -180,7 +180,7 @@ class RollingTest : public cudf::test::BaseFixture {
     std::cout << "\n";
 #endif
 
-    cudf::test::expect_columns_equal(*output, *reference);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*output, *reference);
   }
 
   // helper function to test all aggregators
@@ -892,7 +892,7 @@ TEST_F(RollingTestUdf, StaticWindow)
 
   EXPECT_NO_THROW(output = cudf::rolling_window(input, 2, 2, 4, cuda_udf_agg));
 
-  cudf::test::expect_columns_equal(*output, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*output, expected);
 
   // Test NUMBA UDF
   auto ptx_udf_agg = cudf::make_udf_aggregation(
@@ -900,7 +900,7 @@ TEST_F(RollingTestUdf, StaticWindow)
 
   EXPECT_NO_THROW(output = cudf::rolling_window(input, 2, 2, 4, ptx_udf_agg));
 
-  cudf::test::expect_columns_equal(*output, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*output, expected);
 }
 
 TEST_F(RollingTestUdf, DynamicWindow)
@@ -938,7 +938,7 @@ TEST_F(RollingTestUdf, DynamicWindow)
 
   EXPECT_NO_THROW(output = cudf::rolling_window(input, preceding, following, 2, cuda_udf_agg));
 
-  cudf::test::expect_columns_equal(*output, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*output, expected);
 
   // Test PTX UDF
   auto ptx_udf_agg = cudf::make_udf_aggregation(
@@ -946,7 +946,7 @@ TEST_F(RollingTestUdf, DynamicWindow)
 
   EXPECT_NO_THROW(output = cudf::rolling_window(input, preceding, following, 2, ptx_udf_agg));
 
-  cudf::test::expect_columns_equal(*output, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*output, expected);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

@@ -44,14 +44,14 @@ TEST_F(TextEditDistanceTest, EditDistance)
     auto results =
       nvtext::edit_distance(cudf::strings_column_view(strings), cudf::strings_column_view(targets));
     cudf::test::fixed_width_column_wrapper<int32_t> expected({1, 3, 2, 1, 3, 0, 0, 1});
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     cudf::test::strings_column_wrapper single({"pup"});
     auto results =
       nvtext::edit_distance(cudf::strings_column_view(strings), cudf::strings_column_view(single));
     cudf::test::fixed_width_column_wrapper<int32_t> expected({3, 3, 3, 4, 0, 3, 2, 3});
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
 
@@ -75,7 +75,7 @@ TEST_F(TextEditDistanceTest, EditDistanceMatrix)
                   LCW{3, 0, 3, 4, 3, 0, 3, 4},
                   LCW{3, 3, 2, 4, 1, 3, 0, 4},
                   LCW{2, 4, 2, 2, 3, 4, 4, 0}});
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
 

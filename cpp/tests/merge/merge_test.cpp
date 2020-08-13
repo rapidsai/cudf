@@ -64,7 +64,7 @@ TYPED_TEST(MergeTest_, MergeIsZeroWhenShouldNotBeZero)
 
   int expected_len = 5;
   ASSERT_EQ(result->num_rows(), expected_len);
-  cudf::test::expect_tables_equal(expected, result->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result->view());
 }
 
 TYPED_TEST(MergeTest_, MismatchedNumColumns)
@@ -226,7 +226,7 @@ TYPED_TEST(MergeTest_, SingleTableInput)
   auto input_column_view{left_view.column(0)};
   auto output_column_view{p_outputTable->view().column(0)};
 
-  cudf::test::expect_columns_equal(input_column_view, output_column_view);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(input_column_view, output_column_view);
 }
 
 TYPED_TEST(MergeTest_, MergeTwoEmptyTables)
@@ -247,7 +247,7 @@ TYPED_TEST(MergeTest_, MergeTwoEmptyTables)
   CUDF_EXPECT_NO_THROW(
     p_outputTable = cudf::merge({left_view, right_view}, key_cols, column_order, null_precedence));
 
-  cudf::test::expect_tables_equal(left_view, p_outputTable->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(left_view, p_outputTable->view());
 }
 
 TYPED_TEST(MergeTest_, MergeWithEmptyColumn)
@@ -287,7 +287,7 @@ TYPED_TEST(MergeTest_, MergeWithEmptyColumn)
   auto expected_column_view{static_cast<cudf::column_view const&>(expectedDataWrap1)};
   auto output_column_view{p_outputTable->view().column(0)};
 
-  cudf::test::expect_columns_equal(expected_column_view, output_column_view);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view, output_column_view);
 }
 
 TYPED_TEST(MergeTest_, Merge1KeyColumns)
@@ -368,8 +368,8 @@ TYPED_TEST(MergeTest_, Merge1KeyColumns)
   auto output_column_view1{p_outputTable->view().column(0)};
   auto output_column_view2{p_outputTable->view().column(1)};
 
-  cudf::test::expect_columns_equal(expected_column_view1, output_column_view1);
-  cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view1, output_column_view1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view2, output_column_view2);
 }
 
 TYPED_TEST(MergeTest_, Merge2KeyColumns)
@@ -455,8 +455,8 @@ TYPED_TEST(MergeTest_, Merge2KeyColumns)
   auto output_column_view1{p_outputTable->view().column(0)};
   auto output_column_view2{p_outputTable->view().column(1)};
 
-  cudf::test::expect_columns_equal(expected_column_view1, output_column_view1);
-  cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view1, output_column_view1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view2, output_column_view2);
 }
 
 TYPED_TEST(MergeTest_, Merge1KeyNullColumns)
@@ -541,7 +541,7 @@ TYPED_TEST(MergeTest_, Merge1KeyNullColumns)
   auto expected_column_view1{static_cast<cudf::column_view const&>(expectedDataWrap1)};
   auto output_column_view1{p_outputTable->view().column(0)};
 
-  cudf::test::expect_columns_equal(expected_column_view1, output_column_view1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view1, output_column_view1);
 }
 
 TYPED_TEST(MergeTest_, Merge2KeyNullColumns)
@@ -648,8 +648,8 @@ TYPED_TEST(MergeTest_, Merge2KeyNullColumns)
   auto output_column_view1{p_outputTable->view().column(0)};
   auto output_column_view2{p_outputTable->view().column(1)};
 
-  cudf::test::expect_columns_equal(expected_column_view1, output_column_view1);
-  cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view1, output_column_view1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view2, output_column_view2);
 }
 
 TYPED_TEST(MergeTest_, NMerge1KeyColumns)
@@ -715,8 +715,8 @@ TYPED_TEST(MergeTest_, NMerge1KeyColumns)
   auto output_column_view1{p_outputTable->view().column(0)};
   auto output_column_view2{p_outputTable->view().column(1)};
 
-  cudf::test::expect_columns_equal(expected_column_view1, output_column_view1);
-  cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view1, output_column_view1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view2, output_column_view2);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

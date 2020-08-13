@@ -36,7 +36,7 @@ void normalize_nans_and_zeros_test_internal(
     cudf::normalize_nans_and_zeros(mutable_view);
 
     // compare bitwise
-    cudf::test::expect_equal_buffers(
+    CUDF_TEST_EXPECT_EQUAL_BUFFERS(
       mutable_view.head(), test_data_comp.head(), mutable_view.size() * sizeof(T));
   }
 
@@ -49,7 +49,7 @@ void normalize_nans_and_zeros_test_internal(
     auto out_view = out->view();
 
     // compare bitwise
-    cudf::test::expect_equal_buffers(
+    CUDF_TEST_EXPECT_EQUAL_BUFFERS(
       out_view.head(), test_data_comp.head(), out_view.size() * sizeof(T));
   }
 }
