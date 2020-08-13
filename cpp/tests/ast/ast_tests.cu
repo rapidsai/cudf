@@ -250,6 +250,22 @@ struct custom_functor {
   }
 };
 
+TEST_F(ASTTest, StringComparison)
+{
+  auto c_0   = cudf::test::strings_column_wrapper({"a", "bb", "ccc", "dddd"});
+  auto c_1   = cudf::test::strings_column_wrapper({"aa", "b", "cccc", "ddd"});
+  auto table = cudf::table_view{{c_0, c_1}};
+
+  auto col_ref_0  = cudf::ast::column_reference(0);
+  auto col_ref_1  = cudf::ast::column_reference(1);
+  auto expression = cudf::ast::expression(cudf::ast::ast_operator::LESS, col_ref_0, col_ref_1);
+
+  auto expected = column_wrapper<bool>{true, false, true, false};
+  auto result   = cudf::ast::compute_column(table, expression);
+
+  cudf::test::expect_columns_equal(expected, result->view(), true);
+}
+
 TEST_F(ASTTest, CustomASTFunctor)
 {
   int result = 0;
