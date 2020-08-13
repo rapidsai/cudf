@@ -174,7 +174,7 @@ struct ColumnChunkDesc {
                                               // num_data_pages (dictionary pages first)
   nvstrdesc_s *str_dict_index;                // index for string dictionary
   uint32_t **valid_map_base;                  // base pointers of valid bit map for this column
-  void **column_data_base;                    // base pointer of column data
+  void **column_data_base;                    // base pointers of column data
   int8_t codec;                               // compressed codec enum
   int8_t converted_type;                      // converted type enum
   int8_t decimal_scale;                       // decimal scale pow(10, -decimal_scale)
@@ -341,7 +341,7 @@ cudaError_t PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
  * @param[in,out] pages All pages to be decoded
  * @param[in] chunks All chunks to be decoded
  * @param[in] num_rows Total number of rows to read
- * @param[in] min_row Minimum number of rows to read, default 0
+ * @param[in] min_row Minimum number of rows to read
  * @param[in] stream CUDA stream to use, default 0
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise

@@ -1385,6 +1385,8 @@ __device__ void gpuDecodeLevels(page_state_s *s, int32_t target_leaf_count, int 
  * @param[in] s The local page info
  * @param[in] target_input_value_count The # of repetition/definition levels to process up to
  * @param[in] t Thread index
+ * @param[in] bounds_set Whether or not s->row_index_lower_bound, s->first_row and s->num_rows 
+ * have been computed for this page (they will only be set in the second/trim pass).
  */
 static __device__ void gpuUpdatePageSizes(page_state_s *s,
                                           int32_t target_input_value_count,
@@ -1474,6 +1476,12 @@ static __device__ void gpuUpdatePageSizes(page_state_s *s,
  * @param[in,out] pages List of pages
  * @param[in] chunks List of column chunks
  * @param[in] num_chunks Number of column chunks
+ * @param[in] min_row Row index to start reading at
+ * @param[in] num_rows Maximum number of rows to read
+ * @param[in] num_chunks Number of column chunks
+ * @param[in] trim_pass Whether or not this is the trim pass.  We first have to compute
+ * the full size information of every page before we come through in a second (trim) pass
+ * to determine what subset of rows in this page we should be reading.
  */
 // blockDim {NTHREADS,1,1}
 extern "C" __global__ void __launch_bounds__(NTHREADS)
@@ -1558,7 +1566,7 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
  *
  * @param[in] pages List of pages
  * @param[in,out] chunks List of column chunks
- * @param[in] min_row
+ * @param[in] min_row Row index to start reading at
  * @param[in] num_rows Maximum number of rows to read
  * @param[in] num_chunks Number of column chunks
  */

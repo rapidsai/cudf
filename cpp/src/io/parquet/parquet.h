@@ -77,7 +77,7 @@ struct SchemaElement {
 };
 
 /**
- * @brief Thrift-derived struct describing a column of data
+ * @brief Thrift-derived struct describing a column chunk
  **/
 struct ColumnChunkMetaData {
   Type type = BOOLEAN;

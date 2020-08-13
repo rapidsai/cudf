@@ -171,21 +171,14 @@ std::string name_from_path(const std::vector<std::string> &path_in_schema)
   // definitions underneath it.
   //
   std::string s   = (path_in_schema.size() > 0) ? path_in_schema[0] : "";
-  bool skip_field = false;
   for (size_t i = 1; i < path_in_schema.size(); i++) {
-    // if we're skipping this field (in the case of a list)
-    if (skip_field) {
-      // strictly speaking, the Parquet spec says this should be named "element", but
-      // some libraries seem to get this wrong.  Pandas names it "item". So for now
-      // we'll just ignore it and assume it's simply the inner element of a list
-      // declaration.
-      skip_field = false;
-      continue;
-    }
     // if we encounter a field named "list", do some checking to ensure that this
     // is actually a list field.
     if (path_in_schema[i] == "list") {
-      skip_field = true;
+      // strictly speaking, the Parquet spec says the inner field should be named 
+      // "element", but some libraries seem to get this wrong.  Pandas names it 
+      // "item". So for now we'll just let it be anything.
+      i++;      
       continue;
     }
     // otherwise, we've got a real nested column. update the name
@@ -736,17 +729,15 @@ void reader::impl::allocate_nesting_info(
 
   // compute total # of page_nesting infos needed and allocate space. doing this in one
   // buffer to keep it to a single gpu allocation
-  int total_page_nesting_infos = 0;
-  for (size_t idx = 0; idx < chunks.size(); idx++) {
-    int col_index = chunks[idx].col_index;
+  size_t const total_page_nesting_infos = std::accumulate(chunks.host_ptr(), chunks.host_ptr() + chunks.size(), 0, [&](int total, auto& chunk){
+    auto const col_index = chunk.col_index;
     // the leaf schema represents the bottom of the nested hierarchy
-    auto &leaf_schema              = _metadata->get_column_leaf_schema(col_index);
-    int per_page_nesting_info_size = leaf_schema.max_definition_level + 1;
-    total_page_nesting_infos += (per_page_nesting_info_size * chunks[idx].num_data_pages);
-  }
+    auto const& leaf_schema              = _metadata->get_column_leaf_schema(col_index);
+    auto const per_page_nesting_info_size = leaf_schema.max_definition_level + 1;
+    return total + (per_page_nesting_info_size * chunk.num_data_pages);
+  });
 
-  hostdevice_vector<gpu::PageNestingInfo> pni(total_page_nesting_infos);
-  page_nesting_info = std::move(pni);
+  page_nesting_info = hostdevice_vector<gpu::PageNestingInfo>{total_page_nesting_infos, stream};
 
   // retrieve from the gpu so we can update
   pages.device_to_host(stream, true);

@@ -166,6 +166,7 @@ class reader::impl {
    *
    * @param[in,out] chunks All chunks to be decoded
    * @param[in,out] pages All pages to be decoded
+   * @param[in,out] page_nesting info Per column-chunk nesting information
    * @param[in,out] nested_info Per-output column nesting information (size, nullability)
    * @param[in] num_rows Maximum number of rows to read
    * @param[in] min_rows crop all rows below min_row
@@ -187,7 +188,6 @@ class reader::impl {
    * @param page_nesting Page nesting array
    * @param min_row Minimum number of rows from start
    * @param total_rows Number of rows to output
-   * @param chunk_map Mapping between chunk and column
    * @param out_buffers Output columns' device buffers
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
