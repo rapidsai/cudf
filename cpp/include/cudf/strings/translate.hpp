@@ -16,7 +16,10 @@
 #pragma once
 
 #include <cudf/column/column.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+
+#include <vector>
 
 namespace cudf {
 namespace strings {
@@ -48,6 +51,35 @@ namespace strings {
 std::unique_ptr<column> translate(
   strings_column_view const& strings,
   std::vector<std::pair<char_utf8, char_utf8>> const& chars_table,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Removes specified characters from each string in a strings column.
+ *
+ * This can also be used to keep only specified characters and remove all others
+ * from each string.
+ *
+ * Null string entries result in null entries in the output column.
+ *
+ * @code{.pseudo}
+ * Example:
+ * s = ["aa","bbb","cccc","abcd"]
+ *
+ * @endcode
+ *
+ * @param strings Strings instance for this operation.
+ * @param characters_to_filter Table of character ranges to filter on.
+ * @param keep_characters If true, the `characters_to_filter` are retained and all other characters
+ * are removed.
+ * @param replacement Optional replacement string for each character removed.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return New column with padded strings.
+ */
+std::unique_ptr<column> filter_characters(
+  strings_column_view const& strings,
+  std::vector<std::pair<cudf::char_utf8, cudf::char_utf8>> characters_to_filter,
+  bool keep_characters                = true,
+  string_scalar const& replacement    = string_scalar(""),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** @} */  // end of doxygen group
