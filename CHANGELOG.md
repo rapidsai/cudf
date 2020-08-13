@@ -265,6 +265,7 @@
 - PR #5745 Update JNI cast for inability to cast timestamp and integer types
 - PR #5750 Add RMM_ROOT/include to the spdlog search path in JNI build
 - PR #5763 Update Java slf4j version to match Spark 3.0
+- PR #5816 Always preserve list column hierarchies across operations.
 - PR #5766 Fix issue related to `iloc` and slicing a `DataFrame`
 - PR #5827 Revert fallback for `tolist` being absent
 - PR #5774 Add fallback for when `tolist` is absent
