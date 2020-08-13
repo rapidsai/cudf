@@ -84,7 +84,7 @@ TYPED_TEST(cudf_logical_test, LogicalNot)
 
   auto output = cudf::unary_operation(input, cudf::unary_op::NOT);
 
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_logical_test, SimpleLogicalNot)
@@ -92,7 +92,7 @@ TYPED_TEST(cudf_logical_test, SimpleLogicalNot)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{true, true, true, true}};
   cudf::test::fixed_width_column_wrapper<bool> expected{{false, false, false, false}};
   auto output = cudf::unary_operation(input, cudf::unary_op::NOT);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_logical_test, SimpleLogicalNotWithNullMask)
@@ -100,7 +100,7 @@ TYPED_TEST(cudf_logical_test, SimpleLogicalNotWithNullMask)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{true, true, true, true}, {1, 0, 1, 1}};
   cudf::test::fixed_width_column_wrapper<bool> expected{{false, true, false, false}, {1, 0, 1, 1}};
   auto output = cudf::unary_operation(input, cudf::unary_op::NOT);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_logical_test, EmptyLogicalNot)
@@ -108,7 +108,7 @@ TYPED_TEST(cudf_logical_test, EmptyLogicalNot)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{};
   cudf::test::fixed_width_column_wrapper<bool> expected{};
   auto output = cudf::unary_operation(input, cudf::unary_op::NOT);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 template <typename T>
@@ -140,7 +140,7 @@ TYPED_TEST(cudf_math_test, ABS)
 
   auto const output = cudf::unary_operation(input, cudf::unary_op::ABS);
 
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_test, SQRT)
@@ -167,7 +167,7 @@ TYPED_TEST(cudf_math_test, SQRT)
 
   auto const output = cudf::unary_operation(input, cudf::unary_op::SQRT);
 
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_test, SimpleABS)
@@ -176,7 +176,7 @@ TYPED_TEST(cudf_math_test, SimpleABS)
   cudf::test::fixed_width_column_wrapper<TypeParam> input(v.begin(), v.end());
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{2, 1, 1, 2}};
   auto output = cudf::unary_operation(input, cudf::unary_op::ABS);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_test, SimpleSQRT)
@@ -184,7 +184,7 @@ TYPED_TEST(cudf_math_test, SimpleSQRT)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{1, 4, 9, 16}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{1, 2, 3, 4}};
   auto output = cudf::unary_operation(input, cudf::unary_op::SQRT);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_test, SimpleCBRT)
@@ -192,7 +192,7 @@ TYPED_TEST(cudf_math_test, SimpleCBRT)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{1, 27, 125}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{1, 3, 5}};
   auto output = cudf::unary_operation(input, cudf::unary_op::CBRT);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_test, SimpleSQRTWithNullMask)
@@ -200,7 +200,7 @@ TYPED_TEST(cudf_math_test, SimpleSQRTWithNullMask)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{1, 4, 9, 16}, {1, 1, 0, 1}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{1, 2, 9, 4}, {1, 1, 0, 1}};
   auto output = cudf::unary_operation(input, cudf::unary_op::SQRT);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_test, SimpleCBRTWithNullMask)
@@ -208,7 +208,7 @@ TYPED_TEST(cudf_math_test, SimpleCBRTWithNullMask)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{1, 27, 125}, {1, 1, 0}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{1, 3, 125}, {1, 1, 0}};
   auto output = cudf::unary_operation(input, cudf::unary_op::CBRT);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_test, EmptyABS)
@@ -216,7 +216,7 @@ TYPED_TEST(cudf_math_test, EmptyABS)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{};
   auto output = cudf::unary_operation(input, cudf::unary_op::ABS);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_test, EmptySQRT)
@@ -224,7 +224,7 @@ TYPED_TEST(cudf_math_test, EmptySQRT)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{};
   auto output = cudf::unary_operation(input, cudf::unary_op::SQRT);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 template <typename T>
@@ -240,7 +240,7 @@ TYPED_TEST(cudf_math_with_floating_point_test, SimpleSIN)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{0.0}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{0.0}};
   auto output = cudf::unary_operation(input, cudf::unary_op::SIN);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_with_floating_point_test, SimpleCOS)
@@ -248,7 +248,7 @@ TYPED_TEST(cudf_math_with_floating_point_test, SimpleCOS)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{0.0}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{1.0}};
   auto output = cudf::unary_operation(input, cudf::unary_op::COS);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_with_floating_point_test, SimpleSINH)
@@ -256,7 +256,7 @@ TYPED_TEST(cudf_math_with_floating_point_test, SimpleSINH)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{0.0}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{0.0}};
   auto output = cudf::unary_operation(input, cudf::unary_op::SINH);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_with_floating_point_test, SimpleCOSH)
@@ -264,7 +264,7 @@ TYPED_TEST(cudf_math_with_floating_point_test, SimpleCOSH)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{0.0}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{1.0}};
   auto output = cudf::unary_operation(input, cudf::unary_op::COSH);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_with_floating_point_test, SimpleTANH)
@@ -272,7 +272,7 @@ TYPED_TEST(cudf_math_with_floating_point_test, SimpleTANH)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{0.0}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{0.0}};
   auto output = cudf::unary_operation(input, cudf::unary_op::TANH);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_with_floating_point_test, SimpleiASINH)
@@ -280,7 +280,7 @@ TYPED_TEST(cudf_math_with_floating_point_test, SimpleiASINH)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{0.0}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{0.0}};
   auto output = cudf::unary_operation(input, cudf::unary_op::ARCSINH);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_with_floating_point_test, SimpleACOSH)
@@ -288,7 +288,7 @@ TYPED_TEST(cudf_math_with_floating_point_test, SimpleACOSH)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{1.0}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{0.0}};
   auto output = cudf::unary_operation(input, cudf::unary_op::ARCCOSH);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_with_floating_point_test, SimpleATANH)
@@ -296,7 +296,7 @@ TYPED_TEST(cudf_math_with_floating_point_test, SimpleATANH)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{0.0}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{0.0}};
   auto output = cudf::unary_operation(input, cudf::unary_op::ARCTANH);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_with_floating_point_test, SimpleFLOOR)
@@ -304,7 +304,7 @@ TYPED_TEST(cudf_math_with_floating_point_test, SimpleFLOOR)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{1.1, 3.3, 5.5, 7.7}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{1.0, 3.0, 5.0, 7.0}};
   auto output = cudf::unary_operation(input, cudf::unary_op::FLOOR);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_with_floating_point_test, SimpleCEIL)
@@ -312,7 +312,7 @@ TYPED_TEST(cudf_math_with_floating_point_test, SimpleCEIL)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{1.1, 3.3, 5.5, 7.7}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{2.0, 4.0, 6.0, 8.0}};
   auto output = cudf::unary_operation(input, cudf::unary_op::CEIL);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_with_floating_point_test, SimpleRINT)
@@ -323,7 +323,7 @@ TYPED_TEST(cudf_math_with_floating_point_test, SimpleRINT)
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{
     T(2.0), T(4.0), T(-2.0), T(-4.0), T(0.0), T(NAN)};
   auto output = cudf::unary_operation(input, cudf::unary_op::RINT);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_with_floating_point_test, RINTNonFloatingFail)
@@ -344,7 +344,7 @@ TYPED_TEST(cudf_math_with_floating_point_test, SimpleCBRT)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{1, 27, 343, 4913}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{1, 3, 7, 17}};
   auto output = cudf::unary_operation(input, cudf::unary_op::CBRT);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 template <typename T>
@@ -385,7 +385,7 @@ TYPED_TEST(IsNull, AllValid)
 
   std::unique_ptr<cudf::column> got = cudf::is_null(col);
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 TYPED_TEST(IsNull, WithInvalids)
@@ -400,7 +400,7 @@ TYPED_TEST(IsNull, WithInvalids)
 
   std::unique_ptr<cudf::column> got = cudf::is_null(col);
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 TYPED_TEST(IsNull, EmptyColumns)
@@ -415,7 +415,7 @@ TYPED_TEST(IsNull, EmptyColumns)
 
   std::unique_ptr<cudf::column> got = cudf::is_null(col);
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 template <typename T>
@@ -436,7 +436,7 @@ TYPED_TEST(IsNotNull, AllValid)
 
   std::unique_ptr<cudf::column> got = cudf::is_valid(col);
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 TYPED_TEST(IsNotNull, WithInvalids)
@@ -451,7 +451,7 @@ TYPED_TEST(IsNotNull, WithInvalids)
 
   std::unique_ptr<cudf::column> got = cudf::is_valid(col);
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 TYPED_TEST(IsNotNull, EmptyColumns)
@@ -466,7 +466,7 @@ TYPED_TEST(IsNotNull, EmptyColumns)
 
   std::unique_ptr<cudf::column> got = cudf::is_valid(col);
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 static const auto test_timestamps_D = std::vector<int32_t>{
@@ -611,13 +611,13 @@ void validate_cast_result(cudf::column_view expected, cudf::column_view actual)
   std::vector<cudf::bitmask_type> null_mask;
   std::tie(h_data, null_mask) = to_host<T>(expected);
   if (null_mask.size() == 0) {
-    expect_columns_equal(make_column<R, T>(h_data), actual);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(make_column<R, T>(h_data), actual);
   } else {
     thrust::host_vector<bool> h_null_mask(expected.size());
     for (cudf::size_type i = 0; i < expected.size(); ++i) {
       h_null_mask[i] = cudf::bit_is_set(null_mask.data(), i);
     }
-    expect_columns_equal(make_column<R, T>(h_data, h_null_mask), actual);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(make_column<R, T>(h_data, h_null_mask), actual);
   }
 }
 
@@ -751,7 +751,7 @@ TYPED_TEST(CastChronosTyped, DownCastingFloorsValues)
   for (cudf::type_id higher_precision_type_id : higher_precision_type_ids) {
     auto chrono_src = make_exp_chrono_column(higher_precision_type_id);
     auto chrono_got = cudf::cast(chrono_src, dtype_exp);
-    expect_columns_equal(*chrono_got, chrono_exp);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*chrono_got, chrono_exp);
   }
 }
 
@@ -987,7 +987,7 @@ TYPED_TEST(IsNAN, AllValid)
 
   std::unique_ptr<cudf::column> got = cudf::is_nan(col);
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 TYPED_TEST(IsNAN, WithNull)
@@ -1002,7 +1002,7 @@ TYPED_TEST(IsNAN, WithNull)
 
   std::unique_ptr<cudf::column> got = cudf::is_nan(col);
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 TYPED_TEST(IsNAN, EmptyColumn)
@@ -1014,7 +1014,7 @@ TYPED_TEST(IsNAN, EmptyColumn)
 
   std::unique_ptr<cudf::column> got = cudf::is_nan(col);
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 TYPED_TEST(IsNAN, NonFloatingColumn)
@@ -1042,7 +1042,7 @@ TYPED_TEST(IsNotNAN, AllValid)
 
   std::unique_ptr<cudf::column> got = cudf::is_not_nan(col);
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 TYPED_TEST(IsNotNAN, WithNull)
@@ -1057,7 +1057,7 @@ TYPED_TEST(IsNotNAN, WithNull)
 
   std::unique_ptr<cudf::column> got = cudf::is_not_nan(col);
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 TYPED_TEST(IsNotNAN, EmptyColumn)
@@ -1069,7 +1069,7 @@ TYPED_TEST(IsNotNAN, EmptyColumn)
 
   std::unique_ptr<cudf::column> got = cudf::is_not_nan(col);
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 TYPED_TEST(IsNotNAN, NonFloatingColumn)

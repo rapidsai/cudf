@@ -75,7 +75,7 @@ TEST_F(TableViewTest, TestLexicographicalComparatorTwoTableCase)
   cudf::test::fixed_width_column_wrapper<int8_t> expected{{1, 1, 0, 1}};
   row_comparison(input_table_1, input_table_2, got->mutable_view(), column_order);
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 TEST_F(TableViewTest, TestLexicographicalComparatorSameTable)
@@ -90,12 +90,11 @@ TEST_F(TableViewTest, TestLexicographicalComparatorSameTable)
   cudf::test::fixed_width_column_wrapper<int8_t> expected{{0, 0, 0, 0}};
   row_comparison(input_table_1, input_table_1, got->mutable_view(), column_order);
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 TEST_F(TableViewTest, Select)
 {
-  using cudf::test::expect_columns_equal;
   using cudf::test::fixed_width_column_wrapper;
 
   fixed_width_column_wrapper<int8_t> col1{{1, 2, 3, 4}};
@@ -105,8 +104,8 @@ TEST_F(TableViewTest, Select)
   cudf::table_view t{{col1, col2, col3, col4}};
 
   cudf::table_view selected = t.select({2, 3});
-  expect_columns_equal(t.column(2), selected.column(0));
-  expect_columns_equal(t.column(3), selected.column(1));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(t.column(2), selected.column(0));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(t.column(3), selected.column(1));
 }
 
 TEST_F(TableViewTest, SelectOutOfBounds)

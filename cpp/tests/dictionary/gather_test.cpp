@@ -40,7 +40,7 @@ TEST_F(DictionaryGatherTest, Gather)
 
   cudf::test::strings_column_wrapper expected{"eee", "ccc", "bbb", "aaa"};
   auto decoded = cudf::dictionary::decode(result);
-  cudf::test::expect_columns_equal(expected, decoded->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, decoded->view());
 }
 
 TEST_F(DictionaryGatherTest, GatherWithNulls)
@@ -56,7 +56,7 @@ TEST_F(DictionaryGatherTest, GatherWithNulls)
 
   cudf::test::fixed_width_column_wrapper<int64_t> expected{{7, 5, 5, 7}, {1, 1, 0, 1}};
   auto result_decoded = cudf::dictionary::decode(result);
-  cudf::test::expect_columns_equal(expected, result_decoded->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result_decoded->view());
 }
 
 TEST_F(DictionaryGatherTest, SortStrings)
@@ -75,7 +75,7 @@ TEST_F(DictionaryGatherTest, SortStrings)
   std::sort(h_strings.begin(), h_strings.end());
   auto result_decoded = cudf::dictionary::decode(result.front()->view());
   cudf::test::strings_column_wrapper expected(h_strings.begin(), h_strings.end());
-  cudf::test::expect_columns_equal(expected, result_decoded->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result_decoded->view());
 }
 
 TEST_F(DictionaryGatherTest, SortFloat)
@@ -94,5 +94,5 @@ TEST_F(DictionaryGatherTest, SortFloat)
   std::sort(h_data.begin(), h_data.end());
   auto result_decoded = cudf::dictionary::decode(result.front()->view());
   cudf::test::fixed_width_column_wrapper<double> expected(h_data.begin(), h_data.end());
-  cudf::test::expect_columns_equal(expected, result_decoded->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result_decoded->view());
 }
