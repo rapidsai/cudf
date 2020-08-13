@@ -18,7 +18,7 @@ Contributions to cuDF fall into the following three categories.
     need more context on a particular issue, please ask in a comment.
 
 As contributors and maintainers to this project,
-you are expected to abide by pandas' code of conduct.
+you are expected to abide by cuDF's code of conduct.
 More information can be found at: [Contributor Code of Conduct](https://docs.rapids.ai/resources/conduct/).
 
 ## Code contributions
