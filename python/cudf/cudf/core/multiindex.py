@@ -942,7 +942,8 @@ class MultiIndex(Index):
         return self._is_monotonic_decreasing
 
     def argsort(self, ascending=True, **kwargs):
-        return self._source_data.argsort(ascending=ascending, **kwargs)
+        indices = self._source_data.argsort(ascending=ascending, **kwargs)
+        return cupy.asarray(indices)
 
     def sort_values(self, return_indexer=False, ascending=True, key=None):
         if key is not None:
