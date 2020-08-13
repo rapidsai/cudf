@@ -529,3 +529,32 @@ def test_concat_empty_dataframes(df, other, ignore_index):
         assert_eq(
             expected, actual, check_index_type=False if gdf.empty else True
         )
+
+
+@pytest.mark.parametrize(
+    "df1,df2",
+    [
+        (
+            gd.DataFrame({"k1": [0, 1], "k2": [2, 3], "v1": [4, 5]}),
+            gd.DataFrame({"k1": [1, 0], "k2": [3, 2], "v2": [6, 7]}),
+        ),
+        (
+            gd.DataFrame({"k1": [0, 1], "k2": [2, 3], "v1": [4, 5]}),
+            gd.DataFrame({"k1": [0, 1], "k2": [3, 2], "v2": [6, 7]}),
+        ),
+    ],
+)
+def test_concat_dataframe_with_multiIndex(df1, df2):
+    gdf1 = df1
+    gdf1 = gdf1.set_index(["k1", "k2"])
+
+    gdf2 = df2
+    gdf2 = gdf2.set_index(["k1", "k2"])
+
+    pdf1 = gdf1.to_pandas(nullable_pd_dtype=True)
+    pdf2 = gdf2.to_pandas(nullable_pd_dtype=True)
+
+    expected = gd.concat([gdf1, gdf2], axis=1)
+    actual = pd.concat([pdf1, pdf2], axis=1)
+
+    assert_eq(expected, actual, nullable_pd_dtype=True)

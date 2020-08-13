@@ -30,8 +30,10 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <iterator>
 #include <memory>
+#include <numeric>
 
 #include <cudf/concatenate.hpp>
+#include <cudf/copying.hpp>
 #include <tests/utilities/column_utilities.hpp>
 
 #include <cudf/lists/lists_column_view.hpp>
@@ -851,33 +853,23 @@ class lists_column_wrapper : public detail::column_wrapper {
     auto valids = cudf::test::make_counting_transform_iterator(
       0, [&v](auto i) { return v.empty() ? true : v[i]; });
 
-    // preprocess the incoming lists. unwrap any "root" lists and just use their
-    // underlying non-list data.
-    // also, sanity check everything to make sure the types of all the columns are the same
+    // compute the expected hierarchy and depth
+    auto const hierarchy_and_depth = std::accumulate(
+      elements.begin(),
+      elements.end(),
+      std::pair<column_view, int32_t>{{}, -1},
+      [](auto acc, lists_column_wrapper const& lcw) {
+        return lcw.depth > acc.second ? std::make_pair(lcw.get_view(), lcw.depth) : acc;
+      });
+    column_view expected_hierarchy = hierarchy_and_depth.first;
+    int32_t const expected_depth   = hierarchy_and_depth.second;
+
+    // preprocess columns so that every column_view in 'cols' is an equivalent hierarchy
+    std::vector<std::unique_ptr<column>> stubs;
     std::vector<column_view> cols;
-    type_id child_id = type_id::EMPTY;
-    std::transform(elements.begin(),
-                   elements.end(),
-                   std::back_inserter(cols),
-                   [&child_id](lists_column_wrapper const& l) {
-                     // potentially unwrap
-                     cudf::column_view col =
-                       l.root ? lists_column_view(*l.wrapped).child() : *l.wrapped;
+    std::tie(cols, stubs) = preprocess_columns(elements, expected_hierarchy, expected_depth);
 
-                     if (child_id == type_id::EMPTY) {
-                       child_id = col.type().id();
-                     } else {
-                       // handle the case where we have incomplete hierarchies. see comment
-                       // below in the concatenate step.
-                       if (child_id != type_id::LIST && col.type().id() == type_id::LIST) {
-                         child_id = type_id::LIST;
-                       }
-                     }
-                     return col;
-                   });
-
-    // generate offsets column and do some type checking to make sure the user hasn't passed an
-    // invalid initializer list
+    // generate offsets
     size_type count = 0;
     std::vector<size_type> offsetv;
     std::transform(cols.begin(),
@@ -895,40 +887,25 @@ class lists_column_wrapper : public detail::column_wrapper {
     auto offsets =
       cudf::test::fixed_width_column_wrapper<size_type>(offsetv.begin(), offsetv.end()).release();
 
-    // concatenate them together, skipping data for children that are null.
-    // handle the corner case where we have an "incomplete hierarchy"
-    //
-    // lists_column_wrapper<int> list{ {{}}, {} };
-    //
-    // The above case makes sense semantically. The second list is simply empty and has no internal
-    // list. However, because of the way the constructors are called here,  the list on the left
-    // will be of type List<List<int>> while the one on the right will be of type List<int> which
-    // would normally be appear to be a mismatch of types (as in the case of List<float> and
-    // List<int>).  we will allow this specific case through so that we get useful semantics when
-    // declaring these objects.
+    // concatenate them together, skipping children that are null.
     std::vector<column_view> children;
     for (size_t idx = 0; idx < cols.size(); idx++) {
       if (!valids[idx]) { continue; }
-
-      // handle incomplete hierarchies
-      bool is_empty_mismatched_child = (cols[idx].type().id() != child_id) && cols[idx].size() == 0;
-      if (is_empty_mismatched_child) { continue; }
-
-      // otherwise we expect that all columns have the same type
-      CUDF_EXPECTS(cols[idx].type().id() == child_id, "Unexpected child column mismatch");
-
       children.push_back(cols[idx]);
     }
-    auto data =
-      children.empty() ? make_empty_column(cudf::data_type{child_id}) : concatenate(children);
+    auto data = children.empty() ? cudf::empty_like(expected_hierarchy) : concatenate(children);
+
+    // increment depth
+    depth = expected_depth + 1;
 
     // construct the list column
-    wrapped = make_lists_column(
-      cols.size(),
-      std::move(offsets),
-      std::move(data),
-      v.size() <= 0 ? 0 : cudf::UNKNOWN_NULL_COUNT,
-      v.size() <= 0 ? rmm::device_buffer{0} : detail::make_null_mask(v.begin(), v.end()));
+    wrapped =
+      make_lists_column(cols.size(),
+                        std::move(offsets),
+                        std::move(data),
+                        v.size() <= 0 ? 0 : cudf::UNKNOWN_NULL_COUNT,
+                        v.size() <= 0 ? rmm::device_buffer{0}
+                                      : cudf::test::detail::make_null_mask(v.begin(), v.end()));
   }
 
   /**
@@ -944,18 +921,127 @@ class lists_column_wrapper : public detail::column_wrapper {
                  "Unexpected type");
 
     std::vector<size_type> offsetv;
-    offsetv.push_back(0);
-    if (c->size() > 0) { offsetv.push_back(c->size()); }
+    if (c->size() > 0) {
+      offsetv.push_back(0);
+      offsetv.push_back(c->size());
+    }
     auto offsets =
       cudf::test::fixed_width_column_wrapper<size_type>(offsetv.begin(), offsetv.end()).release();
 
     // construct the list column. mark this as a root
-    root    = true;
-    wrapped = make_lists_column(
-      offsetv.size() - 1, std::move(offsets), std::move(c), 0, rmm::device_buffer{0});
+    root  = true;
+    depth = 0;
+
+    size_type num_elements = offsets->size() == 0 ? 0 : offsets->size() - 1;
+    wrapped =
+      make_lists_column(num_elements, std::move(offsets), std::move(c), 0, rmm::device_buffer{0});
   }
 
+  /**
+   * @brief Given an input column that may be an "incomplete hierarchy" due to being empty
+   * at a level before the leaf, normalize it so that it matches the expected hierarchy of
+   * sibling columns.
+   *
+   * cudf functions that handle lists expect that all columns are fully formed hierarchies,
+   * even if they are empty somewhere in the middle of the hierarchy.
+   * If we had the following lists_column_wrapper<int> declaration:
+   *
+   * @code{.pseudo}
+   * [ {{{1, 2, 3}}}, {} ]
+   * Row 0 in this case is a List<List<List<int>>>, where row 1 appears to be just a List<>.
+   * @endcode
+   *
+   * These two columns will end up getting passed to cudf::concatenate() to merge. But
+   * concatenate() will throw an exception because row 1 will appear to have a child type
+   * of nothing, while row 0 will appear to have a child type of List<List<int>>.
+   * To handle this cleanly, we want to "normalize" row 1 so that it appears as a
+   * List<List<List<int>>> column even though it has 0 elements at the top level.
+   *
+   * This function also detects the case where the user has constructed a truly invalid
+   * pair of columns, such as
+   *
+   * @code{.pseudo}
+   * [ {{{1, 2, 3}}}, {4, 5} ]
+   * Row 0 in this case is a List<List<List<int>>>, and row 1 is a concrete List<int> with
+   * elements. This is purely an invalid way of constructing a lists column.
+   * @endcode
+   *
+   * @param col Input column to be normalized
+   * @param expected_hierarchy Input column which represents the expected hierarchy
+   *
+   * @return A new column representing a normalized copy of col
+   */
+  std::unique_ptr<column> normalize_column(column_view const& col,
+                                           column_view const& expected_hierarchy)
+  {
+    // if are at the bottom of the short column, it must be empty
+    if (col.type().id() != type_id::LIST) {
+      CUDF_EXPECTS(col.size() == 0, "Encountered mismatched column!");
+
+      auto remainder = empty_like(expected_hierarchy);
+      return std::move(remainder);
+    }
+
+    lists_column_view lcv(col);
+    return make_lists_column(col.size(),
+                             std::make_unique<column>(lcv.offsets()),
+                             normalize_column(lists_column_view(col).child(),
+                                              lists_column_view(expected_hierarchy).child()),
+                             UNKNOWN_NULL_COUNT,
+                             copy_bitmask(col));
+  }
+
+  std::pair<std::vector<column_view>, std::vector<std::unique_ptr<column>>> preprocess_columns(
+    std::initializer_list<lists_column_wrapper<T, SourceElementT>> const& elements,
+    column_view& expected_hierarchy,
+    int expected_depth)
+  {
+    std::vector<std::unique_ptr<column>> stubs;
+    std::vector<column_view> cols;
+
+    // preprocess the incoming lists.
+    // - unwrap any "root" lists
+    // - handle incomplete hierarchies
+    std::transform(elements.begin(),
+                   elements.end(),
+                   std::back_inserter(cols),
+                   [&](lists_column_wrapper const& l) -> column_view {
+                     // depth mismatch.  attempt to normalize the short column.
+                     // this function will also catch if this is a legitmately broken
+                     // set of input
+                     if (l.depth < expected_depth) {
+                       if (l.root) {
+                         // this exception distinguishes between the following two cases:
+                         //
+                         // { {{{1, 2, 3}}}, {} }
+                         // In this case, row 0 is a List<List<List<int>>>, whereas row 1 is
+                         // just a List<> which is an apparent mismatch.  However, because row 1
+                         // is empty we will allow that to semantically mean
+                         // "a List<List<List<int>>> that's empty at the top level"
+                         //
+                         // { {{{1, 2, 3}}}, {4, 5, 6} }
+                         // In this case, row 1 is a a concrete List<int> with actual values.  There
+                         // is no way to rectify the differences so we will treat it as a true
+                         // column mismatch.
+                         CUDF_EXPECTS(l.wrapped->size() == 0, "Mismatch in column types!");
+                         stubs.push_back(empty_like(expected_hierarchy));
+                       } else {
+                         stubs.push_back(normalize_column(l.get_view(), expected_hierarchy));
+                       }
+                       return *(stubs.back());
+                     }
+                     // the empty hierarchy case
+                     return l.get_view();
+                   });
+
+    return {std::move(cols), std::move(stubs)};
+  }
+
+  column_view get_view() const { return root ? lists_column_view(*wrapped).child() : *wrapped; }
+
+  int depth = 0;
   bool root = false;
 };
+
 }  // namespace test
 }  // namespace cudf

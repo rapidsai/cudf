@@ -1164,10 +1164,12 @@ class DataFrame(Frame, Serializable):
         filling with `<NA>` values.
         """
         for col in df._data:
-            if is_list_dtype(self._data[col]):
+            if is_list_dtype(df._data[col]):
                 # TODO we need to handle this
                 pass
-            elif self._data[col].has_nulls:
+            elif isinstance(df._data[col], cudf.core.column.TimeDeltaColumn):
+                df[col] = df._data[col]._repr_str_col()
+            elif df._data[col].has_nulls:
                 df[col] = df._data[col].astype("str").fillna(cudf._NA_REP)
             else:
                 df[col] = df._data[col]
@@ -2607,7 +2609,7 @@ class DataFrame(Frame, Serializable):
             else:
                 df = DataFrame(None, idx).join(df, how="left", sort=True)
                 # double-argsort to map back from sorted to unsorted positions
-                df = df.take(idx.argsort(True).argsort())
+                df = df.take(idx.argsort(ascending=True).argsort())
 
         idx = idx if idx is not None else df.index
         names = cols if cols is not None else list(df.columns)
@@ -4673,7 +4675,7 @@ class DataFrame(Frame, Serializable):
         >>> type(pdf)
         <class 'pandas.core.frame.DataFrame'>
         """
-        nullable_pd_dtype = kwargs.get("nullable_pd_dtype", True)
+        nullable_pd_dtype = kwargs.get("nullable_pd_dtype", None)
 
         out_data = {}
         out_index = self.index.to_pandas()
