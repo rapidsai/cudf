@@ -9,6 +9,7 @@ import cudf
 from cudf.core.column.column import as_column
 from cudf.tests.utils import assert_eq
 from cudf.utils import dtypes as dtypeutils
+from cudf._lib.transform import mask_to_bools
 
 dtypes = sorted(
     list(
@@ -47,10 +48,12 @@ def test_column_offset_and_size(pandas_input, offset, size):
         assert col.size == col.codes.size
         assert col.size == (col.codes.data.size / col.codes.dtype.itemsize)
     elif pd.api.types.is_string_dtype(col.dtype):
-        assert col.size == (col.children[0].size - 1)
-        assert col.size == (
-            (col.children[0].data.size / col.children[0].dtype.itemsize) - 1
-        )
+        if col.size > 0:
+            assert col.size == (col.children[0].size - 1)
+            assert col.size == (
+                (col.children[0].data.size / col.children[0].dtype.itemsize)
+                - 1
+            )
     else:
         assert col.size == (col.data.size / col.dtype.itemsize)
 
@@ -316,3 +319,79 @@ def test_as_column_buffer(data, expected):
         cudf.core.Buffer(data), dtype=data.dtype
     )
     assert_eq(cudf.Series(actual_column), cudf.Series(expected))
+
+
+@pytest.mark.parametrize(
+    "pd_dtype,expect_dtype",
+    [
+        # TODO: Nullable float is coming
+        (pd.StringDtype(), np.dtype("O")),
+        (pd.UInt8Dtype(), np.dtype("uint8")),
+        (pd.UInt16Dtype(), np.dtype("uint16")),
+        (pd.UInt32Dtype(), np.dtype("uint32")),
+        (pd.UInt64Dtype(), np.dtype("uint64")),
+        (pd.Int8Dtype(), np.dtype("int8")),
+        (pd.Int16Dtype(), np.dtype("int16")),
+        (pd.Int32Dtype(), np.dtype("int32")),
+        (pd.Int64Dtype(), np.dtype("int64")),
+        (pd.BooleanDtype(), np.dtype("bool")),
+    ],
+)
+def test_build_df_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
+    if pd_dtype == pd.StringDtype():
+        data = ["a", pd.NA, "c", pd.NA, "e"]
+    elif pd_dtype == pd.BooleanDtype():
+        data = [True, pd.NA, False, pd.NA, True]
+    else:
+        data = [1, pd.NA, 3, pd.NA, 5]
+
+    pd_data = pd.DataFrame.from_dict({"a": data}, dtype=pd_dtype)
+    gd_data = cudf.DataFrame.from_pandas(pd_data)
+
+    assert gd_data["a"].dtype == expect_dtype
+
+    # check mask
+    expect_mask = [True if x is not pd.NA else False for x in pd_data["a"]]
+    got_mask = mask_to_bools(
+        gd_data["a"]._column.base_mask, 0, len(gd_data)
+    ).to_array()
+
+    np.testing.assert_array_equal(expect_mask, got_mask)
+
+
+@pytest.mark.parametrize(
+    "pd_dtype,expect_dtype",
+    [
+        # TODO: Nullable float is coming
+        (pd.StringDtype(), np.dtype("O")),
+        (pd.UInt8Dtype(), np.dtype("uint8")),
+        (pd.UInt16Dtype(), np.dtype("uint16")),
+        (pd.UInt32Dtype(), np.dtype("uint32")),
+        (pd.UInt64Dtype(), np.dtype("uint64")),
+        (pd.Int8Dtype(), np.dtype("int8")),
+        (pd.Int16Dtype(), np.dtype("int16")),
+        (pd.Int32Dtype(), np.dtype("int32")),
+        (pd.Int64Dtype(), np.dtype("int64")),
+        (pd.BooleanDtype(), np.dtype("bool")),
+    ],
+)
+def test_build_series_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
+    if pd_dtype == pd.StringDtype():
+        data = ["a", pd.NA, "c", pd.NA, "e"]
+    elif pd_dtype == pd.BooleanDtype():
+        data = [True, pd.NA, False, pd.NA, True]
+    else:
+        data = [1, pd.NA, 3, pd.NA, 5]
+
+    pd_data = pd.Series(data, dtype=pd_dtype)
+    gd_data = cudf.Series.from_pandas(pd_data)
+
+    assert gd_data.dtype == expect_dtype
+
+    # check mask
+    expect_mask = [True if x is not pd.NA else False for x in pd_data]
+    got_mask = mask_to_bools(
+        gd_data._column.base_mask, 0, len(gd_data)
+    ).to_array()
+
+    np.testing.assert_array_equal(expect_mask, got_mask)

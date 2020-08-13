@@ -175,5 +175,44 @@ std::unique_ptr<cudf::column> character_tokenize(
   cudf::strings_column_view const& strings,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/**
+ * @brief Creates a strings column from a strings column of tokens and an
+ * associated column of row ids.
+ *
+ * Multiple tokens from the input column may be combined into a single row (string)
+ * in the output column. The tokens are concatenated along with the `separator` string
+ * in the order in which they appear in the `row_indices` column.
+ *
+ * @code{.pseudo}
+ * Example:
+ * s = ["hello", "world", "one", "two", "three"]
+ * r = [0, 0, 1, 1, 1]
+ * s1 = detokenize(s,r)
+ * s1 is now ["hello world", "one two three"]
+ * r = [0, 2, 1, 1, 0]
+ * s2 = detokenize(s,r)
+ * s2 is now ["hello three", "one two", "world"]
+ * @endcode
+ *
+ * All null row entries are ignored and the output contains all valid rows.
+ * The values in `row_indices` are expected to have positive, sequential
+ * values without any missing row indices otherwise the output is undefined.
+ *
+ * @throw cudf::logic_error is `separator` is invalid
+ * @throw cudf::logic_error if `row_indices.size() != strings.size()`
+ * @throw cudf::logic_error if `row_indices` contains nulls
+ *
+ * @param strings Strings column to detokenize.
+ * @param row_indices The relative output row index assigned for each token in the input column.
+ * @param separator String to append after concatenating each token to the proper output row.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return New strings columns of tokens.
+ */
+std::unique_ptr<cudf::column> detokenize(
+  cudf::strings_column_view const& strings,
+  cudf::column_view const& row_indices,
+  cudf::string_scalar const& separator = cudf::string_scalar(" "),
+  rmm::mr::device_memory_resource* mr  = rmm::mr::get_default_resource());
+
 /** @} */  // end of tokenize group
 }  // namespace nvtext

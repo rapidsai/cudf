@@ -846,3 +846,27 @@ def test_parquet_writer_criteo(tmpdir):
     df = df.drop(columns=cont_names)
 
     df.to_parquet(cudf_path)
+
+
+def test_trailing_nans(datadir, tmpdir):
+    fname = "trailing_nans.parquet"
+    file_path = datadir / fname
+    cu_df = cudf.read_parquet(file_path)
+
+    tmp_file_path = tmpdir.join(fname)
+    cu_df.to_parquet(tmp_file_path)
+
+    pd.read_parquet(tmp_file_path)
+
+
+def test_parquet_writer_sliced(tmpdir):
+    cudf_path = tmpdir.join("cudf.parquet")
+
+    df = pd.DataFrame()
+    df["String"] = np.array(["Alpha", "Beta", "Gamma", "Delta"])
+    df = cudf.from_pandas(df)
+
+    df_select = df.iloc[1:3]
+
+    df_select.to_parquet(cudf_path)
+    assert_eq(cudf.read_parquet(cudf_path), df_select.reset_index(drop=True))

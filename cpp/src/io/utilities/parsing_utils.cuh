@@ -49,41 +49,42 @@ namespace gpu {
  * Also iterates over (one or more) delimiter characters after the field.
  * Function applies to formats with field delimiters and line terminators.
  *
- * @param data The entire plain text data to read
+ * @param begin Pointer to the first character in the parsing range
+ * @param end pointer to the first character after the parsing range
  * @param opts A set of parsing options
- * @param pos Offset to start the seeking from
- * @param stop Offset of the end of the row
  *
- * @return long The position of the last character in the field, including the
+ * @return Pointer to the last character in the field, including the
  *  delimiter(s) following the field data
  */
-__device__ __inline__ long seek_field_end(const char* data,
-                                          ParseOptions const& opts,
-                                          long pos,
-                                          long stop)
+__device__ __inline__ char const* seek_field_end(char const* begin,
+                                                 char const* end,
+                                                 ParseOptions const& opts)
 {
   bool quotation = false;
+  auto current   = begin;
   while (true) {
     // Use simple logic to ignore control chars between any quote seq
     // Handles nominal cases including doublequotes within quotes, but
     // may not output exact failures as PANDAS for malformed fields
-    if (data[pos] == opts.quotechar) {
+    if (*current == opts.quotechar) {
       quotation = !quotation;
-    } else if (quotation == false) {
-      if (data[pos] == opts.delimiter) {
-        while (opts.multi_delimiter && pos < stop && data[pos + 1] == opts.delimiter) { ++pos; }
+    } else if (!quotation) {
+      if (*current == opts.delimiter) {
+        while (opts.multi_delimiter && current < end && *(current + 1) == opts.delimiter) {
+          ++current;
+        }
         break;
-      } else if (data[pos] == opts.terminator) {
+      } else if (*current == opts.terminator) {
         break;
-      } else if (data[pos] == '\r' && (pos + 1 < stop && data[pos + 1] == '\n')) {
-        stop--;
+      } else if (*current == '\r' && (current + 1 < end && *(current + 1) == '\n')) {
+        --end;
         break;
       }
     }
-    if (pos >= stop) break;
-    pos++;
+    if (current >= end) break;
+    current++;
   }
-  return pos;
+  return current;
 }
 
 /**
@@ -142,7 +143,7 @@ template <typename T, int base = 10>
 __inline__ __device__ T
 parse_numeric(const char* data, long start, long end, ParseOptions const& opts)
 {
-  T value               = 0;
+  T value{};
   bool all_digits_valid = true;
 
   // Handle negative values if necessary

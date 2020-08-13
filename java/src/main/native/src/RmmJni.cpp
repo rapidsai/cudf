@@ -28,7 +28,7 @@
 #include <rmm/mr/device/pool_memory_resource.hpp>
 #include <unordered_map>
 
-#include "jni_utils.hpp"
+#include "cudf_jni_apis.hpp"
 
 using rmm::mr::device_memory_resource;
 using rmm::mr::logging_resource_adaptor;
@@ -351,7 +351,8 @@ extern "C" {
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(JNIEnv *env, jclass clazz,
                                                                   jint allocation_mode, jint log_to,
-                                                                  jstring jpath, jlong pool_size) {
+                                                                  jstring jpath, jlong pool_size,
+                                                                  jlong max_pool_size) {
   try {
     // make sure the CUDA device is setup in the context
     cudaError_t cuda_status = cudaFree(0);
@@ -363,14 +364,17 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(JNIEnv *env, j
     bool use_pool_alloc = allocation_mode & 1;
     bool use_managed_mem = allocation_mode & 2;
     if (use_pool_alloc) {
+      std::size_t pool_limit = (max_pool_size > 0)
+                                 ? static_cast<std::size_t>(max_pool_size)
+                                 : std::numeric_limits<std::size_t>::max();
       if (use_managed_mem) {
         Initialized_resource = rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-            std::make_shared<rmm::mr::managed_memory_resource>(), pool_size, pool_size);
+            std::make_shared<rmm::mr::managed_memory_resource>(), pool_size, pool_limit);
         auto wrapped = make_tracking_adaptor(Initialized_resource.get(), RMM_ALLOC_SIZE_ALIGNMENT);
         Tracking_memory_resource.reset(wrapped);
       } else {
         Initialized_resource = rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-            std::make_shared<rmm::mr::cuda_memory_resource>(), pool_size, pool_size);
+            std::make_shared<rmm::mr::cuda_memory_resource>(), pool_size, pool_limit);
         auto wrapped = make_tracking_adaptor(Initialized_resource.get(), RMM_ALLOC_SIZE_ALIGNMENT);
         Tracking_memory_resource.reset(wrapped);
       }

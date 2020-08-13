@@ -69,24 +69,6 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatScalarCount)
   cudf::test::expect_columns_equal(p_ret->view().column(0), expected);
 }
 
-template <typename Element, typename InputIterator>
-void generate_sequence(
-  InputIterator begin,
-  InputIterator end,
-  typename std::enable_if<!cudf::is_duration_t<Element>::value>::type* = nullptr)
-{
-  std::iota(begin, end, 0);
-}
-
-template <typename Element, typename InputIterator>
-void generate_sequence(
-  InputIterator begin,
-  InputIterator end,
-  typename std::enable_if<cudf::is_duration_t<Element>::value>::type* = nullptr)
-{
-  std::iota(begin, end, Element{0});
-}
-
 TYPED_TEST(RepeatTypedTestFixture, RepeatColumnCount)
 {
   using T = TypeParam;
@@ -94,8 +76,8 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatColumnCount)
 
   constexpr cudf::size_type num_values{10};
 
-  std::vector<T> inputs(num_values);
-  generate_sequence<T>(inputs.begin(), inputs.end());
+  std::vector<int64_t> inputs(num_values);
+  std::iota(inputs.begin(), inputs.end(), 0);
 
   std::vector<cudf::size_type> counts(num_values);
   std::transform(counts.begin(), counts.end(), counts.begin(), [&](cudf::size_type count) {
@@ -104,10 +86,12 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatColumnCount)
 
   std::vector<T> expected_values;
   for (size_t i{0}; i < counts.size(); i++) {
-    for (cudf::size_type j{0}; j < counts[i]; j++) { expected_values.push_back(inputs[i]); }
+    for (cudf::size_type j{0}; j < counts[i]; j++) {
+      expected_values.push_back(cudf::test::make_type_param_scalar<T>(inputs[i]));
+    }
   }
 
-  cudf::test::fixed_width_column_wrapper<T> input(inputs.begin(), inputs.end());
+  cudf::test::fixed_width_column_wrapper<T, int64_t> input(inputs.begin(), inputs.end());
 
   auto count =
     cudf::test::fixed_width_column_wrapper<cudf::size_type>(counts.begin(), counts.end());
@@ -129,8 +113,8 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatNullable)
 
   constexpr cudf::size_type num_values{10};
 
-  std::vector<T> input_values(num_values);
-  generate_sequence<T>(input_values.begin(), input_values.end());
+  std::vector<int64_t> input_values(num_values);
+  std::iota(input_values.begin(), input_values.end(), 0);
   std::vector<bool> input_valids(num_values);
   for (size_t i{0}; i < input_valids.size(); i++) { input_valids[i] = (i % 2) == 0 ? true : false; }
 
@@ -143,12 +127,12 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatNullable)
   std::vector<bool> expected_valids;
   for (size_t i{0}; i < counts.size(); i++) {
     for (cudf::size_type j{0}; j < counts[i]; j++) {
-      expected_values.push_back(input_values[i]);
+      expected_values.push_back(cudf::test::make_type_param_scalar<T>(input_values[i]));
       expected_valids.push_back(input_valids[i]);
     }
   }
 
-  cudf::test::fixed_width_column_wrapper<T> input(
+  cudf::test::fixed_width_column_wrapper<T, int64_t> input(
     input_values.begin(), input_values.end(), input_valids.begin());
 
   auto count =

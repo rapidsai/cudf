@@ -32,7 +32,7 @@ class ListColumn(ColumnBase):
 
     @property
     def base_size(self):
-        return self.size
+        return len(self.base_children[0]) - 1
 
     @property
     def elements(self):
@@ -69,8 +69,11 @@ class ListColumn(ColumnBase):
     def to_arrow(self):
         offsets = self.offsets.to_arrow()
         elements = self.elements.to_arrow()
+        pa_type = self.dtype.to_arrow()
+
         if len(elements) == elements.null_count:
             elements = pa.NullArray.from_pandas([None] * len(elements))
+            pa_type = pa.list_(elements.type)
         if self.nullable:
             nbuf = self.mask.to_host_array().view("int8")
             nbuf = pa.py_buffer(nbuf)
@@ -78,7 +81,7 @@ class ListColumn(ColumnBase):
         else:
             buffers = offsets.buffers()
         return pa.ListArray.from_buffers(
-            self.dtype.to_arrow(), len(self), buffers, children=[elements],
+            pa_type, len(self), buffers, children=[elements]
         )
 
     def list(self, parent=None):

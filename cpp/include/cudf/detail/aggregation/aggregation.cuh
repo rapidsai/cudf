@@ -96,11 +96,12 @@ struct update_target_element {
 };
 
 template <typename Source, bool target_has_nulls, bool source_has_nulls>
-struct update_target_element<Source,
-                             aggregation::MIN,
-                             target_has_nulls,
-                             source_has_nulls,
-                             std::enable_if_t<is_fixed_width<Source>()>> {
+struct update_target_element<
+  Source,
+  aggregation::MIN,
+  target_has_nulls,
+  source_has_nulls,
+  std::enable_if_t<is_fixed_width<Source>() && !is_fixed_point<Source>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -117,11 +118,12 @@ struct update_target_element<Source,
 };
 
 template <typename Source, bool target_has_nulls, bool source_has_nulls>
-struct update_target_element<Source,
-                             aggregation::MAX,
-                             target_has_nulls,
-                             source_has_nulls,
-                             std::enable_if_t<is_fixed_width<Source>()>> {
+struct update_target_element<
+  Source,
+  aggregation::MAX,
+  target_has_nulls,
+  source_has_nulls,
+  std::enable_if_t<is_fixed_width<Source>() && !is_fixed_point<Source>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -138,11 +140,12 @@ struct update_target_element<Source,
 };
 
 template <typename Source, bool target_has_nulls, bool source_has_nulls>
-struct update_target_element<Source,
-                             aggregation::SUM,
-                             target_has_nulls,
-                             source_has_nulls,
-                             std::enable_if_t<is_fixed_width<Source>()>> {
+struct update_target_element<
+  Source,
+  aggregation::SUM,
+  target_has_nulls,
+  source_has_nulls,
+  std::enable_if_t<is_fixed_width<Source>() && !is_fixed_point<Source>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -359,7 +362,7 @@ struct identity_initializer {
   template <typename T, aggregation::Kind k>
   static constexpr bool is_supported()
   {
-    return cudf::is_fixed_width<T>() and
+    return cudf::is_fixed_width<T>() && !is_fixed_point<T>() and
            (k == aggregation::SUM or k == aggregation::MIN or k == aggregation::MAX or
             k == aggregation::COUNT_VALID or k == aggregation::COUNT_ALL or
             k == aggregation::ARGMAX or k == aggregation::ARGMIN);
@@ -380,7 +383,19 @@ struct identity_initializer {
   }
 
   template <typename T, aggregation::Kind k>
-  T get_identity()
+  typename std::enable_if<cudf::is_timestamp_t<T>::value, T>::type get_identity()
+  {
+    if (k == aggregation::ARGMAX)
+      return T{typename T::duration(ARGMAX_SENTINEL)};
+    else if (k == aggregation::ARGMIN)
+      return T{typename T::duration(ARGMIN_SENTINEL)};
+    else
+      // In C++17, we can use compile time if and not make this function SFINAE
+      return identity_from_operator<T, k>();
+  }
+
+  template <typename T, aggregation::Kind k>
+  typename std::enable_if<!cudf::is_timestamp_t<T>::value, T>::type get_identity()
   {
     if (k == aggregation::ARGMAX)
       return static_cast<T>(ARGMAX_SENTINEL);

@@ -24,6 +24,7 @@
 
 #include <array>
 #include <tuple>
+#include "cudf/fixed_point/fixed_point.hpp"
 
 /**
  * @filename type_lists.hpp
@@ -74,7 +75,10 @@ constexpr auto types_to_ids()
  * @return Vector of TypeParam with the values specified
  */
 template <typename TypeParam, typename T>
-auto make_type_param_vector(std::initializer_list<T> const& init_list)
+typename std::enable_if<cudf::is_fixed_width<TypeParam>() &&
+                          !cudf::is_timestamp_t<TypeParam>::value,
+                        std::vector<TypeParam>>::type
+make_type_param_vector(std::initializer_list<T> const& init_list)
 {
   std::vector<TypeParam> vec(init_list.size());
   std::transform(std::cbegin(init_list), std::cend(init_list), std::begin(vec), [](auto const& e) {
@@ -84,6 +88,39 @@ auto make_type_param_vector(std::initializer_list<T> const& init_list)
       return static_cast<TypeParam>(e);
   });
   return vec;
+}
+
+template <typename TypeParam, typename T>
+typename std::enable_if<cudf::is_timestamp_t<TypeParam>::value, std::vector<TypeParam>>::type
+make_type_param_vector(std::initializer_list<T> const& init_list)
+{
+  std::vector<TypeParam> vec(init_list.size());
+  std::transform(std::cbegin(init_list), std::cend(init_list), std::begin(vec), [](auto const& e) {
+    return TypeParam{typename TypeParam::duration{e}};
+  });
+  return vec;
+}
+
+/**
+ * @brief Convert the numeric value of type T to a fixed width type of type TypeParam.
+ *
+ * @param init_value Value used to initialize the fixed width type
+ * @return A fixed width type - [u]int32/float/duration etc. of type TypeParam with the
+ *         value specified
+ */
+template <typename TypeParam, typename T>
+std::enable_if_t<cudf::is_fixed_width<TypeParam>() && !cudf::is_timestamp_t<TypeParam>::value,
+                 TypeParam>
+make_type_param_scalar(T const init_value)
+{
+  return static_cast<TypeParam>(init_value);
+}
+
+template <typename TypeParam, typename T>
+std::enable_if_t<cudf::is_timestamp_t<TypeParam>::value, TypeParam> make_type_param_scalar(
+  T const init_value)
+{
+  return TypeParam{typename TypeParam::duration(init_value)};
 }
 
 /**
@@ -183,6 +220,18 @@ using StringTypes = cudf::test::Types<string_view>;
 using ListTypes = cudf::test::Types<list_view>;
 
 /**
+ * @brief Provides a list of all fixed-point element types for use in GTest
+ * typed tests.
+ *
+ * Example:
+ * ```
+ * // Invokes all typed fixture tests for all fixed-width types in libcudf
+ * TYPED_TEST_CASE(MyTypedFixture, cudf::test::FixedPointTypes);
+ * ```
+ **/
+using FixedPointTypes = cudf::test::Types<numeric::decimal32, numeric::decimal64>;
+
+/**
  * @brief Provides a list of all fixed-width element types for use in GTest
  * typed tests.
  *
@@ -192,7 +241,21 @@ using ListTypes = cudf::test::Types<list_view>;
  * TYPED_TEST_CASE(MyTypedFixture, cudf::test::FixedWidthTypes);
  * ```
  **/
-using FixedWidthTypes = Concat<NumericTypes, ChronoTypes>;
+using FixedWidthTypes = Concat<NumericTypes, ChronoTypes, FixedPointTypes>;
+
+/**
+ * @brief Provides a list of all fixed-width element types except for the
+ * fixed-point types for use in GTest typed tests. Certain tests written for
+ * fixed-width types don't work for fixed-point as fixed-point types aren't
+ * constructible from other fixed-width types (a scale needs to be specified)
+ *
+ * Example:
+ * ```
+ * // Invokes all typed fixture tests for all fixed-width types in libcudf
+ * TYPED_TEST_CASE(MyTypedFixture, cudf::test::FixedWidthTypes);
+ * ```
+ **/
+using FixedWidthTypesWithoutFixedPoint = Concat<NumericTypes, ChronoTypes>;
 
 /**
  * @brief Provides a list of sortable types for use in GTest typed tests.

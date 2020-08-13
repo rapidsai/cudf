@@ -69,8 +69,7 @@ class CudfEngine(ArrowEngine):
 
         if index and (index[0] in df.columns):
             df = df.set_index(index[0])
-
-        if len(partition_keys) > 0:
+        if partition_keys:
             if partitions is None:
                 raise ValueError("Must pass partition sets")
             for i, (name, index2) in enumerate(partition_keys):
@@ -150,9 +149,7 @@ class CudfEngine(ArrowEngine):
 def read_parquet(
     path,
     columns=None,
-    chunksize=None,
-    split_row_groups=True,
-    gather_statistics=None,
+    split_row_groups=None,
     row_groups_per_part=None,
     **kwargs,
 ):
@@ -177,41 +174,17 @@ def read_parquet(
         columns = [columns]
 
     if row_groups_per_part:
-        from .opt_parquet import parquet_reader
+        warnings.warn(
+            "row_groups_per_part is deprecated. "
+            "Pass an integer value to split_row_groups instead."
+        )
+        if split_row_groups is None:
+            split_row_groups = row_groups_per_part
 
-        warnings.warn(
-            "Using optimized read_parquet engine. This option does not "
-            "support partitioned datsets or filtering, and will not "
-            "result in known divisions. Do not use `row_groups_per_part` "
-            "if full support is needed."
-        )
-        if kwargs.get("filters", None):
-            raise ValueError(
-                "Cannot use `filters` with `row_groups_per_part=True`."
-            )
-        return parquet_reader(
-            path,
-            columns=columns,
-            row_groups_per_part=row_groups_per_part,
-            **kwargs,
-        )
-
-    if chunksize and gather_statistics is False:
-        warnings.warn(
-            "Setting chunksize parameter with gather_statistics=False. "
-            "Use gather_statistics=True to enable row-group aggregation."
-        )
-    if chunksize and split_row_groups is False:
-        warnings.warn(
-            "Setting chunksize parameter with split_row_groups=False. "
-            "Use split_row_groups=True to enable row-group aggregation."
-        )
     return dd.read_parquet(
         path,
         columns=columns,
-        chunksize=chunksize,
         split_row_groups=split_row_groups,
-        gather_statistics=gather_statistics,
         engine=CudfEngine,
         **kwargs,
     )

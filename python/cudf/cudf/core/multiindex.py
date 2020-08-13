@@ -848,9 +848,9 @@ class MultiIndex(Index):
         result = cls.from_pandas(pdi)
         return result
 
-    def to_pandas(self):
+    def to_pandas(self, **kwargs):
         if hasattr(self, "_source_data"):
-            result = self._source_data.to_pandas()
+            result = self._source_data.to_pandas(nullable_pd_dtype=False)
             result.columns = self.names
             return pd.MultiIndex.from_frame(result)
 
@@ -862,7 +862,10 @@ class MultiIndex(Index):
         # 1. as_index() on each level, so DatetimeColumn becomes DatetimeIndex
         # 2. convert levels to numpy array so empty levels become Float64Index
         levels = np.array(
-            [as_index(level).to_pandas() for level in self.levels]
+            [
+                as_index(level).to_pandas(nullable_pd_dtype=False)
+                for level in self.levels
+            ]
         )
 
         # Backwards compatibility:
@@ -940,6 +943,18 @@ class MultiIndex(Index):
 
     def argsort(self, ascending=True, **kwargs):
         return self._source_data.argsort(ascending=ascending, **kwargs)
+
+    def sort_values(self, return_indexer=False, ascending=True, key=None):
+        if key is not None:
+            raise NotImplementedError("key parameter is not yet implemented.")
+
+        indices = self._source_data.argsort(ascending=ascending)
+        index_sorted = as_index(self.take(indices), name=self.names)
+
+        if return_indexer:
+            return index_sorted, cupy.asarray(indices)
+        else:
+            return index_sorted
 
     def fillna(self, value):
         """

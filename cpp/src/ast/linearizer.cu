@@ -13,15 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <algorithm>
-#include <cudf/ast/linearizer.hpp>
+#include <cudf/ast/linearizer.cuh>
+#include <cudf/ast/operators.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/traits.hpp>
+
+#include <algorithm>
 #include <functional>
 #include <iterator>
-#include "cudf/ast/operators.hpp"
 
 namespace cudf {
 
@@ -66,14 +69,15 @@ cudf::size_type intermediate_counter::find_first_missing(cudf::size_type start,
 
 cudf::size_type linearizer::visit(literal const& expr)
 {
-  // Track the node index
-  auto const node_index = this->node_count++;
+  // Increment the node index
+  this->node_count++;
   // Resolve node type
   auto const data_type = expr.get_data_type();
-  // TODO: Use scalar device view (?)
+  // Construct a scalar device view
+  auto device_view = expr.get_value();
   // Push literal
   auto const literal_index = cudf::size_type(this->literals.size());
-  this->literals.push_back(expr.get_value());
+  this->literals.push_back(device_view);
   // Push data reference
   auto const source = detail::device_data_reference{
     detail::device_data_reference_type::LITERAL, data_type, literal_index};
@@ -82,8 +86,8 @@ cudf::size_type linearizer::visit(literal const& expr)
 
 cudf::size_type linearizer::visit(column_reference const& expr)
 {
-  // Track the node index
-  auto const node_index = this->node_count++;
+  // Increment the node index
+  this->node_count++;
   // Resolve node type
   auto const data_type = expr.get_data_type(this->table);
   // Push data reference
@@ -94,24 +98,24 @@ cudf::size_type linearizer::visit(column_reference const& expr)
   return this->add_data_reference(source);
 }
 
-cudf::size_type linearizer::visit(operator_expression const& expr)
+cudf::size_type linearizer::visit(expression const& expr)
 {
-  // Track the node index
+  // Increment the node index
   auto const node_index = this->node_count++;
   // Visit children (operands) of this node
   auto const operand_data_reference_indices = this->visit_operands(expr.get_operands());
   // Resolve operand types
-  auto operand_types = std::vector<cudf::data_type>();
+  auto operand_types = std::vector<cudf::data_type>(operand_data_reference_indices.size());
   std::transform(operand_data_reference_indices.cbegin(),
                  operand_data_reference_indices.cend(),
-                 std::back_inserter(operand_types),
+                 operand_types.begin(),
                  [this](auto const& data_reference_index) -> cudf::data_type {
                    return this->get_data_references()[data_reference_index].data_type;
                  });
   // Validate types of operand data references match
   if (std::adjacent_find(operand_types.cbegin(), operand_types.cend(), std::not_equal_to<>()) !=
       operand_types.cend()) {
-    CUDF_FAIL("An AST operator expression was provided non-matching operand types.");
+    CUDF_FAIL("An AST expression was provided non-matching operand types.");
   }
   // Give back intermediate storage locations that are consumed by this operation
   std::for_each(
@@ -138,6 +142,13 @@ cudf::size_type linearizer::visit(operator_expression const& expr)
         detail::device_data_reference_type::COLUMN, data_type, 0, table_reference::OUTPUT};
     } else {
       // This node is not the root. Output is an intermediate value.
+      // Ensure that the output type is fixed width and fits in the intermediate storage.
+      if (!cudf::is_fixed_width(data_type)) {
+        CUDF_FAIL(
+          "The output data type is not a fixed-width type but must be stored in an intermediate.");
+      } else if (cudf::size_of(data_type) > sizeof(std::int64_t)) {
+        CUDF_FAIL("The output data type is too large to be stored in an intermediate.");
+      }
       return detail::device_data_reference{detail::device_data_reference_type::INTERMEDIATE,
                                            data_type,
                                            this->intermediate_counter.take()};
@@ -162,7 +173,7 @@ cudf::data_type linearizer::get_root_data_type() const
 }
 
 std::vector<cudf::size_type> linearizer::visit_operands(
-  std::vector<std::reference_wrapper<const expression>> operands)
+  std::vector<std::reference_wrapper<const node>> operands)
 {
   auto operand_data_reference_indices = std::vector<cudf::size_type>();
   for (auto const& operand : operands) {

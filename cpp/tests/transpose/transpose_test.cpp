@@ -101,7 +101,8 @@ void run_test(size_t ncols, size_t nrows, bool add_nulls)
   std::mt19937 rng(1);
 
   // Generate values as vector of vectors
-  auto const values = generate_vectors<T>(ncols, nrows, [&rng]() { return static_cast<T>(rng()); });
+  auto const values = generate_vectors<T>(
+    ncols, nrows, [&rng]() { return cudf::test::make_type_param_scalar<T>(rng()); });
   auto const valuesT = transpose_vectors(values);
 
   std::vector<fixed_width_column_wrapper<T>> input_cols;

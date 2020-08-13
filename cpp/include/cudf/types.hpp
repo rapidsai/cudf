@@ -63,6 +63,10 @@ class list_view;
 class scalar;
 template <typename T>
 class numeric_scalar;
+
+template <typename T>
+class fixed_point_scalar;
+
 class string_scalar;
 template <typename T>
 class timestamp_scalar;
@@ -71,6 +75,10 @@ class duration_scalar;
 
 template <typename T>
 class numeric_scalar_device_view;
+
+template <typename T>
+class fixed_point_scalar_device_view;
+
 class string_scalar_device_view;
 template <typename T>
 class timestamp_scalar_device_view;
@@ -207,6 +215,8 @@ enum class type_id : int32_t {
   DICTIONARY32,            ///< Dictionary type using int32 indices
   STRING,                  ///< String elements
   LIST,                    ///< List elements
+  DECIMAL32,               ///< Fixed-point type with int32_t
+  DECIMAL64,               ///< Fixed-point type with int64_t
   // `NUM_TYPE_IDS` must be last!
   NUM_TYPE_IDS  ///< Total number of type ids
 };

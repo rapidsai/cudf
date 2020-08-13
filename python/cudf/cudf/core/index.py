@@ -467,7 +467,9 @@ class Index(Frame, Serializable):
         >>> type(idx)
         <class 'cudf.core.index.GenericIndex'>
         """
-        return pd.Index(self._values.to_pandas(), name=self.name)
+        return pd.Index(
+            self._values.to_pandas(nullable_pd_dtype=False), name=self.name
+        )
 
     def to_arrow(self):
         """
@@ -489,16 +491,12 @@ class Index(Frame, Serializable):
         return self._values.to_arrow()
 
     def tolist(self):
-        """
-        Return a list type from index data.
 
-        Returns
-        -------
-        list
-        """
-        # TODO: Raise error as part
-        # of https://github.com/rapidsai/cudf/issues/5689
-        return self.to_arrow().to_pylist()
+        raise TypeError(
+            "cuDF does not support conversion to host memory "
+            "via `tolist()` method. Consider using "
+            "`.to_arrow().to_pylist()` to construct a Python list."
+        )
 
     to_list = tolist
 
@@ -718,8 +716,8 @@ class Index(Frame, Serializable):
                 difference = difference.astype(self.dtype)
 
         if sort is None:
-            _, inds = difference._values.sort_by_values()
-            return as_index(difference.take(inds))
+            return difference.sort_values()
+
         return difference
 
     def _apply_op(self, fn, other=None):
@@ -730,6 +728,60 @@ class Index(Frame, Serializable):
             return as_index(op(other))
         else:
             return as_index(op())
+
+    def sort_values(self, return_indexer=False, ascending=True, key=None):
+        """
+        Return a sorted copy of the index, and optionally return the indices
+        that sorted the index itself.
+
+        Parameters
+        ----------
+        return_indexer : bool, default False
+            Should the indices that would sort the index be returned.
+        ascending : bool, default True
+            Should the index values be sorted in an ascending order.
+        key : None, optional
+            This parameter is NON-FUNCTIONAL.
+
+        Returns
+        -------
+        sorted_index : Index
+            Sorted copy of the index.
+        indexer : cupy.ndarray, optional
+            The indices that the index itself was sorted by.
+
+        See Also
+        --------
+        cudf.core.series.Series.min : Sort values of a Series.
+        cudf.core.dataframe.DataFrame.sort_values : Sort values in a DataFrame.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx = cudf.Index([10, 100, 1, 1000])
+        >>> idx
+        Int64Index([10, 100, 1, 1000], dtype='int64')
+
+        Sort values in ascending order (default behavior).
+        >>> idx.sort_values()
+        Int64Index([1, 10, 100, 1000], dtype='int64')
+
+        Sort values in descending order, and also get the indices `idx` was
+        sorted by.
+        >>> idx.sort_values(ascending=False, return_indexer=True)
+        (Int64Index([1000, 100, 10, 1], dtype='int64'), array([3, 1, 0, 2],
+                                                            dtype=int32))
+        """
+        if key is not None:
+            raise NotImplementedError("key parameter is not yet implemented.")
+
+        indices = self._values.argsort(ascending=ascending)
+        index_sorted = as_index(self.take(indices), name=self.name)
+
+        if return_indexer:
+            return index_sorted, cupy.asarray(indices)
+        else:
+            return index_sorted
 
     def unique(self):
         """
@@ -1437,7 +1489,7 @@ class RangeIndex(Index):
         elif isinstance(other, cudf.core.index.RangeIndex):
             return self._start == other._start and self._stop == other._stop
         else:
-            return (self == other)._values.all()
+            return super().equals(other)
 
     def serialize(self):
         header = {}
@@ -1979,7 +2031,9 @@ class DatetimeIndex(GenericIndex):
 
     def to_pandas(self):
         nanos = self._values.astype("datetime64[ns]")
-        return pd.DatetimeIndex(nanos.to_pandas(), name=self.name)
+        return pd.DatetimeIndex(
+            nanos.to_pandas(nullable_pd_dtype=False), name=self.name
+        )
 
     def get_dt_field(self, field):
         out_column = self._values.get_dt_field(field)

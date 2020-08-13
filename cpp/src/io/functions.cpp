@@ -39,8 +39,6 @@ std::unique_ptr<reader> make_reader(source_info const& src_info,
   std::vector<std::unique_ptr<datasource>> datasources;
   if (src_info.type == io_type::HOST_BUFFER) {
     datasources = cudf::io::datasource::create(src_info.buffers);
-  } else if (src_info.type == io_type::ARROW_RANDOM_ACCESS_FILE) {
-    datasources = cudf::io::datasource::create(src_info.files);
   } else if (src_info.type == io_type::USER_IMPLEMENTED) {
     datasources = cudf::io::datasource::create(src_info.user_sources);
   } else {
