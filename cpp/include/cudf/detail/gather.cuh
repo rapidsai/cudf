@@ -25,6 +25,7 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/detail/gather.cuh>
+#include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
@@ -358,19 +359,6 @@ struct column_gatherer_impl<list_view, MapItRoot> {
   }
 };
 
-template <typename MapItRoot>
-struct column_gatherer_impl<struct_view, MapItRoot> {
-  std::unique_ptr<column> operator()(column_view const& column,
-                                     MapItRoot gather_map_begin,
-                                     MapItRoot gather_map_end,
-                                     bool nullify_out_of_bounds,
-                                     cudaStream_t stream,
-                                     rmm::mr::device_memory_resource* mr)
-  {
-    CUDF_FAIL("Gather not yet supported on struct_view.");
-  }
-};
-
 /**
  * @brief Function object for gathering a type-erased
  * column. To be used with the cudf::type_dispatcher.
@@ -517,6 +505,58 @@ void gather_bitmask(table_view const& source,
     }
   }
 }
+
+template <typename MapItRoot>
+struct column_gatherer_impl<struct_view, MapItRoot> {
+  std::unique_ptr<column> operator()(column_view const& column,
+                                     MapItRoot gather_map_begin,
+                                     MapItRoot gather_map_end,
+                                     bool nullify_out_of_bounds,
+                                     cudaStream_t stream,
+                                     rmm::mr::device_memory_resource* mr)
+  {
+    structs_column_view structs_column(column);
+    auto gather_map_size{std::distance(gather_map_begin, gather_map_end)};
+    if (gather_map_size == -1) {
+      return make_empty_column(
+        data_type{type_id::STRUCT});  // TODO: Construct empty member columns, if required.
+    }
+
+    std::vector<std::unique_ptr<cudf::column>> output_struct_members;
+    std::transform(structs_column.child_begin(),
+                   structs_column.child_end(),
+                   std::back_inserter(output_struct_members),
+                   [&gather_map_begin, &gather_map_end, nullify_out_of_bounds, stream, mr](
+                     cudf::column_view const& col) {
+                     return cudf::type_dispatcher(col.type(),
+                                                  column_gatherer{},
+                                                  col,
+                                                  gather_map_begin,
+                                                  gather_map_end,
+                                                  nullify_out_of_bounds,
+                                                  stream,
+                                                  mr);
+                   });
+
+    gather_bitmask(
+      // Table view of struct column.
+      cudf::table_view{
+        std::vector<cudf::column_view>{structs_column.child_begin(), structs_column.child_end()}},
+      gather_map_begin,
+      output_struct_members,
+      nullify_out_of_bounds ? gather_bitmask_op::NULLIFY : gather_bitmask_op::DONT_CHECK,
+      mr,
+      stream);
+
+    return cudf::make_structs_column(
+      gather_map_size,
+      std::move(output_struct_members),
+      0,
+      rmm::device_buffer{0, stream, mr},  // Null mask will be fixed up in cudf::gather().
+      stream,
+      mr);
+  }
+};
 
 /**
  * @brief Gathers the specified rows of a set of columns according to a gather map.
