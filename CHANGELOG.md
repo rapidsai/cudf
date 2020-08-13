@@ -2,6 +2,8 @@
 
 ## New Features
 
+- PR #5975 Add strings `filter_characters` API
+
 ## Improvements
 
 ## Bug Fixes
