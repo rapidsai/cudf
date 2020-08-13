@@ -7,7 +7,6 @@ import rmm
 
 import cudf
 
-from cudf._lib.scalar import as_scalar
 from cudf.core.buffer import Buffer
 from cudf.utils.dtypes import is_categorical_dtype, is_list_dtype
 import cudf._lib as libcudfxx
@@ -547,9 +546,3 @@ def make_column_from_scalar(Scalar val, size_type size):
         c_result = move(cpp_make_column_from_scalar(c_val[0], size))
 
     return Column.from_unique_ptr(move(c_result))
-
-
-def scalar_to_column(val, size, dtype=None):
-    scalar_val = as_scalar(val, dtype)
-
-    return make_column_from_scalar(scalar_val, size)

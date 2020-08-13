@@ -215,7 +215,7 @@ class ApplyChunksCompiler(ApplyKernelCompilerBase):
     def normalize_chunks(self, size, chunks):
         if isinstance(chunks, int):
             # *chunks* is the chunksize
-            return libcudf.filling.arange(0, size, chunks).data_array_view
+            return utils.arange(0, size, chunks).data_array_view
         else:
             # *chunks* is an array of chunk leading offset
             chunks = column.as_column(chunks)

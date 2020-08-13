@@ -497,7 +497,7 @@ class ColumnBase(Column, Serializable):
                 return libcudf.copying.column_slice(self, [start, stop])[0]
             else:
                 # Need to create a gather map for given slice with stride
-                gather_map = libcudf.filling.arange(
+                gather_map = utils.arange(
                     start=start,
                     stop=stop,
                     step=stride,
@@ -533,7 +533,7 @@ class ColumnBase(Column, Serializable):
             if (key_stride is None or key_stride == 1) and is_scalar(value):
                 return self._fill(value, key_start, key_stop, inplace=True)
             if key_stride != 1 or key_stride is not None or is_scalar(value):
-                key = libcudf.filling.arange(
+                key = utils.arange(
                     start=key_start,
                     stop=key_stop,
                     step=key_stride,
@@ -549,7 +549,7 @@ class ColumnBase(Column, Serializable):
                     raise ValueError(
                         "Boolean mask must be of same length as column"
                     )
-                key = libcudf.filling.arange(len(self))[key]
+                key = utils.arange(len(self))[key]
                 if hasattr(value, "__len__") and len(value) == len(self):
                     value = as_column(value)[key]
             nelem = len(key)
@@ -750,15 +750,11 @@ class ColumnBase(Column, Serializable):
 
             # Short-circuit if rhs is all null.
             if lhs.null_count == 0 and (rhs.null_count == len(rhs)):
-                return libcudf.column.scalar_to_column(
-                    False, len(self), dtype="bool"
-                )
+                return utils.full(len(self), False, dtype="bool")
         except ValueError:
             # pandas functionally returns all False when cleansing via
             # typecasting fails
-            return libcudf.column.scalar_to_column(
-                False, len(self), dtype="bool"
-            )
+            return utils.full(len(self), False, dtype="bool")
 
         # If categorical, combine categories first
         if is_categorical_dtype(lhs):
@@ -770,22 +766,13 @@ class ColumnBase(Column, Serializable):
                 # list doesn't have any nulls. If it does have nulls, make
                 # the values list a Categorical with a single null
                 if not rhs.has_nulls:
-                    return libcudf.column.scalar_to_column(
-                        False, len(self), dtype="bool"
-                    )
+                    return utils.full(len(self), False, dtype="bool")
                 rhs = as_column(pd.Categorical.from_codes([-1], categories=[]))
                 rhs = rhs.cat().set_categories(lhs_cats).astype(self.dtype)
 
-        lhs = cudf.DataFrame(
-            {"x": lhs, "orig_order": libcudf.filling.arange(len(lhs))}
-        )
+        lhs = cudf.DataFrame({"x": lhs, "orig_order": utils.arange(len(lhs))})
         rhs = cudf.DataFrame(
-            {
-                "x": rhs,
-                "bool": libcudf.column.scalar_to_column(
-                    True, len(rhs), dtype="bool"
-                ),
-            }
+            {"x": rhs, "bool": utils.full(len(rhs), True, dtype="bool")}
         )
         res = lhs.merge(rhs, on="x", how="left").sort_values(by="orig_order")
         res = res.drop_duplicates(subset="orig_order", ignore_index=True)
@@ -1093,7 +1080,7 @@ def column_empty(row_count, dtype="object", masked=False):
     elif dtype.kind in "OU":
         data = None
         children = (
-            libcudf.column.scalar_to_column(0, row_count + 1, dtype="int32"),
+            utils.full(row_count + 1, 0, dtype="int32"),
             build_column(
                 data=Buffer.empty(row_count * np.dtype("int8").itemsize),
                 dtype="int8",

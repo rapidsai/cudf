@@ -2,6 +2,8 @@
 
 ## New Features
 
+- PR #5974 Use libcudf instead of cupy for `arange` or column creation from a scalar.
+
 ## Improvements
 
 - PR #5917 Just use `None` for `strides` in `Buffer`

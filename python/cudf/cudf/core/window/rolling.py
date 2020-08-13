@@ -7,7 +7,7 @@ import pandas as pd
 import cudf
 from cudf import _lib as libcudf
 from cudf.core.column.column import as_column
-from cudf.utils import cudautils
+from cudf.utils import cudautils, utils
 
 
 class Rolling:
@@ -212,9 +212,7 @@ class Rolling:
             result_col = libcudf.rolling.rolling(
                 sr._column,
                 as_column(self.window),
-                libcudf.column.scalar_to_column(
-                    0, self.window.size, dtype=self.window.dtype
-                ),
+                utils.full(self.window.size, 0, dtype=self.window.dtype),
                 None,
                 self.min_periods,
                 self.center,
@@ -377,7 +375,7 @@ class RollingGroupby(Rolling):
     def _window_to_window_sizes(self, window):
         if pd.api.types.is_integer(window):
             return cudautils.grouped_window_sizes_from_offset(
-                libcudf.filling.arange(len(self.obj)).data_array_view,
+                utils.arange(len(self.obj)).data_array_view,
                 self._group_starts,
                 window,
             )

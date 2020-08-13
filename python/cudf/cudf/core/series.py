@@ -2327,9 +2327,7 @@ class Series(Frame, Serializable):
     def reverse(self):
         """Reverse the Series
         """
-        rinds = libcudf.filling.arange(
-            (self._column.size - 1), -1, -1, dtype=np.int32
-        )
+        rinds = utils.arange((self._column.size - 1), -1, -1, dtype=np.int32)
         col = self._column[rinds]
         index = self.index._values[rinds]
         return self._copy_construct(data=col, index=index)
@@ -2443,8 +2441,8 @@ class Series(Frame, Serializable):
         except ValueError:
             return _return_sentinel_series()
 
-        order = libcudf.filling.arange(len(self))
-        codes = libcudf.filling.arange(len(cats), dtype=dtype)
+        order = utils.arange(len(self))
+        codes = utils.arange(len(cats), dtype=dtype)
 
         value = cudf.DataFrame({"value": cats, "code": codes})
         codes = cudf.DataFrame(
@@ -4147,10 +4145,10 @@ class Series(Frame, Serializable):
         rhs = cudf.DataFrame(index=as_index(index))
         if how == "left":
             tmp_col_id = str(uuid4())
-            lhs[tmp_col_id] = libcudf.filling.arange(len(lhs))
+            lhs[tmp_col_id] = utils.arange(len(lhs))
         elif how == "right":
             tmp_col_id = str(uuid4())
-            rhs[tmp_col_id] = libcudf.filling.arange(len(rhs))
+            rhs[tmp_col_id] = utils.arange(len(rhs))
         result = lhs.join(rhs, how=how, sort=sort)
         if how == "left" or how == "right":
             result = result.sort_values(tmp_col_id)[0]

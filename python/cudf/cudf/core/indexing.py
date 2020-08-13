@@ -3,8 +3,8 @@ import numpy as np
 import pandas as pd
 
 import cudf
-import cudf._lib as libcudf
 from cudf._lib.nvtx import annotate
+from cudf.utils import utils
 from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_column_like,
@@ -34,12 +34,8 @@ def indices_from_labels(obj, labels):
     # join is not guaranteed to maintain the index ordering
     # so we will sort it with its initial ordering which is stored
     # in column "__"
-    lhs = cudf.DataFrame(
-        {"__": libcudf.filling.arange(len(labels))}, index=labels
-    )
-    rhs = cudf.DataFrame(
-        {"_": libcudf.filling.arange(len(obj))}, index=obj.index
-    )
+    lhs = cudf.DataFrame({"__": utils.arange(len(labels))}, index=labels)
+    rhs = cudf.DataFrame({"_": utils.arange(len(obj))}, index=obj.index)
     return lhs.join(rhs).sort_values("__")["_"]
 
 
@@ -326,11 +322,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 else:
                     tmp_col_name = str(uuid4())
                     other_df = DataFrame(
-                        {
-                            tmp_col_name: libcudf.filling.arange(
-                                len(tmp_arg[0])
-                            )
-                        },
+                        {tmp_col_name: utils.arange(len(tmp_arg[0]))},
                         index=as_index(tmp_arg[0]),
                     )
                     df = other_df.join(columns_df, how="inner")

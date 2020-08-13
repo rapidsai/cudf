@@ -9,8 +9,8 @@ from cudf.core.column import (
     as_column,
     build_categorical_column,
 )
-import cudf._lib as libcudf
 from cudf.utils.dtypes import is_categorical_dtype, is_list_like
+from cudf.utils import utils
 
 _axis_map = {0: 0, 1: 1, "index": 0, "columns": 1}
 
@@ -448,9 +448,7 @@ def melt(
     # Step 2: add variable
     var_cols = []
     for i, var in enumerate(value_vars):
-        var_cols.append(
-            Series(libcudf.column.scalar_to_column(i, N, dtype=np.int8))
-        )
+        var_cols.append(Series(utils.full(N, i, dtype=np.int8)))
     temp = Series._concat(objs=var_cols, index=None)
 
     if not var_name:
