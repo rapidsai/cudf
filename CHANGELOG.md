@@ -4,9 +4,11 @@
 
 ## Improvements
 
+- PR #5973 Link to the Code of Conduct in CONTRIBUTING.md
 - PR #5917 Just use `None` for `strides` in `Buffer`
 
 ## Bug Fixes
+
 
 # cuDF 0.15.0 (Date TBD)
 
