@@ -150,7 +150,7 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
     std::cout << "\n";
 #endif
 
-    cudf::test::expect_columns_equal(*output, *reference);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*output, *reference);
   }
 
   void run_test_col_agg(cudf::table_view const& keys,
@@ -711,7 +711,7 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
     std::cout << "\n";
 #endif
 
-    cudf::test::expect_columns_equal(*output, *reference);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*output, *reference);
   }
 
   void run_test_col_agg(cudf::table_view const& keys,

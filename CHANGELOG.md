@@ -4,10 +4,12 @@
 
 ## Improvements
 
+- PR #5973 Link to the Code of Conduct in CONTRIBUTING.md
 - PR #5917 Just use `None` for `strides` in `Buffer`
 - PR #5971 Add cuStreamz README for basic installation and use
 
 ## Bug Fixes
+
 
 # cuDF 0.15.0 (Date TBD)
 
@@ -191,6 +193,7 @@
 - PR #5803 Add in Java support for the repeat command
 - PR #5806 Expose the error message from native exception when throwing an OOM exception
 - PR #5825 Enable ORC statistics generation by default
+- PR #5771 Enable gather/slicing/joins with ListColumns in Python
 - PR #5834 Add support for dictionary column in concatenate
 - PR #5832 Make dictionary_wrapper constructor from a value explicit
 - PR #5833 Pin `dask` and `distributed` version to `2.22.0`
