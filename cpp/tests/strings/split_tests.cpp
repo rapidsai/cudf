@@ -59,7 +59,7 @@ TEST_F(StringsSplitTest, Split)
 
   auto results = cudf::strings::split(strings_view, cudf::string_scalar(" "));
   EXPECT_TRUE(results->num_columns() == 2);
-  cudf::test::expect_tables_equal(*results, *expected);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*results, *expected);
 }
 
 TEST_F(StringsSplitTest, SplitWithMax)
@@ -78,7 +78,7 @@ TEST_F(StringsSplitTest, SplitWithMax)
 
   auto results = cudf::strings::split(strings_view, cudf::string_scalar("::"), 1);
   EXPECT_TRUE(results->num_columns() == 2);
-  cudf::test::expect_tables_equal(*results, *expected);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*results, *expected);
 }
 
 TEST_F(StringsSplitTest, SplitWhitespace)
@@ -108,7 +108,7 @@ TEST_F(StringsSplitTest, SplitWhitespace)
 
   auto results = cudf::strings::split(strings_view);
   EXPECT_TRUE(results->num_columns() == 2);
-  cudf::test::expect_tables_equal(*results, *expected);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*results, *expected);
 }
 
 TEST_F(StringsSplitTest, SplitWhitespaceWithMax)
@@ -126,7 +126,7 @@ TEST_F(StringsSplitTest, SplitWhitespaceWithMax)
 
   auto results = cudf::strings::split(strings_view, cudf::string_scalar(""), 1);
   EXPECT_TRUE(results->num_columns() == 2);
-  cudf::test::expect_tables_equal(*results, *expected);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*results, *expected);
 }
 
 TEST_F(StringsSplitTest, RSplit)
@@ -165,7 +165,7 @@ TEST_F(StringsSplitTest, RSplit)
 
   auto results = cudf::strings::rsplit(strings_view, cudf::string_scalar("_"));
   EXPECT_TRUE(results->num_columns() == 3);
-  cudf::test::expect_tables_equal(*results, *expected);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*results, *expected);
 }
 
 TEST_F(StringsSplitTest, RSplitWithMax)
@@ -184,7 +184,7 @@ TEST_F(StringsSplitTest, RSplitWithMax)
 
   auto results = cudf::strings::rsplit(strings_view, cudf::string_scalar("::"), 1);
   EXPECT_TRUE(results->num_columns() == 2);
-  cudf::test::expect_tables_equal(*results, *expected);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*results, *expected);
 }
 
 TEST_F(StringsSplitTest, RSplitWhitespace)
@@ -219,7 +219,7 @@ TEST_F(StringsSplitTest, RSplitWhitespace)
 
   auto results = cudf::strings::rsplit(strings_view);
   EXPECT_TRUE(results->num_columns() == 3);
-  cudf::test::expect_tables_equal(*results, *expected);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*results, *expected);
 }
 
 TEST_F(StringsSplitTest, RSplitWhitespaceWithMax)
@@ -237,7 +237,7 @@ TEST_F(StringsSplitTest, RSplitWhitespaceWithMax)
 
   auto results = cudf::strings::rsplit(strings_view, cudf::string_scalar(""), 1);
   EXPECT_TRUE(results->num_columns() == 2);
-  cudf::test::expect_tables_equal(*results, *expected);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*results, *expected);
 }
 
 TEST_F(StringsSplitTest, SplitZeroSizeStringsColumns)
@@ -288,7 +288,7 @@ TEST_F(StringsSplitTest, SplitRecord)
   LCW expected(
     {LCW{"", "Héllo", "thesé"}, LCW{}, LCW{"are", "some", "", ""}, LCW{"tést", "String"}, LCW{""}},
     validity);
-  cudf::test::expect_columns_equal(result->view(), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
 }
 
 TEST_F(StringsSplitTest, SplitRecordWithMaxSplit)
@@ -305,7 +305,7 @@ TEST_F(StringsSplitTest, SplitRecordWithMaxSplit)
   LCW expected(
     {LCW{"", "Héllo thesé"}, LCW{}, LCW{"are", "some  "}, LCW{"tést", "String"}, LCW{""}},
     validity);
-  cudf::test::expect_columns_equal(result->view(), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
 }
 
 TEST_F(StringsSplitTest, SplitRecordWhitespace)
@@ -320,7 +320,7 @@ TEST_F(StringsSplitTest, SplitRecordWhitespace)
   using LCW   = cudf::test::lists_column_wrapper<cudf::string_view>;
   LCW expected({LCW{"Héllo", "thesé"}, LCW{}, LCW{"are", "some"}, LCW{"tést", "String"}, LCW{}},
                validity);
-  cudf::test::expect_columns_equal(result->view(), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
 }
 
 TEST_F(StringsSplitTest, SplitRecordWhitespaceWithMaxSplit)
@@ -336,7 +336,7 @@ TEST_F(StringsSplitTest, SplitRecordWhitespaceWithMaxSplit)
   using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
   LCW expected({LCW{"Héllo", "thesé  "}, LCW{}, LCW{"are", "some  "}, LCW{"tést", "String"}, LCW{}},
                validity);
-  cudf::test::expect_columns_equal(result->view(), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
 }
 
 TEST_F(StringsSplitTest, RSplitRecord)
@@ -360,7 +360,7 @@ TEST_F(StringsSplitTest, RSplitRecord)
                validity);
   auto result =
     cudf::strings::rsplit_record(cudf::strings_column_view(strings), cudf::string_scalar("_"));
-  cudf::test::expect_columns_equal(result->view(), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
 }
 
 TEST_F(StringsSplitTest, RSplitRecordWithMaxSplit)
@@ -393,7 +393,7 @@ TEST_F(StringsSplitTest, RSplitRecordWithMaxSplit)
   auto result =
     cudf::strings::rsplit_record(cudf::strings_column_view(strings), cudf::string_scalar("_"), 2);
 
-  cudf::test::expect_columns_equal(result->view(), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
 }
 
 TEST_F(StringsSplitTest, RSplitRecordWhitespace)
@@ -409,7 +409,7 @@ TEST_F(StringsSplitTest, RSplitRecordWhitespace)
 
   auto result = cudf::strings::rsplit_record(cudf::strings_column_view(strings));
 
-  cudf::test::expect_columns_equal(result->view(), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
 }
 
 TEST_F(StringsSplitTest, RSplitRecordWhitespaceWithMaxSplit)
@@ -427,7 +427,7 @@ TEST_F(StringsSplitTest, RSplitRecordWhitespaceWithMaxSplit)
 
   auto result =
     cudf::strings::rsplit_record(cudf::strings_column_view(strings), cudf::string_scalar(""), 1);
-  cudf::test::expect_columns_equal(result->view(), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
 }
 
 TEST_F(StringsSplitTest, SplitRecordZeroSizeStringsColumns)
@@ -477,7 +477,7 @@ TEST_F(StringsSplitTest, Partition)
   expected_columns.push_back(expected3.release());
   auto expected = std::make_unique<cudf::table>(std::move(expected_columns));
 
-  cudf::test::expect_tables_equal(*results, *expected);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*results, *expected);
 }
 
 TEST_F(StringsSplitTest, PartitionWhitespace)
@@ -517,7 +517,7 @@ TEST_F(StringsSplitTest, PartitionWhitespace)
   expected_columns.push_back(expected3.release());
   auto expected = std::make_unique<cudf::table>(std::move(expected_columns));
 
-  cudf::test::expect_tables_equal(*results, *expected);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*results, *expected);
 }
 
 TEST_F(StringsSplitTest, RPartition)
@@ -557,7 +557,7 @@ TEST_F(StringsSplitTest, RPartition)
   expected_columns.push_back(expected3.release());
   auto expected = std::make_unique<cudf::table>(std::move(expected_columns));
 
-  cudf::test::expect_tables_equal(*results, *expected);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*results, *expected);
 }
 
 TEST_F(StringsSplitTest, RPartitionWhitespace)
@@ -597,7 +597,7 @@ TEST_F(StringsSplitTest, RPartitionWhitespace)
   expected_columns.push_back(expected3.release());
   auto expected = std::make_unique<cudf::table>(std::move(expected_columns));
 
-  cudf::test::expect_tables_equal(*results, *expected);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*results, *expected);
 }
 
 TEST_F(StringsSplitTest, PartitionZeroSizeStringsColumns)

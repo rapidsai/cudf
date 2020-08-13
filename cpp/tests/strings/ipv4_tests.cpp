@@ -45,7 +45,7 @@ TEST_F(StringsConvertTest, IPv4ToIntegers)
     h_expected.cend(),
     thrust::make_transform_iterator(h_strings.begin(),
                                     [](auto const str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsConvertTest, IntegersToIPv4)
@@ -66,7 +66,7 @@ TEST_F(StringsConvertTest, IntegersToIPv4)
                                     [](auto const str) { return str != nullptr; }));
 
   auto results = cudf::strings::integers_to_ipv4(column);
-  cudf::test::expect_columns_equal(*results, strings);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings);
 }
 
 TEST_F(StringsConvertTest, ZeroSizeStringsColumnIPV4)
@@ -105,5 +105,5 @@ TEST_F(StringsConvertTest, IsIPv4)
   cudf::test::fixed_width_column_wrapper<bool> expected({0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0},
                                                         {1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1});
   auto results = cudf::strings::is_ipv4(cudf::strings_column_view(strings));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
