@@ -74,7 +74,6 @@ def _check_filters(filters, check_null_strings=True):
 def _filters_to_expression(filters):
     """
     Check if filters are well-formed.
-    See _DNF_filter_doc above for more details.
     """
     import pyarrow.dataset as ds
 

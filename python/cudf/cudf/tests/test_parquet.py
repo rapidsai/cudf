@@ -328,7 +328,37 @@ def test_parquet_read_filtered(tmpdir):
     df_filtered = cudf.read_parquet(fname, filters=[("0", ">", "60")])
 
     assert cudf.io.read_parquet_metadata(fname)[1] == 2048 / 64
-    assert df_filtered.shape[0] < df.shape[0]
+    assert len(df_filtered) < len(df)
+
+    # Generate data
+    fname_0 = tmpdir.join("filtered_multiple_files_0.parquet")
+    df = pd.DataFrame({"x": range(10), "y": list("aabbccddee")})
+    df.to_parquet(fname_0, row_group_size=2)
+    fname_1 = tmpdir.join("filtered_multiple_files_1.parquet")
+    df = pd.DataFrame({"x": range(10), "y": list("aabbccddee")})
+    df.to_parquet(fname_1, row_group_size=2)
+    fname_2 = tmpdir.join("filtered_multiple_files_2.parquet")
+    df = pd.DataFrame({"x": [0, 1, 9, 9, 4, 5, 6, 7, 8, 9], "y": list("aabbzzddee")})
+    df.to_parquet(fname_2, row_group_size=2)
+
+    # Check filter
+    filtered_df = cudf.read_parquet([fname_0, fname_1, fname_2], filters=[("x", "==", 2)])
+    assert len(filtered_df) == 4
+
+    # Generate data
+    fname = tmpdir.join("filtered_complex_predicate.parquet")
+    df = pd.DataFrame({"x": range(10), "y": list("aabbccddee")})
+    df.to_parquet(fname, row_group_size=2)
+
+    # Check filters
+    # TODO: Upgrade Parquet dependency to 1.0.1 once it releases to fix this test
+    assert cudf.io.read_parquet_metadata(fname)[1] == 10 / 2
+    df_filtered = cudf.read_parquet(fname, filters=[("y", "==", "c"), ("x", ">", 8)])
+    assert not len(df_filtered)
+    df_filtered = cudf.read_parquet(fname, filters=[("y", "==", "c"), ("x", ">=", 5)])
+    assert len(df_filtered) == 2
+    df_filtered = cudf.read_parquet(fname, filters=[[("y", "==", "c")], [("x", "<", 3)]])
+    assert len(df_filtered) == 6
 
 
 @pytest.mark.parametrize("row_group_size", [1, 5, 100])
