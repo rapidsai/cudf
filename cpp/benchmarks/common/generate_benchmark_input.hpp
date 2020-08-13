@@ -132,12 +132,6 @@ T random_element()
   return T(elem);
 }
 
-template <typename T, std::enable_if_t<is_timestamp<T>::value, int> = 0>
-T random_element()
-{
-  CUDF_FAIL("Not implemented for timestamp types");
-}
-
 /**
  * @brief Creates an boolean value with 50:50 probability
  *
