@@ -1,5 +1,6 @@
-API Reference
-=============
+~~~~~~~~~~~~~~~~~~~
+cuDF API Reference
+~~~~~~~~~~~~~~~~~~~
 
 .. currentmodule:: cudf.core.dataframe
 

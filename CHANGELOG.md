@@ -294,6 +294,7 @@
 - PR #5947 Fix null count for child device column vector
 - PR #5951 Fix mkdir error in benchmark build
 - PR #5949 Find Arrow include directory for JNI builds
+- PR #5964 Fix API doc page title tag
 
 
 # cuDF 0.14.0 (03 Jun 2020)
