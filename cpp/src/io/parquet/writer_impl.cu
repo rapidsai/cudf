@@ -208,7 +208,7 @@ class parquet_column_view {
       _indexes = rmm::device_buffer(_data_count * sizeof(gpu::nvstrdesc_s), stream);
       stringdata_to_nvstrdesc<<<((_data_count - 1) >> 8) + 1, 256, 0, stream>>>(
         reinterpret_cast<gpu::nvstrdesc_s *>(_indexes.data()),
-        view.offsets().data<size_type>(),
+        view.offsets().data<size_type>() + view.offset(),
         view.chars().data<char>(),
         _nulls,
         _data_count);
@@ -962,7 +962,11 @@ void writer::write_chunked(table_view const &table, pq_chunked_state &state)
 }
 
 // Forward to implementation
-void writer::write_chunked_end(pq_chunked_state &state) { _impl->write_chunked_end(state); }
+std::unique_ptr<std::vector<uint8_t>> writer::write_chunked_end(
+  pq_chunked_state &state, bool return_filemetadata, const std::string &metadata_out_file_path)
+{
+  return _impl->write_chunked_end(state, return_filemetadata, metadata_out_file_path);
+}
 
 std::unique_ptr<std::vector<uint8_t>> writer::merge_rowgroup_metadata(
   const std::vector<std::unique_ptr<std::vector<uint8_t>>> &metadata_list)

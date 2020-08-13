@@ -33,18 +33,18 @@ namespace strings {
  *
  * | Specifier | Description |
  * | :-------: | ----------- |
- * | %%d | Day of the month: 01-31 |
- * | %%m | Month of the year: 01-12 |
- * | %%y | Year without century: 00-99 |
- * | %%Y | Year with century: 0001-9999 |
- * | %%H | 24-hour of the day: 00-23 |
- * | %%I | 12-hour of the day: 01-12 |
- * | %%M | Minute of the hour: 00-59|
- * | %%S | Second of the minute: 00-59 |
- * | %%f | 6-digit microsecond: 000000-999999 |
- * | %%z | UTC offset with format ±HHMM Example +0500 |
- * | %%j | Day of the year: 001-366 |
- * | %%p | Only 'AM', 'PM' or 'am', 'pm' are recognized |
+ * | \%d | Day of the month: 01-31 |
+ * | \%m | Month of the year: 01-12 |
+ * | \%y | Year without century: 00-99 |
+ * | \%Y | Year with century: 0001-9999 |
+ * | \%H | 24-hour of the day: 00-23 |
+ * | \%I | 12-hour of the day: 01-12 |
+ * | \%M | Minute of the hour: 00-59|
+ * | \%S | Second of the minute: 00-59 |
+ * | \%f | 6-digit microsecond: 000000-999999 |
+ * | \%z | UTC offset with format ±HHMM Example +0500 |
+ * | \%j | Day of the year: 001-366 |
+ * | \%p | Only 'AM', 'PM' or 'am', 'pm' are recognized |
  *
  * Other specifiers are not currently supported.
  *
@@ -81,19 +81,19 @@ std::unique_ptr<column> to_timestamps(
  *
  * | Specifier | Description |
  * | :-------: | ----------- |
- * | %%d | Day of the month: 01-31 |
- * | %%m | Month of the year: 01-12 |
- * | %%y | Year without century: 00-99 |
- * | %%Y | Year with century: 0001-9999 |
- * | %%H | 24-hour of the day: 00-23 |
- * | %%I | 12-hour of the day: 01-12 |
- * | %%M | Minute of the hour: 00-59|
- * | %%S | Second of the minute: 00-59 |
- * | %%f | 6-digit microsecond: 000000-999999 |
- * | %%z | Always outputs "+0000" |
- * | %%Z | Always outputs "UTC" |
- * | %%j | Day of the year: 001-366 |
- * | %%p | Only 'AM' or 'PM' |
+ * | \%d | Day of the month: 01-31 |
+ * | \%m | Month of the year: 01-12 |
+ * | \%y | Year without century: 00-99 |
+ * | \%Y | Year with century: 0001-9999 |
+ * | \%H | 24-hour of the day: 00-23 |
+ * | \%I | 12-hour of the day: 01-12 |
+ * | \%M | Minute of the hour: 00-59|
+ * | \%S | Second of the minute: 00-59 |
+ * | \%f | 6-digit microsecond: 000000-999999 |
+ * | \%z | Always outputs "+0000" |
+ * | \%Z | Always outputs "UTC" |
+ * | \%j | Day of the year: 001-366 |
+ * | \%p | Only 'AM' or 'PM' |
  *
  * No checking is done for invalid formats or invalid timestamp values.
  * All timestamps values are formatted to UTC.

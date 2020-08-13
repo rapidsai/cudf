@@ -18,8 +18,14 @@
  */
 
 #include <tests/binaryop/assert-binops.h>
-#include <cudf/binaryop.hpp>
 #include <tests/binaryop/binop-fixture.hpp>
+#include <tests/utilities/type_lists.hpp>
+
+#include <cudf/binaryop.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
+#include "cudf/types.hpp"
+#include "cudf/utilities/type_dispatcher.hpp"
+#include "tests/utilities/column_utilities.hpp"
 
 namespace cudf {
 namespace test {
@@ -144,6 +150,54 @@ TEST_F(BinaryOperationIntegrationTest, Sub_Vector_Scalar_SI64_FP64_SI32)
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SUB());
 }
 
+TEST_F(BinaryOperationIntegrationTest, Sub_Vector_Vector_TimepointD_DurationS_TimepointUS)
+{
+  using TypeOut = cudf::timestamp_us;
+  using TypeLhs = cudf::timestamp_D;
+  using TypeRhs = cudf::duration_s;
+
+  using SUB = cudf::library::operation::Sub<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_column<TypeLhs>(100);
+  auto rhs = make_random_wrapped_column<TypeRhs>(100);
+  auto out =
+    cudf::binary_operation(lhs, rhs, cudf::binary_operator::SUB, data_type(type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SUB());
+}
+
+TEST_F(BinaryOperationIntegrationTest, Sub_Vector_Scalar_TimepointD_TimepointS_DurationS)
+{
+  using TypeOut = cudf::duration_s;
+  using TypeLhs = cudf::timestamp_D;
+  using TypeRhs = cudf::timestamp_s;
+
+  using SUB = cudf::library::operation::Sub<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_column<TypeLhs>(100);
+  auto rhs = cudf::scalar_type_t<TypeRhs>(34);
+  auto out =
+    cudf::binary_operation(lhs, rhs, cudf::binary_operator::SUB, data_type(type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SUB());
+}
+
+TEST_F(BinaryOperationIntegrationTest, Sub_Scalar_Vector_DurationS_DurationD_DurationMS)
+{
+  using TypeOut = cudf::duration_ms;
+  using TypeLhs = cudf::duration_s;
+  using TypeRhs = cudf::duration_D;
+
+  using SUB = cudf::library::operation::Sub<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = cudf::scalar_type_t<TypeLhs>(TypeLhs{-9});
+  auto rhs = make_random_wrapped_column<TypeRhs>(100);
+  auto out =
+    cudf::binary_operation(lhs, rhs, cudf::binary_operator::SUB, data_type(type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SUB());
+}
+
 TEST_F(BinaryOperationIntegrationTest, Mul_Vector_Vector_SI64)
 {
   using TypeOut = int64_t;
@@ -176,6 +230,40 @@ TEST_F(BinaryOperationIntegrationTest, Mul_Vector_Vector_SI64_FP32_FP32)
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, MUL());
 }
 
+TEST_F(BinaryOperationIntegrationTest, Mul_Scalar_Vector_SI32_DurationD_DurationMS)
+{
+  // Double the duration of days and convert the time interval to ms
+  using TypeOut = cudf::duration_ms;
+  using TypeLhs = int32_t;
+  using TypeRhs = cudf::duration_D;
+
+  using MUL = cudf::library::operation::Mul<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = cudf::scalar_type_t<TypeLhs>(2);
+  auto rhs = make_random_wrapped_column<TypeRhs>(100);
+  auto out =
+    cudf::binary_operation(lhs, rhs, cudf::binary_operator::MUL, data_type(type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, MUL());
+}
+
+TEST_F(BinaryOperationIntegrationTest, Mul_Vector_Vector_DurationS_SI32_DurationNS)
+{
+  // Multiple each duration with some random value and promote the result
+  using TypeOut = cudf::duration_ns;
+  using TypeLhs = cudf::duration_s;
+  using TypeRhs = int32_t;
+
+  using MUL = cudf::library::operation::Mul<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_column<TypeLhs>(100);
+  auto rhs = make_random_wrapped_column<TypeRhs>(100);
+  auto out =
+    cudf::binary_operation(lhs, rhs, cudf::binary_operator::MUL, data_type(type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, MUL());
+}
+
 TEST_F(BinaryOperationIntegrationTest, Div_Vector_Vector_SI64)
 {
   using TypeOut = int64_t;
@@ -197,6 +285,39 @@ TEST_F(BinaryOperationIntegrationTest, Div_Vector_Vector_SI64_FP32_FP32)
   using TypeOut = int64_t;
   using TypeLhs = float;
   using TypeRhs = float;
+
+  using DIV = cudf::library::operation::Div<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_column<TypeLhs>(100);
+  auto rhs = make_random_wrapped_column<TypeRhs>(100);
+  auto out =
+    cudf::binary_operation(lhs, rhs, cudf::binary_operator::DIV, data_type(type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, DIV());
+}
+
+TEST_F(BinaryOperationIntegrationTest, Div_Scalar_Vector_DurationD_SI32_DurationS)
+{
+  using TypeOut = cudf::duration_s;
+  using TypeLhs = cudf::duration_D;
+  using TypeRhs = int64_t;
+
+  using DIV = cudf::library::operation::Div<TypeOut, TypeLhs, TypeRhs>;
+
+  // Divide 2 days by an integer and convert the ticks to seconds
+  auto lhs = cudf::scalar_type_t<TypeLhs>(TypeLhs{2});
+  auto rhs = make_random_wrapped_column<TypeRhs>(100);
+  auto out =
+    cudf::binary_operation(lhs, rhs, cudf::binary_operator::DIV, data_type(type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, DIV());
+}
+
+TEST_F(BinaryOperationIntegrationTest, Div_Vector_Vector_DurationD_DurationS_DurationMS)
+{
+  using TypeOut = int64_t;
+  using TypeLhs = cudf::duration_D;
+  using TypeRhs = cudf::duration_s;
 
   using DIV = cudf::library::operation::Div<TypeOut, TypeLhs, TypeRhs>;
 
@@ -309,6 +430,39 @@ TEST_F(BinaryOperationIntegrationTest, Mod_Vector_Vector_FP64)
   using TypeOut = double;
   using TypeLhs = double;
   using TypeRhs = double;
+
+  using MOD = cudf::library::operation::Mod<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_column<TypeLhs>(100);
+  auto rhs = make_random_wrapped_column<TypeRhs>(100);
+  auto out =
+    cudf::binary_operation(lhs, rhs, cudf::binary_operator::MOD, data_type(type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, MOD());
+}
+
+TEST_F(BinaryOperationIntegrationTest, Mod_Vector_Scalar_DurationD_SI32_DurationUS)
+{
+  using TypeOut = cudf::duration_us;
+  using TypeLhs = cudf::duration_D;
+  using TypeRhs = int64_t;
+
+  using MOD = cudf::library::operation::Mod<TypeOut, TypeLhs, TypeRhs>;
+
+  // Half the number of days and convert the remainder ticks to microseconds
+  auto lhs = make_random_wrapped_column<TypeLhs>(100);
+  auto rhs = cudf::scalar_type_t<TypeRhs>(2);
+  auto out =
+    cudf::binary_operation(lhs, rhs, cudf::binary_operator::MOD, data_type(type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, MOD());
+}
+
+TEST_F(BinaryOperationIntegrationTest, Mod_Vector_Scalar_DurationS_DurationMS_DurationUS)
+{
+  using TypeOut = cudf::duration_us;
+  using TypeLhs = cudf::duration_s;
+  using TypeRhs = cudf::duration_ms;
 
   using MOD = cudf::library::operation::Mod<TypeOut, TypeLhs, TypeRhs>;
 
@@ -1628,6 +1782,54 @@ TEST_F(BinaryOperationIntegrationTest, CastAdd_Vector_Vector_SI32_float_float)
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
 
+TEST_F(BinaryOperationIntegrationTest, Add_Vector_Vector_TimepointD_DurationS_TimepointUS)
+{
+  using TypeOut = cudf::timestamp_us;
+  using TypeLhs = cudf::timestamp_D;
+  using TypeRhs = cudf::duration_s;
+
+  using ADD = cudf::library::operation::Add<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_column<TypeLhs>(100);
+  auto rhs = make_random_wrapped_column<TypeRhs>(100);
+  auto out =
+    cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD, data_type(type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
+}
+
+TEST_F(BinaryOperationIntegrationTest, Add_Vector_Scalar_DurationD_TimepointS_TimepointS)
+{
+  using TypeOut = cudf::timestamp_s;
+  using TypeLhs = cudf::duration_D;
+  using TypeRhs = cudf::timestamp_s;
+
+  using ADD = cudf::library::operation::Add<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_column<TypeLhs>(100);
+  auto rhs = cudf::scalar_type_t<TypeRhs>(34);
+  auto out =
+    cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD, data_type(type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
+}
+
+TEST_F(BinaryOperationIntegrationTest, Add_Scalar_Vector_DurationS_DurationD_DurationMS)
+{
+  using TypeOut = cudf::duration_ms;
+  using TypeLhs = cudf::duration_s;
+  using TypeRhs = cudf::duration_D;
+
+  using ADD = cudf::library::operation::Add<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = cudf::scalar_type_t<TypeLhs>(TypeLhs{-9});
+  auto rhs = make_random_wrapped_column<TypeRhs>(100);
+  auto out =
+    cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD, data_type(type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
+}
+
 TEST_F(BinaryOperationIntegrationTest, ShiftRightUnsigned_Scalar_Vector_SI64_SI64_SI32)
 {
   using TypeOut = int64_t;
@@ -1838,6 +2040,141 @@ TEST_F(BinaryOperationIntegrationTest, ATan2_Vector_Vector_FP64_SI32_SI64)
 
   // atan2 has a max ULP error of 2 per CUDA programming guide
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ATAN2(), NearEqualComparator<TypeOut>{2});
+}
+
+template <typename T>
+struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+};
+
+template <typename T>
+using wrapper = cudf::test::fixed_width_column_wrapper<T>;
+TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpAdd)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+
+  auto const sz = std::size_t{1000};
+
+  auto vec1       = std::vector<decimalXX>(sz);
+  auto const vec2 = std::vector<decimalXX>(sz, decimalXX{1, scale_type{-1}});
+  auto expected   = std::vector<decimalXX>(sz);
+
+  std::iota(std::begin(vec1), std::end(vec1), decimalXX{});
+
+  std::transform(std::cbegin(vec1),
+                 std::cend(vec1),
+                 std::cbegin(vec2),
+                 std::begin(expected),
+                 std::plus<decimalXX>());
+
+  auto const lhs          = wrapper<decimalXX>(vec1.begin(), vec1.end());
+  auto const rhs          = wrapper<decimalXX>(vec2.begin(), vec2.end());
+  auto const expected_col = wrapper<decimalXX>(expected.begin(), expected.end());
+
+  auto const result = cudf::binary_operation(
+    lhs, rhs, cudf::binary_operator::ADD, static_cast<cudf::column_view>(lhs).type());
+
+  cudf::test::expect_columns_equal(expected_col, result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpMultiply)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+
+  auto const sz = std::size_t{1000};
+
+  auto vec1       = std::vector<decimalXX>(sz);
+  auto const vec2 = std::vector<decimalXX>(sz, decimalXX{1, scale_type{-1}});
+  auto expected   = std::vector<decimalXX>(sz);
+
+  std::iota(std::begin(vec1), std::end(vec1), decimalXX{});
+
+  std::transform(std::cbegin(vec1),
+                 std::cend(vec1),
+                 std::cbegin(vec2),
+                 std::begin(expected),
+                 std::multiplies<decimalXX>());
+
+  auto const lhs          = wrapper<decimalXX>(vec1.begin(), vec1.end());
+  auto const rhs          = wrapper<decimalXX>(vec2.begin(), vec2.end());
+  auto const expected_col = wrapper<decimalXX>(expected.begin(), expected.end());
+
+  auto const result = cudf::binary_operation(
+    lhs, rhs, cudf::binary_operator::MUL, static_cast<cudf::column_view>(lhs).type());
+
+  cudf::test::expect_columns_equal(expected_col, result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpEqualSimple)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+
+  auto const ONE   = decimalXX{1, scale_type{0}};
+  auto const TWO   = decimalXX{2, scale_type{0}};
+  auto const THREE = decimalXX{3, scale_type{0}};
+  auto const FOUR  = decimalXX{4, scale_type{0}};
+
+  auto const ONE_2   = decimalXX{1, scale_type{-2}};
+  auto const TWO_2   = decimalXX{2, scale_type{-2}};
+  auto const THREE_2 = decimalXX{3, scale_type{-2}};
+  auto const FOUR_2  = decimalXX{4, scale_type{-2}};
+
+  auto const vec1  = std::vector<decimalXX>{ONE, TWO, THREE, FOUR};
+  auto const vec2  = std::vector<decimalXX>{ONE_2, TWO_2, THREE_2, FOUR_2};
+  auto const trues = std::vector<bool>(4, true);
+
+  auto const col1     = wrapper<decimalXX>(vec1.begin(), vec1.end());
+  auto const col2     = wrapper<decimalXX>(vec2.begin(), vec2.end());
+  auto const expected = wrapper<bool>(trues.begin(), trues.end());
+
+  auto const result = cudf::binary_operation(
+    col1, col2, cudf::binary_operator::EQUAL, cudf::data_type{type_id::BOOL8});
+
+  cudf::test::expect_columns_equal(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpEqualLessGreater)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+
+  auto const sz = std::size_t{1000};
+
+  // TESTING binary op ADD
+
+  auto vec1 = std::vector<decimalXX>(sz, decimalXX{0, scale_type{-3}});
+  auto vec2 = std::vector<decimalXX>(sz, decimalXX{0, scale_type{-1}});
+
+  std::iota(std::begin(vec1), std::end(vec1), decimalXX{1, scale_type{-3}});
+
+  auto const iota_1  = wrapper<decimalXX>(vec1.begin(), vec1.end());
+  auto const zeros_3 = wrapper<decimalXX>(vec2.begin(), vec2.end());
+
+  auto const iota_3 = cudf::binary_operation(
+    zeros_3, iota_1, cudf::binary_operator::ADD, static_cast<cudf::column_view>(zeros_3).type());
+
+  cudf::test::expect_columns_equal(iota_1, iota_3->view());
+
+  // TESTING binary op EQUAL, LESS, GREATER
+
+  auto const trues    = std::vector<bool>(sz, true);
+  auto const true_col = wrapper<bool>(trues.begin(), trues.end());
+
+  auto const equal_result = cudf::binary_operation(
+    iota_1, iota_3->view(), cudf::binary_operator::EQUAL, data_type{type_id::BOOL8});
+  cudf::test::expect_columns_equal(true_col, equal_result->view());
+
+  auto const less_result = cudf::binary_operation(
+    zeros_3, iota_3->view(), cudf::binary_operator::LESS, data_type{type_id::BOOL8});
+  cudf::test::expect_columns_equal(true_col, less_result->view());
+
+  auto const greater_result = cudf::binary_operation(
+    iota_3->view(), zeros_3, cudf::binary_operator::GREATER, data_type{type_id::BOOL8});
+  cudf::test::expect_columns_equal(true_col, greater_result->view());
 }
 
 }  // namespace binop

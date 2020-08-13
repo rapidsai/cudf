@@ -66,7 +66,9 @@ fi
 
 conda install "rmm=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
               "rapids-build-env=$MINOR_VERSION.*" \
-              "rapids-notebook-env=$MINOR_VERSION.*"
+              "rapids-notebook-env=$MINOR_VERSION.*" \
+              "dask-cuda=${MINOR_VERSION}" \
+              "ucx-py=${MINOR_VERSION}" \
 
 # https://docs.rapids.ai/maintainers/depmgmt/
 # conda remove -f rapids-build-env rapids-notebook-env
@@ -87,25 +89,14 @@ $CXX --version
 conda list
 
 ################################################################################
-# BUILD - Build libcudf, cuDF and dask_cudf from source
+# BUILD - Build libcudf, cuDF, libcudf_kafka, and dask_cudf from source
 ################################################################################
 
 logger "Build libcudf..."
 if [[ ${BUILD_MODE} == "pull-request" ]]; then
-    $WORKSPACE/build.sh clean libcudf cudf dask_cudf benchmarks tests
+    $WORKSPACE/build.sh clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests --ptds
 else
-    $WORKSPACE/build.sh clean libcudf cudf dask_cudf benchmarks tests -l
-fi
-
-################################################################################
-# BUILD - Build libcudf_kafka from source
-################################################################################
-
-logger "Build libcudf_kafka..."
-if [[ ${BUILD_MODE} == "pull-request" ]]; then
-    $WORKSPACE/build.sh clean libcudf_kafka tests
-else
-    $WORKSPACE/build.sh clean libcudf_kafka tests -l
+    $WORKSPACE/build.sh clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests -l --ptds
 fi
 
 ################################################################################
@@ -127,7 +118,6 @@ else
         echo "Running GoogleTest $test_name"
         ${gt} --gtest_output=xml:${WORKSPACE}/test-results/
     done
-
 
     # set environment variable for numpy 1.16
     # will be enabled for later versions by default

@@ -9,14 +9,16 @@ from cudf import _lib as libcudf
 from cudf._lib.nvtx import annotate
 from cudf._lib.scalar import Scalar
 from cudf.core.buffer import Buffer
-from cudf.core.column import as_column, column
+from cudf.core.column import as_column, build_column, column, string
 from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import (
+    cudf_dtypes_to_pandas_dtypes,
     min_column_type,
     min_signed_type,
     np_to_pa_dtype,
     numeric_normalize_types,
 )
+from cudf.utils.utils import buffers_from_pyarrow
 
 
 class NumericalColumn(column.ColumnBase):
@@ -57,7 +59,7 @@ class NumericalColumn(column.ColumnBase):
                 item = self.data_array_view.dtype.type(item)
             else:
                 return False
-        except Exception:
+        except (TypeError, ValueError):
             return False
         # TODO: Use `scalar`-based `contains` wrapper
         return libcudf.search.contains(
@@ -88,7 +90,7 @@ class NumericalColumn(column.ColumnBase):
                     (np.isscalar(tmp) and (0 == tmp))
                     or ((isinstance(tmp, NumericalColumn)) and (0.0 in tmp))
                 ):
-                    out_dtype = np.dtype("float_")
+                    out_dtype = np.dtype("float64")
         elif rhs is None:
             out_dtype = self.dtype
         else:
@@ -134,7 +136,6 @@ class NumericalColumn(column.ColumnBase):
         return libcudf.string_casting.int2ip(self)
 
     def as_string_column(self, dtype, **kwargs):
-        from cudf.core.column import as_column, string
 
         if len(self) > 0:
             return string._numeric_to_str_typecast_functions[
@@ -144,7 +145,16 @@ class NumericalColumn(column.ColumnBase):
             return as_column([], dtype="object")
 
     def as_datetime_column(self, dtype, **kwargs):
-        from cudf.core.column import build_column
+
+        return build_column(
+            data=self.astype("int64").base_data,
+            dtype=dtype,
+            mask=self.base_mask,
+            offset=self.offset,
+            size=self.size,
+        )
+
+    def as_timedelta_column(self, dtype, **kwargs):
 
         return build_column(
             data=self.astype("int64").base_data,
@@ -160,18 +170,48 @@ class NumericalColumn(column.ColumnBase):
             return self
         return libcudf.unary.cast(self, dtype)
 
-    def to_pandas(self, index=None):
-        if self.has_nulls and self.dtype == np.bool:
-            # Boolean series in Pandas that contains None/NaN is of dtype
-            # `np.object`, which is not natively supported in GDF.
-            ret = self.astype(np.int8).fillna(-1).to_array()
-            ret = pd.Series(ret, index=index)
-            ret = ret.where(ret >= 0, other=None)
-            ret.replace(to_replace=1, value=True, inplace=True)
-            ret.replace(to_replace=0, value=False, inplace=True)
-            return ret
+    @classmethod
+    def from_arrow(cls, array, dtype=None):
+        if dtype is None:
+            dtype = np.dtype(array.type.to_pandas_dtype())
+
+        pa_size, pa_offset, pamask, padata, _ = buffers_from_pyarrow(array)
+        return NumericalColumn(
+            data=padata,
+            mask=pamask,
+            dtype=dtype,
+            size=pa_size,
+            offset=pa_offset,
+        )
+
+    def to_pandas(self, index=None, nullable_pd_dtype=False):
+        if nullable_pd_dtype:
+            arrow_data = self.to_arrow()
+            host_dtype = cudf_dtypes_to_pandas_dtypes.get(
+                self.dtype, self.dtype
+            )
+            if hasattr(host_dtype, "__from_arrow__"):
+                pandas_array = host_dtype.__from_arrow__(arrow_data)
+
+            else:
+                pandas_array = arrow_data.to_pandas()
+
+            result = pd.Series(pandas_array, copy=True)
+            if index is not None:
+                result.index = index
+            return result
         else:
-            return pd.Series(self.to_array(fillna="pandas"), index=index)
+            if self.has_nulls and self.dtype == np.bool:
+                # Boolean series in Pandas that contains None/NaN is of dtype
+                # `np.object`, which is not natively supported in GDF.
+                ret = self.astype(np.int8).fillna(-1).to_array()
+                ret = pd.Series(ret, index=index)
+                ret = ret.where(ret >= 0, other=None)
+                ret.replace(to_replace=1, value=True, inplace=True)
+                ret.replace(to_replace=0, value=False, inplace=True)
+                return ret
+            else:
+                return pd.Series(self.to_array(fillna="pandas"), index=index)
 
     def to_arrow(self):
         mask = None
@@ -308,13 +348,6 @@ class NumericalColumn(column.ColumnBase):
             else:
                 fill_value = fill_value.astype(self.dtype)
         result = libcudf.replace.replace_nulls(self, fill_value)
-        result = column.build_column(
-            result.base_data,
-            result.dtype,
-            mask=None,
-            offset=result.offset,
-            size=result.size,
-        )
 
         return result
 

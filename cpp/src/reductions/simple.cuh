@@ -76,10 +76,12 @@ struct result_type_dispatcher {
     //  - same dtypes (including cudf::wrappers)
     //  - any arithmetic dtype to any arithmetic dtype
     //  - bool to/from any arithmetic dtype
-    return std::is_convertible<ElementType, ResultType>::value &&
+    //  - fixed_point to fixed_point
+    return cudf::is_convertible<ElementType, ResultType>::value &&
            (std::is_arithmetic<ResultType>::value ||
             std::is_same<Op, cudf::reduction::op::min>::value ||
-            std::is_same<Op, cudf::reduction::op::max>::value) &&
+            std::is_same<Op, cudf::reduction::op::max>::value ||
+            cudf::is_fixed_point<ResultType>()) &&
            !std::is_same<ResultType, cudf::list_view>::value;
   }
 

@@ -8,6 +8,7 @@ import pytest
 
 import cudf as gd
 from cudf.tests.utils import assert_eq
+from cudf.utils.dtypes import is_categorical_dtype
 
 
 def make_frames(index=None, nulls="none"):
@@ -56,29 +57,27 @@ def test_concat_dataframe(index, nulls, axis):
     # Make empty frame
     gdf_empty1 = gdf2[:0]
     assert len(gdf_empty1) == 0
-    df_empty1 = gdf_empty1.to_pandas()
+    df_empty1 = gdf_empty1.to_pandas(nullable_pd_dtype=False)
 
     # DataFrame
-    res = gd.concat([gdf, gdf2, gdf, gdf_empty1], axis=axis).to_pandas()
-    sol = pd.concat([df, df2, df, df_empty1], axis=axis)
-    pd.util.testing.assert_frame_equal(
-        res, sol, check_names=False, check_categorical=False
+    res = gd.concat([gdf, gdf2, gdf, gdf_empty1], axis=axis).to_pandas(
+        nullable_pd_dtype=False
     )
+    sol = pd.concat([df, df2, df, df_empty1], axis=axis)
+    assert_eq(res, sol, check_names=False, check_categorical=False)
 
     # Series
     for c in [i for i in ("x", "y", "z") if i != index]:
-        res = gd.concat([gdf[c], gdf2[c], gdf[c]], axis=axis).to_pandas()
-        sol = pd.concat([df[c], df2[c], df[c]], axis=axis)
-        pd.util.testing.assert_series_equal(
-            res, sol, check_names=False, check_categorical=False
+        res = gd.concat([gdf[c], gdf2[c], gdf[c]], axis=axis).to_pandas(
+            nullable_pd_dtype=False
         )
+        sol = pd.concat([df[c], df2[c], df[c]], axis=axis)
+        assert_eq(res, sol, check_names=False, check_categorical=False)
 
     # Index
     res = gd.concat([gdf.index, gdf2.index], axis=axis).to_pandas()
     sol = df.index.append(df2.index)
-    pd.util.testing.assert_index_equal(
-        res, sol, check_names=False, check_categorical=False
-    )
+    assert_eq(res, sol, check_names=False, check_categorical=False)
 
 
 @pytest.mark.parametrize(
@@ -158,12 +157,10 @@ def test_concat_misordered_columns():
     gdf2 = gdf2[["z", "x", "y"]]
     df2 = df2[["z", "x", "y"]]
 
-    res = gd.concat([gdf, gdf2]).to_pandas()
+    res = gd.concat([gdf, gdf2]).to_pandas(nullable_pd_dtype=False)
     sol = pd.concat([df, df2], sort=False)
 
-    pd.util.testing.assert_frame_equal(
-        res, sol, check_names=False, check_categorical=False
-    )
+    assert_eq(res, sol, check_names=False, check_categorical=False)
 
 
 @pytest.mark.parametrize("axis", [1, "columns"])
@@ -191,7 +188,7 @@ def test_concat_multiindex_dataframe():
         }
     )
     gdg = gdf.groupby(["w", "x"]).min()
-    pdg = gdg.to_pandas()
+    pdg = gdg.to_pandas(nullable_pd_dtype=False)
     pdg1 = pdg.iloc[:, :1]
     pdg2 = pdg.iloc[:, 1:]
     gdg1 = gd.from_pandas(pdg1)
@@ -212,7 +209,7 @@ def test_concat_multiindex_series():
         }
     )
     gdg = gdf.groupby(["w", "x"]).min()
-    pdg = gdg.to_pandas()
+    pdg = gdg.to_pandas(nullable_pd_dtype=False)
     pdg1 = pdg["y"]
     pdg2 = pdg["z"]
     gdg1 = gd.from_pandas(pdg1)
@@ -231,7 +228,7 @@ def test_concat_multiindex_dataframe_and_series():
         }
     )
     gdg = gdf.groupby(["w", "x"]).min()
-    pdg = gdg.to_pandas()
+    pdg = gdg.to_pandas(nullable_pd_dtype=False)
     pdg1 = pdg[["y", "z"]]
     pdg2 = pdg["z"]
     pdg2.name = "a"
@@ -250,7 +247,7 @@ def test_concat_multiindex_series_and_dataframe():
         }
     )
     gdg = gdf.groupby(["w", "x"]).min()
-    pdg = gdg.to_pandas()
+    pdg = gdg.to_pandas(nullable_pd_dtype=False)
     pdg1 = pdg["z"]
     pdg2 = pdg[["y", "z"]]
     pdg1.name = "a"
@@ -287,11 +284,11 @@ def test_pandas_concat_compatibility_axis1():
         3, dtypes={"e": float, "ind": float}
     ).set_index("ind")
 
-    pd1 = d1.to_pandas()
-    pd2 = d2.to_pandas()
-    pd3 = d3.to_pandas()
-    pd4 = d4.to_pandas()
-    pd5 = d5.to_pandas()
+    pd1 = d1.to_pandas(nullable_pd_dtype=False)
+    pd2 = d2.to_pandas(nullable_pd_dtype=False)
+    pd3 = d3.to_pandas(nullable_pd_dtype=False)
+    pd4 = d4.to_pandas(nullable_pd_dtype=False)
+    pd5 = d5.to_pandas(nullable_pd_dtype=False)
 
     expect = pd.concat([pd1, pd2, pd3, pd4, pd5], axis=1)
     got = gd.concat([d1, d2, d3, d4, d5], axis=1)
@@ -314,8 +311,8 @@ def test_pandas_concat_compatibility_axis1_overlap(index, names, data):
     if names:
         s1.name = names[0]
         s2.name = names[1]
-    ps1 = s1.to_pandas()
-    ps2 = s2.to_pandas()
+    ps1 = s1.to_pandas(nullable_pd_dtype=False)
+    ps2 = s2.to_pandas(nullable_pd_dtype=False)
     got = gd.concat([s1, s2], axis=1)
     expect = pd.concat([ps1, ps2], axis=1)
 
@@ -325,8 +322,8 @@ def test_pandas_concat_compatibility_axis1_overlap(index, names, data):
 def test_pandas_concat_compatibility_axis1_eq_index():
     s1 = gd.Series(["a", "b", "c"], index=[0, 1, 2])
     s2 = gd.Series(["a", "b", "c"], index=[1, 1, 1])
-    ps1 = s1.to_pandas()
-    ps2 = s2.to_pandas()
+    ps1 = s1.to_pandas(nullable_pd_dtype=False)
+    ps2 = s2.to_pandas(nullable_pd_dtype=False)
 
     try:
         pd.concat([ps1, ps2], axis=1)
@@ -481,6 +478,7 @@ def test_concat_series_dataframe_input_str(objs):
         pd.DataFrame({"l": [10]}),
         pd.DataFrame({"l": [10]}, index=[200]),
         pd.DataFrame([], index=[100]),
+        pd.DataFrame({"cat": pd.Series(["one", "two"], dtype="category")}),
     ],
 )
 @pytest.mark.parametrize(
@@ -499,8 +497,17 @@ def test_concat_series_dataframe_input_str(objs):
             pd.DataFrame({"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
             pd.DataFrame({"l": [10]}),
             pd.DataFrame({"l": [10]}, index=[200]),
+            pd.DataFrame(
+                {"cat": pd.Series(["two", "three"], dtype="category")}
+            ),
         ],
-        [pd.DataFrame([]), pd.DataFrame([], index=[100])],
+        [
+            pd.DataFrame([]),
+            pd.DataFrame([], index=[100]),
+            pd.DataFrame(
+                {"cat": pd.Series(["two", "three"], dtype="category")}
+            ),
+        ],
     ],
 )
 @pytest.mark.parametrize("ignore_index", [True, False])
@@ -513,8 +520,41 @@ def test_concat_empty_dataframes(df, other, ignore_index):
     expected = pd.concat(other_pd, ignore_index=ignore_index)
     actual = gd.concat(other_gd, ignore_index=ignore_index)
     if expected.shape != df.shape:
+        for key, col in actual[actual.columns].iteritems():
+            if is_categorical_dtype(col.dtype):
+                expected[key] = expected[key].fillna("-1")
+                actual[key] = col.astype("str").fillna("-1")
         assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
     else:
         assert_eq(
             expected, actual, check_index_type=False if gdf.empty else True
         )
+
+
+@pytest.mark.parametrize(
+    "df1,df2",
+    [
+        (
+            gd.DataFrame({"k1": [0, 1], "k2": [2, 3], "v1": [4, 5]}),
+            gd.DataFrame({"k1": [1, 0], "k2": [3, 2], "v2": [6, 7]}),
+        ),
+        (
+            gd.DataFrame({"k1": [0, 1], "k2": [2, 3], "v1": [4, 5]}),
+            gd.DataFrame({"k1": [0, 1], "k2": [3, 2], "v2": [6, 7]}),
+        ),
+    ],
+)
+def test_concat_dataframe_with_multiIndex(df1, df2):
+    gdf1 = df1
+    gdf1 = gdf1.set_index(["k1", "k2"])
+
+    gdf2 = df2
+    gdf2 = gdf2.set_index(["k1", "k2"])
+
+    pdf1 = gdf1.to_pandas(nullable_pd_dtype=True)
+    pdf2 = gdf2.to_pandas(nullable_pd_dtype=True)
+
+    expected = gd.concat([gdf1, gdf2], axis=1)
+    actual = pd.concat([pdf1, pdf2], axis=1)
+
+    assert_eq(expected, actual, nullable_pd_dtype=True)

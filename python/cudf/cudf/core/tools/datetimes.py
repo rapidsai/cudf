@@ -87,6 +87,8 @@ def to_datetime(
     Assembling a datetime from multiple columns of a DataFrame. The keys can be
     common abbreviations like ['year', 'month', 'day', 'minute', 'second',
     'ms', 'us', 'ns']) or plurals of the same
+
+    >>> import cudf
     >>> df = cudf.DataFrame({'year': [2015, 2016],
     ...                    'month': [2, 3],
     ...                    'day': [4, 5]})
@@ -257,6 +259,10 @@ def to_datetime(
 def _process_col(col, unit, dayfirst, infer_datetime_format, format):
     if col.dtype.kind == "M":
         return col
+    elif col.dtype.kind == "m":
+        raise TypeError(
+            f"dtype {col.dtype} cannot be converted to {_unit_dtype_map[unit]}"
+        )
 
     if col.dtype.kind in ("f"):
         if unit not in (None, "ns"):

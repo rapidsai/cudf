@@ -41,6 +41,22 @@ __global__ void gpu_atomic_test(T* result, T* data, size_t size)
 }
 
 template <typename T, typename BinaryOp>
+constexpr inline bool is_timestamp_sum()
+{
+  return cudf::is_timestamp<T>() && std::is_same<BinaryOp, cudf::DeviceSum>::value;
+}
+// Disable SUM of TIMESTAMP types
+template <typename T,
+          typename BinaryOp,
+          typename std::enable_if_t<is_timestamp_sum<T, BinaryOp>()>* = nullptr>
+__device__ T atomic_op(T* addr, T const& value, BinaryOp op)
+{
+  return {};
+}
+
+template <typename T,
+          typename BinaryOp,
+          typename std::enable_if_t<!is_timestamp_sum<T, BinaryOp>()>* = nullptr>
 __device__ T atomic_op(T* addr, T const& value, BinaryOp op)
 {
   T old_value = *addr;
@@ -133,16 +149,20 @@ struct AtomicsTest : public cudf::test::BaseFixture {
     CUDA_TRY(cudaDeviceSynchronize());
     CHECK_CUDA(0);
 
-    EXPECT_EQ(host_result[0], exact[0]) << "atomicAdd test failed";
+    if (!is_timestamp_sum<T, cudf::DeviceSum>()) {
+      EXPECT_EQ(host_result[0], exact[0]) << "atomicAdd test failed";
+    }
     EXPECT_EQ(host_result[1], exact[1]) << "atomicMin test failed";
     EXPECT_EQ(host_result[2], exact[2]) << "atomicMax test failed";
-    EXPECT_EQ(host_result[3], exact[0]) << "atomicAdd test(2) failed";
+    if (!is_timestamp_sum<T, cudf::DeviceSum>()) {
+      EXPECT_EQ(host_result[3], exact[0]) << "atomicAdd test(2) failed";
+    }
     EXPECT_EQ(host_result[4], exact[1]) << "atomicMin test(2) failed";
     EXPECT_EQ(host_result[5], exact[2]) << "atomicMax test(2) failed";
   }
 };
 
-TYPED_TEST_CASE(AtomicsTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_CASE(AtomicsTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 // tests for atomicAdd/Min/Max
 TYPED_TEST(AtomicsTest, atomicOps)

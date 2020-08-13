@@ -21,6 +21,7 @@
 #include <tests/utilities/type_lists.hpp>
 
 #include <cudf/concatenate.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/functions.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -413,6 +414,48 @@ TEST_F(ParquetWriterTest, Strings)
   EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
 
+TEST_F(ParquetWriterTest, SlicedTable)
+{
+  // This test checks for writing zero copy, offseted views into existing cudf tables
+
+  std::vector<const char*> strings{
+    "Monday", "Monday", "Friday", "Monday", "Friday", "Friday", "Friday", "Funday"};
+  const auto num_rows = strings.size();
+
+  auto seq_col0 = random_values<int>(num_rows);
+  auto seq_col2 = random_values<float>(num_rows);
+  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+
+  column_wrapper<int> col0{seq_col0.begin(), seq_col0.end(), validity};
+  column_wrapper<cudf::string_view> col1{strings.begin(), strings.end()};
+  column_wrapper<float> col2{seq_col2.begin(), seq_col2.end(), validity};
+
+  cudf_io::table_metadata expected_metadata;
+  expected_metadata.column_names.emplace_back("col_other");
+  expected_metadata.column_names.emplace_back("col_string");
+  expected_metadata.column_names.emplace_back("col_another");
+
+  std::vector<std::unique_ptr<column>> cols;
+  cols.push_back(col0.release());
+  cols.push_back(col1.release());
+  cols.push_back(col2.release());
+  auto expected = std::make_unique<table>(std::move(cols));
+  EXPECT_EQ(3, expected->num_columns());
+
+  auto expected_slice = cudf::slice(expected->view(), {2, static_cast<cudf::size_type>(num_rows)});
+
+  auto filepath = temp_env->get_temp_filepath("SlicedTable.parquet");
+  cudf_io::write_parquet_args out_args{
+    cudf_io::sink_info{filepath}, expected_slice, &expected_metadata};
+  cudf_io::write_parquet(out_args);
+
+  cudf_io::read_parquet_args in_args{cudf_io::source_info{filepath}};
+  auto result = cudf_io::read_parquet(in_args);
+
+  expect_tables_equal(expected_slice, result.tbl->view());
+  EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
+}
+
 TEST_F(ParquetWriterTest, MultiIndex)
 {
   constexpr auto num_rows = 100;
@@ -671,7 +714,8 @@ TEST_F(ParquetChunkedWriterTest, LargeTables)
   auto state = cudf_io::write_parquet_chunked_begin(args);
   cudf_io::write_parquet_chunked(*table1, state);
   cudf_io::write_parquet_chunked(*table2, state);
-  cudf_io::write_parquet_chunked_end(state);
+  auto md = cudf_io::write_parquet_chunked_end(state);
+  CUDF_EXPECTS(!md, "The return value should be null.");
 
   cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
   auto result = cudf_io::read_parquet(read_args);
@@ -699,7 +743,8 @@ TEST_F(ParquetChunkedWriterTest, ManyTables)
   std::for_each(table_views.begin(), table_views.end(), [&state](table_view const& tbl) {
     cudf_io::write_parquet_chunked(tbl, state);
   });
-  cudf_io::write_parquet_chunked_end(state);
+  auto md = cudf_io::write_parquet_chunked_end(state, true, "dummy/path");
+  CUDF_EXPECTS(md, "The returned metadata should not be null.");
 
   cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
   auto result = cudf_io::read_parquet(read_args);

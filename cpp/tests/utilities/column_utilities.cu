@@ -49,7 +49,12 @@ struct column_property_comparator {
     EXPECT_EQ(lhs.type(), rhs.type());
     EXPECT_EQ(lhs.size(), rhs.size());
     if (lhs.size() > 0 && check_exact_equality) { EXPECT_EQ(lhs.nullable(), rhs.nullable()); }
-    EXPECT_EQ(lhs.num_children(), rhs.num_children());
+
+    // equivalent, but not exactly equal columns can have a different number of children if their
+    // sizes are both 0. Specifically, empty string columns may or may not have children.
+    if (check_exact_equality || lhs.size() > 0) {
+      EXPECT_EQ(lhs.num_children(), rhs.num_children());
+    }
 
     // only recurse for true nested types.
     // - strings are an odd case of not being a nested type which do have children. but because
@@ -224,6 +229,9 @@ struct column_comparator_impl<list_view, check_exact_equality> {
     lists_column_view lhs_l(lhs);
     lists_column_view rhs_l(rhs);
 
+    CUDF_EXPECTS(lhs_l.size() == rhs_l.size(), "List column size mismatch");
+    if (lhs_l.size() == 0) { return; }
+
     // using the row_equality_operator directly on a list column is a bad idea for several
     // reasons:
     // - at the moment, the row_equality_operator doesn't support lists
@@ -375,12 +383,21 @@ static auto numeric_to_string_precise(T value)
   return o.str();
 }
 
+static auto duration_suffix(cudf::duration_D) { return " days"; }
+
+static auto duration_suffix(cudf::duration_s) { return " seconds"; }
+
+static auto duration_suffix(cudf::duration_ms) { return " milliseconds"; }
+
+static auto duration_suffix(cudf::duration_us) { return " microseconds"; }
+
+static auto duration_suffix(cudf::duration_ns) { return " nanoseconds"; }
+
 std::string get_nested_type_str(cudf::column_view const& view)
 {
   if (view.type().id() == cudf::type_id::LIST) {
     lists_column_view lcv(view);
-    return cudf::jit::get_type_name(view.type()) + "<" +
-           (lcv.size() > 0 ? get_nested_type_str(lcv.child()) : "") + ">";
+    return cudf::jit::get_type_name(view.type()) + "<" + (get_nested_type_str(lcv.child())) + ">";
   }
   return cudf::jit::get_type_name(view.type());
 }
@@ -425,6 +442,23 @@ struct column_view_printer {
     if (col_as_strings->size() == 0) { return; }
 
     this->template operator()<cudf::string_view>(*col_as_strings, out, indent);
+  }
+
+  template <typename Element, typename std::enable_if_t<cudf::is_fixed_point<Element>()>* = nullptr>
+  void operator()(cudf::column_view const& col,
+                  std::vector<std::string>& out,
+                  std::string const& indent)
+  {
+    auto const h_data = cudf::test::to_host<Element>(col);
+
+    out.resize(col.size());
+    std::transform(thrust::make_counting_iterator(size_type{0}),
+                   thrust::make_counting_iterator(col.size()),
+                   out.begin(),
+                   [&](auto idx) {
+                     auto const d = static_cast<double>(h_data.first[idx]);
+                     return std::to_string(d);
+                   });
   }
 
   template <typename Element,
@@ -472,12 +506,32 @@ struct column_view_printer {
     }
   }
 
+  // Print the tick counts with the units
   template <typename Element, typename std::enable_if_t<is_duration<Element>()>* = nullptr>
   void operator()(cudf::column_view const& col,
                   std::vector<std::string>& out,
                   std::string const& indent)
   {
-    CUDF_FAIL("duration printing not supported yet");
+    auto h_data = cudf::test::to_host<Element>(col);
+
+    out.resize(col.size());
+
+    if (col.nullable()) {
+      std::transform(thrust::make_counting_iterator(size_type{0}),
+                     thrust::make_counting_iterator(col.size()),
+                     out.begin(),
+                     [&h_data](auto idx) {
+                       return bit_is_set(h_data.second.data(), idx)
+                                ? numeric_to_string_precise(h_data.first[idx].count()) +
+                                    duration_suffix(h_data.first[idx])
+                                : std::string("NULL");
+                     });
+
+    } else {
+      std::transform(h_data.first.begin(), h_data.first.end(), out.begin(), [](Element el) {
+        return numeric_to_string_precise(el.count()) + duration_suffix(el);
+      });
+    }
   }
 
   template <typename Element,
@@ -495,7 +549,11 @@ struct column_view_printer {
                            detail::to_string(bitmask_to_host(col), col.size(), indent) + "\n"
                        : "") +
       indent + "Children :\n" +
-      (lcv.size() > 0 ? detail::to_string(lcv.child(), ", ", indent + "   ") : "") + "\n";
+      (lcv.child().type().id() != type_id::LIST && lcv.child().has_nulls()
+         ? indent + detail::to_string(bitmask_to_host(lcv.child()), lcv.child().size(), indent) +
+             "\n"
+         : "") +
+      (detail::to_string(lcv.child(), ", ", indent + "   ")) + "\n";
 
     out.push_back(tmp);
   }

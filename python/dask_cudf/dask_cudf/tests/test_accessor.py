@@ -8,6 +8,7 @@ from dask import dataframe as dd
 import dask_cudf as dgd
 
 from cudf import DataFrame, Series
+from cudf.tests.utils import assert_eq
 
 #############################################################################
 #                        Datetime Accessor                                  #
@@ -119,7 +120,7 @@ def test_categorical_basic(data):
     # Test attributes
     assert pdsr.cat.ordered == dsr.cat.ordered
 
-    assert tuple(pdsr.cat.categories) == tuple(dsr.cat.categories)
+    assert_eq(pdsr.cat.categories, dsr.cat.categories)
 
     np.testing.assert_array_equal(pdsr.cat.codes.values, result.to_array())
 
@@ -132,7 +133,6 @@ def test_categorical_basic(data):
 4 a
 """
     assert all(x == y for x, y in zip(string.split(), expect_str.split()))
-    from cudf.tests.utils import assert_eq
 
     df = DataFrame()
     df["a"] = ["xyz", "abc", "def"] * 10
@@ -242,8 +242,8 @@ def test_string_slicing(data):
     sr = Series(pdsr)
     dsr = dgd.from_cudf(sr, npartitions=2)
     base = pdsr.str.slice(0, 4)
-    test = dsr.str.slice(0, 4).compute().to_pandas()
-    assert_series_equal(base, test)
+    test = dsr.str.slice(0, 4).compute()
+    assert_eq(base, test)
 
 
 def test_categorical_categories():
@@ -252,13 +252,13 @@ def test_categorical_categories():
         {"a": ["a", "b", "c", "d", "e", "e", "a", "d"], "b": range(8)}
     )
     df["a"] = df["a"].astype("category")
-    pdf = df.to_pandas()
+    pdf = df.to_pandas(nullable_pd_dtype=False)
 
     ddf = dgd.from_cudf(df, 2)
     dpdf = dd.from_pandas(pdf, 2)
 
     dd.assert_eq(
-        ddf.a.cat.categories.to_series(),
+        ddf.a.cat.categories.to_series().to_pandas(nullable_pd_dtype=False),
         dpdf.a.cat.categories.to_series(),
         check_index=False,
     )

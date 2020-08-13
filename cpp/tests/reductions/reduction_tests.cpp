@@ -22,6 +22,7 @@
 #include <tests/utilities/type_lists.hpp>
 
 #include <cudf/copying.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
@@ -142,6 +143,35 @@ TYPED_TEST(MinMaxReductionTest, MinMax)
     col_nulls, expected_max_null_result, result_error, cudf::make_max_aggregation());
 }
 
+template <typename T>
+struct SumReductionTest : public ReductionTest<T> {
+};
+using SumTypes = cudf::test::Concat<cudf::test::NumericTypes, cudf::test::DurationTypes>;
+TYPED_TEST_CASE(SumReductionTest, SumTypes);
+
+TYPED_TEST(SumReductionTest, Sum)
+{
+  using T = TypeParam;
+  std::vector<int> int_values({6, -14, 13, 64, 0, -13, -20, 45});
+  std::vector<bool> host_bools({1, 1, 0, 0, 1, 1, 1, 1});
+  std::vector<T> v = convert_values<T>(int_values);
+
+  // test without nulls
+  cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
+  T expected_value = std::accumulate(v.begin(), v.end(), T{0});
+  this->reduction_test(col, expected_value, this->ret_non_arithmetic, cudf::make_sum_aggregation());
+
+  // test with nulls
+  cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
+  cudf::size_type valid_count =
+    cudf::column_view(col_nulls).size() - cudf::column_view(col_nulls).null_count();
+  auto r                = replace_nulls(v, host_bools, T{0});
+  T expected_null_value = std::accumulate(r.begin(), r.end(), T{0});
+
+  this->reduction_test(
+    col_nulls, expected_null_value, this->ret_non_arithmetic, cudf::make_sum_aggregation());
+}
+
 TYPED_TEST_CASE(ReductionTest, cudf::test::NumericTypes);
 
 TYPED_TEST(ReductionTest, Product)
@@ -173,29 +203,6 @@ TYPED_TEST(ReductionTest, Product)
 
   this->reduction_test(
     col_nulls, expected_null_value, this->ret_non_arithmetic, cudf::make_product_aggregation());
-}
-
-TYPED_TEST(ReductionTest, Sum)
-{
-  using T = TypeParam;
-  std::vector<int> int_values({6, -14, 13, 64, 0, -13, -20, 45});
-  std::vector<bool> host_bools({1, 1, 0, 0, 1, 1, 1, 1});
-  std::vector<T> v = convert_values<T>(int_values);
-
-  // test without nulls
-  cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
-  T expected_value = std::accumulate(v.begin(), v.end(), T{0});
-  this->reduction_test(col, expected_value, this->ret_non_arithmetic, cudf::make_sum_aggregation());
-
-  // test with nulls
-  cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
-  cudf::size_type valid_count =
-    cudf::column_view(col_nulls).size() - cudf::column_view(col_nulls).null_count();
-  auto r                = replace_nulls(v, host_bools, T{0});
-  T expected_null_value = std::accumulate(r.begin(), r.end(), T{0});
-
-  this->reduction_test(
-    col_nulls, expected_null_value, this->ret_non_arithmetic, cudf::make_sum_aggregation());
 }
 
 TYPED_TEST(ReductionTest, SumOfSquare)
@@ -232,8 +239,6 @@ TYPED_TEST(ReductionTest, SumOfSquare)
 
 template <typename T>
 struct ReductionAnyAllTest : public ReductionTest<bool> {
-  ReductionAnyAllTest() {}
-  ~ReductionAnyAllTest() {}
 };
 
 TYPED_TEST_CASE(ReductionAnyAllTest, cudf::test::NumericTypes);
@@ -298,8 +303,6 @@ TYPED_TEST(ReductionAnyAllTest, AnyAllFalseFalse)
 
 template <typename T>
 struct MultiStepReductionTest : public ReductionTest<T> {
-  MultiStepReductionTest() {}
-  ~MultiStepReductionTest() {}
 };
 
 using MultiStepReductionTypes = cudf::test::NumericTypes;
@@ -391,9 +394,6 @@ TYPED_TEST(MultiStepReductionTest, var_std)
 
 template <typename T>
 struct ReductionMultiStepErrorCheck : public ReductionTest<T> {
-  ReductionMultiStepErrorCheck() {}
-  ~ReductionMultiStepErrorCheck() {}
-
   void reduction_error_check(cudf::test::fixed_width_column_wrapper<T> &col,
                              bool succeeded_condition,
                              std::unique_ptr<aggregation> const &agg,
@@ -655,8 +655,6 @@ TEST_F(ReductionErrorTest, empty_column)
 
 struct ReductionParamTest : public ReductionTest<double>,
                             public ::testing::WithParamInterface<cudf::size_type> {
-  ReductionParamTest() {}
-  ~ReductionParamTest() {}
 };
 
 INSTANTIATE_TEST_CASE_P(ddofParam, ReductionParamTest, ::testing::Range(1, 5));
@@ -711,9 +709,6 @@ TEST_P(ReductionParamTest, std_var)
 struct StringReductionTest : public cudf::test::BaseFixture,
                              public testing::WithParamInterface<std::vector<std::string>> {
   // Min/Max
-  StringReductionTest() {}
-
-  ~StringReductionTest() {}
 
   void reduction_test(const cudf::column_view underlying_column,
                       std::string expected_value,
@@ -924,6 +919,64 @@ TYPED_TEST(ReductionTest, UniqueCount)
                        expected_null_value1,
                        this->ret_non_arithmetic,
                        cudf::make_nunique_aggregation(cudf::null_policy::EXCLUDE));
+}
+
+template <typename T>
+struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+};
+
+TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointReductionProduct)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+
+  auto const ONE   = decimalXX{1, scale_type{0}};
+  auto const TWO   = decimalXX{2, scale_type{0}};
+  auto const THREE = decimalXX{3, scale_type{0}};
+  auto const FOUR  = decimalXX{4, scale_type{0}};
+  // auto const _24   = decimalXX{24, scale_type{0}};
+
+  auto const in     = std::vector<decimalXX>{ONE, TWO, THREE, FOUR};
+  auto const column = cudf::test::fixed_width_column_wrapper<decimalXX>(in.cbegin(), in.cend());
+  // auto const expected = std::accumulate(in.cbegin(), in.cend(), ONE,
+  // std::multiplies<decimalXX>());
+  auto const out_type = static_cast<cudf::column_view>(column).type();
+
+  EXPECT_THROW(cudf::reduce(column, cudf::make_product_aggregation(), out_type), cudf::logic_error);
+
+  // auto const result        = cudf::reduce(column, cudf::make_product_aggregation(), out_type);
+  // auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
+
+  // EXPECT_EQ(result_scalar->value(), expected);
+  // EXPECT_EQ(result_scalar->value(), _24);
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSum)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+
+  // auto const ZERO  = decimalXX{0, scale_type{0}};
+  auto const ONE   = decimalXX{1, scale_type{0}};
+  auto const TWO   = decimalXX{2, scale_type{0}};
+  auto const THREE = decimalXX{3, scale_type{0}};
+  auto const FOUR  = decimalXX{4, scale_type{0}};
+  // auto const TEN   = decimalXX{10, scale_type{0}};
+
+  auto const in     = std::vector<decimalXX>{ONE, TWO, THREE, FOUR};
+  auto const column = cudf::test::fixed_width_column_wrapper<decimalXX>(in.cbegin(), in.cend());
+  // auto const expected = std::accumulate(in.cbegin(), in.cend(), ZERO, std::plus<decimalXX>());
+  auto const out_type = static_cast<cudf::column_view>(column).type();
+
+  EXPECT_THROW(cudf::reduce(column, cudf::make_sum_aggregation(), out_type), cudf::logic_error);
+
+  // auto const result        = cudf::reduce(column, cudf::make_sum_aggregation(), out_type);
+  // auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
+
+  // EXPECT_EQ(result_scalar->value(), expected);
+  // EXPECT_EQ(result_scalar->value(), TEN);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

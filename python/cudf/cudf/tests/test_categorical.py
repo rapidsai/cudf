@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -62,8 +62,8 @@ def test_categorical_integer():
     string = str(sr)
     expect_str = """
 0 a
-1 null
-2 null
+1 <NA>
+2 <NA>
 3 c
 4 a
 dtype: category
@@ -177,8 +177,8 @@ def test_categorical_element_indexing():
     cat = pd.Categorical(["a", "a", "b", "c", "a"], categories=["a", "b", "c"])
     pdsr = pd.Series(cat)
     sr = Series(cat)
-    assert list(pdsr) == list(sr)
-    assert list(pdsr.cat.codes) == list(sr.cat.codes)
+    assert_eq(pdsr, sr)
+    assert_eq(pdsr.cat.codes, sr.cat.codes, check_dtype=False)
 
 
 def test_categorical_masking():
@@ -213,7 +213,7 @@ def test_df_cat_set_index():
     df["b"] = np.arange(len(df))
     got = df.set_index("a")
 
-    pddf = df.to_pandas()
+    pddf = df.to_pandas(nullable_pd_dtype=False)
     expect = pddf.set_index("a")
 
     assert_eq(got, expect)
@@ -225,7 +225,7 @@ def test_df_cat_sort_index():
     df["b"] = np.arange(len(df))
 
     got = df.set_index("a").sort_index()
-    expect = df.to_pandas().set_index("a").sort_index()
+    expect = df.to_pandas(nullable_pd_dtype=False).set_index("a").sort_index()
 
     assert_eq(got, expect)
 
@@ -311,7 +311,7 @@ def test_categorical_empty():
     np.testing.assert_array_equal(cat.codes, sr.cat.codes.to_array())
 
     # Test attributes
-    assert tuple(pdsr.cat.categories) == tuple(sr.cat.categories)
+    assert_eq(pdsr.cat.categories, sr.cat.categories)
     assert pdsr.cat.ordered == sr.cat.ordered
 
     np.testing.assert_array_equal(
@@ -423,8 +423,8 @@ def test_categorical_add_categories(pd_str_cat, inplace):
     pd_sr_1 = pd_sr if pd_sr_1 is None else pd_sr_1
     cd_sr_1 = cd_sr if cd_sr_1 is None else cd_sr_1
 
-    assert "d" in list(pd_sr_1.cat.categories)
-    assert "d" in list(cd_sr_1.cat.categories)
+    assert "d" in pd_sr_1.cat.categories.to_list()
+    assert "d" in cd_sr_1.cat.categories.to_pandas().to_list()
 
     assert_eq(pd_sr_1, cd_sr_1)
 
@@ -444,8 +444,8 @@ def test_categorical_remove_categories(pd_str_cat, inplace):
     pd_sr_1 = pd_sr if pd_sr_1 is None else pd_sr_1
     cd_sr_1 = cd_sr if cd_sr_1 is None else cd_sr_1
 
-    assert "a" not in list(pd_sr_1.cat.categories)
-    assert "a" not in list(cd_sr_1.cat.categories)
+    assert "a" not in pd_sr_1.cat.categories.to_list()
+    assert "a" not in cd_sr_1.cat.categories.to_pandas().to_list()
 
     assert_eq(pd_sr_1, cd_sr_1)
 
@@ -647,6 +647,7 @@ def test_astype_dtype(data, expected):
         (["a", "bd", "ef"], ["asdfsdf", "bddf", "eff"]),
         ([1, 2, 3], []),
         ([0.0, 6.7, 10.0], []),
+        (["a", "bd", "ef"], []),
     ],
 )
 def test_add_categories(data, add):
