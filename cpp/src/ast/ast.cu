@@ -15,7 +15,7 @@
  */
 
 #include <cudf/ast/ast.cuh>
-#include <cudf/ast/linearizer.cuh>
+#include <cudf/ast/linearizer.hpp>
 #include <cudf/ast/operators.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -128,7 +128,7 @@ std::unique_ptr<column> compute_column(table_view const table,
   for (auto const& dr : data_references) {
     switch (dr.reference_type) {
       case detail::device_data_reference_type::COLUMN:
-        if (dr.table_reference == table_reference::LEFT) {
+        if (dr.table_source == table_reference::LEFT) {
           std::cout << "C";
         } else {
           std::cout << "O";

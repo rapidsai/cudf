@@ -70,12 +70,12 @@ struct device_data_reference {
   cudf::data_type data_type;                  // Type of data
   cudf::size_type
     data_index;  // The column index of a table, index of a literal, or index of an intermediate
-  table_reference table_reference = table_reference::LEFT;
+  table_reference table_source = table_reference::LEFT;
 
   inline bool operator==(const device_data_reference& rhs) const
   {
     return data_index == rhs.data_index && reference_type == rhs.reference_type &&
-           table_reference == rhs.table_reference;
+           table_source == rhs.table_source;
   }
 };
 
@@ -320,7 +320,6 @@ namespace detail {
  *
  */
 class linearizer {
-  friend class detail::node;
   friend class literal;
   friend class column_reference;
   friend class expression;
