@@ -67,6 +67,7 @@
 - PR #5811 Add `nvtext::edit_distance` API
 - PR #5789 Add groupby support for duration types
 - PR #5810 Make Cython subdirs packages and simplify package_data
+- PR #5807 Initial support for struct columns
 - PR #5817 Enable more `fixed_point` unit tests by introducing "scale-less" constructor
 - PR #5822 Add `cudf_kafka` to `custreamz` run time conda dependency and fix bash syntax issue
 - PR #5845 Add support for `mask_to_bools`
@@ -194,6 +195,7 @@
 - PR #5885 Add in java support for merge sort
 - PR #5894 Small code improvement / cleanup
 - PR #5899 Add in gather support for Java
+- PR #5906 Add macros for showing line of failures in unit tests
 - PR #5933 Add in APIs to read/write arrow IPC formatted data from java 
 
 ## Bug Fixes
@@ -294,6 +296,7 @@
 - PR #5947 Fix null count for child device column vector
 - PR #5951 Fix mkdir error in benchmark build
 - PR #5949 Find Arrow include directory for JNI builds
+- PR #5964 Fix API doc page title tag
 
 
 # cuDF 0.14.0 (03 Jun 2020)

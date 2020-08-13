@@ -48,52 +48,52 @@ TYPED_TEST(ListsExtractNumericsTest, ExtractElement)
   {
     auto result = cudf::lists::extract_list_element(cudf::lists_column_view(input), 0);
     cudf::test::fixed_width_column_wrapper<TypeParam> expected({3, 0, 30, 100, 0}, {1, 0, 1, 1, 1});
-    cudf::test::expect_columns_equal(expected, *result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
   {
     auto result = cudf::lists::extract_list_element(cudf::lists_column_view(input), 1);
     cudf::test::fixed_width_column_wrapper<TypeParam> expected({2, 0, 20, 120, 0}, {1, 0, 1, 1, 0});
-    cudf::test::expect_columns_equal(expected, *result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
   {
     auto result = cudf::lists::extract_list_element(cudf::lists_column_view(input), 2);
     cudf::test::fixed_width_column_wrapper<TypeParam> expected({1, 0, 10, 0, 0}, {1, 0, 1, 0, 0});
-    cudf::test::expect_columns_equal(expected, *result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
   {
     auto result = cudf::lists::extract_list_element(cudf::lists_column_view(input), 3);
     cudf::test::fixed_width_column_wrapper<TypeParam> expected({0, 0, 50, 0, 0}, {0, 0, 1, 0, 0});
-    cudf::test::expect_columns_equal(expected, *result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
   {
     auto result = cudf::lists::extract_list_element(cudf::lists_column_view(input), 4);
     cudf::test::fixed_width_column_wrapper<TypeParam> expected({0, 0, 0, 0, 0}, {0, 0, 0, 0, 0});
-    cudf::test::expect_columns_equal(expected, *result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
   {
     auto result = cudf::lists::extract_list_element(cudf::lists_column_view(input), -1);
     cudf::test::fixed_width_column_wrapper<TypeParam> expected({1, 0, 50, 120, 0}, {1, 0, 1, 1, 1});
-    cudf::test::expect_columns_equal(expected, *result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
   {
     auto result = cudf::lists::extract_list_element(cudf::lists_column_view(input), -2);
     cudf::test::fixed_width_column_wrapper<TypeParam> expected({2, 0, 10, 100, 0}, {1, 0, 1, 1, 0});
-    cudf::test::expect_columns_equal(expected, *result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
   {
     auto result = cudf::lists::extract_list_element(cudf::lists_column_view(input), -3);
     cudf::test::fixed_width_column_wrapper<TypeParam> expected({3, 0, 20, 0, 0}, {1, 0, 1, 0, 0});
-    cudf::test::expect_columns_equal(expected, *result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
   {
     auto result = cudf::lists::extract_list_element(cudf::lists_column_view(input), -4);
     cudf::test::fixed_width_column_wrapper<TypeParam> expected({0, 0, 30, 0, 0}, {0, 0, 1, 0, 0});
-    cudf::test::expect_columns_equal(expected, *result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
   {
     auto result = cudf::lists::extract_list_element(cudf::lists_column_view(input), -5);
     cudf::test::fixed_width_column_wrapper<TypeParam> expected({0, 0, 0, 0, 0}, {0, 0, 0, 0, 0});
-    cudf::test::expect_columns_equal(expected, *result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
 }
 
@@ -109,53 +109,53 @@ TEST_F(ListsExtractTest, ExtractElementStrings)
   {
     auto result = cudf::lists::extract_list_element(cudf::lists_column_view(input), 0);
     cudf::test::strings_column_wrapper expected({"", "", "are", "tést", ""}, {1, 0, 1, 1, 1});
-    cudf::test::expect_columns_equal(expected, *result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
   {
     auto result = cudf::lists::extract_list_element(cudf::lists_column_view(input), 1);
     cudf::test::strings_column_wrapper expected({"Héllo", "", "some", "String", ""},
                                                 {1, 0, 1, 1, 0});
-    cudf::test::expect_columns_equal(expected, *result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
   {
     auto result = cudf::lists::extract_list_element(cudf::lists_column_view(input), 2);
     cudf::test::strings_column_wrapper expected({"thesé", "", "", "", ""}, {1, 0, 1, 0, 0});
-    cudf::test::expect_columns_equal(expected, *result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
   {
     auto result = cudf::lists::extract_list_element(cudf::lists_column_view(input), 3);
     cudf::test::strings_column_wrapper expected({"", "", "z", "", ""}, {0, 0, 1, 0, 0});
-    cudf::test::expect_columns_equal(expected, *result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
   {
     auto result = cudf::lists::extract_list_element(cudf::lists_column_view(input), 4);
     cudf::test::strings_column_wrapper expected({"", "", "", "", ""}, {0, 0, 0, 0, 0});
-    cudf::test::expect_columns_equal(expected, *result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
   {
     auto result = cudf::lists::extract_list_element(cudf::lists_column_view(input), -1);
     cudf::test::strings_column_wrapper expected({"thesé", "", "z", "String", ""}, {1, 0, 1, 1, 1});
-    cudf::test::expect_columns_equal(expected, *result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
   {
     auto result = cudf::lists::extract_list_element(cudf::lists_column_view(input), -2);
     cudf::test::strings_column_wrapper expected({"Héllo", "", "", "tést", ""}, {1, 0, 1, 1, 0});
-    cudf::test::expect_columns_equal(expected, *result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
   {
     auto result = cudf::lists::extract_list_element(cudf::lists_column_view(input), -3);
     cudf::test::strings_column_wrapper expected({"", "", "some", "", ""}, {1, 0, 1, 0, 0});
-    cudf::test::expect_columns_equal(expected, *result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
   {
     auto result = cudf::lists::extract_list_element(cudf::lists_column_view(input), -4);
     cudf::test::strings_column_wrapper expected({"", "", "are", "", ""}, {0, 0, 1, 0, 0});
-    cudf::test::expect_columns_equal(expected, *result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
   {
     auto result = cudf::lists::extract_list_element(cudf::lists_column_view(input), -5);
     cudf::test::strings_column_wrapper expected({"", "", "", "", ""}, {0, 0, 0, 0, 0});
-    cudf::test::expect_columns_equal(expected, *result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
 }
 
@@ -172,40 +172,40 @@ TYPED_TEST(ListsExtractNumericsTest, ExtractElementNestedLists)
   {
     auto result = cudf::lists::extract_list_element(cudf::lists_column_view(list), 0);
     LCW expected({LCW{2, 3}, LCW{}, LCW{6, 7, 8}, LCW{15, 16}}, validity.begin());
-    cudf::test::expect_columns_equal(expected, *result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
   {
     auto result = cudf::lists::extract_list_element(cudf::lists_column_view(list), 1);
     LCW expected({LCW{4, 5}, LCW{}, LCW{9, 10, 11}, LCW{17, 18}}, validity.begin());
-    cudf::test::expect_columns_equal(expected, *result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
   {
     auto result = cudf::lists::extract_list_element(cudf::lists_column_view(list), 2);
     std::vector<int32_t> expected_validity{0, 0, 1, 1};
     LCW expected({LCW{}, LCW{}, LCW{12, 13, 14}, LCW{19, 20}}, expected_validity.begin());
-    cudf::test::expect_columns_equal(expected, *result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
   {
     auto result = cudf::lists::extract_list_element(cudf::lists_column_view(list), 3);
     std::vector<int32_t> expected_validity{0, 0, 0, 1};
     LCW expected({LCW{}, LCW{}, LCW{}, LCW{21, 22}}, expected_validity.begin());
-    cudf::test::expect_columns_equal(expected, *result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
   {
     auto result = cudf::lists::extract_list_element(cudf::lists_column_view(list), -1);
     LCW expected({LCW{4, 5}, LCW{}, LCW{12, 13, 14}, LCW{23, 24}}, validity.begin());
-    cudf::test::expect_columns_equal(expected, *result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
   {
     auto result = cudf::lists::extract_list_element(cudf::lists_column_view(list), -2);
     LCW expected({LCW{2, 3}, LCW{}, LCW{9, 10, 11}, LCW{21, 22}}, validity.begin());
-    cudf::test::expect_columns_equal(expected, *result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
   {
     auto result = cudf::lists::extract_list_element(cudf::lists_column_view(list), -3);
     std::vector<int32_t> expected_validity{0, 0, 1, 1};
     LCW expected({LCW{}, LCW{}, LCW{6, 7, 8}, LCW{19, 20}}, expected_validity.begin());
-    cudf::test::expect_columns_equal(expected, *result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
 }
 
@@ -220,12 +220,12 @@ TEST_F(ListsExtractTest, ExtractElementEmpty)
   LCW empty_strings({LCW{"", "", ""}});
   result = cudf::lists::extract_list_element(cudf::lists_column_view(empty_strings), 1);
   cudf::test::strings_column_wrapper expected({""});
-  cudf::test::expect_columns_equal(expected, *result);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 
   LCW null_strings({LCW{"", "", ""}}, thrust::make_constant_iterator<int32_t>(0));
   result = cudf::lists::extract_list_element(cudf::lists_column_view(null_strings), 1);
   cudf::test::strings_column_wrapper expected_null({""}, {0});
-  cudf::test::expect_columns_equal(expected_null, *result);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_null, *result);
 }
 
 TEST_F(ListsExtractTest, ExtractElementWithNulls)
@@ -239,17 +239,17 @@ TEST_F(ListsExtractTest, ExtractElementWithNulls)
   {
     auto result = cudf::lists::extract_list_element(cudf::lists_column_view(input), 0);
     cudf::test::strings_column_wrapper expected({"Héllo", "are", "some", "tést"});
-    cudf::test::expect_columns_equal(expected, *result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
   {
     auto result = cudf::lists::extract_list_element(cudf::lists_column_view(input), 1);
     cudf::test::strings_column_wrapper expected({"", "", "", "strings"}, {0, 0, 0, 1});
-    cudf::test::expect_columns_equal(expected, *result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
   {
     auto result = cudf::lists::extract_list_element(cudf::lists_column_view(input), -1);
     cudf::test::strings_column_wrapper expected({"thesé", "are", "", "strings"}, {1, 1, 0, 1});
-    cudf::test::expect_columns_equal(expected, *result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
 }
 

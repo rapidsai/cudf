@@ -104,7 +104,7 @@ TYPED_TEST(TypedColumnTest, ConcatenateColumnView)
 
   auto concatenated_col = cudf::concatenate(views);
 
-  cudf::test::expect_columns_equal(original, *concatenated_col);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(original, *concatenated_col);
 }
 
 struct StringColumnTest : public cudf::test::BaseFixture {
@@ -143,7 +143,7 @@ TEST_F(StringColumnTest, ConcatenateColumnView)
   auto results = cudf::concatenate(strings_columns);
 
   cudf::test::strings_column_wrapper expected(h_strings.begin(), h_strings.end());
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 struct TableTest : public cudf::test::BaseFixture {
@@ -183,7 +183,7 @@ TEST_F(TableTest, ConcatenateTables)
 
   auto concat_table = cudf::concatenate({t1.view(), t2.view()});
 
-  cudf::test::expect_tables_equal(*concat_table, gold_table);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*concat_table, gold_table);
 }
 
 TEST_F(TableTest, ConcatenateTablesWithOffsets)
@@ -214,7 +214,7 @@ TEST_F(TableTest, ConcatenateTablesWithOffsets)
     cudf::test::strings_column_wrapper exp2_1(
       {"dada", "kite", "dog", "ln", "ln", "dado", "greg", "spinach"});
     cudf::table_view table_view_exp1{{exp1_1, exp2_1}};
-    cudf::test::expect_tables_equal(concatenated_tables->view(), table_view_exp1);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(concatenated_tables->view(), table_view_exp1);
   }
   {
     std::vector<cudf::table_view> table_views_to_concat;
@@ -226,7 +226,7 @@ TEST_F(TableTest, ConcatenateTablesWithOffsets)
     cudf::test::strings_column_wrapper exp2_1(
       {"dada", "egg", "avocado", "ln", "dado", "greg", "spinach"});
     cudf::table_view table_view_exp1{{exp1_1, exp2_1}};
-    cudf::test::expect_tables_equal(concatenated_tables->view(), table_view_exp1);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(concatenated_tables->view(), table_view_exp1);
   }
   {
     std::vector<cudf::table_view> table_views_to_concat;
@@ -237,7 +237,7 @@ TEST_F(TableTest, ConcatenateTablesWithOffsets)
     column_wrapper<int32_t> exp1_1{{5, 8, 5, 6, 5, 8, 5}};
     cudf::test::strings_column_wrapper exp2_1({"dada", "kite", "dog", "ln", "dada", "kite", "dog"});
     cudf::table_view table_view_exp{{exp1_1, exp2_1}};
-    cudf::test::expect_tables_equal(concatenated_tables->view(), table_view_exp);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(concatenated_tables->view(), table_view_exp);
   }
 }
 
@@ -272,7 +272,7 @@ TEST_F(TableTest, ConcatenateTablesWithOffsetsAndNulls)
     cudf::test::strings_column_wrapper exp2_1(
       {"dada", "kite", "dog", "ln", "ln", "dado", "greg", "spinach"}, {0, 1, 1, 1, 1, 1, 1, 1});
     cudf::table_view table_view_exp1{{exp1_1, exp2_1}};
-    cudf::test::expect_tables_equal(concatenated_tables->view(), table_view_exp1);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(concatenated_tables->view(), table_view_exp1);
   }
   {
     std::vector<cudf::table_view> table_views_to_concat;
@@ -284,7 +284,7 @@ TEST_F(TableTest, ConcatenateTablesWithOffsetsAndNulls)
     cudf::test::strings_column_wrapper exp2_1({"dada", "kite", "dog", "ln", "dada", "kite", "dog"},
                                               {0, 1, 1, 1, 1, 0, 1});
     cudf::table_view table_view_exp1{{exp1_1, exp2_1}};
-    cudf::test::expect_tables_equal(concatenated_tables->view(), table_view_exp1);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(concatenated_tables->view(), table_view_exp1);
   }
 }
 
@@ -300,7 +300,7 @@ TEST_F(ListsColumnTest, ConcatenateLists)
 
     auto result = cudf::concatenate({a, b});
 
-    cudf::test::expect_columns_equal(*result, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 
   {
@@ -311,7 +311,7 @@ TEST_F(ListsColumnTest, ConcatenateLists)
 
     auto result = cudf::concatenate({a, b});
 
-    cudf::test::expect_columns_equal(*result, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 
   {
@@ -322,7 +322,7 @@ TEST_F(ListsColumnTest, ConcatenateLists)
 
     auto result = cudf::concatenate({a, b});
 
-    cudf::test::expect_columns_equal(*result, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 }
 
@@ -339,7 +339,7 @@ TEST_F(ListsColumnTest, ConcatenateEmptyLists)
 
     auto result = cudf::concatenate({a, b});
 
-    cudf::test::expect_columns_equal(*result, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 
   {
@@ -349,7 +349,7 @@ TEST_F(ListsColumnTest, ConcatenateEmptyLists)
 
     auto result = cudf::concatenate({a, b, c, d});
 
-    cudf::test::expect_columns_equal(*result, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 
   {
@@ -359,7 +359,7 @@ TEST_F(ListsColumnTest, ConcatenateEmptyLists)
 
     auto result = cudf::concatenate({a, b});
 
-    cudf::test::expect_columns_equal(*result, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 
   {
@@ -369,7 +369,7 @@ TEST_F(ListsColumnTest, ConcatenateEmptyLists)
 
     auto result = cudf::concatenate({a, b, c, d});
 
-    cudf::test::expect_columns_equal(*result, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 
   {
@@ -380,7 +380,7 @@ TEST_F(ListsColumnTest, ConcatenateEmptyLists)
 
     auto result = cudf::concatenate({a, b, c, d});
 
-    cudf::test::expect_columns_equal(*result, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 }
 
@@ -397,7 +397,7 @@ TEST_F(ListsColumnTest, ConcatenateListsWithNulls)
 
     auto result = cudf::concatenate({a, b});
 
-    cudf::test::expect_columns_equal(*result, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 }
 
@@ -411,7 +411,7 @@ TEST_F(ListsColumnTest, ConcatenateNestedLists)
 
     auto result = cudf::concatenate({a, b});
 
-    cudf::test::expect_columns_equal(*result, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 
   {
@@ -435,7 +435,7 @@ TEST_F(ListsColumnTest, ConcatenateNestedLists)
 
     auto result = cudf::concatenate({a, b});
 
-    cudf::test::expect_columns_equal(*result, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 }
 
@@ -454,7 +454,7 @@ TEST_F(ListsColumnTest, ConcatenateNestedEmptyLists)
 
     auto result = cudf::concatenate({a, b});
 
-    cudf::test::expect_columns_equal(*result, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 
   {
@@ -480,7 +480,7 @@ TEST_F(ListsColumnTest, ConcatenateNestedEmptyLists)
 
     auto result = cudf::concatenate({a, b});
 
-    cudf::test::expect_columns_equal(*result, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 }
 
@@ -499,7 +499,7 @@ TEST_F(ListsColumnTest, ConcatenateNestedListsWithNulls)
 
     auto result = cudf::concatenate({a, b});
 
-    cudf::test::expect_columns_equal(*result, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 
   // nulls in the lists -and- the values
@@ -513,7 +513,7 @@ TEST_F(ListsColumnTest, ConcatenateNestedListsWithNulls)
 
     auto result = cudf::concatenate({a, b});
 
-    cudf::test::expect_columns_equal(*result, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 }
 
@@ -576,7 +576,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointConcatentate)
   auto const results             = cudf::concatenate(fixed_point_columns);
   auto const expected            = wrapper<decimalXX>(vec.begin(), vec.end());
 
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 struct DictionaryConcatTest : public cudf::test::BaseFixture {
@@ -594,7 +594,7 @@ TEST_F(DictionaryConcatTest, StringsKeys)
   // concatenate should recreate the original column
   auto result  = cudf::concatenate(views);
   auto decoded = cudf::dictionary::decode(result->view());
-  cudf::test::expect_columns_equal(*decoded, strings);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*decoded, strings);
 }
 
 template <typename T>
@@ -613,7 +613,7 @@ TYPED_TEST(DictionaryConcatTestFW, FixedWidthKeys)
   // concatenated result should equal the original column
   auto result  = cudf::concatenate(views);
   auto decoded = cudf::dictionary::decode(result->view());
-  cudf::test::expect_columns_equal(*decoded, original);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*decoded, original);
 }
 
 TEST_F(DictionaryConcatTest, ErrorsTest)

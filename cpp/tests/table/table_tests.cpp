@@ -85,8 +85,8 @@ TEST_F(TableTest, GetTableWithSelectedColumns)
   Table t(std::move(cols));
 
   cudf::table_view selected_tview = t.select(std::vector<cudf::size_type>{2, 3});
-  cudf::test::expect_columns_equal(t.view().column(2), selected_tview.column(0));
-  cudf::test::expect_columns_equal(t.view().column(3), selected_tview.column(1));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(t.view().column(2), selected_tview.column(0));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(t.view().column(3), selected_tview.column(1));
 }
 
 TEST_F(TableTest, SelectingOutOfBounds)
@@ -126,8 +126,8 @@ TEST_F(TableTest, CreateFromViewVector)
   views.emplace_back(std::vector<column_view>{col1});
   views.emplace_back(std::vector<column_view>{col2});
   TView final_view{views};
-  cudf::test::expect_columns_equal(final_view.column(0), views[0].column(0));
-  cudf::test::expect_columns_equal(final_view.column(1), views[1].column(0));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(final_view.column(0), views[0].column(0));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(final_view.column(1), views[1].column(0));
 }
 
 TEST_F(TableTest, CreateFromViewVectorRowsMismatch)

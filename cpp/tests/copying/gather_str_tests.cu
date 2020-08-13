@@ -45,7 +45,7 @@ TEST_F(GatherTestStr, StringColumn)
 
   auto got = cudf::gather(source_table, gather_map);
 
-  cudf::test::expect_tables_equal(expected, got->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got->view());
 }
 
 TEST_F(GatherTestStr, Gather)
@@ -75,7 +75,7 @@ TEST_F(GatherTestStr, Gather)
   }
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(), h_expected.end(), expected_validity.begin());
-  cudf::test::expect_columns_equal(results->view().column(0), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
 }
 
 TEST_F(GatherTestStr, GatherIgnoreOutOfBounds)
@@ -99,7 +99,7 @@ TEST_F(GatherTestStr, GatherIgnoreOutOfBounds)
   }
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(), h_expected.end(), expected_validity.begin());
-  cudf::test::expect_columns_equal(results->view().column(0), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
 }
 
 TEST_F(GatherTestStr, GatherZeroSizeStringsColumn)

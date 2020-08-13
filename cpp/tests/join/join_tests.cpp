@@ -82,7 +82,7 @@ TEST_F(JoinTest, FullJoinNoCommon)
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
-  cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*sorted_gold, *sorted_result);
 }
 
 TEST_F(JoinTest, LeftJoinNoNullsWithNoCommon)
@@ -128,7 +128,7 @@ TEST_F(JoinTest, LeftJoinNoNullsWithNoCommon)
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
 
-  cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*sorted_gold, *sorted_result);
 }
 
 TEST_F(JoinTest, FullJoinNoNulls)
@@ -169,7 +169,7 @@ TEST_F(JoinTest, FullJoinNoNulls)
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
-  cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*sorted_gold, *sorted_result);
 }
 
 TEST_F(JoinTest, FullJoinWithNulls)
@@ -210,7 +210,7 @@ TEST_F(JoinTest, FullJoinWithNulls)
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
-  cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*sorted_gold, *sorted_result);
 }
 
 TEST_F(JoinTest, FullJoinOnNulls)
@@ -275,7 +275,7 @@ TEST_F(JoinTest, FullJoinOnNulls)
   cudf::test::print(sorted_gold->get_column(3).view(), std::cout, ",\t\t");
 #endif
 
-  cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*sorted_gold, *sorted_result);
 
   // Repeat test with compare_nulls_equal=false,
   // as per SQL standard.
@@ -304,7 +304,7 @@ TEST_F(JoinTest, FullJoinOnNulls)
   gold_sort_order = cudf::sorted_order(gold_nulls_unequal.view());
   sorted_gold     = cudf::gather(gold_nulls_unequal.view(), *gold_sort_order);
 
-  cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*sorted_gold, *sorted_result);
 }
 
 TEST_F(JoinTest, LeftJoinNoNulls)
@@ -345,7 +345,7 @@ TEST_F(JoinTest, LeftJoinNoNulls)
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
-  cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*sorted_gold, *sorted_result);
 }
 
 TEST_F(JoinTest, LeftJoinWithNulls)
@@ -386,7 +386,7 @@ TEST_F(JoinTest, LeftJoinWithNulls)
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
-  cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*sorted_gold, *sorted_result);
 }
 
 TEST_F(JoinTest, LeftJoinOnNulls)
@@ -452,7 +452,7 @@ TEST_F(JoinTest, LeftJoinOnNulls)
   cudf::test::print(sorted_gold->get_column(3).view(), std::cout, ",\t\t");
 #endif
 
-  cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*sorted_gold, *sorted_result);
 
   // Repeat test with compare_nulls_equal=false,
   // as per SQL standard.
@@ -481,7 +481,7 @@ TEST_F(JoinTest, LeftJoinOnNulls)
   gold_sort_order = cudf::sorted_order(gold_nulls_unequal.view());
   sorted_gold     = cudf::gather(gold_nulls_unequal.view(), *gold_sort_order);
 
-  cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*sorted_gold, *sorted_result);
 }
 
 TEST_F(JoinTest, InnerJoinNoNulls)
@@ -522,7 +522,7 @@ TEST_F(JoinTest, InnerJoinNoNulls)
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
-  cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*sorted_gold, *sorted_result);
 }
 
 TEST_F(JoinTest, InnerJoinNonAlignedCommon)
@@ -553,7 +553,7 @@ TEST_F(JoinTest, InnerJoinNonAlignedCommon)
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
-  cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*sorted_gold, *sorted_result);
 }
 
 TEST_F(JoinTest, InnerJoinNonAlignedCommonSwap)
@@ -584,7 +584,7 @@ TEST_F(JoinTest, InnerJoinNonAlignedCommonSwap)
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
-  cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*sorted_gold, *sorted_result);
 }
 
 TEST_F(JoinTest, InnerJoinWithNulls)
@@ -625,7 +625,7 @@ TEST_F(JoinTest, InnerJoinWithNulls)
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
-  cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*sorted_gold, *sorted_result);
 }
 
 // Test to check join behaviour when join keys are null.
@@ -671,7 +671,8 @@ TEST_F(JoinTest, InnerJoinOnNulls)
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
-  cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*sorted_gold, *sorted_result);
+  
   // Repeat test with compare_nulls_equal=false,
   // as per SQL standard.
 
@@ -696,7 +697,7 @@ TEST_F(JoinTest, InnerJoinOnNulls)
 
   gold_sort_order = cudf::sorted_order(gold_sql.view());
   sorted_gold     = cudf::gather(gold_sql.view(), *gold_sort_order);
-  cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*sorted_gold, *sorted_result);
 }
 
 // Empty Left Table
@@ -718,7 +719,7 @@ TEST_F(JoinTest, EmptyLeftTableInnerJoin)
   Table t1(std::move(cols1));
 
   auto result = cudf::inner_join(empty0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
-  cudf::test::expect_tables_equal(empty0, *result);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(empty0, *result);
 }
 
 TEST_F(JoinTest, EmptyLeftTableLeftJoin)
@@ -739,7 +740,7 @@ TEST_F(JoinTest, EmptyLeftTableLeftJoin)
   Table t1(std::move(cols1));
 
   auto result = cudf::left_join(empty0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
-  cudf::test::expect_tables_equal(empty0, *result);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(empty0, *result);
 }
 
 TEST_F(JoinTest, EmptyLeftTableFullJoin)
@@ -760,7 +761,7 @@ TEST_F(JoinTest, EmptyLeftTableFullJoin)
   Table t1(std::move(cols1));
 
   auto result = cudf::full_join(empty0, t1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
-  cudf::test::expect_tables_equal(t1, *result);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(t1, *result);
 }
 
 // Empty Right Table
@@ -782,7 +783,7 @@ TEST_F(JoinTest, EmptyRightTableInnerJoin)
   Table empty1(std::move(cols1));
 
   auto result = cudf::inner_join(t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
-  cudf::test::expect_tables_equal(empty1, *result);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(empty1, *result);
 }
 
 TEST_F(JoinTest, EmptyRightTableLeftJoin)
@@ -803,7 +804,7 @@ TEST_F(JoinTest, EmptyRightTableLeftJoin)
   Table empty1(std::move(cols1));
 
   auto result = cudf::left_join(t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
-  cudf::test::expect_tables_equal(t0, *result);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(t0, *result);
 }
 
 TEST_F(JoinTest, EmptyRightTableFullJoin)
@@ -824,7 +825,7 @@ TEST_F(JoinTest, EmptyRightTableFullJoin)
   Table empty1(std::move(cols1));
 
   auto result = cudf::full_join(t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
-  cudf::test::expect_tables_equal(t0, *result);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(t0, *result);
 }
 
 // Both tables empty
@@ -846,7 +847,7 @@ TEST_F(JoinTest, BothEmptyInnerJoin)
   Table empty1(std::move(cols1));
 
   auto result = cudf::inner_join(t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
-  cudf::test::expect_tables_equal(empty1, *result);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(empty1, *result);
 }
 
 TEST_F(JoinTest, BothEmptyLeftJoin)
@@ -867,7 +868,7 @@ TEST_F(JoinTest, BothEmptyLeftJoin)
   Table empty1(std::move(cols1));
 
   auto result = cudf::left_join(t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
-  cudf::test::expect_tables_equal(empty1, *result);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(empty1, *result);
 }
 
 TEST_F(JoinTest, BothEmptyFullJoin)
@@ -888,7 +889,7 @@ TEST_F(JoinTest, BothEmptyFullJoin)
   Table empty1(std::move(cols1));
 
   auto result = cudf::full_join(t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
-  cudf::test::expect_tables_equal(empty1, *result);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(empty1, *result);
 }
 
 // EqualValues X Inner,Left,Full
@@ -919,7 +920,7 @@ TEST_F(JoinTest, EqualValuesInnerJoin)
   cols_gold.push_back(col_gold_1.release());
   Table gold(std::move(cols_gold));
 
-  cudf::test::expect_tables_equal(gold, *result);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(gold, *result);
 }
 
 TEST_F(JoinTest, EqualValuesLeftJoin)
@@ -948,7 +949,7 @@ TEST_F(JoinTest, EqualValuesLeftJoin)
   cols_gold.push_back(col_gold_1.release());
   Table gold(std::move(cols_gold));
 
-  cudf::test::expect_tables_equal(gold, *result);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(gold, *result);
 }
 
 TEST_F(JoinTest, EqualValuesFullJoin)
@@ -977,7 +978,7 @@ TEST_F(JoinTest, EqualValuesFullJoin)
   cols_gold.push_back(col_gold_1.release());
   Table gold(std::move(cols_gold));
 
-  cudf::test::expect_tables_equal(gold, *result);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(gold, *result);
 }
 
 TEST_F(JoinTest, InnerJoinCornerCase)
@@ -1003,7 +1004,7 @@ TEST_F(JoinTest, InnerJoinCornerCase)
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
-  cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*sorted_gold, *sorted_result);
 }
 
 TEST_F(JoinTest, HashJoinSequentialProbes)
@@ -1043,7 +1044,7 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
 
     auto gold_sort_order = cudf::sorted_order(gold.view());
     auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
-    cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*sorted_gold, *sorted_result);
   }
 
   {
@@ -1068,7 +1069,7 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
 
     auto gold_sort_order = cudf::sorted_order(gold.view());
     auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
-    cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*sorted_gold, *sorted_result);
   }
 
   {
@@ -1100,7 +1101,7 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
 
     auto gold_sort_order = cudf::sorted_order(gold.view());
     auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
-    cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*sorted_gold, *sorted_result);
   }
 
   {
@@ -1133,7 +1134,7 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
 
     auto gold_sort_order = cudf::sorted_order(gold.view());
     auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
-    cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*sorted_gold, *sorted_result);
   }
 }
 
