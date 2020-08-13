@@ -1,6 +1,5 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
 import numpy as np
-import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_integer_dtype
 
@@ -12,7 +11,6 @@ from cudf.core.buffer import Buffer
 from cudf.core.column import as_column, build_column, column, string
 from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import (
-    cudf_dtypes_to_pandas_dtypes,
     min_column_type,
     min_signed_type,
     np_to_pa_dtype,

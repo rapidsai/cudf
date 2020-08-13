@@ -6,9 +6,9 @@ import pytest
 
 from dask import dataframe as dd
 
-import cudf
-
 import dask_cudf as dgd
+
+import cudf
 
 param_nrows = [5, 10, 50, 100]
 

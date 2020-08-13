@@ -22,7 +22,7 @@ def test_null_series(nrows, dtype):
     data = cudf.Series(np.random.randint(1, 9, size))
     column = data.set_mask(mask)
     sr = cudf.Series(column).astype(dtype)
-    if dtype is not "category" and np.dtype(dtype).kind in {"u", "i"}:
+    if dtype != "category" and np.dtype(dtype).kind in {"u", "i"}:
         ps = pd.Series(
             sr._column.data_array_view.copy_to_host(),
             dtype=cudf_dtypes_to_pandas_dtypes.get(
