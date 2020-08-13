@@ -1,6 +1,8 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
+import ctypes
 import os
 import shutil
+import sys
 import sysconfig
 from distutils.sysconfig import get_python_lib
 
@@ -22,30 +24,25 @@ def cuda_detect():
     might not be in the library path.
     Returns: version string (Ex: '9.2') or None if CUDA not found.
     """
-    # platform specific libcuda location
-    import platform
 
-    system = platform.system()
-    if system == "Darwin":
+    system = sys.platform
+    if system == "darwin":
         lib_filenames = [
             "libcuda.dylib",  # check library path first
             os.path.join(CUDA_HOME, "/lib/libcuda.dylib"),
         ]
-    elif system == "Linux":
+    elif system == "linux":
         lib_filenames = [
             "libcuda.so",  # check library path first
             "/usr/lib64/nvidia/libcuda.so",  # Redhat/CentOS/Fedora
             "/usr/lib/x86_64-linux-gnu/libcuda.so",  # Ubuntu
         ]
-    elif system == "Windows":
+    elif system == "win32":
         lib_filenames = ["nvcuda.dll"]
     else:
         return None  # CUDA not available for other operating systems
 
-    # open library
-    import ctypes
-
-    if system == "Windows":
+    if system == "wind32":
         dll = ctypes.windll
     else:
         dll = ctypes.cdll
