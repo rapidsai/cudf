@@ -267,10 +267,7 @@ def test_timedelta_ops_misc_inputs(data, other, dtype, ops):
     if ops == "floordiv":
         expected[actual.isna().to_pandas()] = np.nan
 
-    assert_eq(
-        expected,
-        actual
-    )
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize(
@@ -815,6 +812,7 @@ def test_timedelta_fillna(data, dtype, fill_value):
     expected = psr.fillna(fill_value)
     actual = sr.fillna(fill_value)
     import pdb
+
     pdb.set_trace()
     assert_eq(expected, actual)
 

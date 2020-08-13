@@ -95,7 +95,7 @@ class TimeDeltaColumn(column.ColumnBase):
         if self.has_nulls:
             result = result.fillna(cudf._NA_REP)
         return result
-        
+
     def to_arrow(self):
         mask = None
         if self.nullable:

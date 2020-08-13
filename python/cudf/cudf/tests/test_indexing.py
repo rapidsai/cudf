@@ -165,9 +165,7 @@ def test_dataframe_column_name_indexing():
 
     for i in range(1, len(pdf.columns) + 1):
         for idx in combinations(pdf.columns, i):
-            assert pdf[list(idx)].equals(
-                df[list(idx)].to_pandas()
-            )
+            assert pdf[list(idx)].equals(df[list(idx)].to_pandas())
 
     # test for only numeric columns
     df = pd.DataFrame()

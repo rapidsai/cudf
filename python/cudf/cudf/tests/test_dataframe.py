@@ -885,11 +885,11 @@ def test_dataframe_hash_partition_masked_value(nrows):
         df = p.to_pandas()
         for row in df.itertuples():
             valid = bool(bytemask[row.key])
-            expected_value = (
-                row.key + 100 if valid else np.nan
-            )
+            expected_value = row.key + 100 if valid else np.nan
             got_value = row.val
-            assert ((expected_value == got_value) or (np.isnan(expected_value) and np.isnan(got_value)))
+            assert (expected_value == got_value) or (
+                np.isnan(expected_value) and np.isnan(got_value)
+            )
 
 
 @pytest.mark.parametrize("nrows", [3, 10, 50])

@@ -184,7 +184,6 @@ class NumericalColumn(column.ColumnBase):
             offset=pa_offset,
         )
 
-
     def to_arrow(self):
         mask = None
         if self.nullable:

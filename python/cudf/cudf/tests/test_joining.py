@@ -178,9 +178,7 @@ def test_dataframe_join_cats():
     rhs = rhs.set_index("a")
 
     got = lhs.join(rhs)
-    expect = lhs.to_pandas().join(
-        rhs.to_pandas()
-    )
+    expect = lhs.to_pandas().join(rhs.to_pandas())
 
     # Note: pandas make an object Index after joining
     assert_eq(
@@ -743,9 +741,7 @@ def test_merge_sort_on_indexes(kwargs):
     gd_merge = gleft.merge(gright, **kwargs)
 
     if left_index and right_index:
-        check_if_sorted = gd_merge[["a", "b"]].to_pandas(
-            
-        )
+        check_if_sorted = gd_merge[["a", "b"]].to_pandas()
         check_if_sorted.index.name = "index"
         definitely_sorted = check_if_sorted.sort_values(["index", "a", "b"])
         definitely_sorted.index.name = None

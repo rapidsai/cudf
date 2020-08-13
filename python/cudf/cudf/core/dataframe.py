@@ -4685,9 +4685,7 @@ class DataFrame(Frame, Serializable):
             out_columns = self.columns
 
         for i, col_key in enumerate(self._data):
-            out_data[i] = self._data[col_key].to_pandas(
-                index=out_index
-            )
+            out_data[i] = self._data[col_key].to_pandas(index=out_index)
 
         if isinstance(self.columns, Index):
             out_columns = self.columns.to_pandas()

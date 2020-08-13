@@ -149,9 +149,7 @@ def test_reset_index_multiindex():
     gddf_lookup = dask_cudf.from_cudf(df_lookup, npartitions=2)
 
     ddf = dd.from_pandas(df.to_pandas(), npartitions=2)
-    ddf_lookup = dd.from_pandas(
-        df_lookup.to_pandas(), npartitions=2
-    )
+    ddf_lookup = dd.from_pandas(df_lookup.to_pandas(), npartitions=2)
 
     # Note: 'id_2' has wrong type (object) until after compute
     dd.assert_eq(

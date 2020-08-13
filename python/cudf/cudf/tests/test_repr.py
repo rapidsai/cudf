@@ -22,8 +22,13 @@ def test_null_series(nrows, dtype):
     data = cudf.Series(np.random.randint(1, 9, size))
     column = data.set_mask(mask)
     sr = cudf.Series(column).astype(dtype)
-    if dtype is not 'category' and np.dtype(dtype).kind in {'u','i'}:
-        ps = pd.Series(sr._column.data_array_view.copy_to_host(), dtype=cudf_dtypes_to_pandas_dtypes.get(np.dtype(dtype), np.dtype(dtype)))
+    if dtype is not "category" and np.dtype(dtype).kind in {"u", "i"}:
+        ps = pd.Series(
+            sr._column.data_array_view.copy_to_host(),
+            dtype=cudf_dtypes_to_pandas_dtypes.get(
+                np.dtype(dtype), np.dtype(dtype)
+            ),
+        )
         ps[sr.isnull().to_pandas()] = pd.NA
     else:
         ps = sr.to_pandas()
@@ -41,10 +46,10 @@ def test_null_series(nrows, dtype):
         psrepr = psrepr.replace(
             str(sr._column.default_na_value()) + "\n", "<NA>\n"
         )
-    if 'UInt' in psrepr:
-        psrepr = psrepr.replace('UInt', 'uint')
-    elif 'Int' in psrepr:
-        psrepr = psrepr.replace('Int', 'int')
+    if "UInt" in psrepr:
+        psrepr = psrepr.replace("UInt", "uint")
+    elif "Int" in psrepr:
+        psrepr = psrepr.replace("Int", "int")
     assert psrepr.split() == sr.__repr__().split()
 
 

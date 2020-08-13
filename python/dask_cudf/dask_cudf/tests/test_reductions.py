@@ -2,8 +2,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import cudf as gd
 import dask.dataframe as dd
+
+import cudf as gd
+
 import dask_cudf as dgd
 
 

@@ -2003,9 +2003,7 @@ class Series(Frame, Serializable):
 
         if index is True:
             index = self.index.to_pandas()
-        s = self._column.to_pandas(
-            index=index
-        )
+        s = self._column.to_pandas(index=index)
         s.name = self.name
         return s
 

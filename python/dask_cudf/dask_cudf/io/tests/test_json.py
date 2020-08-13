@@ -4,8 +4,9 @@ import pandas as pd
 import pytest
 
 import dask
-from dask.utils import tmpfile
 import dask.dataframe as dd
+from dask.utils import tmpfile
+
 import dask_cudf
 
 

@@ -5,9 +5,9 @@ import pytest
 
 from dask import dataframe as dd
 
-import dask_cudf
-
 import cudf
+
+import dask_cudf
 
 # import pyarrow.orc as orc
 
