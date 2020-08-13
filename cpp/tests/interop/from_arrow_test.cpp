@@ -68,7 +68,7 @@ TEST_F(FromArrowTest, EmptyTable)
 
   auto got_cudf_table = cudf::from_arrow(*arrow_table);
 
-  cudf::test::expect_tables_equal(expected_cudf_table, got_cudf_table->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_cudf_table, got_cudf_table->view());
 }
 
 TEST_F(FromArrowTest, DateTimeTable)
@@ -92,7 +92,7 @@ TEST_F(FromArrowTest, DateTimeTable)
 
   auto got_cudf_table = cudf::from_arrow(*arrow_table);
 
-  cudf::test::expect_tables_equal(expected_table_view, got_cudf_table->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table_view, got_cudf_table->view());
 }
 
 TYPED_TEST(FromArrowTestDurationsTest, DurationTable)
@@ -125,7 +125,7 @@ TYPED_TEST(FromArrowTestDurationsTest, DurationTable)
 
   auto got_cudf_table = cudf::from_arrow(*arrow_table);
 
-  cudf::test::expect_tables_equal(expected_table_view, got_cudf_table->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table_view, got_cudf_table->view());
 }
 
 TEST_F(FromArrowTest, NestedList)
@@ -147,7 +147,7 @@ TEST_F(FromArrowTest, NestedList)
   auto arrow_table = arrow::Table::Make(schema, {nested_list_arr});
 
   auto got_cudf_table = cudf::from_arrow(*arrow_table);
-  cudf::test::expect_tables_equal(expected_table_view, got_cudf_table->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table_view, got_cudf_table->view());
 }
 
 TEST_F(FromArrowTest, DictionaryIndicesType)
@@ -176,7 +176,7 @@ TEST_F(FromArrowTest, DictionaryIndicesType)
 
   auto got_cudf_table = cudf::from_arrow(*arrow_table);
 
-  cudf::test::expect_tables_equal(expected_table.view(), got_cudf_table->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table.view(), got_cudf_table->view());
 }
 
 TEST_F(FromArrowTest, ChunkedArray)
@@ -227,7 +227,7 @@ TEST_F(FromArrowTest, ChunkedArray)
 
   auto got_cudf_table = cudf::from_arrow(*arrow_table);
 
-  cudf::test::expect_tables_equal(expected_cudf_table->view(), got_cudf_table->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_cudf_table->view(), got_cudf_table->view());
 }
 
 struct FromArrowTestSlice
@@ -248,7 +248,7 @@ TEST_P(FromArrowTestSlice, SliceTest)
   auto sliced_arrow_table = arrow_table->Slice(start, end - start);
   auto got_cudf_table     = cudf::from_arrow(*sliced_arrow_table);
 
-  cudf::test::expect_tables_equal(expected_cudf_table.view(), got_cudf_table->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_cudf_table.view(), got_cudf_table->view());
 }
 
 INSTANTIATE_TEST_CASE_P(FromArrowTest,

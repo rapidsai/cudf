@@ -19,8 +19,6 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/type_lists.hpp>
 
-using cudf::test::expect_column_properties_equal;
-using cudf::test::expect_columns_equal;
 using cudf::test::fixed_width_column_wrapper;
 using cudf::test::strings_column_wrapper;
 
@@ -56,7 +54,7 @@ TEST_F(HashTest, MultiValue)
   auto const output2 = cudf::hash(input2);
 
   EXPECT_EQ(input1.num_rows(), output1->size());
-  expect_columns_equal(output1->view(), output2->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
 TEST_F(HashTest, MultiValueNulls)
@@ -109,7 +107,7 @@ TEST_F(HashTest, MultiValueNulls)
   auto const output2 = cudf::hash(input2);
 
   EXPECT_EQ(input1.num_rows(), output1->size());
-  expect_columns_equal(output1->view(), output2->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
 template <typename T>
@@ -128,7 +126,7 @@ TYPED_TEST(HashTestTyped, Equality)
   auto const output2 = cudf::hash(input);
 
   EXPECT_EQ(input.num_rows(), output1->size());
-  expect_columns_equal(output1->view(), output2->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
 TYPED_TEST(HashTestTyped, EqualityNulls)
@@ -146,7 +144,7 @@ TYPED_TEST(HashTestTyped, EqualityNulls)
   auto const output2 = cudf::hash(input2);
 
   EXPECT_EQ(input1.num_rows(), output1->size());
-  expect_columns_equal(output1->view(), output2->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
 template <typename T>
@@ -173,7 +171,7 @@ TYPED_TEST(HashTestFloatTyped, TestExtremes)
   auto const output1 = cudf::hash(input1);
   auto const output2 = cudf::hash(input2);
 
-  expect_columns_equal(output1->view(), output2->view(), true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view(), true);
 }
 
 class MD5HashTest : public cudf::test::BaseFixture {
@@ -214,15 +212,15 @@ TEST_F(MD5HashTest, MultiValue)
   auto const md5_string_output2 = cudf::hash(string_input2, cudf::hash_id::HASH_MD5);
   EXPECT_EQ(string_input1.num_rows(), md5_string_output1->size());
   EXPECT_EQ(string_input2.num_rows(), md5_string_output2->size());
-  expect_columns_equal(md5_string_output1->view(), md5_string_results1);
-  expect_columns_equal(md5_string_output2->view(), md5_string_results2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(md5_string_output1->view(), md5_string_results1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(md5_string_output2->view(), md5_string_results2);
 
   auto const input1      = cudf::table_view({strings_col, ints_col, bools_col1});
   auto const input2      = cudf::table_view({strings_col, ints_col, bools_col2});
   auto const md5_output1 = cudf::hash(input1, cudf::hash_id::HASH_MD5);
   auto const md5_output2 = cudf::hash(input2, cudf::hash_id::HASH_MD5);
   EXPECT_EQ(input1.num_rows(), md5_output1->size());
-  expect_columns_equal(md5_output1->view(), md5_output2->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(md5_output1->view(), md5_output2->view());
 }
 
 TEST_F(MD5HashTest, MultiValueNulls)
@@ -263,7 +261,7 @@ TEST_F(MD5HashTest, MultiValueNulls)
   auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_MD5);
 
   EXPECT_EQ(input1.num_rows(), output1->size());
-  expect_columns_equal(output1->view(), output2->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
 template <typename T>
@@ -282,7 +280,7 @@ TYPED_TEST(MD5HashTestTyped, Equality)
   auto const output2 = cudf::hash(input, cudf::hash_id::HASH_MD5);
 
   EXPECT_EQ(input.num_rows(), output1->size());
-  expect_columns_equal(output1->view(), output2->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
 TYPED_TEST(MD5HashTestTyped, EqualityNulls)
@@ -300,7 +298,7 @@ TYPED_TEST(MD5HashTestTyped, EqualityNulls)
   auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_MD5);
 
   EXPECT_EQ(input1.num_rows(), output1->size());
-  expect_columns_equal(output1->view(), output2->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
 template <typename T>
@@ -327,7 +325,7 @@ TYPED_TEST(MD5HashTestFloatTyped, TestExtremes)
   auto const output1 = cudf::hash(input1, cudf::hash_id::HASH_MD5);
   auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_MD5);
 
-  expect_columns_equal(output1->view(), output2->view(), true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view(), true);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

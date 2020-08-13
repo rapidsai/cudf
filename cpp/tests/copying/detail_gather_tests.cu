@@ -52,10 +52,10 @@ TYPED_TEST(GatherTest, GatherDetailDeviceVectorTest)
       cudf::detail::gather(source_table, gather_map.begin(), gather_map.end());
 
     for (auto i = 0; i < source_table.num_columns(); ++i) {
-      cudf::test::expect_columns_equal(source_table.column(i), result->view().column(i));
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(source_table.column(i), result->view().column(i));
     }
 
-    cudf::test::expect_tables_equal(source_table, result->view());
+    CUDF_TEST_EXPECT_TABLES_EQUAL(source_table, result->view());
   }
 
   // test with raw pointers
@@ -64,10 +64,10 @@ TYPED_TEST(GatherTest, GatherDetailDeviceVectorTest)
       source_table, gather_map.data().get(), gather_map.data().get() + gather_map.size());
 
     for (auto i = 0; i < source_table.num_columns(); ++i) {
-      cudf::test::expect_columns_equal(source_table.column(i), result->view().column(i));
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(source_table.column(i), result->view().column(i));
     }
 
-    cudf::test::expect_tables_equal(source_table, result->view());
+    CUDF_TEST_EXPECT_TABLES_EQUAL(source_table, result->view());
   }
 }
 
@@ -97,6 +97,6 @@ TYPED_TEST(GatherTest, GatherDetailInvalidIndexTest)
     expect_data, expect_data + (source_size * 2), expect_valid);
 
   for (auto i = 0; i < source_table.num_columns(); ++i) {
-    cudf::test::expect_columns_equal(expect_column, result->view().column(i));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect_column, result->view().column(i));
   }
 }

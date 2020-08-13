@@ -46,7 +46,7 @@ TEST_F(StringsConvertTest, ToInteger)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsConvertTest, FromInteger)
@@ -69,7 +69,7 @@ TEST_F(StringsConvertTest, FromInteger)
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
 
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsConvertTest, ZeroSizeStringsColumn)
@@ -94,7 +94,7 @@ TEST_F(StringsConvertTest, EmptyStringsColumn)
   auto results = cudf::strings::to_integers(cudf::strings_column_view(strings),
                                             cudf::data_type{cudf::type_id::INT64});
   cudf::test::fixed_width_column_wrapper<int64_t> expected({0, 0, 0});
-  cudf::test::expect_columns_equal(results->view(), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
 }
 
 template <typename T>
@@ -128,13 +128,13 @@ TYPED_TEST(StringsIntegerConvertTest, FromToInteger)
     h_strings.push_back(std::to_string(*itr));
 
   cudf::test::strings_column_wrapper expected(h_strings.begin(), h_strings.end());
-  cudf::test::expect_columns_equal(*results_strings, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results_strings, expected);
 
   // convert back to integers
   auto strings_view = cudf::strings_column_view(results_strings->view());
   auto results_integers =
     cudf::strings::to_integers(strings_view, cudf::data_type(cudf::type_to_id<TypeParam>()));
-  cudf::test::expect_columns_equal(*results_integers, integers->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results_integers, integers->view());
 }
 
 //
@@ -179,7 +179,7 @@ TEST_F(StringsConvertTest, HexToInteger)
       h_expected.begin(),
       h_expected.end(),
       thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     std::vector<int64_t> h_expected;
@@ -196,7 +196,7 @@ TEST_F(StringsConvertTest, HexToInteger)
       h_expected.begin(),
       h_expected.end(),
       thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
 
@@ -221,5 +221,5 @@ TEST_F(StringsConvertTest, IsHex)
   cudf::test::fixed_width_column_wrapper<bool> expected({0, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 0},
                                                         {1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1});
   auto results = cudf::strings::is_hex(cudf::strings_column_view(strings));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }

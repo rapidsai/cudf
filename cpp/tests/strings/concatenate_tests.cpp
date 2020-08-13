@@ -64,7 +64,7 @@ TEST_F(StringsConcatenateTest, Concatenate)
   auto results = cudf::strings::detail::concatenate(strings_columns);
 
   cudf::test::strings_column_wrapper expected(h_strings.begin(), h_strings.end());
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsConcatenateTest, ZeroSizeStringsColumns)
@@ -109,5 +109,5 @@ TEST_F(StringsConcatenateTest, ZeroSizeStringsPlusNormal)
   strings_columns.push_back(strings1);
 
   auto results = cudf::strings::detail::concatenate(strings_columns);
-  cudf::test::expect_columns_equal(*results, strings1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings1);
 }

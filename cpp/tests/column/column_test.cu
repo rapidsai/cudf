@@ -203,7 +203,7 @@ TYPED_TEST(TypedColumnTest, CopyDataNoMask)
   // Verify deep copy
   cudf::column_view v = col;
   EXPECT_NE(v.head(), this->data.data());
-  cudf::test::expect_equal_buffers(v.head(), this->data.data(), this->data.size());
+  CUDF_TEST_EXPECT_EQUAL_BUFFERS(v.head(), this->data.data(), this->data.size());
 }
 
 TYPED_TEST(TypedColumnTest, MoveDataNoMask)
@@ -238,8 +238,8 @@ TYPED_TEST(TypedColumnTest, CopyDataAndMask)
   cudf::column_view v = col;
   EXPECT_NE(v.head(), this->data.data());
   EXPECT_NE(v.null_mask(), this->all_valid_mask.data());
-  cudf::test::expect_equal_buffers(v.head(), this->data.data(), this->data.size());
-  cudf::test::expect_equal_buffers(v.null_mask(), this->all_valid_mask.data(), this->mask.size());
+  CUDF_TEST_EXPECT_EQUAL_BUFFERS(v.head(), this->data.data(), this->data.size());
+  CUDF_TEST_EXPECT_EQUAL_BUFFERS(v.null_mask(), this->all_valid_mask.data(), this->mask.size());
 }
 
 TYPED_TEST(TypedColumnTest, MoveDataAndMask)
@@ -267,7 +267,7 @@ TYPED_TEST(TypedColumnTest, CopyConstructorNoMask)
   cudf::column original{this->type(), this->num_elements(), this->data};
   cudf::column copy{original};
   verify_column_views(copy);
-  cudf::test::expect_columns_equal(original, copy);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(original, copy);
 
   // Verify deep copy
   cudf::column_view original_view = original;
@@ -280,7 +280,7 @@ TYPED_TEST(TypedColumnTest, CopyConstructorWithMask)
   cudf::column original{this->type(), this->num_elements(), this->data, this->all_valid_mask};
   cudf::column copy{original};
   verify_column_views(copy);
-  cudf::test::expect_columns_equal(original, copy);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(original, copy);
 
   // Verify deep copy
   cudf::column_view original_view = original;
@@ -395,7 +395,7 @@ TYPED_TEST(TypedColumnTest, ColumnViewConstructorWithMask)
   cudf::column_view original_view = original;
   cudf::column copy{original_view};
   verify_column_views(copy);
-  cudf::test::expect_columns_equal(original, copy);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(original, copy);
 
   // Verify deep copy
   cudf::column_view copy_view = copy;
