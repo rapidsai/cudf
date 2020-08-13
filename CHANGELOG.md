@@ -8,6 +8,7 @@
 
 ## Bug Fixes
 
+
 # cuDF 0.15.0 (Date TBD)
 
 ## New Features
