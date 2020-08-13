@@ -21,6 +21,11 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/cudf_gtest.hpp>
 #include <tests/utilities/type_lists.hpp>
+#include "cudf/column/column_factories.hpp"
+#include "cudf/types.hpp"
+#include "rmm/device_buffer.hpp"
+#include "thrust/iterator/counting_iterator.h"
+#include "thrust/iterator/transform_iterator.h"
 
 struct ListColumnWrapperTest : public cudf::test::BaseFixture {
 };
@@ -1077,6 +1082,57 @@ TYPED_TEST(ListColumnWrapperTestTyped, IncompleteHierarchies)
     lists_column_view child_childv(child_child);
     EXPECT_EQ(child_childv.size(), 0);
   }
+
+  // big mix of truncated stuff
+  // List<List<List<T>
+  // Length : 4
+  // Offsets : 0, 1, 3, 3, 5
+  // Children :
+  //  List<List<T>>:
+  //  Length : 5
+  //  Offsets : 0, 2, 2, 3, 3, 3
+  //  Children :
+  //      List<T>:
+  //      Length : 3
+  //      Offsets : 0, 3, 5, 5
+  //      Children :
+  //        1, 2, 3, 4, 5
+
+  {
+    // { {{{1, 2, 3}, {4, 5}}}, {{}, {{}}}, {}, {{}, {}} }
+    cudf::test::lists_column_wrapper<T> list{
+      {{{1, 2, 3}, {4, 5}}}, {LCW{}, {LCW{}}}, LCW{}, {LCW{}, LCW{}}};
+    lists_column_view lcv(list);
+    EXPECT_EQ(lcv.size(), 4);
+
+    auto offsets = lcv.offsets();
+    EXPECT_EQ(offsets.size(), 5);
+    test::fixed_width_column_wrapper<size_type> e_offsets({0, 1, 3, 3, 5});
+    test::expect_columns_equal(e_offsets, offsets);
+
+    auto child = lcv.child();
+    lists_column_view childv(child);
+    EXPECT_EQ(childv.size(), 5);
+
+    auto child_offsets = childv.offsets();
+    EXPECT_EQ(child_offsets.size(), 6);
+    test::fixed_width_column_wrapper<size_type> e_child_offsets({0, 2, 2, 3, 3, 3});
+    test::expect_columns_equal(e_child_offsets, child_offsets);
+
+    auto child_child = childv.child();
+    lists_column_view child_childv(child_child);
+    EXPECT_EQ(child_childv.size(), 3);
+
+    auto child_child_offsets = child_childv.offsets();
+    EXPECT_EQ(child_child_offsets.size(), 4);
+    test::fixed_width_column_wrapper<size_type> e_child_child_offsets({0, 3, 5, 5});
+    test::expect_columns_equal(e_child_child_offsets, child_child_offsets);
+
+    auto child_child_data = child_childv.child();
+    EXPECT_EQ(child_child_data.size(), 5);
+    test::fixed_width_column_wrapper<size_type> e_child_child_data({1, 2, 3, 4, 5});
+    test::expect_columns_equal(e_child_child_data, e_child_child_data);
+  }
 }
 
 TEST_F(ListColumnWrapperTest, ListOfStrings)
@@ -1306,4 +1362,221 @@ TEST_F(ListColumnWrapperTest, MismatchedHierarchies)
     auto expect_failure = []() { test::lists_column_wrapper<T> list{{{1, 2, 3}}, {4, 5}}; };
     EXPECT_THROW(expect_failure(), cudf::logic_error);
   }
+}
+
+TYPED_TEST(ListColumnWrapperTestTyped, ListsOfStructs)
+{
+  using namespace cudf;
+
+  using T = TypeParam;
+
+  auto num_struct_rows = 8;
+  auto numeric_column  = test::fixed_width_column_wrapper<T>{1, 2, 3, 4, 5, 6, 7, 8};
+  auto bool_column     = test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
+  auto struct_column   = test::structs_column_wrapper{{numeric_column, bool_column}}.release();
+  EXPECT_EQ(struct_column->size(), num_struct_rows);
+  EXPECT_TRUE(!struct_column->nullable());
+
+  auto lists_column_offsets = test::fixed_width_column_wrapper<size_type>{0, 2, 4, 8}.release();
+  auto num_lists            = lists_column_offsets->size() - 1;
+  auto lists_column         = make_lists_column(
+    num_lists, std::move(lists_column_offsets), std::move(struct_column), UNKNOWN_NULL_COUNT, {});
+
+  // Check if child column is unchanged.
+
+  auto expected_numeric_column = test::fixed_width_column_wrapper<T>{1, 2, 3, 4, 5, 6, 7, 8};
+  auto expected_bool_column    = test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
+  auto expected_struct_column =
+    test::structs_column_wrapper{{expected_numeric_column, expected_bool_column}}.release();
+
+  cudf::test::expect_columns_equal(*expected_struct_column,
+                                   lists_column_view(*lists_column).child());
+}
+
+TYPED_TEST(ListColumnWrapperTestTyped, ListsOfStructsWithValidity)
+{
+  using namespace cudf;
+
+  using T = TypeParam;
+
+  auto num_struct_rows = 8;
+  auto numeric_column =
+    test::fixed_width_column_wrapper<T>{{1, 2, 3, 4, 5, 6, 7, 8}, {1, 1, 1, 1, 0, 0, 0, 0}};
+  auto bool_column   = test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
+  auto struct_column = test::structs_column_wrapper{{numeric_column, bool_column}}.release();
+  EXPECT_EQ(struct_column->size(), num_struct_rows);
+  EXPECT_TRUE(!struct_column->nullable());
+
+  auto lists_column_offsets = test::fixed_width_column_wrapper<size_type>{0, 2, 4, 8}.release();
+  auto list_null_mask       = {1, 1, 0};
+  auto num_lists            = lists_column_offsets->size() - 1;
+  auto lists_column =
+    make_lists_column(num_lists,
+                      std::move(lists_column_offsets),
+                      std::move(struct_column),
+                      UNKNOWN_NULL_COUNT,
+                      test::detail::make_null_mask(list_null_mask.begin(), list_null_mask.end()));
+
+  // Check if child column is unchanged.
+
+  auto expected_numeric_column =
+    test::fixed_width_column_wrapper<T>{{1, 2, 3, 4, 5, 6, 7, 8}, {1, 1, 1, 1, 0, 0, 0, 0}};
+  auto expected_bool_column = test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
+  auto expected_struct_column =
+    test::structs_column_wrapper{{expected_numeric_column, expected_bool_column}}.release();
+
+  cudf::test::expect_columns_equal(*expected_struct_column,
+                                   lists_column_view(*lists_column).child());
+}
+
+TYPED_TEST(ListColumnWrapperTestTyped, ListsOfListsOfStructs)
+{
+  using namespace cudf;
+
+  using T = TypeParam;
+
+  auto num_struct_rows = 8;
+  auto numeric_column  = test::fixed_width_column_wrapper<T>{1, 2, 3, 4, 5, 6, 7, 8};
+  auto bool_column     = test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
+  auto struct_column   = test::structs_column_wrapper{{numeric_column, bool_column}}.release();
+  EXPECT_EQ(struct_column->size(), num_struct_rows);
+  EXPECT_TRUE(!struct_column->nullable());
+
+  auto lists_column_offsets = test::fixed_width_column_wrapper<size_type>{0, 2, 4, 8}.release();
+  auto num_lists            = lists_column_offsets->size() - 1;
+  auto lists_column         = make_lists_column(
+    num_lists, std::move(lists_column_offsets), std::move(struct_column), UNKNOWN_NULL_COUNT, {});
+
+  auto lists_of_lists_column_offsets =
+    test::fixed_width_column_wrapper<size_type>{0, 2, 3}.release();
+  auto num_lists_of_lists = lists_of_lists_column_offsets->size() - 1;
+  auto lists_of_lists_of_structs_column =
+    make_lists_column(num_lists_of_lists,
+                      std::move(lists_of_lists_column_offsets),
+                      std::move(lists_column),
+                      UNKNOWN_NULL_COUNT,
+                      {});
+
+  // Check if child column is unchanged.
+
+  auto expected_numeric_column = test::fixed_width_column_wrapper<T>{1, 2, 3, 4, 5, 6, 7, 8};
+  auto expected_bool_column    = test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
+  auto expected_struct_column =
+    test::structs_column_wrapper{{expected_numeric_column, expected_bool_column}}.release();
+
+  cudf::test::expect_columns_equal(
+    *expected_struct_column,
+    lists_column_view{lists_column_view{*lists_of_lists_of_structs_column}.child()}.child());
+}
+
+TYPED_TEST(ListColumnWrapperTestTyped, ListsOfListsOfStructsWithValidity)
+{
+  using namespace cudf;
+
+  using T = TypeParam;
+
+  auto num_struct_rows = 8;
+  auto numeric_column =
+    test::fixed_width_column_wrapper<T>{{1, 2, 3, 4, 5, 6, 7, 8}, {1, 1, 1, 1, 0, 0, 0, 0}};
+  auto bool_column   = test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
+  auto struct_column = test::structs_column_wrapper{{numeric_column, bool_column}}.release();
+  EXPECT_EQ(struct_column->size(), num_struct_rows);
+  EXPECT_TRUE(!struct_column->nullable());
+
+  auto lists_column_offsets = test::fixed_width_column_wrapper<size_type>{0, 2, 4, 8}.release();
+  auto num_lists            = lists_column_offsets->size() - 1;
+  auto list_null_mask       = {1, 1, 0};
+  auto lists_column =
+    make_lists_column(num_lists,
+                      std::move(lists_column_offsets),
+                      std::move(struct_column),
+                      UNKNOWN_NULL_COUNT,
+                      test::detail::make_null_mask(list_null_mask.begin(), list_null_mask.end()));
+
+  auto lists_of_lists_column_offsets =
+    test::fixed_width_column_wrapper<size_type>{0, 2, 3}.release();
+  auto num_lists_of_lists               = lists_of_lists_column_offsets->size() - 1;
+  auto list_of_lists_null_mask          = {1, 0};
+  auto lists_of_lists_of_structs_column = make_lists_column(
+    num_lists_of_lists,
+    std::move(lists_of_lists_column_offsets),
+    std::move(lists_column),
+    UNKNOWN_NULL_COUNT,
+    test::detail::make_null_mask(list_of_lists_null_mask.begin(), list_of_lists_null_mask.end()));
+
+  // Check if child column is unchanged.
+
+  auto expected_numeric_column =
+    test::fixed_width_column_wrapper<T>{{1, 2, 3, 4, 5, 6, 7, 8}, {1, 1, 1, 1, 0, 0, 0, 0}};
+  auto expected_bool_column = test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
+  auto expected_struct_column =
+    test::structs_column_wrapper{{expected_numeric_column, expected_bool_column}}.release();
+
+  cudf::test::expect_columns_equal(
+    *expected_struct_column,
+    lists_column_view{lists_column_view{*lists_of_lists_of_structs_column}.child()}.child());
+}
+
+TYPED_TEST(ListColumnWrapperTestTyped, LargeListsOfStructsWithValidity)
+{
+  using namespace cudf;
+
+  using T = TypeParam;
+
+  auto num_struct_rows = 10000;
+
+  // Creating Struct<Numeric, Bool>.
+  auto numeric_column = test::fixed_width_column_wrapper<T>{
+    thrust::make_counting_iterator(0),
+    thrust::make_counting_iterator(num_struct_rows),
+    cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 1; })};
+
+  auto bool_iterator = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
+                                                       [](auto i) { return i % 3 == 0; });
+  auto bool_column =
+    test::fixed_width_column_wrapper<bool>(bool_iterator, bool_iterator + num_struct_rows);
+
+  auto struct_validity_iterator =
+    cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 5 == 0; });
+  auto struct_column =
+    test::structs_column_wrapper{
+      {numeric_column, bool_column},
+      std::vector<bool>(struct_validity_iterator, struct_validity_iterator + num_struct_rows)}
+      .release();
+
+  EXPECT_EQ(struct_column->size(), num_struct_rows);
+
+  // Now, use struct_column to create a list column.
+  // Each list has 50 elements.
+  auto num_list_rows = num_struct_rows / 50;
+  auto list_offset_iterator =
+    test::make_counting_transform_iterator(0, [](auto i) { return i * 50; });
+  auto list_offset_column = test::fixed_width_column_wrapper<size_type>(
+                              list_offset_iterator, list_offset_iterator + num_list_rows + 1)
+                              .release();
+  auto lists_column = make_lists_column(num_list_rows,
+                                        std::move(list_offset_column),
+                                        std::move(struct_column),
+                                        cudf::UNKNOWN_NULL_COUNT,
+                                        {});
+
+  // List construction succeeded.
+  // Verify that the child is unchanged.
+
+  auto expected_numeric_column = test::fixed_width_column_wrapper<T>{
+    thrust::make_counting_iterator(0),
+    thrust::make_counting_iterator(num_struct_rows),
+    cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 1; })};
+
+  auto expected_bool_column =
+    test::fixed_width_column_wrapper<bool>(bool_iterator, bool_iterator + num_struct_rows);
+
+  auto expected_struct_column =
+    test::structs_column_wrapper{
+      {expected_numeric_column, expected_bool_column},
+      std::vector<bool>(struct_validity_iterator, struct_validity_iterator + num_struct_rows)}
+      .release();
+
+  cudf::test::expect_columns_equal(*expected_struct_column,
+                                   lists_column_view(*lists_column).child());
 }

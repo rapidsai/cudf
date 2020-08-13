@@ -235,6 +235,13 @@ struct create_column_from_view {
   {
     CUDF_FAIL("list_view not supported yet");
   }
+
+  template <typename ColumnType,
+            std::enable_if_t<std::is_same<ColumnType, cudf::struct_view>::value> * = nullptr>
+  std::unique_ptr<column> operator()()
+  {
+    CUDF_FAIL("struct_view not supported yet");
+  }
 };
 }  // anonymous namespace
 
