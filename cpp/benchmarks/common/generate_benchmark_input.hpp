@@ -116,8 +116,11 @@ constexpr auto stddev()
  * @tparam T Numeric type
  */
 template <typename T, std::enable_if_t<not is_timestamp<T>::value, int> = 0>
-T random_element(T lower_bound, T upper_bound)
+T random_element()
 {
+  static constexpr T lower_bound = std::numeric_limits<T>::lowest();
+  static constexpr T upper_bound = std::numeric_limits<T>::max();
+
   // Use the type dependent standard deviation
   static std::normal_distribution<> gaussian{0., stddev<T>()};
 
@@ -129,16 +132,8 @@ T random_element(T lower_bound, T upper_bound)
   return T(elem);
 }
 
-template <typename T, std::enable_if_t<not is_timestamp<T>::value, int> = 0>
-T random_element()
-{
-  static constexpr T lower_bound = std::numeric_limits<T>::lowest();
-  static constexpr T upper_bound = std::numeric_limits<T>::max();
-  return T(random_element<T>(lower_bound, upper_bound));
-}
-
 template <typename T, std::enable_if_t<is_timestamp<T>::value, int> = 0>
-T random_element(T lower_bound, T upper_bounn)
+T random_element()
 {
   CUDF_FAIL("Not implemented for timestamp types");
 }
