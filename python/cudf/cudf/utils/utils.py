@@ -3,7 +3,6 @@ import functools
 from collections import OrderedDict
 from math import floor, isinf, isnan
 
-import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -13,6 +12,7 @@ from pyarrow.cuda import CudaBuffer as arrowCudaBuffer
 import rmm
 
 import cudf
+import cudf._lib as libcudf
 from cudf.core import column
 from cudf.core.buffer import Buffer
 from cudf.utils.dtypes import to_cudf_compatible_scalar
@@ -81,7 +81,7 @@ def scalar_broadcast_to(scalar, size, dtype=None):
     dtype = scalar.dtype
 
     if np.dtype(dtype).kind in ("O", "U"):
-        gather_map = cupy.zeros(size, dtype="int32")
+        gather_map = libcudf.column.scalar_to_column(0, size, dtype="int32")
         scalar_str_col = column.as_column([scalar], dtype="str")
         return scalar_str_col[gather_map]
     else:

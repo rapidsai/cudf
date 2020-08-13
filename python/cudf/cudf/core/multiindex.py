@@ -13,6 +13,8 @@ from cudf.core.column import column
 from cudf.core.frame import Frame
 from cudf.core.index import Index, as_index
 
+import cudf._lib as libcudf
+
 
 class MultiIndex(Index):
     """A multi-level or hierarchical index.
@@ -170,8 +172,6 @@ class MultiIndex(Index):
                 )
             else:
                 level = DataFrame({name: out._levels[i]})
-
-            from cudf import _lib as libcudf
 
             source_data[name] = libcudf.copying.gather(
                 level, codes._data.columns[0]
@@ -437,7 +437,11 @@ class MultiIndex(Index):
             [
                 index._source_data,
                 DataFrame(
-                    {"idx": Series(cupy.arange(len(index._source_data)))}
+                    {
+                        "idx": Series(
+                            libcudf.filling.arange(len(index._source_data))
+                        )
+                    }
                 ),
             ],
             axis=1,
@@ -470,7 +474,7 @@ class MultiIndex(Index):
             ):
                 stop = row_tuple.stop or max_length
                 start, stop, step = row_tuple.indices(stop)
-                return cupy.arange(start, stop, step)
+                return libcudf.filling.arange(start, stop, step)
             start_values = self._compute_validity_mask(
                 index, row_tuple.start, max_length
             )
@@ -478,7 +482,9 @@ class MultiIndex(Index):
                 index, row_tuple.stop, max_length
             )
             return Series(
-                cupy.arange(start_values.min(), stop_values.max() + 1)
+                libcudf.filling.arange(
+                    start_values.min(), stop_values.max() + 1
+                )
             )
         elif isinstance(row_tuple, numbers.Number):
             return row_tuple
@@ -633,7 +639,7 @@ class MultiIndex(Index):
             indices = indices
         elif isinstance(indices, slice):
             start, stop, step = indices.indices(len(self))
-            indices = cupy.arange(start, stop, step)
+            indices = libcudf.filling.arange(start, stop, step)
         result = MultiIndex(source_data=self._source_data.take(indices))
         if self._codes is not None:
             result._codes = self._codes.take(indices)
@@ -735,7 +741,9 @@ class MultiIndex(Index):
             level = DataFrame(
                 {
                     "idx": Series(
-                        cupy.arange(len(self.levels[idx]), dtype=df[col].dtype)
+                        libcudf.filling.arange(
+                            len(self.levels[idx]), dtype=df[col].dtype
+                        )
                     ),
                     "level": self.levels[idx],
                 }

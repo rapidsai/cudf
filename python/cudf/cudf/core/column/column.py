@@ -285,11 +285,7 @@ class ColumnBase(Column, Serializable):
         return dropped_col
 
     def _get_mask_as_column(self):
-        data = Buffer(cupy.ones(len(self), dtype=np.bool_))
-        mask = as_column(data=data)
-        if self.nullable:
-            mask = mask.set_mask(self._mask).fillna(False)
-        return mask
+        return libcudf.transform.mask_to_bools(self)
 
     def _memory_usage(self, **kwargs):
         return self.__sizeof__()
@@ -501,13 +497,11 @@ class ColumnBase(Column, Serializable):
                 return libcudf.copying.column_slice(self, [start, stop])[0]
             else:
                 # Need to create a gather map for given slice with stride
-                gather_map = as_column(
-                    cupy.arange(
-                        start=start,
-                        stop=stop,
-                        step=stride,
-                        dtype=np.dtype(np.int32),
-                    )
+                gather_map = libcudf.filling.arange(
+                    start=start,
+                    stop=stop,
+                    step=stride,
+                    dtype=np.dtype(np.int32),
                 )
                 return self.take(gather_map)
         else:
@@ -539,13 +533,11 @@ class ColumnBase(Column, Serializable):
             if (key_stride is None or key_stride == 1) and is_scalar(value):
                 return self._fill(value, key_start, key_stop, inplace=True)
             if key_stride != 1 or key_stride is not None or is_scalar(value):
-                key = as_column(
-                    cupy.arange(
-                        start=key_start,
-                        stop=key_stop,
-                        step=key_stride,
-                        dtype=np.dtype(np.int32),
-                    )
+                key = libcudf.filling.arange(
+                    start=key_start,
+                    stop=key_stop,
+                    step=key_stride,
+                    dtype=np.dtype(np.int32),
                 )
                 nelem = len(key)
             else:
@@ -557,7 +549,7 @@ class ColumnBase(Column, Serializable):
                     raise ValueError(
                         "Boolean mask must be of same length as column"
                     )
-                key = as_column(cupy.arange(len(self)))[key]
+                key = libcudf.filling.arange(len(self))[key]
                 if hasattr(value, "__len__") and len(value) == len(self):
                     value = as_column(value)[key]
             nelem = len(key)
@@ -758,11 +750,15 @@ class ColumnBase(Column, Serializable):
 
             # Short-circuit if rhs is all null.
             if lhs.null_count == 0 and (rhs.null_count == len(rhs)):
-                return as_column(cupy.zeros(len(self), dtype="bool"))
+                return libcudf.column.scalar_to_column(
+                    False, len(self), dtype="bool"
+                )
         except ValueError:
             # pandas functionally returns all False when cleansing via
             # typecasting fails
-            return as_column(cupy.zeros(len(self), dtype="bool"))
+            return libcudf.column.scalar_to_column(
+                False, len(self), dtype="bool"
+            )
 
         # If categorical, combine categories first
         if is_categorical_dtype(lhs):
@@ -774,12 +770,23 @@ class ColumnBase(Column, Serializable):
                 # list doesn't have any nulls. If it does have nulls, make
                 # the values list a Categorical with a single null
                 if not rhs.has_nulls:
-                    return cupy.zeros(len(self), dtype="bool")
+                    return libcudf.column.scalar_to_column(
+                        False, len(self), dtype="bool"
+                    )
                 rhs = as_column(pd.Categorical.from_codes([-1], categories=[]))
                 rhs = rhs.cat().set_categories(lhs_cats).astype(self.dtype)
 
-        lhs = cudf.DataFrame({"x": lhs, "orig_order": cupy.arange(len(lhs))})
-        rhs = cudf.DataFrame({"x": rhs, "bool": cupy.ones(len(rhs), "bool")})
+        lhs = cudf.DataFrame(
+            {"x": lhs, "orig_order": libcudf.filling.arange(len(lhs))}
+        )
+        rhs = cudf.DataFrame(
+            {
+                "x": rhs,
+                "bool": libcudf.column.scalar_to_column(
+                    True, len(rhs), dtype="bool"
+                ),
+            }
+        )
         res = lhs.merge(rhs, on="x", how="left").sort_values(by="orig_order")
         res = res.drop_duplicates(subset="orig_order", ignore_index=True)
         res = res._data["bool"].fillna(False)
@@ -1086,12 +1093,7 @@ def column_empty(row_count, dtype="object", masked=False):
     elif dtype.kind in "OU":
         data = None
         children = (
-            build_column(
-                data=Buffer(
-                    cupy.zeros(row_count + 1, dtype="int32").view("|u1")
-                ),
-                dtype="int32",
-            ),
+            libcudf.column.scalar_to_column(0, row_count + 1, dtype="int32"),
             build_column(
                 data=Buffer.empty(row_count * np.dtype("int8").itemsize),
                 dtype="int8",

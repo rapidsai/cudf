@@ -1,7 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION
 import itertools
 
-import cupy as cp
 import numba
 import pandas as pd
 
@@ -210,13 +209,11 @@ class Rolling:
                 agg_name,
             )
         else:
-            from cudf.utils import cudautils
-
             result_col = libcudf.rolling.rolling(
                 sr._column,
                 as_column(self.window),
-                as_column(
-                    cudautils.full(self.window.size, 0, self.window.dtype)
+                libcudf.column.scalar_to_column(
+                    0, self.window.size, dtype=self.window.dtype
                 ),
                 None,
                 self.min_periods,
@@ -380,7 +377,9 @@ class RollingGroupby(Rolling):
     def _window_to_window_sizes(self, window):
         if pd.api.types.is_integer(window):
             return cudautils.grouped_window_sizes_from_offset(
-                cp.arange(len(self.obj)), self._group_starts, window
+                libcudf.filling.arange(len(self.obj)).data_array_view,
+                self._group_starts,
+                window,
             )
         else:
             return cudautils.grouped_window_sizes_from_offset(

@@ -1,5 +1,8 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+import numpy as np
+from cudf._lib.scalar import as_scalar
+
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 
@@ -95,3 +98,34 @@ def _repeat_via_size_type(Table inp, size_type count):
         column_names=inp._column_names,
         index_names=inp._index_names
     )
+
+
+def sequence(int size, Scalar init, Scalar step):
+    cdef size_type c_size = size
+    cdef scalar* c_init = init.c_value.get()
+    cdef scalar* c_step = step.c_value.get()
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = move(cpp_filling.sequence(
+            c_size,
+            c_init[0],
+            c_step[0]
+        ))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def arange(start, stop=None, step=1, dtype=None):
+
+    if stop is None:
+        stop = start
+        start = 0
+
+    if step is None:
+        step = 1
+
+    size = int(np.ceil((stop - start) / step))
+
+    return sequence(
+        size, as_scalar(start, dtype=dtype), as_scalar(step, dtype=dtype))

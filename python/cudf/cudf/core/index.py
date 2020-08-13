@@ -10,6 +10,7 @@ import pandas as pd
 from pandas._config import get_option
 
 import cudf
+import cudf._lib as libcudf
 from cudf._lib.nvtx import annotate
 from cudf.core.abc import Serializable
 from cudf.core.column import (
@@ -1511,8 +1512,9 @@ class RangeIndex(Index):
     @cached_property
     def _values(self):
         if len(self) > 0:
-            vals = cupy.arange(self._start, self._stop, dtype=self.dtype)
-            return column.as_column(vals)
+            return libcudf.filling.arange(
+                self._start, self._stop, dtype=self.dtype
+            )
         else:
             return column.column_empty(0, masked=False, dtype=self.dtype)
 
@@ -1740,7 +1742,7 @@ class RangeIndex(Index):
 
 
 def index_from_range(start, stop=None, step=None):
-    vals = cupy.arange(start, stop, step, dtype=np.int64)
+    vals = libcudf.filling.arange(start, stop, step, dtype=np.int64)
     return as_index(vals)
 
 
