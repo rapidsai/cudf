@@ -1077,6 +1077,57 @@ TYPED_TEST(ListColumnWrapperTestTyped, IncompleteHierarchies)
     lists_column_view child_childv(child_child);
     EXPECT_EQ(child_childv.size(), 0);
   }
+
+  // big mix of truncated stuff
+  // List<List<List<T>
+  // Length : 4
+  // Offsets : 0, 1, 3, 3, 5
+  // Children :
+  //  List<List<T>>:
+  //  Length : 5
+  //  Offsets : 0, 2, 2, 3, 3, 3
+  //  Children :
+  //      List<T>:
+  //      Length : 3
+  //      Offsets : 0, 3, 5, 5
+  //      Children :
+  //        1, 2, 3, 4, 5
+
+  {
+    // { {{{1, 2, 3}, {4, 5}}}, {{}, {{}}}, {}, {{}, {}} }
+    cudf::test::lists_column_wrapper<T> list{
+      {{{1, 2, 3}, {4, 5}}}, {LCW{}, {LCW{}}}, LCW{}, {LCW{}, LCW{}}};
+    lists_column_view lcv(list);
+    EXPECT_EQ(lcv.size(), 4);
+
+    auto offsets = lcv.offsets();
+    EXPECT_EQ(offsets.size(), 5);
+    test::fixed_width_column_wrapper<size_type> e_offsets({0, 1, 3, 3, 5});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
+
+    auto child = lcv.child();
+    lists_column_view childv(child);
+    EXPECT_EQ(childv.size(), 5);
+
+    auto child_offsets = childv.offsets();
+    EXPECT_EQ(child_offsets.size(), 6);
+    test::fixed_width_column_wrapper<size_type> e_child_offsets({0, 2, 2, 3, 3, 3});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_offsets, child_offsets);
+
+    auto child_child = childv.child();
+    lists_column_view child_childv(child_child);
+    EXPECT_EQ(child_childv.size(), 3);
+
+    auto child_child_offsets = child_childv.offsets();
+    EXPECT_EQ(child_child_offsets.size(), 4);
+    test::fixed_width_column_wrapper<size_type> e_child_child_offsets({0, 3, 5, 5});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_child_offsets, child_child_offsets);
+
+    auto child_child_data = child_childv.child();
+    EXPECT_EQ(child_child_data.size(), 5);
+    test::fixed_width_column_wrapper<size_type> e_child_child_data({1, 2, 3, 4, 5});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_child_data, e_child_child_data);
+  }
 }
 
 TEST_F(ListColumnWrapperTest, ListOfStrings)

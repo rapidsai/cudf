@@ -138,7 +138,7 @@ TEST_F(CrossJoinEmptyResult, NoRows)
 
   EXPECT_EQ(join_table->num_columns(), table_a.num_columns() + table_b.num_columns());
   EXPECT_EQ(join_table->num_rows(), 0);
-  CUDF_TEST_EXPECT_TABLES_EQUAL(join_table->view(), table_expect);
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(join_table->view(), table_expect);
   EXPECT_EQ(join_table_reverse->num_columns(), table_a.num_columns() + table_b.num_columns());
   EXPECT_EQ(join_table_reverse->num_rows(), 0);
 }

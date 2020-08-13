@@ -211,11 +211,12 @@ TYPED_TEST(ListsExtractNumericsTest, ExtractElementNestedLists)
 
 TEST_F(ListsExtractTest, ExtractElementEmpty)
 {
-  auto empty  = cudf::make_empty_column(cudf::data_type{cudf::type_id::LIST});
-  auto result = cudf::lists::extract_list_element(cudf::lists_column_view(empty->view()), 1);
+  using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
+
+  LCW empty{};
+  auto result = cudf::lists::extract_list_element(cudf::lists_column_view(empty), 1);
   EXPECT_EQ(0, result->size());
 
-  using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
   LCW empty_strings({LCW{"", "", ""}});
   result = cudf::lists::extract_list_element(cudf::lists_column_view(empty_strings), 1);
   cudf::test::strings_column_wrapper expected({""});
