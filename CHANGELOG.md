@@ -52,6 +52,7 @@
 - PR #5666 Add `filter_characters_of_type` strings API
 - PR #5778 Add support for `cudf::table` to `arrow::Table` and `arrow::Table` to `cudf::table`
 - PR #5673 Always build and test with per-thread default stream enabled in the GPU CI build
+- PR #5438 Add MD5 hash support
 - PR #5704 Initial `fixed_point` Column Support
 - PR #5716 Add `double_type_dispatcher` to libcudf
 - PR #5739 Add `nvtext::detokenize` API
@@ -66,12 +67,14 @@
 - PR #5811 Add `nvtext::edit_distance` API
 - PR #5789 Add groupby support for duration types
 - PR #5810 Make Cython subdirs packages and simplify package_data
+- PR #5807 Initial support for struct columns
 - PR #5817 Enable more `fixed_point` unit tests by introducing "scale-less" constructor
 - PR #5822 Add `cudf_kafka` to `custreamz` run time conda dependency and fix bash syntax issue
 - PR #5845 Add support for `mask_to_bools`
 - PR #5851 Add support for `Index.sort_values`
 - PR #5904 Add slice/split support for LIST columns
 - PR #5859 Add conversion form `fixed_point` to `bool`
+- PR #5781 Add duration types support in cudf(python/cython)
 - PR #5815 LIST Support for ColumnVector
 
 ## Improvements
@@ -184,6 +187,7 @@
 - PR #5855 Java interface to limit RMM maximum pool size
 - PR #5853 Disable `fixed_point` for use in `copy_if`
 - PR #5854 Raise informative error in `DataFrame.iterrows` and `DataFrame.itertuples`
+- PR #5864 Replace cnmem with pool_memory_resource in test/benchmark fixtures
 - PR #5863 Explicitly require `ucx-py` on CI
 - PR #5879 Added support of sub-types and object wrappers in concat()
 - PR #5884 Use S3 bucket directly for benchmark plugni
@@ -271,6 +275,7 @@
 - PR #5319 Disallow SUM and specialize MEAN of timestamp types
 - PR #5797 Fix a missing data issue in some Parquet files
 - PR #5787 Fix column create from dictionary column view
+- PR #5926 Fix SeriesGroupBy.nunique() to return a Series
 - PR #5813 Fix normalizer exception with all-null strings column
 - PR #5820 Fix ListColumn.to_arrow for all null case
 - PR #5837 Bash syntax error in prebuild.sh preventing `cudf_kafka` and `libcudf_kafka` from being uploaded to Anaconda
@@ -283,8 +288,13 @@
 - PR #5914 Link CUDA against libcudf_kafka
 - PR #5895 Do not break kafka client consumption loop on local client timeout
 - PR #5915 Fix reference count on Java DeviceMemoryBuffer after contiguousSplit
+- PR #5941 Fix issue related to `string` to `datetime64` column typecast
+- PR #5927 Fix return type of `MultiIndex.argsort`
+- PR #5942 Fix JIT cache multiprocess test failure
 - PR #5929 Revised assertEquals for List Columns in java tests
 - PR #5947 Fix null count for child device column vector
+- PR #5951 Fix mkdir error in benchmark build
+- PR #5949 Find Arrow include directory for JNI builds
 
 
 # cuDF 0.14.0 (03 Jun 2020)

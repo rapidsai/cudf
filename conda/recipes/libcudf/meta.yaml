@@ -2,7 +2,7 @@
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
 {% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
-{% set cuda_version='.'.join(environ.get('CUDA_VERSION', '10.0').split('.')[:2]) %}
+{% set cuda_version='.'.join(environ.get('CUDA_VERSION', '10.1').split('.')[:2]) %}
 
 package:
   name: libcudf
@@ -153,6 +153,8 @@ test:
     - test -f $PREFIX/include/cudf/strings/substring.hpp
     - test -f $PREFIX/include/cudf/strings/translate.hpp
     - test -f $PREFIX/include/cudf/strings/wrap.hpp
+    - test -f $PREFIX/include/cudf/structs/structs_column_view.hpp
+    - test -f $PREFIX/include/cudf/structs/struct_view.hpp
     - test -f $PREFIX/include/cudf/table/table.hpp
     - test -f $PREFIX/include/cudf/table/table_view.hpp
     - test -f $PREFIX/include/cudf/transform.hpp

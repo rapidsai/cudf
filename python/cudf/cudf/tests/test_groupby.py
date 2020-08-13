@@ -1196,3 +1196,14 @@ def test_groupby_groups_multi(by):
     for key in pdg.groups:
         assert key in gdg.groups
         assert_eq(pdg.groups[key], gdg.groups[key])
+
+
+def test_groupby_nunique_series():
+    pdf = pd.DataFrame({"a": [1, 1, 1, 2, 2, 2], "b": [1, 2, 3, 1, 1, 2]})
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.groupby("a")["b"].nunique(),
+        gdf.groupby("a")["b"].nunique(),
+        check_dtype=False,
+    )
