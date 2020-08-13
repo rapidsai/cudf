@@ -642,10 +642,8 @@ class lists_column_wrapper : public detail::column_wrapper {
             std::enable_if_t<cudf::is_fixed_width<Element>()>* = nullptr>
   lists_column_wrapper(InputIterator begin, InputIterator end) : column_wrapper{}
   {
-    build_from_non_nested(std::move(
-      cudf::test::fixed_width_column_wrapper<typename InputIterator::value_type, SourceElementT>(
-        begin, end)
-        .release()));
+    build_from_non_nested(
+      std::move(cudf::test::fixed_width_column_wrapper<T, SourceElementT>(begin, end).release()));
   }
 
   /**

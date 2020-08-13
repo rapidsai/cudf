@@ -165,10 +165,10 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListFromIterator)
   // Children :
   //    0, 1, 2, 3, 4
   //
-  auto sequence = cudf::test::make_counting_transform_iterator(
-    0, [](auto i) { return cudf::test::make_type_param_scalar<T>(i); });
+  auto sequence = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i; });
 
-  test::lists_column_wrapper<T> list{sequence, sequence + 5};
+  test::lists_column_wrapper<T, typename decltype(sequence)::value_type> list{sequence,
+                                                                              sequence + 5};
 
   lists_column_view lcv(list);
   EXPECT_EQ(lcv.size(), 1);
@@ -200,10 +200,10 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListFromIteratorWithValidity)
   // Children :
   //    0, NULL, 2, NULL, 4
   //
-  auto sequence = cudf::test::make_counting_transform_iterator(
-    0, [](auto i) { return cudf::test::make_type_param_scalar<T>(i); });
+  auto sequence = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i; });
 
-  test::lists_column_wrapper<T> list{sequence, sequence + 5, valids};
+  test::lists_column_wrapper<T, typename decltype(sequence)::value_type> list{
+    sequence, sequence + 5, valids};
 
   lists_column_view lcv(list);
   EXPECT_EQ(lcv.size(), 1);

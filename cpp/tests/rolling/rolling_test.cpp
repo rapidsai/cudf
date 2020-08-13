@@ -605,10 +605,11 @@ TYPED_TEST(RollingTest, ZeroWindow)
 {
   size_type num_rows = 1000;
 
-  std::vector<TypeParam> col_data(num_rows, cudf::test::make_type_param_scalar<TypeParam>(1));
+  std::vector<int> col_data(num_rows, 1);
   std::vector<bool> col_mask(num_rows, 1);
 
-  fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
+  fixed_width_column_wrapper<TypeParam, int> input(
+    col_data.begin(), col_data.end(), col_mask.begin());
   std::vector<size_type> window({0});
   size_type periods = num_rows;
 
@@ -620,10 +621,11 @@ TYPED_TEST(RollingTest, ZeroPeriods)
 {
   size_type num_rows = 1000;
 
-  std::vector<TypeParam> col_data(num_rows, cudf::test::make_type_param_scalar<TypeParam>(1));
+  std::vector<int> col_data(num_rows, 1);
   std::vector<bool> col_mask(num_rows, 1);
 
-  fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
+  fixed_width_column_wrapper<TypeParam, int> input(
+    col_data.begin(), col_data.end(), col_mask.begin());
 
   std::vector<size_type> window({num_rows});
   size_type periods = 0;
@@ -638,10 +640,11 @@ TYPED_TEST(RollingTest, BackwardForwardWindow)
 {
   size_type num_rows = 1000;
 
-  std::vector<TypeParam> col_data(num_rows, cudf::test::make_type_param_scalar<TypeParam>(1));
+  std::vector<int> col_data(num_rows, 1);
   std::vector<bool> col_mask(num_rows, 1);
 
-  fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
+  fixed_width_column_wrapper<TypeParam, int> input(
+    col_data.begin(), col_data.end(), col_mask.begin());
 
   std::vector<size_type> window({num_rows});
   size_type periods = num_rows;
