@@ -63,7 +63,11 @@ struct row_evaluator {
   }
 
   /**
-   * @brief Resolves a data reference into a value.
+   * @brief Resolves an input data reference into a value.
+   *
+   * Only input columns (COLUMN), literal values (LITERAL), and intermediates (INTERMEDIATE) are
+   * supported as input data references. Intermediates must be of fixed width less than or equal to
+   * sizeof(std::int64_t). This requirement on intermediates is enforced by the linearizer.
    *
    * @tparam Element Type of element to return.
    * @param device_data_reference Data reference to resolve.
@@ -75,49 +79,48 @@ struct row_evaluator {
                                    cudf::size_type row_index) const
   {
     auto const data_index = device_data_reference.data_index;
-    switch (device_data_reference.reference_type) {
-      case detail::device_data_reference_type::COLUMN: {
-        auto column = this->table.column(data_index);
-        return column.data<Element>()[row_index];
-      }
-      case detail::device_data_reference_type::LITERAL: {
-        return this->literals[data_index].value<Element>();
-      }
-      case detail::device_data_reference_type::INTERMEDIATE: {
-        return *reinterpret_cast<const Element*>(&this->thread_intermediate_storage[data_index]);
-      }
-      default: {
-        release_assert(false && "Invalid input device data reference type.");
-        return Element();
-      }
+    auto const ref_type   = device_data_reference.reference_type;
+    if (ref_type == detail::device_data_reference_type::COLUMN) {
+      auto column = this->table.column(data_index);
+      return column.element<Element>(row_index);
+    } else if (ref_type == detail::device_data_reference_type::LITERAL) {
+      return this->literals[data_index].value<Element>();
+    } else {  // Assumes type == detail::device_data_reference_type::INTERMEDIATE
+      // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing
+      // Using a temporary variable ensures that the compiler knows the result is aligned
+      std::int64_t intermediate = this->thread_intermediate_storage[data_index];
+      Element tmp;
+      memcpy(&tmp, &intermediate, sizeof(Element));
+      return tmp;
     }
   }
 
   /**
-   * @brief Resolves a data reference into a pointer to an output.
+   * @brief Resolves an output data reference and assigns result value.
    *
-   * @tparam Element Type of pointer to return.
+   * Only output columns (COLUMN) and intermediates (INTERMEDIATE) are supported as output reference
+   * types. Intermediates must be of fixed width less than or equal to sizeof(std::int64_t). This
+   * requirement on intermediates is enforced by the linearizer.
+   *
+   * @tparam Element Type of result element.
    * @param device_data_reference Data reference to resolve.
    * @param row_index Row index of data column.
-   * @return Element*
+   * @param result Value to assign to output.
    */
   template <typename Element>
-  __device__ Element* resolve_output(const detail::device_data_reference device_data_reference,
-                                     cudf::size_type row_index) const
+  __device__ void resolve_output(const detail::device_data_reference device_data_reference,
+                                 cudf::size_type row_index,
+                                 Element result) const
   {
-    switch (device_data_reference.reference_type) {
-      case detail::device_data_reference_type::COLUMN: {
-        // TODO: Could refactor to support output tables (multiple output columns)
-        return &(this->output_column->element<Element>(row_index));
-      }
-      case detail::device_data_reference_type::INTERMEDIATE: {
-        return reinterpret_cast<Element*>(
-          &this->thread_intermediate_storage[device_data_reference.data_index]);
-      }
-      default: {
-        release_assert(false && "Invalid output device data reference type.");
-        return nullptr;
-      }
+    auto const ref_type = device_data_reference.reference_type;
+    if (ref_type == detail::device_data_reference_type::COLUMN) {
+      this->output_column->element<Element>(row_index) = result;
+    } else {  // Assumes type == detail::device_data_reference_type::INTERMEDIATE
+      // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing
+      // Using a temporary variable ensures that the compiler knows the result is aligned
+      std::int64_t tmp;
+      memcpy(&tmp, &result, sizeof(Element));
+      this->thread_intermediate_storage[device_data_reference.data_index] = tmp;
     }
   }
 
@@ -139,8 +142,7 @@ struct row_evaluator {
   {
     using Out              = simt::std::invoke_result_t<OperatorFunctor, Input>;
     auto const typed_input = this->resolve_input<Input>(input, row_index);
-    auto typed_output      = this->resolve_output<Out>(output, row_index);
-    *typed_output          = OperatorFunctor{}(typed_input);
+    this->resolve_output<Out>(output, row_index, OperatorFunctor{}(typed_input));
   }
 
   template <typename OperatorFunctor,
@@ -176,8 +178,7 @@ struct row_evaluator {
     using Out            = simt::std::invoke_result_t<OperatorFunctor, LHS, RHS>;
     auto const typed_lhs = this->resolve_input<LHS>(lhs, row_index);
     auto const typed_rhs = this->resolve_input<RHS>(rhs, row_index);
-    auto typed_output    = this->resolve_output<Out>(output, row_index);
-    *typed_output        = OperatorFunctor{}(typed_lhs, typed_rhs);
+    this->resolve_output<Out>(output, row_index, OperatorFunctor{}(typed_lhs, typed_rhs));
   }
 
   template <typename OperatorFunctor,

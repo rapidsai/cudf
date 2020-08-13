@@ -20,7 +20,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
-#include "cudf/utilities/type_dispatcher.hpp"
+#include <cudf/utilities/traits.hpp>
 
 #include <algorithm>
 #include <functional>
@@ -142,6 +142,13 @@ cudf::size_type linearizer::visit(expression const& expr)
         detail::device_data_reference_type::COLUMN, data_type, 0, table_reference::OUTPUT};
     } else {
       // This node is not the root. Output is an intermediate value.
+      // Ensure that the output type is fixed width and fits in the intermediate storage.
+      if (!cudf::is_fixed_width(data_type)) {
+        CUDF_FAIL(
+          "The output data type is not a fixed-width type but must be stored in an intermediate.");
+      } else if (cudf::size_of(data_type) > sizeof(std::int64_t)) {
+        CUDF_FAIL("The output data type is too large to be stored in an intermediate.");
+      }
       return detail::device_data_reference{detail::device_data_reference_type::INTERMEDIATE,
                                            data_type,
                                            this->intermediate_counter.take()};

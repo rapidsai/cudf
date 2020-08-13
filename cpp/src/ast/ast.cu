@@ -127,11 +127,17 @@ std::unique_ptr<column> compute_column(table_view const table,
   std::cout << "Data references: ";
   for (auto const& dr : data_references) {
     switch (dr.reference_type) {
-      case detail::device_data_reference_type::COLUMN: std::cout << "C"; break;
+      case detail::device_data_reference_type::COLUMN:
+        if (dr.table_reference == table_reference::LEFT) {
+          std::cout << "C";
+        } else {
+          std::cout << "O";
+        }
+        break;
       case detail::device_data_reference_type::LITERAL: std::cout << "L"; break;
       case detail::device_data_reference_type::INTERMEDIATE: std::cout << "I";
     }
-    std::cout << dr.data_index << ", ";
+    std::cout << dr.data_index << "[typeid=" << static_cast<int>(dr.data_type.id()) << "], ";
   }
   std::cout << std::endl;
   std::cout << "Number of operators: " << num_operators << std::endl;
