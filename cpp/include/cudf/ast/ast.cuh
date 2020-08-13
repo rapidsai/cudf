@@ -228,7 +228,6 @@ __device__ void evaluate_row_expression(const detail::row_evaluator evaluator,
       // Unary operator
       auto const input  = data_references[operator_source_indices[operator_source_index]];
       auto const output = data_references[operator_source_indices[operator_source_index + 1]];
-
       unary_operator_dispatcher(op, input.data_type, evaluator, row_index, input, output);
     } else if (arity == 2) {
       // Binary operator

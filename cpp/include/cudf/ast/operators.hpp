@@ -963,10 +963,18 @@ struct type_dispatch_binary_op {
 };
 
 /**
- * @brief Functor to determine the return type of a binary operator from its input types.
+ * @brief Functor to determine the return type of an operator from its input types.
  *
  */
-struct binary_return_type_functor {
+struct return_type_functor {
+  /**
+   * @brief Callable for binary operators to determine return type.
+   *
+   * @tparam OperatorFunctor Operator functor to perform.
+   * @tparam LHS Left input type.
+   * @tparam RHS Right input type.
+   * @param result Pointer whose value is assigned to the result data type.
+   */
   template <typename OperatorFunctor,
             typename LHS,
             typename RHS,
@@ -983,15 +991,20 @@ struct binary_return_type_functor {
             std::enable_if_t<!cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE void operator()(cudf::data_type* result)
   {
-    *result = cudf::data_type(cudf::type_id::EMPTY);
+#ifndef __CUDA_ARCH__
+    CUDF_FAIL("Invalid binary operation. Return type cannot be determined.");
+#else
+    release_assert(false && "Invalid binary operation. Return type cannot be determined.");
+#endif
   }
-};
 
-/**
- * @brief Functor to determine the return type of a unary operator from its input types.
- *
- */
-struct unary_return_type_functor {
+  /**
+   * @brief Callable for unary operators to determine return type.
+   *
+   * @tparam OperatorFunctor Operator functor to perform.
+   * @tparam T Input type.
+   * @param result Pointer whose value is assigned to the result data type.
+   */
   template <typename OperatorFunctor,
             typename T,
             std::enable_if_t<cudf::ast::is_valid_unary_op<OperatorFunctor, T>>* = nullptr>
@@ -1006,7 +1019,11 @@ struct unary_return_type_functor {
             std::enable_if_t<!cudf::ast::is_valid_unary_op<OperatorFunctor, T>>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE void operator()(cudf::data_type* result)
   {
-    *result = cudf::data_type(cudf::type_id::EMPTY);
+#ifndef __CUDA_ARCH__
+    CUDF_FAIL("Invalid unary operation. Return type cannot be determined.");
+#else
+    release_assert(false && "Invalid unary operation. Return type cannot be determined.");
+#endif
   }
 };
 
@@ -1081,15 +1098,11 @@ inline cudf::data_type ast_operator_return_type(ast_operator op,
       // TODO: Nullary return type functor
       break;
     case 1:
-      unary_operator_dispatcher(
-        op, operand_types.at(0), detail::unary_return_type_functor{}, &result);
+      unary_operator_dispatcher(op, operand_types.at(0), detail::return_type_functor{}, &result);
       break;
     case 2:
-      binary_operator_dispatcher(op,
-                                 operand_types.at(0),
-                                 operand_types.at(1),
-                                 detail::binary_return_type_functor{},
-                                 &result);
+      binary_operator_dispatcher(
+        op, operand_types.at(0), operand_types.at(1), detail::return_type_functor{}, &result);
       break;
     case 3:
       // TODO: Ternary return type functor
