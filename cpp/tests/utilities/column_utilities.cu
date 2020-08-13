@@ -49,7 +49,12 @@ struct column_property_comparator {
     EXPECT_EQ(lhs.type(), rhs.type());
     EXPECT_EQ(lhs.size(), rhs.size());
     if (lhs.size() > 0 && check_exact_equality) { EXPECT_EQ(lhs.nullable(), rhs.nullable()); }
-    EXPECT_EQ(lhs.num_children(), rhs.num_children());
+
+    // equivalent, but not exactly equal columns can have a different number of children if their
+    // sizes are both 0. Specifically, empty string columns may or may not have children.
+    if (check_exact_equality || lhs.size() > 0) {
+      EXPECT_EQ(lhs.num_children(), rhs.num_children());
+    }
 
     // only recurse for true nested types.
     // - strings are an odd case of not being a nested type which do have children. but because
@@ -392,8 +397,7 @@ std::string get_nested_type_str(cudf::column_view const& view)
 {
   if (view.type().id() == cudf::type_id::LIST) {
     lists_column_view lcv(view);
-    return cudf::jit::get_type_name(view.type()) + "<" +
-           (lcv.size() > 0 ? get_nested_type_str(lcv.child()) : "") + ">";
+    return cudf::jit::get_type_name(view.type()) + "<" + (get_nested_type_str(lcv.child())) + ">";
   }
   return cudf::jit::get_type_name(view.type());
 }
@@ -545,11 +549,11 @@ struct column_view_printer {
                            detail::to_string(bitmask_to_host(col), col.size(), indent) + "\n"
                        : "") +
       indent + "Children :\n" +
-      (lcv.size() > 0 && lcv.child().type().id() != type_id::LIST && lcv.child().has_nulls()
+      (lcv.child().type().id() != type_id::LIST && lcv.child().has_nulls()
          ? indent + detail::to_string(bitmask_to_host(lcv.child()), lcv.child().size(), indent) +
              "\n"
          : "") +
-      (lcv.size() > 0 ? detail::to_string(lcv.child(), ", ", indent + "   ") : "") + "\n";
+      (detail::to_string(lcv.child(), ", ", indent + "   ")) + "\n";
 
     out.push_back(tmp);
   }
