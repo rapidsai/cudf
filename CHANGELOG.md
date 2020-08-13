@@ -4,6 +4,8 @@
 
 ## Improvements
 
+- PR #5973 Link to the Code of Conduct in CONTRIBUTING.md
+
 ## Bug Fixes
 
 # cuDF 0.15.0 (Date TBD)
