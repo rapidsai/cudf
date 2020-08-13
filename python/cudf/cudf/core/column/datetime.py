@@ -10,8 +10,7 @@ from cudf import _lib as libcudf
 from cudf._lib.nvtx import annotate
 from cudf._lib.scalar import Scalar, as_scalar
 from cudf.core.column import column, string
-from cudf.utils.dtypes import is_scalar, np_to_pa_dtype
-from cudf.utils.utils import buffers_from_pyarrow
+from cudf.utils.dtypes import is_scalar
 
 # nanoseconds per time_unit
 _numpy_to_pandas_conversion = {
@@ -255,21 +254,6 @@ class DatetimeColumn(column.ColumnBase):
     @property
     def is_unique(self):
         return self.as_numerical.is_unique
-
-    @classmethod
-    def from_arrow(cls, array, dtype=None):
-        if dtype is None:
-            dtype = np.dtype("M8[{}]".format(array.type.unit))
-
-        pa_size, pa_offset, pamask, padata, _ = buffers_from_pyarrow(array)
-
-        return DatetimeColumn(
-            data=padata,
-            mask=pamask,
-            dtype=dtype,
-            size=pa_size,
-            offset=pa_offset,
-        )
 
     def can_cast_safely(self, to_dtype):
         if np.issubdtype(to_dtype, np.datetime64):

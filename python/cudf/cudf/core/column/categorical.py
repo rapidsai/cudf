@@ -869,26 +869,6 @@ class CategoricalColumn(column.ColumnBase):
     def cat(self, parent=None):
         return CategoricalAccessor(self, parent=parent)
 
-    @classmethod
-    def from_arrow(cls, array):
-        codes_dtype = min_unsigned_type(len(array.indices))
-        codes = column.as_column(array.indices).astype(codes_dtype)
-        if isinstance(array.dictionary, pa.NullArray):
-            categories = column.as_column([], dtype="object")
-        else:
-            categories = column.as_column(array.dictionary)
-
-        dtype = CategoricalDtype(
-            categories=categories, ordered=array.type.ordered
-        )
-        return CategoricalColumn(
-            dtype=dtype,
-            mask=codes.base_mask,
-            children=(codes,),
-            size=codes.size,
-            offset=codes.offset,
-        )
-
     def unary_operator(self, unaryop):
         raise TypeError(
             f"Series of dtype `category` cannot perform the operation: "

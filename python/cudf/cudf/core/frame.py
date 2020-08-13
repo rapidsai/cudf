@@ -1828,6 +1828,7 @@ class Frame(libcudf.table.Table):
             return result
 
     @classmethod
+    @annotate("FROM_ARROW", color="orange", domain="cudf_python")
     def from_arrow(cls, data):
         """Convert from a PyArrow Table/Array/ChunkedArray to
         DataFrame/Series/Index depending on which class calls.
@@ -2006,6 +2007,7 @@ class Frame(libcudf.table.Table):
 
         return result
 
+    @annotate("TO_ARROW", color="orange", domain="cudf_python")
     def to_arrow(self, preserve_index=True):
         """
         Convert to arrow Table/Array

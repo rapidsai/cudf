@@ -7,7 +7,6 @@ import cupy
 import numpy as np
 import pandas as pd
 from numba import njit
-from pyarrow.cuda import CudaBuffer as arrowCudaBuffer
 
 import rmm
 

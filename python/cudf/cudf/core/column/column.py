@@ -1,4 +1,5 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
+
 import pickle
 import warnings
 from numbers import Number
@@ -881,15 +882,12 @@ class ColumnBase(Column, Serializable):
     def astype(self, dtype, **kwargs):
         if is_categorical_dtype(dtype):
             return self.as_categorical_column(dtype, **kwargs)
-<<<<<<< HEAD
         elif pd.api.types.pandas_dtype(dtype).type in (
             np.str_,
             np.object_,
             str,
         ):
             return self.as_string_column(dtype, **kwargs)
-=======
->>>>>>> fd94d283b3c828fa49105acc13a802072e27069c
         elif is_list_dtype(dtype):
             if not self.dtype == dtype:
                 raise NotImplementedError(
@@ -898,13 +896,8 @@ class ColumnBase(Column, Serializable):
             return self
         elif np.issubdtype(dtype, np.datetime64):
             return self.as_datetime_column(dtype, **kwargs)
-<<<<<<< HEAD
-=======
         elif np.issubdtype(dtype, np.timedelta64):
             return self.as_timedelta_column(dtype, **kwargs)
-        elif pd.api.types.pandas_dtype(dtype).type in (np.str_, np.object_):
-            return self.as_string_column(dtype, **kwargs)
->>>>>>> fd94d283b3c828fa49105acc13a802072e27069c
         else:
             return self.as_numerical_column(dtype, **kwargs)
 
@@ -1364,7 +1357,6 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 col = utils.time_col_replace_nulls(col)
         return col
 
-<<<<<<< HEAD
     elif isinstance(arbitrary, (pa.Array, pa.ChunkedArray)):
         col = ColumnBase.from_arrow(arbitrary)
         if isinstance(col, cudf.core.column.NumericalColumn) and np.issubdtype(
@@ -1379,12 +1371,6 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             if nan_as_null is not False:
                 col = utils.time_col_replace_nulls(col)
         if isinstance(arbitrary, pa.NullArray):
-=======
-    elif isinstance(arbitrary, pa.Array):
-        if isinstance(arbitrary, pa.StringArray):
-            data = cudf.core.column.StringColumn.from_arrow(arbitrary)
-        elif isinstance(arbitrary, pa.NullArray):
->>>>>>> fd94d283b3c828fa49105acc13a802072e27069c
             if type(dtype) == str and dtype == "empty":
                 new_dtype = pd.api.types.pandas_dtype(
                     arbitrary.type.to_pandas_dtype()
@@ -1393,73 +1379,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 new_dtype = pd.api.types.pandas_dtype(dtype)
             col = col.astype(new_dtype)
 
-<<<<<<< HEAD
         return col
-=======
-            if is_categorical_dtype(new_dtype):
-                arbitrary = arbitrary.dictionary_encode()
-            else:
-                if nan_as_null is False:
-                    # casting a null array doesn't make nans valid
-                    # so we create one with valid nans from scratch:
-                    if new_dtype == np.dtype("object"):
-                        arbitrary = utils.scalar_broadcast_to(
-                            None, (len(arbitrary),), dtype=new_dtype
-                        )
-                    else:
-                        arbitrary = utils.scalar_broadcast_to(
-                            np.nan, (len(arbitrary),), dtype=new_dtype
-                        )
-                else:
-                    arbitrary = arbitrary.cast(np_to_pa_dtype(new_dtype))
-            data = as_column(arbitrary, nan_as_null=nan_as_null)
-        elif isinstance(arbitrary, pa.DictionaryArray):
-            data = cudf.core.column.CategoricalColumn.from_arrow(arbitrary)
-        elif isinstance(arbitrary, pa.TimestampArray):
-            data = cudf.core.column.DatetimeColumn.from_arrow(arbitrary)
-        elif isinstance(arbitrary, pa.DurationArray):
-            data = cudf.core.column.TimeDeltaColumn.from_arrow(arbitrary)
-        elif isinstance(arbitrary, pa.Date64Array):
-            raise NotImplementedError
-            data = cudf.core.column.DatetimeColumn.from_arrow(
-                arbitrary, dtype=np.dtype("M8[ms]")
-            )
-        elif isinstance(arbitrary, pa.Date32Array):
-            # No equivalent np dtype and not yet supported
-            warnings.warn(
-                "Date32 values are not yet supported so this will "
-                "be typecast to a Date64 value",
-                UserWarning,
-            )
-            data = as_column(arbitrary.cast(pa.int32())).astype("M8[ms]")
-        elif isinstance(arbitrary, pa.BooleanArray):
-            # Arrow uses 1 bit per value while we use int8
-            dtype = np.dtype(np.bool)
-            arbitrary = arbitrary.cast(pa.int8())
-            data = cudf.core.column.NumericalColumn.from_arrow(
-                arbitrary, dtype=dtype
-            )
-        elif isinstance(arbitrary, pa.ListArray):
-            data = cudf.core.column.ListColumn.from_arrow(arbitrary)
-        else:
-            data = cudf.core.column.NumericalColumn.from_arrow(arbitrary)
-
-    elif isinstance(arbitrary, pa.ChunkedArray):
-        gpu_cols = [
-            as_column(chunk, dtype=dtype) for chunk in arbitrary.chunks
-        ]
-
-        if dtype:
-            new_dtype = dtype
-        else:
-            pa_type = arbitrary.type
-            if pa.types.is_dictionary(pa_type):
-                new_dtype = "category"
-            else:
-                new_dtype = np.dtype(pa_type.to_pandas_dtype())
-
-        data = ColumnBase._concat(gpu_cols, dtype=new_dtype)
->>>>>>> fd94d283b3c828fa49105acc13a802072e27069c
 
     elif isinstance(arbitrary, (pd.Series, pd.Categorical)):
         if isinstance(arbitrary, pd.Series) and isinstance(
