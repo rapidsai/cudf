@@ -27,7 +27,6 @@ def validate_setup(check_dask=True):
         cudaError.cudaErrorInitializationError,
         cudaError.cudaErrorInsufficientDriver,
         cudaError.cudaErrorInvalidDeviceFunction,
-        cudaError.cudaErrorNoDevice,
         cudaError.cudaErrorInvalidDevice,
         cudaError.cudaErrorStartupFailure,
         cudaError.cudaErrorInvalidKernelImage,
