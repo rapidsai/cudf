@@ -4,6 +4,8 @@
 
 ## Improvements
 
+- PR #5956 Adding/Updating tests for cuStreamz
+
 ## Bug Fixes
 
 # cuDF 0.15.0 (Date TBD)
