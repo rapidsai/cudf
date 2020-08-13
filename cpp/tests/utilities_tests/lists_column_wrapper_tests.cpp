@@ -1372,7 +1372,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListsOfStructs)
   using T = TypeParam;
 
   auto num_struct_rows = 8;
-  auto numeric_column  = test::fixed_width_column_wrapper<T>{1, 2, 3, 4, 5, 6, 7, 8};
+  auto numeric_column  = test::fixed_width_column_wrapper<T, int32_t>{1, 2, 3, 4, 5, 6, 7, 8};
   auto bool_column     = test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
   auto struct_column   = test::structs_column_wrapper{{numeric_column, bool_column}}.release();
   EXPECT_EQ(struct_column->size(), num_struct_rows);
@@ -1385,8 +1385,9 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListsOfStructs)
 
   // Check if child column is unchanged.
 
-  auto expected_numeric_column = test::fixed_width_column_wrapper<T>{1, 2, 3, 4, 5, 6, 7, 8};
-  auto expected_bool_column    = test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
+  auto expected_numeric_column =
+    test::fixed_width_column_wrapper<T, int32_t>{1, 2, 3, 4, 5, 6, 7, 8};
+  auto expected_bool_column = test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
   auto expected_struct_column =
     test::structs_column_wrapper{{expected_numeric_column, expected_bool_column}}.release();
 
@@ -1401,10 +1402,10 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListsOfStructsWithValidity)
   using T = TypeParam;
 
   auto num_struct_rows = 8;
-  auto numeric_column =
-    test::fixed_width_column_wrapper<T>{{1, 2, 3, 4, 5, 6, 7, 8}, {1, 1, 1, 1, 0, 0, 0, 0}};
-  auto bool_column   = test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
-  auto struct_column = test::structs_column_wrapper{{numeric_column, bool_column}}.release();
+  auto numeric_column  = test::fixed_width_column_wrapper<T, int32_t>{{1, 2, 3, 4, 5, 6, 7, 8},
+                                                                     {1, 1, 1, 1, 0, 0, 0, 0}};
+  auto bool_column     = test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
+  auto struct_column   = test::structs_column_wrapper{{numeric_column, bool_column}}.release();
   EXPECT_EQ(struct_column->size(), num_struct_rows);
   EXPECT_TRUE(!struct_column->nullable());
 
@@ -1420,8 +1421,8 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListsOfStructsWithValidity)
 
   // Check if child column is unchanged.
 
-  auto expected_numeric_column =
-    test::fixed_width_column_wrapper<T>{{1, 2, 3, 4, 5, 6, 7, 8}, {1, 1, 1, 1, 0, 0, 0, 0}};
+  auto expected_numeric_column = test::fixed_width_column_wrapper<T, int32_t>{
+    {1, 2, 3, 4, 5, 6, 7, 8}, {1, 1, 1, 1, 0, 0, 0, 0}};
   auto expected_bool_column = test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
   auto expected_struct_column =
     test::structs_column_wrapper{{expected_numeric_column, expected_bool_column}}.release();
@@ -1437,7 +1438,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListsOfListsOfStructs)
   using T = TypeParam;
 
   auto num_struct_rows = 8;
-  auto numeric_column  = test::fixed_width_column_wrapper<T>{1, 2, 3, 4, 5, 6, 7, 8};
+  auto numeric_column  = test::fixed_width_column_wrapper<T, int32_t>{1, 2, 3, 4, 5, 6, 7, 8};
   auto bool_column     = test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
   auto struct_column   = test::structs_column_wrapper{{numeric_column, bool_column}}.release();
   EXPECT_EQ(struct_column->size(), num_struct_rows);
@@ -1460,8 +1461,9 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListsOfListsOfStructs)
 
   // Check if child column is unchanged.
 
-  auto expected_numeric_column = test::fixed_width_column_wrapper<T>{1, 2, 3, 4, 5, 6, 7, 8};
-  auto expected_bool_column    = test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
+  auto expected_numeric_column =
+    test::fixed_width_column_wrapper<T, int32_t>{1, 2, 3, 4, 5, 6, 7, 8};
+  auto expected_bool_column = test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
   auto expected_struct_column =
     test::structs_column_wrapper{{expected_numeric_column, expected_bool_column}}.release();
 
@@ -1477,10 +1479,10 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListsOfListsOfStructsWithValidity)
   using T = TypeParam;
 
   auto num_struct_rows = 8;
-  auto numeric_column =
-    test::fixed_width_column_wrapper<T>{{1, 2, 3, 4, 5, 6, 7, 8}, {1, 1, 1, 1, 0, 0, 0, 0}};
-  auto bool_column   = test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
-  auto struct_column = test::structs_column_wrapper{{numeric_column, bool_column}}.release();
+  auto numeric_column  = test::fixed_width_column_wrapper<T, int32_t>{{1, 2, 3, 4, 5, 6, 7, 8},
+                                                                     {1, 1, 1, 1, 0, 0, 0, 0}};
+  auto bool_column     = test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
+  auto struct_column   = test::structs_column_wrapper{{numeric_column, bool_column}}.release();
   EXPECT_EQ(struct_column->size(), num_struct_rows);
   EXPECT_TRUE(!struct_column->nullable());
 
@@ -1507,8 +1509,8 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListsOfListsOfStructsWithValidity)
 
   // Check if child column is unchanged.
 
-  auto expected_numeric_column =
-    test::fixed_width_column_wrapper<T>{{1, 2, 3, 4, 5, 6, 7, 8}, {1, 1, 1, 1, 0, 0, 0, 0}};
+  auto expected_numeric_column = test::fixed_width_column_wrapper<T, int32_t>{
+    {1, 2, 3, 4, 5, 6, 7, 8}, {1, 1, 1, 1, 0, 0, 0, 0}};
   auto expected_bool_column = test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
   auto expected_struct_column =
     test::structs_column_wrapper{{expected_numeric_column, expected_bool_column}}.release();
@@ -1527,7 +1529,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, LargeListsOfStructsWithValidity)
   auto num_struct_rows = 10000;
 
   // Creating Struct<Numeric, Bool>.
-  auto numeric_column = test::fixed_width_column_wrapper<T>{
+  auto numeric_column = test::fixed_width_column_wrapper<T, int32_t>{
     thrust::make_counting_iterator(0),
     thrust::make_counting_iterator(num_struct_rows),
     cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 1; })};
@@ -1564,7 +1566,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, LargeListsOfStructsWithValidity)
   // List construction succeeded.
   // Verify that the child is unchanged.
 
-  auto expected_numeric_column = test::fixed_width_column_wrapper<T>{
+  auto expected_numeric_column = test::fixed_width_column_wrapper<T, int32_t>{
     thrust::make_counting_iterator(0),
     thrust::make_counting_iterator(num_struct_rows),
     cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 1; })};
