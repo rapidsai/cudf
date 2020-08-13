@@ -179,16 +179,6 @@ class DatetimeColumn(column.ColumnBase):
         else:
             return column.column_empty(0, dtype="object", masked=False)
 
-    def to_pandas(self, index=None, nullable_pd_dtype=False):
-        if nullable_pd_dtype:
-            raise NotImplementedError(
-                f"nullable_pd_dtype=True is not supported for {self.dtype}"
-            )
-
-        return pd.Series(
-            self.to_array(fillna="pandas").astype(self.dtype), index=index
-        )
-
     def to_arrow(self):
         mask = None
         if self.nullable:

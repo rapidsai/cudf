@@ -264,18 +264,12 @@ def test_timedelta_ops_misc_inputs(data, other, dtype, ops):
     elif ops == "ne":
         actual = actual.fillna(True)
 
-    if expected.dtype in cudf.utils.dtypes.cudf_dtypes_to_pandas_dtypes:
-        expected = expected.astype(
-            cudf.utils.dtypes.cudf_dtypes_to_pandas_dtypes[expected.dtype]
-        )
-
     if ops == "floordiv":
-        expected[actual.isna().to_pandas()] = pd.NA
+        expected[actual.isna().to_pandas()] = np.nan
 
     assert_eq(
         expected,
-        actual,
-        nullable_pd_dtype=False if actual.dtype.kind == "m" else True,
+        actual
     )
 
 
@@ -820,7 +814,8 @@ def test_timedelta_fillna(data, dtype, fill_value):
 
     expected = psr.fillna(fill_value)
     actual = sr.fillna(fill_value)
-
+    import pdb
+    pdb.set_trace()
     assert_eq(expected, actual)
 
 

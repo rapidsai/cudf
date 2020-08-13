@@ -3,9 +3,8 @@ import pandas as pd
 import pytest
 
 import cudf as gd
-
+import dask.dataframe as dd
 import dask_cudf as dgd
-from dask_cudf.tests.utils import assert_dd_eq
 
 
 def _make_random_frame(nelem, npartitions=2):
@@ -40,7 +39,7 @@ def test_series_reduce(reducer):
 
     got = reducer(gdf.x)
     exp = reducer(df.x)
-    assert_dd_eq(got, exp)
+    dd.assert_eq(got, exp)
 
 
 @pytest.mark.parametrize(
@@ -65,7 +64,7 @@ def test_series_reduce(reducer):
 def test_rowwise_reductions(data, op):
 
     gddf = dgd.from_cudf(data, npartitions=10)
-    pddf = gddf.to_dask_dataframe(nullable_pd_dtype=False)
+    pddf = gddf.to_dask_dataframe()
 
     if op in ("var", "std"):
         expected = getattr(pddf, op)(axis=1, ddof=0)
@@ -74,4 +73,4 @@ def test_rowwise_reductions(data, op):
         expected = getattr(pddf, op)(axis=1)
         got = getattr(pddf, op)(axis=1)
 
-    assert_dd_eq(expected.compute(), got.compute(), check_less_precise=7)
+    dd.assert_eq(expected.compute(), got.compute(), check_less_precise=7)

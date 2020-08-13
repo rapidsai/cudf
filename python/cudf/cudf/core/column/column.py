@@ -120,11 +120,11 @@ class ColumnBase(Column, Serializable):
     def __len__(self):
         return self.size
 
-    def to_pandas(self, index=None, nullable_pd_dtype=False, **kwargs):
+    def to_pandas(self, index=None, **kwargs):
         pd_series = self.to_arrow().to_pandas(**kwargs)
         if index is not None:
             pd_series.index = index
-        return pd_series
+        return pd_series.copy()
 
     def __iter__(self):
         cudf.utils.utils.raise_iteration_error(obj=self)

@@ -95,17 +95,7 @@ class TimeDeltaColumn(column.ColumnBase):
         if self.has_nulls:
             result = result.fillna(cudf._NA_REP)
         return result
-
-    def to_pandas(self, index=None, nullable_pd_dtype=False):
-        if nullable_pd_dtype:
-            raise NotImplementedError(
-                f"nullable_pd_dtype=True is not supported for {self.dtype}"
-            )
-
-        return pd.Series(
-            self.to_array(fillna="pandas").astype(self.dtype), index=index
-        )
-
+        
     def to_arrow(self):
         mask = None
         if self.nullable:
