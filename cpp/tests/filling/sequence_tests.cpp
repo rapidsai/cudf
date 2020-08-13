@@ -52,7 +52,7 @@ TYPED_TEST(SequenceTypedTestFixture, Incrementing)
 
   auto result = cudf::sequence(num_els, init, step);
 
-  expect_columns_equal(*result, expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
 }
 
 TYPED_TEST(SequenceTypedTestFixture, Decrementing)
@@ -69,7 +69,7 @@ TYPED_TEST(SequenceTypedTestFixture, Decrementing)
 
   auto result = cudf::sequence(num_els, init, step);
 
-  expect_columns_equal(*result, expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
 }
 
 TYPED_TEST(SequenceTypedTestFixture, EmptyOutput)
@@ -86,7 +86,7 @@ TYPED_TEST(SequenceTypedTestFixture, EmptyOutput)
 
   auto result = cudf::sequence(num_els, init, step);
 
-  expect_columns_equal(*result, expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
 }
 
 TEST_F(SequenceTestFixture, BadTypes)
@@ -132,5 +132,5 @@ TYPED_TEST(SequenceTypedTestFixture, DefaultStep)
 
   auto result = cudf::sequence(num_els, init);
 
-  expect_columns_equal(*result, expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
 }

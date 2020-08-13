@@ -92,7 +92,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
     @Override
     public long getNullCount() {
-      return  offHeap.getNativeNullCount();
+      return  offHeap.getNativeNullCount(viewHandle);
     }
 
     @Override
@@ -3079,6 +3079,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       toClose.add(data);
       toClose.add(valid);
       toClose.add(offsets);
+      contiguousBuffer.incRefCount();
+      toClose.add(contiguousBuffer);
     }
 
     public long getViewHandle() {
@@ -3101,6 +3103,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
         return ColumnVector.getNativeNullCount(getViewHandle());
       }
       return getNativeNullCountColumn(columnHandle);
+    }
+
+    public long getNativeNullCount(long someViewHandle) {
+      return ColumnVector.getNativeNullCount(someViewHandle);
     }
 
     private void setNativeNullCount(int nullCount) throws CudfException {

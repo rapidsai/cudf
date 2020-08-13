@@ -1230,3 +1230,23 @@ def test_dataframe_iloc_index(gdf, slice):
     expected = pdf.iloc[:, slice]
 
     assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [[0], [1], [2]],
+        [[0, 1], [2, 3], [4, 5]],
+        [[[0, 1], [2]], [[3, 4]], [[5, 6]]],
+        [None, [[0, 1], [2]], [[3, 4], [5, 6]]],
+        [[], [[0, 1], [2]], [[3, 4], [5, 6]]],
+        [[], [["a", "b"], None], [["c", "d"], []]],
+    ],
+)
+@pytest.mark.parametrize(
+    "key", [[], [0], [0, 1], [0, 1, 0], slice(None), slice(0, 2), slice(1, 3)]
+)
+def test_iloc_with_lists(data, key):
+    psr = pd.Series(data)
+    gsr = cudf.Series(data)
+    assert_eq(psr.iloc[key], gsr.iloc[key])

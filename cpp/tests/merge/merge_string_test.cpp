@@ -113,8 +113,8 @@ TYPED_TEST(MergeStringTest, Merge1StringKeyColumns)
   auto output_column_view1{p_outputTable->view().column(0)};
   auto output_column_view2{p_outputTable->view().column(1)};
 
-  cudf::test::expect_columns_equal(expected_column_view1, output_column_view1);
-  cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view1, output_column_view1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view2, output_column_view2);
 }
 
 // rename test <TestName> as DISABLED_<TestName> to disable:
@@ -223,9 +223,9 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyColumns)
   auto output_column_view2{p_outputTable->view().column(1)};
   auto output_column_view3{p_outputTable->view().column(2)};
 
-  cudf::test::expect_columns_equal(expected_column_view1, output_column_view1);
-  cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
-  cudf::test::expect_columns_equal(expected_column_view3, output_column_view3);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view1, output_column_view1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view2, output_column_view2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view3, output_column_view3);
 }
 
 TYPED_TEST(MergeStringTest, Merge1StringKeyNullColumns)
@@ -302,8 +302,8 @@ TYPED_TEST(MergeStringTest, Merge1StringKeyNullColumns)
   auto output_column_view1{p_outputTable->view().column(0)};
   auto output_column_view2{p_outputTable->view().column(1)};
 
-  cudf::test::expect_columns_equal(expected_column_view1, output_column_view1);
-  cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view1, output_column_view1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view2, output_column_view2);
 }
 
 TYPED_TEST(MergeStringTest, Merge2StringKeyNullColumns)
@@ -415,7 +415,7 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyNullColumns)
   auto output_column_view2{p_outputTable->view().column(1)};
   auto output_column_view3{p_outputTable->view().column(2)};
 
-  cudf::test::expect_columns_equal(expected_column_view1, output_column_view1);
-  cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
-  cudf::test::expect_columns_equal(expected_column_view3, output_column_view3);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view1, output_column_view1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view2, output_column_view2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view3, output_column_view3);
 }
