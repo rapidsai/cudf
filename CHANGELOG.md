@@ -295,6 +295,7 @@
 - PR #5914 Link CUDA against libcudf_kafka
 - PR #5895 Do not break kafka client consumption loop on local client timeout
 - PR #5915 Fix reference count on Java DeviceMemoryBuffer after contiguousSplit
+- PR #5941 Fix issue related to `string` to `datetime64` column typecast
 - PR #5927 Fix return type of `MultiIndex.argsort`
 - PR #5942 Fix JIT cache multiprocess test failure
 - PR #5929 Revised assertEquals for List Columns in java tests
