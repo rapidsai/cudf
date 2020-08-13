@@ -31,8 +31,8 @@ namespace {
 /**
  * @brief Initializes the token-ids, word-indices, and token counts vectors.
  *
- * Each thread process a single code point from code_points.
- * This also locates the start and end of each word within the code_points buffer.
+ * Each thread process a single code point from `code_points`.
+ * This also locates the start and end of each word within the `code_points` buffer.
  * A word start is identified as a non-space character that appears right after a space.
  * A word end is identified as a space character that appears right after a non-space one.
  * If the code point at this thread does not represent a word start or word end,
@@ -42,8 +42,14 @@ namespace {
  *
  * It is guaranteed that the same number of valid values will be written to both the
  * start and end indices and that after the select step, the two arrays will be aligned.
- *  That is, `start_word_indices[word]` and `end_word_indices[word]` are the start and
+ * That is, `start_word_indices[word]` and `end_word_indices[word]` are the start and
  * end for the same word.
+ *
+ * Memory required is 13 bytes per code point values:
+ * - 4 bytes each for `start_word_indices` and `end_word_indices`
+ * - 4 bytes for each `token_ids`
+ * - 1 byte for each each `tokens_per_word`
+ * Also, there is a code point value for each byte in the input strings.
  *
  * @param code_points[in] A pointer to the code points in the strings after normalization.
  * @param start_word_indices[out] An array of size `num_code_points` which will contain the
