@@ -39,6 +39,8 @@ static void BM_sort(benchmark::State& state)
 {
   using Type           = int;
   using column_wrapper = cudf::test::fixed_width_column_wrapper<Type>;
+  std::default_random_engine generator;
+  std::uniform_int_distribution<int> distribution(0, 100);
 
   const cudf::size_type n_rows{(cudf::size_type)state.range(0)};
   const cudf::size_type n_cols{(cudf::size_type)state.range(1)};
@@ -47,13 +49,11 @@ static void BM_sort(benchmark::State& state)
   // Create columns with values in the range [0,100)
   std::vector<column_wrapper> columns;
   columns.reserve(n_cols);
-  std::generate_n(std::back_inserter(columns), n_cols, [n_rows]() {
+  std::generate_n(std::back_inserter(columns), n_cols, [&, n_rows]() {
     auto valids = cudf::test::make_counting_transform_iterator(
       0, [](auto i) { return i % 100 == 0 ? false : true; });
-    auto elements =
-
-      cudf::test::make_counting_transform_iterator(
-        0, [](auto row) { return random_element<Type>(0, 100); });
+    auto elements = cudf::test::make_counting_transform_iterator(
+      0, [&](auto row) { return distribution(generator); });
     return column_wrapper(elements, elements + n_rows, valids);
   });
 
