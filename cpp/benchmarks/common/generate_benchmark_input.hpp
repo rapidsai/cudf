@@ -20,7 +20,7 @@
  * values are generated using a normal distribution with a zero mean. Therefore, different column
  * types are filled using different distributions. The distributions are documented in the
  * functions where they are used.
-s *
+ *
  * Currently, the data generation is done on the CPU and the data is then copied to the device
  * memory.
  */
