@@ -60,6 +60,16 @@ data_type arrow_to_cudf_type(arrow::DataType const& arrow_type)
         default: CUDF_FAIL("Unsupported timestamp unit in arrow");
       }
     }
+    case arrow::Type::DURATION: {
+      arrow::DurationType const* type = static_cast<arrow::DurationType const*>(&arrow_type);
+      switch (type->unit()) {
+        case arrow::TimeUnit::type::SECOND: return data_type(type_id::DURATION_SECONDS);
+        case arrow::TimeUnit::type::MILLI: return data_type(type_id::DURATION_MILLISECONDS);
+        case arrow::TimeUnit::type::MICRO: return data_type(type_id::DURATION_MICROSECONDS);
+        case arrow::TimeUnit::type::NANO: return data_type(type_id::DURATION_NANOSECONDS);
+        default: CUDF_FAIL("Unsupported duration unit in arrow");
+      }
+    }
     case arrow::Type::STRING: return data_type(type_id::STRING);
     case arrow::Type::DICTIONARY: return data_type(type_id::DICTIONARY32);
     case arrow::Type::LIST: return data_type(type_id::LIST);
