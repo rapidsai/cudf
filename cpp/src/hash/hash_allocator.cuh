@@ -19,9 +19,9 @@
 
 #include <new>
 
-#include <rmm/mr/device/default_memory_resource.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/managed_memory_resource.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 
 template <class T>
 struct managed_allocator {
@@ -60,7 +60,7 @@ bool operator!=(const managed_allocator<T>&, const managed_allocator<U>&)
 template <class T>
 struct default_allocator {
   typedef T value_type;
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource();
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource();
 
   default_allocator() = default;
 
