@@ -239,6 +239,13 @@ struct create_column_from_view {
     auto lists_view = lists_column_view(view);
     return cudf::lists::detail::copy_slice(lists_view, 0, view.size(), stream, mr);
   }
+
+  template <typename ColumnType,
+            std::enable_if_t<std::is_same<ColumnType, cudf::struct_view>::value> * = nullptr>
+  std::unique_ptr<column> operator()()
+  {
+    CUDF_FAIL("struct_view not supported yet");
+  }
 };
 }  // anonymous namespace
 
