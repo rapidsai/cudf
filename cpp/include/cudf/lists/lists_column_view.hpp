@@ -41,6 +41,8 @@ class lists_column_view : private column_view {
   static constexpr size_type offsets_column_index{0};
   static constexpr size_type child_column_index{1};
 
+  using column_view::child_begin;
+  using column_view::child_end;
   using column_view::has_nulls;
   using column_view::is_empty;
   using column_view::null_count;

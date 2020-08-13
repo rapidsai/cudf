@@ -80,10 +80,8 @@ std::unique_ptr<column> empty_like(column_view const& input)
   CUDF_FUNC_RANGE();
 
   std::vector<std::unique_ptr<column>> children;
-  auto child_iter = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0), [input](size_type i) { return input.child(i); });
-  std::transform(child_iter,
-                 child_iter + input.num_children(),
+  std::transform(input.child_begin(),
+                 input.child_end(),
                  std::back_inserter(children),
                  [](column_view const& col) { return empty_like(col); });
 

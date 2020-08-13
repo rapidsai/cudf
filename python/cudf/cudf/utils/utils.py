@@ -7,6 +7,7 @@ import cupy
 import numpy as np
 import pandas as pd
 from numba import njit
+from pyarrow.cuda import CudaBuffer as arrowCudaBuffer
 
 import rmm
 
@@ -64,7 +65,10 @@ def scalar_broadcast_to(scalar, size, dtype=None):
     if isinstance(size, (tuple, list)):
         size = size[0]
 
-    if scalar is None:
+    if scalar is None or (
+        isinstance(scalar, (np.datetime64, np.timedelta64))
+        and np.isnat(scalar)
+    ):
         if dtype is None:
             dtype = "object"
         return column.column_empty(size, dtype=dtype, masked=True)
@@ -346,9 +350,9 @@ def time_col_replace_nulls(input_col):
         input_col,
         column.as_column(
             Buffer(
-                np.array([np.datetime64("NaT")], dtype=input_col.dtype).view(
-                    "|u1"
-                )
+                np.array(
+                    [input_col.default_na_value()], dtype=input_col.dtype
+                ).view("|u1")
             ),
             dtype=input_col.dtype,
         ),

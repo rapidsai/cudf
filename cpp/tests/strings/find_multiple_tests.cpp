@@ -48,7 +48,7 @@ TEST_F(StringsFindMultipleTest, FindMultiple)
   cudf::test::fixed_width_column_wrapper<int32_t> expected(
     {1,  -1, -1, -1, 4,  -1, -1, 4,  -1, 2, -1, -1, -1, 2, -1, -1, -1, -1, -1, -1, -1,
      -1, 2,  1,  -1, -1, -1, -1, -1, -1, 1, 8,  -1, -1, 1, -1, -1, -1, -1, -1, -1, -1});
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsFindMultipleTest, ZeroSizeStringsColumn)

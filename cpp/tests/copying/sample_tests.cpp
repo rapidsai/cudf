@@ -56,7 +56,7 @@ TEST_F(SampleTest, RowMultipleSamplingDisallowed)
     auto out_table  = cudf::sample(input, n_samples, cudf::sample_with_replacement::FALSE, i);
     auto sorted_out = cudf::sort(out_table->view());
 
-    cudf::test::expect_tables_equal(input, sorted_out->view());
+    CUDF_TEST_EXPECT_TABLES_EQUAL(input, sorted_out->view());
   }
 }
 
@@ -72,14 +72,14 @@ TEST_F(SampleTest, TestReproducibilityWithSeed)
   for (int i = 0; i < 2; i++) {
     auto out = cudf::sample(input, n_samples, cudf::sample_with_replacement::FALSE, 1);
 
-    cudf::test::expect_tables_equal(expected_1->view(), out->view());
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_1->view(), out->view());
   }
 
   auto expected_2 = cudf::sample(input, n_samples, cudf::sample_with_replacement::TRUE, 1);
   for (int i = 0; i < 2; i++) {
     auto out = cudf::sample(input, n_samples, cudf::sample_with_replacement::TRUE, 1);
 
-    cudf::test::expect_tables_equal(expected_2->view(), out->view());
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_2->view(), out->view());
   }
 }
 
