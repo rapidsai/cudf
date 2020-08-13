@@ -790,17 +790,23 @@ def test_datetime_scalar_timeunit_cast(timeunit):
     assert_eq(pdf, gdf)
 
 
-def test_str_null_to_datetime():
-    psr = pd.Series(["2001-01-01", "2002-02-02", "2000-01-05", "NaT"])
-    gsr = Series(["2001-01-01", "2002-02-02", "2000-01-05", "NaT"])
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["2001-01-01", "2002-02-02", "2000-01-05", "NaT"],
+        ["2001-01-01", "2002-02-02", "2000-01-05", None],
+        [None, None, None, None, None],
+    ],
+)
+@pytest.mark.parametrize("dtype", DATETIME_TYPES)
+def test_str_null_to_datetime(data, dtype):
+    psr = pd.Series(data)
+    gsr = Series(data)
 
-    assert_eq(psr.astype("datetime64[s]"), gsr.astype("datetime64[s]"))
+    assert_eq(psr.astype(dtype), gsr.astype(dtype))
 
-    psr = pd.Series(["2001-01-01", "2002-02-02", "2000-01-05", None])
-    gsr = Series(["2001-01-01", "2002-02-02", "2000-01-05", None])
 
-    assert_eq(psr.astype("datetime64[s]"), gsr.astype("datetime64[s]"))
-
+def test_str_to_datetime_error():
     psr = pd.Series(["2001-01-01", "2002-02-02", "2000-01-05", "None"])
     gsr = Series(["2001-01-01", "2002-02-02", "2000-01-05", "None"])
 
