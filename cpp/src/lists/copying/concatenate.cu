@@ -61,7 +61,7 @@ std::unique_ptr<column> merge_offsets(std::vector<lists_column_view> const& colu
   std::for_each(columns.begin(), columns.end(), [&](lists_column_view const& c) {
     if (c.size() > 0) {
       // handle sliced columns
-      int local_shift =
+      int const local_shift =
         shift -
         (c.offset() > 0 ? cudf::detail::get_value<size_type>(c.offsets(), c.offset(), stream) : 0);
       column_device_view offsets(c.offsets(), 0, 0);

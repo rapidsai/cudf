@@ -69,12 +69,12 @@ class lists_column_view : private column_view {
   column_view child() const;
 
   /**
-   * @brief Returns the internal child column, applying any offset() from the root.
+   * @brief Returns the internal child column, applying any offset from the root.
    *
-   * slice/split offset values are only stored at the root level of a list column.
+   * Slice/split offset values are only stored at the root level of a list column.
    * So when doing computations on them, we need to apply that offset to
    * the child columns when recursing.  Most functions operating in a recursive manner
-   * on lists columns should be using get_sliced_child() instead of child().
+   * on lists columns should be using `get_sliced_child()` instead of `child()`.
    *
    * @throw cudf::logic error if this is an empty column
    */
