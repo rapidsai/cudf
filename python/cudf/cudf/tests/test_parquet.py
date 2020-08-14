@@ -355,11 +355,17 @@ def test_parquet_read_filtered_multiple_files(tmpdir):
 
 @pytest.mark.skipif(
     version.parse(pa.__version__) < version.parse("1.0.1"),
-    reason="Changes in pyarrow 1.0.0 required to handle complex predicates",
+    reason="Changes in pyarrow 1.0.0 required to handle complex predicates with various operators and various operand types",
 )
 @pytest.mark.parametrize(
     "predicate,expected_len",
     [
+        ([("z", "not in", [0, 1, 2, 3, 4])], 6),
+        ([[("x", "==", 9)], [("z", "not in", [0, 1, 2, 3, 4])]], 8),
+        ([[("x", "==", 0)], [("z", "==", 0)]], 4),
+        ([("x", "==", 0), ("z", "in", [7, 8])], 2),
+        ([("x", "==", 0), ("z", "!=", 0)], 2),
+        ([("x", "==", 0), ("z", "==", 0)], 0),
         ([("y", "==", "c"), ("x", ">", 8)], 0),
         ([("y", "==", "c"), ("x", ">=", 5)], 2),
         ([[("y", "==", "c")], [("x", "<", 3)]], 6),
@@ -370,7 +376,9 @@ def test_parquet_read_filtered_complex_predicate(
 ):
     # Generate data
     fname = tmpdir.join("filtered_complex_predicate.parquet")
-    df = pd.DataFrame({"x": range(10), "y": list("aabbccddee")})
+    df = pd.DataFrame(
+        {"x": range(10), "y": list("aabbccddee"), "z": reversed(range(10))}
+    )
     df.to_parquet(fname, row_group_size=2)
 
     # Check filters
