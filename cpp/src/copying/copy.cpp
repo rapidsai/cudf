@@ -19,6 +19,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -77,7 +78,15 @@ std::unique_ptr<column> allocate_like(column_view const& input,
 std::unique_ptr<column> empty_like(column_view const& input)
 {
   CUDF_FUNC_RANGE();
-  return make_empty_column(input.type());
+
+  std::vector<std::unique_ptr<column>> children;
+  std::transform(input.child_begin(),
+                 input.child_end(),
+                 std::back_inserter(children),
+                 [](column_view const& col) { return empty_like(col); });
+
+  return std::make_unique<cudf::column>(
+    input.type(), 0, rmm::device_buffer{}, rmm::device_buffer{}, 0, std::move(children));
 }
 
 /*

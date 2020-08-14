@@ -9,7 +9,7 @@ from cudf import _lib as libcudf
 from cudf._lib.nvtx import annotate
 from cudf._lib.scalar import Scalar
 from cudf.core.buffer import Buffer
-from cudf.core.column import as_column, column
+from cudf.core.column import as_column, build_column, column, string
 from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import (
     cudf_dtypes_to_pandas_dtypes,
@@ -18,6 +18,7 @@ from cudf.utils.dtypes import (
     np_to_pa_dtype,
     numeric_normalize_types,
 )
+from cudf.utils.utils import buffers_from_pyarrow
 
 
 class NumericalColumn(column.ColumnBase):
@@ -58,7 +59,7 @@ class NumericalColumn(column.ColumnBase):
                 item = self.data_array_view.dtype.type(item)
             else:
                 return False
-        except Exception:
+        except (TypeError, ValueError):
             return False
         # TODO: Use `scalar`-based `contains` wrapper
         return libcudf.search.contains(
@@ -89,7 +90,7 @@ class NumericalColumn(column.ColumnBase):
                     (np.isscalar(tmp) and (0 == tmp))
                     or ((isinstance(tmp, NumericalColumn)) and (0.0 in tmp))
                 ):
-                    out_dtype = np.dtype("float_")
+                    out_dtype = np.dtype("float64")
         elif rhs is None:
             out_dtype = self.dtype
         else:
@@ -135,7 +136,6 @@ class NumericalColumn(column.ColumnBase):
         return libcudf.string_casting.int2ip(self)
 
     def as_string_column(self, dtype, **kwargs):
-        from cudf.core.column import as_column, string
 
         if len(self) > 0:
             return string._numeric_to_str_typecast_functions[
@@ -145,7 +145,16 @@ class NumericalColumn(column.ColumnBase):
             return as_column([], dtype="object")
 
     def as_datetime_column(self, dtype, **kwargs):
-        from cudf.core.column import build_column
+
+        return build_column(
+            data=self.astype("int64").base_data,
+            dtype=dtype,
+            mask=self.base_mask,
+            offset=self.offset,
+            size=self.size,
+        )
+
+    def as_timedelta_column(self, dtype, **kwargs):
 
         return build_column(
             data=self.astype("int64").base_data,
@@ -160,6 +169,20 @@ class NumericalColumn(column.ColumnBase):
         if dtype == self.dtype:
             return self
         return libcudf.unary.cast(self, dtype)
+
+    @classmethod
+    def from_arrow(cls, array, dtype=None):
+        if dtype is None:
+            dtype = np.dtype(array.type.to_pandas_dtype())
+
+        pa_size, pa_offset, pamask, padata, _ = buffers_from_pyarrow(array)
+        return NumericalColumn(
+            data=padata,
+            mask=pamask,
+            dtype=dtype,
+            size=pa_size,
+            offset=pa_offset,
+        )
 
     def to_pandas(self, index=None, nullable_pd_dtype=False):
         if nullable_pd_dtype:
