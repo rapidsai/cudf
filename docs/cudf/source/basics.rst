@@ -15,7 +15,6 @@ The following table lists all of cudf types. For methods requiring dtype argumen
 
 +------------------------+------------+-------------------------------------------------------------------------------------+---------------------------------------------+
 | Kind of Data           | Data Type  | Scalar                                                                              | String Aliases                              |
-| (header rows optional) |            |                                                                                     |                                             |
 +========================+============+=====================================================================================+=============================================+
 | Integer                |            | `int <https://docs.python.org/3/library/functions.html#int>`_                       | ``'int8'``, ``'int16'``, ``'int32'``,       |
 |                        |            |                                                                                     | ``'int64'``, ``'uint8'``, ``'uint16'``,     |
