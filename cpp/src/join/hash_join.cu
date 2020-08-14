@@ -70,8 +70,8 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> get_empty_joined_table
                  });
   std::vector<size_type> non_common_indices = non_common_column_indices(
     common_columns_output_side == hash_join::common_columns_output_side::PROBE
-      ? probe.num_columns()
-      : build.num_columns(),
+      ? build.num_columns()
+      : probe.num_columns(),
     columns_to_exclude);
   std::unique_ptr<table> empty_probe = empty_like(probe);
   std::unique_ptr<table> empty_build = empty_like(build);
