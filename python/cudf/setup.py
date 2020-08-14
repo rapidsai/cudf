@@ -15,7 +15,7 @@ from setuptools.extension import Extension
 import versioneer
 
 
-def cuda_detect():
+def cuda_detect(cuda_home):
     """Attempt to detect the version of CUDA present in the operating system.
     On Windows and Linux, the CUDA library is installed by the NVIDIA
     driver package, and is typically found in the standard library path,
@@ -29,13 +29,11 @@ def cuda_detect():
     if system == "darwin":
         lib_filenames = [
             "libcuda.dylib",  # check library path first
-            os.path.join(CUDA_HOME, "/lib/libcuda.dylib"),
+            os.path.join(cuda_home, "lib/libcuda.dylib"),
         ]
     elif system == "linux":
         lib_filenames = [
-            "libcuda.so",  # check library path first
-            "/usr/lib64/nvidia/libcuda.so",  # Redhat/CentOS/Fedora
-            "/usr/lib/x86_64-linux-gnu/libcuda.so",  # Ubuntu
+            os.path.join(cuda_home, "lib64/libcudart.so"),
         ]
     elif system == "win32":
         lib_filenames = ["nvcuda.dll"]
@@ -58,22 +56,17 @@ def cuda_detect():
 
     # Get CUDA version
     try:
-        cuInit = libcuda.cuInit
-        flags = ctypes.c_uint(0)
-        ret = cuInit(flags)
-        if ret != 0:
-            return None
-
-        cuDriverGetVersion = libcuda.cuDriverGetVersion
+        cudaRuntimeGetVersion = libcuda.cudaRuntimeGetVersion
         version_int = ctypes.c_int(0)
-        ret = cuDriverGetVersion(ctypes.byref(version_int))
+        ret = cudaRuntimeGetVersion(ctypes.byref(version_int))
         if ret != 0:
             return None
 
         # Convert version integer to version string
         value = version_int.value
         return "%d.%d" % (value // 1000, (value % 1000) // 10)
-    except Exception:
+    except Exception as e:
+        print(e.__str__())
         return None
 
 
@@ -100,7 +93,7 @@ cuda_include_dir = os.path.join(CUDA_HOME, "include")
 
 CUDF_ROOT = os.environ.get("CUDF_ROOT", "../../cpp/build/")
 
-print("CUDA_VERSION", cuda_detect())
+print("CUDA_VERSION", cuda_detect(CUDA_HOME))
 print("CUDA_HOME", CUDA_HOME)
 
 try:
@@ -160,7 +153,7 @@ setup(
         compiler_directives=dict(
             profile=False, language_level=3, embedsignature=True
         ),
-        compile_time_env={"CUDA_VERSION": cuda_detect()},
+        compile_time_env={"CUDA_VERSION": cuda_detect(CUDA_HOME)},
     ),
     packages=find_packages(include=["cudf", "cudf.*"]),
     package_data=dict.fromkeys(
