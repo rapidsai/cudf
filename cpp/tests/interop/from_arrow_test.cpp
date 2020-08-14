@@ -53,6 +53,12 @@ std::unique_ptr<cudf::table> get_cudf_table()
 struct FromArrowTest : public cudf::test::BaseFixture {
 };
 
+template <typename T>
+struct FromArrowTestDurationsTest : public cudf::test::BaseFixture {
+};
+
+TYPED_TEST_CASE(FromArrowTestDurationsTest, cudf::test::DurationTypes);
+
 TEST_F(FromArrowTest, EmptyTable)
 {
   auto tables = get_tables(0);
@@ -62,7 +68,7 @@ TEST_F(FromArrowTest, EmptyTable)
 
   auto got_cudf_table = cudf::from_arrow(*arrow_table);
 
-  cudf::test::expect_tables_equal(expected_cudf_table, got_cudf_table->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_cudf_table, got_cudf_table->view());
 }
 
 TEST_F(FromArrowTest, DateTimeTable)
@@ -86,7 +92,40 @@ TEST_F(FromArrowTest, DateTimeTable)
 
   auto got_cudf_table = cudf::from_arrow(*arrow_table);
 
-  cudf::test::expect_tables_equal(expected_table_view, got_cudf_table->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table_view, got_cudf_table->view());
+}
+
+TYPED_TEST(FromArrowTestDurationsTest, DurationTable)
+{
+  using T = TypeParam;
+
+  auto data = {T{1}, T{2}, T{3}, T{4}, T{5}, T{6}};
+  auto col  = cudf::test::fixed_width_column_wrapper<T>(data);
+
+  std::shared_ptr<arrow::Array> arr;
+  cudf::table_view expected_table_view({col});
+  arrow::TimeUnit::type arrow_unit;
+
+  switch (cudf::type_to_id<TypeParam>()) {
+    case cudf::type_id::DURATION_SECONDS: arrow_unit = arrow::TimeUnit::type::SECOND; break;
+    case cudf::type_id::DURATION_MILLISECONDS: arrow_unit = arrow::TimeUnit::type::MILLI; break;
+    case cudf::type_id::DURATION_MICROSECONDS: arrow_unit = arrow::TimeUnit::type::MICRO; break;
+    case cudf::type_id::DURATION_NANOSECONDS: arrow_unit = arrow::TimeUnit::type::NANO; break;
+    case cudf::type_id::DURATION_DAYS: return;
+    default: CUDF_FAIL("Unsupported duration unit in arrow");
+  }
+  arrow::DurationBuilder duration_builder(duration(arrow_unit), arrow::default_memory_pool());
+  duration_builder.AppendValues(std::vector<int64_t>{1, 2, 3, 4, 5, 6});
+  CUDF_EXPECTS(duration_builder.Finish(&arr).ok(), "Failed to build array");
+
+  std::vector<std::shared_ptr<arrow::Field>> schema_vector({arrow::field("a", arr->type())});
+  auto schema = std::make_shared<arrow::Schema>(schema_vector);
+
+  auto arrow_table = arrow::Table::Make(schema, {arr});
+
+  auto got_cudf_table = cudf::from_arrow(*arrow_table);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table_view, got_cudf_table->view());
 }
 
 TEST_F(FromArrowTest, NestedList)
@@ -108,7 +147,7 @@ TEST_F(FromArrowTest, NestedList)
   auto arrow_table = arrow::Table::Make(schema, {nested_list_arr});
 
   auto got_cudf_table = cudf::from_arrow(*arrow_table);
-  cudf::test::expect_tables_equal(expected_table_view, got_cudf_table->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table_view, got_cudf_table->view());
 }
 
 TEST_F(FromArrowTest, DictionaryIndicesType)
@@ -137,7 +176,7 @@ TEST_F(FromArrowTest, DictionaryIndicesType)
 
   auto got_cudf_table = cudf::from_arrow(*arrow_table);
 
-  cudf::test::expect_tables_equal(expected_table.view(), got_cudf_table->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table.view(), got_cudf_table->view());
 }
 
 TEST_F(FromArrowTest, ChunkedArray)
@@ -188,7 +227,7 @@ TEST_F(FromArrowTest, ChunkedArray)
 
   auto got_cudf_table = cudf::from_arrow(*arrow_table);
 
-  cudf::test::expect_tables_equal(expected_cudf_table->view(), got_cudf_table->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_cudf_table->view(), got_cudf_table->view());
 }
 
 struct FromArrowTestSlice
@@ -209,7 +248,7 @@ TEST_P(FromArrowTestSlice, SliceTest)
   auto sliced_arrow_table = arrow_table->Slice(start, end - start);
   auto got_cudf_table     = cudf::from_arrow(*sliced_arrow_table);
 
-  cudf::test::expect_tables_equal(expected_cudf_table.view(), got_cudf_table->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_cudf_table.view(), got_cudf_table->view());
 }
 
 INSTANTIATE_TEST_CASE_P(FromArrowTest,

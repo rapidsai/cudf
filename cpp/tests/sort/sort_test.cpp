@@ -41,13 +41,13 @@ void run_sort_test(table_view input,
   auto got_sorted_table      = sort(input, column_order, null_precedence);
   auto expected_sorted_table = gather(input, expected_sorted_indices);
 
-  expect_tables_equal(expected_sorted_table->view(), got_sorted_table->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_sorted_table->view(), got_sorted_table->view());
 
   // Sorted by key
   auto got_sort_by_key_table      = sort_by_key(input, input, column_order, null_precedence);
   auto expected_sort_by_key_table = gather(input, expected_sorted_indices);
 
-  expect_tables_equal(expected_sort_by_key_table->view(), got_sort_by_key_table->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_sort_by_key_table->view(), got_sort_by_key_table->view());
 }
 
 template <typename T>
@@ -73,7 +73,7 @@ TYPED_TEST(Sort, WithNullMax)
   auto got = sorted_order(input, column_order, null_precedence);
 
   if (!std::is_same<T, bool>::value) {
-    expect_columns_equal(expected, got->view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 
     // Run test for sort and sort_by_key
     run_sort_test(input, expected, column_order, null_precedence);
@@ -111,7 +111,7 @@ TYPED_TEST(Sort, WithNullMin)
   auto got = sorted_order(input, column_order);
 
   if (!std::is_same<T, bool>::value) {
-    cudf::test::expect_columns_equal(expected, got->view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 
     // Run test for sort and sort_by_key
     run_sort_test(input, expected, column_order);
@@ -150,7 +150,7 @@ TYPED_TEST(Sort, WithMixedNullOrder)
   auto got = sorted_order(input, column_order, null_precedence);
 
   if (!std::is_same<T, bool>::value) {
-    cudf::test::expect_columns_equal(expected, got->view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
   } else {
     // for bools only validate that the null element landed at the front, since
     // the rest of the values are equivalent and yields random sorted order.
@@ -186,7 +186,7 @@ TYPED_TEST(Sort, WithAllValid)
   // Skip validating bools order. Valid true bools are all
   // equivalent, and yield random order after thrust::sort
   if (!std::is_same<T, bool>::value) {
-    cudf::test::expect_columns_equal(expected, got->view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 
     // Run test for sort and sort_by_key
     run_sort_test(input, expected, column_order);
@@ -211,7 +211,7 @@ TYPED_TEST(Sort, Stable)
                                  {order::ASCENDING, order::ASCENDING},
                                  {null_order::AFTER, null_order::BEFORE});
 
-  expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 TYPED_TEST(Sort, MisMatchInColumnOrderSize)
@@ -261,7 +261,7 @@ TYPED_TEST(Sort, ZeroSizedColumns)
 
   auto got = sorted_order(input, column_order);
 
-  expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 
   // Run test for sort and sort_by_key
   run_sort_test(input, expected, column_order);
@@ -318,8 +318,8 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointSortedOrderGather)
   auto const indices = cudf::sorted_order(input_table);
   auto const sorted  = cudf::gather(input_table, indices->view());
 
-  cudf::test::expect_columns_equal(index_col, indices->view());
-  cudf::test::expect_tables_equal(sorted_table, sorted->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(index_col, indices->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(sorted_table, sorted->view());
 }
 
 }  // namespace test

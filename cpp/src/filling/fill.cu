@@ -115,6 +115,16 @@ std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf:
 }
 
 template <>
+std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf::struct_view>(
+  cudf::size_type begin,
+  cudf::size_type end,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
+{
+  CUDF_FAIL("struct_view not supported yet");
+}
+
+template <>
 std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf::string_view>(
   cudf::size_type begin,
   cudf::size_type end,

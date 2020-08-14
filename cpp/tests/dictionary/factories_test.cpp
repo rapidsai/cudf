@@ -33,8 +33,8 @@ TEST_F(DictionaryFactoriesTest, CreateFromColumnViews)
   auto dictionary = cudf::make_dictionary_column(keys, values);
   cudf::dictionary_column_view view(dictionary->view());
 
-  cudf::test::expect_columns_equal(view.keys(), keys);
-  cudf::test::expect_columns_equal(view.indices(), values);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.keys(), keys);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.indices(), values);
 }
 
 TEST_F(DictionaryFactoriesTest, ColumnViewsWithNulls)
@@ -48,9 +48,9 @@ TEST_F(DictionaryFactoriesTest, ColumnViewsWithNulls)
   auto dictionary = cudf::make_dictionary_column(keys, indices);
   cudf::dictionary_column_view view(dictionary->view());
 
-  cudf::test::expect_columns_equal(view.keys(), keys);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.keys(), keys);
   cudf::test::fixed_width_column_wrapper<int32_t> values_expected(h_values.begin(), h_values.end());
-  cudf::test::expect_columns_equal(view.indices(), values_expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.indices(), values_expected);
 }
 
 TEST_F(DictionaryFactoriesTest, CreateFromColumns)
@@ -66,8 +66,8 @@ TEST_F(DictionaryFactoriesTest, CreateFromColumns)
 
   cudf::test::strings_column_wrapper keys_expected(h_keys.begin(), h_keys.end());
   cudf::test::fixed_width_column_wrapper<int32_t> values_expected(h_values.begin(), h_values.end());
-  cudf::test::expect_columns_equal(view.keys(), keys_expected);
-  cudf::test::expect_columns_equal(view.indices(), values_expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.keys(), keys_expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.indices(), values_expected);
 }
 
 TEST_F(DictionaryFactoriesTest, ColumnsWithNulls)
@@ -86,8 +86,8 @@ TEST_F(DictionaryFactoriesTest, ColumnsWithNulls)
 
   cudf::test::fixed_width_column_wrapper<int64_t> keys_expected(h_keys.begin(), h_keys.end());
   cudf::test::fixed_width_column_wrapper<int32_t> values_expected(h_values.begin(), h_values.end());
-  cudf::test::expect_columns_equal(view.keys(), keys_expected);
-  cudf::test::expect_columns_equal(view.indices(), values_expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.keys(), keys_expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.indices(), values_expected);
 }
 
 TEST_F(DictionaryFactoriesTest, KeysWithNulls)

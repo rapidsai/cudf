@@ -567,6 +567,9 @@ add_library(cudf
             src/lists/lists_column_view.cu
             src/lists/copying/concatenate.cu
             src/lists/copying/gather.cu
+            src/lists/copying/copying.cu
+            src/structs/structs_column_view.cu
+            src/structs/structs_column_factories.cu
             src/text/detokenize.cu
             src/text/edit_distance.cu
             src/text/generate_ngrams.cu
@@ -747,11 +750,9 @@ add_dependencies(cudf stringify_run)
 option(USE_NVTX "Build with NVTX support" ON)
 if(USE_NVTX)
     message(STATUS "Using Nvidia Tools Extension")
-    # The `USE_NVTX` macro is deprecated
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_NVTX")
 else()
     # Makes NVTX APIs no-ops
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDISABLE_NVTX")
+    add_compile_definitions(NVTX_DISABLE)
 endif(USE_NVTX)
 
 option(HT_DEFAULT_ALLOCATOR "Use the default allocator for hash tables" ON)

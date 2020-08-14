@@ -55,19 +55,19 @@ void expect_tables_equivalent(cudf::table_view lhs, cudf::table_view rhs);
 
 // Macros for showing line of failure.
 #define CUDF_TEST_EXPECT_TABLE_PROPERTIES_EQUAL(lhs, rhs) \
-  {                                                       \
+  do {                                                    \
     SCOPED_TRACE(" <--  line of failure\n");              \
     cudf::test::expect_table_properties_equal(lhs, rhs);  \
-  }
+  } while (0)
 
 #define CUDF_TEST_EXPECT_TABLES_EQUAL(lhs, rhs) \
-  {                                             \
+  do {                                          \
     SCOPED_TRACE(" <--  line of failure\n");    \
     cudf::test::expect_tables_equal(lhs, rhs);  \
-  }
+  } while (0)
 
 #define CUDF_TEST_EXPECT_TABLES_EQUIVALENT(lhs, rhs) \
-  {                                                  \
+  do {                                               \
     SCOPED_TRACE(" <--  line of failure\n");         \
     cudf::test::expect_tables_equivalent(lhs, rhs);  \
-  }
+  } while (0)
