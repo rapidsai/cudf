@@ -77,7 +77,6 @@ def cuda_detect():
         return None
 
 
-print("CUDA_VERSION", cuda_detect())
 install_requires = ["numba", "cython"]
 
 cython_files = ["cudf/**/*.pyx"]
@@ -101,6 +100,7 @@ cuda_include_dir = os.path.join(CUDA_HOME, "include")
 
 CUDF_ROOT = os.environ.get("CUDF_ROOT", "../../cpp/build/")
 
+print("CUDA_VERSION", cuda_detect())
 try:
     nthreads = int(os.environ.get("PARALLEL_LEVEL", "0") or "0")
 except Exception:
