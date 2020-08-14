@@ -217,10 +217,12 @@
 - PR #5377 Handle array of cupy scalars in to_column
 - PR #5326 Fix `DataFrame.__init__` for list of scalar inputs and related dask issue
 - PR #5383 Fix cython `type_id` enum mismatch
+- PR #5982 Fix gcc-9 compile errors under CUDA 11
 - PR #5382 Fix CategoricalDtype equality comparisons
 - PR #5385 Fix index issues in `DataFrame.from_gpu_matrix`
 - PR #5390 Fix Java data type IDs and string interleave test
 - PR #5392 Fix documentation links
+- PR #5978 Fix option to turn off NVTX
 - PR #5410 Fix compile warning by disallowing bool column type for slice_strings
 - PR #5404 Fix issue with column creation when chunked arrays are passed
 - PR #5409 Use the correct memory resource when creating empty null masks
