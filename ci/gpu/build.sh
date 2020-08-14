@@ -72,7 +72,7 @@ conda install "rmm=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
 
 # https://docs.rapids.ai/maintainers/depmgmt/
 conda remove --force rapids-build-env
-conda install -y -c numba/label/dev "numba=0.51.0"
+conda install -y -c numba/label/dev "numba==0.51.0"
 
 # Install the master version of dask, distributed, and streamz
 logger "pip install git+https://github.com/dask/distributed.git --upgrade --no-deps"
