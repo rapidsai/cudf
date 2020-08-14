@@ -23,6 +23,17 @@ def validate_setup(check_dask=True):
         runtimeGetVersion,
     )
 
+    def _try_get_old_or_new_symbols():
+        try:
+            # CUDA 10.2+ symbols
+            return [
+                cudaError.cudaErrorDeviceUninitialized,
+                cudaError.cudaErrorTimeout,
+            ]
+        except AttributeError:
+            # CUDA 10.1 symbols
+            return [cudaError.cudaErrorDeviceUninitilialized]
+
     notify_caller_errors = {
         cudaError.cudaErrorInitializationError,
         cudaError.cudaErrorInsufficientDriver,
@@ -30,7 +41,6 @@ def validate_setup(check_dask=True):
         cudaError.cudaErrorInvalidDevice,
         cudaError.cudaErrorStartupFailure,
         cudaError.cudaErrorInvalidKernelImage,
-        cudaError.cudaErrorDeviceUninitialized,
         cudaError.cudaErrorAlreadyAcquired,
         cudaError.cudaErrorOperatingSystem,
         cudaError.cudaErrorNotPermitted,
@@ -38,7 +48,7 @@ def validate_setup(check_dask=True):
         cudaError.cudaErrorSystemNotReady,
         cudaError.cudaErrorSystemDriverMismatch,
         cudaError.cudaErrorCompatNotSupportedOnDevice,
-        cudaError.cudaErrorTimeout,
+        *_try_get_old_or_new_symbols(),
         cudaError.cudaErrorUnknown,
         cudaError.cudaErrorApiFailureBase,
     }
