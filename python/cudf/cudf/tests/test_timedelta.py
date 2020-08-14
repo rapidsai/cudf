@@ -818,8 +818,18 @@ def test_timedelta_fillna(data, dtype, fill_value):
     sr = cudf.Series(data, dtype=dtype)
     psr = sr.to_pandas()
 
+    expected = psr.dropna()
+    actual = sr.dropna()
+
+    assert_eq(expected, actual)
+
     expected = psr.fillna(fill_value)
     actual = sr.fillna(fill_value)
+
+    assert_eq(expected, actual)
+
+    expected = expected.dropna()
+    actual = actual.dropna()
 
     assert_eq(expected, actual)
 
