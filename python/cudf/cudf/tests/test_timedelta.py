@@ -811,9 +811,6 @@ def test_timedelta_fillna(data, dtype, fill_value):
 
     expected = psr.fillna(fill_value)
     actual = sr.fillna(fill_value)
-    import pdb
-
-    pdb.set_trace()
     assert_eq(expected, actual)
 
 
