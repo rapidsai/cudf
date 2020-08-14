@@ -1,8 +1,0 @@
-Kind of Data,Nullable,Data Type,Scalar,String Aliases
-Integer,|:white_check_mark:|,,`int <https://docs.python.org/3/library/functions.html#int>`_,"``'int8'``, ``'int16'``, ``'int32'``, ``'int64'``, ``'uint8'``, ``'uint16'``, ``'uint32'``, ``'uint64'`` "
-Float,|:white_check_mark:|,,`float <https://docs.python.org/3/library/functions.html#float>`_,"``'float32'``, ``'float64'`` "
-Strings,|:white_check_mark:|,, `str <https://docs.python.org/3/library/stdtypes.html#str>`_ ,"``'string'``, ``'object'`` "
-Datetime,|:white_check_mark:|,,`numpy.datetime64 <https://numpy.org/doc/stable/reference/arrays.datetime.html>`_ ,"``'datetime64[s]'``, ``'datetime64[ms]'``, ``'datetime64[us]'``, ``'datetime64[ns]'``"
-Timedelta(duration type),|:white_check_mark:|,,`numpy.timedelta64 <https://numpy.org/doc/stable/reference/arrays.datetime.html>`_ ,"``'timedelta64[s]'``, ``'timedelta64[ms]'``, ``'timedelta64[us]'``, ``'timedelta64[ns]'``"
-Categorical,|:white_check_mark:|,CategoricalDtype,(none),``'category'``
-Boolean,|:white_check_mark:|,, `bool <https://docs.python.org/3/library/functions.html#bool>`_ ,``'bool'``

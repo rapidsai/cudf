@@ -22,8 +22,6 @@
 import os
 import sys
 
-import cudf
-
 sys.path.insert(0, os.path.abspath("../.."))
 
 # -- General configuration ------------------------------------------------
@@ -46,10 +44,8 @@ extensions = [
     "IPython.sphinxext.ipython_directive",
     "nbsphinx",
     "recommonmark",
-    "sphinxemoji.sphinxemoji",
 ]
 
-sphinxemoji_style = "twemoji"
 
 copybutton_prompt_text = ">>> "
 
