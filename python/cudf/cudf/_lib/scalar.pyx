@@ -16,7 +16,9 @@ from libc.stdint cimport (
 from libcpp.memory cimport unique_ptr
 from libcpp cimport bool
 
-from cudf._lib.types import np_to_cudf_types, cudf_to_np_types
+import cudf
+from cudf._lib.types import cudf_to_np_types, duration_unit_map
+from cudf._lib.types import datetime_unit_map
 from cudf._lib.types cimport underlying_type_t_type_id
 from cudf._lib.move cimport move
 
@@ -26,10 +28,17 @@ from cudf._lib.cpp.wrappers.timestamps cimport (
     timestamp_us,
     timestamp_ns
 )
+from cudf._lib.cpp.wrappers.durations cimport(
+    duration_s,
+    duration_ms,
+    duration_us,
+    duration_ns
+)
 from cudf._lib.cpp.scalar.scalar cimport (
     scalar,
     numeric_scalar,
     timestamp_scalar,
+    duration_scalar,
     string_scalar
 )
 cimport cudf._lib.cpp.types as libcudf_types
@@ -51,9 +60,9 @@ cdef class Scalar:
         dtype : dtype
             A NumPy dtype.
         """
-        from cudf.utils.dtypes import to_cudf_compatible_scalar
 
-        value = to_cudf_compatible_scalar(value, dtype=dtype)
+        value = cudf.utils.dtypes.to_cudf_compatible_scalar(value, dtype=dtype)
+
         valid = value is not None
 
         if dtype is None:
@@ -74,11 +83,14 @@ cdef class Scalar:
             _set_datetime64_from_np_scalar(
                 self.c_value, value, dtype, valid
             )
+        elif pd.api.types.is_timedelta64_dtype(dtype):
+            _set_timedelta64_from_np_scalar(
+                self.c_value, value, dtype, valid
+            )
         else:
             raise ValueError(
-                "Cannot convert value of type {} to cudf scalar".format(
-                    type(value).__name__
-                )
+                f"Cannot convert value of type "
+                f"{type(value).__name__} to cudf scalar"
             )
 
     @property
@@ -101,10 +113,18 @@ cdef class Scalar:
             return _get_np_scalar_from_numeric(self.c_value)
         elif pd.api.types.is_datetime64_dtype(self.dtype):
             return _get_np_scalar_from_timestamp64(self.c_value)
+        elif pd.api.types.is_timedelta64_dtype(self.dtype):
+            return _get_np_scalar_from_timedelta64(self.c_value)
         else:
             raise ValueError(
                 "Could not convert cudf::scalar to a Python value"
             )
+
+    cpdef bool is_valid(self):
+        """
+        Returns if the Scalar is valid or not(i.e., <NA>).
+        """
+        return self.c_value.get()[0].is_valid()
 
     def __repr__(self):
         if self.value is None:
@@ -128,8 +148,8 @@ cdef _set_string_from_np_string(unique_ptr[scalar]& s, value, bool valid=True):
 
 
 cdef _set_numeric_from_np_scalar(unique_ptr[scalar]& s,
-                                 value,
-                                 dtype,
+                                 object value,
+                                 object dtype,
                                  bool valid=True):
     value = value if valid else 0
     if dtype == "int8":
@@ -155,14 +175,16 @@ cdef _set_numeric_from_np_scalar(unique_ptr[scalar]& s,
     elif dtype == "bool":
         s.reset(new numeric_scalar[bool](<bool>value, valid))
     else:
-        raise ValueError("dtype not supported: {}".format(dtype))
+        raise ValueError(f"dtype not supported: {dtype}")
 
 
 cdef _set_datetime64_from_np_scalar(unique_ptr[scalar]& s,
-                                    value,
-                                    dtype,
+                                    object value,
+                                    object dtype,
                                     bool valid=True):
+
     value = value if valid else 0
+
     if dtype == "datetime64[s]":
         s.reset(
             new timestamp_scalar[timestamp_s](<int64_t>np.int64(value), valid)
@@ -180,8 +202,33 @@ cdef _set_datetime64_from_np_scalar(unique_ptr[scalar]& s,
             new timestamp_scalar[timestamp_ns](<int64_t>np.int64(value), valid)
         )
     else:
-        raise ValueError("dtype not supported: {}".format(dtype))
+        raise ValueError(f"dtype not supported: {dtype}")
 
+cdef _set_timedelta64_from_np_scalar(unique_ptr[scalar]& s,
+                                     object value,
+                                     object dtype,
+                                     bool valid=True):
+
+    value = value if valid else 0
+
+    if dtype == "timedelta64[s]":
+        s.reset(
+            new duration_scalar[duration_s](<int64_t>np.int64(value), valid)
+        )
+    elif dtype == "timedelta64[ms]":
+        s.reset(
+            new duration_scalar[duration_ms](<int64_t>np.int64(value), valid)
+        )
+    elif dtype == "timedelta64[us]":
+        s.reset(
+            new duration_scalar[duration_us](<int64_t>np.int64(value), valid)
+        )
+    elif dtype == "timedelta64[ns]":
+        s.reset(
+            new duration_scalar[duration_ns](<int64_t>np.int64(value), valid)
+        )
+    else:
+        raise ValueError(f"dtype not supported: {dtype}")
 
 cdef _get_py_string_from_string(unique_ptr[scalar]& s):
     if not s.get()[0].is_valid():
@@ -236,28 +283,69 @@ cdef _get_np_scalar_from_timestamp64(unique_ptr[scalar]& s):
             (
                 <timestamp_scalar[timestamp_ms]*> s_ptr
             )[0].ticks_since_epoch_64(),
-            "s"
+            datetime_unit_map[<underlying_type_t_type_id>(cdtype.id())]
         )
     elif cdtype.id() == libcudf_types.TIMESTAMP_MILLISECONDS:
         return np.datetime64(
             (
                 <timestamp_scalar[timestamp_ms]*> s_ptr
             )[0].ticks_since_epoch_64(),
-            "ms"
+            datetime_unit_map[<underlying_type_t_type_id>(cdtype.id())]
         )
     elif cdtype.id() == libcudf_types.TIMESTAMP_MICROSECONDS:
         return np.datetime64(
             (
                 <timestamp_scalar[timestamp_ms]*> s_ptr
             )[0].ticks_since_epoch_64(),
-            "us"
+            datetime_unit_map[<underlying_type_t_type_id>(cdtype.id())]
         )
     elif cdtype.id() == libcudf_types.TIMESTAMP_NANOSECONDS:
         return np.datetime64(
             (
                 <timestamp_scalar[timestamp_ms]*> s_ptr
             )[0].ticks_since_epoch_64(),
-            "ns"
+            datetime_unit_map[<underlying_type_t_type_id>(cdtype.id())]
+        )
+    else:
+        raise ValueError("Could not convert cudf::scalar to numpy scalar")
+
+
+cdef _get_np_scalar_from_timedelta64(unique_ptr[scalar]& s):
+
+    cdef scalar* s_ptr = s.get()
+
+    if not s_ptr[0].is_valid():
+        return None
+
+    cdef libcudf_types.data_type cdtype = s_ptr[0].type()
+
+    if cdtype.id() == libcudf_types.DURATION_SECONDS:
+        return np.timedelta64(
+            (
+                <duration_scalar[duration_s]*> s_ptr
+            )[0].ticks(),
+            duration_unit_map[<underlying_type_t_type_id>(cdtype.id())]
+        )
+    elif cdtype.id() == libcudf_types.DURATION_MILLISECONDS:
+        return np.timedelta64(
+            (
+                <duration_scalar[duration_ms]*> s_ptr
+            )[0].ticks(),
+            duration_unit_map[<underlying_type_t_type_id>(cdtype.id())]
+        )
+    elif cdtype.id() == libcudf_types.DURATION_MICROSECONDS:
+        return np.timedelta64(
+            (
+                <duration_scalar[duration_us]*> s_ptr
+            )[0].ticks(),
+            duration_unit_map[<underlying_type_t_type_id>(cdtype.id())]
+        )
+    elif cdtype.id() == libcudf_types.DURATION_NANOSECONDS:
+        return np.timedelta64(
+            (
+                <duration_scalar[duration_ns]*> s_ptr
+            )[0].ticks(),
+            duration_unit_map[<underlying_type_t_type_id>(cdtype.id())]
         )
     else:
         raise ValueError("Could not convert cudf::scalar to numpy scalar")
@@ -270,4 +358,4 @@ def as_scalar(val, dtype=None):
         else:
             return Scalar(val.value, dtype)
     else:
-        return Scalar(val, dtype)
+        return Scalar(value=val, dtype=dtype)

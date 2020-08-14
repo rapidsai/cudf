@@ -56,7 +56,7 @@ TYPED_TEST(SliceTest, NumericColumnsWithNulls)
   EXPECT_EQ(expected.size(), result.size());
 
   for (unsigned long index = 0; index < result.size(); index++) {
-    cudf::test::expect_columns_equal(expected[index], result[index]);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected[index], result[index]);
   }
 }
 
@@ -80,7 +80,7 @@ TYPED_TEST(SliceTest, NumericColumnsWithNullsAsColumn)
 
   for (unsigned long index = 0; index < result.size(); index++) {
     auto col = cudf::column(result[index]);
-    cudf::test::expect_columns_equal(expected[index], col);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected[index], col);
   }
 }
 
@@ -104,7 +104,7 @@ TEST_F(SliceStringTest, StringWithNulls)
   EXPECT_EQ(expected.size(), result.size());
 
   for (unsigned long index = 0; index < result.size(); index++) {
-    cudf::test::expect_columns_equal(expected[index], result[index]);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected[index], result[index]);
   }
 }
 
@@ -127,7 +127,7 @@ TEST_F(SliceStringTest, StringWithNullsAsColumn)
   for (unsigned long index = 0; index < result.size(); index++) {
     // this materializes a column to test slicing + materialization
     auto result_col = cudf::column(result[index]);
-    cudf::test::expect_columns_equal(expected[index], result_col);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected[index], result_col);
   }
 }
 
@@ -231,7 +231,7 @@ TYPED_TEST(SliceTableTest, NumericColumnsWithNulls)
   EXPECT_EQ(expected.size(), result.size());
 
   for (unsigned long index = 0; index < result.size(); index++) {
-    cudf::test::expect_tables_equal(expected[index], result[index]);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected[index], result[index]);
   }
 }
 
@@ -263,7 +263,7 @@ TEST_F(SliceStringTableTest, StringWithNulls)
   EXPECT_EQ(expected.size(), result.size());
 
   for (unsigned long index = 0; index < result.size(); index++) {
-    cudf::test::expect_table_properties_equal(expected[index], result[index]);
+    CUDF_TEST_EXPECT_TABLE_PROPERTIES_EQUAL(expected[index], result[index]);
   }
 }
 
@@ -359,5 +359,5 @@ TEST_F(SliceTableCornerCases, MiscOffset)
   std::vector<cudf::column_view> result = cudf::slice(col2, indices);
   cudf::column result_column(result[0]);
 
-  cudf::test::expect_columns_equal(col3, result_column);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(col3, result_column);
 }

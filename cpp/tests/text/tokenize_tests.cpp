@@ -48,15 +48,15 @@ TEST_F(TextTokenizeTest, Tokenize)
     "the", "cat", "chased", "the",  "mouse", "the", "mousé", "ate", "the",    "cheese"};
 
   auto results = nvtext::tokenize(strings_view, cudf::string_scalar(" "));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   results = nvtext::tokenize(strings_view);
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   cudf::test::fixed_width_column_wrapper<int32_t> expected_counts{6, 5, 5, 0, 0, 5};
   results = nvtext::count_tokens(strings_view, cudf::string_scalar(": #"));
-  cudf::test::expect_columns_equal(*results, expected_counts);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_counts);
   results = nvtext::count_tokens(strings_view);
-  cudf::test::expect_columns_equal(*results, expected_counts);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_counts);
 }
 
 TEST_F(TextTokenizeTest, TokenizeMulti)
@@ -81,10 +81,10 @@ TEST_F(TextTokenizeTest, TokenizeMulti)
 
   cudf::test::strings_column_wrapper expected{
     "fox jumped ", "dog", "dog chased  ", "cat", "cat chased ", "mouse ", "mousé ate ", "cheese"};
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   cudf::test::fixed_width_column_wrapper<int32_t> expected_counts{2, 2, 2, 0, 0, 0, 2};
   results = nvtext::count_tokens(strings_view, delimiters_view);
-  cudf::test::expect_columns_equal(*results, expected_counts);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_counts);
 }
 
 TEST_F(TextTokenizeTest, TokenizeErrorTest)
@@ -119,7 +119,7 @@ TEST_F(TextTokenizeTest, CharacterTokenize)
                                               "e", " ", "c", "h", "e", "e", "s", "e"};
 
   auto results = nvtext::character_tokenize(cudf::strings_column_view(strings));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(TextTokenizeTest, TokenizeEmptyTest)
@@ -138,9 +138,9 @@ TEST_F(TextTokenizeTest, TokenizeEmptyTest)
   results = nvtext::count_tokens(cudf::strings_column_view(strings->view()));
   EXPECT_EQ(results->size(), 0);
   results = nvtext::count_tokens(cudf::strings_column_view(all_empty));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   results = nvtext::count_tokens(cudf::strings_column_view(all_null));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   results = nvtext::character_tokenize(cudf::strings_column_view(strings->view()));
   EXPECT_EQ(results->size(), 0);
   results = nvtext::character_tokenize(cudf::strings_column_view(all_empty));
@@ -163,7 +163,7 @@ TEST_F(TextTokenizeTest, Detokenize)
                                                 "the dog chased the cat",
                                                 "the cat chased the mouse",
                                                 "the mousé ate cheese"};
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     cudf::test::fixed_width_column_wrapper<int16_t> rows{0, 0, 0, 0, 0, 0, 1, 1, 1, 1,
@@ -174,7 +174,7 @@ TEST_F(TextTokenizeTest, Detokenize)
                                                 "the_dog_chased_the_cat",
                                                 "the_cat_chased_the_mouse",
                                                 "the_mousé_ate"};
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
 

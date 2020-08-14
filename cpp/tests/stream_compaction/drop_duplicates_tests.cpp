@@ -282,7 +282,7 @@ TEST_F(DropDuplicate, NonNullTable)
 
   auto got_first = drop_duplicates(input, keys, cudf::duplicate_keep_option::KEEP_FIRST);
 
-  cudf::test::expect_tables_equal(expected_first, got_first->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_first, got_first->view());
 
   // keep last of duplicate
   cudf::test::fixed_width_column_wrapper<int32_t> exp_col1_last{{5, 5, 4, 3, 8}};
@@ -294,7 +294,7 @@ TEST_F(DropDuplicate, NonNullTable)
 
   auto got_last = drop_duplicates(input, keys, cudf::duplicate_keep_option::KEEP_LAST);
 
-  cudf::test::expect_tables_equal(expected_last, got_last->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_last, got_last->view());
 
   // Keep unique
   cudf::test::fixed_width_column_wrapper<int32_t> exp_col1_unique{{5, 5, 3, 8}};
@@ -306,7 +306,7 @@ TEST_F(DropDuplicate, NonNullTable)
 
   auto got_unique = drop_duplicates(input, keys, cudf::duplicate_keep_option::KEEP_NONE);
 
-  cudf::test::expect_tables_equal(expected_unique, got_unique->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_unique, got_unique->view());
 }
 
 TEST_F(DropDuplicate, WithNull)
@@ -323,7 +323,7 @@ TEST_F(DropDuplicate, WithNull)
   auto got_first =
     drop_duplicates(input, keys, cudf::duplicate_keep_option::KEEP_FIRST, null_equality::EQUAL);
 
-  cudf::test::expect_tables_equal(expected_first, got_first->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_first, got_first->view());
 
   // Keep last of duplicate
   cudf::test::fixed_width_column_wrapper<int32_t> exp_col_last{{3, 1, 5, 8}, {1, 1, 1, 1}};
@@ -331,7 +331,7 @@ TEST_F(DropDuplicate, WithNull)
   cudf::table_view expected_last{{exp_col_last, exp_key_col_last}};
   auto got_last = drop_duplicates(input, keys, cudf::duplicate_keep_option::KEEP_LAST);
 
-  cudf::test::expect_tables_equal(expected_last, got_last->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_last, got_last->view());
 
   // Keep unique of duplicate
   cudf::test::fixed_width_column_wrapper<int32_t> exp_col_unique{{5, 8}, {1, 1}};
@@ -339,7 +339,7 @@ TEST_F(DropDuplicate, WithNull)
   cudf::table_view expected_unique{{exp_col_unique, exp_key_col_unique}};
   auto got_unique = drop_duplicates(input, keys, cudf::duplicate_keep_option::KEEP_NONE);
 
-  cudf::test::expect_tables_equal(expected_unique, got_unique->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_unique, got_unique->view());
 }
 
 TEST_F(DropDuplicate, StringKeyColumn)
@@ -356,7 +356,7 @@ TEST_F(DropDuplicate, StringKeyColumn)
 
   auto got_last = drop_duplicates(input, keys, cudf::duplicate_keep_option::KEEP_LAST);
 
-  cudf::test::expect_tables_equal(expected_last, got_last->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_last, got_last->view());
 }
 
 TEST_F(DropDuplicate, EmptyInputTable)
@@ -368,7 +368,7 @@ TEST_F(DropDuplicate, EmptyInputTable)
   auto got =
     drop_duplicates(input, keys, cudf::duplicate_keep_option::KEEP_FIRST, null_equality::EQUAL);
 
-  cudf::test::expect_tables_equal(input, got->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(input, got->view());
 }
 
 TEST_F(DropDuplicate, NoColumnInputTable)
@@ -379,7 +379,7 @@ TEST_F(DropDuplicate, NoColumnInputTable)
   auto got =
     drop_duplicates(input, keys, cudf::duplicate_keep_option::KEEP_FIRST, null_equality::EQUAL);
 
-  cudf::test::expect_tables_equal(input, got->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(input, got->view());
 }
 
 TEST_F(DropDuplicate, EmptyKeys)
@@ -392,5 +392,5 @@ TEST_F(DropDuplicate, EmptyKeys)
   auto got =
     drop_duplicates(input, keys, cudf::duplicate_keep_option::KEEP_FIRST, null_equality::EQUAL);
 
-  cudf::test::expect_tables_equal(cudf::table_view{{empty_col}}, got->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(cudf::table_view{{empty_col}}, got->view());
 }

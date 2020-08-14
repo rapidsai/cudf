@@ -52,7 +52,7 @@ TEST_F(TextStemmerTest, PorterStemmer)
   cudf::test::fixed_width_column_wrapper<int32_t> expected(
     {3, 0, 2, 1, 1, 0, 1, 0, 0, 0, 1, 1, 2, 2}, validity);
   auto const results = nvtext::porter_stemmer_measure(cudf::strings_column_view(strings));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(TextStemmerTest, IsLetterIndex)
@@ -80,37 +80,37 @@ TEST_F(TextStemmerTest, IsLetterIndex)
     auto const results = nvtext::is_letter(sv, nvtext::letter_type::VOWEL, 0);
     cudf::test::fixed_width_column_wrapper<bool> expected(
       {1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1}, validity);
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     auto const results = nvtext::is_letter(sv, nvtext::letter_type::CONSONANT, 0);
     cudf::test::fixed_width_column_wrapper<bool> expected(
       {0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 0, 0, 1, 0}, validity);
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     auto const results = nvtext::is_letter(sv, nvtext::letter_type::VOWEL, 5);
     cudf::test::fixed_width_column_wrapper<bool> expected(
       {1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1}, validity);
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     auto const results = nvtext::is_letter(sv, nvtext::letter_type::CONSONANT, 5);
     cudf::test::fixed_width_column_wrapper<bool> expected(
       {0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0}, validity);
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     auto const results = nvtext::is_letter(sv, nvtext::letter_type::VOWEL, -2);
     cudf::test::fixed_width_column_wrapper<bool> expected(
       {1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0}, validity);
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     auto const results = nvtext::is_letter(sv, nvtext::letter_type::CONSONANT, -2);
     cudf::test::fixed_width_column_wrapper<bool> expected(
       {0, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1}, validity);
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
 
@@ -141,13 +141,13 @@ TEST_F(TextStemmerTest, IsLetterIndices)
     auto const results = nvtext::is_letter(sv, nvtext::letter_type::VOWEL, indices);
     cudf::test::fixed_width_column_wrapper<bool> expected(
       {1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0}, validity);
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     auto const results = nvtext::is_letter(sv, nvtext::letter_type::CONSONANT, indices);
     cudf::test::fixed_width_column_wrapper<bool> expected(
       {0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 1, 0, 1}, validity);
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
 
