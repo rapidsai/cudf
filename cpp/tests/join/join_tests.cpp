@@ -743,6 +743,34 @@ TEST_F(JoinTest, EmptyLeftTableLeftJoin)
   CUDF_TEST_EXPECT_TABLES_EQUAL(empty0, *result);
 }
 
+TEST_F(JoinTest, EmptyLeftTableLeftJoinNonAlignedCommon)
+{
+  column_wrapper<int32_t> col0_0;
+
+  column_wrapper<int32_t> col1_0{{2, 2, 0, 4, 3}};
+  column_wrapper<int32_t> col1_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+
+  CVector cols0, cols1;
+  cols0.emplace_back(col0_0.release());
+  cols1.emplace_back(col1_0.release());
+  cols1.emplace_back(col1_1.release());
+
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
+
+  column_wrapper<int32_t> col_gold_0;
+  column_wrapper<int32_t> col_gold_1;
+
+  CVector cols_gold;
+  cols_gold.emplace_back(col_gold_0.release());
+  cols_gold.emplace_back(col_gold_1.release());
+
+  Table gold(std::move(cols_gold));
+
+  auto result = cudf::left_join(t0, t1, {0}, {1}, {{0, 1}});
+  CUDF_TEST_EXPECT_TABLES_EQUAL(gold, *result);
+}
+
 TEST_F(JoinTest, EmptyLeftTableFullJoin)
 {
   column_wrapper<int32_t> col0_0;
@@ -784,6 +812,34 @@ TEST_F(JoinTest, EmptyRightTableInnerJoin)
 
   auto result = cudf::inner_join(t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1, 1}});
   CUDF_TEST_EXPECT_TABLES_EQUAL(empty1, *result);
+}
+
+TEST_F(JoinTest, EmptyRightTableInnerJoinNonAlignedCommon)
+{
+  column_wrapper<int32_t> col0_0{{2, 2, 0, 4, 3}};
+  column_wrapper<int32_t> col0_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+
+  column_wrapper<int32_t> col1_0;
+
+  CVector cols0, cols1;
+  cols0.emplace_back(col0_0.release());
+  cols0.emplace_back(col0_1.release());
+  cols1.emplace_back(col1_0.release());
+
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
+
+  column_wrapper<int32_t> col_gold_0;
+  column_wrapper<int32_t> col_gold_1;
+
+  CVector cols_gold;
+  cols_gold.emplace_back(col_gold_0.release());
+  cols_gold.emplace_back(col_gold_1.release());
+
+  Table gold(std::move(cols_gold));
+
+  auto result = cudf::inner_join(t0, t1, {1}, {0}, {{1, 0}});
+  CUDF_TEST_EXPECT_TABLES_EQUAL(gold, *result);
 }
 
 TEST_F(JoinTest, EmptyRightTableLeftJoin)
