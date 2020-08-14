@@ -26,6 +26,7 @@ def cuda_detect(cuda_home):
     """
 
     system = sys.platform
+    print("system", system)
     if system == "darwin":
         lib_filenames = [
             "libcuda.dylib",  # check library path first
@@ -45,12 +46,14 @@ def cuda_detect(cuda_home):
     else:
         dll = ctypes.cdll
     libcuda = None
+    print("lib_filenames", lib_filenames)
     for lib_filename in lib_filenames:
         try:
             libcuda = dll.LoadLibrary(lib_filename)
             break
         except Exception:
             pass
+    print("libcuda", libcuda)
     if libcuda is None:
         return None
 
@@ -60,13 +63,14 @@ def cuda_detect(cuda_home):
         version_int = ctypes.c_int(0)
         ret = cudaRuntimeGetVersion(ctypes.byref(version_int))
         if ret != 0:
+            print("ret", ret)
             return None
 
         # Convert version integer to version string
         value = version_int.value
         return "%d.%d" % (value // 1000, (value % 1000) // 10)
     except Exception as e:
-        print(e.__str__())
+        print("Exception", e.__str__())
         return None
 
 
