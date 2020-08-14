@@ -5,6 +5,7 @@ import random
 from glob import glob
 from io import BytesIO
 from string import ascii_letters
+from packaging import version
 
 import numpy as np
 import pandas as pd
@@ -330,6 +331,8 @@ def test_parquet_read_filtered(tmpdir):
     assert cudf.io.read_parquet_metadata(fname)[1] == 2048 / 64
     assert len(df_filtered) < len(df)
 
+
+def test_parquet_read_filtered_multiple_files(tmpdir):
     # Generate data
     fname_0 = tmpdir.join("filtered_multiple_files_0.parquet")
     df = pd.DataFrame({"x": range(10), "y": list("aabbccddee")})
@@ -338,27 +341,42 @@ def test_parquet_read_filtered(tmpdir):
     df = pd.DataFrame({"x": range(10), "y": list("aabbccddee")})
     df.to_parquet(fname_1, row_group_size=2)
     fname_2 = tmpdir.join("filtered_multiple_files_2.parquet")
-    df = pd.DataFrame({"x": [0, 1, 9, 9, 4, 5, 6, 7, 8, 9], "y": list("aabbzzddee")})
+    df = pd.DataFrame(
+        {"x": [0, 1, 9, 9, 4, 5, 6, 7, 8, 9], "y": list("aabbzzddee")}
+    )
     df.to_parquet(fname_2, row_group_size=2)
 
     # Check filter
-    filtered_df = cudf.read_parquet([fname_0, fname_1, fname_2], filters=[("x", "==", 2)])
+    filtered_df = cudf.read_parquet(
+        [fname_0, fname_1, fname_2], filters=[("x", "==", 2)]
+    )
     assert len(filtered_df) == 4
 
+
+@pytest.mark.skipif(
+    version.parse(pa.__version__) < version.parse("1.0.1"),
+    reason="Changes in pyarrow 1.0.0 required to handle complex predicates",
+)
+@pytest.mark.parametrize(
+    "predicate,expected_len",
+    [
+        ([("y", "==", "c"), ("x", ">", 8)], 0),
+        ([("y", "==", "c"), ("x", ">=", 5)], 2),
+        ([[("y", "==", "c")], [("x", "<", 3)]], 6),
+    ],
+)
+def test_parquet_read_filtered_complex_predicate(
+    tmpdir, predicate, expected_len
+):
     # Generate data
     fname = tmpdir.join("filtered_complex_predicate.parquet")
     df = pd.DataFrame({"x": range(10), "y": list("aabbccddee")})
     df.to_parquet(fname, row_group_size=2)
 
     # Check filters
-    # TODO: Upgrade Parquet dependency to 1.0.1 once it releases to fix this test
     assert cudf.io.read_parquet_metadata(fname)[1] == 10 / 2
-    df_filtered = cudf.read_parquet(fname, filters=[("y", "==", "c"), ("x", ">", 8)])
-    assert not len(df_filtered)
-    df_filtered = cudf.read_parquet(fname, filters=[("y", "==", "c"), ("x", ">=", 5)])
-    assert len(df_filtered) == 2
-    df_filtered = cudf.read_parquet(fname, filters=[[("y", "==", "c")], [("x", "<", 3)]])
-    assert len(df_filtered) == 6
+    df_filtered = cudf.read_parquet(fname, filters=predicate)
+    assert len(df_filtered) == expected_len
 
 
 @pytest.mark.parametrize("row_group_size", [1, 5, 100])
