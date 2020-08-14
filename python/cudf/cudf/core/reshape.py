@@ -190,7 +190,22 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     if len(objs) == 0:
         raise ValueError("All objects passed were None")
 
-    typs = set(type(o) for o in objs)
+    # Retrieve the base types of `objs`. In order to support sub-types
+    # and object wrappers, we use `isinstance()` instead of comparing
+    # types directly
+    typs = set()
+    for o in objs:
+        if isinstance(o, cudf.MultiIndex):
+            typs.add(cudf.MultiIndex)
+        if issubclass(type(o), Index):
+            typs.add(type(o))
+        elif isinstance(o, DataFrame):
+            typs.add(DataFrame)
+        elif isinstance(o, Series):
+            typs.add(Series)
+        else:
+            raise ValueError(f"cannot concatenate object of type {type(o)}")
+
     allowed_typs = {Series, DataFrame}
 
     param_axis = _axis_map.get(axis, None)

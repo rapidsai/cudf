@@ -323,7 +323,8 @@ struct column_gatherer_impl<list_view, MapItRoot> {
   {
     lists_column_view list(column);
     auto gather_map_size = std::distance(gather_map_begin, gather_map_end);
-    if (gather_map_size == 0) { return make_empty_column(data_type{type_id::LIST}); }
+    // if the gather map is empty, return an empty column
+    if (gather_map_size == 0) { return empty_like(column); }
 
     // generate gather_data for the next level (N+1)
     lists::detail::gather_data gd = nullify_out_of_bounds
@@ -354,6 +355,19 @@ struct column_gatherer_impl<list_view, MapItRoot> {
                              std::move(child),
                              0,
                              rmm::device_buffer{0, stream, mr});
+  }
+};
+
+template <typename MapItRoot>
+struct column_gatherer_impl<struct_view, MapItRoot> {
+  std::unique_ptr<column> operator()(column_view const& column,
+                                     MapItRoot gather_map_begin,
+                                     MapItRoot gather_map_end,
+                                     bool nullify_out_of_bounds,
+                                     cudaStream_t stream,
+                                     rmm::mr::device_memory_resource* mr)
+  {
+    CUDF_FAIL("Gather not yet supported on struct_view.");
   }
 };
 
