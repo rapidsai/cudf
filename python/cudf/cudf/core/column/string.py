@@ -4421,7 +4421,7 @@ class StringColumn(column.ColumnBase):
 
         if len(children) == 0 and size != 0:
             # all nulls-column:
-            offsets = utils.full(size + 1, 0, dtype="int32")
+            offsets = column.full(size + 1, 0, dtype="int32")
 
             chars = cudf.core.column.as_column([], dtype="int8")
             children = (offsets, chars)

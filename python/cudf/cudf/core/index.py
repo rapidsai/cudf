@@ -1511,7 +1511,7 @@ class RangeIndex(Index):
     @cached_property
     def _values(self):
         if len(self) > 0:
-            return utils.arange(self._start, self._stop, dtype=self.dtype)
+            return column.arange(self._start, self._stop, dtype=self.dtype)
         else:
             return column.column_empty(0, masked=False, dtype=self.dtype)
 
@@ -1739,7 +1739,7 @@ class RangeIndex(Index):
 
 
 def index_from_range(start, stop=None, step=None):
-    vals = utils.arange(start, stop, step, dtype=np.int64)
+    vals = column.arange(start, stop, step, dtype=np.int64)
     return as_index(vals)
 
 

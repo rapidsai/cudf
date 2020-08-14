@@ -12,7 +12,6 @@ import cudf
 from cudf.core.column import column
 from cudf.core.frame import Frame
 from cudf.core.index import Index, as_index
-from cudf.utils import utils
 
 import cudf._lib as libcudf
 
@@ -433,7 +432,11 @@ class MultiIndex(Index):
             [
                 index._source_data,
                 cudf.DataFrame(
-                    {"idx": cudf.Series(utils.arange(len(index._source_data)))}
+                    {
+                        "idx": cudf.Series(
+                            column.arange(len(index._source_data))
+                        )
+                    }
                 ),
             ],
             axis=1,
@@ -465,14 +468,14 @@ class MultiIndex(Index):
             ):
                 stop = row_tuple.stop or max_length
                 start, stop, step = row_tuple.indices(stop)
-                return utils.arange(start, stop, step)
+                return column.arange(start, stop, step)
             start_values = self._compute_validity_mask(
                 index, row_tuple.start, max_length
             )
             stop_values = self._compute_validity_mask(
                 index, row_tuple.stop, max_length
             )
-            return utils.arange(start_values.min(), stop_values.max() + 1)
+            return column.arange(start_values.min(), stop_values.max() + 1)
         elif isinstance(row_tuple, numbers.Number):
             return row_tuple
         return self._compute_validity_mask(index, row_tuple, max_length)
@@ -622,7 +625,7 @@ class MultiIndex(Index):
             indices = indices
         elif isinstance(indices, slice):
             start, stop, step = indices.indices(len(self))
-            indices = utils.arange(start, stop, step)
+            indices = column.arange(start, stop, step)
         result = MultiIndex(source_data=self._source_data.take(indices))
         if self._codes is not None:
             result._codes = self._codes.take(indices)
@@ -722,7 +725,7 @@ class MultiIndex(Index):
             # use merge as a replace fn
             level = cudf.DataFrame(
                 {
-                    "idx": utils.arange(
+                    "idx": column.arange(
                         len(self.levels[idx]), dtype=df[col].dtype
                     ),
                     "level": self.levels[idx],

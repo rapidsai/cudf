@@ -12,7 +12,6 @@ from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.core.column.methods import ColumnMethodsMixin
 from cudf.core.dtypes import CategoricalDtype
-from cudf.utils import utils
 from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_mixed_with_object_dtype,
@@ -674,9 +673,9 @@ class CategoricalAccessor(ColumnMethodsMixin):
         )
         out_code_dtype = min_unsigned_type(max_cat_size)
 
-        cur_order = utils.arange(len(cur_codes))
-        old_codes = utils.arange(len(cur_cats), dtype=out_code_dtype)
-        new_codes = utils.arange(len(new_cats), dtype=out_code_dtype)
+        cur_order = column.arange(len(cur_codes))
+        old_codes = column.arange(len(cur_cats), dtype=out_code_dtype)
+        new_codes = column.arange(len(new_cats), dtype=out_code_dtype)
 
         new_df = cudf.DataFrame({"new_codes": new_codes, "cats": new_cats})
         old_df = cudf.DataFrame({"old_codes": old_codes, "cats": cur_cats})

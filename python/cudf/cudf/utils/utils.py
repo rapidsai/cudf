@@ -12,8 +12,6 @@ from pyarrow.cuda import CudaBuffer as arrowCudaBuffer
 import rmm
 
 import cudf
-import cudf._lib as libcudf
-from cudf._lib.scalar import as_scalar
 from cudf.core import column
 from cudf.core.buffer import Buffer
 from cudf.utils.dtypes import to_cudf_compatible_scalar
@@ -82,7 +80,7 @@ def scalar_broadcast_to(scalar, size, dtype=None):
     dtype = scalar.dtype
 
     if np.dtype(dtype).kind in ("O", "U"):
-        gather_map = full(size, 0, dtype="int32")
+        gather_map = column.full(size, 0, dtype="int32")
         scalar_str_col = column.as_column([scalar], dtype="str")
         return scalar_str_col[gather_map]
     else:
@@ -438,93 +436,4 @@ def raise_iteration_error(obj):
         f"{obj.__class__.__name__} object is not iterable. "
         f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
         f"if you wish to iterate over the values."
-    )
-
-
-def arange(start, stop=None, step=1, dtype=None):
-    """
-    Returns a column with evenly spaced values within a given interval.
-
-    Values are generated within the half-open interval [start, stop).
-    The first three arguments are mapped like the range built-in function,
-    i.e. start and step are optional.
-
-    Parameters
-    ----------
-    start : int/float
-        Start of the interval.
-    stop : int/float, default is None
-        Stop of the interval.
-    step : int/float, default 1
-        Step width between each pair of consecutive values.
-    dtype : default None
-        Data type specifier. It is inferred from other arguments by default.
-
-    Returns
-    -------
-    cudf.core.column.NumericalColumn
-
-    Examples
-    --------
-    >>> import cudf
-    >>> col = cudf.utils.utils.arange(2, 7, 1, dtype='int16')
-    >>> col
-    <cudf.core.column.numerical.NumericalColumn object at 0x7ff7998f8b90>
-    >>> cudf.Series(col)
-    0    2
-    1    3
-    2    4
-    3    5
-    4    6
-    dtype: int16
-    """
-
-    if stop is None:
-        stop = start
-        start = 0
-
-    if step is None:
-        step = 1
-
-    size = int(np.ceil((stop - start) / step))
-
-    return libcudf.filling.sequence(
-        size, as_scalar(start, dtype=dtype), as_scalar(step, dtype=dtype)
-    )
-
-
-def full(size, fill_value, dtype=None):
-    """
-    Returns a column of given size and dtype, filled with a given value.
-
-    Parameters
-    ----------
-    size : int
-        size of the expected column.
-    fill_value : scalar
-         A scalar value to fill a new array.
-    dtype : default None
-        Data type specifier. It is inferred from other arguments by default.
-
-    Returns
-    -------
-    column
-
-    Examples
-    --------
-    >>> import cudf
-    >>> col = cudf.utils.utils.full(5, 7, dtype='int8')
-    >>> col
-    <cudf.core.column.numerical.NumericalColumn object at 0x7fa0912e8b90>
-    >>> cudf.Series(col)
-    0    7
-    1    7
-    2    7
-    3    7
-    4    7
-    dtype: int8
-    """
-
-    return libcudf.column.make_column_from_scalar(
-        as_scalar(fill_value, dtype), size
     )
