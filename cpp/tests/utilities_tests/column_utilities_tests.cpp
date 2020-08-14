@@ -137,7 +137,7 @@ TEST_F(ColumnUtilitiesEquivalenceTest, DoubleTest)
   cudf::test::fixed_width_column_wrapper<double> col1{10. / 3, 22. / 7};
   cudf::test::fixed_width_column_wrapper<double> col2{31. / 3 - 21. / 3, 19. / 7 + 3. / 7};
 
-  cudf::test::expect_columns_equivalent(col1, col2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(col1, col2);
 }
 
 TEST_F(ColumnUtilitiesEquivalenceTest, NullabilityTest)
@@ -146,7 +146,7 @@ TEST_F(ColumnUtilitiesEquivalenceTest, NullabilityTest)
   cudf::test::fixed_width_column_wrapper<double> col1{1, 2, 3};
   cudf::test::fixed_width_column_wrapper<double> col2({1, 2, 3}, all_valid);
 
-  cudf::test::expect_columns_equivalent(col1, col2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(col1, col2);
 }
 
 struct ColumnUtilitiesStringsTest : public cudf::test::BaseFixture {

@@ -57,12 +57,12 @@ TEST_F(TextReplaceTest, ReplaceTokens)
   auto results = nvtext::replace_tokens(cudf::strings_column_view(strings),
                                         cudf::strings_column_view(targets),
                                         cudf::strings_column_view(repls));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   results = nvtext::replace_tokens(cudf::strings_column_view(strings),
                                    cudf::strings_column_view(targets),
                                    cudf::strings_column_view(repls),
                                    cudf::string_scalar("o "));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(TextReplaceTest, ReplaceTokensSingleRepl)
@@ -75,7 +75,7 @@ TEST_F(TextReplaceTest, ReplaceTokensSingleRepl)
   auto results = nvtext::replace_tokens(cudf::strings_column_view(strings),
                                         cudf::strings_column_view(targets),
                                         cudf::strings_column_view(repls));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(TextReplaceTest, ReplaceTokensEmptyTest)
@@ -110,23 +110,23 @@ TEST_F(TextReplaceTest, FilterTokens)
   cudf::test::strings_column_wrapper strings({" one two three ", "four  fivé  six", "sevén eight"});
 
   auto results = nvtext::filter_tokens(cudf::strings_column_view(strings), 1);
-  cudf::test::expect_columns_equal(*results, strings);  // no change
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings);  // no change
 
   {
     auto results = nvtext::filter_tokens(cudf::strings_column_view(strings), 4);
     cudf::test::strings_column_wrapper expected({"   three ", "four  fivé  ", "sevén eight"});
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     auto results = nvtext::filter_tokens(cudf::strings_column_view(strings), 5);
     cudf::test::strings_column_wrapper expected({"   three ", "    ", "sevén eight"});
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     auto results =
       nvtext::filter_tokens(cudf::strings_column_view(strings), 4, cudf::string_scalar("--"));
     cudf::test::strings_column_wrapper expected({" -- -- three ", "four  fivé  --", "sevén eight"});
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
 

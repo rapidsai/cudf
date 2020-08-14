@@ -114,7 +114,7 @@ TEST_F(ClampEmptyCaseTest, BothScalarEmptyInvalid)
 
   auto got = cudf::clamp(input, *lo, *hi);
 
-  cudf::test::expect_columns_equal(input, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(input, got->view());
 }
 
 TEST_F(ClampEmptyCaseTest, EmptyInput)
@@ -128,7 +128,7 @@ TEST_F(ClampEmptyCaseTest, EmptyInput)
 
   auto got = cudf::clamp(input, *lo, *hi);
 
-  cudf::test::expect_columns_equal(input, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(input, got->view());
 }
 
 template <class T>
@@ -216,7 +216,7 @@ TYPED_TEST(ClampTestNumeric, WithNoNull)
 
   cudf::test::fixed_width_column_wrapper<T, int32_t> expected({2, 2, 2, 3, 4, 5, 6, 7, 8, 8, 8});
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 TYPED_TEST(ClampTestNumeric, LowerNull)
@@ -231,7 +231,7 @@ TYPED_TEST(ClampTestNumeric, LowerNull)
 
   cudf::test::fixed_width_column_wrapper<T, int32_t> expected({0, 1, 2, 3, 4, 5, 6, 7, 8, 8, 8});
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 TYPED_TEST(ClampTestNumeric, UpperNull)
@@ -246,7 +246,7 @@ TYPED_TEST(ClampTestNumeric, UpperNull)
 
   cudf::test::fixed_width_column_wrapper<T, int32_t> expected({2, 2, 2, 3, 4, 5, 6, 7, 8, 9, 10});
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 TYPED_TEST(ClampTestNumeric, InputNull)
@@ -263,7 +263,7 @@ TYPED_TEST(ClampTestNumeric, InputNull)
   cudf::test::fixed_width_column_wrapper<T, int32_t> expected({2, 2, 2, 3, 4, 5, 6, 7, 8, 8, 8},
                                                               {0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0});
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 TYPED_TEST(ClampTestNumeric, InputNulliWithReplace)
@@ -283,7 +283,7 @@ TYPED_TEST(ClampTestNumeric, InputNulliWithReplace)
   cudf::test::fixed_width_column_wrapper<T, int32_t> expected({16, 16, 2, 3, 4, 5, 6, 7, 8, 32, 32},
                                                               {0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0});
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 template <typename T>
@@ -313,7 +313,7 @@ TYPED_TEST(ClampFloatTest, WithNANandNoNull)
   cudf::test::fixed_width_column_wrapper<T> expected(
     {T(6.0), T(6.0), T(NAN), T(3.0), T(4.0), T(5.0), T(2.0), T(NAN), T(2.0), T(6.0)});
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 TYPED_TEST(ClampFloatTest, WithNANandNull)
@@ -339,7 +339,7 @@ TYPED_TEST(ClampFloatTest, WithNANandNull)
     {T(6.0), T(6.0), T(NAN), T(3.0), T(4.0), T(5.0), T(2.0), T(NAN), T(2.0), T(6.0)},
     {1, 1, 1, 0, 1, 1, 1, 0, 1, 1});
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 TYPED_TEST(ClampFloatTest, SignOfAFloat)
@@ -373,7 +373,7 @@ TYPED_TEST(ClampFloatTest, SignOfAFloat)
     {T(1.0), T(0.0), T(NAN), T(4.0), T(-1.0), T(-1.0), T(1.0), T(NAN), T(1.0), T(1.0)},
     {1, 1, 1, 0, 1, 1, 1, 0, 1, 1});
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 struct ClampStringTest : public cudf::test::BaseFixture {
@@ -398,7 +398,7 @@ TEST_F(ClampStringTest, WithNullableColumn)
 
   auto got = cudf::clamp(input, *lo, *hi);
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 TEST_F(ClampStringTest, WithNonNullableColumn)
@@ -418,7 +418,7 @@ TEST_F(ClampStringTest, WithNonNullableColumn)
 
   auto got = cudf::clamp(input, *lo, *hi);
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 TEST_F(ClampStringTest, WithNullableColumnNullLow)
@@ -440,7 +440,7 @@ TEST_F(ClampStringTest, WithNullableColumnNullLow)
 
   auto got = cudf::clamp(input, *lo, *hi);
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 TEST_F(ClampStringTest, WithNullableColumnNullHigh)
@@ -462,7 +462,7 @@ TEST_F(ClampStringTest, WithNullableColumnNullHigh)
 
   auto got = cudf::clamp(input, *lo, *hi);
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 TEST_F(ClampStringTest, WithNullableColumnBothLoAndHiNull)
@@ -479,7 +479,7 @@ TEST_F(ClampStringTest, WithNullableColumnBothLoAndHiNull)
 
   auto got = cudf::clamp(input, *lo, *hi);
 
-  cudf::test::expect_columns_equal(input, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(input, got->view());
 }
 
 TEST_F(ClampStringTest, WithReplaceString)
@@ -505,7 +505,7 @@ TEST_F(ClampStringTest, WithReplaceString)
 
   auto got = cudf::clamp(input, *lo, *lo_replace, *hi, *hi_replace);
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 CUDF_TEST_PROGRAM_MAIN()

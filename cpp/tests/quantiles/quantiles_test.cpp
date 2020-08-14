@@ -67,7 +67,7 @@ TYPED_TEST(QuantilesTest, TestZeroRequestedQuantiles)
   auto actual   = quantiles(input, {});
   auto expected = empty_like(input);
 
-  expect_tables_equal(expected->view(), actual->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), actual->view());
 }
 
 TYPED_TEST(QuantilesTest, TestMultiColumnOrderCountMismatch)
@@ -144,7 +144,7 @@ TYPED_TEST(QuantilesTest, TestMultiColumnUnsorted)
 
   auto expected = table_view({expected_a, expected_b});
 
-  expect_tables_equal(expected, actual->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, actual->view());
 }
 
 TYPED_TEST(QuantilesTest, TestMultiColumnAssumedSorted)
@@ -171,5 +171,5 @@ TYPED_TEST(QuantilesTest, TestMultiColumnAssumedSorted)
 
   auto expected = table_view({expected_a, expected_b});
 
-  expect_tables_equal(expected, actual->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, actual->view());
 }
