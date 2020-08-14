@@ -750,11 +750,9 @@ add_dependencies(cudf stringify_run)
 option(USE_NVTX "Build with NVTX support" ON)
 if(USE_NVTX)
     message(STATUS "Using Nvidia Tools Extension")
-    # The `USE_NVTX` macro is deprecated
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_NVTX")
 else()
     # Makes NVTX APIs no-ops
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDISABLE_NVTX")
+    add_compile_definitions(NVTX_DISABLE)
 endif(USE_NVTX)
 
 option(HT_DEFAULT_ALLOCATOR "Use the default allocator for hash tables" ON)
