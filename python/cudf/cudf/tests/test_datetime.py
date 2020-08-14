@@ -1,4 +1,5 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
+import datetime
 import datetime as dt
 import re
 
@@ -11,7 +12,7 @@ import pytest
 import cudf
 from cudf.core import DataFrame, Series
 from cudf.core.index import DatetimeIndex
-from cudf.tests.utils import NUMERIC_TYPES, assert_eq
+from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
 
 
 def data1():
@@ -605,6 +606,7 @@ def test_cudf_to_datetime(data, dayfirst, infer_datetime_format):
         "2",
         ["1", "2", "3"],
         ["1/1/1", "2/2/2", "1"],
+        pd.Series([1, 2, 3], dtype="timedelta64[ns]"),
         pd.DataFrame(
             {
                 "year": [2015, 2016],
@@ -788,17 +790,23 @@ def test_datetime_scalar_timeunit_cast(timeunit):
     assert_eq(pdf, gdf)
 
 
-def test_str_null_to_datetime():
-    psr = pd.Series(["2001-01-01", "2002-02-02", "2000-01-05", "NaT"])
-    gsr = Series(["2001-01-01", "2002-02-02", "2000-01-05", "NaT"])
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["2001-01-01", "2002-02-02", "2000-01-05", "NaT"],
+        ["2001-01-01", "2002-02-02", "2000-01-05", None],
+        [None, None, None, None, None],
+    ],
+)
+@pytest.mark.parametrize("dtype", DATETIME_TYPES)
+def test_str_null_to_datetime(data, dtype):
+    psr = pd.Series(data)
+    gsr = Series(data)
 
-    assert_eq(psr.astype("datetime64[s]"), gsr.astype("datetime64[s]"))
+    assert_eq(psr.astype(dtype), gsr.astype(dtype))
 
-    psr = pd.Series(["2001-01-01", "2002-02-02", "2000-01-05", None])
-    gsr = Series(["2001-01-01", "2002-02-02", "2000-01-05", None])
 
-    assert_eq(psr.astype("datetime64[s]"), gsr.astype("datetime64[s]"))
-
+def test_str_to_datetime_error():
     psr = pd.Series(["2001-01-01", "2002-02-02", "2000-01-05", "None"])
     gsr = Series(["2001-01-01", "2002-02-02", "2000-01-05", "None"])
 
@@ -809,3 +817,228 @@ def test_str_null_to_datetime():
             gsr.astype("datetime64[s]")
     else:
         raise AssertionError("Expected psr.astype('datetime64[s]') to fail")
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3, 4, 10, 100, 20000],
+        [None] * 7,
+        [10, 20, 30, None, 100, 200, None],
+        [3223.234, 342.2332, 23423.23, 3343.23324, 23432.2323, 242.23, 233],
+    ],
+)
+@pytest.mark.parametrize(
+    "other",
+    [
+        [1, 2, 3, 4, 10, 100, 20000],
+        [None] * 7,
+        [10, 20, 30, None, 100, 200, None],
+        [3223.234, 342.2332, 23423.23, 3343.23324, 23432.2323, 242.23, 233],
+        np.datetime64("2005-02"),
+        np.datetime64("2005-02-25"),
+        np.datetime64("2005-02-25T03:30"),
+        np.datetime64("nat"),
+    ],
+)
+@pytest.mark.parametrize("data_dtype", DATETIME_TYPES)
+@pytest.mark.parametrize("other_dtype", DATETIME_TYPES)
+def test_datetime_subtract(data, other, data_dtype, other_dtype):
+
+    gsr = cudf.Series(data, dtype=data_dtype)
+    psr = gsr.to_pandas()
+
+    if isinstance(other, np.datetime64):
+        gsr_other = other
+        psr_other = other
+    else:
+        gsr_other = cudf.Series(other, dtype=other_dtype)
+        psr_other = gsr_other.to_pandas()
+
+    expected = psr - psr_other
+    actual = gsr - gsr_other
+
+    assert_eq(expected, actual)
+
+    expected = psr_other - psr
+    actual = gsr_other - gsr
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [],
+        [None],
+        [None, None, None, None, None],
+        [12, 12, 22, 343, 4353534, 435342],
+        np.array([10, 20, 30, None, 100]),
+        cp.asarray([10, 20, 30, 100]),
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [1],
+        [12, 11, 232, 223432411, 2343241, 234324, 23234],
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+        [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+    ],
+)
+@pytest.mark.parametrize(
+    "other_scalars",
+    [
+        datetime.timedelta(days=768),
+        datetime.timedelta(seconds=768),
+        datetime.timedelta(microseconds=7),
+        datetime.timedelta(minutes=447),
+        datetime.timedelta(hours=447),
+        datetime.timedelta(weeks=734),
+        np.timedelta64(4, "s"),
+        np.timedelta64(456, "D"),
+        np.timedelta64(46, "h"),
+        np.timedelta64("nat"),
+        np.timedelta64(1, "s"),
+        np.timedelta64(1, "ms"),
+        np.timedelta64(1, "us"),
+        np.timedelta64(1, "ns"),
+    ],
+)
+@pytest.mark.parametrize("dtype", DATETIME_TYPES)
+@pytest.mark.parametrize(
+    "op", ["add", "sub"],
+)
+def test_datetime_series_ops_with_scalars(data, other_scalars, dtype, op):
+    gsr = cudf.Series(data=data, dtype=dtype)
+    psr = gsr.to_pandas()
+
+    if op == "add":
+        expected = psr + other_scalars
+        actual = gsr + other_scalars
+    elif op == "sub":
+        expected = psr - other_scalars
+        actual = gsr - other_scalars
+
+    assert_eq(expected, actual)
+
+    if op == "add":
+        expected = other_scalars + psr
+        actual = other_scalars + gsr
+
+        assert_eq(expected, actual)
+
+    elif op == "sub":
+        with pytest.raises(TypeError):
+            expected = other_scalars - psr
+        with pytest.raises(TypeError):
+            actual = other_scalars - gsr
+
+
+def test_datetime_invalid_ops():
+    sr = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
+    psr = sr.to_pandas()
+
+    try:
+        psr + pd.Timestamp(1513393355.5, unit="s")
+    except TypeError:
+        with pytest.raises(TypeError):
+            sr + pd.Timestamp(1513393355.5, unit="s")
+    else:
+        raise AssertionError("Expected psr + pd.Timestamp to fail")
+
+    try:
+        psr / pd.Timestamp(1513393355.5, unit="s")
+    except TypeError:
+        with pytest.raises(TypeError):
+            sr / pd.Timestamp(1513393355.5, unit="s")
+    else:
+        raise AssertionError("Expected psr / pd.Timestamp to fail")
+
+    try:
+        psr + psr
+    except TypeError:
+        with pytest.raises(TypeError):
+            sr + sr
+    else:
+        raise AssertionError("Expected psr + psr to fail")
+
+    try:
+        psr // psr
+    except TypeError:
+        with pytest.raises(TypeError):
+            sr // sr
+    else:
+        raise AssertionError("Expected psr // psr to fail")
+
+    try:
+        psr // pd.Timestamp(1513393355.5, unit="s")
+    except TypeError:
+        with pytest.raises(TypeError):
+            sr // pd.Timestamp(1513393355.5, unit="s")
+    else:
+        raise AssertionError("Expected psr // pd.Timestamp to fail")
+
+    try:
+        psr + 1
+    except TypeError:
+        with pytest.raises(TypeError):
+            sr + 1
+    else:
+        raise AssertionError("Expected psr + 1 to fail")
+
+    try:
+        psr / "a"
+    except TypeError:
+        with pytest.raises(TypeError):
+            sr / "a"
+    else:
+        raise AssertionError("Expected psr / 'a' to fail")
+
+    try:
+        psr * 1
+    except TypeError:
+        with pytest.raises(TypeError):
+            sr * 1
+    else:
+        raise AssertionError("Expected psr * 1 to fail")
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
+        [1, 2, 3],
+        [None, 1, 10, 11, None],
+        [None, None, None, None, None],
+        [None],
+    ],
+)
+@pytest.mark.parametrize("dtype", DATETIME_TYPES)
+@pytest.mark.parametrize(
+    "fill_value",
+    [
+        np.datetime64("2005-02"),
+        np.datetime64("2005-02-25"),
+        np.datetime64("2005-02-25T03:30"),
+        np.datetime64("nat"),
+    ],
+)
+def test_datetime_fillna(data, dtype, fill_value):
+    sr = cudf.Series(data, dtype=dtype)
+    psr = sr.to_pandas()
+
+    expected = psr.dropna()
+    actual = sr.dropna()
+
+    assert_eq(expected, actual)
+
+    expected = psr.fillna(fill_value)
+    actual = sr.fillna(fill_value)
+
+    assert_eq(expected, actual)
+
+    expected = expected.dropna()
+    actual = actual.dropna()
+
+    assert_eq(expected, actual)

@@ -23,9 +23,6 @@
 #include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
 
-using cudf::test::expect_columns_equal;
-using cudf::test::expect_table_properties_equal;
-using cudf::test::expect_tables_equal;
 using cudf::test::fixed_width_column_wrapper;
 using cudf::test::strings_column_wrapper;
 
@@ -133,10 +130,10 @@ TEST_F(HashPartition, MixedColumnTypes)
   EXPECT_EQ(offsets1.size(), offsets2.size());
 
   // Expect output to have same shape as input
-  expect_table_properties_equal(input, output1->view());
+  CUDF_TEST_EXPECT_TABLE_PROPERTIES_EQUAL(input, output1->view());
 
   // Expect deterministic result from hashing the same input
-  expect_tables_equal(output1->view(), output2->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(output1->view(), output2->view());
 }
 
 TEST_F(HashPartition, NullableStrings)
@@ -179,7 +176,8 @@ TEST_F(HashPartition, ColumnsToHash)
     first_offsets.begin(), first_offsets.end(), second_offsets.begin(), second_offsets.end()));
 
   // Expect same result for the hashed columns
-  expect_columns_equal(first_result->get_column(0).view(), second_result->get_column(0).view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(first_result->get_column(0).view(),
+                                 second_result->get_column(0).view());
 }
 
 template <typename T>
@@ -238,8 +236,8 @@ void run_fixed_width_test(size_t cols,
   EXPECT_TRUE(std::equal(offsets1.begin(), offsets1.end(), offsets2.begin()));
 
   // Expect output to have same shape as input
-  expect_table_properties_equal(input, output1->view());
-  expect_table_properties_equal(output1->view(), output2->view());
+  CUDF_TEST_EXPECT_TABLE_PROPERTIES_EQUAL(input, output1->view());
+  CUDF_TEST_EXPECT_TABLE_PROPERTIES_EQUAL(output1->view(), output2->view());
 
   // Compute number of rows in each partition
   EXPECT_EQ(0, offsets1[0]);
@@ -270,7 +268,7 @@ void run_fixed_width_test(size_t cols,
 
   // After sorting by row hashes, the corresponding partition numbers should be
   // equal
-  expect_tables_equal(sorted_partitions1->view(), sorted_partitions2->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(sorted_partitions1->view(), sorted_partitions2->view());
 }
 
 TYPED_TEST(HashPartitionFixedWidth, MorePartitionsThanRows)

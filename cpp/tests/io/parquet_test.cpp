@@ -21,6 +21,7 @@
 #include <tests/utilities/type_lists.hpp>
 
 #include <cudf/concatenate.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/functions.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -158,12 +159,12 @@ inline auto random_values(size_t size)
 }
 
 // Helper function to compare two tables
-void expect_tables_equal(cudf::table_view const& lhs, cudf::table_view const& rhs)
+void CUDF_TEST_EXPECT_TABLES_EQUAL(cudf::table_view const& lhs, cudf::table_view const& rhs)
 {
   EXPECT_EQ(lhs.num_columns(), rhs.num_columns());
   auto expected = lhs.begin();
   auto result   = rhs.begin();
-  while (result != rhs.end()) { cudf::test::expect_columns_equal(*expected++, *result++); }
+  while (result != rhs.end()) { CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected++, *result++); }
 }
 
 }  // namespace
@@ -189,7 +190,7 @@ TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumn)
   cudf_io::read_parquet_args in_args{cudf_io::source_info{filepath}};
   auto result = cudf_io::read_parquet(in_args);
 
-  expect_tables_equal(expected->view(), result.tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
 }
 
 TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumnWithNulls)
@@ -213,7 +214,7 @@ TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumnWithNulls)
   cudf_io::read_parquet_args in_args{cudf_io::source_info{filepath}};
   auto result = cudf_io::read_parquet(in_args);
 
-  expect_tables_equal(expected->view(), result.tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
 }
 
 TYPED_TEST(ParquetWriterTimestampTypeTest, Timestamps)
@@ -238,7 +239,7 @@ TYPED_TEST(ParquetWriterTimestampTypeTest, Timestamps)
   in_args.timestamp_type = this->type();
   auto result            = cudf_io::read_parquet(in_args);
 
-  expect_tables_equal(expected->view(), result.tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
 }
 
 TYPED_TEST(ParquetWriterTimestampTypeTest, TimestampsWithNulls)
@@ -264,7 +265,7 @@ TYPED_TEST(ParquetWriterTimestampTypeTest, TimestampsWithNulls)
   in_args.timestamp_type = this->type();
   auto result            = cudf_io::read_parquet(in_args);
 
-  expect_tables_equal(expected->view(), result.tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
 }
 
 TEST_F(ParquetWriterTest, MultiColumn)
@@ -313,7 +314,7 @@ TEST_F(ParquetWriterTest, MultiColumn)
   cudf_io::read_parquet_args in_args{cudf_io::source_info{filepath}};
   auto result = cudf_io::read_parquet(in_args);
 
-  expect_tables_equal(expected->view(), result.tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
   EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
 
@@ -371,7 +372,7 @@ TEST_F(ParquetWriterTest, MultiColumnWithNulls)
   cudf_io::read_parquet_args in_args{cudf_io::source_info{filepath}};
   auto result = cudf_io::read_parquet(in_args);
 
-  expect_tables_equal(expected->view(), result.tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
   EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
 
@@ -409,7 +410,49 @@ TEST_F(ParquetWriterTest, Strings)
   cudf_io::read_parquet_args in_args{cudf_io::source_info{filepath}};
   auto result = cudf_io::read_parquet(in_args);
 
-  expect_tables_equal(expected->view(), result.tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
+  EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
+}
+
+TEST_F(ParquetWriterTest, SlicedTable)
+{
+  // This test checks for writing zero copy, offseted views into existing cudf tables
+
+  std::vector<const char*> strings{
+    "Monday", "Monday", "Friday", "Monday", "Friday", "Friday", "Friday", "Funday"};
+  const auto num_rows = strings.size();
+
+  auto seq_col0 = random_values<int>(num_rows);
+  auto seq_col2 = random_values<float>(num_rows);
+  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+
+  column_wrapper<int> col0{seq_col0.begin(), seq_col0.end(), validity};
+  column_wrapper<cudf::string_view> col1{strings.begin(), strings.end()};
+  column_wrapper<float> col2{seq_col2.begin(), seq_col2.end(), validity};
+
+  cudf_io::table_metadata expected_metadata;
+  expected_metadata.column_names.emplace_back("col_other");
+  expected_metadata.column_names.emplace_back("col_string");
+  expected_metadata.column_names.emplace_back("col_another");
+
+  std::vector<std::unique_ptr<column>> cols;
+  cols.push_back(col0.release());
+  cols.push_back(col1.release());
+  cols.push_back(col2.release());
+  auto expected = std::make_unique<table>(std::move(cols));
+  EXPECT_EQ(3, expected->num_columns());
+
+  auto expected_slice = cudf::slice(expected->view(), {2, static_cast<cudf::size_type>(num_rows)});
+
+  auto filepath = temp_env->get_temp_filepath("SlicedTable.parquet");
+  cudf_io::write_parquet_args out_args{
+    cudf_io::sink_info{filepath}, expected_slice, &expected_metadata};
+  cudf_io::write_parquet(out_args);
+
+  cudf_io::read_parquet_args in_args{cudf_io::source_info{filepath}};
+  auto result = cudf_io::read_parquet(in_args);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_slice, result.tbl->view());
   EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
 
@@ -458,7 +501,7 @@ TEST_F(ParquetWriterTest, MultiIndex)
   in_args.columns             = {"int8s", "int16s", "int32s"};
   auto result                 = cudf_io::read_parquet(in_args);
 
-  expect_tables_equal(expected->view(), result.tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
   EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
 
@@ -485,7 +528,7 @@ TEST_F(ParquetWriterTest, HostBuffer)
   cudf_io::read_parquet_args in_args{cudf_io::source_info(out_buffer.data(), out_buffer.size())};
   const auto result = cudf_io::read_parquet(in_args);
 
-  expect_tables_equal(expected->view(), result.tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
   EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
 
@@ -501,7 +544,7 @@ TEST_F(ParquetWriterTest, NonNullable)
   cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
   auto result = cudf_io::read_parquet(read_args);
 
-  expect_tables_equal(*result.tbl, *expected);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
 }
 
 // custom data sink that supports device writes. uses plain file io.
@@ -567,11 +610,11 @@ TEST_F(ParquetWriterTest, CustomDataSink)
 
   cudf_io::read_parquet_args custom_args{cudf_io::source_info{filepath}};
   auto custom_tbl = cudf_io::read_parquet(custom_args);
-  expect_tables_equal(custom_tbl.tbl->view(), expected->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(custom_tbl.tbl->view(), expected->view());
 
   cudf_io::read_parquet_args buf_args{cudf_io::source_info{buf_sink.data(), buf_sink.size()}};
   auto buf_tbl = cudf_io::read_parquet(buf_args);
-  expect_tables_equal(buf_tbl.tbl->view(), expected->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(buf_tbl.tbl->view(), expected->view());
 }
 
 TEST_F(ParquetWriterTest, DeviceWriteLargeishFile)
@@ -591,7 +634,7 @@ TEST_F(ParquetWriterTest, DeviceWriteLargeishFile)
 
   cudf_io::read_parquet_args custom_args{cudf_io::source_info{filepath}};
   auto custom_tbl = cudf_io::read_parquet(custom_args);
-  expect_tables_equal(custom_tbl.tbl->view(), expected->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(custom_tbl.tbl->view(), expected->view());
 }
 template <typename T>
 std::string create_parquet_file(int num_cols)
@@ -634,7 +677,7 @@ TEST_F(ParquetChunkedWriterTest, SingleTable)
   cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
   auto result = cudf_io::read_parquet(read_args);
 
-  expect_tables_equal(*result.tbl, *table1);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *table1);
 }
 
 TEST_F(ParquetChunkedWriterTest, SimpleTable)
@@ -655,7 +698,7 @@ TEST_F(ParquetChunkedWriterTest, SimpleTable)
   cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
   auto result = cudf_io::read_parquet(read_args);
 
-  expect_tables_equal(*result.tbl, *full_table);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
 }
 
 TEST_F(ParquetChunkedWriterTest, LargeTables)
@@ -677,7 +720,7 @@ TEST_F(ParquetChunkedWriterTest, LargeTables)
   cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
   auto result = cudf_io::read_parquet(read_args);
 
-  expect_tables_equal(*result.tbl, *full_table);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
 }
 
 TEST_F(ParquetChunkedWriterTest, ManyTables)
@@ -706,7 +749,7 @@ TEST_F(ParquetChunkedWriterTest, ManyTables)
   cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
   auto result = cudf_io::read_parquet(read_args);
 
-  expect_tables_equal(*result.tbl, *expected);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
 }
 
 TEST_F(ParquetChunkedWriterTest, Strings)
@@ -737,7 +780,7 @@ TEST_F(ParquetChunkedWriterTest, Strings)
   cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
   auto result = cudf_io::read_parquet(read_args);
 
-  expect_tables_equal(*result.tbl, *expected);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
 }
 
 TEST_F(ParquetChunkedWriterTest, MismatchedTypes)
@@ -787,7 +830,7 @@ TEST_F(ParquetChunkedWriterTest, ReadRowGroups)
   read_args.row_groups = {{1, 0, 1}};
   auto result          = cudf_io::read_parquet(read_args);
 
-  expect_tables_equal(*result.tbl, *full_table);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
 }
 
 TEST_F(ParquetChunkedWriterTest, ReadRowGroupsError)
@@ -855,7 +898,7 @@ TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize)
   cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
   auto result = cudf_io::read_parquet(read_args);
 
-  expect_tables_equal(*result.tbl, *expected);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
 }
 
 TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize2)
@@ -903,7 +946,7 @@ TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize2)
   cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
   auto result = cudf_io::read_parquet(read_args);
 
-  expect_tables_equal(*result.tbl, *expected);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
 }
 
 // custom mem mapped data sink that supports device writes
@@ -960,7 +1003,7 @@ TEST_F(ParquetWriterStressTest, LargeTableWeakCompression)
 
   cudf_io::read_parquet_args custom_args{cudf_io::source_info{mm_buf.data(), mm_buf.size()}};
   auto custom_tbl = cudf_io::read_parquet(custom_args);
-  expect_tables_equal(custom_tbl.tbl->view(), expected->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(custom_tbl.tbl->view(), expected->view());
 }
 
 TEST_F(ParquetWriterStressTest, LargeTableGoodCompression)
@@ -981,7 +1024,7 @@ TEST_F(ParquetWriterStressTest, LargeTableGoodCompression)
 
   cudf_io::read_parquet_args custom_args{cudf_io::source_info{mm_buf.data(), mm_buf.size()}};
   auto custom_tbl = cudf_io::read_parquet(custom_args);
-  expect_tables_equal(custom_tbl.tbl->view(), expected->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(custom_tbl.tbl->view(), expected->view());
 }
 
 TEST_F(ParquetWriterStressTest, LargeTableWithValids)
@@ -1002,7 +1045,7 @@ TEST_F(ParquetWriterStressTest, LargeTableWithValids)
 
   cudf_io::read_parquet_args custom_args{cudf_io::source_info{mm_buf.data(), mm_buf.size()}};
   auto custom_tbl = cudf_io::read_parquet(custom_args);
-  expect_tables_equal(custom_tbl.tbl->view(), expected->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(custom_tbl.tbl->view(), expected->view());
 }
 
 TEST_F(ParquetWriterStressTest, DeviceWriteLargeTableWeakCompression)
@@ -1023,7 +1066,7 @@ TEST_F(ParquetWriterStressTest, DeviceWriteLargeTableWeakCompression)
 
   cudf_io::read_parquet_args custom_args{cudf_io::source_info{mm_buf.data(), mm_buf.size()}};
   auto custom_tbl = cudf_io::read_parquet(custom_args);
-  expect_tables_equal(custom_tbl.tbl->view(), expected->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(custom_tbl.tbl->view(), expected->view());
 }
 
 TEST_F(ParquetWriterStressTest, DeviceWriteLargeTableGoodCompression)
@@ -1044,7 +1087,7 @@ TEST_F(ParquetWriterStressTest, DeviceWriteLargeTableGoodCompression)
 
   cudf_io::read_parquet_args custom_args{cudf_io::source_info{mm_buf.data(), mm_buf.size()}};
   auto custom_tbl = cudf_io::read_parquet(custom_args);
-  expect_tables_equal(custom_tbl.tbl->view(), expected->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(custom_tbl.tbl->view(), expected->view());
 }
 
 TEST_F(ParquetWriterStressTest, DeviceWriteLargeTableWithValids)
@@ -1065,7 +1108,7 @@ TEST_F(ParquetWriterStressTest, DeviceWriteLargeTableWithValids)
 
   cudf_io::read_parquet_args custom_args{cudf_io::source_info{mm_buf.data(), mm_buf.size()}};
   auto custom_tbl = cudf_io::read_parquet(custom_args);
-  expect_tables_equal(custom_tbl.tbl->view(), expected->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(custom_tbl.tbl->view(), expected->view());
 }
 
 CUDF_TEST_PROGRAM_MAIN()

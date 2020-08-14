@@ -11,6 +11,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib import string_casting as str_cast
 from cudf._lib.column import Column
+from cudf._lib.nvtext.edit_distance import edit_distance as cpp_edit_distance
 from cudf._lib.nvtext.generate_ngrams import (
     generate_character_ngrams as cpp_generate_character_ngrams,
     generate_ngrams as cpp_generate_ngrams,
@@ -25,6 +26,12 @@ from cudf._lib.nvtext.normalize import (
 from cudf._lib.nvtext.replace import (
     filter_tokens as cpp_filter_tokens,
     replace_tokens as cpp_replace_tokens,
+)
+from cudf._lib.nvtext.stemmer import (
+    LetterType,
+    is_letter as cpp_is_letter,
+    is_letter_multi as cpp_is_letter_multi,
+    porter_stemmer_measure as cpp_porter_stemmer_measure,
 )
 from cudf._lib.nvtext.subword_tokenize import (
     subword_tokenize as cpp_subword_tokenize,
@@ -138,6 +145,7 @@ from cudf.utils.dtypes import (
     is_scalar,
     is_string_dtype,
 )
+from cudf.utils.utils import buffers_from_pyarrow
 
 _str_to_numeric_typecast_functions = {
     np.dtype("int8"): str_cast.stoi8,
@@ -157,6 +165,10 @@ _str_to_numeric_typecast_functions = {
     np.dtype("datetime64[ms]"): str_cast.timestamp2int,
     np.dtype("datetime64[us]"): str_cast.timestamp2int,
     np.dtype("datetime64[ns]"): str_cast.timestamp2int,
+    np.dtype("timedelta64[s]"): str_cast.timedelta2int,
+    np.dtype("timedelta64[ms]"): str_cast.timedelta2int,
+    np.dtype("timedelta64[us]"): str_cast.timedelta2int,
+    np.dtype("timedelta64[ns]"): str_cast.timedelta2int,
 }
 
 _numeric_to_str_typecast_functions = {
@@ -177,6 +189,10 @@ _numeric_to_str_typecast_functions = {
     np.dtype("datetime64[ms]"): str_cast.int2timestamp,
     np.dtype("datetime64[us]"): str_cast.int2timestamp,
     np.dtype("datetime64[ns]"): str_cast.int2timestamp,
+    np.dtype("timedelta64[s]"): str_cast.int2timedelta,
+    np.dtype("timedelta64[ms]"): str_cast.int2timedelta,
+    np.dtype("timedelta64[us]"): str_cast.int2timedelta,
+    np.dtype("timedelta64[ns]"): str_cast.int2timedelta,
 }
 
 
@@ -408,7 +424,7 @@ class StringMethods(ColumnMethodsMixin):
                 self._column, as_scalar(sep), as_scalar(na_rep, "str")
             )
         else:
-            other_cols = _get_cols_list(others)
+            other_cols = _get_cols_list(self._parent, others)
             all_cols = [self._column] + other_cols
             data = cpp_concatenate(
                 cudf.DataFrame(
@@ -422,10 +438,10 @@ class StringMethods(ColumnMethodsMixin):
             data = [""]
         out = self._return_or_inplace(data, **kwargs)
         if len(out) == 1 and others is None:
-            if isinstance(out, StringColumn):
-                out = out[0]
-            else:
+            if isinstance(out, cudf.Series):
                 out = out.iloc[0]
+            else:
+                out = out[0]
         return out
 
     def join(self, sep):
@@ -4174,6 +4190,168 @@ class StringMethods(ColumnMethodsMixin):
             cupy.asarray(metadata),
         )
 
+    def porter_stemmer_measure(self, **kwargs):
+        """
+        Compute the Porter Stemmer measure for each string.
+        The Porter Stemmer algorithm is described `here
+        <https://tartarus.org/martin/PorterStemmer/def.txt>`_.
+
+        Returns
+        -------
+        Series or Index of object.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series(["hello", "super"])
+        >>> ser.str.porter_stemmer_measure()
+        0    1
+        1    2
+        dtype: int32
+        """
+        return self._return_or_inplace(
+            cpp_porter_stemmer_measure(self._column), **kwargs
+        )
+
+    def is_consonant(self, position, **kwargs):
+        """
+        Return true for strings where the character at ``position`` is a
+        consonant. The ``position`` parameter may also be a list of integers
+        to check different characters per string.
+        If the ``position`` is larger than the string length, False is
+        returned for that string.
+
+        Parameters
+        ----------
+        position: int or list-like
+           The character position to check within each string.
+
+        Returns
+        -------
+        Series or Index of bool dtype.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series(["toy", "trouble"])
+        >>> ser.str.is_consonant(1)
+        0    False
+        1     True
+        dtype: bool
+        >>> positions = cudf.Series([2, 3])
+        >>> ser.str.is_consonant(positions)
+        0     True
+        1    False
+        dtype: bool
+         """
+        ltype = LetterType.CONSONANT
+
+        if can_convert_to_column(position):
+            return self._return_or_inplace(
+                cpp_is_letter_multi(
+                    self._column, ltype, column.as_column(position)
+                ),
+                **kwargs,
+            )
+
+        return self._return_or_inplace(
+            cpp_is_letter(self._column, ltype, position), **kwargs
+        )
+
+    def is_vowel(self, position, **kwargs):
+        """
+        Return true for strings where the character at ``position`` is a
+        vowel -- not a consonant. The ``position`` parameter may also be
+        a list of integers to check different characters per string.
+        If the ``position`` is larger than the string length, False is
+        returned for that string.
+
+        Parameters
+        ----------
+        position: int or list-like
+           The character position to check within each string.
+
+        Returns
+        -------
+        Series or Index of bool dtype.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series(["toy", "trouble"])
+        >>> ser.str.is_vowel(1)
+        0     True
+        1    False
+        dtype: bool
+        >>> positions = cudf.Series([2, 3])
+        >>> ser.str.is_vowel(positions)
+        0    False
+        1     True
+        dtype: bool
+        """
+        ltype = LetterType.VOWEL
+
+        if can_convert_to_column(position):
+            return self._return_or_inplace(
+                cpp_is_letter_multi(
+                    self._column, ltype, column.as_column(position)
+                ),
+                **kwargs,
+            )
+
+        return self._return_or_inplace(
+            cpp_is_letter(self._column, ltype, position), **kwargs
+        )
+
+    def edit_distance(self, targets, **kwargs):
+        """
+        The ``targets`` strings are measured against the strings in this
+        instance using the Levenshtein edit distance algorithm.
+        https://www.cuelogic.com/blog/the-levenshtein-algorithm
+
+        The ``targets`` parameter may also be a single string in which
+        case the edit distance is computed for all the strings against
+        that single string.
+
+        Parameters
+        ----------
+        targets : array-like, Sequence or Series or str
+            The string(s) to measure against each string.
+
+        Returns
+        -------
+        Series or Index of int32.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> sr = cudf.Series(["puppy", "doggy", "kitty"])
+        >>> targets = cudf.Series(["pup", "dogie", "kitten"])
+        >>> sr.str.edit_distance(targets=targets)
+        0    2
+        1    2
+        2    2
+        dtype: int32
+        >>> sr.str.edit_distance("puppy")
+        0    0
+        1    4
+        2    4
+        dtype: int32
+        """
+        if is_scalar(targets):
+            targets_column = column.as_column([targets])
+        elif can_convert_to_column(targets):
+            targets_column = column.as_column(targets)
+        else:
+            raise TypeError(
+                f"targets should be an str, array-like or Series object, "
+                f"found {type(targets)}"
+            )
+
+        return self._return_or_inplace(
+            cpp_edit_distance(self._column, targets_column), **kwargs
+        )
+
 
 def _massage_string_arg(value, name, allow_col=False):
     if isinstance(value, str):
@@ -4334,6 +4512,18 @@ class StringColumn(column.ColumnBase):
     def _set_mask(self, value):
         super()._set_mask(value)
 
+    @classmethod
+    def from_arrow(cls, array):
+        pa_size, pa_offset, nbuf, obuf, sbuf = buffers_from_pyarrow(array)
+        children = (
+            column.build_column(data=obuf, dtype="int32"),
+            column.build_column(data=sbuf, dtype="int8"),
+        )
+
+        return StringColumn(
+            mask=nbuf, children=children, size=pa_size, offset=pa_offset
+        )
+
     @property
     def _nbytes(self):
         if self.size == 0:
@@ -4350,12 +4540,25 @@ class StringColumn(column.ColumnBase):
             if "format" not in kwargs:
                 if len(self) > 0:
                     # infer on host from the first not na element
-                    fmt = datetime.infer_format(self[self.notna()][0])
-                    kwargs.update(format=fmt)
+                    # or return all null column if all values
+                    # are null in current column
+                    if self.null_count == len(self):
+                        return column.column_empty(
+                            len(self), dtype=out_dtype, masked=True
+                        )
+                    else:
+                        fmt = datetime.infer_format(self[self.notna()][0])
+                        kwargs.update(format=fmt)
 
             # Check for None strings
             if len(self) > 0 and self.binary_operator("eq", "None").any():
                 raise ValueError("Could not convert `None` value to datetime")
+
+            boolean_match = self.binary_operator("eq", "NaT")
+        elif out_dtype.type is np.timedelta64:
+            if "format" not in kwargs:
+                if len(self) > 0:
+                    kwargs.update(format="%D days %H:%M:%S")
 
             boolean_match = self.binary_operator("eq", "NaT")
         elif out_dtype.kind in {"i", "u"}:
@@ -4374,11 +4577,16 @@ class StringColumn(column.ColumnBase):
         result_col = _str_to_numeric_typecast_functions[out_dtype](
             self, **kwargs
         )
-        if (out_dtype.type is np.datetime64) and boolean_match.any():
+        if (
+            out_dtype.type in (np.datetime64, np.timedelta64)
+        ) and boolean_match.any():
             result_col[boolean_match] = None
         return result_col
 
     def as_datetime_column(self, dtype, **kwargs):
+        return self.as_numerical_column(dtype, **kwargs)
+
+    def as_timedelta_column(self, dtype, **kwargs):
         return self.as_numerical_column(dtype, **kwargs)
 
     def as_string_column(self, dtype, **kwargs):
@@ -4620,7 +4828,11 @@ def _string_column_binop(lhs, rhs, op, out_dtype):
     return out
 
 
-def _get_cols_list(others):
+def _get_cols_list(parent_obj, others):
+
+    parent_index = (
+        parent_obj.index if isinstance(parent_obj, cudf.Series) else parent_obj
+    )
 
     if (
         can_convert_to_column(others)
@@ -4637,9 +4849,26 @@ def _get_cols_list(others):
         If others is a list-like object (in our case lists & tuples)
         just another Series/Index, great go ahead with concatenation.
         """
-        cols_list = [column.as_column(frame, dtype="str") for frame in others]
+        cols_list = [
+            column.as_column(frame.reindex(parent_index), dtype="str")
+            if (
+                parent_index is not None
+                and isinstance(frame, cudf.Series)
+                and not frame.index.equals(parent_index)
+            )
+            else column.as_column(frame, dtype="str")
+            for frame in others
+        ]
+
         return cols_list
     elif others is not None:
+        if (
+            parent_index is not None
+            and isinstance(others, cudf.Series)
+            and not others.index.equals(parent_index)
+        ):
+            others = others.reindex(parent_index)
+
         return [column.as_column(others, dtype="str")]
     else:
         raise TypeError(

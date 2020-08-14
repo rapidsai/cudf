@@ -46,7 +46,7 @@ TEST_F(StringsColumnTest, Sort)
 
   auto strings_view = cudf::strings_column_view(h_strings);
   auto results      = cudf::strings::detail::sort(strings_view, cudf::strings::detail::name);
-  cudf::test::expect_columns_equal(*results, h_expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, h_expected);
 }
 
 TEST_F(StringsColumnTest, SortZeroSizeStringsColumn)
@@ -78,11 +78,11 @@ TEST_P(SliceParmsTest, Slice)
       h_expected.push_back(h_strings[idx]);
   }
   auto strings_view = cudf::strings_column_view(strings);
-  auto results      = cudf::strings::detail::slice(strings_view, start, end);
+  auto results      = cudf::strings::detail::copy_slice(strings_view, start, end);
 
   cudf::test::strings_column_wrapper expected(h_expected.begin(), h_expected.end());
   // thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_P(SliceParmsTest, SliceAllNulls)
@@ -101,12 +101,12 @@ TEST_P(SliceParmsTest, SliceAllNulls)
       h_expected.push_back(h_strings[idx]);
   }
   auto strings_view = cudf::strings_column_view(strings);
-  auto results      = cudf::strings::detail::slice(strings_view, start, end);
+  auto results      = cudf::strings::detail::copy_slice(strings_view, start, end);
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_P(SliceParmsTest, SliceAllEmpty)
@@ -125,10 +125,10 @@ TEST_P(SliceParmsTest, SliceAllEmpty)
       h_expected.push_back(h_strings[idx]);
   }
   auto strings_view = cudf::strings_column_view(strings);
-  auto results      = cudf::strings::detail::slice(strings_view, start, end);
+  auto results      = cudf::strings::detail::copy_slice(strings_view, start, end);
   cudf::test::strings_column_wrapper expected(h_expected.begin(), h_expected.end());
   // thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 INSTANTIATE_TEST_CASE_P(SliceParms,
@@ -140,7 +140,7 @@ TEST_F(StringsColumnTest, SliceZeroSizeStringsColumn)
   cudf::column_view zero_size_strings_column(
     cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
-  auto results      = cudf::strings::detail::slice(strings_view, 1, 2);
+  auto results      = cudf::strings::detail::copy_slice(strings_view, 1, 2);
   cudf::test::expect_strings_empty(results->view());
 }
 
@@ -160,7 +160,7 @@ TEST_F(StringsColumnTest, Gather)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(results.front()->view(), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results.front()->view(), expected);
 }
 
 TEST_F(StringsColumnTest, GatherZeroSizeStringsColumn)
@@ -213,7 +213,7 @@ TEST_F(StringsColumnTest, Scatter)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsColumnTest, ScatterScalar)
@@ -240,7 +240,7 @@ TEST_F(StringsColumnTest, ScatterScalar)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsColumnTest, ScatterZeroSizeStringsColumn)

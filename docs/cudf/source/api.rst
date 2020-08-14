@@ -1,5 +1,6 @@
-API Reference
-=============
+~~~~~~~~~~~~~~~~~~~
+cuDF API Reference
+~~~~~~~~~~~~~~~~~~~
 
 .. currentmodule:: cudf.core.dataframe
 
@@ -8,7 +9,7 @@ DataFrame
 .. autoclass:: DataFrame
     :members:
     :inherited-members:
-    :exclude-members: serialize, deserialize, device_deserialize, device_serialize, host_deserialize, host_serialize, to_dict
+    :exclude-members: serialize, deserialize, device_deserialize, device_serialize, host_deserialize, host_serialize, to_dict, itertuples, iterrows
 
 Series
 ------
@@ -165,6 +166,14 @@ DatetimeIndex
 -------------
 .. currentmodule:: cudf.core.index
 .. autoclass:: DatetimeIndex
+    :members:
+    :inherited-members:
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
+
+TimedeltaIndex
+--------------
+.. currentmodule:: cudf.core.index
+.. autoclass:: TimedeltaIndex
     :members:
     :inherited-members:
     :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list

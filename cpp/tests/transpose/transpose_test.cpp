@@ -141,7 +141,7 @@ void run_test(size_t ncols, size_t nrows, bool add_nulls)
   CUDF_EXPECTS(result_view.num_columns() == expected_view.num_columns(),
                "Expected same number of columns");
   for (cudf::size_type i = 0; i < result_view.num_columns(); ++i) {
-    cudf::test::expect_columns_equal(result_view.column(i), expected_view.column(i));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result_view.column(i), expected_view.column(i));
     CUDF_EXPECTS(result_view.column(i).null_count() == expected_nulls[i],
                  "Expected correct null count");
   }
@@ -153,7 +153,7 @@ template <typename T>
 class TransposeTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(TransposeTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_CASE(TransposeTest, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(TransposeTest, SingleValue) { run_test<TypeParam>(1, 1, false); }
 
