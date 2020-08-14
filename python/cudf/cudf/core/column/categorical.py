@@ -1,7 +1,6 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
 import pickle
 
-import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -674,9 +673,9 @@ class CategoricalAccessor(ColumnMethodsMixin):
         )
         out_code_dtype = min_unsigned_type(max_cat_size)
 
-        cur_order = cupy.arange(len(cur_codes))
-        old_codes = cupy.arange(len(cur_cats), dtype=out_code_dtype)
-        new_codes = cupy.arange(len(new_cats), dtype=out_code_dtype)
+        cur_order = column.arange(len(cur_codes))
+        old_codes = column.arange(len(cur_cats), dtype=out_code_dtype)
+        new_codes = column.arange(len(new_cats), dtype=out_code_dtype)
 
         new_df = cudf.DataFrame({"new_codes": new_codes, "cats": new_cats})
         old_df = cudf.DataFrame({"old_codes": old_codes, "cats": cur_cats})

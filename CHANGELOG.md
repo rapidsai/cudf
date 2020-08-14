@@ -3,10 +3,17 @@
 ## New Features
 
 - PR #5779 Add DataFrame.pivot() and DataFrame.unstack()
+- PR #5974 Use libcudf instead of cupy for `arange` or column creation from a scalar.
 
 ## Improvements
 
+- PR #5953 Use stable sort when doing a sort groupby
+- PR #5973 Link to the Code of Conduct in CONTRIBUTING.md
+- PR #5917 Just use `None` for `strides` in `Buffer`
+- PR #5971 Add cuStreamz README for basic installation and use
+
 ## Bug Fixes
+
 
 # cuDF 0.15.0 (Date TBD)
 
