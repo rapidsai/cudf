@@ -297,6 +297,7 @@
 - PR #5951 Fix mkdir error in benchmark build
 - PR #5949 Find Arrow include directory for JNI builds
 - PR #5964 Fix API doc page title tag
+- PR #5979 Test numba 0.51.0
 
 
 # cuDF 0.14.0 (03 Jun 2020)
