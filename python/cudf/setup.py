@@ -77,6 +77,7 @@ def cuda_detect():
         return None
 
 
+print("CUDA_VERSION", cuda_detect())
 install_requires = ["numba", "cython"]
 
 cython_files = ["cudf/**/*.pyx"]
