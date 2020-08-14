@@ -355,7 +355,7 @@ def test_parquet_read_filtered_multiple_files(tmpdir):
 
 @pytest.mark.skipif(
     version.parse(pa.__version__) < version.parse("1.0.1"),
-    reason="Changes in pyarrow 1.0.0 required to handle complex predicates with various operators and various operand types",
+    reason="pyarrow 1.0.0 needed for various operators and operand types",
 )
 @pytest.mark.parametrize(
     "predicate,expected_len",
