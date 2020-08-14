@@ -231,6 +231,53 @@ TEST_F(ASTTest, ArityCheckFailure)
                cudf::logic_error);
 }
 
+TEST_F(ASTTest, StringComparison)
+{
+  auto c_0   = cudf::test::strings_column_wrapper({"a", "bb", "ccc", "dddd"});
+  auto c_1   = cudf::test::strings_column_wrapper({"aa", "b", "cccc", "ddd"});
+  auto table = cudf::table_view{{c_0, c_1}};
+
+  auto col_ref_0  = cudf::ast::column_reference(0);
+  auto col_ref_1  = cudf::ast::column_reference(1);
+  auto expression = cudf::ast::expression(cudf::ast::ast_operator::LESS, col_ref_0, col_ref_1);
+
+  auto expected = column_wrapper<bool>{true, false, true, false};
+  auto result   = cudf::ast::compute_column(table, expression);
+
+  cudf::test::expect_columns_equal(expected, result->view(), true);
+}
+
+TEST_F(ASTTest, CopyColumn)
+{
+  auto c_0   = column_wrapper<int32_t>{3, 0, 1, 50};
+  auto table = cudf::table_view{{c_0}};
+
+  auto col_ref_0  = cudf::ast::column_reference(0);
+  auto expression = cudf::ast::expression(cudf::ast::ast_operator::IDENTITY, col_ref_0);
+
+  auto result   = cudf::ast::compute_column(table, expression);
+  auto expected = column_wrapper<int32_t>{3, 0, 1, 50};
+
+  cudf::test::expect_columns_equal(expected, result->view(), true);
+}
+
+TEST_F(ASTTest, CopyLiteral)
+{
+  auto c_0   = column_wrapper<int32_t>{0, 0, 0, 0};
+  auto table = cudf::table_view{{c_0}};
+
+  auto literal_value = cudf::numeric_scalar<int32_t>(-123);
+  auto literal_view  = cudf::get_scalar_device_view(literal_value);
+  auto literal       = cudf::ast::literal(literal_view);
+
+  auto expression = cudf::ast::expression(cudf::ast::ast_operator::IDENTITY, literal);
+
+  auto result   = cudf::ast::compute_column(table, expression);
+  auto expected = column_wrapper<int32_t>{-123, -123, -123, -123};
+
+  cudf::test::expect_columns_equal(expected, result->view(), true);
+}
+
 struct custom_functor {
   template <typename OperatorFunctor,
             typename LHS,
@@ -249,22 +296,6 @@ struct custom_functor {
   {
   }
 };
-
-TEST_F(ASTTest, StringComparison)
-{
-  auto c_0   = cudf::test::strings_column_wrapper({"a", "bb", "ccc", "dddd"});
-  auto c_1   = cudf::test::strings_column_wrapper({"aa", "b", "cccc", "ddd"});
-  auto table = cudf::table_view{{c_0, c_1}};
-
-  auto col_ref_0  = cudf::ast::column_reference(0);
-  auto col_ref_1  = cudf::ast::column_reference(1);
-  auto expression = cudf::ast::expression(cudf::ast::ast_operator::LESS, col_ref_0, col_ref_1);
-
-  auto expected = column_wrapper<bool>{true, false, true, false};
-  auto result   = cudf::ast::compute_column(table, expression);
-
-  cudf::test::expect_columns_equal(expected, result->view(), true);
-}
 
 TEST_F(ASTTest, CustomASTFunctor)
 {

@@ -132,7 +132,7 @@ cudf::size_type linearizer::visit(expression const& expr)
   // Push operator
   this->operators.push_back(op);
   // Push data reference
-  auto const source = [&]() {
+  auto const output = [&]() {
     if (node_index == 0) {
       // This node is the root. Output should be directed to the output column.
       // TODO: Could refactor to support output tables (multiple output columns)
@@ -152,7 +152,7 @@ cudf::size_type linearizer::visit(expression const& expr)
                                            this->intermediate_counter.take()};
     }
   }();
-  auto const index = this->add_data_reference(source);
+  auto const index = this->add_data_reference(output);
   // Insert source indices from all operands (sources) and this operator (destination)
   this->operator_source_indices.insert(this->operator_source_indices.end(),
                                        operand_data_reference_indices.cbegin(),

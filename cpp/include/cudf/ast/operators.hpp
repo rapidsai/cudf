@@ -76,6 +76,7 @@ enum class ast_operator {
                          ///< operand when one is null; or invalid when both are null
   */
   // Unary operators
+  IDENTITY,    ///< Identity function
   SIN,         ///< Trigonometric sine
   COS,         ///< Trigonometric cosine
   TAN,         ///< Trigonometric tangent
@@ -201,6 +202,9 @@ CUDA_HOST_DEVICE_CALLABLE constexpr void ast_operator_dispatcher(ast_operator op
       break;
     case ast_operator::LOGICAL_OR:
       f.template operator()<ast_operator::LOGICAL_OR>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::IDENTITY:
+      f.template operator()<ast_operator::IDENTITY>(std::forward<Ts>(args)...);
       break;
     case ast_operator::SIN:
       f.template operator()<ast_operator::SIN>(std::forward<Ts>(args)...);
@@ -571,6 +575,17 @@ struct operator_functor<ast_operator::LOGICAL_OR> {
   CUDA_HOST_DEVICE_CALLABLE auto operator()(LHS lhs, RHS rhs) -> decltype(lhs || rhs)
   {
     return lhs || rhs;
+  }
+};
+
+template <>
+struct operator_functor<ast_operator::IDENTITY> {
+  static constexpr auto arity{1};
+
+  template <typename InputT>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(input)
+  {
+    return input;
   }
 };
 
