@@ -152,6 +152,7 @@
 - PR #5602 Add support for concatenation of `Series` & `DataFrame` in `cudf.concat` when `axis=0`
 - PR #5603 Refactor JIT `parser.cpp`
 - PR #5643 Update `isort` to 5.0.4
+- PR #5648 OO interface for hash join with explicit `build/probe` semantic 
 - PR #5662 Make Java ColumnVector(long nativePointer) constructor public
 - PR #5679 Use `pickle5` to test older Python versions
 - PR #5684 Use `pickle5` in `Serializable` (when available)
@@ -218,16 +219,19 @@
 - PR #5377 Handle array of cupy scalars in to_column
 - PR #5326 Fix `DataFrame.__init__` for list of scalar inputs and related dask issue
 - PR #5383 Fix cython `type_id` enum mismatch
+- PR #5982 Fix gcc-9 compile errors under CUDA 11
 - PR #5382 Fix CategoricalDtype equality comparisons
 - PR #5385 Fix index issues in `DataFrame.from_gpu_matrix`
 - PR #5390 Fix Java data type IDs and string interleave test
 - PR #5392 Fix documentation links
+- PR #5978 Fix option to turn off NVTX
 - PR #5410 Fix compile warning by disallowing bool column type for slice_strings
 - PR #5404 Fix issue with column creation when chunked arrays are passed
 - PR #5409 Use the correct memory resource when creating empty null masks
 - PR #5399 Fix cpp compiler warnings of unreachable code
 - PR #5439 Fix nvtext ngrams_tokenize performance for multi-byte UTF8
 - PR #5446 Fix compile error caused by out-of-date PR merge (4990)
+- PR #5983 Fix JNI gcc-9 compile error under CUDA 11
 - PR #5423 Fix any() reduction ignore nulls
 - PR #5459 Fix str.translate to convert table characters to UTF-8
 - PR #5480 Fix merge sort docs
@@ -298,6 +302,7 @@
 - PR #5951 Fix mkdir error in benchmark build
 - PR #5949 Find Arrow include directory for JNI builds
 - PR #5964 Fix API doc page title tag
+- PR #5981 Handle `nat` in `fillna` for datetime and timedelta types
 
 
 # cuDF 0.14.0 (03 Jun 2020)
