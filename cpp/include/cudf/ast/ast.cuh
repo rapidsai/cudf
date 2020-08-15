@@ -26,6 +26,9 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
+#include <cstring>
+#include <numeric>
+
 namespace cudf {
 
 namespace ast {
@@ -310,6 +313,45 @@ std::unique_ptr<column> compute_column(
   expression const& expr,
   cudaStream_t stream                 = 0,  // TODO use detail API
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+struct ast_plan {
+ public:
+  ast_plan() : sizes(), data_pointers() {}
+
+  using buffer_type = std::pair<std::unique_ptr<char[]>, int>;
+
+  template <typename T>
+  void add_to_plan(std::vector<T> const& v)
+  {
+    auto const data_size = sizeof(T) * v.size();
+    sizes.push_back(data_size);
+    data_pointers.push_back(v.data());
+  }
+
+  buffer_type get_host_data_buffer() const
+  {
+    auto const total_size = std::accumulate(sizes.cbegin(), sizes.cend(), 0);
+    auto host_data_buffer = std::make_unique<char[]>(total_size);
+    auto const offsets    = this->get_offsets();
+    for (unsigned int i = 0; i < data_pointers.size(); ++i) {
+      std::memcpy(host_data_buffer.get() + offsets.at(i), data_pointers.at(i), sizes.at(i));
+    }
+    return std::make_pair(std::move(host_data_buffer), total_size);
+  }
+
+  std::vector<cudf::size_type> get_offsets() const
+  {
+    auto offsets = std::vector<int>(this->sizes.size());
+    // When C++17, use std::exclusive_scan
+    offsets.at(0) = 0;
+    std::partial_sum(this->sizes.cbegin(), this->sizes.cend() - 1, offsets.begin() + 1);
+    return offsets;
+  }
+
+ private:
+  std::vector<cudf::size_type> sizes;
+  std::vector<const void*> data_pointers;
+};
 
 }  // namespace detail
 
