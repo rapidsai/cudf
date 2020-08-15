@@ -296,24 +296,6 @@ __launch_bounds__(block_size) __global__
                              cudf::size_type num_operators,
                              cudf::size_type num_intermediates);
 
-/**
- * @brief Compute a new column by evaluating an expression tree on a table.
- *
- * This evaluates an expression over a table to produce a new column. Also called an n-ary
- * transform.
- *
- * @param table The table used for expression evaluation.
- * @param expr The root of the expression tree.
- * @param stream Stream on which to perform the computation.
- * @param mr Device memory resource.
- * @return std::unique_ptr<column> Output column.
- */
-std::unique_ptr<column> compute_column(
-  table_view const table,
-  expression const& expr,
-  cudaStream_t stream                 = 0,  // TODO use detail API
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
 struct ast_plan {
  public:
   ast_plan() : sizes(), data_pointers() {}
@@ -353,6 +335,23 @@ struct ast_plan {
   std::vector<const void*> data_pointers;
 };
 
+/**
+ * @brief Compute a new column by evaluating an expression tree on a table.
+ *
+ * This evaluates an expression over a table to produce a new column. Also called an n-ary
+ * transform.
+ *
+ * @param table The table used for expression evaluation.
+ * @param expr The root of the expression tree.
+ * @param stream Stream on which to perform the computation.
+ * @param mr Device memory resource.
+ * @return std::unique_ptr<column> Output column.
+ */
+std::unique_ptr<column> compute_column(
+  table_view const table,
+  expression const& expr,
+  cudaStream_t stream                 = 0,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 }  // namespace detail
 
 /**

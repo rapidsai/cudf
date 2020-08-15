@@ -273,7 +273,11 @@ CUDA_HOST_DEVICE_CALLABLE constexpr void ast_operator_dispatcher(ast_operator op
       f.template operator()<ast_operator::NOT>(std::forward<Ts>(args)...);
       break;
     default:
-      // TODO: Error handling?
+#ifndef __CUDA_ARCH__
+      CUDF_FAIL("Invalid operator.");
+#else
+      release_assert(false && "Invalid operator.");
+#endif
       break;
   }
 }
@@ -1109,9 +1113,6 @@ inline cudf::data_type ast_operator_return_type(ast_operator op,
 {
   auto result = cudf::data_type(cudf::type_id::EMPTY);
   switch (operand_types.size()) {
-    case 0:
-      // TODO: Nullary return type functor
-      break;
     case 1:
       unary_operator_dispatcher(op, operand_types.at(0), detail::return_type_functor{}, &result);
       break;
@@ -1119,10 +1120,7 @@ inline cudf::data_type ast_operator_return_type(ast_operator op,
       binary_operator_dispatcher(
         op, operand_types.at(0), operand_types.at(1), detail::return_type_functor{}, &result);
       break;
-    case 3:
-      // TODO: Ternary return type functor
-      break;
-    default: break;
+    default: CUDF_FAIL("Unsupported operator return type."); break;
   }
   return result;
 }
