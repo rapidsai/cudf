@@ -62,8 +62,15 @@ def cuda_detect(cuda_home):
         cudaRuntimeGetVersion = libcuda.cudaRuntimeGetVersion
         version_int = ctypes.c_int(0)
         ret = cudaRuntimeGetVersion(ctypes.byref(version_int))
-        if ret != 0:
-            print("ret", ret)
+        print("ret", ret)
+        if ret == 100:
+            cuda_version = os.environ.get("CUDA_VERSION", None)
+            if cuda_version is None:
+                raise TypeError("Please set CUDA_VERSION environment variable")
+            cuda_version = cuda_version.split(".")
+            print("cuda_version", cuda_version)
+            return ".".join(cuda_version.split(".")[:2])
+        elif ret != 0:
             return None
 
         # Convert version integer to version string
