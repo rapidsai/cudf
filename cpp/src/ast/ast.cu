@@ -57,8 +57,8 @@ __launch_bounds__(block_size) __global__
 {
   extern __shared__ std::int64_t intermediate_storage[];
   auto thread_intermediate_storage = &intermediate_storage[threadIdx.x * num_intermediates];
-  const cudf::size_type start_idx  = threadIdx.x + blockIdx.x * blockDim.x;
-  const cudf::size_type stride     = blockDim.x * gridDim.x;
+  auto const start_idx             = cudf::size_type(threadIdx.x + blockIdx.x * blockDim.x);
+  auto const stride                = cudf::size_type(blockDim.x * gridDim.x);
   auto const num_rows              = table.num_rows();
   auto const evaluator =
     cudf::ast::detail::row_evaluator(table, literals, thread_intermediate_storage, &output_column);
