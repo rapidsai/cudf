@@ -124,11 +124,20 @@ std::unique_ptr<column> compute_column(table_view const table,
     cudf::mutable_column_device_view::create(output_column->mutable_view(), stream);
 
   // Configure kernel parameters
-  auto constexpr block_size = 512;
+  auto const num_intermediates     = expr_linearizer.get_intermediate_count();
+  auto const shmem_size_per_thread = static_cast<int>(sizeof(std::int64_t) * num_intermediates);
+  int device_id;
+  CUDA_TRY(cudaGetDevice(&device_id));
+  int shmem_per_block_limit;
+  CUDA_TRY(
+    cudaDeviceGetAttribute(&shmem_per_block_limit, cudaDevAttrMaxSharedMemoryPerBlock, device_id));
+  auto constexpr DEFAULT_BLOCK_SIZE = 512;
+  auto const block_size =
+    (shmem_size_per_thread > 0)
+      ? std::min(DEFAULT_BLOCK_SIZE, shmem_per_block_limit / shmem_size_per_thread)
+      : DEFAULT_BLOCK_SIZE;
   cudf::detail::grid_1d config(table_num_rows, block_size);
-  auto const num_intermediates = expr_linearizer.get_intermediate_count();
-  auto const shmem_size_per_block =
-    sizeof(std::int64_t) * num_intermediates * config.num_threads_per_block;
+  auto const shmem_size_per_block = shmem_size_per_thread * config.num_threads_per_block;
 
   // Output linearizer info
   /*
@@ -162,7 +171,7 @@ std::unique_ptr<column> compute_column(table_view const table,
   */
 
   // Execute the kernel
-  cudf::ast::detail::compute_column_kernel<block_size>
+  cudf::ast::detail::compute_column_kernel<DEFAULT_BLOCK_SIZE>
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream>>>(
       *table_device,
       device_literals,
