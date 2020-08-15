@@ -7,7 +7,7 @@ def validate_setup():
     # TODO: Remove the following check once we arrive at a solution for #4827
     # This is a temporary workaround to unblock internal testing
     # related issue: https://github.com/rapidsai/cudf/issues/4827
-    if "RAPIDS_NO_INITIALIZE" in os.environ:
+    if "RAPIDS_NO_INITIALIZE" in os.environ or "CUDF_NO_INITIALIZE" in os.environ:
         return
 
     import warnings
