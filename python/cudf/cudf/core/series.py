@@ -4557,6 +4557,9 @@ class DatetimeProperties(object):
                 f"'date_format' must be str, not {type(date_format)}"
             )
 
+        # TODO: Remove following validations
+        # once https://github.com/rapidsai/cudf/issues/5991
+        # is implemented
         not_implemented_formats = [
             "%a",
             "%A",
