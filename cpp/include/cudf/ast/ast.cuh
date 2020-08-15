@@ -84,11 +84,10 @@ struct row_evaluator {
     auto const data_index = device_data_reference.data_index;
     auto const ref_type   = device_data_reference.reference_type;
     if (ref_type == detail::device_data_reference_type::COLUMN) {
-      auto column = this->table.column(data_index);
-      return column.element<Element>(row_index);
+      return this->table.column(data_index).element<Element>(row_index);
     } else if (ref_type == detail::device_data_reference_type::LITERAL) {
       return this->literals[data_index].value<Element>();
-    } else {  // Assumes type == detail::device_data_reference_type::INTERMEDIATE
+    } else {  // Assumes ref_type == detail::device_data_reference_type::INTERMEDIATE
       // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing
       // Using a temporary variable ensures that the compiler knows the result is aligned
       std::int64_t intermediate = this->thread_intermediate_storage[data_index];
@@ -118,7 +117,7 @@ struct row_evaluator {
     auto const ref_type = device_data_reference.reference_type;
     if (ref_type == detail::device_data_reference_type::COLUMN) {
       this->output_column->element<Element>(row_index) = result;
-    } else {  // Assumes type == detail::device_data_reference_type::INTERMEDIATE
+    } else {  // Assumes ref_type == detail::device_data_reference_type::INTERMEDIATE
       // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing
       // Using a temporary variable ensures that the compiler knows the result is aligned
       std::int64_t tmp;
