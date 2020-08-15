@@ -229,6 +229,7 @@
 - PR #5399 Fix cpp compiler warnings of unreachable code
 - PR #5439 Fix nvtext ngrams_tokenize performance for multi-byte UTF8
 - PR #5446 Fix compile error caused by out-of-date PR merge (4990)
+- PR #5983 Fix JNI gcc-9 compile error under CUDA 11
 - PR #5423 Fix any() reduction ignore nulls
 - PR #5459 Fix str.translate to convert table characters to UTF-8
 - PR #5480 Fix merge sort docs
@@ -300,6 +301,7 @@
 - PR #5951 Fix mkdir error in benchmark build
 - PR #5949 Find Arrow include directory for JNI builds
 - PR #5964 Fix API doc page title tag
+- PR #5981 Handle `nat` in `fillna` for datetime and timedelta types
 
 
 # cuDF 0.14.0 (03 Jun 2020)
