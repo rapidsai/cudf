@@ -250,38 +250,15 @@ file(INSTALL ${LIBCXX_INCLUDE_DIR}     DESTINATION ${CMAKE_BINARY_DIR}/include/l
 hunter_add_package(ZLIB)
 find_package(ZLIB CONFIG REQUIRED)
 
-message(STATUS "ZLIB: ZLIB_LIBRARIES set to ${ZLIB_LIBRARIES}")
-message(STATUS "ZLIB: ZLIB_INCLUDE_DIRS set to ${ZLIB_INCLUDE_DIRS}")
-
-if(ZLIB_FOUND)
-    message(STATUS "ZLib found in ${ZLIB_INCLUDE_DIRS}")
-else()
-    message(FATAL_ERROR "ZLib not found. Building from source.")
-    
-endif(ZLIB_FOUND)
-
 ###################################################################################################
 # - find boost ------------------------------------------------------------------------------------
 
 # Don't look for a CMake configuration file
 set(Boost_NO_BOOST_CMAKE ON)
 
-
 hunter_add_package(Boost COMPONENTS system filesystem)
 find_package(Boost CONFIG REQUIRED system filesystem)
 
-message(STATUS "BOOST: Boost_LIBRARIES set to ${Boost_LIBRARIES}")
-message(STATUS "BOOST: Boost_INCLUDE_DIRS set to ${Boost_INCLUDE_DIRS}")
-
-if(Boost_FOUND)
-    message(STATUS "Boost found in ${Boost_INCLUDE_DIRS}")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DBOOST_NO_CXX14_CONSTEXPR")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBOOST_NO_CXX14_CONSTEXPR")
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DBOOST_NO_CXX14_CONSTEXPR")
-else()
-    message(FATAL_ERROR "Boost not found, building from source.")
-    
-endif(Boost_FOUND)
 
 ###################################################################################################
 # - RMM -------------------------------------------------------------------------------------------
@@ -342,7 +319,6 @@ if(BUILD_TESTS)
         set(GTEST_INCLUDE_DIR "${GTEST_ROOT}/include")
         include_directories(${GTEST_INCLUDE_DIR})
         add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
-        
     else()
         message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
     endif(GTest_FOUND)
@@ -356,7 +332,6 @@ message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
 if(BUILD_BENCHMARKS)
 
   hunter_add_package(benchmark)
-
   find_package(benchmark CONFIG REQUIRED)
 
   if(benchmark_FOUND)
@@ -782,7 +757,11 @@ endif(HT_DEFAULT_ALLOCATOR)
 # - link libraries --------------------------------------------------------------------------------
 
 # link targets for cuDF
-target_link_libraries(cudf rmm arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES} GTest::gtest_main GTest::gmock benchmark)
+target_link_libraries(cudf rmm 
+  arrow arrow_cuda 
+  nvrtc ${CUDART_LIBRARY} cuda 
+  ${ZLIB_LIBRARIES} ${Boost_LIBRARIES} 
+  ${Gtest_LIBRARIES} ${benchmark_LIBRARIES})
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
