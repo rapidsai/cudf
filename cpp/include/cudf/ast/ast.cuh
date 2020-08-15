@@ -54,7 +54,7 @@ struct row_evaluator {
    * storing intermediates.
    * @param output_column The output column where results are stored.
    */
-  __device__ row_evaluator(const table_device_view table,
+  __device__ row_evaluator(table_device_view const& table,
                            const cudf::detail::fixed_width_scalar_device_view_base* literals,
                            std::int64_t* thread_intermediate_storage,
                            mutable_column_device_view* output_column)
@@ -78,7 +78,7 @@ struct row_evaluator {
    * @return Element
    */
   template <typename Element>
-  __device__ Element resolve_input(const detail::device_data_reference device_data_reference,
+  __device__ Element resolve_input(detail::device_data_reference const& device_data_reference,
                                    cudf::size_type row_index) const
   {
     auto const data_index = device_data_reference.data_index;
@@ -111,9 +111,9 @@ struct row_evaluator {
    * @param result Value to assign to output.
    */
   template <typename Element>
-  __device__ void resolve_output(const detail::device_data_reference device_data_reference,
+  __device__ void resolve_output(detail::device_data_reference const& device_data_reference,
                                  cudf::size_type row_index,
-                                 Element result) const
+                                 Element const& result) const
   {
     auto const ref_type = device_data_reference.reference_type;
     if (ref_type == detail::device_data_reference_type::COLUMN) {
@@ -140,8 +140,8 @@ struct row_evaluator {
             typename Input,
             std::enable_if_t<cudf::ast::is_valid_unary_op<OperatorFunctor, Input>>* = nullptr>
   __device__ void operator()(cudf::size_type row_index,
-                             const detail::device_data_reference input,
-                             const detail::device_data_reference output) const
+                             detail::device_data_reference const& input,
+                             detail::device_data_reference const& output) const
   {
     using Out              = simt::std::invoke_result_t<OperatorFunctor, Input>;
     auto const typed_input = this->resolve_input<Input>(input, row_index);
@@ -152,8 +152,8 @@ struct row_evaluator {
             typename Input,
             std::enable_if_t<!cudf::ast::is_valid_unary_op<OperatorFunctor, Input>>* = nullptr>
   __device__ void operator()(cudf::size_type row_index,
-                             const detail::device_data_reference input,
-                             const detail::device_data_reference output) const
+                             detail::device_data_reference const& input,
+                             detail::device_data_reference const& output) const
   {
     release_assert(false && "Invalid unary dispatch operator for the provided input.");
   }
@@ -174,9 +174,9 @@ struct row_evaluator {
             typename RHS,
             std::enable_if_t<cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
   __device__ void operator()(cudf::size_type row_index,
-                             const detail::device_data_reference lhs,
-                             const detail::device_data_reference rhs,
-                             const detail::device_data_reference output) const
+                             detail::device_data_reference const& lhs,
+                             detail::device_data_reference const& rhs,
+                             detail::device_data_reference const& output) const
   {
     using Out            = simt::std::invoke_result_t<OperatorFunctor, LHS, RHS>;
     auto const typed_lhs = this->resolve_input<LHS>(lhs, row_index);
@@ -189,15 +189,15 @@ struct row_evaluator {
             typename RHS,
             std::enable_if_t<!cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
   __device__ void operator()(cudf::size_type row_index,
-                             const detail::device_data_reference lhs,
-                             const detail::device_data_reference rhs,
-                             const detail::device_data_reference output) const
+                             detail::device_data_reference const& lhs,
+                             detail::device_data_reference const& rhs,
+                             detail::device_data_reference const& output) const
   {
     release_assert(false && "Invalid binary dispatch operator for the provided input.");
   }
 
  private:
-  const table_device_view table;
+  table_device_view const& table;
   const cudf::detail::fixed_width_scalar_device_view_base* literals;
   std::int64_t* thread_intermediate_storage;
   mutable_column_device_view* output_column;
@@ -209,11 +209,11 @@ struct row_evaluator {
  */
 struct evaluate_row_operator_functor {
   template <ast_operator op>
-  CUDA_HOST_DEVICE_CALLABLE void operator()(const detail::row_evaluator evaluator,
+  CUDA_HOST_DEVICE_CALLABLE void operator()(detail::row_evaluator const& evaluator,
                                             const detail::device_data_reference* data_references,
                                             const cudf::size_type* operator_source_indices,
                                             cudf::size_type& operator_source_index,
-                                            cudf::size_type row_index)
+                                            cudf::size_type const& row_index)
   {
     auto const arity = operator_functor<op>::arity;
     if (arity == 1) {
@@ -247,11 +247,11 @@ struct evaluate_row_operator_functor {
  * @param num_operators Number of operators.
  * @param row_index Row index of data column(s).
  */
-__device__ void evaluate_row_expression(const detail::row_evaluator evaluator,
+__device__ void evaluate_row_expression(detail::row_evaluator const& evaluator,
                                         const detail::device_data_reference* data_references,
                                         const ast_operator* operators,
                                         const cudf::size_type* operator_source_indices,
-                                        cudf::size_type num_operators,
+                                        cudf::size_type const& num_operators,
                                         cudf::size_type row_index)
 {
   auto operator_source_index = cudf::size_type(0);
@@ -287,7 +287,7 @@ __device__ void evaluate_row_expression(const detail::row_evaluator evaluator,
  */
 template <size_type block_size>
 __launch_bounds__(block_size) __global__
-  void compute_column_kernel(const table_device_view table,
+  void compute_column_kernel(table_device_view const table,
                              const cudf::detail::fixed_width_scalar_device_view_base* literals,
                              mutable_column_device_view output_column,
                              const detail::device_data_reference* data_references,

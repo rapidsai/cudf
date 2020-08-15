@@ -46,7 +46,7 @@ namespace detail {
 
 template <size_type block_size>
 __launch_bounds__(block_size) __global__
-  void compute_column_kernel(const table_device_view table,
+  void compute_column_kernel(table_device_view const table,
                              const cudf::detail::fixed_width_scalar_device_view_base* literals,
                              mutable_column_device_view output_column,
                              const detail::device_data_reference* data_references,
