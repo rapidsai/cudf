@@ -66,6 +66,7 @@ def cuda_detect(cuda_home):
         if ret == 100:
             cuda_version = os.environ.get("CUDA_VERSION", None)
             if cuda_version is None:
+                print("ENV_VARS", os.environ)
                 raise TypeError("Please set CUDA_VERSION environment variable")
             cuda_version = cuda_version.split(".")
             print("cuda_version", cuda_version)
