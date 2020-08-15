@@ -2910,7 +2910,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   private static native long normalizeNANsAndZeros(long viewHandle) throws CudfException;
 
   /**
-   * Native method to hash each row of the given table. Hashing function dispatched on the native side using the hashId.
+   * Native method to hash each row of the given table. Hashing function dispatched on the
+   * native side using the hashId.
    *
    * @param viewHandles array of native handles to the cudf::column_view columns being operated on.
    * @param hashId integer native ID of the hashing function identifier HashType
