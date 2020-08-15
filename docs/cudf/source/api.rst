@@ -191,7 +191,7 @@ GroupBy
 
 .. autoclass:: GroupBy
     :members:
-    :exclude-members: deserialize, serialize
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
 
 General utility functions
 -------------------------
