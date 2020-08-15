@@ -795,10 +795,17 @@ template <>
 struct operator_functor<ast_operator::ABS> {
   static constexpr auto arity{1};
 
-  template <typename InputT>
+  // Only accept signed or unsigned types (both require is_arithmetic<T> to be true)
+  template <typename InputT, std::enable_if_t<std::is_signed<InputT>::value>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(std::abs(input))
   {
     return std::abs(input);
+  }
+
+  template <typename InputT, std::enable_if_t<std::is_unsigned<InputT>::value>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(input)
+  {
+    return input;
   }
 };
 

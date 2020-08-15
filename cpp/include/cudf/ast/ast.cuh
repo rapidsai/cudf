@@ -78,7 +78,7 @@ struct row_evaluator {
    * @return Element
    */
   template <typename Element>
-  __device__ Element resolve_input(detail::device_data_reference const& device_data_reference,
+  __device__ Element resolve_input(detail::device_data_reference device_data_reference,
                                    cudf::size_type row_index) const
   {
     auto const data_index = device_data_reference.data_index;
@@ -111,7 +111,7 @@ struct row_evaluator {
    * @param result Value to assign to output.
    */
   template <typename Element>
-  __device__ void resolve_output(detail::device_data_reference const& device_data_reference,
+  __device__ void resolve_output(detail::device_data_reference device_data_reference,
                                  cudf::size_type row_index,
                                  Element const& result) const
   {
@@ -140,8 +140,8 @@ struct row_evaluator {
             typename Input,
             std::enable_if_t<cudf::ast::is_valid_unary_op<OperatorFunctor, Input>>* = nullptr>
   __device__ void operator()(cudf::size_type row_index,
-                             detail::device_data_reference const& input,
-                             detail::device_data_reference const& output) const
+                             detail::device_data_reference input,
+                             detail::device_data_reference output) const
   {
     using Out              = simt::std::invoke_result_t<OperatorFunctor, Input>;
     auto const typed_input = this->resolve_input<Input>(input, row_index);
@@ -152,8 +152,8 @@ struct row_evaluator {
             typename Input,
             std::enable_if_t<!cudf::ast::is_valid_unary_op<OperatorFunctor, Input>>* = nullptr>
   __device__ void operator()(cudf::size_type row_index,
-                             detail::device_data_reference const& input,
-                             detail::device_data_reference const& output) const
+                             detail::device_data_reference input,
+                             detail::device_data_reference output) const
   {
     release_assert(false && "Invalid unary dispatch operator for the provided input.");
   }
@@ -174,9 +174,9 @@ struct row_evaluator {
             typename RHS,
             std::enable_if_t<cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
   __device__ void operator()(cudf::size_type row_index,
-                             detail::device_data_reference const& lhs,
-                             detail::device_data_reference const& rhs,
-                             detail::device_data_reference const& output) const
+                             detail::device_data_reference lhs,
+                             detail::device_data_reference rhs,
+                             detail::device_data_reference output) const
   {
     using Out            = simt::std::invoke_result_t<OperatorFunctor, LHS, RHS>;
     auto const typed_lhs = this->resolve_input<LHS>(lhs, row_index);
@@ -189,9 +189,9 @@ struct row_evaluator {
             typename RHS,
             std::enable_if_t<!cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
   __device__ void operator()(cudf::size_type row_index,
-                             detail::device_data_reference const& lhs,
-                             detail::device_data_reference const& rhs,
-                             detail::device_data_reference const& output) const
+                             detail::device_data_reference lhs,
+                             detail::device_data_reference rhs,
+                             detail::device_data_reference output) const
   {
     release_assert(false && "Invalid binary dispatch operator for the provided input.");
   }
