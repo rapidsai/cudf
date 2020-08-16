@@ -4578,7 +4578,10 @@ class DatetimeProperties(object):
         for d_format in not_implemented_formats:
             if d_format in date_format:
                 raise NotImplementedError(
-                    f"{d_format} date-time format is not supported yet."
+                    f"{d_format} date-time format is not "
+                    f"supported yet, Please follow this issue "
+                    f"https://github.com/rapidsai/cudf/issues/5991 "
+                    f"for tracking purposes."
                 )
 
         str_col = self.series._column.as_string_column(
