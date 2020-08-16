@@ -4560,7 +4560,7 @@ class DatetimeProperties(object):
         # TODO: Remove following validations
         # once https://github.com/rapidsai/cudf/issues/5991
         # is implemented
-        not_implemented_formats = [
+        not_implemented_formats = {
             "%a",
             "%A",
             "%w",
@@ -4574,7 +4574,7 @@ class DatetimeProperties(object):
             "%G",
             "%u",
             "%V",
-        ]
+        }
         for d_format in not_implemented_formats:
             if d_format in date_format:
                 raise NotImplementedError(
