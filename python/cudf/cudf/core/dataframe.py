@@ -6603,7 +6603,7 @@ class DataFrame(Frame, Serializable):
 
         See Also
         --------
-        cudf.concat : General function to concatenate DataFrame or
+        cudf.core.reshape.concat : General function to concatenate DataFrame or
             objects.
 
         Notes

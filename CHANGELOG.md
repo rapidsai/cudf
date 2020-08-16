@@ -71,6 +71,7 @@
 - PR #5822 Add `cudf_kafka` to `custreamz` run time conda dependency and fix bash syntax issue
 - PR #5845 Add support for `mask_to_bools`
 - PR #5851 Add support for `Index.sort_values`
+- PR #5857 Add dtypes information page in python docs
 - PR #5859 Add conversion form `fixed_point` to `bool`
 - PR #5781 Add duration types support in cudf(python/cython)
 - PR #5815 LIST Support for ColumnVector

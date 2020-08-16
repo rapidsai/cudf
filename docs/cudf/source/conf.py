@@ -22,8 +22,6 @@
 import os
 import sys
 
-import cudf
-
 sys.path.insert(0, os.path.abspath("../.."))
 
 # -- General configuration ------------------------------------------------
@@ -48,6 +46,7 @@ extensions = [
     "recommonmark",
 ]
 
+
 copybutton_prompt_text = ">>> "
 
 ipython_mplbackend = "str"
@@ -66,7 +65,7 @@ master_doc = "index"
 
 # General information about the project.
 project = "cudf"
-copyright = "2018, NVIDIA"
+copyright = "2020, NVIDIA"
 author = "NVIDIA"
 
 # The version info for the project you're documenting, acts as replacement for
