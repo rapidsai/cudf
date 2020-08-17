@@ -201,6 +201,17 @@ General utility functions
     :members:
 
 
+Timedelta Properties
+--------------------
+.. currentmodule:: cudf.core.series
+.. autoclass:: TimedeltaProperties
+    :members:
+
+Datetime Properties
+-------------------
+.. currentmodule:: cudf.core.series
+.. autoclass:: DatetimeProperties
+    :members:
 
 IO
 --
