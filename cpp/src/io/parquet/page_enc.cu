@@ -649,34 +649,66 @@ inline __device__ void PackLiterals(
 {
   if (t <= (count | 0x1f)) {
     if (w < 8) {
-      uint32_t mask;
-      if (w <= 1) {
+      uint32_t mask = 0;
+      if (w == 1) {
         v |= SHFL_XOR(v, 1) << 1;
         v |= SHFL_XOR(v, 2) << 2;
         v |= SHFL_XOR(v, 4) << 4;
         mask = 0x7;
-      } else if (w <= 2) {
+      } else if (w == 2) {
         v |= SHFL_XOR(v, 1) << 2;
         v |= SHFL_XOR(v, 2) << 4;
         mask = 0x3;
-      } else {  // w=4
+      } else if (w == 4) {
         v |= SHFL_XOR(v, 1) << 4;
         mask = 0x1;
       }
-      if (t < count && !(t & mask)) { dst[(t * w) >> 3] = v; }
-    } else if (w < 12) {  // w=8
+      if (t < count && mask && !(t & mask)) { dst[(t * w) >> 3] = v; }
+
+      // If w is in set{3,5,6,7}, our job is not done yet.
+      if (w == 1 || w == 2 || w == 4) { return; }
+    } else if (w == 8) {
       if (t < count) { dst[t] = v; }
-    } else if (w < 16) {  // w=12
+      return;
+    } else if (w == 12) {
       v |= SHFL_XOR(v, 1) << 12;
       if (t < count && !(t & 1)) {
         dst[(t >> 1) * 3 + 0] = v;
         dst[(t >> 1) * 3 + 1] = v >> 8;
         dst[(t >> 1) * 3 + 2] = v >> 16;
       }
-    } else if (t < count) {  // w=16
-      dst[t * 2 + 0] = v;
-      dst[t * 2 + 1] = v >> 8;
+      return;
+    } else if (w == 16) {
+      if (t < count) {
+        dst[t * 2 + 0] = v;
+        dst[t * 2 + 1] = v >> 8;
+      }
+      return;
     }
+
+    // Scratch space to temporarily write to. Needed because we will use atomics to write 32 bit
+    // words but the destination mem may not be a multiple of 4 bytes.
+    // TODO (dm): This assumes blockdim = 128 and max bits per value = 16. Reduce magic numbers.
+    __shared__ uint32_t scratch[64];
+    if (t < 64) { scratch[t] = 0; }
+
+    uint64_t v64 = v;
+    v64 <<= (t * w) & 0x1f;
+
+    // Copy 64 bit word into two 32 bit words while following C++ strict aliasing rules.
+    uint32_t v32[2];
+    memcpy(&v32, &v64, sizeof(uint64_t));
+
+    // Atomically write result to scratch
+    if (v32[0]) { atomicOr(scratch + ((t * w) >> 5), v32[0]); }
+    if (v32[1]) { atomicOr(scratch + (((t + 1) * w) >> 5), v32[1]); }
+
+    // Copy scratch data to final destination
+    auto available_bytes = (count * w + 7) / 8;
+
+    auto scratch_bytes = reinterpret_cast<char *>(&scratch[0]);
+    if (t < available_bytes) { dst[t] = scratch_bytes[t]; }
+    if (t + 128 < available_bytes) { dst[t + 128] = scratch_bytes[t + 128]; }
   }
 }
 

@@ -467,12 +467,10 @@ TEST_F(ParquetWriterTest, ListColumn)
   // valids2},
   //                                                {{7, 8}}};
 
-  // TODO (dm): Following case still fails with
-  // "Invalid: List child array invalid: Invalid: Length spanned by list offsets (5) larger than
-  // values array (length 4)"
-
   // cudf::test::lists_column_wrapper<int32_t> col1{
   //   {{{1, 2, 3}, {}, {4, 5}, {}, {{0, 6, 0}, valids}}, valids2}, {{7, 8}}};
+  // cudf::test::lists_column_wrapper<int32_t> col1{
+  //   {{{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, valids2}, {{7, 8}}, lcw{}, lcw{lcw{}}}, valids2};
   cudf::test::lists_column_wrapper<int32_t> col1{
     {{{{1, 2, 3}, {}, {4, 5}, {}, {{0, 6, 0}, valids}}, valids2}, {{7, 8}}, lcw{}, lcw{lcw{}}},
     valids2};
@@ -490,6 +488,7 @@ TEST_F(ParquetWriterTest, ListColumn)
   auto filepath = ("ListColumn.parquet");
   cudf_io::write_parquet_args out_args{
     cudf_io::sink_info{filepath}, expected->view(), &expected_metadata};
+  out_args.compression = cudf::io::compression_type::NONE;
   cudf_io::write_parquet(out_args);
 
   // cudf_io::read_parquet_args in_args{cudf_io::source_info{filepath}};

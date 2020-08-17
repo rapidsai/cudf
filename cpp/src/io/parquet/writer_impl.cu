@@ -907,6 +907,7 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
       }
       return nbits;
     };
+    printf("maxdef %d, bits %d\n", col.max_def_level(), count_bits(col.max_def_level()));
     desc->level_bits = count_bits(col.nesting_levels()) << 4 | count_bits(col.max_def_level());
   }
 
@@ -916,7 +917,7 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
   // iteratively reduce this value if the largest fragment exceeds the max page size limit (we
   // ideally want the page size to be below 1MB so as to have enough pages to get good
   // compression/decompression performance).
-  uint32_t fragment_size = 3;
+  uint32_t fragment_size = 5000;
   // Not having this caused me great pain in debugging previous bug
   assert(fragment_size <= MAX_PAGE_FRAGMENT_SIZE);
 
