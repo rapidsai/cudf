@@ -33,25 +33,23 @@ namespace strings {
  *
  * | Specifier | Description |
  * | :-------: | ----------- |
- * | %%d | Day of the month: 01-31 |
- * | %%m | Month of the year: 01-12 |
- * | %%y | Year without century: 00-99 |
- * | %%Y | Year with century: 0001-9999 |
- * | %%H | 24-hour of the day: 00-23 |
- * | %%I | 12-hour of the day: 01-12 |
- * | %%M | Minute of the hour: 00-59|
- * | %%S | Second of the minute: 00-59 |
- * | %%f | 6-digit microsecond: 000000-999999 |
- * | %%z | UTC offset with format ±HHMM Example +0500 |
- * | %%j | Day of the year: 001-366 |
- * | %%p | Only 'AM', 'PM' or 'am', 'pm' are recognized |
+ * | \%d | Day of the month: 01-31 |
+ * | \%m | Month of the year: 01-12 |
+ * | \%y | Year without century: 00-99 |
+ * | \%Y | Year with century: 0001-9999 |
+ * | \%H | 24-hour of the day: 00-23 |
+ * | \%I | 12-hour of the day: 01-12 |
+ * | \%M | Minute of the hour: 00-59|
+ * | \%S | Second of the minute: 00-59 |
+ * | \%f | 6-digit microsecond: 000000-999999 |
+ * | \%z | UTC offset with format ±HHMM Example +0500 |
+ * | \%j | Day of the year: 001-366 |
+ * | \%p | Only 'AM', 'PM' or 'am', 'pm' are recognized |
  *
  * Other specifiers are not currently supported.
  *
  * Invalid formats are not checked. If the string contains unexpected
  * or insufficient characters, that output row entry's timestamp value is undefined.
- * Negative timestamp values are not currently supported. These would have
- * dates formatted before 1970-01-01.
  *
  * Any null string entry will result in a corresponding null row in the output column.
  *
@@ -83,22 +81,21 @@ std::unique_ptr<column> to_timestamps(
  *
  * | Specifier | Description |
  * | :-------: | ----------- |
- * | %%d | Day of the month: 01-31 |
- * | %%m | Month of the year: 01-12 |
- * | %%y | Year without century: 00-99 |
- * | %%Y | Year with century: 0001-9999 |
- * | %%H | 24-hour of the day: 00-23 |
- * | %%I | 12-hour of the day: 01-12 |
- * | %%M | Minute of the hour: 00-59|
- * | %%S | Second of the minute: 00-59 |
- * | %%f | 6-digit microsecond: 000000-999999 |
- * | %%z | Always outputs "+0000" |
- * | %%Z | Always outputs "UTC" |
- * | %%j | Day of the year: 001-366 |
- * | %%p | Only 'AM' or 'PM' |
+ * | \%d | Day of the month: 01-31 |
+ * | \%m | Month of the year: 01-12 |
+ * | \%y | Year without century: 00-99 |
+ * | \%Y | Year with century: 0001-9999 |
+ * | \%H | 24-hour of the day: 00-23 |
+ * | \%I | 12-hour of the day: 01-12 |
+ * | \%M | Minute of the hour: 00-59|
+ * | \%S | Second of the minute: 00-59 |
+ * | \%f | 6-digit microsecond: 000000-999999 |
+ * | \%z | Always outputs "+0000" |
+ * | \%Z | Always outputs "UTC" |
+ * | \%j | Day of the year: 001-366 |
+ * | \%p | Only 'AM' or 'PM' |
  *
  * No checking is done for invalid formats or invalid timestamp values.
- * Negative timestamp values are not currently supported.
  * All timestamps values are formatted to UTC.
  *
  * Any null input entry will result in a corresponding null entry in the output column.

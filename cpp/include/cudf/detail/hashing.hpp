@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,9 +37,21 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> hash(table_view const& input,
+                             hash_id hash_function                     = hash_id::HASH_MURMUR3,
                              std::vector<uint32_t> const& initial_hash = {},
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                              cudaStream_t stream                 = 0);
+
+std::unique_ptr<column> murmur_hash3_32(
+  table_view const& input,
+  std::vector<uint32_t> const& initial_hash = {},
+  rmm::mr::device_memory_resource* mr       = rmm::mr::get_default_resource(),
+  cudaStream_t stream                       = 0);
+
+std::unique_ptr<column> md5_hash(
+  table_view const& input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 }  // namespace detail
 }  // namespace cudf

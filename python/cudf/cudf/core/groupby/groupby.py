@@ -1,19 +1,22 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
-
 import collections
 import functools
 import pickle
+import warnings
 
 import pandas as pd
 
 import cudf
-import cudf._lib.groupby as libgroupby
+from cudf._lib import groupby as libgroupby
 from cudf._lib.nvtx import annotate
 from cudf.core.abc import Serializable
 from cudf.utils.utils import cached_property
 
 
 class GroupBy(Serializable):
+
+    _MAX_GROUPS_BEFORE_WARN = 100
+
     def __init__(
         self, obj, by=None, level=None, sort=True, as_index=True, dropna=True
     ):
@@ -55,18 +58,38 @@ class GroupBy(Serializable):
         else:
             self.grouping = _Grouping(obj, by, level)
 
-    def __getattr__(self, key):
-        if key != "_agg_func_name_with_args":
+    def __getattribute__(self, key):
+        try:
+            return super().__getattribute__(key)
+        except AttributeError:
             if key in libgroupby._GROUPBY_AGGS:
                 return functools.partial(self._agg_func_name_with_args, key)
-        raise AttributeError(
-            f"'{self.__class__.__name__}' has no attribute '{key}'"
-        )
+            raise
 
     def __iter__(self):
-        group_names, offsets, grouped_values = self._grouped()
+        group_names, offsets, grouped_keys, grouped_values = self._grouped()
+        if isinstance(group_names, cudf.Index):
+            group_names = group_names.to_pandas()
         for i, name in enumerate(group_names):
             yield name, grouped_values[offsets[i] : offsets[i + 1]]
+
+    @cached_property
+    def groups(self):
+        """
+        Returns a dictionary mapping group keys to row labels.
+        """
+        group_names, offsets, _, grouped_values = self._grouped()
+        grouped_index = grouped_values.index
+
+        if len(group_names) > self._MAX_GROUPS_BEFORE_WARN:
+            warnings.warn(
+                f"GroupBy.groups() performance scales poorly with "
+                f"number of groups. Got {len(group_names)} groups."
+            )
+
+        return dict(
+            zip(group_names.to_pandas(), grouped_index._split(offsets[1:-1]))
+        )
 
     def size(self):
         """
@@ -149,18 +172,22 @@ class GroupBy(Serializable):
             result = result.sort_index()
 
         if not _is_multi_agg(func):
-            try:
-                # drop the last level
-                if result.columns.nlevels > 1:
+            if result.columns.nlevels == 1:
+                # make sure it's a flat index:
+                result.columns = result.columns.get_level_values(0)
+
+            if result.columns.nlevels > 1:
+                try:
+                    # drop the last level
                     result.columns = result.columns.droplevel(-1)
-            except IndexError:
-                # Pandas raises an IndexError if we are left
-                # with an all-nan MultiIndex when dropping
-                # the last level
-                if result.shape[1] == 1:
-                    result.columns = [None]
-                else:
-                    raise
+                except IndexError:
+                    # Pandas raises an IndexError if we are left
+                    # with an all-nan MultiIndex when dropping
+                    # the last level
+                    if result.shape[1] == 1:
+                        result.columns = [None]
+                    else:
+                        raise
 
         # set index names to be group key names
         result.index.names = self.grouping.names
@@ -190,13 +217,6 @@ class GroupBy(Serializable):
         sizes = self.size()
         return result[n < sizes]
 
-    def nunique(self):
-        """
-        Return the number of unique values per group.
-        """
-        # Pandas includes key columns for nunique:
-        return self.agg(dict.fromkeys(self.obj._data.keys(), "nunique"))
-
     def serialize(self):
         header = {}
         frames = []
@@ -222,7 +242,6 @@ class GroupBy(Serializable):
 
     @classmethod
     def deserialize(cls, header, frames):
-
         kwargs = header["kwargs"]
 
         obj_type = pickle.loads(header["obj_type"])
@@ -241,7 +260,7 @@ class GroupBy(Serializable):
         grouped_values = self.obj.__class__._from_table(grouped_values)
         grouped_values._copy_categories(self.obj)
         group_names = grouped_keys.unique()
-        return (group_names, offsets, grouped_values)
+        return (group_names, offsets, grouped_keys, grouped_values)
 
     def _agg_func_name_with_args(self, func_name, *args, **kwargs):
         """
@@ -330,7 +349,15 @@ class GroupBy(Serializable):
         """
         if not callable(function):
             raise TypeError("type {!r} is not callable", type(function))
-        _, offsets, grouped_values = self._grouped()
+        _, offsets, _, grouped_values = self._grouped()
+
+        ngroups = len(offsets) - 1
+        if ngroups > self._MAX_GROUPS_BEFORE_WARN:
+            warnings.warn(
+                f"GroupBy.apply() performance scales poorly with "
+                f"number of groups. Got {ngroups} groups."
+            )
+
         chunks = [
             grouped_values[s:e] for s, e in zip(offsets[:-1], offsets[1:])
         ]
@@ -473,7 +500,7 @@ class GroupBy(Serializable):
         if not callable(function):
             raise TypeError("type {!r} is not callable", type(function))
 
-        _, offsets, grouped_values = self._grouped()
+        _, offsets, _, grouped_values = self._grouped()
         kwargs.update({"chunks": offsets})
         return grouped_values.apply_chunks(function, **kwargs)
 
@@ -551,7 +578,7 @@ class DataFrameGroupBy(GroupBy):
         Parrot       25.0
 
         >>> arrays = [['Falcon', 'Falcon', 'Parrot', 'Parrot'],
-        ['Captive', 'Wild', 'Captive', 'Wild']]
+        ... ['Captive', 'Wild', 'Captive', 'Wild']]
         >>> index = pd.MultiIndex.from_arrays(arrays, names=('Animal', 'Type'))
         >>> df = cudf.DataFrame({'Max Speed': [390., 350., 30., 20.]},
                 index=index)
@@ -583,13 +610,25 @@ class DataFrameGroupBy(GroupBy):
             dropna=dropna,
         )
 
-    def __getattr__(self, key):
-        if key in self.obj:
-            return self.obj[key].groupby(self.grouping, dropna=self._dropna)
-        return super().__getattr__(key)
+    def __getattribute__(self, key):
+        try:
+            return super().__getattribute__(key)
+        except AttributeError:
+            if key in self.obj:
+                return self.obj[key].groupby(
+                    self.grouping, dropna=self._dropna
+                )
+            raise
 
     def __getitem__(self, key):
         return self.obj[key].groupby(self.grouping, dropna=self._dropna)
+
+    def nunique(self):
+        """
+        Return the number of unique values per group
+        """
+        # For DataFrameGroupBy, Pandas includes key columns for nunique:
+        return self.agg(dict.fromkeys(self.obj._data.keys(), "nunique"))
 
 
 class SeriesGroupBy(GroupBy):

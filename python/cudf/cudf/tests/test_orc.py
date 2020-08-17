@@ -67,6 +67,7 @@ def path_or_buf(datadir):
                 "double1",
             ],
         ),
+        ("TestOrcFile.RLEv2.orc", ["x", "y"]),
         ("TestOrcFile.testSnappy.orc", None),
         ("TestOrcFile.demo-12-zlib.orc", ["_col2", "_col3", "_col4", "_col5"]),
     ],
@@ -318,3 +319,16 @@ def test_orc_writer_strings(tmpdir, dtypes):
     got = pa.orc.ORCFile(gdf_fname).read().to_pandas()
 
     assert_eq(expect, got)
+
+
+def test_orc_writer_sliced(tmpdir):
+    cudf_path = tmpdir.join("cudf.orc")
+
+    df = pd.DataFrame()
+    df["String"] = np.array(["Alpha", "Beta", "Gamma", "Delta"])
+    df = cudf.from_pandas(df)
+
+    df_select = df.iloc[1:3]
+
+    df_select.to_orc(cudf_path)
+    assert_eq(cudf.read_orc(cudf_path), df_select.reset_index(drop=True))

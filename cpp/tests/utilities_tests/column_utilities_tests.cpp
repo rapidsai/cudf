@@ -137,7 +137,7 @@ TEST_F(ColumnUtilitiesEquivalenceTest, DoubleTest)
   cudf::test::fixed_width_column_wrapper<double> col1{10. / 3, 22. / 7};
   cudf::test::fixed_width_column_wrapper<double> col2{31. / 3 - 21. / 3, 19. / 7 + 3. / 7};
 
-  cudf::test::expect_columns_equivalent(col1, col2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(col1, col2);
 }
 
 TEST_F(ColumnUtilitiesEquivalenceTest, NullabilityTest)
@@ -146,7 +146,7 @@ TEST_F(ColumnUtilitiesEquivalenceTest, NullabilityTest)
   cudf::test::fixed_width_column_wrapper<double> col1{1, 2, 3};
   cudf::test::fixed_width_column_wrapper<double> col2({1, 2, 3}, all_valid);
 
-  cudf::test::expect_columns_equivalent(col1, col2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(col1, col2);
 }
 
 struct ColumnUtilitiesStringsTest : public cudf::test::BaseFixture {
@@ -177,6 +177,17 @@ TEST_F(ColumnUtilitiesStringsTest, StringsToHostAllNulls)
   auto results   = host_data.first;
   EXPECT_EQ(3, host_data.first.size());
   EXPECT_TRUE(std::all_of(results.begin(), results.end(), [](auto s) { return s.empty(); }));
+}
+
+TEST_F(ColumnUtilitiesStringsTest, PrintColumnDuration)
+{
+  const char* delimiter = ",";
+
+  cudf::test::fixed_width_column_wrapper<cudf::duration_s, int32_t> cudf_col({100, 0, 7, 140000});
+
+  auto expected = "100 seconds,0 seconds,7 seconds,140000 seconds";
+
+  EXPECT_EQ(cudf::test::to_string(cudf_col, delimiter), expected);
 }
 
 TYPED_TEST(ColumnUtilitiesTestIntegral, PrintColumnNumeric)

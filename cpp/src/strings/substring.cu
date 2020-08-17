@@ -364,7 +364,7 @@ std::unique_ptr<column> slice_strings(
                "Parameters starts and stops must be of the same type.");
   CUDF_EXPECTS(starts_column.null_count() == 0, "Parameter starts must not contain nulls.");
   CUDF_EXPECTS(stops_column.null_count() == 0, "Parameter stops must not contain nulls.");
-  CUDF_EXPECTS(starts_column.type().id() != data_type{BOOL8}.id(),
+  CUDF_EXPECTS(starts_column.type().id() != data_type{type_id::BOOL8}.id(),
                "Positions values must not be bool type.");
   CUDF_EXPECTS(is_fixed_width(starts_column.type()), "Positions values must be fixed width type.");
 

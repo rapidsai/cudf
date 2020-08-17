@@ -129,11 +129,16 @@ public class TableTest extends CudfTestBase {
           case INT32: // fall through
           case UINT32: // fall through
           case TIMESTAMP_DAYS:
+          case DURATION_DAYS:
             assertEquals(expected.getInt(expectedRow), cv.getInt(tableRow),
                 "Column " + colName + " Row " + tableRow);
             break;
           case INT64: // fall through
           case UINT64: // fall through
+          case DURATION_MICROSECONDS: // fall through
+          case DURATION_MILLISECONDS: // fall through
+          case DURATION_NANOSECONDS: // fall through
+          case DURATION_SECONDS: // fall through
           case TIMESTAMP_MICROSECONDS: // fall through
           case TIMESTAMP_MILLISECONDS: // fall through
           case TIMESTAMP_NANOSECONDS: // fall through
@@ -153,10 +158,91 @@ public class TableTest extends CudfTestBase {
             assertArrayEquals(expected.getUTF8(expectedRow), cv.getUTF8(tableRow),
                 "Column " + colName + " Row " + tableRow);
             break;
+          case LIST:
+            assertListColumnsEquals(expected, cv, colName, enableNullCheck);
+            break;
           default:
             throw new IllegalArgumentException(type + " is not supported yet");
         }
       }
+    }
+  }
+
+  public static void assertPartialColumnsAreEqual(HostColumnVector.NestedHostColumnVector expected,
+                                                  HostColumnVector.NestedHostColumnVector cv,
+                                                  String colName, boolean enableNullCheck) {
+    assertEquals(expected.getType(), cv.getType(), "Type For Column " + colName);
+    assertEquals(expected.getRows(), cv.getRows(), "Row Count For Column " + colName);
+    if (enableNullCheck) {
+      assertEquals(expected.getNullCount(), cv.getNullCount(), "Null Count For Column " + colName);
+    } else {
+      // TODO add in a proper check when null counts are supported by serializing a partitioned column
+    }
+    DType type = expected.getType();
+    for (int expectedRow = 0; expectedRow < expected.getRows(); expectedRow++) {
+      assertEquals(expected.isNull(expectedRow), cv.isNull(expectedRow),
+          "NULL for Column " + colName + " Row " + expectedRow);
+      if (!expected.isNull(expectedRow)) {
+        switch (type) {
+          case BOOL8: // fall through
+          case INT8: // fall through
+          case UINT8: // fall through
+          case INT16: // fall through
+          case UINT16: // fall through
+          case INT32: // fall through
+          case UINT32: // fall through
+          case TIMESTAMP_DAYS: // fall through
+          case DURATION_DAYS: // fall through
+          case INT64: // fall through
+          case UINT64: // fall through
+          case DURATION_MICROSECONDS: // fall through
+          case DURATION_MILLISECONDS: // fall through
+          case DURATION_NANOSECONDS: // fall through
+          case DURATION_SECONDS: // fall through
+          case TIMESTAMP_MICROSECONDS: // fall through
+          case TIMESTAMP_MILLISECONDS: // fall through
+          case TIMESTAMP_NANOSECONDS: // fall through
+          case TIMESTAMP_SECONDS:
+            assertEquals(expected.getElement(expectedRow), cv.getElement(expectedRow),
+                "Column " + colName + " Row " + expectedRow);
+            break;
+          case FLOAT32:
+            assertEqualsWithinPercentage((float)expected.getElement(expectedRow), (float)cv.getElement(expectedRow), 0.0001,
+                "Column " + colName + " Row " + expectedRow);
+            break;
+          case FLOAT64:
+            assertEqualsWithinPercentage((double)expected.getElement(expectedRow), (double)cv.getElement(expectedRow), 0.0001,
+                "Column " + colName + " Row " + expectedRow);
+            break;
+          case STRING:
+            assertArrayEquals(((String)expected.getElement(expectedRow)).getBytes(), ((String)cv.getElement(expectedRow)).getBytes(),
+                "Column " + colName + " Row " + expectedRow);
+            break;
+          case LIST:
+            assertEquals(expected.getNestedChildren().size(),
+                cv.getNestedChildren().size(), " num children don't match");
+            for (int k = 0; k < expected.getNestedChildren().size(); k++)
+            assertPartialColumnsAreEqual(expected.getNestedChildren().get(k),
+                cv.getNestedChildren().get(k), colName, enableNullCheck);
+            break;
+          default:
+            throw new IllegalArgumentException(type + " is not supported yet");
+        }
+      }
+    }
+  }
+
+  private static void assertListColumnsEquals(HostColumnVector expected, HostColumnVector input,
+                                              String colName, boolean enableNullCheck) {
+    for (int rowIndex = 0; rowIndex < expected.getRowCount(); rowIndex++) {
+      assertEquals(expected.isNull(rowIndex), input.isNull(rowIndex));
+      if (expected.getList(rowIndex) != null) {
+        assertArrayEquals(expected.getList(rowIndex).toString().getBytes(),
+          input.getList(rowIndex).toString().getBytes());
+      }
+    }
+    for (int j = 0; j < expected.children.size(); j++) {
+      assertPartialColumnsAreEqual(expected.children.get(j), input.children.get(j), colName, enableNullCheck);
     }
   }
 
@@ -213,6 +299,30 @@ public class TableTest extends CudfTestBase {
       ColumnVector vec = t.getColumn(i);
       DType type = vec.getType();
       assertEquals(expectedTypes[i], type, "Types don't match at " + i);
+    }
+  }
+
+  @Test
+  void testMergeSimple() {
+    try (Table table1 = new Table.TestBuilder()
+            .column(5, 3, 3, 1, 1)
+            .column(5, 3, null, 1, 2)
+            .column(1, 3, 5, 7, 9)
+            .build();
+         Table table2 = new Table.TestBuilder()
+                 .column(1, 2, 7)
+                 .column(3, 2, 2)
+                 .column(1, 3, 10)
+                 .build();
+         Table expected = new Table.TestBuilder()
+                 .column(1, 1, 1, 2, 3, 3, 5, 7)
+                 .column(3, 2, 1, 2, null, 3, 5, 2)
+                 .column(1, 9, 7, 3, 5, 3, 1, 10)
+                 .build();
+         Table sortedTable1 = table1.orderBy(Table.asc(0), Table.desc(1));
+         Table sortedTable2 = table2.orderBy(Table.asc(0), Table.desc(1));
+         Table merged = Table.merge(Arrays.asList(sortedTable1, sortedTable2), Table.asc(0), Table.desc(1))) {
+      assertTablesAreEqual(expected, merged);
     }
   }
 
@@ -664,9 +774,45 @@ public class TableTest extends CudfTestBase {
              .column( 100,  101, 102,  103,  104,  105,  106, 107, 108, 109) // left
              .column(null, null, 203, null, null, null, null, 201, 202, 204) // right
              .build();
-         Table joinedTable = leftTable.onColumns(0).leftJoin(rightTable.onColumns(0));
+         Table joinedTable = leftTable.onColumns(0).leftJoin(rightTable.onColumns(0), true);
          Table orderedJoinedTable = joinedTable.orderBy(Table.asc(1, true))) {
       assertTablesAreEqual(expected, orderedJoinedTable);
+    }
+  }
+
+ @Test
+  void testLeftJoinOnNullKeys() {
+    try (Table leftTable = new Table.TestBuilder()
+        .column(  2,   3,   9,   0,   1,   7,   4, null, null,   8)
+        .column(100, 101, 102, 103, 104, 105, 106,  107,  108, 109)
+        .build();
+         
+         Table rightTable = new Table.TestBuilder()
+             .column(null, null,   9,   8,  10,  32)
+             .column( 201,  202, 203, 204, 205, 206)
+             .build()) {
+
+       try (Table expectedResults = new Table.TestBuilder()
+           .column(   2,    3,   9,    0,    1,    7,    4, null, null, null, null,   8) // common
+           .column( 100,  101, 102,  103,  104,  105,  106,  107,  107,  108,  108, 109) // left
+           .column(null, null, 203, null, null, null, null,  201,  202,  201,  202, 204) // right
+           .build();
+
+           Table joinedTable = leftTable.onColumns(0).leftJoin(rightTable.onColumns(0));
+           Table orderedJoinedTable = joinedTable.orderBy(Table.asc(1, true))) {
+         assertTablesAreEqual(expectedResults, orderedJoinedTable);
+       }
+
+       try (Table expectedResults = new Table.TestBuilder()
+           .column(   2,    3,   9,    0,    1,    7,    4, null, null,    8) // common
+           .column( 100,  101, 102,  103,  104,  105,  106,  107,  108,  109) // left
+           .column(null, null, 203, null, null, null, null, null, null,  204) // right
+           .build();
+
+           Table joinedTable = leftTable.onColumns(0).leftJoin(rightTable.onColumns(0), false);
+           Table orderedJoinedTable = joinedTable.orderBy(Table.asc(1, true))) {
+         assertTablesAreEqual(expectedResults, orderedJoinedTable);
+       }
     }
   }
 
@@ -680,13 +826,91 @@ public class TableTest extends CudfTestBase {
              .column(306, 301, 360, 109, 335, 254, 317, 361, 251, 326)
              .column( 20,  21,  22,  23,  24,  25,  26,  27,  28,  29)
              .build();
-         Table joinedTable = leftTable.onColumns(0).leftJoin(rightTable.onColumns(new int[]{0}));
+         Table joinedTable = leftTable.onColumns(0).leftJoin(rightTable.onColumns(0), true);
          Table orderedJoinedTable = joinedTable.orderBy(Table.asc(1, true));
          Table expected = new Table.TestBuilder()
              .column(360, 326, 254, 306, 109, 361, 251, 335, 301, 317) // common
              .column( 10,  11,  12,  13,  14,  15,  16,  17,  18,  19) // left
              .column( 22,  29,  25,  20,  23,  27,  28,  24,  21,  26) // right
              .build()) {
+      assertTablesAreEqual(expected, orderedJoinedTable);
+    }
+  }
+
+  @Test
+  void testFullJoinWithNonCommonKeys() {
+    try (Table leftTable = new Table.TestBuilder()
+            .column(  2,   3,   9,   0,   1,   7,   4,   6,   5,   8)
+            .column(100, 101, 102, 103, 104, 105, 106, 107, 108, 109)
+            .build();
+         Table rightTable = new Table.TestBuilder()
+                 .column(  6,   5,   9,   8,  10,  32)
+                 .column(200, 201, 202, 203, 204, 205)
+                 .build();
+         Table expected = new Table.TestBuilder()
+                 .column(   0,    1,    2,    3,    4,   5,   6,    7,   8,   9,   10,   32) // common
+                 .column( 103,  104,  100,  101,  106, 108, 107,  105, 109, 102, null, null) // left
+                 .column(null, null, null, null, null, 201, 200, null, 203, 202,  204,  205) // right
+                 .build();
+         Table joinedTable = leftTable.onColumns(0).fullJoin(rightTable.onColumns(0), true);
+         Table orderedJoinedTable = joinedTable.orderBy(Table.asc(0, true))) {
+      assertTablesAreEqual(expected, orderedJoinedTable);
+    }
+  }
+
+  @Test
+  void testFullJoinOnNullKeys() {
+    try (Table leftTable = new Table.TestBuilder()
+            .column(  2,   3, null,   0,   1,   7,   4, null,   5,   8)
+            .column(100, 101,  102, 103, 104, 105, 106,  107, 108, 109)
+            .build();
+         Table rightTable = new Table.TestBuilder()
+                 .column(null,   5, null,   8,  10,  32)
+                 .column( 200, 201,  202, 203, 204, 205)
+                 .build()) {
+
+      // First, test that null-key rows match, with compareNullsEqual=true.
+      try (Table expectedResults = new Table.TestBuilder()
+              .column(null, null, null, null,    0,    1,    2,    3,    4,   5,    7,   8,   10,   32) // common
+              .column( 102,  102,  107,  107,  103,  104,  100,  101,  106, 108,  105, 109, null, null) // left
+              .column( 200,  202,  200,  202, null, null, null, null, null, 201, null, 203,  204,  205) // right
+              .build();
+           Table joinedTable = leftTable.onColumns(0).fullJoin(rightTable.onColumns(0));
+           Table orderedJoinedTable = joinedTable.orderBy(Table.asc(0, true), Table.asc(1, true))) {
+        assertTablesAreEqual(expectedResults, orderedJoinedTable);
+      }
+
+      // Next, test that null-key rows do not match, with compareNullsEqual=false.
+      try (Table expectedResults = new Table.TestBuilder()
+              .column(null, null, null, null,    0,    1,    2,    3,    4,   5,    7,   8,   10,   32) // common
+              .column(null, null,  102,  107,  103,  104,  100,  101,  106, 108,  105, 109, null, null) // left
+              .column( 200,  202, null, null, null, null, null, null, null, 201, null, 203,  204,  205) // right
+              .build();
+           Table joinedTable = leftTable.onColumns(0).fullJoin(rightTable.onColumns(0), false);
+           Table orderedJoinedTable = joinedTable.orderBy(
+                   Table.asc(0, true), Table.asc(1, true), Table.asc(2, true))) {
+        assertTablesAreEqual(expectedResults, orderedJoinedTable);
+      }
+    }
+  }
+
+  @Test
+  void testFullJoinWithOnlyCommonKeys() {
+    try (Table leftTable = new Table.TestBuilder()
+            .column(360, 326, 254, 306, 109, 361, 251, 335, 301, 317)
+            .column(100, 101, 102, 103, 104, 105, 106, 107, 108, 109)
+            .build();
+         Table rightTable = new Table.TestBuilder()
+                 .column(306, 301, 360, 109, 335, 254, 317, 361, 251, 326)
+                 .column(200, 201, 202, 203, 204, 205, 206, 207, 208, 209)
+                 .build();
+         Table joinedTable = leftTable.onColumns(0).fullJoin(rightTable.onColumns(new int[]{0}), true);
+         Table orderedJoinedTable = joinedTable.orderBy(Table.asc(1, true));
+         Table expected = new Table.TestBuilder()
+                 .column(360, 326, 254, 306, 109, 361, 251, 335, 301, 317) // common
+                 .column(100, 101, 102, 103, 104, 105, 106, 107, 108, 109) // left
+                 .column(202, 209, 205, 200, 203, 207, 208, 204, 201, 206) // right
+                 .build()) {
       assertTablesAreEqual(expected, orderedJoinedTable);
     }
   }
@@ -706,9 +930,44 @@ public class TableTest extends CudfTestBase {
              .column(102, 107, 108, 109) // left
              .column(202, 200, 201, 203) // right
              .build();
-         Table joinedTable = leftTable.onColumns(0).innerJoin(rightTable.onColumns(0));
+         Table joinedTable = leftTable.onColumns(0).innerJoin(rightTable.onColumns(0), true);
          Table orderedJoinedTable = joinedTable.orderBy(Table.asc(1, true))) {
       assertTablesAreEqual(expected, orderedJoinedTable);
+    }
+  }
+
+  @Test
+  void testInnerJoinOnNullKeys() {
+    try (Table leftTable = new Table.TestBuilder()
+             .column(  2,   3,   9,   0,   1,   7,   4,   6, null,   8)
+             .column(100, 101, 102, 103, 104, 105, 106, 107,  108, 109)
+             .build();
+         Table rightTable = new Table.TestBuilder()
+             .column(  6, null,   9,   8,  10,  32)
+             .column(200,  201, 202, 203, 204, 205)
+             .build()) {
+
+      // First, test that null-key rows match, with compareNullsEqual=true.
+      try (Table expected = new Table.TestBuilder()
+             .column(  9,   6, null,   8) // common
+             .column(102, 107,  108, 109) // left
+             .column(202, 200,  201, 203) // right
+             .build();
+         Table joinedTable = leftTable.onColumns(0).innerJoin(rightTable.onColumns(0));
+         Table orderedJoinedTable = joinedTable.orderBy(Table.asc(1, true))) {
+        assertTablesAreEqual(expected, orderedJoinedTable);
+      }
+
+      // Next, test that null-key rows do not match, with compareNullsEqual=false.
+      try (Table expected = new Table.TestBuilder()
+              .column(  9,   6,    8) // common
+              .column(102, 107,  109) // left
+              .column(202, 200,  203) // right
+              .build();
+           Table joinedTable = leftTable.onColumns(0).innerJoin(rightTable.onColumns(0), false);
+           Table orderedJoinedTable = joinedTable.orderBy(Table.asc(1, true))){
+        assertTablesAreEqual(expected, orderedJoinedTable);
+      }
     }
   }
 
@@ -722,7 +981,7 @@ public class TableTest extends CudfTestBase {
              .column(306, 301, 360, 109, 335, 254, 317, 361, 251, 326)
              .column(200, 201, 202, 203, 204, 205, 206, 207, 208, 209)
              .build();
-         Table joinedTable = leftTable.onColumns(0).innerJoin(rightTable.onColumns(new int[]{0}));
+         Table joinedTable = leftTable.onColumns(0).innerJoin(rightTable.onColumns(new int[]{0}), true);
          Table orderedJoinedTable = joinedTable.orderBy(Table.asc(1, true));
          Table expected = new Table.TestBuilder()
              .column(360, 326, 254, 306, 109, 361, 251, 335, 301, 317) // common
@@ -747,7 +1006,7 @@ public class TableTest extends CudfTestBase {
              .column(  9,   6,   5,   8)
              .column(102, 107, 108, 109)
              .build();
-         Table joinedTable = leftTable.onColumns(0).leftSemiJoin(rightTable.onColumns(0));
+         Table joinedTable = leftTable.onColumns(0).leftSemiJoin(rightTable.onColumns(0), true);
          Table orderedJoinedTable = joinedTable.orderBy(Table.asc(1, true))) {
       assertTablesAreEqual(expected, orderedJoinedTable);
     }
@@ -764,7 +1023,7 @@ public class TableTest extends CudfTestBase {
              .column( 306,  301,  360,  109,  335,  254,  317,  361,  251,  326)
              .column("20", "21", "22", "23", "24", "25", "26", "27", "28", "29")
              .build();
-         Table joinedTable = leftTable.onColumns(0, 2).leftSemiJoin(rightTable.onColumns(0, 1));
+         Table joinedTable = leftTable.onColumns(0, 2).leftSemiJoin(rightTable.onColumns(0, 1), true);
          Table orderedJoinedTable = joinedTable.orderBy(Table.asc(0, true));
          Table expected = new Table.TestBuilder()
              .column(254,   326,   361)
@@ -772,6 +1031,39 @@ public class TableTest extends CudfTestBase {
              .column("25", "29",  "27")
              .build()) {
       assertTablesAreEqual(expected, orderedJoinedTable);
+    }
+  }
+
+  @Test
+  void testLeftSemiJoinOnNullKeys() {
+    try (Table leftTable = new Table.TestBuilder()
+            .column(  2,   3,   9,   0,   1,   7,   4,   6, null,   8)
+            .column(100, 101, 102, 103, 104, 105, 106, 107,  108, 109)
+            .build();
+         Table rightTable = new Table.TestBuilder()
+                 .column(  6, null,   9,   8,  10,  32)
+                 .column(201,  202, 203, 204, 205, 206)
+                 .build()) {
+
+       // First, test that null-key rows match, with compareNullsEqual=true.
+       try (Table expected = new Table.TestBuilder()
+               .column(  9,   6, null,   8)
+               .column(102, 107,  108, 109)
+               .build();
+            Table joinedTable = leftTable.onColumns(0).leftSemiJoin(rightTable.onColumns(0));
+            Table orderedJoinedTable = joinedTable.orderBy(Table.asc(1, true))) {
+          assertTablesAreEqual(expected, orderedJoinedTable);
+       }
+
+      // Next, test that null-key rows do not match, with compareNullsEqual=false.
+      try (Table expected = new Table.TestBuilder()
+              .column(  9,   6,   8)
+              .column(102, 107, 109)
+              .build();
+           Table joinedTable = leftTable.onColumns(0).leftSemiJoin(rightTable.onColumns(0), false);
+           Table orderedJoinedTable = joinedTable.orderBy(Table.asc(1, true))) {
+        assertTablesAreEqual(expected, orderedJoinedTable);
+      }
     }
   }
 
@@ -789,9 +1081,42 @@ public class TableTest extends CudfTestBase {
              .column(  2,   3,   0,   1,   7,   4)
              .column(100, 101, 103, 104, 105, 106)
              .build();
-         Table joinedTable = leftTable.onColumns(0).leftAntiJoin(rightTable.onColumns(0));
+         Table joinedTable = leftTable.onColumns(0).leftAntiJoin(rightTable.onColumns(0), true);
          Table orderedJoinedTable = joinedTable.orderBy(Table.asc(1, true))) {
       assertTablesAreEqual(expected, orderedJoinedTable);
+    }
+  }
+
+  @Test
+  void testLeftAntiJoinOnNullKeys() {
+    try (Table leftTable = new Table.TestBuilder()
+            .column(  2,   3,   9,   0,   1,   7,   4,   6, null,   8)
+            .column(100, 101, 102, 103, 104, 105, 106, 107,  108, 109)
+            .build();
+         Table rightTable = new Table.TestBuilder()
+                 .column(  6, null,   9,   8,  10,  32)
+                 .column(201,  202, 203, 204, 205, 206)
+                 .build()) {
+
+      // First, test that null-key rows match, with compareNullsEqual=true.
+      try (Table expected = new Table.TestBuilder()
+              .column(  2,   3,   0,   1,   7,   4)
+              .column(100, 101, 103, 104, 105, 106)
+              .build();
+           Table joinedTable = leftTable.onColumns(0).leftAntiJoin(rightTable.onColumns(0));
+           Table orderedJoinedTable = joinedTable.orderBy(Table.asc(1, true))) {
+        assertTablesAreEqual(expected, orderedJoinedTable);
+      }
+
+      // Next, test that null-key rows do not match, with compareNullsEqual=false.
+      try (Table expected = new Table.TestBuilder()
+              .column(  2,   3,   0,   1,   7,   4, null)
+              .column(100, 101, 103, 104, 105, 106,  108)
+              .build();
+           Table joinedTable = leftTable.onColumns(0).leftAntiJoin(rightTable.onColumns(0), false);
+           Table orderedJoinedTable = joinedTable.orderBy(Table.asc(1, true))) {
+        assertTablesAreEqual(expected, orderedJoinedTable);
+      }
     }
   }
 
@@ -806,13 +1131,34 @@ public class TableTest extends CudfTestBase {
              .column( 306,  301,  360,  109,  335,  254,  317,  361,  251,  326)
              .column("20", "21", "22", "23", "24", "25", "26", "27", "28", "29")
              .build();
-         Table joinedTable = leftTable.onColumns(0, 2).leftAntiJoin(rightTable.onColumns(0, 1));
+         Table joinedTable = leftTable.onColumns(0, 2).leftAntiJoin(rightTable.onColumns(0, 1), true);
          Table orderedJoinedTable = joinedTable.orderBy(Table.asc(2, true));
          Table expected = new Table.TestBuilder()
              .column( 360,  326, null,  306, null,  251,  301,  317)
              .column(  10,   11, null,   13,   14,   16,   18,   19)
              .column("20", "21", "22", "23", "24", "26", "28", "29")
              .build()) {
+      assertTablesAreEqual(expected, orderedJoinedTable);
+    }
+  }
+
+  @Test
+  void testCrossJoin() {
+    try (Table leftTable = new Table.TestBuilder()
+            .column(100, 101, 102)
+            .build();
+         Table rightTable = new Table.TestBuilder()
+                 .column(200, null)
+                 .build();
+         Table expected = new Table.TestBuilder()
+                 .column(  100, 100,  101, 101,  102, 102) // left
+                 .column( null, 200, null, 200, null, 200) // right
+                 .build();
+         Table joinedTable = leftTable.crossJoin(rightTable);
+         Table orderedJoinedTable =
+                 joinedTable.orderBy(
+                         Table.asc(0, true),
+                         Table.asc(1, true))) {
       assertTablesAreEqual(expected, orderedJoinedTable);
     }
   }
@@ -1053,6 +1399,48 @@ public class TableTest extends CudfTestBase {
     return isUpperBound ?
         table.upperBound(nullsAreSmallest, values, descFlags) :
         table.lowerBound(nullsAreSmallest, values, descFlags);
+  }
+
+  @Test
+  void testRepeat() {
+    try (Table t = new Table.TestBuilder()
+            .column(1, 2)
+            .column("a", "b")
+            .build();
+         Table expected = new Table.TestBuilder()
+                 .column(1, 1, 1, 2, 2, 2)
+                 .column("a", "a", "a", "b", "b", "b")
+                 .build();
+         Table repeated = t.repeat(3)) {
+      assertTablesAreEqual(expected, repeated);
+    }
+  }
+
+  @Test
+  void testRepeatColumn() {
+    try (Table t = new Table.TestBuilder()
+            .column(1, 2)
+            .column("a", "b")
+            .build();
+         ColumnVector repeats = ColumnVector.fromBytes((byte)1, (byte)4);
+         Table expected = new Table.TestBuilder()
+                 .column(1, 2, 2, 2, 2)
+                 .column("a", "b", "b", "b", "b")
+                 .build();
+         Table repeated = t.repeat(repeats)) {
+      assertTablesAreEqual(expected, repeated);
+    }
+  }
+
+  @Test
+  void testRepeatColumnBad() {
+    try (Table t = new Table.TestBuilder()
+            .column(1, 2)
+            .column("a", "b")
+            .build();
+         ColumnVector repeats = ColumnVector.fromBytes((byte)2, (byte)-1)) {
+      assertThrows(CudfException.class, () -> t.repeat(repeats));
+    }
   }
 
   @Test
@@ -2568,6 +2956,21 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  @Test
+  void testSimpleGather() {
+    try (Table testTable = new Table.TestBuilder()
+            .column(1, 2, 3, 4, 5)
+            .column("A", "AA", "AAA", "AAAA", "AAAAA")
+            .build();
+         ColumnVector gatherMap = ColumnVector.fromInts(0, 2, 4, -2);
+         Table expected = new Table.TestBuilder()
+                 .column(1, 3, 5, 4)
+                 .column("A", "AAA", "AAAAA", "AAAA")
+                 .build();
+         Table found = testTable.gather(gatherMap)) {
+      assertTablesAreEqual(expected, found);
+    }
+  }
 
   @Test
   void testMaskWithoutValidity() {
@@ -2732,6 +3135,26 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  private final class MyBufferProvider implements HostBufferProvider {
+    private final MyBufferConsumer wrapped;
+    long offset = 0;
+
+    private MyBufferProvider(MyBufferConsumer wrapped) {
+      this.wrapped = wrapped;
+    }
+
+    @Override
+    public long readInto(HostMemoryBuffer buffer, long len) {
+      long amountLeft = wrapped.offset - offset;
+      long amountToCopy = Math.max(0, Math.min(len, amountLeft));
+      if (amountToCopy > 0) {
+        buffer.copyFromHostBuffer(0, wrapped.buffer, offset, amountToCopy);
+        offset += amountToCopy;
+      }
+      return amountToCopy;
+    }
+  }
+
   @Test
   void testParquetWriteToBufferChunked() {
     try (Table table0 = getExpectedFileTable();
@@ -2805,6 +3228,66 @@ public class TableTest extends CudfTestBase {
       }
     } finally {
       tempFile.delete();
+    }
+  }
+
+  @Test
+  void testArrowIPCWriteToFileWithNamesAndMetadata() throws IOException {
+    File tempFile = File.createTempFile("test-names-metadata", ".arrow");
+    try (Table table0 = getExpectedFileTable()) {
+      ArrowIPCWriterOptions options = ArrowIPCWriterOptions.builder()
+              .withColumnNames("first", "second", "third", "fourth", "fifth", "sixth", "seventh")
+              .build();
+      try (TableWriter writer = Table.writeArrowIPCChunked(options, tempFile.getAbsoluteFile())) {
+        writer.write(table0);
+      }
+      try (StreamedTableReader reader = Table.readArrowIPCChunked(tempFile)) {
+        boolean done = false;
+        int count = 0;
+        while (!done) {
+          try (Table t = reader.getNextIfAvailable()) {
+            if (t == null) {
+              done = true;
+            } else {
+              assertTablesAreEqual(table0, t);
+              count++;
+            }
+          }
+        }
+        assertEquals(1, count);
+      }
+    } finally {
+      tempFile.delete();
+    }
+  }
+
+  @Test
+  void testArrowIPCWriteToBufferChunked() {
+    try (Table table0 = getExpectedFileTable();
+         MyBufferConsumer consumer = new MyBufferConsumer()) {
+      ArrowIPCWriterOptions options = ArrowIPCWriterOptions.builder()
+              .withColumnNames("first", "second", "third", "fourth", "fifth", "sixth", "seventh")
+              .build();
+      try (TableWriter writer = Table.writeArrowIPCChunked(options, consumer)) {
+        writer.write(table0);
+        writer.write(table0);
+        writer.write(table0);
+      }
+      try (StreamedTableReader reader = Table.readArrowIPCChunked(new MyBufferProvider(consumer))) {
+        boolean done = false;
+        int count = 0;
+        while (!done) {
+          try (Table t = reader.getNextIfAvailable()) {
+            if (t == null) {
+              done = true;
+            } else {
+              assertTablesAreEqual(table0, t);
+              count++;
+            }
+          }
+        }
+        assertEquals(3, count);
+      }
     }
   }
 

@@ -51,6 +51,8 @@ std::size_t size_of(data_type element_type)
 // Empty column of specified type
 std::unique_ptr<column> make_empty_column(data_type type)
 {
+  CUDF_EXPECTS(type.id() == type_id::EMPTY || !cudf::is_nested(type),
+               "make_empty_column is invalid to call on nested types");
   return std::make_unique<column>(type, 0, rmm::device_buffer{});
 }
 
@@ -162,7 +164,7 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stri
   // any of the children in the strings column which would otherwise cause an exception.
   auto null_mask = create_null_mask(size, mask_state::ALL_NULL, stream);
   column_view sc{
-    data_type{STRING}, size, nullptr, static_cast<bitmask_type*>(null_mask.data()), size};
+    data_type{type_id::STRING}, size, nullptr, static_cast<bitmask_type*>(null_mask.data()), size};
   auto sv = static_cast<scalar_type_t<cudf::string_view> const&>(value);
   // fill the column with the scalar
   auto output = strings::detail::fill(strings_column_view(sc), 0, size, sv, mr, stream);
@@ -188,6 +190,16 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::list
   cudaStream_t stream) const
 {
   CUDF_FAIL("TODO");
+}
+
+template <>
+std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::struct_view>(
+  scalar const& value,
+  size_type size,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream) const
+{
+  CUDF_FAIL("TODO. struct_view currently not supported.");
 }
 
 std::unique_ptr<column> make_column_from_scalar(scalar const& s,

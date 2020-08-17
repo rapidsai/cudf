@@ -86,7 +86,7 @@ std::unique_ptr<column> make_numeric_column(
   cudaStream_t stream                 = 0,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
 {
-  CUDF_EXPECTS(is_numeric(type), "Invalid, non-numeric type.");
+  CUDF_EXPECTS(is_numeric(type) || is_fixed_point(type), "Invalid, non-numeric type.");
   return std::make_unique<column>(type,
                                   size,
                                   rmm::device_buffer{size * cudf::size_of(type), stream, mr},
@@ -497,6 +497,37 @@ std::unique_ptr<cudf::column> make_lists_column(
   size_type num_lists,
   std::unique_ptr<column> offsets_column,
   std::unique_ptr<column> child_column,
+  size_type null_count,
+  rmm::device_buffer&& null_mask,
+  cudaStream_t stream                 = 0,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Constructs a STRUCT column using specified child columns as members.
+ *
+ * Specified child/member columns and null_mask are adopted by resultant
+ * struct column.
+ *
+ * A struct column requires that all specified child columns have the same
+ * number of rows. A struct column's row count equals that of any/all
+ * of its child columns. A single struct row at any index is comprised of
+ * all the individual child column values at the same index, in the order
+ * specified in the list of child columns.
+ *
+ * The specified null mask governs which struct row has a null value. This
+ * is orthogonal to the null values of individual child columns.
+ *
+ * @param num_rows The number of struct values in the struct column.
+ * @param child_columns The list of child/members that the struct is comprised of.
+ * @param null_count The number of null values in the struct column.
+ * @param null_mask The bits specifying the null struct values in the column.
+ * @param stream Optional stream for use with all memory allocation and device kernels.
+ * @param mr Optional resource to use for device memory allocation.
+ *
+ */
+std::unique_ptr<cudf::column> make_structs_column(
+  size_type num_rows,
+  std::vector<std::unique_ptr<column>>&& child_columns,
   size_type null_count,
   rmm::device_buffer&& null_mask,
   cudaStream_t stream                 = 0,

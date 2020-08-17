@@ -22,7 +22,8 @@
 namespace cudf {
 namespace detail {
 /**
- * @brief Creates a column of `BOOL8` elements by applying a predicate to every element between
+ * @brief Creates a column of `type_id::BOOL8` elements by applying a predicate to every element
+ * between
  * [`begin, `end`) `true` indicates the value is satisfies the predicate and `false` indicates it
  * doesn't.
  *
@@ -34,7 +35,7 @@ namespace detail {
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @param stream CUDA stream used for device memory operations and kernel launches.
  *
- * @returns A column of type `BOOL8,` with `true` representing predicate is satisfied.
+ * @returns A column of type `type_id::BOOL8,` with `true` representing predicate is satisfied.
  */
 
 template <typename InputIterator, typename Predicate>
@@ -46,7 +47,8 @@ std::unique_ptr<column> true_if(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
   cudaStream_t stream                 = 0)
 {
-  auto output = make_numeric_column(data_type(BOOL8), size, mask_state::UNALLOCATED, stream, mr);
+  auto output =
+    make_numeric_column(data_type(type_id::BOOL8), size, mask_state::UNALLOCATED, stream, mr);
   auto output_mutable_view = output->mutable_view();
   auto output_data         = output_mutable_view.data<bool>();
 

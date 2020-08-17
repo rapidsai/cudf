@@ -134,6 +134,26 @@ class parquet_column_view {
         _physical_type = Type::INT64;
         _stats_dtype   = statistics_dtype::dtype_int64;
         break;
+      case cudf::type_id::UINT8:
+        _physical_type  = Type::INT32;
+        _converted_type = ConvertedType::UINT_8;
+        _stats_dtype    = statistics_dtype::dtype_int8;
+        break;
+      case cudf::type_id::UINT16:
+        _physical_type  = Type::INT32;
+        _converted_type = ConvertedType::UINT_16;
+        _stats_dtype    = statistics_dtype::dtype_int16;
+        break;
+      case cudf::type_id::UINT32:
+        _physical_type  = Type::INT32;
+        _converted_type = ConvertedType::UINT_32;
+        _stats_dtype    = statistics_dtype::dtype_int32;
+        break;
+      case cudf::type_id::UINT64:
+        _physical_type  = Type::INT64;
+        _converted_type = ConvertedType::UINT_64;
+        _stats_dtype    = statistics_dtype::dtype_int64;
+        break;
       case cudf::type_id::FLOAT32:
         _physical_type = Type::FLOAT;
         _stats_dtype   = statistics_dtype::dtype_float32;
@@ -145,6 +165,35 @@ class parquet_column_view {
       case cudf::type_id::BOOL8:
         _physical_type = Type::BOOLEAN;
         _stats_dtype   = statistics_dtype::dtype_bool;
+        break;
+      // unsupported outside cudf for parquet 1.0.
+      case cudf::type_id::DURATION_DAYS:
+        _physical_type  = Type::INT32;
+        _converted_type = ConvertedType::TIME_MILLIS;
+        _stats_dtype    = statistics_dtype::dtype_int64;
+        break;
+      case cudf::type_id::DURATION_SECONDS:
+        _physical_type  = Type::INT64;
+        _converted_type = ConvertedType::TIME_MILLIS;
+        _stats_dtype    = statistics_dtype::dtype_int64;
+        _ts_scale       = 1000;
+        break;
+      case cudf::type_id::DURATION_MILLISECONDS:
+        _physical_type  = Type::INT64;
+        _converted_type = ConvertedType::TIME_MILLIS;
+        _stats_dtype    = statistics_dtype::dtype_int64;
+        break;
+      case cudf::type_id::DURATION_MICROSECONDS:
+        _physical_type  = Type::INT64;
+        _converted_type = ConvertedType::TIME_MICROS;
+        _stats_dtype    = statistics_dtype::dtype_int64;
+        break;
+      // unsupported outside cudf for parquet 1.0.
+      case cudf::type_id::DURATION_NANOSECONDS:
+        _physical_type  = Type::INT64;
+        _converted_type = ConvertedType::TIME_MICROS;
+        _stats_dtype    = statistics_dtype::dtype_int64;
+        _ts_scale       = -1000;  // negative value indicates division by absolute value
         break;
       case cudf::type_id::TIMESTAMP_DAYS:
         _physical_type  = Type::INT32;
@@ -171,12 +220,12 @@ class parquet_column_view {
         _physical_type  = Type::INT64;
         _converted_type = ConvertedType::TIMESTAMP_MICROS;
         _stats_dtype    = statistics_dtype::dtype_timestamp64;
-        _ts_scale       = -1000;
+        _ts_scale       = -1000;  // negative value indicates division by absolute value
         break;
       case cudf::type_id::STRING:
-        _physical_type = Type::BYTE_ARRAY;
-        //_converted_type = ConvertedType::UTF8; // TBD
-        _stats_dtype = statistics_dtype::dtype_string;
+        _physical_type  = Type::BYTE_ARRAY;
+        _converted_type = ConvertedType::UTF8;
+        _stats_dtype    = statistics_dtype::dtype_string;
         break;
       default:
         _physical_type = UNDEFINED_TYPE;
@@ -188,7 +237,7 @@ class parquet_column_view {
       _indexes = rmm::device_buffer(_data_count * sizeof(gpu::nvstrdesc_s), stream);
       stringdata_to_nvstrdesc<<<((_data_count - 1) >> 8) + 1, 256, 0, stream>>>(
         reinterpret_cast<gpu::nvstrdesc_s *>(_indexes.data()),
-        view.offsets().data<size_type>(),
+        view.offsets().data<size_type>() + view.offset(),
         view.chars().data<char>(),
         _nulls,
         _data_count);
@@ -942,7 +991,11 @@ void writer::write_chunked(table_view const &table, pq_chunked_state &state)
 }
 
 // Forward to implementation
-void writer::write_chunked_end(pq_chunked_state &state) { _impl->write_chunked_end(state); }
+std::unique_ptr<std::vector<uint8_t>> writer::write_chunked_end(
+  pq_chunked_state &state, bool return_filemetadata, const std::string &metadata_out_file_path)
+{
+  return _impl->write_chunked_end(state, return_filemetadata, metadata_out_file_path);
+}
 
 std::unique_ptr<std::vector<uint8_t>> writer::merge_rowgroup_metadata(
   const std::vector<std::unique_ptr<std::vector<uint8_t>>> &metadata_list)

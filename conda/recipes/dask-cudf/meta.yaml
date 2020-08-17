@@ -3,6 +3,7 @@
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
 {% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
 {% set py_version=environ.get('CONDA_PY', 36) %}
+{% set cuda_version='.'.join(environ.get('CUDA_VERSION', '10.1').split('.')[:2]) %}
 
 package:
   name: dask-cudf
@@ -21,16 +22,18 @@ requirements:
   host:
     - python
     - cudf {{ version }}
-    - dask >=2.15.0
-    - distributed >=2.15.0
+    - dask >=2.22.0
+    - distributed >=2.22.0
   run:
     - python
     - cudf {{ version }}
-    - dask >=2.15.0
-    - distributed >=2.15.0
+    - dask >=2.22.0
+    - distributed >=2.22.0
+  
 test:
-  imports:
-    - dask_cudf
+  requires:
+    - cudatoolkit {{ cuda_version }}.*
+
 
 about:
   home: http://rapids.ai/

@@ -154,7 +154,7 @@ class concurrent_unordered_map {
    * @param stream CUDA stream used for device memory operations and kernel launches.
    **/
   static auto create(size_type capacity,
-                     const mapped_type unused_element = std::numeric_limits<key_type>::max(),
+                     const mapped_type unused_element = std::numeric_limits<mapped_type>::max(),
                      const key_type unused_key        = std::numeric_limits<key_type>::max(),
                      const Hasher& hash_function      = hasher(),
                      const Equality& equal            = key_equal(),
@@ -164,7 +164,9 @@ class concurrent_unordered_map {
     CUDF_FUNC_RANGE();
     using Self = concurrent_unordered_map<Key, Element, Hasher, Equality, Allocator>;
 
-    auto deleter = [stream](Self* p) { p->destroy(stream); };
+    // Note: need `(*p).destroy` instead of `p->destroy` here
+    // due to compiler bug: https://github.com/rapidsai/cudf/pull/5692
+    auto deleter = [stream](Self* p) { (*p).destroy(stream); };
 
     return std::unique_ptr<Self, std::function<void(Self*)>>{
       new Self(capacity, unused_element, unused_key, hash_function, equal, allocator, stream),

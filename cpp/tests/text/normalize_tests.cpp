@@ -29,7 +29,7 @@
 struct TextNormalizeTest : public cudf::test::BaseFixture {
 };
 
-TEST_F(TextNormalizeTest, Normalize)
+TEST_F(TextNormalizeTest, NormalizeSpaces)
 {
   std::vector<const char*> h_strings{"the\t fox  jumped over the      dog",
                                      "the dog\f chased  the cat\r",
@@ -60,14 +60,74 @@ TEST_F(TextNormalizeTest, Normalize)
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
 
   auto const results = nvtext::normalize_spaces(strings_view);
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(TextNormalizeTest, NormalizeEmptyTest)
 {
-  auto strings = cudf::make_empty_column(cudf::data_type{cudf::STRING});
+  auto strings = cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
   cudf::strings_column_view strings_view(strings->view());
-  auto const results = nvtext::normalize_spaces(strings_view);
+  auto results = nvtext::normalize_spaces(strings_view);
   EXPECT_EQ(results->size(), 0);
-  EXPECT_EQ(results->has_nulls(), false);
+  results = nvtext::normalize_characters(strings_view, true);
+  EXPECT_EQ(results->size(), 0);
+  results = nvtext::normalize_characters(strings_view, false);
+  EXPECT_EQ(results->size(), 0);
+}
+
+TEST_F(TextNormalizeTest, AllNullStrings)
+{
+  cudf::test::strings_column_wrapper strings({"", "", ""}, {0, 0, 0});
+  cudf::strings_column_view strings_view(strings);
+  auto results = nvtext::normalize_characters(strings_view, false);
+  EXPECT_EQ(results->size(), 0);
+}
+
+TEST_F(TextNormalizeTest, NormalizeCharacters)
+{
+  // These include punctuation, accents, whitespace, and CJK characters
+  std::vector<const char*> h_strings{"abc£def",
+                                     nullptr,
+                                     "éè â îô\taeio",
+                                     "\tĂĆĖÑ  Ü",
+                                     "ACEN U",
+                                     "P^NP",
+                                     "$41.07",
+                                     "[a,b]",
+                                     "丏丟",
+                                     ""};
+  auto validity =
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; });
+  cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end(), validity);
+  cudf::strings_column_view strings_view(strings);
+  {
+    auto results = nvtext::normalize_characters(strings_view, true);
+    cudf::test::strings_column_wrapper expected({"abc£def",
+                                                 "",
+                                                 "ee a io aeio",
+                                                 " acen  u",
+                                                 "acen u",
+                                                 "p ^ np",
+                                                 " $ 41 . 07",
+                                                 " [ a , b ] ",
+                                                 " 丏  丟 ",
+                                                 ""},
+                                                validity);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    auto results = nvtext::normalize_characters(cudf::strings_column_view(strings), false);
+    cudf::test::strings_column_wrapper expected({"abc£def",
+                                                 "",
+                                                 "éè â îô aeio",
+                                                 " ĂĆĖÑ  Ü",
+                                                 "ACEN U",
+                                                 "P ^ NP",
+                                                 " $ 41 . 07",
+                                                 " [ a , b ] ",
+                                                 " 丏  丟 ",
+                                                 ""},
+                                                validity);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
 }

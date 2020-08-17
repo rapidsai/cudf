@@ -33,8 +33,6 @@ cdef extern from "cudf/io/types.hpp" \
     ctypedef enum io_type:
         FILEPATH "cudf::io::io_type::FILEPATH"
         HOST_BUFFER "cudf::io::io_type::HOST_BUFFER"
-        ARROW_RANDOM_ACCESS_FILE \
-            "cudf::io::io_type::ARROW_RANDOM_ACCESS_FILE"
         VOID "cudf::io::io_type::VOID"
         USER_IMPLEMENTED "cudf::io::io_type::USER_IMPLEMENTED"
 
@@ -58,16 +56,23 @@ cdef extern from "cudf/io/types.hpp" \
         unique_ptr[table] tbl
         table_metadata metadata
 
+    cdef cppclass host_buffer:
+        const char* data
+        size_t size
+
+        host_buffer()
+        host_buffer(const char* data, size_t size)
+
     cdef cppclass source_info:
         io_type type
-        string filepath
-        pair[const char*, size_t] buffer
-        shared_ptr[CRandomAccessFile] file
+        vector[string] filepaths
+        vector[host_buffer] buffers
+        vector[shared_ptr[CRandomAccessFile]] files
 
         source_info() except +
-        source_info(const string filepath) except +
-        source_info(const char* host_buffer, size_t size) except +
-        source_info(const shared_ptr[CRandomAccessFile] arrow_file) except +
+        source_info(const vector[string] &filepaths) except +
+        source_info(const vector[host_buffer] &host_buffers) except +
+        source_info(datasource *source) except +
 
     cdef cppclass sink_info:
         io_type type
@@ -85,4 +90,10 @@ cdef extern from "cudf/io/data_sink.hpp" \
         namespace "cudf::io" nogil:
 
     cdef cppclass data_sink:
+        pass
+
+cdef extern from "cudf/io/datasource.hpp" \
+        namespace "cudf::io" nogil:
+
+    cdef cppclass datasource:
         pass

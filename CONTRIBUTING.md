@@ -75,7 +75,7 @@ that committed code follows our standards. You can use the tools to
 automatically format your python code by running:
 
 ```bash
-isort --recursive --atomic --apply python
+isort --atomic python/**/*.py
 black python
 ```
 
@@ -139,21 +139,6 @@ CUDA/GPU requirements:
 
 You can obtain CUDA from [https://developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads).
 
-Since `cmake` will download and build Apache Arrow you may need to install Boost C++ (version 1.58+) before running
-`cmake`:
-
-```bash
-# Install Boost C++ for Ubuntu 16.04/18.04
-$ sudo apt-get install libboost-all-dev
-```
-
-or
-
-```bash
-# Install Boost C++ for Conda
-$ conda install -c conda-forge boost
-```
-
 ## Script to build cuDF from source
 
 ### Build from Source
@@ -175,7 +160,6 @@ conda env create --name cudf_dev --file conda/environments/cudf_dev_cuda10.0.yml
 # activate the environment
 conda activate cudf_dev
 ```
-- If using CUDA 10.0, create the environment with `conda env create --name cudf_dev --file conda/environments/cudf_dev_cuda10.0.yml` instead.
 - For other CUDA versions, check the corresponding cudf_dev_cuda*.yml file in conda/environments
 
 - Build and install `libcudf` after its dependencies. CMake depends on the `nvcc` executable being on your path or defined in `$CUDACXX`.
