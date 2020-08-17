@@ -2,11 +2,13 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/gather.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/search.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/bit.hpp>
 #include <iostream>
 #include <numeric>
 
@@ -26,14 +28,30 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(
     input_table, columns, duplicate_keep_option::KEEP_FIRST, null_equality::EQUAL, mr, stream);
 
   if (cudf::has_nulls(keys_table->view())) {
-    auto sort_order = cudf::detail::sorted_order(
-      keys_table->view(),
-      {},
-      std::vector<null_order>(keys_table->num_columns(), null_order::AFTER),
-      rmm::mr::get_default_resource(),
-      stream);
+    auto num_rows = keys_table->num_rows();
+    auto mask =
+      cudf::detail::bitmask_and(keys_table->view(), rmm::mr::get_default_resource(), stream);
+    auto num_rows_with_nulls =
+      cudf::count_unset_bits(reinterpret_cast<bitmask_type*>(mask.data()), 0, num_rows);
+
+    rmm::device_vector<cudf::size_type> gather_map(num_rows);
+    auto execpol = rmm::exec_policy(stream);
+    thrust::transform(execpol->on(stream),
+                      thrust::make_counting_iterator<cudf::size_type>(0),
+                      thrust::make_counting_iterator<cudf::size_type>(num_rows),
+                      gather_map.begin(),
+                      [num_rows, num_rows_with_nulls] __device__(cudf::size_type i) {
+                        if (i < num_rows_with_nulls) {
+                          return num_rows_with_nulls + i;
+                        } else {
+                          return num_rows - i - 1;
+                        }
+                      });
+    cudf::column_view gather_map_column(
+      cudf::data_type{type_id::INT32}, num_rows, thrust::raw_pointer_cast(gather_map.data()));
+
     keys_table = cudf::detail::gather(keys_table->view(),
-                                      sort_order->view(),
+                                      gather_map_column,
                                       cudf::detail::out_of_bounds_policy::FAIL,
                                       cudf::detail::negative_index_policy::NOT_ALLOWED,
                                       mr,
