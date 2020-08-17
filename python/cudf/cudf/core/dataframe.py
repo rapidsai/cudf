@@ -1164,10 +1164,12 @@ class DataFrame(Frame, Serializable):
         filling with `<NA>` values.
         """
         for col in df._data:
-            if is_list_dtype(self._data[col]):
+            if is_list_dtype(df._data[col]):
                 # TODO we need to handle this
                 pass
-            elif self._data[col].has_nulls:
+            elif isinstance(df._data[col], cudf.core.column.TimeDeltaColumn):
+                df[col] = df._data[col]._repr_str_col()
+            elif df._data[col].has_nulls:
                 df[col] = df._data[col].astype("str").fillna(cudf._NA_REP)
             else:
                 df[col] = df._data[col]
@@ -2607,7 +2609,7 @@ class DataFrame(Frame, Serializable):
             else:
                 df = DataFrame(None, idx).join(df, how="left", sort=True)
                 # double-argsort to map back from sorted to unsorted positions
-                df = df.take(idx.argsort(True).argsort())
+                df = df.take(idx.argsort(ascending=True).argsort())
 
         idx = idx if idx is not None else df.index
         names = cols if cols is not None else list(df.columns)
@@ -4673,23 +4675,20 @@ class DataFrame(Frame, Serializable):
         >>> type(pdf)
         <class 'pandas.core.frame.DataFrame'>
         """
-        nullable_pd_dtype = kwargs.get("nullable_pd_dtype", True)
 
         out_data = {}
         out_index = self.index.to_pandas()
 
         if not isinstance(self.columns, pd.Index):
-            out_columns = self.columns.to_pandas(nullable_pd_dtype=False)
+            out_columns = self.columns.to_pandas()
         else:
             out_columns = self.columns
 
         for i, col_key in enumerate(self._data):
-            out_data[i] = self._data[col_key].to_pandas(
-                index=out_index, nullable_pd_dtype=nullable_pd_dtype
-            )
+            out_data[i] = self._data[col_key].to_pandas(index=out_index)
 
         if isinstance(self.columns, Index):
-            out_columns = self.columns.to_pandas(nullable_pd_dtype=False)
+            out_columns = self.columns.to_pandas()
             if isinstance(self.columns, cudf.core.multiindex.MultiIndex):
                 if self.columns.names is not None:
                     out_columns.names = self.columns.names
@@ -6601,7 +6600,7 @@ class DataFrame(Frame, Serializable):
 
         See Also
         --------
-        cudf.concat : General function to concatenate DataFrame or
+        cudf.core.reshape.concat : General function to concatenate DataFrame or
             objects.
 
         Notes

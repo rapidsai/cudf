@@ -90,7 +90,7 @@ TEST(TextSubwordTest, Tokenize)
     for (auto idx = 0; idx < nrows; ++idx)
       h_expected.insert(h_expected.end(), base_data.begin(), base_data.end());
     cudf::test::fixed_width_column_wrapper<uint32_t> expected(h_expected.begin(), h_expected.end());
-    cudf::test::expect_columns_equal(result.tensor_token_ids->view(), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_token_ids->view(), expected);
   }
 
   {
@@ -99,7 +99,7 @@ TEST(TextSubwordTest, Tokenize)
     for (auto idx = 0; idx < nrows; ++idx)
       h_expected.insert(h_expected.end(), base_data.begin(), base_data.end());
     cudf::test::fixed_width_column_wrapper<uint32_t> expected(h_expected.begin(), h_expected.end());
-    cudf::test::expect_columns_equal(result.tensor_attention_mask->view(), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_attention_mask->view(), expected);
   }
 
   {
@@ -111,7 +111,7 @@ TEST(TextSubwordTest, Tokenize)
       h_expected.push_back(9);
     }
     cudf::test::fixed_width_column_wrapper<uint32_t> expected(h_expected.begin(), h_expected.end());
-    cudf::test::expect_columns_equal(result.tensor_metadata->view(), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_metadata->view(), expected);
   }
 }
 
@@ -139,12 +139,12 @@ TEST(TextSubwordTest, TokenizeMultiRow)
   cudf::test::fixed_width_column_wrapper<uint32_t> expected_tokens(
     {2023, 2003, 1037, 3231, 1012, 0,    0,    0,    2023, 2003, 1037, 3231,
      1012, 2023, 2003, 1037, 2003, 1037, 3231, 1012, 0,    0,    0,    0});
-  cudf::test::expect_columns_equal(result.tensor_token_ids->view(), expected_tokens);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_token_ids->view(), expected_tokens);
   cudf::test::fixed_width_column_wrapper<uint32_t> expected_attn(
     {1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0});
-  cudf::test::expect_columns_equal(result.tensor_attention_mask->view(), expected_attn);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_attention_mask->view(), expected_attn);
   cudf::test::fixed_width_column_wrapper<uint32_t> expected_metadata({0, 0, 4, 1, 0, 6, 1, 1, 3});
-  cudf::test::expect_columns_equal(result.tensor_metadata->view(), expected_metadata);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_metadata->view(), expected_metadata);
 }
 
 TEST(TextSubwordTest, ParameterErrors)
@@ -237,12 +237,12 @@ TEST(TextSubwordTest, TokenizeFromVocabStruct)
   EXPECT_EQ(2, result.nrows_tensor);
   cudf::test::fixed_width_column_wrapper<uint32_t> expected_tokens(
     {2023, 2003, 1037, 3231, 1012, 0, 0, 0, 2023, 2003, 1037, 3231, 1012, 2023, 2003, 1037});
-  cudf::test::expect_columns_equal(result.tensor_token_ids->view(), expected_tokens);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_token_ids->view(), expected_tokens);
   cudf::test::fixed_width_column_wrapper<uint32_t> expected_attn(
     {1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1});
-  cudf::test::expect_columns_equal(result.tensor_attention_mask->view(), expected_attn);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_attention_mask->view(), expected_attn);
   cudf::test::fixed_width_column_wrapper<uint32_t> expected_metadata({0, 0, 4, 1, 0, 7});
-  cudf::test::expect_columns_equal(result.tensor_metadata->view(), expected_metadata);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_metadata->view(), expected_metadata);
 }
 
 TEST(TextSubwordTest, LoadVocabFileErrors)

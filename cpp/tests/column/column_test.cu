@@ -18,6 +18,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <tests/utilities/base_fixture.hpp>
@@ -203,7 +204,7 @@ TYPED_TEST(TypedColumnTest, CopyDataNoMask)
   // Verify deep copy
   cudf::column_view v = col;
   EXPECT_NE(v.head(), this->data.data());
-  cudf::test::expect_equal_buffers(v.head(), this->data.data(), this->data.size());
+  CUDF_TEST_EXPECT_EQUAL_BUFFERS(v.head(), this->data.data(), this->data.size());
 }
 
 TYPED_TEST(TypedColumnTest, MoveDataNoMask)
@@ -238,8 +239,8 @@ TYPED_TEST(TypedColumnTest, CopyDataAndMask)
   cudf::column_view v = col;
   EXPECT_NE(v.head(), this->data.data());
   EXPECT_NE(v.null_mask(), this->all_valid_mask.data());
-  cudf::test::expect_equal_buffers(v.head(), this->data.data(), this->data.size());
-  cudf::test::expect_equal_buffers(v.null_mask(), this->all_valid_mask.data(), this->mask.size());
+  CUDF_TEST_EXPECT_EQUAL_BUFFERS(v.head(), this->data.data(), this->data.size());
+  CUDF_TEST_EXPECT_EQUAL_BUFFERS(v.null_mask(), this->all_valid_mask.data(), this->mask.size());
 }
 
 TYPED_TEST(TypedColumnTest, MoveDataAndMask)
@@ -267,7 +268,7 @@ TYPED_TEST(TypedColumnTest, CopyConstructorNoMask)
   cudf::column original{this->type(), this->num_elements(), this->data};
   cudf::column copy{original};
   verify_column_views(copy);
-  cudf::test::expect_columns_equal(original, copy);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(original, copy);
 
   // Verify deep copy
   cudf::column_view original_view = original;
@@ -280,7 +281,7 @@ TYPED_TEST(TypedColumnTest, CopyConstructorWithMask)
   cudf::column original{this->type(), this->num_elements(), this->data, this->all_valid_mask};
   cudf::column copy{original};
   verify_column_views(copy);
-  cudf::test::expect_columns_equal(original, copy);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(original, copy);
 
   // Verify deep copy
   cudf::column_view original_view = original;
@@ -395,12 +396,72 @@ TYPED_TEST(TypedColumnTest, ColumnViewConstructorWithMask)
   cudf::column_view original_view = original;
   cudf::column copy{original_view};
   verify_column_views(copy);
-  cudf::test::expect_columns_equal(original, copy);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(original, copy);
 
   // Verify deep copy
   cudf::column_view copy_view = copy;
   EXPECT_NE(original_view.head(), copy_view.head());
   EXPECT_NE(original_view.null_mask(), copy_view.null_mask());
+}
+
+template <typename T>
+struct ListsColumnTest : public cudf::test::BaseFixture {
+};
+
+using NumericTypesNotBool =
+  cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
+
+TYPED_TEST_CASE(ListsColumnTest, NumericTypesNotBool);
+
+TYPED_TEST(ListsColumnTest, ListsColumnViewConstructor)
+{
+  cudf::test::lists_column_wrapper<TypeParam> list{{1, 2}, {3, 4}, {5, 6, 7}, {8, 9}};
+
+  auto result = std::make_unique<cudf::column>(list);
+
+  cudf::test::expect_columns_equal(list, result->view());
+}
+
+TYPED_TEST(ListsColumnTest, ListsSlicedColumnViewConstructor)
+{
+  cudf::test::lists_column_wrapper<TypeParam> list{{1, 2}, {3, 4}, {5, 6, 7}, {8, 9}};
+  cudf::test::lists_column_wrapper<TypeParam> expect{{3, 4}, {5, 6, 7}};
+
+  auto sliced = cudf::slice(list, {1, 3}).front();
+  auto result = std::make_unique<cudf::column>(sliced);
+
+  cudf::test::expect_columns_equal(expect, result->view());
+}
+
+TYPED_TEST(ListsColumnTest, ListsSlicedColumnViewConstructorWithNulls)
+{
+  auto valids = cudf::test::make_counting_transform_iterator(
+    0, [](auto i) { return i % 2 == 0 ? true : false; });
+
+  auto expect_valids = cudf::test::make_counting_transform_iterator(
+    0, [](auto i) { return i % 2 == 0 ? false : true; });
+
+  using LCW = cudf::test::lists_column_wrapper<TypeParam>;
+
+  cudf::test::lists_column_wrapper<TypeParam> list{
+    {{{{1, 2}, {3, 4}}, valids}, LCW{}, {{{5, 6, 7}, LCW{}, {8, 9}}, valids}, LCW{}, LCW{}},
+    valids};
+
+  cudf::test::lists_column_wrapper<TypeParam> expect{
+    {LCW{}, {{{5, 6, 7}, LCW{}, {8, 9}}, valids}, LCW{}, LCW{}}, expect_valids};
+
+  auto sliced = cudf::slice(list, {1, 5}).front();
+  auto result = std::make_unique<cudf::column>(sliced);
+
+  cudf::test::expect_columns_equal(expect, result->view());
+
+  // TODO: null mask equality is being checked separately because
+  // expect_columns_equal doesn't do the check for lists columns.
+  // This is fixed in https://github.com/rapidsai/cudf/pull/5904,
+  // so we should remove this check after that's merged:
+  cudf::test::expect_columns_equal(
+    cudf::mask_to_bools(result->view().null_mask(), 0, 4)->view(),
+    cudf::mask_to_bools(static_cast<cudf::column_view>(expect).null_mask(), 0, 4)->view());
 }
 
 CUDF_TEST_PROGRAM_MAIN()

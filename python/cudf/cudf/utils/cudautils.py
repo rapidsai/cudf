@@ -6,11 +6,7 @@ import numpy as np
 from numba import cuda
 
 import cudf
-from cudf.utils.utils import (
-    check_equals_float,
-    check_equals_int,
-    rint,
-)
+from cudf.utils.utils import check_equals_float, check_equals_int, rint
 
 try:
     # Numba >= 0.49

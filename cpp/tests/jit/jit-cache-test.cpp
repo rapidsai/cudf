@@ -50,7 +50,7 @@ TEST_F(JitCacheTest, MemoryCacheKernelTest)
     .configure(grid, block)
     .launch(column.operator cudf::mutable_column_view().data<int>());
 
-  cudf::test::expect_columns_equal(expect, column);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, column);
 }
 
 TEST_F(JitCacheTest, MemoryCacheProgramTest)
@@ -73,7 +73,7 @@ TEST_F(JitCacheTest, MemoryCacheProgramTest)
     .configure(grid, block)
     .launch(column.operator cudf::mutable_column_view().data<int>());
 
-  cudf::test::expect_columns_equal(expect, column);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, column);
 }
 
 // Test the file caching ability
@@ -95,7 +95,7 @@ TEST_F(JitCacheTest, FileCacheProgramTest)
     .configure(grid, block)
     .launch(column.operator cudf::mutable_column_view().data<int>());
 
-  cudf::test::expect_columns_equal(expect, column);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, column);
 }
 
 TEST_F(JitCacheTest, FileCacheKernelTest)
@@ -115,7 +115,7 @@ TEST_F(JitCacheTest, FileCacheKernelTest)
     .configure(grid, block)
     .launch(column.operator cudf::mutable_column_view().data<int>());
 
-  cudf::test::expect_columns_equal(expect, column);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, column);
 }
 #endif
 
