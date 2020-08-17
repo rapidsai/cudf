@@ -549,7 +549,7 @@ def test_parquet_reader_list_table(tmpdir):
     expect.to_parquet(fname)
     assert os.path.exists(fname)
     got = cudf.read_parquet(fname)
-    assert_eq(expect, got, nullable_pd_dtype=True, check_dtype=False)
+    assert_eq(expect, got, check_dtype=False)
 
 
 def int_gen(first_val, i):
@@ -616,7 +616,7 @@ def test_parquet_reader_list_large(tmpdir):
     expect.to_parquet(fname)
     assert os.path.exists(fname)
     got = cudf.read_parquet(fname)
-    assert_eq(expect, got, nullable_pd_dtype=True, check_dtype=False)
+    assert_eq(expect, got, check_dtype=False)
 
 
 def test_parquet_reader_list_validity(tmpdir):
@@ -627,7 +627,7 @@ def test_parquet_reader_list_validity(tmpdir):
     expect.to_parquet(fname)
     assert os.path.exists(fname)
     got = cudf.read_parquet(fname)
-    assert_eq(expect, got, nullable_pd_dtype=True, check_dtype=False)
+    assert_eq(expect, got, check_dtype=False)
 
 
 def test_parquet_reader_list_large_mixed(tmpdir):
@@ -643,7 +643,7 @@ def test_parquet_reader_list_large_mixed(tmpdir):
     expect.to_parquet(fname)
     assert os.path.exists(fname)
     got = cudf.read_parquet(fname)
-    assert_eq(expect, got, nullable_pd_dtype=True, check_dtype=False)
+    assert_eq(expect, got, check_dtype=False)
 
 
 def test_parquet_reader_list_skiprows(tmpdir):
@@ -670,7 +670,7 @@ def test_parquet_reader_list_skiprows(tmpdir):
             }
         )
         got = cudf.read_parquet(fname, skip_rows=i)
-        assert_eq(expect, got, nullable_pd_dtype=True, check_dtype=False)
+        assert_eq(expect, got, check_dtype=False)
 
 
 def test_parquet_reader_list_num_rows(tmpdir):
@@ -703,7 +703,7 @@ def test_parquet_reader_list_num_rows(tmpdir):
             }
         )
         got = cudf.read_parquet(fname, skip_rows=i, num_rows=rows_to_read)
-        assert_eq(expect, got, nullable_pd_dtype=True, check_dtype=False)
+        assert_eq(expect, got, check_dtype=False)
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
