@@ -201,6 +201,7 @@
 - PR #5899 Add in gather support for Java
 - PR #5906 Add macros for showing line of failures in unit tests
 - PR #5933 Add in APIs to read/write arrow IPC formatted data from java 
+- PR #5970 Map data to pandas through arrow, always
 
 ## Bug Fixes
 
@@ -294,6 +295,7 @@
 - PR #5866 cudf_kafka python version inconsistencies in Anaconda packages
 - PR #5872 libcudf_kafka r_path is causing docker build failures on centos7
 - PR #5869 Fix bug in parquet writer in writing string column with offset
+- PR #5910 Propagate `CUDA` insufficient driver error to the user
 - PR #5914 Link CUDA against libcudf_kafka
 - PR #5895 Do not break kafka client consumption loop on local client timeout
 - PR #5915 Fix reference count on Java DeviceMemoryBuffer after contiguousSplit
