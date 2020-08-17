@@ -1,5 +1,6 @@
-API Reference
-=============
+~~~~~~~~~~~~~~~~~~~
+cuDF API Reference
+~~~~~~~~~~~~~~~~~~~
 
 .. currentmodule:: cudf.core.dataframe
 
@@ -169,6 +170,14 @@ DatetimeIndex
     :inherited-members:
     :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
 
+TimedeltaIndex
+--------------
+.. currentmodule:: cudf.core.index
+.. autoclass:: TimedeltaIndex
+    :members:
+    :inherited-members:
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
+
 Categories
 ----------
 .. currentmodule:: cudf.core.column.categorical
@@ -182,7 +191,7 @@ GroupBy
 
 .. autoclass:: GroupBy
     :members:
-    :exclude-members: deserialize, serialize
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
 
 General utility functions
 -------------------------

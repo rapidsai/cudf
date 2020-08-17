@@ -425,6 +425,17 @@ __inline__ __device__ numeric::decimal64 decode_value(const char *data,
   return numeric::decimal64{};
 }
 
+// The purpose of this is merely to allow compilation ONLY
+// TODO : make this work for csv
+template <>
+__inline__ __device__ cudf::struct_view decode_value(const char *data,
+                                                     long start,
+                                                     long end,
+                                                     ParseOptions const &opts)
+{
+  return cudf::struct_view{};
+}
+
 /**
  * @brief Functor for converting CSV raw data to typed value.
  */

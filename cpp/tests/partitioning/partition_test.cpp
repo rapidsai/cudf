@@ -55,7 +55,7 @@ TYPED_TEST(PartitionTest, EmptyInputs)
 
   EXPECT_TRUE(result_offsets.empty());
 
-  cudf::test::expect_columns_equal(empty_column, result.first->get_column(0));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(empty_column, result.first->get_column(0));
 }
 
 TYPED_TEST(PartitionTest, MapInputSizeMismatch)
@@ -106,7 +106,7 @@ void expect_equal_partitions(cudf::table_view expected,
              [](cudf::table_view expected, cudf::table_view actual) {
                auto sorted_expected = cudf::sort(expected);
                auto sorted_actual   = cudf::sort(actual);
-               cudf::test::expect_tables_equal(*sorted_expected, *sorted_actual);
+               CUDF_TEST_EXPECT_TABLES_EQUAL(*sorted_expected, *sorted_actual);
                return true;
              });
 }

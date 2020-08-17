@@ -74,6 +74,18 @@ std::shared_ptr<arrow::Array> to_arrow_array(cudf::type_id id, Ts&&... args)
     case type_id::TIMESTAMP_NANOSECONDS:
       return std::make_shared<arrow::TimestampArray>(arrow::timestamp(arrow::TimeUnit::NANO),
                                                      std::forward<Ts>(args)...);
+    case type_id::DURATION_SECONDS:
+      return std::make_shared<arrow::DurationArray>(arrow::duration(arrow::TimeUnit::SECOND),
+                                                    std::forward<Ts>(args)...);
+    case type_id::DURATION_MILLISECONDS:
+      return std::make_shared<arrow::DurationArray>(arrow::duration(arrow::TimeUnit::MILLI),
+                                                    std::forward<Ts>(args)...);
+    case type_id::DURATION_MICROSECONDS:
+      return std::make_shared<arrow::DurationArray>(arrow::duration(arrow::TimeUnit::MICRO),
+                                                    std::forward<Ts>(args)...);
+    case type_id::DURATION_NANOSECONDS:
+      return std::make_shared<arrow::DurationArray>(arrow::duration(arrow::TimeUnit::NANO),
+                                                    std::forward<Ts>(args)...);
     default: CUDF_FAIL("Unsupported type_id conversion to arrow");
   }
 }
