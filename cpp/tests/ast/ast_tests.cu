@@ -278,6 +278,7 @@ TEST_F(ASTTest, CopyLiteral)
   cudf::test::expect_columns_equal(expected, result->view(), true);
 }
 
+/*
 struct custom_functor {
   template <typename OperatorFunctor,
             typename LHS,
@@ -307,5 +308,6 @@ TEST_F(ASTTest, CustomASTFunctor)
                                         &result);
   EXPECT_EQ(result, 42);
 }
+*/
 
 CUDF_TEST_PROGRAM_MAIN()

@@ -35,6 +35,88 @@ namespace ast {
 
 namespace detail {
 
+// Forward declaration
+struct row_evaluator;
+
+struct row_output {
+ public:
+  __device__ row_output(row_evaluator const& evaluator) : evaluator(evaluator) {}
+
+  /**
+   * @brief Resolves an output data reference and assigns result value.
+   *
+   * Only output columns (COLUMN) and intermediates (INTERMEDIATE) are supported as output reference
+   * types. Intermediates must be of fixed width less than or equal to sizeof(std::int64_t). This
+   * requirement on intermediates is enforced by the linearizer.
+   *
+   * @tparam Element Type of result element.
+   * @param device_data_reference Data reference to resolve.
+   * @param row_index Row index of data column.
+   * @param result Value to assign to output.
+   */
+  template <typename Element>
+  __device__ void resolve_output(detail::device_data_reference device_data_reference,
+                                 cudf::size_type row_index,
+                                 Element result) const;
+
+ private:
+  row_evaluator const& evaluator;
+};
+
+template <typename Input>
+struct unary_row_output : public row_output {
+  __device__ unary_row_output(row_evaluator const& evaluator) : row_output(evaluator) {}
+
+  template <ast_operator op,
+            std::enable_if_t<cudf::ast::is_valid_unary_op<operator_functor<op>, Input>>* = nullptr>
+  __device__ void operator()(cudf::size_type row_index,
+                             Input input,
+                             detail::device_data_reference output) const
+  {
+    using OperatorFunctor = operator_functor<op>;
+    using Out             = simt::std::invoke_result_t<OperatorFunctor, Input>;
+    this->resolve_output<Out>(output, row_index, OperatorFunctor{}(input));
+  }
+
+  template <ast_operator op,
+            std::enable_if_t<!cudf::ast::is_valid_unary_op<operator_functor<op>, Input>>* = nullptr>
+  __device__ void operator()(cudf::size_type row_index,
+                             Input input,
+                             detail::device_data_reference output) const
+  {
+    release_assert(false && "Invalid unary dispatch operator for the provided input.");
+  }
+};
+
+template <typename LHS, typename RHS>
+struct binary_row_output : public row_output {
+  __device__ binary_row_output(row_evaluator const& evaluator) : row_output(evaluator) {}
+
+  template <
+    ast_operator op,
+    std::enable_if_t<cudf::ast::is_valid_binary_op<operator_functor<op>, LHS, RHS>>* = nullptr>
+  __device__ void operator()(cudf::size_type row_index,
+                             LHS lhs,
+                             RHS rhs,
+                             detail::device_data_reference output) const
+  {
+    using OperatorFunctor = operator_functor<op>;
+    using Out             = simt::std::invoke_result_t<OperatorFunctor, LHS, RHS>;
+    this->resolve_output<Out>(output, row_index, OperatorFunctor{}(lhs, rhs));
+  }
+
+  template <
+    ast_operator op,
+    std::enable_if_t<!cudf::ast::is_valid_binary_op<operator_functor<op>, LHS, RHS>>* = nullptr>
+  __device__ void operator()(cudf::size_type row_index,
+                             LHS lhs,
+                             RHS rhs,
+                             detail::device_data_reference output) const
+  {
+    release_assert(false && "Invalid binary dispatch operator for the provided input.");
+  }
+};
+
 /**
  * @brief An expression evaluator owned by a single thread operating on rows of a table.
  *
@@ -44,6 +126,12 @@ namespace detail {
  *
  */
 struct row_evaluator {
+  friend struct row_output;
+  template <typename Input>
+  friend struct unary_row_output;
+  template <typename LHS, typename RHS>
+  friend struct binary_row_output;
+
  public:
   /**
    * @brief Construct a row evaluator.
@@ -98,35 +186,6 @@ struct row_evaluator {
   }
 
   /**
-   * @brief Resolves an output data reference and assigns result value.
-   *
-   * Only output columns (COLUMN) and intermediates (INTERMEDIATE) are supported as output reference
-   * types. Intermediates must be of fixed width less than or equal to sizeof(std::int64_t). This
-   * requirement on intermediates is enforced by the linearizer.
-   *
-   * @tparam Element Type of result element.
-   * @param device_data_reference Data reference to resolve.
-   * @param row_index Row index of data column.
-   * @param result Value to assign to output.
-   */
-  template <typename Element>
-  __device__ void resolve_output(detail::device_data_reference device_data_reference,
-                                 cudf::size_type row_index,
-                                 Element result) const
-  {
-    auto const ref_type = device_data_reference.reference_type;
-    if (ref_type == detail::device_data_reference_type::COLUMN) {
-      this->output_column->element<Element>(row_index) = result;
-    } else {  // Assumes ref_type == detail::device_data_reference_type::INTERMEDIATE
-      // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing
-      // Using a temporary variable ensures that the compiler knows the result is aligned
-      std::int64_t tmp;
-      memcpy(&tmp, &result, sizeof(Element));
-      this->thread_intermediate_storage[device_data_reference.data_index] = tmp;
-    }
-  }
-
-  /**
    * @brief Callable to perform a unary operation.
    *
    * @tparam OperatorFunctor Functor that performs desired operation when `operator()` is called.
@@ -135,26 +194,14 @@ struct row_evaluator {
    * @param input Input data reference.
    * @param output Output data reference.
    */
-  template <typename OperatorFunctor,
-            typename Input,
-            std::enable_if_t<cudf::ast::is_valid_unary_op<OperatorFunctor, Input>>* = nullptr>
+  template <typename Input>
   __device__ void operator()(cudf::size_type row_index,
                              detail::device_data_reference input,
-                             detail::device_data_reference output) const
+                             detail::device_data_reference output,
+                             ast_operator op) const
   {
-    using Out              = simt::std::invoke_result_t<OperatorFunctor, Input>;
     auto const typed_input = this->resolve_input<Input>(input, row_index);
-    this->resolve_output<Out>(output, row_index, OperatorFunctor{}(typed_input));
-  }
-
-  template <typename OperatorFunctor,
-            typename Input,
-            std::enable_if_t<!cudf::ast::is_valid_unary_op<OperatorFunctor, Input>>* = nullptr>
-  __device__ void operator()(cudf::size_type row_index,
-                             detail::device_data_reference input,
-                             detail::device_data_reference output) const
-  {
-    release_assert(false && "Invalid unary dispatch operator for the provided input.");
+    ast_operator_dispatcher(op, unary_row_output<Input>(*this), row_index, typed_input, output);
   }
 
   /**
@@ -168,19 +215,17 @@ struct row_evaluator {
    * @param rhs Right input data reference.
    * @param output Output data reference.
    */
-  template <typename OperatorFunctor,
-            typename LHS,
-            typename RHS,
-            std::enable_if_t<cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
+  template <typename LHS, typename RHS>
   __device__ void operator()(cudf::size_type row_index,
                              detail::device_data_reference lhs,
                              detail::device_data_reference rhs,
-                             detail::device_data_reference output) const
+                             detail::device_data_reference output,
+                             ast_operator op) const
   {
-    using Out            = simt::std::invoke_result_t<OperatorFunctor, LHS, RHS>;
     auto const typed_lhs = this->resolve_input<LHS>(lhs, row_index);
     auto const typed_rhs = this->resolve_input<RHS>(rhs, row_index);
-    this->resolve_output<Out>(output, row_index, OperatorFunctor{}(typed_lhs, typed_rhs));
+    ast_operator_dispatcher(
+      op, binary_row_output<LHS, RHS>(*this), row_index, typed_lhs, typed_rhs, output);
   }
 
   template <typename OperatorFunctor,
@@ -202,30 +247,42 @@ struct row_evaluator {
   mutable_column_device_view* output_column;
 };
 
+template <typename Element>
+__device__ void row_output::resolve_output(detail::device_data_reference device_data_reference,
+                                           cudf::size_type row_index,
+                                           Element result) const
+{
+  auto const ref_type = device_data_reference.reference_type;
+  if (ref_type == detail::device_data_reference_type::COLUMN) {
+    evaluator.output_column->element<Element>(row_index) = result;
+  } else {  // Assumes ref_type == detail::device_data_reference_type::INTERMEDIATE
+    // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing.
+    // Using a temporary variable ensures that the compiler knows the result is aligned.
+    std::int64_t tmp;
+    memcpy(&tmp, &result, sizeof(Element));
+    evaluator.thread_intermediate_storage[device_data_reference.data_index] = tmp;
+  }
+}
+
 /**
  * @brief Functor to evaluate one operator on one row.
  *
  */
 struct evaluate_row_operator_functor {
-  template <ast_operator op>
-  CUDA_HOST_DEVICE_CALLABLE void operator()(detail::row_evaluator const& evaluator,
+  CUDA_HOST_DEVICE_CALLABLE void operator()(ast_operator op,
+                                            detail::row_evaluator const& evaluator,
                                             const detail::device_data_reference* data_references,
                                             const cudf::size_type* operator_source_indices,
                                             cudf::size_type& operator_source_index,
                                             cudf::size_type const& row_index)
   {
-    auto const arity = operator_functor<op>::arity;
+    auto const arity = ast_operator_arity(op);
     if (arity == 1) {
       // Unary operator
       auto const input  = data_references[operator_source_indices[operator_source_index]];
       auto const output = data_references[operator_source_indices[operator_source_index + 1]];
       operator_source_index += arity + 1;
-      type_dispatcher(input.data_type,
-                      detail::dispatch_unary_operator_types<operator_functor<op>>{},
-                      evaluator,
-                      row_index,
-                      input,
-                      output);
+      type_dispatcher(input.data_type, evaluator, row_index, input, output, op);
       /*
       // reg: 40, stack: 240
       unary_operator_dispatcher(op, input.data_type, evaluator, row_index, input, output);
@@ -246,12 +303,13 @@ struct evaluate_row_operator_functor {
       auto const output = data_references[operator_source_indices[operator_source_index + 2]];
       operator_source_index += arity + 1;
       type_dispatcher(lhs.data_type,
-                      detail::single_dispatch_binary_operator_types<operator_functor<op>>{},
+                      detail::single_dispatch_binary_operator{},
                       evaluator,
                       row_index,
                       lhs,
                       rhs,
-                      output);
+                      output,
+                      op);
       /*
       // reg: 38
       type_dispatch_binary_op{}.operator()<op>(
@@ -295,13 +353,8 @@ __device__ void evaluate_row_expression(detail::row_evaluator const& evaluator,
   for (cudf::size_type operator_index(0); operator_index < num_operators; operator_index++) {
     // Execute operator
     auto const op = operators[operator_index];
-    ast_operator_dispatcher(op,
-                            evaluate_row_operator_functor{},
-                            evaluator,
-                            data_references,
-                            operator_source_indices,
-                            operator_source_index,
-                            row_index);
+    evaluate_row_operator_functor{}(
+      op, evaluator, data_references, operator_source_indices, operator_source_index, row_index);
   }
 }
 
