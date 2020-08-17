@@ -172,12 +172,16 @@ std::string name_from_path(const std::vector<std::string> &path_in_schema)
   //
   std::string s = (path_in_schema.size() > 0) ? path_in_schema[0] : "";
   for (size_t i = 1; i < path_in_schema.size(); i++) {
-    // if we encounter a field named "list", do some checking to ensure that this
-    // is actually a list field.
+    // The Parquet spec requires that the outer schema field is named "list". However it also
+    // provides a list of backwards compatibility cases that are applicable as well.  Currently
+    // we are only handling the formal spec.  This will get cleaned up and improved when we add
+    // support for structs. The correct thing to do will probably be to examine the type of
+    // the SchemaElement itself to concretely identify the start of a nested type of any kind rather
+    // than trying to derive it from the path string.
     if (path_in_schema[i] == "list") {
-      // strictly speaking, the Parquet spec says the inner field should be named
-      // "element", but some libraries seem to get this wrong.  Pandas names it
-      // "item". So for now we'll just let it be anything.
+      // Again, strictly speaking, the Parquet spec says the inner field should be named
+      // "element", but there are some backwards compatibility issues that we have seen in the
+      // wild. For example, Pandas calls the field "item".  We will allow any name for now.
       i++;
       continue;
     }
