@@ -760,6 +760,7 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
   size_type num_list_cols = 0;
   for (auto &&col : parquet_columns) { num_list_cols += col.is_list(); }
 
+  printf("1\n");
   if (state.md.version == 0) {
     state.md.version  = 1;
     state.md.num_rows = num_rows;
@@ -859,6 +860,7 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
     // increment num rows
     state.md.num_rows += num_rows;
   }
+  printf("2\n");
 
   // Initialize column description
   hostdevice_vector<gpu::EncColumnDesc> col_desc(num_columns);
@@ -979,7 +981,7 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
                                  state.stream);
     }
   }
-
+  printf("3\n");
   // Initialize row groups and column chunks
   uint32_t num_chunks = num_rowgroups * num_columns;
   hostdevice_vector<gpu::EncColumnChunk> chunks(num_chunks);
@@ -990,6 +992,7 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
       (uint32_t)((state.md.row_groups[global_r].num_rows + fragment_size - 1) / fragment_size);
     state.md.row_groups[global_r].total_byte_size = 0;
     state.md.row_groups[global_r].columns.resize(num_columns);
+    printf("4\n");
     for (int i = 0; i < num_columns; i++) {
       gpu::EncColumnChunk *ck = &chunks[r * num_columns + i];
       bool dict_enable        = false;

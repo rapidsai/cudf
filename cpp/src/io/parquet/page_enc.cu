@@ -460,6 +460,7 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
         page_g.max_data_size   = ck_g.dictionary_size;
         page_g.start_row       = cur_row;
         page_g.num_rows        = ck_g.total_dict_entries;
+        page_g.num_leaf_values = ck_g.total_dict_entries;
         page_g.num_values      = ck_g.total_dict_entries;
         page_offset += page_g.max_hdr_size + page_g.max_data_size;
         comp_page_offset += page_g.max_hdr_size + GetMaxCompressedBfrSize(page_g.max_data_size);
@@ -536,9 +537,9 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
         }
         if (!t) {
           uint32_t def_level_bits = col_g.level_bits & 0xf;
-          // This is no longer tied to number of values in page. In list, there can be def level
-          // values to indicate empty list which will not show up in the leaf column values.
-          // So num def_level_size can be more
+          // TODO (dm): This is no longer tied to number of values in page. In list, there can be
+          // def level values to indicate empty list which will not show up in the leaf column
+          // values. So num def_level_size can be more
           uint32_t def_level_size =
             (def_level_bits)
               ? 4 + 5 + ((def_level_bits * values_in_page + 7) >> 3) + (values_in_page >> 8)
@@ -558,12 +559,26 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
             }
             page_g.max_hdr_size += stats_hdr_len;
           }
-          page_g.max_data_size    = page_size + def_level_size;
-          page_g.page_data        = ck_g.uncompressed_bfr + page_offset;
-          page_g.compressed_data  = ck_g.compressed_bfr + comp_page_offset;
-          page_g.start_row        = cur_row;
-          page_g.num_rows         = rows_in_page;
-          page_g.num_values       = values_in_page;
+          page_g.max_data_size   = page_size + def_level_size;
+          page_g.page_data       = ck_g.uncompressed_bfr + page_offset;
+          page_g.compressed_data = ck_g.compressed_bfr + comp_page_offset;
+          page_g.start_row       = cur_row;
+          page_g.num_rows        = rows_in_page;
+          page_g.num_leaf_values = values_in_page;
+
+          if (col_g.nesting_levels > 0) {
+            // The number of rep/def values can be more than num data values because data values do
+            // not contain nulls but rep/def values have an entry for null/empty. For any row, the
+            // location of these pre-calc level values can be obtained from level_offsets which are
+            // per-row offsets into these values. But they only contain offsets from the top level
+            // of nesting. So List<List<int>> will only contain one level_offsets.
+            size_type page_first_val_idx = col_g.level_offsets[page_g.start_row];
+            size_type page_last_val_idx  = col_g.level_offsets[page_g.start_row + page_g.num_rows];
+            page_g.num_values            = page_last_val_idx - page_first_val_idx;
+          } else {
+            page_g.num_values = page_g.num_rows;
+          }
+
           pagestats_g.start_chunk = ck_g.first_fragment + page_start;
           pagestats_g.num_chunks  = page_g.num_fragments;
           page_offset += page_g.max_hdr_size + page_g.max_data_size;
@@ -976,29 +991,19 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
         s->rle_out     = s->cur + 4;
       }
       __syncthreads();
-      // The number of rep/def values can be more than num data values because data values do not
-      // contain nulls but rep/def values have an entry for null/empty.
-      // For any row, the location of these pre-calc level values can be obtained from level_offsets
-      // which are per-row offsets into these values. But they only contain offsets from the top
-      // level of nesting. So List<List<int>> will only contain one level_offsets.
-      size_type page_first_val_idx = s->col.level_offsets[s->page.start_row];
-      size_type page_last_val_idx  = s->col.level_offsets[s->page.start_row + s->page.num_rows];
-      size_type page_nvals         = page_last_val_idx - page_first_val_idx;
-
-      // TODO (dm): This is not the right place for this. Put it in initPages.
-      if (!t) { s->page.num_level_vals = page_nvals; }
-
       size_type col_last_val_idx = s->col.level_offsets[s->col.num_rows];
-      while (s->rle_numvals < page_nvals) {
+      while (s->rle_numvals < s->page.num_values) {
         uint32_t rle_numvals = s->rle_numvals;
-        uint32_t nvals       = min(page_nvals - rle_numvals, 128);
-        uint32_t idx         = s->page.start_row + rle_numvals + t;
+        uint32_t nvals       = min(s->page.num_values - rle_numvals, 128);
+        // TODO (dm): Investigate the below: it should've been page_first_val_idx instead of
+        // s->page.start_row
+        uint32_t idx = s->page.start_row + rle_numvals + t;
         uint32_t lvl_val =
-          (rle_numvals + t < page_nvals && idx < col_last_val_idx) ? lvl_val_data[idx] : 0;
+          (rle_numvals + t < s->page.num_values && idx < col_last_val_idx) ? lvl_val_data[idx] : 0;
         s->vals[(rle_numvals + t) & (RLE_BFRSZ - 1)] = lvl_val;
         __syncthreads();
         rle_numvals += nvals;
-        RleEncode(s, rle_numvals, nbits, (rle_numvals == page_nvals), t);
+        RleEncode(s, rle_numvals, nbits, (rle_numvals == s->page.num_values), t);
         __syncthreads();
       }
       if (t < 32) {
@@ -1049,20 +1054,20 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
   // However, num_values may include NULLs. These NULLs may come from list structure that's not
   // known in leaf column. For this, we need a distinction between nulls in dremel encoded columns
   // and nulls in leaf column. For now, num_nulls refers to only leaf.
-  for (uint32_t cur_val_idx = 0; cur_val_idx < s->page.num_values;) {
-    uint32_t nvals   = min(s->page.num_values - cur_val_idx, 128);
+  for (uint32_t cur_val_idx = 0; cur_val_idx < s->page.num_leaf_values;) {
+    uint32_t nvals   = min(s->page.num_leaf_values - cur_val_idx, 128);
     uint32_t val_idx = s->page_start_val + cur_val_idx + t;
     uint32_t is_valid, warp_valids, len, pos;
 
     if (s->page.page_type == DICTIONARY_PAGE) {
-      is_valid = (cur_val_idx + t < s->page.num_values);
+      is_valid = (cur_val_idx + t < s->page.num_leaf_values);
       val_idx  = (is_valid) ? s->col.dict_data[val_idx] : val_idx;
     } else {
       const uint32_t *valid = s->col.valid_map_base;
       // EncColDesc also needs a col.num_vals because list may have more vals than rows and it
       // doesn't hurt to have them both.
       // Later I can evaluate whether to keep num_rows
-      is_valid = (val_idx < s->col.num_values && cur_val_idx + t < s->page.num_values)
+      is_valid = (val_idx < s->col.num_values && cur_val_idx + t < s->page.num_leaf_values)
                    ? (valid) ? (valid[val_idx >> 5] >> (val_idx & 0x1f)) & 1 : 1
                    : 0;
     }
@@ -1096,11 +1101,11 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
         __syncthreads();
 #if !ENABLE_BOOL_RLE
         if (dtype == BOOLEAN) {
-          PlainBoolEncode(s, rle_numvals, (cur_val_idx == s->page.num_values), t);
+          PlainBoolEncode(s, rle_numvals, (cur_val_idx == s->page.num_leaf_values), t);
         } else
 #endif
         {
-          RleEncode(s, rle_numvals, dict_bits, (cur_val_idx == s->page.num_values), t);
+          RleEncode(s, rle_numvals, dict_bits, (cur_val_idx == s->page.num_leaf_values), t);
         }
         __syncthreads();
       }
@@ -1463,10 +1468,10 @@ __global__ void __launch_bounds__(128) gpuEncodePageHeaders(EncPage *pages,
     if (page_type == DATA_PAGE) {
       // DataPageHeader
       CPW_FLD_STRUCT_BEGIN(5)
-      CPW_FLD_INT32(1, page_g.num_level_vals)  // NOTE: num_values != num_rows for list types
-      CPW_FLD_INT32(2, encoding)               // encoding
-      CPW_FLD_INT32(3, RLE)                    // definition_level_encoding
-      CPW_FLD_INT32(4, RLE)                    // repetition_level_encoding
+      CPW_FLD_INT32(1, page_g.num_values)  // NOTE: num_values != num_rows for list types
+      CPW_FLD_INT32(2, encoding)           // encoding
+      CPW_FLD_INT32(3, RLE)                // definition_level_encoding
+      CPW_FLD_INT32(4, RLE)                // repetition_level_encoding
       // Optionally encode page-level statistics
       if (page_stats) {
         CPW_FLD_STRUCT_BEGIN(5)

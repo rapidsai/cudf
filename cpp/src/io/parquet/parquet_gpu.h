@@ -185,9 +185,9 @@ struct EncPage {
   uint32_t max_data_size;    //!< Maximum size of coded page data (excluding header)
   uint32_t start_row;        //!< First row of page
   uint32_t num_rows;         //!< Rows in page
-  // TODO (dm): rename to nnz
-  uint32_t num_values;  //!< Values in page. Different from num_rows in case of list
-  uint32_t num_level_vals;
+  uint32_t num_leaf_values;  //!< Values in page. Different from num_rows in case of list
+  uint32_t num_values;  //!< Number of def/rep level values in page. Includes null/empty elements in
+                        //!< non-leaf levels
 };
 
 /// Size of hash used for building dictionaries
