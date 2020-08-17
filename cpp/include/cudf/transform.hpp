@@ -88,7 +88,7 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
  *
  * The encoded values are integers in the range [0, n), where `n`
  * is the number of distinct rows in the input table.
- * The result table is such that keys[result[i]] == input[i],
+ * The result table is such that `keys[result[i]] == input[i]`,
  * where `keys` is a table containing the distinct rows  in `input` in
  * sorted ascending order. Nulls, if any, are sorted to the end of
  * the `keys` table.
@@ -102,9 +102,9 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
  * output: [{1, 2, 3, 9}, {1, 3, 2, 5}], {0, 2, 0, 1, 3}
  * @endcode
  *
- * @param input        Table containing values to be encoded
- * @param mr           Device memory resource used to allocate the returned table's device memory
- * @return A pair containing the distinct row of the input table  in sorter order,
+ * @param input Table containing values to be encoded
+ * @param mr Device memory resource used to allocate the returned table's device memory
+ * @return A pair containing the distinct row of the input table in sorter order,
  * and a column of integer indices representing the encoded rows.
  */
 std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>> encode(
