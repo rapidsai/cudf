@@ -9,7 +9,6 @@
 #include <cudf/detail/transform.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/bit.hpp>
-#include <iostream>
 #include <numeric>
 
 namespace cudf {
