@@ -517,9 +517,7 @@ class Index(Frame, Serializable):
         >>> type(idx)
         <class 'cudf.core.index.GenericIndex'>
         """
-        return pd.Index(
-            self._values.to_pandas(nullable_pd_dtype=False), name=self.name
-        )
+        return pd.Index(self._values.to_pandas(), name=self.name)
 
     def to_arrow(self):
         """
@@ -812,11 +810,13 @@ class Index(Frame, Serializable):
         Int64Index([10, 100, 1, 1000], dtype='int64')
 
         Sort values in ascending order (default behavior).
+
         >>> idx.sort_values()
         Int64Index([1, 10, 100, 1000], dtype='int64')
 
         Sort values in descending order, and also get the indices `idx` was
         sorted by.
+
         >>> idx.sort_values(ascending=False, return_indexer=True)
         (Int64Index([1000, 100, 10, 1], dtype='int64'), array([3, 1, 0, 2],
                                                             dtype=int32))
@@ -2130,9 +2130,7 @@ class DatetimeIndex(GenericIndex):
 
     def to_pandas(self):
         nanos = self._values.astype("datetime64[ns]")
-        return pd.DatetimeIndex(
-            nanos.to_pandas(nullable_pd_dtype=False), name=self.name
-        )
+        return pd.DatetimeIndex(nanos.to_pandas(), name=self.name)
 
     def get_dt_field(self, field):
         out_column = self._values.get_dt_field(field)
@@ -2225,7 +2223,7 @@ class TimedeltaIndex(GenericIndex):
 
     def to_pandas(self):
         return pd.TimedeltaIndex(
-            self._values.to_pandas(nullable_pd_dtype=False),
+            self._values.to_pandas(),
             name=self.name,
             unit=self._values.time_unit,
         )

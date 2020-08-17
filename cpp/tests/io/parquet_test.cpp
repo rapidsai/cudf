@@ -115,7 +115,7 @@ struct ParquetWriterNumericTypeTest : public ParquetWriterTest {
 
 // Typed test fixture for timestamp type tests
 template <typename T>
-struct ParquetWriterTimestampTypeTest : public ParquetWriterTest {
+struct ParquetWriterChronoTypeTest : public ParquetWriterTest {
   auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
@@ -123,8 +123,8 @@ struct ParquetWriterTimestampTypeTest : public ParquetWriterTest {
 // TODO: Replace with `NumericTypes` when unsigned support is added. Issue #5352
 using SupportedTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, bool, float, double>;
 TYPED_TEST_CASE(ParquetWriterNumericTypeTest, SupportedTypes);
-using SupportedTimestampTypes = cudf::test::TimestampTypes;
-TYPED_TEST_CASE(ParquetWriterTimestampTypeTest, SupportedTimestampTypes);
+using SupportedChronoTypes = cudf::test::Concat<cudf::test::ChronoTypes, cudf::test::DurationTypes>;
+TYPED_TEST_CASE(ParquetWriterChronoTypeTest, SupportedChronoTypes);
 
 // Base test fixture for chunked writer tests
 struct ParquetChunkedWriterTest : public cudf::test::BaseFixture {
@@ -221,7 +221,7 @@ TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumnWithNulls)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
 }
 
-TYPED_TEST(ParquetWriterTimestampTypeTest, Timestamps)
+TYPED_TEST(ParquetWriterChronoTypeTest, Chronos)
 {
   auto sequence = cudf::test::make_counting_transform_iterator(
     0, [](auto i) { return TypeParam((std::rand() / 10000) * 1000); });
@@ -235,7 +235,7 @@ TYPED_TEST(ParquetWriterTimestampTypeTest, Timestamps)
   auto expected = std::make_unique<table>(std::move(cols));
   EXPECT_EQ(1, expected->num_columns());
 
-  auto filepath = temp_env->get_temp_filepath("Timestamps.parquet");
+  auto filepath = temp_env->get_temp_filepath("Chronos.parquet");
   cudf_io::write_parquet_args out_args{cudf_io::sink_info{filepath}, expected->view()};
   cudf_io::write_parquet(out_args);
 
@@ -246,7 +246,7 @@ TYPED_TEST(ParquetWriterTimestampTypeTest, Timestamps)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
 }
 
-TYPED_TEST(ParquetWriterTimestampTypeTest, TimestampsWithNulls)
+TYPED_TEST(ParquetWriterChronoTypeTest, ChronosWithNulls)
 {
   auto sequence = cudf::test::make_counting_transform_iterator(
     0, [](auto i) { return TypeParam((std::rand() / 10000) * 1000); });
@@ -261,7 +261,7 @@ TYPED_TEST(ParquetWriterTimestampTypeTest, TimestampsWithNulls)
   auto expected = std::make_unique<table>(std::move(cols));
   EXPECT_EQ(1, expected->num_columns());
 
-  auto filepath = temp_env->get_temp_filepath("TimestampsWithNulls.parquet");
+  auto filepath = temp_env->get_temp_filepath("ChronosWithNulls.parquet");
   cudf_io::write_parquet_args out_args{cudf_io::sink_info{filepath}, expected->view()};
   cudf_io::write_parquet(out_args);
 

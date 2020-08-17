@@ -96,16 +96,6 @@ class TimeDeltaColumn(column.ColumnBase):
             result = result.fillna(cudf._NA_REP)
         return result
 
-    def to_pandas(self, index=None, nullable_pd_dtype=False):
-        if nullable_pd_dtype:
-            raise NotImplementedError(
-                f"nullable_pd_dtype=True is not supported for {self.dtype}"
-            )
-
-        return pd.Series(
-            self.to_array(fillna="pandas").astype(self.dtype), index=index
-        )
-
     def to_arrow(self):
         mask = None
         if self.nullable:
@@ -319,7 +309,21 @@ class TimeDeltaColumn(column.ColumnBase):
             fill_value = column.as_column(fill_value, nan_as_null=False)
 
         result = libcudf.replace.replace_nulls(col, fill_value)
+        if isinstance(fill_value, np.timedelta64) and np.isnat(fill_value):
+            # If the value we are filling is np.timedelta64("NAT")
+            # we set the same mask as current column.
+            # However where there are "<NA>" in the
+            # columns, their corresponding locations
+            # in base_data will contain min(int64) values.
 
+            return column.build_column(
+                data=result.base_data,
+                dtype=result.dtype,
+                mask=self.base_mask,
+                size=result.size,
+                offset=result.offset,
+                children=result.base_children,
+            )
         return result
 
     def as_numerical_column(self, dtype, **kwargs):

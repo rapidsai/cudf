@@ -68,7 +68,7 @@ def test_string_export(ps_gs):
     ps, gs = ps_gs
 
     expect = ps
-    got = gs.to_pandas(nullable_pd_dtype=False)
+    got = gs.to_pandas()
     assert_eq(expect, got)
 
     expect = np.array(ps)
@@ -2015,53 +2015,49 @@ def test_string_find(data, sub):
     gs = Series(data)
 
     got = gs.str.find(sub)
-    expect = ps.str.find(sub).fillna(got._column.default_na_value())
+    expect = ps.str.find(sub)
     assert_eq(
         expect, got, check_dtype=False,
     )
 
     got = gs.str.find(sub, start=1)
-    expect = ps.str.find(sub, start=1).fillna(got._column.default_na_value())
+    expect = ps.str.find(sub, start=1)
     assert_eq(
         expect, got, check_dtype=False,
     )
 
     got = gs.str.find(sub, end=10)
-    expect = ps.str.find(sub, end=10).fillna(got._column.default_na_value())
+    expect = ps.str.find(sub, end=10)
     assert_eq(
         expect, got, check_dtype=False,
     )
 
     got = gs.str.find(sub, start=2, end=10)
-    expect = ps.str.find(sub, start=2, end=10).fillna(
-        got._column.default_na_value()
-    )
+    expect = ps.str.find(sub, start=2, end=10)
     assert_eq(
         expect, got, check_dtype=False,
     )
 
     got = gs.str.rfind(sub)
-    expect = ps.str.rfind(sub).fillna(got._column.default_na_value())
+    expect = ps.str.rfind(sub)
     assert_eq(
         expect, got, check_dtype=False,
     )
 
     got = gs.str.rfind(sub, start=1)
-    expect = ps.str.rfind(sub, start=1).fillna(got._column.default_na_value())
+    expect = ps.str.rfind(sub, start=1)
     assert_eq(
         expect, got, check_dtype=False,
     )
 
     got = gs.str.rfind(sub, end=10)
-    expect = ps.str.rfind(sub, end=10).fillna(got._column.default_na_value())
+    expect = ps.str.rfind(sub, end=10)
     assert_eq(
         expect, got, check_dtype=False,
     )
 
     got = gs.str.rfind(sub, start=2, end=10)
-    expect = ps.str.rfind(sub, start=2, end=10).fillna(
-        got._column.default_na_value()
-    )
+    expect = ps.str.rfind(sub, start=2, end=10)
     assert_eq(
         expect, got, check_dtype=False,
     )
