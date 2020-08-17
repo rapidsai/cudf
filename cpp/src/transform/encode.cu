@@ -18,12 +18,12 @@ namespace detail {
 std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(
   table_view const& input_table, rmm::mr::device_memory_resource* mr, cudaStream_t stream)
 {
-  // side effects of this function we are now dependent on:
-  // - resulting table elements are sorted ascending
-
   std::vector<size_type> columns(input_table.num_columns());
   std::iota(columns.begin(), columns.end(), 0);
 
+  // side effects of this function we are now dependent on:
+  // - resulting column elements are sorted ascending
+  // - nulls are sorted to the end
   auto keys_table = cudf::detail::drop_duplicates(
     input_table, columns, duplicate_keep_option::KEEP_FIRST, null_equality::EQUAL, mr, stream);
 
@@ -41,12 +41,13 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(
                       thrust::make_counting_iterator<cudf::size_type>(num_rows),
                       gather_map.begin(),
                       [num_rows, num_rows_with_nulls] __device__(cudf::size_type i) {
-                        if (i < num_rows_with_nulls) {
+                        if (i < (num_rows - num_rows_with_nulls)) {
                           return num_rows_with_nulls + i;
                         } else {
                           return num_rows - i - 1;
                         }
                       });
+
     cudf::column_view gather_map_column(
       cudf::data_type{type_id::INT32}, num_rows, thrust::raw_pointer_cast(gather_map.data()));
 
@@ -69,49 +70,7 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(
   return std::make_pair(std::move(keys_table), std::move(indices_column));
 }
 
-std::pair<std::unique_ptr<column>, std::unique_ptr<column>> encode(
-  column_view const& input_column, rmm::mr::device_memory_resource* mr, cudaStream_t stream)
-{
-  // side effects of this function we are now dependent on:
-  // - resulting column elements are sorted ascending
-  // - nulls are sorted to the beginning
-  auto table_keys = cudf::detail::drop_duplicates(table_view{{input_column}},
-                                                  std::vector<size_type>{0},
-                                                  duplicate_keep_option::KEEP_FIRST,
-                                                  null_equality::EQUAL,
-                                                  mr,
-                                                  stream)
-                      ->release();
-  std::unique_ptr<column> keys_column(std::move(table_keys.front()));
-
-  if (input_column.has_nulls()) {
-    // the single null entry should be at the beginning -- side effect from drop_duplicates
-    // copy the column without the null entry
-    keys_column = std::make_unique<column>(
-      slice(keys_column->view(), std::vector<size_type>{1, keys_column->size()}).front(),
-      stream,
-      mr);
-    keys_column->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);  // remove the null-mask
-  }
-
-  // this returns a column with no null entries
-  // - it appears to ignore the null entries in the input and tries to place the value regardless
-  auto indices_column = cudf::detail::lower_bound(table_view{{keys_column->view()}},
-                                                  table_view{{input_column}},
-                                                  std::vector<order>{order::ASCENDING},
-                                                  std::vector<null_order>{null_order::AFTER},
-                                                  mr,
-                                                  stream);
-
-  return std::make_pair(std::move(keys_column), std::move(indices_column));
-}
 }  // namespace detail
-
-std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> encode(
-  cudf::column_view const& input, rmm::mr::device_memory_resource* mr)
-{
-  return detail::encode(input, mr, 0);
-}
 
 std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>> encode(
   cudf::table_view const& input, rmm::mr::device_memory_resource* mr)
