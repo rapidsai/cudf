@@ -27,6 +27,7 @@ from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils import ioutils, utils
 from cudf.utils.dtypes import (
+    NUMERIC_TYPES,
     check_cast_unsupported_dtype,
     get_time_unit,
     is_categorical_dtype,
@@ -120,8 +121,11 @@ class ColumnBase(Column, Serializable):
     def __len__(self):
         return self.size
 
-    def to_pandas(self, index=None, nullable_pd_dtype=False, **kwargs):
-        pd_series = self.to_arrow().to_pandas(**kwargs)
+    def to_pandas(self, index=None, **kwargs):
+        if str(self.dtype) in NUMERIC_TYPES and self.null_count == 0:
+            pd_series = pd.Series(cupy.asnumpy(self.values))
+        else:
+            pd_series = self.to_arrow().to_pandas(**kwargs)
         if index is not None:
             pd_series.index = index
         return pd_series

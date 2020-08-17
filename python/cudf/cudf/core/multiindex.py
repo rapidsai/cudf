@@ -840,7 +840,7 @@ class MultiIndex(Index):
 
     def to_pandas(self, **kwargs):
         if hasattr(self, "_source_data"):
-            result = self._source_data.to_pandas(nullable_pd_dtype=False)
+            result = self._source_data.to_pandas()
             result.columns = self.names
             return pd.MultiIndex.from_frame(result)
 
@@ -852,10 +852,7 @@ class MultiIndex(Index):
         # 1. as_index() on each level, so DatetimeColumn becomes DatetimeIndex
         # 2. convert levels to numpy array so empty levels become Float64Index
         levels = np.array(
-            [
-                as_index(level).to_pandas(nullable_pd_dtype=False)
-                for level in self.levels
-            ]
+            [as_index(level).to_pandas() for level in self.levels]
         )
 
         # Backwards compatibility:
