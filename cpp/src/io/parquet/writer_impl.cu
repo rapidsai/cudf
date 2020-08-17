@@ -782,6 +782,10 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
     for (auto i = 0; i < num_columns; i++) {
       auto &col = parquet_columns[i];
       if (col.is_list()) {
+        // TODO (dm): figure out way to do chunked write for list. Primry problem: figuring out
+        // nullability of each level. The user help we get is in the form of predetermined
+        // nullability of each column as passed in state.user_metadata_with_nullability. But that
+        // contains one bool per column in a vector of bools
         size_type nesting_depth = col.nesting_levels();
         // Each level of nesting requires two levels of Schema. The leaf level needs one schema
         // element
@@ -837,10 +841,13 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
         }
         col_schema.name         = col.name();
         col_schema.num_children = 0;  // Leaf node
+
+        state.md.schema.push_back(std::move(col_schema));
       }
     }
   } else {
     // verify the user isn't passing mismatched tables
+    // TODO (dm): Now needs to compare children of columns in case of list.
     CUDF_EXPECTS(state.md.schema[0].num_children == num_columns,
                  "Mismatch in table structure between multiple calls to write_chunked");
     for (auto i = 0; i < num_columns; i++) {
@@ -1026,14 +1033,14 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
           num_dictionaries++;
         }
       }
-      ck->has_dictionary                                           = dict_enable;
-      state.md.row_groups[global_r].columns[i].meta_data.type      = state.md.schema[1 + i].type;
+      ck->has_dictionary                                      = dict_enable;
+      state.md.row_groups[global_r].columns[i].meta_data.type = parquet_columns[i].physical_type();
       state.md.row_groups[global_r].columns[i].meta_data.encodings = {PLAIN, RLE};
       if (dict_enable) {
         state.md.row_groups[global_r].columns[i].meta_data.encodings.push_back(PLAIN_DICTIONARY);
       }
       state.md.row_groups[global_r].columns[i].meta_data.path_in_schema = {
-        state.md.schema[1 + i].name};
+        parquet_columns[i].name()};
       state.md.row_groups[global_r].columns[i].meta_data.codec = UNCOMPRESSED;
       state.md.row_groups[global_r].columns[i].meta_data.num_values =
         state.md.row_groups[global_r].num_rows;
