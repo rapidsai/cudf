@@ -1,8 +1,7 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
-import ctypes
 import os
+import re
 import shutil
-import sys
 import sysconfig
 from distutils.sysconfig import get_python_lib
 
@@ -15,71 +14,20 @@ from setuptools.extension import Extension
 import versioneer
 
 
-def cuda_detect(cuda_home):
-    """Attempt to detect the version of CUDA present in the operating system.
-    On Windows and Linux, the CUDA library is installed by the NVIDIA
-    driver package, and is typically found in the standard library path,
-    rather than with the CUDA SDK (which is optional for running CUDA apps).
-    On macOS, the CUDA library is only installed with the CUDA SDK, and
-    might not be in the library path.
-    Returns: version string (Ex: '9.2') or None if CUDA not found.
-    """
+def get_cuda_version_from_header(cuda_include_dir):
 
-    system = sys.platform
-    print("system", system)
-    if system == "darwin":
-        lib_filenames = [
-            "libcuda.dylib",  # check library path first
-            os.path.join(cuda_home, "lib/libcuda.dylib"),
-        ]
-    elif system == "linux":
-        lib_filenames = [
-            os.path.join(cuda_home, "lib64/libcudart.so"),
-        ]
-    elif system == "win32":
-        lib_filenames = ["nvcuda.dll"]
-    else:
-        return None  # CUDA not available for other operating systems
+    cuda_version = None
 
-    if system == "wind32":
-        dll = ctypes.windll
-    else:
-        dll = ctypes.cdll
-    libcuda = None
-    print("lib_filenames", lib_filenames)
-    for lib_filename in lib_filenames:
-        try:
-            libcuda = dll.LoadLibrary(lib_filename)
-            break
-        except Exception:
-            pass
-    print("libcuda", libcuda)
-    if libcuda is None:
-        return None
+    with open(os.path.join(cuda_include_dir, "cuda.h"), "r") as f:
+        for line in f.readlines():
+            if re.search(r"#define CUDA_VERSION ", line) is not None:
+                cuda_version = line
+                break
 
-    # Get CUDA version
-    try:
-        cudaRuntimeGetVersion = libcuda.cudaRuntimeGetVersion
-        version_int = ctypes.c_int(0)
-        ret = cudaRuntimeGetVersion(ctypes.byref(version_int))
-        print("ret", ret)
-        if ret == 100:
-            cuda_version = os.environ.get("CUDA_VERSION", None)
-            if cuda_version is None:
-                print("ENV_VARS", os.environ)
-                raise TypeError("Please set CUDA_VERSION environment variable")
-
-            print("cuda_version", cuda_version)
-            return ".".join(cuda_version.split(".")[:2])
-        elif ret != 0:
-            return None
-
-        # Convert version integer to version string
-        value = version_int.value
-        return "%d.%d" % (value // 1000, (value % 1000) // 10)
-    except Exception as e:
-        print("Exception", e.__str__())
-        return None
+    if cuda_version is None:
+        raise TypeError("CUDA_VERSION not found in cuda.h")
+    cuda_version = int(cuda_version.split()[2])
+    return "%d.%d" % (cuda_version // 1000, (cuda_version % 1000) // 10)
 
 
 install_requires = ["numba", "cython"]
@@ -104,9 +52,8 @@ if not os.path.isdir(CUDA_HOME):
 cuda_include_dir = os.path.join(CUDA_HOME, "include")
 
 CUDF_ROOT = os.environ.get("CUDF_ROOT", "../../cpp/build/")
-
-print("CUDA_VERSION", cuda_detect(CUDA_HOME))
-print("CUDA_HOME", CUDA_HOME)
+CUDA_VERSION = get_cuda_version_from_header(cuda_include_dir)
+print("CUDA_VERSION", CUDA_VERSION)
 
 try:
     nthreads = int(os.environ.get("PARALLEL_LEVEL", "0") or "0")
@@ -165,7 +112,7 @@ setup(
         compiler_directives=dict(
             profile=False, language_level=3, embedsignature=True
         ),
-        compile_time_env={"CUDA_VERSION": cuda_detect(CUDA_HOME)},
+        compile_time_env={"CUDA_VERSION": CUDA_VERSION},
     ),
     packages=find_packages(include=["cudf", "cudf.*"]),
     package_data=dict.fromkeys(
