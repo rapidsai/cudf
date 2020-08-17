@@ -175,7 +175,7 @@ cdef dtype_from_lists_column_view(column_view cv):
     if child.type().id() == libcudf_types.type_id.LIST:
         return ListDtype(dtype_from_lists_column_view(child))
     elif child.type().id() == libcudf_types.type_id.EMPTY:
-        return ListDtype(np.dtype("float64"))
+        return ListDtype(np.dtype("int8"))
     else:
         return ListDtype(
             cudf_to_np_types[<underlying_type_t_type_id> child.type().id()]

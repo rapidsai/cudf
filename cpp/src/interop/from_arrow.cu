@@ -99,13 +99,11 @@ struct dispatch_to_cudf_column {
       stream,
       mr);
     auto mask_buffer = array.null_bitmap();
-    CUDA_TRY(cudaMemcpyAsync(
-      mask->data(),
-      (mask_buffer->is_cpu() ? mask_buffer->data()
-                             : reinterpret_cast<const uint8_t*>(mask_buffer->address())),
-      array.null_bitmap()->size(),
-      cudaMemcpyDefault,
-      stream));
+    CUDA_TRY(cudaMemcpyAsync(mask->data(),
+                             reinterpret_cast<const uint8_t*>(mask_buffer->address()),
+                             array.null_bitmap()->size(),
+                             cudaMemcpyDefault,
+                             stream));
     return mask;
   }
 
@@ -123,9 +121,7 @@ struct dispatch_to_cudf_column {
     auto mutable_column_view = col->mutable_view();
     CUDA_TRY(cudaMemcpyAsync(
       mutable_column_view.data<void*>(),
-      (data_buffer->is_cpu() ? data_buffer->data()
-                             : reinterpret_cast<const uint8_t*>(data_buffer->address())) +
-        array.offset() * sizeof(T),
+      reinterpret_cast<const uint8_t*>(data_buffer->address()) + array.offset() * sizeof(T),
       sizeof(T) * num_rows,
       cudaMemcpyDefault,
       stream));
@@ -175,13 +171,11 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<bool>(
 {
   auto data_buffer = array.data()->buffers[1];
   auto data        = rmm::device_buffer(data_buffer->size(), stream, mr);
-  CUDA_TRY(cudaMemcpyAsync(
-    data.data(),
-    (data_buffer->is_cpu() ? data_buffer->data()
-                           : reinterpret_cast<const uint8_t*>(data_buffer->address())),
-    data_buffer->size(),
-    cudaMemcpyDefault,
-    stream));
+  CUDA_TRY(cudaMemcpyAsync(data.data(),
+                           reinterpret_cast<const uint8_t*>(data_buffer->address()),
+                           data_buffer->size(),
+                           cudaMemcpyDefault,
+                           stream));
   auto out_col = mask_to_bools(static_cast<bitmask_type*>(data.data()),
                                array.offset(),
                                array.offset() + array.length(),

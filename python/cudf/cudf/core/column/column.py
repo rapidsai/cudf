@@ -1359,17 +1359,6 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
 
     elif isinstance(arbitrary, (pa.Array, pa.ChunkedArray)):
         col = ColumnBase.from_arrow(arbitrary)
-        if isinstance(col, cudf.core.column.NumericalColumn) and np.issubdtype(
-            col.dtype, np.floating
-        ):
-            if nan_as_null is not False:
-                mask = libcudf.transform.nans_to_nulls(col)
-                col = col.set_mask(mask)
-        elif isinstance(
-            col, cudf.core.column.DatetimeColumn
-        ) and np.issubdtype(col.dtype, np.datetime64):
-            if nan_as_null is not False:
-                col = utils.time_col_replace_nulls(col)
         if isinstance(arbitrary, pa.NullArray):
             if type(dtype) == str and dtype == "empty":
                 new_dtype = pd.api.types.pandas_dtype(

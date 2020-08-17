@@ -19,6 +19,19 @@ from cudf._lib.cpp.interop cimport (
 
 
 def to_arrow(Table input_table, object column_names, bool keep_index=True):
+    """Convert from a cudf Table to PyArrow Table.
+
+    Parameters
+    ----------
+    input_table : cudf table
+    column_names : names for the pyarrow arrays
+    keep_index : whether index needs to be part of arrow table
+
+    Returns
+    -------
+    pyarrow table
+    """
+
     cdef vector[string] cpp_column_names
     cdef table_view input = (
         input_table.view() if keep_index else input_table.data_view()
@@ -39,6 +52,18 @@ def from_arrow(
     object column_names=None,
     object index_names=None
 ):
+    """Convert from a PyArrow Table to cudf Table.
+
+    Parameters
+    ----------
+    input_table : PyArrow table
+    column_names : names for the cudf table data columns
+    index_names : names for the cudf table index columns
+
+    Returns
+    -------
+    cudf Table
+    """
     cdef shared_ptr[CTable] cpp_arrow_table = (
         pyarrow_unwrap_table(input_table)
     )
