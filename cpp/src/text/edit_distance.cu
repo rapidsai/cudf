@@ -209,7 +209,8 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
   cudf::size_type strings_count = strings.size();
   if (strings_count == 0) return cudf::make_empty_column(cudf::data_type{cudf::type_id::INT32});
   CUDF_EXPECTS(strings_count > 1, "the input strings must include at least 2 strings");
-  CUDF_EXPECTS(size_t{strings_count} * size_t{strings_count} < std::numeric_limits<int32_t>().max(),
+  CUDF_EXPECTS(static_cast<size_t>(strings_count) * static_cast<size_t>(strings_count) <
+                 std::numeric_limits<int32_t>().max(),
                "too many strings to create the output column");
 
   // create device column of the input strings column
