@@ -297,8 +297,12 @@ class DatetimeColumn(column.ColumnBase):
 
             max_int = np.iinfo(np.dtype("int64")).max
 
-            max_dist = self.max().astype(np.timedelta64, copy=False)
-            min_dist = self.min().astype(np.timedelta64, copy=False)
+            max_dist = np.timedelta64(
+                self.max().astype(int, copy=False), self_res
+            )
+            min_dist = np.timedelta64(
+                self.min().astype(int, copy=False), self_res
+            )
 
             self_delta_dtype = np.timedelta64(0, self_res).dtype
 
