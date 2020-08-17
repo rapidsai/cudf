@@ -301,6 +301,7 @@
 - PR #5319 Disallow SUM and specialize MEAN of timestamp types
 - PR #5797 Fix a missing data issue in some Parquet files
 - PR #5787 Fix column create from dictionary column view
+- PR #5764 Remove repetition of install instructions
 - PR #5926 Fix SeriesGroupBy.nunique() to return a Series
 - PR #5813 Fix normalizer exception with all-null strings column
 - PR #5820 Fix ListColumn.to_arrow for all null case
