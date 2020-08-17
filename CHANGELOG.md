@@ -4,7 +4,7 @@
 
 ## Improvements
 
-- PR #5956 Adding/Updating tests for cuStreamz
+- PR #5956 Add/Update tests for cuStreamz
 
 ## Bug Fixes
 
