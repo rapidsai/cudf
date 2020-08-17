@@ -70,6 +70,7 @@
 - PR #5807 Initial support for struct columns
 - PR #5817 Enable more `fixed_point` unit tests by introducing "scale-less" constructor
 - PR #5822 Add `cudf_kafka` to `custreamz` run time conda dependency and fix bash syntax issue
+- PR #5903 Add duration support for Parquet reader, writer
 - PR #5845 Add support for `mask_to_bools`
 - PR #5851 Add support for `Index.sort_values`
 - PR #5857 Add dtypes information page in python docs
@@ -222,6 +223,7 @@
 - PR #5383 Fix cython `type_id` enum mismatch
 - PR #5982 Fix gcc-9 compile errors under CUDA 11
 - PR #5382 Fix CategoricalDtype equality comparisons
+- PR #5989 Fix gcc-9 warnings on narrowing conversion
 - PR #5385 Fix index issues in `DataFrame.from_gpu_matrix`
 - PR #5390 Fix Java data type IDs and string interleave test
 - PR #5392 Fix documentation links
