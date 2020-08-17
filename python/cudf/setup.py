@@ -53,7 +53,6 @@ cuda_include_dir = os.path.join(CUDA_HOME, "include")
 
 CUDF_ROOT = os.environ.get("CUDF_ROOT", "../../cpp/build/")
 CUDA_VERSION = get_cuda_version_from_header(cuda_include_dir)
-print("CUDA_VERSION", CUDA_VERSION)
 
 try:
     nthreads = int(os.environ.get("PARALLEL_LEVEL", "0") or "0")
