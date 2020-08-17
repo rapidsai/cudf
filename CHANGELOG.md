@@ -67,13 +67,17 @@
 - PR #5811 Add `nvtext::edit_distance` API
 - PR #5789 Add groupby support for duration types
 - PR #5810 Make Cython subdirs packages and simplify package_data
+- PR #5807 Initial support for struct columns
 - PR #5817 Enable more `fixed_point` unit tests by introducing "scale-less" constructor
 - PR #5822 Add `cudf_kafka` to `custreamz` run time conda dependency and fix bash syntax issue
+- PR #5903 Add duration support for Parquet reader, writer
 - PR #5845 Add support for `mask_to_bools`
 - PR #5851 Add support for `Index.sort_values`
+- PR #5857 Add dtypes information page in python docs
 - PR #5859 Add conversion form `fixed_point` to `bool`
 - PR #5781 Add duration types support in cudf(python/cython)
 - PR #5815 LIST Support for ColumnVector
+- PR #5992 Add support for `.dt.strftime`
 
 ## Improvements
 
@@ -150,6 +154,7 @@
 - PR #5602 Add support for concatenation of `Series` & `DataFrame` in `cudf.concat` when `axis=0`
 - PR #5603 Refactor JIT `parser.cpp`
 - PR #5643 Update `isort` to 5.0.4
+- PR #5648 OO interface for hash join with explicit `build/probe` semantic 
 - PR #5662 Make Java ColumnVector(long nativePointer) constructor public
 - PR #5679 Use `pickle5` to test older Python versions
 - PR #5684 Use `pickle5` in `Serializable` (when available)
@@ -179,6 +184,7 @@
 - PR #5803 Add in Java support for the repeat command
 - PR #5806 Expose the error message from native exception when throwing an OOM exception
 - PR #5825 Enable ORC statistics generation by default
+- PR #5771 Enable gather/slicing/joins with ListColumns in Python
 - PR #5834 Add support for dictionary column in concatenate
 - PR #5832 Make dictionary_wrapper constructor from a value explicit
 - PR #5833 Pin `dask` and `distributed` version to `2.22.0`
@@ -193,6 +199,7 @@
 - PR #5885 Add in java support for merge sort
 - PR #5894 Small code improvement / cleanup
 - PR #5899 Add in gather support for Java
+- PR #5906 Add macros for showing line of failures in unit tests
 - PR #5933 Add in APIs to read/write arrow IPC formatted data from java 
 - PR #5970 Map data to pandas through arrow, always
 
@@ -215,16 +222,20 @@
 - PR #5377 Handle array of cupy scalars in to_column
 - PR #5326 Fix `DataFrame.__init__` for list of scalar inputs and related dask issue
 - PR #5383 Fix cython `type_id` enum mismatch
+- PR #5982 Fix gcc-9 compile errors under CUDA 11
 - PR #5382 Fix CategoricalDtype equality comparisons
+- PR #5989 Fix gcc-9 warnings on narrowing conversion
 - PR #5385 Fix index issues in `DataFrame.from_gpu_matrix`
 - PR #5390 Fix Java data type IDs and string interleave test
 - PR #5392 Fix documentation links
+- PR #5978 Fix option to turn off NVTX
 - PR #5410 Fix compile warning by disallowing bool column type for slice_strings
 - PR #5404 Fix issue with column creation when chunked arrays are passed
 - PR #5409 Use the correct memory resource when creating empty null masks
 - PR #5399 Fix cpp compiler warnings of unreachable code
 - PR #5439 Fix nvtext ngrams_tokenize performance for multi-byte UTF8
 - PR #5446 Fix compile error caused by out-of-date PR merge (4990)
+- PR #5983 Fix JNI gcc-9 compile error under CUDA 11
 - PR #5423 Fix any() reduction ignore nulls
 - PR #5459 Fix str.translate to convert table characters to UTF-8
 - PR #5480 Fix merge sort docs
@@ -294,6 +305,8 @@
 - PR #5947 Fix null count for child device column vector
 - PR #5951 Fix mkdir error in benchmark build
 - PR #5949 Find Arrow include directory for JNI builds
+- PR #5964 Fix API doc page title tag
+- PR #5981 Handle `nat` in `fillna` for datetime and timedelta types
 
 
 # cuDF 0.14.0 (03 Jun 2020)

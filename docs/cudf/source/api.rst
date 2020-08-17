@@ -1,5 +1,6 @@
-API Reference
-=============
+~~~~~~~~~~~~~~~~~~~
+cuDF API Reference
+~~~~~~~~~~~~~~~~~~~
 
 .. currentmodule:: cudf.core.dataframe
 
@@ -190,7 +191,7 @@ GroupBy
 
 .. autoclass:: GroupBy
     :members:
-    :exclude-members: deserialize, serialize
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
 
 General utility functions
 -------------------------
@@ -200,6 +201,17 @@ General utility functions
     :members:
 
 
+Timedelta Properties
+--------------------
+.. currentmodule:: cudf.core.series
+.. autoclass:: TimedeltaProperties
+    :members:
+
+Datetime Properties
+-------------------
+.. currentmodule:: cudf.core.series
+.. autoclass:: DatetimeProperties
+    :members:
 
 IO
 --

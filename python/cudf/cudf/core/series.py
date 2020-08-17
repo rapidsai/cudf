@@ -4305,36 +4305,281 @@ class DatetimeProperties(object):
 
     @property
     def year(self):
+        """
+        The year of the datetime.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pandas as pd
+        >>> datetime_series = cudf.Series(pd.date_range("2000-01-01",
+        ...         periods=3, freq="Y"))
+        >>> datetime_series
+        0   2000-12-31
+        1   2001-12-31
+        2   2002-12-31
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.year
+        0    2000
+        1    2001
+        2    2002
+        dtype: int16
+        """
         return self._get_dt_field("year")
 
     @property
     def month(self):
+        """
+        The month as January=1, December=12.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_series = cudf.Series(pd.date_range("2000-01-01",
+        ...         periods=3, freq="M"))
+        >>> datetime_series
+        0   2000-01-31
+        1   2000-02-29
+        2   2000-03-31
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.month
+        0    1
+        1    2
+        2    3
+        dtype: int16
+        """
         return self._get_dt_field("month")
 
     @property
     def day(self):
+        """
+        The day of the datetime.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_series = cudf.Series(pd.date_range("2000-01-01",
+        ...         periods=3, freq="D"))
+        >>> datetime_series
+        0   2000-01-01
+        1   2000-01-02
+        2   2000-01-03
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.day
+        0    1
+        1    2
+        2    3
+        dtype: int16
+        """
         return self._get_dt_field("day")
 
     @property
     def hour(self):
+        """
+        The hours of the datetime.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_series = cudf.Series(pd.date_range("2000-01-01",
+        ...         periods=3, freq="h"))
+        >>> datetime_series
+        0   2000-01-01 00:00:00
+        1   2000-01-01 01:00:00
+        2   2000-01-01 02:00:00
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.hour
+        0    0
+        1    1
+        2    2
+        dtype: int16
+        """
         return self._get_dt_field("hour")
 
     @property
     def minute(self):
+        """
+        The minutes of the datetime.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_series = cudf.Series(pd.date_range("2000-01-01",
+        ...         periods=3, freq="T"))
+        >>> datetime_series
+        0   2000-01-01 00:00:00
+        1   2000-01-01 00:01:00
+        2   2000-01-01 00:02:00
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.minute
+        0    0
+        1    1
+        2    2
+        dtype: int16
+        """
         return self._get_dt_field("minute")
 
     @property
     def second(self):
+        """
+        The seconds of the datetime.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_series = cudf.Series(pd.date_range("2000-01-01",
+        ...         periods=3, freq="s"))
+        >>> datetime_series
+        0   2000-01-01 00:00:00
+        1   2000-01-01 00:00:01
+        2   2000-01-01 00:00:02
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.second
+        0    0
+        1    1
+        2    2
+        dtype: int16
+        """
         return self._get_dt_field("second")
 
     @property
     def weekday(self):
+        """
+        The day of the week with Monday=0, Sunday=6.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_series = cudf.Series(pd.date_range('2016-12-31',
+        ...     '2017-01-08', freq='D'))
+        >>> datetime_series
+        0   2016-12-31
+        1   2017-01-01
+        2   2017-01-02
+        3   2017-01-03
+        4   2017-01-04
+        5   2017-01-05
+        6   2017-01-06
+        7   2017-01-07
+        8   2017-01-08
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.weekday
+        0    5
+        1    6
+        2    0
+        3    1
+        4    2
+        5    3
+        6    4
+        7    5
+        8    6
+        dtype: int16
+        """
         return self._get_dt_field("weekday")
 
     def _get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)
         return Series(
             data=out_column, index=self.series._index, name=self.series.name
+        )
+
+    def strftime(self, date_format, *args, **kwargs):
+        """
+        Convert to Series using specified ``date_format``.
+
+        Return a Series of formatted strings specified by ``date_format``,
+        which supports the same string format as the python standard library.
+        Details of the string format can be found in `python string format doc
+        <https://docs.python.org/3/library/datetime.html#strftime-and-strptime-behavior>`_.
+
+        Parameters
+        ----------
+        date_format : str
+            Date format string (e.g. “%Y-%m-%d”).
+
+        Returns
+        -------
+        Series
+            Series of formatted strings.
+
+        Notes
+        -----
+
+        The following date format identifiers are not yet supported: ``%a``,
+        ``%A``, ``%w``, ``%b``, ``%B``, ``%U``, ``%W``, ``%c``, ``%x``,
+        ``%X``, ``%G``, ``%u``, ``%V``
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pandas as pd
+        >>> weekday_series = cudf.Series(pd.date_range("2000-01-01", periods=3,
+        ...      freq="q"))
+        >>> weekday_series.dt.strftime("%Y-%m-%d")
+        >>> weekday_series
+        0   2000-03-31
+        1   2000-06-30
+        2   2000-09-30
+        dtype: datetime64[ns]
+        0    2000-03-31
+        1    2000-06-30
+        2    2000-09-30
+        dtype: object
+        >>> weekday_series.dt.strftime("%Y %d %m")
+        0    2000 31 03
+        1    2000 30 06
+        2    2000 30 09
+        dtype: object
+        >>> weekday_series.dt.strftime("%Y / %d / %m")
+        0    2000 / 31 / 03
+        1    2000 / 30 / 06
+        2    2000 / 30 / 09
+        dtype: object
+        """
+
+        if not isinstance(date_format, str):
+            raise TypeError(
+                f"'date_format' must be str, not {type(date_format)}"
+            )
+
+        # TODO: Remove following validations
+        # once https://github.com/rapidsai/cudf/issues/5991
+        # is implemented
+        not_implemented_formats = {
+            "%a",
+            "%A",
+            "%w",
+            "%b",
+            "%B",
+            "%U",
+            "%W",
+            "%c",
+            "%x",
+            "%X",
+            "%G",
+            "%u",
+            "%V",
+        }
+        for d_format in not_implemented_formats:
+            if d_format in date_format:
+                raise NotImplementedError(
+                    f"{d_format} date-time format is not "
+                    f"supported yet, Please follow this issue "
+                    f"https://github.com/rapidsai/cudf/issues/5991 "
+                    f"for tracking purposes."
+                )
+
+        str_col = self.series._column.as_string_column(
+            dtype="str", format=date_format
+        )
+        return Series(
+            data=str_col, index=self.series._index, name=self.series.name
         )
 
 

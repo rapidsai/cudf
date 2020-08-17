@@ -810,11 +810,13 @@ class Index(Frame, Serializable):
         Int64Index([10, 100, 1, 1000], dtype='int64')
 
         Sort values in ascending order (default behavior).
+
         >>> idx.sort_values()
         Int64Index([1, 10, 100, 1000], dtype='int64')
 
         Sort values in descending order, and also get the indices `idx` was
         sorted by.
+
         >>> idx.sort_values(ascending=False, return_indexer=True)
         (Int64Index([1000, 100, 10, 1], dtype='int64'), array([3, 1, 0, 2],
                                                             dtype=int32))

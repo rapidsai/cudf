@@ -103,6 +103,7 @@ test:
     - test -f $PREFIX/include/cudf/ipc.hpp
     - test -f $PREFIX/include/cudf/join.hpp
     - test -f $PREFIX/include/cudf/lists/detail/concatenate.hpp
+    - test -f $PREFIX/include/cudf/lists/detail/copying.hpp
     - test -f $PREFIX/include/cudf/lists/extract.hpp
     - test -f $PREFIX/include/cudf/lists/lists_column_view.hpp
     - test -f $PREFIX/include/cudf/merge.hpp
@@ -153,6 +154,8 @@ test:
     - test -f $PREFIX/include/cudf/strings/substring.hpp
     - test -f $PREFIX/include/cudf/strings/translate.hpp
     - test -f $PREFIX/include/cudf/strings/wrap.hpp
+    - test -f $PREFIX/include/cudf/structs/structs_column_view.hpp
+    - test -f $PREFIX/include/cudf/structs/struct_view.hpp
     - test -f $PREFIX/include/cudf/table/table.hpp
     - test -f $PREFIX/include/cudf/table/table_view.hpp
     - test -f $PREFIX/include/cudf/transform.hpp
