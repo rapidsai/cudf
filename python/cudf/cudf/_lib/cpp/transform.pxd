@@ -38,10 +38,6 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
         bool is_ptx
     ) except +
 
-    cdef pair[unique_ptr[column], unique_ptr[column]] encode(
-        column_view input
-    ) except +
-
     cdef pair[unique_ptr[table], unique_ptr[column]] encode(
         table_view input
     ) except +

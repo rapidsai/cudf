@@ -1030,9 +1030,6 @@ class ColumnBase(Column, Serializable):
     def max(self, dtype=None):
         return libcudf.reduce.reduce("max", self, dtype=dtype)
 
-    def encode(self):
-        return libcudf.transform.encode(self)
-
     def scatter_to_table(
         self, row_indices, column_indices, names, nrows=None, ncols=None
     ):

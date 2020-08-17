@@ -128,17 +128,6 @@ def transform(Column input, op):
     return Column.from_unique_ptr(move(c_output))
 
 
-def encode(Column input):
-    cdef column_view c_input = input.view()
-    cdef pair[unique_ptr[column], unique_ptr[column]] c_result
-
-    with nogil:
-        c_result = move(libcudf_transform.encode(c_input))
-
-    return (Column.from_unique_ptr(move(c_result.first)),
-            Column.from_unique_ptr(move(c_result.second)))
-
-
 def table_encode(Table input):
     cdef table_view c_input = input.data_view()
     cdef pair[unique_ptr[table], unique_ptr[column]] c_result
