@@ -1042,3 +1042,45 @@ def test_datetime_fillna(data, dtype, fill_value):
     actual = actual.dropna()
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data", [[1, 2, 3, None], [], [100121, 1221312, 321312321, 1232131223]]
+)
+@pytest.mark.parametrize("dtype", DATETIME_TYPES)
+@pytest.mark.parametrize(
+    "date_format", ["%d - %m", "%y/%H", "%Y", "%I - %M / %S", "%f", "%j", "%p"]
+)
+def test_datetime_strftime(data, dtype, date_format):
+    gsr = cudf.Series(data, dtype=dtype)
+    psr = gsr.to_pandas()
+
+    expected = psr.dt.strftime(date_format=date_format)
+    actual = gsr.dt.strftime(date_format=date_format)
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "date_format",
+    [
+        "%a",
+        "%A",
+        "%w",
+        "%b",
+        "%B",
+        "%U",
+        "%W",
+        "%c",
+        "%x",
+        "%X",
+        "%G",
+        "%u",
+        "%V",
+    ],
+)
+def test_datetime_strftime_not_implemented_formats(date_format):
+    gsr = cudf.Series([1, 2, 3], dtype="datetime64[ms]")
+
+    with pytest.raises(NotImplementedError):
+        gsr.dt.strftime(date_format=date_format)
