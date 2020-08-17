@@ -685,7 +685,16 @@ def merge_sorted(
 
 def _pivot(df, index, columns):
     """
-    Pivot a DataFrame to the given index and columns
+    Pivot a DataFrame to the given index and column labels
+
+    Parameters
+    ----------
+    df : DataFrame
+        DataFrame containing values to pivot
+    index : cudf.core.index.Index
+        Index labels of the result
+    columns : cudf.core.index.Index
+        Column labels of the result
     """
     columns_labels, columns_idx = columns._encode()
     index_labels, index_idx = index._encode()
@@ -744,7 +753,32 @@ def pivot(df, index=None, columns=None, values=None):
 
     Examples
     --------
-    TODO
+
+    Pivot values to given index and a column:
+
+    >>> a = cudf.DataFrame()
+    >>> a['a'] = [1, 1, 2, 2],
+    >>> a['b'] = ['a', 'b', 'a', 'b']
+    >>> a['c'] = [1, 2, 3, 4]
+    >>> a.pivot(index='a', columns='b')
+       c
+    b  a  b
+    a
+    1  1  2
+    2  3  4
+
+    Pivot with missing values in result:
+
+    >>> a = cudf.DataFrame()
+    >>> a['a'] = [1, 1, 2]
+    >>> a['b'] = [1, 2, 3]
+    >>> a['c'] = ['one', 'two', 'three']
+    >>> a.pivot(index='a', columns='b')
+              c
+        b     1     2      3
+        a
+        1   one   two   <NA>
+        2  <NA>  <NA>  three
     """
     if values is None:
         values = df._columns_view(
@@ -761,6 +795,9 @@ def pivot(df, index=None, columns=None, values=None):
 
 
 def unstack(df, level, fill_value=None):
+    """
+    TODO
+    """
     if pd.api.types.is_list_like(level):
         if not level:
             return df
