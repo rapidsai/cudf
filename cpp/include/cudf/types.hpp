@@ -59,6 +59,7 @@ class column_view;
 class mutable_column_view;
 class string_view;
 class list_view;
+class struct_view;
 
 class scalar;
 template <typename T>
@@ -86,6 +87,8 @@ template <typename T>
 class duration_scalar_device_view;
 
 class list_scalar;
+
+class struct_scalar;
 
 class table;
 class table_view;
@@ -217,6 +220,7 @@ enum class type_id : int32_t {
   LIST,                    ///< List elements
   DECIMAL32,               ///< Fixed-point type with int32_t
   DECIMAL64,               ///< Fixed-point type with int64_t
+  STRUCT,                  ///< Struct elements
   // `NUM_TYPE_IDS` must be last!
   NUM_TYPE_IDS  ///< Total number of type ids
 };
@@ -278,6 +282,15 @@ inline bool operator==(data_type const& lhs, data_type const& rhs) { return lhs.
  * @return Size in bytes of an element of the specified `data_type`
  */
 std::size_t size_of(data_type t);
+
+/**
+ *  @brief Identifies the hash function to be used
+ */
+enum class hash_id {
+  HASH_IDENTITY = 0,  ///< Identity hash function that simply returns the key to be hashed
+  HASH_MURMUR3,       ///< Murmur3 hash function
+  HASH_MD5            ///< MD5 hash function
+};
 
 /** @} */
 }  // namespace cudf

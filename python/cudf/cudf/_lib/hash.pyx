@@ -64,6 +64,7 @@ def hash(Table source_table, object initial_hash_values=None):
         c_result = move(
             cpp_hash(
                 c_source_view,
+                libcudf_types.hash_id.HASH_MURMUR3,
                 c_initial_hash
             )
         )
