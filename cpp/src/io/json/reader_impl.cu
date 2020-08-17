@@ -21,6 +21,8 @@
 
 #include "reader_impl.hpp"
 
+#include <thrust/optional.h>
+
 #include <rmm/thrust_rmm_allocator.h>
 #include <rmm/device_scalar.hpp>
 
@@ -28,13 +30,12 @@
 #include <cudf/groupby.hpp>
 #include <cudf/io/readers.hpp>
 #include <cudf/sorting.hpp>
+#include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <io/comp/io_uncomp.h>
 #include <io/utilities/parsing_utils.cuh>
 #include <io/utilities/type_conversion.cuh>
-
-#include <cudf/table/table.hpp>
 
 namespace cudf {
 namespace io {
@@ -146,7 +147,7 @@ std::unique_ptr<table> create_json_keys_info_table(
                                          record_starts.data().get(),
                                          record_starts.size(),
                                          key_counter.data(),
-                                         nullptr,
+                                         {},
                                          stream);
 
   // Allocate columns to store hash value, length, and offset of each JSON object key in the input
@@ -158,7 +159,6 @@ std::unique_ptr<table> create_json_keys_info_table(
   // Create a table out of these columns to pass them around more easily
   auto info_table           = std::make_unique<table>(std::move(info_columns));
   auto const info_table_mdv = mutable_table_device_view::create(info_table->mutable_view(), stream);
-  rmm::device_scalar<mutable_table_device_view> d_info_table_mdv(*info_table_mdv, stream);
 
   // Reset the key counter - now used for indexing
   key_counter.set_value(0, stream);
@@ -169,7 +169,7 @@ std::unique_ptr<table> create_json_keys_info_table(
                                          record_starts.data().get(),
                                          record_starts.size(),
                                          key_counter.data(),
-                                         d_info_table_mdv.data(),
+                                         {*info_table_mdv},
                                          stream);
   return info_table;
 }
