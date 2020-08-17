@@ -23,7 +23,8 @@
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
-#include <type_traits>
+#include <simt/type_traits>
+#include "cudf/structs/struct_view.hpp"
 
 namespace cudf {
 
@@ -330,6 +331,39 @@ constexpr inline bool is_timestamp(data_type type)
 }
 
 /**
+ * @brief Indicates whether the type `T` is a fixed-point type.
+ *
+ * @tparam T  The type to verify
+ * @return true `T` is a fixed-point type
+ * @return false  `T` is not a fixed-point type
+ **/
+template <typename T>
+constexpr inline bool is_fixed_point()
+{
+  return std::is_same<numeric::decimal32, T>::value || std::is_same<numeric::decimal64, T>::value;
+}
+
+struct is_fixed_point_impl {
+  template <typename T>
+  bool operator()()
+  {
+    return is_fixed_point<T>();
+  }
+};
+
+/**
+ * @brief Indicates whether `type` is a fixed point `data_type`.
+ *
+ * @param type The `data_type` to verify
+ * @return true `type` is a fixed point type
+ * @return false `type` is not a fixed point type
+ **/
+constexpr inline bool is_fixed_point(data_type type)
+{
+  return cudf::type_dispatcher(type, is_fixed_point_impl{});
+}
+
+/**
  * @brief Indicates whether the type `T` is a duration type.
  *
  * @tparam T  The type to verify
@@ -414,7 +448,7 @@ constexpr inline bool is_fixed_width()
 {
   // TODO Add fixed width wrapper types
   // Is a category fixed width?
-  return cudf::is_numeric<T>() || cudf::is_chrono<T>();
+  return cudf::is_numeric<T>() || cudf::is_chrono<T>() || cudf::is_fixed_point<T>();
 }
 
 struct is_fixed_width_impl {
@@ -455,7 +489,7 @@ template <typename T>
 constexpr inline bool is_compound()
 {
   return std::is_same<T, cudf::string_view>::value or std::is_same<T, cudf::dictionary32>::value or
-         std::is_same<T, cudf::list_view>::value;
+         std::is_same<T, cudf::list_view>::value or std::is_same<T, cudf::struct_view>::value;
 }
 
 struct is_compound_impl {
@@ -497,7 +531,7 @@ constexpr inline bool is_compound(data_type type)
 template <typename T>
 constexpr inline bool is_nested()
 {
-  return std::is_same<T, cudf::list_view>::value;
+  return std::is_same<T, cudf::list_view>::value || std::is_same<T, cudf::struct_view>::value;
 }
 
 struct is_nested_impl {

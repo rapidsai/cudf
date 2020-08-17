@@ -15,17 +15,22 @@
  */
 
 #include "column_utilities.hpp"
+#include "cudf/utilities/type_dispatcher.hpp"
 #include "detail/column_utilities.hpp"
+#include "thrust/iterator/counting_iterator.h"
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
+#include <cudf/structs/struct_view.hpp>
+#include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/bit.hpp>
 
+#include <sstream>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/cudf_gtest.hpp>
 
@@ -49,7 +54,12 @@ struct column_property_comparator {
     EXPECT_EQ(lhs.type(), rhs.type());
     EXPECT_EQ(lhs.size(), rhs.size());
     if (lhs.size() > 0 && check_exact_equality) { EXPECT_EQ(lhs.nullable(), rhs.nullable()); }
-    EXPECT_EQ(lhs.num_children(), rhs.num_children());
+
+    // equivalent, but not exactly equal columns can have a different number of children if their
+    // sizes are both 0. Specifically, empty string columns may or may not have children.
+    if (check_exact_equality || lhs.size() > 0) {
+      EXPECT_EQ(lhs.num_children(), rhs.num_children());
+    }
 
     // only recurse for true nested types.
     // - strings are an odd case of not being a nested type which do have children. but because
@@ -261,6 +271,26 @@ struct column_comparator_impl<list_view, check_exact_equality> {
 };
 
 template <bool check_exact_equality>
+struct column_comparator_impl<struct_view, check_exact_equality> {
+  void operator()(column_view const& lhs,
+                  column_view const& rhs,
+                  bool print_all_differences,
+                  int depth)
+  {
+    std::for_each(thrust::make_counting_iterator(0),
+                  thrust::make_counting_iterator(0) + lhs.num_children(),
+                  [&](auto i) {
+                    cudf::type_dispatcher(lhs.child(i).type(),
+                                          column_comparator<check_exact_equality>{},
+                                          lhs.child(i),
+                                          rhs.child(i),
+                                          print_all_differences,
+                                          depth + 1);
+                  });
+  }
+};
+
+template <bool check_exact_equality>
 struct column_comparator {
   template <typename T>
   void operator()(column_view const& lhs,
@@ -392,9 +422,21 @@ std::string get_nested_type_str(cudf::column_view const& view)
 {
   if (view.type().id() == cudf::type_id::LIST) {
     lists_column_view lcv(view);
-    return cudf::jit::get_type_name(view.type()) + "<" +
-           (lcv.size() > 0 ? get_nested_type_str(lcv.child()) : "") + ">";
+    return cudf::jit::get_type_name(view.type()) + "<" + (get_nested_type_str(lcv.child())) + ">";
   }
+
+  if (view.type().id() == cudf::type_id::STRUCT) {
+    std::ostringstream out;
+
+    out << cudf::jit::get_type_name(view.type()) + "<";
+    std::transform(view.child_begin(),
+                   view.child_end(),
+                   std::ostream_iterator<std::string>(out, ","),
+                   [&out](auto const col) { return get_nested_type_str(col); });
+    out << ">";
+    return out.str();
+  }
+
   return cudf::jit::get_type_name(view.type());
 }
 
@@ -438,6 +480,23 @@ struct column_view_printer {
     if (col_as_strings->size() == 0) { return; }
 
     this->template operator()<cudf::string_view>(*col_as_strings, out, indent);
+  }
+
+  template <typename Element, typename std::enable_if_t<cudf::is_fixed_point<Element>()>* = nullptr>
+  void operator()(cudf::column_view const& col,
+                  std::vector<std::string>& out,
+                  std::string const& indent)
+  {
+    auto const h_data = cudf::test::to_host<Element>(col);
+
+    out.resize(col.size());
+    std::transform(thrust::make_counting_iterator(size_type{0}),
+                   thrust::make_counting_iterator(col.size()),
+                   out.begin(),
+                   [&](auto idx) {
+                     auto const d = static_cast<double>(h_data.first[idx]);
+                     return std::to_string(d);
+                   });
   }
 
   template <typename Element,
@@ -528,13 +587,39 @@ struct column_view_printer {
                            detail::to_string(bitmask_to_host(col), col.size(), indent) + "\n"
                        : "") +
       indent + "Children :\n" +
-      (lcv.size() > 0 && lcv.child().type().id() != type_id::LIST && lcv.child().has_nulls()
+      (lcv.child().type().id() != type_id::LIST && lcv.child().has_nulls()
          ? indent + detail::to_string(bitmask_to_host(lcv.child()), lcv.child().size(), indent) +
              "\n"
          : "") +
-      (lcv.size() > 0 ? detail::to_string(lcv.child(), ", ", indent + "   ") : "") + "\n";
+      (detail::to_string(lcv.child(), ", ", indent + "   ")) + "\n";
 
     out.push_back(tmp);
+  }
+
+  template <typename Element,
+            typename std::enable_if_t<std::is_same<Element, cudf::struct_view>::value>* = nullptr>
+  void operator()(cudf::column_view const& col,
+                  std::vector<std::string>& out,
+                  std::string const& indent)
+  {
+    structs_column_view view{col};
+
+    std::ostringstream out_stream;
+
+    out_stream << get_nested_type_str(col) << ":\n"
+               << indent << "Length : " << view.size() << ":\n";
+    if (view.has_nulls()) {
+      out_stream << indent << "Null count: " << view.null_count() << "\n"
+                 << detail::to_string(bitmask_to_host(col), col.size(), indent) << "\n";
+    }
+
+    std::transform(
+      view.child_begin(),
+      view.child_end(),
+      std::ostream_iterator<std::string>(out_stream, "\n"),
+      [&](auto child_column) { return detail::to_string(child_column, ", ", indent + "    "); });
+
+    out.push_back(out_stream.str());
   }
 };
 

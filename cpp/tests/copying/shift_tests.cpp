@@ -34,7 +34,7 @@ template <typename T, typename ScalarType = cudf::scalar_type_t<T>>
 std::unique_ptr<cudf::scalar> make_scalar(
   cudaStream_t stream = 0, rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
 {
-  auto s = new ScalarType(T{0}, false, stream, mr);
+  auto s = new ScalarType(T{}, false, stream, mr);
   return std::unique_ptr<cudf::scalar>(s);
 }
 
@@ -73,7 +73,7 @@ TYPED_TEST(ShiftTest, OneColumnEmpty)
   auto fill   = make_scalar<T>();
   auto actual = cudf::shift(input, 5, *fill);
 
-  cudf::test::expect_columns_equal(expected, *actual);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *actual);
 }
 
 TYPED_TEST(ShiftTest, TwoColumnsEmpty)
@@ -89,7 +89,7 @@ TYPED_TEST(ShiftTest, TwoColumnsEmpty)
   auto fill   = make_scalar<T>();
   auto actual = cudf::shift(input, 5, *fill);
 
-  cudf::test::expect_columns_equal(expected, *actual);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *actual);
 }
 
 TYPED_TEST(ShiftTest, OneColumn)
@@ -102,7 +102,7 @@ TYPED_TEST(ShiftTest, OneColumn)
   auto fill   = make_scalar<T>(T(7));
   auto actual = cudf::shift(input, 2, *fill);
 
-  cudf::test::expect_columns_equal(expected, *actual);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *actual);
 }
 
 TYPED_TEST(ShiftTest, OneColumnNegativeShift)
@@ -115,7 +115,7 @@ TYPED_TEST(ShiftTest, OneColumnNegativeShift)
   auto fill   = make_scalar<T>(T(7));
   auto actual = cudf::shift(input, -4, *fill);
 
-  cudf::test::expect_columns_equal(expected, *actual);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *actual);
 }
 
 TYPED_TEST(ShiftTest, OneColumnNullFill)
@@ -130,7 +130,7 @@ TYPED_TEST(ShiftTest, OneColumnNullFill)
 
   auto actual = cudf::shift(input, 2, *fill);
 
-  cudf::test::expect_columns_equal(expected, *actual);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *actual);
 }
 
 TYPED_TEST(ShiftTest, TwoColumnsNullableInput)
@@ -143,7 +143,7 @@ TYPED_TEST(ShiftTest, TwoColumnsNullableInput)
   auto fill   = make_scalar<T>(T(7));
   auto actual = cudf::shift(input, 2, *fill);
 
-  cudf::test::expect_columns_equal(expected, *actual);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *actual);
 }
 
 TYPED_TEST(ShiftTest, MismatchFillValueDtypes)

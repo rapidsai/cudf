@@ -128,7 +128,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeBool8Scalar(JNIEnv *env, 
                                                                    jboolean is_valid) {
   try {
     cudf::jni::auto_set_device(env);
-    std::unique_ptr<cudf::scalar> s = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::BOOL8));
+    std::unique_ptr<cudf::scalar> s =
+        cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::BOOL8));
     s->set_valid(is_valid);
     if (is_valid) {
       using ScalarType = cudf::scalar_type_t<int8_t>;
@@ -144,7 +145,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeInt8Scalar(JNIEnv *env, j
                                                                   jboolean is_valid) {
   try {
     cudf::jni::auto_set_device(env);
-    std::unique_ptr<cudf::scalar> s = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT8));
+    std::unique_ptr<cudf::scalar> s =
+        cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT8));
     s->set_valid(is_valid);
     if (is_valid) {
       using ScalarType = cudf::scalar_type_t<int8_t>;
@@ -159,7 +161,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeUint8Scalar(JNIEnv *env, 
                                                                    jboolean is_valid) {
   try {
     cudf::jni::auto_set_device(env);
-    std::unique_ptr<cudf::scalar> s = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::UINT8));
+    std::unique_ptr<cudf::scalar> s =
+        cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::UINT8));
     s->set_valid(is_valid);
     if (is_valid) {
       using ScalarType = cudf::scalar_type_t<uint8_t>;
@@ -175,7 +178,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeInt16Scalar(JNIEnv *env, 
                                                                    jboolean is_valid) {
   try {
     cudf::jni::auto_set_device(env);
-    std::unique_ptr<cudf::scalar> s = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT16));
+    std::unique_ptr<cudf::scalar> s =
+        cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT16));
     s->set_valid(is_valid);
     if (is_valid) {
       using ScalarType = cudf::scalar_type_t<int16_t>;
@@ -191,7 +195,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeUint16Scalar(JNIEnv *env,
                                                                     jboolean is_valid) {
   try {
     cudf::jni::auto_set_device(env);
-    std::unique_ptr<cudf::scalar> s = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::UINT16));
+    std::unique_ptr<cudf::scalar> s =
+        cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::UINT16));
     s->set_valid(is_valid);
     if (is_valid) {
       using ScalarType = cudf::scalar_type_t<uint16_t>;
@@ -202,11 +207,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeUint16Scalar(JNIEnv *env,
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeDurationDaysScalar(JNIEnv *env, jclass, jint value,
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeDurationDaysScalar(JNIEnv *env, jclass,
+                                                                          jint value,
                                                                           jboolean is_valid) {
   try {
     cudf::jni::auto_set_device(env);
-    std::unique_ptr<cudf::scalar> s = cudf::make_duration_scalar(cudf::data_type(cudf::type_id::DURATION_DAYS));
+    std::unique_ptr<cudf::scalar> s =
+        cudf::make_duration_scalar(cudf::data_type(cudf::type_id::DURATION_DAYS));
     s->set_valid(is_valid);
     if (is_valid) {
       using ScalarType = cudf::scalar_type_t<int32_t>;
@@ -221,7 +228,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeInt32Scalar(JNIEnv *env, 
                                                                    jboolean is_valid) {
   try {
     cudf::jni::auto_set_device(env);
-    std::unique_ptr<cudf::scalar> s = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
+    std::unique_ptr<cudf::scalar> s =
+        cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
     s->set_valid(is_valid);
     if (is_valid) {
       using ScalarType = cudf::scalar_type_t<int32_t>;
@@ -236,7 +244,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeUint32Scalar(JNIEnv *env,
                                                                     jboolean is_valid) {
   try {
     cudf::jni::auto_set_device(env);
-    std::unique_ptr<cudf::scalar> s = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::UINT32));
+    std::unique_ptr<cudf::scalar> s =
+        cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::UINT32));
     s->set_valid(is_valid);
     if (is_valid) {
       using ScalarType = cudf::scalar_type_t<uint32_t>;
@@ -251,7 +260,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeInt64Scalar(JNIEnv *env, 
                                                                    jboolean is_valid) {
   try {
     cudf::jni::auto_set_device(env);
-    std::unique_ptr<cudf::scalar> s = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT64));
+    std::unique_ptr<cudf::scalar> s =
+        cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT64));
     s->set_valid(is_valid);
     if (is_valid) {
       using ScalarType = cudf::scalar_type_t<int64_t>;
@@ -267,7 +277,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeUint64Scalar(JNIEnv *env,
                                                                     jboolean is_valid) {
   try {
     cudf::jni::auto_set_device(env);
-    std::unique_ptr<cudf::scalar> s = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::UINT64));
+    std::unique_ptr<cudf::scalar> s =
+        cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::UINT64));
     s->set_valid(is_valid);
     if (is_valid) {
       using ScalarType = cudf::scalar_type_t<uint64_t>;
@@ -283,7 +294,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeFloat32Scalar(JNIEnv *env
                                                                      jboolean is_valid) {
   try {
     cudf::jni::auto_set_device(env);
-    std::unique_ptr<cudf::scalar> s = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::FLOAT32));
+    std::unique_ptr<cudf::scalar> s =
+        cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::FLOAT32));
     s->set_valid(is_valid);
     if (is_valid) {
       using ScalarType = cudf::scalar_type_t<float>;
@@ -299,7 +311,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeFloat64Scalar(JNIEnv *env
                                                                      jboolean is_valid) {
   try {
     cudf::jni::auto_set_device(env);
-    std::unique_ptr<cudf::scalar> s = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::FLOAT64));
+    std::unique_ptr<cudf::scalar> s =
+        cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::FLOAT64));
     s->set_valid(is_valid);
     if (is_valid) {
       using ScalarType = cudf::scalar_type_t<double>;
@@ -321,7 +334,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeStringScalar(JNIEnv *env,
       strval.assign(reinterpret_cast<char *>(jbytes.data()), jbytes.size());
     }
 
-    auto s = new cudf::string_scalar{strval, is_valid};
+    auto s = new cudf::string_scalar{strval, static_cast<bool>(is_valid)};
     return reinterpret_cast<jlong>(s);
   }
   CATCH_STD(env, 0);

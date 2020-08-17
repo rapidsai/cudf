@@ -550,6 +550,46 @@ def test_index_argsort(data):
 @pytest.mark.parametrize(
     "data",
     [
+        pd.Index([1, 10, 2, 100, -10], name="abc"),
+        pd.Index(["z", "x", "a", "c", "b"]),
+        pd.Index(["z", "x", "a", "c", "b"], dtype="category"),
+        pd.Index(
+            [-10.2, 100.1, -100.2, 0.0, 0.23], name="this is a float index"
+        ),
+        pd.Index([102, 1001, 1002, 0.0, 23], dtype="datetime64[ns]"),
+        pd.Index([13240.2, 1001, 100.2, 0.0, 23], dtype="datetime64[ns]"),
+        pd.RangeIndex(0, 10, 1),
+        pd.Index([-10.2, 100.1, -100.2, 0.0, 23], dtype="timedelta64[ns]"),
+    ],
+)
+@pytest.mark.parametrize("ascending", [True, False])
+@pytest.mark.parametrize("return_indexer", [True, False])
+def test_index_sort_values(data, ascending, return_indexer):
+    pdi = data
+    gdi = cudf.from_pandas(pdi)
+
+    expected = pdi.sort_values(
+        ascending=ascending, return_indexer=return_indexer
+    )
+    actual = gdi.sort_values(
+        ascending=ascending, return_indexer=return_indexer
+    )
+
+    if return_indexer:
+        expected_indexer = expected[1]
+        actual_indexer = actual[1]
+
+        assert_eq(expected_indexer, actual_indexer)
+
+        expected = expected[0]
+        actual = actual[0]
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
         [1, 10, 2, 100, -10],
         ["z", "x", "a", "c", "b"],
         [-10.2, 100.1, -100.2, 0.0, 0.23],
@@ -1310,10 +1350,16 @@ def test_index_drop_duplicates(data, dtype):
 )
 def test_index_tolist(data, dtype):
     gdi = cudf.Index(data, dtype=dtype)
-    pdi = pd.Index(data, dtype=dtype)
-    # TODO: This needs to check for a raised error instead.
-    # xref: https://github.com/rapidsai/cudf/issues/5689
-    assert_eq(gdi.tolist(), pdi.tolist())
+
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            r"cuDF does not support conversion to host memory "
+            r"via `tolist()` method. Consider using "
+            r"`.to_arrow().to_pylist()` to construct a Python list."
+        ),
+    ):
+        gdi.tolist()
 
 
 @pytest.mark.parametrize("data", [[], [1], [1, 2, 3]])

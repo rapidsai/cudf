@@ -64,11 +64,10 @@ enum class compression_type {
  * @brief Data source or destination types
  */
 enum class io_type {
-  FILEPATH,                  ///< Input/output is a file path
-  HOST_BUFFER,               ///< Input/output is a buffer in host memory,
-  ARROW_RANDOM_ACCESS_FILE,  ///< Input/output is an arrow::io::RandomAccessFile
-  VOID,                      ///< Input/output is nothing. No work is done. Useful for benchmarking
-  USER_IMPLEMENTED,          ///< Input/output is handled by a custom user class
+  FILEPATH,          ///< Input/output is a file path
+  HOST_BUFFER,       ///< Input/output is a buffer in host memory
+  VOID,              ///< Input/output is nothing. No work is done. Useful for benchmarking
+  USER_IMPLEMENTED,  ///< Input/output is handled by a custom user class
 };
 
 /**
@@ -176,15 +175,6 @@ struct source_info {
   }
   explicit source_info(const char* host_data, size_t size)
     : type(io_type::HOST_BUFFER), buffers({{host_data, size}})
-  {
-  }
-
-  explicit source_info(std::vector<std::shared_ptr<arrow::io::RandomAccessFile>> const& arrow_files)
-    : type(io_type::ARROW_RANDOM_ACCESS_FILE), files(arrow_files)
-  {
-  }
-  explicit source_info(const std::shared_ptr<arrow::io::RandomAccessFile> arrow_file)
-    : type(io_type::ARROW_RANDOM_ACCESS_FILE), files({arrow_file})
   {
   }
 

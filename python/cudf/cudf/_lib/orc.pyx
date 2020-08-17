@@ -76,7 +76,7 @@ cpdef read_orc(filepath_or_buffer, columns=None,
 cpdef write_orc(Table table,
                 path_or_buf,
                 compression=None,
-                enable_statistics=False):
+                enable_statistics=True):
     """
     Cython function to call into libcudf API, see `write_orc`.
 

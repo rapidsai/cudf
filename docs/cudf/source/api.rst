@@ -1,5 +1,6 @@
-API Reference
-=============
+~~~~~~~~~~~~~~~~~~~
+cuDF API Reference
+~~~~~~~~~~~~~~~~~~~
 
 .. currentmodule:: cudf.core.dataframe
 
@@ -8,7 +9,7 @@ DataFrame
 .. autoclass:: DataFrame
     :members:
     :inherited-members:
-    :exclude-members: serialize, deserialize, device_deserialize, device_serialize, host_deserialize, host_serialize, to_dict
+    :exclude-members: serialize, deserialize, device_deserialize, device_serialize, host_deserialize, host_serialize, to_dict, itertuples, iterrows
 
 Series
 ------
@@ -169,6 +170,14 @@ DatetimeIndex
     :inherited-members:
     :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
 
+TimedeltaIndex
+--------------
+.. currentmodule:: cudf.core.index
+.. autoclass:: TimedeltaIndex
+    :members:
+    :inherited-members:
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
+
 Categories
 ----------
 .. currentmodule:: cudf.core.column.categorical
@@ -182,7 +191,7 @@ GroupBy
 
 .. autoclass:: GroupBy
     :members:
-    :exclude-members: deserialize, serialize
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
 
 General utility functions
 -------------------------
@@ -192,6 +201,17 @@ General utility functions
     :members:
 
 
+Timedelta Properties
+--------------------
+.. currentmodule:: cudf.core.series
+.. autoclass:: TimedeltaProperties
+    :members:
+
+Datetime Properties
+-------------------
+.. currentmodule:: cudf.core.series
+.. autoclass:: DatetimeProperties
+    :members:
 
 IO
 --

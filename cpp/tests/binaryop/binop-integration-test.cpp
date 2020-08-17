@@ -18,8 +18,14 @@
  */
 
 #include <tests/binaryop/assert-binops.h>
-#include <cudf/binaryop.hpp>
 #include <tests/binaryop/binop-fixture.hpp>
+#include <tests/utilities/type_lists.hpp>
+
+#include <cudf/binaryop.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
+#include "cudf/types.hpp"
+#include "cudf/utilities/type_dispatcher.hpp"
+#include "tests/utilities/column_utilities.hpp"
 
 namespace cudf {
 namespace test {
@@ -945,7 +951,7 @@ TEST_F(BinaryOperationIntegrationTest, ShiftRightUnsigned_Vector_Vector_SI32)
   auto out = cudf::binary_operation(
     lhs_w, shift_w, cudf::binary_operator::SHIFT_RIGHT_UNSIGNED, data_type(type_to_id<TypeOut>()));
 
-  cudf::test::expect_columns_equal(*out, expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*out, expected_w);
 }
 
 TEST_F(BinaryOperationIntegrationTest, ShiftRightUnsigned_Vector_Vector_SI32_SI16_SI64)
@@ -1075,7 +1081,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Scalar_B8_SI32_SI32
     int_col, int_scalar, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
-  expect_columns_equal(
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *op_col,
     fixed_width_column_wrapper<bool>{{true, false, false, false}, {true, true, true, true}},
     true);
@@ -1096,12 +1102,12 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_ScalarInvalid_B8_SI
     int_col, int_scalar, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
-  expect_columns_equal(*op_col,
-                       fixed_width_column_wrapper<bool>{
-                         {true, false, true, false, false, true},
-                         {true, true, true, true, true, true},
-                       },
-                       true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*op_col,
+                                 fixed_width_column_wrapper<bool>{
+                                   {true, false, true, false, false, true},
+                                   {true, true, true, true, true, true},
+                                 },
+                                 true);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_tsD_tsD)
@@ -1129,12 +1135,12 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_tsD_tsD)
     ts_scalar, ts_col, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
-  expect_columns_equal(*op_col,
-                       fixed_width_column_wrapper<bool>{
-                         {false, false, true, false, false, false, false, false},
-                         {true, true, true, true, true, true, true, true},
-                       },
-                       true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*op_col,
+                                 fixed_width_column_wrapper<bool>{
+                                   {false, false, true, false, false, false, false, false},
+                                   {true, true, true, true, true, true, true, true},
+                                 },
+                                 true);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Scalar_B8_string_string_EmptyString)
@@ -1152,7 +1158,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Scalar_B8_string_st
     str_col, str_scalar, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
-  expect_columns_equal(
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *op_col,
     fixed_width_column_wrapper<bool>{{false, false, false, true, false, false, false},
                                      {true, true, true, true, true, true, true}},
@@ -1174,7 +1180,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_string_st
     str_scalar, str_col, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
-  expect_columns_equal(
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *op_col,
     fixed_width_column_wrapper<bool>{{false, false, true, false, false, false, false},
                                      {true, true, true, true, true, true, true}},
@@ -1197,7 +1203,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Scalar_B8_string_st
     str_col, str_scalar, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
-  expect_columns_equal(
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *op_col,
     fixed_width_column_wrapper<bool>{{false, false, false, false, false, false, false},
                                      {true, true, true, true, true, true, true}},
@@ -1221,7 +1227,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_string_st
     str_scalar, str_col, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
-  expect_columns_equal(
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *op_col,
     fixed_width_column_wrapper<bool>{{false, false, false, false, false, false, false},
                                      {true, true, true, true, true, true, true}},
@@ -1245,7 +1251,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Scalar_B8_string_st
     str_scalar, str_col, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
-  expect_columns_equal(
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *op_col,
     fixed_width_column_wrapper<bool>{{false, false, false, false, false, false, false},
                                      {true, true, true, true, true, true, true}},
@@ -1270,10 +1276,11 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_string_st
     str_scalar, str_col, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
-  expect_columns_equal(*op_col,
-                       fixed_width_column_wrapper<bool>{{true, true, true, true, true, true, true},
-                                                        {true, true, true, true, true, true, true}},
-                       true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    *op_col,
+    fixed_width_column_wrapper<bool>{{true, true, true, true, true, true, true},
+                                     {true, true, true, true, true, true, true}},
+    true);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_string_string_MatchInvalid)
@@ -1291,7 +1298,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_string_st
     str_scalar, str_col, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
-  expect_columns_equal(
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *op_col,
     fixed_width_column_wrapper<bool>{{false, false, false, false, false, false, false},
                                      {true, true, true, true, true, true, true}},
@@ -1314,7 +1321,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_InvalidScalar_B8_st
     str_col, str_scalar, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
-  expect_columns_equal(
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *op_col,
     fixed_width_column_wrapper<bool>{{false, true, false, false, false, true, false},
                                      {true, true, true, true, true, true, true}},
@@ -1347,12 +1354,12 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_tsD_tsD_N
     lhs_col, rhs_col, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
-  expect_columns_equal(*op_col,
-                       fixed_width_column_wrapper<bool>{
-                         {true, false, true, false, true},
-                         {true, true, true, true, true},
-                       },
-                       true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*op_col,
+                                 fixed_width_column_wrapper<bool>{
+                                   {true, false, true, false, true},
+                                   {true, true, true, true, true},
+                                 },
+                                 true);
 }
 
 // Both vectors with mixed validity
@@ -1373,7 +1380,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_st
     lhs_col, rhs_col, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
-  expect_columns_equal(
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *op_col,
     fixed_width_column_wrapper<bool>{{false, false, true, true, false, true, true},
                                      {true, true, true, true, true, true, true}},
@@ -1396,7 +1403,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_st
     lhs_col, rhs_col, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
-  expect_columns_equal(
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *op_col,
     fixed_width_column_wrapper<bool>{{true, false, true, true, true, false, true},
                                      {true, true, true, true, true, true, true}},
@@ -1420,7 +1427,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_st
     lhs_col, rhs_col, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
-  expect_columns_equal(
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *op_col,
     fixed_width_column_wrapper<bool>{{false, true, false, false, false, true, false},
                                      {true, true, true, true, true, true, true}},
@@ -1442,10 +1449,11 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_st
     lhs_col, rhs_col, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
-  expect_columns_equal(*op_col,
-                       fixed_width_column_wrapper<bool>{{true, true, true, true, true, true, true},
-                                                        {true, true, true, true, true, true, true}},
-                       true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    *op_col,
+    fixed_width_column_wrapper<bool>{{true, true, true, true, true, true, true},
+                                     {true, true, true, true, true, true, true}},
+    true);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_string_ValidInvalid)
@@ -1464,7 +1472,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_st
     lhs_col, rhs_col, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
-  expect_columns_equal(
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *op_col,
     fixed_width_column_wrapper<bool>{{false, false, false, false, false, false, false},
                                      {true, true, true, true, true, true, true}},
@@ -1488,10 +1496,11 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_st
     lhs_col, rhs_col, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
-  expect_columns_equal(*op_col,
-                       fixed_width_column_wrapper<bool>{{true, true, true, true, true, true, true},
-                                                        {true, true, true, true, true, true, true}},
-                       true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    *op_col,
+    fixed_width_column_wrapper<bool>{{true, true, true, true, true, true, true},
+                                     {true, true, true, true, true, true, true}},
+    true);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_VectorAllInvalid_B8_SI32_SI32)
@@ -1509,12 +1518,12 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_VectorAllInvalid_B8
     lhs_col, rhs_col, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
-  expect_columns_equal(*op_col,
-                       fixed_width_column_wrapper<bool>{
-                         {true, true, true, true, true, true},
-                         {true, true, true, true, true, true},
-                       },
-                       true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*op_col,
+                                 fixed_width_column_wrapper<bool>{
+                                   {true, true, true, true, true, true},
+                                   {true, true, true, true, true, true},
+                                 },
+                                 true);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Scalar_SI64_SI32_SI8)
@@ -1532,7 +1541,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Scalar_SI64_SI32_SI8)
     int_col, int_scalar, cudf::binary_operator::NULL_MIN, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
-  expect_columns_equal(
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *op_col, fixed_width_column_wrapper<TypeOut>{{77, -37, 0, 77}, {true, true, true, true}}, true);
 }
 
@@ -1551,7 +1560,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Scalar_Vector_FP64_SI32_SI64
     int_scalar, int_col, cudf::binary_operator::NULL_MAX, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
-  expect_columns_equal(
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *op_col,
     fixed_width_column_wrapper<TypeOut>{
       {INT32_MAX, INT32_MAX, INT32_MAX, INT32_MAX, INT32_MAX, INT32_MAX, INT32_MAX},
@@ -1575,7 +1584,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Scalar_SI64_SI32_FP32
     int_col, float_scalar, cudf::binary_operator::NULL_MIN, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
-  expect_columns_equal(
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *op_col,
     fixed_width_column_wrapper<TypeOut>{{0, -37, 0, INT32_MAX, 0, -4379, 0},
                                         {false, true, false, true, false, true, false}},
@@ -1597,10 +1606,11 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Scalar_Vector_SI8_SI8_FP32)
     float_scalar, int_col, cudf::binary_operator::NULL_MAX, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
-  expect_columns_equal(*op_col,
-                       fixed_width_column_wrapper<TypeOut>{
-                         {0, 0, 0, 0, 0, 0, 0}, {false, false, false, false, false, false, false}},
-                       true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    *op_col,
+    fixed_width_column_wrapper<TypeOut>{{0, 0, 0, 0, 0, 0, 0},
+                                        {false, false, false, false, false, false, false}},
+    true);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Vector_SI64_SI32_SI8)
@@ -1619,10 +1629,11 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Vector_SI64_SI32_SI8)
     int_col, another_int_col, cudf::binary_operator::NULL_MIN, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
-  expect_columns_equal(*op_col,
-                       fixed_width_column_wrapper<TypeOut>{
-                         {0, 0, 0, 0, 0, 0, 0}, {false, false, false, false, false, false, false}},
-                       true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    *op_col,
+    fixed_width_column_wrapper<TypeOut>{{0, 0, 0, 0, 0, 0, 0},
+                                        {false, false, false, false, false, false, false}},
+    true);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Vector_Vector_SI64_SI32_SI8)
@@ -1640,7 +1651,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Vector_Vector_SI64_SI32_SI8)
     int_col, another_int_col, cudf::binary_operator::NULL_MAX, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
-  expect_columns_equal(
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *op_col,
     fixed_width_column_wrapper<TypeOut>{{999, -37, 0, INT32_MAX, -INT32_MAX, -4379, 55},
                                         {true, true, true, true, true, true, true}},
@@ -1672,12 +1683,12 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Vector_tsD_tsD_tsD)
     lhs_col, rhs_col, cudf::binary_operator::NULL_MIN, data_type(type_to_id<cudf::timestamp_D>()));
 
   // Every row has a value
-  expect_columns_equal(*op_col,
-                       fixed_width_column_wrapper<cudf::timestamp_D>{
-                         {0, 44380, 47695, 66068, 0},
-                         {true, true, true, true, false},
-                       },
-                       true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*op_col,
+                                 fixed_width_column_wrapper<cudf::timestamp_D>{
+                                   {0, 44380, 47695, 66068, 0},
+                                   {true, true, true, true, false},
+                                 },
+                                 true);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Vector_Vector_SI32_SI64_SI8)
@@ -1696,10 +1707,11 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Vector_Vector_SI32_SI64_SI8)
     int_col, another_int_col, cudf::binary_operator::NULL_MAX, data_type(type_to_id<TypeOut>()));
 
   // Every row has a value
-  expect_columns_equal(*op_col,
-                       fixed_width_column_wrapper<TypeOut>{
-                         {9, 0, 0, 0, -47, 0, 55}, {true, false, true, false, true, false, true}},
-                       true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    *op_col,
+    fixed_width_column_wrapper<TypeOut>{{9, 0, 0, 0, -47, 0, 55},
+                                        {true, false, true, false, true, false, true}},
+    true);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Vector_Vector_string_string_string_Mix)
@@ -1718,7 +1730,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Vector_Vector_string_string_
     {"", "invalid", "<null>", "", "", "", "ééé", "", "", "def", "def"},
     {false, true, true, true, true, true, true, false, false, true, true});
 
-  expect_columns_equal(*op_col, exp_col, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*op_col, exp_col, true);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Scalar_string_string_string_Mix)
@@ -1736,7 +1748,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Scalar_string_string_
   auto exp_col = cudf::test::strings_column_wrapper(
     {"foo", "foo", "<null>", "foo", "", "", "foo", "foo", "foo", "abc", "foo"});
 
-  expect_columns_equal(*op_col, exp_col, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*op_col, exp_col, true);
 }
 
 TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Scalar_Vector_string_string_string_Mix)
@@ -1755,7 +1767,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Scalar_Vector_string_string_
     {"", "invalid", "<null>", "", "", "", "ééé", "", "", "abc", "foo"},
     {false, true, true, false, true, true, true, false, false, true, true});
 
-  expect_columns_equal(*op_col, exp_col, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*op_col, exp_col, true);
 }
 
 TEST_F(BinaryOperationIntegrationTest, CastAdd_Vector_Vector_SI32_float_float)
@@ -1858,7 +1870,7 @@ TEST_F(BinaryOperationIntegrationTest, PMod_Scalar_Vector_FP32)
 
   auto expected_result =
     fixed_width_column_wrapper<TypeOut>{{4671.0625, -8817.51953125, 10539.974609375}};
-  expect_columns_equal(*out, expected_result);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*out, expected_result);
 }
 
 TEST_F(BinaryOperationIntegrationTest, PMod_Vector_Scalar_FP64)
@@ -1877,7 +1889,7 @@ TEST_F(BinaryOperationIntegrationTest, PMod_Vector_Scalar_FP64)
 
   auto expected_result = fixed_width_column_wrapper<TypeOut>{
     {4671.0650400000013178, -15456.433499999999185, 32213.221190000000206}};
-  expect_columns_equal(*out, expected_result);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*out, expected_result);
 }
 
 TEST_F(BinaryOperationIntegrationTest, PMod_Vector_Vector_FP64_FP32_FP64)
@@ -1910,7 +1922,7 @@ TEST_F(BinaryOperationIntegrationTest, PMod_Vector_Vector_FP64_FP32_FP64)
                                                               1.0,
                                                               0.0,
                                                               0.0}};
-  expect_columns_equal(*out, expected_result);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*out, expected_result);
 }
 
 TEST_F(BinaryOperationIntegrationTest, PMod_Vector_Vector_FP64_SI32_SI64)
@@ -2034,6 +2046,141 @@ TEST_F(BinaryOperationIntegrationTest, ATan2_Vector_Vector_FP64_SI32_SI64)
 
   // atan2 has a max ULP error of 2 per CUDA programming guide
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ATAN2(), NearEqualComparator<TypeOut>{2});
+}
+
+template <typename T>
+struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+};
+
+template <typename T>
+using wrapper = cudf::test::fixed_width_column_wrapper<T>;
+TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpAdd)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+
+  auto const sz = std::size_t{1000};
+
+  auto vec1       = std::vector<decimalXX>(sz);
+  auto const vec2 = std::vector<decimalXX>(sz, decimalXX{1, scale_type{-1}});
+  auto expected   = std::vector<decimalXX>(sz);
+
+  std::iota(std::begin(vec1), std::end(vec1), decimalXX{});
+
+  std::transform(std::cbegin(vec1),
+                 std::cend(vec1),
+                 std::cbegin(vec2),
+                 std::begin(expected),
+                 std::plus<decimalXX>());
+
+  auto const lhs          = wrapper<decimalXX>(vec1.begin(), vec1.end());
+  auto const rhs          = wrapper<decimalXX>(vec2.begin(), vec2.end());
+  auto const expected_col = wrapper<decimalXX>(expected.begin(), expected.end());
+
+  auto const result = cudf::binary_operation(
+    lhs, rhs, cudf::binary_operator::ADD, static_cast<cudf::column_view>(lhs).type());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col, result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpMultiply)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+
+  auto const sz = std::size_t{1000};
+
+  auto vec1       = std::vector<decimalXX>(sz);
+  auto const vec2 = std::vector<decimalXX>(sz, decimalXX{1, scale_type{-1}});
+  auto expected   = std::vector<decimalXX>(sz);
+
+  std::iota(std::begin(vec1), std::end(vec1), decimalXX{});
+
+  std::transform(std::cbegin(vec1),
+                 std::cend(vec1),
+                 std::cbegin(vec2),
+                 std::begin(expected),
+                 std::multiplies<decimalXX>());
+
+  auto const lhs          = wrapper<decimalXX>(vec1.begin(), vec1.end());
+  auto const rhs          = wrapper<decimalXX>(vec2.begin(), vec2.end());
+  auto const expected_col = wrapper<decimalXX>(expected.begin(), expected.end());
+
+  auto const result = cudf::binary_operation(
+    lhs, rhs, cudf::binary_operator::MUL, static_cast<cudf::column_view>(lhs).type());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col, result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpEqualSimple)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+
+  auto const ONE   = decimalXX{1, scale_type{0}};
+  auto const TWO   = decimalXX{2, scale_type{0}};
+  auto const THREE = decimalXX{3, scale_type{0}};
+  auto const FOUR  = decimalXX{4, scale_type{0}};
+
+  auto const ONE_2   = decimalXX{1, scale_type{-2}};
+  auto const TWO_2   = decimalXX{2, scale_type{-2}};
+  auto const THREE_2 = decimalXX{3, scale_type{-2}};
+  auto const FOUR_2  = decimalXX{4, scale_type{-2}};
+
+  auto const vec1  = std::vector<decimalXX>{ONE, TWO, THREE, FOUR};
+  auto const vec2  = std::vector<decimalXX>{ONE_2, TWO_2, THREE_2, FOUR_2};
+  auto const trues = std::vector<bool>(4, true);
+
+  auto const col1     = wrapper<decimalXX>(vec1.begin(), vec1.end());
+  auto const col2     = wrapper<decimalXX>(vec2.begin(), vec2.end());
+  auto const expected = wrapper<bool>(trues.begin(), trues.end());
+
+  auto const result = cudf::binary_operation(
+    col1, col2, cudf::binary_operator::EQUAL, cudf::data_type{type_id::BOOL8});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpEqualLessGreater)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+
+  auto const sz = std::size_t{1000};
+
+  // TESTING binary op ADD
+
+  auto vec1 = std::vector<decimalXX>(sz, decimalXX{0, scale_type{-3}});
+  auto vec2 = std::vector<decimalXX>(sz, decimalXX{0, scale_type{-1}});
+
+  std::iota(std::begin(vec1), std::end(vec1), decimalXX{1, scale_type{-3}});
+
+  auto const iota_1  = wrapper<decimalXX>(vec1.begin(), vec1.end());
+  auto const zeros_3 = wrapper<decimalXX>(vec2.begin(), vec2.end());
+
+  auto const iota_3 = cudf::binary_operation(
+    zeros_3, iota_1, cudf::binary_operator::ADD, static_cast<cudf::column_view>(zeros_3).type());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(iota_1, iota_3->view());
+
+  // TESTING binary op EQUAL, LESS, GREATER
+
+  auto const trues    = std::vector<bool>(sz, true);
+  auto const true_col = wrapper<bool>(trues.begin(), trues.end());
+
+  auto const equal_result = cudf::binary_operation(
+    iota_1, iota_3->view(), cudf::binary_operator::EQUAL, data_type{type_id::BOOL8});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(true_col, equal_result->view());
+
+  auto const less_result = cudf::binary_operation(
+    zeros_3, iota_3->view(), cudf::binary_operator::LESS, data_type{type_id::BOOL8});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(true_col, less_result->view());
+
+  auto const greater_result = cudf::binary_operation(
+    iota_3->view(), zeros_3, cudf::binary_operator::GREATER, data_type{type_id::BOOL8});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(true_col, greater_result->view());
 }
 
 }  // namespace binop

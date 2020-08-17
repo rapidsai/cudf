@@ -63,5 +63,17 @@ std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> encode(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
   cudaStream_t stream                 = 0);
 
+/**
+ * @copydoc cudf::mask_to_bools
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ **/
+std::unique_ptr<column> mask_to_bools(
+  bitmask_type const* null_mask,
+  size_type begin_bit,
+  size_type end_bit,
+  cudaStream_t stream                 = 0,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
 }  // namespace detail
 }  // namespace cudf
