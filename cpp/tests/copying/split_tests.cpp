@@ -105,7 +105,7 @@ TYPED_TEST(SplitTest, SplitEndLessThanSize)
   EXPECT_EQ(expected.size(), result.size());
 
   for (unsigned long index = 0; index < result.size(); index++) {
-    cudf::test::expect_columns_equal(expected[index], result[index]);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected[index], result[index]);
   }
 }
 
@@ -128,7 +128,7 @@ TYPED_TEST(SplitTest, SplitEndToSize)
   EXPECT_EQ(expected.size(), result.size());
 
   for (unsigned long index = 0; index < result.size(); index++) {
-    cudf::test::expect_columns_equal(expected[index], result[index]);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected[index], result[index]);
   }
 }
 
@@ -152,7 +152,7 @@ TEST_F(SplitStringTest, StringWithInvalids)
   EXPECT_EQ(expected.size(), result.size());
 
   for (unsigned long index = 0; index < result.size(); index++) {
-    cudf::test::expect_columns_equal(expected[index], result[index]);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected[index], result[index]);
   }
 }
 
@@ -391,7 +391,7 @@ TYPED_TEST(SplitTableTest, SplitEndLessThanSize)
       return cudf::split(t, splits);
     },
     [](cudf::table_view const& expected, cudf::table_view const& result) {
-      return cudf::test::expect_tables_equal(expected, result);
+      CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result);
     });
 }
 
@@ -402,7 +402,7 @@ TYPED_TEST(SplitTableTest, SplitEndToSize)
       return cudf::split(t, splits);
     },
     [](cudf::table_view const& expected, cudf::table_view const& result) {
-      return cudf::test::expect_tables_equal(expected, result);
+      CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result);
     });
 }
 
@@ -522,7 +522,7 @@ TEST_F(SplitStringTableTest, StringWithInvalids)
       return cudf::split(t, splits);
     },
     [](cudf::table_view const& expected, cudf::table_view const& result) {
-      return cudf::test::expect_tables_equal(expected, result);
+      CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result);
     });
 }
 
@@ -546,7 +546,7 @@ TEST_F(ContiguousSplitStringTableTest, StringWithInvalids)
       return cudf::contiguous_split(t, splits);
     },
     [](cudf::table_view const& expected, cudf::contiguous_split_result const& result) {
-      return cudf::test::expect_tables_equal(expected, result.table);
+      CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.table);
     });
 }
 
@@ -574,7 +574,7 @@ TYPED_TEST(ContiguousSplitTableTest, SplitEndLessThanSize)
       return cudf::contiguous_split(t, splits);
     },
     [](cudf::table_view const& expected, cudf::contiguous_split_result const& result) {
-      return cudf::test::expect_tables_equal(expected, result.table);
+      CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.table);
     });
 }
 
@@ -585,7 +585,7 @@ TYPED_TEST(ContiguousSplitTableTest, SplitEndToSize)
       return cudf::contiguous_split(t, splits);
     },
     [](cudf::table_view const& expected, cudf::contiguous_split_result const& result) {
-      return cudf::test::expect_tables_equal(expected, result.table);
+      CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.table);
     });
 }
 
@@ -675,6 +675,6 @@ TEST_F(ContiguousSplitTableCornerCases, MixedColumnTypes)
   auto expected = cudf::split(tbl, splits);
 
   for (unsigned long index = 0; index < expected.size(); index++) {
-    cudf::test::expect_tables_equivalent(expected[index], result[index].table);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected[index], result[index].table);
   }
 }

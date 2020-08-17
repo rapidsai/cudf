@@ -1,7 +1,7 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
 from cudf.utils.gpu_utils import validate_setup  # isort:skip
 
-validate_setup(check_dask=False)
+validate_setup()
 
 import cupy
 from numba import cuda
@@ -24,6 +24,7 @@ from cudf.core import (
     MultiIndex,
     RangeIndex,
     Series,
+    TimedeltaIndex,
     UInt8Index,
     UInt16Index,
     UInt32Index,
@@ -34,6 +35,7 @@ from cudf.core import (
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.groupby import Grouper
 from cudf.core.ops import (
+    add,
     arccos,
     arcsin,
     arctan,
@@ -44,10 +46,13 @@ from cudf.core.ops import (
     logical_and,
     logical_not,
     logical_or,
+    multiply,
     remainder,
     sin,
     sqrt,
+    subtract,
     tan,
+    true_divide,
 )
 from cudf.core.reshape import concat, get_dummies, melt, merge_sorted
 from cudf.core.series import isclose

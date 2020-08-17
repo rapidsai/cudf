@@ -2,10 +2,12 @@
 from __future__ import division, print_function
 
 import pickle
+from numbers import Number
 
 import cupy
 import numpy as np
 import pandas as pd
+from pandas._config import get_option
 
 import cudf
 from cudf._lib.nvtx import annotate
@@ -16,6 +18,7 @@ from cudf.core.column import (
     DatetimeColumn,
     NumericalColumn,
     StringColumn,
+    TimeDeltaColumn,
     column,
 )
 from cudf.core.column.string import StringMethods as StringMethods
@@ -48,8 +51,6 @@ def _to_frame(this_index, index=True, name=None):
         cudf DataFrame
     """
 
-    from cudf import DataFrame
-
     if name is not None:
         col_name = name
     elif this_index.name is None:
@@ -57,7 +58,7 @@ def _to_frame(this_index, index=True, name=None):
     else:
         col_name = this_index.name
 
-    return DataFrame(
+    return cudf.DataFrame(
         {col_name: this_index._values}, index=this_index if index else None
     )
 
@@ -78,6 +79,14 @@ class Index(Frame, Serializable):
             )
 
         return as_index(data, copy=copy, dtype=dtype, name=name, **kwargs)
+
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+
+        if method == "__call__" and hasattr(cudf, ufunc.__name__):
+            func = getattr(cudf, ufunc.__name__)
+            return func(*inputs)
+        else:
+            return NotImplemented
 
     def __init__(
         self,
@@ -420,6 +429,47 @@ class Index(Frame, Serializable):
         -------
         array : A cupy array containing Integer indices that
             would sort the index if used as an indexer.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> index = cudf.Index([10, 100, 1, 1000])
+        >>> index
+        Int64Index([10, 100, 1, 1000], dtype='int64')
+        >>> index.argsort()
+        array([2, 0, 1, 3], dtype=int32)
+
+        The order of argsort can be reversed using
+        ``ascending`` parameter, by setting it to ``False``.
+        >>> index.argsort(ascending=False)
+        array([3, 1, 0, 2], dtype=int32)
+
+        ``argsort`` on a MultiIndex:
+
+        >>> index = cudf.MultiIndex(
+        ...      levels=[[1, 3, 4, -10], [1, 11, 5]],
+        ...      codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        ...      names=["x", "y"],
+        ... )
+        >>> index
+        MultiIndex(levels=[0     1
+        1     3
+        2     4
+        3   -10
+        dtype: int64, 0     1
+        1    11
+        2     5
+        dtype: int64],
+        codes=   x  y
+        0  0  0
+        1  0  2
+        2  1  1
+        3  2  1
+        4  3  0)
+        >>> index.argsort()
+        array([4, 0, 1, 2, 3], dtype=int32)
+        >>> index.argsort(ascending=False)
+        array([3, 2, 1, 0, 4], dtype=int32)
         """
         indices = self._values.argsort(ascending=ascending, **kwargs)
         return cupy.asarray(indices)
@@ -467,9 +517,7 @@ class Index(Frame, Serializable):
         >>> type(idx)
         <class 'cudf.core.index.GenericIndex'>
         """
-        return pd.Index(
-            self._values.to_pandas(nullable_pd_dtype=False), name=self.name
-        )
+        return pd.Index(self._values.to_pandas(), name=self.name)
 
     def to_arrow(self):
         """
@@ -503,9 +551,8 @@ class Index(Frame, Serializable):
     @ioutils.doc_to_dlpack()
     def to_dlpack(self):
         """{docstring}"""
-        from cudf.io import dlpack as dlpack
 
-        return dlpack.to_dlpack(self)
+        return cudf.io.dlpack.to_dlpack(self)
 
     @property
     def gpu_values(self):
@@ -716,8 +763,8 @@ class Index(Frame, Serializable):
                 difference = difference.astype(self.dtype)
 
         if sort is None:
-            _, inds = difference._values.sort_by_values()
-            return as_index(difference.take(inds))
+            return difference.sort_values()
+
         return difference
 
     def _apply_op(self, fn, other=None):
@@ -728,6 +775,115 @@ class Index(Frame, Serializable):
             return as_index(op(other))
         else:
             return as_index(op())
+
+    def sort_values(self, return_indexer=False, ascending=True, key=None):
+        """
+        Return a sorted copy of the index, and optionally return the indices
+        that sorted the index itself.
+
+        Parameters
+        ----------
+        return_indexer : bool, default False
+            Should the indices that would sort the index be returned.
+        ascending : bool, default True
+            Should the index values be sorted in an ascending order.
+        key : None, optional
+            This parameter is NON-FUNCTIONAL.
+
+        Returns
+        -------
+        sorted_index : Index
+            Sorted copy of the index.
+        indexer : cupy.ndarray, optional
+            The indices that the index itself was sorted by.
+
+        See Also
+        --------
+        cudf.core.series.Series.min : Sort values of a Series.
+        cudf.core.dataframe.DataFrame.sort_values : Sort values in a DataFrame.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx = cudf.Index([10, 100, 1, 1000])
+        >>> idx
+        Int64Index([10, 100, 1, 1000], dtype='int64')
+
+        Sort values in ascending order (default behavior).
+
+        >>> idx.sort_values()
+        Int64Index([1, 10, 100, 1000], dtype='int64')
+
+        Sort values in descending order, and also get the indices `idx` was
+        sorted by.
+
+        >>> idx.sort_values(ascending=False, return_indexer=True)
+        (Int64Index([1000, 100, 10, 1], dtype='int64'), array([3, 1, 0, 2],
+                                                            dtype=int32))
+
+        Sorting values in a MultiIndex:
+
+        >>> midx = cudf.MultiIndex(
+        ...      levels=[[1, 3, 4, -10], [1, 11, 5]],
+        ...      codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        ...      names=["x", "y"],
+        ... )
+        >>> midx
+        MultiIndex(levels=[0     1
+        1     3
+        2     4
+        3   -10
+        dtype: int64, 0     1
+        1    11
+        2     5
+        dtype: int64],
+        codes=   x  y
+        0  0  0
+        1  0  2
+        2  1  1
+        3  2  1
+        4  3  0)
+        >>> midx.sort_values()
+        MultiIndex(levels=[0     1
+        1     3
+        2     4
+        3   -10
+        dtype: int64, 0     1
+        1    11
+        2     5
+        dtype: int64],
+        codes=   x  y
+        4  3  0
+        0  0  0
+        1  0  2
+        2  1  1
+        3  2  1)
+        >>> midx.sort_values(ascending=False)
+        MultiIndex(levels=[0     1
+        1     3
+        2     4
+        3   -10
+        dtype: int64, 0     1
+        1    11
+        2     5
+        dtype: int64],
+        codes=   x  y
+        3  2  1
+        2  1  1
+        1  0  2
+        0  0  0
+        4  3  0)
+        """
+        if key is not None:
+            raise NotImplementedError("key parameter is not yet implemented.")
+
+        indices = self._values.argsort(ascending=ascending)
+        index_sorted = as_index(self.take(indices), name=self.name)
+
+        if return_indexer:
+            return index_sorted, cupy.asarray(indices)
+        else:
+            return index_sorted
 
     def unique(self):
         """
@@ -1244,6 +1400,8 @@ class Index(Frame, Serializable):
                     )
                 elif isinstance(values, DatetimeColumn):
                     out = super(Index, DatetimeIndex).__new__(DatetimeIndex)
+                elif isinstance(values, TimeDeltaColumn):
+                    out = super(Index, TimedeltaIndex).__new__(TimedeltaIndex)
                 elif isinstance(values, StringColumn):
                     out = super(Index, StringIndex).__new__(StringIndex)
                 elif isinstance(values, CategoricalColumn):
@@ -1360,9 +1518,9 @@ class RangeIndex(Index):
 
     @property
     def _data(self):
-        from cudf.core.column_accessor import ColumnAccessor
-
-        return ColumnAccessor({self.name: self._values})
+        return cudf.core.column_accessor.ColumnAccessor(
+            {self.name: self._values}
+        )
 
     def __contains__(self, item):
         if not isinstance(
@@ -1397,8 +1555,6 @@ class RangeIndex(Index):
         return max(0, self._stop - self._start)
 
     def __getitem__(self, index):
-        from numbers import Number
-
         if isinstance(index, slice):
             start, stop, step = index.indices(len(self))
             sln = (stop - start) // step
@@ -1663,8 +1819,6 @@ class GenericIndex(Index):
         return len(self._values)
 
     def __repr__(self):
-        from pandas._config import get_option
-
         max_seq_items = get_option("max_seq_items") or len(self)
         mr = 0
         if 2 * max_seq_items < len(self):
@@ -1673,9 +1827,8 @@ class GenericIndex(Index):
         if len(self) > mr and mr != 0:
             top = self[0:mr]
             bottom = self[-1 * mr :]
-            from cudf import concat
 
-            preprocess = concat([top, bottom])
+            preprocess = cudf.concat([top, bottom])
         else:
             preprocess = self
 
@@ -1943,7 +2096,7 @@ class DatetimeIndex(GenericIndex):
         elif isinstance(data, pd.DatetimeIndex):
             data = column.as_column(data.values)
         elif isinstance(data, (list, tuple)):
-            data = column.as_column(np.array(data, dtype="<M8[ms]"))
+            data = column.as_column(np.array(data, dtype="datetime64[ms]"))
         out._initialize(data, **kwargs)
         return out
 
@@ -1977,9 +2130,7 @@ class DatetimeIndex(GenericIndex):
 
     def to_pandas(self):
         nanos = self._values.astype("datetime64[ns]")
-        return pd.DatetimeIndex(
-            nanos.to_pandas(nullable_pd_dtype=False), name=self.name
-        )
+        return pd.DatetimeIndex(nanos.to_pandas(), name=self.name)
 
     def get_dt_field(self, field):
         out_column = self._values.get_dt_field(field)
@@ -1993,6 +2144,147 @@ class DatetimeIndex(GenericIndex):
             offset=out_column.offset,
         )
         return as_index(out_column, name=self.name)
+
+
+class TimedeltaIndex(GenericIndex):
+    """
+    Immutable, ordered and sliceable sequence of timedelta64 data,
+    represented internally as int64.
+
+    Parameters
+    ----------
+    data : array-like (1-dimensional), optional
+        Optional datetime-like data to construct index with.
+    unit : str, optional
+        This is not yet supported
+    copy : bool
+        Make a copy of input.
+    freq : str, optional
+        This is not yet supported
+    closed : str, optional
+        This is not yet supported
+    dtype : str or numpy.dtype, optional
+        Data type for the output Index. If not specified, the
+        default dtype will be ``timedelta64[ns]``.
+    name : object
+        Name to be stored in the index.
+
+    Returns
+    -------
+    TimedeltaIndex
+
+    Examples
+    --------
+    >>> import cudf
+    >>> cudf.TimedeltaIndex([1132223, 2023232, 342234324, 4234324],
+    ...     dtype='timedelta64[ns]')
+    TimedeltaIndex(['00:00:00.001132', '00:00:00.002023', '00:00:00.342234',
+                    '00:00:00.004234'],
+                dtype='timedelta64[ns]')
+    >>> cudf.TimedeltaIndex([1, 2, 3, 4], dtype='timedelta64[s]',
+    ...     name="delta-index")
+    TimedeltaIndex(['00:00:01', '00:00:02', '00:00:03', '00:00:04'],
+                dtype='timedelta64[s]', name='delta-index')
+    """
+
+    def __new__(
+        cls,
+        data=None,
+        unit=None,
+        freq=None,
+        closed=None,
+        dtype="timedelta64[ns]",
+        copy=False,
+        name=None,
+    ) -> "TimedeltaIndex":
+
+        out = Frame.__new__(cls)
+
+        if freq is not None:
+            raise NotImplementedError("freq is not yet supported")
+
+        if unit is not None:
+            raise NotImplementedError(
+                "unit is not yet supported, alternatively "
+                "dtype parameter is supported"
+            )
+
+        if copy:
+            data = column.as_column(data).copy()
+        kwargs = _setdefault_name(data, name=name)
+        if isinstance(data, np.ndarray) and data.dtype.kind == "m":
+            data = column.as_column(data)
+        elif isinstance(data, pd.TimedeltaIndex):
+            data = column.as_column(data.values)
+        elif isinstance(data, (list, tuple)):
+            data = column.as_column(np.array(data, dtype=dtype))
+        out._initialize(data, **kwargs)
+        return out
+
+    def to_pandas(self):
+        return pd.TimedeltaIndex(
+            self._values.to_pandas(),
+            name=self.name,
+            unit=self._values.time_unit,
+        )
+
+    @property
+    def days(self):
+        """
+        Number of days for each element.
+        """
+        return as_index(arbitrary=self._values.days, name=self.name)
+
+    @property
+    def seconds(self):
+        """
+        Number of seconds (>= 0 and less than 1 day) for each element.
+        """
+        return as_index(arbitrary=self._values.seconds, name=self.name)
+
+    @property
+    def microseconds(self):
+        """
+        Number of microseconds (>= 0 and less than 1 second) for each element.
+        """
+        return as_index(arbitrary=self._values.microseconds, name=self.name)
+
+    @property
+    def nanoseconds(self):
+        """
+        Number of nanoseconds (>= 0 and less than 1 microsecond) for each
+        element.
+        """
+        return as_index(arbitrary=self._values.nanoseconds, name=self.name)
+
+    @property
+    def components(self):
+        """
+        Return a dataframe of the components (days, hours, minutes,
+        seconds, milliseconds, microseconds, nanoseconds) of the Timedeltas.
+        """
+        return self._values.components()
+
+    @property
+    def inferred_freq(self):
+        raise NotImplementedError("inferred_freq is not yet supported")
+
+    def _clean_nulls_from_index(self):
+        """
+        Convert all na values(if any) in Index object
+        to `<NA>` as a preprocessing step to `__repr__` methods.
+
+        This will involve changing type of Index object
+        to StringIndex but it is the responsibility of the `__repr__`
+        methods using this method to replace or handle representation
+        of the actual types correctly.
+        """
+        return cudf.Index(
+            self._values._repr_str_col().fillna(cudf._NA_REP)
+            if self._values.has_nulls
+            else self._values._repr_str_col(),
+            name=self.name,
+        )
 
 
 class CategoricalIndex(GenericIndex):
@@ -2233,7 +2525,6 @@ def as_index(arbitrary, **kwargs):
     """
 
     kwargs = _setdefault_name(arbitrary, **kwargs)
-
     if isinstance(arbitrary, cudf.MultiIndex):
         return arbitrary
     elif isinstance(arbitrary, Index):
@@ -2249,6 +2540,8 @@ def as_index(arbitrary, **kwargs):
         return StringIndex(arbitrary, **kwargs)
     elif isinstance(arbitrary, DatetimeColumn):
         return DatetimeIndex(arbitrary, **kwargs)
+    elif isinstance(arbitrary, TimeDeltaColumn):
+        return TimedeltaIndex(arbitrary, **kwargs)
     elif isinstance(arbitrary, CategoricalColumn):
         return CategoricalIndex(arbitrary, **kwargs)
     elif isinstance(arbitrary, cudf.Series):

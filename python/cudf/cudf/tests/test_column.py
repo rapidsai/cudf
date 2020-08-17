@@ -6,15 +6,22 @@ import pyarrow as pa
 import pytest
 
 import cudf
+from cudf._lib.transform import mask_to_bools
 from cudf.core.column.column import as_column
 from cudf.tests.utils import assert_eq
 from cudf.utils import dtypes as dtypeutils
-from cudf.utils.cudautils import expand_mask_bits
 
 dtypes = sorted(
     list(
         dtypeutils.ALL_TYPES
-        - {"datetime64[s]", "datetime64[ms]", "datetime64[us]"}
+        - {
+            "datetime64[s]",
+            "datetime64[ms]",
+            "datetime64[us]",
+            "timedelta64[s]",
+            "timedelta64[ms]",
+            "timedelta64[us]",
+        }
     )
 )
 
@@ -32,7 +39,7 @@ def str_host_view(list_of_str, to_dtype):
 
 
 @pytest.mark.parametrize("offset", [0, 1, 15])
-@pytest.mark.parametrize("size", [None, 50, 10, 0])
+@pytest.mark.parametrize("size", [50, 10, 0])
 def test_column_offset_and_size(pandas_input, offset, size):
     col = cudf.core.column.as_column(pandas_input)
     col = cudf.core.column.build_column(
@@ -352,7 +359,9 @@ def test_build_df_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
 
     # check mask
     expect_mask = [True if x is not pd.NA else False for x in pd_data["a"]]
-    got_mask = expand_mask_bits(len(gd_data), gd_data["a"]._column.base_mask)
+    got_mask = mask_to_bools(
+        gd_data["a"]._column.base_mask, 0, len(gd_data)
+    ).to_array()
 
     np.testing.assert_array_equal(expect_mask, got_mask)
 
@@ -388,6 +397,8 @@ def test_build_series_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
 
     # check mask
     expect_mask = [True if x is not pd.NA else False for x in pd_data]
-    got_mask = expand_mask_bits(len(gd_data), gd_data._column.base_mask)
+    got_mask = mask_to_bools(
+        gd_data._column.base_mask, 0, len(gd_data)
+    ).to_array()
 
     np.testing.assert_array_equal(expect_mask, got_mask)

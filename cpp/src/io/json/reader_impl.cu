@@ -116,7 +116,7 @@ col_map_ptr_type create_col_names_hash_map(column_view column_name_hashes, cudaS
                      [map = *key_col_map, column_data] __device__(size_type idx) mutable {
                        map.insert(thrust::make_pair(column_data[idx], idx));
                      });
-  return std::move(key_col_map);
+  return key_col_map;
 }
 
 /**
@@ -171,7 +171,7 @@ std::unique_ptr<table> create_json_keys_info_table(
                                          key_counter.data(),
                                          info_table_mdv.data(),
                                          stream);
-  return std::move(info_table);
+  return info_table;
 }
 
 /**

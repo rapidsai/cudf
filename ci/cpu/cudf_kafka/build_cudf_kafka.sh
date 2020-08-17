@@ -1,6 +1,10 @@
+#!/usr/bin/env bash
 set -e
 
-echo "Building cudf_kafka"
-CUDA_REL=${CUDA_VERSION%.*}
+# Logger function for build status output
+function logger() {
+  echo -e "\n>>>> $@\n"
+}
 
-conda build conda/recipes/cudf_kafka
+logger "Building cudf_kafka"
+conda build conda/recipes/cudf_kafka --python=$PYTHON
