@@ -756,7 +756,7 @@ def pivot(df, index=None, columns=None, values=None):
         index = df.index
     else:
         index = cudf.core.index.Index(df.loc[:, index])
-    columns = df.loc[:, columns]
+    columns = cudf.Index(df.loc[:, columns])
     return _pivot(values, index, columns)
 
 
