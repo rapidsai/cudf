@@ -298,10 +298,10 @@ class DatetimeColumn(column.ColumnBase):
             max_int = np.iinfo(np.dtype("int64")).max
 
             max_dist = np.timedelta64(
-                self.max().astype(int, copy=False), self_res
+                self.max().astype(np.dtype("int64"), copy=False), self_res
             )
             min_dist = np.timedelta64(
-                self.min().astype(int, copy=False), self_res
+                self.min().astype(np.dtype("int64"), copy=False), self_res
             )
 
             self_delta_dtype = np.timedelta64(0, self_res).dtype
