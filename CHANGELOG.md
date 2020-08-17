@@ -98,6 +98,7 @@
 - PR #5309 Handle host frames in serialization
 - PR #5312 Test serializing `Series` after `slice`
 - PR #5248 Support interleave_columns for string types
+- PR #5332 Remove outdated dask-xgboost docs
 - PR #5349 Improve libcudf documentation CSS style
 - PR #5317 Optimize fixed_point rounding shift for integers
 - PR #5386 Remove `cub` from `include_dirs` in `setup.py`
