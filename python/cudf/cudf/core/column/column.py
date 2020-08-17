@@ -27,6 +27,7 @@ from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils import ioutils, utils
 from cudf.utils.dtypes import (
+    NUMERIC_TYPES,
     check_cast_unsupported_dtype,
     get_time_unit,
     is_categorical_dtype,
@@ -120,8 +121,11 @@ class ColumnBase(Column, Serializable):
     def __len__(self):
         return self.size
 
-    def to_pandas(self, index=None, nullable_pd_dtype=False, **kwargs):
-        pd_series = self.to_arrow().to_pandas(**kwargs)
+    def to_pandas(self, index=None, **kwargs):
+        if str(self.dtype) in NUMERIC_TYPES and self.null_count == 0:
+            pd_series = pd.Series(cupy.asnumpy(self.values))
+        else:
+            pd_series = self.to_arrow().to_pandas(**kwargs)
         if index is not None:
             pd_series.index = index
         return pd_series
@@ -285,11 +289,7 @@ class ColumnBase(Column, Serializable):
         return dropped_col
 
     def _get_mask_as_column(self):
-        data = Buffer(cupy.ones(len(self), dtype=np.bool_))
-        mask = as_column(data=data)
-        if self.nullable:
-            mask = mask.set_mask(self._mask).fillna(False)
-        return mask
+        return libcudf.transform.mask_to_bools(self)
 
     def _memory_usage(self, **kwargs):
         return self.__sizeof__()
@@ -501,13 +501,11 @@ class ColumnBase(Column, Serializable):
                 return libcudf.copying.column_slice(self, [start, stop])[0]
             else:
                 # Need to create a gather map for given slice with stride
-                gather_map = as_column(
-                    cupy.arange(
-                        start=start,
-                        stop=stop,
-                        step=stride,
-                        dtype=np.dtype(np.int32),
-                    )
+                gather_map = arange(
+                    start=start,
+                    stop=stop,
+                    step=stride,
+                    dtype=np.dtype(np.int32),
                 )
                 return self.take(gather_map)
         else:
@@ -539,13 +537,11 @@ class ColumnBase(Column, Serializable):
             if (key_stride is None or key_stride == 1) and is_scalar(value):
                 return self._fill(value, key_start, key_stop, inplace=True)
             if key_stride != 1 or key_stride is not None or is_scalar(value):
-                key = as_column(
-                    cupy.arange(
-                        start=key_start,
-                        stop=key_stop,
-                        step=key_stride,
-                        dtype=np.dtype(np.int32),
-                    )
+                key = arange(
+                    start=key_start,
+                    stop=key_stop,
+                    step=key_stride,
+                    dtype=np.dtype(np.int32),
                 )
                 nelem = len(key)
             else:
@@ -557,7 +553,7 @@ class ColumnBase(Column, Serializable):
                     raise ValueError(
                         "Boolean mask must be of same length as column"
                     )
-                key = as_column(cupy.arange(len(self)))[key]
+                key = arange(len(self))[key]
                 if hasattr(value, "__len__") and len(value) == len(self):
                     value = as_column(value)[key]
             nelem = len(key)
@@ -758,11 +754,11 @@ class ColumnBase(Column, Serializable):
 
             # Short-circuit if rhs is all null.
             if lhs.null_count == 0 and (rhs.null_count == len(rhs)):
-                return as_column(cupy.zeros(len(self), dtype="bool"))
+                return full(len(self), False, dtype="bool")
         except ValueError:
             # pandas functionally returns all False when cleansing via
             # typecasting fails
-            return as_column(cupy.zeros(len(self), dtype="bool"))
+            return full(len(self), False, dtype="bool")
 
         # If categorical, combine categories first
         if is_categorical_dtype(lhs):
@@ -774,12 +770,14 @@ class ColumnBase(Column, Serializable):
                 # list doesn't have any nulls. If it does have nulls, make
                 # the values list a Categorical with a single null
                 if not rhs.has_nulls:
-                    return cupy.zeros(len(self), dtype="bool")
+                    return full(len(self), False, dtype="bool")
                 rhs = as_column(pd.Categorical.from_codes([-1], categories=[]))
                 rhs = rhs.cat().set_categories(lhs_cats).astype(self.dtype)
 
-        lhs = cudf.DataFrame({"x": lhs, "orig_order": cupy.arange(len(lhs))})
-        rhs = cudf.DataFrame({"x": rhs, "bool": cupy.ones(len(rhs), "bool")})
+        lhs = cudf.DataFrame({"x": lhs, "orig_order": arange(len(lhs))})
+        rhs = cudf.DataFrame(
+            {"x": rhs, "bool": full(len(rhs), True, dtype="bool")}
+        )
         res = lhs.merge(rhs, on="x", how="left").sort_values(by="orig_order")
         res = res.drop_duplicates(subset="orig_order", ignore_index=True)
         res = res._data["bool"].fillna(False)
@@ -1092,12 +1090,7 @@ def column_empty(row_count, dtype="object", masked=False):
     elif dtype.kind in "OU":
         data = None
         children = (
-            build_column(
-                data=Buffer(
-                    cupy.zeros(row_count + 1, dtype="int32").view("|u1")
-                ),
-                dtype="int32",
-            ),
+            full(row_count + 1, 0, dtype="int32"),
             build_column(
                 data=Buffer.empty(row_count * np.dtype("int8").itemsize),
                 dtype="int8",
@@ -1788,3 +1781,91 @@ def deserialize_columns(headers, frames):
         frames = frames[col_frame_count:]
 
     return columns
+
+
+def arange(start, stop=None, step=1, dtype=None):
+    """
+    Returns a column with evenly spaced values within a given interval.
+
+    Values are generated within the half-open interval [start, stop).
+    The first three arguments are mapped like the range built-in function,
+    i.e. start and step are optional.
+
+    Parameters
+    ----------
+    start : int/float
+        Start of the interval.
+    stop : int/float, default is None
+        Stop of the interval.
+    step : int/float, default 1
+        Step width between each pair of consecutive values.
+    dtype : default None
+        Data type specifier. It is inferred from other arguments by default.
+
+    Returns
+    -------
+    cudf.core.column.NumericalColumn
+
+    Examples
+    --------
+    >>> import cudf
+    >>> col = cudf.core.column.arange(2, 7, 1, dtype='int16')
+    >>> col
+    <cudf.core.column.numerical.NumericalColumn object at 0x7ff7998f8b90>
+    >>> cudf.Series(col)
+    0    2
+    1    3
+    2    4
+    3    5
+    4    6
+    dtype: int16
+    """
+    if stop is None:
+        stop = start
+        start = 0
+
+    if step is None:
+        step = 1
+
+    size = int(np.ceil((stop - start) / step))
+
+    return libcudf.filling.sequence(
+        size, as_scalar(start, dtype=dtype), as_scalar(step, dtype=dtype)
+    )
+
+
+def full(size, fill_value, dtype=None):
+    """
+    Returns a column of given size and dtype, filled with a given value.
+
+    Parameters
+    ----------
+    size : int
+        size of the expected column.
+    fill_value : scalar
+         A scalar value to fill a new array.
+    dtype : default None
+        Data type specifier. It is inferred from other arguments by default.
+
+    Returns
+    -------
+    column
+
+    Examples
+    --------
+    >>> import cudf
+    >>> col = cudf.core.column.full(5, 7, dtype='int8')
+    >>> col
+    <cudf.core.column.numerical.NumericalColumn object at 0x7fa0912e8b90>
+    >>> cudf.Series(col)
+    0    7
+    1    7
+    2    7
+    3    7
+    4    7
+    dtype: int8
+    """
+
+    return libcudf.column.make_column_from_scalar(
+        as_scalar(fill_value, dtype), size
+    )

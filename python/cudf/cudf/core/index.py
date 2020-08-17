@@ -517,9 +517,7 @@ class Index(Frame, Serializable):
         >>> type(idx)
         <class 'cudf.core.index.GenericIndex'>
         """
-        return pd.Index(
-            self._values.to_pandas(nullable_pd_dtype=False), name=self.name
-        )
+        return pd.Index(self._values.to_pandas(), name=self.name)
 
     def to_arrow(self):
         """
@@ -1513,8 +1511,7 @@ class RangeIndex(Index):
     @cached_property
     def _values(self):
         if len(self) > 0:
-            vals = cupy.arange(self._start, self._stop, dtype=self.dtype)
-            return column.as_column(vals)
+            return column.arange(self._start, self._stop, dtype=self.dtype)
         else:
             return column.column_empty(0, masked=False, dtype=self.dtype)
 
@@ -1742,7 +1739,7 @@ class RangeIndex(Index):
 
 
 def index_from_range(start, stop=None, step=None):
-    vals = cupy.arange(start, stop, step, dtype=np.int64)
+    vals = column.arange(start, stop, step, dtype=np.int64)
     return as_index(vals)
 
 
@@ -2132,9 +2129,7 @@ class DatetimeIndex(GenericIndex):
 
     def to_pandas(self):
         nanos = self._values.astype("datetime64[ns]")
-        return pd.DatetimeIndex(
-            nanos.to_pandas(nullable_pd_dtype=False), name=self.name
-        )
+        return pd.DatetimeIndex(nanos.to_pandas(), name=self.name)
 
     def get_dt_field(self, field):
         out_column = self._values.get_dt_field(field)
@@ -2227,7 +2222,7 @@ class TimedeltaIndex(GenericIndex):
 
     def to_pandas(self):
         return pd.TimedeltaIndex(
-            self._values.to_pandas(nullable_pd_dtype=False),
+            self._values.to_pandas(),
             name=self.name,
             unit=self._values.time_unit,
         )
