@@ -278,36 +278,4 @@ TEST_F(ASTTest, CopyLiteral)
   cudf::test::expect_columns_equal(expected, result->view(), true);
 }
 
-/*
-struct custom_functor {
-  template <typename OperatorFunctor,
-            typename LHS,
-            typename RHS,
-            std::enable_if_t<cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(int* result)
-  {
-    *result = 42;
-  }
-
-  template <typename OperatorFunctor,
-            typename LHS,
-            typename RHS,
-            std::enable_if_t<!cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(int* result)
-  {
-  }
-};
-
-TEST_F(ASTTest, CustomASTFunctor)
-{
-  int result = 0;
-  cudf::ast::binary_operator_dispatcher(cudf::ast::ast_operator::ADD,
-                                        cudf::data_type(cudf::type_id::INT32),
-                                        cudf::data_type(cudf::type_id::INT32),
-                                        custom_functor{},
-                                        &result);
-  EXPECT_EQ(result, 42);
-}
-*/
-
 CUDF_TEST_PROGRAM_MAIN()
