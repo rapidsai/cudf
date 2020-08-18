@@ -55,18 +55,13 @@ The data and mask buffers of a Column represent data in GPU memory (a.k.a *devic
 and are object of type `cudf.core.buffer.Buffer`.
 
 Buffers can be constructed from array-like objects that live either on the host (e.g., numpy arrays)
-or the device (e.g., cupy arrays).
+or the device (e.g., cupy arrays). Arrays must be of `uint8` dtype or viewed as such.
 
 When constructing a Buffer from a host object such as a numpy array, new device memory is allocated:
 
 ```python
 >>> from cudf.core.buffer import Buffer
->>> buf = Buffer(np.array([1, 2, 3]))
->>> print(buf.ptr)  # address of new device memory allocation
-140050901762048
->>> print(buf.size)
-24
->>> buf = Buffer(np.array([1, 2, 3], dtype='int64'))
+>>> buf = Buffer(np.array([1, 2, 3], dtype='int64').view("uint8"))
 >>> print(buf.ptr)  # address of new device memory allocation
 140050901762560
 >>> print(buf.size)
@@ -86,7 +81,7 @@ array:
 ```python
 >>> import cupy as cp
 >>> c_ary = cp.asarray([1, 2, 3], dtype='int64')
->>> buf = Buffer(c_ary)
+>>> buf = Buffer(c_ary.view("uint8"))
 >>> print(c_ary.data.mem.ptr)
 140050901762560
 >>> print(buf.ptr)
