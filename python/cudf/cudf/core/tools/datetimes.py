@@ -259,6 +259,10 @@ def to_datetime(
 def _process_col(col, unit, dayfirst, infer_datetime_format, format):
     if col.dtype.kind == "M":
         return col
+    elif col.dtype.kind == "m":
+        raise TypeError(
+            f"dtype {col.dtype} cannot be converted to {_unit_dtype_map[unit]}"
+        )
 
     if col.dtype.kind in ("f"):
         if unit not in (None, "ns"):

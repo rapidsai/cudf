@@ -68,7 +68,7 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
   size_type offset_count = output_count + 1;
 
   // offsets of the source column
-  int32_t const* src_offsets{source_column.offsets().data<int32_t>()};
+  int32_t const* src_offsets{source_column.offsets().data<int32_t>() + source_column.offset()};
   size_type const src_size = source_column.size();
 
   // outgoing offsets.  these will persist as output from the entire gather operation
@@ -95,21 +95,27 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
     0,
     thrust::plus<int32_t>());
 
+  // handle sliced columns
+  size_type const shift =
+    source_column.offset() > 0
+      ? cudf::detail::get_value<size_type>(source_column.offsets(), source_column.offset(), stream)
+      : 0;
+
   // generate the base offsets
   rmm::device_uvector<int32_t> base_offsets = rmm::device_uvector<int32_t>(output_count, stream);
   thrust::transform(rmm::exec_policy(stream)->on(stream),
                     gather_map,
                     gather_map + offset_count,
                     base_offsets.data(),
-                    [src_offsets, output_count, src_size] __device__(int32_t index) {
+                    [src_offsets, output_count, src_size, shift] __device__(int32_t index) {
                       // if this is an invalid index, this will be a NULL list
                       if (NullifyOutOfBounds && ((index < 0) || (index >= src_size))) { return 0; }
-                      return src_offsets[index];
+                      return src_offsets[index] - shift;
                     });
 
-  // now that we are doing using the gather_map, we can release the underlying prev_base_offsets.
-  // we will do it before allocating the new buffer (instead of letting the destructor clear it up
-  // at the end of the function) to keep peak memory usage down.
+  // now that we are done using the gather_map, we can release the underlying prev_base_offsets.
+  // doing this prevents this (potentially large) memory buffer from sitting around unused as the
+  // recursion continues.
   prev_base_offsets.release();
 
   // Retrieve size of the resulting gather map for level N+1 (the last offset)

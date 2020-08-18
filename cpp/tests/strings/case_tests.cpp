@@ -48,7 +48,7 @@ TEST_F(StringsCaseTest, ToLower)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsCaseTest, ToUpper)
@@ -70,7 +70,7 @@ TEST_F(StringsCaseTest, ToUpper)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsCaseTest, Swapcase)
@@ -92,7 +92,7 @@ TEST_F(StringsCaseTest, Swapcase)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsCaseTest, EmptyStringsColumn)
@@ -124,7 +124,7 @@ TEST_F(StringsCaseTest, Capitalize)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsCaseTest, Title)
@@ -146,7 +146,7 @@ TEST_F(StringsCaseTest, Title)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsCaseTest, MultiCharUpper)
@@ -158,7 +158,7 @@ TEST_F(StringsCaseTest, MultiCharUpper)
 
   auto results = cudf::strings::to_upper(strings_view);
 
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsCaseTest, MultiCharLower)
@@ -170,5 +170,5 @@ TEST_F(StringsCaseTest, MultiCharLower)
 
   auto results = cudf::strings::to_lower(strings_view);
 
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }

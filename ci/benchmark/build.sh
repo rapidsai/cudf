@@ -29,11 +29,7 @@ export GIT_DESCRIBE_TAG=`git describe --tags`
 export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
 
 # Set Benchmark Vars
-export ASVRESULTS_DIR=${WORKSPACE}/ci/artifacts/asv/results
 export GBENCH_BENCHMARKS_DIR=${WORKSPACE}/cpp/build/gbenchmarks/
-
-# Ensure ASV results directory exists
-mkdir -p ${ASVRESULTS_DIR}
 
 # Set `LIBCUDF_KERNEL_CACHE_PATH` environment variable to $HOME/.jitify-cache because
 # it's local to the container's virtual file system, and not shared with other CI jobs
@@ -168,7 +164,7 @@ set -e
 rm ${WORKSPACE}/tmp/benchmark/benchmarks.txt
 cd ${WORKSPACE}
 mv ${GBENCH_BENCHMARKS_DIR}/*.json ${WORKSPACE}/tmp/benchmark/
-python GBenchToASV.py -d  ${WORKSPACE}/tmp/benchmark/ -t ${ASVRESULTS_DIR} -n libcudf -b branch-${MINOR_VERSION} -r "${REQS}" 
+python GBenchToASV.py -d  ${WORKSPACE}/tmp/benchmark/ -t ${S3_ASV_DIR} -n libcudf -b branch-${MINOR_VERSION} -r "${REQS}" 
 
 ###
 # Run Python Benchmarks

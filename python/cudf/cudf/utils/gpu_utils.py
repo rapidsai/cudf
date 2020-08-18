@@ -1,20 +1,24 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 
-def validate_setup(check_dask=True):
+def validate_setup():
     import os
 
     # TODO: Remove the following check once we arrive at a solution for #4827
     # This is a temporary workaround to unblock internal testing
     # related issue: https://github.com/rapidsai/cudf/issues/4827
-    if not check_dask and "DASK_PARENT" in os.environ:
+    if (
+        "RAPIDS_NO_INITIALIZE" in os.environ
+        or "CUDF_NO_INITIALIZE" in os.environ
+    ):
         return
 
     import warnings
 
-    from cudf._cuda.gpu import (
-        CudaDeviceAttr,
+    from rmm._cuda.gpu import (
         CUDARuntimeError,
+        cudaDeviceAttr,
+        cudaError,
         deviceGetName,
         driverGetVersion,
         getDeviceAttribute,
@@ -22,9 +26,41 @@ def validate_setup(check_dask=True):
         runtimeGetVersion,
     )
 
+    def _try_get_old_or_new_symbols():
+        try:
+            # CUDA 10.2+ symbols
+            return [
+                cudaError.cudaErrorDeviceUninitialized,
+                cudaError.cudaErrorTimeout,
+            ]
+        except AttributeError:
+            # CUDA 10.1 symbols
+            return [cudaError.cudaErrorDeviceUninitilialized]
+
+    notify_caller_errors = {
+        cudaError.cudaErrorInitializationError,
+        cudaError.cudaErrorInsufficientDriver,
+        cudaError.cudaErrorInvalidDeviceFunction,
+        cudaError.cudaErrorInvalidDevice,
+        cudaError.cudaErrorStartupFailure,
+        cudaError.cudaErrorInvalidKernelImage,
+        cudaError.cudaErrorAlreadyAcquired,
+        cudaError.cudaErrorOperatingSystem,
+        cudaError.cudaErrorNotPermitted,
+        cudaError.cudaErrorNotSupported,
+        cudaError.cudaErrorSystemNotReady,
+        cudaError.cudaErrorSystemDriverMismatch,
+        cudaError.cudaErrorCompatNotSupportedOnDevice,
+        *_try_get_old_or_new_symbols(),
+        cudaError.cudaErrorUnknown,
+        cudaError.cudaErrorApiFailureBase,
+    }
+
     try:
         gpus_count = getDeviceCount()
-    except CUDARuntimeError:
+    except CUDARuntimeError as e:
+        if e.status in notify_caller_errors:
+            raise e
         # If there is no GPU detected, set `gpus_count` to -1
         gpus_count = -1
 
@@ -35,7 +71,7 @@ def validate_setup(check_dask=True):
         # 75 - Indicates to get "cudaDevAttrComputeCapabilityMajor" attribute
         # 0 - Get GPU 0
         major_version = getDeviceAttribute(
-            CudaDeviceAttr.cudaDevAttrComputeCapabilityMajor, 0
+            cudaDeviceAttr.cudaDevAttrComputeCapabilityMajor, 0
         )
 
         if major_version >= 6:
@@ -51,7 +87,7 @@ def validate_setup(check_dask=True):
         else:
             device_name = deviceGetName(0)
             minor_version = getDeviceAttribute(
-                CudaDeviceAttr.cudaDevAttrComputeCapabilityMinor, 0
+                cudaDeviceAttr.cudaDevAttrComputeCapabilityMinor, 0
             )
             warnings.warn(
                 f"You will need a GPU with NVIDIA Pascal™ or "

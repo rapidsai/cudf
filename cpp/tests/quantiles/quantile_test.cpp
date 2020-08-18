@@ -359,27 +359,27 @@ void test(testdata::test_case<T> test_case)
     auto actual_higher =
       quantile(test_case.column, q, interpolation::HIGHER, test_case.ordered_indices);
     auto expected_higher_col = make_expected_column(expected.higher);
-    expect_columns_equal(expected_higher_col, actual_higher->view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_higher_col, actual_higher->view());
 
     auto actual_lower =
       quantile(test_case.column, q, interpolation::LOWER, test_case.ordered_indices);
     auto expected_lower_col = make_expected_column(expected.lower);
-    expect_columns_equal(expected_lower_col, actual_lower->view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_col, actual_lower->view());
 
     auto actual_linear =
       quantile(test_case.column, q, interpolation::LINEAR, test_case.ordered_indices);
     auto expected_linear_col = make_expected_column(expected.linear);
-    expect_columns_equal(expected_linear_col, actual_linear->view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_linear_col, actual_linear->view());
 
     auto actual_midpoint =
       quantile(test_case.column, q, interpolation::MIDPOINT, test_case.ordered_indices);
     auto expected_midpoint_col = make_expected_column(expected.midpoint);
-    expect_columns_equal(expected_midpoint_col, actual_midpoint->view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_midpoint_col, actual_midpoint->view());
 
     auto actual_nearest =
       quantile(test_case.column, q, interpolation::NEAREST, test_case.ordered_indices);
     auto expected_nearest_col = make_expected_column(expected.nearest);
-    expect_columns_equal(expected_nearest_col, actual_nearest->view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_nearest_col, actual_nearest->view());
   }
 }
 

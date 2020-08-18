@@ -72,7 +72,7 @@ TEST_F(StringsExtractTests, ExtractTest)
   columns.push_back(expected1.release());
   columns.push_back(expected2.release());
   cudf::table expected(std::move(columns));
-  cudf::test::expect_tables_equal(*results, expected);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*results, expected);
 }
 
 TEST_F(StringsExtractTests, ExtractDomainTest)
@@ -113,7 +113,7 @@ TEST_F(StringsExtractTests, ExtractDomainTest)
     "a23-44-13-2.deploy.static.akamaitechnologies.com",
   });
   cudf::table_view expected{{expected1}};
-  cudf::test::expect_tables_equal(*results, expected);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*results, expected);
 }
 
 TEST_F(StringsExtractTests, ExtractEventTest)
@@ -143,7 +143,7 @@ TEST_F(StringsExtractTests, ExtractEventTest)
   for (auto idx = 0; idx < patterns.size(); ++idx) {
     auto results = cudf::strings::extract(strings_view, patterns[idx]);
     cudf::test::strings_column_wrapper expected({expecteds[idx]});
-    cudf::test::expect_columns_equal(results->view().column(0), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
   }
 }
 
@@ -166,7 +166,7 @@ TEST_F(StringsExtractTests, EmptyExtractTest)
   std::vector<std::unique_ptr<cudf::column>> columns;
   columns.push_back(expected.release());
   cudf::table table_expected(std::move(columns));
-  cudf::test::expect_tables_equal(*results, table_expected);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*results, table_expected);
 }
 
 TEST_F(StringsExtractTests, MediumRegex)
@@ -195,7 +195,7 @@ TEST_F(StringsExtractTests, MediumRegex)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(results->get_column(0), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->get_column(0), expected);
 }
 
 TEST_F(StringsExtractTests, LargeRegex)
@@ -224,5 +224,5 @@ TEST_F(StringsExtractTests, LargeRegex)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(results->get_column(0), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->get_column(0), expected);
 }

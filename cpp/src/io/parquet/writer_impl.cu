@@ -166,6 +166,35 @@ class parquet_column_view {
         _physical_type = Type::BOOLEAN;
         _stats_dtype   = statistics_dtype::dtype_bool;
         break;
+      // unsupported outside cudf for parquet 1.0.
+      case cudf::type_id::DURATION_DAYS:
+        _physical_type  = Type::INT32;
+        _converted_type = ConvertedType::TIME_MILLIS;
+        _stats_dtype    = statistics_dtype::dtype_int64;
+        break;
+      case cudf::type_id::DURATION_SECONDS:
+        _physical_type  = Type::INT64;
+        _converted_type = ConvertedType::TIME_MILLIS;
+        _stats_dtype    = statistics_dtype::dtype_int64;
+        _ts_scale       = 1000;
+        break;
+      case cudf::type_id::DURATION_MILLISECONDS:
+        _physical_type  = Type::INT64;
+        _converted_type = ConvertedType::TIME_MILLIS;
+        _stats_dtype    = statistics_dtype::dtype_int64;
+        break;
+      case cudf::type_id::DURATION_MICROSECONDS:
+        _physical_type  = Type::INT64;
+        _converted_type = ConvertedType::TIME_MICROS;
+        _stats_dtype    = statistics_dtype::dtype_int64;
+        break;
+      // unsupported outside cudf for parquet 1.0.
+      case cudf::type_id::DURATION_NANOSECONDS:
+        _physical_type  = Type::INT64;
+        _converted_type = ConvertedType::TIME_MICROS;
+        _stats_dtype    = statistics_dtype::dtype_int64;
+        _ts_scale       = -1000;  // negative value indicates division by absolute value
+        break;
       case cudf::type_id::TIMESTAMP_DAYS:
         _physical_type  = Type::INT32;
         _converted_type = ConvertedType::DATE;
@@ -191,7 +220,7 @@ class parquet_column_view {
         _physical_type  = Type::INT64;
         _converted_type = ConvertedType::TIMESTAMP_MICROS;
         _stats_dtype    = statistics_dtype::dtype_timestamp64;
-        _ts_scale       = -1000;
+        _ts_scale       = -1000;  // negative value indicates division by absolute value
         break;
       case cudf::type_id::STRING:
         _physical_type  = Type::BYTE_ARRAY;
