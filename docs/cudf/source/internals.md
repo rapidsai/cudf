@@ -36,8 +36,8 @@ A column is composed of the following:
 For example, the `NumericalColumn` backing a Series with 1000 elements of type 'int32'
 and containing nulls is composed of:
 
-1. A data buffer of size 4000 bytes
-2. A mask buffer of size 128 bytes
+1. A data buffer of size 4000 bytes  (sizeof(int32) * 1000)
+2. A mask buffer of size 128 bytes (1000/8 padded to a multiple of 64 bytes)
 3. No children columns
 
 As another example, the `StringColumn` backing the Series
