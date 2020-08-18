@@ -74,6 +74,7 @@
 - PR #5903 Add duration support for Parquet reader, writer
 - PR #5845 Add support for `mask_to_bools`
 - PR #5851 Add support for `Index.sort_values`
+- PR #5904 Add slice/split support for LIST columns
 - PR #5857 Add dtypes information page in python docs
 - PR #5859 Add conversion form `fixed_point` to `bool`
 - PR #5781 Add duration types support in cudf(python/cython)
@@ -159,6 +160,7 @@
 - PR #5643 Update `isort` to 5.0.4
 - PR #5648 OO interface for hash join with explicit `build/probe` semantic 
 - PR #5662 Make Java ColumnVector(long nativePointer) constructor public
+- PR #5681 Pin black, flake8 and isort
 - PR #5679 Use `pickle5` to test older Python versions
 - PR #5684 Use `pickle5` in `Serializable` (when available)
 - PR #5419 Support rolling, groupby_rolling for durations 
