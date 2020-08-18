@@ -1001,11 +1001,11 @@ class ColumnBase(Column, Serializable):
     def astype(self, dtype, **kwargs):
         if is_categorical_dtype(dtype):
             return self.as_categorical_column(dtype, **kwargs)
-        elif pd.api.types.pandas_dtype(dtype).type in (
+        elif pd.api.types.pandas_dtype(dtype).type in {
             np.str_,
             np.object_,
             str,
-        ):
+        }:
             return self.as_string_column(dtype, **kwargs)
         elif is_list_dtype(dtype):
             if not self.dtype == dtype:

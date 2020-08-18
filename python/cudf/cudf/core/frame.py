@@ -1859,13 +1859,19 @@ class Frame(libcudf.table.Table):
             )
 
         column_names = data.column_names
-        dtypes = None
+        pandas_dtypes = None
+        np_dtypes = None
         if isinstance(data, pa.Table) and isinstance(
             data.schema.pandas_metadata, dict
         ):
             metadata = data.schema.pandas_metadata
-            dtypes = {
+            pandas_dtypes = {
                 col["field_name"]: col["pandas_type"]
+                for col in metadata["columns"]
+                if "field_name" in col
+            }
+            np_dtypes = {
+                col["field_name"]: col["numpy_type"]
                 for col in metadata["columns"]
                 if "field_name" in col
             }
@@ -1891,33 +1897,26 @@ class Frame(libcudf.table.Table):
                 )
 
         # Handle dict arrays
-        cudf_category_frames = cudf.DataFrame()
+        cudf_category_frame = libcudf.table.Table()
         if len(dict_indices) != 0:
 
             dict_indices_table = pa.table(dict_indices)
             data = data.drop(dict_indices_table.column_names)
-            cudf_indices_frame = cudf.DataFrame._from_table(
-                libcudf.interop.from_arrow(
-                    dict_indices_table, dict_indices_table.column_names
-                )
+            cudf_indices_frame = libcudf.interop.from_arrow(
+                dict_indices_table, dict_indices_table.column_names
             )
             # as dictionary size can vary, it can't be a single table
-            cudf_dictionaries_frames = [
-                cudf.DataFrame._from_table(
-                    libcudf.interop.from_arrow(
-                        pa.table({name: dict_dictionaries[name]}), [name]
-                    )
+            cudf_dictionaries_columns = {
+                name: cudf.core.column.ColumnBase.from_arrow(
+                    dict_dictionaries[name]
                 )
                 for name in dict_dictionaries.keys()
-            ]
-            cudf_dictionaries_frame = cudf.concat(
-                cudf_dictionaries_frames, axis=1
-            )
+            }
 
             for name in cudf_indices_frame._data.names:
                 codes = cudf_indices_frame._data[name]
-                cudf_category_frames[name] = build_categorical_column(
-                    cudf_dictionaries_frame._data[name],
+                cudf_category_frame._data[name] = build_categorical_column(
+                    cudf_dictionaries_columns[name],
                     codes,
                     mask=codes.base_mask,
                     size=codes.size,
@@ -1925,39 +1924,38 @@ class Frame(libcudf.table.Table):
                 )
 
         # Handle non-dict arrays
-        cudf_non_category_frames = (
-            cudf.DataFrame()
+        cudf_non_category_frame = (
+            libcudf.table.Table()
             if data.num_columns == 0
-            else cudf.DataFrame._from_table(
-                libcudf.interop.from_arrow(data, data.column_names)
-            )
+            else libcudf.interop.from_arrow(data, data.column_names)
         )
 
         if (
-            cudf_non_category_frames.shape[1] > 0
-            and cudf_category_frames.shape[1] > 0
+            cudf_non_category_frame._num_columns > 0
+            and cudf_category_frame._num_columns > 0
         ):
-            result = cudf.concat(
-                [cudf_non_category_frames, cudf_category_frames], axis=1
-            )
-        elif cudf_non_category_frames.shape[1] > 0:
-            result = cudf_non_category_frames
+            result = cudf_non_category_frame
+            for name in cudf_category_frame._data.names:
+                result._data[name] = cudf_category_frame._data[name]
+        elif cudf_non_category_frame._num_columns > 0:
+            result = cudf_non_category_frame
         else:
-            result = cudf_category_frames
+            result = cudf_category_frame
 
-        if dtypes:
+        if pandas_dtypes:
             for name in result._data.names:
-                dtype = dtypes[name]
-                if dtype == "categorical":
+                if pandas_dtypes[name] == "categorical":
                     dtype = "category"
-                elif dtype == "date" or dtype == "datetime":
-                    dtype = "datetime64[ms]"
-                elif dtype == "empty":
-                    dtype = "object"
+                else:
+                    dtype = np_dtypes[name]
 
                 result._data[name] = result._data[name].astype(dtype)
 
-        return result[column_names]
+        result = libcudf.table.Table(
+            result._data.select_by_label(column_names)
+        )
+
+        return cls._from_table(result)
 
     @annotate("TO_ARROW", color="orange", domain="cudf_python")
     def to_arrow(self):
@@ -2012,28 +2010,13 @@ class Frame(libcudf.table.Table):
                 data, data._data.names, keep_index=False
             )
 
-        # If the dicitonary array is a string array and of length `0`
-        # it should be a null array
-        def get_dictionary_array(array):
-            if isinstance(array, pa.StringArray) and len(array) == 0:
-                return pa.array([], type=pa.null())
-            else:
-                return array
-
         if len(codes) > 0:
             codes_df = cudf.DataFrame(codes)
             indices = libcudf.interop.to_arrow(
                 codes_df, codes_df._data.names, keep_index=False
             )
             dictionaries = dict(
-                (
-                    name,
-                    libcudf.interop.to_arrow(
-                        cudf.DataFrame({name: categories[name]}),
-                        [name],
-                        keep_index=False,
-                    )[name],
-                )
+                (name, categories[name].to_arrow())
                 for name in categories.keys()
             )
             for name in codes.keys():
@@ -2041,8 +2024,7 @@ class Frame(libcudf.table.Table):
                     out_table = pa.table(
                         {
                             name: pa.DictionaryArray.from_arrays(
-                                indices[name].chunk(0),
-                                dictionaries[name].chunk(0),
+                                indices[name].chunk(0), dictionaries[name],
                             )
                         }
                     )
@@ -2053,9 +2035,7 @@ class Frame(libcudf.table.Table):
                             name,
                             pa.DictionaryArray.from_arrays(
                                 indices[name].chunk(0),
-                                get_dictionary_array(
-                                    dictionaries[name].chunk(0)
-                                ),
+                                _get_dictionary_array(dictionaries[name]),
                                 ordered=self._data[name].ordered,
                             ),
                         )
@@ -2064,9 +2044,7 @@ class Frame(libcudf.table.Table):
                             name,
                             pa.DictionaryArray.from_arrays(
                                 indices[name].chunk(0),
-                                get_dictionary_array(
-                                    dictionaries[name].chunk(0)
-                                ),
+                                _get_dictionary_array(dictionaries[name]),
                                 ordered=self._data[name].ordered,
                             ),
                         )
@@ -3213,3 +3191,12 @@ def _get_replacement_values(to_replace, replacement, col_name, column):
     if isinstance(replacement, list):
         all_nan = replacement.count(None) == len(replacement)
     return all_nan, replacement, to_replace
+
+
+# If the dictionary array is a string array and of length `0`
+# it should be a null array
+def _get_dictionary_array(array):
+    if isinstance(array, pa.StringArray) and len(array) == 0:
+        return pa.array([], type=pa.null())
+    else:
+        return array

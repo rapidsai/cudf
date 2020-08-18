@@ -309,7 +309,7 @@ class MultiIndex(Index):
         2  2  2)
         """
 
-        return cls.from_frame(super(Index, cls).from_arrow(table))
+        return super(Index, cls).from_arrow(table)
 
     def to_arrow(self):
         """Convert MultiIndex to PyArrow Table
