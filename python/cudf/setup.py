@@ -1,5 +1,6 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 import os
+import re
 import shutil
 import sysconfig
 from distutils.sysconfig import get_python_lib
@@ -11,6 +12,23 @@ from setuptools import find_packages, setup
 from setuptools.extension import Extension
 
 import versioneer
+
+
+def get_cuda_version_from_header(cuda_include_dir):
+
+    cuda_version = None
+
+    with open(os.path.join(cuda_include_dir, "cuda.h"), "r") as f:
+        for line in f.readlines():
+            if re.search(r"#define CUDA_VERSION ", line) is not None:
+                cuda_version = line
+                break
+
+    if cuda_version is None:
+        raise TypeError("CUDA_VERSION not found in cuda.h")
+    cuda_version = int(cuda_version.split()[2])
+    return "%d.%d" % (cuda_version // 1000, (cuda_version % 1000) // 10)
+
 
 install_requires = ["numba", "cython"]
 
@@ -34,6 +52,7 @@ if not os.path.isdir(CUDA_HOME):
 cuda_include_dir = os.path.join(CUDA_HOME, "include")
 
 CUDF_ROOT = os.environ.get("CUDF_ROOT", "../../cpp/build/")
+CUDA_VERSION = get_cuda_version_from_header(cuda_include_dir)
 
 try:
     nthreads = int(os.environ.get("PARALLEL_LEVEL", "0") or "0")
@@ -92,6 +111,7 @@ setup(
         compiler_directives=dict(
             profile=False, language_level=3, embedsignature=True
         ),
+        compile_time_env={"CUDA_VERSION": CUDA_VERSION},
     ),
     packages=find_packages(include=["cudf", "cudf.*"]),
     package_data=dict.fromkeys(
