@@ -68,7 +68,7 @@ struct unary_row_output : public row_output {
   __device__ unary_row_output(row_evaluator const& evaluator) : row_output(evaluator) {}
 
   template <ast_operator op,
-            std::enable_if_t<cudf::ast::is_valid_unary_op<operator_functor<op>, Input>>* = nullptr>
+            std::enable_if_t<is_valid_unary_op<operator_functor<op>, Input>>* = nullptr>
   __device__ void operator()(cudf::size_type row_index,
                              Input input,
                              detail::device_data_reference output) const
@@ -79,7 +79,7 @@ struct unary_row_output : public row_output {
   }
 
   template <ast_operator op,
-            std::enable_if_t<!cudf::ast::is_valid_unary_op<operator_functor<op>, Input>>* = nullptr>
+            std::enable_if_t<!is_valid_unary_op<operator_functor<op>, Input>>* = nullptr>
   __device__ void operator()(cudf::size_type row_index,
                              Input input,
                              detail::device_data_reference output) const
@@ -92,9 +92,8 @@ template <typename LHS, typename RHS>
 struct binary_row_output : public row_output {
   __device__ binary_row_output(row_evaluator const& evaluator) : row_output(evaluator) {}
 
-  template <
-    ast_operator op,
-    std::enable_if_t<cudf::ast::is_valid_binary_op<operator_functor<op>, LHS, RHS>>* = nullptr>
+  template <ast_operator op,
+            std::enable_if_t<is_valid_binary_op<operator_functor<op>, LHS, RHS>>* = nullptr>
   __device__ void operator()(cudf::size_type row_index,
                              LHS lhs,
                              RHS rhs,
@@ -105,9 +104,8 @@ struct binary_row_output : public row_output {
     this->resolve_output<Out>(output, row_index, OperatorFunctor{}(lhs, rhs));
   }
 
-  template <
-    ast_operator op,
-    std::enable_if_t<!cudf::ast::is_valid_binary_op<operator_functor<op>, LHS, RHS>>* = nullptr>
+  template <ast_operator op,
+            std::enable_if_t<!is_valid_binary_op<operator_functor<op>, LHS, RHS>>* = nullptr>
   __device__ void operator()(cudf::size_type row_index,
                              LHS lhs,
                              RHS rhs,
@@ -231,7 +229,7 @@ struct row_evaluator {
   template <typename OperatorFunctor,
             typename LHS,
             typename RHS,
-            std::enable_if_t<!cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
+            std::enable_if_t<!is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
   __device__ void operator()(cudf::size_type row_index,
                              detail::device_data_reference lhs,
                              detail::device_data_reference rhs,

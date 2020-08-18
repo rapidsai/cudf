@@ -128,7 +128,7 @@ cudf::size_type linearizer::visit(expression const& expr)
     });
   // Resolve node type
   auto const op        = expr.get_operator();
-  auto const data_type = cudf::ast::ast_operator_return_type(op, operand_types);
+  auto const data_type = cudf::ast::detail::ast_operator_return_type(op, operand_types);
   // Push operator
   this->operators.push_back(op);
   // Push data reference

@@ -109,7 +109,7 @@ enum class ast_operator {
   ROUND,                 ///< Round a value to a desired precision
   IS_NOT_NULL,           ///< Unary comparator returning whether the value is not null
   COTAN,                 ///< Trigonometric cotangent
-  CAST,                  ///< Type cast operator (TODO: special case)
+  CAST,                  ///< Type cast operator
   CHAR_LENGTH,           ///< String length
   RAND,                  ///< Random number (nullary operator)
   NOW,                   ///< Current timestamp
@@ -118,6 +118,8 @@ enum class ast_operator {
   BLOCK_ID               ///< Could be useful for debugging
   */
 };
+
+namespace detail {
 
 // Traits for valid operator / type combinations
 template <typename Op, typename LHS, typename RHS>
@@ -839,8 +841,6 @@ struct operator_functor<ast_operator::NOT> {
   }
 };
 
-namespace detail {
-
 /**
  * @brief Functor used to type-dispatch unary operators.
  *
@@ -969,23 +969,27 @@ struct type_dispatch_unary_op {
 /**
  * @brief Functor performing a type dispatch for a binary operator.
  *
+ * This functor performs single dispatch, which assumes lhs_t == rhs_t. This may not be true for
+ * all binary operators but holds for all currently implemented operators.
  */
 struct type_dispatch_binary_op {
+  /**
+   * @brief Performs type dispatch for a binary operator.
+   *
+   * @tparam op AST operator.
+   * @tparam F Type of forwarded functor.
+   * @tparam Ts Parameter pack of forwarded arguments.
+   * @param lhs_t Type of left input data.
+   * @param rhs_t Type of right input data.
+   * @param f Forwarded functor to be called.
+   * @param args Forwarded arguments to `operator()` of `f`.
+   */
   template <ast_operator op, typename F, typename... Ts>
   CUDA_HOST_DEVICE_CALLABLE void operator()(cudf::data_type lhs_t,
                                             cudf::data_type rhs_t,
                                             F&& f,
                                             Ts&&... args)
   {
-    // Double dispatch
-    /*
-    double_type_dispatcher(lhs_t,
-                           rhs_t,
-                           detail::double_dispatch_binary_operator_types<operator_functor<op>>{},
-                           std::forward<F>(f),
-                           std::forward<Ts>(args)...);
-    */
-    // Single dispatch (assume lhs_t == rhs_t)
     type_dispatcher(lhs_t,
                     detail::single_dispatch_binary_operator_types<operator_functor<op>>{},
                     std::forward<F>(f),
@@ -1004,23 +1008,23 @@ struct return_type_functor {
    * @tparam OperatorFunctor Operator functor to perform.
    * @tparam LHS Left input type.
    * @tparam RHS Right input type.
-   * @param result Pointer whose value is assigned to the result data type.
+   * @param result Reference whose value is assigned to the result data type.
    */
   template <typename OperatorFunctor,
             typename LHS,
             typename RHS,
-            std::enable_if_t<cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE void operator()(cudf::data_type* result)
+            std::enable_if_t<is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE void operator()(cudf::data_type& result)
   {
     using Out = simt::std::invoke_result_t<OperatorFunctor, LHS, RHS>;
-    *result   = cudf::data_type(cudf::type_to_id<Out>());
+    result    = cudf::data_type(cudf::type_to_id<Out>());
   }
 
   template <typename OperatorFunctor,
             typename LHS,
             typename RHS,
-            std::enable_if_t<!cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE void operator()(cudf::data_type* result)
+            std::enable_if_t<!is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE void operator()(cudf::data_type& result)
   {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Invalid binary operation. Return type cannot be determined.");
@@ -1038,17 +1042,17 @@ struct return_type_functor {
    */
   template <typename OperatorFunctor,
             typename T,
-            std::enable_if_t<cudf::ast::is_valid_unary_op<OperatorFunctor, T>>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE void operator()(cudf::data_type* result)
+            std::enable_if_t<is_valid_unary_op<OperatorFunctor, T>>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE void operator()(cudf::data_type& result)
   {
     using Out = simt::std::invoke_result_t<OperatorFunctor, T>;
-    *result   = cudf::data_type(cudf::type_to_id<Out>());
+    result    = cudf::data_type(cudf::type_to_id<Out>());
   }
 
   template <typename OperatorFunctor,
             typename T,
-            std::enable_if_t<!cudf::ast::is_valid_unary_op<OperatorFunctor, T>>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE void operator()(cudf::data_type* result)
+            std::enable_if_t<!is_valid_unary_op<OperatorFunctor, T>>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE void operator()(cudf::data_type& result)
   {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Invalid unary operation. Return type cannot be determined.");
@@ -1064,13 +1068,11 @@ struct return_type_functor {
  */
 struct arity_functor {
   template <ast_operator op>
-  CUDA_HOST_DEVICE_CALLABLE void operator()(cudf::size_type* result)
+  CUDA_HOST_DEVICE_CALLABLE void operator()(cudf::size_type& result)
   {
-    *result = operator_functor<op>::arity;
+    result = operator_functor<op>::arity;
   }
 };
-
-}  // namespace detail
 
 /**
  * @brief Dispatches a runtime unary operator to a templated type dispatcher.
@@ -1126,11 +1128,11 @@ inline cudf::data_type ast_operator_return_type(ast_operator op,
   auto result = cudf::data_type(cudf::type_id::EMPTY);
   switch (operand_types.size()) {
     case 1:
-      unary_operator_dispatcher(op, operand_types.at(0), detail::return_type_functor{}, &result);
+      unary_operator_dispatcher(op, operand_types.at(0), detail::return_type_functor{}, result);
       break;
     case 2:
       binary_operator_dispatcher(
-        op, operand_types.at(0), operand_types.at(1), detail::return_type_functor{}, &result);
+        op, operand_types.at(0), operand_types.at(1), detail::return_type_functor{}, result);
       break;
     default: CUDF_FAIL("Unsupported operator return type."); break;
   }
@@ -1146,9 +1148,11 @@ inline cudf::data_type ast_operator_return_type(ast_operator op,
 CUDA_HOST_DEVICE_CALLABLE cudf::size_type ast_operator_arity(ast_operator op)
 {
   auto result = cudf::size_type(0);
-  ast_operator_dispatcher(op, detail::arity_functor{}, &result);
+  ast_operator_dispatcher(op, detail::arity_functor{}, result);
   return result;
 }
+
+}  // namespace detail
 
 }  // namespace ast
 

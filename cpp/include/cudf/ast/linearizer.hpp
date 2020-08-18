@@ -259,7 +259,7 @@ class expression : public detail::node {
    */
   expression(ast_operator op, node const& input) : op(op), operands({input})
   {
-    if (cudf::ast::ast_operator_arity(op) != 1) {
+    if (cudf::ast::detail::ast_operator_arity(op) != 1) {
       CUDF_FAIL("The provided operator is not a unary operator.");
     }
   }
@@ -273,7 +273,7 @@ class expression : public detail::node {
    */
   expression(ast_operator op, node const& left, node const& right) : op(op), operands({left, right})
   {
-    if (cudf::ast::ast_operator_arity(op) != 2) {
+    if (cudf::ast::detail::ast_operator_arity(op) != 2) {
       CUDF_FAIL("The provided operator is not a binary operator.");
     }
   }
