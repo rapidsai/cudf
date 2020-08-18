@@ -217,13 +217,6 @@ class GroupBy(Serializable):
         sizes = self.size()
         return result[n < sizes]
 
-    def nunique(self):
-        """
-        Return the number of unique values per group.
-        """
-        # Pandas includes key columns for nunique:
-        return self.agg(dict.fromkeys(self.obj._data.keys(), "nunique"))
-
     def serialize(self):
         header = {}
         frames = []
@@ -629,6 +622,13 @@ class DataFrameGroupBy(GroupBy):
 
     def __getitem__(self, key):
         return self.obj[key].groupby(self.grouping, dropna=self._dropna)
+
+    def nunique(self):
+        """
+        Return the number of unique values per group
+        """
+        # For DataFrameGroupBy, Pandas includes key columns for nunique:
+        return self.agg(dict.fromkeys(self.obj._data.keys(), "nunique"))
 
 
 class SeriesGroupBy(GroupBy):

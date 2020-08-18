@@ -126,7 +126,7 @@ std::unique_ptr<column> gather_list_leaf(column_view const& column,
     leaf_column->set_null_mask(std::move(validity.first), validity.second);
   }
 
-  return std::move(leaf_column);
+  return leaf_column;
 }
 
 /**
@@ -142,6 +142,9 @@ std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
   auto gather_map_begin = thrust::make_transform_iterator(
     thrust::make_counting_iterator<size_type>(0), list_gatherer{gd});
   size_type gather_map_size = gd.gather_map_size;
+
+  // if the gather map is empty, return an empty column
+  if (gather_map_size == 0) { return empty_like(list.parent()); }
 
   // gather the bitmask, if relevant
   rmm::device_buffer null_mask{0, stream, mr};

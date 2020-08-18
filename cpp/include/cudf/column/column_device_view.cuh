@@ -21,6 +21,7 @@
 #include <cudf/lists/list_view.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/structs/struct_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/traits.hpp>
