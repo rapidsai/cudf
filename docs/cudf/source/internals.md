@@ -28,8 +28,10 @@ A column is composed of the following:
 * A tuple of **children** columns, which enable the representation complex types such as
   columns with non-fixed width elements (e.g., strings, lists).
 * A *size* indicating the number of elements in the Column.
-* If the Column represents a slice, an integer **offset** into the first element of the slice.
-  The size of the Column then gives the extent of the slice.
+* An integer **offset**: a column may represent a "slice" of another column,
+  in which case this offset represents the first element of the slice. The size of
+  the column then gives the extent of the slice. A column that is not a slice
+  has an offset of 0.
 
 For example, the `NumericalColumn` backing a Series with 1000 elements of type 'int32'
 and containing nulls is composed of:
