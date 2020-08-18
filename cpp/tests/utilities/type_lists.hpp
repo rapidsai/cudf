@@ -104,6 +104,10 @@ make_type_param_vector(std::initializer_list<T> const& init_list)
 /**
  * @brief Convert the numeric value of type T to a fixed width type of type TypeParam.
  *
+ * This function is necessary because some types (such as timestamp types) are not directly
+ * constructible from numeric types. This function is offered as a convenience to allow
+ * implicitly constructing such objects from numeric values.
+ *
  * @param init_value Value used to initialize the fixed width type
  * @return A fixed width type - [u]int32/float/duration etc. of type TypeParam with the
  *         value specified
