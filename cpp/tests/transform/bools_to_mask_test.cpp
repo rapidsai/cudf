@@ -46,7 +46,7 @@ struct MaskToNullTest : public cudf::test::BaseFixture {
     cudf::column got_column(expected);
     got_column.set_null_mask(std::move(*(got_mask.first)));
 
-    cudf::test::expect_columns_equal(expected, got_column.view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got_column.view());
   }
 
   void run_test(thrust::host_vector<bool> input)
@@ -61,7 +61,7 @@ struct MaskToNullTest : public cudf::test::BaseFixture {
     cudf::column got_column(expected);
     got_column.set_null_mask(std::move(*(got_mask.first)));
 
-    cudf::test::expect_columns_equal(expected, got_column.view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got_column.view());
   }
 };
 

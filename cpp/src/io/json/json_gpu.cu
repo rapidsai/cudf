@@ -271,6 +271,14 @@ __inline__ __device__ cudf::list_view decode_value(const char *data,
 {
   return cudf::list_view{};
 }
+template <>
+__inline__ __device__ cudf::struct_view decode_value(const char *data,
+                                                     uint64_t start,
+                                                     uint64_t end,
+                                                     ParseOptions const &opts)
+{
+  return cudf::struct_view{};
+}
 
 template <>
 __inline__ __device__ numeric::decimal32 decode_value(const char *data,
@@ -766,7 +774,7 @@ __global__ void collect_keys_info_kernel(const char *data,
                                          const uint64_t *rec_starts,
                                          cudf::size_type num_records,
                                          unsigned long long int *keys_cnt,
-                                         mutable_table_device_view *keys_info)
+                                         thrust::optional<mutable_table_device_view> keys_info)
 {
   auto const rec_id = threadIdx.x + (blockDim.x * blockIdx.x);
   if (rec_id >= num_records) return;
@@ -780,7 +788,7 @@ __global__ void collect_keys_info_kernel(const char *data,
        field_range.key_begin < row_data_range.second;
        field_range = advance(field_range.value_end)) {
     auto const idx = atomicAdd(keys_cnt, 1);
-    if (nullptr != keys_info) {
+    if (keys_info.has_value()) {
       auto const len                              = field_range.key_end - field_range.key_begin;
       keys_info->column(0).element<uint64_t>(idx) = field_range.key_begin - data;
       keys_info->column(1).element<uint16_t>(idx) = len;
@@ -866,7 +874,7 @@ void collect_keys_info(const char *data,
                        const uint64_t *rec_starts,
                        cudf::size_type num_records,
                        unsigned long long int *keys_cnt,
-                       mutable_table_device_view *keys_info,
+                       thrust::optional<mutable_table_device_view> keys_info,
                        cudaStream_t stream)
 {
   int block_size;
