@@ -26,8 +26,8 @@ A column is composed of the following:
   Columns whose elements are all "valid" may not have a mask buffer. Mask buffers are padded
   to 64 bytes.
 * A tuple of **children** columns, which enable the representation complex types such as
-  columns with non-fixed width elements (e.g., strings, lists).
-* A *size* indicating the number of elements in the Column.
+  columns with non-fixed width elements such as strings or lists.
+* A **size** indicating the number of elements in the Column.
 * An integer **offset**: a column may represent a "slice" of another column,
   in which case this offset represents the first element of the slice. The size of
   the column then gives the extent of the slice. A column that is not a slice
