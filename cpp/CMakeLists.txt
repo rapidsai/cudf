@@ -23,8 +23,6 @@ HunterGate(
 
 project(CUDA_DATAFRAME VERSION 0.15.0 LANGUAGES C CXX CUDA)
 
-find_package(CUDAToolkit)
-
 if(NOT CMAKE_CUDA_COMPILER)
   message(SEND_ERROR "CMake cannot locate a CUDA compiler")
 endif(NOT CMAKE_CUDA_COMPILER)
@@ -104,11 +102,7 @@ if("${GPU_ARCHS}" STREQUAL "ALL")
   if((CUDA_VERSION_MAJOR EQUAL 10) OR (CUDA_VERSION_MAJOR GREATER 10))
     set(GPU_ARCHS "${GPU_ARCHS};75")
   endif()
-  if((CUDA_VERSION_MAJOR EQUAL 11) OR (CUDA_VERSION_MAJOR GREATER 11))
-    set(GPU_ARCHS "${GPU_ARCHS};80")
-  endif()
 endif()
-
 message("GPU_ARCHS = ${GPU_ARCHS}")
 
 foreach(arch ${GPU_ARCHS})
@@ -149,7 +143,7 @@ set(CMAKE_EXE_LINKER_FLAGS "-Wl,--disable-new-dtags")
 # Build options
 option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 option(BUILD_TESTS "Configure CMake to build tests" ON)
-option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
+option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" ON)
 
 ###################################################################################################
 # - cudart options --------------------------------------------------------------------------------
@@ -193,6 +187,12 @@ elseif(DEFINED ENV{CONDA_PREFIX})
     set(CONDA_LINK_DIRS "$ENV{CONDA_PREFIX}/lib")
     message(STATUS "Conda environment detected, CMAKE_SYSTEM_PREFIX_PATH set to: ${CMAKE_SYSTEM_PREFIX_PATH}")
 endif("$ENV{CONDA_BUILD}" STREQUAL "1")
+
+###################################################################################################
+# - find CIDAToolkit ------------------------------------------------------------------------------------
+
+find_package(CUDAToolkit)
+set(CMAKE_CUDA_ARCHITECTURES ${GPU_ARCHS})
 
 ###################################################################################################
 # - find arrow ------------------------------------------------------------------------------------
@@ -307,6 +307,8 @@ if(PER_THREAD_DEFAULT_STREAM)
     add_compile_definitions(CUDA_API_PER_THREAD_DEFAULT_STREAM)
 endif(PER_THREAD_DEFAULT_STREAM)
 
+
+
 ###################################################################################################
 # - add gtest -------------------------------------------------------------------------------------
 
@@ -332,12 +334,12 @@ if(BUILD_BENCHMARKS)
   hunter_add_package(benchmark)
   find_package(benchmark CONFIG REQUIRED)
 
-  if(BENCHMARK_FOUND)
+  if(benchmark_FOUND)
     message(STATUS "Google C++ Benchmarking Framework (Google Benchmark) found in ${BENCHMARK_ROOT}")
     add_subdirectory(${CMAKE_SOURCE_DIR}/benchmarks)
   else()
     message(AUTHOR_WARNING "Google C++ Benchmarking Framework (Google Benchmark) not found: automated tests are disabled.")
-  endif(BENCHMARK_FOUND)
+  endif(benchmark_FOUND)
 
 endif(BUILD_BENCHMARKS)
 
@@ -362,11 +364,9 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${ARROW_INCLUDE_DIR}"
                     "${RMM_INCLUDE}"
-                    "${DLPACK_INCLUDE}")
-
-if(HUNTER_ENABLED)
-    include_directories("${HUNTER_ROOT}/Install/include")
-endif(HUNTER_ENABLED)
+                    "${DLPACK_INCLUDE}"
+                    "${GTEST_ROOT}/include"
+                    "${BENCHMARK_ROOT}/include")
 
 if(CONDA_INCLUDE_DIRS)
     include_directories("${CONDA_INCLUDE_DIRS}")
@@ -378,6 +378,8 @@ endif(CONDA_INCLUDE_DIRS)
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
                  "${CMAKE_BINARY_DIR}/lib"
                  "${CMAKE_BINARY_DIR}"
+                 "${GTEST_ROOT}/lib"
+                 "${BENCHMARK_ROOT}/lib"
                  "${RMM_LIBRARY}")
 
 if(CONDA_LINK_DIRS)
@@ -392,7 +394,6 @@ add_library(cudf
             src/merge/merge.cu
             src/partitioning/round_robin.cu
             src/join/join.cu
-            src/join/hash_join.cu
             src/join/cross_join.cu
             src/join/semi_join.cu
             src/sort/is_sorted.cu
@@ -560,9 +561,6 @@ add_library(cudf
             src/lists/lists_column_view.cu
             src/lists/copying/concatenate.cu
             src/lists/copying/gather.cu
-            src/lists/copying/copying.cu
-            src/structs/structs_column_view.cu
-            src/structs/structs_column_factories.cu
             src/text/detokenize.cu
             src/text/edit_distance.cu
             src/text/generate_ngrams.cu
@@ -743,9 +741,11 @@ add_dependencies(cudf stringify_run)
 option(USE_NVTX "Build with NVTX support" ON)
 if(USE_NVTX)
     message(STATUS "Using Nvidia Tools Extension")
+    # The `USE_NVTX` macro is deprecated
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_NVTX")
 else()
     # Makes NVTX APIs no-ops
-    add_compile_definitions(NVTX_DISABLE)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDISABLE_NVTX")
 endif(USE_NVTX)
 
 option(HT_DEFAULT_ALLOCATOR "Use the default allocator for hash tables" ON)
@@ -758,11 +758,11 @@ endif(HT_DEFAULT_ALLOCATOR)
 # - link libraries --------------------------------------------------------------------------------
 
 # link targets for cuDF
-target_link_libraries(cudf rmm 
-  arrow arrow_cuda 
-  nvrtc ${CUDART_LIBRARY} cuda 
+target_link_libraries(cudf rmm arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda 
   ${ZLIB_LIBRARIES} 
   ${Boost_LIBRARIES} 
+  ${GTest_LIBRARIES} 
+  ${benchmark_LIBRARIES}
 )
 
 ###################################################################################################

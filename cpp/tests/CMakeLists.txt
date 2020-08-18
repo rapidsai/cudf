@@ -66,7 +66,7 @@ include_directories("${CUB_INCLUDE_DIR}"
 
 if(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
     include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
-endif(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
+endif()
 
 include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
@@ -74,11 +74,9 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include"
                     "${ARROW_INCLUDE_DIR}"
+                    "${GTEST_ROOT}/include"
+                    "${BENCHMARK_ROOT}/include"
                     "${RMM_INCLUDE}")
-
-if(HUNTER_ENABLED)
-    include_directories("${HUNTER_ROOT}/Install/include")
-endif(HUNTER_ENABLED)
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
@@ -86,7 +84,8 @@ endif(HUNTER_ENABLED)
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
                  "${CMAKE_BINARY_DIR}/lib"
                  "${CMAKE_BINARY_DIR}"
-                 "${GTEST_LIBRARY_DIR}"
+                 "${GTEST_ROOT}/lib"
+                 "${BENCHMARK_ROOT}/lib"
                  "${RMM_LIBRARY}")
 
 if(CONDA_LINK_DIRS)
@@ -538,14 +537,6 @@ set(STRINGS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/urls_tests.cpp")
 
 ConfigureTest(STRINGS_TEST "${STRINGS_TEST_SRC}")
-
-###################################################################################################
-# - structs test ----------------------------------------------------------------------------------
-
-set(STRUCTS_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/structs/structs_column_tests.cu")
-
-ConfigureTest(STRUCTS_TEST "${STRUCTS_TEST_SRC}")
 
 ###################################################################################################
 # - nvtext test ----------------------------------------------------------------------------------

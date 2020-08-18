@@ -36,8 +36,8 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include"
-                    "${GTEST_INCLUDE_DIR}"
-                    "${GBENCH_INCLUDE_DIR}"
+                    "${GTEST_ROOT}/include"
+                    "${BENCHMARK_ROOT}/include"
                     "${ARROW_INCLUDE_DIR}"
                     "${RMM_INCLUDE}"
                     "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -48,8 +48,8 @@ include_directories("${CMAKE_BINARY_DIR}/include"
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
                  "${CMAKE_BINARY_DIR}/lib"
                  "${CMAKE_BINARY_DIR}"
-                 "${GTEST_LIBRARY_DIR}"
-                 "${GBENCH_LIBRARY_DIR}"
+                 "${GTEST_ROOT}/lib"
+                 "${BENCHMARK_ROOT}/lib"
                  "${RMM_LIBRARY}")
 
 ###################################################################################################
