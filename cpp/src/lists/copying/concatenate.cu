@@ -19,6 +19,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/concatenate.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/detail/concatenate.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <memory>
@@ -99,13 +100,9 @@ std::unique_ptr<column> concatenate(
                 [&total_list_count, &children](lists_column_view const& l) {
                   // count total # of lists
                   total_list_count += l.size();
-
-                  // child column. could be a leaf type (string, float, int, etc) or more nested
-                  // lists.
-                  if (l.child().size() > 0) { children.push_back(l.child()); }
+                  children.push_back(l.child());
                 });
-  auto data = children.empty() ? make_empty_column(data_type{lists_columns[0].child().type()})
-                               : cudf::detail::concatenate(children, mr, stream);
+  auto data = cudf::detail::concatenate(children, mr, stream);
 
   // merge offsets
   auto offsets = merge_offsets(lists_columns, total_list_count, stream, mr);

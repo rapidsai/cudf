@@ -116,6 +116,21 @@ struct copy_if_else_functor_impl<list_view, Left, Right, Filter> {
   }
 };
 
+template <typename Left, typename Right, typename Filter>
+struct copy_if_else_functor_impl<struct_view, Left, Right, Filter> {
+  std::unique_ptr<column> operator()(Left const& lhs,
+                                     Right const& rhs,
+                                     size_type size,
+                                     bool left_nullable,
+                                     bool right_nullable,
+                                     Filter filter,
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream)
+  {
+    CUDF_FAIL("copy_if_else not supported for struct_view yet");
+  }
+};
+
 /**
  * @brief Specialization of copy_if_else_functor for decimal32.
  */
