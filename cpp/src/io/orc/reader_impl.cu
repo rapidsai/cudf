@@ -158,7 +158,6 @@ class metadata {
   /**
    * @brief Filters and reads the info of only a selection of stripes
    *
-   * @param[in] stripe Index of the stripe to select
    * @param[in] max_stripe_count Number of stripes to select for stripe-based selection
    * @param[in] stripe_indices Indices of individual stripes [max_stripe_count]
    * @param[in] row_start Starting row of the selection
@@ -166,8 +165,7 @@ class metadata {
    *
    * @return List of stripe info and total number of selected rows
    **/
-  auto select_stripes(size_type stripe,
-                      size_type max_stripe_count,
+  auto select_stripes(size_type max_stripe_count,
                       const size_type *stripe_indices,
                       size_type &row_start,
                       size_type &row_count)
@@ -183,16 +181,6 @@ class metadata {
         stripe_rows += ff.stripes[stripe_idx].numberOfRows;
       }
       row_count = static_cast<size_type>(stripe_rows);
-    } else if (stripe != -1) {
-      CUDF_EXPECTS(stripe < get_num_stripes(), "Non-existent stripe");
-      size_t stripe_rows = 0;
-      do {
-        if (row_count >= 0 && stripe_rows >= (size_t)row_count) { break; }
-        selection.emplace_back(&ff.stripes[stripe], nullptr);
-        stripe_rows += ff.stripes[stripe].numberOfRows;
-      } while (--max_stripe_count > 0 && ++stripe < get_num_stripes());
-      row_count = (row_count < 0) ? static_cast<size_type>(stripe_rows)
-                                  : std::min(row_count, static_cast<size_type>(stripe_rows));
     } else {
       row_start = std::max(row_start, 0);
       if (row_count < 0) {
@@ -619,7 +607,6 @@ reader::impl::impl(std::unique_ptr<datasource> source,
 
 table_with_metadata reader::impl::read(size_type skip_rows,
                                        size_type num_rows,
-                                       size_type stripe,
                                        size_type max_stripe_count,
                                        const size_type *stripe_indices,
                                        cudaStream_t stream)
@@ -629,7 +616,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
   // Select only stripes required (aka row groups)
   const auto selected_stripes =
-    _metadata->select_stripes(stripe, max_stripe_count, stripe_indices, skip_rows, num_rows);
+    _metadata->select_stripes(max_stripe_count, stripe_indices, skip_rows, num_rows);
 
   // Association between each ORC column and its cudf::column
   std::vector<int32_t> orc_col_map(_metadata->get_num_columns(), -1);
@@ -856,15 +843,7 @@ reader::~reader() = default;
 // Forward to implementation
 table_with_metadata reader::read_all(cudaStream_t stream)
 {
-  return _impl->read(0, -1, -1, -1, nullptr, stream);
-}
-
-// Forward to implementation
-table_with_metadata reader::read_stripe(size_type stripe,
-                                        size_type stripe_count,
-                                        cudaStream_t stream)
-{
-  return _impl->read(0, -1, stripe, stripe_count, nullptr, stream);
+  return _impl->read(0, -1, -1, nullptr, stream);
 }
 
 // Forward to implementation
@@ -872,13 +851,13 @@ table_with_metadata reader::read_stripes(const std::vector<size_type> &stripe_li
                                          cudaStream_t stream)
 {
   return _impl->read(
-    0, -1, -1, static_cast<size_type>(stripe_list.size()), stripe_list.data(), stream);
+    0, -1, static_cast<size_type>(stripe_list.size()), stripe_list.data(), stream);
 }
 
 // Forward to implementation
 table_with_metadata reader::read_rows(size_type skip_rows, size_type num_rows, cudaStream_t stream)
 {
-  return _impl->read(skip_rows, (num_rows != 0) ? num_rows : -1, -1, -1, nullptr, stream);
+  return _impl->read(skip_rows, (num_rows != 0) ? num_rows : -1, -1, nullptr, stream);
 }
 
 }  // namespace orc

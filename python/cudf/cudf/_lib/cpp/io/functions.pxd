@@ -95,8 +95,6 @@ cdef extern from "cudf/io/functions.hpp" \
     cdef cppclass read_orc_args:
         cudf_io_types.source_info source
         vector[string] columns
-        size_type stripe
-        size_type stripe_count
         vector[size_type] stripe_list
         size_type skip_rows
         size_type num_rows
