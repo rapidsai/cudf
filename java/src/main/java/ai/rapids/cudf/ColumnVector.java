@@ -969,9 +969,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   /**
    * Create a new vector containing the MD5 hash of each row in the table.
    *
-   * @param initialValue the initial value to start at.
    * @param columns array of columns to hash, must have identical number of rows.
-   * @return the new ColumnVector.
+   * @return the new ColumnVector of 32 character hex strings representing each row's hash value.
    */
   public static ColumnVector md5Hash(ColumnVector... columns) {
     if (columns.length < 1) {
