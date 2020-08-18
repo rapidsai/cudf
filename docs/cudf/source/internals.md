@@ -27,7 +27,7 @@ A column is composed of the following:
   to 64 bytes.
 * A tuple of **children** columns, which enable the representation complex types such as
   columns with non-fixed width elements such as strings or lists.
-* A **size** indicating the number of elements in the Column.
+* A **size** indicating the number of elements in the column.
 * An integer **offset**: a column may represent a "slice" of another column,
   in which case this offset represents the first element of the slice. The size of
   the column then gives the extent of the slice. A column that is not a slice
@@ -51,7 +51,7 @@ As another example, the `StringColumn` backing the Series
 
 ## Buffer
 
-The data and mask buffers of a Column represent data in GPU memory (a.k.a *device memory*),
+The data and mask buffers of a column represent data in GPU memory (a.k.a *device memory*),
 and are object of type `cudf.core.buffer.Buffer`.
 
 Buffers can be constructed from array-like objects that live either on the host (e.g., numpy arrays)
