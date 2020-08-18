@@ -74,7 +74,7 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include"
                     "${ARROW_INCLUDE_DIR}"
-                    "${HUNTER_ROOT}/include"
+                    "${HUNTER_ROOT}/Install/include"
                     "${RMM_INCLUDE}")
 
 ###################################################################################################

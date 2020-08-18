@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #=============================================================================
-cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.18 FATAL_ERROR)
 
 include("cmake/HunterGate.cmake")
 HunterGate(
@@ -103,6 +103,7 @@ if("${GPU_ARCHS}" STREQUAL "ALL")
     set(GPU_ARCHS "${GPU_ARCHS};75")
   endif()
 endif()
+
 message("GPU_ARCHS = ${GPU_ARCHS}")
 
 foreach(arch ${GPU_ARCHS})
@@ -277,7 +278,7 @@ if(RMM_INCLUDE AND RMM_LIBRARY)
     set_target_properties(rmm PROPERTIES IMPORTED_LOCATION ${RMM_LIBRARY})
 endif(RMM_INCLUDE AND RMM_LIBRARY)
 
-###################################################################################################
+######################################BENCHMARK#############################################################
 # - DLPACK -------------------------------------------------------------------------------------------
 
 find_path(
@@ -310,15 +311,14 @@ endif(PER_THREAD_DEFAULT_STREAM)
 # - add gtest -------------------------------------------------------------------------------------
 
 if(BUILD_TESTS)
-    include(CTest)
     hunter_add_package(GTest)
     find_package(GTest CONFIG REQUIRED)
 
     if(GTest_FOUND)
         message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
-        set(GTEST_INCLUDE_DIR "${GTEST_ROOT}/include")
-        include_directories(${GTEST_INCLUDE_DIR})
         add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
+        set(GTest_LIBRARIES "GTest")
+        
     else()
         message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
     endif(GTest_FOUND)
@@ -335,16 +335,16 @@ if(BUILD_BENCHMARKS)
   find_package(benchmark CONFIG REQUIRED)
 
   if(benchmark_FOUND)
-    message(STATUS "Google C++ Benchmarking Framework (Google Benchmark) found in ${benchmark_ROOT}")
-    include_directories(${GBENCH_INCLUDE_DIR})
+    message(STATUS "Google C++ Benchmarking Framework (Google Benchmark) found in ${BENCHMARK_ROOT}")
     add_subdirectory(${CMAKE_SOURCE_DIR}/benchmarks)
+    set(benchmark_LIBRARIES "benchmark")
   else()
     message(AUTHOR_WARNING "Google C++ Benchmarking Framework (Google Benchmark) not found: automated tests are disabled.")
   endif(benchmark_FOUND)
 
 endif(BUILD_BENCHMARKS)
 
-message(STATUS "BENCHMARK_LIST set to: ${benchmark_LIST}")
+message(STATUS "BENCHMARK_LIST set to: ${BENCHMARK_LIST}")
 
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
@@ -364,7 +364,7 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${ARROW_INCLUDE_DIR}"
-                    "${HUNTER_ROOT}/include"
+                    "${HUNTER_ROOT}/Install/include"
                     "${RMM_INCLUDE}"
                     "${DLPACK_INCLUDE}")
 
@@ -378,7 +378,7 @@ endif(CONDA_INCLUDE_DIRS)
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
                  "${CMAKE_BINARY_DIR}/lib"
                  "${CMAKE_BINARY_DIR}"
-                 "${GTEST_LIBRARY_DIR}"
+                 "${HUNTER_ROOT}/Install"
                  "${RMM_LIBRARY}")
 
 if(CONDA_LINK_DIRS)
@@ -757,11 +757,12 @@ endif(HT_DEFAULT_ALLOCATOR)
 # - link libraries --------------------------------------------------------------------------------
 
 # link targets for cuDF
-target_link_libraries(cudf rmm 
-  arrow arrow_cuda 
-  nvrtc ${CUDART_LIBRARY} cuda 
-  ${ZLIB_LIBRARIES} ${Boost_LIBRARIES} 
-  ${Gtest_LIBRARIES} ${benchmark_LIBRARIES})
+target_link_libraries(cudf rmm arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda 
+  ${ZLIB_LIBRARIES} 
+  ${Boost_LIBRARIES} 
+  ${GTest_LIBRARIES} 
+  ${benchmark_LIBRARIES}
+)
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
