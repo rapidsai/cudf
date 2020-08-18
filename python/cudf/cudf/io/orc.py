@@ -72,6 +72,9 @@ def read_orc(
             pa_table = orc_file.read_stripe(stripe, columns)
             if isinstance(pa_table, pa.RecordBatch):
                 pa_table = pa.Table.from_batches([pa_table])
+        elif stripes is not None:
+            pa_tables = [orc_file.read_stripe(i, columns) for i in stripes]
+            pa_table = pa.concat_tables(pa_tables)
         else:
             pa_table = orc_file.read(columns=columns)
         df = cudf.DataFrame.from_arrow(pa_table)
