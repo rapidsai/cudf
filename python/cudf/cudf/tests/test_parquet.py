@@ -554,8 +554,8 @@ def test_parquet_reader_list_table(tmpdir):
 
 def int_gen(first_val, i):
     """
-    lambda for generating an integer based on an absolute index and a
-    starting value. Used as an input to list_gen.
+    Returns an integer based on an absolute index and a starting value. Used
+    as input to `list_gen`.
     """
     return int(i + first_val)
 
@@ -575,8 +575,8 @@ strings = [
 
 def string_gen(first_val, i):
     """
-    lambda for generating a string based on an absolute index and a
-    starting value. Used as an input to list_gen.
+    Returns a string based on an absolute index and a starting value. Used as
+    input to `list_gen`.
     """
     return strings[int_gen(first_val, i) % len(strings)]
 
@@ -588,7 +588,7 @@ def list_gen(
     Generate a list column based on input parameters.
 
     Args:
-        gen: A lambda which generates an individual leaf element based on an
+        gen: A callable which generates an individual leaf element based on an
             absolute index.
         skip_rows : Generate the column as if it had started at 'skip_rows'
             instead of 0. The intent here is to emulate the skip_rows
