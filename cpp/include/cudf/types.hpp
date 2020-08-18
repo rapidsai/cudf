@@ -335,7 +335,12 @@ enum class hash_id {
   HASH_MURMUR3,         ///< Murmur3 hash function
   HASH_MD5,             ///< MD5 hash function
   HASH_SERIAL_MURMUR3,  ///< Serial Murmur3 hash function
-  HASH_SPARK_MURMUR3    ///< Spark Murmur3 hash function
+  HASH_SPARK_MURMUR3,   ///< Spark Murmur3 hash function
+  HASH_SHA1,
+  HASH_SHA224,
+  HASH_SHA256,
+  HASH_SHA384,
+  HASH_SHA512
 };
 
 /**
