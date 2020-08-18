@@ -21,7 +21,7 @@ class ColumnParameters:
     # ty is a callable function, specifically a Mimesis provider
     def __init__(
         self,
-        cardinality=0.2,
+        cardinality=5,
         null_frequency=0.1,
         ty=g.food.fruit,
         is_sorted=False,
@@ -70,7 +70,7 @@ def synthesize(filepath, parameters):
         vals = np.array(
             [
                 column_parameters.ty()
-                for _ in range(int(1 / column_parameters.cardinality))
+                for _ in range(column_parameters.cardinality)
             ]
         )
 
@@ -101,7 +101,7 @@ default = Parameters()
 # Focusing on the company type column...
 very_sparse_column_params = list(default_column_params)
 very_sparse_column_params[2].null_frequency = 0.8
-very_sparse_column_params[2].cardinality = 1.0 / 16.0
+very_sparse_column_params[2].cardinality = 16
 very_sparse = Parameters(
     num_rows=2048 << 4, column_params=very_sparse_column_params
 )
@@ -109,13 +109,13 @@ very_sparse = Parameters(
 # Focusing on the date column...
 dates_sorted_column_params = list(default_column_params)
 dates_sorted_column_params[0].is_sorted = True
-dates_sorted_column_params[0].cardinality = 1.0 / (2048 << 4)
+dates_sorted_column_params[0].cardinality = 2048
 dates_sorted = Parameters(
     num_rows=2048, column_params=dates_sorted_column_params
 )
 high_cardinality_column_params = list(default_column_params)
 high_cardinality_column_params[0].is_sorted = True
-high_cardinality_column_params[0].cardinality = 1.0 / (2048 << 5)
+high_cardinality_column_params[0].cardinality = 2048
 high_cardinality = Parameters(
     num_rows=2048, column_params=high_cardinality_column_params
 )
@@ -123,7 +123,7 @@ high_cardinality = Parameters(
 # Focusing on the city column...
 low_cardinality_column_params = list(default_column_params)
 low_cardinality_column_params[1].is_sorted = True
-low_cardinality_column_params[1].cardinality = 1.0 / 20.0
+low_cardinality_column_params[1].cardinality = 20
 low_cardinality = Parameters(
     num_rows=2048, column_params=low_cardinality_column_params
 )
