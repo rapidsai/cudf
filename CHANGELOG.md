@@ -44,6 +44,7 @@
 - PR #5659 Added support for rapids-compose for Java bindings and other enhancements
 - PR #5637 Parameterize Null comparator behaviour in Joins
 - PR #5623 Add `is_ipv4` strings API
+- PR #5723 Parquet reader - add support for nested LIST columns
 - PR #5669 Add support for reading JSON files with missing or out-of-order fields
 - PR #5674 Support JIT backend on PowerPC64
 - PR #5629 Add `ListColumn` and `ListDtype`
@@ -316,6 +317,7 @@
 - PR #5981 Handle `nat` in `fillna` for datetime and timedelta types
 - PR #6016 Fix benchmark fixture segfault
 - PR #6003 Fix concurrent JSON reads crash
+- PR #6032 Change black version to 19.10b0 in .pre-commit-config.yaml
 
 
 # cuDF 0.14.0 (03 Jun 2020)
