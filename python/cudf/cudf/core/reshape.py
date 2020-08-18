@@ -1,4 +1,6 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
+import itertools
+
 import numpy as np
 import pandas as pd
 
@@ -791,6 +793,20 @@ def pivot(df, index=None, columns=None, values=None):
     else:
         index = cudf.core.index.Index(df.loc[:, index])
     columns = cudf.Index(df.loc[:, columns])
+
+    # Create a DataFrame composed of columns from both
+    # columns and index
+    columns_index = {}
+    for i, col in enumerate(
+        itertools.chain(index._data.columns, columns._data.columns)
+    ):
+        columns_index[i] = col
+    columns_index = cudf.DataFrame(columns_index)
+
+    # Check that each row is unique:
+    if len(columns_index) != len(columns_index.drop_duplicates()):
+        raise ValueError("Duplicate index-column pairs found. Cannot reshape.")
+
     return _pivot(values, index, columns)
 
 

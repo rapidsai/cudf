@@ -420,3 +420,13 @@ def test_unstack(level):
         nullable_pd_dtype=True,
         check_dtype=False,
     )
+
+
+def test_pivot_duplicate_error():
+    gdf = cudf.DataFrame(
+        {"a": [0, 1, 2, 2], "b": [1, 2, 3, 3], "d": [1, 2, 3, 4]}
+    )
+    with pytest.raises(ValueError):
+        gdf.pivot(index="a", columns="b")
+    with pytest.raises(ValueError):
+        gdf.pivot(index="b", columns="a")
