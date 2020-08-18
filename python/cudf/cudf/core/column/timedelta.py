@@ -72,12 +72,6 @@ class TimeDeltaColumn(column.ColumnBase):
             return False
         return item.view("int64") in self.as_numerical
 
-    def _repr_str_col(self):
-        result = self.as_string_column(dtype="str", format=None)
-        if self.has_nulls:
-            result = result.fillna(cudf._NA_REP)
-        return result
-
     def to_arrow(self):
         mask = None
         if self.nullable:
