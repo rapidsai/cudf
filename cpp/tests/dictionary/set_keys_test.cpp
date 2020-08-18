@@ -42,7 +42,7 @@ TEST_F(DictionarySetKeysTest, StringsKeys)
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
   auto decoded = cudf::dictionary::decode(result->view());
-  cudf::test::expect_columns_equal(*decoded, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*decoded, expected);
 }
 
 TEST_F(DictionarySetKeysTest, FloatKeys)
@@ -56,7 +56,7 @@ TEST_F(DictionarySetKeysTest, FloatKeys)
   cudf::test::fixed_width_column_wrapper<float> expected{{4.25, 7.125, 0.5, 0., 7.125, 0.5},
                                                          {1, 1, 1, 0, 1, 1}};
   auto decoded = cudf::dictionary::decode(result->view());
-  cudf::test::expect_columns_equal(*decoded, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*decoded, expected);
 }
 
 TEST_F(DictionarySetKeysTest, WithNulls)
@@ -71,7 +71,7 @@ TEST_F(DictionarySetKeysTest, WithNulls)
   cudf::test::fixed_width_column_wrapper<int64_t> expected{
     {444, 0, 333, 111, 222, 222, 222, 444, 0}, {1, 1, 1, 0, 1, 0, 1, 1, 1}};
   auto decoded = cudf::dictionary::decode(result->view());
-  cudf::test::expect_columns_equal(*decoded, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*decoded, expected);
 }
 
 TEST_F(DictionarySetKeysTest, Errors)

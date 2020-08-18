@@ -35,6 +35,16 @@ cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
         int32_t ticks_since_epoch_32 "ticks_since_epoch"() except +
         T value() except +
 
+    cdef cppclass duration_scalar[T](scalar):
+        duration_scalar() except +
+        duration_scalar(duration_scalar other) except +
+        duration_scalar(int64_t value) except +
+        duration_scalar(int64_t value, bool is_valid) except +
+        duration_scalar(int32_t value) except +
+        duration_scalar(int32_t value, bool is_valid) except +
+        int64_t ticks "count"() except +
+        T value() except +
+
     cdef cppclass string_scalar(scalar):
         string_scalar() except +
         string_scalar(string st) except +

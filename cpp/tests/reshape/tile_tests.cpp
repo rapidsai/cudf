@@ -42,7 +42,7 @@ TYPED_TEST(TileTest, NoColumns)
 
   auto actual = cudf::tile(in, 10);
 
-  cudf::test::expect_tables_equal(expected, actual->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, actual->view());
 }
 
 TYPED_TEST(TileTest, NoRows)
@@ -56,7 +56,7 @@ TYPED_TEST(TileTest, NoRows)
 
   auto actual = cudf::tile(in, 10);
 
-  cudf::test::expect_tables_equal(expected, actual->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, actual->view());
 }
 
 TYPED_TEST(TileTest, OneColumn)
@@ -71,7 +71,7 @@ TYPED_TEST(TileTest, OneColumn)
 
   auto actual = cudf::tile(in, 2);
 
-  cudf::test::expect_tables_equal(expected, actual->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, actual->view());
 }
 
 TYPED_TEST(TileTest, OneColumnNullable)
@@ -86,7 +86,7 @@ TYPED_TEST(TileTest, OneColumnNullable)
 
   auto actual = cudf::tile(in, 2);
 
-  cudf::test::expect_tables_equal(expected, actual->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, actual->view());
 }
 
 TYPED_TEST(TileTest, OneColumnNegativeCount)
@@ -115,5 +115,5 @@ TYPED_TEST(TileTest, OneColumnZeroCount)
 
   auto actual = cudf::tile(in, 0);
 
-  cudf::test::expect_tables_equal(expected, actual->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, actual->view());
 }

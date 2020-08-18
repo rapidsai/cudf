@@ -82,7 +82,7 @@ void ReplaceNaNsColumn(fixed_width_column_wrapper<T> input,
 {
   std::unique_ptr<column> result;
   ASSERT_NO_THROW(result = replace_nans(input, replacement_values));
-  expect_columns_equal(expected, *result);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 }
 
 template <typename T>
@@ -92,7 +92,7 @@ void ReplaceNaNsScalar(fixed_width_column_wrapper<T> input,
 {
   std::unique_ptr<column> result;
   ASSERT_NO_THROW(result = replace_nans(input, replacement_value));
-  expect_columns_equal(expected, *result);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 }
 
 TYPED_TEST(ReplaceNaNsTest, ReplaceColumn)

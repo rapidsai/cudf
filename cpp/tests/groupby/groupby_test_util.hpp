@@ -45,7 +45,7 @@ inline void test_groups(column_view const& keys,
   } else {
     gb_groups = gb.get_groups();
   }
-  expect_tables_equal(table_view({expect_grouped_keys}), gb_groups.keys->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({expect_grouped_keys}), gb_groups.keys->view());
 
   auto got_offsets = gb_groups.offsets;
   EXPECT_EQ(expect_group_offsets.size(), got_offsets.size());
@@ -54,7 +54,7 @@ inline void test_groups(column_view const& keys,
   }
 
   if (values.size()) {
-    expect_tables_equal(table_view({expect_grouped_values}), gb_groups.values->view());
+    CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({expect_grouped_values}), gb_groups.values->view());
   }
 }
 
@@ -86,15 +86,15 @@ inline void test_single_agg(column_view const& keys,
   auto result = gb_obj.aggregate(requests);
 
   if (use_sort == force_use_sort_impl::YES) {
-    expect_tables_equal(table_view({expect_keys}), result.first->view());
-    expect_columns_equivalent(expect_vals, *result.second[0].results[0], true);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({expect_keys}), result.first->view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expect_vals, *result.second[0].results[0], true);
   } else {
     auto const sort_order  = sorted_order(result.first->view(), {}, {null_order::AFTER});
     auto const sorted_keys = gather(result.first->view(), *sort_order);
     auto const sorted_vals = gather(table_view({result.second[0].results[0]->view()}), *sort_order);
 
-    expect_tables_equal(table_view({expect_keys}), *sorted_keys);
-    expect_columns_equivalent(expect_vals, sorted_vals->get_column(0), true);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({expect_keys}), *sorted_keys);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expect_vals, sorted_vals->get_column(0), true);
   }
 }
 

@@ -32,7 +32,7 @@ TEST_F(RowOperatorTestForNAN, NANEquality)
   cudf::test::fixed_width_column_wrapper<double> col1{{1., double(NAN), 3., 4.}, {1, 1, 0, 1}};
   cudf::test::fixed_width_column_wrapper<double> col2{{1., double(NAN), 3., 4.}, {1, 1, 0, 1}};
 
-  cudf::test::expect_columns_equal(col1, col2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(col1, col2);
 }
 
 TEST_F(RowOperatorTestForNAN, NANSorting)
@@ -54,7 +54,7 @@ TEST_F(RowOperatorTestForNAN, NANSorting)
 
   auto got1 = cudf::sorted_order(input_table, column_order, null_precedence_1);
 
-  cudf::test::expect_columns_equal(expected1, got1->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected1, got1->view());
 
   // NULL After
 
@@ -63,5 +63,5 @@ TEST_F(RowOperatorTestForNAN, NANSorting)
 
   auto got2 = cudf::sorted_order(input_table, column_order, null_precedence_2);
 
-  cudf::test::expect_columns_equal(expected2, got2->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, got2->view());
 }
