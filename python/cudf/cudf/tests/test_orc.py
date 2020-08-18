@@ -210,6 +210,21 @@ def test_orc_read_stripe(datadir, engine):
     assert_eq(pdf, gdf, check_categorical=False)
 
 
+@pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
+def test_orc_read_stripes(datadir, engine):
+    path = datadir / "TestOrcFile.testDate1900.orc"
+    try:
+        pdf = cudf.read_orc(path, engine=engine)
+    except pa.ArrowIOError as e:
+        pytest.skip(".orc file is not found: %s" % e)
+
+    num_rows, stripes, col_names = cudf.io.read_orc_metadata(path)
+
+    gdf = cudf.read_orc(path, engine=engine, stripes=range(stripes))
+
+    assert_eq(pdf, gdf, check_categorical=False)
+
+
 @pytest.mark.parametrize("num_rows", [1, 100, 3000])
 @pytest.mark.parametrize("skip_rows", [0, 1, 3000])
 def test_orc_read_rows(datadir, skip_rows, num_rows):
