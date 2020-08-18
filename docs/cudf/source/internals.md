@@ -1,11 +1,111 @@
 cuDF internals
 ==============
 
-ColumnAccessor
---------------
+## Introduction
+
+The cuDF API closely matches that of the [Pandas](https://pandas.pydata.org/) library.
+Thus, we have the types `cudf.Series`, `cudf.DataFrame` and `cudf.Index` which look and
+feel very much like their Pandas counterparts.
+
+Under the hood, however, cuDF uses data structures very different from Pandas. In this document,
+we describe these internal data structures.
+
+## Column
+
+Columns are cuDF's core data structure and they are modeled after
+the [Apache Arrow Columnar Format](https://arrow.apache.org/docs/format/Columnar.html).
+
+A column represents a sequence of values, any number of which may be "null". Columns are
+specialized based on the type of data they contain. Thus we have `NumericalColumn`, `StringColumn`,
+`DatetimeColumn`, etc.,
+
+A column is composed of the following:
+
+* A **data type**, specifying the type of each element.
+* A **mask buffer** that may store the data for the column elements.
+  Some column types do not have a data buffer, instead storing data in the children columns.
+* A **mask buffer** whose bits represent the validity (null or not null) of each element.
+  Columns whose elements are all "valid" may not have a mask buffer.
+* A tuple of **children** columns, which enable the representation complex types such as
+  columns with non-fixed width elements (e.g., strings, lists).
+* If the Column represents a slice, an integer **offset** into the first element of the slice
+
+For example, the `NumericalColumn` backing a Series of size 1000 with `dtype='int32'`
+and containing nulls is composed of:
+
+2. A data buffer of size 4000 bytes
+2. A mask buffer of size 128 bytes (mask buffers are 64-byte aligned) 
+3. No children columns
+
+As another example, the `StringColumn` backing the Series
+`['do', 'you', 'have', 'any', 'cheese?']` is composed of:
+
+1. No data buffer
+2. No mask buffer as there are no nulls in the Series
+3. Two children columns:
+   - A column of 8-bit characters `['d', 'o', 'y', 'o', 'u', h' ... '?']`
+   - A column of "offsets" to the characters column (in this case, `[0, 2, 5, 9, 12, 19]`)
+
+## Buffer
+
+The data and mask buffers of a Column represent data in GPU memory (a.k.a *device memory*),
+and are object of type `cudf.core.buffer.Buffer`.
+
+Buffers can be constructed from array-like objects that live either on the host (e.g., numpy arrays)
+or the device (e.g., cupy arrays).
+
+When constructing a Buffer from a host object (e.g., a numpy array), new device memory is allocated:
+
+```python
+>>> from cudf.core.buffer import Buffer
+>>> buf = Buffer(np.array([1, 2, 3]))
+>>> print(buf.ptr)  # address of new device memory allocation
+140050901762048
+>>> print(buf.size)
+24
+>>> buf = Buffer(np.array([1, 2, 3], dtype='int64'))
+>>> print(buf.ptr)  # address of new device memory allocation
+140050901762560
+>>> print(buf.size)
+24
+>>> print(buf._owner)
+<rmm._lib.device_buffer.DeviceBuffer object at 0x7f6055baab50>
+```
+
+**Note**: cuDF uses [`RMM`](https://github.com/rapidsai/rmm) for allocating device memory.
+
+When constructing a Buffer from a device object, such as a CuPy array, no new device memory is
+allocated. Instead, the Buffer points to the existing allocation, keeping a reference to the device
+array:
+
+```python
+>>> import cupy as cp
+>>> c_ary = cp.asarray([1, 2, 3], dtype='int64')
+>>> buf = Buffer(c_ary)
+>>> print(c_ary.data.mem.ptr)
+140050901762560
+>>> print(buf.ptr)
+140050901762560
+>>> print(buf.size)
+24
+>>> print(buf._owner is c_ary)
+True
+```
+
+An uninitialized block of device memory can be allocated with `Buffer.empty`:
+
+```python
+>>> buf = Buffer.empty(10)
+>>> print(buf.size)
+10
+>>> print(buf._owner)
+<rmm._lib.device_buffer.DeviceBuffer object at 0x7f6055baa890>
+```
+
+## ColumnAccessor
 
 cuDF  `Series`, `DataFrame` and `Index` are all subclasses of an internal `Frame` class.
-The underlying data structure of `Frame` is a `ColumnAccessor`,
+The underlying data structure of `Frame` is a dictionary-like object known as `ColumnAccessor`,
 which can be accessed via the `._data` attribute:
 
 ```python
@@ -14,16 +114,14 @@ which can be accessed via the `._data` attribute:
 ColumnAccessor(OrderedColumnDict([('x', <cudf.core.column.numerical.NumericalColumn object at 0x7f5a7d12e050>), ('y', <cudf.core.column.string.StringColumn object at 0x7f5a7d12e320>)]), multiindex=False, level_names=(None,))
 ```
 
-`ColumnAccessor` is an ordered, dict-like object that maps column labels to columns.
-In addition, it supports things like selecting multiple columns (both by index and label),
-as well as hierarchical indexing.
+ColumnAccessor is an ordered mapping of column labels to columns. In addition, it supports
+things like selecting multiple columns (both by index and label), as well as hierarchical indexing.
 
 ```python
 >>> from cudf.core.column_accessor import ColumnAccessor
 ```
 
-A ColumnAccessor behaves like an OrderedDict,
-its values are coerced to Columns during construction:
+A ColumnAccessor behaves like an OrderedDict, its values are coerced to Columns during construction:
 
 ```python
 >>> ca = ColumnAccessor({'x': [1, 2, 3], 'y': ['a', 'b', 'c']})
