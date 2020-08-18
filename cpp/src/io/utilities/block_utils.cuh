@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -68,6 +68,36 @@ inline __device__ T WarpReduceSum32(T acc)
 {
   acc = WarpReduceSum16(acc);
   return acc + SHFL_XOR(acc, 16);
+}
+
+template <typename T>
+inline __device__ T WarpReduceOr2(T acc)
+{
+  return acc | SHFL_XOR(acc, 1);
+}
+template <typename T>
+inline __device__ T WarpReduceOr4(T acc)
+{
+  acc = WarpReduceOr2(acc);
+  return acc | SHFL_XOR(acc, 2);
+}
+template <typename T>
+inline __device__ T WarpReduceOr8(T acc)
+{
+  acc = WarpReduceOr4(acc);
+  return acc | SHFL_XOR(acc, 4);
+}
+template <typename T>
+inline __device__ T WarpReduceOr16(T acc)
+{
+  acc = WarpReduceOr8(acc);
+  return acc | SHFL_XOR(acc, 8);
+}
+template <typename T>
+inline __device__ T WarpReduceOr32(T acc)
+{
+  acc = WarpReduceOr16(acc);
+  return acc | SHFL_XOR(acc, 16);
 }
 
 template <typename T>
