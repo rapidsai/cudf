@@ -24,9 +24,6 @@ requirements:
     - cudf {{ version }}
     - dask >=2.22.0
     - distributed >=2.22.0
-    - flake8=3.8.3
-    - black=19.10
-    - isort=5.0.7
   run:
     - python
     - cudf {{ version }}
