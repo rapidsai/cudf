@@ -289,7 +289,12 @@ std::size_t size_of(data_type t);
 enum class hash_id {
   HASH_IDENTITY = 0,  ///< Identity hash function that simply returns the key to be hashed
   HASH_MURMUR3,       ///< Murmur3 hash function
-  HASH_MD5            ///< MD5 hash function
+  HASH_MD5,           ///< MD5 hash function
+  HASH_SHA1,
+  HASH_SHA224,
+  HASH_SHA256,
+  HASH_SHA384,
+  HASH_SHA512
 };
 
 /** @} */

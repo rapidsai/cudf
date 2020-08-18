@@ -644,6 +644,12 @@ std::unique_ptr<column> hash(table_view const& input,
   switch (hash_function) {
     case (hash_id::HASH_MURMUR3): return murmur_hash3_32(input, initial_hash, mr, stream);
     case (hash_id::HASH_MD5): return md5_hash(input, mr, stream);
+    case (hash_id::HASH_SHA1): return sha1(input, mr, stream);
+    case (hash_id::HASH_SHA224): return sha256_base(input, true, mr, stream);
+    case (hash_id::HASH_SHA256): return sha256_base(input, false, mr, stream);
+    case (hash_id::HASH_SHA384): return sha512_base(input, true, mr, stream);
+    case (hash_id::HASH_SHA512): return sha512_base(input, false, mr, stream);
+
     default: return nullptr;
   }
 }
@@ -763,6 +769,23 @@ std::unique_ptr<column> murmur_hash3_32(table_view const& input,
   }
 
   return output;
+}
+
+std::unique_ptr<column> sha1(table_view const& input,
+                             rmm::mr::device_memory_resource* mr,
+                             cudaStream_t stream) {
+}
+
+std::unique_ptr<column> sha256_base(table_view const& input,
+                                    bool truncate_output,
+                                    rmm::mr::device_memory_resource* mr,
+                                    cudaStream_t stream) {
+}
+
+std::unique_ptr<column> sha512_base(table_view const& input,
+                                    bool truncate_output,
+                                    rmm::mr::device_memory_resource* mr,
+                                    cudaStream_t stream) {
 }
 
 }  // namespace detail
