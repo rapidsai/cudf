@@ -4,7 +4,7 @@ repos:
         hooks:
               - id: isort
       - repo: https://github.com/ambv/black
-        rev: 19.10
+        rev: 19.10b0
         hooks:
               - id: black
       - repo: https://gitlab.com/pycqa/flake8
