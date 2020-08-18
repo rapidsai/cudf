@@ -553,6 +553,10 @@ def test_parquet_reader_list_table(tmpdir):
 
 
 def int_gen(first_val, i):
+    """
+    lambda for generating an integer based on an absolute index and a
+    starting value. Used as an input to list_gen.
+    """
     return int(i + first_val)
 
 
@@ -570,12 +574,37 @@ strings = [
 
 
 def string_gen(first_val, i):
+    """
+    lambda for generating a string based on an absolute index and a
+    starting value. Used as an input to list_gen.
+    """
     return strings[int_gen(first_val, i) % len(strings)]
 
 
 def list_gen(
     gen, skip_rows, num_rows, lists_per_row, list_size, include_validity=False
 ):
+    """
+    Generate a list column based on input parameters.
+
+    Args:
+        gen: A lambda which generates an individual leaf element based on an
+            absolute index.
+        skip_rows : Generate the column as if it had started at 'skip_rows'
+            instead of 0. The intent here is to emulate the skip_rows
+            parameter of the parquet reader.
+        num_rows : Number of rows to generate.  Again, this is to emulate the
+            'num_rows' parameter of the parquet reader.
+        lists_per_row : Number of lists to generate per row.
+        list_size : Size of each generated list.
+        include_validity : Whether or not to include nulls as part of the
+            column. If true, it will add a selection of nulls at both the
+            topmost row level and at the leaf level.
+
+    Returns:
+        The generated list column.
+    """
+
     def L(list_size, first_val):
         return [
             (gen(first_val, i) if i % 2 == 0 else None)
