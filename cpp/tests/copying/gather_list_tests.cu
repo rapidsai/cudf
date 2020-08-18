@@ -388,8 +388,7 @@ TYPED_TEST(GatherTestListTyped, GatherSliced)
     cudf::test::expect_columns_equal(expected1, result1->get_column(0).view());
   }
 
-  auto valids = cudf::test::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   // List<List<List<T>>>
   {

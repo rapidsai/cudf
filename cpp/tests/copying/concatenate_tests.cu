@@ -656,8 +656,7 @@ TEST_F(ListsColumnTest, SlicedColumnsWithNulls)
 {
   using LCW = cudf::test::lists_column_wrapper<int>;
 
-  auto valids = cudf::test::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   {
     cudf::test::lists_column_wrapper<int> a{{{{1, 1, 1}, valids}, {2, 2}, {{3, 3}, valids}},

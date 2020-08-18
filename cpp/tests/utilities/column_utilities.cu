@@ -264,7 +264,7 @@ struct column_comparator_impl<list_view, check_exact_equality> {
     //
     // These two columns are seemingly equivalent, since their top level rows are the same, with
     // just the last element being null. However, pyArrow will say these are -not- equal and
-    // does not appear to have an equivalent() check.  so the question is : should we be handling
+    // does not appear to have an equivalent() check.  So the question is : should we be handling
     // this case when someone calls expect_columns_equivalent()?
 
     // compare offsets, taking slicing into account
