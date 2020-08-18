@@ -66,14 +66,21 @@ def read_orc(
             )
         )
     else:
-        warnings.warn("Using CPU via PyArrow to read ORC dataset.")
-        orc_file = orc.ORCFile(filepath_or_buffer)
-        if stripe is not None:
+
+        def read_orc_stripe(orc_file, stripe, columns):
             pa_table = orc_file.read_stripe(stripe, columns)
             if isinstance(pa_table, pa.RecordBatch):
                 pa_table = pa.Table.from_batches([pa_table])
+            return pa_table
+
+        warnings.warn("Using CPU via PyArrow to read ORC dataset.")
+        orc_file = orc.ORCFile(filepath_or_buffer)
+        if stripe is not None:
+            pa_table = read_orc_stripe(orc_file, stripe, columns)
         elif stripes is not None:
-            pa_tables = [orc_file.read_stripe(i, columns) for i in stripes]
+            pa_tables = [
+                read_orc_stripe(orc_file, i, columns) for i in stripes
+            ]
             pa_table = pa.concat_tables(pa_tables)
         else:
             pa_table = orc_file.read(columns=columns)

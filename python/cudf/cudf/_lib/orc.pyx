@@ -47,7 +47,7 @@ cpdef read_orc(filepath_or_buffer, columns=None,
         columns or [],
         get_size_t_arg(stripe, "stripe"),
         get_size_t_arg(stripe_count, "stripe_count"),
-        stripes,
+        stripes or [],
         get_size_t_arg(skip_rows, "skip_rows"),
         get_size_t_arg(num_rows, "num_rows"),
         (
