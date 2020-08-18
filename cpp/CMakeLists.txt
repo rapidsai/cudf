@@ -329,12 +329,12 @@ if(BUILD_BENCHMARKS)
   hunter_add_package(benchmark)
   find_package(benchmark CONFIG REQUIRED)
 
-  if(benchmark_FOUND)
+  if(BENCHMARK_FOUND)
     message(STATUS "Google C++ Benchmarking Framework (Google Benchmark) found in ${BENCHMARK_ROOT}")
     add_subdirectory(${CMAKE_SOURCE_DIR}/benchmarks)
   else()
     message(AUTHOR_WARNING "Google C++ Benchmarking Framework (Google Benchmark) not found: automated tests are disabled.")
-  endif(benchmark_FOUND)
+  endif(BENCHMARK_FOUND)
 
 endif(BUILD_BENCHMARKS)
 
@@ -758,8 +758,6 @@ target_link_libraries(cudf rmm
   nvrtc ${CUDART_LIBRARY} cuda 
   ${ZLIB_LIBRARIES} 
   ${Boost_LIBRARIES} 
-  ${GTest_LIBRARIES} 
-  ${benchmark_LIBRARIES}
 )
 
 ###################################################################################################
