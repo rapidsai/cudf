@@ -135,7 +135,6 @@ cudf::size_type linearizer::visit(expression const& expr)
   auto const output = [&]() {
     if (node_index == 0) {
       // This node is the root. Output should be directed to the output column.
-      // TODO: Could refactor to support output tables (multiple output columns)
       return detail::device_data_reference{
         detail::device_data_reference_type::COLUMN, data_type, 0, table_reference::OUTPUT};
     } else {

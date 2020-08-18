@@ -139,37 +139,6 @@ std::unique_ptr<column> compute_column(table_view const table,
   cudf::detail::grid_1d config(table_num_rows, block_size);
   auto const shmem_size_per_block = shmem_size_per_thread * config.num_threads_per_block;
 
-  // Output linearizer info
-  /*
-  std::cout << "LINEARIZER INFO:" << std::endl;
-  std::cout << "Number of data references: " << data_references.size() << std::endl;
-  std::cout << "Data references: ";
-  for (auto const& dr : data_references) {
-    switch (dr.reference_type) {
-      case detail::device_data_reference_type::COLUMN:
-        if (dr.table_source == table_reference::LEFT) {
-          std::cout << "C";
-        } else {
-          std::cout << "O";
-        }
-        break;
-      case detail::device_data_reference_type::LITERAL: std::cout << "L"; break;
-      case detail::device_data_reference_type::INTERMEDIATE: std::cout << "I";
-    }
-    std::cout << dr.data_index << "[typeid=" << static_cast<int>(dr.data_type.id()) << "], ";
-  }
-  std::cout << std::endl;
-  std::cout << "Number of operators: " << num_operators << std::endl;
-  std::cout << "Number of operator source indices: " << operator_source_indices.size() << std::endl;
-  std::cout << "Number of literals: " << literals.size() << std::endl;
-  std::cout << "Operator source indices: ";
-  for (auto const& v : operator_source_indices) { std::cout << v << ", "; }
-  std::cout << std::endl;
-  std::cout << "Requesting " << config.num_blocks << " blocks, ";
-  std::cout << config.num_threads_per_block << " threads/block, ";
-  std::cout << shmem_size_per_block << " bytes of shared memory." << std::endl;
-  */
-
   // Execute the kernel
   cudf::ast::detail::compute_column_kernel<DEFAULT_BLOCK_SIZE>
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream>>>(
