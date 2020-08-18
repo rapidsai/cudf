@@ -30,107 +30,6 @@ def _get_partition_groups(df, partition_cols, preserve_index=False):
     ]
 
 
-def _check_contains_null(val):
-    if isinstance(val, bytes):
-        for byte in val:
-            if isinstance(byte, bytes):
-                compare_to = chr(0)
-            else:
-                compare_to = 0
-            if byte == compare_to:
-                return True
-    elif isinstance(val, str):
-        return "\x00" in val
-    return False
-
-
-def _check_filters(filters, check_null_strings=True):
-    """
-    Check if filters are well-formed.
-    """
-    if filters is not None:
-        if len(filters) == 0 or any(len(f) == 0 for f in filters):
-            raise ValueError("Malformed filters")
-        if isinstance(filters[0][0], str):
-            # We have encountered the situation where we have one nesting level
-            # too few:
-            #   We have [(,,), ..] instead of [[(,,), ..]]
-            filters = [filters]
-        if check_null_strings:
-            for conjunction in filters:
-                for col, op, val in conjunction:
-                    if (
-                        isinstance(val, list)
-                        and all(_check_contains_null(v) for v in val)
-                        or _check_contains_null(val)
-                    ):
-                        raise NotImplementedError(
-                            "Null-terminated binary strings are not supported "
-                            "as filter values."
-                        )
-    return filters
-
-
-def _filters_to_expression(filters):
-    """
-    Check if filters are well-formed.
-    """
-    import pyarrow.dataset as ds
-
-    if isinstance(filters, ds.Expression):
-        return filters
-
-    filters = _check_filters(filters, check_null_strings=False)
-
-    def convert_single_predicate(col, op, val):
-        field = ds.field(col)
-
-        if op == "=" or op == "==":
-            return field == val
-        elif op == "!=":
-            return field != val
-        elif op == "<":
-            return field < val
-        elif op == ">":
-            return field > val
-        elif op == "<=":
-            return field <= val
-        elif op == ">=":
-            return field >= val
-        elif op == "in":
-            return field.isin(val)
-        elif op == "not in":
-            return ~field.isin(val)
-        else:
-            raise ValueError(
-                '"{0}" is not a valid operator in predicates.'.format(
-                    (col, op, val)
-                )
-            )
-
-    or_exprs = []
-
-    for conjunction in filters:
-        and_exprs = []
-        for col, op, val in conjunction:
-            and_exprs.append(convert_single_predicate(col, op, val))
-
-        expr = and_exprs[0]
-        if len(and_exprs) > 1:
-            for and_expr in and_exprs[1:]:
-                expr = ds.AndExpression(expr, and_expr)
-
-        or_exprs.append(expr)
-
-    expr = or_exprs[0]
-    if len(or_exprs) > 1:
-        expr = ds.OrExpression(*or_exprs)
-        for or_expr in or_exprs[1:]:
-            expr = ds.OrExpression(expr, or_expr)
-
-    return expr
-
-
 def _ensure_filesystem(passed_filesystem, path):
     if passed_filesystem is None:
         return get_fs_token_paths(path[0] if isinstance(path, list) else path)[
@@ -308,9 +207,7 @@ def read_parquet(
 
     if filters is not None:
         # Convert filters to ds.Expression
-        # TODO: Use pyarrow once filters-to-expression conversion is added to
-        # API by resolving https://issues.apache.org/jira/browse/ARROW-9672
-        filters = _filters_to_expression(filters)
+        filters = ioutils.filters_to_expression(filters)
 
         # Initialize ds.FilesystemDataset
         dataset = ds.dataset(filepaths_or_buffers, format="parquet")
