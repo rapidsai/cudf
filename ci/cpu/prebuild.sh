@@ -3,7 +3,7 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 set -e
 
-#Upload cudf once per PYTHON/CUDA combo
+#Always upload cudf Python package
 export UPLOAD_CUDF=1
 
 #Upload libcudf once per CUDA
