@@ -517,9 +517,7 @@ class Index(Frame, Serializable):
         >>> type(idx)
         <class 'cudf.core.index.GenericIndex'>
         """
-        return pd.Index(
-            self._values.to_pandas(nullable_pd_dtype=False), name=self.name
-        )
+        return pd.Index(self._values.to_pandas(), name=self.name)
 
     def to_arrow(self):
         """
@@ -2132,9 +2130,7 @@ class DatetimeIndex(GenericIndex):
 
     def to_pandas(self):
         nanos = self._values.astype("datetime64[ns]")
-        return pd.DatetimeIndex(
-            nanos.to_pandas(nullable_pd_dtype=False), name=self.name
-        )
+        return pd.DatetimeIndex(nanos.to_pandas(), name=self.name)
 
     def get_dt_field(self, field):
         out_column = self._values.get_dt_field(field)
@@ -2227,7 +2223,7 @@ class TimedeltaIndex(GenericIndex):
 
     def to_pandas(self):
         return pd.TimedeltaIndex(
-            self._values.to_pandas(nullable_pd_dtype=False),
+            self._values.to_pandas(),
             name=self.name,
             unit=self._values.time_unit,
         )
