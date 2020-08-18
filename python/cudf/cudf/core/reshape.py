@@ -687,12 +687,12 @@ def merge_sorted(
 
 def _pivot(df, index, columns):
     """
-    Pivot a DataFrame to the given index and column labels
+    Reorganize the values of the DataFrame according to the given
+    index and columns.
 
     Parameters
     ----------
     df : DataFrame
-        DataFrame containing values to pivot
     index : cudf.core.index.Index
         Index labels of the result
     columns : cudf.core.index.Index
@@ -755,9 +755,6 @@ def pivot(df, index=None, columns=None, values=None):
 
     Examples
     --------
-
-    Pivot values to given index and a column:
-
     >>> a = cudf.DataFrame()
     >>> a['a'] = [1, 1, 2, 2],
     >>> a['b'] = ['a', 'b', 'a', 'b']
@@ -781,6 +778,7 @@ def pivot(df, index=None, columns=None, values=None):
         a
         1   one   two   <NA>
         2  <NA>  <NA>  three
+
     """
     if values is None:
         values = df._columns_view(
@@ -810,16 +808,86 @@ def pivot(df, index=None, columns=None, values=None):
     return _pivot(values, index, columns)
 
 
-def unstack(df, level, fill_value=None):
+def unstack(df, level):
     """
-    TODO
+    Pivot one or more levels of the (necessarily hierarchical) index labels.
+
+    Pivots the specified levels of the index labels of df to the innermost
+    levels of the columns labels of the result.
+
+    Parameters
+    ----------
+    df : DataFrame
+    level : level name or index, list-like
+        Integer, name or list of such, specifying one or more
+        levels of the index to pivot
+
+    Returns
+    -------
+    DataFrame with specified index levels pivoted to column levels
+
+    Examples
+    --------
+    >>> df['a'] = [1, 1, 1, 2, 2]
+    >>> df['b'] = [1, 2, 3, 1, 2]
+    >>> df['c'] = [5, 6, 7, 8, 9]
+    >>> df['d'] = ['a', 'b', 'a', 'd', 'e']
+    >>> df = df.set_index(['a', 'b', 'd'])
+    >>> df
+           c
+    a b d
+    1 1 a  5
+      2 b  6
+      3 a  7
+    2 1 d  8
+      2 e  9
+
+    Unstacking level 'a':
+
+    >>> df.unstack('a')
+            c
+    a       1     2
+    b d
+    1 a     5  <NA>
+      d  <NA>     8
+    2 b     6  <NA>
+      e  <NA>     9
+    3 a     7  <NA>
+
+    Unstacking level 'd' :
+
+    >>> df.unstack('d')
+            c
+    d       a     b     d     e
+    a b
+    1 1     5  <NA>  <NA>  <NA>
+      2  <NA>     6  <NA>  <NA>
+      3     7  <NA>  <NA>  <NA>
+    2 1  <NA>  <NA>     8  <NA>
+      2  <NA>  <NA>  <NA>     9
+
+    Unstacking multiple levels:
+
+    >>> df.unstack(['b', 'd'])
+          c
+    b     1           2           3
+    d     a     d     b     e     a
+    a
+    1     5  <NA>     6  <NA>     7
+    2  <NA>     8  <NA>     9  <NA>
     """
     if pd.api.types.is_list_like(level):
         if not level:
             return df
-    df = df.copy()
-    columns = df.index._poplevels(level)
-    index = df.index
+    df = df.copy(deep=False)
+    if not isinstance(df.index, cudf.MultiIndex):
+        raise NotImplementedError(
+            "Calling unstack() on a DataFrame without a MultiIndex "
+            "is not supported"
+        )
+    else:
+        columns = df.index._poplevels(level)
+        index = df.index
     result = _pivot(df, index, columns)
     if result.index.nlevels == 1:
         result.index = result.index.get_level_values(result.index.names[0])
