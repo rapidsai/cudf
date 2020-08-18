@@ -105,6 +105,7 @@
 - PR #5386 Remove `cub` from `include_dirs` in `setup.py`
 - PR #5373 Remove legacy nvstrings/nvcategory/nvtext
 - PR #5362 Remove dependency on `rmm._DevicePointer`
+- PR #6015 Upgrade CUB/Thrust to the latest commit
 - PR #5302 Add missing comparison operators to `fixed_point` type
 - PR #5824 Mark host frames as not needing to be writeable
 - PR #5354 Split Dask deserialization methods by dask/cuda
