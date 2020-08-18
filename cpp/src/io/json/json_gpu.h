@@ -19,6 +19,8 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 
+#include <thrust/optional.h>
+
 #include <hash/concurrent_unordered_map.cuh>
 
 #include <io/utilities/parsing_utils.cuh>
@@ -99,7 +101,7 @@ void collect_keys_info(const char *data,
                        const uint64_t *rec_starts,
                        cudf::size_type num_records,
                        unsigned long long int *keys_cnt,
-                       mutable_table_device_view *keys_info,
+                       thrust::optional<mutable_table_device_view> keys_info,
                        cudaStream_t stream = 0);
 
 }  // namespace gpu
