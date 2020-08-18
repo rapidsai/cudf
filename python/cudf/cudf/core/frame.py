@@ -1830,7 +1830,7 @@ class Frame(libcudf.table.Table):
     @classmethod
     @annotate("FROM_ARROW", color="orange", domain="cudf_python")
     def from_arrow(cls, data):
-        """Convert from a PyArrow Table to Frame
+        """Convert from PyArrow Table to Frame
 
         Parameters
         ----------

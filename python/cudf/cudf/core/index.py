@@ -228,11 +228,11 @@ class Index(Frame, Serializable):
 
     @classmethod
     def from_arrow(cls, array):
-        """Convert PyArrow array to Index
+        """Convert PyArrow Array/ChunkedArray to Index
 
         Parameters
         ----------
-        array : PyArrow array/chunked array
+        array : PyArrow Array/ChunkedArray
             PyArrow Object which has to be converted to Index
 
         Raises
@@ -254,11 +254,11 @@ class Index(Frame, Serializable):
         return cls(cudf.core.column.column.ColumnBase.from_arrow(array))
 
     def to_arrow(self):
-        """Convert Index to PyArrow array
+        """Convert Index to PyArrow Array
 
         Returns
         -------
-        PyArrow array
+        PyArrow Array
 
         Examples
         --------

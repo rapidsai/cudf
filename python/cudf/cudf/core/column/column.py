@@ -287,7 +287,7 @@ class ColumnBase(Column, Serializable):
         return dropped_col
 
     def to_arrow(self):
-        """Convert from column to PyArrow Array
+        """Convert to PyArrow Array
 
         Examples
         --------
@@ -357,7 +357,7 @@ class ColumnBase(Column, Serializable):
 
         Parameters
         ----------
-        array : PyArrow array/chunked array
+        array : PyArrow Array/ChunkedArray
 
         Returns
         -------

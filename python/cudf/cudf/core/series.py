@@ -395,10 +395,10 @@ class Series(Frame, Serializable):
 
     @classmethod
     def from_arrow(cls, array):
-        """Convert from a PyArrow Array to Series.
+        """Convert from PyArrow Array/ChunkedArray to Series.
         Parameters
         ----------
-        array : PyArrow Object
+        array : PyArrow Array/ChunkedArray
             PyArrow Object which has to be converted to cudf Series.
 
         Raises

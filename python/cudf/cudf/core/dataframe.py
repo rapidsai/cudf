@@ -4773,14 +4773,16 @@ class DataFrame(Frame, Serializable):
 
     @classmethod
     def from_arrow(cls, table):
-        """Convert from a PyArrow Table to DataFrame.
+        """Convert from PyArrow Table to DataFrame.
         Parameters
         ----------
         table : PyArrow Table Object
             PyArrow Table Object which has to be converted to cudf DataFrame.
+
         Raises
         ------
         TypeError for invalid input type.
+
         Returns
         -------
         cudf DataFrame
@@ -4789,6 +4791,7 @@ class DataFrame(Frame, Serializable):
         -----
         -   Does not support automatically setting index column(s) similar
             to how ``to_pandas`` works for PyArrow Tables.
+
         Examples
         --------
         >>> import cudf
