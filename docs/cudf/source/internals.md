@@ -27,7 +27,7 @@ A column is composed of the following:
   to 64 bytes.
 * A tuple of **children** columns, which enable the representation complex types such as
   columns with non-fixed width elements (e.g., strings, lists).
-* A *size* indicating the number of elements in the Column  
+* A *size* indicating the number of elements in the Column.
 * If the Column represents a slice, an integer **offset** into the first element of the slice.
   The size of the Column then gives the extent of the slice.
 
