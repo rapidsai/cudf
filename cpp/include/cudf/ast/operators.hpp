@@ -55,26 +55,6 @@ enum class ast_operator {
   BITWISE_XOR,    ///< operator ^
   LOGICAL_AND,    ///< operator &&
   LOGICAL_OR,     ///< operator ||
-  /*
-  COALESCE,       ///< operator x,y  x is null ? y : x
-  // GENERIC_BINARY,        ///< generic binary operator to be generated with input
-  //                       ///< ptx code
-  SHIFT_LEFT,            ///< operator <<
-  SHIFT_RIGHT,           ///< operator >>
-  SHIFT_RIGHT_UNSIGNED,  ///< operator >>> (from Java)
-                         ///< Logical right shift. Casts to an unsigned value before shifting.
-  LOG_BASE,              ///< logarithm to the base
-  ATAN2,                 ///< 2-argument arctangent
-  PMOD,                  ///< positive modulo operator
-                         ///< If remainder is negative, this returns (remainder + divisor) % divisor
-                         ///< else, it returns (dividend % divisor)
-  NULL_EQUALS,           ///< Returns true when both operands are null; false when one is null; the
-                         ///< result of equality when both are non-null
-  NULL_MAX,              ///< Returns max of operands when both are non-null; returns the non-null
-                         ///< operand when one is null; or invalid when both are null
-  NULL_MIN,              ///< Returns min of operands when both are non-null; returns the non-null
-                         ///< operand when one is null; or invalid when both are null
-  */
   // Unary operators
   IDENTITY,    ///< Identity function
   SIN,         ///< Trigonometric sine
@@ -99,26 +79,43 @@ enum class ast_operator {
   RINT,        ///< Rounds the floating-point argument arg to an integer value
   BIT_INVERT,  ///< Bitwise Not (~)
   NOT,         ///< Logical Not (!)
-  // Other operators included in BlazingSQL (TODO: may or may not implement)
+  // Other operators -- not implemented
   /*
-  IS_NULL,            ///< Unary comparator returning whether the value is null
-  COMPONENT_YEAR,     ///< Get year from a timestamp
-  COMPONENT_MONTH,    ///< Get month from a timestamp
-  COMPONENT_DAY,      ///< Get day from a timestamp
-  COMPONENT_WEEKDAY,  ///< Get weekday from a timestamp
-  COMPONENT_HOUR,     ///< Get hour from a timestamp
-  COMPONENT_MINUTE,   ///< Get minute from a timestamp
-  COMPONENT_SECOND,   ///< Get second from a timestamp
-  ROUND,              ///< Round a value to a desired precision
-  IS_NOT_NULL,        ///< Unary comparator returning whether the value is not null
-  COTAN,              ///< Trigonometric cotangent
-  CAST,               ///< Type cast operator (TODO: special case)
-  CHAR_LENGTH,        ///< String length
-  RAND,               ///< Random number (nullary operator)
-  NOW,                ///< Current timestamp
-  ROW,                ///< Current row of the table
-  THREAD_ID,          ///< Could be useful for debugging
-  BLOCK_ID            ///< Could be useful for debugging
+  COALESCE,              ///< operator x,y  x is null ? y : x
+  GENERIC_BINARY,        ///< generic binary operator from ptx code
+  SHIFT_LEFT,            ///< operator <<
+  SHIFT_RIGHT,           ///< operator >>
+  SHIFT_RIGHT_UNSIGNED,  ///< operator >>> (from Java)
+                         ///< Logical right shift. Casts to an unsigned value before shifting.
+  LOG_BASE,              ///< logarithm to the base
+  ATAN2,                 ///< 2-argument arctangent
+  PMOD,                  ///< positive modulo operator
+                         ///< If remainder is negative, this returns (remainder + divisor) % divisor
+                         ///< else, it returns (dividend % divisor)
+  NULL_EQUALS,           ///< Returns true when both operands are null; false when one is null; the
+                         ///< result of equality when both are non-null
+  NULL_MAX,              ///< Returns max of operands when both are non-null; returns the non-null
+                         ///< operand when one is null; or invalid when both are null
+  NULL_MIN,              ///< Returns min of operands when both are non-null; returns the non-null
+                         ///< operand when one is null; or invalid when both are null
+  IS_NULL,               ///< Unary comparator returning whether the value is null
+  COMPONENT_YEAR,        ///< Get year from a timestamp
+  COMPONENT_MONTH,       ///< Get month from a timestamp
+  COMPONENT_DAY,         ///< Get day from a timestamp
+  COMPONENT_WEEKDAY,     ///< Get weekday from a timestamp
+  COMPONENT_HOUR,        ///< Get hour from a timestamp
+  COMPONENT_MINUTE,      ///< Get minute from a timestamp
+  COMPONENT_SECOND,      ///< Get second from a timestamp
+  ROUND,                 ///< Round a value to a desired precision
+  IS_NOT_NULL,           ///< Unary comparator returning whether the value is not null
+  COTAN,                 ///< Trigonometric cotangent
+  CAST,                  ///< Type cast operator (TODO: special case)
+  CHAR_LENGTH,           ///< String length
+  RAND,                  ///< Random number (nullary operator)
+  NOW,                   ///< Current timestamp
+  ROW,                   ///< Current row of the table
+  THREAD_ID,             ///< Could be useful for debugging
+  BLOCK_ID               ///< Could be useful for debugging
   */
 };
 
