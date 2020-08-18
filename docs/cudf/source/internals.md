@@ -20,7 +20,7 @@ specialized based on the type of data they contain. Thus we have `NumericalColum
 A column is composed of the following:
 
 * A **data type**, specifying the type of each element.
-* A **mask buffer** that may store the data for the column elements.
+* A **data buffer** that may store the data for the column elements.
   Some column types do not have a data buffer, instead storing data in the children columns.
 * A **mask buffer** whose bits represent the validity (null or not null) of each element.
   Columns whose elements are all "valid" may not have a mask buffer.
