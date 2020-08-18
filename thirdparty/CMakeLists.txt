@@ -8,11 +8,9 @@ message("Fetching CUB")
 FetchContent_Declare(
     cub
     GIT_REPOSITORY https://github.com/thrust/cub.git
-    GIT_TAG        1.9.10
+    # August 17, 2020
+    GIT_TAG        2442f44532ffcc53298c7e3a298feb5134563860
     GIT_SHALLOW    true
-    # TODO(rongou): remove this after upgrading to new CUB release.
-    PATCH_COMMAND
-        COMMAND    sed -i "494 a histogram_sweep_config.template Init<typename Policy110::HistogramSweepPolicy>()$<SEMICOLON>" cub/device/dispatch/dispatch_histogram.cuh
 )
 
 FetchContent_GetProperties(cub)
@@ -30,7 +28,8 @@ message("Fetching Thrust")
 FetchContent_Declare(
     thrust
     GIT_REPOSITORY https://github.com/thrust/thrust.git
-    GIT_TAG        1.9.10
+    # August 17, 2020
+    GIT_TAG        f881e4b77833f4b4cb90e998a6c634eaabc2da61
     GIT_SHALLOW    true
 )
 

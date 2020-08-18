@@ -70,14 +70,18 @@ auto create_device_views(std::vector<column_view> const& views, cudaStream_t str
   auto d_views = rmm::device_vector<column_device_view>{device_views};
 
   // Compute the partition offsets
+  // Note: Using 64-bit size_t so we can detect overflow of 32-bit size_type
+  // Note: Using separate transform and inclusive_scan because transform_inclusive_scan fails to
+  // compile with:
+  // error: no suitable constructor exists to convert from "size_t" to "cudf::column_device_view"
   auto offsets = thrust::host_vector<size_t>(views.size() + 1);
-  thrust::transform_inclusive_scan(
-    thrust::host,
-    device_views.cbegin(),
-    device_views.cend(),
-    std::next(offsets.begin()),
-    [](auto const& col) { return col.size(); },
-    thrust::plus<size_t>{});
+  thrust::transform(thrust::host,
+                    device_views.cbegin(),
+                    device_views.cend(),
+                    std::next(offsets.begin()),
+                    [](auto const& col) { return static_cast<size_t>(col.size()); });
+  thrust::inclusive_scan(
+    thrust::host, offsets.cbegin(), offsets.cend(), offsets.begin(), thrust::plus<size_t>{});
   auto const d_offsets   = rmm::device_vector<size_t>{offsets};
   auto const output_size = offsets.back();
 
