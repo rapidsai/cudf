@@ -311,6 +311,7 @@
 - PR #5949 Find Arrow include directory for JNI builds
 - PR #5964 Fix API doc page title tag
 - PR #5981 Handle `nat` in `fillna` for datetime and timedelta types
+- PR #6016 Fix benchmark fixture segfault
 
 
 # cuDF 0.14.0 (03 Jun 2020)
