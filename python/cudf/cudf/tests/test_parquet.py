@@ -5,6 +5,7 @@ import random
 from glob import glob
 from io import BytesIO
 from string import ascii_letters
+from packaging import version
 
 import numpy as np
 import pandas as pd
@@ -15,6 +16,8 @@ from pyarrow import parquet as pq
 import cudf
 from cudf.io.parquet import ParquetWriter, merge_parquet_filemetadata
 from cudf.tests.utils import assert_eq
+
+import cudf.tests.dataset_synthesizer as ds
 
 
 @pytest.fixture(scope="module")
@@ -314,6 +317,87 @@ def test_parquet_read_metadata(tmpdir, pdf):
     assert row_groups == num_row_groups(num_rows, row_group_size)
     for a, b in zip(col_names, pdf.columns):
         assert a == b
+
+
+def test_parquet_read_filtered(tmpdir):
+    # Generate data
+    fname = tmpdir.join("filtered.parquet")
+    ds.synthesize(fname, ds.simple)
+
+    # Get dataframes to compare
+    df = cudf.read_parquet(fname)
+    df_filtered = cudf.read_parquet(fname, filters=[("0", ">", 60)])
+
+    assert cudf.io.read_parquet_metadata(fname)[1] == 2048 / 64
+    assert len(df_filtered) < len(df)
+
+
+def test_parquet_read_filtered_everything(tmpdir):
+    # Generate data
+    fname = tmpdir.join("filtered_everything.parquet")
+    df = pd.DataFrame({"x": range(10), "y": list("aabbccddee")})
+    df.to_parquet(fname, row_group_size=2)
+
+    # Check filter
+    df_filtered = cudf.read_parquet(fname, filters=[("x", "==", 12)])
+    assert len(df_filtered) == 0
+    assert df_filtered["x"].dtype == "int64"
+    assert df_filtered["y"].dtype == "object"
+
+
+def test_parquet_read_filtered_multiple_files(tmpdir):
+    # Generate data
+    fname_0 = tmpdir.join("filtered_multiple_files_0.parquet")
+    df = pd.DataFrame({"x": range(10), "y": list("aabbccddee")})
+    df.to_parquet(fname_0, row_group_size=2)
+    fname_1 = tmpdir.join("filtered_multiple_files_1.parquet")
+    df = pd.DataFrame({"x": range(10), "y": list("aabbccddee")})
+    df.to_parquet(fname_1, row_group_size=2)
+    fname_2 = tmpdir.join("filtered_multiple_files_2.parquet")
+    df = pd.DataFrame(
+        {"x": [0, 1, 9, 9, 4, 5, 6, 7, 8, 9], "y": list("aabbzzddee")}
+    )
+    df.to_parquet(fname_2, row_group_size=2)
+
+    # Check filter
+    filtered_df = cudf.read_parquet(
+        [fname_0, fname_1, fname_2], filters=[("x", "==", 2)]
+    )
+    assert len(filtered_df) == 4
+
+
+@pytest.mark.skipif(
+    version.parse(pa.__version__) < version.parse("1.0.1"),
+    reason="pyarrow 1.0.0 needed for various operators and operand types",
+)
+@pytest.mark.parametrize(
+    "predicate,expected_len",
+    [
+        ([("z", "not in", [0, 1, 2, 3, 4])], 6),
+        ([[("x", "==", 9)], [("z", "not in", [0, 1, 2, 3, 4])]], 8),
+        ([[("x", "==", 0)], [("z", "==", 0)]], 4),
+        ([("x", "==", 0), ("z", "in", [7, 8])], 2),
+        ([("x", "==", 0), ("z", "!=", 0)], 2),
+        ([("x", "==", 0), ("z", "==", 0)], 0),
+        ([("y", "==", "c"), ("x", ">", 8)], 0),
+        ([("y", "==", "c"), ("x", ">=", 5)], 2),
+        ([[("y", "==", "c")], [("x", "<", 3)]], 6),
+    ],
+)
+def test_parquet_read_filtered_complex_predicate(
+    tmpdir, predicate, expected_len
+):
+    # Generate data
+    fname = tmpdir.join("filtered_complex_predicate.parquet")
+    df = pd.DataFrame(
+        {"x": range(10), "y": list("aabbccddee"), "z": reversed(range(10))}
+    )
+    df.to_parquet(fname, row_group_size=2)
+
+    # Check filters
+    assert cudf.io.read_parquet_metadata(fname)[1] == 10 / 2
+    df_filtered = cudf.read_parquet(fname, filters=predicate)
+    assert len(df_filtered) == expected_len
 
 
 @pytest.mark.parametrize("row_group_size", [1, 5, 100])

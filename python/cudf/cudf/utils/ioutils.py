@@ -112,6 +112,20 @@ engine : {{ 'cudf', 'pyarrow' }}, default 'cudf'
     Parser engine to use.
 columns : list, default None
     If not None, only these columns will be read.
+filters : list of tuple, list of lists of tuples default None
+    If not None, specifies a filter predicate used to filter out row groups
+    using statistics stored for each row group as Parquet metadata. Row groups
+    that do not match the given filter predicate are not read. The
+    predicate is expressed in disjunctive normal form (DNF) like
+    `[[('x', '=', 0), ...], ...]`. DNF allows arbitrary boolean logical
+    combinations of single column predicates. The innermost tuples each
+    describe a single column predicate. The list of inner predicates is
+    interpreted as a conjunction (AND), forming a more selective and
+    multiple column predicate. Finally, the most outer list combines
+    these filters as a disjunction (OR). Predicates may also be passed
+    as a list of tuples. This form is interpreted as a single conjunction.
+    To express OR in predicates, one must use the (preferred) notation of
+    list of lists of tuples.
 row_groups : int, or list, or a list of lists default None
     If not None, specifies, for each input file, which row groups to read.
     If reading multiple inputs, a list of lists should be passed, one list
@@ -1065,3 +1079,106 @@ def buffer_write_lines(buf, lines):
     if any(isinstance(x, str) for x in lines):
         lines = [str(x) for x in lines]
     buf.write("\n".join(lines))
+
+
+def _check_contains_null(val):
+    if isinstance(val, bytes):
+        for byte in val:
+            if isinstance(byte, bytes):
+                compare_to = chr(0)
+            else:
+                compare_to = 0
+            if byte == compare_to:
+                return True
+    elif isinstance(val, str):
+        return "\x00" in val
+    return False
+
+
+def _check_filters(filters, check_null_strings=True):
+    """
+    Check if filters are well-formed.
+    """
+    if filters is not None:
+        if len(filters) == 0 or any(len(f) == 0 for f in filters):
+            raise ValueError("Malformed filters")
+        if isinstance(filters[0][0], str):
+            # We have encountered the situation where we have one nesting level
+            # too few:
+            #   We have [(,,), ..] instead of [[(,,), ..]]
+            filters = [filters]
+        if check_null_strings:
+            for conjunction in filters:
+                for col, op, val in conjunction:
+                    if (
+                        isinstance(val, list)
+                        and all(_check_contains_null(v) for v in val)
+                        or _check_contains_null(val)
+                    ):
+                        raise NotImplementedError(
+                            "Null-terminated binary strings are not supported "
+                            "as filter values."
+                        )
+    return filters
+
+
+# TODO: Use PyArrow once filters-to-expression conversion is added to
+# API by resolving https://issues.apache.org/jira/browse/ARROW-9672
+def filters_to_expression(filters):
+    """
+    Check if filters are well-formed.
+    """
+    import pyarrow.dataset as ds
+
+    if isinstance(filters, ds.Expression):
+        return filters
+
+    filters = _check_filters(filters, check_null_strings=False)
+
+    def convert_single_predicate(col, op, val):
+        field = ds.field(col)
+
+        if op == "=" or op == "==":
+            return field == val
+        elif op == "!=":
+            return field != val
+        elif op == "<":
+            return field < val
+        elif op == ">":
+            return field > val
+        elif op == "<=":
+            return field <= val
+        elif op == ">=":
+            return field >= val
+        elif op == "in":
+            return field.isin(val)
+        elif op == "not in":
+            return ~field.isin(val)
+        else:
+            raise ValueError(
+                '"{0}" is not a valid operator in predicates.'.format(
+                    (col, op, val)
+                )
+            )
+
+    or_exprs = []
+
+    for conjunction in filters:
+        and_exprs = []
+        for col, op, val in conjunction:
+            and_exprs.append(convert_single_predicate(col, op, val))
+
+        expr = and_exprs[0]
+        if len(and_exprs) > 1:
+            for and_expr in and_exprs[1:]:
+                expr = ds.AndExpression(expr, and_expr)
+
+        or_exprs.append(expr)
+
+    expr = or_exprs[0]
+    if len(or_exprs) > 1:
+        expr = ds.OrExpression(*or_exprs)
+        for or_expr in or_exprs[1:]:
+            expr = ds.OrExpression(expr, or_expr)
+
+    return expr

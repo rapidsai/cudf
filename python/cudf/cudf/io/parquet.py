@@ -5,6 +5,7 @@ import warnings
 from fsspec.core import get_fs_token_paths
 from pyarrow import parquet as pq
 from pyarrow.compat import guid
+from pyarrow import dataset as ds
 
 import cudf
 from cudf._lib import parquet as libparquet
@@ -169,6 +170,7 @@ def read_parquet(
     filepath_or_buffer,
     engine="cudf",
     columns=None,
+    filters=None,
     row_groups=None,
     skip_rows=None,
     num_rows=None,
@@ -202,6 +204,51 @@ def read_parquet(
                 "URL content-encoding decompression is not supported"
             )
         filepaths_or_buffers.append(tmp_source)
+
+    if filters is not None:
+        # Convert filters to ds.Expression
+        filters = ioutils.filters_to_expression(filters)
+
+        # Initialize ds.FilesystemDataset
+        dataset = ds.dataset(filepaths_or_buffers, format="parquet")
+
+        # Load IDs of filtered row groups for each file in dataset
+        filtered_rg_ids = {}
+        for fragment in dataset.get_fragments(filter=filters):
+            for rg_fragment in fragment.get_row_group_fragments(filters):
+                for rg_id in rg_fragment.row_groups:
+                    path = rg_fragment.path
+                    if path not in filtered_rg_ids:
+                        filtered_rg_ids[path] = [rg_id]
+                    else:
+                        filtered_rg_ids[path].append(rg_id)
+
+        # TODO: Use this with pyarrow 1.0.0
+        # # Load IDs of filtered row groups for each file in dataset
+        # filtered_row_group_ids = {}
+        # for fragment in dataset.get_fragments(filters):
+        #     for row_group_fragment in fragment.split_by_row_group(filters):
+        #         for row_group_info in row_group_fragment.row_groups:
+        #             path = row_group_fragment.path
+        #             if path not in filtered_row_group_ids:
+        #                 filtered_row_group_ids[path] = [row_group_info.id]
+        #             else:
+        #                 filtered_row_group_ids[path].append(row_group_info.id)
+
+        # Initialize row_groups to be selected
+        if row_groups is None:
+            row_groups = [None for _ in dataset.files]
+
+        # Store IDs of selected row groups for each file
+        for i, file in enumerate(dataset.files):
+            if row_groups[i] is None:
+                row_groups[i] = (
+                    filtered_rg_ids[file] if file in filtered_rg_ids else []
+                )
+            else:
+                row_groups[i] = filter(
+                    lambda id: id in row_groups[i], filtered_rg_ids[file]
+                )
 
     if engine == "cudf":
         return libparquet.read_parquet(

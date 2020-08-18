@@ -131,6 +131,131 @@ TEST_F(SliceStringTest, StringWithNullsAsColumn)
   }
 }
 
+struct SliceListTest : public SliceTest<int> {
+};
+
+TEST_F(SliceListTest, Lists)
+{
+  using LCW = cudf::test::lists_column_wrapper<int>;
+
+  {
+    cudf::test::lists_column_wrapper<int> list{{1, 2, 3},
+                                               {4, 5},
+                                               {6},
+                                               {7, 8},
+                                               {9, 10, 11},
+                                               LCW{},
+                                               LCW{},
+                                               {-1, -2, -3, -4, -5},
+                                               {-10},
+                                               {-100, -200}};
+
+    std::vector<cudf::size_type> indices{1, 3, 2, 4, 1, 9};
+
+    std::vector<cudf::test::lists_column_wrapper<int>> expected;
+    expected.push_back(LCW{{4, 5}, {6}});
+    expected.push_back(LCW{{6}, {7, 8}});
+    expected.push_back(
+      LCW{{4, 5}, {6}, {7, 8}, {9, 10, 11}, LCW{}, LCW{}, {-1, -2, -3, -4, -5}, {-10}});
+
+    std::vector<cudf::column_view> result = cudf::slice(list, indices);
+    EXPECT_EQ(expected.size(), result.size());
+
+    for (unsigned long index = 0; index < result.size(); index++) {
+      cudf::test::expect_columns_equivalent(expected[index], result[index]);
+    }
+  }
+
+  {
+    cudf::test::lists_column_wrapper<int> list{{{1, 2, 3}, {4, 5}},
+                                               {LCW{}, LCW{}, {7, 8}, LCW{}},
+                                               {{{6}}},
+                                               {{7, 8}, {9, 10, 11}, LCW{}},
+                                               {LCW{}, {-1, -2, -3, -4, -5}},
+                                               {LCW{}},
+                                               {{-10}, {-100, -200}}};
+
+    std::vector<cudf::size_type> indices{1, 3, 3, 6};
+
+    std::vector<cudf::test::lists_column_wrapper<int>> expected;
+    expected.push_back(LCW{{LCW{}, LCW{}, {7, 8}, LCW{}}, {{{6}}}});
+    expected.push_back(LCW{{{7, 8}, {9, 10, 11}, LCW{}}, {LCW{}, {-1, -2, -3, -4, -5}}, {LCW{}}});
+
+    std::vector<cudf::column_view> result = cudf::slice(list, indices);
+    EXPECT_EQ(expected.size(), result.size());
+
+    for (unsigned long index = 0; index < result.size(); index++) {
+      cudf::test::expect_columns_equivalent(expected[index], result[index]);
+    }
+  }
+}
+
+TEST_F(SliceListTest, ListsWithNulls)
+{
+  using LCW = cudf::test::lists_column_wrapper<int>;
+
+  auto valids = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+
+  {
+    cudf::test::lists_column_wrapper<int> list{{1, 2, 3},
+                                               {4, 5},
+                                               {6},
+                                               {{7, 8}, valids},
+                                               {9, 10, 11},
+                                               LCW{},
+                                               LCW{},
+                                               {{-1, -2, -3, -4, -5}, valids},
+                                               {-10},
+                                               {{-100, -200}, valids}};
+
+    std::vector<cudf::size_type> indices{1, 3, 2, 4, 1, 9};
+
+    std::vector<cudf::test::lists_column_wrapper<int>> expected;
+    expected.push_back(LCW{{4, 5}, {6}});
+    expected.push_back(LCW{{6}, {{7, 8}, valids}});
+    expected.push_back(LCW{{4, 5},
+                           {6},
+                           {{7, 8}, valids},
+                           {9, 10, 11},
+                           LCW{},
+                           LCW{},
+                           {{-1, -2, -3, -4, -5}, valids},
+                           {-10}});
+
+    std::vector<cudf::column_view> result = cudf::slice(list, indices);
+    EXPECT_EQ(expected.size(), result.size());
+
+    for (unsigned long index = 0; index < result.size(); index++) {
+      cudf::test::expect_columns_equivalent(expected[index], result[index]);
+    }
+  }
+
+  {
+    cudf::test::lists_column_wrapper<int> list{{{{1, 2, 3}, valids}, {4, 5}},
+                                               {{LCW{}, LCW{}, {7, 8}, LCW{}}, valids},
+                                               {{{6}}},
+                                               {{{7, 8}, {{9, 10, 11}, valids}, LCW{}}, valids},
+                                               {{LCW{}, {-1, -2, -3, -4, -5}}, valids},
+                                               {LCW{}},
+                                               {{-10}, {-100, -200}}};
+
+    std::vector<cudf::size_type> indices{1, 3, 3, 6};
+
+    std::vector<cudf::test::lists_column_wrapper<int>> expected;
+    expected.push_back(LCW{{{LCW{}, LCW{}, {7, 8}, LCW{}}, valids}, {{{6}}}});
+    expected.push_back(LCW{{{{7, 8}, {{9, 10, 11}, valids}, LCW{}}, valids},
+                           {{LCW{}, {-1, -2, -3, -4, -5}}, valids},
+                           {LCW{}}});
+
+    std::vector<cudf::column_view> result = cudf::slice(list, indices);
+    EXPECT_EQ(expected.size(), result.size());
+
+    for (unsigned long index = 0; index < result.size(); index++) {
+      cudf::test::expect_columns_equivalent(expected[index], result[index]);
+    }
+  }
+}
+
 struct SliceCornerCases : public SliceTest<int8_t> {
 };
 
