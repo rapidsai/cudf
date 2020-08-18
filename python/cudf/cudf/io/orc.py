@@ -77,7 +77,7 @@ def read_orc(
         orc_file = orc.ORCFile(filepath_or_buffer)
         if stripe is not None:
             pa_table = read_orc_stripe(orc_file, stripe, columns)
-        elif stripes is not None:
+        elif stripes is not None and len(stripes) > 0:
             pa_tables = [
                 read_orc_stripe(orc_file, i, columns) for i in stripes
             ]
