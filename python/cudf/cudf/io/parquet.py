@@ -353,9 +353,6 @@ def read_parquet(
                     lambda id: id in row_groups[i], filtered_rg_ids[file]
                 )
 
-    if row_groups == [[]] or columns == []:
-        return cudf.DataFrame()
-
     if engine == "cudf":
         return libparquet.read_parquet(
             filepaths_or_buffers,

@@ -326,10 +326,23 @@ def test_parquet_read_filtered(tmpdir):
 
     # Get dataframes to compare
     df = cudf.read_parquet(fname)
-    df_filtered = cudf.read_parquet(fname, filters=[("0", ">", "60")])
+    df_filtered = cudf.read_parquet(fname, filters=[("0", ">", 60)])
 
     assert cudf.io.read_parquet_metadata(fname)[1] == 2048 / 64
     assert len(df_filtered) < len(df)
+
+
+def test_parquet_read_filtered_everything(tmpdir):
+    # Generate data
+    fname = tmpdir.join("filtered_everything.parquet")
+    df = pd.DataFrame({"x": range(10), "y": list("aabbccddee")})
+    df.to_parquet(fname, row_group_size=2)
+
+    # Check filter
+    df_filtered = cudf.read_parquet(fname, filters=[("x", "==", 12)])
+    assert len(df_filtered) == 0
+    assert df_filtered["x"].dtype == "int64"
+    assert df_filtered["y"].dtype == "object"
 
 
 def test_parquet_read_filtered_multiple_files(tmpdir):
