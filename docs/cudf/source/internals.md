@@ -121,7 +121,7 @@ things like selecting multiple columns (both by index and label), as well as hie
 >>> from cudf.core.column_accessor import ColumnAccessor
 ```
 
-A ColumnAccessor behaves like an OrderedDict, its values are coerced to Columns during construction:
+A ColumnAccessor behaves like an OrderedDict; its values are coerced to Columns during construction:
 
 ```python
 >>> ca = ColumnAccessor({'x': [1, 2, 3], 'y': ['a', 'b', 'c']})
