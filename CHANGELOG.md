@@ -74,6 +74,7 @@
 - PR #5903 Add duration support for Parquet reader, writer
 - PR #5845 Add support for `mask_to_bools`
 - PR #5851 Add support for `Index.sort_values`
+- PR #5904 Add slice/split support for LIST columns
 - PR #5857 Add dtypes information page in python docs
 - PR #5859 Add conversion form `fixed_point` to `bool`
 - PR #5781 Add duration types support in cudf(python/cython)
