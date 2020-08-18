@@ -66,7 +66,7 @@ include_directories("${CUB_INCLUDE_DIR}"
 
 if(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
     include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
-endif()
+endif(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
 
 include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
@@ -74,8 +74,11 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include"
                     "${ARROW_INCLUDE_DIR}"
-                    "${HUNTER_ROOT}/Install/include"
                     "${RMM_INCLUDE}")
+
+if(HUNTER_ENABLED)
+    include_directories("${HUNTER_ROOT}/Install/include")
+endif(HUNTER_ENABLED)
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------

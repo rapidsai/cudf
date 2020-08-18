@@ -23,6 +23,8 @@ HunterGate(
 
 project(CUDA_DATAFRAME VERSION 0.15.0 LANGUAGES C CXX CUDA)
 
+find_package(CUDAToolkit)
+
 if(NOT CMAKE_CUDA_COMPILER)
   message(SEND_ERROR "CMake cannot locate a CUDA compiler")
 endif(NOT CMAKE_CUDA_COMPILER)
@@ -190,11 +192,6 @@ elseif(DEFINED ENV{CONDA_PREFIX})
 endif("$ENV{CONDA_BUILD}" STREQUAL "1")
 
 ###################################################################################################
-# - find CIDAToolkit ------------------------------------------------------------------------------------
-
-find_package(CUDAToolkit)
-
-###################################################################################################
 # - find arrow ------------------------------------------------------------------------------------
 
 option(ARROW_STATIC_LIB "Build and statically link with Arrow libraries" OFF)
@@ -317,8 +314,6 @@ if(BUILD_TESTS)
     if(GTest_FOUND)
         message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
         add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
-        set(GTest_LIBRARIES "GTest")
-        
     else()
         message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
     endif(GTest_FOUND)
@@ -337,7 +332,6 @@ if(BUILD_BENCHMARKS)
   if(benchmark_FOUND)
     message(STATUS "Google C++ Benchmarking Framework (Google Benchmark) found in ${BENCHMARK_ROOT}")
     add_subdirectory(${CMAKE_SOURCE_DIR}/benchmarks)
-    set(benchmark_LIBRARIES "benchmark")
   else()
     message(AUTHOR_WARNING "Google C++ Benchmarking Framework (Google Benchmark) not found: automated tests are disabled.")
   endif(benchmark_FOUND)
@@ -364,9 +358,12 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${ARROW_INCLUDE_DIR}"
-                    "${HUNTER_ROOT}/Install/include"
                     "${RMM_INCLUDE}"
                     "${DLPACK_INCLUDE}")
+
+if(HUNTER_ENABLED)
+    include_directories("${HUNTER_ROOT}/Install/include")
+endif(HUNTER_ENABLED)
 
 if(CONDA_INCLUDE_DIRS)
     include_directories("${CONDA_INCLUDE_DIRS}")
@@ -378,7 +375,6 @@ endif(CONDA_INCLUDE_DIRS)
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
                  "${CMAKE_BINARY_DIR}/lib"
                  "${CMAKE_BINARY_DIR}"
-                 "${HUNTER_ROOT}/Install"
                  "${RMM_LIBRARY}")
 
 if(CONDA_LINK_DIRS)
@@ -757,7 +753,9 @@ endif(HT_DEFAULT_ALLOCATOR)
 # - link libraries --------------------------------------------------------------------------------
 
 # link targets for cuDF
-target_link_libraries(cudf rmm arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda 
+target_link_libraries(cudf rmm 
+  arrow arrow_cuda 
+  nvrtc ${CUDART_LIBRARY} cuda 
   ${ZLIB_LIBRARIES} 
   ${Boost_LIBRARIES} 
   ${GTest_LIBRARIES} 
