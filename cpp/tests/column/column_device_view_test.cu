@@ -43,7 +43,7 @@ TEST_F(ColumnDeviceViewTest, Sample)
                                input_device_view->end<T>(),
                                output_device_view->begin<T>()));
 
-  cudf::test::expect_columns_equal(input, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(input, output->view());
 }
 
 TEST_F(ColumnDeviceViewTest, MismatchingType)

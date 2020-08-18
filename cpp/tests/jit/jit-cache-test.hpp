@@ -65,7 +65,7 @@ struct JitCacheTest : public ::testing::Test, public cudf::jit::cudfJitCache {
       .configure(grid, block)
       .launch(column.operator cudf::mutable_column_view().data<int>());
 
-    cudf::test::expect_columns_equal(expect, column);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, column);
   }
 
   const char* program_source =

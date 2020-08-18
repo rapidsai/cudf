@@ -83,13 +83,13 @@ class FillTypedTestFixture : public cudf::test::BaseFixture {
     // test out-of-place version first
 
     auto p_ret = cudf::fill(destination, begin, end, *p_val);
-    cudf::test::expect_columns_equal(*p_ret, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*p_ret, expected);
 
     // test in-place version second
 
     cudf::mutable_column_view mutable_view{destination};
     EXPECT_NO_THROW(cudf::fill_in_place(mutable_view, begin, end, *p_val));
-    cudf::test::expect_columns_equal(mutable_view, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(mutable_view, expected);
   }
 };
 
@@ -204,7 +204,7 @@ class FillStringTestFixture : public cudf::test::BaseFixture {
         }));
 
     auto p_ret = cudf::fill(destination, begin, end, *p_val);
-    cudf::test::expect_columns_equal(*p_ret, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*p_ret, expected);
   }
 };
 

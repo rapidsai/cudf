@@ -126,7 +126,7 @@ std::unique_ptr<column> gather_list_leaf(column_view const& column,
     leaf_column->set_null_mask(std::move(validity.first), validity.second);
   }
 
-  return std::move(leaf_column);
+  return leaf_column;
 }
 
 /**

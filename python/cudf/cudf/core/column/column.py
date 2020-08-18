@@ -27,6 +27,7 @@ from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils import ioutils, utils
 from cudf.utils.dtypes import (
+    NUMERIC_TYPES,
     check_cast_unsupported_dtype,
     get_time_unit,
     is_categorical_dtype,
@@ -120,8 +121,11 @@ class ColumnBase(Column, Serializable):
     def __len__(self):
         return self.size
 
-    def to_pandas(self, index=None, nullable_pd_dtype=False, **kwargs):
-        pd_series = self.to_arrow().to_pandas(**kwargs)
+    def to_pandas(self, index=None, **kwargs):
+        if str(self.dtype) in NUMERIC_TYPES and self.null_count == 0:
+            pd_series = pd.Series(cupy.asnumpy(self.values))
+        else:
+            pd_series = self.to_arrow().to_pandas(**kwargs)
         if index is not None:
             pd_series.index = index
         return pd_series
@@ -874,6 +878,12 @@ class ColumnBase(Column, Serializable):
     def astype(self, dtype, **kwargs):
         if is_categorical_dtype(dtype):
             return self.as_categorical_column(dtype, **kwargs)
+        elif is_list_dtype(dtype):
+            if not self.dtype == dtype:
+                raise NotImplementedError(
+                    "Casting list columns not currently supported"
+                )
+            return self
         elif np.issubdtype(dtype, np.datetime64):
             return self.as_datetime_column(dtype, **kwargs)
         elif np.issubdtype(dtype, np.timedelta64):
@@ -1105,7 +1115,9 @@ def column_empty(row_count, dtype="object", masked=False):
     else:
         mask = None
 
-    return build_column(data, dtype, mask=mask, children=children)
+    return build_column(
+        data, dtype, mask=mask, size=row_count, children=children
+    )
 
 
 def build_column(
@@ -1604,6 +1616,13 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             np_type = None
             try:
                 if dtype is not None:
+                    if is_list_dtype(dtype):
+                        data = pa.array(arbitrary)
+                        if type(data) not in (pa.ListArray, pa.NullArray):
+                            raise ValueError(
+                                "Cannot create list column from given data"
+                            )
+                        return as_column(data, nan_as_null=nan_as_null)
                     dtype = pd.api.types.pandas_dtype(dtype)
                     if is_categorical_dtype(dtype):
                         raise TypeError
