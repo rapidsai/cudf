@@ -11,6 +11,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib import string_casting as str_cast
 from cudf._lib.column import Column
+from cudf._lib.nvtext.edit_distance import edit_distance as cpp_edit_distance
 from cudf._lib.nvtext.generate_ngrams import (
     generate_character_ngrams as cpp_generate_character_ngrams,
     generate_ngrams as cpp_generate_ngrams,
@@ -144,6 +145,7 @@ from cudf.utils.dtypes import (
     is_scalar,
     is_string_dtype,
 )
+from cudf.utils.utils import buffers_from_pyarrow
 
 _str_to_numeric_typecast_functions = {
     np.dtype("int8"): str_cast.stoi8,
@@ -163,6 +165,10 @@ _str_to_numeric_typecast_functions = {
     np.dtype("datetime64[ms]"): str_cast.timestamp2int,
     np.dtype("datetime64[us]"): str_cast.timestamp2int,
     np.dtype("datetime64[ns]"): str_cast.timestamp2int,
+    np.dtype("timedelta64[s]"): str_cast.timedelta2int,
+    np.dtype("timedelta64[ms]"): str_cast.timedelta2int,
+    np.dtype("timedelta64[us]"): str_cast.timedelta2int,
+    np.dtype("timedelta64[ns]"): str_cast.timedelta2int,
 }
 
 _numeric_to_str_typecast_functions = {
@@ -183,6 +189,10 @@ _numeric_to_str_typecast_functions = {
     np.dtype("datetime64[ms]"): str_cast.int2timestamp,
     np.dtype("datetime64[us]"): str_cast.int2timestamp,
     np.dtype("datetime64[ns]"): str_cast.int2timestamp,
+    np.dtype("timedelta64[s]"): str_cast.int2timedelta,
+    np.dtype("timedelta64[ms]"): str_cast.int2timedelta,
+    np.dtype("timedelta64[us]"): str_cast.int2timedelta,
+    np.dtype("timedelta64[ns]"): str_cast.int2timedelta,
 }
 
 
@@ -4293,6 +4303,55 @@ class StringMethods(ColumnMethodsMixin):
             cpp_is_letter(self._column, ltype, position), **kwargs
         )
 
+    def edit_distance(self, targets, **kwargs):
+        """
+        The ``targets`` strings are measured against the strings in this
+        instance using the Levenshtein edit distance algorithm.
+        https://www.cuelogic.com/blog/the-levenshtein-algorithm
+
+        The ``targets`` parameter may also be a single string in which
+        case the edit distance is computed for all the strings against
+        that single string.
+
+        Parameters
+        ----------
+        targets : array-like, Sequence or Series or str
+            The string(s) to measure against each string.
+
+        Returns
+        -------
+        Series or Index of int32.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> sr = cudf.Series(["puppy", "doggy", "kitty"])
+        >>> targets = cudf.Series(["pup", "dogie", "kitten"])
+        >>> sr.str.edit_distance(targets=targets)
+        0    2
+        1    2
+        2    2
+        dtype: int32
+        >>> sr.str.edit_distance("puppy")
+        0    0
+        1    4
+        2    4
+        dtype: int32
+        """
+        if is_scalar(targets):
+            targets_column = column.as_column([targets])
+        elif can_convert_to_column(targets):
+            targets_column = column.as_column(targets)
+        else:
+            raise TypeError(
+                f"targets should be an str, array-like or Series object, "
+                f"found {type(targets)}"
+            )
+
+        return self._return_or_inplace(
+            cpp_edit_distance(self._column, targets_column), **kwargs
+        )
+
 
 def _massage_string_arg(value, name, allow_col=False):
     if isinstance(value, str):
@@ -4453,6 +4512,18 @@ class StringColumn(column.ColumnBase):
     def _set_mask(self, value):
         super()._set_mask(value)
 
+    @classmethod
+    def from_arrow(cls, array):
+        pa_size, pa_offset, nbuf, obuf, sbuf = buffers_from_pyarrow(array)
+        children = (
+            column.build_column(data=obuf, dtype="int32"),
+            column.build_column(data=sbuf, dtype="int8"),
+        )
+
+        return StringColumn(
+            mask=nbuf, children=children, size=pa_size, offset=pa_offset
+        )
+
     @property
     def _nbytes(self):
         if self.size == 0:
@@ -4469,12 +4540,25 @@ class StringColumn(column.ColumnBase):
             if "format" not in kwargs:
                 if len(self) > 0:
                     # infer on host from the first not na element
-                    fmt = datetime.infer_format(self[self.notna()][0])
-                    kwargs.update(format=fmt)
+                    # or return all null column if all values
+                    # are null in current column
+                    if self.null_count == len(self):
+                        return column.column_empty(
+                            len(self), dtype=out_dtype, masked=True
+                        )
+                    else:
+                        fmt = datetime.infer_format(self[self.notna()][0])
+                        kwargs.update(format=fmt)
 
             # Check for None strings
             if len(self) > 0 and self.binary_operator("eq", "None").any():
                 raise ValueError("Could not convert `None` value to datetime")
+
+            boolean_match = self.binary_operator("eq", "NaT")
+        elif out_dtype.type is np.timedelta64:
+            if "format" not in kwargs:
+                if len(self) > 0:
+                    kwargs.update(format="%D days %H:%M:%S")
 
             boolean_match = self.binary_operator("eq", "NaT")
         elif out_dtype.kind in {"i", "u"}:
@@ -4493,11 +4577,16 @@ class StringColumn(column.ColumnBase):
         result_col = _str_to_numeric_typecast_functions[out_dtype](
             self, **kwargs
         )
-        if (out_dtype.type is np.datetime64) and boolean_match.any():
+        if (
+            out_dtype.type in (np.datetime64, np.timedelta64)
+        ) and boolean_match.any():
             result_col[boolean_match] = None
         return result_col
 
     def as_datetime_column(self, dtype, **kwargs):
+        return self.as_numerical_column(dtype, **kwargs)
+
+    def as_timedelta_column(self, dtype, **kwargs):
         return self.as_numerical_column(dtype, **kwargs)
 
     def as_string_column(self, dtype, **kwargs):
@@ -4527,14 +4616,6 @@ class StringColumn(column.ColumnBase):
             return pa.StringArray.from_buffers(
                 len(self), obuf, sbuf, nbuf, self.null_count
             )
-
-    def to_pandas(self, index=None, nullable_pd_dtype=False):
-        pd_series = self.to_arrow().to_pandas()
-        if index is not None:
-            pd_series.index = index
-        if nullable_pd_dtype:
-            return pd_series.astype(pd.StringDtype(), copy=False)
-        return pd_series
 
     @property
     def values_host(self):

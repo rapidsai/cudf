@@ -104,7 +104,7 @@ TYPED_TEST(TypedColumnTest, ConcatenateColumnView)
 
   auto concatenated_col = cudf::concatenate(views);
 
-  cudf::test::expect_columns_equal(original, *concatenated_col);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(original, *concatenated_col);
 }
 
 struct StringColumnTest : public cudf::test::BaseFixture {
@@ -143,7 +143,7 @@ TEST_F(StringColumnTest, ConcatenateColumnView)
   auto results = cudf::concatenate(strings_columns);
 
   cudf::test::strings_column_wrapper expected(h_strings.begin(), h_strings.end());
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 struct TableTest : public cudf::test::BaseFixture {
@@ -183,7 +183,7 @@ TEST_F(TableTest, ConcatenateTables)
 
   auto concat_table = cudf::concatenate({t1.view(), t2.view()});
 
-  cudf::test::expect_tables_equal(*concat_table, gold_table);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*concat_table, gold_table);
 }
 
 TEST_F(TableTest, ConcatenateTablesWithOffsets)
@@ -214,7 +214,7 @@ TEST_F(TableTest, ConcatenateTablesWithOffsets)
     cudf::test::strings_column_wrapper exp2_1(
       {"dada", "kite", "dog", "ln", "ln", "dado", "greg", "spinach"});
     cudf::table_view table_view_exp1{{exp1_1, exp2_1}};
-    cudf::test::expect_tables_equal(concatenated_tables->view(), table_view_exp1);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(concatenated_tables->view(), table_view_exp1);
   }
   {
     std::vector<cudf::table_view> table_views_to_concat;
@@ -226,7 +226,7 @@ TEST_F(TableTest, ConcatenateTablesWithOffsets)
     cudf::test::strings_column_wrapper exp2_1(
       {"dada", "egg", "avocado", "ln", "dado", "greg", "spinach"});
     cudf::table_view table_view_exp1{{exp1_1, exp2_1}};
-    cudf::test::expect_tables_equal(concatenated_tables->view(), table_view_exp1);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(concatenated_tables->view(), table_view_exp1);
   }
   {
     std::vector<cudf::table_view> table_views_to_concat;
@@ -237,7 +237,7 @@ TEST_F(TableTest, ConcatenateTablesWithOffsets)
     column_wrapper<int32_t> exp1_1{{5, 8, 5, 6, 5, 8, 5}};
     cudf::test::strings_column_wrapper exp2_1({"dada", "kite", "dog", "ln", "dada", "kite", "dog"});
     cudf::table_view table_view_exp{{exp1_1, exp2_1}};
-    cudf::test::expect_tables_equal(concatenated_tables->view(), table_view_exp);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(concatenated_tables->view(), table_view_exp);
   }
 }
 
@@ -272,7 +272,7 @@ TEST_F(TableTest, ConcatenateTablesWithOffsetsAndNulls)
     cudf::test::strings_column_wrapper exp2_1(
       {"dada", "kite", "dog", "ln", "ln", "dado", "greg", "spinach"}, {0, 1, 1, 1, 1, 1, 1, 1});
     cudf::table_view table_view_exp1{{exp1_1, exp2_1}};
-    cudf::test::expect_tables_equal(concatenated_tables->view(), table_view_exp1);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(concatenated_tables->view(), table_view_exp1);
   }
   {
     std::vector<cudf::table_view> table_views_to_concat;
@@ -284,7 +284,7 @@ TEST_F(TableTest, ConcatenateTablesWithOffsetsAndNulls)
     cudf::test::strings_column_wrapper exp2_1({"dada", "kite", "dog", "ln", "dada", "kite", "dog"},
                                               {0, 1, 1, 1, 1, 0, 1});
     cudf::table_view table_view_exp1{{exp1_1, exp2_1}};
-    cudf::test::expect_tables_equal(concatenated_tables->view(), table_view_exp1);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(concatenated_tables->view(), table_view_exp1);
   }
 }
 
@@ -300,7 +300,7 @@ TEST_F(ListsColumnTest, ConcatenateLists)
 
     auto result = cudf::concatenate({a, b});
 
-    cudf::test::expect_columns_equal(*result, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 
   {
@@ -311,7 +311,7 @@ TEST_F(ListsColumnTest, ConcatenateLists)
 
     auto result = cudf::concatenate({a, b});
 
-    cudf::test::expect_columns_equal(*result, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 
   {
@@ -322,7 +322,7 @@ TEST_F(ListsColumnTest, ConcatenateLists)
 
     auto result = cudf::concatenate({a, b});
 
-    cudf::test::expect_columns_equal(*result, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 }
 
@@ -333,54 +333,54 @@ TEST_F(ListsColumnTest, ConcatenateEmptyLists)
   // empty lists in lists_column_wrapper documentation
   using LCW = cudf::test::lists_column_wrapper<int>;
   {
-    cudf::test::lists_column_wrapper<int> a{};
+    cudf::test::lists_column_wrapper<int> a;
     cudf::test::lists_column_wrapper<int> b{4, 5, 6, 7};
     cudf::test::lists_column_wrapper<int> expected{4, 5, 6, 7};
 
     auto result = cudf::concatenate({a, b});
 
-    cudf::test::expect_columns_equal(*result, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 
   {
-    cudf::test::lists_column_wrapper<int> a{}, b{}, c{};
+    cudf::test::lists_column_wrapper<int> a, b, c;
     cudf::test::lists_column_wrapper<int> d{4, 5, 6, 7};
     cudf::test::lists_column_wrapper<int> expected{4, 5, 6, 7};
 
     auto result = cudf::concatenate({a, b, c, d});
 
-    cudf::test::expect_columns_equal(*result, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 
   {
     cudf::test::lists_column_wrapper<int> a{LCW{}};
     cudf::test::lists_column_wrapper<int> b{4, 5, 6, 7};
-    cudf::test::lists_column_wrapper<int> expected{{}, {4, 5, 6, 7}};
+    cudf::test::lists_column_wrapper<int> expected{LCW{}, {4, 5, 6, 7}};
 
     auto result = cudf::concatenate({a, b});
 
-    cudf::test::expect_columns_equal(*result, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 
   {
     cudf::test::lists_column_wrapper<int> a{LCW{}}, b{LCW{}}, c{LCW{}};
     cudf::test::lists_column_wrapper<int> d{4, 5, 6, 7};
-    cudf::test::lists_column_wrapper<int> expected{{}, {}, {}, {4, 5, 6, 7}};
+    cudf::test::lists_column_wrapper<int> expected{LCW{}, LCW{}, LCW{}, {4, 5, 6, 7}};
 
     auto result = cudf::concatenate({a, b, c, d});
 
-    cudf::test::expect_columns_equal(*result, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 
   {
     cudf::test::lists_column_wrapper<int> a{1, 2};
     cudf::test::lists_column_wrapper<int> b{LCW{}}, c{LCW{}};
     cudf::test::lists_column_wrapper<int> d{4, 5, 6, 7};
-    cudf::test::lists_column_wrapper<int> expected{{1, 2}, {}, {}, {4, 5, 6, 7}};
+    cudf::test::lists_column_wrapper<int> expected{{1, 2}, LCW{}, LCW{}, {4, 5, 6, 7}};
 
     auto result = cudf::concatenate({a, b, c, d});
 
-    cudf::test::expect_columns_equal(*result, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 }
 
@@ -397,7 +397,7 @@ TEST_F(ListsColumnTest, ConcatenateListsWithNulls)
 
     auto result = cudf::concatenate({a, b});
 
-    cudf::test::expect_columns_equal(*result, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 }
 
@@ -411,7 +411,7 @@ TEST_F(ListsColumnTest, ConcatenateNestedLists)
 
     auto result = cudf::concatenate({a, b});
 
-    cudf::test::expect_columns_equal(*result, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 
   {
@@ -435,7 +435,7 @@ TEST_F(ListsColumnTest, ConcatenateNestedLists)
 
     auto result = cudf::concatenate({a, b});
 
-    cudf::test::expect_columns_equal(*result, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 }
 
@@ -446,7 +446,6 @@ TEST_F(ListsColumnTest, ConcatenateNestedEmptyLists)
   // Also, see note about compiler issues when declaring nested
   // empty lists in lists_column_wrapper documentation
   using LCW = cudf::test::lists_column_wrapper<T>;
-
   {
     cudf::test::lists_column_wrapper<T> a{{{LCW{}}}, {{0, 1}, {2, 3}}};
     cudf::test::lists_column_wrapper<int> b{{{6, 7}}, {LCW{}, {11, 12}}};
@@ -455,7 +454,7 @@ TEST_F(ListsColumnTest, ConcatenateNestedEmptyLists)
 
     auto result = cudf::concatenate({a, b});
 
-    cudf::test::expect_columns_equal(*result, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 
   {
@@ -481,7 +480,7 @@ TEST_F(ListsColumnTest, ConcatenateNestedEmptyLists)
 
     auto result = cudf::concatenate({a, b});
 
-    cudf::test::expect_columns_equal(*result, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 }
 
@@ -500,7 +499,7 @@ TEST_F(ListsColumnTest, ConcatenateNestedListsWithNulls)
 
     auto result = cudf::concatenate({a, b});
 
-    cudf::test::expect_columns_equal(*result, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 
   // nulls in the lists -and- the values
@@ -514,27 +513,21 @@ TEST_F(ListsColumnTest, ConcatenateNestedListsWithNulls)
 
     auto result = cudf::concatenate({a, b});
 
-    cudf::test::expect_columns_equal(*result, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 }
 
-TEST_F(ListsColumnTest, ConcatenateIncompleteHierarchies)
+TEST_F(ListsColumnTest, ConcatenateMismatchedHierarchies)
 {
   // to disambiguate between {} == 0 and {} == List{0}
   // Also, see note about compiler issues when declaring nested
   // empty lists in lists_column_wrapper documentation
   using LCW = cudf::test::lists_column_wrapper<int>;
-
   {
-    std::vector<bool> valids{false};
     cudf::test::lists_column_wrapper<int> a{{{{LCW{}}}}};
     cudf::test::lists_column_wrapper<int> b{{{LCW{}}}};
     cudf::test::lists_column_wrapper<int> c{{LCW{}}};
-    auto result = cudf::concatenate({a, b, c});
-
-    cudf::test::lists_column_wrapper<int> expected{{{{LCW{}}}}, {{LCW{}}}, {LCW{}}};
-
-    cudf::test::expect_columns_equal(*result, expected);
+    EXPECT_THROW(cudf::concatenate({a, b, c}), cudf::logic_error);
   }
 
   {
@@ -542,12 +535,230 @@ TEST_F(ListsColumnTest, ConcatenateIncompleteHierarchies)
     cudf::test::lists_column_wrapper<int> a{{{{{LCW{}}}}, valids.begin()}};
     cudf::test::lists_column_wrapper<int> b{{{LCW{}}}};
     cudf::test::lists_column_wrapper<int> c{{LCW{}}};
-    auto result = cudf::concatenate({a, b, c});
+    EXPECT_THROW(cudf::concatenate({a, b, c}), cudf::logic_error);
+  }
 
-    cudf::test::lists_column_wrapper<int> expected{
-      {{{{LCW{}}}}, valids.begin()}, {{LCW{}}}, {LCW{}}};
+  {
+    cudf::test::lists_column_wrapper<int> a{{{{LCW{}}}}};
+    cudf::test::lists_column_wrapper<int> b{1, 2, 3};
+    cudf::test::lists_column_wrapper<int> c{{3, 4, 5}};
+    EXPECT_THROW(cudf::concatenate({a, b, c}), cudf::logic_error);
+  }
 
-    cudf::test::expect_columns_equal(*result, expected);
+  {
+    cudf::test::lists_column_wrapper<int> a{{{1, 2, 3}}};
+    cudf::test::lists_column_wrapper<int> b{{4, 5}};
+    EXPECT_THROW(cudf::concatenate({a, b}), cudf::logic_error);
+  }
+}
+
+TEST_F(ListsColumnTest, SlicedColumns)
+{
+  using LCW = cudf::test::lists_column_wrapper<int>;
+
+  {
+    cudf::test::lists_column_wrapper<int> a{{{1, 1, 1}, {2, 2}, {3, 3}},
+                                            {{4, 4, 4}, {5, 5}, {6, 6}},
+                                            {{7, 7, 7}, {8, 8}, {9, 9}},
+                                            {{10, 10, 10}, {11, 11}, {12, 12}}};
+    auto split_a = cudf::split(a, {2});
+
+    cudf::test::lists_column_wrapper<int> b{{{-1, -1, -1, -1}, {-2}},
+                                            {{-3, -3, -3, -3}, {-4}},
+                                            {{-5, -5, -5, -5}, {-6}},
+                                            {{-7, -7, -7, -7}, {-8}}};
+    auto split_b = cudf::split(b, {2});
+
+    cudf::test::lists_column_wrapper<int> expected0{{{1, 1, 1}, {2, 2}, {3, 3}},
+                                                    {{4, 4, 4}, {5, 5}, {6, 6}},
+                                                    {{-1, -1, -1, -1}, {-2}},
+                                                    {{-3, -3, -3, -3}, {-4}}};
+    auto result0 = cudf::concatenate({split_a[0], split_b[0]});
+    cudf::test::expect_columns_equivalent(*result0, expected0);
+
+    cudf::test::lists_column_wrapper<int> expected1{{{1, 1, 1}, {2, 2}, {3, 3}},
+                                                    {{4, 4, 4}, {5, 5}, {6, 6}},
+                                                    {{-5, -5, -5, -5}, {-6}},
+                                                    {{-7, -7, -7, -7}, {-8}}};
+    auto result1 = cudf::concatenate({split_a[0], split_b[1]});
+    cudf::test::expect_columns_equivalent(*result1, expected1);
+
+    cudf::test::lists_column_wrapper<int> expected2{
+      {{7, 7, 7}, {8, 8}, {9, 9}},
+      {{10, 10, 10}, {11, 11}, {12, 12}},
+      {{-1, -1, -1, -1}, {-2}},
+      {{-3, -3, -3, -3}, {-4}},
+    };
+    auto result2 = cudf::concatenate({split_a[1], split_b[0]});
+    cudf::test::expect_columns_equivalent(*result2, expected2);
+
+    cudf::test::lists_column_wrapper<int> expected3{{{7, 7, 7}, {8, 8}, {9, 9}},
+                                                    {{10, 10, 10}, {11, 11}, {12, 12}},
+                                                    {{-5, -5, -5, -5}, {-6}},
+                                                    {{-7, -7, -7, -7}, {-8}}};
+    auto result3 = cudf::concatenate({split_a[1], split_b[1]});
+    cudf::test::expect_columns_equivalent(*result3, expected3);
+  }
+
+  {
+    cudf::test::lists_column_wrapper<int> a{
+      {{{1, 1, 1}, {2, 2}}, {{3, 3}}, {{10, 9, 16}, {8, 7, 1}, {6, 8, 2}}},
+      {LCW{}, {LCW{}}, {{6, 6}, {2}}},
+      {LCW{}, LCW{}},
+      {LCW{}, LCW{}, {{10, 10, 10}, {11, 11}, {12, 12}}, LCW{}}};
+    auto split_a = cudf::split(a, {2});
+
+    cudf::test::lists_column_wrapper<int> b{
+      {{LCW{}}},
+      {LCW{}, {LCW{}}},
+      {{{1, 2, 9}, LCW{}}, {{5, 6, 7, 8, 9}, {0}, {15, 17}}},
+      {{LCW{}}},
+    };
+    auto split_b = cudf::split(b, {2});
+
+    cudf::test::lists_column_wrapper<int> expected0{
+      {{{1, 1, 1}, {2, 2}}, {{3, 3}}, {{10, 9, 16}, {8, 7, 1}, {6, 8, 2}}},
+      {LCW{}, {LCW{}}, {{6, 6}, {2}}},
+      {{LCW{}}},
+      {LCW{}, {LCW{}}}};
+    auto result0 = cudf::concatenate({split_a[0], split_b[0]});
+    cudf::test::expect_columns_equivalent(*result0, expected0);
+
+    cudf::test::lists_column_wrapper<int> expected1{
+      {{{1, 1, 1}, {2, 2}}, {{3, 3}}, {{10, 9, 16}, {8, 7, 1}, {6, 8, 2}}},
+      {LCW{}, {LCW{}}, {{6, 6}, {2}}},
+      {{{1, 2, 9}, LCW{}}, {{5, 6, 7, 8, 9}, {0}, {15, 17}}},
+      {{LCW{}}},
+    };
+    auto result1 = cudf::concatenate({split_a[0], split_b[1]});
+    cudf::test::expect_columns_equivalent(*result1, expected1);
+
+    cudf::test::lists_column_wrapper<int> expected2{
+      {LCW{}, LCW{}},
+      {LCW{}, LCW{}, {{10, 10, 10}, {11, 11}, {12, 12}}, LCW{}},
+      {{LCW{}}},
+      {LCW{}, {LCW{}}}};
+    auto result2 = cudf::concatenate({split_a[1], split_b[0]});
+    cudf::test::expect_columns_equivalent(*result2, expected2);
+
+    cudf::test::lists_column_wrapper<int> expected3{
+      {LCW{}, LCW{}},
+      {LCW{}, LCW{}, {{10, 10, 10}, {11, 11}, {12, 12}}, LCW{}},
+      {{{1, 2, 9}, LCW{}}, {{5, 6, 7, 8, 9}, {0}, {15, 17}}},
+      {{LCW{}}},
+    };
+    auto result3 = cudf::concatenate({split_a[1], split_b[1]});
+    cudf::test::expect_columns_equivalent(*result3, expected3);
+  }
+}
+
+TEST_F(ListsColumnTest, SlicedColumnsWithNulls)
+{
+  using LCW = cudf::test::lists_column_wrapper<int>;
+
+  auto valids = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+
+  {
+    cudf::test::lists_column_wrapper<int> a{{{{1, 1, 1}, valids}, {2, 2}, {{3, 3}, valids}},
+                                            {{{4, 4, 4}, {{5, 5}, valids}, {6, 6}}, valids},
+                                            {{7, 7, 7}, {8, 8}, {9, 9}},
+                                            {{{10, 10, 10}, {11, 11}, {{12, 12}, valids}}, valids}};
+    auto split_a = cudf::split(a, {3});
+
+    cudf::test::lists_column_wrapper<int> b{{{{{-1, -1, -1, -1}, valids}, {-2}}, valids},
+                                            {{{{-3, -3, -3, -3}, valids}, {-4}}, valids},
+                                            {{{{-5, -5, -5, -5}, valids}, {-6}}, valids},
+                                            {{{{-7, -7, -7, -7}, valids}, {-8}}, valids}};
+    auto split_b = cudf::split(b, {3});
+
+    cudf::test::lists_column_wrapper<int> expected0{{{{1, 1, 1}, valids}, {2, 2}, {{3, 3}, valids}},
+                                                    {{{4, 4, 4}, {{5, 5}, valids}, {6, 6}}, valids},
+                                                    {{7, 7, 7}, {8, 8}, {9, 9}},
+                                                    {{{{-1, -1, -1, -1}, valids}, {-2}}, valids},
+                                                    {{{{-3, -3, -3, -3}, valids}, {-4}}, valids},
+                                                    {{{{-5, -5, -5, -5}, valids}, {-6}}, valids}};
+    auto result0 = cudf::concatenate({split_a[0], split_b[0]});
+    cudf::test::expect_columns_equivalent(*result0, expected0);
+
+    cudf::test::lists_column_wrapper<int> expected1{{{{1, 1, 1}, valids}, {2, 2}, {{3, 3}, valids}},
+                                                    {{{4, 4, 4}, {{5, 5}, valids}, {6, 6}}, valids},
+                                                    {{7, 7, 7}, {8, 8}, {9, 9}},
+                                                    {{{{-7, -7, -7, -7}, valids}, {-8}}, valids}};
+    auto result1 = cudf::concatenate({split_a[0], split_b[1]});
+    cudf::test::expect_columns_equivalent(*result1, expected1);
+
+    cudf::test::lists_column_wrapper<int> expected2{
+      {{{10, 10, 10}, {11, 11}, {{12, 12}, valids}}, valids},
+      {{{{-1, -1, -1, -1}, valids}, {-2}}, valids},
+      {{{{-3, -3, -3, -3}, valids}, {-4}}, valids},
+      {{{{-5, -5, -5, -5}, valids}, {-6}}, valids}};
+    auto result2 = cudf::concatenate({split_a[1], split_b[0]});
+    cudf::test::expect_columns_equivalent(*result2, expected2);
+
+    cudf::test::lists_column_wrapper<int> expected3{
+      {{{10, 10, 10}, {11, 11}, {{12, 12}, valids}}, valids},
+      {{{{-7, -7, -7, -7}, valids}, {-8}}, valids}};
+    auto result3 = cudf::concatenate({split_a[1], split_b[1]});
+    cudf::test::expect_columns_equivalent(*result3, expected3);
+  }
+
+  {
+    cudf::test::lists_column_wrapper<int> a{
+      {{{{1, 1, 1}, valids}, {2, 2}},
+       {{{3, 3}}, valids},
+       {{{10, 9, 16}, valids}, {8, 7, 1}, {{6, 8, 2}, valids}}},
+      {{LCW{}, {{LCW{}}, valids}, {{6, 6}, {2}}}, valids},
+      {{{LCW{}, LCW{}}, valids}},
+      {LCW{}, LCW{}, {{{10, 10, 10}, {{11, 11}, valids}, {12, 12}}, valids}, LCW{}}};
+    auto split_a = cudf::split(a, {3});
+
+    cudf::test::lists_column_wrapper<int> b{
+      {{{LCW{}}, valids}},
+      {{LCW{}, {{LCW{}}, valids}}, valids},
+      {{{{1, 2, 9}, LCW{}}, {{5, 6, 7, 8, 9}, {0}, {15, 17}}}, valids},
+      {{LCW{}}},
+    };
+    auto split_b = cudf::split(b, {3});
+
+    cudf::test::lists_column_wrapper<int> expected0{
+      {{{{1, 1, 1}, valids}, {2, 2}},
+       {{{3, 3}}, valids},
+       {{{10, 9, 16}, valids}, {8, 7, 1}, {{6, 8, 2}, valids}}},
+      {{LCW{}, {{LCW{}}, valids}, {{6, 6}, {2}}}, valids},
+      {{{LCW{}, LCW{}}, valids}},
+      {{{LCW{}}, valids}},
+      {{LCW{}, {{LCW{}}, valids}}, valids},
+      {{{{1, 2, 9}, LCW{}}, {{5, 6, 7, 8, 9}, {0}, {15, 17}}}, valids},
+    };
+    auto result0 = cudf::concatenate({split_a[0], split_b[0]});
+    cudf::test::expect_columns_equivalent(*result0, expected0);
+
+    cudf::test::lists_column_wrapper<int> expected1{
+      {{{{1, 1, 1}, valids}, {2, 2}},
+       {{{3, 3}}, valids},
+       {{{10, 9, 16}, valids}, {8, 7, 1}, {{6, 8, 2}, valids}}},
+      {{LCW{}, {{LCW{}}, valids}, {{6, 6}, {2}}}, valids},
+      {{{LCW{}, LCW{}}, valids}},
+      {{LCW{}}},
+    };
+    auto result1 = cudf::concatenate({split_a[0], split_b[1]});
+    cudf::test::expect_columns_equivalent(*result1, expected1);
+
+    cudf::test::lists_column_wrapper<int> expected2{
+      {LCW{}, LCW{}, {{{10, 10, 10}, {{11, 11}, valids}, {12, 12}}, valids}, LCW{}},
+      {{{LCW{}}, valids}},
+      {{LCW{}, {{LCW{}}, valids}}, valids},
+      {{{{1, 2, 9}, LCW{}}, {{5, 6, 7, 8, 9}, {0}, {15, 17}}}, valids},
+    };
+    auto result2 = cudf::concatenate({split_a[1], split_b[0]});
+    cudf::test::expect_columns_equivalent(*result2, expected2);
+
+    cudf::test::lists_column_wrapper<int> expected3{
+      {LCW{}, LCW{}, {{{10, 10, 10}, {{11, 11}, valids}, {12, 12}}, valids}, LCW{}},
+      {{LCW{}}},
+    };
+    auto result3 = cudf::concatenate({split_a[1], split_b[1]});
+    cudf::test::expect_columns_equivalent(*result3, expected3);
   }
 }
 
@@ -575,7 +786,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointConcatentate)
   auto const results             = cudf::concatenate(fixed_point_columns);
   auto const expected            = wrapper<decimalXX>(vec.begin(), vec.end());
 
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 struct DictionaryConcatTest : public cudf::test::BaseFixture {
@@ -593,7 +804,7 @@ TEST_F(DictionaryConcatTest, StringsKeys)
   // concatenate should recreate the original column
   auto result  = cudf::concatenate(views);
   auto decoded = cudf::dictionary::decode(result->view());
-  cudf::test::expect_columns_equal(*decoded, strings);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*decoded, strings);
 }
 
 template <typename T>
@@ -612,7 +823,7 @@ TYPED_TEST(DictionaryConcatTestFW, FixedWidthKeys)
   // concatenated result should equal the original column
   auto result  = cudf::concatenate(views);
   auto decoded = cudf::dictionary::decode(result->view());
-  cudf::test::expect_columns_equal(*decoded, original);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*decoded, original);
 }
 
 TEST_F(DictionaryConcatTest, ErrorsTest)

@@ -66,7 +66,7 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatScalarCount)
   auto p_ret = cudf::repeat(input_table, repeat_count);
 
   EXPECT_EQ(p_ret->num_columns(), 1);
-  cudf::test::expect_columns_equal(p_ret->view().column(0), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(p_ret->view().column(0), expected);
 }
 
 template <typename Element, typename InputIterator>
@@ -119,7 +119,7 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatColumnCount)
   auto p_ret = cudf::repeat(input_table, count);
 
   EXPECT_EQ(p_ret->num_columns(), 1);
-  cudf::test::expect_columns_equal(p_ret->view().column(0), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(p_ret->view().column(0), expected);
 }
 
 TYPED_TEST(RepeatTypedTestFixture, RepeatNullable)
@@ -161,7 +161,7 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatNullable)
   auto p_ret = cudf::repeat(input_table, count);
 
   EXPECT_EQ(p_ret->num_columns(), 1);
-  cudf::test::expect_columns_equal(p_ret->view().column(0), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(p_ret->view().column(0), expected);
 }
 
 TYPED_TEST(RepeatTypedTestFixture, ZeroSizeInput)
@@ -182,7 +182,7 @@ TYPED_TEST(RepeatTypedTestFixture, ZeroSizeInput)
   auto p_ret = cudf::repeat(input_table, count);
 
   EXPECT_EQ(p_ret->num_columns(), 1);
-  cudf::test::expect_columns_equal(p_ret->view().column(0), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(p_ret->view().column(0), expected);
 }
 
 class RepeatStringTestFixture : public cudf::test::BaseFixture,
@@ -231,7 +231,7 @@ TEST_F(RepeatStringTestFixture, RepeatNullable)
   auto p_ret = cudf::repeat(input_table, count);
 
   EXPECT_EQ(p_ret->num_columns(), 1);
-  cudf::test::expect_columns_equal(p_ret->view().column(0), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(p_ret->view().column(0), expected);
 }
 
 TEST_F(RepeatStringTestFixture, ZeroSizeInput)
@@ -248,7 +248,7 @@ TEST_F(RepeatStringTestFixture, ZeroSizeInput)
   auto p_ret = cudf::repeat(input_table, count);
 
   EXPECT_EQ(p_ret->num_columns(), 1);
-  cudf::test::expect_columns_equal(p_ret->view().column(0), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(p_ret->view().column(0), expected);
 }
 
 class RepeatErrorTestFixture : public cudf::test::BaseFixture {

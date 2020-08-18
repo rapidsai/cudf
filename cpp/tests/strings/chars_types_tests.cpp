@@ -79,7 +79,7 @@ TEST_P(StringsCharsTestTypes, AllTypes)
     sub_expected,
     sub_expected + strings_count,
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 INSTANTIATE_TEST_CASE_P(StringsCharsTestAllTypes,
@@ -103,13 +103,13 @@ TEST_F(StringsCharsTest, LowerUpper)
     auto results = cudf::strings::all_characters_of_type(
       strings_view, cudf::strings::string_character_types::LOWER, verify_types);
     cudf::test::fixed_width_column_wrapper<bool> expected({1, 0, 1, 0, 0, 0});
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     auto results = cudf::strings::all_characters_of_type(
       strings_view, cudf::strings::string_character_types::UPPER, verify_types);
     cudf::test::fixed_width_column_wrapper<bool> expected({0, 1, 0, 1, 0, 0});
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
 
@@ -146,7 +146,7 @@ TEST_F(StringsCharsTest, Alphanumeric)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsCharsTest, AlphaNumericSpace)
@@ -184,7 +184,7 @@ TEST_F(StringsCharsTest, AlphaNumericSpace)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsCharsTest, Numerics)
@@ -223,7 +223,7 @@ TEST_F(StringsCharsTest, Numerics)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsCharsTest, Integers)
@@ -232,14 +232,14 @@ TEST_F(StringsCharsTest, Integers)
     {"+175", "-34", "9.8", "17+2", "+-14", "1234567890", "67de", "", "1e10", "-", "++", ""});
   auto results = cudf::strings::is_integer(cudf::strings_column_view(strings1));
   cudf::test::fixed_width_column_wrapper<bool> expected1({1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0});
-  cudf::test::expect_columns_equal(*results, expected1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected1);
   EXPECT_FALSE(cudf::strings::all_integer(cudf::strings_column_view(strings1)));
 
   cudf::test::strings_column_wrapper strings2(
     {"0", "+0", "-0", "1234567890", "-27341132", "+012", "023", "-045"});
   results = cudf::strings::is_integer(cudf::strings_column_view(strings2));
   cudf::test::fixed_width_column_wrapper<bool> expected2({1, 1, 1, 1, 1, 1, 1, 1});
-  cudf::test::expect_columns_equal(*results, expected2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected2);
   EXPECT_TRUE(cudf::strings::all_integer(cudf::strings_column_view(strings2)));
 }
 
@@ -263,14 +263,14 @@ TEST_F(StringsCharsTest, Floats)
   auto results = cudf::strings::is_float(cudf::strings_column_view(strings1));
   cudf::test::fixed_width_column_wrapper<bool> expected1(
     {1, 1, 0, 0, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0});
-  cudf::test::expect_columns_equal(*results, expected1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected1);
   EXPECT_FALSE(cudf::strings::all_float(cudf::strings_column_view(strings1)));
 
   cudf::test::strings_column_wrapper strings2(
     {"+175", "-34", "9.8", "1234567890", "6.7e17", "-917.2e5"});
   results = cudf::strings::is_float(cudf::strings_column_view(strings2));
   cudf::test::fixed_width_column_wrapper<bool> expected2({1, 1, 1, 1, 1, 1});
-  cudf::test::expect_columns_equal(*results, expected2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected2);
   EXPECT_TRUE(cudf::strings::all_float(cudf::strings_column_view(strings2)));
 }
 
@@ -281,12 +281,12 @@ TEST_F(StringsCharsTest, EmptyStrings)
   cudf::test::fixed_width_column_wrapper<bool> expected({0, 0, 0});
   auto results = cudf::strings::all_characters_of_type(
     strings_view, cudf::strings::string_character_types::ALPHANUM);
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   results = cudf::strings::is_integer(strings_view);
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   EXPECT_FALSE(cudf::strings::all_integer(strings_view));
   results = cudf::strings::is_float(strings_view);
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   EXPECT_FALSE(cudf::strings::all_float(strings_view));
 }
 
@@ -303,14 +303,14 @@ TEST_F(StringsCharsTest, FilterCharTypes)
   {
     cudf::test::strings_column_wrapper expected(
       {"abc def", "01234 56789", "   is not alphanumeric", "but Αγγλικά is", ""});
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 
   results = cudf::strings::filter_characters_of_type(
     cudf::strings_column_view(strings), cudf::strings::string_character_types::ALPHANUM);
   {
     cudf::test::strings_column_wrapper expected({"£", " ", "℉℧   ", "  ", ""});
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 
   results = cudf::strings::filter_characters_of_type(cudf::strings_column_view(strings),
@@ -318,7 +318,7 @@ TEST_F(StringsCharsTest, FilterCharTypes)
   {
     cudf::test::strings_column_wrapper expected(
       {"abc£def", "0123456789", "℉℧isnotalphanumeric", "butΑγγλικάis", ""});
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 
   results =
@@ -329,7 +329,7 @@ TEST_F(StringsCharsTest, FilterCharTypes)
   {
     cudf::test::strings_column_wrapper expected(
       {"+++++++", "+++++ +++++", "++ ++ +++ ++++++++++++", "+++ +++++++ ++", ""});
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 
   results = cudf::strings::filter_characters_of_type(
@@ -337,7 +337,7 @@ TEST_F(StringsCharsTest, FilterCharTypes)
   {
     cudf::test::strings_column_wrapper expected(
       {"abc£def", " ", "℉℧ is not alphanumeric", "but Αγγλικά is", ""});
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 
   results =
@@ -347,7 +347,7 @@ TEST_F(StringsCharsTest, FilterCharTypes)
                                              cudf::strings::string_character_types::NUMERIC);
   {
     cudf::test::strings_column_wrapper expected({"", "0123456789", "", "", ""});
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
 

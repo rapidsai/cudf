@@ -123,7 +123,7 @@ class reader::impl {
    *
    * Sets the uncomp_data_ and uncomp_size_ data members
    */
-  void decompress_input();
+  void decompress_input(cudaStream_t stream);
 
   /**
    * @brief Finds all record starts in the file and stores them in rec_starts_
@@ -141,7 +141,7 @@ class reader::impl {
    * Only rows that need to be parsed are copied, based on the byte range
    * Also updates the array of record starts to match the device data offset.
    */
-  void upload_data_to_device();
+  void upload_data_to_device(cudaStream_t stream);
 
   /**
    * @brief Parse the first row to set the column name
