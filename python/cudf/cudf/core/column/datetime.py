@@ -179,16 +179,6 @@ class DatetimeColumn(column.ColumnBase):
         else:
             return column.column_empty(0, dtype="object", masked=False)
 
-    def to_pandas(self, index=None, nullable_pd_dtype=False):
-        if nullable_pd_dtype:
-            raise NotImplementedError(
-                f"nullable_pd_dtype=True is not supported for {self.dtype}"
-            )
-
-        return pd.Series(
-            self.to_array(fillna="pandas").astype(self.dtype), index=index
-        )
-
     def to_arrow(self):
         mask = None
         if self.nullable:
@@ -307,8 +297,12 @@ class DatetimeColumn(column.ColumnBase):
 
             max_int = np.iinfo(np.dtype("int64")).max
 
-            max_dist = self.max().astype(np.timedelta64, copy=False)
-            min_dist = self.min().astype(np.timedelta64, copy=False)
+            max_dist = np.timedelta64(
+                self.max().astype(np.dtype("int64"), copy=False), self_res
+            )
+            min_dist = np.timedelta64(
+                self.min().astype(np.dtype("int64"), copy=False), self_res
+            )
 
             self_delta_dtype = np.timedelta64(0, self_res).dtype
 
