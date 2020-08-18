@@ -374,14 +374,6 @@ def test_parquet_read_rows(tmpdir, pdf, row_group_size):
 
     num_rows = total_rows // 4
     skip_rows = (total_rows - num_rows) // 2
-    print(
-        "rg size: ",
-        row_group_size,
-        " skip_rows: ",
-        skip_rows,
-        " num_rows: ",
-        num_rows,
-    )
     gdf = cudf.read_parquet(fname, skip_rows=skip_rows, num_rows=num_rows)
 
     for row in range(num_rows):
