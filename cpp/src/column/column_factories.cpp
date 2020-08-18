@@ -51,6 +51,8 @@ std::size_t size_of(data_type element_type)
 // Empty column of specified type
 std::unique_ptr<column> make_empty_column(data_type type)
 {
+  CUDF_EXPECTS(type.id() == type_id::EMPTY || !cudf::is_nested(type),
+               "make_empty_column is invalid to call on nested types");
   return std::make_unique<column>(type, 0, rmm::device_buffer{});
 }
 
@@ -188,6 +190,16 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::list
   cudaStream_t stream) const
 {
   CUDF_FAIL("TODO");
+}
+
+template <>
+std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::struct_view>(
+  scalar const& value,
+  size_type size,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream) const
+{
+  CUDF_FAIL("TODO. struct_view currently not supported.");
 }
 
 std::unique_ptr<column> make_column_from_scalar(scalar const& s,

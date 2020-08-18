@@ -9,7 +9,6 @@ from cudf.core.column import (
     as_column,
     build_categorical_column,
 )
-from cudf.utils import cudautils
 from cudf.utils.dtypes import is_categorical_dtype, is_list_like
 
 _axis_map = {0: 0, 1: 1, "index": 0, "columns": 1}
@@ -190,7 +189,22 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     if len(objs) == 0:
         raise ValueError("All objects passed were None")
 
-    typs = set(type(o) for o in objs)
+    # Retrieve the base types of `objs`. In order to support sub-types
+    # and object wrappers, we use `isinstance()` instead of comparing
+    # types directly
+    typs = set()
+    for o in objs:
+        if isinstance(o, cudf.MultiIndex):
+            typs.add(cudf.MultiIndex)
+        if issubclass(type(o), Index):
+            typs.add(type(o))
+        elif isinstance(o, DataFrame):
+            typs.add(DataFrame)
+        elif isinstance(o, Series):
+            typs.add(Series)
+        else:
+            raise ValueError(f"cannot concatenate object of type {type(o)}")
+
     allowed_typs = {Series, DataFrame}
 
     param_axis = _axis_map.get(axis, None)
@@ -433,7 +447,7 @@ def melt(
     # Step 2: add variable
     var_cols = []
     for i, var in enumerate(value_vars):
-        var_cols.append(Series(cudautils.full(size=N, value=i, dtype=np.int8)))
+        var_cols.append(Series(cudf.core.column.full(N, i, dtype=np.int8)))
     temp = Series._concat(objs=var_cols, index=None)
 
     if not var_name:

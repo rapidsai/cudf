@@ -3,11 +3,11 @@ import functools
 from collections import OrderedDict
 from math import floor, isinf, isnan
 
-import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 from numba import njit
+from pyarrow.cuda import CudaBuffer as arrowCudaBuffer
 
 import rmm
 
@@ -65,7 +65,10 @@ def scalar_broadcast_to(scalar, size, dtype=None):
     if isinstance(size, (tuple, list)):
         size = size[0]
 
-    if scalar is None:
+    if scalar is None or (
+        isinstance(scalar, (np.datetime64, np.timedelta64))
+        and np.isnat(scalar)
+    ):
         if dtype is None:
             dtype = "object"
         return column.column_empty(size, dtype=dtype, masked=True)
@@ -77,7 +80,7 @@ def scalar_broadcast_to(scalar, size, dtype=None):
     dtype = scalar.dtype
 
     if np.dtype(dtype).kind in ("O", "U"):
-        gather_map = cupy.zeros(size, dtype="int32")
+        gather_map = column.full(size, 0, dtype="int32")
         scalar_str_col = column.as_column([scalar], dtype="str")
         return scalar_str_col[gather_map]
     else:
@@ -100,7 +103,7 @@ def normalize_index(index, size, doraise=True):
 list_types_tuple = (list, np.array)
 
 
-def buffers_from_pyarrow(pa_arr, dtype=None):
+def buffers_from_pyarrow(pa_arr):
     """
     Given a pyarrow array returns a 5 length tuple of:
         - size
@@ -109,12 +112,13 @@ def buffers_from_pyarrow(pa_arr, dtype=None):
         - cudf.Buffer --> data
         - cudf.Buffer --> string characters
     """
-    from cudf._lib.null_mask import bitmask_allocation_size_bytes
 
     buffers = pa_arr.buffers()
 
     if pa_arr.null_count:
-        mask_size = bitmask_allocation_size_bytes(len(pa_arr))
+        mask_size = cudf._lib.null_mask.bitmask_allocation_size_bytes(
+            len(pa_arr)
+        )
         pamask = pyarrow_buffer_to_cudf_buffer(buffers[0], mask_size=mask_size)
     else:
         pamask = None
@@ -138,7 +142,6 @@ def pyarrow_buffer_to_cudf_buffer(arrow_buf, mask_size=0):
     Given a PyArrow Buffer backed by either host or device memory, convert it
     to a cuDF Buffer
     """
-    from pyarrow.cuda import CudaBuffer as arrowCudaBuffer
 
     # Try creating a PyArrow CudaBuffer from the PyArrow Buffer object, it
     # fails with an ArrowTypeError if it's a host based Buffer so we catch and
@@ -417,9 +420,9 @@ def time_col_replace_nulls(input_col):
         input_col,
         column.as_column(
             Buffer(
-                np.array([np.datetime64("NaT")], dtype=input_col.dtype).view(
-                    "|u1"
-                )
+                np.array(
+                    [input_col.default_na_value()], dtype=input_col.dtype
+                ).view("|u1")
             ),
             dtype=input_col.dtype,
         ),

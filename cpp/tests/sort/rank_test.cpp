@@ -48,7 +48,7 @@ void run_rank_test(table_view input,
       cudf::test::print(got_rank_column->view());
       std::cout << "\n";
     }
-    expect_columns_equal(expected.column(i), got_rank_column->view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected.column(i), got_rank_column->view());
     i++;
   }
 }

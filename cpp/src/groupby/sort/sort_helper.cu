@@ -126,12 +126,12 @@ column_view sort_groupby_helper::key_sort_order(cudaStream_t stream)
   }
 
   if (_include_null_keys == null_policy::INCLUDE || !cudf::has_nulls(_keys)) {  // SQL style
-    _key_sorted_order =
-      cudf::detail::sorted_order(_keys,
-                                 {},
-                                 std::vector<null_order>(_keys.num_columns(), null_order::AFTER),
-                                 rmm::mr::get_default_resource(),
-                                 stream);
+    _key_sorted_order = cudf::detail::stable_sorted_order(
+      _keys,
+      {},
+      std::vector<null_order>(_keys.num_columns(), null_order::AFTER),
+      rmm::mr::get_default_resource(),
+      stream);
   } else {  // Pandas style
     // Temporarily prepend the keys table with a column that indicates the
     // presence of a null value within a row. This allows moving all rows that
@@ -139,7 +139,7 @@ column_view sort_groupby_helper::key_sort_order(cudaStream_t stream)
 
     auto augmented_keys = table_view({table_view({keys_bitmask_column()}), _keys});
 
-    _key_sorted_order = cudf::detail::sorted_order(
+    _key_sorted_order = cudf::detail::stable_sorted_order(
       augmented_keys,
       {},
       std::vector<null_order>(_keys.num_columns() + 1, null_order::AFTER),
@@ -261,11 +261,11 @@ sort_groupby_helper::column_ptr sort_groupby_helper::sorted_values(
   column_view const& values, rmm::mr::device_memory_resource* mr, cudaStream_t stream)
 {
   column_ptr values_sort_order =
-    cudf::detail::sorted_order(table_view({unsorted_keys_labels(), values}),
-                               {},
-                               std::vector<null_order>(2, null_order::AFTER),
-                               mr,
-                               stream);
+    cudf::detail::stable_sorted_order(table_view({unsorted_keys_labels(), values}),
+                                      {},
+                                      std::vector<null_order>(2, null_order::AFTER),
+                                      mr,
+                                      stream);
 
   // Zero-copy slice this sort order so that its new size is num_keys()
   column_view gather_map = cudf::detail::slice(values_sort_order->view(), 0, num_keys(stream));

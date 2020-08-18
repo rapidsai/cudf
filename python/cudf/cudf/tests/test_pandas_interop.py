@@ -15,7 +15,7 @@ def test_to_pandas():
     df["b"] = np.arange(10, 15, dtype=np.float64)
     df["c"] = np.array([True, False, None, True, True])
 
-    pdf = df.to_pandas(nullable_pd_dtype=False)
+    pdf = df.to_pandas()
 
     assert tuple(df.columns) == tuple(pdf.columns)
 

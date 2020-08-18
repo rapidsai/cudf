@@ -291,6 +291,16 @@ set(TRANSFORM_TEST_SRC
 ConfigureTest(TRANSFORM_TEST "${TRANSFORM_TEST_SRC}")
 
 ###################################################################################################
+# - interop tests -------------------------------------------------------------------------
+
+set(INTEROP_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/interop/to_arrow_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/interop/from_arrow_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/interop/dlpack_test.cpp")
+
+ConfigureTest(INTEROP_TEST "${INTEROP_TEST_SRC}")
+
+###################################################################################################
 # - jit cache tests -------------------------------------------------------------------------------
 
 set(JITCACHE_TEST_SRC
@@ -335,14 +345,6 @@ set(SORT_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/sort/rank_test.cpp")
 
 ConfigureTest(SORT_TEST "${SORT_TEST_SRC}")
-
-###################################################################################################
-# - DLPack tests ----------------------------------------------------------------------------------
-
-set(DLPACK_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/dlpack/dlpack_test.cpp")
-
-ConfigureTest(DLPACK_TEST "${DLPACK_TEST_SRC}")
 
 ###################################################################################################
 # - copying tests ---------------------------------------------------------------------------------
@@ -536,9 +538,18 @@ set(STRINGS_TEST_SRC
 ConfigureTest(STRINGS_TEST "${STRINGS_TEST_SRC}")
 
 ###################################################################################################
+# - structs test ----------------------------------------------------------------------------------
+
+set(STRUCTS_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/structs/structs_column_tests.cu")
+
+ConfigureTest(STRUCTS_TEST "${STRUCTS_TEST_SRC}")
+
+###################################################################################################
 # - nvtext test ----------------------------------------------------------------------------------
 
 set(TEXT_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/text/edit_distance_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/text/ngrams_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/text/ngrams_tokenize_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/text/normalize_tests.cpp"

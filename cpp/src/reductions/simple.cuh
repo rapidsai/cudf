@@ -21,6 +21,7 @@
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include "cudf/structs/struct_view.hpp"
 
 namespace cudf {
 namespace reduction {
@@ -82,7 +83,8 @@ struct result_type_dispatcher {
             std::is_same<Op, cudf::reduction::op::min>::value ||
             std::is_same<Op, cudf::reduction::op::max>::value ||
             cudf::is_fixed_point<ResultType>()) &&
-           !std::is_same<ResultType, cudf::list_view>::value;
+           !std::is_same<ResultType, cudf::list_view>::value &&
+           !std::is_same<ResultType, cudf::struct_view>::value;
   }
 
  public:
@@ -118,8 +120,9 @@ struct element_type_dispatcher {
     return !((std::is_same<ElementType, cudf::string_view>::value &&
               !(std::is_same<Op, cudf::reduction::op::min>::value ||
                 std::is_same<Op, cudf::reduction::op::max>::value))
-             // disable for list views
-             || std::is_same<ElementType, cudf::list_view>::value);
+             // disable for list/struct views
+             || std::is_same<ElementType, cudf::list_view>::value ||
+             std::is_same<ElementType, cudf::struct_view>::value);
   }
 
  public:
