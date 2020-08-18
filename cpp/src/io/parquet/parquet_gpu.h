@@ -142,18 +142,16 @@ struct EncColumnDesc : stats_column_desc {
   // TODO (dm): Evaluate if this is sufficient. At 4 bits, this allows a maximum 16 level nesting
   uint8_t level_bits;  //!< bits to encode max definition (lower nibble) & repetition (upper nibble)
                        //!< levels
-  bool is_list;
-  size_type const *const *nesting_offsets;
-  // TODO (dm): Look into replacing this with max repetition level in level_bits
-  size_type nesting_levels;
+  bool is_list;        //!< Indicates whether the column is a list type
+  size_type const *const
+    *nesting_offsets;  //!< If column is a list type, contains offset array of each nesting level
+  size_type nesting_levels;  //!< Number of nesting levels in column.
   size_type num_values;  //!< Number of data values in column. Different from num_rows in case of
                          //!< nested columns
 
-  // TODO (dm): docs for these
-  size_type const *level_offsets;
-  uint32_t const *rep_values;
-  uint32_t const *def_values;
-  size_type num_level_values;
+  size_type const *level_offsets;  //!< Offset array for per-row pre-calculated rep/def level values
+  uint32_t const *rep_values;      //!< Pre-calculated repetition level values
+  uint32_t const *def_values;      //!< Pre-calculated definition level values
 };
 
 #define MAX_PAGE_FRAGMENT_SIZE 5000  //!< Max number of rows in a page fragment

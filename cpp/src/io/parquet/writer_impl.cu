@@ -452,7 +452,6 @@ class parquet_column_view {
   size_type const *level_offsets() const noexcept { return _dremel_offsets.data().get(); }
   uint32_t const *repetition_levels() const noexcept { return _rep_level.data().get(); }
   uint32_t const *definition_levels() const noexcept { return _def_level.data().get(); }
-  size_type levels_size() const noexcept { return _dremel_offsets.size(); }
   uint16_t max_def_level() const noexcept
   {
     uint16_t num_def_level = 0;
@@ -886,29 +885,23 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
       desc->dict_index = nullptr;
     }
     if (col.is_list()) {
-      desc->nesting_offsets  = col.nesting_offsets();
-      desc->nesting_levels   = col.nesting_levels();
-      desc->level_offsets    = col.level_offsets();
-      desc->rep_values       = col.repetition_levels();
-      desc->def_values       = col.definition_levels();
-      desc->num_level_values = col.levels_size();
+      desc->nesting_offsets = col.nesting_offsets();
+      desc->nesting_levels  = col.nesting_levels();
+      desc->level_offsets   = col.level_offsets();
+      desc->rep_values      = col.repetition_levels();
+      desc->def_values      = col.definition_levels();
     } else {
-      desc->nesting_offsets  = nullptr;
-      desc->nesting_levels   = 0;
-      desc->level_offsets    = nullptr;
-      desc->rep_values       = nullptr;
-      desc->def_values       = nullptr;
-      desc->num_level_values = 0;
+      desc->nesting_offsets = nullptr;
+      desc->nesting_levels  = 0;
+      desc->level_offsets   = nullptr;
+      desc->rep_values      = nullptr;
+      desc->def_values      = nullptr;
     }
     desc->num_values     = col.data_count();
     desc->num_rows       = col.row_count();
     desc->physical_type  = static_cast<uint8_t>(col.physical_type());
     desc->converted_type = static_cast<uint8_t>(col.converted_type());
-    // TODO (dm): level bits need to be dependent on more than just repetition_type.
-    // schema needs to be more than just one per column. For lists, there can be multiple schema
-    // elements per column
-    // Add a method to column to calculate this. Should be doable by checking the levels
-    auto count_bits = [](uint16_t number) {
+    auto count_bits      = [](uint16_t number) {
       int16_t nbits = 0;
       while (number > 0) {
         nbits++;
