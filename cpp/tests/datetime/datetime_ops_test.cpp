@@ -87,45 +87,54 @@ TEST_F(BasicDatetimeOpsTest, TestExtractingDatetimeComponents)
       1674631932929   // 2023-01-25 07:32:12.929 GMT
     };
 
-  expect_columns_equal(*extract_year(timestamps_D),
-                       fixed_width_column_wrapper<int16_t>{1965, 2018, 2023});
-  expect_columns_equal(*extract_year(timestamps_s),
-                       fixed_width_column_wrapper<int16_t>{1965, 2018, 2023});
-  expect_columns_equal(*extract_year(timestamps_ms),
-                       fixed_width_column_wrapper<int16_t>{1965, 2018, 2023});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_year(timestamps_D),
+                                 fixed_width_column_wrapper<int16_t>{1965, 2018, 2023});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_year(timestamps_s),
+                                 fixed_width_column_wrapper<int16_t>{1965, 2018, 2023});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_year(timestamps_ms),
+                                 fixed_width_column_wrapper<int16_t>{1965, 2018, 2023});
 
-  expect_columns_equal(*extract_month(timestamps_D), fixed_width_column_wrapper<int16_t>{10, 7, 1});
-  expect_columns_equal(*extract_month(timestamps_s), fixed_width_column_wrapper<int16_t>{10, 7, 1});
-  expect_columns_equal(*extract_month(timestamps_ms),
-                       fixed_width_column_wrapper<int16_t>{10, 7, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_month(timestamps_D),
+                                 fixed_width_column_wrapper<int16_t>{10, 7, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_month(timestamps_s),
+                                 fixed_width_column_wrapper<int16_t>{10, 7, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_month(timestamps_ms),
+                                 fixed_width_column_wrapper<int16_t>{10, 7, 1});
 
-  expect_columns_equal(*extract_day(timestamps_D), fixed_width_column_wrapper<int16_t>{26, 4, 25});
-  expect_columns_equal(*extract_day(timestamps_s), fixed_width_column_wrapper<int16_t>{26, 4, 25});
-  expect_columns_equal(*extract_day(timestamps_ms), fixed_width_column_wrapper<int16_t>{26, 4, 25});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_day(timestamps_D),
+                                 fixed_width_column_wrapper<int16_t>{26, 4, 25});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_day(timestamps_s),
+                                 fixed_width_column_wrapper<int16_t>{26, 4, 25});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_day(timestamps_ms),
+                                 fixed_width_column_wrapper<int16_t>{26, 4, 25});
 
-  expect_columns_equal(*extract_weekday(timestamps_D),
-                       fixed_width_column_wrapper<int16_t>{2, 3, 3});
-  expect_columns_equal(*extract_weekday(timestamps_s),
-                       fixed_width_column_wrapper<int16_t>{2, 3, 3});
-  expect_columns_equal(*extract_weekday(timestamps_ms),
-                       fixed_width_column_wrapper<int16_t>{2, 3, 3});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_weekday(timestamps_D),
+                                 fixed_width_column_wrapper<int16_t>{2, 3, 3});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_weekday(timestamps_s),
+                                 fixed_width_column_wrapper<int16_t>{2, 3, 3});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_weekday(timestamps_ms),
+                                 fixed_width_column_wrapper<int16_t>{2, 3, 3});
 
-  expect_columns_equal(*extract_hour(timestamps_D), fixed_width_column_wrapper<int16_t>{0, 0, 0});
-  expect_columns_equal(*extract_hour(timestamps_s), fixed_width_column_wrapper<int16_t>{14, 12, 7});
-  expect_columns_equal(*extract_hour(timestamps_ms),
-                       fixed_width_column_wrapper<int16_t>{14, 12, 7});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_hour(timestamps_D),
+                                 fixed_width_column_wrapper<int16_t>{0, 0, 0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_hour(timestamps_s),
+                                 fixed_width_column_wrapper<int16_t>{14, 12, 7});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_hour(timestamps_ms),
+                                 fixed_width_column_wrapper<int16_t>{14, 12, 7});
 
-  expect_columns_equal(*extract_minute(timestamps_D), fixed_width_column_wrapper<int16_t>{0, 0, 0});
-  expect_columns_equal(*extract_minute(timestamps_s),
-                       fixed_width_column_wrapper<int16_t>{1, 0, 32});
-  expect_columns_equal(*extract_minute(timestamps_ms),
-                       fixed_width_column_wrapper<int16_t>{1, 0, 32});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_minute(timestamps_D),
+                                 fixed_width_column_wrapper<int16_t>{0, 0, 0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_minute(timestamps_s),
+                                 fixed_width_column_wrapper<int16_t>{1, 0, 32});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_minute(timestamps_ms),
+                                 fixed_width_column_wrapper<int16_t>{1, 0, 32});
 
-  expect_columns_equal(*extract_second(timestamps_D), fixed_width_column_wrapper<int16_t>{0, 0, 0});
-  expect_columns_equal(*extract_second(timestamps_s),
-                       fixed_width_column_wrapper<int16_t>{12, 0, 12});
-  expect_columns_equal(*extract_second(timestamps_ms),
-                       fixed_width_column_wrapper<int16_t>{12, 0, 12});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_second(timestamps_D),
+                                 fixed_width_column_wrapper<int16_t>{0, 0, 0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_second(timestamps_s),
+                                 fixed_width_column_wrapper<int16_t>{12, 0, 12});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_second(timestamps_ms),
+                                 fixed_width_column_wrapper<int16_t>{12, 0, 12});
 }
 
 template <typename T>
@@ -150,13 +159,13 @@ TYPED_TEST(TypedDatetimeOpsTest, TestEmptyColumns)
   cudf::column int16s{int16s_dtype, 0, rmm::device_buffer{0}};
   cudf::column timestamps{timestamps_dtype, 0, rmm::device_buffer{0}};
 
-  expect_columns_equal(*extract_year(timestamps), int16s);
-  expect_columns_equal(*extract_month(timestamps), int16s);
-  expect_columns_equal(*extract_day(timestamps), int16s);
-  expect_columns_equal(*extract_weekday(timestamps), int16s);
-  expect_columns_equal(*extract_hour(timestamps), int16s);
-  expect_columns_equal(*extract_minute(timestamps), int16s);
-  expect_columns_equal(*extract_second(timestamps), int16s);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_year(timestamps), int16s);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_month(timestamps), int16s);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_day(timestamps), int16s);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_weekday(timestamps), int16s);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_hour(timestamps), int16s);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_minute(timestamps), int16s);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_second(timestamps), int16s);
 }
 
 TYPED_TEST(TypedDatetimeOpsTest, TestExtractingGeneratedDatetimeComponents)
@@ -187,13 +196,13 @@ TYPED_TEST(TypedDatetimeOpsTest, TestExtractingGeneratedDatetimeComponents)
     expected_seconds = fixed_width_column_wrapper<int16_t>{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
   }
 
-  expect_columns_equal(*extract_year(timestamps), expected_years);
-  expect_columns_equal(*extract_month(timestamps), expected_months);
-  expect_columns_equal(*extract_day(timestamps), expected_days);
-  expect_columns_equal(*extract_weekday(timestamps), expected_weekdays);
-  expect_columns_equal(*extract_hour(timestamps), expected_hours);
-  expect_columns_equal(*extract_minute(timestamps), expected_minutes);
-  expect_columns_equal(*extract_second(timestamps), expected_seconds);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_year(timestamps), expected_years);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_month(timestamps), expected_months);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_day(timestamps), expected_days);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_weekday(timestamps), expected_weekdays);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_hour(timestamps), expected_hours);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_minute(timestamps), expected_minutes);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_second(timestamps), expected_seconds);
 }
 
 TYPED_TEST(TypedDatetimeOpsTest, TestExtractingGeneratedNullableDatetimeComponents)
@@ -243,13 +252,13 @@ TYPED_TEST(TypedDatetimeOpsTest, TestExtractingGeneratedNullableDatetimeComponen
       {true, false, true, false, true, false, true, false, true, false}};
   }
 
-  expect_columns_equal(*extract_year(timestamps), expected_years);
-  expect_columns_equal(*extract_month(timestamps), expected_months);
-  expect_columns_equal(*extract_day(timestamps), expected_days);
-  expect_columns_equal(*extract_weekday(timestamps), expected_weekdays);
-  expect_columns_equal(*extract_hour(timestamps), expected_hours);
-  expect_columns_equal(*extract_minute(timestamps), expected_minutes);
-  expect_columns_equal(*extract_second(timestamps), expected_seconds);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_year(timestamps), expected_years);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_month(timestamps), expected_months);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_day(timestamps), expected_days);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_weekday(timestamps), expected_weekdays);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_hour(timestamps), expected_hours);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_minute(timestamps), expected_minutes);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_second(timestamps), expected_seconds);
 }
 
 TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithSeconds)
@@ -260,24 +269,23 @@ TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithSeconds)
 
   // Time in seconds since epoch
   // Dates converted using epochconverter.com
-  auto timestamps_s =
-    cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{
-      662688000L,   // 1991-01-01 00:00:00 GMT
-      949496401L,   // 2000-02-02 13:00:01 GMT - leap year
-      4106854801L,  // 2100-02-21 01:00:01 GMT - not a leap year
-      1582391837L,  // 2020-02-22 17:17:17 GMT - leap year
-      1363046401L,  // 2013-03-12 00:00:01 GMT
-      1302696000L,  // 2011-04-13 12:00:00 GMT
-      1495800001L,  // 2017-05-26 12:00:01 GMT
-      1056931201L,  // 2003-06-30 00:00:01 GMT - already last day
-      1031961599L,  // 2002-09-13 23:59:59 GMT
-      0L,           // This is the UNIX epoch - 1970-01-01
-      -131968728L   // 1965-10-26 14:01:12 GMT
-    };
+  auto timestamps_s = fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{
+    662688000L,   // 1991-01-01 00:00:00 GMT
+    949496401L,   // 2000-02-02 13:00:01 GMT - leap year
+    4106854801L,  // 2100-02-21 01:00:01 GMT - not a leap year
+    1582391837L,  // 2020-02-22 17:17:17 GMT - leap year
+    1363046401L,  // 2013-03-12 00:00:01 GMT
+    1302696000L,  // 2011-04-13 12:00:00 GMT
+    1495800001L,  // 2017-05-26 12:00:01 GMT
+    1056931201L,  // 2003-06-30 00:00:01 GMT - already last day
+    1031961599L,  // 2002-09-13 23:59:59 GMT
+    0L,           // This is the UNIX epoch - 1970-01-01
+    -131968728L,  // 1965-10-26 14:01:12 GMT
+  };
 
-  expect_columns_equal(
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *last_day_of_month(timestamps_s),
-    cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
+    fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
       7700,   // 1991-01-31
       11016,  // 2000-02-29
       47540,  // 2100-02-28
@@ -302,23 +310,23 @@ TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithDate)
   // Time in days since epoch
   // Dates converted using epochconverter.com
   // Make some nullable fields as well
-  auto timestamps_d =
-    cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
-      {
-        999,    // Random nullable field
-        0,      // This is the UNIX epoch - 1970-01-01
-        44376,  // 2091-07-01 00:00:00 GMT
-        47695,  // 2100-08-02 00:00:00 GMT
-        3,      // Random nullable field
-        66068,  // 2150-11-21 00:00:00 GMT
-        22270,  // 2030-12-22 00:00:00 GMT
-        111     // Random nullable field
-      },
-      {false, true, true, true, false, true, true, false}};
+  auto timestamps_d = fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
+    {
+      999,    // Random nullable field
+      0,      // This is the UNIX epoch - 1970-01-01
+      44376,  // 2091-07-01 00:00:00 GMT
+      47695,  // 2100-08-02 00:00:00 GMT
+      3,      // Random nullable field
+      66068,  // 2150-11-21 00:00:00 GMT
+      22270,  // 2030-12-22 00:00:00 GMT
+      111,    // Random nullable field
+    },
+    {false, true, true, true, false, true, true, false},
+  };
 
-  expect_columns_equal(
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *last_day_of_month(timestamps_d),
-    cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
+    fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
       {
         999,    // Random nullable field
         30,     // This is the UNIX epoch - when rounded up becomes 1970-01-31
@@ -357,22 +365,22 @@ TEST_F(BasicDatetimeOpsTest, TestDayOfYearWithDate)
       },
       {false, true, true, true, false, true, true, false, true}};
 
-  expect_columns_equal(*day_of_year(timestamps_d),
-                       fixed_width_column_wrapper<int16_t>{
-                         {
-                           999,  // Random nullable field
-                           1,    // Number of year days until UNIX epoch time
-                           1,    // Number of year days until 2020-01-01
-                           45,   // Number of year days until 2020-02-14
-                           3,    // Random nullable field
-                           366,  // Number of year days until 2020-12-31
-                           365,  // Number of year days until 2100-12-31
-                           111,  // Random nullable field
-                           334   // Number of year days until 1900-11-30
-                         },
-                         {false, true, true, true, false, true, true, false, true},
-                       },
-                       true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*day_of_year(timestamps_d),
+                                 fixed_width_column_wrapper<int16_t>{
+                                   {
+                                     999,  // Random nullable field
+                                     1,    // Number of year days until UNIX epoch time
+                                     1,    // Number of year days until 2020-01-01
+                                     45,   // Number of year days until 2020-02-14
+                                     3,    // Random nullable field
+                                     366,  // Number of year days until 2020-12-31
+                                     365,  // Number of year days until 2100-12-31
+                                     111,  // Random nullable field
+                                     334   // Number of year days until 1900-11-30
+                                   },
+                                   {false, true, true, true, false, true, true, false, true},
+                                 },
+                                 true);
 }
 
 TEST_F(BasicDatetimeOpsTest, TestDayOfYearWithEmptyColumn)

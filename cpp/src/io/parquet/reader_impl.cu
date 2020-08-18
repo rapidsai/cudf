@@ -64,6 +64,12 @@ constexpr type_id to_type_id(parquet::Type physical,
     case parquet::UINT_32: return type_id::UINT32;
     case parquet::UINT_64: return type_id::UINT64;
     case parquet::DATE: return type_id::TIMESTAMP_DAYS;
+    case parquet::TIME_MILLIS:
+      return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
+                                                   : type_id::DURATION_MILLISECONDS;
+    case parquet::TIME_MICROS:
+      return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
+                                                   : type_id::DURATION_MICROSECONDS;
     case parquet::TIMESTAMP_MICROS:
       return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
                                                    : type_id::TIMESTAMP_MICROSECONDS;
@@ -105,6 +111,10 @@ constexpr type_id to_type_id(parquet::Type physical,
 constexpr int32_t to_clockrate(type_id timestamp_type_id)
 {
   switch (timestamp_type_id) {
+    case type_id::DURATION_SECONDS: return 1;
+    case type_id::DURATION_MILLISECONDS: return 1000;
+    case type_id::DURATION_MICROSECONDS: return 1000000;
+    case type_id::DURATION_NANOSECONDS: return 1000000000;
     case type_id::TIMESTAMP_SECONDS: return 1;
     case type_id::TIMESTAMP_MILLISECONDS: return 1000;
     case type_id::TIMESTAMP_MICROSECONDS: return 1000000;
@@ -136,7 +146,7 @@ std::tuple<int32_t, int32_t, int8_t> conversion_info(type_id column_type_id,
     type_width = 2;  // I32 -> I16
   } else if (column_type_id == type_id::INT32) {
     type_width = 4;  // str -> hash32
-  } else if (is_timestamp(data_type{column_type_id})) {
+  } else if (is_chrono(data_type{column_type_id})) {
     clock_rate = to_clockrate(timestamp_type_id);
   }
 

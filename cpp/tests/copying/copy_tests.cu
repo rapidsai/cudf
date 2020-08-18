@@ -47,7 +47,7 @@ TYPED_TEST(CopyTest, CopyIfElseTestShort)
   wrapper<T, int32_t> expected_w({5, 6, 6, 6});
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
-  cudf::test::expect_columns_equal(out->view(), expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
 }
 
 TYPED_TEST(CopyTest, CopyIfElseTestManyNulls)
@@ -61,7 +61,7 @@ TYPED_TEST(CopyTest, CopyIfElseTestManyNulls)
   wrapper<T, int32_t> expected_w({5, 6, 6, 6, 6, 6, 6}, {1, 0, 0, 0, 0, 0, 1});
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
-  cudf::test::expect_columns_equal(out->view(), expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
 }
 
 struct copy_if_else_tiny_grid_functor {
@@ -145,7 +145,7 @@ TYPED_TEST(CopyTest, CopyIfElseTestTinyGrid)
 
   auto out = tiny_grid_launch(lhs_w, rhs_w, mask_w);
 
-  cudf::test::expect_columns_equal(out->view(), expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
 }
 
 TYPED_TEST(CopyTest, CopyIfElseTestLong)
@@ -185,7 +185,7 @@ TYPED_TEST(CopyTest, CopyIfElseTestLong)
                                  exp_v);
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
-  cudf::test::expect_columns_equal(out->view(), expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
 }
 
 TYPED_TEST(CopyTest, CopyIfElseTestEmptyInputs)
@@ -199,7 +199,7 @@ TYPED_TEST(CopyTest, CopyIfElseTestEmptyInputs)
   wrapper<T> expected_w{};
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
-  cudf::test::expect_columns_equal(out->view(), expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
 }
 
 TYPED_TEST(CopyTest, CopyIfElseMixedInputValidity)
@@ -213,7 +213,7 @@ TYPED_TEST(CopyTest, CopyIfElseMixedInputValidity)
   wrapper<T, int32_t> expected_w({5, 6, 5, 5}, {1, 0, 1, 0});
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
-  cudf::test::expect_columns_equal(out->view(), expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
 }
 
 TYPED_TEST(CopyTest, CopyIfElseMixedInputValidity2)
@@ -227,7 +227,7 @@ TYPED_TEST(CopyTest, CopyIfElseMixedInputValidity2)
   wrapper<T, int32_t> expected_w({5, 6, 5, 5}, {1, 1, 1, 0});
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
-  cudf::test::expect_columns_equal(out->view(), expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
 }
 
 TYPED_TEST(CopyTest, CopyIfElseMixedInputValidity3)
@@ -241,7 +241,7 @@ TYPED_TEST(CopyTest, CopyIfElseMixedInputValidity3)
   wrapper<T, int32_t> expected_w({5, 6, 5, 5}, {1, 0, 1, 1});
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
-  cudf::test::expect_columns_equal(out->view(), expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
 }
 
 TYPED_TEST(CopyTest, CopyIfElseMixedInputValidity4)
@@ -255,7 +255,7 @@ TYPED_TEST(CopyTest, CopyIfElseMixedInputValidity4)
   wrapper<T, int32_t> expected_w({5, 6, 5, 5});
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
-  cudf::test::expect_columns_equal(out->view(), expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
 }
 
 TYPED_TEST(CopyTest, CopyIfElseBadInputLength)
@@ -307,7 +307,7 @@ TYPED_TEST(CopyTestNumeric, CopyIfElseTestScalarColumn)
   wrapper<T> expected_w(expected, expected + num_els, rhs_v);
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
-  cudf::test::expect_columns_equal(out->view(), expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
 }
 
 TYPED_TEST(CopyTestNumeric, CopyIfElseTestColumnScalar)
@@ -330,7 +330,7 @@ TYPED_TEST(CopyTestNumeric, CopyIfElseTestColumnScalar)
   wrapper<T> expected_w(expected, expected + num_els, lhs_v);
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
-  cudf::test::expect_columns_equal(out->view(), expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
 }
 
 TYPED_TEST(CopyTestNumeric, CopyIfElseTestScalarScalar)
@@ -349,7 +349,7 @@ TYPED_TEST(CopyTestNumeric, CopyIfElseTestScalarScalar)
   wrapper<T> expected_w(expected, expected + num_els, mask);
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
-  cudf::test::expect_columns_equal(out->view(), expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
 }
 
 template <typename T>
@@ -395,7 +395,7 @@ TYPED_TEST(CopyTestChrono, CopyIfElseTestScalarColumn)
   wrapper<T, int32_t> expected_w({5, 6, 6, 5}, rhs_v);
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
-  cudf::test::expect_columns_equal(out->view(), expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
 }
 
 TYPED_TEST(CopyTestChrono, CopyIfElseTestColumnScalar)
@@ -415,7 +415,7 @@ TYPED_TEST(CopyTestChrono, CopyIfElseTestColumnScalar)
   wrapper<T, int32_t> expected_w({5, 6, 6, 5}, lhs_v);
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
-  cudf::test::expect_columns_equal(out->view(), expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
 }
 
 TYPED_TEST(CopyTestChrono, CopyIfElseTestScalarScalar)
@@ -433,7 +433,7 @@ TYPED_TEST(CopyTestChrono, CopyIfElseTestScalarScalar)
   wrapper<T, int32_t> expected_w({5, 6, 6, 5}, mask);
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
-  cudf::test::expect_columns_equal(out->view(), expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
 }
 
 struct CopyTestUntyped : public cudf::test::BaseFixture {
@@ -476,7 +476,7 @@ TEST_F(StringsCopyIfElseTest, CopyIfElse)
       h_expected.push_back(h_strings2[idx]);
   }
   cudf::test::strings_column_wrapper expected(h_expected.begin(), h_expected.end(), valids);
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsCopyIfElseTest, CopyIfElseScalarColumn)
@@ -504,7 +504,7 @@ TEST_F(StringsCopyIfElseTest, CopyIfElseScalarColumn)
     }
   }
   cudf::test::strings_column_wrapper expected(h_expected.begin(), h_expected.end(), valids);
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsCopyIfElseTest, CopyIfElseColumnScalar)
@@ -531,7 +531,7 @@ TEST_F(StringsCopyIfElseTest, CopyIfElseColumnScalar)
     }
   }
   cudf::test::strings_column_wrapper expected(h_expected.begin(), h_expected.end(), valids);
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsCopyIfElseTest, CopyIfElseScalarScalar)
@@ -559,5 +559,5 @@ TEST_F(StringsCopyIfElseTest, CopyIfElseScalarScalar)
     }
   }
   cudf::test::strings_column_wrapper expected(h_expected.begin(), h_expected.end(), valids);
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }

@@ -76,6 +76,7 @@ enum class ast_operator {
                          ///< operand when one is null; or invalid when both are null
   */
   // Unary operators
+  IDENTITY,    ///< Identity function
   SIN,         ///< Trigonometric sine
   COS,         ///< Trigonometric cosine
   TAN,         ///< Trigonometric tangent
@@ -202,6 +203,9 @@ CUDA_HOST_DEVICE_CALLABLE constexpr void ast_operator_dispatcher(ast_operator op
     case ast_operator::LOGICAL_OR:
       f.template operator()<ast_operator::LOGICAL_OR>(std::forward<Ts>(args)...);
       break;
+    case ast_operator::IDENTITY:
+      f.template operator()<ast_operator::IDENTITY>(std::forward<Ts>(args)...);
+      break;
     case ast_operator::SIN:
       f.template operator()<ast_operator::SIN>(std::forward<Ts>(args)...);
       break;
@@ -269,7 +273,11 @@ CUDA_HOST_DEVICE_CALLABLE constexpr void ast_operator_dispatcher(ast_operator op
       f.template operator()<ast_operator::NOT>(std::forward<Ts>(args)...);
       break;
     default:
-      // TODO: Error handling?
+#ifndef __CUDA_ARCH__
+      CUDF_FAIL("Invalid operator.");
+#else
+      release_assert(false && "Invalid operator.");
+#endif
       break;
   }
 }
@@ -575,6 +583,17 @@ struct operator_functor<ast_operator::LOGICAL_OR> {
 };
 
 template <>
+struct operator_functor<ast_operator::IDENTITY> {
+  static constexpr auto arity{1};
+
+  template <typename InputT>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(input)
+  {
+    return input;
+  }
+};
+
+template <>
 struct operator_functor<ast_operator::SIN> {
   static constexpr auto arity{1};
 
@@ -776,10 +795,17 @@ template <>
 struct operator_functor<ast_operator::ABS> {
   static constexpr auto arity{1};
 
-  template <typename InputT>
+  // Only accept signed or unsigned types (both require is_arithmetic<T> to be true)
+  template <typename InputT, std::enable_if_t<std::is_signed<InputT>::value>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(std::abs(input))
   {
     return std::abs(input);
+  }
+
+  template <typename InputT, std::enable_if_t<std::is_unsigned<InputT>::value>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(input)
+  {
+    return input;
   }
 };
 
@@ -963,10 +989,18 @@ struct type_dispatch_binary_op {
 };
 
 /**
- * @brief Functor to determine the return type of a binary operator from its input types.
+ * @brief Functor to determine the return type of an operator from its input types.
  *
  */
-struct binary_return_type_functor {
+struct return_type_functor {
+  /**
+   * @brief Callable for binary operators to determine return type.
+   *
+   * @tparam OperatorFunctor Operator functor to perform.
+   * @tparam LHS Left input type.
+   * @tparam RHS Right input type.
+   * @param result Pointer whose value is assigned to the result data type.
+   */
   template <typename OperatorFunctor,
             typename LHS,
             typename RHS,
@@ -983,15 +1017,20 @@ struct binary_return_type_functor {
             std::enable_if_t<!cudf::ast::is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE void operator()(cudf::data_type* result)
   {
-    *result = cudf::data_type(cudf::type_id::EMPTY);
+#ifndef __CUDA_ARCH__
+    CUDF_FAIL("Invalid binary operation. Return type cannot be determined.");
+#else
+    release_assert(false && "Invalid binary operation. Return type cannot be determined.");
+#endif
   }
-};
 
-/**
- * @brief Functor to determine the return type of a unary operator from its input types.
- *
- */
-struct unary_return_type_functor {
+  /**
+   * @brief Callable for unary operators to determine return type.
+   *
+   * @tparam OperatorFunctor Operator functor to perform.
+   * @tparam T Input type.
+   * @param result Pointer whose value is assigned to the result data type.
+   */
   template <typename OperatorFunctor,
             typename T,
             std::enable_if_t<cudf::ast::is_valid_unary_op<OperatorFunctor, T>>* = nullptr>
@@ -1006,7 +1045,11 @@ struct unary_return_type_functor {
             std::enable_if_t<!cudf::ast::is_valid_unary_op<OperatorFunctor, T>>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE void operator()(cudf::data_type* result)
   {
-    *result = cudf::data_type(cudf::type_id::EMPTY);
+#ifndef __CUDA_ARCH__
+    CUDF_FAIL("Invalid unary operation. Return type cannot be determined.");
+#else
+    release_assert(false && "Invalid unary operation. Return type cannot be determined.");
+#endif
   }
 };
 
@@ -1077,24 +1120,14 @@ inline cudf::data_type ast_operator_return_type(ast_operator op,
 {
   auto result = cudf::data_type(cudf::type_id::EMPTY);
   switch (operand_types.size()) {
-    case 0:
-      // TODO: Nullary return type functor
-      break;
     case 1:
-      unary_operator_dispatcher(
-        op, operand_types.at(0), detail::unary_return_type_functor{}, &result);
+      unary_operator_dispatcher(op, operand_types.at(0), detail::return_type_functor{}, &result);
       break;
     case 2:
-      binary_operator_dispatcher(op,
-                                 operand_types.at(0),
-                                 operand_types.at(1),
-                                 detail::binary_return_type_functor{},
-                                 &result);
+      binary_operator_dispatcher(
+        op, operand_types.at(0), operand_types.at(1), detail::return_type_functor{}, &result);
       break;
-    case 3:
-      // TODO: Ternary return type functor
-      break;
-    default: break;
+    default: CUDF_FAIL("Unsupported operator return type."); break;
   }
   return result;
 }

@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/ast/linearizer.cuh>
+#include <cudf/ast/linearizer.hpp>
 #include <cudf/ast/operators.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
@@ -64,8 +64,6 @@ cudf::size_type intermediate_counter::find_first_missing(cudf::size_type start,
   // The missing value must be in the left half
   return this->find_first_missing(start, mid);
 }
-
-}  // namespace detail
 
 cudf::size_type linearizer::visit(literal const& expr)
 {
@@ -134,7 +132,7 @@ cudf::size_type linearizer::visit(expression const& expr)
   // Push operator
   this->operators.push_back(op);
   // Push data reference
-  auto const source = [&]() {
+  auto const output = [&]() {
     if (node_index == 0) {
       // This node is the root. Output should be directed to the output column.
       // TODO: Could refactor to support output tables (multiple output columns)
@@ -154,7 +152,7 @@ cudf::size_type linearizer::visit(expression const& expr)
                                            this->intermediate_counter.take()};
     }
   }();
-  auto const index = this->add_data_reference(source);
+  auto const index = this->add_data_reference(output);
   // Insert source indices from all operands (sources) and this operator (destination)
   this->operator_source_indices.insert(this->operator_source_indices.end(),
                                        operand_data_reference_indices.cbegin(),
@@ -194,6 +192,18 @@ cudf::size_type linearizer::add_data_reference(detail::device_data_reference dat
     this->data_references.push_back(data_ref);
     return this->data_references.size() - 1;
   }
+}
+
+}  // namespace detail
+
+cudf::size_type literal::accept(detail::linearizer& visitor) const { return visitor.visit(*this); }
+cudf::size_type column_reference::accept(detail::linearizer& visitor) const
+{
+  return visitor.visit(*this);
+}
+cudf::size_type expression::accept(detail::linearizer& visitor) const
+{
+  return visitor.visit(*this);
 }
 
 }  // namespace ast

@@ -113,7 +113,7 @@ public final class HostColumnVector implements AutoCloseable {
     }
 
 
-    private Object getElement(int rowIndex) {
+    Object getElement(int rowIndex) {
       if (type == DType.LIST) {
         List retList = new ArrayList();
         int start = offsets.getInt(rowIndex * DType.INT32.getSizeInBytes());
@@ -155,11 +155,25 @@ public final class HostColumnVector implements AutoCloseable {
     private Object readValue(int index){
       assert index < rows * type.getSizeInBytes();
       switch (type) {
-        case INT32: return data.getInt(index);
-        case INT64: return data.getLong(index);
+        case INT32: // fall through
+        case UINT32: // fall through
+        case TIMESTAMP_DAYS:
+        case DURATION_DAYS: return data.getInt(index);
+        case INT64: // fall through
+        case UINT64: // fall through
+        case DURATION_MICROSECONDS: // fall through
+        case DURATION_MILLISECONDS: // fall through
+        case DURATION_NANOSECONDS: // fall through
+        case DURATION_SECONDS: // fall through
+        case TIMESTAMP_MICROSECONDS: // fall through
+        case TIMESTAMP_MILLISECONDS: // fall through
+        case TIMESTAMP_NANOSECONDS: // fall through
+        case TIMESTAMP_SECONDS: return data.getLong(index);
         case FLOAT32: return data.getFloat(index);
         case FLOAT64: return data.getDouble(index);
+        case UINT8: // fall through
         case INT8: return data.getByte(index);
+        case UINT16: // fall through
         case INT16: return data.getShort(index);
         case BOOL8: return data.getBoolean(index);
         default: throw new UnsupportedOperationException("Do not support " + type);

@@ -42,7 +42,7 @@ TEST_F(StringsConvertTest, ToBooleans)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsConvertTest, FromBooleans)
@@ -60,7 +60,7 @@ TEST_F(StringsConvertTest, FromBooleans)
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
 
   auto results = cudf::strings::from_booleans(column);
-  cudf::test::expect_columns_equal(*results, strings);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings);
 }
 
 TEST_F(StringsConvertTest, ZeroSizeStringsColumnBoolean)

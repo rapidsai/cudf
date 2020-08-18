@@ -15,7 +15,7 @@
  */
 
 #include <cudf/ast/ast.cuh>
-#include <cudf/ast/linearizer.cuh>
+#include <cudf/ast/linearizer.hpp>
 #include <cudf/ast/operators.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -30,7 +30,8 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <rmm/device_uvector.hpp>
+#include <rmm/device_buffer.hpp>
+#include <rmm/mr/device/device_memory_resource.hpp>
 
 #include <algorithm>
 #include <functional>
@@ -45,7 +46,7 @@ namespace detail {
 
 template <size_type block_size>
 __launch_bounds__(block_size) __global__
-  void compute_column_kernel(const table_device_view table,
+  void compute_column_kernel(table_device_view const table,
                              const cudf::detail::fixed_width_scalar_device_view_base* literals,
                              mutable_column_device_view output_column,
                              const detail::device_data_reference* data_references,
@@ -56,8 +57,8 @@ __launch_bounds__(block_size) __global__
 {
   extern __shared__ std::int64_t intermediate_storage[];
   auto thread_intermediate_storage = &intermediate_storage[threadIdx.x * num_intermediates];
-  const cudf::size_type start_idx  = threadIdx.x + blockIdx.x * blockDim.x;
-  const cudf::size_type stride     = blockDim.x * gridDim.x;
+  auto const start_idx             = cudf::size_type(threadIdx.x + blockIdx.x * blockDim.x);
+  auto const stride                = cudf::size_type(blockDim.x * gridDim.x);
   auto const num_rows              = table.num_rows();
   auto const evaluator =
     cudf::ast::detail::row_evaluator(table, literals, thread_intermediate_storage, &output_column);
@@ -66,18 +67,6 @@ __launch_bounds__(block_size) __global__
     evaluate_row_expression(
       evaluator, data_references, operators, operator_source_indices, num_operators, row_index);
   }
-}
-
-template <typename T>
-rmm::device_uvector<T> async_create_device_data(std::vector<T> host_data, cudaStream_t stream)
-{
-  auto device_data = rmm::device_uvector<T>(host_data.size(), stream);
-  CUDA_TRY(cudaMemcpyAsync(device_data.data(),
-                           host_data.data(),
-                           sizeof(T) * host_data.size(),
-                           cudaMemcpyHostToDevice,
-                           stream));
-  return device_data;
 }
 
 std::unique_ptr<column> compute_column(table_view const table,
@@ -94,14 +83,35 @@ std::unique_ptr<column> compute_column(table_view const table,
   auto const operator_source_indices = expr_linearizer.get_operator_source_indices();
   auto const expr_data_type          = expr_linearizer.get_root_data_type();
 
-  // Create device data
-  auto const device_data_references = detail::async_create_device_data(data_references, stream);
-  auto const device_literals        = detail::async_create_device_data(literals, stream);
-  auto const device_operators       = detail::async_create_device_data(operators, stream);
-  auto const device_operator_source_indices =
-    detail::async_create_device_data(operator_source_indices, stream);
-  // The stream is synced later when the table_device_view is created.
+  // Create ast_plan and device buffer
+  auto plan = ast_plan();
+  plan.add_to_plan(data_references);
+  plan.add_to_plan(literals);
+  plan.add_to_plan(operators);
+  plan.add_to_plan(operator_source_indices);
+  auto const host_data_buffer = plan.get_host_data_buffer();
+  auto const buffer_offsets   = plan.get_offsets();
+  auto const buffer_size      = host_data_buffer.second;
+  auto device_data_buffer     = rmm::device_buffer(buffer_size, stream, mr);
+  CUDA_TRY(cudaMemcpyAsync(device_data_buffer.data(),
+                           host_data_buffer.first.get(),
+                           buffer_size,
+                           cudaMemcpyHostToDevice,
+                           stream));
   // To reduce overhead, we don't call a stream sync here.
+  // The stream is synced later when the table_device_view is created.
+
+  // Create device pointers to components of plan
+  auto const device_data_buffer_ptr = static_cast<const char*>(device_data_buffer.data());
+  auto const device_data_references = reinterpret_cast<const detail::device_data_reference*>(
+    device_data_buffer_ptr + buffer_offsets.at(0));
+  auto const device_literals =
+    reinterpret_cast<const cudf::detail::fixed_width_scalar_device_view_base*>(
+      device_data_buffer_ptr + buffer_offsets.at(1));
+  auto const device_operators =
+    reinterpret_cast<const ast_operator*>(device_data_buffer_ptr + buffer_offsets.at(2));
+  auto const device_operator_source_indices =
+    reinterpret_cast<const cudf::size_type*>(device_data_buffer_ptr + buffer_offsets.at(3));
 
   // Create table device view
   auto table_device         = table_device_view::create(table, stream);
@@ -114,11 +124,20 @@ std::unique_ptr<column> compute_column(table_view const table,
     cudf::mutable_column_device_view::create(output_column->mutable_view(), stream);
 
   // Configure kernel parameters
-  auto constexpr block_size = 512;
+  auto const num_intermediates     = expr_linearizer.get_intermediate_count();
+  auto const shmem_size_per_thread = static_cast<int>(sizeof(std::int64_t) * num_intermediates);
+  int device_id;
+  CUDA_TRY(cudaGetDevice(&device_id));
+  int shmem_per_block_limit;
+  CUDA_TRY(
+    cudaDeviceGetAttribute(&shmem_per_block_limit, cudaDevAttrMaxSharedMemoryPerBlock, device_id));
+  auto constexpr DEFAULT_BLOCK_SIZE = 512;
+  auto const block_size =
+    (shmem_size_per_thread > 0)
+      ? std::min(DEFAULT_BLOCK_SIZE, shmem_per_block_limit / shmem_size_per_thread)
+      : DEFAULT_BLOCK_SIZE;
   cudf::detail::grid_1d config(table_num_rows, block_size);
-  auto const num_intermediates = expr_linearizer.get_intermediate_count();
-  auto const shmem_size_per_block =
-    sizeof(std::int64_t) * num_intermediates * config.num_threads_per_block;
+  auto const shmem_size_per_block = shmem_size_per_thread * config.num_threads_per_block;
 
   // Output linearizer info
   /*
@@ -128,7 +147,7 @@ std::unique_ptr<column> compute_column(table_view const table,
   for (auto const& dr : data_references) {
     switch (dr.reference_type) {
       case detail::device_data_reference_type::COLUMN:
-        if (dr.table_reference == table_reference::LEFT) {
+        if (dr.table_source == table_reference::LEFT) {
           std::cout << "C";
         } else {
           std::cout << "O";
@@ -152,14 +171,14 @@ std::unique_ptr<column> compute_column(table_view const table,
   */
 
   // Execute the kernel
-  cudf::ast::detail::compute_column_kernel<block_size>
+  cudf::ast::detail::compute_column_kernel<DEFAULT_BLOCK_SIZE>
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream>>>(
       *table_device,
-      device_literals.data(),
+      device_literals,
       *mutable_output_device,
-      device_data_references.data(),
-      device_operators.data(),
-      device_operator_source_indices.data(),
+      device_data_references,
+      device_operators,
+      device_operator_source_indices,
       num_operators,
       num_intermediates);
   CHECK_CUDA(stream);

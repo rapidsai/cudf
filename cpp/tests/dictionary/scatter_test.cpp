@@ -43,7 +43,7 @@ TEST_F(DictionaryScatterTest, Scatter)
     cudf::dictionary::decode(cudf::dictionary_column_view(table_result.front()->view()));
   cudf::test::strings_column_wrapper expected{
     "xxx", "aaa", "bbb", "aaa", "ccc", "ccc", "ccc", "ccc", "aaa"};
-  cudf::test::expect_columns_equal(expected, decoded->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, decoded->view());
 
   // empty map test
   cudf::test::fixed_width_column_wrapper<int32_t> empty_map{};
@@ -51,7 +51,7 @@ TEST_F(DictionaryScatterTest, Scatter)
     cudf::scatter(cudf::table_view{{source->view()}}, empty_map, cudf::table_view{{target->view()}})
       ->release();
   decoded = cudf::dictionary::decode(cudf::dictionary_column_view(table_result.front()->view()));
-  cudf::test::expect_columns_equal(strings_target, decoded->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(strings_target, decoded->view());
 
   // empty target test
   cudf::test::strings_column_wrapper empty_target{};
@@ -82,7 +82,7 @@ TEST_F(DictionaryScatterTest, WithNulls)
 
   cudf::test::fixed_width_column_wrapper<int64_t> expected{{1, 9, 5, 7, 7, 1, 4, 1},
                                                            {0, 1, 1, 1, 1, 1, 1, 0}};
-  cudf::test::expect_columns_equal(expected, decoded->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, decoded->view());
 }
 
 TEST_F(DictionaryScatterTest, Error)
