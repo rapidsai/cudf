@@ -283,19 +283,6 @@ struct evaluate_row_operator_functor {
       auto const output = data_references[operator_source_indices[operator_source_index + 1]];
       operator_source_index += arity + 1;
       type_dispatcher(input.data_type, evaluator, row_index, input, output, op);
-      /*
-      // reg: 40, stack: 240
-      unary_operator_dispatcher(op, input.data_type, evaluator, row_index, input, output);
-      // reg: 40, stack: 224
-      type_dispatch_unary_op{}.operator()<op>(input.data_type, evaluator, row_index, input, output);
-      // reg: 40, stack: 224
-      type_dispatcher(input.data_type,
-                      detail::dispatch_unary_operator_types<operator_functor<op>>{},
-                      evaluator,
-                      row_index,
-                      input,
-                      output);
-      */
     } else if (arity == 2) {
       // Binary operator
       auto const lhs    = data_references[operator_source_indices[operator_source_index]];
@@ -310,20 +297,6 @@ struct evaluate_row_operator_functor {
                       rhs,
                       output,
                       op);
-      /*
-      // reg: 38
-      type_dispatch_binary_op{}.operator()<op>(
-        lhs.data_type, rhs.data_type, evaluator, row_index, lhs, rhs, output);
-      type_dispatcher(lhs.data_type,
-                      detail::single_dispatch_binary_operator_types<operator_functor<op>>{},
-                      evaluator,
-                      row_index,
-                      lhs,
-                      rhs,
-                      output);
-      binary_operator_dispatcher(
-        op, lhs.data_type, rhs.data_type, evaluator, row_index, lhs, rhs, output);
-      */
     } else {
       release_assert(false && "Invalid operator arity.");
     }
