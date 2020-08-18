@@ -597,7 +597,7 @@ template <>
 struct operator_functor<ast_operator::SIN> {
   static constexpr auto arity{1};
 
-  template <typename InputT>
+  template <typename InputT, std::enable_if_t<std::is_floating_point<InputT>::value>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(std::sin(input))
   {
     return std::sin(input);
@@ -608,7 +608,7 @@ template <>
 struct operator_functor<ast_operator::COS> {
   static constexpr auto arity{1};
 
-  template <typename InputT>
+  template <typename InputT, std::enable_if_t<std::is_floating_point<InputT>::value>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(std::cos(input))
   {
     return std::cos(input);
@@ -619,7 +619,7 @@ template <>
 struct operator_functor<ast_operator::TAN> {
   static constexpr auto arity{1};
 
-  template <typename InputT>
+  template <typename InputT, std::enable_if_t<std::is_floating_point<InputT>::value>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(std::tan(input))
   {
     return std::tan(input);
@@ -630,7 +630,7 @@ template <>
 struct operator_functor<ast_operator::ARCSIN> {
   static constexpr auto arity{1};
 
-  template <typename InputT>
+  template <typename InputT, std::enable_if_t<std::is_floating_point<InputT>::value>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(std::asin(input))
   {
     return std::asin(input);
@@ -641,7 +641,7 @@ template <>
 struct operator_functor<ast_operator::ARCCOS> {
   static constexpr auto arity{1};
 
-  template <typename InputT>
+  template <typename InputT, std::enable_if_t<std::is_floating_point<InputT>::value>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(std::acos(input))
   {
     return std::acos(input);
@@ -652,7 +652,7 @@ template <>
 struct operator_functor<ast_operator::ARCTAN> {
   static constexpr auto arity{1};
 
-  template <typename InputT>
+  template <typename InputT, std::enable_if_t<std::is_floating_point<InputT>::value>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(std::atan(input))
   {
     return std::atan(input);
@@ -663,7 +663,7 @@ template <>
 struct operator_functor<ast_operator::SINH> {
   static constexpr auto arity{1};
 
-  template <typename InputT>
+  template <typename InputT, std::enable_if_t<std::is_floating_point<InputT>::value>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(std::sinh(input))
   {
     return std::sinh(input);
@@ -674,7 +674,7 @@ template <>
 struct operator_functor<ast_operator::COSH> {
   static constexpr auto arity{1};
 
-  template <typename InputT>
+  template <typename InputT, std::enable_if_t<std::is_floating_point<InputT>::value>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(std::cosh(input))
   {
     return std::cosh(input);
@@ -685,7 +685,7 @@ template <>
 struct operator_functor<ast_operator::TANH> {
   static constexpr auto arity{1};
 
-  template <typename InputT>
+  template <typename InputT, std::enable_if_t<std::is_floating_point<InputT>::value>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(std::tanh(input))
   {
     return std::tanh(input);
@@ -696,7 +696,7 @@ template <>
 struct operator_functor<ast_operator::ARCSINH> {
   static constexpr auto arity{1};
 
-  template <typename InputT>
+  template <typename InputT, std::enable_if_t<std::is_floating_point<InputT>::value>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(std::asinh(input))
   {
     return std::asinh(input);
@@ -707,7 +707,7 @@ template <>
 struct operator_functor<ast_operator::ARCCOSH> {
   static constexpr auto arity{1};
 
-  template <typename InputT>
+  template <typename InputT, std::enable_if_t<std::is_floating_point<InputT>::value>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(std::acosh(input))
   {
     return std::acosh(input);
@@ -718,7 +718,7 @@ template <>
 struct operator_functor<ast_operator::ARCTANH> {
   static constexpr auto arity{1};
 
-  template <typename InputT>
+  template <typename InputT, std::enable_if_t<std::is_floating_point<InputT>::value>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE auto operator()(InputT input) -> decltype(std::atanh(input))
   {
     return std::atanh(input);
