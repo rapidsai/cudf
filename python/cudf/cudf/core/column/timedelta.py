@@ -73,25 +73,7 @@ class TimeDeltaColumn(column.ColumnBase):
         return item.view("int64") in self.as_numerical
 
     def _repr_str_col(self):
-        # NOTE: This is for __repr__ purposes only.
-        # Typecasting to "str" yields different output
-        # when compared to __repr__ output of a duration type
-        # A Typecast to "str" preserves "Days" field even if
-        # the number of days in all rows are <= 0, whereas
-        # in __repr__ output the number of "Days" are truncated
-        # from the output if the number of days in all the rows
-        # are <= 0, hence this is an interal API which truncates "Days"
-        # from the output repr to both match pandas and have
-        # cleaner output.
-
-        if not (
-            self.binary_operator(op="gt", rhs=np.timedelta64(1, "D"))
-        ).any():
-            format = "%H:%M:%S"
-        else:
-            format = None
-
-        result = self.as_string_column(dtype="str", format=format)
+        result = self.as_string_column(dtype="str", format=None)
         if self.has_nulls:
             result = result.fillna(cudf._NA_REP)
         return result
