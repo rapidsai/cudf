@@ -28,6 +28,7 @@ requirements:
     - pyarrow 0.17.1.*
     - libcudf {{ version }}
     - rmm {{ minor_version }}.*
+    - cudatoolkit {{ cuda_version }}.*
   run:
     - python
     - pandas >=1.0,<1.1.0dev0
@@ -39,6 +40,7 @@ requirements:
     - rmm {{ minor_version }}.*
     - dlpack
     - fsspec>=0.6.0
+    - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
 
 test:
   requires:
