@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@ const uint8_t CompactProtocolReader::g_list2struct[16] = {0,
  * @param[in] depth Level of struct nesting
  *
  * @return True if the struct type is recognized, false otherwise
- **/
+ */
 bool CompactProtocolReader::skip_struct_field(int t, int depth)
 {
   switch (t) {
@@ -241,7 +241,7 @@ PARQUET_FLD_INT64(6, column_index_offset)
 PARQUET_FLD_INT32(7, column_index_length)
 PARQUET_END_STRUCT()
 
-PARQUET_BEGIN_STRUCT(ColumnMetaData)
+PARQUET_BEGIN_STRUCT(ColumnChunkMetaData)
 PARQUET_FLD_ENUM(1, type, Type)
 PARQUET_FLD_ENUM_LIST(2, encodings, Encoding)
 PARQUET_FLD_STRING_LIST(3, path_in_schema)
@@ -286,7 +286,7 @@ PARQUET_END_STRUCT()
  * @param[in] md File metadata that was previously parsed
  *
  * @return True if schema constructed completely, false otherwise
- **/
+ */
 bool CompactProtocolReader::InitSchema(FileMetaData *md)
 {
   if (WalkSchema(md->schema) != md->schema.size()) return false;
@@ -298,22 +298,28 @@ bool CompactProtocolReader::InitSchema(FileMetaData *md)
    * mapping the columns to the schema.
    */
   for (auto &row_group : md->row_groups) {
-    int current_row_group = 0;
+    int current_schema_index = 0;
     for (auto &column : row_group.columns) {
       int parent = 0;  // root of schema
       for (auto const &path : column.meta_data.path_in_schema) {
         auto const it = [&] {
-          // find_if starting at (current_row_group + 1) and then wrapping
+          // find_if starting at (current_schema_index + 1) and then wrapping
           auto schema = [&](auto const &e) { return e.parent_idx == parent && e.name == path; };
-          auto mid    = md->schema.cbegin() + current_row_group + 1;
+          auto mid    = md->schema.cbegin() + current_schema_index + 1;
           auto it     = std::find_if(mid, md->schema.cend(), schema);
           if (it != md->schema.cend()) return it;
           return std::find_if(md->schema.cbegin(), mid, schema);
         }();
         if (it == md->schema.cend()) return false;
-        current_row_group = std::distance(md->schema.cbegin(), it);
-        column.schema_idx = current_row_group;
-        parent            = current_row_group;
+        current_schema_index = std::distance(md->schema.cbegin(), it);
+
+        // if the schema index is already pointing at a nested type, we'll leave it alone.
+        if (column.schema_idx < 0 ||
+            md->schema[column.schema_idx].converted_type != parquet::LIST) {
+          column.schema_idx = current_schema_index;
+        }
+        column.leaf_schema_idx = current_schema_index;
+        parent                 = current_schema_index;
       }
     }
   }
@@ -330,7 +336,7 @@ bool CompactProtocolReader::InitSchema(FileMetaData *md)
  * @param[in] max_rep_level Max repetition level
  *
  * @return The node index that was populated
- **/
+ */
 int CompactProtocolReader::WalkSchema(
   std::vector<SchemaElement> &schema, int idx, int parent_idx, int max_def_level, int max_rep_level)
 {
@@ -361,11 +367,9 @@ int CompactProtocolReader::WalkSchema(
   }
 }
 
-/* ----------------------------------------------------------------------------*/
 /**
  * @Brief Parquet CompactProtocolWriter class
- **/
-/* ----------------------------------------------------------------------------*/
+ */
 
 #define CPW_BEGIN_STRUCT(st)                       \
   size_t CompactProtocolWriter::write(const st *s) \
@@ -490,7 +494,7 @@ if (s->column_index_length != 0) {
 }
 CPW_END_STRUCT()
 
-CPW_BEGIN_STRUCT(ColumnMetaData)
+CPW_BEGIN_STRUCT(ColumnChunkMetaData)
 CPW_FLD_INT32(1, type)
 CPW_FLD_INT32_LIST(2, encodings)
 CPW_FLD_STRING_LIST(3, path_in_schema)
