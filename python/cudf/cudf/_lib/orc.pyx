@@ -31,7 +31,7 @@ import numpy as np
 
 
 cpdef read_orc(filepath_or_buffer, columns=None,
-               stripe=None, stripe_count=None,
+               stripe=None, stripe_count=None, stripes=None,
                skip_rows=None, num_rows=None, use_index=True,
                decimals_as_float=True, force_decimal_scale=None,
                timestamp_type=None):
@@ -47,6 +47,7 @@ cpdef read_orc(filepath_or_buffer, columns=None,
         columns or [],
         get_size_t_arg(stripe, "stripe"),
         get_size_t_arg(stripe_count, "stripe_count"),
+        stripes,
         get_size_t_arg(skip_rows, "skip_rows"),
         get_size_t_arg(num_rows, "num_rows"),
         (
@@ -124,6 +125,7 @@ cdef read_orc_args make_read_orc_args(filepath_or_buffer,
                                       column_names,
                                       size_type stripe,
                                       size_type stripe_count,
+                                      stripes,
                                       size_type skip_rows,
                                       size_type num_rows,
                                       type_id timestamp_type,
@@ -135,6 +137,7 @@ cdef read_orc_args make_read_orc_args(filepath_or_buffer,
     )
     args.stripe = stripe
     args.stripe_count = stripe_count
+    args.stripe_list = stripes
     args.skip_rows = skip_rows
     args.num_rows = num_rows
     args.timestamp_type = data_type(timestamp_type)
