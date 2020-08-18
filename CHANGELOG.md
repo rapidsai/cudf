@@ -204,6 +204,7 @@
 - PR #5906 Add macros for showing line of failures in unit tests
 - PR #5933 Add in APIs to read/write arrow IPC formatted data from java 
 - PR #5970 Map data to pandas through arrow, always
+- PR #6012 Remove `cudf._cuda` and replace usages with `rmm._cuda`
 
 ## Bug Fixes
 
@@ -311,6 +312,7 @@
 - PR #5949 Find Arrow include directory for JNI builds
 - PR #5964 Fix API doc page title tag
 - PR #5981 Handle `nat` in `fillna` for datetime and timedelta types
+- PR #6003 Fix concurrent JSON reads crash
 
 
 # cuDF 0.14.0 (03 Jun 2020)
