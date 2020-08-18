@@ -131,7 +131,7 @@ std::unique_ptr<column> compute_column(table_view const table,
   int shmem_per_block_limit;
   CUDA_TRY(
     cudaDeviceGetAttribute(&shmem_per_block_limit, cudaDevAttrMaxSharedMemoryPerBlock, device_id));
-  auto constexpr DEFAULT_BLOCK_SIZE = 512;
+  auto constexpr DEFAULT_BLOCK_SIZE = 128;
   auto const block_size =
     (shmem_size_per_thread > 0)
       ? std::min(DEFAULT_BLOCK_SIZE, shmem_per_block_limit / shmem_size_per_thread)
