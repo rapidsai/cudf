@@ -72,7 +72,9 @@ When constructing a Buffer from a host object (e.g., a numpy array), new device 
 <rmm._lib.device_buffer.DeviceBuffer object at 0x7f6055baab50>
 ```
 
-**Note**: cuDF uses [`RMM`](https://github.com/rapidsai/rmm) for allocating device memory.
+cuDF uses the [RMM](https://github.com/rapidsai/rmm) library for allocating device memory.
+You can read more about device memory allocation with RMM
+[here](https://github.com/rapidsai/rmm#devicebuffers).
 
 When constructing a Buffer from a device object, such as a CuPy array, no new device memory is
 allocated. Instead, the Buffer points to the existing allocation, keeping a reference to the device
