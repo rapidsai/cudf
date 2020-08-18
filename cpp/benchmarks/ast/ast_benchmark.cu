@@ -52,11 +52,11 @@ static void BM_ast_transform(benchmark::State& state)
 
   // Create table data
   auto n_cols          = reuse_columns ? 1 : tree_levels + 1;
-  auto column_wrappers = std::vector<cudf::test::fixed_width_column_wrapper<key_type>>();
+  auto column_wrappers = std::vector<cudf::test::fixed_width_column_wrapper<key_type>>(n_cols);
   auto columns         = std::vector<cudf::column_view>(n_cols);
 
   auto data_iterator = thrust::make_counting_iterator(0);
-  std::generate_n(std::back_inserter(column_wrappers), n_cols, [=]() {
+  std::generate_n(column_wrappers.begin(), n_cols, [=]() {
     return cudf::test::fixed_width_column_wrapper<key_type>(data_iterator,
                                                             data_iterator + table_size);
   });
