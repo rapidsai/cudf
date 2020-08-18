@@ -67,6 +67,7 @@
 - PR #5811 Add `nvtext::edit_distance` API
 - PR #5789 Add groupby support for duration types
 - PR #5810 Make Cython subdirs packages and simplify package_data
+- PR #6005 Add support for Ampere
 - PR #5807 Initial support for struct columns
 - PR #5817 Enable more `fixed_point` unit tests by introducing "scale-less" constructor
 - PR #5822 Add `cudf_kafka` to `custreamz` run time conda dependency and fix bash syntax issue
@@ -98,6 +99,7 @@
 - PR #5309 Handle host frames in serialization
 - PR #5312 Test serializing `Series` after `slice`
 - PR #5248 Support interleave_columns for string types
+- PR #5332 Remove outdated dask-xgboost docs
 - PR #5349 Improve libcudf documentation CSS style
 - PR #5317 Optimize fixed_point rounding shift for integers
 - PR #5386 Remove `cub` from `include_dirs` in `setup.py`
@@ -203,6 +205,7 @@
 - PR #5906 Add macros for showing line of failures in unit tests
 - PR #5933 Add in APIs to read/write arrow IPC formatted data from java 
 - PR #5970 Map data to pandas through arrow, always
+- PR #6012 Remove `cudf._cuda` and replace usages with `rmm._cuda`
 
 ## Bug Fixes
 
