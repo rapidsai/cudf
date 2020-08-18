@@ -334,13 +334,8 @@ TEST_F(GatherTestList, GatherIncompleteHierarchies)
 TYPED_TEST(GatherTestListTyped, GatherSliced)
 {
   using T = TypeParam;
-  // to disambiguate between {} == 0 and {} == List{0}
-  // Also, see note about compiler issues when declaring nested
-  // empty lists in lists_column_wrapper documentation
-  using LCW = cudf::test::lists_column_wrapper<T>;
-
   {
-    cudf::test::lists_column_wrapper<T> a{
+    LCW<T> a{
       {{1, 1, 1}, {2, 2}, {3, 3}},
       {{4, 4, 4}, {5, 5}, {6, 6}},
       {{7, 7, 7}, {8, 8}, {9, 9}},
@@ -355,14 +350,14 @@ TYPED_TEST(GatherTestListTyped, GatherSliced)
     cudf::table_view tbl1({split_a[1]});
 
     auto result0 = cudf::gather(tbl0, cudf::test::fixed_width_column_wrapper<int>{1, 2});
-    cudf::test::lists_column_wrapper<T> expected0{
+    LCW<T> expected0{
       {{4, 4, 4}, {5, 5}, {6, 6}},
       {{7, 7, 7}, {8, 8}, {9, 9}},
     };
     cudf::test::expect_columns_equal(expected0, result0->get_column(0).view());
 
     auto result1 = cudf::gather(tbl1, cudf::test::fixed_width_column_wrapper<int>{0, 3});
-    cudf::test::lists_column_wrapper<T> expected1{
+    LCW<T> expected1{
       {{10, 10, 10}, {11, 11}, {12, 12}},
       {{50, 50, 50, 50}, {6, 13}},
     };
@@ -373,7 +368,7 @@ TYPED_TEST(GatherTestListTyped, GatherSliced)
 
   // List<List<List<T>>>
   {
-    cudf::test::lists_column_wrapper<T> list{
+    LCW<T> list{
       // slice 0
       {{{2, 3}, {4, 5}}, {{6, 7, 8}, {9, 10, 11}, {12, 13, 14}}},
 
@@ -381,15 +376,15 @@ TYPED_TEST(GatherTestListTyped, GatherSliced)
        {{11, 12}, {{42, 43, 44}, valids}, {{77, 78}, valids}}},
 
       // slice 1
-      {{LCW{0}}},
+      {{LCW<T>{0}}},
       {{{10}, {20, 30, 40, 50}, {60, 70, 80}},
        {{0, 1, 3}, {5}},
        {{11, 12, 13, 14, 15}, {16, 17}, {0}}},
       {{{{1, 6}, {60, 70, 80, 100}}, {{10, 11, 13}, {15}}, {{11, 12, 13, 14, 15}}}, valids},
 
       // slice 2
-      {{{{{10, 20}, valids}}, {LCW{30}}, {{40, 50}, {60, 70, 80}}}, valids},
-      {{{{10, 20, 30}}, {LCW{30}}, {{{20, 30}, valids}, {62, 72, 82}}}, valids}};
+      {{{{{10, 20}, valids}}, {LCW<T>{30}}, {{40, 50}, {60, 70, 80}}}, valids},
+      {{{{10, 20, 30}}, {LCW<T>{30}}, {{{20, 30}, valids}, {62, 72, 82}}}, valids}};
 
     auto sliced = cudf::slice(list, {0, 1, 2, 5, 5, 7});
 
@@ -399,8 +394,7 @@ TYPED_TEST(GatherTestListTyped, GatherSliced)
 
       cudf::test::fixed_width_column_wrapper<int> map{0};
       auto result = cudf::gather(tbl, map);
-      cudf::test::lists_column_wrapper<T> expected{
-        {{{2, 3}, {4, 5}}, {{6, 7, 8}, {9, 10, 11}, {12, 13, 14}}}};
+      LCW<T> expected{{{{2, 3}, {4, 5}}, {{6, 7, 8}, {9, 10, 11}, {12, 13, 14}}}};
       cudf::test::expect_columns_equivalent(expected, result->get_column(0).view());
     }
 
@@ -410,14 +404,14 @@ TYPED_TEST(GatherTestListTyped, GatherSliced)
 
       cudf::test::fixed_width_column_wrapper<int> map{1, 2, 0, 1};
       auto result = cudf::gather(tbl, map);
-      cudf::test::lists_column_wrapper<T> expected{
+      LCW<T> expected{
         {{{10}, {20, 30, 40, 50}, {60, 70, 80}},
          {{0, 1, 3}, {5}},
          {{11, 12, 13, 14, 15}, {16, 17}, {0}}},
 
         {{{{1, 6}, {60, 70, 80, 100}}, {{10, 11, 13}, {15}}, {{11, 12, 13, 14, 15}}}, valids},
 
-        {{LCW{0}}},
+        {{LCW<T>{0}}},
 
         {{{10}, {20, 30, 40, 50}, {60, 70, 80}},
          {{0, 1, 3}, {5}},
@@ -432,13 +426,12 @@ TYPED_TEST(GatherTestListTyped, GatherSliced)
 
       cudf::test::fixed_width_column_wrapper<int> map{1, 0, 0, 1, 1, 0};
       auto result = cudf::gather(tbl, map);
-      cudf::test::lists_column_wrapper<T> expected{
-        {{{{10, 20, 30}}, {LCW{30}}, {{{20, 30}, valids}, {62, 72, 82}}}, valids},
-        {{{{{10, 20}, valids}}, {LCW{30}}, {{40, 50}, {60, 70, 80}}}, valids},
-        {{{{{10, 20}, valids}}, {LCW{30}}, {{40, 50}, {60, 70, 80}}}, valids},
-        {{{{10, 20, 30}}, {LCW{30}}, {{{20, 30}, valids}, {62, 72, 82}}}, valids},
-        {{{{10, 20, 30}}, {LCW{30}}, {{{20, 30}, valids}, {62, 72, 82}}}, valids},
-        {{{{{10, 20}, valids}}, {LCW{30}}, {{40, 50}, {60, 70, 80}}}, valids}};
+      LCW<T> expected{{{{{10, 20, 30}}, {LCW<T>{30}}, {{{20, 30}, valids}, {62, 72, 82}}}, valids},
+                      {{{{{10, 20}, valids}}, {LCW<T>{30}}, {{40, 50}, {60, 70, 80}}}, valids},
+                      {{{{{10, 20}, valids}}, {LCW<T>{30}}, {{40, 50}, {60, 70, 80}}}, valids},
+                      {{{{10, 20, 30}}, {LCW<T>{30}}, {{{20, 30}, valids}, {62, 72, 82}}}, valids},
+                      {{{{10, 20, 30}}, {LCW<T>{30}}, {{{20, 30}, valids}, {62, 72, 82}}}, valids},
+                      {{{{{10, 20}, valids}}, {LCW<T>{30}}, {{40, 50}, {60, 70, 80}}}, valids}};
       cudf::test::expect_columns_equivalent(expected, result->get_column(0).view());
     }
   }

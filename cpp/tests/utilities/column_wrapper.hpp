@@ -615,11 +615,8 @@ class lists_column_wrapper : public detail::column_wrapper {
    *
    * @param elements The list of elements
    */
-  template <typename Element = T,
-            typename ElementFrom,
-            std::enable_if_t<cudf::is_fixed_width<Element>() &&
-                             cudf::is_fixed_width<ElementFrom>()>* = nullptr>
-  lists_column_wrapper(std::initializer_list<ElementFrom> elements) : column_wrapper{}
+  template <typename Element = T, std::enable_if_t<cudf::is_fixed_width<Element>()>* = nullptr>
+  lists_column_wrapper(std::initializer_list<SourceElementT> elements) : column_wrapper{}
   {
     build_from_non_nested(
       std::move(cudf::test::fixed_width_column_wrapper<T, SourceElementT>(elements).release()));
@@ -665,10 +662,9 @@ class lists_column_wrapper : public detail::column_wrapper {
    * @param v The validity iterator
    */
   template <typename Element = T,
-            typename ElementFrom,
             typename ValidityIterator,
             std::enable_if_t<cudf::is_fixed_width<Element>()>* = nullptr>
-  lists_column_wrapper(std::initializer_list<ElementFrom> elements, ValidityIterator v)
+  lists_column_wrapper(std::initializer_list<SourceElementT> elements, ValidityIterator v)
     : column_wrapper{}
   {
     build_from_non_nested(
