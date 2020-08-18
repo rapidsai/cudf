@@ -1,8 +1,6 @@
 cuDF internals
 ==============
 
-## Introduction
-
 The cuDF API closely matches that of the [Pandas](https://pandas.pydata.org/) library.
 Thus, we have the types `cudf.Series`, `cudf.DataFrame` and `cudf.Index` which look and
 feel very much like their Pandas counterparts.
@@ -54,7 +52,7 @@ and are object of type `cudf.core.buffer.Buffer`.
 Buffers can be constructed from array-like objects that live either on the host (e.g., numpy arrays)
 or the device (e.g., cupy arrays).
 
-When constructing a Buffer from a host object (e.g., a numpy array), new device memory is allocated:
+When constructing a Buffer from a host object such as a numpy array, new device memory is allocated:
 
 ```python
 >>> from cudf.core.buffer import Buffer
@@ -76,7 +74,7 @@ cuDF uses the [RMM](https://github.com/rapidsai/rmm) library for allocating devi
 You can read more about device memory allocation with RMM
 [here](https://github.com/rapidsai/rmm#devicebuffers).
 
-When constructing a Buffer from a device object, such as a CuPy array, no new device memory is
+When constructing a Buffer from a device object such as a CuPy array, no new device memory is
 allocated. Instead, the Buffer points to the existing allocation, keeping a reference to the device
 array:
 
