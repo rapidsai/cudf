@@ -195,6 +195,7 @@
 - PR #5894 Small code improvement / cleanup
 - PR #5899 Add in gather support for Java
 - PR #5933 Add in APIs to read/write arrow IPC formatted data from java 
+- PR #6002 Add Java bindings for md5
 
 ## Bug Fixes
 
