@@ -27,7 +27,9 @@ A column is composed of the following:
   to 64 bytes.
 * A tuple of **children** columns, which enable the representation complex types such as
   columns with non-fixed width elements (e.g., strings, lists).
-* If the Column represents a slice, an integer **offset** into the first element of the slice
+* A *size* indicating the number of elements in the Column  
+* If the Column represents a slice, an integer **offset** into the first element of the slice.
+  The size of the Column then gives the extent of the slice.
 
 For example, the `NumericalColumn` backing a Series with 1000 elements of type 'int32'
 and containing nulls is composed of:
