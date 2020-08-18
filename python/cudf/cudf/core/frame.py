@@ -1830,70 +1830,40 @@ class Frame(libcudf.table.Table):
     @classmethod
     @annotate("FROM_ARROW", color="orange", domain="cudf_python")
     def from_arrow(cls, data):
-        """Convert from a PyArrow Table/Array/ChunkedArray to
-        DataFrame/Series/Index depending on which class calls.
+        """Convert from a PyArrow Table to Frame
 
         Parameters
         ----------
-        data : PyArrow Table/Array/ChunkedArray
-            For DataFrame and MultiIndex, data should be arrow Table.
-            For others, it should be Array or Chunked Array.
+        data : PyArrow Table
 
         Raises
         ------
         TypeError for invalid input type.
-
-        Notes
-        -----
-
-        -   Does not support automatically setting index column(s) similar
-            to how ``to_pandas`` works for PyArrow Tables.
 
         Examples
         --------
         >>> import cudf
         >>> import pyarrow as pa
         >>> data = pa.table({"a":[1, 2, 3], "b":[4, 5, 6]})
-        >>> cudf.DataFrame.from_arrow(data)
+        >>> cudf.core.frame.Frame.from_arrow(data)
            a  b
         0  1  4
         1  2  5
         2  3  6
-
-        >>> cudf.Series.from_arrow(pa.array(["a", "b", None]))
-        0       a
-        1       b
-        2    <NA>
-        dtype: object
-
-        >>> cudf.Index.from_arrow(pa.array(["a", "b", None]))
-        StringIndex(['a' 'b' None], dtype='object')
         """
 
-        if cls in (cudf.DataFrame, cudf.MultiIndex) and not isinstance(
-            data, (pa.Table)
-        ):
+        if not isinstance(data, (pa.Table)):
             raise TypeError(
                 "To create a multicolumn cudf data, "
                 "the data should be an arrow Table"
             )
-        elif cls in (cudf.Series, cudf.Index):
-            if not isinstance(data, (pa.Array, pa.ChunkedArray)):
-                raise TypeError(
-                    "To create a cudf Series, "
-                    "the data should be an arrow Array"
-                )
-            data = pa.table([data], [None])
 
         column_names = data.column_names
-        index_col = None
         dtypes = None
-        # Find if there is a column in Table that should be treated as an Index
         if isinstance(data, pa.Table) and isinstance(
             data.schema.pandas_metadata, dict
         ):
             metadata = data.schema.pandas_metadata
-            index_col = metadata["index_columns"]
             dtypes = {
                 col["field_name"]: col["pandas_type"]
                 for col in metadata["columns"]
@@ -1987,39 +1957,12 @@ class Frame(libcudf.table.Table):
 
                 result._data[name] = result._data[name].astype(dtype)
 
-        if cls is cudf.MultiIndex:
-            result = cudf.Index(result[column_names])
-        elif cls in (cudf.Series, cudf.Index):
-            result = cls(result._data.columns[0])
-        else:
-            if index_col:
-                if isinstance(index_col[0], dict):
-                    result = result.set_index(
-                        cudf.RangeIndex(
-                            index_col[0]["start"],
-                            index_col[0]["stop"],
-                            name=index_col[0]["name"],
-                        )
-                    )
-                else:
-                    result = result.set_index(index_col[0])
-                    column_names.remove(index_col[0])
-            result = result[column_names]
-
-        return result
+        return result[column_names]
 
     @annotate("TO_ARROW", color="orange", domain="cudf_python")
-    def to_arrow(self, preserve_index=True):
+    def to_arrow(self):
         """
-        Convert to arrow Table/Array
-
-        For DataFrame and MultiIndex Table is returned and
-        for Series and Index  returns Array.
-
-        Parameters
-        ----------
-        preserve_index : bool, default True
-            whether index column and its meta data needs to be saved or not
+        Convert to arrow Table
 
         Examples
         --------
@@ -2031,28 +1974,6 @@ class Frame(libcudf.table.Table):
         a: int64
         b: int64
         index: int64
-        >>> df.to_arrow(preserve_index=False)
-        pyarrow.Table
-        a: int64
-        b: int64
-
-        >>> sr = cudf.Series(["a", "b", None])
-        >>> sr.to_arrow()
-        <pyarrow.lib.StringArray object at 0x7f796b0e7600>
-        [
-          "a",
-          "b",
-          null
-        ]
-
-        >>> ind = cudf.Index(["a", "b", None])
-        >>> ind.to_arrow()
-        <pyarrow.lib.StringArray object at 0x7f796b0e7750>
-        [
-          "a",
-          "b",
-          null
-        ]
         """
 
         data = self.copy(deep=False)
@@ -2063,37 +1984,7 @@ class Frame(libcudf.table.Table):
         categories = {}
         # saving the name as they might get changed from int to str
         names = self._data.names
-        index_descr = []
         null_arrays_names = []
-        if preserve_index and isinstance(self, (cudf.DataFrame)):
-            if isinstance(self.index, cudf.RangeIndex):
-                descr = {
-                    "kind": "range",
-                    "name": self.index.name,
-                    "start": self.index._start,
-                    "stop": self.index._stop,
-                    "step": 1,
-                }
-            else:
-                if isinstance(self.index, cudf.MultiIndex):
-                    names = tuple(
-                        f"level_{i}"
-                        for i, _ in enumerate(self.index._data.names)
-                    )
-                else:
-                    names = (
-                        data.index.names
-                        if data.index.name is not None
-                        else ("index",)
-                    )
-                for gen_name, col_name in zip(names, self.index._data.names):
-                    data.insert(
-                        data.shape[1], gen_name, self.index._data[col_name]
-                    )
-
-                descr = names[0]
-                names = data._data.names
-            index_descr.append(descr)
 
         for name in self._data.names:
             col = self._data[name]
@@ -2101,7 +1992,7 @@ class Frame(libcudf.table.Table):
                 # arrow doesn't support unsigned codes
                 signed_type = (
                     min_signed_type(col.codes.max())
-                    if self._data[name].codes.size > 0
+                    if col.codes.size > 0
                     else np.int8
                 )
                 codes[str(name)] = col.codes.astype(signed_type)
@@ -2198,24 +2089,7 @@ class Frame(libcudf.table.Table):
                             pa.null(), len(self), [pa.py_buffer((b""))]
                         ),
                     )
-        if (
-            out_table.num_columns == 1
-            and isinstance(self, (cudf.Series, cudf.Index))
-            and not isinstance(self, cudf.MultiIndex)
-        ):
-            return out_table.columns[0].chunk(0)
 
-        if isinstance(self, (cudf.DataFrame, cudf.Series)):
-            metadata = pa.pandas_compat.construct_metadata(
-                self,
-                out_table.schema.names,
-                [self.index],
-                index_descr,
-                preserve_index,
-                types=out_table.schema.types,
-            )
-
-            return out_table.replace_schema_metadata(metadata)
         return out_table
 
     def drop_duplicates(

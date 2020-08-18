@@ -393,6 +393,57 @@ class Series(Frame, Serializable):
         params.update(kwargs)
         return cls(**params)
 
+    @classmethod
+    def from_arrow(cls, array):
+        """Convert from a PyArrow Array to Series.
+        Parameters
+        ----------
+        array : PyArrow Object
+            PyArrow Object which has to be converted to cudf Series.
+
+        Raises
+        ------
+        TypeError for invalid input type.
+
+        Returns
+        -------
+        cudf Series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pyarrow as pa
+        >>> cudf.Series.from_arrow(pa.array(["a", "b", None]))
+        0       a
+        1       b
+        2    <NA>
+        dtype: object
+        """
+
+        return cls(cudf.core.column.ColumnBase.from_arrow(array))
+
+    def to_arrow(self):
+        """
+        Convert Series to a PyArrow Array.
+
+        Returns
+        -------
+        PyArrow Array
+
+        Examples
+        --------
+        >>> import cudf
+        >>> sr = cudf.Series(["a", "b", None])
+        >>> sr.to_arrow()
+        <pyarrow.lib.StringArray object at 0x7f796b0e7600>
+        [
+          "a",
+          "b",
+          null
+        ]
+        """
+        return self._column.to_arrow()
+
     def copy(self, deep=True):
         """
         Make a copy of this object's indices and data.

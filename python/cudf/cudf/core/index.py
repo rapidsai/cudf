@@ -226,6 +226,55 @@ class Index(Frame, Serializable):
     def __iter__(self):
         cudf.utils.utils.raise_iteration_error(obj=self)
 
+    @classmethod
+    def from_arrow(cls, array):
+        """Convert PyArrow array to Index
+
+        Parameters
+        ----------
+        array : PyArrow array/chunked array
+            PyArrow Object which has to be converted to Index
+
+        Raises
+        ------
+        TypeError for invalid input type.
+
+        Returns
+        -------
+        cudf Index
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pyarrow as pa
+        >>> cudf.Index.from_arrow(pa.array(["a", "b", None]))
+        StringIndex(['a' 'b' None], dtype='object')
+        """
+
+        return cls(cudf.core.column.column.ColumnBase.from_arrow(array))
+
+    def to_arrow(self):
+        """Convert Index to PyArrow array
+
+        Returns
+        -------
+        PyArrow array
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ind = cudf.Index(["a", "b", None])
+        >>> ind.to_arrow()
+        <pyarrow.lib.StringArray object at 0x7f796b0e7750>
+        [
+          "a",
+          "b",
+          null
+        ]
+        """
+
+        return self._data.columns[0].to_arrow()
+
     @property
     def values_host(self):
         """

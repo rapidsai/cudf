@@ -15,6 +15,7 @@ from types import GeneratorType
 import cupy
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from numba import cuda
 from pandas._config import get_option
 from pandas.api.types import is_dict_like
@@ -4769,6 +4770,130 @@ class DataFrame(Frame, Serializable):
         result = df.set_index(index)
 
         return result
+
+    @classmethod
+    def from_arrow(cls, table):
+        """Convert from a PyArrow Table to DataFrame.
+        Parameters
+        ----------
+        table : PyArrow Table Object
+            PyArrow Table Object which has to be converted to cudf DataFrame.
+        Raises
+        ------
+        TypeError for invalid input type.
+        Returns
+        -------
+        cudf DataFrame
+
+        Notes
+        -----
+        -   Does not support automatically setting index column(s) similar
+            to how ``to_pandas`` works for PyArrow Tables.
+        Examples
+        --------
+        >>> import cudf
+        >>> import pyarrow as pa
+        >>> data = pa.table({"a":[1, 2, 3], "b":[4, 5, 6]})
+        >>> cudf.DataFrame.from_arrow(data)
+           a  b
+        0  1  4
+        1  2  5
+        2  3  6
+        """
+        index_col = None
+        if isinstance(table, pa.Table) and isinstance(
+            table.schema.pandas_metadata, dict
+        ):
+            index_col = table.schema.pandas_metadata["index_columns"]
+
+        out = super().from_arrow(table)
+
+        if index_col:
+            if isinstance(index_col[0], dict):
+                out = out.set_index(
+                    cudf.RangeIndex(
+                        index_col[0]["start"],
+                        index_col[0]["stop"],
+                        name=index_col[0]["name"],
+                    )
+                )
+            else:
+                out = out.set_index(index_col[0])
+
+        return out
+
+    def to_arrow(self, preserve_index=True):
+        """
+        Convert to a PyArrow Table.
+
+        Parameters
+        ----------
+        preserve_index : bool, default True
+            whether index column and its meta data needs to be saved or not
+
+        Returns
+        -------
+        PyArrow Table
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame(
+        ...     {"a":[1, 2, 3], "b":[4, 5, 6]}, index=[1, 2, 3])
+        >>> df.to_arrow()
+        pyarrow.Table
+        a: int64
+        b: int64
+        index: int64
+        >>> df.to_arrow(preserve_index=False)
+        pyarrow.Table
+        a: int64
+        b: int64
+        """
+
+        data = self.copy(deep=False)
+        index_descr = []
+        if preserve_index:
+            if isinstance(self.index, cudf.RangeIndex):
+                descr = {
+                    "kind": "range",
+                    "name": self.index.name,
+                    "start": self.index._start,
+                    "stop": self.index._stop,
+                    "step": 1,
+                }
+            else:
+                if isinstance(self.index, cudf.MultiIndex):
+                    gen_names = tuple(
+                        f"level_{i}"
+                        for i, _ in enumerate(self.index._data.names)
+                    )
+                else:
+                    gen_names = (
+                        self.index.names
+                        if self.index.name is not None
+                        else ("index",)
+                    )
+                for gen_name, col_name in zip(
+                    gen_names, self.index._data.names
+                ):
+                    data.insert(
+                        data.shape[1], gen_name, self.index._data[col_name]
+                    )
+                descr = gen_names[0]
+            index_descr.append(descr)
+
+        out = super(DataFrame, data).to_arrow()
+        metadata = pa.pandas_compat.construct_metadata(
+            self,
+            out.schema.names,
+            [self.index],
+            index_descr,
+            preserve_index,
+            types=out.schema.types,
+        )
+
+        return out.replace_schema_metadata(metadata)
 
     def to_records(self, index=True):
         """Convert to a numpy recarray

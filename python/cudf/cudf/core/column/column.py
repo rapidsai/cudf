@@ -35,6 +35,7 @@ from cudf.utils.dtypes import (
     is_numerical_dtype,
     is_scalar,
     is_string_dtype,
+    min_signed_type,
     min_unsigned_type,
     np_to_pa_dtype,
 )
@@ -286,11 +287,129 @@ class ColumnBase(Column, Serializable):
         return dropped_col
 
     def to_arrow(self):
-        return self.as_frame().to_arrow()["None"].chunk(0)
+        """Convert from column to PyArrow Array
+
+        Examples
+        --------
+        >>> import cudf
+        >>> col = cudf.core.column.as_column([1, 2, 3, 4])
+        >>> col.to_arrow()
+        <pyarrow.lib.Int64Array object at 0x7f886547f830>
+        [
+          1,
+          2,
+          3,
+          4
+        ]
+        """
+        if isinstance(self, cudf.core.column.CategoricalColumn):
+            # arrow doesn't support unsigned codes
+            signed_type = (
+                min_signed_type(self.codes.max())
+                if self.codes.size > 0
+                else np.int8
+            )
+            codes = self.codes.astype(signed_type)
+            categories = self.categories
+
+            out_indices = libcudf.interop.to_arrow(
+                libcudf.table.Table(
+                    cudf.core.column_accessor.ColumnAccessor({"None": codes})
+                ),
+                ["None"],
+                keep_index=False,
+            )
+            out_dictionary = libcudf.interop.to_arrow(
+                libcudf.table.Table(
+                    cudf.core.column_accessor.ColumnAccessor(
+                        {"None": categories}
+                    )
+                ),
+                ["None"],
+                keep_index=False,
+            )
+
+            return pa.DictionaryArray.from_arrays(
+                out_indices["None"].chunk(0),
+                out_dictionary["None"].chunk(0),
+                ordered=self.ordered,
+            )
+
+        elif isinstance(self, cudf.core.column.StringColumn) and (
+            self.null_count == len(self)
+        ):
+            return pa.NullArray.from_buffers(
+                pa.null(), len(self), [pa.py_buffer((b""))]
+            )
+
+        return libcudf.interop.to_arrow(
+            libcudf.table.Table(
+                cudf.core.column_accessor.ColumnAccessor({"None": self})
+            ),
+            ["None"],
+            keep_index=False,
+        )["None"].chunk(0)
 
     @classmethod
     def from_arrow(cls, array):
-        return cudf.Series.from_arrow(array)._column
+        """
+        Convert PyArrow Array/ChunkedArray to column
+
+        Parameters
+        ----------
+        array : PyArrow array/chunked array
+
+        Returns
+        -------
+        column
+
+        Examples
+        --------
+        >>> import pyarrow as pa
+        >>> import cudf
+        >>> cudf.core.column.ColumnBase.from_arrow(pa.array([1, 2, 3, 4]))
+        <cudf.core.column.numerical.NumericalColumn object at 0x7f8865497ef0>
+        """
+        if not isinstance(array, (pa.Array, pa.ChunkedArray)):
+            raise TypeError("array should be PyArrow array or chunked array")
+
+        data = pa.table([array], [None])
+        if isinstance(array.type, pa.DictionaryType):
+            indices_table = pa.table(
+                {
+                    "None": pa.chunked_array(
+                        [chunk.indices for chunk in data["None"].chunks],
+                        type=array.type.index_type,
+                    )
+                }
+            )
+            dictionaries_table = pa.table(
+                {
+                    "None": pa.chunked_array(
+                        [chunk.dictionary for chunk in data["None"].chunks],
+                        type=array.type.value_type,
+                    )
+                }
+            )
+
+            codes = libcudf.interop.from_arrow(
+                indices_table, indices_table.column_names
+            )._data["None"]
+            categories = libcudf.interop.from_arrow(
+                dictionaries_table, dictionaries_table.column_names
+            )._data["None"]
+
+            return build_categorical_column(
+                categories=categories,
+                codes=codes,
+                mask=codes.base_mask,
+                size=codes.size,
+                ordered=array.type.ordered,
+            )
+
+        return libcudf.interop.from_arrow(data, data.column_names)._data[
+            "None"
+        ]
 
     def _get_mask_as_column(self):
         data = Buffer(cupy.ones(len(self), dtype=np.bool_))

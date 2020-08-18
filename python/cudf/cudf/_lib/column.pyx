@@ -433,7 +433,7 @@ cdef class Column:
             expected_tid = (
                 <libcudf_types.type_id> (
                     <underlying_type_t_type_id> (
-                        np_to_cudf_types[np.dtype("int8")]
+                        np_to_cudf_types[np.dtype("float64")]
                     )
                 )
             )

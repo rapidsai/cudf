@@ -276,6 +276,82 @@ class MultiIndex(Index):
             + ")"
         )
 
+    @classmethod
+    def from_arrow(cls, table):
+        """Convert PyArrow Table to MultiIndex
+
+        Parameters
+        ----------
+        table : PyArrow Table
+            PyArrow Object which has to be converted to MultiIndex
+
+        Returns
+        -------
+        cudf MultiIndex
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pyarrow as pa
+        >>> tbl = pa.table({"a":[1, 2, 3], "b":["a", "b", "c"]})
+
+        >>> cudf.MultiIndex.from_arrow(tbl)
+        MultiIndex(levels=[0    1
+        1    2
+        2    3
+        dtype: int64, 0    a
+        1    b
+        2    c
+        dtype: object],
+        codes=   a  b
+        0  0  0
+        1  1  1
+        2  2  2)
+        """
+
+        return cls.from_frame(super(Index, cls).from_arrow(table))
+
+    def to_arrow(self):
+        """Convert MultiIndex to PyArrow Table
+
+        Returns
+        -------
+        PyArrow Table
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({"a":[1, 2, 3], "b":[2, 3, 4]})
+        >>> mindex = cudf.Index(df)
+        >>> mindex
+        MultiIndex(levels=[0    1
+        1    2
+        2    3
+        dtype: int64, 0    2
+        1    3
+        2    4
+        dtype: int64],
+        codes=   a  b
+        0  0  0
+        1  1  1
+        2  2  2)
+        >>> mindex.to_arrow()
+        pyarrow.Table
+        a: int64
+        b: int64
+        >>> mindex.to_arrow()['a']
+        <pyarrow.lib.ChunkedArray object at 0x7f5c6b71fad0>
+        [
+            [
+                1,
+                2,
+                3
+            ]
+        ]
+        """
+
+        return super(Index, self).to_arrow()
+
     @property
     def codes(self):
         if self._codes is None:
