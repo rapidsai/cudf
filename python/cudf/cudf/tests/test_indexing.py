@@ -7,6 +7,7 @@ import pytest
 
 import cudf
 from cudf import DataFrame, Series
+from cudf.core._compat import PANDAS_GE_110
 from cudf.tests import utils
 from cudf.tests.utils import INTEGER_TYPES, assert_eq
 
@@ -380,8 +381,8 @@ def test_series_loc_string():
     )
 
 
-def test_series_loc_datetime(pd_version_fail):
-    if not pd_version_fail:
+def test_series_loc_datetime():
+    if not PANDAS_GE_110:
         kwargs = {"check_freq": False}
     else:
         kwargs = {}

@@ -6,6 +6,7 @@ import pytest
 
 import cudf as gd
 from cudf.core import DataFrame, Series
+from cudf.core._compat import PANDAS_GE_110
 from cudf.core.index import as_index
 from cudf.tests.utils import assert_eq
 
@@ -46,7 +47,7 @@ t a
 
 
 def test_categorical_integer(pd_version_fail):
-    if pd_version_fail:
+    if not PANDAS_GE_110:
         pytest.xfail(reason="pandas >=1.1 required")
     cat = pd.Categorical(["a", "_", "_", "c", "a"], categories=["a", "b", "c"])
     pdsr = pd.Series(cat)

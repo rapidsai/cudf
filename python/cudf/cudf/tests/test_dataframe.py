@@ -14,6 +14,7 @@ import pytest
 from numba import cuda
 
 import cudf as gd
+from cudf.core._compat import PANDAS_GE_110
 from cudf.core.column import column
 from cudf.core.dataframe import DataFrame, Series
 from cudf.tests import utils
@@ -2285,8 +2286,8 @@ def test_dataframe_reindex_10(copy):
 
 
 @pytest.mark.parametrize("copy", [True, False])
-def test_dataframe_reindex_change_dtype(copy, pd_version_fail):
-    if not pd_version_fail:
+def test_dataframe_reindex_change_dtype(copy):
+    if PANDAS_GE_110:
         kwargs = {"check_freq": False}
     else:
         kwargs = {}
