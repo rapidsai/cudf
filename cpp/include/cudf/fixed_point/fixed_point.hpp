@@ -344,6 +344,11 @@ class fixed_point {
     return detail::shift<Rep, Rad>(static_cast<U>(_value), detail::negate(_scale));
   }
 
+  CUDA_HOST_DEVICE_CALLABLE operator scaled_integer<Rep>() const
+  {
+    return scaled_integer<Rep>{_value, _scale};
+  }
+
   /**
    * @brief Explicit conversion operator to `bool`
    *
