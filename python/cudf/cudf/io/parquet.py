@@ -1,6 +1,7 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 import warnings
+from collections import defaultdict
 
 from fsspec.core import get_fs_token_paths
 from pyarrow import parquet as pq
@@ -213,15 +214,11 @@ def read_parquet(
         dataset = ds.dataset(filepaths_or_buffers, format="parquet")
 
         # Load IDs of filtered row groups for each file in dataset
-        filtered_rg_ids = {}
+        filtered_rg_ids = defaultdict(list)
         for fragment in dataset.get_fragments(filter=filters):
             for rg_fragment in fragment.get_row_group_fragments(filters):
                 for rg_id in rg_fragment.row_groups:
-                    path = rg_fragment.path
-                    if path not in filtered_rg_ids:
-                        filtered_rg_ids[path] = [rg_id]
-                    else:
-                        filtered_rg_ids[path].append(rg_id)
+                    filtered_rg_ids[rg_fragment.path].append(rg_id)
 
         # TODO: Use this with pyarrow 1.0.0
         # # Load IDs of filtered row groups for each file in dataset
@@ -243,7 +240,7 @@ def read_parquet(
         for i, file in enumerate(dataset.files):
             if row_groups[i] is None:
                 row_groups[i] = (
-                    filtered_rg_ids[file] if file in filtered_rg_ids else []
+                    filtered_rg_ids[file]
                 )
             else:
                 row_groups[i] = filter(
