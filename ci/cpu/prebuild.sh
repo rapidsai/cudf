@@ -3,12 +3,8 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 set -e
 
-#Upload cudf once per PYTHON
-if [[ "$CUDA" == "10.1" ]]; then
-    export UPLOAD_CUDF=1
-else
-    export UPLOAD_CUDF=0
-fi
+#Always upload cudf Python package
+export UPLOAD_CUDF=1
 
 #Upload libcudf once per CUDA
 if [[ "$PYTHON" == "3.7" ]]; then
