@@ -270,6 +270,120 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testMD5HashStrings() {
+    try (ColumnVector v0 = ColumnVector.fromStrings(
+          "a", "B\n", "dE\"\u0100\t\u0101 \u0500\u0501",
+          "A very long (greater than 128 bytes/char string) to test a multi hash-step data point " +
+          "in the MD5 hash function. This string needed to be longer.",
+          null, null);
+         ColumnVector v1 = ColumnVector.fromStrings(
+           null, "c", "\\Fg2\'",
+           "A 60 character string to test MD5's message padding algorithm",
+           "hiJ\ud720\ud721\ud720\ud721", null);
+         ColumnVector v2 = ColumnVector.fromStrings(
+           "a", "B\nc",  "dE\"\u0100\t\u0101 \u0500\u0501\\Fg2\'",
+           "A very long (greater than 128 bytes/char string) to test a multi hash-step data point " +
+           "in the MD5 hash function. This string needed to be longer.A 60 character string to " +
+           "test MD5's message padding algorithm",
+           "hiJ\ud720\ud721\ud720\ud721", null);
+         ColumnVector result01 = ColumnVector.md5Hash(v0, v1);
+         ColumnVector result2 = ColumnVector.md5Hash(v2);
+         ColumnVector expected = ColumnVector.fromStrings(
+          "0cc175b9c0f1b6a831c399e269772661", "f5112705c2f6dc7d3fc6bd496df6c2e8",
+          "675c30ce6d1b27dcb5009b01be42e9bd", "8fa29148f63c1fe9248fdc4644e3a193",
+          "1bc221b25e6c4825929e884092f4044f", "d41d8cd98f00b204e9800998ecf8427e")) {
+      assertColumnsAreEqual(result01, expected);
+      assertColumnsAreEqual(result2, expected);
+    }
+  }
+
+  @Test
+  void testMD5HashInts() {
+    try (ColumnVector v0 = ColumnVector.fromBoxedInts(0, 100, null, null, Integer.MIN_VALUE, null);
+         ColumnVector v1 = ColumnVector.fromBoxedInts(0, null, -100, null, null, Integer.MAX_VALUE);
+         ColumnVector result = ColumnVector.md5Hash(v0, v1);
+         ColumnVector expected = ColumnVector.fromStrings(
+          "7dea362b3fac8e00956a4952a3d4f474", "cdc824bf721df654130ed7447fb878ac",
+          "7fb89558e395330c6a10ab98915fcafb", "d41d8cd98f00b204e9800998ecf8427e",
+          "152afd7bf4dbe26f85032eee0269201a", "ed0622e1179e101cf7edc0b952cc5262")) {
+      assertColumnsAreEqual(result, expected);
+    }
+  }
+
+  @Test
+  void testMD5HashDoubles() {
+    try (ColumnVector v = ColumnVector.fromBoxedDoubles(
+          0.0, null, 100.0, -100.0, Double.MIN_NORMAL, Double.MAX_VALUE,
+          POSITIVE_DOUBLE_NAN_UPPER_RANGE, POSITIVE_DOUBLE_NAN_LOWER_RANGE,
+          NEGATIVE_DOUBLE_NAN_UPPER_RANGE, NEGATIVE_DOUBLE_NAN_LOWER_RANGE,
+          Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY);
+         ColumnVector result = ColumnVector.md5Hash(v);
+         ColumnVector expected = ColumnVector.fromStrings(
+          "7dea362b3fac8e00956a4952a3d4f474", "d41d8cd98f00b204e9800998ecf8427e",
+          "6f5b4a57fd3aeb25cd33aa6c56512fd4", "b36ce1b64164e8f12c52ee5f1131ec01",
+          "f7fbcdce3cf1bea8defd4ca29dabeb75", "d466cb643c6da6c31c88f4d482bccfd3",
+          "bf26d90b64827fdbc58da0aa195156fe", "bf26d90b64827fdbc58da0aa195156fe",
+          "bf26d90b64827fdbc58da0aa195156fe", "bf26d90b64827fdbc58da0aa195156fe",
+          "73c82437c94e197f7e35e14f0140497a", "740660a5f71e7a264fca45330c34da31")) {
+      assertColumnsAreEqual(result, expected);
+    }
+  }
+
+  @Test
+  void testMD5HashFloats() {
+    try (ColumnVector v = ColumnVector.fromBoxedFloats(
+          0f, 100f, -100f, Float.MIN_NORMAL, Float.MAX_VALUE, null,
+          POSITIVE_FLOAT_NAN_LOWER_RANGE, POSITIVE_FLOAT_NAN_UPPER_RANGE,
+          NEGATIVE_FLOAT_NAN_LOWER_RANGE, NEGATIVE_FLOAT_NAN_UPPER_RANGE,
+          Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY);
+         ColumnVector result = ColumnVector.md5Hash(v);
+         ColumnVector expected = ColumnVector.fromStrings(
+          "f1d3ff8443297732862df21dc4e57262", "a5d1e9463fae706307f90b05e9e6db9a",
+          "556915a037c2ce1adfbedd7ca24794ea", "59331a73da50b419339c0d67a9ec1a97",
+          "0ac9ada9698891bfc3f74bcee7e3f675", "d41d8cd98f00b204e9800998ecf8427e",
+          "d6fd2bac25776d9a7269ca0e24b21b36", "d6fd2bac25776d9a7269ca0e24b21b36",
+          "d6fd2bac25776d9a7269ca0e24b21b36", "d6fd2bac25776d9a7269ca0e24b21b36",
+          "55e3a4db046ad9065bd7d64243de408f", "33b552ad34a825b275f5f2b59778b5c3")){
+      assertColumnsAreEqual(result, expected);
+    }
+  }
+
+  @Test
+  void testMD5HashBools() {
+    try (ColumnVector v0 = ColumnVector.fromBoxedBooleans(null, true, false, true, null, false);
+         ColumnVector v1 = ColumnVector.fromBoxedBooleans(null, true, false, null, false, true);
+         ColumnVector result = ColumnVector.md5Hash(v0, v1);
+         ColumnVector expected = ColumnVector.fromStrings(
+          "d41d8cd98f00b204e9800998ecf8427e", "249ba6277758050695e8f5909bacd6d3",
+          "c4103f122d27677c9db144cae1394a66", "55a54008ad1ba589aa210d2629c1df41",
+          "93b885adfe0da089cdf634904fd59f71", "441077cc9e57554dd476bdfb8b8b8102")) {
+      assertColumnsAreEqual(result, expected);
+    }
+  }
+
+  @Test
+  void testMD5HashMixed() {
+    try (ColumnVector strings = ColumnVector.fromStrings(
+          "a", "B\n", "dE\"\u0100\t\u0101 \u0500\u0501",
+          "A very long (greater than 128 bytes/char string) to test a multi hash-step data point " +
+          "in the MD5 hash function. This string needed to be longer.",
+          null, null);
+         ColumnVector integers = ColumnVector.fromBoxedInts(0, 100, -100, Integer.MIN_VALUE, Integer.MAX_VALUE, null);
+         ColumnVector doubles = ColumnVector.fromBoxedDoubles(
+          0.0, 100.0, -100.0, POSITIVE_DOUBLE_NAN_LOWER_RANGE, POSITIVE_DOUBLE_NAN_UPPER_RANGE, null);
+         ColumnVector floats = ColumnVector.fromBoxedFloats(
+          0f, 100f, -100f, NEGATIVE_FLOAT_NAN_LOWER_RANGE, NEGATIVE_FLOAT_NAN_UPPER_RANGE, null);
+         ColumnVector bools = ColumnVector.fromBoxedBooleans(true, false, null, false, true, null);
+         ColumnVector result = ColumnVector.md5Hash(strings, integers, doubles, floats, bools);
+         ColumnVector expected = ColumnVector.fromStrings(
+          "c12c8638819fdd8377bbf537a4ebf0b4", "abad86357c1ae28eeb89f4b59700946a",
+          "8c176e687e677a752868fe9d319d9d5c", "2f64d6a1d5b730fd97115924cf9aa486",
+          "9f9d26bb5d25d56453a91f0558370fa4", "d41d8cd98f00b204e9800998ecf8427e")) {
+      assertColumnsAreEqual(result, expected);
+    }
+  }
+
+  @Test
   void isNotNullTestEmptyColumn() {
     try (ColumnVector v = ColumnVector.fromBoxedInts();
          ColumnVector expected = ColumnVector.fromBoxedBooleans();
