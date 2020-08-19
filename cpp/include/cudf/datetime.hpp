@@ -27,34 +27,6 @@
 
 namespace cudf {
 namespace datetime {
-namespace detail {
-enum class datetime_component {
-  INVALID = 0,
-  YEAR,
-  MONTH,
-  DAY,
-  WEEKDAY,
-  HOUR,
-  MINUTE,
-  SECOND,
-};
-
-/**
- * @brief  Extracts the supplied datetime component from any date time type
- * and returns an int16_t cudf::column.
- *
- * @param[in] cudf::column_view of the input datetime values
- * @returns cudf::column of the extracted int16_t datetime component
- * @throw cudf::logic_error if input column datatype is not TIMESTAMP
- */
-
-template <datetime_component Component>
-std::unique_ptr<column> extract_component(
-  column_view const& column,
-  cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-}  // namespace detail
-
 /**
  * @addtogroup datetime_extract
  * @{
@@ -182,7 +154,6 @@ std::unique_ptr<cudf::column> last_day_of_month(
 std::unique_ptr<cudf::column> day_of_year(
   cudf::column_view const& column,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
 /** @} */  // end of group
 }  // namespace datetime
 }  // namespace cudf
