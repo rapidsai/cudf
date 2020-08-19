@@ -243,6 +243,7 @@ add_library(cudf
     src/hash/hashing.cu
     src/hash/md5_hash.cu
     src/hash/murmur_hash.cu
+    src/hash/sha_hash.cu
     src/interop/dlpack.cpp
     src/interop/from_arrow.cu
     src/interop/to_arrow.cu
