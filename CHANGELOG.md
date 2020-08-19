@@ -223,6 +223,7 @@
 - PR #5899 Add in gather support for Java
 - PR #5906 Add macros for showing line of failures in unit tests
 - PR #5933 Add in APIs to read/write arrow IPC formatted data from java 
+- PR #3918 Update cuDF internals doc
 - PR #5970 Map data to pandas through arrow, always
 - PR #6012 Remove `cudf._cuda` and replace usages with `rmm._cuda`
 
