@@ -10,6 +10,8 @@ import fsspec.implementations.local
 
 from cudf.utils.docutils import docfmt_partial
 
+import pyarrow.dataset as ds
+
 _docstring_remote_sources = """
 - cuDF supports local and remote data stores. See configuration details for
   available sources
@@ -1122,58 +1124,59 @@ def _check_filters(filters, check_null_strings=True):
     return filters
 
 
+def _convert_single_predicate(col, op, val):
+    field = ds.field(col)
+
+    if op == "=" or op == "==":
+        return field == val
+    elif op == "!=":
+        return field != val
+    elif op == "<":
+        return field < val
+    elif op == ">":
+        return field > val
+    elif op == "<=":
+        return field <= val
+    elif op == ">=":
+        return field >= val
+    elif op == "in":
+        return field.isin(val)
+    elif op == "not in":
+        return ~field.isin(val)
+    else:
+        raise ValueError(
+            '"{0}" is not a valid operator in predicates.'.format(
+                (col, op, val)
+            )
+        )
+
+
+def _convert_single_conjunction(conjunction):
+    and_exprs = [
+        _convert_single_predicate(col, op, val) for col, op, val in conjunction
+    ]
+
+    expr = and_exprs[0]
+    if len(and_exprs) > 1:
+        for and_expr in and_exprs[1:]:
+            expr = ds.AndExpression(expr, and_expr)
+
+
 # TODO: Use PyArrow once filters-to-expression conversion is added to
 # API by resolving https://issues.apache.org/jira/browse/ARROW-9672
 def filters_to_expression(filters):
     """
     Check if filters are well-formed.
     """
-    import pyarrow.dataset as ds
 
     if isinstance(filters, ds.Expression):
         return filters
 
     filters = _check_filters(filters, check_null_strings=False)
 
-    def convert_single_predicate(col, op, val):
-        field = ds.field(col)
-
-        if op == "=" or op == "==":
-            return field == val
-        elif op == "!=":
-            return field != val
-        elif op == "<":
-            return field < val
-        elif op == ">":
-            return field > val
-        elif op == "<=":
-            return field <= val
-        elif op == ">=":
-            return field >= val
-        elif op == "in":
-            return field.isin(val)
-        elif op == "not in":
-            return ~field.isin(val)
-        else:
-            raise ValueError(
-                '"{0}" is not a valid operator in predicates.'.format(
-                    (col, op, val)
-                )
-            )
-
-    or_exprs = []
-
-    for conjunction in filters:
-        and_exprs = []
-        for col, op, val in conjunction:
-            and_exprs.append(convert_single_predicate(col, op, val))
-
-        expr = and_exprs[0]
-        if len(and_exprs) > 1:
-            for and_expr in and_exprs[1:]:
-                expr = ds.AndExpression(expr, and_expr)
-
-        or_exprs.append(expr)
+    or_exprs = [
+        _convert_single_conjunction(conjunction) for conjunction in filters
+    ]
 
     expr = or_exprs[0]
     if len(or_exprs) > 1:
