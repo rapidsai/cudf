@@ -113,8 +113,8 @@ TYPED_TEST(MergeStringTest, Merge1StringKeyColumns)
   auto output_column_view1{p_outputTable->view().column(0)};
   auto output_column_view2{p_outputTable->view().column(1)};
 
-  cudf::test::expect_columns_equal(expected_column_view1, output_column_view1);
-  cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view1, output_column_view1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view2, output_column_view2);
 }
 
 // rename test <TestName> as DISABLED_<TestName> to disable:
@@ -190,10 +190,9 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyColumns)
 
   auto seq_out2 = cudf::test::make_counting_transform_iterator(0, [outputRows](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
-      bool ret = (row % 2 == 0);
-      return static_cast<TypeParam>(ret);
+      return (row % 2 == 0) ? 1 : 0;
     } else
-      return static_cast<TypeParam>(row);
+      return (row);
   });
   fixed_width_column_wrapper<TypeParam, typename decltype(seq_out2)::value_type> expectedDataWrap2(
     seq_out2, seq_out2 + outputRows);
@@ -223,9 +222,9 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyColumns)
   auto output_column_view2{p_outputTable->view().column(1)};
   auto output_column_view3{p_outputTable->view().column(2)};
 
-  cudf::test::expect_columns_equal(expected_column_view1, output_column_view1);
-  cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
-  cudf::test::expect_columns_equal(expected_column_view3, output_column_view3);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view1, output_column_view1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view2, output_column_view2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view3, output_column_view3);
 }
 
 TYPED_TEST(MergeStringTest, Merge1StringKeyNullColumns)
@@ -302,8 +301,8 @@ TYPED_TEST(MergeStringTest, Merge1StringKeyNullColumns)
   auto output_column_view1{p_outputTable->view().column(0)};
   auto output_column_view2{p_outputTable->view().column(1)};
 
-  cudf::test::expect_columns_equal(expected_column_view1, output_column_view1);
-  cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view1, output_column_view1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view2, output_column_view2);
 }
 
 TYPED_TEST(MergeStringTest, Merge2StringKeyNullColumns)
@@ -381,10 +380,9 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyNullColumns)
 
   auto seq_out2 = cudf::test::make_counting_transform_iterator(0, [outputRows](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
-      bool ret = (row % 2 == 0);
-      return static_cast<TypeParam>(ret);
+      return (row % 2 == 0) ? 1 : 0;
     } else
-      return static_cast<TypeParam>(row);
+      return (row);
   });
   fixed_width_column_wrapper<TypeParam, typename decltype(seq_out2)::value_type> expectedDataWrap2(
     seq_out2, seq_out2 + outputRows);
@@ -415,7 +413,7 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyNullColumns)
   auto output_column_view2{p_outputTable->view().column(1)};
   auto output_column_view3{p_outputTable->view().column(2)};
 
-  cudf::test::expect_columns_equal(expected_column_view1, output_column_view1);
-  cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
-  cudf::test::expect_columns_equal(expected_column_view3, output_column_view3);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view1, output_column_view1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view2, output_column_view2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view3, output_column_view3);
 }

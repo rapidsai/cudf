@@ -149,7 +149,7 @@ TEST_F(StringsFactoriesTest, CreateColumnFromOffsets)
 
   // check host version of the factory too
   auto column2 = cudf::make_strings_column(h_buffer, h_offsets, h_nulls, null_count);
-  cudf::test::expect_columns_equal(column->view(), column2->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(column->view(), column2->view());
 }
 
 TEST_F(StringsFactoriesTest, CreateScalar)

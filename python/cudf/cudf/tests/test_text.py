@@ -44,6 +44,57 @@ def test_tokenize():
     assert_eq(expected, actual)
 
 
+def test_detokenize():
+    strings = cudf.Series(
+        [
+            "the",
+            "quick",
+            "fox",
+            "jumped",
+            "over",
+            "the",
+            "lazy",
+            "dog",
+            "the",
+            "siamésé",
+            "cat",
+            "jumped",
+            "under",
+            "the",
+            "sofa",
+        ]
+    )
+
+    indices = cudf.Series([0, 0, 0, 1, 1, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3])
+    actual = strings.str.detokenize(indices)
+    expected = cudf.Series(
+        [
+            "the quick fox",
+            "jumped over",
+            "the lazy dog",
+            "the siamésé cat jumped under the sofa",
+        ]
+    )
+    assert type(expected) == type(actual)
+    assert_eq(expected, actual)
+
+    indices = cudf.Series(
+        [4, 0, 0, 0, 0, 4, 1, 1, 4, 2, 2, 2, 2, 4, 3], dtype=np.int8
+    )
+    actual = strings.str.detokenize(indices, "+")
+    expected = cudf.Series(
+        [
+            "quick+fox+jumped+over",
+            "lazy+dog",
+            "siamésé+cat+jumped+under",
+            "sofa",
+            "the+the+the+the",
+        ]
+    )
+    assert type(expected) == type(actual)
+    assert_eq(expected, actual)
+
+
 @pytest.mark.parametrize(
     "delimiter, expected_token_counts",
     [
@@ -92,6 +143,40 @@ def test_normalize_spaces():
 
     actual = strings.str.normalize_spaces()
 
+    assert type(expected) == type(actual)
+    assert_eq(expected, actual)
+
+
+def test_normalize_characters():
+    strings = cudf.Series(
+        ["乾 \t 乿", "ĂĆCĖÑTÜATE", "âscénd, Descend", "", None, "Stock^ $1"]
+    )
+    expected = cudf.Series(
+        [
+            " 乾     乿 ",
+            "accentuate",
+            "ascend ,  descend",
+            "",
+            None,
+            "stock ^   $ 1",
+        ]
+    )
+
+    actual = strings.str.normalize_characters()
+    assert type(expected) == type(actual)
+    assert_eq(expected, actual)
+
+    expected = cudf.Series(
+        [
+            " 乾     乿 ",
+            "ĂĆCĖÑTÜATE",
+            "âscénd ,  Descend",
+            "",
+            None,
+            "Stock ^   $ 1",
+        ]
+    )
+    actual = strings.str.normalize_characters(do_lower=False)
     assert type(expected) == type(actual)
     assert_eq(expected, actual)
 
@@ -687,3 +772,80 @@ def test_text_subword_tokenize(tmpdir):
         [0, 0, 3, 1, 0, 3, 2, 0, 3, 3, 0, 1, 4, 0, 1], dtype=np.uint32
     )
     assert_eq(expected_metadata, metadata)
+
+
+def test_edit_distance():
+    sr = cudf.Series(["kitten", "saturday", "address", "book"])
+    tg = cudf.Series(["sitting", "sunday", "addressee", "back"])
+
+    expected = cudf.Series([3, 3, 2, 2], dtype=np.int32)
+    actual = sr.str.edit_distance(tg)
+    assert_eq(expected, actual)
+
+    expected = cudf.Series([0, 7, 6, 6], dtype=np.int32)
+    actual = sr.str.edit_distance("kitten")
+    assert_eq(expected, actual)
+
+
+def test_porter_stemmer_measure():
+    strings = cudf.Series(
+        [
+            "tr",
+            "ee",
+            "tree",
+            "y",
+            "by",
+            "trouble",
+            "oats",
+            "trees",
+            "ivy",
+            "troubles",
+            "private",
+            "oaten",
+            "orrery",
+            None,
+            "",
+        ]
+    )
+    expected = cudf.Series(
+        [0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, None, 0], dtype=np.int32
+    )
+
+    actual = strings.str.porter_stemmer_measure()
+
+    assert type(expected) == type(actual)
+    assert_eq(expected, actual)
+
+
+def test_is_vowel_consonant():
+    strings = cudf.Series(
+        ["tr", "ee", "tree", "y", "by", "oats", "ivy", "orrery", None, ""]
+    )
+    expected = cudf.Series(
+        [False, False, True, False, False, False, True, False, None, False]
+    )
+    actual = strings.str.is_vowel(2)
+    assert type(expected) == type(actual)
+    assert_eq(expected, actual)
+
+    expected = cudf.Series(
+        [True, False, True, False, False, False, True, True, None, False]
+    )
+    actual = strings.str.is_consonant(1)
+    assert type(expected) == type(actual)
+    assert_eq(expected, actual)
+
+    indices = cudf.Series([2, 1, 0, 0, 1, 2, 0, 3, 0, 0])
+    expected = cudf.Series(
+        [False, True, False, False, True, False, True, True, None, False]
+    )
+    actual = strings.str.is_vowel(indices)
+    assert type(expected) == type(actual)
+    assert_eq(expected, actual)
+
+    expected = cudf.Series(
+        [False, False, True, True, False, True, False, False, None, False]
+    )
+    actual = strings.str.is_consonant(indices)
+    assert type(expected) == type(actual)
+    assert_eq(expected, actual)

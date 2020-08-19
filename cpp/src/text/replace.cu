@@ -23,7 +23,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/error.hpp>
 #include <nvtext/detail/tokenize.hpp>
-#include <nvtext/tokenize.hpp>
+#include <nvtext/replace.hpp>
 #include <strings/utilities.cuh>
 #include <text/utilities/tokenize_ops.cuh>
 

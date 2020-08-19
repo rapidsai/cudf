@@ -369,7 +369,7 @@ def test_dataframe_MI_rename():
         {"a": np.arange(10), "b": np.arange(10), "c": np.arange(10)}
     )
     gdg = gdf.groupby(["a", "b"]).count()
-    pdg = gdg.to_pandas(nullable_pd_dtype=False)
+    pdg = gdg.to_pandas()
 
     expect = pdg.rename(mapper={1: 5, 2: 6}, axis=0)
     got = gdg.rename(mapper={1: 5, 2: 6}, axis=0)
@@ -882,14 +882,14 @@ def test_dataframe_hash_partition_masked_value(nrows):
     parted = gdf.partition_by_hash(["key"], nparts=3)
     # Verify that the valid mask is correct
     for p in parted:
-        df = p.to_pandas(nullable_pd_dtype=False)
+        df = p.to_pandas()
         for row in df.itertuples():
             valid = bool(bytemask[row.key])
-            expected_value = (
-                row.key + 100 if valid else np.iinfo(gdf["val"].dtype).min
-            )
+            expected_value = row.key + 100 if valid else np.nan
             got_value = row.val
-            assert expected_value == got_value
+            assert (expected_value == got_value) or (
+                np.isnan(expected_value) and np.isnan(got_value)
+            )
 
 
 @pytest.mark.parametrize("nrows", [3, 10, 50])
@@ -903,15 +903,15 @@ def test_dataframe_hash_partition_masked_keys(nrows):
     parted = gdf.partition_by_hash(["key"], nparts=3, keep_index=False)
     # Verify that the valid mask is correct
     for p in parted:
-        df = p.to_pandas(nullable_pd_dtype=False)
+        df = p.to_pandas()
         for row in df.itertuples():
             valid = bool(bytemask[row.val - 100])
             # val is key + 100
-            expected_value = (
-                row.val - 100 if valid else np.iinfo(gdf["val"].dtype).min
-            )
+            expected_value = row.val - 100 if valid else np.nan
             got_value = row.key
-            assert expected_value == got_value
+            assert (expected_value == got_value) or (
+                np.isnan(expected_value) and np.isnan(got_value)
+            )
 
 
 @pytest.mark.parametrize("keep_index", [True, False])
@@ -1061,8 +1061,8 @@ def test_concat_with_axis():
     midf2.index = gd.MultiIndex(
         levels=[[3, 4, 5], [2, 0]], codes=[[0, 1, 2], [1, 0, 1]]
     )
-    mipdf1 = midf1.to_pandas(nullable_pd_dtype=False)
-    mipdf2 = midf2.to_pandas(nullable_pd_dtype=False)
+    mipdf1 = midf1.to_pandas()
+    mipdf2 = midf2.to_pandas()
 
     assert_eq(gd.concat([midf1, midf2]), pd.concat([mipdf1, mipdf2]))
     assert_eq(gd.concat([midf2, midf1]), pd.concat([mipdf2, mipdf1]))
@@ -1082,8 +1082,8 @@ def test_concat_with_axis():
     gdf2 = gdf1[5:]
     gdg1 = gdf1.groupby(["x", "y"]).min()
     gdg2 = gdf2.groupby(["x", "y"]).min()
-    pdg1 = gdg1.to_pandas(nullable_pd_dtype=False)
-    pdg2 = gdg2.to_pandas(nullable_pd_dtype=False)
+    pdg1 = gdg1.to_pandas()
+    pdg2 = gdg2.to_pandas()
 
     assert_eq(gd.concat([gdg1, gdg2]), pd.concat([pdg1, pdg2]))
     assert_eq(gd.concat([gdg2, gdg1]), pd.concat([pdg2, pdg1]))
@@ -1091,8 +1091,8 @@ def test_concat_with_axis():
     # series multi index concat
     gdgz1 = gdg1.z
     gdgz2 = gdg2.z
-    pdgz1 = gdgz1.to_pandas(nullable_pd_dtype=False)
-    pdgz2 = gdgz2.to_pandas(nullable_pd_dtype=False)
+    pdgz1 = gdgz1.to_pandas()
+    pdgz2 = gdgz2.to_pandas()
 
     assert_eq(gd.concat([gdgz1, gdgz2]), pd.concat([pdgz1, pdgz2]))
     assert_eq(gd.concat([gdgz2, gdgz1]), pd.concat([pdgz2, pdgz1]))
@@ -1901,7 +1901,7 @@ def test_dataframe_multiindex_boolmask(mask):
         {"w": [3, 2, 1], "x": [1, 2, 3], "y": [0, 1, 0], "z": [1, 1, 1]}
     )
     gdg = gdf.groupby(["w", "x"]).count()
-    pdg = gdg.to_pandas(nullable_pd_dtype=False)
+    pdg = gdg.to_pandas()
     assert_eq(gdg[mask], pdg[mask])
 
 
@@ -2053,7 +2053,7 @@ def test_tail_for_string():
     gdf = DataFrame()
     gdf["id"] = Series(["a", "b"], dtype=np.object)
     gdf["v"] = Series([1, 2])
-    assert_eq(gdf.tail(3), gdf.to_pandas(nullable_pd_dtype=False).tail(3))
+    assert_eq(gdf.tail(3), gdf.to_pandas().tail(3))
 
 
 @pytest.mark.parametrize("drop", [True, False])
@@ -2140,7 +2140,7 @@ def test_dataframe_reindex_0(copy):
             "d": str,
         },
     )
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
     # Validate reindex returns a copy unmodified
     assert_eq(pdf.reindex(copy=True), gdf.reindex(copy=copy))
 
@@ -2151,7 +2151,7 @@ def test_dataframe_reindex_1(copy):
     gdf = gd.datasets.randomdata(
         nrows=6, dtypes={"a": "category", "c": float, "d": str}
     )
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
     # Validate labels are used as index when axis defaults to 0
     assert_eq(pdf.reindex(index, copy=True), gdf.reindex(index, copy=copy))
 
@@ -2162,7 +2162,7 @@ def test_dataframe_reindex_2(copy):
     gdf = gd.datasets.randomdata(
         nrows=6, dtypes={"a": "category", "c": float, "d": str}
     )
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
     # Validate labels are used as index when axis=0
     assert_eq(
         pdf.reindex(index, axis=0, copy=True),
@@ -2176,7 +2176,7 @@ def test_dataframe_reindex_3(copy):
     gdf = gd.datasets.randomdata(
         nrows=6, dtypes={"a": "category", "c": float, "d": str}
     )
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
     # Validate labels are used as columns when axis=0
     assert_eq(
         pdf.reindex(columns, axis=1, copy=True),
@@ -2190,7 +2190,7 @@ def test_dataframe_reindex_4(copy):
     gdf = gd.datasets.randomdata(
         nrows=6, dtypes={"a": "category", "c": float, "d": str}
     )
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
     # Validate labels are used as index when axis=0
     assert_eq(
         pdf.reindex(labels=index, axis=0, copy=True),
@@ -2204,7 +2204,7 @@ def test_dataframe_reindex_5(copy):
     gdf = gd.datasets.randomdata(
         nrows=6, dtypes={"a": "category", "c": float, "d": str}
     )
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
     # Validate labels are used as columns when axis=1
     assert_eq(
         pdf.reindex(labels=columns, axis=1, copy=True),
@@ -2218,7 +2218,7 @@ def test_dataframe_reindex_6(copy):
     gdf = gd.datasets.randomdata(
         nrows=6, dtypes={"a": "category", "c": float, "d": str}
     )
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
     # Validate labels are used as index when axis='index'
     assert_eq(
         pdf.reindex(labels=index, axis="index", copy=True),
@@ -2232,7 +2232,7 @@ def test_dataframe_reindex_7(copy):
     gdf = gd.datasets.randomdata(
         nrows=6, dtypes={"a": "category", "c": float, "d": str}
     )
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
     # Validate labels are used as columns when axis='columns'
     assert_eq(
         pdf.reindex(labels=columns, axis="columns", copy=True),
@@ -2246,7 +2246,7 @@ def test_dataframe_reindex_8(copy):
     gdf = gd.datasets.randomdata(
         nrows=6, dtypes={"a": "category", "c": float, "d": str}
     )
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
     # Validate reindexes labels when index=labels
     assert_eq(
         pdf.reindex(index=index, copy=True),
@@ -2260,7 +2260,7 @@ def test_dataframe_reindex_9(copy):
     gdf = gd.datasets.randomdata(
         nrows=6, dtypes={"a": "category", "c": float, "d": str}
     )
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
     # Validate reindexes column names when columns=labels
     assert_eq(
         pdf.reindex(columns=columns, copy=True),
@@ -2275,7 +2275,7 @@ def test_dataframe_reindex_10(copy):
     gdf = gd.datasets.randomdata(
         nrows=6, dtypes={"a": "category", "c": float, "d": str}
     )
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
     # Validate reindexes both labels and column names when
     # index=index_labels and columns=column_labels
     assert_eq(
@@ -2291,7 +2291,7 @@ def test_dataframe_reindex_change_dtype(copy):
     gdf = gd.datasets.randomdata(
         nrows=6, dtypes={"a": "category", "c": float, "d": str}
     )
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
     # Validate reindexes both labels and column names when
     # index=index_labels and columns=column_labels
     assert_eq(
@@ -2334,7 +2334,7 @@ def test_series_float_reindex(copy):
 def test_series_string_reindex(copy):
     index = [-3, 0, 3, 0, -2, 1, 3, 4, 6]
     gdf = gd.datasets.randomdata(nrows=6, dtypes={"d": str})
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
     assert_eq(pdf["d"].reindex(copy=True), gdf["d"].reindex(copy=copy))
     assert_eq(
         pdf["d"].reindex(index, copy=True), gdf["d"].reindex(index, copy=copy)
@@ -2517,7 +2517,7 @@ def test_select_dtype():
     gdf = gd.datasets.randomdata(
         nrows=20, dtypes={"a": "category", "b": int, "c": float, "d": str}
     )
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
 
     assert_eq(pdf.select_dtypes("float64"), gdf.select_dtypes("float64"))
     assert_eq(pdf.select_dtypes(np.float64), gdf.select_dtypes(np.float64))
@@ -2564,7 +2564,7 @@ def test_select_dtype():
         pdf.select_dtypes(exclude=np.number, include=np.number)
 
     gdf = DataFrame({"A": [3, 4, 5], "C": [1, 2, 3], "D": ["a", "b", "c"]})
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
     assert_eq(
         pdf.select_dtypes(include=["object", "int", "category"]),
         gdf.select_dtypes(include=["object", "int", "category"]),
@@ -2575,7 +2575,7 @@ def test_select_dtype():
     )
 
     gdf = gd.DataFrame({"a": range(10), "b": range(10, 20)})
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
     assert_eq(
         pdf.select_dtypes(include=["category"]),
         gdf.select_dtypes(include=["category"]),
@@ -2611,7 +2611,7 @@ def test_select_dtype():
     gdf = gd.DataFrame(
         {"a": gd.Series([], dtype="int"), "b": gd.Series([], dtype="str")}
     )
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
     assert_eq(
         pdf.select_dtypes(exclude=["object"]),
         gdf.select_dtypes(exclude=["object"]),
@@ -3305,7 +3305,7 @@ def test_as_column_types():
 
 def test_one_row_head():
     gdf = DataFrame({"name": ["carl"], "score": [100]}, index=[123])
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
 
     head_gdf = gdf.head()
     head_pdf = pdf.head()
@@ -4171,59 +4171,6 @@ def test_constructor_properties():
         df._constructor_expanddim
 
 
-@pytest.mark.parametrize(
-    "data",
-    [
-        [1, 2, 3, 4, 5],
-        [1, 2, None, 4, 5],
-        [1.0, 2.0, 3.0, 4.0, 5.0],
-        [1.0, 2.0, None, 4.0, 5.0],
-        ["a", "b", "c", "d", "e"],
-        ["a", "b", None, "d", "e"],
-        [None, None, None, None, None],
-        np.array(["1991-11-20", "2004-12-04"], dtype=np.datetime64),
-        np.array(["1991-11-20", None], dtype=np.datetime64),
-        np.array(
-            ["1991-11-20 05:15:00", "2004-12-04 10:00:00"], dtype=np.datetime64
-        ),
-        np.array(["1991-11-20 05:15:00", None], dtype=np.datetime64),
-    ],
-)
-def test_tolist(data):
-    psr = pd.Series(data)
-    gsr = Series.from_pandas(psr)
-
-    got = gsr.tolist()
-    expected = [x if not pd.isnull(x) else None for x in psr.tolist()]
-
-    np.testing.assert_array_equal(got, expected)
-
-
-def test_tolist_mixed_nulls():
-    num_data = pa.array([1.0, None, np.float64("nan")])
-    num_data_expect = [1.0, None, np.float64("nan")]
-
-    time_data = pa.array(
-        [1, None, -9223372036854775808], type=pa.timestamp("ns")
-    )
-    time_data_expect = [
-        pd.Timestamp("1970-01-01T00:00:00.000000001"),
-        None,
-        pd.NaT,
-    ]
-
-    df = DataFrame()
-    df["num_data"] = num_data
-    df["time_data"] = time_data
-
-    num_data_got = df["num_data"].tolist()
-    time_data_got = df["time_data"].tolist()
-
-    np.testing.assert_equal(num_data_got, num_data_expect)
-    for got, exp in zip(time_data_got, time_data_expect):  # deal with NaT
-        assert (got == exp) or (pd.isnull(got) and pd.isnull(exp))
-
-
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES)
 @pytest.mark.parametrize("as_dtype", ALL_TYPES)
 def test_df_astype_numeric_to_all(dtype, as_dtype):
@@ -4471,7 +4418,7 @@ def test_df_constructor_dtype(dtype):
 )
 def test_rowwise_ops(data, op):
     gdf = data
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
 
     if op in ("var", "std"):
         expected = getattr(pdf, op)(axis=1, ddof=0)
@@ -4522,7 +4469,7 @@ def test_insert(data):
 
 def test_cov():
     gdf = gd.datasets.randomdata(10)
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
 
     assert_eq(pdf.cov(), gdf.cov())
 
@@ -4578,7 +4525,7 @@ def test_df_sr_binop(gsr, colnames, op):
     gdf = DataFrame(data)
     pdf = pd.DataFrame.from_dict(data)
 
-    psr = gsr.to_pandas(nullable_pd_dtype=False)
+    psr = gsr.to_pandas()
 
     expect = op(pdf, psr)
     got = op(gdf, gsr)
@@ -4617,7 +4564,7 @@ def test_df_sr_binop_col_order(gsr, op):
     gdf = DataFrame(data)
     pdf = pd.DataFrame.from_dict(data)
 
-    psr = gsr.to_pandas(nullable_pd_dtype=False)
+    psr = gsr.to_pandas()
 
     expect = op(pdf, psr).astype("float")
     out = op(gdf, gsr).astype("float")
@@ -5396,7 +5343,7 @@ def test_from_pandas_for_series_nan_as_null(nan_as_null):
 @pytest.mark.parametrize("copy", [True, False])
 def test_df_series_dataframe_astype_copy(copy):
     gdf = DataFrame({"col1": [1, 2], "col2": [3, 4]})
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
 
     assert_eq(
         gdf.astype(dtype="float", copy=copy),
@@ -5405,7 +5352,7 @@ def test_df_series_dataframe_astype_copy(copy):
     assert_eq(gdf, pdf)
 
     gsr = Series([1, 2])
-    psr = gsr.to_pandas(nullable_pd_dtype=False)
+    psr = gsr.to_pandas()
 
     assert_eq(
         gsr.astype(dtype="float", copy=copy),
@@ -5414,7 +5361,7 @@ def test_df_series_dataframe_astype_copy(copy):
     assert_eq(gsr, psr)
 
     gsr = Series([1, 2])
-    psr = gsr.to_pandas(nullable_pd_dtype=False)
+    psr = gsr.to_pandas()
 
     actual = gsr.astype(dtype="int64", copy=copy)
     expected = psr.astype(dtype="int64", copy=copy)
@@ -5428,7 +5375,7 @@ def test_df_series_dataframe_astype_copy(copy):
 @pytest.mark.parametrize("copy", [True, False])
 def test_df_series_dataframe_astype_dtype_dict(copy):
     gdf = DataFrame({"col1": [1, 2], "col2": [3, 4]})
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
 
     assert_eq(
         gdf.astype(dtype={"col1": "float"}, copy=copy),
@@ -5437,7 +5384,7 @@ def test_df_series_dataframe_astype_dtype_dict(copy):
     assert_eq(gdf, pdf)
 
     gsr = Series([1, 2])
-    psr = gsr.to_pandas(nullable_pd_dtype=False)
+    psr = gsr.to_pandas()
 
     assert_eq(
         gsr.astype(dtype={None: "float"}, copy=copy),
@@ -5452,7 +5399,7 @@ def test_df_series_dataframe_astype_dtype_dict(copy):
         psr.astype(dtype={"a": "float"}, copy=copy)
 
     gsr = Series([1, 2])
-    psr = gsr.to_pandas(nullable_pd_dtype=False)
+    psr = gsr.to_pandas()
 
     actual = gsr.astype({None: "int64"}, copy=copy)
     expected = psr.astype({None: "int64"}, copy=copy)
@@ -6139,9 +6086,9 @@ def test_dataframe_to_dict_error():
     with pytest.raises(
         TypeError,
         match=re.escape(
-            r"Implicit conversion to a host memory via to_dict() is not "
-            r"allowed, To explicitly construct a dictionary object, "
-            r"consider using .to_pandas().to_dict()"
+            r"cuDF does not support conversion to host memory "
+            r"via `to_dict()` method. Consider using "
+            r"`.to_pandas().to_dict()` to construct a Python dictionary."
         ),
     ):
         df.to_dict()
@@ -6149,12 +6096,87 @@ def test_dataframe_to_dict_error():
     with pytest.raises(
         TypeError,
         match=re.escape(
-            r"Implicit conversion to a host memory via to_dict() is not "
-            r"allowed, To explicitly construct a dictionary object, "
-            r"consider using .to_pandas().to_dict()"
+            r"cuDF does not support conversion to host memory "
+            r"via `to_dict()` method. Consider using "
+            r"`.to_pandas().to_dict()` to construct a Python dictionary."
         ),
     ):
         df["a"].to_dict()
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        pd.DataFrame({"a": [1, 2, 3, 4, 5, 10, 11, 12, 33, 55, 19]}),
+        pd.DataFrame(
+            {
+                "one": [1, 2, 3, 4, 5, 10],
+                "two": ["abc", "def", "ghi", "xyz", "pqr", "abc"],
+            }
+        ),
+        pd.DataFrame(
+            {
+                "one": [1, 2, 3, 4, 5, 10],
+                "two": ["abc", "def", "ghi", "xyz", "pqr", "abc"],
+            },
+            index=[10, 20, 30, 40, 50, 60],
+        ),
+        pd.DataFrame(
+            {
+                "one": [1, 2, 3, 4, 5, 10],
+                "two": ["abc", "def", "ghi", "xyz", "pqr", "abc"],
+            },
+            index=["a", "b", "c", "d", "e", "f"],
+        ),
+        pd.DataFrame(index=["a", "b", "c", "d", "e", "f"]),
+        pd.DataFrame(columns=["a", "b", "c", "d", "e", "f"]),
+        pd.DataFrame(index=[10, 11, 12]),
+        pd.DataFrame(columns=[10, 11, 12]),
+        pd.DataFrame(),
+        pd.DataFrame({"one": [], "two": []}),
+        pd.DataFrame({2: [], 1: []}),
+        pd.DataFrame(
+            {
+                0: [1, 2, 3, 4, 5, 10],
+                1: ["abc", "def", "ghi", "xyz", "pqr", "abc"],
+                100: ["a", "b", "b", "x", "z", "a"],
+            },
+            index=[10, 20, 30, 40, 50, 60],
+        ),
+    ],
+)
+def test_dataframe_keys(df):
+    gdf = gd.from_pandas(df)
+
+    assert_eq(df.keys(), gdf.keys())
+
+
+@pytest.mark.parametrize(
+    "ps",
+    [
+        pd.Series([1, 2, 3, 4, 5, 10, 11, 12, 33, 55, 19]),
+        pd.Series(["abc", "def", "ghi", "xyz", "pqr", "abc"]),
+        pd.Series(
+            [1, 2, 3, 4, 5, 10],
+            index=["abc", "def", "ghi", "xyz", "pqr", "abc"],
+        ),
+        pd.Series(
+            ["abc", "def", "ghi", "xyz", "pqr", "abc"],
+            index=[1, 2, 3, 4, 5, 10],
+        ),
+        pd.Series(index=["a", "b", "c", "d", "e", "f"]),
+        pd.Series(index=[10, 11, 12]),
+        pd.Series(),
+        pd.Series([]),
+    ],
+)
+def test_series_keys(ps):
+    gds = gd.from_pandas(ps)
+
+    if len(ps) == 0 and not isinstance(ps.index, pd.RangeIndex):
+        assert_eq(ps.keys().astype("float64"), gds.keys())
+    else:
+        assert_eq(ps.keys(), gds.keys())
 
 
 @pytest.mark.parametrize(
@@ -6901,5 +6923,31 @@ def test_dataframe_init_from_series_list_duplicate_index_error(data):
             gd.DataFrame(gd_data)
     else:
         raise AssertionError(
-            "expected pd.DataFrame to because of " "duplicates in index"
+            "expected pd.DataFrame to because of duplicates in index"
         )
+
+
+def test_dataframe_iterrows_itertuples():
+    df = gd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            "cuDF does not support iteration of DataFrame "
+            "via itertuples. Consider using "
+            "`.to_pandas().itertuples()` "
+            "if you wish to iterate over namedtuples."
+        ),
+    ):
+        df.itertuples()
+
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            "cuDF does not support iteration of DataFrame "
+            "via iterrows. Consider using "
+            "`.to_pandas().iterrows()` "
+            "if you wish to iterate over each row."
+        ),
+    ):
+        df.iterrows()

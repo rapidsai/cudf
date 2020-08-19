@@ -2,7 +2,7 @@
 import copy
 import functools
 import warnings
-from collections import OrderedDict
+from collections import OrderedDict, abc as abc
 
 import cupy
 import numpy as np
@@ -551,6 +551,10 @@ class Frame(libcudf.table.Table):
         # it from materializing unnecessarily
         keep_index = True
         if self.index is not None and isinstance(self.index, RangeIndex):
+            if self._num_columns == 0:
+                result = self._empty_like(keep_index)
+                result._index = self.index[start:stop]
+                return result
             keep_index = False
 
         if start < 0:
@@ -558,9 +562,7 @@ class Frame(libcudf.table.Table):
         if stop < 0:
             stop = stop + num_rows
 
-        if (start > stop and (stride is None or stride == 1)) or (
-            len(self._data) == 0 and keep_index is False
-        ):
+        if start > stop and (stride is None or stride == 1):
             return self._empty_like(keep_index)
         else:
             start = len(self) if start > num_rows else start
@@ -1037,11 +1039,20 @@ class Frame(libcudf.table.Table):
 
         return self.where(cond=~cond, other=other, inplace=inplace)
 
+    def _split(self, splits, keep_index=True):
+        result = libcudf.copying.table_split(
+            self, splits, keep_index=keep_index
+        )
+
+        result = [self.__class__._from_table(tbl) for tbl in result]
+        return result
+
     def _partition(self, scatter_map, npartitions, keep_index=True):
 
         output_table, output_offsets = libcudf.partitioning.partition(
             self, scatter_map, npartitions, keep_index
         )
+        partitioned = self.__class__._from_table(output_table)
 
         # due to the split limitation mentioned
         # here: https://github.com/rapidsai/cudf/issues/4607
@@ -1049,11 +1060,7 @@ class Frame(libcudf.table.Table):
         # TODO: Remove this after the above issue is fixed.
         output_offsets = output_offsets[1:-1]
 
-        result = libcudf.copying.table_split(
-            output_table, output_offsets, keep_index=keep_index
-        )
-
-        result = [self.__class__._from_table(tbl) for tbl in result]
+        result = partitioned._split(output_offsets, keep_index=keep_index)
 
         for frame in result:
             frame._copy_categories(self, include_index=keep_index)
@@ -1314,13 +1321,22 @@ class Frame(libcudf.table.Table):
         if axis:
             raise NotImplementedError("The axis keyword is not supported")
 
-        if not isinstance(value, dict):
+        if isinstance(value, cudf.Series):
+            value = value.reindex(self._data.names)
+        elif isinstance(value, cudf.DataFrame):
+            if not self.index.equals(value.index):
+                value = value.reindex(self.index)
+            else:
+                value = value
+        elif not isinstance(value, abc.Mapping):
             value = {name: copy.deepcopy(value) for name in self._data.names}
 
         copy_data = self._data.copy(deep=True)
 
         for name, col in copy_data.items():
-            copy_data[name] = copy_data[name].fillna(value[name],)
+            if name in value and value[name] is not None:
+                copy_data[name] = copy_data[name].fillna(value[name],)
+
         result = self._from_table(Frame(copy_data, self._index))
 
         return self._mimic_inplace(result, inplace=inplace)
@@ -2866,8 +2882,11 @@ class Frame(libcudf.table.Table):
 def _get_replacement_values(to_replace, replacement, col_name, column):
 
     all_nan = False
-
-    if is_dict_like(to_replace) and replacement is None:
+    if (
+        is_dict_like(to_replace)
+        and not isinstance(to_replace, cudf.Series)
+        and replacement is None
+    ):
         replacement = list(to_replace.values())
         to_replace = list(to_replace.keys())
     elif not is_scalar(to_replace):

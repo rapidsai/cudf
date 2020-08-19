@@ -3,6 +3,9 @@
 from libc.stdint cimport int32_t
 from libcpp cimport bool
 from cudf._lib.cpp.types cimport data_type
+from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
+
 
 ctypedef bool underlying_type_t_order
 ctypedef bool underlying_type_t_null_order
@@ -13,3 +16,5 @@ ctypedef bool underlying_type_t_null_policy
 
 cdef class _Dtype:
     cdef data_type get_libcudf_type(self) except *
+
+cdef dtype_from_column_view(column_view cv)

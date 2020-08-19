@@ -101,7 +101,8 @@ void run_test(size_t ncols, size_t nrows, bool add_nulls)
   std::mt19937 rng(1);
 
   // Generate values as vector of vectors
-  auto const values = generate_vectors<T>(ncols, nrows, [&rng]() { return static_cast<T>(rng()); });
+  auto const values = generate_vectors<T>(
+    ncols, nrows, [&rng]() { return cudf::test::make_type_param_scalar<T>(rng()); });
   auto const valuesT = transpose_vectors(values);
 
   std::vector<fixed_width_column_wrapper<T>> input_cols;
@@ -141,7 +142,7 @@ void run_test(size_t ncols, size_t nrows, bool add_nulls)
   CUDF_EXPECTS(result_view.num_columns() == expected_view.num_columns(),
                "Expected same number of columns");
   for (cudf::size_type i = 0; i < result_view.num_columns(); ++i) {
-    cudf::test::expect_columns_equal(result_view.column(i), expected_view.column(i));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result_view.column(i), expected_view.column(i));
     CUDF_EXPECTS(result_view.column(i).null_count() == expected_nulls[i],
                  "Expected correct null count");
   }

@@ -96,6 +96,9 @@ if("${GPU_ARCHS}" STREQUAL "ALL")
   if((CUDA_VERSION_MAJOR EQUAL 10) OR (CUDA_VERSION_MAJOR GREATER 10))
     set(GPU_ARCHS "${GPU_ARCHS};75")
   endif()
+  if((CUDA_VERSION_MAJOR EQUAL 11) OR (CUDA_VERSION_MAJOR GREATER 11))
+    set(GPU_ARCHS "${GPU_ARCHS};80")
+  endif()
 endif()
 message("GPU_ARCHS = ${GPU_ARCHS}")
 
@@ -138,7 +141,6 @@ set(CMAKE_EXE_LINKER_FLAGS "-Wl,--disable-new-dtags")
 option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
-option(BUILD_CUDF_KAFKA "Configure CMake to build cudf_kafka" OFF)
 
 ###################################################################################################
 # - cudart options --------------------------------------------------------------------------------
@@ -401,6 +403,7 @@ add_library(cudf
             src/merge/merge.cu
             src/partitioning/round_robin.cu
             src/join/join.cu
+            src/join/hash_join.cu
             src/join/cross_join.cu
             src/join/semi_join.cu
             src/sort/is_sorted.cu
@@ -409,6 +412,9 @@ add_library(cudf
             src/binaryop/jit/code/kernel.cpp
             src/binaryop/jit/code/operation.cpp
             src/binaryop/jit/code/traits.cpp
+            src/interop/from_arrow.cu
+            src/interop/to_arrow.cpp
+            src/interop/dlpack.cpp
             src/jit/type.cpp
             src/jit/parser.cpp
             src/jit/cache.cpp
@@ -417,6 +423,7 @@ add_library(cudf
             src/transform/transform.cpp
             src/transform/nans_to_nulls.cu
             src/transform/bools_to_mask.cu
+            src/transform/mask_to_bools.cu
             src/transform/encode.cpp
             src/stream_compaction/apply_boolean_mask.cu
             src/stream_compaction/drop_nulls.cu
@@ -448,7 +455,6 @@ add_library(cudf
             src/unary/nan_ops.cu
             src/unary/math_ops.cu
             src/unary/unary_ops.cuh
-            src/dlpack/dlpack.cpp
             src/io/avro/avro_gpu.cu
             src/io/avro/avro.cpp
             src/io/avro/reader_impl.cu
@@ -527,6 +533,7 @@ add_library(cudf
             src/strings/contains.cu
             src/strings/convert/convert_booleans.cu
             src/strings/convert/convert_datetime.cu
+            src/strings/convert/convert_durations.cu
             src/strings/convert/convert_floats.cu
             src/strings/convert/convert_hex.cu
             src/strings/convert/convert_integers.cu
@@ -559,12 +566,19 @@ add_library(cudf
             src/strings/substring.cu
             src/strings/translate.cu
             src/strings/utilities.cu
+            src/lists/extract.cu
             src/lists/lists_column_factories.cu
             src/lists/lists_column_view.cu
             src/lists/copying/concatenate.cu
             src/lists/copying/gather.cu
+            src/lists/copying/copying.cu
+            src/structs/structs_column_view.cu
+            src/structs/structs_column_factories.cu
+            src/text/detokenize.cu
+            src/text/edit_distance.cu
             src/text/generate_ngrams.cu
             src/text/normalize.cu
+            src/text/stemmer.cu
             src/text/tokenize.cu
             src/text/ngrams_tokenize.cu
             src/text/replace.cu
@@ -575,6 +589,7 @@ add_library(cudf
             src/scalar/scalar.cpp
             src/scalar/scalar_factories.cpp
             src/dictionary/add_keys.cu
+            src/dictionary/detail/concatenate.cu
             src/dictionary/dictionary_column_view.cpp
             src/dictionary/dictionary_factories.cu
             src/dictionary/decode.cu
@@ -623,6 +638,7 @@ add_custom_command(WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
                           ${CMAKE_BINARY_DIR}/include/jit/types.hpp.jit
                           ${CMAKE_BINARY_DIR}/include/bit.hpp.jit
                           ${CMAKE_BINARY_DIR}/include/jit/timestamps.hpp.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/fixed_point.hpp.jit
                           ${CMAKE_BINARY_DIR}/include/jit/durations.hpp.jit
                           ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/details/__config.jit
                           ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/limits.jit
@@ -632,6 +648,8 @@ add_custom_command(WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
                           ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/ratio.jit
                           ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/type_traits.jit
                           ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/version.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/cmath.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/cassert.jit
                           ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/__config.jit
                           ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/__undef_macros.jit
                           ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/cfloat.jit
@@ -640,10 +658,13 @@ add_custom_command(WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
                           ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/limits.jit
                           ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/ratio.jit
                           ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/type_traits.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/cmath.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/cassert.jit
                    MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/types.h
                                    ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/types.hpp
                                    ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/utilities/bit.hpp
                                    ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/wrappers/timestamps.hpp
+                                   ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/fixed_point/fixed_point.hpp
                                    ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/wrappers/durations.hpp
                                    ${LIBCUDACXX_INCLUDE_DIR}/details/__config
                                    ${LIBCUDACXX_INCLUDE_DIR}/simt/limits
@@ -653,6 +674,8 @@ add_custom_command(WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
                                    ${LIBCUDACXX_INCLUDE_DIR}/simt/ratio
                                    ${LIBCUDACXX_INCLUDE_DIR}/simt/type_traits
                                    ${LIBCUDACXX_INCLUDE_DIR}/simt/version
+                                   ${LIBCUDACXX_INCLUDE_DIR}/simt/cmath
+                                   ${LIBCUDACXX_INCLUDE_DIR}/simt/cassert
                                    ${LIBCXX_INCLUDE_DIR}/__config
                                    ${LIBCXX_INCLUDE_DIR}/__undef_macros
                                    ${LIBCXX_INCLUDE_DIR}/cfloat
@@ -661,6 +684,8 @@ add_custom_command(WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
                                    ${LIBCXX_INCLUDE_DIR}/limits
                                    ${LIBCXX_INCLUDE_DIR}/ratio
                                    ${LIBCXX_INCLUDE_DIR}/type_traits
+                                   ${LIBCXX_INCLUDE_DIR}/cmath
+                                   ${LIBCXX_INCLUDE_DIR}/cassert
 
                    # stringified headers are placed underneath the bin include jit directory and end in ".jit"
                    COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.h > ${CMAKE_BINARY_DIR}/include/jit/types.h.jit
@@ -668,6 +693,7 @@ add_custom_command(WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
                    COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/utilities/bit.hpp > ${CMAKE_BINARY_DIR}/include/bit.hpp.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify ../src/rolling/rolling_jit_detail.hpp > ${CMAKE_BINARY_DIR}/include/rolling_jit_detail.hpp.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/wrappers/timestamps.hpp > ${CMAKE_BINARY_DIR}/include/jit/timestamps.hpp.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/fixed_point/fixed_point.hpp > ${CMAKE_BINARY_DIR}/include/jit/fixed_point.hpp.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/wrappers/durations.hpp > ${CMAKE_BINARY_DIR}/include/jit/durations.hpp.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCUDACXX_INCLUDE_DIR}/details/__config libcudacxx_details_config > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/details/__config.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCUDACXX_INCLUDE_DIR}/simt/limits libcudacxx_simt_limits > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/limits.jit
@@ -676,6 +702,8 @@ add_custom_command(WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
                    COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCUDACXX_INCLUDE_DIR}/simt/ctime libcudacxx_simt_ctime > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/ctime.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCUDACXX_INCLUDE_DIR}/simt/ratio libcudacxx_simt_ratio > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/ratio.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCUDACXX_INCLUDE_DIR}/simt/type_traits libcudacxx_simt_type_traits > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/type_traits.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCUDACXX_INCLUDE_DIR}/simt/cmath libcudacxx_simt_cmath > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/cmath.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCUDACXX_INCLUDE_DIR}/simt/cassert libcudacxx_simt_cassert > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/cassert.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCUDACXX_INCLUDE_DIR}/version libcudacxx_simt_version > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/version.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCXX_INCLUDE_DIR}/__config libcxx_config > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/__config.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCXX_INCLUDE_DIR}/__undef_macros libcxx_undef_macros > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/__undef_macros.jit
@@ -685,6 +713,8 @@ add_custom_command(WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
                    COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCXX_INCLUDE_DIR}/limits libcxx_limits > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/limits.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCXX_INCLUDE_DIR}/ratio libcxx_ratio > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/ratio.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCXX_INCLUDE_DIR}/type_traits libcxx_type_traits > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/type_traits.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCXX_INCLUDE_DIR}/cmath libcxx_cmath > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/cmath.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCXX_INCLUDE_DIR}/cassert libcxx_cassert > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/cassert.jit
                    )
 
 add_custom_target(stringify_run DEPENDS
@@ -692,6 +722,7 @@ add_custom_target(stringify_run DEPENDS
                   ${CMAKE_BINARY_DIR}/include/jit/types.hpp.jit
                   ${CMAKE_BINARY_DIR}/include/bit.hpp.jit
                   ${CMAKE_BINARY_DIR}/include/jit/timestamps.hpp.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/fixed_point.hpp.jit
                   ${CMAKE_BINARY_DIR}/include/jit/durations.hpp.jit
                   ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/details/__config.jit
                   ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/limits.jit
@@ -700,6 +731,8 @@ add_custom_target(stringify_run DEPENDS
                   ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/ctime.jit
                   ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/ratio.jit
                   ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/type_traits.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/cmath.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/cassert.jit
                   ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/version.jit
                   ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/__config.jit
                   ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/__undef_macros.jit
@@ -708,7 +741,10 @@ add_custom_target(stringify_run DEPENDS
                   ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/ctime.jit
                   ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/limits.jit
                   ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/ratio.jit
-                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/type_traits.jit)
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/type_traits.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/cmath.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/cassert.jit
+                  )
 
 add_dependencies(cudf stringify_run)
 
@@ -718,11 +754,9 @@ add_dependencies(cudf stringify_run)
 option(USE_NVTX "Build with NVTX support" ON)
 if(USE_NVTX)
     message(STATUS "Using Nvidia Tools Extension")
-    # The `USE_NVTX` macro is deprecated
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_NVTX")
 else()
     # Makes NVTX APIs no-ops
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDISABLE_NVTX")
+    add_compile_definitions(NVTX_DISABLE)
 endif(USE_NVTX)
 
 option(HT_DEFAULT_ALLOCATOR "Use the default allocator for hash tables" ON)
@@ -784,72 +818,3 @@ add_custom_command(OUTPUT CUDF_DOXYGEN
                    VERBATIM)
 
 add_custom_target(docs_cudf DEPENDS CUDF_DOXYGEN)
-
-
-####################################################################################################
-# - cudf_kafka - OFF by default due to increased number of dependencies
-if(BUILD_CUDF_KAFKA)
-
-    # cudf_kafka library
-    add_library(libcudf_kafka
-        libcudf_kafka/src/kafka_consumer.cpp
-    )
-
-    # Include paths
-    include_directories("${CMAKE_SOURCE_DIR}/libcudf_kafka/include"
-                        "${CMAKE_CURRENT_SOURCE_DIR}/include/cudf")
-    
-    # Rename installation to proper name for later finding
-    set_target_properties(libcudf_kafka PROPERTIES OUTPUT_NAME "cudf_kafka")
-    set_target_properties(libcudf_kafka PROPERTIES BUILD_RPATH "\$ORIGIN")
-
-    ###################################################################################################
-    # cudf_kafka - librdkafka -------------------------------------------------------------------------
-
-    find_path(RDKAFKA_INCLUDE "librdkafka" HINTS "$ENV{RDKAFKA_ROOT}/include")
-    find_library(RDKAFKA++_LIBRARY "rdkafka++" HINTS "$ENV{RDKAFKA_ROOT}/lib" "$ENV{RDKAFKA_ROOT}/build")
-
-    message(STATUS "RDKAFKA: RDKAFKA++_LIBRARY set to ${RDKAFKA++_LIBRARY}")
-    message(STATUS "RDKAFKA: RDKAFKA_INCLUDE set to ${RDKAFKA_INCLUDE}")
-
-    target_link_libraries(libcudf_kafka ${RDKAFKA++_LIBRARY})
-    include_directories("${RDKAFKA_INCLUDE}")
-
-    ###################################################################################################
-    # - cudf_kafka Install ----------------------------------------------------------------------------
-    target_link_libraries(libcudf_kafka cudf)
-
-    install(TARGETS libcudf_kafka
-            DESTINATION libcudf_kafka/lib
-            COMPONENT libcudf_kafka)
-
-    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/libcudf_kafka/include
-            DESTINATION include
-            COMPONENT libcudf_kafka)
-
-    add_custom_target(install_libcudf_kafka
-            COMMAND "${CMAKE_COMMAND}" -DCOMPONENT=libcudf_kafka -P "${CMAKE_BINARY_DIR}/cmake_install.cmake"
-            DEPENDS libcudf_kafka)
-
-    ####################################################################################################
-    # - cudf_kafka Tests
-    if(BUILD_TESTS)
-        if(GTEST_FOUND)
-            message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
-            include_directories(${GTEST_INCLUDE_DIR})
-            add_subdirectory(${CMAKE_SOURCE_DIR}/libcudf_kafka/tests)
-        else()
-            message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
-        endif(GTEST_FOUND)
-    endif(BUILD_TESTS)
-        
-    message(STATUS "CUDF_KAFKA_TEST_LIST set to: ${CUDF_KAFKA_TEST_LIST}")
-
-    add_custom_target(build_tests_libcudf_kafka
-                      DEPENDS ${CUDF_KAFKA_TEST_LIST})
-
-    add_custom_target(test_libcudf_kafka
-                      COMMAND ctest
-                      DEPENDS build_tests_libcudf_kafka)
-
-endif(BUILD_CUDF_KAFKA)
