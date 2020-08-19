@@ -338,6 +338,7 @@
 - PR #6016 Fix benchmark fixture segfault
 - PR #6003 Fix concurrent JSON reads crash
 - PR #6032 Change black version to 19.10b0 in .pre-commit-config.yaml
+- PR #6041 Fix Java memory resource handler to rethrow original exception object
 
 
 # cuDF 0.14.0 (03 Jun 2020)

@@ -276,7 +276,7 @@ private:
         break;
       } catch (std::bad_alloc const &e) {
         if (!on_alloc_fail(num_bytes)) {
-          throw e;
+          throw;
         }
       }
     }
@@ -285,10 +285,10 @@ private:
     try {
       check_for_threshold_callback(total_before, total_after, alloc_thresholds,
                                    on_alloc_threshold_method, "onAllocThreshold", total_after);
-    } catch (std::exception e) {
+    } catch (std::exception const &e) {
       // Free the allocation as app will think the exception means the memory was not allocated.
       resource->deallocate(result, num_bytes, stream);
-      throw e;
+      throw;
     }
 
     return result;
