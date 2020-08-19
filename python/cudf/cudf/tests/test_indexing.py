@@ -382,7 +382,7 @@ def test_series_loc_string():
 
 
 def test_series_loc_datetime():
-    if not PANDAS_GE_110:
+    if PANDAS_GE_110:
         kwargs = {"check_freq": False}
     else:
         kwargs = {}
