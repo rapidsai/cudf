@@ -2268,23 +2268,6 @@ class TimedeltaIndex(GenericIndex):
     def inferred_freq(self):
         raise NotImplementedError("inferred_freq is not yet supported")
 
-    def _clean_nulls_from_index(self):
-        """
-        Convert all na values(if any) in Index object
-        to `<NA>` as a preprocessing step to `__repr__` methods.
-
-        This will involve changing type of Index object
-        to StringIndex but it is the responsibility of the `__repr__`
-        methods using this method to replace or handle representation
-        of the actual types correctly.
-        """
-        return cudf.Index(
-            self._values._repr_str_col().fillna(cudf._NA_REP)
-            if self._values.has_nulls
-            else self._values._repr_str_col(),
-            name=self.name,
-        )
-
 
 class CategoricalIndex(GenericIndex):
     """An categorical of orderable values that represent the indices of another
