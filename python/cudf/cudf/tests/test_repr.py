@@ -8,6 +8,7 @@ import pytest
 from hypothesis import given, settings, strategies as st
 
 import cudf
+from cudf.core._compat import PANDAS_GE_110
 from cudf.tests import utils
 from cudf.utils.dtypes import cudf_dtypes_to_pandas_dtypes
 
@@ -608,6 +609,8 @@ def test_series_null_index_repr(sr, pandas_special_case):
 )
 @pytest.mark.parametrize("dtype", ["timedelta64[s]", "timedelta64[us]"])
 def test_timedelta_series_s_us_repr(data, dtype):
+    if not PANDAS_GE_110:
+        pytest.xfail(reason="pandas >= 1.1 requried")
     sr = cudf.Series(data, dtype=dtype)
     psr = sr.to_pandas()
 
@@ -642,9 +645,9 @@ def test_timedelta_series_s_us_repr(data, dtype):
             cudf.Series([1000000, 200000, 3000000], dtype="timedelta64[ns]"),
             textwrap.dedent(
                 """
-            0    00:00:00.001000000
-            1    00:00:00.000200000
-            2    00:00:00.003000000
+            0    0 days 00:00:00.001000000
+            1    0 days 00:00:00.000200000
+            2    0 days 00:00:00.003000000
             dtype: timedelta64[ns]
             """
             ),
@@ -653,9 +656,9 @@ def test_timedelta_series_s_us_repr(data, dtype):
             cudf.Series([1000000, 200000, 3000000], dtype="timedelta64[ms]"),
             textwrap.dedent(
                 """
-            0    00:16:40
-            1    00:03:20
-            2    00:50:00
+            0    0 days 00:16:40
+            1    0 days 00:03:20
+            2    0 days 00:50:00
             dtype: timedelta64[ms]
             """
             ),
@@ -664,9 +667,9 @@ def test_timedelta_series_s_us_repr(data, dtype):
             cudf.Series([1000000, 200000, None], dtype="timedelta64[ns]"),
             textwrap.dedent(
                 """
-            0    00:00:00.001000000
-            1    00:00:00.000200000
-            2                  <NA>
+            0    0 days 00:00:00.001000000
+            1    0 days 00:00:00.000200000
+            2                         <NA>
             dtype: timedelta64[ns]
             """
             ),
@@ -675,9 +678,9 @@ def test_timedelta_series_s_us_repr(data, dtype):
             cudf.Series([1000000, 200000, None], dtype="timedelta64[ms]"),
             textwrap.dedent(
                 """
-            0    00:16:40
-            1    00:03:20
-            2        <NA>
+            0    0 days 00:16:40
+            1    0 days 00:03:20
+            2               <NA>
             dtype: timedelta64[ms]
             """
             ),
@@ -718,12 +721,12 @@ def test_timedelta_series_s_us_repr(data, dtype):
             ),
             textwrap.dedent(
                 """
-            0    00:00:00.000000012
-            1    00:00:00.000000012
-            2    00:00:00.000000022
-            3    00:00:00.000000343
-            4    00:00:00.004353534
-            5    00:00:00.000435342
+            0    0 days 00:00:00.000000012
+            1    0 days 00:00:00.000000012
+            2    0 days 00:00:00.000000022
+            3    0 days 00:00:00.000000343
+            4    0 days 00:00:00.004353534
+            5    0 days 00:00:00.000435342
             dtype: timedelta64[ns]
             """
             ),
@@ -734,12 +737,12 @@ def test_timedelta_series_s_us_repr(data, dtype):
             ),
             textwrap.dedent(
                 """
-            0    00:00:00.012
-            1    00:00:00.012
-            2    00:00:00.022
-            3    00:00:00.343
-            4    01:12:33.534
-            5    00:07:15.342
+            0    0 days 00:00:00.012
+            1    0 days 00:00:00.012
+            2    0 days 00:00:00.022
+            3    0 days 00:00:00.343
+            4    0 days 01:12:33.534
+            5    0 days 00:07:15.342
             dtype: timedelta64[ms]
             """
             ),
@@ -751,13 +754,13 @@ def test_timedelta_series_s_us_repr(data, dtype):
             ),
             textwrap.dedent(
                 """
-            0    00:00:00.000000001
-            1    00:00:00.000001132
-            2    00:00:00.023223231
-            3    00:00:00.000000233
-            4              00:00:00
-            5    00:00:00.000000332
-            6    00:00:00.000000323
+            0    0 days 00:00:00.000000001
+            1    0 days 00:00:00.000001132
+            2    0 days 00:00:00.023223231
+            3    0 days 00:00:00.000000233
+            4              0 days 00:00:00
+            5    0 days 00:00:00.000000332
+            6    0 days 00:00:00.000000323
             dtype: timedelta64[ns]
             """
             ),
@@ -769,13 +772,13 @@ def test_timedelta_series_s_us_repr(data, dtype):
             ),
             textwrap.dedent(
                 """
-            0    00:00:00.001
-            1    00:00:01.132
-            2    06:27:03.231
-            3    00:00:00.233
-            4        00:00:00
-            5    00:00:00.332
-            6    00:00:00.323
+            0    0 days 00:00:00.001
+            1    0 days 00:00:01.132
+            2    0 days 06:27:03.231
+            3    0 days 00:00:00.233
+            4        0 days 00:00:00
+            5    0 days 00:00:00.332
+            6    0 days 00:00:00.323
             dtype: timedelta64[ms]
             """
             ),
@@ -821,13 +824,13 @@ def test_timedelta_series_s_us_repr(data, dtype):
             ),
             textwrap.dedent(
                 """
-            0    03:47:25.765432432
-            1    00:00:00.134736784
-            2    00:00:00.245345345
-            3    00:00:00.223432411
-            4    00:16:39.992343241
-            5    00:00:03.634548734
-            6    00:00:00.000023234
+            0    0 days 03:47:25.765432432
+            1    0 days 00:00:00.134736784
+            2    0 days 00:00:00.245345345
+            3    0 days 00:00:00.223432411
+            4    0 days 00:16:39.992343241
+            5    0 days 00:00:03.634548734
+            6    0 days 00:00:00.000023234
             dtype: timedelta64[ns]
             """
             ),
@@ -876,13 +879,13 @@ def test_timedelta_series_s_us_repr(data, dtype):
             ),
             textwrap.dedent(
                 """
-            a    03:47:25.765432432
-            b    00:00:00.134736784
-            z    00:00:00.245345345
-            x    00:00:00.223432411
-            y    00:16:39.992343241
-            l    00:00:03.634548734
-            m    00:00:00.000023234
+            a    0 days 03:47:25.765432432
+            b    0 days 00:00:00.134736784
+            z    0 days 00:00:00.245345345
+            x    0 days 00:00:00.223432411
+            y    0 days 00:16:39.992343241
+            l    0 days 00:00:03.634548734
+            m    0 days 00:00:00.000023234
             Name: hello, dtype: timedelta64[ns]
             """
             ),
@@ -1034,13 +1037,13 @@ def test_timedelta_series_ns_ms_repr(ser, expected_repr):
             textwrap.dedent(
                 """
                                     a
-                00:00:00.136457654  a
+                0 days 00:00:00.136457654  a
                 <NA>                f
-                00:00:00.245345345  q
-                00:00:00.223432411  e
+                0 days 00:00:00.245345345  q
+                0 days 00:00:00.223432411  e
                 <NA>                w
-                00:00:03.634548734  e
-                00:00:00.000023234  t
+                0 days 00:00:03.634548734  e
+                0 days 00:00:00.000023234  t
                 """
             ),
         ),
@@ -1057,7 +1060,8 @@ def test_timedelta_dataframe_repr(df, expected_repr):
     [
         (
             cudf.Index([1000000, 200000, 3000000], dtype="timedelta64[ms]"),
-            "TimedeltaIndex(['00:16:40', '00:03:20', '00:50:00'], "
+            "TimedeltaIndex(['0 days 00:16:40', "
+            "'0 days 00:03:20', '0 days 00:50:00'], "
             "dtype='timedelta64[ms]')",
         ),
         (
@@ -1080,9 +1084,10 @@ def test_timedelta_dataframe_repr(df, expected_repr):
                 ],
                 dtype="timedelta64[us]",
             ),
-            "TimedeltaIndex([00:02:16.457654, <NA>, 00:04:05.345345, "
-            "00:03:43.432411, <NA>,"
-            "       01:00:34.548734, 00:00:00.023234],"
+            "TimedeltaIndex([0 days 00:02:16.457654, <NA>, "
+            "0 days 00:04:05.345345, "
+            "0 days 00:03:43.432411, <NA>,"
+            "       0 days 01:00:34.548734, 0 days 00:00:00.023234],"
             "      dtype='timedelta64[us]')",
         ),
         (
@@ -1106,6 +1111,8 @@ def test_timedelta_dataframe_repr(df, expected_repr):
     ],
 )
 def test_timedelta_index_repr(index, expected_repr):
+    if not PANDAS_GE_110:
+        pytest.xfail(reason="pandas >= 1.1 requried")
     actual_repr = index.__repr__()
 
     assert actual_repr.split() == expected_repr.split()

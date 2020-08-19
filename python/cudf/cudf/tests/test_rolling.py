@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_110
 from cudf.tests.utils import assert_eq
 
 
@@ -21,6 +22,10 @@ from cudf.tests.utils import assert_eq
 @pytest.mark.parametrize("nulls", ["none", "one", "some", "all"])
 @pytest.mark.parametrize("center", [True, False])
 def test_rollling_series_basic(data, index, agg, nulls, center):
+    if PANDAS_GE_110:
+        kwargs = {"check_freq": False}
+    else:
+        kwargs = {}
     if len(data) > 0:
         if nulls == "one":
             p = np.random.randint(0, len(data))
@@ -43,7 +48,7 @@ def test_rollling_series_basic(data, index, agg, nulls, center):
                 gsr.rolling(window_size, min_periods, center), agg
             )().fillna(-1)
             try:
-                assert_eq(expect, got, check_dtype=False)
+                assert_eq(expect, got, check_dtype=False, **kwargs)
             except AssertionError as e:
                 if agg == "count" and data != []:
                     pytest.xfail(
@@ -157,12 +162,17 @@ def test_rolling_getitem():
 
 
 def test_rolling_getitem_window():
+    if PANDAS_GE_110:
+        kwargs = {"check_freq": False}
+    else:
+        kwargs = {}
     index = pd.DatetimeIndex(
         pd.date_range("2000-01-01", "2000-01-02", freq="1h")
     )
     pdf = pd.DataFrame({"x": np.arange(len(index))}, index=index)
     gdf = cudf.from_pandas(pdf)
-    assert_eq(pdf.rolling("2h").x.mean(), gdf.rolling("2h").x.mean())
+
+    assert_eq(pdf.rolling("2h").x.mean(), gdf.rolling("2h").x.mean(), **kwargs)
 
 
 @pytest.mark.parametrize(
