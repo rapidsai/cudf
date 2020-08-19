@@ -239,9 +239,7 @@ def read_parquet(
         # Store IDs of selected row groups for each file
         for i, file in enumerate(dataset.files):
             if row_groups[i] is None:
-                row_groups[i] = (
-                    filtered_rg_ids[file]
-                )
+                row_groups[i] = filtered_rg_ids[file]
             else:
                 row_groups[i] = filter(
                     lambda id: id in row_groups[i], filtered_rg_ids[file]

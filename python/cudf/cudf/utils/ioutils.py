@@ -1160,6 +1160,7 @@ def _convert_single_conjunction(conjunction):
     if len(and_exprs) > 1:
         for and_expr in and_exprs[1:]:
             expr = ds.AndExpression(expr, and_expr)
+    return expr
 
 
 # TODO: Use PyArrow once filters-to-expression conversion is added to
