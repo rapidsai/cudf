@@ -273,7 +273,7 @@ TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithSeconds)
 
   // Time in seconds since epoch
   // Dates converted using epochconverter.com
-  auto timestamps_s = fixed_width_column_wrapper<cudf::timestamp_s>{
+  auto timestamps_s = fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{
     662688000L,   // 1991-01-01 00:00:00 GMT
     949496401L,   // 2000-02-02 13:00:01 GMT - leap year
     4106854801L,  // 2100-02-21 01:00:01 GMT - not a leap year
@@ -289,7 +289,7 @@ TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithSeconds)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *last_day_of_month(timestamps_s),
-    fixed_width_column_wrapper<cudf::timestamp_D>{
+    fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
       7700,   // 1991-01-31
       11016,  // 2000-02-29
       47540,  // 2100-02-28
@@ -314,7 +314,7 @@ TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithDate)
   // Time in days since epoch
   // Dates converted using epochconverter.com
   // Make some nullable fields as well
-  auto timestamps_d = fixed_width_column_wrapper<cudf::timestamp_D>{
+  auto timestamps_d = fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
     {
       999,    // Random nullable field
       0,      // This is the UNIX epoch - 1970-01-01
@@ -330,7 +330,7 @@ TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithDate)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *last_day_of_month(timestamps_d),
-    fixed_width_column_wrapper<cudf::timestamp_D>{
+    fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
       {
         999,    // Random nullable field
         30,     // This is the UNIX epoch - when rounded up becomes 1970-01-31
@@ -339,10 +339,9 @@ TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithDate)
         3,      // Random nullable field
         66077,  // 2150-11-30
         22279,  // 2030-12-31
-        111,    // Random nullable field
+        111     // Random nullable field
       },
-      {false, true, true, true, false, true, true, false},
-    },
+      {false, true, true, true, false, true, true, false}},
     true);
 }
 

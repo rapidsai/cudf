@@ -15,6 +15,7 @@
  */
 
 #include <cudf/column/column.hpp>
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/datetime.hpp>
@@ -74,26 +75,16 @@ struct extract_component_operator {
   }
 };
 
-CUDA_DEVICE_CALLABLE auto days_in_month(simt::std::chrono::month mon, bool is_leap_year) -> uint8_t
+// Number of days until month indexed by leap year and month (0-based index)
+static __device__ int16_t const days_until_month[2][13] = {
+  {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365},  // For non leap years
+  {0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335, 366}   // For leap years
+};
+
+CUDA_DEVICE_CALLABLE uint8_t days_in_month(simt::std::chrono::month mon, bool is_leap_year)
 {
-  using namespace simt::std::chrono;
-  // The expression in switch has to be integral/enumerated type.
-  // The constexpr in case has to match the switch type
-  switch (unsigned{mon}) {
-    case unsigned{January}: return 31;
-    case unsigned{February}: return is_leap_year ? 29 : 28;
-    case unsigned{March}: return 31;
-    case unsigned{April}: return 30;
-    case unsigned{May}: return 31;
-    case unsigned{June}: return 30;
-    case unsigned{July}: return 31;
-    case unsigned{August}: return 31;
-    case unsigned{September}: return 30;
-    case unsigned{October}: return 31;
-    case unsigned{November}: return 30;
-    case unsigned{December}: return 31;
-    default: return 0;
-  }
+  return days_until_month[is_leap_year][unsigned{mon}] -
+         days_until_month[is_leap_year][unsigned{mon} - 1];
 }
 
 // Round up the date to the last day of the month and return the
@@ -116,12 +107,6 @@ struct extract_last_day_of_month {
 
     return timestamp_D(days_since_epoch + days(last_day - static_cast<unsigned>(date.day())));
   }
-};
-
-// Number of days until month indexed by leap year and month (0-based index)
-static __device__ int16_t const days_until_month[2][12] = {
-  {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334},  // For non leap years
-  {0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335}   // For leap years
 };
 
 // Extract the day number of the year present in the timestamp
@@ -201,7 +186,7 @@ struct add_calendrical_months_functor {
   {
   }
 
-  // std chrono implementation is copied here due to nvcc bug
+  // std chrono implementation is copied here due to nvcc bug 2909685
   // https://howardhinnant.github.io/date_algorithms.html#days_from_civil
   static CUDA_DEVICE_CALLABLE timestamp_D
   compute_sys_days(simt::std::chrono::year_month_day const& ymd)

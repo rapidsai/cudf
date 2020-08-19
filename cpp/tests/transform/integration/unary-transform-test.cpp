@@ -37,7 +37,8 @@ void test_udf(const char udf[], Op op, Data data_init, cudf::size_type size, boo
   auto all_valid = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
   auto data_iter = cudf::test::make_counting_transform_iterator(0, data_init);
 
-  auto in = cudf::test::fixed_width_column_wrapper<dtype>(data_iter, data_iter + size, all_valid);
+  cudf::test::fixed_width_column_wrapper<dtype, typename decltype(data_iter)::value_type> in(
+    data_iter, data_iter + size, all_valid);
 
   std::unique_ptr<cudf::column> out =
     cudf::transform(in, udf, data_type(type_to_id<dtype>()), is_ptx);
@@ -216,7 +217,7 @@ __device__ inline void f(cudf::timestamp_us* output, cudf::timestamp_us input)
     return static_cast<timestamp_us>(a + dur{1});
   };
   auto random_eng = UniformRandomGenerator<timestamp_us::rep>(0, 100000000);
-  auto data_init  = [&random_eng](cudf::size_type row) { return dtype(random_eng.generate()); };
+  auto data_init  = [&random_eng](cudf::size_type row) { return random_eng.generate(); };
 
   test_udf<dtype>(cuda, op, data_init, 500, false);
 }

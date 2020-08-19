@@ -187,7 +187,6 @@ std::unique_ptr<cudf::column> add_calendrical_months(
   cudf::column_view const& timestamps,
   cudf::column_view const& months,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
 /** @} */  // end of group
 }  // namespace datetime
 }  // namespace cudf

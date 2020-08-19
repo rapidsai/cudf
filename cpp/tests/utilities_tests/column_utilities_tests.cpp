@@ -50,8 +50,8 @@ TYPED_TEST_CASE(ColumnUtilitiesTestFloatingPoint, cudf::test::FloatingPointTypes
 
 TYPED_TEST(ColumnUtilitiesTest, NonNullableToHost)
 {
-  auto sequence =
-    cudf::test::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
+  auto sequence = cudf::test::make_counting_transform_iterator(
+    0, [](auto i) { return cudf::test::make_type_param_scalar<TypeParam>(i); });
 
   auto size = this->size();
 
@@ -65,8 +65,8 @@ TYPED_TEST(ColumnUtilitiesTest, NonNullableToHost)
 
 TYPED_TEST(ColumnUtilitiesTest, NonNullableToHostWithOffset)
 {
-  auto sequence =
-    cudf::test::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
+  auto sequence = cudf::test::make_counting_transform_iterator(
+    0, [](auto i) { return cudf::test::make_type_param_scalar<TypeParam>(i); });
 
   auto size  = this->size();
   auto split = 2;
@@ -85,8 +85,8 @@ TYPED_TEST(ColumnUtilitiesTest, NonNullableToHostWithOffset)
 
 TYPED_TEST(ColumnUtilitiesTest, NullableToHostWithOffset)
 {
-  auto sequence =
-    cudf::test::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
+  auto sequence = cudf::test::make_counting_transform_iterator(
+    0, [](auto i) { return cudf::test::make_type_param_scalar<TypeParam>(i); });
 
   auto split = 2;
   auto size  = this->size();
@@ -110,8 +110,8 @@ TYPED_TEST(ColumnUtilitiesTest, NullableToHostWithOffset)
 
 TYPED_TEST(ColumnUtilitiesTest, NullableToHostAllValid)
 {
-  auto sequence =
-    cudf::test::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
+  auto sequence = cudf::test::make_counting_transform_iterator(
+    0, [](auto i) { return cudf::test::make_type_param_scalar<TypeParam>(i); });
 
   auto all_valid = thrust::make_constant_iterator<bool>(true);
 
