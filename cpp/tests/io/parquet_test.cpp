@@ -485,9 +485,11 @@ TEST_F(ParquetWriterTest, ListColumn)
   auto expected = std::make_unique<table>(std::move(cols));
   EXPECT_EQ(1, expected->num_columns());
 
+  auto expected_slice = cudf::slice(expected->view(), {1, 3});
+
   auto filepath = ("ListColumn.parquet");
   cudf_io::write_parquet_args out_args{
-    cudf_io::sink_info{filepath}, expected->view(), &expected_metadata};
+    cudf_io::sink_info{filepath}, expected_slice[0], &expected_metadata};
   out_args.compression = cudf::io::compression_type::NONE;
   cudf_io::write_parquet(out_args);
 

@@ -28,10 +28,12 @@
 
 #include <algorithm>
 #include <cstring>
+#include <numeric>
 #include <utility>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <rmm/device_buffer.hpp>
+#include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 
 namespace cudf {
@@ -142,8 +144,8 @@ __device__ size_type count_nested(column_device_view const &col, size_type idx)
 {
   auto child_col         = col.child(lists_column_view::child_column_index);
   auto offset_col        = col.child(lists_column_view::offsets_column_index);
-  size_type start_offset = offset_col.element<size_type>(idx);
-  size_type end_offset   = offset_col.element<size_type>(idx + 1);
+  size_type start_offset = offset_col.element<size_type>(idx + col.offset());
+  size_type end_offset   = offset_col.element<size_type>(idx + col.offset() + 1);
   // printf("start %d end %d\n", start_offset, end_offset);
 
   // Dremel encoding needs one set of repetition/definition values for null/empty records
@@ -179,8 +181,8 @@ __device__ void store_nested_rep_level(column_device_view const &col,
 
   auto child_col         = col.child(lists_column_view::child_column_index);
   auto offset_col        = col.child(lists_column_view::offsets_column_index);
-  size_type start_offset = offset_col.element<size_type>(idx);
-  size_type end_offset   = offset_col.element<size_type>(idx + 1);
+  size_type start_offset = offset_col.element<size_type>(idx + col.offset());
+  size_type end_offset   = offset_col.element<size_type>(idx + col.offset() + 1);
 
   if (start_offset == end_offset) {
     // printf("idx %d, rep %d\n", cur_idx, cur_rep_level);
@@ -230,8 +232,8 @@ __device__ void store_nested_def_level(column_device_view const &col,
 
   auto child_col         = col.child(lists_column_view::child_column_index);
   auto offset_col        = col.child(lists_column_view::offsets_column_index);
-  size_type start_offset = offset_col.element<size_type>(idx);
-  size_type end_offset   = offset_col.element<size_type>(idx + 1);
+  size_type start_offset = offset_col.element<size_type>(idx + col.offset());
+  size_type end_offset   = offset_col.element<size_type>(idx + col.offset() + 1);
 
   if (start_offset == end_offset) {
     def_level[cur_idx++] = cur_def_level - 1;
@@ -259,6 +261,16 @@ __global__ void calculate_levels(column_device_view const col,
   }
 }
 
+__global__ void get_leaf_offset(column_device_view const d_col, size_type *offset, size_type *end)
+{
+  column_device_view temp = d_col;
+  while (temp.type().id() == type_id::LIST) {
+    printf("off: %d,  end: %d\n", *offset, *end);
+    *offset = temp.child(lists_column_view::offsets_column_index).element<size_type>(*offset);
+    *end    = temp.child(lists_column_view::offsets_column_index).element<size_type>(*end);
+    temp    = temp.child(lists_column_view::child_column_index);
+  }
+}
 /**
  * @brief Helper class that adds parquet-specific column info
  **/
@@ -279,7 +291,6 @@ class parquet_column_view {
       _list_type(col.type().id() == type_id::LIST),
       _type_width((_string_type || _list_type) ? 0 : cudf::size_of(col.type())),
       _row_count(col.size()),
-      _data_count(_leaf_col.size()),
       _null_count(_leaf_col.null_count()),
       _data(col.head<uint8_t>() + col.offset() * _type_width),
       _nulls(_leaf_col.nullable() ? _leaf_col.null_mask() : nullptr),
@@ -374,22 +385,22 @@ class parquet_column_view {
         _stats_dtype   = dtype_none;
         break;
     }
-    if (_string_type && _data_count > 0) {
-      strings_column_view view{_leaf_col};
-      _indexes = rmm::device_buffer(_data_count * sizeof(gpu::nvstrdesc_s), stream);
-      stringdata_to_nvstrdesc<<<((_data_count - 1) >> 8) + 1, 256, 0, stream>>>(
-        reinterpret_cast<gpu::nvstrdesc_s *>(_indexes.data()),
-        view.offsets().data<size_type>() + view.offset(),
-        view.chars().data<char>(),
-        _nulls,
-        _data_count);
-      _data = _indexes.data();
-      CUDA_TRY(cudaStreamSynchronize(stream));
-    }
+    size_type leaf_col_offset = col.offset();
+    _data_count               = col.size();
     if (_list_type) {
-      // TODO (dm): make this work for list cols with offsets by applying offset recursively until
-      // we get offset of leaf data
-      _data = _leaf_col.head();
+      // Apply offset recursively until we get offset of leaf data
+      rmm::device_scalar<size_type> d_col_offset(leaf_col_offset, stream);
+      rmm::device_scalar<size_type> d_end_offset(leaf_col_offset + _data_count, stream);
+      auto d_col = column_device_view::create(col, stream);
+      get_leaf_offset<<<1, 1, 0, stream>>>(*d_col, d_col_offset.data(), d_end_offset.data());
+      leaf_col_offset = d_col_offset.value(stream);
+      _data_count     = d_end_offset.value(stream) - leaf_col_offset;
+
+      _type_width = (is_fixed_width(_leaf_col.type())) ? cudf::size_of(_leaf_col.type()) : 0;
+      _data       = (is_fixed_width(_leaf_col.type()))
+                ? _leaf_col.head<uint8_t>() + leaf_col_offset * _type_width
+                : nullptr;
+
       // Bring offset array to device
       column_view curr_col = col;
       while (curr_col.type().id() == type_id::LIST) {
@@ -401,7 +412,6 @@ class parquet_column_view {
 
       // Calculate row offset into dremel data (repetition/definition values)
       _dremel_offsets.resize(_row_count + 1);
-      auto d_col = column_device_view::create(col);
       dremel_encoding_size<<<((_row_count - 1) >> 8) + 1, 256, 0, stream>>>(
         *d_col, _dremel_offsets.data().get());
       CUDA_TRY(cudaStreamSynchronize(stream));
@@ -424,6 +434,18 @@ class parquet_column_view {
         *d_col, _dremel_offsets.data().get(), _rep_level.data().get(), _def_level.data().get());
       print(_rep_level, "rep:");
       print(_def_level, "def:");
+    }
+    if (_string_type && _data_count > 0) {
+      strings_column_view view{_leaf_col};
+      _indexes = rmm::device_buffer(_data_count * sizeof(gpu::nvstrdesc_s), stream);
+      stringdata_to_nvstrdesc<<<((_data_count - 1) >> 8) + 1, 256, 0, stream>>>(
+        reinterpret_cast<gpu::nvstrdesc_s *>(_indexes.data()),
+        view.offsets().data<size_type>() + leaf_col_offset,
+        view.chars().data<char>(),
+        _nulls,
+        _data_count);
+      _data = _indexes.data();
+      CUDA_TRY(cudaStreamSynchronize(stream));
     }
 
     // Generating default name if name isn't present in metadata
@@ -1001,12 +1023,11 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
       ck->start_row      = start_row;
       ck->num_rows       = (uint32_t)state.md.row_groups[global_r].num_rows;
       ck->first_fragment = i * num_fragments + f;
-      // Count total number of values in this chunk
-      // TODO (dm): stl algo
-      ck->num_values = 0;
-      for (size_t j = 0; j < fragments_in_chunk; j++) {
-        ck->num_values += fragments[i * num_fragments + f + j].num_values;
-      }
+      ck->num_values =
+        std::accumulate(fragments.host_ptr(i * num_fragments + f),
+                        fragments.host_ptr(i * num_fragments + f) + fragments_in_chunk,
+                        0,
+                        [](uint32_t l, auto r) { return l + r.num_values; });
       ck->first_page    = 0;
       ck->num_pages     = 0;
       ck->is_compressed = 0;
