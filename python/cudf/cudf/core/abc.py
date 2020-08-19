@@ -2,8 +2,12 @@
 
 import abc
 import sys
+import threading
 from abc import abstractmethod
+from concurrent.futures import ThreadPoolExecutor
 
+import cupy
+import numpy
 import rmm
 
 import cudf
@@ -15,6 +19,36 @@ if sys.version_info < (3, 8):
         import pickle
 else:
     import pickle
+
+
+_tls = threading.local()
+
+
+def _get_tls_stream():
+    stream = getattr(_tls, "stream", None)
+    if stream is None:
+        _tls.stream = stream = cupy.cuda.Stream(non_blocking=True)
+    return stream
+
+
+def _ensure_on_host(is_cuda, buf):
+    if is_cuda:
+        with _get_tls_stream() as stream:
+            return memoryview(cupy.asarray(buf).get(stream=stream))
+    else:
+        return memoryview(buf)
+
+
+def _ensure_maybe_on_device(is_cuda, buf):
+    buf = memoryview(buf)
+    if is_cuda:
+        with _get_tls_stream() as stream:
+            #dbuf = rmm.DeviceBuffer(size=buf.nbytes, stream=stream.ptr)
+            dbuf = rmm.DeviceBuffer(size=buf.nbytes)
+            cupy.asarray(dbuf).set(numpy.asarray(buf), stream=stream)
+            return dbuf
+    else:
+        return buf
 
 
 class Serializable(abc.ABC):
@@ -96,10 +130,10 @@ class Serializable(abc.ABC):
         """
         header, frames = self.device_serialize()
         header["writeable"] = len(frames) * (None,)
-        frames = [
-            f.to_host_array().data if c else memoryview(f)
-            for c, f in zip(header["is-cuda"], frames)
-        ]
+        with ThreadPoolExecutor() as executor:
+            frames = list(
+                executor.map(_ensure_on_host, header["is-cuda"], frames)
+            )
         return header, frames
 
     @classmethod
@@ -121,10 +155,12 @@ class Serializable(abc.ABC):
 
         :meta private:
         """
-        frames = [
-            rmm.DeviceBuffer.to_device(f) if c else f
-            for c, f in zip(header["is-cuda"], map(memoryview, frames))
-        ]
+        with ThreadPoolExecutor() as executor:
+            frames = list(
+                executor.map(
+                    _ensure_maybe_on_device, header["is-cuda"], frames
+                )
+            )
         obj = cls.device_deserialize(header, frames)
         return obj
 
