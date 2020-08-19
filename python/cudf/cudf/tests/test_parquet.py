@@ -667,7 +667,7 @@ def test_parquet_reader_list_large_mixed(tmpdir):
     assert_eq(expect, got, check_dtype=False)
 
 
-@pytest.mark.parametrize("skip", range(0, 128, 4))
+@pytest.mark.parametrize("skip", range(0, 128))
 def test_parquet_reader_list_skiprows(skip, tmpdir):
     num_rows = 128
     src = pd.DataFrame(
@@ -694,7 +694,7 @@ def test_parquet_reader_list_skiprows(skip, tmpdir):
     assert_eq(expect, got, check_dtype=False)
 
 
-@pytest.mark.parametrize("skip", range(0, 128, 4))
+@pytest.mark.parametrize("skip", range(0, 128))
 def test_parquet_reader_list_num_rows(skip, tmpdir):
     num_rows = 128
     src = pd.DataFrame(
