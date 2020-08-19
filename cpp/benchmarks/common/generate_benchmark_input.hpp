@@ -90,7 +90,7 @@ T random_element()
                             seconds_gen(deterministic_engine()) * nanoseconds<cudf::timestamp_s>() -
                             nanoseconds_gen(deterministic_engine());
   // Return value in the type's precision
-  return T(timestamp_ns / nanoseconds<T>());
+  return T(typename T::duration{timestamp_ns / nanoseconds<T>()});
 }
 
 /**

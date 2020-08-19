@@ -75,7 +75,8 @@ TEST_F(FromArrowTest, DateTimeTable)
 {
   auto data = {1, 2, 3, 4, 5, 6};
 
-  auto col = cudf::test::fixed_width_column_wrapper<cudf::timestamp_ms>(data);
+  auto col =
+    cudf::test::fixed_width_column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep>(data);
 
   cudf::table_view expected_table_view({col});
 

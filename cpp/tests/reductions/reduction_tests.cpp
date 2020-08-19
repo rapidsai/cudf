@@ -32,12 +32,25 @@
 using aggregation = cudf::aggregation;
 
 template <typename T>
-std::vector<T> convert_values(std::vector<int> const &int_values)
+typename std::enable_if<!cudf::is_timestamp_t<T>::value, std::vector<T>>::type convert_values(
+  std::vector<int> const &int_values)
 {
   std::vector<T> v(int_values.size());
   std::transform(int_values.begin(), int_values.end(), v.begin(), [](int x) {
     if (std::is_unsigned<T>::value) x = std::abs(x);
     return static_cast<T>(x);
+  });
+  return v;
+}
+
+template <typename T>
+typename std::enable_if<cudf::is_timestamp_t<T>::value, std::vector<T>>::type convert_values(
+  std::vector<int> const &int_values)
+{
+  std::vector<T> v(int_values.size());
+  std::transform(int_values.begin(), int_values.end(), v.begin(), [](int x) {
+    if (std::is_unsigned<T>::value) x = std::abs(x);
+    return T{typename T::duration(x)};
   });
   return v;
 }
@@ -532,21 +545,21 @@ TEST_F(ReductionDtypeTest, different_precision)
   // wrapper classes other than bool are not convertible
   this->reduction_test<cudf::timestamp_D, cudf::timestamp_s>(
     int_values,
-    static_cast<cudf::timestamp_s>(expected_value),
+    cudf::timestamp_s{cudf::duration_s(expected_value)},
     false,
     sum_agg,
     cudf::data_type(cudf::type_id::TIMESTAMP_SECONDS));
 
   this->reduction_test<cudf::timestamp_s, cudf::timestamp_ns>(
     int_values,
-    static_cast<cudf::timestamp_ns>(expected_value),
+    cudf::timestamp_ns{cudf::duration_ns(expected_value)},
     false,
     sum_agg,
     cudf::data_type(cudf::type_id::TIMESTAMP_NANOSECONDS));
 
   this->reduction_test<int8_t, cudf::timestamp_us>(
     int_values,
-    static_cast<cudf::timestamp_us>(expected_value),
+    cudf::timestamp_us{cudf::duration_us(expected_value)},
     false,
     sum_agg,
     cudf::data_type(cudf::type_id::TIMESTAMP_MICROSECONDS));
