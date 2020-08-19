@@ -1008,7 +1008,9 @@ def test_groupby_median(agg, by):
 
 @pytest.mark.parametrize("agg", [lambda x: x.nunique(), "nunique"])
 @pytest.mark.parametrize("by", ["a", ["a", "b"], ["a", "c"]])
-def test_groupby_nunique(agg, by):
+def test_groupby_nunique(agg, by, pd_version_fail):
+    if pd_version_fail:
+        pytest.xfail("pandas >= 1.1 required")
     pdf = pd.DataFrame(
         {"a": [1, 1, 1, 2, 3], "b": [1, 2, 2, 2, 1], "c": [1, 2, None, 4, 5]}
     )

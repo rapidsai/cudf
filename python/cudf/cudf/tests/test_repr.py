@@ -607,7 +607,9 @@ def test_series_null_index_repr(sr, pandas_special_case):
     ],
 )
 @pytest.mark.parametrize("dtype", ["timedelta64[s]", "timedelta64[us]"])
-def test_timedelta_series_s_us_repr(data, dtype):
+def test_timedelta_series_s_us_repr(data, dtype, pd_version_fail):
+    if pd_version_fail:
+        pytest.xfail(reason="pandas >= 1.1 requried")
     sr = cudf.Series(data, dtype=dtype)
     psr = sr.to_pandas()
 
@@ -1107,7 +1109,9 @@ def test_timedelta_dataframe_repr(df, expected_repr):
         ),
     ],
 )
-def test_timedelta_index_repr(index, expected_repr):
+def test_timedelta_index_repr(index, expected_repr, pd_version_fail):
+    if pd_version_fail:
+        pytest.xfail(reason="pandas >= 1.1 requried")
     actual_repr = index.__repr__()
 
     assert actual_repr.split() == expected_repr.split()

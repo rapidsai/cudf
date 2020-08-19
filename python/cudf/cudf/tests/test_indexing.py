@@ -380,7 +380,11 @@ def test_series_loc_string():
     )
 
 
-def test_series_loc_datetime():
+def test_series_loc_datetime(pd_version_fail):
+    if not pd_version_fail:
+        kwargs = {"check_freq": False}
+    else:
+        kwargs = {}
     ps = pd.Series(
         [1, 2, 3, 4, 5], index=pd.date_range("20010101", "20010105")
     )
@@ -401,11 +405,11 @@ def test_series_loc_datetime():
     assert_eq(
         ps.loc["2001-01-02":"2001-01-05"],
         gs.loc["2001-01-02":"2001-01-05"],
-        check_freq=False,
+        **kwargs,
     )
-    assert_eq(ps.loc["2001-01-02":], gs.loc["2001-01-02":], check_freq=False)
-    assert_eq(ps.loc[:"2001-01-04"], gs.loc[:"2001-01-04"], check_freq=False)
-    assert_eq(ps.loc[::2], gs.loc[::2], check_freq=False)
+    assert_eq(ps.loc["2001-01-02":], gs.loc["2001-01-02":], **kwargs)
+    assert_eq(ps.loc[:"2001-01-04"], gs.loc[:"2001-01-04"], **kwargs)
+    assert_eq(ps.loc[::2], gs.loc[::2], **kwargs)
     #
     # assert_eq(ps.loc[['2001-01-01', '2001-01-04', '2001-01-05']],
     #           gs.loc[['2001-01-01', '2001-01-04', '2001-01-05']])
@@ -430,7 +434,7 @@ def test_series_loc_datetime():
     assert_eq(
         ps.loc[[True, False, True, False, True]],
         gs.loc[[True, False, True, False, True]],
-        check_freq=False,
+        **kwargs,
     )
 
 

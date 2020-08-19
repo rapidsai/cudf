@@ -45,7 +45,9 @@ t a
     assert_eq(cat.codes, cudf_cat.codes.to_array())
 
 
-def test_categorical_integer():
+def test_categorical_integer(pd_version_fail):
+    if pd_version_fail:
+        pytest.xfail(reason="pandas >=1.1 required")
     cat = pd.Categorical(["a", "_", "_", "c", "a"], categories=["a", "b", "c"])
     pdsr = pd.Series(cat)
     sr = Series(cat)
