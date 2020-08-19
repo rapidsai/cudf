@@ -12,6 +12,7 @@
 - PR #5973 Link to the Code of Conduct in CONTRIBUTING.md
 - PR #5917 Just use `None` for `strides` in `Buffer`
 - PR #5971 Add cuStreamz README for basic installation and use
+- PR #6002 Add Java bindings for md5
 
 ## Bug Fixes
 
@@ -223,12 +224,14 @@
 - PR #5894 Small code improvement / cleanup
 - PR #5899 Add in gather support for Java
 - PR #5906 Add macros for showing line of failures in unit tests
-- PR #5933 Add in APIs to read/write arrow IPC formatted data from java 
+- PR #5933 Add in APIs to read/write arrow IPC formatted data from java
+- PR #3918 Update cuDF internals doc
 - PR #5970 Map data to pandas through arrow, always
 - PR #6012 Remove `cudf._cuda` and replace usages with `rmm._cuda`
 
 ## Bug Fixes
 
+- PR #6034 Specify `--basetemp` for `py.test` run
 - PR #5793 Fix leak in mutable_table_device_view by deleting _descendant_storage in table_device_view_base::destroy
 - PR #5525 Make sure to allocate bitmasks of string columns only once
 - PR #5336 Initialize conversion tables on a per-context basis
