@@ -38,14 +38,14 @@ TEST_F(TextGenerateNgramsTest, Ngrams)
     cudf::test::strings_column_wrapper expected{
       "the_fox", "fox_jumped", "jumped_over", "over_thé", "thé_dog"};
     auto const results = nvtext::generate_ngrams(strings_view);
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 
   {
     cudf::test::strings_column_wrapper expected{
       "the_fox_jumped", "fox_jumped_over", "jumped_over_thé", "over_thé_dog"};
     auto const results = nvtext::generate_ngrams(strings_view, 3);
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     cudf::test::strings_column_wrapper expected{"th",
@@ -65,13 +65,13 @@ TEST_F(TextGenerateNgramsTest, Ngrams)
                                                 "do",
                                                 "og"};
     auto const results = nvtext::generate_character_ngrams(strings_view, 2);
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     cudf::test::strings_column_wrapper expected{
       "the", "fox", "jum", "ump", "mpe", "ped", "ove", "ver", "thé", "dog"};
     auto const results = nvtext::generate_character_ngrams(strings_view, 3);
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
 
@@ -88,13 +88,13 @@ TEST_F(TextGenerateNgramsTest, NgramsWithNulls)
     auto const results = nvtext::generate_ngrams(strings_view, 3);
     cudf::test::strings_column_wrapper expected{
       "the_fox_jumped", "fox_jumped_over", "jumped_over_the", "over_the_dog"};
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     cudf::test::strings_column_wrapper expected{
       "the", "fox", "jum", "ump", "mpe", "ped", "ove", "ver", "the", "dog"};
     auto const results = nvtext::generate_character_ngrams(strings_view, 3);
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
 

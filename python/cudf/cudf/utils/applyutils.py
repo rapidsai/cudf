@@ -1,7 +1,6 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 import functools
 
-import cupy
 from numba import cuda
 
 import cudf
@@ -216,7 +215,7 @@ class ApplyChunksCompiler(ApplyKernelCompilerBase):
     def normalize_chunks(self, size, chunks):
         if isinstance(chunks, int):
             # *chunks* is the chunksize
-            return cupy.arange(0, size, chunks)
+            return column.arange(0, size, chunks).data_array_view
         else:
             # *chunks* is an array of chunk leading offset
             chunks = column.as_column(chunks)

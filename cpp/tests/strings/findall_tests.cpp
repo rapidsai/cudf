@@ -72,7 +72,7 @@ TEST_F(StringsFindallTests, FindallTest)
   columns.push_back(expected1.release());
   columns.push_back(expected2.release());
   cudf::table expected(std::move(columns));
-  cudf::test::expect_tables_equal(*results, expected);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*results, expected);
 }
 
 TEST_F(StringsFindallTests, MediumRegex)
@@ -95,14 +95,14 @@ TEST_F(StringsFindallTests, MediumRegex)
     h_expected1.begin(),
     h_expected1.end(),
     thrust::make_transform_iterator(h_expected1.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(results->get_column(0), expected1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->get_column(0), expected1);
 
   std::vector<const char*> h_expected2{"just numbers 9876", nullptr};
   cudf::test::strings_column_wrapper expected2(
     h_expected2.begin(),
     h_expected2.end(),
     thrust::make_transform_iterator(h_expected2.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(results->get_column(1), expected2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->get_column(1), expected2);
 }
 
 TEST_F(StringsFindallTests, LargeRegex)
@@ -133,5 +133,5 @@ TEST_F(StringsFindallTests, LargeRegex)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(results->get_column(0), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->get_column(0), expected);
 }

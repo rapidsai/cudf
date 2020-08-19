@@ -6,6 +6,7 @@ import pandas as pd
 import rmm
 
 import cudf
+
 from cudf.core.buffer import Buffer
 from cudf.utils.dtypes import is_categorical_dtype, is_list_dtype
 import cudf._lib as libcudfxx
@@ -29,9 +30,13 @@ from cudf._lib.move cimport move
 
 from cudf._lib.cpp.column.column cimport column, column_contents
 from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.column.column_factories cimport (
+    make_column_from_scalar as cpp_make_column_from_scalar
+)
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
+from cudf._lib.cpp.scalar.scalar cimport scalar
+from cudf._lib.scalar cimport Scalar
 cimport cudf._lib.cpp.types as libcudf_types
-
 
 cdef class Column:
     """
@@ -531,3 +536,13 @@ cdef class Column:
         )
 
         return result
+
+
+def make_column_from_scalar(Scalar val, size_type size):
+    cdef scalar* c_val = val.c_value.get()
+
+    cdef unique_ptr[column] c_result
+    with nogil:
+        c_result = move(cpp_make_column_from_scalar(c_val[0], size))
+
+    return Column.from_unique_ptr(move(c_result))

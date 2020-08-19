@@ -138,7 +138,7 @@ struct dispatch_to_cudf_column {
       col->set_null_mask(std::move(out_mask));
     }
 
-    return std::move(col);
+    return col;
   }
 };
 
