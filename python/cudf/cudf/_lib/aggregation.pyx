@@ -87,7 +87,9 @@ cdef unique_ptr[aggregation] make_aggregation(op, kwargs={}) except *:
     if isinstance(op, str):
         agg = getattr(_AggregationFactory, op)(**kwargs)
     elif callable(op):
-        if "dtype" in kwargs:
+        if op is list:
+            agg = _AggregationFactory.collect()
+        elif "dtype" in kwargs:
             agg = _AggregationFactory.from_udf(op, **kwargs)
         else:
             agg = op(_AggregationFactory)

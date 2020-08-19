@@ -1200,3 +1200,14 @@ def test_groupby_nunique_series():
         gdf.groupby("a")["b"].nunique(),
         check_dtype=False,
     )
+
+
+def test_groupby_list():
+    pdf = pd.DataFrame({"a": [1, 1, 1, 2, 2, 2], "b": [1, 2, 3, 4, 5, 6]})
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.groupby("a").agg({"b": list}),
+        gdf.groupby("a").agg({"b": list}),
+        check_dtype=False,
+    )
