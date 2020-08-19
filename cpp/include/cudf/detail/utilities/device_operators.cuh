@@ -44,7 +44,15 @@ struct DeviceSum {
     return lhs + rhs;
   }
 
-  template <typename T, typename std::enable_if_t<!cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T, typename std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
+  static constexpr T identity()
+  {
+    return T{typename T::duration{0}};
+  }
+
+  template <
+    typename T,
+    typename std::enable_if_t<!cudf::is_timestamp<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
     return T{0};

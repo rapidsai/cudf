@@ -42,7 +42,7 @@ struct IteratorTest : public cudf::test::BaseFixture {
   template <typename InputIterator, typename T_output>
   void iterator_test_cub(T_output expected, InputIterator d_in, int num_items)
   {
-    T_output init{0};
+    T_output init = cudf::test::make_type_param_scalar<T_output>(0);
     thrust::device_vector<T_output> dev_result(1, init);
 
     // Get temporary storage size
@@ -126,7 +126,8 @@ struct IteratorTest : public cudf::test::BaseFixture {
                          const cudf::column_device_view& col)
   {
     if (col.nullable()) {
-      auto it_dev = cudf::detail::make_null_replacement_iterator(col, T_output{0});
+      auto it_dev = cudf::detail::make_null_replacement_iterator(
+        col, cudf::test::make_type_param_scalar<T_output>(0));
       iterator_test_thrust(expected, it_dev, col.size());
     } else {
       auto it_dev = col.begin<T_output>();
