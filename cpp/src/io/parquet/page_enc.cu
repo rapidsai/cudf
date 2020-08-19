@@ -536,14 +536,6 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
           dict_bits_plus1 = 0;
         }
         if (!t) {
-          uint32_t def_level_bits = col_g.level_bits & 0xf;
-          // TODO (dm): This is no longer tied to number of values in page. In list, there can be
-          // def level values to indicate empty list which will not show up in the leaf column
-          // values. So num def_level_size can be more
-          uint32_t def_level_size =
-            (def_level_bits)
-              ? 4 + 5 + ((def_level_bits * values_in_page + 7) >> 3) + (values_in_page >> 8)
-              : 0;
           page_g.num_fragments   = fragments_in_chunk - page_start;
           page_g.chunk_id        = blockIdx.y * num_columns + blockIdx.x;
           page_g.page_type       = DATA_PAGE;
@@ -559,7 +551,6 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
             }
             page_g.max_hdr_size += stats_hdr_len;
           }
-          page_g.max_data_size   = page_size + def_level_size;
           page_g.page_data       = ck_g.uncompressed_bfr + page_offset;
           page_g.compressed_data = ck_g.compressed_bfr + comp_page_offset;
           page_g.start_row       = cur_row;
@@ -578,6 +569,17 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
           } else {
             page_g.num_values = page_g.num_rows;
           }
+          uint32_t def_level_bits = col_g.level_bits & 0xf;
+          uint32_t rep_level_bits = col_g.level_bits >> 4;
+          uint32_t def_level_size =
+            (def_level_bits)
+              ? 4 + 5 + ((def_level_bits * page_g.num_values + 7) >> 3) + (page_g.num_values >> 8)
+              : 0;
+          uint32_t rep_level_size =
+            (rep_level_bits)
+              ? 4 + 5 + ((rep_level_bits * page_g.num_values + 7) >> 3) + (page_g.num_values >> 8)
+              : 0;
+          page_g.max_data_size = page_size + def_level_size + rep_level_size;
 
           pagestats_g.start_chunk = ck_g.first_fragment + page_start;
           pagestats_g.num_chunks  = page_g.num_fragments;
