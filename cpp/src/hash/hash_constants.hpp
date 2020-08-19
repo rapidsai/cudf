@@ -61,6 +61,16 @@ __device__ __constant__ md5_hash_constants_type md5_hash_constants[64] = {
   0x6fa87e4f, 0xfe2ce6e0, 0xa3014314, 0x4e0811a1, 0xf7537e82, 0xbd3af235, 0x2ad7d2bb, 0xeb86d391,
 };
 
+using sha1_word_type = uint32_t;
+
+struct sha1_intermediate_data {
+  uint64_t message_length = 0;
+  uint32_t buffer_length  = 0;
+  uint32_t hash_value[5] = {0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476, 0xc3d2e1f0};
+  // uint32_t hash_value[5] = {0x01234567, 0x89abcdef, 0xfedcba98, 0x76543210, 0xf0e1d2c3};
+  uint8_t buffer[64];
+};
+
 using sha256_word_type = uint32_t;
 
 struct sha256_intermediate_data {
@@ -80,9 +90,9 @@ __device__ __constant__ sha256_word_type sha256_hash_constants[64] = {
   0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
   0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
 };
-__device__ __constant__ sha256_word_type sha224_initial_hash = {0xc1059ed8, 0x367cd507, 0x3070dd17, 0xf70e5939, 0xffc00b31, 0x68581511, 0x64f98fa7, 0xbefa4fa4};
+__device__ __constant__ sha256_word_type sha224_initial_hash[8] = {0xc1059ed8, 0x367cd507, 0x3070dd17, 0xf70e5939, 0xffc00b31, 0x68581511, 0x64f98fa7, 0xbefa4fa4};
 
-__device__ __constant__ sha256_word_type sha256_initial_hash = {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
+__device__ __constant__ sha256_word_type sha256_initial_hash[8] = {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
 
 using sha512_word_type = uint64_t;
 
@@ -109,15 +119,15 @@ __device__ __constant__ sha512_word_type sha512_hash_constants[80] = {
   0x90befffa23631e28, 0xa4506cebde82bde9, 0xbef9a3f7b2c67915, 0xc67178f2e372532b, 0xca273eceea26619c,
   0xd186b8c721c0c207, 0xeada7dd6cde0eb1e, 0xf57d4f7fee6ed178, 0x06f067aa72176fba, 0x0a637dc5a2c898a6,
   0x113f9804bef90dae, 0x1b710b35131c471b, 0x28db77f523047d84, 0x32caab7b40c72493, 0x3c9ebe0a15c9bebc,
-  0x431d67c49c100d4c, 0x4cc5d4becb3e42b6, 0x597f299cfc657e2a, 0x5fcb6fab3ad6faec, 0x6c44198c4a475817
+  0x431d67c49c100d4c, 0x4cc5d4becb3e42b6, 0x597f299cfc657e2a, 0x5fcb6fab3ad6faec, 0x6c44198c4a475817,
 };
 
-__device__ __constant__ sha512_word_type sha384_initial_hash = {
+__device__ __constant__ sha512_word_type sha384_initial_hash[8] = {
   0xcbbb9d5dc1059ed8, 0x629a292a367cd507, 0x9159015a3070dd17, 0x152fecd8f70e5939,
   0x67332667ffc00b31, 0x8eb44a8768581511, 0xdb0c2e0d64f98fa7, 0x47b5481dbefa4fa4
 };
 
-__device__ __constant__ sha512_word_type sha512_initial_hash = {
+__device__ __constant__ sha512_word_type sha512_initial_hash[8] = {
   0x6a09e667f3bcc908, 0xbb67ae8584caa73b, 0x3c6ef372fe94f82b, 0xa54ff53a5f1d36f1,
   0x510e527fade682d1, 0x9b05688c2b3e6c1f, 0x1f83d9abfb41bd6b, 0x5be0cd19137e2179
 };

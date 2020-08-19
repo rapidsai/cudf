@@ -53,5 +53,22 @@ std::unique_ptr<column> md5_hash(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
   cudaStream_t stream                 = 0);
 
+std::unique_ptr<column> sha1_hash(
+  table_view const& input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
+
+std::unique_ptr<column> sha256_hash(
+  table_view const& input,
+  bool truncate_output,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
+
+std::unique_ptr<column> sha512_hash(
+  table_view const& input,
+  bool truncate_output,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
+
 }  // namespace detail
 }  // namespace cudf
