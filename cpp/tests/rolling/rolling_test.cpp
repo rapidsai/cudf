@@ -473,16 +473,16 @@ TEST_F(RollingErrorTest, WindowWrongDtype)
 TEST_F(RollingErrorTest, SumTimestampNotSupported)
 {
   constexpr size_type size{10};
-  fixed_width_column_wrapper<cudf::timestamp_D> input_D(thrust::make_counting_iterator(0),
-                                                        thrust::make_counting_iterator(size));
-  fixed_width_column_wrapper<cudf::timestamp_s> input_s(thrust::make_counting_iterator(0),
-                                                        thrust::make_counting_iterator(size));
-  fixed_width_column_wrapper<cudf::timestamp_ms> input_ms(thrust::make_counting_iterator(0),
-                                                          thrust::make_counting_iterator(size));
-  fixed_width_column_wrapper<cudf::timestamp_us> input_us(thrust::make_counting_iterator(0),
-                                                          thrust::make_counting_iterator(size));
-  fixed_width_column_wrapper<cudf::timestamp_ns> input_ns(thrust::make_counting_iterator(0),
-                                                          thrust::make_counting_iterator(size));
+  fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> input_D(
+    thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
+  fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep> input_s(
+    thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
+  fixed_width_column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep> input_ms(
+    thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
+  fixed_width_column_wrapper<cudf::timestamp_us, cudf::timestamp_us::rep> input_us(
+    thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
+  fixed_width_column_wrapper<cudf::timestamp_ns, cudf::timestamp_ns::rep> input_ns(
+    thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
 
   EXPECT_THROW(cudf::rolling_window(input_D, 2, 2, 0, cudf::make_sum_aggregation()),
                cudf::logic_error);
@@ -500,16 +500,16 @@ TEST_F(RollingErrorTest, SumTimestampNotSupported)
 TEST_F(RollingErrorTest, MeanTimestampNotSupported)
 {
   constexpr size_type size{10};
-  fixed_width_column_wrapper<cudf::timestamp_D> input_D(thrust::make_counting_iterator(0),
-                                                        thrust::make_counting_iterator(size));
-  fixed_width_column_wrapper<cudf::timestamp_s> input_s(thrust::make_counting_iterator(0),
-                                                        thrust::make_counting_iterator(size));
-  fixed_width_column_wrapper<cudf::timestamp_ms> input_ms(thrust::make_counting_iterator(0),
-                                                          thrust::make_counting_iterator(size));
-  fixed_width_column_wrapper<cudf::timestamp_us> input_us(thrust::make_counting_iterator(0),
-                                                          thrust::make_counting_iterator(size));
-  fixed_width_column_wrapper<cudf::timestamp_ns> input_ns(thrust::make_counting_iterator(0),
-                                                          thrust::make_counting_iterator(size));
+  fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> input_D(
+    thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
+  fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep> input_s(
+    thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
+  fixed_width_column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep> input_ms(
+    thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
+  fixed_width_column_wrapper<cudf::timestamp_us, cudf::timestamp_us::rep> input_us(
+    thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
+  fixed_width_column_wrapper<cudf::timestamp_ns, cudf::timestamp_ns::rep> input_ns(
+    thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
 
   EXPECT_THROW(cudf::rolling_window(input_D, 2, 2, 0, cudf::make_mean_aggregation()),
                cudf::logic_error);
@@ -605,10 +605,11 @@ TYPED_TEST(RollingTest, ZeroWindow)
 {
   size_type num_rows = 1000;
 
-  std::vector<TypeParam> col_data(num_rows, TypeParam(1));
+  std::vector<int> col_data(num_rows, 1);
   std::vector<bool> col_mask(num_rows, 1);
 
-  fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
+  fixed_width_column_wrapper<TypeParam, int> input(
+    col_data.begin(), col_data.end(), col_mask.begin());
   std::vector<size_type> window({0});
   size_type periods = num_rows;
 
@@ -620,10 +621,11 @@ TYPED_TEST(RollingTest, ZeroPeriods)
 {
   size_type num_rows = 1000;
 
-  std::vector<TypeParam> col_data(num_rows, TypeParam(1));
+  std::vector<int> col_data(num_rows, 1);
   std::vector<bool> col_mask(num_rows, 1);
 
-  fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
+  fixed_width_column_wrapper<TypeParam, int> input(
+    col_data.begin(), col_data.end(), col_mask.begin());
 
   std::vector<size_type> window({num_rows});
   size_type periods = 0;
@@ -638,10 +640,11 @@ TYPED_TEST(RollingTest, BackwardForwardWindow)
 {
   size_type num_rows = 1000;
 
-  std::vector<TypeParam> col_data(num_rows, TypeParam(1));
+  std::vector<int> col_data(num_rows, 1);
   std::vector<bool> col_mask(num_rows, 1);
 
-  fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
+  fixed_width_column_wrapper<TypeParam, int> input(
+    col_data.begin(), col_data.end(), col_mask.begin());
 
   std::vector<size_type> window({num_rows});
   size_type periods = num_rows;

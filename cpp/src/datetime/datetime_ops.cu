@@ -15,11 +15,13 @@
  */
 
 #include <cudf/column/column.hpp>
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/datetime.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 
@@ -28,6 +30,17 @@
 namespace cudf {
 namespace datetime {
 namespace detail {
+enum class datetime_component {
+  INVALID = 0,
+  YEAR,
+  MONTH,
+  DAY,
+  WEEKDAY,
+  HOUR,
+  MINUTE,
+  SECOND,
+};
+
 template <datetime_component Component>
 struct extract_component_operator {
   template <typename Timestamp>
@@ -62,32 +75,31 @@ struct extract_component_operator {
   }
 };
 
+CUDA_DEVICE_CALLABLE auto days_in_month(simt::std::chrono::month mon, bool is_leap_year) -> uint8_t
+{
+  using namespace simt::std::chrono;
+  // The expression in switch has to be integral/enumerated type.
+  // The constexpr in case has to match the switch type
+  switch (unsigned{mon}) {
+    case unsigned{January}: return 31;
+    case unsigned{February}: return is_leap_year ? 29 : 28;
+    case unsigned{March}: return 31;
+    case unsigned{April}: return 30;
+    case unsigned{May}: return 31;
+    case unsigned{June}: return 30;
+    case unsigned{July}: return 31;
+    case unsigned{August}: return 31;
+    case unsigned{September}: return 30;
+    case unsigned{October}: return 31;
+    case unsigned{November}: return 30;
+    case unsigned{December}: return 31;
+    default: return 0;
+  }
+}
+
 // Round up the date to the last day of the month and return the
 // date only (without the time component)
 struct extract_last_day_of_month {
-  CUDA_DEVICE_CALLABLE auto days_in_month(simt::std::chrono::month mon, bool is_leap_year) const
-    -> uint8_t
-  {
-    using namespace simt::std::chrono;
-    // The expression in switch has to be integral/enumerated type.
-    // The constexpr in case has to match the switch type
-    switch (unsigned{mon}) {
-      case unsigned{January}: return 31;
-      case unsigned{February}: return is_leap_year ? 29 : 28;
-      case unsigned{March}: return 31;
-      case unsigned{April}: return 30;
-      case unsigned{May}: return 31;
-      case unsigned{June}: return 30;
-      case unsigned{July}: return 31;
-      case unsigned{August}: return 31;
-      case unsigned{September}: return 30;
-      case unsigned{October}: return 31;
-      case unsigned{November}: return 30;
-      case unsigned{December}: return 31;
-      default: return 0;
-    }
-  }
-
   template <typename Timestamp>
   CUDA_DEVICE_CALLABLE timestamp_D operator()(Timestamp const ts) const
   {
@@ -179,7 +191,6 @@ std::unique_ptr<column> apply_datetime_op(column_view const& column,
 
   return output;
 }
-
 }  // namespace detail
 
 std::unique_ptr<column> extract_year(column_view const& column, rmm::mr::device_memory_resource* mr)
@@ -257,6 +268,5 @@ std::unique_ptr<column> day_of_year(column_view const& column, rmm::mr::device_m
   return detail::apply_datetime_op<detail::extract_day_num_of_year, cudf::type_id::INT16>(
     column, 0, mr);
 }
-
 }  // namespace datetime
 }  // namespace cudf
