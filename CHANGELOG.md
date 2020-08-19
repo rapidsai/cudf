@@ -229,6 +229,7 @@
 
 ## Bug Fixes
 
+- PR #6034 Specify `--basetemp` for `py.test` run
 - PR #5793 Fix leak in mutable_table_device_view by deleting _descendant_storage in table_device_view_base::destroy
 - PR #5525 Make sure to allocate bitmasks of string columns only once
 - PR #5336 Initialize conversion tables on a per-context basis
