@@ -966,6 +966,30 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     return new ColumnVector(normalizeNANsAndZeros(getNativeView()));
   }
 
+  /**
+   * Create a new vector containing the MD5 hash of each row in the table.
+   *
+   * @param columns array of columns to hash, must have identical number of rows.
+   * @return the new ColumnVector of 32 character hex strings representing each row's hash value.
+   */
+  public static ColumnVector md5Hash(ColumnVector... columns) {
+    if (columns.length < 1) {
+      throw new IllegalArgumentException("MD5 hashing requires at least 1 column of input");
+    }
+    long[] column_views = new long[columns.length];
+    long size = columns[0].getRowCount();
+
+    for(int i = 0; i < columns.length; i++) {
+      assert columns[i] != null : "Column vectors passed may not be null";
+      assert columns[i].getRowCount() == size : "Row count mismatch, all columns must have the same number of rows";
+      assert !columns[i].getType().isDurationType() : "Unsupported column type Duration";
+      assert !columns[i].getType().isTimestamp() : "Unsupported column type Timestamp";
+      column_views[i] = columns[i].getNativeView();
+    }
+
+    return new ColumnVector(hash(column_views, HashType.HASH_MD5.getNativeId()));
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // DATE/TIME
   /////////////////////////////////////////////////////////////////////////////
@@ -2883,6 +2907,16 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * @throws CudfException On failure to normalize.
    */
   private static native long normalizeNANsAndZeros(long viewHandle) throws CudfException;
+
+  /**
+   * Native method to hash each row of the given table. Hashing function dispatched on the
+   * native side using the hashId.
+   *
+   * @param viewHandles array of native handles to the cudf::column_view columns being operated on.
+   * @param hashId integer native ID of the hashing function identifier HashType
+   * @return native handle of the resulting cudf column containing the hex-string hashing results.
+   */
+  private static native long hash(long[] viewHandles, int hashId) throws CudfException;
 
   /**
    * Get the number of bytes needed to allocate a validity buffer for the given number of rows.
