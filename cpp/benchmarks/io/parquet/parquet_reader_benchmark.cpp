@@ -53,7 +53,8 @@ void PQ_read(benchmark::State& state)
 };
 cudf_io::write_parquet(write_args);
 
-cudf_io::read_parquet_args read_args{cudf_io::source_info(out_buffer.data(), out_buffer.size())};
+cudf_io::read_parquet_args read_args =
+  cudf_io::read_parquet_args::build(cudf_io::source_info(out_buffer.data(), out_buffer.size()));
 
 for (auto _ : state) {
   cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0

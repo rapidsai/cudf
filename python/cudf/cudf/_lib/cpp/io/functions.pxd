@@ -114,17 +114,46 @@ cdef extern from "cudf/io/functions.hpp" \
     ) except +
 
     cdef cppclass read_parquet_args:
-        cudf_io_types.source_info source
-        vector[string] columns
-        vector[vector[size_type]] row_groups
-        size_t skip_rows
-        size_t num_rows
-        bool strings_to_categorical
-        bool use_pandas_metadata
-        data_type timestamp_type
-
         read_parquet_args() except +
-        read_parquet_args(cudf_io_types.source_info src) except +
+        cudf_io_types.source_info get_source_info() except +
+        vector[string] column_names() except +
+        vector[vector[size_type]] get_row_groups() except +
+        size_type rows_to_skip() except +
+        size_type get_num_rows() except +
+        bool is_strings_to_categorical() except +
+        bool utilize_pandas_metadata() except +
+        data_type get_timestamp_type() except +
+
+        @staticmethod
+        read_parquet_args_builder build(cudf_io_types.source_info src) except +
+
+    cdef cppclass read_parquet_args_builder:
+        read_parquet_args_builder() except +
+        read_parquet_args_builder(
+            cudf_io_types.source_info src
+        ) except +
+        read_parquet_args_builder& with_column_names(
+            vector[string] column_names
+        ) except +
+        read_parquet_args_builder& with_row_groups(
+            vector[vector[size_type]] row_groups
+        ) except +
+        read_parquet_args_builder& with_skip_rows(
+            size_type skip_rows
+        ) except +
+        read_parquet_args_builder& with_num_rows(
+            size_type num_rows
+        ) except +
+        read_parquet_args_builder& with_strings_to_categorical(
+            bool strings_to_categorical
+        ) except +
+        read_parquet_args_builder& with_utilize_pandas_metadata(
+            bool use_pandas_metadata
+        ) except +
+        read_parquet_args_builder& with_timestamp_type(
+            data_type timestamp_type
+        ) except +
+        read_parquet_args get_args() except +
 
     cdef cudf_io_types.table_with_metadata read_parquet(
         read_parquet_args args) except +

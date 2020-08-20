@@ -20,7 +20,7 @@ from libcpp.map cimport map
 from libcpp.vector cimport vector
 from libcpp cimport bool
 
-from cudf._lib.cpp.types cimport size_type
+from cudf._lib.cpp.types cimport data_type, size_type
 from cudf._lib.table cimport Table
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport (
@@ -164,21 +164,35 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     cdef cudf_io_types.source_info source = make_source_info(
         filepaths_or_buffers)
 
-    # Setup parquet reader arguments
-    cdef read_parquet_args args = read_parquet_args(source)
+    cdef vector[string] cpp_columns
+    cdef bool cpp_strings_to_categorical = strings_to_categorical
+    cdef bool cpp_use_pandas_metadata = use_pandas_metadata
+    cdef size_type cpp_skip_rows = skip_rows if skip_rows is not None else 0
+    cdef size_type cpp_num_rows = num_rows if num_rows is not None else -1
+    cdef vector[vector[size_type]] cpp_row_groups
+    cdef data_type timestamp_type = cudf_types.data_type(
+        cudf_types.type_id.EMPTY
+    )
 
     if columns is not None:
-        args.columns.reserve(len(columns))
+        cpp_columns.reserve(len(columns))
         for col in columns or []:
-            args.columns.push_back(str(col).encode())
-    args.strings_to_categorical = strings_to_categorical
-    args.use_pandas_metadata = use_pandas_metadata
-
-    args.skip_rows = skip_rows if skip_rows is not None else 0
-    args.num_rows = num_rows if num_rows is not None else -1
+            cpp_columns.push_back(str(col).encode())
     if row_groups is not None:
-        args.row_groups = row_groups
-    args.timestamp_type = cudf_types.data_type(cudf_types.type_id.EMPTY)
+        cpp_row_groups = row_groups
+
+    # Setup parquet reader arguments
+    cdef read_parquet_args args = move(read_parquet_args.build(source).
+                                       with_column_names(cpp_columns).
+                                       with_row_groups(cpp_row_groups).
+                                       with_skip_rows(cpp_skip_rows).
+                                       with_num_rows(cpp_num_rows).
+                                       with_strings_to_categorical(
+                                           cpp_strings_to_categorical).
+                                       with_utilize_pandas_metadata(
+                                           cpp_use_pandas_metadata).
+                                       with_timestamp_type(timestamp_type).
+                                       get_args())
 
     # Read Parquet
     cdef cudf_io_types.table_with_metadata c_out_table

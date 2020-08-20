@@ -406,9 +406,14 @@ table_with_metadata read_orc(read_orc_args const& args,
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
+ * @brief Builds read_parquet_args to use for `read_parquet()`
+ */
+class read_parquet_args_builder;
+
+/**
  * @brief Settings to use for `read_parquet()`
  */
-struct read_parquet_args {
+class read_parquet_args {
   source_info source;
 
   /// Names of column to read; empty is all
@@ -428,10 +433,148 @@ struct read_parquet_args {
   /// Cast timestamp columns to a specific type
   data_type timestamp_type{type_id::EMPTY};
 
+  explicit read_parquet_args(source_info const& src) : source(src) {}
+
+  friend read_parquet_args_builder;
+
+ public:
   explicit read_parquet_args() = default;
 
-  explicit read_parquet_args(source_info const& src) : source(src) {}
+  /**
+   * @brief create read_parquet_args_builder which will build read_parquet_args
+   *
+   * @param src source information used to read parquet file
+   * @returns read_parquet_args_builder
+   */
+  static read_parquet_args_builder build(source_info const& src);
+
+  /**
+   * @brief Returns source info
+   */
+  source_info get_source_info() const { return source; }
+
+  /**
+   * @brief Returns column names
+   */
+  std::vector<std::string> column_names() const { return columns; }
+
+  /**
+   * @brief Returns row groups
+   */
+  std::vector<std::vector<size_type>> get_row_groups() const { return row_groups; }
+
+  /**
+   * @brief Returns number of rows to skip
+   */
+  size_type rows_to_skip() const { return skip_rows; }
+
+  /**
+   * @brief Returns row groups
+   */
+  size_type get_num_rows() const { return num_rows; }
+
+  /**
+   * @brief Returns strings_to_categorical
+   */
+  bool is_strings_to_categorical() const { return strings_to_categorical; }
+
+  /**
+   * @brief Returns use_pandas_metadata
+   */
+  bool utilize_pandas_metadata() const { return use_pandas_metadata; }
+
+  /**
+   * @brief Returns timestamp type
+   */
+  data_type get_timestamp_type() const { return timestamp_type; }
 };
+
+class read_parquet_args_builder {
+  read_parquet_args args;
+
+ public:
+  explicit read_parquet_args_builder() = default;
+
+  explicit read_parquet_args_builder(source_info const& src) : args(src) {}
+
+  /**
+   * @brief Set column names which needs to be read
+   */
+  read_parquet_args_builder& with_column_names(std::vector<std::string> column_names)
+  {
+    args.columns = column_names;
+    return *this;
+  }
+
+  /**
+   * @brief Set row groups
+   */
+  read_parquet_args_builder& with_row_groups(std::vector<std::vector<size_type>> row_groups)
+  {
+    args.row_groups = row_groups;
+    return *this;
+  }
+
+  /**
+   * @brief Set skip rows
+   */
+  read_parquet_args_builder& with_skip_rows(size_type skip_rows)
+  {
+    args.skip_rows = skip_rows;
+    return *this;
+  }
+
+  /**
+   * @brief Set number rows to be read
+   */
+  read_parquet_args_builder& with_num_rows(size_type num_rows)
+  {
+    args.num_rows = num_rows;
+    return *this;
+  }
+
+  /**
+   * @brief Set whether strings to be converted to be categorical
+   */
+  read_parquet_args_builder& with_strings_to_categorical(bool strings_to_categorical)
+  {
+    args.strings_to_categorical = strings_to_categorical;
+    return *this;
+  }
+
+  /**
+   * @brief Set whether to use pandas metadata
+   */
+  read_parquet_args_builder& with_utilize_pandas_metadata(bool utilize_pandas_metadata)
+  {
+    args.use_pandas_metadata = utilize_pandas_metadata;
+    return *this;
+  }
+
+  /**
+   * @brief Set timestamp type
+   */
+  read_parquet_args_builder& with_timestamp_type(data_type timestamp_type)
+  {
+    args.timestamp_type = timestamp_type;
+    return *this;
+  }
+
+  /**
+   * @brief move read_parquet_args member once args is built
+   */
+  operator read_parquet_args &&() { return std::move(args); }
+
+  /**
+   * @brief move read_parquet_args member once args is built
+   */
+  read_parquet_args&& get_args() { return std::move(args); }
+};
+
+read_parquet_args_builder read_parquet_args::build(source_info const& src)
+{
+  return read_parquet_args_builder{src};
+}
 
 /**
  * @brief Reads a Parquet dataset into a set of columns
@@ -741,6 +884,9 @@ class write_parquet_args_builder {
     return *this;
   }
 
+  /**
+   * @brief move write_parquet_args member once args is built
+   */
   operator write_parquet_args &&() { return std::move(args); }
 
   /**
