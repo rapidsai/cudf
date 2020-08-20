@@ -98,6 +98,7 @@
 - PR #5859 Add conversion form `fixed_point` to `bool`
 - PR #5781 Add duration types support in cudf(python/cython)
 - PR #5815 LIST Support for ColumnVector
+- PR #5931 Support for `add_calendrical_months` API
 - PR #5992 Add support for `.dt.strftime`
 
 ## Improvements
@@ -212,6 +213,7 @@
 - PR #5834 Add support for dictionary column in concatenate
 - PR #5832 Make dictionary_wrapper constructor from a value explicit
 - PR #5833 Pin `dask` and `distributed` version to `2.22.0`
+- PR #5856 Bump Pandas support to >=1.0,<1.2
 - PR #5855 Java interface to limit RMM maximum pool size
 - PR #5853 Disable `fixed_point` for use in `copy_if`
 - PR #5854 Raise informative error in `DataFrame.iterrows` and `DataFrame.itertuples`
@@ -228,6 +230,7 @@
 - PR #3918 Update cuDF internals doc
 - PR #5970 Map data to pandas through arrow, always
 - PR #6012 Remove `cudf._cuda` and replace usages with `rmm._cuda`
+- PR #6045 Parametrize parquet_reader_list tests
 
 ## Bug Fixes
 
@@ -339,6 +342,7 @@
 - PR #6016 Fix benchmark fixture segfault
 - PR #6003 Fix concurrent JSON reads crash
 - PR #6032 Change black version to 19.10b0 in .pre-commit-config.yaml
+- PR #6041 Fix Java memory resource handler to rethrow original exception object
 
 
 # cuDF 0.14.0 (03 Jun 2020)

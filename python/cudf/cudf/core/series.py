@@ -971,15 +971,14 @@ class Series(Frame, Serializable):
             preprocess = self.copy()
 
         preprocess.index = preprocess.index._clean_nulls_from_index()
-        if isinstance(preprocess._column, cudf.core.column.TimeDeltaColumn):
-            preprocess._column = preprocess._column._repr_str_col()
-            output = preprocess.to_pandas().__repr__()
-        elif (
+        if (
             preprocess.nullable
             and not isinstance(
                 preprocess._column, cudf.core.column.CategoricalColumn
             )
             and not is_list_dtype(preprocess.dtype)
+        ) or isinstance(
+            preprocess._column, cudf.core.column.timedelta.TimeDeltaColumn
         ):
             output = (
                 preprocess.astype("O")
