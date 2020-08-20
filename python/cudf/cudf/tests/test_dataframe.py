@@ -2661,33 +2661,6 @@ def test_series_to_gpu_array(nan_value):
     )
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES)
-def test_series_describe_numeric(dtype):
-    pdf = pd.Series([0, 1, 2, 3])
-    gdf = Series.from_pandas(pdf).astype(dtype)
-    gdf_results = gdf.describe().to_pandas()
-    pdf_results = gdf.to_pandas().describe()
-
-    np.testing.assert_array_almost_equal(
-        gdf_results.values, pdf_results.values, decimal=4
-    )
-
-
-@pytest.mark.xfail(
-    raises=NotImplementedError,
-    reason="Describing non-numeric columns is not yet supported.",
-)
-def test_series_describe_datetime():
-    pdf = pd.Series([0, 1, 2, 3]).astype("datetime64[ms]")
-    gdf = Series.from_pandas(pdf)
-    gdf_results = gdf.describe()
-    pdf_results = pdf.describe()
-
-    np.testing.assert_array_almost_equal(
-        gdf_results.values, pdf_results.values, decimal=4
-    )
-
-
 def test_dataframe_describe_exclude():
     np.random.seed(12)
     data_length = 10000
