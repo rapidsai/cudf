@@ -782,7 +782,7 @@ void reader::impl::allocate_nesting_info(
   // fill in
   int nesting_info_index = 0;
   for (size_t idx = 0; idx < chunks.size(); idx++) {
-    int col_index     = chunks[idx].col_index;
+    int dst_col_index = chunks[idx].dst_col_index;
     int src_col_index = chunks[idx].src_col_index;
 
     // the leaf schema represents the bottom of the nested hierarchy
@@ -793,7 +793,7 @@ void reader::impl::allocate_nesting_info(
     // # of nesting infos stored per page for this column
     size_t per_page_nesting_info_size = leaf_schema.max_definition_level + 1;
 
-    col_nesting_info[col_index].resize(max_depth);
+    col_nesting_info[dst_col_index].resize(max_depth);
 
     // fill in host-side nesting info
     int schema_idx     = _metadata->get_column_leaf_schema_index(src_col_index);
@@ -807,7 +807,7 @@ void reader::impl::allocate_nesting_info(
 
       // set nullability on the column
       if (repetition_type != REPEATED) {
-        col_nesting_info[col_index][output_col_idx].second =
+        col_nesting_info[dst_col_index][output_col_idx].second =
           repetition_type == OPTIONAL ? true : false;
       }
 
@@ -917,7 +917,7 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
     chunks[c].column_data_base      = data.device_ptr();
 
     // fill in the arrays on the host
-    column_buffer *buf = &out_buffers[chunks[c].col_index];
+    column_buffer *buf = &out_buffers[chunks[c].dst_col_index];
     for (size_t idx = 0; idx <= max_depth; idx++) {
       valids[idx] = buf->null_mask();
       data[idx]   = buf->data();
@@ -973,7 +973,7 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
     gpu::PageInfo *pi = &pages[i];
     if (pi->flags & gpu::PAGEINFO_FLAGS_DICTIONARY) { continue; }
     gpu::ColumnChunkDesc *col = &chunks[pi->chunk_idx];
-    column_buffer *out        = &out_buffers[col->col_index];
+    column_buffer *out        = &out_buffers[col->dst_col_index];
 
     int index                 = pi->nesting - page_nesting.device_ptr();
     gpu::PageNestingInfo *pni = &page_nesting[index];
