@@ -17,7 +17,7 @@ import cudf
 from cudf.io.parquet import ParquetWriter, merge_parquet_filemetadata
 from cudf.tests.utils import assert_eq
 
-import cudf.tests.dataset_synthesizer as ds
+import cudf.tests.dataset_generator as dg
 
 
 @pytest.fixture(scope="module")
@@ -126,6 +126,11 @@ def parquet_file(request, tmp_path_factory, pdf):
     fname = tmp_path_factory.mktemp("parquet") / "test.parquet"
     pdf.to_parquet(fname, engine="pyarrow", compression=request.param)
     return fname
+
+
+@pytest.fixture(scope="module")
+def seed():
+    return 42
 
 
 def make_pdf(nrows, ncolumns=1, nvalids=0, dtype=np.int64):
@@ -319,17 +324,39 @@ def test_parquet_read_metadata(tmpdir, pdf):
         assert a == b
 
 
-def test_parquet_read_filtered(tmpdir):
+def test_parquet_read_filtered(tmpdir, seed):
     # Generate data
     fname = tmpdir.join("filtered.parquet")
-    ds.synthesize(fname, ds.simple)
+    dg.generate(
+        fname,
+        dg.Parameters(
+            num_rows=2048,
+            column_parameters=[
+                dg.ColumnParameters(
+                    cardinality=100,
+                    null_frequency=0.05,
+                    ty=lambda g: g.address.country,
+                    is_sorted=False,
+                ),
+                dg.ColumnParameters(40, 0.2, lambda g: g.person.age, True,),
+            ],
+            seed=seed,
+        ),
+        format={"name": "parquet", "row_group_size": 64},
+    )
 
     # Get dataframes to compare
     df = cudf.read_parquet(fname)
-    df_filtered = cudf.read_parquet(fname, filters=[("0", ">", 60)])
+    df_filtered = cudf.read_parquet(fname, filters=[("1", ">", 60)])
+    tbl_filtered = pq.read_table(
+        fname, filters=[("1", ">", 60)], use_legacy_dataset=False
+    )
 
-    assert cudf.io.read_parquet_metadata(fname)[1] == 2048 / 64
+    assert_eq(cudf.io.read_parquet_metadata(fname)[1], 2048 / 64)
+    print(len(df_filtered))
+    print(len(tbl_filtered))
     assert len(df_filtered) < len(df)
+    assert len(tbl_filtered) <= len(df_filtered)
 
 
 def test_parquet_read_filtered_everything(tmpdir):
@@ -340,9 +367,9 @@ def test_parquet_read_filtered_everything(tmpdir):
 
     # Check filter
     df_filtered = cudf.read_parquet(fname, filters=[("x", "==", 12)])
-    assert len(df_filtered) == 0
-    assert df_filtered["x"].dtype == "int64"
-    assert df_filtered["y"].dtype == "object"
+    assert_eq(len(df_filtered), 0)
+    assert_eq(df_filtered["x"].dtype, "int64")
+    assert_eq(df_filtered["y"].dtype, "object")
 
 
 def test_parquet_read_filtered_multiple_files(tmpdir):
@@ -351,7 +378,7 @@ def test_parquet_read_filtered_multiple_files(tmpdir):
     df = pd.DataFrame({"x": range(10), "y": list("aabbccddee")})
     df.to_parquet(fname_0, row_group_size=2)
     fname_1 = tmpdir.join("filtered_multiple_files_1.parquet")
-    df = pd.DataFrame({"x": range(10), "y": list("aabbccddee")})
+    df = pd.DataFrame({"x": range(10), "y": list("aaccccddee")})
     df.to_parquet(fname_1, row_group_size=2)
     fname_2 = tmpdir.join("filtered_multiple_files_2.parquet")
     df = pd.DataFrame(
@@ -363,7 +390,9 @@ def test_parquet_read_filtered_multiple_files(tmpdir):
     filtered_df = cudf.read_parquet(
         [fname_0, fname_1, fname_2], filters=[("x", "==", 2)]
     )
-    assert len(filtered_df) == 4
+    assert_eq(
+        filtered_df, cudf.DataFrame({"x": [2, 3, 2, 3], "y": list("bbcc")})
+    )
 
 
 @pytest.mark.skipif(
@@ -395,9 +424,9 @@ def test_parquet_read_filtered_complex_predicate(
     df.to_parquet(fname, row_group_size=2)
 
     # Check filters
-    assert cudf.io.read_parquet_metadata(fname)[1] == 10 / 2
     df_filtered = cudf.read_parquet(fname, filters=predicate)
-    assert len(df_filtered) == expected_len
+    assert_eq(cudf.io.read_parquet_metadata(fname)[1], 10 / 2)
+    assert_eq(len(df_filtered), expected_len)
 
 
 @pytest.mark.parametrize("row_group_size", [1, 5, 100])
