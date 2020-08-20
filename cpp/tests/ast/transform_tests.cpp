@@ -37,10 +37,10 @@
 template <typename T>
 using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
 
-struct ASTTest : public cudf::test::BaseFixture {
+struct TransformTest : public cudf::test::BaseFixture {
 };
 
-TEST_F(ASTTest, BasicAddition)
+TEST_F(TransformTest, BasicAddition)
 {
   auto c_0   = column_wrapper<int32_t>{3, 20, 1, 50};
   auto c_1   = column_wrapper<int32_t>{10, 7, 20, 0};
@@ -56,7 +56,7 @@ TEST_F(ASTTest, BasicAddition)
   cudf::test::expect_columns_equal(expected, result->view(), true);
 }
 
-TEST_F(ASTTest, LessComparator)
+TEST_F(TransformTest, LessComparator)
 {
   auto c_0   = column_wrapper<int32_t>{3, 20, 1, 50};
   auto c_1   = column_wrapper<int32_t>{10, 7, 20, 0};
@@ -72,7 +72,7 @@ TEST_F(ASTTest, LessComparator)
   cudf::test::expect_columns_equal(expected, result->view(), true);
 }
 
-TEST_F(ASTTest, MultiLevelTreeArithmetic)
+TEST_F(TransformTest, MultiLevelTreeArithmetic)
 {
   auto c_0   = column_wrapper<int32_t>{3, 20, 1, 50};
   auto c_1   = column_wrapper<int32_t>{10, 7, 20, 0};
@@ -98,7 +98,7 @@ TEST_F(ASTTest, MultiLevelTreeArithmetic)
   cudf::test::expect_columns_equal(expected, result->view(), true);
 }
 
-TEST_F(ASTTest, ImbalancedTreeArithmetic)
+TEST_F(TransformTest, ImbalancedTreeArithmetic)
 {
   auto c_0   = column_wrapper<double>{0.15, 0.37, 4.2, 21.3};
   auto c_1   = column_wrapper<double>{0.0, -42.0, 1.0, 98.6};
@@ -122,7 +122,7 @@ TEST_F(ASTTest, ImbalancedTreeArithmetic)
   cudf::test::expect_columns_equal(expected, result->view(), true);
 }
 
-TEST_F(ASTTest, MultiLevelTreeComparator)
+TEST_F(TransformTest, MultiLevelTreeComparator)
 {
   auto c_0   = column_wrapper<int32_t>{3, 20, 1, 50};
   auto c_1   = column_wrapper<int32_t>{10, 7, 20, 0};
@@ -148,7 +148,7 @@ TEST_F(ASTTest, MultiLevelTreeComparator)
   cudf::test::expect_columns_equal(expected, result->view(), true);
 }
 
-TEST_F(ASTTest, MultiTypeOperationFailure)
+TEST_F(TransformTest, MultiTypeOperationFailure)
 {
   auto c_0   = column_wrapper<int32_t>{3, 20, 1, 50};
   auto c_1   = column_wrapper<double>{0.15, 0.77, 4.2, 21.3};
@@ -167,7 +167,7 @@ TEST_F(ASTTest, MultiTypeOperationFailure)
   EXPECT_THROW(cudf::ast::compute_column(table, expression_1_plus_0), cudf::logic_error);
 }
 
-TEST_F(ASTTest, LiteralComparison)
+TEST_F(TransformTest, LiteralComparison)
 {
   auto c_0   = column_wrapper<int32_t>{3, 20, 1, 50};
   auto table = cudf::table_view{{c_0}};
@@ -185,7 +185,7 @@ TEST_F(ASTTest, LiteralComparison)
   cudf::test::expect_columns_equal(expected, result->view(), true);
 }
 
-TEST_F(ASTTest, UnaryNot)
+TEST_F(TransformTest, UnaryNot)
 {
   auto c_0   = column_wrapper<int32_t>{3, 0, 1, 50};
   auto table = cudf::table_view{{c_0}};
@@ -200,7 +200,7 @@ TEST_F(ASTTest, UnaryNot)
   cudf::test::expect_columns_equal(expected, result->view(), true);
 }
 
-TEST_F(ASTTest, UnaryTrigonometry)
+TEST_F(TransformTest, UnaryTrigonometry)
 {
   auto c_0   = column_wrapper<double>{0.0, M_PI / 4, M_PI / 3};
   auto table = cudf::table_view{{c_0}};
@@ -223,7 +223,7 @@ TEST_F(ASTTest, UnaryTrigonometry)
   cudf::test::expect_columns_equivalent(expected_tan, result_tan->view(), true);
 }
 
-TEST_F(ASTTest, ArityCheckFailure)
+TEST_F(TransformTest, ArityCheckFailure)
 {
   auto col_ref_0 = cudf::ast::column_reference(0);
   EXPECT_THROW(cudf::ast::expression(cudf::ast::ast_operator::ADD, col_ref_0), cudf::logic_error);
@@ -231,7 +231,7 @@ TEST_F(ASTTest, ArityCheckFailure)
                cudf::logic_error);
 }
 
-TEST_F(ASTTest, StringComparison)
+TEST_F(TransformTest, StringComparison)
 {
   auto c_0   = cudf::test::strings_column_wrapper({"a", "bb", "ccc", "dddd"});
   auto c_1   = cudf::test::strings_column_wrapper({"aa", "b", "cccc", "ddd"});
@@ -247,7 +247,7 @@ TEST_F(ASTTest, StringComparison)
   cudf::test::expect_columns_equal(expected, result->view(), true);
 }
 
-TEST_F(ASTTest, CopyColumn)
+TEST_F(TransformTest, CopyColumn)
 {
   auto c_0   = column_wrapper<int32_t>{3, 0, 1, 50};
   auto table = cudf::table_view{{c_0}};
@@ -261,7 +261,7 @@ TEST_F(ASTTest, CopyColumn)
   cudf::test::expect_columns_equal(expected, result->view(), true);
 }
 
-TEST_F(ASTTest, CopyLiteral)
+TEST_F(TransformTest, CopyLiteral)
 {
   auto c_0   = column_wrapper<int32_t>{0, 0, 0, 0};
   auto table = cudf::table_view{{c_0}};
@@ -274,6 +274,78 @@ TEST_F(ASTTest, CopyLiteral)
 
   auto result   = cudf::ast::compute_column(table, expression);
   auto expected = column_wrapper<int32_t>{-123, -123, -123, -123};
+
+  cudf::test::expect_columns_equal(expected, result->view(), true);
+}
+
+TEST_F(TransformTest, TrueDiv)
+{
+  auto c_0   = column_wrapper<int32_t>{3, 0, 1, 50};
+  auto table = cudf::table_view{{c_0}};
+
+  auto col_ref_0     = cudf::ast::column_reference(0);
+  auto literal_value = cudf::numeric_scalar<int32_t>(2);
+  auto literal_view  = cudf::get_scalar_device_view(literal_value);
+  auto literal       = cudf::ast::literal(literal_view);
+
+  auto expression = cudf::ast::expression(cudf::ast::ast_operator::TRUE_DIV, col_ref_0, literal);
+
+  auto result   = cudf::ast::compute_column(table, expression);
+  auto expected = column_wrapper<double>{1.5, 0.0, 0.5, 25.0};
+
+  cudf::test::expect_columns_equal(expected, result->view(), true);
+}
+
+TEST_F(TransformTest, FloorDiv)
+{
+  auto c_0   = column_wrapper<double>{3.0, 0.0, 1.0, 50.0};
+  auto table = cudf::table_view{{c_0}};
+
+  auto col_ref_0     = cudf::ast::column_reference(0);
+  auto literal_value = cudf::numeric_scalar<double>(2.0);
+  auto literal_view  = cudf::get_scalar_device_view(literal_value);
+  auto literal       = cudf::ast::literal(literal_view);
+
+  auto expression = cudf::ast::expression(cudf::ast::ast_operator::FLOOR_DIV, col_ref_0, literal);
+
+  auto result   = cudf::ast::compute_column(table, expression);
+  auto expected = column_wrapper<double>{1.0, 0.0, 0.0, 25.0};
+
+  cudf::test::expect_columns_equal(expected, result->view(), true);
+}
+
+TEST_F(TransformTest, Mod)
+{
+  auto c_0   = column_wrapper<double>{3.0, 0.0, -1.0, 50.0};
+  auto table = cudf::table_view{{c_0}};
+
+  auto col_ref_0     = cudf::ast::column_reference(0);
+  auto literal_value = cudf::numeric_scalar<double>(2.0);
+  auto literal_view  = cudf::get_scalar_device_view(literal_value);
+  auto literal       = cudf::ast::literal(literal_view);
+
+  auto expression = cudf::ast::expression(cudf::ast::ast_operator::MOD, col_ref_0, literal);
+
+  auto result   = cudf::ast::compute_column(table, expression);
+  auto expected = column_wrapper<double>{1.0, 0.0, -1.0, 0.0};
+
+  cudf::test::expect_columns_equal(expected, result->view(), true);
+}
+
+TEST_F(TransformTest, PyMod)
+{
+  auto c_0   = column_wrapper<double>{3.0, 0.0, 1.0, 50.0};
+  auto table = cudf::table_view{{c_0}};
+
+  auto col_ref_0     = cudf::ast::column_reference(0);
+  auto literal_value = cudf::numeric_scalar<double>(2.0);
+  auto literal_view  = cudf::get_scalar_device_view(literal_value);
+  auto literal       = cudf::ast::literal(literal_view);
+
+  auto expression = cudf::ast::expression(cudf::ast::ast_operator::PYMOD, col_ref_0, literal);
+
+  auto result   = cudf::ast::compute_column(table, expression);
+  auto expected = column_wrapper<double>{1.0, 0.0, 1.0, 0.0};
 
   cudf::test::expect_columns_equal(expected, result->view(), true);
 }
