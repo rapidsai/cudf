@@ -3906,31 +3906,43 @@ class Series(Frame, Serializable):
         def describe_categorical(self):
             # blocked by StringColumn/DatetimeColumn support for
             # value_counts/unique
-            index = ['count', 'unique', 'top', 'freq']
+            index = ["count", "unique", "top", "freq"]
             val_counts = self.value_counts(ascending=False)
             data = [self.count(), self.unique().size]
-            val_counts.index[0], val_counts.iloc[0]]
+
             dtype = None
             if data[1] > 0:
                 top, freq = val_counts.index[0], val_counts.iloc[0]
-                result += [top, freq]
+                data += [top, freq]
 
             # If the DataFrame is empty, set 'top' and 'freq' to None
             # to maintain output shape consistency
             else:
-                result += [np.nan, np.nan]
+                data += [np.nan, np.nan]
                 dtype = "object"
 
-            return Series(data=data, dtype=dtype, index=index, nan_as_null=False, name=self.name)
-        
-        def describe_timestamp(data):
-            index = ["count", "mean", "min"] + _format_percentile_names(percentiles) + ["max"]
+            return Series(
+                data=data,
+                dtype=dtype,
+                index=index,
+                nan_as_null=False,
+                name=self.name,
+            )
+
+        def describe_timestamp(self):
+            index = (
+                ["count", "mean", "min"]
+                + _format_percentile_names(percentiles)
+                + ["max"]
+            )
             data = (
                 [self.count(), self.mean(), self.min()]
                 + self.quantile(percentiles).to_array(fillna="pandas").tolist()
                 + [self.max()]
             )
-            return Series(data=data, index=stat_index, nan_as_null=False, name=data.name)
+            return Series(
+                data=data, index=index, nan_as_null=False, name=data.name
+            )
 
         if percentiles is not None:
             percentiles = _prepare_percentiles(percentiles)
@@ -3938,15 +3950,20 @@ class Series(Frame, Serializable):
             # pandas defaults
             percentiles = np.array([0.25, 0.5, 0.75])
 
-
         if pd.api.types.is_bool_dtype(self.dtype):
-            return describe_categorical(data)
-        elif isinstance(self._column, (cudf.core.column.NumericalColumn, cudf.core.column.TimeDeltaColumn)):
-            return describe_numeric(data)
+            return describe_categorical(self)
+        elif isinstance(
+            self._column,
+            (
+                cudf.core.column.NumericalColumn,
+                cudf.core.column.TimeDeltaColumn,
+            ),
+        ):
+            return describe_numeric(self)
         elif isinstance(self._column, cudf.core.column.DatetimeColumn):
-            return describe_timestamp(data)
+            return describe_timestamp(self)
         else:
-            return describe_categorical(data)
+            return describe_categorical(self)
 
     def digitize(self, bins, right=False):
         """Return the indices of the bins to which each value in series belongs.
