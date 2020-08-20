@@ -419,30 +419,17 @@ cdef class Column:
     cdef Column from_unique_ptr(unique_ptr[column] c_col):
         cdef column_view view = c_col.get()[0].view()
         cdef libcudf_types.type_id tid = view.type().id()
-        cdef libcudf_types.type_id expected_tid
         cdef libcudf_types.data_type c_dtype
         cdef size_type length = view.size()
         cdef libcudf_types.mask_state mask_state
         if tid == libcudf_types.type_id.TIMESTAMP_DAYS:
-            expected_tid = (
-                <libcudf_types.type_id> (
-                    <underlying_type_t_type_id> (
-                        np_to_cudf_types[np.dtype("datetime64[s]")]
-                    )
-                )
+            c_dtype = libcudf_types.data_type(
+                libcudf_types.type_id.TIMESTAMP_SECONDS
             )
-            c_dtype = libcudf_types.data_type(expected_tid)
             with nogil:
                 c_col = move(libcudf_unary.cast(view, c_dtype))
         elif tid == libcudf_types.type_id.EMPTY:
-            expected_tid = (
-                <libcudf_types.type_id> (
-                    <underlying_type_t_type_id> (
-                        np_to_cudf_types[np.dtype("int8")]
-                    )
-                )
-            )
-            c_dtype = libcudf_types.data_type(expected_tid)
+            c_dtype = libcudf_types.data_type(libcudf_types.type_id.INT8)
             mask_state = libcudf_types.mask_state.ALL_NULL
             with nogil:
                 c_col = move(make_numeric_column(c_dtype, length, mask_state))
