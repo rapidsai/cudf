@@ -249,7 +249,7 @@ ConfigureBench(CSV_WRITER_BENCH "${CSV_WRITER_BENCH_SRC}")
 # - ast benchmark ---------------------------------------------------------------------------------
 
 set(AST_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/ast/ast_benchmark.cu")
+  "${CMAKE_CURRENT_SOURCE_DIR}/ast/transform_benchmark.cpp")
 
 ConfigureBench(AST_BENCH "${AST_BENCH_SRC}")
 

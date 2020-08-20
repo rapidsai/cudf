@@ -601,7 +601,7 @@ ConfigureTest(ENCODE_TEST "${ENCODE_TEST_SRC}")
 # - ast tests -------------------------------------------------------------------------------------
 
 set(AST_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/ast/ast_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/ast/transform_tests.cpp")
 
 ConfigureTest(AST_TEST "${AST_TEST_SRC}")
 

@@ -14,16 +14,15 @@
  * limitations under the License.
  */
 
-#include <cudf/ast/ast.cuh>
+#include <cudf/ast/detail/transform.cuh>
 #include <cudf/ast/linearizer.hpp>
 #include <cudf/ast/operators.hpp>
+#include <cudf/ast/transform.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
-#include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>

@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <cudf/ast/ast.cuh>
 #include <cudf/ast/operators.hpp>
+#include <cudf/ast/transform.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/scalar/scalar.hpp>

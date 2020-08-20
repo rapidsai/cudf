@@ -15,13 +15,12 @@
  */
 #pragma once
 
+#include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/linearizer.hpp>
 #include <cudf/ast/operators.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
-#include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -67,19 +66,21 @@ template <typename Input>
 struct unary_row_output : public row_output {
   __device__ unary_row_output(row_evaluator const& evaluator) : row_output(evaluator) {}
 
-  template <ast_operator op,
-            std::enable_if_t<is_valid_unary_op<operator_functor<op>, Input>>* = nullptr>
+  template <
+    ast_operator op,
+    std::enable_if_t<detail::is_valid_unary_op<detail::operator_functor<op>, Input>>* = nullptr>
   __device__ void operator()(cudf::size_type row_index,
                              Input input,
                              detail::device_data_reference output) const
   {
-    using OperatorFunctor = operator_functor<op>;
+    using OperatorFunctor = detail::operator_functor<op>;
     using Out             = simt::std::invoke_result_t<OperatorFunctor, Input>;
     this->resolve_output<Out>(output, row_index, OperatorFunctor{}(input));
   }
 
-  template <ast_operator op,
-            std::enable_if_t<!is_valid_unary_op<operator_functor<op>, Input>>* = nullptr>
+  template <
+    ast_operator op,
+    std::enable_if_t<!detail::is_valid_unary_op<detail::operator_functor<op>, Input>>* = nullptr>
   __device__ void operator()(cudf::size_type row_index,
                              Input input,
                              detail::device_data_reference output) const
@@ -92,20 +93,22 @@ template <typename LHS, typename RHS>
 struct binary_row_output : public row_output {
   __device__ binary_row_output(row_evaluator const& evaluator) : row_output(evaluator) {}
 
-  template <ast_operator op,
-            std::enable_if_t<is_valid_binary_op<operator_functor<op>, LHS, RHS>>* = nullptr>
+  template <
+    ast_operator op,
+    std::enable_if_t<detail::is_valid_binary_op<detail::operator_functor<op>, LHS, RHS>>* = nullptr>
   __device__ void operator()(cudf::size_type row_index,
                              LHS lhs,
                              RHS rhs,
                              detail::device_data_reference output) const
   {
-    using OperatorFunctor = operator_functor<op>;
+    using OperatorFunctor = detail::operator_functor<op>;
     using Out             = simt::std::invoke_result_t<OperatorFunctor, LHS, RHS>;
     this->resolve_output<Out>(output, row_index, OperatorFunctor{}(lhs, rhs));
   }
 
   template <ast_operator op,
-            std::enable_if_t<!is_valid_binary_op<operator_functor<op>, LHS, RHS>>* = nullptr>
+            std::enable_if_t<!detail::is_valid_binary_op<detail::operator_functor<op>, LHS, RHS>>* =
+              nullptr>
   __device__ void operator()(cudf::size_type row_index,
                              LHS lhs,
                              RHS rhs,
@@ -229,7 +232,7 @@ struct row_evaluator {
   template <typename OperatorFunctor,
             typename LHS,
             typename RHS,
-            std::enable_if_t<!is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
+            std::enable_if_t<!detail::is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
   __device__ void operator()(cudf::size_type row_index,
                              detail::device_data_reference lhs,
                              detail::device_data_reference rhs,
@@ -414,22 +417,6 @@ std::unique_ptr<column> compute_column(
   cudaStream_t stream                 = 0,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 }  // namespace detail
-
-/**
- * @brief Compute a new column by evaluating an expression tree on a table.
- *
- * This evaluates an expression over a table to produce a new column. Also called an n-ary
- * transform.
- *
- * @param table The table used for expression evaluation.
- * @param expr The root of the expression tree.
- * @param mr Device memory resource.
- * @return std::unique_ptr<column> Output column.
- */
-std::unique_ptr<column> compute_column(
-  table_view const table,
-  expression const& expr,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace ast
 

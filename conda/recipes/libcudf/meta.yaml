@@ -46,6 +46,7 @@ test:
     - test -f $PREFIX/lib/libcudf.so
     - test -f $PREFIX/lib/libcudftestutil.a
     - test -f $PREFIX/include/cudf/aggregation.hpp
+    - test -f $PREFIX/include/cudf/ast/transform.hpp
     - test -f $PREFIX/include/cudf/ast/linearizer.hpp
     - test -f $PREFIX/include/cudf/ast/operators.hpp
     - test -f $PREFIX/include/cudf/binaryop.hpp
