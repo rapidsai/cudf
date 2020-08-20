@@ -165,20 +165,45 @@ cdef extern from "cudf/io/functions.hpp" \
     cdef void write_orc(write_orc_args args) except +
 
     cdef cppclass write_parquet_args:
-        cudf_io_types.sink_info sink
-        cudf_io_types.compression_type compression
-        cudf_io_types.statistics_freq stats_level
-        cudf_table_view.table_view table
-        const cudf_io_types.table_metadata *metadata
-        bool return_filemetadata
-        string metadata_out_file_path
-
         write_parquet_args() except +
-        write_parquet_args(cudf_io_types.sink_info sink_,
-                           cudf_table_view.table_view table_,
-                           cudf_io_types.table_metadata *table_metadata_,
-                           cudf_io_types.compression_type compression_,
-                           cudf_io_types.statistics_freq stats_lvl_) except +
+        cudf_io_types.sink_info get_sink_info() except +
+        cudf_io_types.compression_type get_compression_type() except +
+        cudf_io_types.statistics_freq get_stats_level() except +
+        cudf_table_view.table_view get_table() except +
+        const cudf_io_types.table_metadata get_metadata() except +
+        bool is_filemetadata_required() except +
+        string get_metadata_out_file_path() except+
+
+        @staticmethod
+        write_parquet_args_builder build(
+            cudf_io_types.sink_info sink_,
+            cudf_table_view.table_view table_
+        ) except +
+
+    cdef cppclass write_parquet_args_builder:
+
+        write_parquet_args_builder() except +
+        write_parquet_args_builder(
+            cudf_io_types.sink_info sink_,
+            cudf_table_view.table_view table_
+        ) except +
+        write_parquet_args_builder& with_metadata(
+            cudf_io_types.table_metadata *m
+        ) except +
+        write_parquet_args_builder& generate_statistics(
+            cudf_io_types.statistics_freq sf
+        ) except +
+        write_parquet_args_builder& with_compression(
+            cudf_io_types.compression_type compression
+        ) except +
+        write_parquet_args_builder& filemetadata_required(
+            bool req
+        ) except +
+        write_parquet_args_builder& with_metadata_out_file_path(
+            string metadata_out_file_path
+        ) except +
+
+        write_parquet_args get_args() except +
 
     cdef unique_ptr[vector[uint8_t]] \
         write_parquet(write_parquet_args args) except +

@@ -270,11 +270,13 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(write_parquet_args const& ar
                                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  detail_parquet::writer_options options{args.compression, args.stats_level};
-  auto writer = make_writer<detail_parquet::writer>(args.sink, options, mr);
+  detail_parquet::writer_options options{args.get_compression_type(), args.get_stats_level()};
+  auto writer = make_writer<detail_parquet::writer>(args.get_sink_info(), options, mr);
 
-  return writer->write_all(
-    args.table, args.metadata, args.return_filemetadata, args.metadata_out_file_path);
+  return writer->write_all(args.get_table(),
+                           args.get_metadata(),
+                           args.is_filemetadata_required(),
+                           args.get_metadata_out_file_path());
 }
 
 /**

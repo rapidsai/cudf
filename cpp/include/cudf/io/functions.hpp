@@ -602,11 +602,18 @@ void write_orc_chunked(table_view const& table,
 void write_orc_chunked_end(std::shared_ptr<detail::orc::orc_chunked_state>& state);
 
 /**
+ * @brief Class to build `write_parquet_args`
+ *
+ * @ingroup io_writers
+ */
+class write_parquet_args_builder;
+
+/**
  * @brief Settings to use for `write_parquet()`
  *
  * @ingroup io_writers
  */
-struct write_parquet_args {
+class write_parquet_args {
   /// Specify the sink to use for writer output
   sink_info sink;
   /// Specify the compression format to use
@@ -616,27 +623,136 @@ struct write_parquet_args {
   /// Set of columns to output
   table_view table;
   /// Optional associated metadata
-  const table_metadata* metadata;
+  const table_metadata* metadata = nullptr;
   /// Optionally return the raw parquet file metadata output
   bool return_filemetadata = false;
   /// Column chunks file path to be set in the raw output metadata
   std::string metadata_out_file_path;
 
-  write_parquet_args() = default;
-
-  explicit write_parquet_args(sink_info const& sink_,
-                              table_view const& table_,
-                              const table_metadata* metadata_ = nullptr,
-                              compression_type compression_   = compression_type::AUTO,
-                              statistics_freq stats_lvl_ = statistics_freq::STATISTICS_ROWGROUP)
-    : sink(sink_),
-      compression(compression_),
-      stats_level(stats_lvl_),
-      table(table_),
-      metadata(metadata_)
+  explicit write_parquet_args(sink_info const& sink_, table_view const& table_)
+    : sink(sink_), table(table_)
   {
   }
+
+  friend class write_parquet_args_builder;
+
+ public:
+  write_parquet_args() = default;
+
+  /**
+   * @brief Build write_parquet_args.
+   *
+   * @param sink_ sink to use for writer output
+   * @param table_ Table to be written to output
+   *
+   * @return write_parquet_args_builder parquet args builder with all arguments
+   */
+  static write_parquet_args_builder build(sink_info const& sink, table_view const& table);
+
+  /**
+   * @brief Returns sink info
+   */
+  sink_info get_sink_info() const { return sink; }
+
+  /**
+   * @brief Returns compression type
+   */
+  compression_type get_compression_type() const { return compression; }
+
+  /**
+   * @brief Returns stats level
+   */
+  statistics_freq get_stats_level() const { return stats_level; }
+
+  /**
+   * @brief Returns table_view
+   */
+  table_view get_table() const { return table; }
+
+  /**
+   * @brief Returns metadata
+   */
+  const table_metadata* get_metadata() const { return metadata; }
+
+  /**
+   * @brief Returns True/False for filemetadata is requried or not
+   */
+  bool is_filemetadata_required() const { return return_filemetadata; }
+
+  /**
+   * @brief Returns metadata_out_file_path
+   */
+  std::string get_metadata_out_file_path() const { return metadata_out_file_path; }
 };
+
+class write_parquet_args_builder {
+  write_parquet_args args;
+
+ public:
+  explicit write_parquet_args_builder(sink_info const& sink_, table_view const& table_)
+    : args(sink_, table_)
+  {
+  }
+
+  explicit write_parquet_args_builder() {}
+
+  /**
+   * @brief Set metadata to write_parquet_args
+   */
+  write_parquet_args_builder& with_metadata(table_metadata const* m)
+  {
+    args.metadata = m;
+    return *this;
+  }
+
+  /**
+   * @brief Set statistics_freq to write_parquet_args
+   */
+  write_parquet_args_builder& generate_statistics(statistics_freq sf)
+  {
+    args.stats_level = sf;
+    return *this;
+  }
+
+  /**
+   * @brief Set compression type to write_parquet_args
+   */
+  write_parquet_args_builder& with_compression(compression_type compression)
+  {
+    args.compression = compression;
+    return *this;
+  }
+
+  /**
+   * @brief Set whether filemetadata is required or not to write_parquet_args
+   */
+  write_parquet_args_builder& filemetadata_required(bool req)
+  {
+    args.return_filemetadata = req;
+    return *this;
+  }
+
+  /**
+   * @brief Set metadata_out_file_path to write_parquet_args
+   */
+  write_parquet_args_builder& with_metadata_out_file_path(std::string metadata_out_file_path)
+  {
+    args.metadata_out_file_path.assign(metadata_out_file_path);
+    return *this;
+  }
+
+  operator write_parquet_args &&() { return std::move(args); }
+
+  /**
+   * @brief move write_parquet_args member once args is built
+   */
+  write_parquet_args&& get_args() { return std::move(args); }
+};
+
+write_parquet_args_builder write_parquet_args::build(sink_info const& sink, table_view const& table)
+{
+  return write_parquet_args_builder{sink, table};
+}
 
 /**
  * @brief Writes a set of columns to parquet format

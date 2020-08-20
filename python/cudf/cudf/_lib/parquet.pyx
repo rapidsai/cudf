@@ -29,6 +29,7 @@ from cudf._lib.cpp.table.table_view cimport (
 from cudf._lib.move cimport move
 from cudf._lib.cpp.io.functions cimport (
     write_parquet_args,
+    write_parquet_args_builder,
     write_parquet as parquet_writer,
     merge_rowgroup_metadata as parquet_merge_metadata,
     read_parquet_args,
@@ -284,20 +285,23 @@ cpdef write_parquet(
 
     cdef write_parquet_args args
     cdef unique_ptr[vector[uint8_t]] out_metadata_c
+    cdef string metadata_out_file_path
+    cdef bool return_filemetadata = False
+    if metadata_file_path is not None:
+        metadata_out_file_path = str.encode(metadata_file_path)
+        return_filemetadata = True
 
     # Perform write
     with nogil:
-        args = write_parquet_args(sink,
-                                  tv,
-                                  tbl_meta.get(),
-                                  comp_type,
-                                  stat_freq)
-
-    if metadata_file_path is not None:
-        args.metadata_out_file_path = str.encode(metadata_file_path)
-        args.return_filemetadata = True
-
-    with nogil:
+        args = move(
+            write_parquet_args.build(sink, tv).
+            with_metadata(tbl_meta.get()).
+            with_compression(comp_type).
+            generate_statistics(stat_freq).
+            with_metadata_out_file_path(metadata_out_file_path).
+            filemetadata_required(return_filemetadata).
+            get_args()
+        )
         out_metadata_c = move(parquet_writer(args))
 
     if metadata_file_path is not None:
