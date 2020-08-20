@@ -34,7 +34,7 @@ from cudf._lib.move cimport move
 from cudf._lib.cpp.column.column cimport column, column_contents
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.column.column_factories cimport (
-    make_column_from_scalar as cpp_make_column_from_scalar
+    make_column_from_scalar as cpp_make_column_from_scalar,
     make_numeric_column
 )
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
