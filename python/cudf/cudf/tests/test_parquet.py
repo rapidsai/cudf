@@ -17,7 +17,7 @@ import cudf
 from cudf.io.parquet import ParquetWriter, merge_parquet_filemetadata
 from cudf.tests.utils import assert_eq
 
-import cudf.tests.dataset_synthesizer as ds
+import cudf.tests.dataset_generator as dg
 
 
 @pytest.fixture(scope="module")
@@ -322,11 +322,26 @@ def test_parquet_read_metadata(tmpdir, pdf):
 def test_parquet_read_filtered(tmpdir):
     # Generate data
     fname = tmpdir.join("filtered.parquet")
-    ds.synthesize(fname, ds.simple)
+    dg.generate(
+        fname,
+        dg.Parameters(
+            num_rows=2048,
+            column_parameters=[
+                dg.ColumnParameters(
+                    cardinality=100,
+                    null_frequency=0.05,
+                    ty=lambda g: g.address.country,
+                    is_sorted=False,
+                ),
+                dg.ColumnParameters(40, 0.2, lambda g: g.person.age, True,),
+            ],
+            seed=0,
+        ),
+    )
 
     # Get dataframes to compare
     df = cudf.read_parquet(fname)
-    df_filtered = cudf.read_parquet(fname, filters=[("0", ">", 60)])
+    df_filtered = cudf.read_parquet(fname, filters=[("1", ">", 60)])
 
     assert cudf.io.read_parquet_metadata(fname)[1] == 2048 / 64
     assert len(df_filtered) < len(df)
