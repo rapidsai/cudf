@@ -212,6 +212,7 @@
 - PR #5970 Map data to pandas through arrow, always
 - PR #6012 Remove `cudf._cuda` and replace usages with `rmm._cuda`
 - PR #6045 Parametrize parquet_reader_list tests
+- PR #6053 Import traits.hpp for cudftestutils consumers
 
 ## Bug Fixes
 
