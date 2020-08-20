@@ -356,6 +356,14 @@ class TimeDeltaColumn(column.ColumnBase):
                 self.as_numerical.sum(dtype=dtype), unit=self.time_unit
             )
 
+    def std(self, ddof=1, dtype=np.float64):
+        return pd.Timedelta(
+            libcudf.reduce.reduce(
+                "std", self.as_numerical, dtype=dtype, ddof=ddof
+            ),
+            unit=self.time_unit,
+        )
+
     def components(self, index=None):
         """
         Return a Dataframe of the components of the Timedeltas.
