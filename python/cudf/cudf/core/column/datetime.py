@@ -1,6 +1,7 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
 import datetime as dt
 import re
+from numbers import Number
 
 import numpy as np
 import pandas as pd
@@ -196,6 +197,24 @@ class DatetimeColumn(column.ColumnBase):
         """Returns the default NA value for this column
         """
         return np.datetime64("nat", self.time_unit)
+
+    def mean(self, dtype=np.float64):
+        return pd.Timestamp(
+            self.as_numerical.mean(dtype=dtype), unit=self.time_unit
+        )
+
+    def median(self, dtype=np.float64):
+        return pd.Timestamp(
+            self.as_numerical.median(dtype=dtype), unit=self.time_unit
+        )
+
+    def quantile(self, q, interpolation, exact):
+        result = self.as_numerical.quantile(
+            q=q, interpolation=interpolation, exact=exact
+        )
+        if isinstance(q, Number):
+            return [pd.Timestamp(result[0], unit=self.time_unit)]
+        return result.astype(self.dtype)
 
     def binary_operator(self, op, rhs, reflect=False):
         lhs, rhs = self, rhs
