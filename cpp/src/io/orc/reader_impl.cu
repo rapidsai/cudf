@@ -813,8 +813,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                          stream);
 
       for (size_t i = 0; i < column_types.size(); ++i) {
-        out_columns.emplace_back(
-          make_column(column_types[i], num_rows, out_buffers[i], stream, _mr));
+        out_columns.emplace_back(make_column(out_buffers[i], stream, _mr));
       }
     }
   }

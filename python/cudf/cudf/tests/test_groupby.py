@@ -8,6 +8,7 @@ from numpy.testing import assert_array_equal
 
 import cudf
 from cudf.core import DataFrame, Series
+from cudf.core._compat import PANDAS_GE_110
 from cudf.tests.utils import assert_eq
 
 _now = np.datetime64("now")
@@ -57,7 +58,7 @@ def gdf():
 
 @pytest.fixture
 def pdf(gdf):
-    return gdf.to_pandas(nullable_pd_dtype=False)
+    return gdf.to_pandas()
 
 
 @pytest.mark.parametrize("nelem", [2, 3, 100, 1000])
@@ -239,9 +240,7 @@ def test_groupby_apply():
     df["val1"] = np.random.random(nelem)
     df["val2"] = np.random.random(nelem)
 
-    expect_grpby = df.to_pandas(nullable_pd_dtype=False).groupby(
-        ["key1", "key2"], as_index=False
-    )
+    expect_grpby = df.to_pandas().groupby(["key1", "key2"], as_index=False)
     got_grpby = df.groupby(["key1", "key2"])
 
     def foo(df):
@@ -264,9 +263,7 @@ def test_groupby_apply_grouped():
     df["val1"] = np.random.random(nelem)
     df["val2"] = np.random.random(nelem)
 
-    expect_grpby = df.to_pandas(nullable_pd_dtype=False).groupby(
-        ["key1", "key2"], as_index=False
-    )
+    expect_grpby = df.to_pandas().groupby(["key1", "key2"], as_index=False)
     got_grpby = df.groupby(["key1", "key2"])
 
     def foo(key1, val1, com1, com2):
@@ -281,7 +278,7 @@ def test_groupby_apply_grouped():
         tpb=8,
     )
 
-    got = got.to_pandas(nullable_pd_dtype=False)
+    got = got.to_pandas()
 
     # Get expected result by emulating the operation in pandas
     def emulate(df):
@@ -552,7 +549,7 @@ def test_groupby_list_then_string():
     gdf["a"] = [0, 1, 0, 1, 2]
     gdf["b"] = [11, 2, 15, 12, 2]
     gdf["c"] = [6, 7, 6, 7, 6]
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
     gdg = gdf.groupby("a", as_index=True).agg(
         {"b": ["min", "max"], "c": "max"}
     )
@@ -567,7 +564,7 @@ def test_groupby_different_unequal_length_column_aggregations():
     gdf["a"] = [0, 1, 0, 1, 2]
     gdf["b"] = [11, 2, 15, 12, 2]
     gdf["c"] = [11, 2, 15, 12, 2]
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
     gdg = gdf.groupby("a", as_index=True).agg(
         {"b": "min", "c": ["max", "min"]}
     )
@@ -582,7 +579,7 @@ def test_groupby_single_var_two_aggs():
     gdf["a"] = [0, 1, 0, 1, 2]
     gdf["b"] = [11, 2, 15, 12, 2]
     gdf["c"] = [11, 2, 15, 12, 2]
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
     gdg = gdf.groupby("a", as_index=True).agg({"b": ["min", "max"]})
     pdg = pdf.groupby("a", as_index=True).agg({"b": ["min", "max"]})
     assert_eq(pdg, gdg)
@@ -593,7 +590,7 @@ def test_groupby_double_var_two_aggs():
     gdf["a"] = [0, 1, 0, 1, 2]
     gdf["b"] = [11, 2, 15, 12, 2]
     gdf["c"] = [11, 2, 15, 12, 2]
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
     gdg = gdf.groupby(["a", "b"], as_index=True).agg({"c": ["min", "max"]})
     pdg = pdf.groupby(["a", "b"], as_index=True).agg({"c": ["min", "max"]})
     assert_eq(pdg, gdg)
@@ -604,7 +601,7 @@ def test_groupby_apply_basic_agg_single_column():
     gdf["key"] = [0, 0, 1, 1, 2, 2, 0]
     gdf["val"] = [0, 1, 2, 3, 4, 5, 6]
     gdf["mult"] = gdf["key"] * gdf["val"]
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
 
     gdg = gdf.groupby(["key", "val"]).mult.sum()
     pdg = pdf.groupby(["key", "val"]).mult.sum()
@@ -718,13 +715,13 @@ def test_groupby_all_nulls_index():
             "b": [1, 2, 3, 4],
         }
     )
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
     assert_eq(pdf.groupby("a").sum(), gdf.groupby("a").sum())
 
     gdf = cudf.DataFrame(
         {"a": cudf.Series([np.nan, np.nan, np.nan, np.nan]), "b": [1, 2, 3, 4]}
     )
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
     assert_eq(pdf.groupby("a").sum(), gdf.groupby("a").sum())
 
 
@@ -744,10 +741,7 @@ def test_groupby_sort():
 
     assert_eq(
         pdf.groupby(["c", "b"], sort=False).sum().sort_index(),
-        gdf.groupby(["c", "b"], sort=False)
-        .sum()
-        .to_pandas(nullable_pd_dtype=False)
-        .sort_index(),
+        gdf.groupby(["c", "b"], sort=False).sum().to_pandas().sort_index(),
     )
 
 
@@ -916,8 +910,8 @@ def test_groupby_arbitrary_length_series():
     gdf = cudf.DataFrame({"a": [1, 1, 2], "b": [2, 3, 4]}, index=[4, 5, 6])
     gsr = cudf.Series([1.0, 2.0, 2.0], index=[3, 4, 5])
 
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
-    psr = gsr.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
+    psr = gsr.to_pandas()
 
     expect = pdf.groupby(psr).sum()
     got = gdf.groupby(gsr).sum()
@@ -929,8 +923,8 @@ def test_groupby_series_same_name_as_dataframe_column():
     gdf = cudf.DataFrame({"a": [1, 1, 2], "b": [2, 3, 4]}, index=[4, 5, 6])
     gsr = cudf.Series([1.0, 2.0, 2.0], name="a", index=[3, 4, 5])
 
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
-    psr = gsr.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
+    psr = gsr.to_pandas()
 
     expect = pdf.groupby(psr).sum()
     got = gdf.groupby(gsr).sum()
@@ -945,9 +939,9 @@ def test_group_by_series_and_column_name_in_by():
     gsr0 = cudf.Series([0.0, 1.0, 2.0], name="a", index=[1, 2, 3])
     gsr1 = cudf.Series([0.0, 1.0, 3.0], name="b", index=[3, 4, 5])
 
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
-    psr0 = gsr0.to_pandas(nullable_pd_dtype=False)
-    psr1 = gsr1.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
+    psr0 = gsr0.to_pandas()
+    psr1 = gsr1.to_pandas()
 
     expect = pdf.groupby(["x", psr0, psr1]).sum()
     got = gdf.groupby(["x", gsr0, gsr1]).sum()
@@ -1016,6 +1010,8 @@ def test_groupby_median(agg, by):
 @pytest.mark.parametrize("agg", [lambda x: x.nunique(), "nunique"])
 @pytest.mark.parametrize("by", ["a", ["a", "b"], ["a", "c"]])
 def test_groupby_nunique(agg, by):
+    if not PANDAS_GE_110:
+        pytest.xfail("pandas >= 1.1 required")
     pdf = pd.DataFrame(
         {"a": [1, 1, 1, 2, 3], "b": [1, 2, 2, 2, 1], "c": [1, 2, None, 4, 5]}
     )

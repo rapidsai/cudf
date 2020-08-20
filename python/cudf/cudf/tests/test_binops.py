@@ -770,7 +770,5 @@ def test_ufunc_ops(lhs, rhs, ops):
         assert got == expect
     else:
         utils.assert_eq(
-            expect.fillna(got._column.default_na_value()),
-            got,
-            check_dtype=False,
+            expect, got,
         )

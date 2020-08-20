@@ -3,7 +3,6 @@ import functools
 from collections import OrderedDict
 from math import floor, isinf, isnan
 
-import cupy
 import numpy as np
 import pandas as pd
 from numba import njit
@@ -79,7 +78,7 @@ def scalar_broadcast_to(scalar, size, dtype=None):
     dtype = scalar.dtype
 
     if np.dtype(dtype).kind in ("O", "U"):
-        gather_map = cupy.zeros(size, dtype="int32")
+        gather_map = column.full(size, 0, dtype="int32")
         scalar_str_col = column.as_column([scalar], dtype="str")
         return scalar_str_col[gather_map]
     else:
