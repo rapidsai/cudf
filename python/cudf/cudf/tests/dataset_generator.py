@@ -8,6 +8,7 @@
 import pandas as pd
 import numpy as np
 
+import pyarrow as pa
 from mimesis import Generic
 
 
@@ -20,8 +21,9 @@ class ColumnParameters:
         Number of rows to generate
     null_frequency : 0.1
         Number of columns to generate
-    ty : Callable
-        Mimesis provider function for generating random data
+    generator : Callable
+        Function for generating random data. It is passed a Mimesis Generic
+        provider and returns a callable that generates data.
     is_sorted : bool
         Sort this column. Columns are sorted in same order as ColumnParameters
         instances stored in column_params of Parameters.
@@ -31,12 +33,12 @@ class ColumnParameters:
         self,
         cardinality=100,
         null_frequency=0.1,
-        ty=lambda g: g.address.country,
+        generator=lambda g: g.address.country,
         is_sorted=True,
     ):
         self.cardinality = cardinality
         self.null_frequency = null_frequency
-        self.ty = ty
+        self.generator = generator
         self.is_sorted = is_sorted
 
 
@@ -67,25 +69,25 @@ SIMPLE = Parameters(
         ColumnParameters(
             cardinality=100,
             null_frequency=0.05,
-            ty=lambda g: g.address.country,
+            generator=lambda g: g.address.country,
             is_sorted=False,
         ),
         ColumnParameters(
             cardinality=40,
             null_frequency=0.2,
-            ty=lambda g: g.person.age,
+            generator=lambda g: g.person.age,
             is_sorted=True,
         ),
         ColumnParameters(
             cardinality=30,
             null_frequency=0.1,
-            ty=lambda g: g.text.color,
+            generator=lambda g: g.text.color,
             is_sorted=False,
         ),
         ColumnParameters(
             cardinality=10,
             null_frequency=0.1,
-            ty=lambda g: g.hardware.manufacturer,
+            generator=lambda g: g.hardware.manufacturer,
             is_sorted=False,
         ),
     ],
@@ -110,34 +112,51 @@ def generate(
     """
 
     # Initialize seeds
-    g = Generic("es", seed=parameters.seed)
+    g = Generic("en", seed=parameters.seed)
     if parameters.seed is not None:
         np.random.seed(parameters.seed)
 
-    # Generate data for each column
-    data = {}
-    columns_to_sort = []
+    # Generate data for each column in Arrow Table
+    schema = pa.schema(
+        [
+            pa.field(
+                name=str(i),
+                type=pa.from_numpy_dtype(type(column_params.generator(g)())),
+                nullable=column_params.null_frequency > 0,
+            )
+            for i, column_params in enumerate(parameters.column_parameters)
+        ]
+    )
+    column_data = []
+    columns_to_sort = [
+        str(i)
+        for i, column_params in enumerate(parameters.column_parameters)
+        if column_params.is_sorted
+    ]
     for i, column_params in enumerate(parameters.column_parameters):
-        vals = np.array(
-            [column_params.ty(g)() for _ in range(column_params.cardinality)]
+        vals = pa.array(
+            (
+                column_params.generator(g)()
+                for _ in range(column_params.cardinality)
+            ),
+            size=column_params.cardinality,
         )
 
         # Generate data for current column
-        data[str(i)] = np.array(
-            [
-                None
-                if np.random.rand() < column_params.null_frequency
-                else np.random.choice(vals)
-                for _ in range(parameters.num_rows)
-            ]
+        column_data.append(
+            pa.array(
+                (
+                    None
+                    if np.random.rand() < column_params.null_frequency
+                    else np.random.choice(vals)
+                    for _ in range(parameters.num_rows)
+                ),
+                size=parameters.num_rows,
+            )
         )
 
-        # Check if marked for sorting
-        if column_params.is_sorted:
-            columns_to_sort.append(str(i))
-
-    # Create DataFrame and sort columns appropriately
-    df = pd.DataFrame(data)
+    # Convert to Pandas DataFrame and sort columns appropriately
+    df = pa.Table.from_arrays(column_data, schema=schema,).to_pandas()
     df = df.sort_values(columns_to_sort)
 
     # Write

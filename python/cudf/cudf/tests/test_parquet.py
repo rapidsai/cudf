@@ -333,9 +333,9 @@ def test_parquet_read_filtered(tmpdir, seed):
             num_rows=2048,
             column_parameters=[
                 dg.ColumnParameters(
-                    cardinality=100,
+                    cardinality=40,
                     null_frequency=0.05,
-                    ty=lambda g: g.address.country,
+                    generator=lambda g: g.address.city,
                     is_sorted=False,
                 ),
                 dg.ColumnParameters(40, 0.2, lambda g: g.person.age, True,),
