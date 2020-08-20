@@ -56,7 +56,7 @@ TEST_F(StringsReplaceTests, ReplaceRegexTest)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsReplaceTests, ReplaceMultiRegexTest)
@@ -92,7 +92,7 @@ TEST_F(StringsReplaceTests, ReplaceMultiRegexTest)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsReplaceTests, InvalidRegex)
@@ -128,9 +128,9 @@ TEST_F(StringsReplaceTests, WithEmptyPattern)
   cudf::test::strings_column_wrapper repls({"bbb"});
   auto repls_view = cudf::strings_column_view(repls);
   auto results    = cudf::strings::replace_re(strings_view, patterns, repls_view);
-  cudf::test::expect_columns_equal(*results, strings);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings);
   results = cudf::strings::replace_re(strings_view, "", cudf::string_scalar("bbb"));
-  cudf::test::expect_columns_equal(*results, strings);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings);
 }
 
 TEST_F(StringsReplaceTests, ReplaceBackrefsRegexTest)
@@ -164,7 +164,7 @@ TEST_F(StringsReplaceTests, ReplaceBackrefsRegexTest)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsReplaceTests, ReplaceBackrefsRegexTest2)
@@ -183,7 +183,7 @@ TEST_F(StringsReplaceTests, ReplaceBackrefsRegexTest2)
                                                "twXo+tZhréé fouXr+fZivé",
                                                "abcXd+éZfgh",
                                                "tésXt+sZtrinXg+aZgain"});
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsReplaceTests, MediumReplaceRegex)
@@ -211,7 +211,7 @@ TEST_F(StringsReplaceTests, MediumReplaceRegex)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsReplaceTests, LargeReplaceRegex)
@@ -239,5 +239,5 @@ TEST_F(StringsReplaceTests, LargeReplaceRegex)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
