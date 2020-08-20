@@ -22,7 +22,7 @@
  *
  * bzip2 license information is available at
  * https://spdx.org/licenses/bzip2-1.0.6.html
- * https://github.com/asimonov-im/bzip2/blob/master/LICENSE
+ * https://github.com/asimonov-im/bzip2/blob/main/LICENSE
  * original source code available at
  * http://www.sourceware.org/bzip2/
  *

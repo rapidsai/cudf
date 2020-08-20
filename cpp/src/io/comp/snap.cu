@@ -247,7 +247,7 @@ static __device__ uint32_t Match60(const uint8_t *src1,
 
 /**
  * @brief Snappy compression kernel
- * See http://github.com/google/snappy/blob/master/format_description.txt
+ * See http://github.com/google/snappy/blob/main/format_description.txt
  *
  * blockDim {128,1,1}
  *

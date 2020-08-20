@@ -21,7 +21,7 @@ class CudfKafkaClient:
             Dict of Key/Value pairs of librdkafka
             configuration values. Full list of valid configuration
             options can be found at
-            https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
+            https://github.com/edenhill/librdkafka/blob/main/CONFIGURATION.md
         """
 
         self.kafka_configs = kafka_configs
@@ -67,7 +67,7 @@ class Consumer(CudfKafkaClient):
             Dict of Key/Value pairs of librdkafka
             configuration values. Full list of valid configuration
             options can be found at
-            https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
+            https://github.com/edenhill/librdkafka/blob/main/CONFIGURATION.md
         """
 
         super().__init__(kafka_configs)

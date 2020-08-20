@@ -169,7 +169,7 @@ std::string name_from_path(const std::vector<std::string> &path_in_schema)
   // For the case of lists, we will see a schema that looks like:
   // a.list.element.list.element
   // where each (list.item) pair represents a level of nesting.  According to the parquet spec,
-  // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md
+  // https://github.com/apache/parquet-format/blob/main/LogicalTypes.md
   // the initial field must be named "list" and the inner element must be named "element".
   // If we are dealing with a list, we want to return the topmost name of the group ("a").
   //
@@ -357,7 +357,7 @@ class aggregate_metadata {
     auto &pfm = per_file_metadata[0];
 
     // see : the "Nested Types" section here
-    // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md
+    // https://github.com/apache/parquet-format/blob/main/LogicalTypes.md
     int index = get_column_leaf_schema_index(col_index);
     int depth = 0;
 
