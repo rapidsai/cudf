@@ -79,6 +79,7 @@
 - PR #5859 Add conversion form `fixed_point` to `bool`
 - PR #5781 Add duration types support in cudf(python/cython)
 - PR #5815 LIST Support for ColumnVector
+- PR #5931 Support for `add_calendrical_months` API
 - PR #5992 Add support for `.dt.strftime`
 
 ## Improvements
