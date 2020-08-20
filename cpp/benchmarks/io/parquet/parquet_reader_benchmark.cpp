@@ -48,8 +48,9 @@ void PQ_read(benchmark::State& state)
   auto const tbl  = create_random_table<T>(num_cols, col_bytes, true);
   auto const view = tbl->view();
 
-  cudf_io::write_parquet_args write_args = cudf_io::write_parquet_args::build(
-    cudf_io::sink_info(&out_buffer), view).with_compression(compression
+  cudf_io::write_parquet_args write_args =
+    cudf_io::write_parquet_args::build(cudf_io::sink_info(&out_buffer), view)
+      .with_compression(compression);
 };
 cudf_io::write_parquet(write_args);
 
