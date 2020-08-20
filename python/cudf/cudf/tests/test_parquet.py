@@ -729,7 +729,6 @@ def test_parquet_reader_list_large_mixed(tmpdir):
     assert_eq(expect, got, check_dtype=False)
 
 
-"""
 @pytest.mark.parametrize("skip", range(0, 128))
 def test_parquet_reader_list_skiprows(skip, tmpdir):
     num_rows = 128
@@ -789,7 +788,6 @@ def test_parquet_reader_list_num_rows(skip, tmpdir):
     )
     got = cudf.read_parquet(fname, skip_rows=skip, num_rows=rows_to_read)
     assert_eq(expect, got, check_dtype=False)
-"""
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
