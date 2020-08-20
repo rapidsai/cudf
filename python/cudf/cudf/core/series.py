@@ -3903,6 +3903,33 @@ class Series(Frame, Serializable):
                 data=data, index=index, nan_as_null=False, name=self.name,
             )
 
+        def describe_timedelta(self):
+            # mimicking pandas
+            index = (
+                ["count", "mean", "std", "min"]
+                + _format_percentile_names(percentiles)
+                + ["max"]
+            )
+            # import pdb;pdb.set_trace()
+            data = (
+                [self.mean().to_numpy(), self.std().to_numpy(), self.min()]
+                + self.quantile(percentiles).to_array(fillna="pandas").tolist()
+                + [self.max()]
+            )
+            data = column.as_column(data, dtype=self.dtype)
+
+            data = [self.count()] + data.astype("str").to_array(
+                fillna="pandas"
+            ).tolist()
+
+            return Series(
+                data=data,
+                index=index,
+                dtype="str",
+                nan_as_null=False,
+                name=self.name,
+            )
+
         def describe_categorical(self):
             # blocked by StringColumn/DatetimeColumn support for
             # value_counts/unique
@@ -3910,26 +3937,24 @@ class Series(Frame, Serializable):
             val_counts = self.value_counts(ascending=False)
             data = [self.count(), self.unique().size]
 
-            dtype = None
             if data[1] > 0:
                 top, freq = val_counts.index[0], val_counts.iloc[0]
-                data += [top, freq]
-
+                data += [str(top), freq]
             # If the DataFrame is empty, set 'top' and 'freq' to None
             # to maintain output shape consistency
             else:
-                data += [np.nan, np.nan]
-                dtype = "object"
+                data += [None, None]
 
             return Series(
                 data=data,
-                dtype=dtype,
+                dtype="str",
                 index=index,
                 nan_as_null=False,
                 name=self.name,
             )
 
         def describe_timestamp(self):
+
             index = (
                 ["count", "mean", "min"]
                 + _format_percentile_names(percentiles)
@@ -3937,11 +3962,19 @@ class Series(Frame, Serializable):
             )
             data = (
                 [self.count(), self.mean(), self.min()]
-                + self.quantile(percentiles).to_array(fillna="pandas").tolist()
+                + self.quantile(percentiles)
+                .astype("str")
+                .to_array(fillna="pandas")
+                .tolist()
                 + [self.max()]
             )
+
             return Series(
-                data=data, index=index, nan_as_null=False, name=data.name
+                data=data,
+                dtype="str",
+                index=index,
+                nan_as_null=False,
+                name=self.name,
             )
 
         if percentiles is not None:
@@ -3952,14 +3985,10 @@ class Series(Frame, Serializable):
 
         if pd.api.types.is_bool_dtype(self.dtype):
             return describe_categorical(self)
-        elif isinstance(
-            self._column,
-            (
-                cudf.core.column.NumericalColumn,
-                cudf.core.column.TimeDeltaColumn,
-            ),
-        ):
+        elif isinstance(self._column, cudf.core.column.NumericalColumn):
             return describe_numeric(self)
+        elif isinstance(self._column, cudf.core.column.TimeDeltaColumn):
+            return describe_timedelta(self)
         elif isinstance(self._column, cudf.core.column.DatetimeColumn):
             return describe_timestamp(self)
         else:
