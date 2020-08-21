@@ -270,7 +270,7 @@ __device__ void gpuDecodeStream(
     }
     if (s->error) { break; }
 
-    batch_len = min(num_input_values - value_count, 32);
+    batch_len = min(num_input_values - value_count, BATCH_SZ); //defined in parquet_common.h
     if (level_run & 1) {
       // Literal run
       int batch_len8;
@@ -356,12 +356,12 @@ __device__ int gpuDecodeDictionaryIndices(volatile page_state_s *s, int target_p
       if (run & 1) {
         // Literal batch: must output a multiple of 8, except for the last batch
         int batch_len_div8;
-        batch_len      = max(min(32, (int)(run >> 1) * 8), 1);
+        batch_len      = max(min(BATCH_SZ, (int)(run >> 1) * 8), 1); //BATCH_SZ defined in parquet_common.h
         batch_len_div8 = (batch_len + 7) >> 3;
         run -= batch_len_div8 * 2;
         cur += batch_len_div8 * dict_bits;
       } else {
-        batch_len = max(min(32, (int)(run >> 1)), 1);
+        batch_len = max(min(BATCH_SZ, (int)(run >> 1)), 1);//BATCH_SZ defined in parquet_common.h
         run -= batch_len * 2;
       }
       s->dict_run   = run;
@@ -430,13 +430,13 @@ __device__ int gpuDecodeRleBooleans(volatile page_state_s *s, int target_pos, in
       if (run & 1) {
         // Literal batch: must output a multiple of 8, except for the last batch
         int batch_len_div8;
-        batch_len = max(min(32, (int)(run >> 1) * 8), 1);
+        batch_len = max(min(BATCH_SZ, (int)(run >> 1) * 8), 1); //BATCH_SZ is defined in parquet_common.h
         if (batch_len >= 8) { batch_len &= ~7; }
         batch_len_div8 = (batch_len + 7) >> 3;
         run -= batch_len_div8 * 2;
         cur += batch_len_div8;
       } else {
-        batch_len = max(min(32, (int)(run >> 1)), 1);
+        batch_len = max(min(BATCH_SZ, (int)(run >> 1)), 1); //BATCH_SZ is defined in parquet_common.h
         run -= batch_len * 2;
       }
       s->dict_run   = run;
@@ -1017,7 +1017,7 @@ static __device__ bool setupLocalPageInfo(page_state_s *const s,
       // - for nested schemas, these offsets are computed during the preprocess step
       if (s->col.column_data_base != nullptr) {
         int max_depth = s->col.max_level[level_type::REPETITION];
-        for (int idx = 0; idx <= max_depth; idx++) {
+        for (short idx = 0; idx <= max_depth; idx++) {
           PageNestingInfo *pni = &s->page.nesting[idx];
 
           size_t output_offset;
@@ -1105,7 +1105,7 @@ static __device__ bool setupLocalPageInfo(page_state_s *const s,
     // row indicated by chunk_row, but to the row before it that spanned page boundaries. If that
     // previous row is within the overall row bounds, include the values by allowing relative row
     // index -1
-    int max_row = (min_row + num_rows) - 1;
+    short max_row = (min_row + num_rows) - 1;
     if (min_row < page_start_row && max_row >= page_start_row - 1) {
       s->row_index_lower_bound = -1;
     } else {
@@ -1164,7 +1164,7 @@ static __device__ void store_validity(PageNestingInfo *pni,
     }
   }
   // we're going to spill over into the next word.
-  // note : writing both values here is the lazy/slow way.  we could be writing just
+  // note : writing both values here is the lazy/slow way, we could be writing just
   // the first word and rolling the remaining bits over into the next call.
   // however, some basic performance tests shows almost no difference between these two
   // methods. More detailed performance testing might be worthwhile here.
@@ -1200,11 +1200,11 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
                                                              int t)
 {
   // max nesting depth of the column
-  int max_depth = s->col.max_level[level_type::REPETITION];
+  short max_depth = s->col.max_level[level_type::REPETITION];
   // how many (input) values we've processed in the page so far
   int input_value_count = s->input_value_count;
   // how many rows we've processed in the page so far
-  int input_row_count = s->input_row_count;
+  short input_row_count = s->input_row_count;
 
   // process until we've reached the target
   while (input_value_count < target_input_value_count) {
@@ -1213,7 +1213,7 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
     int end_depth   = -1;
     int d           = -1;
     if (input_value_count + t < target_input_value_count) {
-      int index = rolling_index(input_value_count + t);
+      short index = rolling_index(input_value_count + t);
       // important : we don't decode repetition levels for flat schemas. we can assume the
       // repetition level is always 0.
       int r       = max_depth == 0 ? 0 : s->rep[index];
@@ -1255,7 +1255,7 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
     // otherwise we'd have thread/warp synchronization issues on the BALLOT() and WarpReduce()
     // calls.
     uint32_t next_thread_value_count, next_warp_value_count;
-    for (int s_idx = 0; s_idx <= max_depth; s_idx++) {
+    for (short s_idx = 0; s_idx <= max_depth; s_idx++) {
       PageNestingInfo *pni = &s->page.nesting[s_idx];
 
       int in_bounds = ((s_idx >= start_depth && s_idx <= end_depth) && in_row_bounds) ? 1 : 0;
@@ -1272,7 +1272,7 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
         warp_valid_mask = BALLOT(is_valid);
       }
       // for nested schemas, it's more complicated.  This warp will visit 32 incoming values,
-      // however not all of them will necessarily represent a value at this nesting level. so the
+      // however not all of them will necessarily represent a value at this nesting level. So the
       // validity bit for thread t might actually represent output value t-6. the correct position
       // for thread t's bit is cur_value_count. for cuda 11 we could use __reduce_or_sync(), but
       // until then we have to do a warp reduce.
@@ -1301,7 +1301,7 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
 
         // if we're -not- at a leaf column, and we're within row bounds, emit an offset
         if (in_bounds) {
-          int idx             = pni->value_count + thread_value_count;
+          short idx             = pni->value_count + thread_value_count;
           cudf::size_type ofs = s->page.nesting[s_idx + 1].value_count + next_thread_value_count +
                                 s->page.nesting[s_idx + 1].page_start_value;
           (reinterpret_cast<cudf::size_type *>(pni->data_out))[idx] = ofs;
@@ -1350,9 +1350,9 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
  */
 __device__ void gpuDecodeLevels(page_state_s *s, int32_t target_leaf_count, int t)
 {
-  int max_depth = s->col.max_level[level_type::REPETITION];
+  short max_depth = s->col.max_level[level_type::REPETITION];
 
-  constexpr int batch_size = 32;
+  //constexpr int batch_size = 32; //BATCH_SZ is defined in parquet_common.h
   int cur_leaf_count       = target_leaf_count;
   while (!s->error && s->nz_count < target_leaf_count &&
          s->input_value_count < s->num_input_values) {
@@ -1362,7 +1362,7 @@ __device__ void gpuDecodeLevels(page_state_s *s, int32_t target_leaf_count, int 
     SYNCWARP();
 
     // because the rep and def streams are encoded seperately, we cannot request an exact
-    // # of values to be decoded at once. we can only process the lowest # of decoded rep/def
+    // # of values to be decoded at once; We can only process the lowest # of decoded rep/def
     // levels we get.
     int actual_leaf_count = max_depth > 0 ? min(s->lvl_count[level_type::REPETITION],
                                                 s->lvl_count[level_type::DEFINITION])
@@ -1370,7 +1370,7 @@ __device__ void gpuDecodeLevels(page_state_s *s, int32_t target_leaf_count, int 
 
     // process what we got back
     gpuUpdateValidityOffsetsAndRowIndices(actual_leaf_count, s, t);
-    cur_leaf_count = actual_leaf_count + batch_size;
+    cur_leaf_count = actual_leaf_count + BATCH_SZ;
     SYNCWARP();
   }
 }
@@ -1408,7 +1408,7 @@ static __device__ void gpuUpdatePageSizes(page_state_s *s,
     int end_depth   = -1;
     int d           = -1;
     if (input_value_count + t < target_input_value_count) {
-      int index   = rolling_index(input_value_count + t);
+      short index   = rolling_index(input_value_count + t);
       int r       = s->rep[index];
       start_depth = r;
       d           = s->def[index];
@@ -1416,13 +1416,13 @@ static __device__ void gpuUpdatePageSizes(page_state_s *s,
     }
 
     // count rows and leaf values
-    int is_new_row                = start_depth == 0 ? 1 : 0;
+    short is_new_row                = start_depth == 0 ? 1 : 0;
     uint32_t warp_row_count_mask  = BALLOT(is_new_row);
-    int is_new_leaf               = (d >= s->page.nesting[max_depth].max_def_level) ? 1 : 0;
+    short is_new_leaf               = (d >= s->page.nesting[max_depth].max_def_level) ? 1 : 0;
     uint32_t warp_leaf_count_mask = BALLOT(is_new_leaf);
 
     // is this thread within row bounds? on the first pass we don't know the bounds, so we will be
-    // computing the full size of the column.  on the second pass, we will know our actual row
+    // computing the full size of the column, on the second pass, we will know our actual row
     // bounds, so the computation will cap sizes properly.
     int in_row_bounds = 1;
     if (bounds_set) {
@@ -1449,7 +1449,7 @@ static __device__ void gpuUpdatePageSizes(page_state_s *s,
     }
 
     // increment counts across all nesting depths
-    for (int s_idx = 0; s_idx <= max_depth; s_idx++) {
+    for (short s_idx = 0; s_idx <= max_depth; s_idx++) {
       int in_bounds       = (s_idx >= start_depth && s_idx <= end_depth && in_row_bounds) ? 1 : 0;
       uint32_t count_mask = BALLOT(in_bounds);
       if (!t) { s->page.nesting[s_idx].size += __popc(count_mask); }
@@ -1495,8 +1495,8 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
   __shared__ __align__(16) page_state_s state_g;
 
   page_state_s *const s = &state_g;
-  int page_idx          = blockIdx.x;
-  int t                 = threadIdx.x;
+  short page_idx          = blockIdx.x;
+  short t                 = threadIdx.x;
   PageInfo *pp          = &pages[page_idx];
 
   if (!setupLocalPageInfo(
@@ -1525,14 +1525,14 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
   __syncthreads();
 
   // optimization : it might be useful to have a version of gpuDecodeStream that could go
-  // wider than 1 warp.  Currently it only only uses 1 warp so that it can overlap work
-  // with the value decoding step when in the actual value decoding kernel.  however during
+  // wider than 1 warp.  Currently it only uses 1 warp so that it can overlap work
+  // with the value decoding step when in the actual value decoding kernel,however during
   // this preprocess step we have no such limits -  we could go as wide as NTHREADS
   if (t < 32) {
-    constexpr int batch_size = 32;
-    int target_input_count   = batch_size;
+    //constexpr int batch_size = 32; //BATCH_SZ is defined in parquet_common.h
+    int target_input_count   = BATCH_SZ;
     while (!s->error && s->input_value_count < s->num_input_values) {
-      // decode repetition and definition levels. these will attempt to decode at
+      // decode repetition and definition levels. These will attempt to decode at
       // least up to the target, but may decode a few more.
       gpuDecodeStream(s->rep, s, target_input_count, t, level_type::REPETITION);
       gpuDecodeStream(s->def, s, target_input_count, t, level_type::DEFINITION);
@@ -1544,7 +1544,7 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
 
       // process what we got back
       gpuUpdatePageSizes(s, actual_input_count, t, trim_pass);
-      target_input_count = actual_input_count + batch_size;
+      target_input_count = actual_input_count + BATCH_SZ;
       SYNCWARP();
     }
   }
@@ -1689,7 +1689,7 @@ struct start_offset_output_iterator {
   PageInfo *p;
   int col_index;
   int nesting_depth;
-  int empty               = 0;
+  short empty               = 0;
   using value_type        = size_type;
   using difference_type   = size_type;
   using pointer           = size_type *;
