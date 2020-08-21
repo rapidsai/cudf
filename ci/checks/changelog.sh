@@ -5,10 +5,10 @@
 #########################
 
 # Checkout main for comparison
-git checkout --quiet main
+git checkout --force --quiet main
 
 # Switch back to tip of PR branch
-git checkout --quiet current-pr-branch
+git checkout --force --quiet current-pr-branch
 
 # Ignore errors during searching
 set +e
