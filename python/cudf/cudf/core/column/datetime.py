@@ -214,7 +214,12 @@ class DatetimeColumn(column.ColumnBase):
         )
         if isinstance(q, Number):
             return [pd.Timestamp(result[0], unit=self.time_unit)]
-        return result.astype(self.dtype)
+
+        result = result.binary_operator(
+            "mul", as_scalar(_numpy_to_pandas_conversion[self.time_unit])
+        )
+
+        return result.astype("datetime64[ns]")
 
     def binary_operator(self, op, rhs, reflect=False):
         lhs, rhs = self, rhs

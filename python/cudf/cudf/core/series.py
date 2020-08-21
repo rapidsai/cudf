@@ -3960,14 +3960,21 @@ class Series(Frame, Serializable):
                 + _format_percentile_names(percentiles)
                 + ["max"]
             )
+
             data = (
-                [self.count(), self.mean(), self.min()]
-                + self.quantile(percentiles)
-                .astype("str")
-                .to_array(fillna="pandas")
-                .tolist()
-                + [self.max()]
+                [
+                    self.mean().to_numpy().astype("datetime64[ns]"),
+                    self.min().astype("datetime64[ns]"),
+                ]
+                + self.quantile(percentiles).to_array(fillna="pandas").tolist()
+                + [self.max().astype("datetime64[ns]")]
             )
+
+            data = column.as_column(data, dtype="datetime64[ns]")
+
+            data = [self.count()] + data.astype("str").to_array(
+                fillna="pandas"
+            ).tolist()
 
             return Series(
                 data=data,
