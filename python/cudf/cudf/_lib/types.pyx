@@ -164,13 +164,21 @@ class NullHandling(IntEnum):
 
 cdef class _Dtype:
     cdef data_type get_libcudf_type(self) except *:
-        np_dtype = self.to_numpy
-        cdef libcudf_types.type_id tid = <libcudf_types.type_id> (
-                <underlying_type_t_type_id> (
-                    np_to_cudf_types[np_dtype]
+
+        cdef libcudf_types.type_id tid
+        cdef data_type libcudf_type 
+
+        if not isinstance(self, ListDtype):
+            np_dtype = self.to_numpy
+            tid = <libcudf_types.type_id> (
+                    <underlying_type_t_type_id> (
+                        np_to_cudf_types[np_dtype]
+                    )
                 )
-            )
-        cdef data_type libcudf_type = libcudf_types.data_type(tid)
+        else:
+            tid = libcudf_types.type_id.LIST
+        
+        libcudf_type = libcudf_types.data_type(tid)
         return libcudf_type
 
 

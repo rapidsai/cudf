@@ -364,25 +364,9 @@ cdef class Column:
             col = self.base_children[0]
         else:
             col = self
-<<<<<<< HEAD
-        cdef _Dtype data_dtype = col.dtype
-        cdef libcudf_types.data_type dtype = data_dtype.get_libcudf_type()
-=======
 
-        data_dtype = col.dtype
-        cdef libcudf_types.type_id tid
-
-        if not is_list_dtype(self.dtype):
-            tid = <libcudf_types.type_id> (
-                <underlying_type_t_type_id> (
-                    np_to_cudf_types[np.dtype(data_dtype)]
-                )
-            )
-        else:
-            tid = libcudf_types.type_id.LIST
-
-        cdef libcudf_types.data_type dtype = libcudf_types.data_type(tid)
->>>>>>> branch-0.15
+        cdef _Dtype pydtype = self.dtype
+        cdef libcudf_types.data_type dtype = pydtype.get_libcudf_type()
         cdef libcudf_types.size_type offset = self.offset
         cdef vector[column_view] children
         cdef void* data
