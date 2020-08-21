@@ -43,8 +43,8 @@ namespace ast {
 
 namespace detail {
 
-template <size_type block_size>
-__launch_bounds__(block_size) __global__
+template <cudf::size_type max_block_size>
+__launch_bounds__(max_block_size) __global__
   void compute_column_kernel(table_device_view const table,
                              const cudf::detail::fixed_width_scalar_device_view_base* literals,
                              mutable_column_device_view output_column,
@@ -130,16 +130,16 @@ std::unique_ptr<column> compute_column(table_view const table,
   int shmem_per_block_limit;
   CUDA_TRY(
     cudaDeviceGetAttribute(&shmem_per_block_limit, cudaDevAttrMaxSharedMemoryPerBlock, device_id));
-  auto constexpr DEFAULT_BLOCK_SIZE = 128;
+  auto constexpr MAX_BLOCK_SIZE = 128;
   auto const block_size =
     (shmem_size_per_thread > 0)
-      ? std::min(DEFAULT_BLOCK_SIZE, shmem_per_block_limit / shmem_size_per_thread)
-      : DEFAULT_BLOCK_SIZE;
+      ? std::min(MAX_BLOCK_SIZE, shmem_per_block_limit / shmem_size_per_thread)
+      : MAX_BLOCK_SIZE;
   cudf::detail::grid_1d config(table_num_rows, block_size);
   auto const shmem_size_per_block = shmem_size_per_thread * config.num_threads_per_block;
 
   // Execute the kernel
-  cudf::ast::detail::compute_column_kernel<DEFAULT_BLOCK_SIZE>
+  cudf::ast::detail::compute_column_kernel<MAX_BLOCK_SIZE>
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream>>>(
       *table_device,
       device_literals,
