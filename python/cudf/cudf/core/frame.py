@@ -1863,9 +1863,7 @@ class Frame(libcudf.table.Table):
         column_names = data.column_names
         pandas_dtypes = None
         np_dtypes = None
-        if isinstance(data, pa.Table) and isinstance(
-            data.schema.pandas_metadata, dict
-        ):
+        if isinstance(data.schema.pandas_metadata, dict):
             metadata = data.schema.pandas_metadata
             pandas_dtypes = {
                 col["field_name"]: col["pandas_type"]
@@ -1900,7 +1898,7 @@ class Frame(libcudf.table.Table):
 
         # Handle dict arrays
         cudf_category_frame = libcudf.table.Table()
-        if len(dict_indices) != 0:
+        if len(dict_indices):
 
             dict_indices_table = pa.table(dict_indices)
             data = data.drop(dict_indices_table.column_names)
@@ -1986,12 +1984,12 @@ class Frame(libcudf.table.Table):
         names = self._data.names
         null_arrays_names = []
 
-        for name in self._data.names:
+        for name in names:
             col = self._data[name]
             if isinstance(col, cudf.core.column.CategoricalColumn,):
                 # arrow doesn't support unsigned codes
                 signed_type = (
-                    min_signed_type(col.codes.max())
+                    min_signed_type(col.categories.size)
                     if col.codes.size > 0
                     else np.int8
                 )
@@ -2003,71 +2001,61 @@ class Frame(libcudf.table.Table):
             ) and col.null_count == len(col):
                 null_arrays_names.append(name)
 
-        data = cudf.DataFrame(data._data)
-        data = data.drop(codes_keys + null_arrays_names, inplace=True)
+        data = libcudf.table.Table(
+            data._data.select_by_label(
+                [
+                    name
+                    for name in names
+                    if name not in codes_keys + null_arrays_names
+                ]
+            )
+        )
 
         out_table = pa.table([])
-        if data.shape[1] > 0:
+        if data._num_columns > 0:
             out_table = libcudf.interop.to_arrow(
                 data, data._data.names, keep_index=False
             )
 
         if len(codes) > 0:
-            codes_df = cudf.DataFrame(codes)
+            codes_table = libcudf.table.Table(codes)
             indices = libcudf.interop.to_arrow(
-                codes_df, codes_df._data.names, keep_index=False
+                codes_table, codes_table._data.names, keep_index=False
             )
             dictionaries = dict(
                 (name, categories[name].to_arrow())
                 for name in categories.keys()
             )
-            for name in codes.keys():
+            for name in codes_keys:
+                # as name can be interger in case of cudf
+                actual_name = name
+                name = str(name)
+                dict_array = pa.DictionaryArray.from_arrays(
+                    indices[name].chunk(0),
+                    _get_dictionary_array(dictionaries[name]),
+                    ordered=self._data[actual_name].ordered,
+                )
+
                 if out_table.num_columns == 0:
-                    out_table = pa.table(
-                        {
-                            name: pa.DictionaryArray.from_arrays(
-                                indices[name].chunk(0), dictionaries[name],
-                            )
-                        }
-                    )
+                    out_table = pa.table({name: dict_array})
                 else:
                     try:
                         out_table = out_table.add_column(
-                            names.index(name),
-                            name,
-                            pa.DictionaryArray.from_arrays(
-                                indices[name].chunk(0),
-                                _get_dictionary_array(dictionaries[name]),
-                                ordered=self._data[name].ordered,
-                            ),
+                            names.index(actual_name), name, dict_array
                         )
                     except pa.lib.ArrowInvalid:
-                        out_table = out_table.append_column(
-                            name,
-                            pa.DictionaryArray.from_arrays(
-                                indices[name].chunk(0),
-                                _get_dictionary_array(dictionaries[name]),
-                                ordered=self._data[name].ordered,
-                            ),
-                        )
+                        out_table = out_table.append_column(name, dict_array)
 
         if len(null_arrays_names):
             for name in null_arrays_names:
+                null_array = pa.NullArray.from_buffers(
+                    pa.null(), len(self), [pa.py_buffer((b""))]
+                )
                 if out_table.num_columns == 0:
-                    out_table = pa.table(
-                        {
-                            name: pa.NullArray.from_buffers(
-                                pa.null(), len(self), [pa.py_buffer((b""))]
-                            )
-                        }
-                    )
+                    out_table = pa.table({name: null_array})
                 else:
                     out_table = out_table.add_column(
-                        names.index(name),
-                        name,
-                        pa.NullArray.from_buffers(
-                            pa.null(), len(self), [pa.py_buffer((b""))]
-                        ),
+                        names.index(name), name, null_array
                     )
 
         return out_table
