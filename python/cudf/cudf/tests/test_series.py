@@ -395,14 +395,10 @@ def test_series_describe_datetime(dtype):
     # Assert rest of the element apart from
     # the first index('count')
 
-    # expected = gdf_results.tail(-1).astype(dtype)
-    # actual = pdf_results.tail(-1).astype(dtype)
+    expected = gdf_results.tail(-1).astype(dtype)
+    actual = pdf_results.tail(-1).astype(dtype)
 
-    # TODO: Fix this test
-    # assert_eq(expected, actual)
-    # np.testing.assert_array_equal(
-    #     actual.values, expected.values
-    # )
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize("dtype", TIMEDELTA_TYPES)
