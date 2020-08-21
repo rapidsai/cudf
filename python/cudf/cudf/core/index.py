@@ -33,6 +33,7 @@ from cudf.utils.dtypes import (
     numeric_normalize_types,
 )
 from cudf.utils.utils import cached_property
+from cudf.core.dtypes import dtype
 
 
 def _to_frame(this_index, index=True, name=None):
@@ -2561,29 +2562,29 @@ def as_index(arbitrary, **kwargs):
 
 
 _dtype_to_index = {
-    np.int8: Int8Index,
-    np.int16: Int16Index,
-    np.int32: Int32Index,
-    np.int64: Int64Index,
-    np.uint8: UInt8Index,
-    np.uint16: UInt16Index,
-    np.uint32: UInt32Index,
-    np.uint64: UInt64Index,
-    np.float32: Float32Index,
-    np.float64: Float64Index,
+    dtype(np.int8): Int8Index,
+    dtype(np.int16): Int16Index,
+    dtype(np.int32): Int32Index,
+    dtype(np.int64): Int64Index,
+    dtype(np.uint8): UInt8Index,
+    dtype(np.uint16): UInt16Index,
+    dtype(np.uint32): UInt32Index,
+    dtype(np.uint64): UInt64Index,
+    dtype(np.float32): Float32Index,
+    dtype(np.float64): Float64Index,
 }
 
 _index_to_dtype = {
-    Int8Index: np.int8,
-    Int16Index: np.int16,
-    Int32Index: np.int32,
-    Int64Index: np.int64,
-    UInt8Index: np.uint8,
-    UInt16Index: np.uint16,
-    UInt32Index: np.uint32,
-    UInt64Index: np.uint64,
-    Float32Index: np.float32,
-    Float64Index: np.float64,
+    Int8Index: dtype(np.int8),
+    Int16Index: dtype(np.int16),
+    Int32Index: dtype(np.int32),
+    Int64Index: dtype(np.int64),
+    UInt8Index: dtype(np.uint8),
+    UInt16Index: dtype(np.uint16),
+    UInt32Index: dtype(np.uint32),
+    UInt64Index: dtype(np.uint64),
+    Float32Index: dtype(np.float32),
+    Float64Index: dtype(np.float64),
 }
 
 
