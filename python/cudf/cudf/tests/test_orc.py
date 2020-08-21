@@ -193,7 +193,7 @@ def test_orc_reader_strings(datadir):
 
 
 @pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
-def test_orc_read_stripe(datadir, engine):
+def test_orc_read_stripes(datadir, engine):
     path = datadir / "TestOrcFile.testDate1900.orc"
     try:
         pdf = cudf.read_orc(path, engine=engine)
@@ -202,41 +202,19 @@ def test_orc_read_stripe(datadir, engine):
 
     num_rows, stripes, col_names = cudf.io.read_orc_metadata(path)
 
+    # Read stripes one at a time
     gdf = [
-        cudf.read_orc(path, engine=engine, stripe=i) for i in range(stripes)
+        cudf.read_orc(path, engine=engine, stripes=[i]) for i in range(stripes)
     ]
     gdf = cudf.concat(gdf).reset_index(drop=True)
-
     assert_eq(pdf, gdf, check_categorical=False)
 
-
-@pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
-def test_orc_read_all_stripes(datadir, engine):
-    path = datadir / "TestOrcFile.testDate1900.orc"
-    try:
-        pdf = cudf.read_orc(path, engine=engine)
-    except pa.ArrowIOError as e:
-        pytest.skip(".orc file is not found: %s" % e)
-
-    num_rows, stripes, col_names = cudf.io.read_orc_metadata(path)
-
+    # Read stripes all at once
     gdf = cudf.read_orc(path, engine=engine, stripes=range(stripes))
-
     assert_eq(pdf, gdf, check_categorical=False)
 
-
-@pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
-def test_orc_read_some_stripes(datadir, engine):
-    path = datadir / "TestOrcFile.testDate1900.orc"
-    try:
-        pdf = cudf.read_orc(path, engine=engine)
-    except pa.ArrowIOError as e:
-        pytest.skip(".orc file is not found: %s" % e)
-
-    num_rows, stripes, col_names = cudf.io.read_orc_metadata(path)
-
+    # Read only some stripes
     gdf = cudf.read_orc(path, engine=engine, stripes=[0, 1])
-
     assert len(gdf) < len(pdf)
 
 

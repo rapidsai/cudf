@@ -42,7 +42,7 @@ using int_wrapper          = wrapper<int>;
 using int8_wrapper         = wrapper<int8_t>;
 using int16_wrapper        = wrapper<int16_t>;
 using int64_wrapper        = wrapper<int64_t>;
-using timestamp_ms_wrapper = wrapper<cudf::timestamp_ms>;
+using timestamp_ms_wrapper = wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep>;
 using bool_wrapper         = wrapper<bool>;
 
 namespace cudf_io = cudf::io;

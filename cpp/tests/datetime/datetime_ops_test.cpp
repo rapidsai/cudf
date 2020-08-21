@@ -66,23 +66,26 @@ TEST_F(BasicDatetimeOpsTest, TestExtractingDatetimeComponents)
   using namespace cudf::datetime;
   using namespace simt::std::chrono;
 
-  auto timestamps_D = fixed_width_column_wrapper<cudf::timestamp_D>{
-    -1528,  // 1965-10-26 GMT
-    17716,  // 2018-07-04 GMT
-    19382,  // 2023-01-25 GMT
-  };
+  auto timestamps_D =
+    cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
+      -1528,  // 1965-10-26 GMT
+      17716,  // 2018-07-04 GMT
+      19382   // 2023-01-25 GMT
+    };
 
-  auto timestamps_s = fixed_width_column_wrapper<cudf::timestamp_s>{
-    -131968728,  // 1965-10-26 14:01:12 GMT
-    1530705600,  // 2018-07-04 12:00:00 GMT
-    1674631932,  // 2023-01-25 07:32:12 GMT
-  };
+  auto timestamps_s =
+    cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{
+      -131968728,  // 1965-10-26 14:01:12 GMT
+      1530705600,  // 2018-07-04 12:00:00 GMT
+      1674631932   // 2023-01-25 07:32:12 GMT
+    };
 
-  auto timestamps_ms = fixed_width_column_wrapper<cudf::timestamp_ms>{
-    -131968727238,  // 1965-10-26 14:01:12.762 GMT
-    1530705600000,  // 2018-07-04 12:00:00.000 GMT
-    1674631932929,  // 2023-01-25 07:32:12.929 GMT
-  };
+  auto timestamps_ms =
+    cudf::test::fixed_width_column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep>{
+      -131968727238,  // 1965-10-26 14:01:12.762 GMT
+      1530705600000,  // 2018-07-04 12:00:00.000 GMT
+      1674631932929   // 2023-01-25 07:32:12.929 GMT
+    };
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_year(timestamps_D),
                                  fixed_width_column_wrapper<int16_t>{1965, 2018, 2023});
@@ -266,7 +269,7 @@ TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithSeconds)
 
   // Time in seconds since epoch
   // Dates converted using epochconverter.com
-  auto timestamps_s = fixed_width_column_wrapper<cudf::timestamp_s>{
+  auto timestamps_s = fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{
     662688000L,   // 1991-01-01 00:00:00 GMT
     949496401L,   // 2000-02-02 13:00:01 GMT - leap year
     4106854801L,  // 2100-02-21 01:00:01 GMT - not a leap year
@@ -282,7 +285,7 @@ TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithSeconds)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *last_day_of_month(timestamps_s),
-    fixed_width_column_wrapper<cudf::timestamp_D>{
+    fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
       7700,   // 1991-01-31
       11016,  // 2000-02-29
       47540,  // 2100-02-28
@@ -307,7 +310,7 @@ TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithDate)
   // Time in days since epoch
   // Dates converted using epochconverter.com
   // Make some nullable fields as well
-  auto timestamps_d = fixed_width_column_wrapper<cudf::timestamp_D>{
+  auto timestamps_d = fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
     {
       999,    // Random nullable field
       0,      // This is the UNIX epoch - 1970-01-01
@@ -323,7 +326,7 @@ TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithDate)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *last_day_of_month(timestamps_d),
-    fixed_width_column_wrapper<cudf::timestamp_D>{
+    fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
       {
         999,    // Random nullable field
         30,     // This is the UNIX epoch - when rounded up becomes 1970-01-31
@@ -332,10 +335,9 @@ TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithDate)
         3,      // Random nullable field
         66077,  // 2150-11-30
         22279,  // 2030-12-31
-        111,    // Random nullable field
+        111     // Random nullable field
       },
-      {false, true, true, true, false, true, true, false},
-    },
+      {false, true, true, true, false, true, true, false}},
     true);
 }
 
@@ -348,20 +350,20 @@ TEST_F(BasicDatetimeOpsTest, TestDayOfYearWithDate)
   // Day number in the year
   // Dates converted using epochconverter.com
   // Make some nullable fields as well
-  auto timestamps_d = fixed_width_column_wrapper<cudf::timestamp_s>{
-    {
-      999L,         // Random nullable field
-      0L,           // This is the UNIX epoch - 1970-01-01
-      1577865600L,  // 2020-01-01 00:00:00 GMT
-      1581667200L,  // 2020-02-14 00:00:00 GMT
-      3L,           // Random nullable field
-      1609401600L,  // 2020-12-31 00:00:00 GMT
-      4133923200L,  // 2100-12-31 00:00:00 GMT
-      111L,         // Random nullable field
-      -2180188800L  // 1900-11-30 00:00:00 GMT
-    },
-    {false, true, true, true, false, true, true, false, true},
-  };
+  auto timestamps_d =
+    cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{
+      {
+        999L,         // Random nullable field
+        0L,           // This is the UNIX epoch - 1970-01-01
+        1577865600L,  // 2020-01-01 00:00:00 GMT
+        1581667200L,  // 2020-02-14 00:00:00 GMT
+        3L,           // Random nullable field
+        1609401600L,  // 2020-12-31 00:00:00 GMT
+        4133923200L,  // 2100-12-31 00:00:00 GMT
+        111L,         // Random nullable field
+        -2180188800L  // 1900-11-30 00:00:00 GMT
+      },
+      {false, true, true, true, false, true, true, false, true}};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*day_of_year(timestamps_d),
                                  fixed_width_column_wrapper<int16_t>{

@@ -180,8 +180,6 @@ table_with_metadata read_orc(read_orc_args const& args, rmm::mr::device_memory_r
 
   if (args.stripe_list.size() > 0) {
     return reader->read_stripes(args.stripe_list);
-  } else if (args.stripe != -1) {
-    return reader->read_stripe(args.stripe, std::max(args.stripe_count, 1));
   } else if (args.skip_rows != -1 || args.num_rows != -1) {
     return reader->read_rows(args.skip_rows, args.num_rows);
   } else {
