@@ -126,27 +126,21 @@ class linearizer {
    *
    * @return cudf::size_type
    */
-  cudf::size_type get_intermediate_count() const
-  {
-    return this->intermediate_counter.get_max_used();
-  }
+  cudf::size_type get_intermediate_count() const { return intermediate_counter.get_max_used(); }
 
   /**
    * @brief Get the device data references.
    *
    * @return std::vector<detail::device_data_reference>
    */
-  std::vector<detail::device_data_reference> get_data_references() const
-  {
-    return this->data_references;
-  }
+  std::vector<detail::device_data_reference> get_data_references() const { return data_references; }
 
   /**
    * @brief Get the operators.
    *
    * @return std::vector<ast_operator>
    */
-  std::vector<ast_operator> get_operators() const { return this->operators; }
+  std::vector<ast_operator> get_operators() const { return operators; }
 
   /**
    * @brief Get the operator source indices.
@@ -155,7 +149,7 @@ class linearizer {
    */
   std::vector<cudf::size_type> get_operator_source_indices() const
   {
-    return this->operator_source_indices;
+    return operator_source_indices;
   }
 
   /**
@@ -165,7 +159,7 @@ class linearizer {
    */
   std::vector<cudf::detail::fixed_width_scalar_device_view_base> get_literals() const
   {
-    return this->literals;
+    return literals;
   }
 
   /**
@@ -209,7 +203,7 @@ class linearizer {
     intermediate_counter() : used_values(), max_used(0) {}
     cudf::size_type take();
     void give(cudf::size_type value);
-    cudf::size_type get_max_used() const { return this->max_used; }
+    cudf::size_type get_max_used() const { return max_used; }
 
    private:
     cudf::size_type find_first_missing(cudf::size_type start, cudf::size_type end) const;

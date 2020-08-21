@@ -91,7 +91,7 @@ class literal : public detail::node {
    *
    * @return cudf::data_type
    */
-  cudf::data_type get_data_type() const { return this->get_value().type(); }
+  cudf::data_type get_data_type() const { return get_value().type(); }
 
  private:
   /**
@@ -99,7 +99,7 @@ class literal : public detail::node {
    *
    * @return cudf::detail::fixed_width_scalar_device_view_base
    */
-  cudf::detail::fixed_width_scalar_device_view_base get_value() const { return this->value; }
+  cudf::detail::fixed_width_scalar_device_view_base get_value() const { return value; }
 
   /**
    * @brief Accepts a visitor class.
@@ -138,14 +138,14 @@ class column_reference : public detail::node {
    *
    * @return cudf::size_type
    */
-  cudf::size_type get_column_index() const { return this->column_index; }
+  cudf::size_type get_column_index() const { return column_index; }
 
   /**
    * @brief Get the table source.
    *
    * @return table_reference
    */
-  table_reference get_table_source() const { return this->table_source; }
+  table_reference get_table_source() const { return table_source; }
 
   /**
    * @brief Get the data type.
@@ -155,7 +155,7 @@ class column_reference : public detail::node {
    */
   cudf::data_type get_data_type(const table_view& table) const
   {
-    return table.column(this->get_column_index()).type();
+    return table.column(get_column_index()).type();
   }
 
   /**
@@ -168,15 +168,15 @@ class column_reference : public detail::node {
   cudf::data_type get_data_type(const table_view& left_table, const table_view& right_table) const
   {
     const auto table = [&] {
-      if (this->get_table_source() == table_reference::LEFT) {
+      if (get_table_source() == table_reference::LEFT) {
         return left_table;
-      } else if (this->get_table_source() == table_reference::RIGHT) {
+      } else if (get_table_source() == table_reference::RIGHT) {
         return right_table;
       } else {
         CUDF_FAIL("Column reference data type cannot be determined from unknown table.");
       }
     }();
-    return table.column(this->get_column_index()).type();
+    return table.column(get_column_index()).type();
   }
 
  private:
@@ -232,14 +232,14 @@ class expression : public detail::node {
    *
    * @return ast_operator
    */
-  ast_operator get_operator() const { return this->op; }
+  ast_operator get_operator() const { return op; }
 
   /**
    * @brief Get the operands.
    *
    * @return std::vector<std::reference_wrapper<const node>>
    */
-  std::vector<std::reference_wrapper<const node>> get_operands() const { return this->operands; }
+  std::vector<std::reference_wrapper<const node>> get_operands() const { return operands; }
 
  private:
   /**

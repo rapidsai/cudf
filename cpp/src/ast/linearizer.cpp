@@ -34,17 +34,16 @@ namespace detail {
 
 cudf::size_type linearizer::intermediate_counter::take()
 {
-  auto const first_missing =
-    this->used_values.size() ? this->find_first_missing(0, this->used_values.size() - 1) : 0;
-  this->used_values.insert(this->used_values.cbegin() + first_missing, first_missing);
-  this->max_used = std::max(max_used, first_missing + 1);
+  auto const first_missing = used_values.size() ? find_first_missing(0, used_values.size() - 1) : 0;
+  used_values.insert(used_values.cbegin() + first_missing, first_missing);
+  max_used = std::max(max_used, first_missing + 1);
   return first_missing;
 }
 
 void linearizer::intermediate_counter::give(cudf::size_type value)
 {
-  auto const found = std::find(this->used_values.cbegin(), this->used_values.cend(), value);
-  if (found != this->used_values.cend()) { this->used_values.erase(found); }
+  auto const found = std::find(used_values.cbegin(), used_values.cend(), value);
+  if (found != used_values.cend()) { used_values.erase(found); }
 }
 
 cudf::size_type linearizer::intermediate_counter::find_first_missing(cudf::size_type start,
@@ -60,55 +59,55 @@ cudf::size_type linearizer::intermediate_counter::find_first_missing(cudf::size_
 
   // Use binary search and check the left half or right half
   // We can assume the missing value must be in the right half
-  if (used_values.at(mid) == mid) return this->find_first_missing(mid + 1, end);
+  if (used_values.at(mid) == mid) return find_first_missing(mid + 1, end);
   // The missing value must be in the left half
-  return this->find_first_missing(start, mid);
+  return find_first_missing(start, mid);
 }
 
 cudf::size_type linearizer::visit(literal const& expr)
 {
   // Increment the node index
-  this->node_count++;
+  node_count++;
   // Resolve node type
   auto const data_type = expr.get_data_type();
   // Construct a scalar device view
   auto device_view = expr.get_value();
   // Push literal
-  auto const literal_index = cudf::size_type(this->literals.size());
-  this->literals.push_back(device_view);
+  auto const literal_index = cudf::size_type(literals.size());
+  literals.push_back(device_view);
   // Push data reference
   auto const source = detail::device_data_reference{
     detail::device_data_reference_type::LITERAL, data_type, literal_index};
-  return this->add_data_reference(source);
+  return add_data_reference(source);
 }
 
 cudf::size_type linearizer::visit(column_reference const& expr)
 {
   // Increment the node index
-  this->node_count++;
+  node_count++;
   // Resolve node type
-  auto const data_type = expr.get_data_type(this->table);
+  auto const data_type = expr.get_data_type(table);
   // Push data reference
   auto const source = detail::device_data_reference{detail::device_data_reference_type::COLUMN,
                                                     data_type,
                                                     expr.get_column_index(),
                                                     expr.get_table_source()};
-  return this->add_data_reference(source);
+  return add_data_reference(source);
 }
 
 cudf::size_type linearizer::visit(expression const& expr)
 {
   // Increment the node index
-  auto const node_index = this->node_count++;
+  auto const node_index = node_count++;
   // Visit children (operands) of this node
-  auto const operand_data_reference_indices = this->visit_operands(expr.get_operands());
+  auto const operand_data_reference_indices = visit_operands(expr.get_operands());
   // Resolve operand types
   auto operand_types = std::vector<cudf::data_type>(operand_data_reference_indices.size());
   std::transform(operand_data_reference_indices.cbegin(),
                  operand_data_reference_indices.cend(),
                  operand_types.begin(),
                  [this](auto const& data_reference_index) -> cudf::data_type {
-                   return this->get_data_references()[data_reference_index].data_type;
+                   return get_data_references()[data_reference_index].data_type;
                  });
   // Validate types of operand data references match
   if (std::adjacent_find(operand_types.cbegin(), operand_types.cend(), std::not_equal_to<>()) !=
@@ -120,17 +119,17 @@ cudf::size_type linearizer::visit(expression const& expr)
     operand_data_reference_indices.cbegin(),
     operand_data_reference_indices.cend(),
     [this](auto const& data_reference_index) {
-      auto const operand_source = this->get_data_references()[data_reference_index];
+      auto const operand_source = get_data_references()[data_reference_index];
       if (operand_source.reference_type == detail::device_data_reference_type::INTERMEDIATE) {
         auto const intermediate_index = operand_source.data_index;
-        this->intermediate_counter.give(intermediate_index);
+        intermediate_counter.give(intermediate_index);
       }
     });
   // Resolve node type
   auto const op        = expr.get_operator();
   auto const data_type = cudf::ast::detail::ast_operator_return_type(op, operand_types);
   // Push operator
-  this->operators.push_back(op);
+  operators.push_back(op);
   // Push data reference
   auto const output = [&]() {
     if (node_index == 0) {
@@ -146,26 +145,25 @@ cudf::size_type linearizer::visit(expression const& expr)
       } else if (cudf::size_of(data_type) > sizeof(std::int64_t)) {
         CUDF_FAIL("The output data type is too large to be stored in an intermediate.");
       }
-      return detail::device_data_reference{detail::device_data_reference_type::INTERMEDIATE,
-                                           data_type,
-                                           this->intermediate_counter.take()};
+      return detail::device_data_reference{
+        detail::device_data_reference_type::INTERMEDIATE, data_type, intermediate_counter.take()};
     }
   }();
-  auto const index = this->add_data_reference(output);
+  auto const index = add_data_reference(output);
   // Insert source indices from all operands (sources) and this operator (destination)
-  this->operator_source_indices.insert(this->operator_source_indices.end(),
-                                       operand_data_reference_indices.cbegin(),
-                                       operand_data_reference_indices.cend());
-  this->operator_source_indices.push_back(index);
+  operator_source_indices.insert(operator_source_indices.end(),
+                                 operand_data_reference_indices.cbegin(),
+                                 operand_data_reference_indices.cend());
+  operator_source_indices.push_back(index);
   return index;
 }
 
 cudf::data_type linearizer::get_root_data_type() const
 {
-  if (this->get_data_references().size() == 0) {
+  if (get_data_references().size() == 0) {
     return cudf::data_type(cudf::type_id::EMPTY);
   } else {
-    return this->get_data_references().back().data_type;
+    return get_data_references().back().data_type;
   }
 }
 
@@ -184,12 +182,12 @@ cudf::size_type linearizer::add_data_reference(detail::device_data_reference dat
 {
   // If an equivalent data reference already exists, return its index. Otherwise add this data
   // reference and return the new index.
-  auto const it = std::find(this->data_references.cbegin(), this->data_references.cend(), data_ref);
-  if (it != this->data_references.cend()) {
-    return std::distance(this->data_references.cbegin(), it);
+  auto const it = std::find(data_references.cbegin(), data_references.cend(), data_ref);
+  if (it != data_references.cend()) {
+    return std::distance(data_references.cbegin(), it);
   } else {
-    this->data_references.push_back(data_ref);
-    return this->data_references.size() - 1;
+    data_references.push_back(data_ref);
+    return data_references.size() - 1;
   }
 }
 

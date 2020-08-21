@@ -75,7 +75,7 @@ struct unary_row_output : public row_output {
   {
     using OperatorFunctor = detail::operator_functor<op>;
     using Out             = simt::std::invoke_result_t<OperatorFunctor, Input>;
-    this->resolve_output<Out>(output, row_index, OperatorFunctor{}(input));
+    resolve_output<Out>(output, row_index, OperatorFunctor{}(input));
   }
 
   template <
@@ -103,7 +103,7 @@ struct binary_row_output : public row_output {
   {
     using OperatorFunctor = detail::operator_functor<op>;
     using Out             = simt::std::invoke_result_t<OperatorFunctor, LHS, RHS>;
-    this->resolve_output<Out>(output, row_index, OperatorFunctor{}(lhs, rhs));
+    resolve_output<Out>(output, row_index, OperatorFunctor{}(lhs, rhs));
   }
 
   template <ast_operator op,
@@ -173,13 +173,13 @@ struct row_evaluator {
     auto const data_index = device_data_reference.data_index;
     auto const ref_type   = device_data_reference.reference_type;
     if (ref_type == detail::device_data_reference_type::COLUMN) {
-      return this->table.column(data_index).element<Element>(row_index);
+      return table.column(data_index).element<Element>(row_index);
     } else if (ref_type == detail::device_data_reference_type::LITERAL) {
-      return this->literals[data_index].value<Element>();
+      return literals[data_index].value<Element>();
     } else {  // Assumes ref_type == detail::device_data_reference_type::INTERMEDIATE
       // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing
       // Using a temporary variable ensures that the compiler knows the result is aligned
-      std::int64_t intermediate = this->thread_intermediate_storage[data_index];
+      std::int64_t intermediate = thread_intermediate_storage[data_index];
       Element tmp;
       memcpy(&tmp, &intermediate, sizeof(Element));
       return tmp;
@@ -201,7 +201,7 @@ struct row_evaluator {
                              detail::device_data_reference output,
                              ast_operator op) const
   {
-    auto const typed_input = this->resolve_input<Input>(input, row_index);
+    auto const typed_input = resolve_input<Input>(input, row_index);
     ast_operator_dispatcher(op, unary_row_output<Input>(*this), row_index, typed_input, output);
   }
 
@@ -223,8 +223,8 @@ struct row_evaluator {
                              detail::device_data_reference output,
                              ast_operator op) const
   {
-    auto const typed_lhs = this->resolve_input<LHS>(lhs, row_index);
-    auto const typed_rhs = this->resolve_input<RHS>(rhs, row_index);
+    auto const typed_lhs = resolve_input<LHS>(lhs, row_index);
+    auto const typed_rhs = resolve_input<RHS>(rhs, row_index);
     ast_operator_dispatcher(
       op, binary_row_output<LHS, RHS>(*this), row_index, typed_lhs, typed_rhs, output);
   }
@@ -378,7 +378,7 @@ struct ast_plan {
   {
     auto const total_size = std::accumulate(sizes.cbegin(), sizes.cend(), 0);
     auto host_data_buffer = std::make_unique<char[]>(total_size);
-    auto const offsets    = this->get_offsets();
+    auto const offsets    = get_offsets();
     for (unsigned int i = 0; i < data_pointers.size(); ++i) {
       std::memcpy(host_data_buffer.get() + offsets.at(i), data_pointers.at(i), sizes.at(i));
     }
@@ -387,10 +387,10 @@ struct ast_plan {
 
   std::vector<cudf::size_type> get_offsets() const
   {
-    auto offsets = std::vector<int>(this->sizes.size());
+    auto offsets = std::vector<int>(sizes.size());
     // When C++17, use std::exclusive_scan
     offsets.at(0) = 0;
-    std::partial_sum(this->sizes.cbegin(), this->sizes.cend() - 1, offsets.begin() + 1);
+    std::partial_sum(sizes.cbegin(), sizes.cend() - 1, offsets.begin() + 1);
     return offsets;
   }
 
