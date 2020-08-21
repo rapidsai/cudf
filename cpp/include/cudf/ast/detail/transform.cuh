@@ -315,34 +315,6 @@ __device__ void evaluate_row_expression(detail::row_evaluator const& evaluator,
   }
 }
 
-/**
- * @brief Kernel for evaluating an expression on a table to produce a new column.
- *
- * This evaluates an expression over a table to produce a new column. Also called an n-ary
- * transform.
- *
- * @tparam block_size
- * @param table The table device view used for evaluation.
- * @param literals Array of literal values used for evaluation.
- * @param output_column The output column where results are stored.
- * @param data_references Array of data references.
- * @param operators Array of operators to perform.
- * @param operator_source_indices Array of source indices for the operators.
- * @param num_operators Number of operators.
- * @param num_intermediates Number of intermediates, used to allocate a portion of shared memory to
- * each thread.
- */
-template <size_type block_size>
-__launch_bounds__(block_size) __global__
-  void compute_column_kernel(table_device_view const table,
-                             const cudf::detail::fixed_width_scalar_device_view_base* literals,
-                             mutable_column_device_view output_column,
-                             const detail::device_data_reference* data_references,
-                             const ast_operator* operators,
-                             const cudf::size_type* operator_source_indices,
-                             cudf::size_type num_operators,
-                             cudf::size_type num_intermediates);
-
 struct ast_plan {
  public:
   ast_plan() : sizes(), data_pointers() {}

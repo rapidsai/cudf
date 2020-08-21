@@ -43,6 +43,23 @@ namespace ast {
 
 namespace detail {
 
+/**
+ * @brief Kernel for evaluating an expression on a table to produce a new column.
+ *
+ * This evaluates an expression over a table to produce a new column. Also called an n-ary
+ * transform.
+ *
+ * @tparam block_size
+ * @param table The table device view used for evaluation.
+ * @param literals Array of literal values used for evaluation.
+ * @param output_column The output column where results are stored.
+ * @param data_references Array of data references.
+ * @param operators Array of operators to perform.
+ * @param operator_source_indices Array of source indices for the operators.
+ * @param num_operators Number of operators.
+ * @param num_intermediates Number of intermediates, used to allocate a portion of shared memory to
+ * each thread.
+ */
 template <cudf::size_type max_block_size>
 __launch_bounds__(max_block_size) __global__
   void compute_column_kernel(table_device_view const table,
