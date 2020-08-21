@@ -247,7 +247,7 @@ void CUDA_DEVICE_CALLABLE MD5Hash::operator()<string_view>(column_device_view co
 }  // namespace cudf
 
 // MurmurHash3_32 implementation from
-// https://github.com/aappleby/smhasher/blob/main/src/MurmurHash3.cpp
+// https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
 //-----------------------------------------------------------------------------
 // MurmurHash3 was written by Austin Appleby, and is placed in the public
 // domain. The author hereby disclaims copyright to this source code.

@@ -70,7 +70,7 @@
  * Systems:
  *
  * \image html
- * https://raw.githubusercontent.com/jrhemstad/nvtx_wrappers/main/docs/example_range.png
+ * https://raw.githubusercontent.com/jrhemstad/nvtx_wrappers/master/docs/example_range.png
  *
  * Alternatively, use the \ref MACROS like `NVTX3_FUNC_RANGE()` to add
  * ranges to your code that automatically use the name of the enclosing function

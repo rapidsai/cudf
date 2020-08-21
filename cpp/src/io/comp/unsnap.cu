@@ -593,7 +593,7 @@ __device__ void snappy_process_symbols(unsnap_state_s *s, int t)
 
 /**
  * @brief Snappy decompression kernel
- * See http://github.com/google/snappy/blob/main/format_description.txt
+ * See http://github.com/google/snappy/blob/master/format_description.txt
  *
  * blockDim {128,1,1}
  *

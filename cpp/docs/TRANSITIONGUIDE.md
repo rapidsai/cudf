@@ -504,7 +504,7 @@ For example `is_numeric<T>()` can be used to specialize for any numeric type.
 
 # Testing
 
-Unit tests in libcudf are written using [Google Test](https://github.com/google/googletest/blob/main/googletest/docs/primer.md).
+Unit tests in libcudf are written using [Google Test](https://github.com/google/googletest/blob/master/googletest/docs/primer.md).
 
 **Important:** Instead of including `gtest/gtest.h` directly, use the custom header in `cpp/tests/utilities/cudf_gtest.hpp`.
 
@@ -521,7 +521,7 @@ This is because `nvcc` is generally slower than `gcc` in compiling host code.
 
 ## Base Fixture
 
-All libcudf unit tests should make use of a GTest ["Test Fixture"](https://github.com/google/googletest/blob/main/googletest/docs/primer.md#test-fixtures-using-the-same-data-configuration-for-multiple-tests-same-data-multiple-tests).
+All libcudf unit tests should make use of a GTest ["Test Fixture"](https://github.com/google/googletest/blob/master/googletest/docs/primer.md#test-fixtures-using-the-same-data-configuration-for-multiple-tests-same-data-multiple-tests).
 Even if the fixture is empty, it should inherit from the base fixture `cudf::test::BaseFixture` found in `cudf/cpp/tests/utilities/base_fixture.hpp`.
 This is to ensure that RMM is properly initialized/finalized. 
 `cudf::test::BaseFixture` already inherits from `::testing::Test` and therefore it is not necessary for your test fixtures to inherit from it.
@@ -534,7 +534,7 @@ class MyTestFiture : public cudf::test::BaseFixture {...};
 ## Typed Tests
 
 In libcudf we must ensure that features work across all of the types we support.
-In order to automate the process of running the same tests across multiple types, we make use of GTest's [Typed Tests](https://github.com/google/googletest/blob/main/googletest/docs/advanced.md#typed-tests).
+In order to automate the process of running the same tests across multiple types, we make use of GTest's [Typed Tests](https://github.com/google/googletest/blob/master/googletest/docs/advanced.md#typed-tests).
 Typed tests allow you to write a test once and run it across all types in a list of types.
 
 For example:

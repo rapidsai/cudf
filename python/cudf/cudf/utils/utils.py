@@ -263,7 +263,7 @@ def get_null_series(size, dtype=np.bool):
 
 
 # taken from dask array
-# https://github.com/dask/dask/blob/main/dask/array/utils.py#L352-L363
+# https://github.com/dask/dask/blob/master/dask/array/utils.py#L352-L363
 def _is_nep18_active():
     class A:
         def __array_function__(self, *args, **kwargs):

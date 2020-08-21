@@ -11,7 +11,7 @@ missing_arrfunc_cond = not IS_NEP18_ACTIVE
 missing_arrfunc_reason = "NEP-18 support is not available in NumPy"
 
 # Test implementation based on dask array test
-# https://github.com/dask/dask/blob/main/dask/array/tests/test_array_function.py
+# https://github.com/dask/dask/blob/master/dask/array/tests/test_array_function.py
 
 
 @pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)

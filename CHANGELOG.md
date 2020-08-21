@@ -2054,7 +2054,7 @@
 - PR #1433 Fix NVStrings/categories includes
 - PR #1432 Update NVStrings to 0.7.* to coincide with 0.7 development
 - PR #1483 Modify CSV reader to avoid cropping blank quoted characters in non-string fields
-- PR #1446 Merge 1275 hotfix from main into branch-0.7
+- PR #1446 Merge 1275 hotfix from master into branch-0.7
 - PR #1447 Fix legacy groupby apply docstring
 - PR #1451 Fix hash join estimated result size is not correct
 - PR #1454 Fix local build script improperly change directory permissions

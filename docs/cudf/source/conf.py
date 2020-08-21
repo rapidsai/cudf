@@ -60,8 +60,8 @@ templates_path = ["_templates"]
 # source_suffix = ['.rst', '.md']
 source_suffix = {".rst": "restructuredtext", ".md": "markdown"}
 
-# The main toctree document.
-main_doc = "index"
+# The master toctree document.
+master_doc = "index"
 
 # General information about the project.
 project = "cudf"
@@ -157,7 +157,7 @@ latex_elements = {
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
     (
-        main_doc,
+        master_doc,
         "cudf.tex",
         "cudf Documentation",
         "Continuum Analytics",
@@ -170,7 +170,7 @@ latex_documents = [
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
-man_pages = [(main_doc, "cudf", "cudf Documentation", [author], 1)]
+man_pages = [(master_doc, "cudf", "cudf Documentation", [author], 1)]
 
 
 # -- Options for Texinfo output -------------------------------------------
@@ -180,7 +180,7 @@ man_pages = [(main_doc, "cudf", "cudf Documentation", [author], 1)]
 #  dir menu entry, description, category)
 texinfo_documents = [
     (
-        main_doc,
+        master_doc,
         "cudf",
         "cudf Documentation",
         author,

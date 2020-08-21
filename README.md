@@ -13,7 +13,7 @@ For example, the following snippet downloads a CSV, then uses the GPU to parse i
 import cudf, io, requests
 from io import StringIO
 
-url = "https://github.com/plotly/datasets/raw/main/tips.csv"
+url = "https://github.com/plotly/datasets/raw/master/tips.csv"
 content = requests.get(url).content.decode('utf-8')
 
 tips_df = cudf.read_csv(StringIO(content))

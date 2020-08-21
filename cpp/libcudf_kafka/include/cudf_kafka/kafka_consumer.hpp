@@ -44,7 +44,7 @@ class kafka_consumer : public cudf::io::datasource {
    * operations. This is useful when the need for delayed partition and topic assignment
    * is not known ahead of time and needs to be delayed to as late as possible.
    * Documentation for librdkafka configurations can be found at
-   * https://github.com/edenhill/librdkafka/blob/main/CONFIGURATION.md
+   * https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
    *
    * @param configs key/value pairs of librdkafka configurations that will be
    *                passed to the librdkafka client
@@ -53,7 +53,7 @@ class kafka_consumer : public cudf::io::datasource {
 
   /**
    * @brief Instantiate a Kafka consumer object. Documentation for librdkafka configurations can be
-   * found at https://github.com/edenhill/librdkafka/blob/main/CONFIGURATION.md
+   * found at https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
    *
    * @param configs key/value pairs of librdkafka configurations that will be
    *                passed to the librdkafka client

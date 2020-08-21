@@ -6294,7 +6294,7 @@ class DataFrame(Frame, Serializable):
         """
 
         # code modified from:
-        # https://github.com/pandas-dev/pandas/blob/main/pandas/core/frame.py#L3196
+        # https://github.com/pandas-dev/pandas/blob/master/pandas/core/frame.py#L3196
 
         if not isinstance(include, (list, tuple)):
             include = (include,) if include is not None else ()

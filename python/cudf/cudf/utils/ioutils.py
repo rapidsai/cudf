@@ -864,7 +864,7 @@ Parameters
 ----------
 kafka_configs : dict, key/value pairs of librdkafka configuration values.
     The complete list of valid configurations can be found at
-    https://github.com/edenhill/librdkafka/blob/main/CONFIGURATION.md
+    https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
 topic : string, case sensitive name of the Kafka topic that contains the
     source data.
 partition : int,
