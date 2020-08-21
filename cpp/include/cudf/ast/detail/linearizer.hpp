@@ -68,30 +68,6 @@ struct device_data_reference {
   }
 };
 
-/**
- * @brief Internal class used to track the utilization of intermediate storage locations.
- *
- * As nodes are being evaluated, they may generate "intermediate" data that is immediately
- * consumed. Rather than manifesting this data in global memory, we can store intermediates of any
- * fixed width type (up to 8 bytes) by placing them in shared memory. This class helps to track the
- * number and indices of intermediate data in shared memory using a give-take model. Locations
- * in shared memory can be "taken" and used for storage, "given back," and then later re-used. This
- * aims to minimize the maximum amount of shared memory needed at any point during the evaluation.
- *
- */
-class intermediate_counter {
- public:
-  intermediate_counter() : used_values(), max_used(0) {}
-  cudf::size_type take();
-  void give(cudf::size_type value);
-  cudf::size_type get_max_used() const { return this->max_used; }
-
- private:
-  cudf::size_type find_first_missing(cudf::size_type start, cudf::size_type end) const;
-  std::vector<cudf::size_type> used_values;
-  cudf::size_type max_used;
-};
-
 // Forward declaration
 class linearizer;
 
@@ -216,6 +192,31 @@ class linearizer {
    */
   cudf::size_type visit(expression const& expr);
 
+  /**
+   * @brief Internal class used to track the utilization of intermediate storage locations.
+   *
+   * As nodes are being evaluated, they may generate "intermediate" data that is immediately
+   * consumed. Rather than manifesting this data in global memory, we can store intermediates of any
+   * fixed width type (up to 8 bytes) by placing them in shared memory. This class helps to track
+   * the number and indices of intermediate data in shared memory using a give-take model. Locations
+   * in shared memory can be "taken" and used for storage, "given back," and then later re-used.
+   * This aims to minimize the maximum amount of shared memory needed at any point during the
+   * evaluation.
+   *
+   */
+  class intermediate_counter {
+   public:
+    intermediate_counter() : used_values(), max_used(0) {}
+    cudf::size_type take();
+    void give(cudf::size_type value);
+    cudf::size_type get_max_used() const { return this->max_used; }
+
+   private:
+    cudf::size_type find_first_missing(cudf::size_type start, cudf::size_type end) const;
+    std::vector<cudf::size_type> used_values;
+    cudf::size_type max_used;
+  };
+
  private:
   std::vector<cudf::size_type> visit_operands(
     std::vector<std::reference_wrapper<const node>> operands);
@@ -224,7 +225,7 @@ class linearizer {
   // State information about the "linearized" GPU execution plan
   cudf::table_view table;
   cudf::size_type node_count;
-  detail::intermediate_counter intermediate_counter;
+  intermediate_counter intermediate_counter;
   std::vector<detail::device_data_reference> data_references;
   std::vector<ast_operator> operators;
   std::vector<cudf::size_type> operator_source_indices;

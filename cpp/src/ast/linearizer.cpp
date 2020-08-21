@@ -32,7 +32,7 @@ namespace ast {
 
 namespace detail {
 
-cudf::size_type intermediate_counter::take()
+cudf::size_type linearizer::intermediate_counter::take()
 {
   auto const first_missing =
     this->used_values.size() ? this->find_first_missing(0, this->used_values.size() - 1) : 0;
@@ -41,14 +41,14 @@ cudf::size_type intermediate_counter::take()
   return first_missing;
 }
 
-void intermediate_counter::give(cudf::size_type value)
+void linearizer::intermediate_counter::give(cudf::size_type value)
 {
   auto const found = std::find(this->used_values.cbegin(), this->used_values.cend(), value);
   if (found != this->used_values.cend()) { this->used_values.erase(found); }
 }
 
-cudf::size_type intermediate_counter::find_first_missing(cudf::size_type start,
-                                                         cudf::size_type end) const
+cudf::size_type linearizer::intermediate_counter::find_first_missing(cudf::size_type start,
+                                                                     cudf::size_type end) const
 {
   // Given a sorted container, find the smallest value not already in the container
   if (start > end) return end + 1;
