@@ -23,6 +23,8 @@ namespace parquet {
 /**
  * @brief Basic data types in Parquet, determines how data is physically stored
  **/
+  
+#define BATCH_SZ 32 // Batch Size for further processing
 enum Type {
   UNDEFINED_TYPE       = -1,  // Undefined for non-leaf nodes
   BOOLEAN              = 0,
