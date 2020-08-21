@@ -208,7 +208,7 @@ def read_parquet(
 
     if filters is not None:
         # Convert filters to ds.Expression
-        filters = ioutils.filters_to_expression(filters)
+        filters = pq._filters_to_expression(filters)
 
         # Initialize ds.FilesystemDataset
         dataset = ds.dataset(filepaths_or_buffers, format="parquet")
