@@ -44,11 +44,6 @@ struct timestamp : time_point<Duration> {
   // does.
   constexpr timestamp() : time_point<Duration>(Duration()){};
 
-  // Implicitly convert a tick count into a timestamp
-  // TODO: is this still needed and is this operation even meaningful? The duration units
-  // cannot be inferred from this
-  constexpr timestamp(typename Duration::rep r) : time_point<Duration>(Duration(r)){};
-
   // The inherited copy constructor will hide the auto generated copy constructor;
   // hence, explicitly define and delegate
   constexpr timestamp(const time_point<Duration>& other) : time_point<Duration>(other) {}
@@ -102,21 +97,15 @@ namespace std {
  *
  * Pass through to return the limits of the underlying numeric representation.
  **/
-#define TIMESTAMP_LIMITS(TypeName)                                  \
-  template <>                                                       \
-  struct numeric_limits<TypeName> {                                 \
-    static constexpr TypeName max() noexcept                        \
-    {                                                               \
-      return std::numeric_limits<typename TypeName::rep>::max();    \
-    }                                                               \
-    static constexpr TypeName lowest() noexcept                     \
-    {                                                               \
-      return std::numeric_limits<typename TypeName::rep>::lowest(); \
-    }                                                               \
-    static constexpr TypeName min() noexcept                        \
-    {                                                               \
-      return std::numeric_limits<typename TypeName::rep>::min();    \
-    }                                                               \
+#define TIMESTAMP_LIMITS(TypeName)                                                                \
+  template <>                                                                                     \
+  struct numeric_limits<TypeName> {                                                               \
+    static constexpr TypeName max() noexcept { return TypeName::max(); }                          \
+    static constexpr TypeName lowest() noexcept                                                   \
+    {                                                                                             \
+      return TypeName{TypeName::duration{std::numeric_limits<typename TypeName::rep>::lowest()}}; \
+    }                                                                                             \
+    static constexpr TypeName min() noexcept { return TypeName::min(); }                          \
   }
 
 TIMESTAMP_LIMITS(cudf::timestamp_D);

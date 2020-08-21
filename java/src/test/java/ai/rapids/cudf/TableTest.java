@@ -159,13 +159,90 @@ public class TableTest extends CudfTestBase {
                 "Column " + colName + " Row " + tableRow);
             break;
           case LIST:
-            assertArrayEquals(expected.getList(expectedRow).toString().getBytes(), cv.getList(tableRow).toString().getBytes(),
-                "Column " + colName + " Row " + tableRow);
+            assertListColumnsEquals(expected, cv, colName, enableNullCheck);
             break;
           default:
             throw new IllegalArgumentException(type + " is not supported yet");
         }
       }
+    }
+  }
+
+  public static void assertPartialColumnsAreEqual(HostColumnVector.NestedHostColumnVector expected,
+                                                  HostColumnVector.NestedHostColumnVector cv,
+                                                  String colName, boolean enableNullCheck) {
+    assertEquals(expected.getType(), cv.getType(), "Type For Column " + colName);
+    assertEquals(expected.getRows(), cv.getRows(), "Row Count For Column " + colName);
+    if (enableNullCheck) {
+      assertEquals(expected.getNullCount(), cv.getNullCount(), "Null Count For Column " + colName);
+    } else {
+      // TODO add in a proper check when null counts are supported by serializing a partitioned column
+    }
+    DType type = expected.getType();
+    for (int expectedRow = 0; expectedRow < expected.getRows(); expectedRow++) {
+      assertEquals(expected.isNull(expectedRow), cv.isNull(expectedRow),
+          "NULL for Column " + colName + " Row " + expectedRow);
+      if (!expected.isNull(expectedRow)) {
+        switch (type) {
+          case BOOL8: // fall through
+          case INT8: // fall through
+          case UINT8: // fall through
+          case INT16: // fall through
+          case UINT16: // fall through
+          case INT32: // fall through
+          case UINT32: // fall through
+          case TIMESTAMP_DAYS: // fall through
+          case DURATION_DAYS: // fall through
+          case INT64: // fall through
+          case UINT64: // fall through
+          case DURATION_MICROSECONDS: // fall through
+          case DURATION_MILLISECONDS: // fall through
+          case DURATION_NANOSECONDS: // fall through
+          case DURATION_SECONDS: // fall through
+          case TIMESTAMP_MICROSECONDS: // fall through
+          case TIMESTAMP_MILLISECONDS: // fall through
+          case TIMESTAMP_NANOSECONDS: // fall through
+          case TIMESTAMP_SECONDS:
+            assertEquals(expected.getElement(expectedRow), cv.getElement(expectedRow),
+                "Column " + colName + " Row " + expectedRow);
+            break;
+          case FLOAT32:
+            assertEqualsWithinPercentage((float)expected.getElement(expectedRow), (float)cv.getElement(expectedRow), 0.0001,
+                "Column " + colName + " Row " + expectedRow);
+            break;
+          case FLOAT64:
+            assertEqualsWithinPercentage((double)expected.getElement(expectedRow), (double)cv.getElement(expectedRow), 0.0001,
+                "Column " + colName + " Row " + expectedRow);
+            break;
+          case STRING:
+            assertArrayEquals(((String)expected.getElement(expectedRow)).getBytes(), ((String)cv.getElement(expectedRow)).getBytes(),
+                "Column " + colName + " Row " + expectedRow);
+            break;
+          case LIST:
+            assertEquals(expected.getNestedChildren().size(),
+                cv.getNestedChildren().size(), " num children don't match");
+            for (int k = 0; k < expected.getNestedChildren().size(); k++)
+            assertPartialColumnsAreEqual(expected.getNestedChildren().get(k),
+                cv.getNestedChildren().get(k), colName, enableNullCheck);
+            break;
+          default:
+            throw new IllegalArgumentException(type + " is not supported yet");
+        }
+      }
+    }
+  }
+
+  private static void assertListColumnsEquals(HostColumnVector expected, HostColumnVector input,
+                                              String colName, boolean enableNullCheck) {
+    for (int rowIndex = 0; rowIndex < expected.getRowCount(); rowIndex++) {
+      assertEquals(expected.isNull(rowIndex), input.isNull(rowIndex));
+      if (expected.getList(rowIndex) != null) {
+        assertArrayEquals(expected.getList(rowIndex).toString().getBytes(),
+          input.getList(rowIndex).toString().getBytes());
+      }
+    }
+    for (int j = 0; j < expected.children.size(); j++) {
+      assertPartialColumnsAreEqual(expected.children.get(j), input.children.get(j), colName, enableNullCheck);
     }
   }
 

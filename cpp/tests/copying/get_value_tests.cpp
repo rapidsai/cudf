@@ -44,7 +44,7 @@ TYPED_TEST(FixedWidthGetValueTest, BasicGet)
   auto typed_s     = static_cast<ScalarType const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
-  EXPECT_EQ(TypeParam(9), typed_s->value());
+  EXPECT_EQ(cudf::test::make_type_param_scalar<TypeParam>(9), typed_s->value());
 }
 
 TYPED_TEST(FixedWidthGetValueTest, GetFromNullable)
@@ -56,7 +56,7 @@ TYPED_TEST(FixedWidthGetValueTest, GetFromNullable)
   auto typed_s     = static_cast<ScalarType const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
-  EXPECT_EQ(TypeParam(8), typed_s->value());
+  EXPECT_EQ(cudf::test::make_type_param_scalar<TypeParam>(8), typed_s->value());
 }
 
 TYPED_TEST(FixedWidthGetValueTest, GetNull)
@@ -137,7 +137,7 @@ TYPED_TEST(DictionaryGetValueTest, BasicGet)
   auto typed_s     = static_cast<ScalarType const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
-  EXPECT_EQ(TypeParam(7), typed_s->value());
+  EXPECT_EQ(cudf::test::make_type_param_scalar<TypeParam>(7), typed_s->value());
 }
 
 TYPED_TEST(DictionaryGetValueTest, GetFromNullable)
@@ -152,7 +152,7 @@ TYPED_TEST(DictionaryGetValueTest, GetFromNullable)
   auto typed_s     = static_cast<ScalarType const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
-  EXPECT_EQ(TypeParam(8), typed_s->value());
+  EXPECT_EQ(cudf::test::make_type_param_scalar<TypeParam>(8), typed_s->value());
 }
 
 TYPED_TEST(DictionaryGetValueTest, GetNull)
