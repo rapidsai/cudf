@@ -1038,11 +1038,11 @@ inline cudf::data_type ast_operator_return_type(ast_operator op,
   auto result = cudf::data_type(cudf::type_id::EMPTY);
   switch (operand_types.size()) {
     case 1:
-      unary_operator_dispatcher(op, operand_types.at(0), detail::return_type_functor{}, result);
+      unary_operator_dispatcher(op, operand_types[0], detail::return_type_functor{}, result);
       break;
     case 2:
       binary_operator_dispatcher(
-        op, operand_types.at(0), operand_types.at(1), detail::return_type_functor{}, result);
+        op, operand_types[0], operand_types[1], detail::return_type_functor{}, result);
       break;
     default: CUDF_FAIL("Unsupported operator return type."); break;
   }

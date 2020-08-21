@@ -380,7 +380,7 @@ struct ast_plan {
     auto host_data_buffer = std::make_unique<char[]>(total_size);
     auto const offsets    = get_offsets();
     for (unsigned int i = 0; i < data_pointers.size(); ++i) {
-      std::memcpy(host_data_buffer.get() + offsets.at(i), data_pointers.at(i), sizes.at(i));
+      std::memcpy(host_data_buffer.get() + offsets[i], data_pointers[i], sizes[i]);
     }
     return std::make_pair(std::move(host_data_buffer), total_size);
   }
@@ -389,7 +389,7 @@ struct ast_plan {
   {
     auto offsets = std::vector<int>(sizes.size());
     // When C++17, use std::exclusive_scan
-    offsets.at(0) = 0;
+    offsets[0] = 0;
     std::partial_sum(sizes.cbegin(), sizes.cend() - 1, offsets.begin() + 1);
     return offsets;
   }

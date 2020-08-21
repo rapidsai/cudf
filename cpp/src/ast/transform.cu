@@ -103,14 +103,14 @@ std::unique_ptr<column> compute_column(table_view const table,
   // Create device pointers to components of plan
   auto const device_data_buffer_ptr = static_cast<const char*>(device_data_buffer.data());
   auto const device_data_references = reinterpret_cast<const detail::device_data_reference*>(
-    device_data_buffer_ptr + buffer_offsets.at(0));
+    device_data_buffer_ptr + buffer_offsets[0]);
   auto const device_literals =
     reinterpret_cast<const cudf::detail::fixed_width_scalar_device_view_base*>(
-      device_data_buffer_ptr + buffer_offsets.at(1));
+      device_data_buffer_ptr + buffer_offsets[1]);
   auto const device_operators =
-    reinterpret_cast<const ast_operator*>(device_data_buffer_ptr + buffer_offsets.at(2));
+    reinterpret_cast<const ast_operator*>(device_data_buffer_ptr + buffer_offsets[2]);
   auto const device_operator_source_indices =
-    reinterpret_cast<const cudf::size_type*>(device_data_buffer_ptr + buffer_offsets.at(3));
+    reinterpret_cast<const cudf::size_type*>(device_data_buffer_ptr + buffer_offsets[3]);
 
   // Create table device view
   auto table_device         = table_device_view::create(table, stream);
