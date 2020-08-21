@@ -9,6 +9,7 @@ import pandas as pd
 import numpy as np
 
 import pyarrow as pa
+import pyarrow.parquet as pq
 from mimesis import Generic
 
 
@@ -17,13 +18,16 @@ class ColumnParameters:
 
     Attributes
     ---
-    cardinality : int
-        Number of rows to generate
+    cardinality : int or None
+        Size of a random set of values that generated data is sampled from.
+        The values in the random set are derived from the given generator.
+        If cardinality is None, the Iterable returned by the given generator
+        is invoked for each value to be generated.
     null_frequency : 0.1
-        Number of columns to generate
+        Probability of a generated value being null
     generator : Callable
         Function for generating random data. It is passed a Mimesis Generic
-        provider and returns a callable that generates data.
+        provider and returns an Iterable that generates data.
     is_sorted : bool
         Sort this column. Columns are sorted in same order as ColumnParameters
         instances stored in column_params of Parameters.
@@ -33,7 +37,7 @@ class ColumnParameters:
         self,
         cardinality=100,
         null_frequency=0.1,
-        generator=lambda g: g.address.country,
+        generator=lambda g: (g.address.country for _ in range(100)),
         is_sorted=True,
     ):
         self.cardinality = cardinality
@@ -63,36 +67,12 @@ class Parameters:
         self.seed = seed
 
 
-SIMPLE = Parameters(
-    num_rows=2048,
-    column_parameters=[
-        ColumnParameters(
-            cardinality=100,
-            null_frequency=0.05,
-            generator=lambda g: g.address.country,
-            is_sorted=False,
-        ),
-        ColumnParameters(
-            cardinality=40,
-            null_frequency=0.2,
-            generator=lambda g: g.person.age,
-            is_sorted=True,
-        ),
-        ColumnParameters(
-            cardinality=30,
-            null_frequency=0.1,
-            generator=lambda g: g.text.color,
-            is_sorted=False,
-        ),
-        ColumnParameters(
-            cardinality=10,
-            null_frequency=0.1,
-            generator=lambda g: g.hardware.manufacturer,
-            is_sorted=False,
-        ),
-    ],
-    seed=0,
-)
+def _write(tbl, path, format):
+    if format["name"] == "parquet":
+        if isinstance(tbl, pa.Table):
+            pq.write_table(tbl, path, row_group_size=format["row_group_size"])
+        elif isinstance(tbl, pd.DataFrame):
+            tbl.to_parquet(path, row_group_size=format["row_group_size"])
 
 
 def generate(
@@ -121,7 +101,9 @@ def generate(
         [
             pa.field(
                 name=str(i),
-                type=pa.from_numpy_dtype(type(column_params.generator(g)())),
+                type=pa.from_numpy_dtype(
+                    type(next(iter(column_params.generator(g))))
+                ),
                 nullable=column_params.null_frequency > 0,
             )
             for i, column_params in enumerate(parameters.column_parameters)
@@ -134,31 +116,60 @@ def generate(
         if column_params.is_sorted
     ]
     for i, column_params in enumerate(parameters.column_parameters):
-        vals = pa.array(
-            (
-                column_params.generator(g)()
-                for _ in range(column_params.cardinality)
-            ),
-            size=column_params.cardinality,
-        )
-
-        # Generate data for current column
-        column_data.append(
-            pa.array(
-                (
-                    None
-                    if np.random.rand() < column_params.null_frequency
-                    else np.random.choice(vals)
-                    for _ in range(parameters.num_rows)
-                ),
-                size=parameters.num_rows,
+        generator = column_params.generator(g)
+        if column_params.cardinality is not None:
+            # Construct set of values to sample from where set size = cardinality
+            vals = pa.array(
+                generator, size=column_params.cardinality, safe=False,
             )
-        )
+
+            # Generate data for current column
+            choices = np.random.randint(
+                0, len(vals) - 1, size=parameters.num_rows
+            )
+            column_data.append(
+                pa.array(
+                    [
+                        vals[choices[i]].as_py()
+                        for i in range(parameters.num_rows)
+                    ],
+                    mask=np.random.choice(
+                        [True, False],
+                        size=parameters.num_rows,
+                        p=[
+                            column_params.null_frequency,
+                            1 - column_params.null_frequency,
+                        ],
+                    )
+                    if column_params.null_frequency > 0.0
+                    else None,
+                    size=parameters.num_rows,
+                    safe=False,
+                )
+            )
+        else:
+            # Generate data for current column
+            column_data.append(
+                pa.array(
+                    generator,
+                    mask=np.random.choice(
+                        [True, False],
+                        size=parameters.num_rows,
+                        p=[
+                            column_params.null_frequency,
+                            1 - column_params.null_frequency,
+                        ],
+                    ),
+                    size=parameters.num_rows,
+                    safe=False,
+                )
+            )
 
     # Convert to Pandas DataFrame and sort columns appropriately
-    df = pa.Table.from_arrays(column_data, schema=schema,).to_pandas()
-    df = df.sort_values(columns_to_sort)
+    tbl = pa.Table.from_arrays(column_data, schema=schema,)
+    if columns_to_sort:
+        tbl = tbl.to_pandas()
+        tbl = tbl.sort_values(columns_to_sort)
 
     # Write
-    if format["name"] == "parquet":
-        df.to_parquet(path, row_group_size=format["row_group_size"])
+    _write(tbl, path, format)
