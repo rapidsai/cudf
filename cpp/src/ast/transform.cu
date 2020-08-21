@@ -108,12 +108,8 @@ std::unique_ptr<column> compute_column(table_view const table,
   auto const host_data_buffer = plan.get_host_data_buffer();
   auto const buffer_offsets   = plan.get_offsets();
   auto const buffer_size      = host_data_buffer.second;
-  auto device_data_buffer     = rmm::device_buffer(buffer_size, stream, mr);
-  CUDA_TRY(cudaMemcpyAsync(device_data_buffer.data(),
-                           host_data_buffer.first.get(),
-                           buffer_size,
-                           cudaMemcpyHostToDevice,
-                           stream));
+  auto device_data_buffer =
+    rmm::device_buffer(host_data_buffer.first.get(), buffer_size, stream, mr);
   // To reduce overhead, we don't call a stream sync here.
   // The stream is synced later when the table_device_view is created.
 
