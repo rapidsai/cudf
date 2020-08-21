@@ -751,44 +751,12 @@ struct operator_functor<ast_operator::NOT> {
   }
 };
 
-/**
- * @brief Functor used to type-dispatch unary operators.
- *
- * This functor's `operator()` is templated to validate calls to its operators based on the input
- * type, as determined by the is_valid_unary_op` trait.
- *
- * @tparam OperatorFunctor Unary operator functor.
- */
-template <typename OperatorFunctor>
-struct dispatch_unary_operator_types {
-  template <typename InputT,
-            typename F,
-            typename... Ts,
-            std::enable_if_t<is_valid_unary_op<OperatorFunctor, InputT>>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE void operator()(F&& f, Ts&&... args)
-  {
-    f.template operator()<OperatorFunctor, InputT>(std::forward<Ts>(args)...);
-  }
-
-  template <typename InputT,
-            typename F,
-            typename... Ts,
-            std::enable_if_t<!is_valid_unary_op<OperatorFunctor, InputT>>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE void operator()(F&& f, Ts&&... args)
-  {
-#ifndef __CUDA_ARCH__
-    CUDF_FAIL("Invalid unary operation.");
-#else
-    release_assert(false && "Invalid unary operation.");
-#endif
-  }
-};
-
+#if 0
 /**
  * @brief Functor used to double-type-dispatch binary operators.
  *
  * This functor's `operator()` is templated to validate calls to its operators based on the input
- * type, as determined by the is_valid_binary_op` trait.
+ * type, as determined by the `is_valid_binary_op` trait.
  *
  * @tparam OperatorFunctor Binary operator functor.
  */
@@ -818,12 +786,13 @@ struct double_dispatch_binary_operator_types {
 #endif
   }
 };
+#endif
 
 /**
  * @brief Functor used to single-type-dispatch binary operators.
  *
  * This functor's `operator()` is templated to validate calls to its operators based on the input
- * type, as determined by the is_valid_binary_op` trait. This function assumes that both inputs are
+ * type, as determined by the `is_valid_binary_op` trait. This function assumes that both inputs are
  * the same type, and dispatches based on the type of the left input.
  *
  * @tparam OperatorFunctor Binary operator functor.
@@ -862,25 +831,10 @@ struct single_dispatch_binary_operator {
 };
 
 /**
- * @brief Functor performing a type dispatch for a unary operator.
- *
- */
-struct type_dispatch_unary_op {
-  template <ast_operator op, typename F, typename... Ts>
-  CUDA_HOST_DEVICE_CALLABLE void operator()(cudf::data_type input_t, F&& f, Ts&&... args)
-  {
-    type_dispatcher(input_t,
-                    detail::dispatch_unary_operator_types<operator_functor<op>>{},
-                    std::forward<F>(f),
-                    std::forward<Ts>(args)...);
-  }
-};
-
-/**
  * @brief Functor performing a type dispatch for a binary operator.
  *
- * This functor performs single dispatch, which assumes lhs_t == rhs_t. This may not be true for
- * all binary operators but holds for all currently implemented operators.
+ * This functor performs single dispatch, which assumes lhs_type == rhs_type. This may not be true
+ * for all binary operators but holds for all currently implemented operators.
  */
 struct type_dispatch_binary_op {
   /**
@@ -889,19 +843,78 @@ struct type_dispatch_binary_op {
    * @tparam op AST operator.
    * @tparam F Type of forwarded functor.
    * @tparam Ts Parameter pack of forwarded arguments.
-   * @param lhs_t Type of left input data.
-   * @param rhs_t Type of right input data.
+   * @param lhs_type Type of left input data.
+   * @param rhs_type Type of right input data.
    * @param f Forwarded functor to be called.
    * @param args Forwarded arguments to `operator()` of `f`.
    */
   template <ast_operator op, typename F, typename... Ts>
-  CUDA_HOST_DEVICE_CALLABLE void operator()(cudf::data_type lhs_t,
-                                            cudf::data_type rhs_t,
+  CUDA_HOST_DEVICE_CALLABLE void operator()(cudf::data_type lhs_type,
+                                            cudf::data_type rhs_type,
                                             F&& f,
                                             Ts&&... args)
   {
-    type_dispatcher(lhs_t,
+#if 0
+    // Double dispatch
+    /*
+    double_type_dispatcher(lhs_type,
+                           rhs_type,
+                           detail::double_dispatch_binary_operator_types<operator_functor<op>>{},
+                           std::forward<F>(f),
+                           std::forward<Ts>(args)...);
+    */
+#endif
+    // Single dispatch (assume lhs_type == rhs_type)
+    type_dispatcher(lhs_type,
                     detail::single_dispatch_binary_operator_types<operator_functor<op>>{},
+                    std::forward<F>(f),
+                    std::forward<Ts>(args)...);
+  }
+};
+
+/**
+ * @brief Functor used to type-dispatch unary operators.
+ *
+ * This functor's `operator()` is templated to validate calls to its operators based on the input
+ * type, as determined by the `is_valid_unary_op` trait.
+ *
+ * @tparam OperatorFunctor Unary operator functor.
+ */
+template <typename OperatorFunctor>
+struct dispatch_unary_operator_types {
+  template <typename InputT,
+            typename F,
+            typename... Ts,
+            std::enable_if_t<is_valid_unary_op<OperatorFunctor, InputT>>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE void operator()(F&& f, Ts&&... args)
+  {
+    f.template operator()<OperatorFunctor, InputT>(std::forward<Ts>(args)...);
+  }
+
+  template <typename InputT,
+            typename F,
+            typename... Ts,
+            std::enable_if_t<!is_valid_unary_op<OperatorFunctor, InputT>>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE void operator()(F&& f, Ts&&... args)
+  {
+#ifndef __CUDA_ARCH__
+    CUDF_FAIL("Invalid unary operation.");
+#else
+    release_assert(false && "Invalid unary operation.");
+#endif
+  }
+};
+
+/**
+ * @brief Functor performing a type dispatch for a unary operator.
+ *
+ */
+struct type_dispatch_unary_op {
+  template <ast_operator op, typename F, typename... Ts>
+  CUDA_HOST_DEVICE_CALLABLE void operator()(cudf::data_type input_type, F&& f, Ts&&... args)
+  {
+    type_dispatcher(input_type,
+                    detail::dispatch_unary_operator_types<operator_functor<op>>{},
                     std::forward<F>(f),
                     std::forward<Ts>(args)...);
   }
@@ -989,18 +1002,21 @@ struct arity_functor {
  *
  * @tparam F Type of forwarded functor.
  * @tparam Ts Parameter pack of forwarded arguments.
- * @param input_t Type of input data.
+ * @param input_type Type of input data.
  * @param f Forwarded functor to be called.
  * @param args Forwarded arguments to `operator()` of `f`.
  */
 template <typename F, typename... Ts>
 CUDA_HOST_DEVICE_CALLABLE constexpr void unary_operator_dispatcher(ast_operator op,
-                                                                   cudf::data_type input_t,
+                                                                   cudf::data_type input_type,
                                                                    F&& f,
                                                                    Ts&&... args)
 {
-  ast_operator_dispatcher(
-    op, detail::type_dispatch_unary_op{}, input_t, std::forward<F>(f), std::forward<Ts>(args)...);
+  ast_operator_dispatcher(op,
+                          detail::type_dispatch_unary_op{},
+                          input_type,
+                          std::forward<F>(f),
+                          std::forward<Ts>(args)...);
 }
 
 /**
@@ -1008,19 +1024,19 @@ CUDA_HOST_DEVICE_CALLABLE constexpr void unary_operator_dispatcher(ast_operator 
  *
  * @tparam F Type of forwarded functor.
  * @tparam Ts Parameter pack of forwarded arguments.
- * @param lhs_t Type of left input data.
- * @param rhs_t Type of right input data.
+ * @param lhs_type Type of left input data.
+ * @param rhs_type Type of right input data.
  * @param f Forwarded functor to be called.
  * @param args Forwarded arguments to `operator()` of `f`.
  */
 template <typename F, typename... Ts>
 CUDA_HOST_DEVICE_CALLABLE constexpr void binary_operator_dispatcher(
-  ast_operator op, cudf::data_type lhs_t, cudf::data_type rhs_t, F&& f, Ts&&... args)
+  ast_operator op, cudf::data_type lhs_type, cudf::data_type rhs_type, F&& f, Ts&&... args)
 {
   ast_operator_dispatcher(op,
                           detail::type_dispatch_binary_op{},
-                          lhs_t,
-                          rhs_t,
+                          lhs_type,
+                          rhs_type,
                           std::forward<F>(f),
                           std::forward<Ts>(args)...);
 }
