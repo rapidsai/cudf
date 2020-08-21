@@ -206,7 +206,7 @@ class linearizer {
     cudf::size_type get_max_used() const { return max_used; }
 
    private:
-    cudf::size_type find_first_missing(cudf::size_type start, cudf::size_type end) const;
+    cudf::size_type find_first_missing() const;
     std::vector<cudf::size_type> used_values;
     cudf::size_type max_used;
   };

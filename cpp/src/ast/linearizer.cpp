@@ -34,7 +34,7 @@ namespace detail {
 
 cudf::size_type linearizer::intermediate_counter::take()
 {
-  auto const first_missing = used_values.size() ? find_first_missing(0, used_values.size() - 1) : 0;
+  auto const first_missing = find_first_missing();
   used_values.insert(used_values.cbegin() + first_missing, first_missing);
   max_used = std::max(max_used, first_missing + 1);
   return first_missing;
@@ -42,26 +42,41 @@ cudf::size_type linearizer::intermediate_counter::take()
 
 void linearizer::intermediate_counter::give(cudf::size_type value)
 {
-  auto const found = std::find(used_values.cbegin(), used_values.cend(), value);
-  if (found != used_values.cend()) { used_values.erase(found); }
+  auto const lower_bound = std::lower_bound(used_values.cbegin(), used_values.cend(), value);
+  if ((*lower_bound == value) && (lower_bound != used_values.cend())) {
+    used_values.erase(lower_bound);
+  }
 }
 
-cudf::size_type linearizer::intermediate_counter::find_first_missing(cudf::size_type start,
-                                                                     cudf::size_type end) const
+/**
+ * @brief Find the first missing value in a contiguous sequence of integers.
+ *
+ * From a sorted container of integers, find the first "missing" value.
+ * For example, {0, 1, 2, 4, 5} is missing 3, and {1, 2, 3} is missing 0.
+ * If there are no missing values, return the size of the container.
+ *
+ * @param start Starting index.
+ * @param end Ending index.
+ * @return cudf::size_type Smallest value not already in the container.
+ */
+cudf::size_type linearizer::intermediate_counter::find_first_missing() const
 {
-  // Given a sorted container, find the smallest value not already in the container
-  if (start > end) return end + 1;
-
-  // If the value at an index is not equal to its index, it must be the missing value
-  if (start != used_values.at(start)) return start;
-
-  auto const mid = (start + end) / 2;
-
-  // Use binary search and check the left half or right half
-  // We can assume the missing value must be in the right half
-  if (used_values.at(mid) == mid) return find_first_missing(mid + 1, end);
-  // The missing value must be in the left half
-  return find_first_missing(start, mid);
+  if ((used_values.size() == 0) || (used_values.front() != 0)) {
+    // Handle cases where the container is empty or first value is non-zero.
+    return 0;
+  } else {
+    // Search for the first non-contiguous pair of elements.
+    auto found = std::adjacent_find(used_values.cbegin(),
+                                    used_values.cend(),
+                                    [](auto const& a, auto const& b) { return a != b - 1; });
+    if (found != used_values.cend()) {
+      // A missing value was found and is returned.
+      return *found + 1;
+    } else {
+      // No missing elements. Return the next element in the sequence.
+      return used_values.size();
+    }
+  }
 }
 
 cudf::size_type linearizer::visit(literal const& expr)
