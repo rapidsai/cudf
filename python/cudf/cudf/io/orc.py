@@ -9,6 +9,8 @@ import cudf
 from cudf import _lib as libcudf
 from cudf.utils import ioutils
 
+import pyorc
+
 
 @ioutils.doc_read_orc_metadata()
 def read_orc_metadata(path):
@@ -28,6 +30,7 @@ def read_orc(
     filepath_or_buffer,
     engine="cudf",
     columns=None,
+    filters=None,
     stripes=None,
     skip_rows=None,
     num_rows=None,
@@ -46,6 +49,25 @@ def read_orc(
     )
     if compression is not None:
         ValueError("URL content-encoding decompression is not supported")
+
+    if filters is not None:
+        # Create bytestream and reader
+        f = (
+            filepath_or_buffer
+            if ioutils.is_file_like(filepath_or_buffer)
+            else open(filepath_or_buffer, "rb")
+        )
+        r = pyorc.Reader(f)
+
+        # Prepare stripes for filtering
+        if not stripes:
+            stripes = range(r.num_of_stripes)
+
+        filter(lambda stripe_idx: stripe_idx == 0, stripes)
+
+        # If file object was read from, close
+        if isinstance(filepath_or_buffer, str):
+            f.close()
 
     if engine == "cudf":
         df = DataFrame._from_table(

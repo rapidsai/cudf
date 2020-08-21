@@ -193,6 +193,24 @@ def test_orc_reader_strings(datadir):
 
 
 @pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
+def test_orc_read_filtered(datadir, engine):
+    path = datadir / "TestOrcFile.testStripeLevelStats.orc"
+    try:
+        pdf = cudf.read_orc(path, engine=engine)
+    except pa.ArrowIOError as e:
+        pytest.skip(".orc file is not found: %s" % e)
+
+    num_rows, stripes, col_names = cudf.io.read_orc_metadata(path)
+
+    # Create dataframes to compare
+    df = cudf.read_orc(path, engine=engine)
+    df_filtered = cudf.read_orc(path, engine=engine, filters=[("int1", "==", 1)])
+
+    # Compare
+    assert len(df_filtered) < len(df)
+
+
+@pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
 def test_orc_read_stripes(datadir, engine):
     path = datadir / "TestOrcFile.testDate1900.orc"
     try:
