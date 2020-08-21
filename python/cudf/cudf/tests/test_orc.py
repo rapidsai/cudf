@@ -204,7 +204,7 @@ def test_orc_read_filtered(datadir, engine):
 
     # Create dataframes to compare
     df = cudf.read_orc(path, engine=engine)
-    df_filtered = cudf.read_orc(path, engine=engine, filters=[("int1", "==", 1)])
+    df_filtered = cudf.read_orc(path, engine=engine, filters=[[("int1", "==", 1)]])
 
     # Compare
     assert len(df_filtered) < len(df)

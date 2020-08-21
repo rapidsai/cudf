@@ -12,6 +12,22 @@ from cudf.utils import ioutils
 import pyorc
 
 
+def _filter_stripe(filters, stripe_idx, reader):
+    for conjunction in filters:
+        res = True
+        for col, op, val in conjunction:
+            col_idx = reader.schema.find_column_id(col)
+            if op == "=" or op == "==":
+                stats = reader.read_stripe(stripe_idx)[col_idx].statistics
+                if stats["minimum"] and val < stats["minimum"]:
+                    res = False
+                if stats["maximum"] and val > stats["maximum"]:
+                    res = False
+        if res:
+            return True
+    return False
+
+
 @ioutils.doc_read_orc_metadata()
 def read_orc_metadata(path):
     """{docstring}"""
@@ -63,7 +79,13 @@ def read_orc(
         if not stripes:
             stripes = range(r.num_of_stripes)
 
-        filter(lambda stripe_idx: stripe_idx == 0, stripes)
+        # Filter
+        stripes = list(
+            filter(
+                lambda stripe_idx: _filter_stripe(filters, stripe_idx, r),
+                stripes,
+            )
+        )
 
         # If file object was read from, close
         if isinstance(filepath_or_buffer, str):
