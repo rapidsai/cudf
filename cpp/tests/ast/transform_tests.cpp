@@ -174,8 +174,7 @@ TEST_F(TransformTest, LiteralComparison)
 
   auto col_ref_0     = cudf::ast::column_reference(0);
   auto literal_value = cudf::numeric_scalar<int32_t>(41);
-  auto literal_view  = cudf::get_scalar_device_view(literal_value);
-  auto literal       = cudf::ast::literal(literal_view);
+  auto literal       = cudf::ast::literal(literal_value);
 
   auto expression = cudf::ast::expression(cudf::ast::ast_operator::GREATER, col_ref_0, literal);
 
@@ -267,8 +266,7 @@ TEST_F(TransformTest, CopyLiteral)
   auto table = cudf::table_view{{c_0}};
 
   auto literal_value = cudf::numeric_scalar<int32_t>(-123);
-  auto literal_view  = cudf::get_scalar_device_view(literal_value);
-  auto literal       = cudf::ast::literal(literal_view);
+  auto literal       = cudf::ast::literal(literal_value);
 
   auto expression = cudf::ast::expression(cudf::ast::ast_operator::IDENTITY, literal);
 
@@ -285,8 +283,7 @@ TEST_F(TransformTest, TrueDiv)
 
   auto col_ref_0     = cudf::ast::column_reference(0);
   auto literal_value = cudf::numeric_scalar<int32_t>(2);
-  auto literal_view  = cudf::get_scalar_device_view(literal_value);
-  auto literal       = cudf::ast::literal(literal_view);
+  auto literal       = cudf::ast::literal(literal_value);
 
   auto expression = cudf::ast::expression(cudf::ast::ast_operator::TRUE_DIV, col_ref_0, literal);
 
@@ -303,8 +300,7 @@ TEST_F(TransformTest, FloorDiv)
 
   auto col_ref_0     = cudf::ast::column_reference(0);
   auto literal_value = cudf::numeric_scalar<double>(2.0);
-  auto literal_view  = cudf::get_scalar_device_view(literal_value);
-  auto literal       = cudf::ast::literal(literal_view);
+  auto literal       = cudf::ast::literal(literal_value);
 
   auto expression = cudf::ast::expression(cudf::ast::ast_operator::FLOOR_DIV, col_ref_0, literal);
 
@@ -316,13 +312,12 @@ TEST_F(TransformTest, FloorDiv)
 
 TEST_F(TransformTest, Mod)
 {
-  auto c_0   = column_wrapper<double>{3.0, 0.0, -1.0, 50.0};
+  auto c_0   = column_wrapper<double>{3.0, 0.0, -1.0, -50.0};
   auto table = cudf::table_view{{c_0}};
 
   auto col_ref_0     = cudf::ast::column_reference(0);
   auto literal_value = cudf::numeric_scalar<double>(2.0);
-  auto literal_view  = cudf::get_scalar_device_view(literal_value);
-  auto literal       = cudf::ast::literal(literal_view);
+  auto literal       = cudf::ast::literal(literal_value);
 
   auto expression = cudf::ast::expression(cudf::ast::ast_operator::MOD, col_ref_0, literal);
 
@@ -334,13 +329,12 @@ TEST_F(TransformTest, Mod)
 
 TEST_F(TransformTest, PyMod)
 {
-  auto c_0   = column_wrapper<double>{3.0, 0.0, 1.0, 50.0};
+  auto c_0   = column_wrapper<double>{3.0, 0.0, -1.0, -50.0};
   auto table = cudf::table_view{{c_0}};
 
   auto col_ref_0     = cudf::ast::column_reference(0);
   auto literal_value = cudf::numeric_scalar<double>(2.0);
-  auto literal_view  = cudf::get_scalar_device_view(literal_value);
-  auto literal       = cudf::ast::literal(literal_view);
+  auto literal       = cudf::ast::literal(literal_value);
 
   auto expression = cudf::ast::expression(cudf::ast::ast_operator::PYMOD, col_ref_0, literal);
 

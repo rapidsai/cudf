@@ -56,9 +56,35 @@ class literal : public detail::node {
   /**
    * @brief Construct a new literal object.
    *
-   * @param value A fixed width scalar device view containing the literal value.
+   * @tparam T Numeric scalar template type.
+   * @param value A numeric scalar value.
    */
-  literal(const cudf::detail::fixed_width_scalar_device_view_base value) : value(value) {}
+  template <typename T>
+  literal(cudf::numeric_scalar<T>& value) : value(cudf::get_scalar_device_view(value))
+  {
+  }
+
+  /**
+   * @brief Construct a new literal object.
+   *
+   * @tparam T Timestamp scalar template type.
+   * @param value A timestamp scalar value.
+   */
+  template <typename T>
+  literal(cudf::timestamp_scalar<T>& value) : value(cudf::get_scalar_device_view(value))
+  {
+  }
+
+  /**
+   * @brief Construct a new literal object.
+   *
+   * @tparam T Duration scalar template type.
+   * @param value A duration scalar value.
+   */
+  template <typename T>
+  literal(cudf::duration_scalar<T>& value) : value(cudf::get_scalar_device_view(value))
+  {
+  }
 
   /**
    * @brief Get the data type.
