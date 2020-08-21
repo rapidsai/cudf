@@ -152,7 +152,6 @@ __device__ size_type count_nested(column_device_view const &col, size_type idx)
   if (start_offset == end_offset) { return 1; }
   if (child_col.type().id() != type_id::LIST) { return end_offset - start_offset; }
 
-  // TODO (dm): stl algo accumulate
   size_type result = 0;
   for (size_type i = start_offset; i < end_offset; i++) { result += count_nested(child_col, i); }
   return result;
@@ -432,12 +431,13 @@ class parquet_column_view {
 
       // Bring offset array to device
       column_view curr_col = col;
+      std::vector<size_type const *> offsets_array;
       while (curr_col.type().id() == type_id::LIST) {
         lists_column_view list_col(curr_col);
-        // TODO (dm): this is inefficient. Make it write to host and then transfer to device
-        _offsets_array.push_back(list_col.offsets().data<size_type>());
+        offsets_array.push_back(list_col.offsets().data<size_type>());
         curr_col = list_col.child();
       }
+      _offsets_array = offsets_array;
 
       // Calculate row offset into dremel data (repetition/definition values)
       _dremel_offsets.resize(_row_count + 1);
@@ -521,6 +521,8 @@ class parquet_column_view {
   auto converted_type() const noexcept { return _converted_type; }
   auto stats_type() const noexcept { return _stats_dtype; }
   int32_t ts_scale() const noexcept { return _ts_scale; }
+  void set_path_in_schema(std::vector<std::string> path) { _path_in_schema = path; }
+  auto get_path_in_schema() const noexcept { return _path_in_schema; }
 
   // Dictionary management
   uint32_t *get_dict_data() { return (_dict_data.size()) ? _dict_data.data().get() : nullptr; }
@@ -565,6 +567,7 @@ class parquet_column_view {
   ConvertedType _converted_type;
   statistics_dtype _stats_dtype;
   int32_t _ts_scale;
+  std::vector<std::string> _path_in_schema;
 
   // Dictionary-related members
   bool _dictionary_used = false;
@@ -863,6 +866,12 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
         list_schema[nesting_depth * 2].converted_type = col.converted_type();
         list_schema[nesting_depth * 2].num_children   = 0;
 
+        std::vector<std::string> path_in_schema;
+        std::transform(
+          list_schema.cbegin(), list_schema.cend(), std::back_inserter(path_in_schema), [](auto s) {
+            return s.name;
+          });
+        col.set_path_in_schema(path_in_schema);
         state.md.schema.insert(state.md.schema.end(), list_schema.begin(), list_schema.end());
       } else {
         SchemaElement col_schema{};
@@ -1085,8 +1094,8 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
       if (dict_enable) {
         state.md.row_groups[global_r].columns[i].meta_data.encodings.push_back(PLAIN_DICTIONARY);
       }
-      state.md.row_groups[global_r].columns[i].meta_data.path_in_schema = {
-        parquet_columns[i].name()};
+      state.md.row_groups[global_r].columns[i].meta_data.path_in_schema =
+        parquet_columns[i].get_path_in_schema();
       state.md.row_groups[global_r].columns[i].meta_data.codec = UNCOMPRESSED;
       state.md.row_groups[global_r].columns[i].meta_data.num_values =
         state.md.row_groups[global_r].num_rows;

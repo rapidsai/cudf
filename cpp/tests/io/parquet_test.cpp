@@ -470,41 +470,80 @@ TEST_F(ParquetWriterTest, ListColumn)
   auto valids2 = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
 
   using lcw = cudf::test::lists_column_wrapper<int32_t>;
-  // cudf::test::lists_column_wrapper<int32_t> col1{{{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}},
-  // valids2},
-  //                                                {{7, 8}}};
 
-  // cudf::test::lists_column_wrapper<int32_t> col1{
-  //   {{{1, 2, 3}, {}, {4, 5}, {}, {{0, 6, 0}, valids}}, valids2}, {{7, 8}}};
-  // cudf::test::lists_column_wrapper<int32_t> col1{
-  //   {{{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, valids2}, {{7, 8}}, lcw{}, lcw{lcw{}}}, valids2};
+  // [1, 2, 3]
+  // []
+  // [4, 5]
+  // NULL
+  cudf::test::lists_column_wrapper<int32_t> col0{{{1, 2, 3}, {}, {4, 5}, {}}, valids2};
+
+  // [[1, 2, 3], [], [4, 5], [], [0, 6, 0]]
+  // [[7, 8]]
+  // []
+  // [[]]
   cudf::test::lists_column_wrapper<int32_t> col1{
+    {{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, {{7, 8}}, lcw{}, lcw{lcw{}}};
+
+  // [[1, 2, 3], [], [4, 5], NULL, [0, 6, 0]]
+  // [[7, 8]]
+  // []
+  // [[]]
+  cudf::test::lists_column_wrapper<int32_t> col2{
+    {{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, valids2}, {{7, 8}}, lcw{}, lcw{lcw{}}};
+
+  // [[1, 2, 3], [], [4, 5], NULL, [NULL, 6, NULL]]
+  // [[7, 8]]
+  // []
+  // [[]]
+  cudf::test::lists_column_wrapper<int32_t> col3{
+    {{{1, 2, 3}, {}, {4, 5}, {}, {{0, 6, 0}, valids}}, valids2}, {{7, 8}}, lcw{}, lcw{lcw{}}};
+
+  // TODO: uint16_t lists are not read properly in parquet reader
+  // [[1, 2, 3], [], [4, 5], NULL, [0, 6, 0]]
+  // [[7, 8]]
+  // []
+  // NULL
+  // using ui16lcw = cudf::test::lists_column_wrapper<uint16_t>;
+  // cudf::test::lists_column_wrapper<uint16_t> col4{
+  //   {{{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, valids2}, {{7, 8}}, ui16lcw{}, ui16lcw{ui16lcw{}}},
+  //   valids2};
+
+  // [[1, 2, 3], [], [4, 5], NULL, [NULL, 6, NULL]]
+  // [[7, 8]]
+  // []
+  // NULL
+  cudf::test::lists_column_wrapper<int32_t> col5{
     {{{{1, 2, 3}, {}, {4, 5}, {}, {{0, 6, 0}, valids}}, valids2}, {{7, 8}}, lcw{}, lcw{lcw{}}},
     valids2};
 
-  cudf::test::print(col1);
+  using strlcw = cudf::test::lists_column_wrapper<cudf::string_view>;
+  cudf::test::lists_column_wrapper<cudf::string_view> col6{
+    {{"Monday", "Monday", "Friday"}, {}, {"Monday", "Friday"}, {}, {"Sunday", "Funday"}},
+    {{"bee", "sting"}},
+    strlcw{},
+    strlcw{strlcw{}}};
 
   cudf_io::table_metadata expected_metadata;
-  expected_metadata.column_names.emplace_back("col_list");
+  expected_metadata.column_names.emplace_back("col_list_int_0");
+  expected_metadata.column_names.emplace_back("col_list_list_int_1");
+  expected_metadata.column_names.emplace_back("col_list_list_int_nullable_2");
+  expected_metadata.column_names.emplace_back("col_list_list_nullable_int_nullable_3");
+  // expected_metadata.column_names.emplace_back("col_list_list_uint16_4");
+  expected_metadata.column_names.emplace_back("col_list_nullable_list_nullable_int_nullable_5");
+  expected_metadata.column_names.emplace_back("col_list_list_string_6");
 
-  std::vector<std::unique_ptr<column>> cols;
-  cols.push_back(col1.release());
-  auto expected = std::make_unique<table>(std::move(cols));
-  EXPECT_EQ(1, expected->num_columns());
-
-  auto expected_slice = cudf::slice(expected->view(), {1, 3});
+  table_view expected({col0, col1, col2, col3, /* col4, */ col5, col6});
 
   auto filepath = ("ListColumn.parquet");
-  cudf_io::write_parquet_args out_args{
-    cudf_io::sink_info{filepath}, expected_slice[0], &expected_metadata};
+  cudf_io::write_parquet_args out_args{cudf_io::sink_info{filepath}, expected, &expected_metadata};
   out_args.compression = cudf::io::compression_type::NONE;
   cudf_io::write_parquet(out_args);
 
-  // cudf_io::read_parquet_args in_args{cudf_io::source_info{filepath}};
-  // auto result = cudf_io::read_parquet(in_args);
+  cudf_io::read_parquet_args in_args{cudf_io::source_info{filepath}};
+  auto result = cudf_io::read_parquet(in_args);
 
-  // expect_tables_equal(expected->view(), result.tbl->view());
-  // EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+  EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
 
 TEST_F(ParquetWriterTest, MultiIndex)
