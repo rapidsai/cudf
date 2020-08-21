@@ -353,6 +353,11 @@ def test_parquet_read_filtered(tmpdir, seed):
     # Get dataframes to compare
     df = cudf.read_parquet(fname)
     df_filtered = cudf.read_parquet(fname, filters=[("1", ">", 60)])
+    # PyArrow's read_table function does row-group-level filtering in addition
+    # to applying given filters once the table has been read into memory.
+    # Because of this, we aren't using PyArrow as a reference for testing our
+    # row-group selection method since the only way to only select row groups
+    # with PyArrow is with the method we use and intend to test.
     tbl_filtered = pq.read_table(
         fname, filters=[("1", ">", 60)], use_legacy_dataset=False
     )
