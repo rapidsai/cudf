@@ -15,7 +15,6 @@
  */
 #pragma once
 
-#include <cudf/ast/detail/linearizer.hpp>
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/linearizer.hpp>
 #include <cudf/ast/operators.hpp>
@@ -361,77 +360,27 @@ __launch_bounds__(block_size) __global__
                              cudf::size_type num_operators,
                              cudf::size_type num_intermediates);
 
-/**
- * @brief The AST plan creates a device buffer of data needed to execute an AST.
- *
- * On construction, an AST plan creates a single "packed" host buffer of all necessary data arrays,
- * and copies that to the device with a single host-device memory copy. Because the plan tends to be
- * small, this is the most efficient approach for low latency. The stream is not synchronized
- * automatically, so a stream sync must be performed manually (or by another function) before the
- * device data can be used safely.
- *
- */
 struct ast_plan {
  public:
-  ast_plan(std::vector<detail::device_data_reference> data_references,
-           std::vector<cudf::detail::fixed_width_scalar_device_view_base> literals,
-           std::vector<cudf::ast::ast_operator> operators,
-           std::vector<cudf::size_type> operator_source_indices,
-           cudaStream_t stream,
-           rmm::mr::device_memory_resource* mr)
-    : sizes(), host_data_pointers()
-  {
-    add_to_plan(data_references);
-    add_to_plan(literals);
-    add_to_plan(operators);
-    add_to_plan(operator_source_indices);
-    auto const host_data_buffer = get_host_data_buffer();
-    auto const buffer_offsets   = get_offsets();
-    auto const buffer_size      = host_data_buffer.second;
-    auto device_data_buffer =
-      rmm::device_buffer(host_data_buffer.first.get(), buffer_size, stream, mr);
-    // To reduce overhead, we don't call a stream sync here.
-    // The stream is synced later when the table_device_view is created.
+  ast_plan() : sizes(), data_pointers() {}
 
-    // Create device pointers to components of plan
-    auto const device_data_buffer_ptr = static_cast<const char*>(device_data_buffer.data());
-    device_data_references            = reinterpret_cast<const detail::device_data_reference*>(
-      device_data_buffer_ptr + buffer_offsets[0]);
-    device_literals = reinterpret_cast<const cudf::detail::fixed_width_scalar_device_view_base*>(
-      device_data_buffer_ptr + buffer_offsets[1]);
-    device_operators =
-      reinterpret_cast<const ast_operator*>(device_data_buffer_ptr + buffer_offsets[2]);
-    device_operator_source_indices =
-      reinterpret_cast<const cudf::size_type*>(device_data_buffer_ptr + buffer_offsets[3]);
-  }
-
-  const detail::device_data_reference* get_device_data_references() const
-  {
-    return device_data_references;
-  }
-
-  const cudf::detail::fixed_width_scalar_device_view_base* get_device_literals() const
-  {
-    return device_literals;
-  }
-
-  const ast_operator* get_device_operators() const { return device_operators; }
-
-  const cudf::size_type* get_device_operator_source_indices() const
-  {
-    return device_operator_source_indices;
-  }
-
- private:
   using buffer_type = std::pair<std::unique_ptr<char[]>, int>;
+
+  template <typename T>
+  void add_to_plan(std::vector<T> const& v)
+  {
+    auto const data_size = sizeof(T) * v.size();
+    sizes.push_back(data_size);
+    data_pointers.push_back(v.data());
+  }
 
   buffer_type get_host_data_buffer() const
   {
     auto const total_size = std::accumulate(sizes.cbegin(), sizes.cend(), 0);
     auto host_data_buffer = std::make_unique<char[]>(total_size);
     auto const offsets    = get_offsets();
-    for (unsigned int i = 0; i < host_data_pointers.size(); ++i) {
-      std::memcpy(host_data_buffer.get() + offsets[i], host_data_pointers[i], sizes[i]);
+    for (unsigned int i = 0; i < data_pointers.size(); ++i) {
+      std::memcpy(host_data_buffer.get() + offsets.at(i), data_pointers.at(i), sizes.at(i));
     }
     return std::make_pair(std::move(host_data_buffer), total_size);
   }
@@ -440,25 +389,14 @@ struct ast_plan {
   {
     auto offsets = std::vector<int>(sizes.size());
     // When C++17, use std::exclusive_scan
-    offsets[0] = 0;
+    offsets.at(0) = 0;
     std::partial_sum(sizes.cbegin(), sizes.cend() - 1, offsets.begin() + 1);
     return offsets;
   }
 
-  template <typename T>
-  void add_to_plan(std::vector<T> const& v)
-  {
-    auto const data_size = sizeof(T) * v.size();
-    sizes.push_back(data_size);
-    host_data_pointers.push_back(v.data());
-  }
-
+ private:
   std::vector<cudf::size_type> sizes;
-  std::vector<const void*> host_data_pointers;
-  const detail::device_data_reference* device_data_references;
-  const cudf::detail::fixed_width_scalar_device_view_base* device_literals;
-  const ast_operator* device_operators;
-  const cudf::size_type* device_operator_source_indices;
+  std::vector<const void*> data_pointers;
 };
 
 /**
