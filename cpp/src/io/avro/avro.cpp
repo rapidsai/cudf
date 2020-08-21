@@ -317,7 +317,7 @@ bool schema_parser::parse(std::vector<schema_entry> &schema, const std::string &
 /**
  * @Brief Parse a string
  *
- * @returns return parsed string, consuming the terminating quote
+ * @returns parsed string, consuming the terminating quote
  */
 std::string schema_parser::get_str()
 {
