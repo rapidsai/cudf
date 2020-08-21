@@ -140,6 +140,19 @@ bool random_element<bool>(std::mt19937& engine)
   return uniform(engine) == 1;
 }
 
+class rand_elem_fn {
+  std::mt19937& engine;  // tmp until strings are refactored to be generated individually
+
+ public:
+  rand_elem_fn(std::mt19937& engine) : engine{engine} {}
+
+  template <typename T>
+  T operator()()
+  {
+    return random_element<T>(engine);
+  }
+};
+
 /**
  * @brief Creates a column with random content of the given type
  *
@@ -157,6 +170,7 @@ std::unique_ptr<cudf::column> create_random_column(std::mt19937& engine,
                                                    bool include_validity)
 {
   const cudf::size_type num_rows = col_bytes / sizeof(T);
+  auto elem_gen                  = rand_elem_fn{engine};
 
   // Every 100th element is invalid
   // TODO: should this also be random?
@@ -165,7 +179,7 @@ std::unique_ptr<cudf::column> create_random_column(std::mt19937& engine,
 
   cudf::test::fixed_width_column_wrapper<T> wrapped_col;
   auto rand_elements = cudf::test::make_counting_transform_iterator(
-    0, [&](auto row) { return random_element<T>(engine); });
+    0, [&](auto row) { return elem_gen.operator()<T>(); });
   if (include_validity) {
     wrapped_col =
       cudf::test::fixed_width_column_wrapper<T>(rand_elements, rand_elements + num_rows, valids);
@@ -248,14 +262,15 @@ std::unique_ptr<cudf::table> create_random_table(cudf::size_type num_columns,
                                                  cudf::size_type col_bytes,
                                                  bool include_validity)
 {
-  auto engine                           = deterministic_engine();
+  auto engine = deterministic_engine();  // pass the seed param here
+  rand_elem_fn seed_gen(engine);
   const auto processor_count            = std::thread::hardware_concurrency();
   const cudf::size_type cols_per_thread = (num_columns + processor_count - 1) / processor_count;
   cudf::size_type cols_left             = num_columns;
 
   std::vector<std::future<columns_vector>> col_futures;
   for (int i = 0; i < processor_count && cols_left > 0; ++i) {
-    auto thread_engine         = deterministic_engine(random_element<unsigned>(engine));
+    auto thread_engine         = deterministic_engine(seed_gen.operator()<unsigned>());
     auto const thread_num_cols = std::min(cols_left, cols_per_thread);
     col_futures.emplace_back(std::async(std::launch::async,
                                         create_random_columns<T>,
