@@ -126,6 +126,12 @@ class Floating(Inexact):
 class Flexible(Generic):
     pass
 
+class Datetime(Generic):
+    pass
+
+class Timedelta(Generic):
+    pass
+
 class UInt8Dtype(UnsignedInteger):
     def __init__(self):
         self.pa_type = pa.uint8()
@@ -192,10 +198,6 @@ class BooleanDtype(Generic):
         self.pa_type = pa.bool_()
         self._name = "Boolean"
 
-
-class Datetime(Generic):
-    pass
-
 class Datetime64NSDtype(Datetime):
     def __init__(self):
         self.pa_type = pa.timestamp("ns")
@@ -219,6 +221,25 @@ class Datetime64SDtype(Datetime):
         self.pa_type = pa.timestamp("s")
         self._name = "Datetime64S"
 
+class Timedelta64NSDtype(Timedelta):
+    def __init__(self):
+        self.pa_type = pa.duration('ns')
+        self._name = "Timedelta64NS"
+
+class Timedelta64USDtype(Timedelta):
+    def __init__(self):
+        self.pa_type = pa.duration('us')
+        self._name = "Timedelta64US"
+
+class Timedelta64MSDtype(Timedelta):
+    def __init__(self):
+        self.pa_type = pa.duration('ms')
+        self._name = "Timedelta64MS"
+
+class Timedelta64SDtype(Timedelta):
+    def __init__(self):
+        self.pa_type = pa.duration('s')
+        self._name = "Timedelta64S"
 
 class StringDtype(Flexible):
     is_string = True
@@ -475,6 +496,10 @@ pa_to_cudf_dtypes = {
     pa.timestamp("us"): Datetime64USDtype(),
     pa.timestamp("ms"): Datetime64MSDtype(),
     pa.timestamp("s"): Datetime64SDtype(),
+    pa.duration("ns"): Timedelta64NSDtype(),
+    pa.duration("us"): Timedelta64USDtype(),
+    pa.duration("ms"): Timedelta64MSDtype(),
+    pa.duration("s"): Timedelta64SDtype(),
     pa.null(): None
 }
 
@@ -495,6 +520,10 @@ np_to_cudf_dtypes = {
     np.dtype("datetime64[us]"): Datetime64USDtype(),
     np.dtype("datetime64[ms]"): Datetime64MSDtype(),
     np.dtype("datetime64[s]"): Datetime64SDtype(),
+    np.dtype("timedelta64[ns]"): Timedelta64NSDtype(),
+    np.dtype("timedelta64[us]"): Timedelta64USDtype(),
+    np.dtype("timedelta64[ms]"): Timedelta64MSDtype(),
+    np.dtype("timedelta64[s]"): Timedelta64SDtype(),
 }
 
 pd_to_cudf_dtypes = {

@@ -56,6 +56,10 @@ from cudf.core.dtypes import (
     Datetime64USDtype, 
     Datetime64MSDtype,
     Datetime64SDtype,
+    Timedelta64NSDtype,
+    Timedelta64USDtype,
+    Timedelta64MSDtype,
+    Timedelta64SDtype
 )
 
 from cudf.core.groupby import Grouper
