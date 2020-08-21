@@ -266,17 +266,28 @@ __device__ void row_output::resolve_output(detail::device_data_reference device_
 }
 
 /**
- * @brief Functor to evaluate one operator on one row.
+ * @brief Evaluate an expression applied to a row.
  *
+ * This function performs an n-ary transform for one row on one thread.
+ *
+ * @param evaluator The row evaluator used for evaluation.
+ * @param data_references Array of data references.
+ * @param operators Array of operators to perform.
+ * @param operator_source_indices Array of source indices for the operators.
+ * @param num_operators Number of operators.
+ * @param row_index Row index of data column(s).
  */
-struct evaluate_row_operator_functor {
-  __device__ void operator()(ast_operator op,
-                             detail::row_evaluator const& evaluator,
-                             const detail::device_data_reference* data_references,
-                             const cudf::size_type* operator_source_indices,
-                             cudf::size_type& operator_source_index,
-                             cudf::size_type const& row_index)
-  {
+__device__ void evaluate_row_expression(detail::row_evaluator const& evaluator,
+                                        const detail::device_data_reference* data_references,
+                                        const ast_operator* operators,
+                                        const cudf::size_type* operator_source_indices,
+                                        cudf::size_type num_operators,
+                                        cudf::size_type row_index)
+{
+  auto operator_source_index = cudf::size_type(0);
+  for (cudf::size_type operator_index(0); operator_index < num_operators; operator_index++) {
+    // Execute operator
+    auto const op    = operators[operator_index];
     auto const arity = ast_operator_arity(op);
     if (arity == 1) {
       // Unary operator
@@ -301,34 +312,6 @@ struct evaluate_row_operator_functor {
     } else {
       release_assert(false && "Invalid operator arity.");
     }
-  }
-};
-
-/**
- * @brief Evaluate an expression applied to a row.
- *
- * This function performs an n-ary transform for one row on one thread.
- *
- * @param evaluator The row evaluator used for evaluation.
- * @param data_references Array of data references.
- * @param operators Array of operators to perform.
- * @param operator_source_indices Array of source indices for the operators.
- * @param num_operators Number of operators.
- * @param row_index Row index of data column(s).
- */
-__device__ void evaluate_row_expression(detail::row_evaluator const& evaluator,
-                                        const detail::device_data_reference* data_references,
-                                        const ast_operator* operators,
-                                        const cudf::size_type* operator_source_indices,
-                                        cudf::size_type num_operators,
-                                        cudf::size_type row_index)
-{
-  auto operator_source_index = cudf::size_type(0);
-  for (cudf::size_type operator_index(0); operator_index < num_operators; operator_index++) {
-    // Execute operator
-    auto const op = operators[operator_index];
-    evaluate_row_operator_functor{}(
-      op, evaluator, data_references, operator_source_indices, operator_source_index, row_index);
   }
 }
 
