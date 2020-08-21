@@ -270,12 +270,12 @@ __device__ void row_output::resolve_output(detail::device_data_reference device_
  *
  */
 struct evaluate_row_operator_functor {
-  CUDA_HOST_DEVICE_CALLABLE void operator()(ast_operator op,
-                                            detail::row_evaluator const& evaluator,
-                                            const detail::device_data_reference* data_references,
-                                            const cudf::size_type* operator_source_indices,
-                                            cudf::size_type& operator_source_index,
-                                            cudf::size_type const& row_index)
+  __device__ void operator()(ast_operator op,
+                             detail::row_evaluator const& evaluator,
+                             const detail::device_data_reference* data_references,
+                             const cudf::size_type* operator_source_indices,
+                             cudf::size_type& operator_source_index,
+                             cudf::size_type const& row_index)
   {
     auto const arity = ast_operator_arity(op);
     if (arity == 1) {
