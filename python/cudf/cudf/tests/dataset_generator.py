@@ -30,7 +30,10 @@ class ColumnParameters:
         provider and returns an Iterable that generates data.
     is_sorted : bool
         Sort this column. Columns are sorted in same order as ColumnParameters
-        instances stored in column_params of Parameters.
+        instances stored in column_params of Parameters. If there are one or
+        more columns marked as sorted, the generated PyArrow Table will be
+        converted to a Pandas DataFrame to do the sorting. This may implicitly
+        convert numbers to floats in the presence of nulls.
     """
 
     def __init__(
