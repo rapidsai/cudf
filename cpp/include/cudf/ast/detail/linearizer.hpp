@@ -55,6 +55,13 @@ enum class device_data_reference_type {
  *
  */
 struct device_data_reference {
+  device_data_reference(device_data_reference_type reference_type,
+                        cudf::data_type data_type,
+                        cudf::size_type data_index)
+    : reference_type(reference_type), data_type(data_type), data_index(data_index)
+  {
+  }
+
   device_data_reference_type reference_type;  // Source of data
   cudf::data_type data_type;                  // Type of data
   cudf::size_type
@@ -63,8 +70,8 @@ struct device_data_reference {
 
   inline bool operator==(const device_data_reference& rhs) const
   {
-    return data_index == rhs.data_index && reference_type == rhs.reference_type &&
-           table_source == rhs.table_source;
+    return std::tie(data_index, reference_type, table_source) ==
+           std::tie(rhs.data_index, rhs.reference_type, rhs.table_source);
   }
 };
 
