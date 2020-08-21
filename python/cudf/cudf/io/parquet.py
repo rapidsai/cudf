@@ -211,7 +211,7 @@ def read_parquet(
         filters = pq._filters_to_expression(filters)
 
         # Initialize ds.FilesystemDataset
-        dataset = ds.dataset(filepaths_or_buffers, format="parquet")
+        dataset = ds.dataset(filepaths_or_buffers, format="parquet", partitioning="hive")
 
         # Load IDs of filtered row groups for each file in dataset
         filtered_rg_ids = defaultdict(list)
