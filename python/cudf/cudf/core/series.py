@@ -1381,7 +1381,6 @@ class Series(Frame, Serializable):
     __div__ = __truediv__
 
     def _bitwise_binop(self, other, op):
-        if isinstance(self.dtype, (cudf.BooleanDtype, cudf.Integer)
         if (
             np.issubdtype(self.dtype, np.bool_)
             or np.issubdtype(self.dtype, np.integer)
