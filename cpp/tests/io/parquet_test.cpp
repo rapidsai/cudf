@@ -437,20 +437,18 @@ TEST_F(ParquetWriterTest, SlicedTable)
   column_wrapper<int> col0{seq_col0.begin(), seq_col0.end(), validity};
   column_wrapper<cudf::string_view> col1{strings.begin(), strings.end()};
   column_wrapper<float> col2{seq_col2.begin(), seq_col2.end(), validity};
+  cudf::test::lists_column_wrapper<uint64_t> col3{
+    {9, 8}, {7, 6, 5}, {}, {4}, {3, 2, 1, 0}, {20, 21, 22, 23, 24}, {}, {66, 666}};
 
   cudf_io::table_metadata expected_metadata;
   expected_metadata.column_names.emplace_back("col_other");
   expected_metadata.column_names.emplace_back("col_string");
   expected_metadata.column_names.emplace_back("col_another");
+  expected_metadata.column_names.emplace_back("col_list");
 
-  std::vector<std::unique_ptr<column>> cols;
-  cols.push_back(col0.release());
-  cols.push_back(col1.release());
-  cols.push_back(col2.release());
-  auto expected = std::make_unique<table>(std::move(cols));
-  EXPECT_EQ(3, expected->num_columns());
+  auto expected = table_view({col0, col1, col2, col3});
 
-  auto expected_slice = cudf::slice(expected->view(), {2, static_cast<cudf::size_type>(num_rows)});
+  auto expected_slice = cudf::slice(expected, {2, static_cast<cudf::size_type>(num_rows) - 1});
 
   auto filepath = temp_env->get_temp_filepath("SlicedTable.parquet");
   cudf_io::write_parquet_args out_args{

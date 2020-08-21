@@ -483,6 +483,7 @@ class parquet_column_view {
     } else {
       _name = "_col" + std::to_string(_id);
     }
+    _path_in_schema.push_back(_name);
   }
 
   auto is_string() const noexcept { return _string_type; }
