@@ -338,7 +338,12 @@ def test_parquet_read_filtered(tmpdir, seed):
                     generator=lambda g: (g.address.city() for _ in range(40)),
                     is_sorted=False,
                 ),
-                dg.ColumnParameters(40, 0.2, lambda g: (g.person.age() for _ in range(40)), True,),
+                dg.ColumnParameters(
+                    40,
+                    0.2,
+                    lambda g: (g.person.age() for _ in range(40)),
+                    True,
+                ),
             ],
             seed=seed,
         ),
