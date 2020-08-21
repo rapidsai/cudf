@@ -44,13 +44,14 @@
 
 namespace cudf_io = cudf::io;
 
-template <typename T>
-using column_wrapper = typename std::conditional<std::is_same<T, cudf::string_view>::value,
-                                                 cudf::test::strings_column_wrapper,
-                                                 cudf::test::fixed_width_column_wrapper<T>>::type;
-using column         = cudf::column;
-using table          = cudf::table;
-using table_view     = cudf::table_view;
+template <typename T, typename SourceElementT = T>
+using column_wrapper =
+  typename std::conditional<std::is_same<T, cudf::string_view>::value,
+                            cudf::test::strings_column_wrapper,
+                            cudf::test::fixed_width_column_wrapper<T, SourceElementT>>::type;
+using column     = cudf::column;
+using table      = cudf::table;
+using table_view = cudf::table_view;
 
 // Global environment for temporary files
 auto const temp_env = static_cast<cudf::test::TempDirTestEnvironment*>(
@@ -103,7 +104,7 @@ template <typename T>
 using wrapper = cudf::test::fixed_width_column_wrapper<T>;
 
 // temporary method to verify the float columns until
-// cudf::test::expect_columns_equal supports floating point
+// CUDF_TEST_EXPECT_COLUMNS_EQUAL supports floating point
 template <typename T, typename valid_t>
 void check_float_column(cudf::column_view const& col_lhs,
                         cudf::column_view const& col_rhs,
@@ -115,8 +116,8 @@ void check_float_column(cudf::column_view const& col_lhs,
   std::vector<T> data(h_data.size());
   std::copy(h_data.begin(), h_data.end(), data.begin());
 
-  cudf::test::expect_column_properties_equivalent(col_lhs,
-                                                  wrapper<T>{data.begin(), data.end(), validity});
+  CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUIVALENT(col_lhs,
+                                                (wrapper<T>{data.begin(), data.end(), validity}));
   CUDF_EXPECTS(col_lhs.null_count() == 0, "All elements should be valid");
   EXPECT_THAT(cudf::test::to_host<T>(col_lhs).first,
               ::testing::Pointwise(FloatNearPointwise(tol), data));
@@ -390,16 +391,17 @@ TEST_F(CsvReaderTest, Dates)
   EXPECT_EQ(1, view.num_columns());
   ASSERT_EQ(cudf::type_id::TIMESTAMP_MILLISECONDS, view.column(0).type().id());
 
-  expect_column_data_equal(std::vector<cudf::timestamp_ms>{983750400000,
-                                                           1288483200000,
-                                                           782611200000,
-                                                           656208000000,
-                                                           0,
-                                                           798163200000,
-                                                           774144000000,
-                                                           1149679230400,
-                                                           1126875750400,
-                                                           2764800000},
+  using namespace simt::std::chrono_literals;
+  expect_column_data_equal(std::vector<cudf::timestamp_ms>{cudf::timestamp_ms{983750400000ms},
+                                                           cudf::timestamp_ms{1288483200000ms},
+                                                           cudf::timestamp_ms{782611200000ms},
+                                                           cudf::timestamp_ms{656208000000ms},
+                                                           cudf::timestamp_ms{0ms},
+                                                           cudf::timestamp_ms{798163200000ms},
+                                                           cudf::timestamp_ms{774144000000ms},
+                                                           cudf::timestamp_ms{1149679230400ms},
+                                                           cudf::timestamp_ms{1126875750400ms},
+                                                           cudf::timestamp_ms{2764800000ms}},
                            view.column(0));
 }
 
@@ -425,16 +427,17 @@ TEST_F(CsvReaderTest, DatesCastToTimestampSeconds)
   EXPECT_EQ(1, view.num_columns());
   ASSERT_EQ(cudf::type_id::TIMESTAMP_SECONDS, view.column(0).type().id());
 
-  expect_column_data_equal(std::vector<cudf::timestamp_s>{983750400,
-                                                          1288483200,
-                                                          782611200,
-                                                          656208000,
-                                                          0,
-                                                          798163200,
-                                                          774144000,
-                                                          1149679230,
-                                                          1126875750,
-                                                          2764800},
+  using namespace simt::std::chrono_literals;
+  expect_column_data_equal(std::vector<cudf::timestamp_s>{cudf::timestamp_s{983750400s},
+                                                          cudf::timestamp_s{1288483200s},
+                                                          cudf::timestamp_s{782611200s},
+                                                          cudf::timestamp_s{656208000s},
+                                                          cudf::timestamp_s{0s},
+                                                          cudf::timestamp_s{798163200s},
+                                                          cudf::timestamp_s{774144000s},
+                                                          cudf::timestamp_s{1149679230s},
+                                                          cudf::timestamp_s{1126875750s},
+                                                          cudf::timestamp_s{2764800s}},
                            view.column(0));
 }
 
@@ -460,16 +463,17 @@ TEST_F(CsvReaderTest, DatesCastToTimestampMilliSeconds)
   EXPECT_EQ(1, view.num_columns());
   ASSERT_EQ(cudf::type_id::TIMESTAMP_MILLISECONDS, view.column(0).type().id());
 
-  expect_column_data_equal(std::vector<cudf::timestamp_ms>{983750400000,
-                                                           1288483200000,
-                                                           782611200000,
-                                                           656208000000,
-                                                           0,
-                                                           798163200000,
-                                                           774144000000,
-                                                           1149679230400,
-                                                           1126875750400,
-                                                           2764800000},
+  using namespace simt::std::chrono_literals;
+  expect_column_data_equal(std::vector<cudf::timestamp_ms>{cudf::timestamp_ms{983750400000ms},
+                                                           cudf::timestamp_ms{1288483200000ms},
+                                                           cudf::timestamp_ms{782611200000ms},
+                                                           cudf::timestamp_ms{656208000000ms},
+                                                           cudf::timestamp_ms{0ms},
+                                                           cudf::timestamp_ms{798163200000ms},
+                                                           cudf::timestamp_ms{774144000000ms},
+                                                           cudf::timestamp_ms{1149679230400ms},
+                                                           cudf::timestamp_ms{1126875750400ms},
+                                                           cudf::timestamp_ms{2764800000ms}},
                            view.column(0));
 }
 
@@ -495,16 +499,17 @@ TEST_F(CsvReaderTest, DatesCastToTimestampMicroSeconds)
   EXPECT_EQ(1, view.num_columns());
   ASSERT_EQ(cudf::type_id::TIMESTAMP_MICROSECONDS, view.column(0).type().id());
 
-  expect_column_data_equal(std::vector<cudf::timestamp_us>{983750400000000,
-                                                           1288483200000000,
-                                                           782611200000000,
-                                                           656208000000000,
-                                                           0,
-                                                           798163200000000,
-                                                           774144000000000,
-                                                           1149679230400000,
-                                                           1126875750400000,
-                                                           2764800000000},
+  using namespace simt::std::chrono_literals;
+  expect_column_data_equal(std::vector<cudf::timestamp_us>{cudf::timestamp_us{983750400000000us},
+                                                           cudf::timestamp_us{1288483200000000us},
+                                                           cudf::timestamp_us{782611200000000us},
+                                                           cudf::timestamp_us{656208000000000us},
+                                                           cudf::timestamp_us{0us},
+                                                           cudf::timestamp_us{798163200000000us},
+                                                           cudf::timestamp_us{774144000000000us},
+                                                           cudf::timestamp_us{1149679230400000us},
+                                                           cudf::timestamp_us{1126875750400000us},
+                                                           cudf::timestamp_us{2764800000000us}},
                            view.column(0));
 }
 
@@ -530,17 +535,19 @@ TEST_F(CsvReaderTest, DatesCastToTimestampNanoSeconds)
   EXPECT_EQ(1, view.num_columns());
   ASSERT_EQ(cudf::type_id::TIMESTAMP_NANOSECONDS, view.column(0).type().id());
 
-  expect_column_data_equal(std::vector<cudf::timestamp_ns>{983750400000000000,
-                                                           1288483200000000000,
-                                                           782611200000000000,
-                                                           656208000000000000,
-                                                           0,
-                                                           798163200000000000,
-                                                           774144000000000000,
-                                                           1149679230400000000,
-                                                           1126875750400000000,
-                                                           2764800000000000},
-                           view.column(0));
+  using namespace simt::std::chrono_literals;
+  expect_column_data_equal(
+    std::vector<cudf::timestamp_ns>{cudf::timestamp_ns{983750400000000000ns},
+                                    cudf::timestamp_ns{1288483200000000000ns},
+                                    cudf::timestamp_ns{782611200000000000ns},
+                                    cudf::timestamp_ns{656208000000000000ns},
+                                    cudf::timestamp_ns{0ns},
+                                    cudf::timestamp_ns{798163200000000000ns},
+                                    cudf::timestamp_ns{774144000000000000ns},
+                                    cudf::timestamp_ns{1149679230400000000ns},
+                                    cudf::timestamp_ns{1126875750400000000ns},
+                                    cudf::timestamp_ns{2764800000000000ns}},
+    view.column(0));
 }
 
 TEST_F(CsvReaderTest, FloatingPoint)
@@ -901,7 +908,7 @@ TYPED_TEST(CsvReaderNumericTypeTest, SingleColumnWithWriter)
   auto result    = cudf_io::read_csv(in_args);
 
   const auto result_table = result.tbl->view();
-  cudf::test::expect_tables_equivalent(input_table, result_table);
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(input_table, result_table);
 }
 
 TEST_F(CsvReaderTest, MultiColumnWithWriter)
@@ -993,7 +1000,7 @@ TEST_F(CsvReaderTest, MultiColumnWithWriter)
   std::vector<cudf::size_type> non_float64s{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
   const auto input_sliced_view  = input_table.select(non_float64s);
   const auto result_sliced_view = result_table.select(non_float64s);
-  cudf::test::expect_tables_equivalent(input_sliced_view, result_sliced_view);
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(input_sliced_view, result_sliced_view);
 
   auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
   double tol{1.0e-6};
@@ -1009,16 +1016,16 @@ TEST_F(CsvReaderTest, DatesWithWriter)
 {
   auto filepath = temp_env->get_temp_dir() + "DatesWithWriter.csv";
 
-  auto input_column = column_wrapper<cudf::timestamp_ms>{983750400000,
-                                                         1288483200000,
-                                                         782611200000,
-                                                         656208000000,
-                                                         (long)0,
-                                                         798163200000,
-                                                         774144000000,
-                                                         1149679230400,
-                                                         1126875750400,
-                                                         2764800000};
+  auto input_column = column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep>{983750400000,
+                                                                                  1288483200000,
+                                                                                  782611200000,
+                                                                                  656208000000,
+                                                                                  0L,
+                                                                                  798163200000,
+                                                                                  774144000000,
+                                                                                  1149679230400,
+                                                                                  1126875750400,
+                                                                                  2764800000};
   cudf::table_view input_table(std::vector<cudf::column_view>{input_column});
 
   // TODO need to add a dayfirst flag?
@@ -1055,7 +1062,7 @@ TEST_F(CsvReaderTest, FloatingPointWithWriter)
   auto result    = cudf_io::read_csv(in_args);
 
   const auto result_table = result.tbl->view();
-  cudf::test::expect_tables_equivalent(input_table, result_table);
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(input_table, result_table);
 }
 
 TEST_F(CsvReaderTest, StringsWithWriter)
@@ -1079,7 +1086,7 @@ TEST_F(CsvReaderTest, StringsWithWriter)
   auto result     = cudf_io::read_csv(in_args);
 
   const auto result_table = result.tbl->view();
-  cudf::test::expect_columns_equivalent(input_table.column(0), result_table.column(0));
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(input_table.column(0), result_table.column(0));
   check_string_column(input_table.column(1), result_table.column(1));
 }
 
@@ -1103,7 +1110,7 @@ TEST_F(CsvReaderTest, StringsWithWriterSimple)
   auto result     = cudf_io::read_csv(in_args);
 
   const auto result_table = result.tbl->view();
-  cudf::test::expect_columns_equivalent(input_table.column(0), result_table.column(0));
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(input_table.column(0), result_table.column(0));
   check_string_column(input_table.column(1), result_table.column(1));
 }
 

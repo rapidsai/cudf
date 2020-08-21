@@ -407,7 +407,7 @@ def test_multiindex_index_and_columns():
     gdf = cudf.DataFrame()
     gdf["x"] = np.random.randint(0, 5, 5)
     gdf["y"] = np.random.randint(0, 5, 5)
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
     mi = cudf.MultiIndex(
         levels=[[0, 1, 2], [3, 4]],
         codes=[[0, 0, 1, 1, 2], [0, 1, 0, 1, 1]],
@@ -418,8 +418,8 @@ def test_multiindex_index_and_columns():
         levels=[["val"], ["mean", "min"]], codes=[[0, 0], [0, 1]]
     )
     gdf.columns = mc
-    pdf.index = mi.to_pandas(nullable_pd_dtype=False)
-    pdf.columns = mc.to_pandas(nullable_pd_dtype=False)
+    pdf.index = mi.to_pandas()
+    pdf.columns = mc.to_pandas()
     assert_eq(pdf, gdf)
 
 
@@ -691,7 +691,7 @@ def test_multicolumn_item():
     )
     gdg = gdf.groupby(["x", "y"]).min()
     gdgT = gdg.T
-    pdgT = gdgT.to_pandas(nullable_pd_dtype=False)
+    pdgT = gdgT.to_pandas()
     assert_eq(gdgT[(0, 0)], pdgT[(0, 0)])
 
 
@@ -710,7 +710,7 @@ def test_multiindex_groupby_to_frame():
     gdf = cudf.DataFrame(
         {"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5], "z": [0, 1, 0, 1, 0]}
     )
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
     gdg = gdf.groupby(["x", "y"]).count()
     pdg = pdf.groupby(["x", "y"]).count()
     assert_eq(pdg.index.to_frame(), gdg.index.to_frame())
@@ -727,7 +727,7 @@ def test_multiindex_groupby_reset_index():
     gdf = cudf.DataFrame(
         {"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5], "z": [0, 1, 0, 1, 0]}
     )
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
     gdg = gdf.groupby(["x", "y"]).sum()
     pdg = pdf.groupby(["x", "y"]).sum()
     assert_eq(pdg.reset_index(), gdg.reset_index())
@@ -799,7 +799,7 @@ def test_multiindex_multicolumn_zero_row_slice():
     gdf = cudf.DataFrame(
         {"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5], "z": [1, 2, 3, 4, 5]}
     )
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
     gdg = gdf.groupby(["x", "y"]).agg({"z": ["count"]}).iloc[:0]
     pdg = pdf.groupby(["x", "y"]).agg({"z": ["count"]}).iloc[:0]
     assert_eq(pdg, gdg, check_dtype=False)

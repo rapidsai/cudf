@@ -517,9 +517,7 @@ class Index(Frame, Serializable):
         >>> type(idx)
         <class 'cudf.core.index.GenericIndex'>
         """
-        return pd.Index(
-            self._values.to_pandas(nullable_pd_dtype=False), name=self.name
-        )
+        return pd.Index(self._values.to_pandas(), name=self.name)
 
     def to_arrow(self):
         """
@@ -812,11 +810,13 @@ class Index(Frame, Serializable):
         Int64Index([10, 100, 1, 1000], dtype='int64')
 
         Sort values in ascending order (default behavior).
+
         >>> idx.sort_values()
         Int64Index([1, 10, 100, 1000], dtype='int64')
 
         Sort values in descending order, and also get the indices `idx` was
         sorted by.
+
         >>> idx.sort_values(ascending=False, return_indexer=True)
         (Int64Index([1000, 100, 10, 1], dtype='int64'), array([3, 1, 0, 2],
                                                             dtype=int32))
@@ -1511,8 +1511,7 @@ class RangeIndex(Index):
     @cached_property
     def _values(self):
         if len(self) > 0:
-            vals = cupy.arange(self._start, self._stop, dtype=self.dtype)
-            return column.as_column(vals)
+            return column.arange(self._start, self._stop, dtype=self.dtype)
         else:
             return column.column_empty(0, masked=False, dtype=self.dtype)
 
@@ -1740,7 +1739,7 @@ class RangeIndex(Index):
 
 
 def index_from_range(start, stop=None, step=None):
-    vals = cupy.arange(start, stop, step, dtype=np.int64)
+    vals = column.arange(start, stop, step, dtype=np.int64)
     return as_index(vals)
 
 
@@ -2130,9 +2129,7 @@ class DatetimeIndex(GenericIndex):
 
     def to_pandas(self):
         nanos = self._values.astype("datetime64[ns]")
-        return pd.DatetimeIndex(
-            nanos.to_pandas(nullable_pd_dtype=False), name=self.name
-        )
+        return pd.DatetimeIndex(nanos.to_pandas(), name=self.name)
 
     def get_dt_field(self, field):
         out_column = self._values.get_dt_field(field)
@@ -2225,7 +2222,7 @@ class TimedeltaIndex(GenericIndex):
 
     def to_pandas(self):
         return pd.TimedeltaIndex(
-            self._values.to_pandas(nullable_pd_dtype=False),
+            self._values.to_pandas(),
             name=self.name,
             unit=self._values.time_unit,
         )
@@ -2270,23 +2267,6 @@ class TimedeltaIndex(GenericIndex):
     @property
     def inferred_freq(self):
         raise NotImplementedError("inferred_freq is not yet supported")
-
-    def _clean_nulls_from_index(self):
-        """
-        Convert all na values(if any) in Index object
-        to `<NA>` as a preprocessing step to `__repr__` methods.
-
-        This will involve changing type of Index object
-        to StringIndex but it is the responsibility of the `__repr__`
-        methods using this method to replace or handle representation
-        of the actual types correctly.
-        """
-        return cudf.Index(
-            self._values._repr_str_col().fillna(cudf._NA_REP)
-            if self._values.has_nulls
-            else self._values._repr_str_col(),
-            name=self.name,
-        )
 
 
 class CategoricalIndex(GenericIndex):

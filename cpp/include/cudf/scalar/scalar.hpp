@@ -437,22 +437,6 @@ class chrono_scalar : public detail::fixed_width_scalar<T> {
   }
 
   /**
-   * @brief Construct a new chrono scalar object from an integer
-   *
-   * @param[in] value Integer representing number of ticks since the UNIX epoch
-   * @param[in] is_valid Whether the value held by the scalar is valid
-   * @param[in] stream CUDA stream used for device memory operations.
-   * @param[in] mr Device memory resource to use for device memory allocation
-   */
-  chrono_scalar(typename T::rep value,
-                bool is_valid,
-                cudaStream_t stream                 = 0,
-                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
-    : detail::fixed_width_scalar<T>(T{value}, is_valid, stream, mr)
-  {
-  }
-
-  /**
    * @brief Construct a new chrono scalar object from existing device memory.
    *
    * @param[in] data The scalar's data in device memory
@@ -474,6 +458,27 @@ struct timestamp_scalar : chrono_scalar<T> {
   static_assert(is_timestamp<T>(), "Unexpected non-timestamp type");
   using chrono_scalar<T>::chrono_scalar;
 
+  timestamp_scalar() = default;
+
+  /**
+   * @brief Construct a new timestamp scalar object from a duration that is
+   * convertible to T::duration
+   *
+   * @param value Duration representing number of ticks since the UNIX epoch or
+   * another duration that is convertible to timestamps duration
+   * @param is_valid Whether the value held by the scalar is valid
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  template <typename Duration2>
+  timestamp_scalar(Duration2 const& value,
+                   bool is_valid,
+                   cudaStream_t stream                 = 0,
+                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+    : chrono_scalar<T>(T{typename T::duration{value}}, is_valid, stream, mr)
+  {
+  }
+
   /**
    * @brief Return the duration in number of ticks since the UNIX epoch.
    */
@@ -484,6 +489,24 @@ template <typename T>
 struct duration_scalar : chrono_scalar<T> {
   static_assert(is_duration<T>(), "Unexpected non-duration type");
   using chrono_scalar<T>::chrono_scalar;
+
+  duration_scalar() = default;
+
+  /**
+   * @brief Construct a new duration scalar object from tick counts
+   *
+   * @param value Integer representing number of ticks since the UNIX epoch
+   * @param is_valid Whether the value held by the scalar is valid
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  duration_scalar(typename T::rep value,
+                  bool is_valid,
+                  cudaStream_t stream                 = 0,
+                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+    : chrono_scalar<T>(T{value}, is_valid, stream, mr)
+  {
+  }
 
   /**
    * @brief Return the duration in number of ticks.

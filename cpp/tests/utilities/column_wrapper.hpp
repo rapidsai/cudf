@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/null_mask.hpp>
@@ -135,25 +136,18 @@ struct fixed_width_type_converter {
     std::transform(begin, end, out, [](auto const& e) { return static_cast<ToT>(e); });
   }
 
-#if 0
-  // This is to be used when timestamp disallows construction from tick counts; presently,
-  // this conflicts with the convertible/constructible overload
   // Convert integral values to timestamps
   template <
-    typename FromT                        = From,
-    typename ToT                       = To,
-    typename InputIterator, typename OutputIterator,
+    typename FromT = From,
+    typename ToT   = To,
+    typename InputIterator,
+    typename OutputIterator,
     typename std::enable_if<std::is_integral<FromT>::value && cudf::is_timestamp_t<ToT>::value,
                             void>::type* = nullptr>
-  void operator()(InputIterator begin,
-                  InputIterator end,
-                  OutputIterator out
-                  ) const
+  void operator()(InputIterator begin, InputIterator end, OutputIterator out) const
   {
-      std::transform(
-      begin, end, out, [](auto const& e) { return ToT{typename ToT::duration{e}}; });
+    std::transform(begin, end, out, [](auto const& e) { return ToT{typename ToT::duration{e}}; });
   }
-#endif
 };
 
 /**
@@ -605,8 +599,8 @@ class strings_column_wrapper : public detail::column_wrapper {
  * @endcode
  *
  */
-template <typename T>
-class lists_column_wrapper : public cudf::test::detail::column_wrapper {
+template <typename T, typename SourceElementT = T>
+class lists_column_wrapper : public detail::column_wrapper {
  public:
   /**
    * @brief Construct a lists column containing a single list of fixed-width
@@ -622,9 +616,10 @@ class lists_column_wrapper : public cudf::test::detail::column_wrapper {
    * @param elements The list of elements
    */
   template <typename Element = T, std::enable_if_t<cudf::is_fixed_width<Element>()>* = nullptr>
-  lists_column_wrapper(std::initializer_list<T> elements) : column_wrapper{}
+  lists_column_wrapper(std::initializer_list<SourceElementT> elements) : column_wrapper{}
   {
-    build_from_non_nested(std::move(cudf::test::fixed_width_column_wrapper<T>(elements).release()));
+    build_from_non_nested(
+      std::move(cudf::test::fixed_width_column_wrapper<T, SourceElementT>(elements).release()));
   }
 
   /**
@@ -647,9 +642,8 @@ class lists_column_wrapper : public cudf::test::detail::column_wrapper {
             std::enable_if_t<cudf::is_fixed_width<Element>()>* = nullptr>
   lists_column_wrapper(InputIterator begin, InputIterator end) : column_wrapper{}
   {
-    build_from_non_nested(std::move(
-      cudf::test::fixed_width_column_wrapper<typename InputIterator::value_type>(begin, end)
-        .release()));
+    build_from_non_nested(
+      std::move(cudf::test::fixed_width_column_wrapper<T, SourceElementT>(begin, end).release()));
   }
 
   /**
@@ -670,10 +664,11 @@ class lists_column_wrapper : public cudf::test::detail::column_wrapper {
   template <typename Element = T,
             typename ValidityIterator,
             std::enable_if_t<cudf::is_fixed_width<Element>()>* = nullptr>
-  lists_column_wrapper(std::initializer_list<T> elements, ValidityIterator v) : column_wrapper{}
+  lists_column_wrapper(std::initializer_list<SourceElementT> elements, ValidityIterator v)
+    : column_wrapper{}
   {
     build_from_non_nested(
-      std::move(cudf::test::fixed_width_column_wrapper<T>(elements, v).release()));
+      std::move(cudf::test::fixed_width_column_wrapper<T, SourceElementT>(elements, v).release()));
   }
 
   /**
@@ -700,8 +695,8 @@ class lists_column_wrapper : public cudf::test::detail::column_wrapper {
   lists_column_wrapper(InputIterator begin, InputIterator end, ValidityIterator v)
     : column_wrapper{}
   {
-    build_from_non_nested(
-      std::move(cudf::test::fixed_width_column_wrapper<T>(begin, end, v).release()));
+    build_from_non_nested(std::move(
+      cudf::test::fixed_width_column_wrapper<T, SourceElementT>(begin, end, v).release()));
   }
 
   /**
@@ -771,7 +766,8 @@ class lists_column_wrapper : public cudf::test::detail::column_wrapper {
    *
    * @param elements The list of elements
    */
-  lists_column_wrapper(std::initializer_list<lists_column_wrapper<T>> elements) : column_wrapper{}
+  lists_column_wrapper(std::initializer_list<lists_column_wrapper<T, SourceElementT>> elements)
+    : column_wrapper{}
   {
     std::vector<bool> valids;
     build_from_nested(elements, valids);
@@ -819,7 +815,8 @@ class lists_column_wrapper : public cudf::test::detail::column_wrapper {
    * @param v The validity iterator
    */
   template <typename ValidityIterator>
-  lists_column_wrapper(std::initializer_list<lists_column_wrapper<T>> elements, ValidityIterator v)
+  lists_column_wrapper(std::initializer_list<lists_column_wrapper<T, SourceElementT>> elements,
+                       ValidityIterator v)
     : column_wrapper{}
   {
     std::vector<bool> validity;
@@ -847,7 +844,7 @@ class lists_column_wrapper : public cudf::test::detail::column_wrapper {
    * @param c Input column to be wrapped
    *
    */
-  void build_from_nested(std::initializer_list<lists_column_wrapper<T>> elements,
+  void build_from_nested(std::initializer_list<lists_column_wrapper<T, SourceElementT>> elements,
                          std::vector<bool> const& v)
   {
     auto valids = cudf::test::make_counting_transform_iterator(
@@ -992,7 +989,7 @@ class lists_column_wrapper : public cudf::test::detail::column_wrapper {
   }
 
   std::pair<std::vector<column_view>, std::vector<std::unique_ptr<column>>> preprocess_columns(
-    std::initializer_list<lists_column_wrapper<T>> const& elements,
+    std::initializer_list<lists_column_wrapper<T, SourceElementT>> const& elements,
     column_view& expected_hierarchy,
     int expected_depth)
   {
@@ -1041,6 +1038,150 @@ class lists_column_wrapper : public cudf::test::detail::column_wrapper {
 
   int depth = 0;
   bool root = false;
+};
+
+/**
+ * @brief `column_wrapper` derived class for wrapping columns of structs.
+ */
+class structs_column_wrapper : public detail::column_wrapper {
+ public:
+  /**
+   * @brief Constructs a struct column from the specified list of pre-constructed child columns.
+   *
+   * The child columns are "adopted" by the struct column constructed here.
+   *
+   * Example usage:
+   * @code{.cpp}
+   * // The following constructs a column for struct< int, string >.
+   * auto child_int_col = fixed_width_column_wrapper<int32_t>{ 1, 2, 3, 4, 5 }.release();
+   * auto child_string_col = string_column_wrapper {"All", "the", "leaves", "are",
+   * "brown"}.release();
+   *
+   * std::vector<std::unique_ptr<column>> child_columns;
+   * child_columns.push_back(std::move(child_int_col));
+   * child_columns.push_back(std::move(child_string_col));
+   *
+   * struct_column_wrapper struct_column_wrapper{
+   *  child_cols,
+   *  {1,0,1,0,1} // Validity.
+   * };
+   *
+   * auto struct_col {struct_column_wrapper.release()};
+   * @endcode
+   *
+   * @param child_columns The vector of pre-constructed child columns
+   * @param validity The vector of bools representing the column validity values
+   */
+  structs_column_wrapper(std::vector<std::unique_ptr<cudf::column>>&& child_columns,
+                         std::vector<bool> const& validity = {})
+  {
+    init(std::move(child_columns), validity);
+  }
+
+  /**
+   * @brief Constructs a struct column from the list of column wrappers for child columns.
+   *
+   * Example usage:
+   * @code{.cpp}
+   * // The following constructs a column for struct< int, string >.
+   * fixed_width_column_wrapper<int32_t> child_int_col_wrapper{ 1, 2, 3, 4, 5 };
+   * string_column_wrapper child_string_col_wrapper {"All", "the", "leaves", "are", "brown"};
+   *
+   * struct_column_wrapper struct_column_wrapper{
+   *  {child_int_col_wrapper, child_string_col_wrapper}
+   *  {1,0,1,0,1} // Validity.
+   * };
+   *
+   * auto struct_col {struct_column_wrapper.release()};
+   * @endcode
+   *
+   * @param child_columns_wrappers The list of child column wrappers
+   * @param validity The vector of bools representing the column validity values
+   */
+  structs_column_wrapper(
+    std::initializer_list<std::reference_wrapper<detail::column_wrapper>> child_column_wrappers,
+    std::vector<bool> const& validity = {})
+  {
+    std::vector<std::unique_ptr<cudf::column>> child_columns;
+    child_columns.reserve(child_column_wrappers.size());
+    std::transform(child_column_wrappers.begin(),
+                   child_column_wrappers.end(),
+                   std::back_inserter(child_columns),
+                   [&](auto column_wrapper) { return column_wrapper.get().release(); });
+    init(std::move(child_columns), validity);
+  }
+
+  /**
+   * @brief Constructs a struct column from the list of column wrappers for child columns.
+   *
+   * Example usage:
+   * @code{.cpp}
+   * // The following constructs a column for struct< int, string >.
+   * fixed_width_column_wrapper<int32_t> child_int_col_wrapper{ 1, 2, 3, 4, 5 };
+   * string_column_wrapper child_string_col_wrapper {"All", "the", "leaves", "are", "brown"};
+   *
+   * struct_column_wrapper struct_column_wrapper{
+   *  {child_int_col_wrapper, child_string_col_wrapper}
+   *  cudf::test::make_counting_transform_iterator(0, [](auto i){ return i%2; }) // Validity.
+   * };
+   *
+   * auto struct_col {struct_column_wrapper.release()};
+   * @endcode
+   *
+   * @param child_columns_wrappers The list of child column wrappers
+   * @param validity Iterator returning the per-row validity bool
+   */
+  template <typename V>
+  structs_column_wrapper(
+    std::initializer_list<std::reference_wrapper<detail::column_wrapper>> child_column_wrappers,
+    V validity_iter)
+  {
+    std::vector<std::unique_ptr<cudf::column>> child_columns;
+    child_columns.reserve(child_column_wrappers.size());
+    std::transform(child_column_wrappers.begin(),
+                   child_column_wrappers.end(),
+                   std::back_inserter(child_columns),
+                   [&](auto column_wrapper) { return column_wrapper.get().release(); });
+    init(std::move(child_columns), validity_iter);
+  }
+
+ private:
+  void init(std::vector<std::unique_ptr<cudf::column>>&& child_columns,
+            std::vector<bool> const& validity)
+  {
+    size_type num_rows = child_columns.empty() ? 0 : child_columns[0]->size();
+
+    CUDF_EXPECTS(std::all_of(child_columns.begin(),
+                             child_columns.end(),
+                             [&](auto const& p_column) { return p_column->size() == num_rows; }),
+                 "All struct member columns must have the same row count.");
+
+    CUDF_EXPECTS(validity.size() <= 0 || static_cast<size_type>(validity.size()) == num_rows,
+                 "Validity buffer must have as many elements as rows in the struct column.");
+
+    wrapped = cudf::make_structs_column(
+      num_rows,
+      std::move(child_columns),
+      validity.size() <= 0 ? 0 : cudf::UNKNOWN_NULL_COUNT,
+      validity.size() <= 0 ? rmm::device_buffer{0}
+                           : detail::make_null_mask(validity.begin(), validity.end()));
+  }
+
+  template <typename V>
+  void init(std::vector<std::unique_ptr<cudf::column>>&& child_columns, V validity_iterator)
+  {
+    size_type num_rows = child_columns.empty() ? 0 : child_columns[0]->size();
+
+    CUDF_EXPECTS(std::all_of(child_columns.begin(),
+                             child_columns.end(),
+                             [&](auto const& p_column) { return p_column->size() == num_rows; }),
+                 "All struct member columns must have the same row count.");
+
+    std::vector<bool> validity(num_rows);
+    std::copy(validity_iterator, validity_iterator + num_rows, validity.begin());
+
+    init(std::move(child_columns), validity);
+  }
 };
 
 }  // namespace test

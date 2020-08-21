@@ -4413,9 +4413,8 @@ class StringColumn(column.ColumnBase):
 
         if len(children) == 0 and size != 0:
             # all nulls-column:
-            offsets = cudf.core.column.as_column(
-                cupy.zeros(size + 1, dtype="int32")
-            )
+            offsets = column.full(size + 1, 0, dtype="int32")
+
             chars = cudf.core.column.as_column([], dtype="int8")
             children = (offsets, chars)
 
@@ -4608,14 +4607,6 @@ class StringColumn(column.ColumnBase):
             return pa.StringArray.from_buffers(
                 len(self), obuf, sbuf, nbuf, self.null_count
             )
-
-    def to_pandas(self, index=None, nullable_pd_dtype=False):
-        pd_series = self.to_arrow().to_pandas()
-        if index is not None:
-            pd_series.index = index
-        if nullable_pd_dtype:
-            return pd_series.astype(pd.StringDtype(), copy=False)
-        return pd_series
 
     @property
     def values_host(self):
