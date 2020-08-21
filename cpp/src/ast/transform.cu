@@ -82,35 +82,8 @@ std::unique_ptr<column> compute_column(table_view const table,
   auto const operator_source_indices = expr_linearizer.get_operator_source_indices();
   auto const expr_data_type          = expr_linearizer.get_root_data_type();
 
-  // Create ast_plan and device buffer
-  auto plan = ast_plan();
-  plan.add_to_plan(data_references);
-  plan.add_to_plan(literals);
-  plan.add_to_plan(operators);
-  plan.add_to_plan(operator_source_indices);
-  auto const host_data_buffer = plan.get_host_data_buffer();
-  auto const buffer_offsets   = plan.get_offsets();
-  auto const buffer_size      = host_data_buffer.second;
-  auto device_data_buffer     = rmm::device_buffer(buffer_size, stream, mr);
-  CUDA_TRY(cudaMemcpyAsync(device_data_buffer.data(),
-                           host_data_buffer.first.get(),
-                           buffer_size,
-                           cudaMemcpyHostToDevice,
-                           stream));
-  // To reduce overhead, we don't call a stream sync here.
-  // The stream is synced later when the table_device_view is created.
-
-  // Create device pointers to components of plan
-  auto const device_data_buffer_ptr = static_cast<const char*>(device_data_buffer.data());
-  auto const device_data_references = reinterpret_cast<const detail::device_data_reference*>(
-    device_data_buffer_ptr + buffer_offsets.at(0));
-  auto const device_literals =
-    reinterpret_cast<const cudf::detail::fixed_width_scalar_device_view_base*>(
-      device_data_buffer_ptr + buffer_offsets.at(1));
-  auto const device_operators =
-    reinterpret_cast<const ast_operator*>(device_data_buffer_ptr + buffer_offsets.at(2));
-  auto const device_operator_source_indices =
-    reinterpret_cast<const cudf::size_type*>(device_data_buffer_ptr + buffer_offsets.at(3));
+  // Create ast_plan with device buffer
+  auto plan = ast_plan(data_references, literals, operators, operator_source_indices, stream, mr);
 
   // Create table device view
   auto table_device         = table_device_view::create(table, stream);
@@ -142,11 +115,11 @@ std::unique_ptr<column> compute_column(table_view const table,
   cudf::ast::detail::compute_column_kernel<MAX_BLOCK_SIZE>
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream>>>(
       *table_device,
-      device_literals,
+      plan.get_device_literals(),
       *mutable_output_device,
-      device_data_references,
-      device_operators,
-      device_operator_source_indices,
+      plan.get_device_data_references(),
+      plan.get_device_operators(),
+      plan.get_device_operator_source_indices(),
       num_operators,
       num_intermediates);
   CHECK_CUDA(stream);
