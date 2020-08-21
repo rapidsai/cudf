@@ -142,21 +142,24 @@ class linearizer {
    *
    * @return std::vector<detail::device_data_reference>
    */
-  std::vector<detail::device_data_reference> get_data_references() const { return data_references; }
+  std::vector<detail::device_data_reference> const& get_data_references() const
+  {
+    return data_references;
+  }
 
   /**
    * @brief Get the operators.
    *
    * @return std::vector<ast_operator>
    */
-  std::vector<ast_operator> get_operators() const { return operators; }
+  std::vector<ast_operator> const& get_operators() const { return operators; }
 
   /**
    * @brief Get the operator source indices.
    *
    * @return std::vector<cudf::size_type>
    */
-  std::vector<cudf::size_type> get_operator_source_indices() const
+  std::vector<cudf::size_type> const& get_operator_source_indices() const
   {
     return operator_source_indices;
   }
@@ -166,7 +169,7 @@ class linearizer {
    *
    * @return std::vector<cudf::detail::fixed_width_scalar_device_view_base>
    */
-  std::vector<cudf::detail::fixed_width_scalar_device_view_base> get_literals() const
+  std::vector<cudf::detail::fixed_width_scalar_device_view_base> const& get_literals() const
   {
     return literals;
   }
