@@ -164,7 +164,7 @@ class metadata {
    *
    * @return List of stripe info and total number of selected rows
    **/
-  auto select_stripes(const std::vector<size_type> & stripe_list,
+  auto select_stripes(const std::vector<size_type> &stripe_list,
                       size_type &row_start,
                       size_type &row_count)
   {
@@ -604,15 +604,14 @@ reader::impl::impl(std::unique_ptr<datasource> source,
 
 table_with_metadata reader::impl::read(size_type skip_rows,
                                        size_type num_rows,
-                                       const std::vector<size_type> & stripe_list,
+                                       const std::vector<size_type> &stripe_list,
                                        cudaStream_t stream)
 {
   std::vector<std::unique_ptr<column>> out_columns;
   table_metadata out_metadata;
 
   // Select only stripes required (aka row groups)
-  const auto selected_stripes =
-    _metadata->select_stripes(stripe_list, skip_rows, num_rows);
+  const auto selected_stripes = _metadata->select_stripes(stripe_list, skip_rows, num_rows);
 
   // Association between each ORC column and its cudf::column
   std::vector<int32_t> orc_col_map(_metadata->get_num_columns(), -1);
@@ -845,8 +844,7 @@ table_with_metadata reader::read_all(cudaStream_t stream)
 table_with_metadata reader::read_stripes(const std::vector<size_type> &stripe_list,
                                          cudaStream_t stream)
 {
-  return _impl->read(
-    0, -1, stripe_list, stream);
+  return _impl->read(0, -1, stripe_list, stream);
 }
 
 // Forward to implementation
