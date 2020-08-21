@@ -6,8 +6,10 @@
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 
+#include <future>
 #include <memory>
 #include <random>
+#include <thread>
 #include <vector>
 
 /**
@@ -30,12 +32,7 @@
  *
  * Produces the same random sequence on each run.
  */
-auto& deterministic_engine()
-{
-  static unsigned seed = 13377331;
-  static std::mt19937 engine{seed};
-  return engine;
-}
+auto deterministic_engine(unsigned seed = 13377331) { return std::mt19937{seed}; }
 
 /**
  * @brief Type trait for cudf timestamp types.
@@ -73,7 +70,7 @@ constexpr int64_t nanoseconds()
  * @tparam T Timestamp type
  */
 template <typename T, std::enable_if_t<is_timestamp<T>::value, int> = 0>
-T random_element()
+T random_element(std::mt19937& engine)
 {
   // Timestamp for June 2020
   static constexpr int64_t current_ns    = 1591053936l * nanoseconds<cudf::timestamp_s>();
@@ -86,9 +83,8 @@ T random_element()
                                                                 nanoseconds<cudf::timestamp_s>()};
 
   // Subtract the seconds from the 2020 timestamp to generate a reccent timestamp
-  auto const timestamp_ns = current_ns -
-                            seconds_gen(deterministic_engine()) * nanoseconds<cudf::timestamp_s>() -
-                            nanoseconds_gen(deterministic_engine());
+  auto const timestamp_ns =
+    current_ns - seconds_gen(engine) * nanoseconds<cudf::timestamp_s>() - nanoseconds_gen(engine);
   // Return value in the type's precision
   return T(typename T::duration{timestamp_ns / nanoseconds<T>()});
 }
@@ -116,7 +112,7 @@ constexpr auto stddev()
  * @tparam T Numeric type
  */
 template <typename T, std::enable_if_t<not is_timestamp<T>::value, int> = 0>
-T random_element()
+T random_element(std::mt19937& engine)
 {
   static constexpr T lower_bound = std::numeric_limits<T>::lowest();
   static constexpr T upper_bound = std::numeric_limits<T>::max();
@@ -124,7 +120,7 @@ T random_element()
   // Use the type dependent standard deviation
   static std::normal_distribution<> gaussian{0., stddev<T>()};
 
-  auto elem = gaussian(deterministic_engine());
+  auto elem = gaussian(engine);
   // Use absolute value for unsigned types
   if (lower_bound >= 0) elem = abs(elem);
   elem = std::max(std::min(elem, (double)upper_bound), (double)lower_bound);
@@ -138,10 +134,10 @@ T random_element()
  * @return The random boolean value
  */
 template <>
-bool random_element<bool>()
+bool random_element<bool>(std::mt19937& engine)
 {
   static std::uniform_int_distribution<> uniform{0, 1};
-  return uniform(deterministic_engine()) == 1;
+  return uniform(engine) == 1;
 }
 
 /**
@@ -156,7 +152,9 @@ bool random_element<bool>()
  * @return Column filled with random data
  */
 template <typename T>
-std::unique_ptr<cudf::column> create_random_column(cudf::size_type col_bytes, bool include_validity)
+std::unique_ptr<cudf::column> create_random_column(std::mt19937& engine,
+                                                   cudf::size_type col_bytes,
+                                                   bool include_validity)
 {
   const cudf::size_type num_rows = col_bytes / sizeof(T);
 
@@ -166,8 +164,8 @@ std::unique_ptr<cudf::column> create_random_column(cudf::size_type col_bytes, bo
     0, [](auto i) { return i % 100 == 0 ? false : true; });
 
   cudf::test::fixed_width_column_wrapper<T> wrapped_col;
-  auto rand_elements =
-    cudf::test::make_counting_transform_iterator(0, [](auto row) { return random_element<T>(); });
+  auto rand_elements = cudf::test::make_counting_transform_iterator(
+    0, [&](auto row) { return random_element<T>(engine); });
   if (include_validity) {
     wrapped_col =
       cudf::test::fixed_width_column_wrapper<T>(rand_elements, rand_elements + num_rows, valids);
@@ -195,7 +193,8 @@ std::unique_ptr<cudf::column> create_random_column(cudf::size_type col_bytes, bo
  * @return Column filled with random data
  */
 template <>
-std::unique_ptr<cudf::column> create_random_column<std::string>(cudf::size_type col_bytes,
+std::unique_ptr<cudf::column> create_random_column<std::string>(std::mt19937& engine,
+                                                                cudf::size_type col_bytes,
                                                                 bool include_validity)
 {
   // TODO: have some elements be null?
@@ -207,9 +206,7 @@ std::unique_ptr<cudf::column> create_random_column<std::string>(cudf::size_type 
 
   std::vector<int32_t> offsets{0};
   offsets.reserve(num_rows + 1);
-  for (int i = 1; i < num_rows; ++i) {
-    offsets.push_back(offsets.back() + dist(deterministic_engine()));
-  }
+  for (int i = 1; i < num_rows; ++i) { offsets.push_back(offsets.back() + dist(engine)); }
   auto const char_cnt = offsets.back() + 1;
   std::vector<char> chars;
   chars.reserve(char_cnt);
@@ -220,6 +217,21 @@ std::unique_ptr<cudf::column> create_random_column<std::string>(cudf::size_type 
   });
 
   return cudf::make_strings_column(chars, offsets);
+}
+
+using columns_vector = std::vector<std::unique_ptr<cudf::column>>;
+
+template <typename T>
+columns_vector create_random_columns(std::mt19937 engine,
+                                     cudf::size_type num_columns,
+                                     cudf::size_type col_bytes,
+                                     bool include_validity)
+{
+  columns_vector output_columns;
+  std::generate_n(std::back_inserter(output_columns), num_columns, [&]() {
+    return create_random_column<T>(engine, col_bytes, include_validity);
+  });
+  return output_columns;
 }
 
 /**
@@ -236,13 +248,34 @@ std::unique_ptr<cudf::table> create_random_table(cudf::size_type num_columns,
                                                  cudf::size_type col_bytes,
                                                  bool include_validity)
 {
-  return std::make_unique<cudf::table>([&]() {
-    std::vector<std::unique_ptr<cudf::column>> columns;
-    std::generate_n(std::back_inserter(columns), num_columns, [&]() {
-      return create_random_column<T>(col_bytes, include_validity);
-    });
-    return columns;
-  }());
+  auto engine                           = deterministic_engine();
+  const auto processor_count            = std::thread::hardware_concurrency();
+  const cudf::size_type cols_per_thread = (num_columns + processor_count - 1) / processor_count;
+  cudf::size_type cols_left             = num_columns;
+
+  std::vector<std::future<columns_vector>> col_futures;
+  for (int i = 0; i < processor_count && cols_left > 0; ++i) {
+    auto thread_engine         = deterministic_engine(random_element<unsigned>(engine));
+    auto const thread_num_cols = std::min(cols_left, cols_per_thread);
+    col_futures.emplace_back(std::async(std::launch::async,
+                                        create_random_columns<T>,
+                                        std::move(thread_engine),
+                                        thread_num_cols,
+                                        col_bytes,
+                                        include_validity));
+    cols_left -= thread_num_cols;
+  }
+
+  columns_vector output_columns;
+  for (auto& cf : col_futures) {
+    auto partial_table = cf.get();
+    output_columns.reserve(output_columns.size() + partial_table.size());
+    std::move(
+      std::begin(partial_table), std::end(partial_table), std::back_inserter(output_columns));
+    partial_table.clear();
+  }
+
+  return std::make_unique<cudf::table>(std::move(output_columns));
 }
 
 // TODO: create random mixed table
