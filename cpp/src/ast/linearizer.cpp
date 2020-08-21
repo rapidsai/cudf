@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <cudf/ast/detail/linearizer.hpp>
 #include <cudf/ast/linearizer.hpp>
 #include <cudf/ast/operators.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -31,6 +32,27 @@ namespace cudf {
 namespace ast {
 
 namespace detail {
+
+device_data_reference::device_data_reference(device_data_reference_type reference_type,
+                                             cudf::data_type data_type,
+                                             cudf::size_type data_index,
+                                             table_reference table_source)
+  : reference_type(reference_type),
+    data_type(data_type),
+    data_index(data_index),
+    table_source(table_source)
+{
+}
+
+device_data_reference::device_data_reference(device_data_reference_type reference_type,
+                                             cudf::data_type data_type,
+                                             cudf::size_type data_index)
+  : reference_type(reference_type),
+    data_type(data_type),
+    data_index(data_index),
+    table_source(table_reference::LEFT)
+{
+}
 
 cudf::size_type linearizer::intermediate_counter::take()
 {
@@ -91,8 +113,8 @@ cudf::size_type linearizer::visit(literal const& expr)
   auto const literal_index = cudf::size_type(literals.size());
   literals.push_back(device_view);
   // Push data reference
-  auto const source = detail::device_data_reference{
-    detail::device_data_reference_type::LITERAL, data_type, literal_index};
+  auto const source = detail::device_data_reference(
+    detail::device_data_reference_type::LITERAL, data_type, literal_index);
   return add_data_reference(source);
 }
 
@@ -103,10 +125,10 @@ cudf::size_type linearizer::visit(column_reference const& expr)
   // Resolve node type
   auto const data_type = expr.get_data_type(table);
   // Push data reference
-  auto const source = detail::device_data_reference{detail::device_data_reference_type::COLUMN,
+  auto const source = detail::device_data_reference(detail::device_data_reference_type::COLUMN,
                                                     data_type,
                                                     expr.get_column_index(),
-                                                    expr.get_table_source()};
+                                                    expr.get_table_source());
   return add_data_reference(source);
 }
 
@@ -149,8 +171,8 @@ cudf::size_type linearizer::visit(expression const& expr)
   auto const output = [&]() {
     if (node_index == 0) {
       // This node is the root. Output should be directed to the output column.
-      return detail::device_data_reference{
-        detail::device_data_reference_type::COLUMN, data_type, 0, table_reference::OUTPUT};
+      return detail::device_data_reference(
+        detail::device_data_reference_type::COLUMN, data_type, 0, table_reference::OUTPUT);
     } else {
       // This node is not the root. Output is an intermediate value.
       // Ensure that the output type is fixed width and fits in the intermediate storage.
@@ -160,8 +182,8 @@ cudf::size_type linearizer::visit(expression const& expr)
       } else if (cudf::size_of(data_type) > sizeof(std::int64_t)) {
         CUDF_FAIL("The output data type is too large to be stored in an intermediate.");
       }
-      return detail::device_data_reference{
-        detail::device_data_reference_type::INTERMEDIATE, data_type, intermediate_counter.take()};
+      return detail::device_data_reference(
+        detail::device_data_reference_type::INTERMEDIATE, data_type, intermediate_counter.take());
     }
   }();
   auto const index = add_data_reference(output);

@@ -57,16 +57,18 @@ enum class device_data_reference_type {
 struct device_data_reference {
   device_data_reference(device_data_reference_type reference_type,
                         cudf::data_type data_type,
-                        cudf::size_type data_index)
-    : reference_type(reference_type), data_type(data_type), data_index(data_index)
-  {
-  }
+                        cudf::size_type data_index,
+                        table_reference table_source);
 
-  device_data_reference_type reference_type;  // Source of data
-  cudf::data_type data_type;                  // Type of data
-  cudf::size_type
+  device_data_reference(device_data_reference_type reference_type,
+                        cudf::data_type data_type,
+                        cudf::size_type data_index);
+
+  const device_data_reference_type reference_type;  // Source of data
+  const cudf::data_type data_type;                  // Type of data
+  const cudf::size_type
     data_index;  // The column index of a table, index of a literal, or index of an intermediate
-  table_reference table_source;
+  const table_reference table_source;
 
   inline bool operator==(const device_data_reference& rhs) const
   {
