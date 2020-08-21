@@ -194,7 +194,7 @@ class NumericalColumn(column.ColumnBase):
             buffers=[mask, data],
             null_count=self.null_count,
         )
-        if self.dtype.is_boolean:
+        if isinstance(self.dtype, cudf.core.dtypes.BooleanDtype):
             return out.cast(pa.bool_())
         else:
             return out
