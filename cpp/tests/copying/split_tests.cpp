@@ -156,6 +156,134 @@ TEST_F(SplitStringTest, StringWithInvalids)
   }
 }
 
+struct SplitListTest : public SplitTest<int> {
+};
+
+TEST_F(SplitListTest, Lists)
+{
+  using LCW = cudf::test::lists_column_wrapper<int>;
+
+  {
+    cudf::test::lists_column_wrapper<int> list{{1, 2, 3},
+                                               {4, 5},
+                                               {6},
+                                               {7, 8},
+                                               {9, 10, 11},
+                                               LCW{},
+                                               LCW{},
+                                               {-1, -2, -3, -4, -5},
+                                               {-10},
+                                               {-100, -200}};
+
+    std::vector<cudf::size_type> splits{0, 1, 4, 5, 6, 9};
+
+    std::vector<cudf::test::lists_column_wrapper<int>> expected;
+    expected.push_back(LCW{});
+    expected.push_back(LCW{{1, 2, 3}});
+    expected.push_back(LCW{{4, 5}, {6}, {7, 8}});
+    expected.push_back(LCW{{9, 10, 11}});
+    expected.push_back(LCW{LCW{}});
+    expected.push_back(LCW{LCW{}, {-1, -2, -3, -4, -5}, {-10}});
+    expected.push_back(LCW{{-100, -200}});
+
+    std::vector<cudf::column_view> result = cudf::split(list, splits);
+    EXPECT_EQ(expected.size(), result.size());
+
+    for (unsigned long index = 0; index < result.size(); index++) {
+      cudf::test::expect_columns_equivalent(expected[index], result[index]);
+    }
+  }
+
+  {
+    cudf::test::lists_column_wrapper<int> list{{{1, 2, 3}, {4, 5}},
+                                               {LCW{}, LCW{}, {7, 8}, LCW{}},
+                                               {LCW{6}},
+                                               {{7, 8}, {9, 10, 11}, LCW{}},
+                                               {LCW{}, {-1, -2, -3, -4, -5}},
+                                               {LCW{}},
+                                               {{-10}, {-100, -200}}};
+
+    std::vector<cudf::size_type> splits{1, 3, 4};
+
+    std::vector<cudf::test::lists_column_wrapper<int>> expected;
+    expected.push_back(LCW{{{1, 2, 3}, {4, 5}}});
+    expected.push_back(LCW{{LCW{}, LCW{}, {7, 8}, LCW{}}, {LCW{6}}});
+    expected.push_back(LCW{{{7, 8}, {9, 10, 11}, LCW{}}});
+    expected.push_back(LCW{{LCW{}, {-1, -2, -3, -4, -5}}, {LCW{}}, {{-10}, {-100, -200}}});
+
+    std::vector<cudf::column_view> result = cudf::split(list, splits);
+    EXPECT_EQ(expected.size(), result.size());
+
+    for (unsigned long index = 0; index < result.size(); index++) {
+      cudf::test::expect_columns_equivalent(expected[index], result[index]);
+    }
+  }
+}
+
+TEST_F(SplitListTest, ListsWithNulls)
+{
+  using LCW = cudf::test::lists_column_wrapper<int>;
+
+  auto valids = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+
+  {
+    cudf::test::lists_column_wrapper<int> list{{1, 2, 3},
+                                               {4, 5},
+                                               {6},
+                                               {{7, 8}, valids},
+                                               {9, 10, 11},
+                                               LCW{},
+                                               LCW{},
+                                               {{-1, -2, -3, -4, -5}, valids},
+                                               {-10},
+                                               {{-100, -200}, valids}};
+
+    std::vector<cudf::size_type> splits{0, 1, 4, 5, 6, 9};
+
+    std::vector<cudf::test::lists_column_wrapper<int>> expected;
+    expected.push_back(LCW{});
+    expected.push_back(LCW{{1, 2, 3}});
+    expected.push_back(LCW{{4, 5}, {6}, {{7, 8}, valids}});
+    expected.push_back(LCW{{9, 10, 11}});
+    expected.push_back(LCW{LCW{}});
+    expected.push_back(LCW{LCW{}, {{-1, -2, -3, -4, -5}, valids}, {-10}});
+    expected.push_back(LCW{{{-100, -200}, valids}});
+
+    std::vector<cudf::column_view> result = cudf::split(list, splits);
+    EXPECT_EQ(expected.size(), result.size());
+
+    for (unsigned long index = 0; index < result.size(); index++) {
+      cudf::test::expect_columns_equivalent(expected[index], result[index]);
+    }
+  }
+
+  {
+    cudf::test::lists_column_wrapper<int> list{{{{1, 2, 3}, valids}, {4, 5}},
+                                               {{LCW{}, LCW{}, {7, 8}, LCW{}}, valids},
+                                               {{{6}}},
+                                               {{{7, 8}, {{9, 10, 11}, valids}, LCW{}}, valids},
+                                               {{LCW{}, {-1, -2, -3, -4, -5}}, valids},
+                                               {LCW{}},
+                                               {{-10}, {-100, -200}}};
+
+    std::vector<cudf::size_type> splits{1, 3, 4};
+
+    std::vector<cudf::test::lists_column_wrapper<int>> expected;
+    expected.push_back(LCW{{{{1, 2, 3}, valids}, {4, 5}}});
+    expected.push_back(LCW{{{LCW{}, LCW{}, {7, 8}, LCW{}}, valids}, {{{6}}}});
+    expected.push_back(LCW{{{{7, 8}, {{9, 10, 11}, valids}, LCW{}}, valids}});
+    expected.push_back(
+      LCW{{{LCW{}, {-1, -2, -3, -4, -5}}, valids}, {LCW{}}, {{-10}, {-100, -200}}});
+
+    std::vector<cudf::column_view> result = cudf::split(list, splits);
+    EXPECT_EQ(expected.size(), result.size());
+
+    for (unsigned long index = 0; index < result.size(); index++) {
+      cudf::test::expect_columns_equivalent(expected[index], result[index]);
+    }
+  }
+}
+
 struct SplitCornerCases : public SplitTest<int8_t> {
 };
 
