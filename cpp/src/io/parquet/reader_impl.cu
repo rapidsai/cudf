@@ -357,7 +357,7 @@ class aggregate_metadata {
     auto &pfm = per_file_metadata[0];
 
     // see : the "Nested Types" section here
-    // https://github.com/apache/parquet-format/blob/main/LogicalTypes.md
+    // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md
     int index = get_column_leaf_schema_index(col_index);
     int depth = 0;
 
