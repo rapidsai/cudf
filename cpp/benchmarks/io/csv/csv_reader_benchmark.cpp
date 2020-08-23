@@ -43,7 +43,7 @@ void CSV_read(benchmark::State& state)
   std::vector<char> out_buffer;
   out_buffer.reserve(total_bytes);
 
-  auto const tbl  = create_random_table<T>(num_cols, col_bytes, true);
+  auto const tbl  = create_random_table(cudf::type_id::INT32, num_cols, col_bytes, true);
   auto const view = tbl->view();
 
   cudf_io::write_csv_args args{cudf_io::sink_info(&out_buffer), view, "null", false, 1 << 30};
