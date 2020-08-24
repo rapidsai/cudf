@@ -5,12 +5,22 @@
 # if you want to generate data where certain phenomena (e.g., cardinality)
 # are exaggurated.
 
+from multiprocessing import Pool
+
 import pandas as pd
 import numpy as np
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 from mimesis import Generic
+
+
+class Generator(object):
+    def __init__(self, func):
+        self.func = func
+
+    def __call__(self, g):
+        return self.func(g)
 
 
 class ColumnParameters:
@@ -78,8 +88,58 @@ def _write(tbl, path, format):
             tbl.to_parquet(path, row_group_size=format["row_group_size"])
 
 
+def _generate_column(column_params, num_rows):
+    # If cardinality is specified, we create a set to sample from.
+    # Otherwise, we simply use the generator to generate each value.
+    if column_params.cardinality is not None:
+        # Construct set of values to sample from where
+        # set size = cardinality
+        vals = pa.array(
+            column_params.generator,
+            size=column_params.cardinality,
+            safe=False,
+        )
+
+        # Generate data for current column
+        choices = np.random.randint(0, len(vals) - 1, size=num_rows)
+        return pa.array(
+            [vals[choices[i]].as_py() for i in range(num_rows)],
+            mask=np.random.choice(
+                [True, False],
+                size=num_rows,
+                p=[
+                    column_params.null_frequency,
+                    1 - column_params.null_frequency,
+                ],
+            )
+            if column_params.null_frequency > 0.0
+            else None,
+            size=num_rows,
+            safe=False,
+        )
+
+    else:
+        # Generate data for current column
+        return pa.array(
+            column_params.generator,
+            mask=np.random.choice(
+                [True, False],
+                size=num_rows,
+                p=[
+                    column_params.null_frequency,
+                    1 - column_params.null_frequency,
+                ],
+            ),
+            size=num_rows,
+            safe=False,
+        )
+
+
 def generate(
-    path, parameters, format={"name": "parquet", "row_group_size": 64}
+    path,
+    parameters,
+    format={"name": "parquet", "row_group_size": 64},
+    use_threads=True,
 ):
     """
     Generate dataset using given parameters and write to given format
@@ -95,79 +155,56 @@ def generate(
     """
 
     # Initialize seeds
-    g = Generic("en", seed=parameters.seed)
     if parameters.seed is not None:
         np.random.seed(parameters.seed)
+    column_seeds = np.arange(len(parameters.column_parameters))
+    np.random.shuffle(column_seeds)
 
-    # Generate data for each column in Arrow Table
+    # For each column, use a generic Mimesis producer to create an Iterable
+    # for generating data
+    for i, column_params in enumerate(parameters.column_parameters):
+        column_params.generator = column_params.generator(
+            Generic("en", seed=column_seeds[i])
+        )
+
+    # Get schema for each column
     schema = pa.schema(
         [
             pa.field(
                 name=str(i),
                 type=pa.from_numpy_dtype(
-                    type(next(iter(column_params.generator(g))))
+                    type(next(iter(column_params.generator)))
                 ),
                 nullable=column_params.null_frequency > 0,
             )
             for i, column_params in enumerate(parameters.column_parameters)
         ]
     )
-    column_data = []
+
+    # Initialize column data and which columns should be sorted
+    column_data = [None] * len(parameters.column_parameters)
     columns_to_sort = [
         str(i)
         for i, column_params in enumerate(parameters.column_parameters)
         if column_params.is_sorted
     ]
-    for i, column_params in enumerate(parameters.column_parameters):
-        generator = column_params.generator(g)
-        if column_params.cardinality is not None:
-            # Construct set of values to sample from where
-            # set size = cardinality
-            vals = pa.array(
-                generator, size=column_params.cardinality, safe=False,
-            )
 
-            # Generate data for current column
-            choices = np.random.randint(
-                0, len(vals) - 1, size=parameters.num_rows
+    # Generate data
+    if not use_threads:
+        for i, column_params in enumerate(parameters.column_parameters):
+            column_data[i] = _generate_column(
+                column_params, parameters.num_rows
             )
-            column_data.append(
-                pa.array(
-                    [
-                        vals[choices[i]].as_py()
-                        for i in range(parameters.num_rows)
-                    ],
-                    mask=np.random.choice(
-                        [True, False],
-                        size=parameters.num_rows,
-                        p=[
-                            column_params.null_frequency,
-                            1 - column_params.null_frequency,
-                        ],
-                    )
-                    if column_params.null_frequency > 0.0
-                    else None,
-                    size=parameters.num_rows,
-                    safe=False,
-                )
-            )
-        else:
-            # Generate data for current column
-            column_data.append(
-                pa.array(
-                    generator,
-                    mask=np.random.choice(
-                        [True, False],
-                        size=parameters.num_rows,
-                        p=[
-                            column_params.null_frequency,
-                            1 - column_params.null_frequency,
-                        ],
-                    ),
-                    size=parameters.num_rows,
-                    safe=False,
-                )
-            )
+    else:
+        pool = Pool(pa.cpu_count())
+        column_data = pool.starmap(
+            _generate_column,
+            [
+                (column_params, parameters.num_rows)
+                for i, column_params in enumerate(parameters.column_parameters)
+            ],
+        )
+        pool.close()
 
     # Convert to Pandas DataFrame and sort columns appropriately
     tbl = pa.Table.from_arrays(column_data, schema=schema,)
