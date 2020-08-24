@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # <div align="left"><img src="../../img/rapids_logo.png" width="90px"/>&nbsp;custreamz - GPU Accelerated Streaming</div>
 
 Built as an extension to [python streamz](https://github.com/python-streamz/streamz), cuStreamz provides GPU accelerated abstractions for streaming data. CuStreamz can be used along side python streamz or as a standalone library for ingesting streaming data to cudf dataframes.
