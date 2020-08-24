@@ -122,7 +122,6 @@ struct ParquetWriterChronoTypeTest : public ParquetWriterTest {
 
 // Declare typed test cases
 // TODO: Replace with `NumericTypes` when unsigned support is added. Issue #5352
-// I forgot to do this. Need to test unsigned types
 using SupportedTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, bool, float, double>;
 TYPED_TEST_CASE(ParquetWriterNumericTypeTest, SupportedTypes);
 using SupportedChronoTypes = cudf::test::Concat<cudf::test::ChronoTypes, cudf::test::DurationTypes>;

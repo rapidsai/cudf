@@ -139,11 +139,6 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
   // For list<list<int>>, values between i and i+50 can be calculated by
   // off_11 = off[i], off_12 = off[i+50]
   // off_21 = child.off[off_11], off_22 = child.off[off_12]
-
-  // Fragment definitely needs frag.num_vals along with num_rows. Both are needed because num_vals
-  // will be passed on to pages and num_rows will be used to check against number of rows in chunk
-  // Although, even chunk metadata does not care about num_rows, only num values. Perhaps it also
-  // needs both
   nrows                     = s->frag.num_rows;
   size_type start_value_idx = start_row;
   size_type end_value_idx   = start_row + nrows;
@@ -153,7 +148,6 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
   }
   size_type nvals = end_value_idx - start_value_idx;
   if (!t) { s->frag.num_values = nvals; }
-  if (!t) { printf("start_val %d, end_val %d, nvals %d\n", start_value_idx, end_value_idx, nvals); }
 
   for (uint32_t i = 0; i < nvals; i += 512) {
     const uint32_t *valid = s->col.valid_map_base;
@@ -163,7 +157,6 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
                           : 0;
     uint32_t valid_warp = BALLOT(is_valid);
     uint32_t len, nz_pos, hash;
-    if (is_valid) printf("t %d, isvlaid %d, idx %d\n", t, is_valid, val_idx);
     if (is_valid) {
       len = dtype_len;
       if (dtype != BOOLEAN) {
@@ -477,7 +470,7 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
       num_pages = 1;
     }
     SYNCWARP();
-    // This loop seems to be going over one page fragment at a time and adding them to pages.
+    // This loop goes over one page fragment at a time and adds it to page.
     // When page size crosses a particular limit, then it moves on to the next page and then next
     // page fragment gets added to that one.
 
@@ -937,11 +930,6 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
   __syncthreads();
   if (!t) { s->cur = s->page.page_data + s->page.max_hdr_size; }
   __syncthreads();
-  // Starting here, I can bypass all the following code in case of list columns. List columns will
-  // set definition levels and repetition levels on their own.
-  // For a simple start, I can have the list column's definition, repetition level pre-generated and
-  // this kernel would just have to write it out.
-
   // Encode NULLs
   // This is just treating definition levels as validity.
   if (s->page.page_type != DICTIONARY_PAGE && s->col.level_bits != 0 &&
@@ -1019,7 +1007,6 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
         if (t == 0) { s->cur = rle_out; }
       }
     };
-    if (t == 0) printf("nbits rep: %d, def %d\n", s->col.level_bits >> 4, s->col.level_bits & 0xf);
     encode_levels(s->col.rep_values, s->col.level_bits >> 4);
     encode_levels(s->col.def_values, s->col.level_bits & 0xf);
   }
@@ -1049,13 +1036,6 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
     }
   }
   __syncthreads();
-  // Instead of page->num_rows, it should be called page->num_values. The values and rows are
-  // decoupled and there can be multiple values per row.
-  // Also, metadata diagram says DataPageHeader containes num_values and not num_rows
-
-  // However, num_values may include NULLs. These NULLs may come from list structure that's not
-  // known in leaf column. For this, we need a distinction between nulls in dremel encoded columns
-  // and nulls in leaf column. For now, num_nulls refers to only leaf.
   for (uint32_t cur_val_idx = 0; cur_val_idx < s->page.num_leaf_values;) {
     uint32_t nvals   = min(s->page.num_leaf_values - cur_val_idx, 128);
     uint32_t val_idx = s->page_start_val + cur_val_idx + t;
@@ -1066,19 +1046,13 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
       val_idx  = (is_valid) ? s->col.dict_data[val_idx] : val_idx;
     } else {
       const uint32_t *valid = s->col.valid_map_base;
-      // EncColDesc also needs a col.num_vals because list may have more vals than rows and it
-      // doesn't hurt to have them both.
-      // Later I can evaluate whether to keep num_rows
       is_valid = (val_idx < s->col.num_values && cur_val_idx + t < s->page.num_leaf_values)
                    ? (valid) ? (valid[val_idx >> 5] >> (val_idx & 0x1f)) & 1 : 1
                    : 0;
     }
-    // printf("val_idx %d, isvalid %d\n", val_idx, is_valid);
     warp_valids = BALLOT(is_valid);
     cur_val_idx += nvals;
     if (dict_bits >= 0) {
-      if (t == 0) { printf("dict\n"); }
-
       // Dictionary encoding
       if (dict_bits > 0) {
         uint32_t rle_numvals;
@@ -1114,7 +1088,6 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
       if (t == 0) { s->cur = s->rle_out; }
       __syncthreads();
     } else {
-      if (t == 0) { printf("non-dict, type: %d\n", dtype); }
       // Non-dictionary encoding
       uint8_t *dst = s->cur;
 
@@ -1147,7 +1120,6 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
               v = *reinterpret_cast<const int16_t *>(src8);
             else
               v = *reinterpret_cast<const int8_t *>(src8);
-            printf("val_idx %d, val %d\n", val_idx, v);
             dst[pos + 0] = v;
             dst[pos + 1] = v >> 8;
             dst[pos + 2] = v >> 16;
@@ -1654,7 +1626,7 @@ cudaError_t EncodePages(EncPage *pages,
                         cudaStream_t stream)
 {
   // A page is part of one column. This is launching 1 block per page. 1 block will exclusively deal
-  // with one datatype. I can safely add an if condition such that list column takes the if branch
+  // with one datatype.
   gpuEncodePages<<<num_pages, 128, 0, stream>>>(pages, chunks, comp_in, comp_out, start_page);
   return cudaSuccess;
 }

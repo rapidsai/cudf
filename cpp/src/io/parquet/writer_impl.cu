@@ -80,33 +80,6 @@ column_view get_leaf_col(column_view col)
     return get_leaf_col(list_col.child());
   }
 }
-template <typename T>
-void print(rmm::device_vector<T> const &d_vec, std::string label = "")
-{
-  thrust::host_vector<T> h_vec = d_vec;
-  printf("%s \t", label.c_str());
-  for (auto &&i : h_vec) std::cout << i << " ";
-  printf("\n");
-}
-// struct printer {
-//   template <typename T>
-//   std::enable_if_t<cudf::is_numeric<T>(), void> operator()(column_view const &col,
-//                                                            std::string label = "")
-//   {
-//     auto d_vec = rmm::device_uvector<T>(col.begin<T>(), col.end<T>());
-//     print(d_vec, label);
-//   }
-//   template <typename T>
-//   std::enable_if_t<!cudf::is_numeric<T>(), void> operator()(column_view const &col,
-//                                                             std::string label = "")
-//   {
-//     CUDF_FAIL("no strings");
-//   }
-// };
-// void print(column_view const &col, std::string label = "")
-// {
-//   cudf::type_dispatcher(col.type(), printer{}, col, label);
-// }
 
 }  // namespace
 
@@ -146,7 +119,6 @@ __device__ size_type count_nested(column_device_view const &col, size_type idx)
   auto offset_col        = col.child(lists_column_view::offsets_column_index);
   size_type start_offset = offset_col.element<size_type>(idx + col.offset());
   size_type end_offset   = offset_col.element<size_type>(idx + col.offset() + 1);
-  // printf("start %d end %d\n", start_offset, end_offset);
 
   // Dremel encoding needs one set of repetition/definition values for null/empty records
   if (start_offset == end_offset) { return 1; }
@@ -173,7 +145,6 @@ __device__ void store_nested_rep_level(column_device_view const &col,
                                        uint32_t depth)
 {
   if (col.type().id() != type_id::LIST) {
-    // printf("idx %d, rep %d\n", cur_idx, cur_rep_level);
     rep_level[cur_idx++] = cur_rep_level;
     return;
   }
@@ -184,7 +155,6 @@ __device__ void store_nested_rep_level(column_device_view const &col,
   size_type end_offset   = offset_col.element<size_type>(idx + col.offset() + 1);
 
   if (start_offset == end_offset) {
-    // printf("idx %d, rep %d\n", cur_idx, cur_rep_level);
     rep_level[cur_idx++] = cur_rep_level;
     return;
   }
@@ -204,7 +174,6 @@ __device__ void store_nested_def_level(column_device_view const &col,
 {
   if (col.nullable()) {
     if (col.is_null_nocheck(idx)) {
-      // if (threadIdx.x == 0) { printf("idx %d, curdef %d\n", cur_idx, cur_def_level); }
       def_level[cur_idx++] = cur_def_level;
       return;
     }
@@ -214,14 +183,11 @@ __device__ void store_nested_def_level(column_device_view const &col,
   if (col.type().id() != type_id::LIST) {
     if (col.nullable()) {
       if (col.is_valid_nocheck(idx)) {
-        // if (threadIdx.x == 0) { printf("idx %d, curdef %d\n", cur_idx, cur_def_level); }
         def_level[cur_idx++] = cur_def_level;
       } else {
-        // if (threadIdx.x == 0) { printf("idx %d, curdef %d\n", cur_idx, cur_def_level); }
         def_level[cur_idx++] = cur_def_level - 1;
       }
     } else {
-      // if (threadIdx.x == 0) { printf("idx %d, curdef %d\n", cur_idx, cur_def_level); }
       def_level[cur_idx++] = cur_def_level;
     }
     return;
@@ -264,7 +230,6 @@ __global__ void get_leaf_offset(column_device_view const d_col, size_type *offse
 {
   column_device_view temp = d_col;
   while (temp.type().id() == type_id::LIST) {
-    printf("off: %d,  end: %d\n", *offset, *end);
     *offset = temp.child(lists_column_view::offsets_column_index).element<size_type>(*offset);
     *end    = temp.child(lists_column_view::offsets_column_index).element<size_type>(*end);
     temp    = temp.child(lists_column_view::child_column_index);
@@ -444,14 +409,12 @@ class parquet_column_view {
       dremel_encoding_size<<<((_row_count - 1) >> 8) + 1, 256, 0, stream>>>(
         *d_col, _dremel_offsets.data().get());
       CUDA_TRY(cudaStreamSynchronize(stream));
-      print(_dremel_offsets, "off:");
 
       thrust::exclusive_scan(rmm::exec_policy(stream)->on(stream),
                              _dremel_offsets.begin(),
                              _dremel_offsets.end(),
                              _dremel_offsets.begin());
       CUDA_TRY(cudaStreamSynchronize(stream));
-      print(_dremel_offsets, "off:");
       CHECK_CUDA(stream);
 
       // Calculate definition and repetition levels
@@ -461,8 +424,6 @@ class parquet_column_view {
       CUDA_TRY(cudaDeviceSynchronize());
       calculate_levels<<<((_row_count - 1) >> 8) + 1, 256, 0, stream>>>(
         *d_col, _dremel_offsets.data().get(), _rep_level.data().get(), _def_level.data().get());
-      print(_rep_level, "rep:");
-      print(_def_level, "def:");
     }
     if (_string_type && _data_count > 0) {
       strings_column_view view{_leaf_col};
@@ -576,7 +537,7 @@ class parquet_column_view {
   rmm::device_vector<uint32_t> _dict_index;
 
   // List-related members
-  // TODO (dm): convert to uvector so it can work in stream.
+  // TODO (dm): convert to uvector
   rmm::device_vector<size_type const *> _offsets_array;
   rmm::device_vector<size_type> _dremel_offsets;
   rmm::device_vector<uint32_t> _rep_level;
@@ -814,7 +775,6 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
   size_type num_list_cols = 0;
   for (auto &&col : parquet_columns) { num_list_cols += col.is_list(); }
 
-  printf("1\n");
   if (state.md.version == 0) {
     state.md.version  = 1;
     state.md.num_rows = num_rows;
@@ -918,15 +878,12 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
     // increment num rows
     state.md.num_rows += num_rows;
   }
-  printf("2\n");
 
   // Initialize column description
   hostdevice_vector<gpu::EncColumnDesc> col_desc(num_columns);
 
   // setup gpu column description.
   // applicable to only this _write_chunked() call
-  // This whole thing needs to be updated for list columns. Specifically, there isn't just one pair
-  // of data and null pointers. Each list level has one.
   for (auto i = 0; i < num_columns; i++) {
     auto &col = parquet_columns[i];
     // GPU column description
@@ -968,7 +925,6 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
       }
       return nbits;
     };
-    printf("maxdef %d, bits %d\n", col.max_def_level(), count_bits(col.max_def_level()));
     desc->level_bits = count_bits(col.nesting_levels()) << 4 | count_bits(col.max_def_level());
   }
 
@@ -979,7 +935,6 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
   // ideally want the page size to be below 1MB so as to have enough pages to get good
   // compression/decompression performance).
   uint32_t fragment_size = 5000;
-  // Not having this caused me great pain in debugging previous bug
   assert(fragment_size <= MAX_PAGE_FRAGMENT_SIZE);
 
   uint32_t num_fragments = (uint32_t)((num_rows + fragment_size - 1) / fragment_size);
@@ -1033,7 +988,6 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
                                  state.stream);
     }
   }
-  printf("3\n");
   // Initialize row groups and column chunks
   uint32_t num_chunks = num_rowgroups * num_columns;
   hostdevice_vector<gpu::EncColumnChunk> chunks(num_chunks);
@@ -1044,7 +998,6 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
       (uint32_t)((state.md.row_groups[global_r].num_rows + fragment_size - 1) / fragment_size);
     state.md.row_groups[global_r].total_byte_size = 0;
     state.md.row_groups[global_r].columns.resize(num_columns);
-    printf("4\n");
     for (int i = 0; i < num_columns; i++) {
       gpu::EncColumnChunk *ck = &chunks[r * num_columns + i];
       bool dict_enable        = false;
