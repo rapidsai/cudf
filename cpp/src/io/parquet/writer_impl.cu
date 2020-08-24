@@ -837,10 +837,7 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
     for (auto i = 0; i < num_columns; i++) {
       auto &col = parquet_columns[i];
       if (col.is_list()) {
-        // TODO (dm): figure out way to do chunked write for list. Primry problem: figuring out
-        // nullability of each level. The user help we get is in the form of predetermined
-        // nullability of each column as passed in state.user_metadata_with_nullability. But that
-        // contains one bool per column in a vector of bools
+        CUDF_EXPECTS(state.single_write_mode, "Chunked write for lists is not supported");
         size_type nesting_depth = col.nesting_levels();
         // Each level of nesting requires two levels of Schema. The leaf level needs one schema
         // element
@@ -908,7 +905,8 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
     }
   } else {
     // verify the user isn't passing mismatched tables
-    // TODO (dm): Now needs to compare children of columns in case of list.
+    // TODO (dm): Now needs to compare children of columns in case of list when we support chunked
+    // write for it
     CUDF_EXPECTS(state.md.schema[0].num_children == num_columns,
                  "Mismatch in table structure between multiple calls to write_chunked");
     for (auto i = 0; i < num_columns; i++) {
