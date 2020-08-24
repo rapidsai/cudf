@@ -131,7 +131,7 @@ __global__ void mark_string_start_and_ends(uint32_t const* code_points,
       start_word_indices[offset] = offset;
     }
 
-    if ((idx > 0) && (code_points[offset - 1] != SPACE_CODE_POINT)) {
+    if ((offset > 0) && (code_points[offset - 1] != SPACE_CODE_POINT)) {
       end_word_indices[offset - 1] = offset;
     }
   }

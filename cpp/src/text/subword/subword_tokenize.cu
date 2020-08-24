@@ -110,7 +110,7 @@ __global__ void kernel_compute_tensor_metadata(
       metadata[metadata_idx + 1] = (max_sequence_length - stride) / 2;
     if (last_row_of_tensor) {
       if (n_tokens_tensor < max_sequence_length)
-        metadata[metadata_idx + 2] = n_tokens_tensor - 1;
+        metadata[metadata_idx + 2] = (n_tokens_tensor > 0) ? (n_tokens_tensor - 1) : 0;
       else {
         if (!do_truncate)
           metadata[metadata_idx + 2] =
