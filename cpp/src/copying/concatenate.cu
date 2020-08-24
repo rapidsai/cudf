@@ -79,7 +79,7 @@ auto create_device_views(std::vector<column_view> const& views, cudaStream_t str
                     device_views.cbegin(),
                     device_views.cend(),
                     std::next(offsets.begin()),
-                    [](auto const& col) { return static_cast<size_t>(col.size()); });
+                    [](auto const& col) { return static_cast<std::size_t>(col.size()); });
   thrust::inclusive_scan(
     thrust::host, offsets.cbegin(), offsets.cend(), offsets.begin(), thrust::plus<size_t>{});
   auto const d_offsets   = rmm::device_vector<size_t>{offsets};
