@@ -202,8 +202,7 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
                                                    rmm::mr::device_memory_resource* mr)
 {
   auto const strings_count = strings.size();
-  if (strings_count == 0 || strings.chars_size() == 0)
-    return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
+  if (strings_count == 0) return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
 
   // create the normalizer and call it
   data_normalizer normalizer(strings.chars_size(), stream, do_lower_case);

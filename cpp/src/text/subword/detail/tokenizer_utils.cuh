@@ -47,7 +47,8 @@ struct update_strings_lengths_fn {
   uint32_t* d_offsets;
   __device__ void operator()(uint32_t idx)
   {
-    d_offsets[idx] = d_chars_up_to_idx[d_offsets[idx] - 1];
+    auto const offset = d_offsets[idx];
+    d_offsets[idx]    = offset > 0 ? d_chars_up_to_idx[offset - 1] : 0;
   }
 };
 
