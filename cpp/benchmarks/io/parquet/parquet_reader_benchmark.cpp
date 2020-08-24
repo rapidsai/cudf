@@ -25,7 +25,7 @@
 
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
 
-constexpr int64_t data_size        = 256 << 10;
+constexpr int64_t data_size        = 512 << 20;
 constexpr cudf::size_type num_cols = 64;
 
 namespace cudf_io = cudf::io;
@@ -61,16 +61,19 @@ void PQ_read(benchmark::State& state)
 }
 
 #define PARQ_RD_BENCHMARK_DEFINE(name, type_or_group, compression)        \
-  BENCHMARK_DEFINE_F(ParquetRead, name)                                   \
+  BENCHMARK_DEFINE_F(ParquetRead, name##_##compression)                   \
   (::benchmark::State & state) { PQ_read(state); }                        \
-  BENCHMARK_REGISTER_F(ParquetRead, name)                                 \
+  BENCHMARK_REGISTER_F(ParquetRead, name##_##compression)                 \
     ->Args({static_cast<int32_t>(type_or_group), data_size, compression}) \
     ->Unit(benchmark::kMillisecond)                                       \
     ->UseManualTime();
-
-#define CUIO_BENCH_TYPE_GROUP(benchmark_define, compression)
 
 PARQ_RD_BENCHMARK_DEFINE(integral, type_group_id::INTEGRAL, UNCOMPRESSED);
 PARQ_RD_BENCHMARK_DEFINE(floats, type_group_id::FLOATING_POINT, UNCOMPRESSED);
 PARQ_RD_BENCHMARK_DEFINE(timestamps, type_group_id::TIMESTAMP, UNCOMPRESSED);
 PARQ_RD_BENCHMARK_DEFINE(string, cudf::type_id::STRING, UNCOMPRESSED);
+
+PARQ_RD_BENCHMARK_DEFINE(integral, type_group_id::INTEGRAL, USE_SNAPPY);
+PARQ_RD_BENCHMARK_DEFINE(floats, type_group_id::FLOATING_POINT, USE_SNAPPY);
+PARQ_RD_BENCHMARK_DEFINE(timestamps, type_group_id::TIMESTAMP, USE_SNAPPY);
+PARQ_RD_BENCHMARK_DEFINE(string, cudf::type_id::STRING, USE_SNAPPY);
