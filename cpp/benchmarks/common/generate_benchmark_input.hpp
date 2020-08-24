@@ -35,13 +35,21 @@
 auto deterministic_engine(unsigned seed = 13377331) { return std::mt19937{seed}; }
 
 template <typename T>
-std::enable_if_t<cudf::is_fixed_width<T>(), size_t> avg_element_size(){
+std::enable_if_t<cudf::is_fixed_width<T>(), size_t> avg_element_size()
+{
   return sizeof(T);
 }
 
 template <typename T>
-std::enable_if_t<!cudf::is_fixed_width<T>(), size_t> avg_element_size(){
+std::enable_if_t<!cudf::is_fixed_width<T>(), size_t> avg_element_size()
+{
   CUDF_FAIL("not implemented!");
+}
+
+template <>
+size_t avg_element_size<cudf::string_view>()
+{
+  return 4 + 4 + 6;  // offset + length + hardcoded avg len
 }
 
 struct avg_element_size_fn {
@@ -52,9 +60,9 @@ struct avg_element_size_fn {
   }
 };
 
-size_t avg_element_bytes(cudf::type_id tid){
-  return  cudf::type_dispatcher(cudf::data_type(tid),
-                                   avg_element_size_fn{});
+size_t avg_element_bytes(cudf::type_id tid)
+{
+  return cudf::type_dispatcher(cudf::data_type(tid), avg_element_size_fn{});
 }
 
 /**
@@ -308,31 +316,39 @@ columns_vector create_random_columns(std::vector<cudf::type_id> dtype_ids,
   return output_columns;
 }
 
+std::vector<cudf::type_id> repeat_dtypes(std::vector<cudf::type_id> const& dtype_ids,
+                                         cudf::size_type num_cols)
+{
+  std::vector<cudf::type_id> out_dtypes;
+  out_dtypes.reserve(num_cols);
+  for (cudf::size_type col = 0; col < num_cols; ++col)
+    out_dtypes.push_back(dtype_ids[col % dtype_ids.size()]);
+  return out_dtypes;
+}
+
 std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> dtype_ids,
+                                                 cudf::size_type num_cols,
                                                  size_t table_bytes,
                                                  bool include_validity)
 {
-  auto seed_engine = deterministic_engine();  // pass the seed param here
-
+  auto const out_dtype_ids = repeat_dtypes(dtype_ids, num_cols);
   size_t const avg_row_bytes =
-    std::accumulate(dtype_ids.begin(), dtype_ids.end(), 0ul, [](size_t sum, auto tid) {
+    std::accumulate(out_dtype_ids.begin(), out_dtype_ids.end(), 0ul, [](size_t sum, auto tid) {
       return sum + avg_element_bytes(tid);
     });
-
-  cudf::size_type num_rows = table_bytes / avg_row_bytes;
-  std::cout << avg_row_bytes << std::endl;
+  cudf::size_type const num_rows = table_bytes / avg_row_bytes;
 
   auto const processor_count            = std::thread::hardware_concurrency();
-  cudf::size_type const num_cols        = dtype_ids.size();
   cudf::size_type const cols_per_thread = (num_cols + processor_count - 1) / processor_count;
   cudf::size_type next_col              = 0;
 
+  auto seed_engine = deterministic_engine();  // pass the seed param here
   std::vector<std::future<columns_vector>> col_futures;
   for (unsigned int i = 0; i < processor_count && next_col < num_cols; ++i) {
     auto thread_engine         = deterministic_engine(random_element<unsigned>(seed_engine));
     auto const thread_num_cols = std::min(num_cols - next_col, cols_per_thread);
-    std::vector<cudf::type_id> thread_types(dtype_ids.begin() + next_col,
-                                            dtype_ids.begin() + next_col + thread_num_cols);
+    std::vector<cudf::type_id> thread_types(out_dtype_ids.begin() + next_col,
+                                            out_dtype_ids.begin() + next_col + thread_num_cols);
     col_futures.emplace_back(std::async(std::launch::async,
                                         create_random_columns,
                                         std::move(thread_types),
@@ -352,39 +368,4 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> dtyp
   }
 
   return std::make_unique<cudf::table>(std::move(output_columns));
-}
-
-/**
- * @brief Creates a table with random content of the given type
- *
- * @param[in] dtype_id TODO
- * @param[in] num_columns Number of columns in the table
- * @param[in] col_bytes Size of each column, in bytes
- * @param[in] include_validity Whether to include the null mask in the columns
- *
- * @return Table filled with random data
- */
-std::unique_ptr<cudf::table> create_random_table(
-  cudf::type_id dtype_id,  // add overload that takes an array
-  cudf::size_type num_columns,
-  size_t table_bytes,
-  bool include_validity)
-{
-  return create_random_table(
-    std::vector<cudf::type_id>(num_columns, dtype_id), table_bytes, include_validity);
-}
-
-enum class dtype_group : int32_t { FLOAT, TIMESTAMP };
-std::vector<cudf::type_id> get_group_types(dtype_group group)
-{
-  switch (group) {
-    case dtype_group::FLOAT: return {cudf::type_id::FLOAT32, cudf::type_id::FLOAT64};
-    case dtype_group::TIMESTAMP:
-      return {cudf::type_id::TIMESTAMP_DAYS,
-              cudf::type_id::TIMESTAMP_SECONDS,
-              cudf::type_id::TIMESTAMP_MILLISECONDS,
-              cudf::type_id::TIMESTAMP_MICROSECONDS,
-              cudf::type_id::TIMESTAMP_NANOSECONDS};
-    default: CUDF_FAIL("Invalid data type group");
-  }
 }

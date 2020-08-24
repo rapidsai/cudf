@@ -24,14 +24,44 @@ constexpr int USE_SNAPPY   = (int)cudf::io::compression_type::SNAPPY;
 
 #define CUIO_BENCH_ALL_TYPES(benchmark_define, compression)
 
-// sample benchmark define macro that can be passed to the macro above
-#define SAMPLE_BENCHMARK_DEFINE(name, datatype, compression)             \
-  BENCHMARK_TEMPLATE_DEFINE_F(SampleFixture, name, datatype)             \
-  (::benchmark::State & state) { SampleBenchFunction<datatype>(state); } \
-  BENCHMARK_REGISTER_F(SampleFixture, name)                              \
-    ->Args({data_size, 64, compression})                                 \
-    ->Unit(benchmark::kMillisecond)                                      \
-    ->UseManualTime();
+enum class type_group_id : int32_t {
+  INTEGRAL = static_cast<int32_t>(cudf::type_id::NUM_TYPE_IDS),
+  FLOATING_POINT,
+  TIMESTAMP,
+  DURATION,
+  FIXED_POINT,
+  COMPOUND,
+  NESTED,
+};
+std::vector<cudf::type_id> get_type_or_group(int32_t id)
+{
+  // identity transformation when passing a concrete type_id
+  if (id < static_cast<int32_t>(cudf::type_id::NUM_TYPE_IDS))
+    return {static_cast<cudf::type_id>(id)};
 
-// sample CUIO_BENCH_ALL_TYPES use
-// CUIO_BENCH_ALL_TYPES(SAMPLE_BENCHMARK_DEFINE, USE_SNAPPY)
+  // if the value is larger that type_id::NUM_TYPE_IDS, it's a group id
+  type_group_id const group_id = static_cast<type_group_id>(id);
+
+  using trait_fn       = bool (*)(cudf::data_type);
+  trait_fn is_integral = [](cudf::data_type type) {
+    return cudf::is_numeric(type) && !cudf::is_floating_point(type);
+  };
+  auto fn = [&]() -> trait_fn {
+    switch (group_id) {
+      case type_group_id::FLOATING_POINT: return cudf::is_floating_point;
+      case type_group_id::INTEGRAL: return is_integral;
+      case type_group_id::TIMESTAMP: return cudf::is_timestamp;
+      case type_group_id::DURATION: return cudf::is_duration;
+      case type_group_id::FIXED_POINT: return cudf::is_fixed_point;
+      case type_group_id::COMPOUND: return cudf::is_compound;
+      case type_group_id::NESTED: return cudf::is_nested;
+      default: CUDF_FAIL("Invalid data type group");
+    }
+  }();
+  std::vector<cudf::type_id> types;
+  for (int type_int = 0; type_int < static_cast<int32_t>(cudf::type_id::NUM_TYPE_IDS); ++type_int) {
+    auto const type = static_cast<cudf::type_id>(type_int);
+    if (type != cudf::type_id::EMPTY && fn(cudf::data_type(type))) types.push_back(type);
+  }
+  return types;
+}
