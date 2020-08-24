@@ -6,7 +6,6 @@ from numba import cuda
 import cudf
 from cudf import _lib as libcudf
 from cudf.core.column import column
-from cudf.core.series import Series
 from cudf.utils import utils
 from cudf.utils.docutils import docfmt_partial
 
@@ -175,7 +174,9 @@ class ApplyKernelCompilerBase(object):
         # Prepare output frame
         outdf = df.copy()
         for k in sorted(self.outcols):
-            outdf[k] = Series(outputs[k], index=outdf.index, nan_as_null=False)
+            outdf[k] = cudf.Series(
+                outputs[k], index=outdf.index, nan_as_null=False
+            )
             if out_mask is not None:
                 outdf[k] = outdf[k].set_mask(out_mask.data_array_view)
 

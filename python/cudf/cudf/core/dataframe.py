@@ -33,7 +33,6 @@ from cudf.core.frame import Frame
 from cudf.core.groupby.groupby import DataFrameGroupBy
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
-from cudf.core.series import Series
 from cudf.core.window import Rolling
 from cudf.utils import applyutils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
@@ -495,7 +494,7 @@ class DataFrame(Frame, Serializable):
 
     @property
     def _constructor_sliced(self):
-        return Series
+        return cudf.Series
 
     @property
     def _constructor_expanddim(self):
@@ -649,7 +648,7 @@ class DataFrame(Frame, Serializable):
                 cupy.ndarray,
                 np.ndarray,
                 pd.Series,
-                Series,
+                cudf.Series,
                 Index,
                 pd.Index,
             ),
@@ -700,7 +699,7 @@ class DataFrame(Frame, Serializable):
             else:
                 if arg in self._data:
                     if len(self) == 0:
-                        if isinstance(value, (pd.Series, Series)):
+                        if isinstance(value, (pd.Series, cudf.Series)):
                             self._index = as_index(value.index)
                         elif len(value) > 0:
                             self._index = RangeIndex(start=0, stop=len(value))
@@ -718,8 +717,8 @@ class DataFrame(Frame, Serializable):
 
                         self._data = new_data
                         return
-                    elif isinstance(value, (pd.Series, Series)):
-                        value = Series(value)._align_to_index(
+                    elif isinstance(value, (pd.Series, cudf.Series)):
+                        value = cudf.Series(value)._align_to_index(
                             self._index,
                             how="right",
                             sort=False,
@@ -736,7 +735,7 @@ class DataFrame(Frame, Serializable):
                     self.insert(len(self._data), arg, value)
 
         elif isinstance(
-            arg, (list, np.ndarray, pd.Series, Series, Index, pd.Index)
+            arg, (list, np.ndarray, pd.Series, cudf.Series, Index, pd.Index)
         ):
             mask = arg
             if isinstance(mask, list):
@@ -843,7 +842,7 @@ class DataFrame(Frame, Serializable):
             ind.append("Index")
             ind = cudf.Index(ind, dtype="str")
             sizes.append(self.index.memory_usage(deep=deep))
-        return Series(sizes, index=ind)
+        return cudf.Series(sizes, index=ind)
 
     def __len__(self):
         """
@@ -863,7 +862,7 @@ class DataFrame(Frame, Serializable):
     def __array_function__(self, func, types, args, kwargs):
 
         cudf_df_module = DataFrame
-        cudf_series_module = Series
+        cudf_series_module = cudf.Series
 
         for submodule in func.__module__.split(".")[1:]:
             # point cudf to the correct submodule
@@ -1309,7 +1308,7 @@ class DataFrame(Frame, Serializable):
 
             def fallback(col, fn):
                 if fill_value is None:
-                    return Series.from_masked_array(
+                    return cudf.Series.from_masked_array(
                         data=column_empty(max_num_rows, dtype="float64"),
                         mask=create_null_mask(
                             max_num_rows, state=MaskState.ALL_NULL
@@ -1326,7 +1325,7 @@ class DataFrame(Frame, Serializable):
             for col in rhs._data:
                 if col not in lhs._data:
                     result[col] = fallback(rhs[col], _reverse_op(fn))
-        elif isinstance(other, Series):
+        elif isinstance(other, cudf.Series):
             other_cols = other.to_pandas().to_dict()
             other_cols_keys = list(other_cols.keys())
             result_cols = list(self.columns)
@@ -1341,7 +1340,7 @@ class DataFrame(Frame, Serializable):
                 else:
                     if col not in df_cols:
                         r_opr = other_cols[col]
-                        l_opr = Series(
+                        l_opr = cudf.Series(
                             column_empty(
                                 len(self), masked=True, dtype=other.dtype
                             )
@@ -2619,7 +2618,7 @@ class DataFrame(Frame, Serializable):
                 cols[name] = df._data[name].copy(deep=copy)
             else:
                 dtype = dtypes.get(name, np.float64)
-                col = original_cols.get(name, Series(dtype=dtype)._column)
+                col = original_cols.get(name, cudf.Series(dtype=dtype)._column)
                 col = column.column_empty_like(
                     col, dtype=dtype, masked=True, newsize=length
                 )
@@ -2848,7 +2847,7 @@ class DataFrame(Frame, Serializable):
             value = utils.scalar_broadcast_to(value, len(self))
 
         if len(self) == 0:
-            if isinstance(value, (pd.Series, Series)):
+            if isinstance(value, (pd.Series, cudf.Series)):
                 self._index = as_index(value.index)
             elif len(value) > 0:
                 self._index = RangeIndex(start=0, stop=len(value))
@@ -2861,8 +2860,8 @@ class DataFrame(Frame, Serializable):
                             newsize=len(value),
                         )
                 self._data = new_data
-        elif isinstance(value, (pd.Series, Series)):
-            value = Series(value)._align_to_index(
+        elif isinstance(value, (pd.Series, cudf.Series)):
+            value = cudf.Series(value)._align_to_index(
                 self._index, how="right", sort=False
             )
 
@@ -2890,7 +2889,7 @@ class DataFrame(Frame, Serializable):
             raise NameError("duplicated column name {!r}".format(name))
 
         if isinstance(data, GeneratorType):
-            data = Series(data)
+            data = cudf.Series(data)
 
         self.insert(len(self._data.names), name, data)
 
@@ -4120,7 +4119,7 @@ class DataFrame(Frame, Serializable):
             cols = [self[k]._column for k in columns]
             table_to_hash = Frame(data=OrderedColumnDict(zip(columns, cols)))
 
-        return Series(table_to_hash._hash()).values
+        return cudf.Series(table_to_hash._hash()).values
 
     def partition_by_hash(self, columns, nparts, keep_index=True):
         """Partition the dataframe by the hashed value of data in *columns*.
@@ -4537,34 +4536,85 @@ class DataFrame(Frame, Serializable):
         exclude=None,
         datetime_is_numeric=False,
     ):
-        """Compute summary statistics of a DataFrame's columns. For numeric
-        data, the output includes the minimum, maximum, mean, median,
-        standard deviation, and various quantiles. For object data, the output
-        includes the count, number of unique values, the most common value, and
-        the number of occurrences of the most common value.
+        """
+        Generate descriptive statistics.
+
+        Descriptive statistics include those that summarize the
+        central tendency, dispersion and shape of a dataset’s
+        distribution, excluding ``NaN`` values.
+
+        Analyzes both numeric and object series, as well as
+        ``DataFrame`` column sets of mixed data types. The
+        output will vary depending on what is provided.
+        Refer to the notes below for more detail.
 
         Parameters
         ----------
-        percentiles : list-like, optional
-            The percentiles used to generate the output summary statistics.
-            If None, the default percentiles used are the 25th, 50th and 75th.
-            Values should be within the interval [0, 1].
+        percentiles : list-like of numbers, optional
+            The percentiles to include in the output.
+            All should fall between 0 and 1. The default is
+            ``[.25, .5, .75]``, which returns the 25th, 50th,
+            and 75th percentiles.
 
-        include: str, list-like, optional
-            The dtypes to be included in the output summary statistics. Columns
-            of dtypes not included in this list will not be part of the output.
-            If include='all', all dtypes are included. Default of None includes
-            all numeric columns.
+        include: 'all', list-like of dtypes or None(default), optional
+            A list of data types to include in the result.
+            Ignored for ``Series``. Here are the options:
 
-        exclude: str, list-like, optional
-            The dtypes to be excluded from the output summary statistics.
-            Columns of dtypes included in this list will not be part of the
-            output. Default of None excludes no columns.
+            - 'all' : All columns of the input will be included in the output.
+            - A list-like of dtypes : Limits the results to the
+              provided data types.
+              To limit the result to numeric types submit
+              ``numpy.number``. To limit it instead to object columns submit
+              the ``numpy.object`` data type. Strings
+              can also be used in the style of
+              ``select_dtypes`` (e.g. ``df.describe(include=['O'])``). To
+              select pandas categorical columns, use ``'category'``
+            - None (default) : The result will include all numeric columns.
+
+        exclude : list-like of dtypes or None (default), optional,
+            A list of data types to omit from the result. Ignored
+            for ``Series``. Here are the options:
+
+            - A list-like of dtypes : Excludes the provided data types
+              from the result. To exclude numeric types submit
+              ``numpy.number``. To exclude object columns submit the data
+              type ``numpy.object``. Strings can also be used in the style of
+              ``select_dtypes`` (e.g. ``df.describe(include=['O'])``). To
+              exclude pandas categorical columns, use ``'category'``
+            - None (default) : The result will exclude nothing.
+
+        datetime_is_numeric : bool, default False
+            For DataFrame input, this also controls whether datetime columns
+            are included by default.
 
         Returns
         -------
         output_frame : DataFrame
             Summary statistics of relevant columns in the original dataframe.
+
+        Notes
+        -----
+        For numeric data, the result's index will include ``count``,
+        ``mean``, ``std``, ``min``, ``max`` as well as lower, ``50`` and
+        upper percentiles. By default the lower percentile is ``25`` and the
+        upper percentile is ``75``. The ``50`` percentile is the
+        same as the median.
+        For strings dtype or datetime dtype, the result's index
+        will include ``count``, ``unique``, ``top``, and ``freq``. The ``top``
+        is the most common value. The ``freq`` is the most common value's
+        frequency. Timestamps also include the ``first`` and ``last`` items.
+        If multiple object values have the highest count, then the
+        ``count`` and ``top`` results will be arbitrarily chosen from
+        among those with the highest count.
+        For mixed data types provided via a ``DataFrame``, the default is to
+        return only an analysis of numeric columns. If the dataframe consists
+        only of object and categorical data without any numeric columns, the
+        default is to return an analysis of both the object and categorical
+        columns. If ``include='all'`` is provided as an option, the result
+        will include a union of attributes of each type.
+        The `include` and `exclude` parameters can be used to limit
+        which columns in a ``DataFrame`` are analyzed for the output.
+        The parameters are ignored when analyzing a ``Series``.
 
         Examples
         --------
@@ -5259,7 +5309,7 @@ class DataFrame(Frame, Serializable):
 
         if q_is_number:
             result = result.transpose()
-            return Series(
+            return cudf.Series(
                 data=result._columns[0], index=result.index, name=q[0]
             )
         else:
@@ -5302,7 +5352,7 @@ class DataFrame(Frame, Serializable):
 
             result_df.index = self.index
             return result_df
-        elif isinstance(values, Series):
+        elif isinstance(values, cudf.Series):
             values = values.reindex(self.index)
 
             result = DataFrame()
@@ -6177,13 +6227,13 @@ class DataFrame(Frame, Serializable):
                 for col in self._data.names
             ]
 
-            if isinstance(result[0], Series):
+            if isinstance(result[0], cudf.Series):
                 support_result = result
                 result = DataFrame(index=support_result[0].index)
                 for idx, col in enumerate(self._data.names):
                     result[col] = support_result[idx]
             else:
-                result = Series(result)
+                result = cudf.Series(result)
                 result = result.set_index(self._data.names)
             return result
 
@@ -6225,7 +6275,7 @@ class DataFrame(Frame, Serializable):
             result = getattr(arr, method)(axis=1, **kwargs)
 
             if len(result.shape) == 1:
-                return Series(result, index=self.index)
+                return cudf.Series(result, index=self.index)
             else:
                 result_df = DataFrame.from_gpu_matrix(result).set_index(
                     self.index
@@ -6495,7 +6545,7 @@ class DataFrame(Frame, Serializable):
 
         data_col = libcudf.reshape.interleave_columns(homogenized)
 
-        result = Series(data=data_col, index=new_index)
+        result = cudf.Series(data=data_col, index=new_index)
         if dropna:
             return result.dropna()
         else:
@@ -6847,7 +6897,7 @@ def from_pandas(obj, nan_as_null=None):
     if isinstance(obj, pd.DataFrame):
         return DataFrame.from_pandas(obj, nan_as_null=nan_as_null)
     elif isinstance(obj, pd.Series):
-        return Series.from_pandas(obj, nan_as_null=nan_as_null)
+        return cudf.Series.from_pandas(obj, nan_as_null=nan_as_null)
     elif isinstance(obj, pd.MultiIndex):
         return cudf.MultiIndex.from_pandas(obj, nan_as_null=nan_as_null)
     elif isinstance(obj, pd.RangeIndex):

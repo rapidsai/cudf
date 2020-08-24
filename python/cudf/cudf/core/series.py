@@ -31,6 +31,7 @@ from cudf.core.column.categorical import (
 from cudf.core.column.lists import ListMethods
 from cudf.core.column.string import StringMethods
 from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.dataframe import DataFrame
 from cudf.core.frame import Frame
 from cudf.core.groupby.groupby import SeriesGroupBy
 from cudf.core.index import Index, RangeIndex, as_index
@@ -3827,43 +3828,14 @@ class Series(Frame, Serializable):
                 result = self._column.quantile(q, interpolation, exact)
             return Series(result, index=as_index(np_array_q), name=self.name)
 
-    def describe(self, percentiles=None, include=None, exclude=None):
-        """Compute summary statistics of a Series. For numeric
-        data, the output includes the minimum, maximum, mean, median,
-        standard deviation, and various quantiles. For object data, the output
-        includes the count, number of unique values, the most common value, and
-        the number of occurrences of the most common value.
-
-        Parameters
-        ----------
-        percentiles : list-like, optional
-            The percentiles used to generate the output summary statistics.
-            If None, the default percentiles used are the 25th, 50th and 75th.
-            Values should be within the interval [0, 1].
-
-        Returns
-        -------
-        A DataFrame containing summary statistics of relevant columns from
-        the input DataFrame.
-
-        Examples
-        --------
-        Describing a ``Series`` containing numeric values.
-
-        >>> import cudf
-        >>> s = cudf.Series([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-        >>> print(s.describe())
-           stats   values
-        0  count     10.0
-        1   mean      5.5
-        2    std  3.02765
-        3    min      1.0
-        4    25%      2.5
-        5    50%      5.5
-        6    75%      7.5
-        7    max     10.0
-        """
-
+    @copy_docstring(DataFrame.describe)
+    def describe(
+        self,
+        percentiles=None,
+        include=None,
+        exclude=None,
+        datetime_is_numeric=False,
+    ):
         def _prepare_percentiles(percentiles):
             percentiles = list(percentiles)
 
