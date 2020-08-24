@@ -29,8 +29,9 @@
 #include <vector>
 
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/iterator/transform_input_output_iterator.h>
+#include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/transform.h>
+#include "transform_mutable_iterator.h"
 
 using namespace numeric;
 
@@ -542,16 +543,17 @@ TEST_F(FixedPointTest, DecimalXXThrustOnDevice)
 }
 
 // Implement these transforms as functors instead of lambas because:
-// error: The enclosing parent function for an extended __device__ lambda must not have deduced return type
+// error: The enclosing parent function for an extended __device__ lambda must not have deduced
+// return type
 template <typename Rep, Radix Rad>
 struct RepToFP {
   using FP = fixed_point<Rep, Rad>;
 
   scale_type scale;
 
-  __host__ __device__
-  FP operator()(Rep rep) const {
-    return FP{scaled_integer<Rep>{rep, scale}};
+  __host__ __device__ FP operator()(Rep value) const
+  {
+    return FP{scaled_integer<Rep>{value, scale}};
   }
 };
 
@@ -561,8 +563,8 @@ struct FPToRep {
 
   scale_type scale;
 
-  __host__ __device__
-  Rep operator()(FP fp) const {
+  __host__ __device__ Rep operator()(FP fp) const
+  {
     return scaled_integer<Rep>{fp.rescaled(scale)}.value;
   }
 };
@@ -571,36 +573,35 @@ struct FPToRep {
 template <typename Rep, Radix Rad>
 class ColumnLike {
  public:
-  ColumnLike(size_t size, scale_type scale):
-    _data{size}, _scale{scale} {}
+  ColumnLike(size_t size, scale_type scale) : _data{size}, _scale{scale} {}
 
-  ColumnLike(std::initializer_list<Rep> l, scale_type scale):
-    _data{l.begin(), l.end()}, _scale{scale} {}
-
-  ColumnLike(thrust::host_vector<Rep>&& data, scale_type scale):
-    _data{std::move(data)}, _scale{scale} {}
-
-  auto cbegin() const {
-    return thrust::make_transform_iterator(_data.cbegin(),
-      FPToRep<Rep, Rad>{_scale});
+  ColumnLike(std::initializer_list<Rep> l, scale_type scale)
+    : _data{l.begin(), l.end()}, _scale{scale}
+  {
   }
 
-  auto cend() const {
-    return cbegin() + _data.size();
+  ColumnLike(thrust::host_vector<Rep>&& data, scale_type scale)
+    : _data{std::move(data)}, _scale{scale}
+  {
   }
 
-  auto begin() {
-    return thrust::make_transform_input_output_iterator(_data.begin(),
-      RepToFP<Rep, Rad>{_scale}, FPToRep<Rep, Rad>{_scale});
+  auto cbegin() const
+  {
+    return thrust::make_transform_iterator(_data.cbegin(), FPToRep<Rep, Rad>{_scale});
   }
 
-  auto end() {
-    return begin() + _data.size();
+  auto cend() const { return cbegin() + _data.size(); }
+
+  auto begin()
+  {
+    // Replace with thrust::make_transform_input_output_iterator when Thrust has it
+    return thrust::make_transform_mutable_iterator(
+      _data.begin(), RepToFP<Rep, Rad>{_scale}, FPToRep<Rep, Rad>{_scale});
   }
 
-  auto size() const {
-    return _data.size();
-  }
+  auto end() { return begin() + _data.size(); }
+
+  auto size() const { return _data.size(); }
 
  private:
   template <typename Rep1, Radix Rad1>
@@ -613,40 +614,40 @@ class ColumnLike {
 template <typename Rep, Radix Rad>
 class DeviceColumnLike {
  public:
-  DeviceColumnLike(size_t size, scale_type scale):
-    _data{size}, _scale{scale} {}
+  DeviceColumnLike(size_t size, scale_type scale) : _data{size}, _scale{scale} {}
 
-  DeviceColumnLike(std::initializer_list<Rep> l, scale_type scale):
-    _data{l.begin(), l.end()}, _scale{scale} {}
+  DeviceColumnLike(std::initializer_list<Rep> l, scale_type scale)
+    : _data{l.begin(), l.end()}, _scale{scale}
+  {
+  }
 
-  explicit DeviceColumnLike(ColumnLike<Rep, Rad> const& column):
-    _data{column._data}, _scale{column._scale} {}
+  explicit DeviceColumnLike(ColumnLike<Rep, Rad> const& column)
+    : _data{column._data}, _scale{column._scale}
+  {
+  }
 
-  explicit operator ColumnLike<Rep, Rad>() const {
+  explicit operator ColumnLike<Rep, Rad>() const
+  {
     return ColumnLike<Rep, Rad>{thrust::host_vector<Rep>{_data}, _scale};
   }
 
-  auto cbegin() const {
-    return thrust::make_transform_iterator(_data.cbegin(),
-      RepToFP<Rep, Rad>{_scale});
+  auto cbegin() const
+  {
+    return thrust::make_transform_iterator(_data.cbegin(), RepToFP<Rep, Rad>{_scale});
   }
 
-  auto cend() const {
-    return cbegin() + _data.size();
+  auto cend() const { return cbegin() + _data.size(); }
+
+  auto begin()
+  {
+    // Replace with thrust::make_transform_input_output_iterator when Thrust has it
+    return thrust::make_transform_mutable_iterator(
+      _data.begin(), RepToFP<Rep, Rad>{_scale}, FPToRep<Rep, Rad>{_scale});
   }
 
-  auto begin() {
-    return thrust::make_transform_input_output_iterator(_data.begin(),
-      RepToFP<Rep, Rad>{_scale}, FPToRep<Rep, Rad>{_scale});
-  }
+  auto end() { return begin() + _data.size(); }
 
-  auto end() {
-    return begin() + _data.size();
-  }
-
-  auto size() const {
-    return _data.size();
-  }
+  auto size() const { return _data.size(); }
 
  private:
   scale_type _scale;
@@ -655,59 +656,52 @@ class DeviceColumnLike {
 
 TEST_F(FixedPointTest, Decimal32ColumnLikeAssignment)
 {
-  using Rep = int32_t;
+  using Rep          = int32_t;
   constexpr auto Rad = Radix::BASE_10;
-  using Column = ColumnLike<Rep, Rad>;
-  using FP = fixed_point<Rep, Rad>;
+  using Column       = ColumnLike<Rep, Rad>;
+  using FP           = fixed_point<Rep, Rad>;
 
   Column input{{100, 125, 150}, scale_type{-2}};
   Column output{3, scale_type{-4}};
 
-  std::transform(input.begin(), input.end(), output.begin(),
-    [](auto fp) {
-      return fp;
-    });
+  std::transform(input.begin(), input.end(), output.begin(), [](auto fp) { return fp; });
 
   std::vector<double> expected{1., 1.25, 1.5};
   auto result_it = thrust::make_transform_iterator(output.begin(),
-    [](auto fp) {
-      return double{fp};
-    });
+                                                   [](auto fp) { return static_cast<double>(fp); });
+
+  EXPECT_EQ(*expected.cbegin(), *result_it);
   EXPECT_TRUE(std::equal(expected.cbegin(), expected.cend(), result_it));
 }
 
 TEST_F(FixedPointTest, Decimal32ColumnLikeAddition)
 {
-  using Rep = int32_t;
+  using Rep          = int32_t;
   constexpr auto Rad = Radix::BASE_10;
-  using Column = ColumnLike<Rep, Rad>;
-  using FP = fixed_point<Rep, Rad>;
+  using Column       = ColumnLike<Rep, Rad>;
+  using FP           = fixed_point<Rep, Rad>;
 
   Column input1{{100, 125, 150}, scale_type{-2}};
   Column input2{{4, 5, 6}, scale_type{0}};
   Column output{3, scale_type{-4}};
 
-  // std::transform doesn't get two inputs until C++17 :(
-  thrust::transform(input1.begin(), input1.end(), input2.begin(), output.begin(),
-    [](FP fp1, FP fp2) { // auto doesn't work here; can't resolve operator +
-      return fp1 + fp2;
-    });
+  std::transform(input1.begin(), input1.end(), input2.begin(), output.begin(), std::plus<FP>());
 
-  std::vector<double> expected{5., 6., 8.}; // fractional part rounded off from addition
+  std::vector<double> expected{5., 6.25, 7.5};
   auto result_it = thrust::make_transform_iterator(output.begin(),
-    [](auto fp) {
-      return double{fp};
-    });
+                                                   [](auto fp) { return static_cast<double>(fp); });
+
+  EXPECT_EQ(*expected.begin(), *result_it);
   EXPECT_TRUE(std::equal(expected.cbegin(), expected.cend(), result_it));
 }
 
 TEST_F(FixedPointTest, Decimal32DeviceColumnLikeAddition)
 {
-  using Rep = int32_t;
+  using Rep          = int32_t;
   constexpr auto Rad = Radix::BASE_10;
-  using Column = ColumnLike<Rep, Rad>;
+  using Column       = ColumnLike<Rep, Rad>;
   using DeviceColumn = DeviceColumnLike<Rep, Rad>;
-  using FP = fixed_point<Rep, Rad>;
+  using FP           = fixed_point<Rep, Rad>;
 
   DeviceColumn input1{{100, 125, 150}, scale_type{-2}};
   DeviceColumn input2{{4, 5, 6}, scale_type{0}};
@@ -715,45 +709,46 @@ TEST_F(FixedPointTest, Decimal32DeviceColumnLikeAddition)
 
   // Test fixed point iterator in device function
   thrust::transform(thrust::device,
-    input1.begin(), input1.end(), input2.begin(), output.begin(),
-    thrust::plus<FP>{});
+                    input1.begin(),
+                    input1.end(),
+                    input2.begin(),
+                    output.begin(),
+                    thrust::plus<FP>{});
 
   auto output_host = Column{output};
 
-  std::vector<double> expected{5., 6., 8.}; // fractional part rounded off from addition
-  auto result_it = thrust::make_transform_iterator(output_host.begin(),
-    [](auto fp) {
-      return double{fp};
-    });
+  std::vector<double> expected{5., 6.25, 7.5};
+  auto result_it =
+    thrust::make_transform_iterator(output_host.begin(), [](auto fp) { return double{fp}; });
+  EXPECT_EQ(*expected.cbegin(), *result_it);
   EXPECT_TRUE(std::equal(expected.cbegin(), expected.cend(), result_it));
 }
 
 template <typename Input, typename Output>
-__global__ void ReverseKernel(Input in, Output out, size_t n) {
+__global__ void ReverseKernel(Input in, Output out, size_t n)
+{
   int i = threadIdx.x + blockIdx.x * blockDim.x;
 
-  if (i < n) {
-    out[n - i - 1] = in[i];
-  }
+  if (i < n) { out[n - i - 1] = in[i]; }
 }
 
 template <typename Input, typename Output>
-void Reverse(Input start, Input end, Output out) {
+void Reverse(Input start, Input end, Output out)
+{
   int size = end - start;
   constexpr int block_size{128};
   cudf::detail::grid_1d grid_config{size, block_size};
   int grid_size = grid_config.num_blocks;
-  ReverseKernel<Input, Output><<<grid_size, block_size>>>
-    (start, out, size);
+  ReverseKernel<Input, Output><<<grid_size, block_size>>>(start, out, size);
 }
 
 TEST_F(FixedPointTest, Decimal32DeviceDereference)
 {
-  using Rep = int32_t;
+  using Rep          = int32_t;
   constexpr auto Rad = Radix::BASE_10;
-  using Column = ColumnLike<Rep, Rad>;
+  using Column       = ColumnLike<Rep, Rad>;
   using DeviceColumn = DeviceColumnLike<Rep, Rad>;
-  using FP = fixed_point<Rep, Rad>;
+  using FP           = fixed_point<Rep, Rad>;
 
   DeviceColumn input{{100, 125, 150, 175, 200}, scale_type{-2}};
   DeviceColumn output{input.size(), scale_type{-1}};
@@ -762,11 +757,11 @@ TEST_F(FixedPointTest, Decimal32DeviceDereference)
 
   auto output_host = Column{output};
 
-  std::vector<double> expected{2.0, 1.7, 1.5, 1.2, 1.0};
+  std::vector<double> expected{2.0, 1.8, 1.5, 1.3, 1.0};
   auto result_it = thrust::make_transform_iterator(output_host.begin(),
-    [](auto fp) {
-      return double{fp};
-    });
+                                                   [](auto fp) { return static_cast<double>(fp); });
+
+  EXPECT_EQ(*expected.cbegin(), *result_it);
   EXPECT_TRUE(std::equal(expected.cbegin(), expected.cend(), result_it));
 }
 
