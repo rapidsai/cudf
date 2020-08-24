@@ -745,9 +745,9 @@ void reader::impl::allocate_nesting_info(
   // buffer to keep it to a single gpu allocation
   size_t const total_page_nesting_infos = std::accumulate(
     chunks.host_ptr(), chunks.host_ptr() + chunks.size(), 0, [&](int total, auto &chunk) {
-      auto const col_index = chunk.col_index;
+      auto const src_col_index = chunk.src_col_index;
       // the leaf schema represents the bottom of the nested hierarchy
-      auto const &leaf_schema               = _metadata->get_column_leaf_schema(col_index);
+      auto const &leaf_schema               = _metadata->get_column_leaf_schema(src_col_index);
       auto const per_page_nesting_info_size = leaf_schema.max_definition_level + 1;
       return total + (per_page_nesting_info_size * chunk.num_data_pages);
     });
@@ -761,8 +761,8 @@ void reader::impl::allocate_nesting_info(
   int target_page_index = 0;
   int src_info_index    = 0;
   for (size_t idx = 0; idx < chunks.size(); idx++) {
-    int col_index                  = chunks[idx].col_index;
-    auto &leaf_schema              = _metadata->get_column_leaf_schema(col_index);
+    int src_col_index              = chunks[idx].src_col_index;
+    auto &leaf_schema              = _metadata->get_column_leaf_schema(src_col_index);
     int per_page_nesting_info_size = leaf_schema.max_definition_level + 1;
 
     // skip my dict pages
@@ -782,20 +782,21 @@ void reader::impl::allocate_nesting_info(
   // fill in
   int nesting_info_index = 0;
   for (size_t idx = 0; idx < chunks.size(); idx++) {
-    int col_index = chunks[idx].col_index;
+    int dst_col_index = chunks[idx].dst_col_index;
+    int src_col_index = chunks[idx].src_col_index;
 
     // the leaf schema represents the bottom of the nested hierarchy
-    auto &leaf_schema = _metadata->get_column_leaf_schema(col_index);
+    auto &leaf_schema = _metadata->get_column_leaf_schema(src_col_index);
     // real depth of the output cudf column hiearchy (1 == no nesting, 2 == 1 level, etc)
-    int max_depth = _metadata->get_nesting_depth(col_index);
+    int max_depth = _metadata->get_nesting_depth(src_col_index);
 
     // # of nesting infos stored per page for this column
     size_t per_page_nesting_info_size = leaf_schema.max_definition_level + 1;
 
-    col_nesting_info[col_index].resize(max_depth);
+    col_nesting_info[dst_col_index].resize(max_depth);
 
     // fill in host-side nesting info
-    int schema_idx     = _metadata->get_column_leaf_schema_index(col_index);
+    int schema_idx     = _metadata->get_column_leaf_schema_index(src_col_index);
     auto cur_schema    = _metadata->get_schema(schema_idx);
     int output_col_idx = max_depth - 1;
     while (schema_idx > 0) {
@@ -806,7 +807,7 @@ void reader::impl::allocate_nesting_info(
 
       // set nullability on the column
       if (repetition_type != REPEATED) {
-        col_nesting_info[col_index][output_col_idx].second =
+        col_nesting_info[dst_col_index][output_col_idx].second =
           repetition_type == OPTIONAL ? true : false;
       }
 
@@ -916,7 +917,7 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
     chunks[c].column_data_base      = data.device_ptr();
 
     // fill in the arrays on the host
-    column_buffer *buf = &out_buffers[chunks[c].col_index];
+    column_buffer *buf = &out_buffers[chunks[c].dst_col_index];
     for (size_t idx = 0; idx <= max_depth; idx++) {
       valids[idx] = buf->null_mask();
       data[idx]   = buf->data();
@@ -972,7 +973,7 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
     gpu::PageInfo *pi = &pages[i];
     if (pi->flags & gpu::PAGEINFO_FLAGS_DICTIONARY) { continue; }
     gpu::ColumnChunkDesc *col = &chunks[pi->chunk_idx];
-    column_buffer *out        = &out_buffers[col->col_index];
+    column_buffer *out        = &out_buffers[col->dst_col_index];
 
     int index                 = pi->nesting - page_nesting.device_ptr();
     gpu::PageNestingInfo *pni = &page_nesting[index];
@@ -1107,7 +1108,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                            converted_type,
                                            leaf_schema.decimal_scale,
                                            clock_rate,
-                                           i));
+                                           i,
+                                           col.first));
 
         // Map each column chunk to its column index and its source index
         chunk_source_map[chunks.size() - 1] = row_group_source;

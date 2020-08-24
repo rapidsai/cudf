@@ -13,6 +13,7 @@
 - PR #5917 Just use `None` for `strides` in `Buffer`
 - PR #5971 Add cuStreamz README for basic installation and use
 - PR #6002 Add Java bindings for md5
+- PR #6067 Added compute codes for aarch64 devices
 
 ## Bug Fixes
 
@@ -344,7 +345,7 @@
 - PR #6003 Fix concurrent JSON reads crash
 - PR #6032 Change black version to 19.10b0 in .pre-commit-config.yaml
 - PR #6041 Fix Java memory resource handler to rethrow original exception object
-
+- PR #6057 Fix issue in parquet reader with reading columns out of file-order
 
 # cuDF 0.14.0 (03 Jun 2020)
 
