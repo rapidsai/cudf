@@ -15,7 +15,9 @@ import cudf
 def _read_orc_stripe(fs, path, stripe, columns, kwargs={}):
     """Pull out specific columns from specific stripe"""
     with fs.open(path, "rb") as f:
-        df_stripe = cudf.read_orc(f, stripes=[stripe], columns=columns, **kwargs)
+        df_stripe = cudf.read_orc(
+            f, stripes=[stripe], columns=columns, **kwargs
+        )
     return df_stripe
 
 
