@@ -10,6 +10,7 @@
 - PR #5953 Use stable sort when doing a sort groupby
 - PR #5973 Link to the Code of Conduct in CONTRIBUTING.md
 - PR #5917 Just use `None` for `strides` in `Buffer`
+- PR #6015 Upgrade CUB/Thrust to the latest commit
 - PR #5971 Add cuStreamz README for basic installation and use
 - PR #6002 Add Java bindings for md5
 - PR #6067 Added compute codes for aarch64 devices
@@ -126,7 +127,6 @@
 - PR #5386 Remove `cub` from `include_dirs` in `setup.py`
 - PR #5373 Remove legacy nvstrings/nvcategory/nvtext
 - PR #5362 Remove dependency on `rmm._DevicePointer`
-- PR #6015 Upgrade CUB/Thrust to the latest commit
 - PR #5302 Add missing comparison operators to `fixed_point` type
 - PR #5824 Mark host frames as not needing to be writeable
 - PR #5354 Split Dask deserialization methods by dask/cuda
