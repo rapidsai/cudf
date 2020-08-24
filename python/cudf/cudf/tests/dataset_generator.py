@@ -121,7 +121,8 @@ def generate(
     for i, column_params in enumerate(parameters.column_parameters):
         generator = column_params.generator(g)
         if column_params.cardinality is not None:
-            # Construct set of values to sample from where set size = cardinality
+            # Construct set of values to sample from where
+            # set size = cardinality
             vals = pa.array(
                 generator, size=column_params.cardinality, safe=False,
             )
