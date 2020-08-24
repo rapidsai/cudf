@@ -18,7 +18,6 @@
 
 - PR #6073 Fix issue related to `.loc` incase of `DatetimeIndex`
 
-
 # cuDF 0.15.0 (Date TBD)
 
 ## New Features
