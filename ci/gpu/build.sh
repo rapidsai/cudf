@@ -94,9 +94,9 @@ conda list
 
 logger "Build libcudf..."
 if [[ ${BUILD_MODE} == "pull-request" ]]; then
-    $WORKSPACE/build.sh clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests --ptds
+    $WORKSPACE/build.sh clean cudf --ptds
 else
-    $WORKSPACE/build.sh clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests -l --ptds
+    $WORKSPACE/build.sh clean cudf -l --ptds
 fi
 
 ################################################################################
@@ -126,19 +126,4 @@ else
         logger "export NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=1"
         export NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=1
     fi
-
-    cd $WORKSPACE/python/cudf
-    logger "Python py.test for cuDF..."
-    py.test --cache-clear --basetemp=${WORKSPACE}/cudf-cuda-tmp --junitxml=${WORKSPACE}/junit-cudf.xml -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:${WORKSPACE}/python/cudf/cudf-coverage.xml --cov-report term
-
-    cd $WORKSPACE/python/dask_cudf
-    logger "Python py.test for dask-cudf..."
-    py.test --cache-clear --basetemp=${WORKSPACE}/dask-cudf-cuda-tmp --junitxml=${WORKSPACE}/junit-dask-cudf.xml -v --cov-config=.coveragerc --cov=dask_cudf --cov-report=xml:${WORKSPACE}/python/dask_cudf/dask-cudf-coverage.xml --cov-report term
-
-    cd $WORKSPACE/python/custreamz
-    logger "Python py.test for cuStreamz..."
-    py.test --cache-clear --basetemp=${WORKSPACE}/custreamz-cuda-tmp --junitxml=${WORKSPACE}/junit-custreamz.xml -v --cov-config=.coveragerc --cov=custreamz --cov-report=xml:${WORKSPACE}/python/custreamz/custreamz-coverage.xml --cov-report term
-
-    ${WORKSPACE}/ci/gpu/test-notebooks.sh 2>&1 | tee nbtest.log
-    python ${WORKSPACE}/ci/utils/nbtestlog2junitxml.py nbtest.log
 fi
