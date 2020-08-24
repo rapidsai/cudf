@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # <div align="left"><img src="../../img/rapids_logo.png" width="90px"/>&nbsp;custreamz - GPU Accelerated Streaming</div>
 
 Built as an extension to [python streamz](https://github.com/python-streamz/streamz), cuStreamz provides GPU accelerated abstractions for streaming data. CuStreamz can be used along side python streamz or as a standalone library for ingesting streaming data to cudf dataframes.
@@ -36,7 +37,7 @@ tips_df['tip_percentage'] = tips_df['tip'] / tips_df['total_bill'] * 100
 print(tips_df.groupby('size').tip_percentage.mean())
 ```
 
-A "hello world" of using cuStreamz with python streamz can be found [here](https://github.com/rapidsai-community/notebooks-contrib/blob/master/getting_started_notebooks/basics/hello_streamz.ipynb)
+A "hello world" of using cuStreamz with python streamz can be found [here](https://github.com/rapidsai-community/notebooks-contrib/blob/main/getting_started_notebooks/basics/hello_streamz.ipynb)
 
 A more detailed example of [parsing haproxy logs](https://github.com/rapidsai-community/notebooks-contrib/blob/branch-0.14/intermediate_notebooks/examples/custreamz/parsing_haproxy_logs.ipynb) is also available.
 
@@ -67,4 +68,5 @@ Nightly:
 conda install -c rapidsai-nightly cudf_kafka custreamz
 ```
 
-See the [Get RAPIDS version picker](https://rapids.ai/start.html) for more OS and version info. 
+See the [Get RAPIDS version picker](https://rapids.ai/start.html) for more OS and version info.
+ 
