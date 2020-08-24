@@ -58,7 +58,7 @@ class Parameters:
     ---
     num_rows : int
         Number of rows to generate
-    column_params : List[ColumnParams]
+    column_parameters : List[ColumnParams]
         ColumnParams for each column
     seed : int or None, default None
         Seed for random data generation
@@ -82,7 +82,7 @@ def _write(tbl, path, format):
 
 def _generate_column(column_params, num_rows):
     # If cardinality is specified, we create a set to sample from.
-    # Otherwise, we simply use the generator to generate each value.
+    # Otherwise, we simply use the given generator to generate each value.
     if column_params.cardinality is not None:
         # Construct set of values to sample from where
         # set size = cardinality
@@ -121,7 +121,9 @@ def _generate_column(column_params, num_rows):
                     column_params.null_frequency,
                     1 - column_params.null_frequency,
                 ],
-            ),
+            )
+            if column_params.null_frequency > 0.0
+            else None,
             size=num_rows,
             safe=False,
         )
