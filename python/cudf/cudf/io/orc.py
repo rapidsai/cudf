@@ -12,16 +12,21 @@ from cudf.utils import ioutils
 import pyorc
 
 
-def _filter_stripe(filters, stripe_idx, reader):
+def _filter_row_group(filters, stats, row_group_idx):
     for conjunction in filters:
         res = True
         for col, op, val in conjunction:
-            col_idx = reader.schema.find_column_id(col)
+            row_group_stats = stats[col][row_group_idx]
             if op == "=" or op == "==":
-                stats = reader.read_stripe(stripe_idx)[col_idx].statistics
-                if stats["minimum"] and val < stats["minimum"]:
+                if (
+                    row_group_stats["minimum"]
+                    and val < row_group_stats["minimum"]
+                ):
                     res = False
-                if stats["maximum"] and val > stats["maximum"]:
+                if (
+                    row_group_stats["maximum"]
+                    and val > row_group_stats["maximum"]
+                ):
                     res = False
         if res:
             return True
@@ -74,22 +79,72 @@ def read_orc(
             else open(filepath_or_buffer, "rb")
         )
         r = pyorc.Reader(f)
+        
+        # Get relevant columns
+        cols = set()
+        for conjunction in filters:
+            for i, (col, op, val) in enumerate(conjunction):
+                col = r.schema.find_column_id(col)
+                cols.add(col)
+                conjunction[i] = (col, op, val)
+        cols = sorted(cols)
 
-        # Prepare stripes for filtering
+        print(conjunction)
+
+        # Select stripes
         if not stripes:
             stripes = range(r.num_of_stripes)
+        else:
+            stripes = sorted(stripes)
 
-        # Filter
-        stripes = list(
-            filter(
-                lambda stripe_idx: _filter_stripe(filters, stripe_idx, r),
-                stripes,
-            )
-        )
+        num_rows_scanned = 0
+        filtered_stripes = []
+        for stripe_idx in stripes:
+            # Read in statistics for relevant columns
+            stripe = r.read_stripe(stripe_idx)
+            stats = {}
+            for col in cols:
+                stats[col] = stripe[col]._stats
+            num_row_groups = len(stats[cols[-1]])
+
+            # Apply filters to each row group
+            filter_stripe = True
+            for row_group_idx in range(num_row_groups):
+                if _filter_row_group(filters, stats, row_group_idx):
+                    pass
+                else:
+                    filter_stripe = False
+                num_rows_scanned += next(iter(stats.values()))[row_group_idx]["number_of_values"]
+            if filter_stripe:
+                filtered_stripes.append(stripe_idx)
+        stripes = [
+            stripe_idx
+            for stripe_idx in stripes
+            if stripe_idx in filtered_stripes
+        ]
+        print(stripes)
 
         # If file object was read from, close
         if isinstance(filepath_or_buffer, str):
             f.close()
+
+        # Return if empty
+        if len(stripes) == 0:
+            return cudf.DataFrame([])
+            # return read_orc(
+            #     filepath_or_buffer,
+            #     engine=engine,
+            #     columns=columns,
+            #     filters=None,
+            #     stripes=None,
+            #     skip_rows=skip_rows,
+            #     num_rows=1,
+            #     use_index=use_index,
+            #     decimals_as_float=decimals_as_float,
+            #     force_decimal_scale=force_decimal_scale,
+            #     timestamp_type=timestamp_type,
+            #     **kwargs,
+            # ).iloc[0:0]
 
     if engine == "cudf":
         df = DataFrame._from_table(
