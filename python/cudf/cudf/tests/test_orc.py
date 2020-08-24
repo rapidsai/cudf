@@ -233,7 +233,11 @@ def test_orc_read_stripes(datadir, engine):
 
     # Read only some stripes
     gdf = cudf.read_orc(path, engine=engine, stripes=[0, 1])
-    assert len(gdf) < len(pdf)
+    assert_eq(gdf, pdf.head(25000))
+    gdf = cudf.read_orc(path, engine=engine, stripes=[0, stripes - 1])
+    assert_eq(
+        gdf, cudf.concat([pdf.head(15000), pdf.tail(10000)], ignore_index=True)
+    )
 
 
 @pytest.mark.parametrize("num_rows", [1, 100, 3000])
