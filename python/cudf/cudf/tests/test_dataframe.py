@@ -2633,15 +2633,35 @@ def test_select_dtype_datetime():
         start="2000-01-01", end="2000-01-02", freq="3600s", dtypes={"x": int}
     )
     gdf = gdf.reset_index()
+    pdf = gdf.to_pandas()
 
-    assert_eq(gdf[["timestamp"]], gdf.select_dtypes("datetime64"))
-    assert_eq(gdf[["timestamp"]], gdf.select_dtypes(np.dtype("datetime64")))
-    assert_eq(gdf[["timestamp"]], gdf.select_dtypes(include="datetime64"))
-    assert_eq(gdf[["timestamp"]], gdf.select_dtypes("datetime64[ms]"))
+    assert_eq(pdf.select_dtypes("datetime64"), gdf.select_dtypes("datetime64"))
     assert_eq(
-        gdf[["timestamp"]], gdf.select_dtypes(np.dtype("datetime64[ms]"))
+        pdf.select_dtypes(np.dtype("datetime64")),
+        gdf.select_dtypes(np.dtype("datetime64")),
     )
-    assert_eq(gdf[["timestamp"]], gdf.select_dtypes(include="datetime64[ms]"))
+    assert_eq(
+        pdf.select_dtypes(include="datetime64"),
+        gdf.select_dtypes(include="datetime64"),
+    )
+
+
+def test_select_dtype_datetime_with_frequency():
+    gdf = gd.datasets.timeseries(
+        start="2000-01-01", end="2000-01-02", freq="3600s", dtypes={"x": int}
+    )
+    gdf = gdf.reset_index()
+    pdf = gdf.to_pandas()
+
+    try:
+        pdf.select_dtypes("datetime64[ms]")
+    except Exception as e:
+        with pytest.raises(type(e), match=re.escape(str(e))):
+            gdf.select_dtypes("datetime64[ms]")
+    else:
+        raise AssertionError(
+            "Expected pdf.select_dtypes('datetime64[ms]') to fail"
+        )
 
 
 def test_array_ufunc():
@@ -2709,10 +2729,6 @@ def test_dataframe_describe_default():
     assert_eq(pdf_results, gdf_results)
 
 
-@pytest.mark.xfail(
-    raises=AssertionError,
-    reason="Describing non-numeric columns is not yet supported.",
-)
 def test_series_describe_include_all():
     np.random.seed(12)
     data_length = 10000
@@ -2724,11 +2740,15 @@ def test_series_describe_include_all():
     df["animal"] = np.random.choice(["dog", "cat", "bird"], data_length)
 
     pdf = df.to_pandas()
-    gdf_results = df.describe(include="all").to_pandas()
+    gdf_results = df.describe(include="all")
     pdf_results = pdf.describe(include="all")
 
-    np.testing.assert_array_almost_equal(
-        gdf_results.values, pdf_results.values, decimal=4
+    assert_eq(gdf_results[["x", "y"]], pdf_results[["x", "y"]])
+    assert_eq(gdf_results.index, pdf_results.index)
+    assert_eq(gdf_results.columns, pdf_results.columns)
+    assert_eq(
+        gdf_results[["animal"]].fillna(-1).astype("str"),
+        pdf_results[["animal"]].fillna(-1).astype("str"),
     )
 
 

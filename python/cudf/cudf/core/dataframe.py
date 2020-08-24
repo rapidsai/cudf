@@ -3,7 +3,6 @@ from __future__ import division, print_function
 
 import inspect
 import itertools
-import logging
 import numbers
 import pickle
 import sys
@@ -4531,7 +4530,13 @@ class DataFrame(Frame, Serializable):
 
         cudf.utils.ioutils.buffer_write_lines(buf, lines)
 
-    def describe(self, percentiles=None, include=None, exclude=None):
+    def describe(
+        self,
+        percentiles=None,
+        include=None,
+        exclude=None,
+        datetime_is_numeric=False,
+    ):
         """Compute summary statistics of a DataFrame's columns. For numeric
         data, the output includes the minimum, maximum, mean, median,
         standard deviation, and various quantiles. For object data, the output
@@ -4616,45 +4621,51 @@ class DataFrame(Frame, Serializable):
         7    max  3.0
         """
 
-        def _create_output_frame(data, percentiles=None):
-            # hack because we don't support strings in indexes
-            return DataFrame(
-                {
-                    col: data[col].describe(percentiles=percentiles)
-                    for col in data.columns
-                },
-                index=Series(column.column_empty(0, dtype="int32"))
-                .describe(percentiles=percentiles)
-                .index,
-            )
-
         if not include and not exclude:
-            numeric_data = self.select_dtypes(np.number)
-            output_frame = _create_output_frame(numeric_data, percentiles)
+            default_include = [np.number]
+            if datetime_is_numeric:
+                default_include.append("datetime")
+            data_to_describe = self.select_dtypes(include=default_include)
+            if len(data_to_describe.columns) == 0:
+                data_to_describe = self
 
         elif include == "all":
-            if exclude:
-                raise ValueError("Cannot exclude when include='all'.")
+            if exclude is not None:
+                raise ValueError("exclude must be None when include is 'all'")
 
-            included_data = self.select_dtypes(np.number)
-            output_frame = _create_output_frame(included_data, percentiles)
-            logging.warning(
-                "Describe does not yet include StringColumns or "
-                "DatetimeColumns."
-            )
-
+            data_to_describe = self
         else:
             if not include:
                 include = np.number
 
-            included_data = self.select_dtypes(
+            data_to_describe = self.select_dtypes(
                 include=include, exclude=exclude
             )
-            if included_data.empty:
+            if data_to_describe.empty:
                 raise ValueError("No data of included types.")
-            output_frame = _create_output_frame(included_data, percentiles)
 
-        return output_frame
+        describe_series = [
+            data_to_describe[col].describe(percentiles=percentiles)
+            for col in data_to_describe.columns
+        ]
+        names = []
+        ldesc_indexes = sorted((x.index for x in describe_series), key=len)
+        for idxnames in ldesc_indexes:
+            for name in idxnames.to_pandas():
+                if name not in names:
+                    names.append(name)
+
+        if len(describe_series) == 1:
+            return describe_series[0].to_frame()
+        else:
+            return cudf.concat(
+                [
+                    series.reindex(names, copy=False)
+                    for series in describe_series
+                ],
+                axis=1,
+                sort=False,
+            )
 
     def to_pandas(self, **kwargs):
         """
