@@ -247,8 +247,9 @@ engine : {{ 'cudf', 'pyarrow' }}, default 'cudf'
     Parser engine to use.
 columns : list, default None
     If not None, only these columns will be read from the file.
-stripe: int, default None
-    If not None, only the stripe with the specified index will be read.
+stripes: list, default None
+    If not None, only these stripe will be read from the file. Stripes are
+    concatenated with index ignored.
 skip_rows : int, default None
     If not None, the number of rows to skip from the start of the file.
 num_rows : int, default None
