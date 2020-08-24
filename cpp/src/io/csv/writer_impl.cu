@@ -28,6 +28,7 @@
 
 #include <cudf/strings/convert/convert_booleans.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
+#include <cudf/strings/convert/convert_durations.hpp>
 #include <cudf/strings/convert/convert_floats.hpp>
 #include <cudf/strings/convert/convert_integers.hpp>
 
@@ -216,7 +217,8 @@ struct column_to_strings_fn {
     //
     return not((std::is_same<column_type, cudf::string_view>::value) ||
                (std::is_integral<column_type>::value) ||
-               (std::is_floating_point<column_type>::value) || (cudf::is_timestamp<column_type>()));
+               (std::is_floating_point<column_type>::value) ||
+               (cudf::is_timestamp<column_type>()) || (cudf::is_duration<column_type>()));
   }
 
   explicit column_to_strings_fn(writer_options const& options,
@@ -323,6 +325,33 @@ struct column_to_strings_fn {
     }
 
     auto conv_col_ptr = cudf::strings::from_timestamps(column, format, mr_);
+
+    return conv_col_ptr;
+  }
+
+    template <typename column_type>
+  std::enable_if_t<cudf::is_duration<column_type>(), std::unique_ptr<column>> operator()(
+    column_view const& column) const
+  {
+    std::string format{"%P"}; //"D days %+%H:%M:%S"
+
+    // handle the cases where delimiter / line-terminator can be
+    // "-" or ":", in which case they are to be dropped from the format:
+    //
+    std::string delimiter{options_.inter_column_delimiter()};
+    std::string newline{options_.line_terminator()};
+
+    constexpr char const* dash{"-"};
+    constexpr char const* colon{":"};
+    if (delimiter == dash || newline == dash) {
+      format.erase(std::remove(format.begin(), format.end(), dash[0]), format.end());
+    }
+
+    if (delimiter == colon || newline == colon) {
+      format.erase(std::remove(format.begin(), format.end(), colon[0]), format.end());
+    }
+
+    auto conv_col_ptr = cudf::strings::from_durations(column, format, mr_);
 
     return conv_col_ptr;
   }
