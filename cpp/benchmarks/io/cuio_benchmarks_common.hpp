@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/io/types.hpp>
+#include <cudf/utilities/traits.hpp>
 
 // used to make CUIO_BENCH_ALL_TYPES calls more readable
 constexpr int UNCOMPRESSED = (int)cudf::io::compression_type::NONE;
