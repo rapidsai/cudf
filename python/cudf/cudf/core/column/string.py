@@ -4772,7 +4772,7 @@ class StringColumn(column.ColumnBase):
         if isinstance(rhs, StringColumn) and op == "add":
             return lhs.str().cat(others=rhs)
         elif op in ("eq", "ne", "gt", "lt", "ge", "le"):
-            return _string_column_binop(self, rhs, op=op, out_dtype="bool")
+            return _string_column_binop(self, rhs, op=op, out_dtype=cudf.BooleanDtype())
         else:
             msg = "{!r} operator not supported between {} and {}"
             raise TypeError(msg.format(op, type(self), type(rhs)))

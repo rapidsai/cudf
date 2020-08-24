@@ -1058,8 +1058,8 @@ class Series(Frame, Serializable):
         rhs = self._normalize_binop_value(rhs)
 
         if fn == "truediv":
-            if str(lhs.dtype) in truediv_int_dtype_corrections:
-                truediv_type = truediv_int_dtype_corrections[str(lhs.dtype)]
+            if lhs.dtype.name in truediv_int_dtype_corrections:
+                truediv_type = truediv_int_dtype_corrections[lhs.dtype.name]
                 lhs = lhs.astype(truediv_type)
 
         if fill_value is not None:
@@ -1381,27 +1381,17 @@ class Series(Frame, Serializable):
     __div__ = __truediv__
 
     def _bitwise_binop(self, other, op):
-        if (
-            np.issubdtype(self.dtype, np.bool_)
-            or np.issubdtype(self.dtype, np.integer)
-        ) and (
-            np.issubdtype(other.dtype, np.bool_)
-            or np.issubdtype(other.dtype, np.integer)
-        ):
-            # TODO: This doesn't work on Series (op) DataFrame
-            # because dataframe doesn't have dtype
+        if (isinstance(self.dtype, (cudf.BooleanDtype, cudf.Integer))) and (isinstance(other.dtype, (cudf.BooleanDtype, cudf.Integer))):
             ser = self._binaryop(other, op)
-            if np.issubdtype(self.dtype, np.bool_) or np.issubdtype(
-                other.dtype, np.bool_
-            ):
-                ser = ser.astype(np.bool_)
-            return ser
+            if isinstance(self.dtype, cudf.BooleanDtype) or isinstance(other.dtype, cudf.BooleanDtype):
+                ser = ser.astype(cudf.BooleanDtype())
         else:
             raise TypeError(
                 f"Operation 'bitwise {op}' not supported between "
                 f"{self.dtype.type.__name__} and {other.dtype.type.__name__}"
             )
-
+        return ser
+        
     def __and__(self, other):
         """Performs vectorized bitwise and (&) on corresponding elements of two
         series.
@@ -2125,7 +2115,6 @@ class Series(Frame, Serializable):
             return self.copy(deep=copy)
         try:
             data = self._column.astype(dtype)
-
             return self._copy_construct(
                 data=data.copy(deep=True) if copy else data, index=self.index
             )
@@ -4239,16 +4228,16 @@ class Series(Frame, Serializable):
 
 
 truediv_int_dtype_corrections = {
-    "int8": "float32",
-    "int16": "float32",
-    "int32": "float32",
-    "int64": "float64",
-    "uint8": "float32",
-    "uint16": "float32",
-    "uint32": "float64",
-    "uint64": "float64",
-    "bool": "float32",
-    "int": "float",
+    "Int8": "Float32",
+    "Int16": "Float32",
+    "Int32": "Float32",
+    "Int64": "Float64",
+    "UInt8": "Float32",
+    "UInt16": "Float32",
+    "UInt32": "Float64",
+    "UInt64": "Float64",
+    "Boolean": "Float32",
+    "Int": "Float",
 }
 
 

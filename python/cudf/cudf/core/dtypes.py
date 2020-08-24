@@ -126,7 +126,7 @@ class Floating(Inexact):
 class Flexible(Generic):
     pass
 
-class Datetime(Generic):
+class Datetime(Generic):    
     pass
 
 class Timedelta(Generic):
@@ -202,24 +202,28 @@ class Datetime64NSDtype(Datetime):
     def __init__(self):
         self.pa_type = pa.timestamp("ns")
         self._name = "Datetime64NS"
+        self._time_unit = "ns"
 
 
 class Datetime64USDtype(Datetime):
     def __init__(self):
         self.pa_type = pa.timestamp("us")
         self._name = "Datetime64US"
+        self._time_unit = "us"
 
 
 class Datetime64MSDtype(Datetime):
     def __init__(self):
         self.pa_type = pa.timestamp("ms")
         self._name = "Datetime64MS"
+        self._time_unit = "ms"
 
 
 class Datetime64SDtype(Datetime):
     def __init__(self):
         self.pa_type = pa.timestamp("s")
         self._name = "Datetime64S"
+        self._time_unit = "s"
 
 class Timedelta64NSDtype(Timedelta):
     def __init__(self):
@@ -278,7 +282,7 @@ def make_dtype_from_string(obj):
             return UInt16Dtype()
         elif obj in {"uint8", "Uint8"}:
             return UInt8Dtype()
-    elif "float" in obj:
+    elif "float" in obj or "Float" in obj:
         if obj in {"float64", "Float64"}:
             return Float64Dtype()
         elif obj in {"float32", "Float32"}:
@@ -299,7 +303,9 @@ def dtype(obj):
     if isinstance(obj, CategoricalDtype):
         return obj
     elif isinstance(obj, Generic):
-        return np_to_cudf_dtypes[obj.to_numpy]
+        return obj
+    elif issubclass(obj.__class__, Generic):
+        return obj()
     if isinstance(obj, np.dtype):
         return np_to_cudf_dtypes[obj]
     elif isinstance(obj, pa.lib.DataType):
@@ -513,6 +519,7 @@ np_to_cudf_dtypes = {
     np.dtype("uint32"): UInt32Dtype(),
     np.dtype("uint64"): UInt64Dtype(),
     np.dtype("bool"): BooleanDtype(),
+    np.dtype("U"): StringDtype(),
     np.dtype("object"): StringDtype(),
     np.dtype("float32"): Float32Dtype(),
     np.dtype("float64"): Float64Dtype(),

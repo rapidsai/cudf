@@ -66,11 +66,9 @@ class DatetimeColumn(column.ColumnBase):
         if not (self.dtype.type is np.datetime64):
             raise TypeError(f"{self.dtype} is not a supported datetime type")
 
-        self._time_unit, _ = np.datetime_data(self.dtype)
-
     def __contains__(self, item):
         try:
-            item = np.datetime64(item, self._time_unit)
+            item = np.datetime64(item, self.dtype._time_unit)
         except ValueError:
             # If item cannot be converted to datetime type
             # np.datetime64 raises ValueError, hence `item`
@@ -80,7 +78,7 @@ class DatetimeColumn(column.ColumnBase):
 
     @property
     def time_unit(self):
-        return self._time_unit
+        return self.dtype._time_unit
 
     @property
     def year(self):
@@ -127,7 +125,7 @@ class DatetimeColumn(column.ColumnBase):
             if np.isnat(other):
                 return as_scalar(val=None, dtype=self.dtype)
 
-            other = other.astype(self.dtype)
+            other = other.astype(self.dtype.to_numpy)
             return as_scalar(other)
         elif isinstance(other, np.timedelta64):
             other_time_unit = cudf.utils.dtypes.get_time_unit(other)
@@ -200,25 +198,29 @@ class DatetimeColumn(column.ColumnBase):
 
     def binary_operator(self, op, rhs, reflect=False):
         lhs, rhs = self, rhs
+
+        lhs_dtype = cudf.dtype(lhs.dtype)
+        rhs_dtype = cudf.dtype(rhs.dtype)
+
         if op in ("eq", "ne", "lt", "gt", "le", "ge"):
-            out_dtype = np.bool
-        elif op == "add" and pd.api.types.is_timedelta64_dtype(rhs.dtype):
+            out_dtype = cudf.BooleanDtype()
+        elif op == "add" and isinstance(rhs_dtype, cudf.Timedelta):
             out_dtype = cudf.core.column.timedelta._timedelta_binary_op_add(
                 rhs, lhs
             )
-        elif op == "sub" and pd.api.types.is_timedelta64_dtype(rhs.dtype):
+        elif op == "sub" and isinstance(rhs_dtype, cudf.Timedelta):
             out_dtype = cudf.core.column.timedelta._timedelta_binary_op_sub(
                 rhs if reflect else lhs, lhs if reflect else rhs
             )
-        elif op == "sub" and pd.api.types.is_datetime64_dtype(rhs.dtype):
+        elif op == "sub" and isinstance(rhs.dtype, cudf.Datetime):
             units = ["s", "ms", "us", "ns"]
             lhs_time_unit = cudf.utils.dtypes.get_time_unit(lhs)
             lhs_unit = units.index(lhs_time_unit)
             rhs_time_unit = cudf.utils.dtypes.get_time_unit(rhs)
             rhs_unit = units.index(rhs_time_unit)
-            out_dtype = np.dtype(
+            out_dtype = cudf.dtype(np.dtype(
                 f"timedelta64[{units[max(lhs_unit, rhs_unit)]}]"
-            )
+            ))
         else:
             raise TypeError(
                 f"Series of dtype {self.dtype} cannot perform "

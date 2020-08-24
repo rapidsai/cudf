@@ -887,9 +887,9 @@ class ColumnBase(Column, Serializable):
                     "Casting list columns not currently supported"
                 )
             return self
-        elif np.issubdtype(dtype, np.datetime64):
+        elif isinstance(dtype, cudf.Datetime):
             return self.as_datetime_column(dtype, **kwargs)
-        elif np.issubdtype(dtype, np.timedelta64):
+        elif isinstance(dtype, cudf.Timedelta):
             return self.as_timedelta_column(dtype, **kwargs)
         else:
             return self.as_numerical_column(dtype, **kwargs)
@@ -968,7 +968,7 @@ class ColumnBase(Column, Serializable):
         output = {
             "shape": (len(self),),
             "strides": (self.dtype.itemsize,),
-            "typestr": self.dtype.str,
+            "typestr": self.dtype.to_numpy.str,
             "data": (self.data_ptr, False),
             "version": 1,
         }

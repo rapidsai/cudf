@@ -189,7 +189,7 @@ class NumericalColumn(column.ColumnBase):
             mask = pa.py_buffer(self.mask_array_view.copy_to_host())
         data = pa.py_buffer(self.data_array_view.copy_to_host())
         out = pa.Array.from_buffers(
-            type=self.dtype.pa_type,
+            type=self.dtype.pa_type if not isinstance(self.dtype, cudf.core.dtypes.BooleanDtype) else pa.int8(),
             length=len(self),
             buffers=[mask, data],
             null_count=self.null_count,
@@ -437,7 +437,7 @@ def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
     is_op_comparison = op in ["lt", "gt", "le", "ge", "eq", "ne"]
 
     if is_op_comparison:
-        out_dtype = "bool"
+        out_dtype = cudf.BooleanDtype()
     out = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
 
     if is_op_comparison:

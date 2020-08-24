@@ -73,17 +73,17 @@ cdef class Scalar:
             else:
                 dtype = value.dtype
 
-        dtype = np.dtype(dtype)
+        dtype = cudf.dtype(dtype)
 
-        if pd.api.types.is_string_dtype(dtype):
+        if isinstance(dtype, cudf.StringDtype):
             _set_string_from_np_string(self.c_value, value, valid)
-        elif pd.api.types.is_numeric_dtype(dtype):
+        elif isinstance(dtype, (cudf.Number, cudf.BooleanDtype)):
             _set_numeric_from_np_scalar(self.c_value, value, dtype, valid)
-        elif pd.api.types.is_datetime64_dtype(dtype):
+        elif isinstance(dtype, cudf.Datetime):
             _set_datetime64_from_np_scalar(
                 self.c_value, value, dtype, valid
             )
-        elif pd.api.types.is_timedelta64_dtype(dtype):
+        elif isinstance(dtype, cudf.Timedelta):
             _set_timedelta64_from_np_scalar(
                 self.c_value, value, dtype, valid
             )
