@@ -15,14 +15,6 @@ import pyarrow.parquet as pq
 from mimesis import Generic
 
 
-class Generator(object):
-    def __init__(self, func):
-        self.func = func
-
-    def __call__(self, g):
-        return self.func(g)
-
-
 class ColumnParameters:
     """Parameters for generating column of data
 
@@ -50,7 +42,7 @@ class ColumnParameters:
         self,
         cardinality=100,
         null_frequency=0.1,
-        generator=lambda g: (g.address.country for _ in range(100)),
+        generator=lambda g: [g.address.country for _ in range(100)],
         is_sorted=True,
     ):
         self.cardinality = cardinality
