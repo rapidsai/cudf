@@ -47,13 +47,13 @@ class CopyRangeTypedTestFixture : public cudf::test::BaseFixture {
 
     const cudf::column_view immutable_view{target};
     auto p_ret = cudf::copy_range(source, immutable_view, source_begin, source_end, target_begin);
-    cudf::test::expect_columns_equal(*p_ret, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*p_ret, expected);
 
     // test the in-place version second
 
     EXPECT_NO_THROW(
       cudf::copy_range_in_place(source, target, source_begin, source_end, target_begin));
-    cudf::test::expect_columns_equal(target, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(target, expected);
   }
 };
 
@@ -223,7 +223,7 @@ TEST_F(CopyRangeStringTestFixture, CopyWithNullsString)
     }));
 
   auto p_ret = cudf::copy_range(source, target, source_begin, source_end, target_begin);
-  cudf::test::expect_columns_equal(*p_ret, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*p_ret, expected);
 }
 
 TEST_F(CopyRangeStringTestFixture, CopyNoNullsString)
@@ -251,7 +251,7 @@ TEST_F(CopyRangeStringTestFixture, CopyNoNullsString)
   auto expected = cudf::test::strings_column_wrapper(expected_elements, expected_elements + size);
 
   auto p_ret = cudf::copy_range(source, target, source_begin, source_end, target_begin);
-  cudf::test::expect_columns_equal(*p_ret, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*p_ret, expected);
 }
 
 TEST_F(CopyRangeStringTestFixture, CopyWithNullsNonzeroOffsetString)
@@ -304,7 +304,7 @@ TEST_F(CopyRangeStringTestFixture, CopyWithNullsNonzeroOffsetString)
   auto expected_slice = cudf::slice(expected, std::vector<cudf::size_type>{target_offset, size})[0];
 
   auto p_ret = cudf::copy_range(source_slice, target_slice, source_begin, source_end, target_begin);
-  cudf::test::expect_columns_equal(*p_ret, expected_slice);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*p_ret, expected_slice);
 }
 
 class CopyRangeErrorTestFixture : public cudf::test::BaseFixture {

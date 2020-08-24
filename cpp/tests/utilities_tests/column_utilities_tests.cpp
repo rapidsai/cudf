@@ -44,14 +44,14 @@ template <typename T>
 struct ColumnUtilitiesTestFloatingPoint : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(ColumnUtilitiesTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_CASE(ColumnUtilitiesTest, cudf::test::FixedWidthTypes);
 TYPED_TEST_CASE(ColumnUtilitiesTestIntegral, cudf::test::IntegralTypes);
 TYPED_TEST_CASE(ColumnUtilitiesTestFloatingPoint, cudf::test::FloatingPointTypes);
 
 TYPED_TEST(ColumnUtilitiesTest, NonNullableToHost)
 {
-  auto sequence =
-    cudf::test::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
+  auto sequence = cudf::test::make_counting_transform_iterator(
+    0, [](auto i) { return cudf::test::make_type_param_scalar<TypeParam>(i); });
 
   auto size = this->size();
 
@@ -65,8 +65,8 @@ TYPED_TEST(ColumnUtilitiesTest, NonNullableToHost)
 
 TYPED_TEST(ColumnUtilitiesTest, NonNullableToHostWithOffset)
 {
-  auto sequence =
-    cudf::test::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
+  auto sequence = cudf::test::make_counting_transform_iterator(
+    0, [](auto i) { return cudf::test::make_type_param_scalar<TypeParam>(i); });
 
   auto size  = this->size();
   auto split = 2;
@@ -85,8 +85,8 @@ TYPED_TEST(ColumnUtilitiesTest, NonNullableToHostWithOffset)
 
 TYPED_TEST(ColumnUtilitiesTest, NullableToHostWithOffset)
 {
-  auto sequence =
-    cudf::test::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
+  auto sequence = cudf::test::make_counting_transform_iterator(
+    0, [](auto i) { return cudf::test::make_type_param_scalar<TypeParam>(i); });
 
   auto split = 2;
   auto size  = this->size();
@@ -110,8 +110,8 @@ TYPED_TEST(ColumnUtilitiesTest, NullableToHostWithOffset)
 
 TYPED_TEST(ColumnUtilitiesTest, NullableToHostAllValid)
 {
-  auto sequence =
-    cudf::test::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
+  auto sequence = cudf::test::make_counting_transform_iterator(
+    0, [](auto i) { return cudf::test::make_type_param_scalar<TypeParam>(i); });
 
   auto all_valid = thrust::make_constant_iterator<bool>(true);
 
@@ -137,7 +137,7 @@ TEST_F(ColumnUtilitiesEquivalenceTest, DoubleTest)
   cudf::test::fixed_width_column_wrapper<double> col1{10. / 3, 22. / 7};
   cudf::test::fixed_width_column_wrapper<double> col2{31. / 3 - 21. / 3, 19. / 7 + 3. / 7};
 
-  cudf::test::expect_columns_equivalent(col1, col2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(col1, col2);
 }
 
 TEST_F(ColumnUtilitiesEquivalenceTest, NullabilityTest)
@@ -146,7 +146,7 @@ TEST_F(ColumnUtilitiesEquivalenceTest, NullabilityTest)
   cudf::test::fixed_width_column_wrapper<double> col1{1, 2, 3};
   cudf::test::fixed_width_column_wrapper<double> col2({1, 2, 3}, all_valid);
 
-  cudf::test::expect_columns_equivalent(col1, col2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(col1, col2);
 }
 
 struct ColumnUtilitiesStringsTest : public cudf::test::BaseFixture {

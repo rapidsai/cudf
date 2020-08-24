@@ -62,7 +62,7 @@ TEST_F(TextNgramsTokenizeTest, Tokenize)
                                                 "ate_the",
                                                 "the_cheese"};
     auto results = nvtext::ngrams_tokenize(strings_view);
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     cudf::test::strings_column_wrapper expected{"the:fox:jumped",
@@ -79,7 +79,7 @@ TEST_F(TextNgramsTokenizeTest, Tokenize)
                                                 "mousé:ate:the",
                                                 "ate:the:cheese"};
     auto results = nvtext::ngrams_tokenize(strings_view, 3, std::string{" "}, std::string{":"});
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     cudf::test::strings_column_wrapper expected{"the--fox--jumped--over",
@@ -92,7 +92,7 @@ TEST_F(TextNgramsTokenizeTest, Tokenize)
                                                 "the--mousé--ate--the",
                                                 "mousé--ate--the--cheese"};
     auto results = nvtext::ngrams_tokenize(strings_view, 4, std::string{" "}, std::string{"--"});
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
 
@@ -103,7 +103,7 @@ TEST_F(TextNgramsTokenizeTest, TokenizeOneGram)
 
   cudf::test::strings_column_wrapper expected{"aaa", "bbb", "ccc", "ddd", "eee"};
   auto results = nvtext::ngrams_tokenize(strings_view, 1);
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(TextNgramsTokenizeTest, TokenizeEmptyTest)

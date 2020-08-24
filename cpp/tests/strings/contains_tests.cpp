@@ -140,7 +140,7 @@ TEST_F(StringsContainsTests, ContainsTest)
       h_expected,
       h_expected + h_strings.size(),
       thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
 
@@ -161,7 +161,7 @@ TEST_F(StringsContainsTests, MatchesTest)
       h_expected,
       h_expected + h_strings.size(),
       thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     auto results      = cudf::strings::matches_re(strings_view, "\\d+");
@@ -170,7 +170,7 @@ TEST_F(StringsContainsTests, MatchesTest)
       h_expected,
       h_expected + h_strings.size(),
       thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     auto results      = cudf::strings::matches_re(strings_view, "@\\w+");
@@ -179,7 +179,7 @@ TEST_F(StringsContainsTests, MatchesTest)
       h_expected,
       h_expected + h_strings.size(),
       thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     auto results      = cudf::strings::matches_re(strings_view, ".*");
@@ -188,7 +188,7 @@ TEST_F(StringsContainsTests, MatchesTest)
       h_expected,
       h_expected + h_strings.size(),
       thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
 
@@ -212,7 +212,7 @@ TEST_F(StringsContainsTests, MatchesIPV4Test)
     auto results = cudf::strings::matches_re(strings_view, pattern);
     cudf::test::fixed_width_column_wrapper<bool> expected(
       {true, true, false, false, false, false, true, true, true, true});
-    cudf::test::expect_columns_equal(results->view(), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
   }
   {  // is_loopback
     std::string pattern =
@@ -222,7 +222,7 @@ TEST_F(StringsContainsTests, MatchesIPV4Test)
     auto results = cudf::strings::matches_re(strings_view, pattern);
     cudf::test::fixed_width_column_wrapper<bool> expected(
       {false, false, false, false, false, false, false, false, false, true});
-    cudf::test::expect_columns_equal(results->view(), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
   }
   {  // is_multicast
     std::string pattern =
@@ -232,7 +232,7 @@ TEST_F(StringsContainsTests, MatchesIPV4Test)
     auto results = cudf::strings::matches_re(strings_view, pattern);
     cudf::test::fixed_width_column_wrapper<bool> expected(
       {false, false, false, false, false, false, true, true, false, false});
-    cudf::test::expect_columns_equal(results->view(), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
   }
 }
 
@@ -253,7 +253,7 @@ TEST_F(StringsContainsTests, CountTest)
       h_expected,
       h_expected + h_strings.size(),
       thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     auto results         = cudf::strings::count_re(strings_view, "@\\w+");
@@ -262,7 +262,7 @@ TEST_F(StringsContainsTests, CountTest)
       h_expected,
       h_expected + h_strings.size(),
       thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     auto results         = cudf::strings::count_re(strings_view, "\\d+:\\d+");
@@ -271,7 +271,7 @@ TEST_F(StringsContainsTests, CountTest)
       h_expected,
       h_expected + h_strings.size(),
       thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
 
@@ -302,7 +302,7 @@ TEST_F(StringsContainsTests, MediumRegex)
       h_expected,
       h_expected + h_strings.size(),
       thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     auto results      = cudf::strings::matches_re(strings_view, medium_regex);
@@ -311,7 +311,7 @@ TEST_F(StringsContainsTests, MediumRegex)
       h_expected,
       h_expected + h_strings.size(),
       thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     auto results         = cudf::strings::count_re(strings_view, medium_regex);
@@ -320,7 +320,7 @@ TEST_F(StringsContainsTests, MediumRegex)
       h_expected,
       h_expected + h_strings.size(),
       thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
 
@@ -351,7 +351,7 @@ TEST_F(StringsContainsTests, LargeRegex)
       h_expected,
       h_expected + h_strings.size(),
       thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     auto results      = cudf::strings::matches_re(strings_view, large_regex);
@@ -360,7 +360,7 @@ TEST_F(StringsContainsTests, LargeRegex)
       h_expected,
       h_expected + h_strings.size(),
       thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     auto results         = cudf::strings::count_re(strings_view, large_regex);
@@ -369,6 +369,6 @@ TEST_F(StringsContainsTests, LargeRegex)
       h_expected,
       h_expected + h_strings.size(),
       thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }

@@ -375,8 +375,7 @@ table_with_metadata reader::impl::read(size_t range_offset,
         out_columns.emplace_back(
           cudf::strings::replace(col->view(), dblquotechar, quotechar, -1, mr_));
       } else {
-        out_columns.emplace_back(
-          make_column(column_types[i], num_records, out_buffers[i], stream, mr_));
+        out_columns.emplace_back(make_column(out_buffers[i], stream, mr_));
       }
     }
   } else {

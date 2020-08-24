@@ -42,14 +42,14 @@ template <typename T>
 class MergeTest_ : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(MergeTest_, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_CASE(MergeTest_, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(MergeTest_, MergeIsZeroWhenShouldNotBeZero)
 {
   using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
   columnFactoryT leftColWrap1({1, 2, 3, 4, 5});
-  columnFactoryT rightColWrap1{};
+  cudf::test::fixed_width_column_wrapper<TypeParam> rightColWrap1{};
 
   std::vector<cudf::size_type> key_cols{0};
   std::vector<cudf::order> column_order;
@@ -64,7 +64,7 @@ TYPED_TEST(MergeTest_, MergeIsZeroWhenShouldNotBeZero)
 
   int expected_len = 5;
   ASSERT_EQ(result->num_rows(), expected_len);
-  cudf::test::expect_tables_equal(expected, result->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result->view());
 }
 
 TYPED_TEST(MergeTest_, MismatchedNumColumns)
@@ -208,8 +208,7 @@ TYPED_TEST(MergeTest_, SingleTableInput)
 {
   cudf::size_type inputRows = 40;
 
-  auto sequence =
-    cudf::test::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
+  auto sequence = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i; });
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(sequence)::value_type>
     colWrap1(sequence, sequence + inputRows);
 
@@ -226,7 +225,7 @@ TYPED_TEST(MergeTest_, SingleTableInput)
   auto input_column_view{left_view.column(0)};
   auto output_column_view{p_outputTable->view().column(0)};
 
-  cudf::test::expect_columns_equal(input_column_view, output_column_view);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(input_column_view, output_column_view);
 }
 
 TYPED_TEST(MergeTest_, MergeTwoEmptyTables)
@@ -247,7 +246,7 @@ TYPED_TEST(MergeTest_, MergeTwoEmptyTables)
   CUDF_EXPECT_NO_THROW(
     p_outputTable = cudf::merge({left_view, right_view}, key_cols, column_order, null_precedence));
 
-  cudf::test::expect_tables_equal(left_view, p_outputTable->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(left_view, p_outputTable->view());
 }
 
 TYPED_TEST(MergeTest_, MergeWithEmptyColumn)
@@ -256,8 +255,7 @@ TYPED_TEST(MergeTest_, MergeWithEmptyColumn)
 
   cudf::size_type inputRows = 40;
 
-  auto sequence =
-    cudf::test::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
+  auto sequence = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i; });
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(sequence)::value_type>
     leftColWrap1(sequence, sequence + inputRows);
   columnFactoryT rightColWrap1{};  // wrapper of empty column <- this might require a (sequence,
@@ -287,7 +285,7 @@ TYPED_TEST(MergeTest_, MergeWithEmptyColumn)
   auto expected_column_view{static_cast<cudf::column_view const&>(expectedDataWrap1)};
   auto output_column_view{p_outputTable->view().column(0)};
 
-  cudf::test::expect_columns_equal(expected_column_view, output_column_view);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view, output_column_view);
 }
 
 TYPED_TEST(MergeTest_, Merge1KeyColumns)
@@ -345,10 +343,9 @@ TYPED_TEST(MergeTest_, Merge1KeyColumns)
 
   auto seq_out1 = cudf::test::make_counting_transform_iterator(0, [outputRows](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
-      bool ret = (row >= outputRows / 2);
-      return static_cast<TypeParam>(ret);
+      return (row >= outputRows / 2) ? 1 : 0;
     } else
-      return static_cast<TypeParam>(row);
+      return row;
   });
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(seq_out1)::value_type>
     expectedDataWrap1(seq_out1, seq_out1 + outputRows);
@@ -368,8 +365,8 @@ TYPED_TEST(MergeTest_, Merge1KeyColumns)
   auto output_column_view1{p_outputTable->view().column(0)};
   auto output_column_view2{p_outputTable->view().column(1)};
 
-  cudf::test::expect_columns_equal(expected_column_view1, output_column_view1);
-  cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view1, output_column_view1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view2, output_column_view2);
 }
 
 TYPED_TEST(MergeTest_, Merge2KeyColumns)
@@ -378,22 +375,18 @@ TYPED_TEST(MergeTest_, Merge2KeyColumns)
 
   auto sequence1 = cudf::test::make_counting_transform_iterator(0, [inputRows](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
-      bool ret = (row >= inputRows / 2);
-      return static_cast<TypeParam>(ret);
+      return (row >= inputRows / 2) ? 1 : 0;
     } else
-      return static_cast<TypeParam>(row);
+      return row;
   });
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(sequence1)::value_type>
     leftColWrap1(sequence1, sequence1 + inputRows);
 
   auto sequence2 = cudf::test::make_counting_transform_iterator(0, [inputRows](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
-      bool ret = ((row / (inputRows / 4)) % 2 == 0);
-      return static_cast<TypeParam>(ret);
+      return ((row / (inputRows / 4)) % 2 == 0) ? 1 : 0;
     } else {
-      auto row2     = row * 2;
-      TypeParam res = static_cast<TypeParam>(row2);
-      return static_cast<TypeParam>(res);
+      return row * 2;
     }
   });
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(sequence2)::value_type>
@@ -404,10 +397,9 @@ TYPED_TEST(MergeTest_, Merge2KeyColumns)
 
   auto sequence3 = cudf::test::make_counting_transform_iterator(0, [inputRows](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
-      bool ret = ((row / (inputRows / 4)) % 2 == 0);
-      return static_cast<TypeParam>(ret);
+      return ((row / (inputRows / 4)) % 2 == 0) ? 1 : 0;
     } else
-      return static_cast<TypeParam>(2 * row + 1);
+      return (2 * row + 1);
   });
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(sequence3)::value_type>
     rightColWrap2(sequence3, sequence3 + inputRows);
@@ -429,21 +421,18 @@ TYPED_TEST(MergeTest_, Merge2KeyColumns)
 
   auto seq_out1 = cudf::test::make_counting_transform_iterator(0, [outputRows](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
-      bool ret = (row >= outputRows / 2);
-      return static_cast<TypeParam>(ret);
+      return (row >= outputRows / 2) ? 1 : 0;
     } else
-      return static_cast<TypeParam>(row / 2);
+      return (row / 2);
   });
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(seq_out1)::value_type>
     expectedDataWrap1(seq_out1, seq_out1 + outputRows);
 
   auto seq_out2 = cudf::test::make_counting_transform_iterator(0, [outputRows](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
-      bool ret = ((row / (outputRows / 4)) % 2 == 0);
-      return static_cast<TypeParam>(ret);
+      return ((row / (outputRows / 4)) % 2 == 0) ? 1 : 0;
     } else {
-      auto ret = (row % 2 == 0 ? row + 1 : row - 1);
-      return static_cast<TypeParam>(ret);
+      return (row % 2 == 0 ? row + 1 : row - 1);
     }
   });
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(seq_out2)::value_type>
@@ -455,8 +444,8 @@ TYPED_TEST(MergeTest_, Merge2KeyColumns)
   auto output_column_view1{p_outputTable->view().column(0)};
   auto output_column_view2{p_outputTable->view().column(1)};
 
-  cudf::test::expect_columns_equal(expected_column_view1, output_column_view1);
-  cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view1, output_column_view1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view2, output_column_view2);
 }
 
 TYPED_TEST(MergeTest_, Merge1KeyNullColumns)
@@ -466,12 +455,9 @@ TYPED_TEST(MergeTest_, Merge1KeyNullColumns)
   // data: 0  2  4  6 | valid: 1 1 1 0
   auto sequence1       = cudf::test::make_counting_transform_iterator(0, [inputRows](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
-      bool ret = 0;
-      return static_cast<TypeParam>(ret);  // <- no shortcut to this can avoid compiler errors
+      return 0;  // <- no shortcut to this can avoid compiler errors
     } else {
-      auto row2     = row * 2;
-      TypeParam res = static_cast<TypeParam>(row2);
-      return static_cast<TypeParam>(res);
+      return row * 2;
     }
   });
   auto valid_sequence1 = cudf::test::make_counting_transform_iterator(
@@ -482,10 +468,9 @@ TYPED_TEST(MergeTest_, Merge1KeyNullColumns)
   // data: 1  3  5  7 | valid: 1 1 1 0
   auto sequence2 = cudf::test::make_counting_transform_iterator(0, [inputRows](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
-      bool ret = 1;
-      return static_cast<TypeParam>(ret);
+      return 1;
     } else
-      return static_cast<TypeParam>(2 * row + 1);
+      return (2 * row + 1);
   });
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(sequence2)::value_type>
     rightColWrap1(sequence2,
@@ -527,10 +512,9 @@ TYPED_TEST(MergeTest_, Merge1KeyNullColumns)
   auto seq_out1 =
     cudf::test::make_counting_transform_iterator(0, [outputRows, column1TotalNulls](auto row) {
       if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
-        bool ret = (row >= (outputRows - column1TotalNulls) / 2);
-        return static_cast<TypeParam>(ret);
+        return (row >= (outputRows - column1TotalNulls) / 2) ? 1 : 0;
       } else
-        return static_cast<TypeParam>(row);
+        return (row);
     });
   auto valid_seq_out = cudf::test::make_counting_transform_iterator(
     0,
@@ -541,7 +525,7 @@ TYPED_TEST(MergeTest_, Merge1KeyNullColumns)
   auto expected_column_view1{static_cast<cudf::column_view const&>(expectedDataWrap1)};
   auto output_column_view1{p_outputTable->view().column(0)};
 
-  cudf::test::expect_columns_equal(expected_column_view1, output_column_view1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view1, output_column_view1);
 }
 
 TYPED_TEST(MergeTest_, Merge2KeyNullColumns)
@@ -551,10 +535,9 @@ TYPED_TEST(MergeTest_, Merge2KeyNullColumns)
   // data: 0 1 2 3 | valid: 1 1 1 1
   auto sequence1 = cudf::test::make_counting_transform_iterator(0, [inputRows](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
-      bool ret = (row >= inputRows / 2);
-      return static_cast<TypeParam>(ret);
+      return (row >= inputRows / 2) ? 1 : 0;
     } else
-      return static_cast<TypeParam>(row);
+      return (row);
   });
   auto valid_sequence1 =
     cudf::test::make_counting_transform_iterator(0, [](auto row) { return true; });
@@ -566,12 +549,9 @@ TYPED_TEST(MergeTest_, Merge2KeyNullColumns)
   // data: 0 2 4 6 | valid: 1 1 1 1
   auto sequence2 = cudf::test::make_counting_transform_iterator(0, [inputRows](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
-      bool ret = ((row / (inputRows / 4)) % 2 == 0);
-      return static_cast<TypeParam>(ret);
+      return ((row / (inputRows / 4)) % 2 == 0) ? 1 : 0;
     } else {
-      auto row2     = row * 2;
-      TypeParam res = static_cast<TypeParam>(row2);
-      return static_cast<TypeParam>(res);
+      return row * 2;
     }
   });
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(sequence2)::value_type>
@@ -586,10 +566,9 @@ TYPED_TEST(MergeTest_, Merge2KeyNullColumns)
   // data: 0 1 2 3 | valid: 0 0 0 0
   auto sequence3 = cudf::test::make_counting_transform_iterator(0, [inputRows](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
-      bool ret = ((row / (inputRows / 4)) % 2 == 0);
-      return static_cast<TypeParam>(ret);
+      return ((row / (inputRows / 4)) % 2 == 0) ? 1 : 0;
     } else
-      return static_cast<TypeParam>(row);
+      return (row);
   });
   auto valid_sequence0 =
     cudf::test::make_counting_transform_iterator(0, [](auto row) { return false; });
@@ -614,10 +593,9 @@ TYPED_TEST(MergeTest_, Merge2KeyNullColumns)
   // data: 0 0 1 1 2 2 3 3 | valid: 1 1 1 1 1 1 1 1
   auto seq_out1 = cudf::test::make_counting_transform_iterator(0, [outputRows](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
-      bool ret = (row >= outputRows / 2);
-      return static_cast<TypeParam>(ret);
+      return (row >= outputRows / 2) ? 1 : 0;
     } else
-      return static_cast<TypeParam>(row / 2);
+      return (row / 2);
   });
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(seq_out1)::value_type>
     expectedDataWrap1(seq_out1, seq_out1 + outputRows, valid_sequence1);
@@ -625,18 +603,16 @@ TYPED_TEST(MergeTest_, Merge2KeyNullColumns)
   // data: 0 0 2 1 4 2 6 3 | valid: 0 1 0 1 0 1 0 1
   auto seq_out2           = cudf::test::make_counting_transform_iterator(0, [outputRows](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
-      bool ret = ((row / (outputRows / 8)) % 2 == 0);
-      return static_cast<TypeParam>(ret);
+      return ((row / (outputRows / 8)) % 2 == 0) ? 1 : 0;
     } else {
-      auto ret = (row % 2 != 0 ? 2 * (row / 2) : (row / 2));
-      return static_cast<TypeParam>(ret);
+      return (row % 2 != 0 ? 2 * (row / 2) : (row / 2));
     }
   });
   auto valid_sequence_out = cudf::test::make_counting_transform_iterator(0, [outputRows](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
-      return ((row / (outputRows / 4)) % 2 == 1);
+      return ((row / (outputRows / 4)) % 2 == 1) ? 1 : 0;
     } else {
-      return (row % 2 != 0);
+      return (row % 2 != 0) ? 1 : 0;
     }
   });
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(seq_out2)::value_type>
@@ -648,8 +624,8 @@ TYPED_TEST(MergeTest_, Merge2KeyNullColumns)
   auto output_column_view1{p_outputTable->view().column(0)};
   auto output_column_view2{p_outputTable->view().column(1)};
 
-  cudf::test::expect_columns_equal(expected_column_view1, output_column_view1);
-  cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view1, output_column_view1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view2, output_column_view2);
 }
 
 TYPED_TEST(MergeTest_, NMerge1KeyColumns)
@@ -693,9 +669,9 @@ TYPED_TEST(MergeTest_, NMerge1KeyColumns)
 
   auto seq_out1 = cudf::test::make_counting_transform_iterator(0, [](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
-      return static_cast<TypeParam>(0);
+      return (0);
     } else
-      return static_cast<TypeParam>(row / num_tables);
+      return (row / num_tables);
   });
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(seq_out1)::value_type>
     expectedDataWrap1(seq_out1, seq_out1 + outputRows);
@@ -715,8 +691,8 @@ TYPED_TEST(MergeTest_, NMerge1KeyColumns)
   auto output_column_view1{p_outputTable->view().column(0)};
   auto output_column_view2{p_outputTable->view().column(1)};
 
-  cudf::test::expect_columns_equal(expected_column_view1, output_column_view1);
-  cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view1, output_column_view1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view2, output_column_view2);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

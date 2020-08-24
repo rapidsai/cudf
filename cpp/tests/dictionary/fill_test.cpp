@@ -37,7 +37,7 @@ TEST_F(DictionaryFillTest, StringsColumn)
   auto decoded = cudf::dictionary::decode(results->view());
   cudf::test::strings_column_wrapper expected(
     {"fff", "___", "___", "___", "ccc", "ccc", "ccc", "fff", "aaa", ""});
-  cudf::test::expect_columns_equal(decoded->view(), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(decoded->view(), expected);
 }
 
 TEST_F(DictionaryFillTest, WithNulls)
@@ -48,7 +48,7 @@ TEST_F(DictionaryFillTest, WithNulls)
   auto results = cudf::fill(dictionary->view(), 0, 2, fv);
   auto decoded = cudf::dictionary::decode(results->view());
   cudf::test::fixed_width_column_wrapper<int64_t> expected({-10, -10, 7, 6, 4}, {1, 1, 1, 0, 1});
-  cudf::test::expect_columns_equal(decoded->view(), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(decoded->view(), expected);
 }
 
 TEST_F(DictionaryFillTest, FillWithNull)
@@ -61,7 +61,7 @@ TEST_F(DictionaryFillTest, FillWithNull)
   auto decoded = cudf::dictionary::decode(results->view());
   cudf::test::fixed_width_column_wrapper<double> expected({1.2, 0.0, 0.0, 0.0, 4.125},
                                                           {1, 0, 0, 0, 1});
-  cudf::test::expect_columns_equal(decoded->view(), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(decoded->view(), expected);
 }
 
 TEST_F(DictionaryFillTest, Empty)
@@ -69,7 +69,7 @@ TEST_F(DictionaryFillTest, Empty)
   auto dictionary = cudf::make_empty_column(cudf::data_type{cudf::type_id::DICTIONARY32});
   cudf::numeric_scalar<int64_t> fv(-10);
   auto results = cudf::fill(dictionary->view(), 0, 0, fv);
-  cudf::test::expect_columns_equal(results->view(), dictionary->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), dictionary->view());
 }
 
 TEST_F(DictionaryFillTest, Errors)

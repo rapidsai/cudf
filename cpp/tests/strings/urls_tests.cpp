@@ -60,7 +60,7 @@ TEST_F(StringsConvertTest, UrlEncode)
     h_expected.cend(),
     thrust::make_transform_iterator(h_expected.cbegin(),
                                     [](auto const str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsConvertTest, UrlDecode)
@@ -95,7 +95,7 @@ TEST_F(StringsConvertTest, UrlDecode)
     h_expected.cend(),
     thrust::make_transform_iterator(h_expected.cbegin(),
                                     [](auto const str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsConvertTest, ZeroSizeUrlStringsColumn)

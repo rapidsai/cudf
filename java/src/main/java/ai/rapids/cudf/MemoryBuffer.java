@@ -95,8 +95,7 @@ abstract public class MemoryBuffer implements AutoCloseable {
     this.cleaner = cleaner;
     if (cleaner != null) {
       this.id = cleaner.id;
-      refCount++;
-      cleaner.addRef();
+      incRefCount();
       MemoryCleaner.register(this, cleaner);
     } else {
       this.id = -1;
@@ -189,5 +188,19 @@ abstract public class MemoryBuffer implements AutoCloseable {
         "address=0x" + Long.toHexString(address) +
         ", length=" + length +
         ", id=" + id + "}";
+  }
+
+  /**
+   * Increment the reference count for this column.  You need to call close on this
+   * to decrement the reference count again.
+   */
+  public synchronized void incRefCount() {
+    refCount++;
+    cleaner.addRef();
+  }
+
+  // visible for testing
+  synchronized int getRefCount() {
+    return refCount;
   }
 }
