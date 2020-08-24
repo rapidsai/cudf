@@ -144,7 +144,7 @@ def find_index_of_val(arr, val, mask=None, compare="eq"):
     mask : mask of the array
     compare: str ('gt', 'lt', or 'eq' (default))
     """
-    found = cuda.device_array(arr.shape, dtype=np.dtype("int32"))
+    found = cuda.device_array(shape=(arr.shape), dtype="int32")
     if found.size > 0:
         if compare == "gt":
             gpu_mark_gt.forall(found.size)(arr, val, found, arr.size)
