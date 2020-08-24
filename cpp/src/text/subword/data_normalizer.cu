@@ -165,8 +165,6 @@ __device__ uint32_t extract_code_points_from_utf8(unsigned char const* strings,
   uint32_t code_point = (utf8_blocks[0] & char_encoding_length.second) << 18;
   // Move the remaining values which are 6 bits (mask b10xxxxxx = x3F)
   // from the remaining bytes into successive positions in the 32-bit result.
-  // for (int i = 1; i < max_utf8_blocks_for_char; ++i)
-  //  code_point |= ((utf8_blocks[i] & 0x3F) << (18 - 6 * i));
   code_point |= ((utf8_blocks[1] & 0x3F) << 12);
   code_point |= ((utf8_blocks[2] & 0x3F) << 6);
   code_point |= utf8_blocks[3] & 0x3F;
