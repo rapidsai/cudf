@@ -34,17 +34,16 @@ class ParquetRead : public cudf::benchmark {
 
 void PQ_read(benchmark::State& state)
 {
-  cudf::type_id const data_type  = static_cast<cudf::type_id>(state.range(0));
+  auto const data_types          = get_group_types(static_cast<dtype_group>(state.range(0)));
   int64_t const total_bytes      = state.range(1);
-  cudf::size_type const num_cols = state.range(2);
+  cudf::size_type const num_cols = data_types.size();
   cudf_io::compression_type const compression =
-    state.range(3) ? cudf_io::compression_type::SNAPPY : cudf_io::compression_type::NONE;
+    state.range(2) ? cudf_io::compression_type::SNAPPY : cudf_io::compression_type::NONE;
 
-  int64_t const col_bytes = total_bytes / num_cols;
   std::vector<char> out_buffer;
   out_buffer.reserve(total_bytes);
 
-  auto const tbl  = create_random_table(data_type, num_cols, col_bytes, true);
+  auto const tbl  = create_random_table(data_types, total_bytes, true);
   auto const view = tbl->view();
 
   cudf_io::write_parquet_args write_args{
@@ -61,15 +60,14 @@ void PQ_read(benchmark::State& state)
   state.SetBytesProcessed(total_bytes * state.iterations());
 }
 
-#define PARQ_RD_BENCHMARK_DEFINE(name, datatype, compression)            \
-  BENCHMARK_DEFINE_F(ParquetRead, name)                                  \
-  (::benchmark::State & state) { PQ_read(state); }                       \
-  BENCHMARK_REGISTER_F(ParquetRead, name)                                \
-    ->Args({static_cast<int32_t>(datatype), data_size, 64, compression}) \
-    ->Unit(benchmark::kMillisecond)                                      \
+#define PARQ_RD_BENCHMARK_DEFINE(name, type_group, compression)        \
+  BENCHMARK_DEFINE_F(ParquetRead, name)                                \
+  (::benchmark::State & state) { PQ_read(state); }                     \
+  BENCHMARK_REGISTER_F(ParquetRead, name)                              \
+    ->Args({static_cast<int32_t>(type_group), data_size, compression}) \
+    ->Unit(benchmark::kMillisecond)                                    \
     ->UseManualTime();
 
-PARQ_RD_BENCHMARK_DEFINE(int32, cudf::type_id::INT32, UNCOMPRESSED);
-PARQ_RD_BENCHMARK_DEFINE(string, cudf::type_id::STRING, UNCOMPRESSED);
-PARQ_RD_BENCHMARK_DEFINE(ddays, cudf::type_id::DURATION_DAYS, UNCOMPRESSED);
-PARQ_RD_BENCHMARK_DEFINE(tdays, cudf::type_id::TIMESTAMP_DAYS, UNCOMPRESSED);
+#define CUIO_BENCH_TYPE_GROUP(benchmark_define, compression)
+
+PARQ_RD_BENCHMARK_DEFINE(int32, dtype_group::FLOAT, UNCOMPRESSED);
