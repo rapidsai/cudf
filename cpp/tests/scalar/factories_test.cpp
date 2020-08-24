@@ -80,7 +80,7 @@ TYPED_TEST(TimestampScalarFactory, TypeCast)
 
   auto numeric_s = static_cast<cudf::scalar_type_t<TypeParam>*>(s.get());
 
-  TypeParam value(37);
+  TypeParam value(typename TypeParam::duration{37});
   numeric_s->set_value(value);
   EXPECT_EQ(numeric_s->value(), value);
   EXPECT_TRUE(numeric_s->is_valid());
@@ -122,7 +122,7 @@ TYPED_TEST_CASE(FixedWidthScalarFactory, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(FixedWidthScalarFactory, ValueProvided)
 {
-  TypeParam value(54);
+  TypeParam value = cudf::test::make_type_param_scalar<TypeParam>(54);
 
   std::unique_ptr<cudf::scalar> s =
     cudf::make_fixed_width_scalar<TypeParam>(value, this->stream(), this->mr());

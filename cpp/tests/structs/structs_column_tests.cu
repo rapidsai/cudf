@@ -54,6 +54,7 @@ struct TypedStructColumnWrapperTest : public cudf::test::BaseFixture {
 
 using FixedWidthTypesNotBool = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                                   cudf::test::FloatingPointTypes,
+                                                  cudf::test::DurationTypes,
                                                   cudf::test::TimestampTypes>;
 
 TYPED_TEST_CASE(TypedStructColumnWrapperTest, FixedWidthTypesNotBool);
@@ -69,7 +70,8 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestColumnFactoryConstruction)
 
   int num_rows{names_col->size()};
 
-  auto ages_col = cudf::test::fixed_width_column_wrapper<TypeParam>{{48, 27, 25}}.release();
+  auto ages_col =
+    cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>{{48, 27, 25}}.release();
 
   auto is_human_col = cudf::test::fixed_width_column_wrapper<bool>{{true, true, false}}.release();
 
@@ -93,7 +95,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestColumnFactoryConstruction)
     "Samuel Vimes", "Carrot Ironfoundersson", "Angua von Uberwald"}
                                    .release());
   expected_children.emplace_back(
-    cudf::test::fixed_width_column_wrapper<TypeParam>{48, 27, 25}.release());
+    cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>{48, 27, 25}.release());
   expected_children.emplace_back(
     cudf::test::fixed_width_column_wrapper<bool>{true, true, false}.release());
 
@@ -120,8 +122,8 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestColumnWrapperConstruction)
 
   auto names_col = cudf::test::strings_column_wrapper{names.begin(), names.end()};
 
-  auto ages_col = cudf::test::fixed_width_column_wrapper<TypeParam>{{48, 27, 25, 31, 351, 351},
-                                                                    {1, 1, 1, 1, 1, 0}};
+  auto ages_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>{
+    {48, 27, 25, 31, 351, 351}, {1, 1, 1, 1, 1, 0}};
 
   auto is_human_col = cudf::test::fixed_width_column_wrapper<bool>{
     {true, true, false, false, false, false}, {1, 1, 0, 1, 1, 0}};
@@ -141,7 +143,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestColumnWrapperConstruction)
   vector_of_columns expected_children;
   expected_children.emplace_back(
     cudf::test::strings_column_wrapper{names, {1, 1, 1, 0, 1, 1}}.release());
-  expected_children.emplace_back(cudf::test::fixed_width_column_wrapper<TypeParam>{
+  expected_children.emplace_back(cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>{
     {48, 27, 25, 31, 351, 351},
     {1, 1, 1, 0, 1, 0}}.release());
   expected_children.emplace_back(cudf::test::fixed_width_column_wrapper<bool>{
@@ -181,7 +183,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestStructsContainingLists)
 
   // `List` member.
   auto lists_col =
-    cudf::test::lists_column_wrapper<TypeParam>{{1, 2, 3}, {4}, {5, 6}, {}, {7, 8}, {9}};
+    cudf::test::lists_column_wrapper<TypeParam, int32_t>{{1, 2, 3}, {4}, {5, 6}, {}, {7, 8}, {9}};
 
   // Construct a Struct column of 6 rows, with the last two values set to null.
   auto struct_col =
@@ -204,7 +206,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestStructsContainingLists)
   //         and offsets match perfectly.
   //         This causes two "equivalent lists" to compare unequal, if the data columns
   //         have different values at an index where the value is null.
-  auto expected_last_two_lists_col = cudf::test::lists_column_wrapper<TypeParam>{
+  auto expected_last_two_lists_col = cudf::test::lists_column_wrapper<TypeParam, int32_t>{
     {
       {1, 2, 3},
       {4},
@@ -374,7 +376,7 @@ TEST_F(StructColumnWrapperTest, StructWithNoMembers)
 
 TYPED_TEST(TypedStructColumnWrapperTest, StructsWithMembersWithDifferentRowCounts)
 {
-  auto numeric_col_5 = cudf::test::fixed_width_column_wrapper<TypeParam>{{1, 2, 3, 4, 5}};
+  auto numeric_col_5 = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>{{1, 2, 3, 4, 5}};
   auto bool_col_4    = cudf::test::fixed_width_column_wrapper<bool>{1, 0, 1, 0};
 
   EXPECT_THROW(cudf::test::structs_column_wrapper({numeric_col_5, bool_col_4}), cudf::logic_error);
@@ -399,8 +401,8 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestListsOfStructs)
   auto names_col = cudf::test::strings_column_wrapper{names.begin(), names.end()};
 
   // Numeric column has some nulls.
-  auto ages_col = cudf::test::fixed_width_column_wrapper<TypeParam>{{48, 27, 25, 31, 351, 351},
-                                                                    {1, 1, 1, 1, 1, 0}};
+  auto ages_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>{
+    {48, 27, 25, 31, 351, 351}, {1, 1, 1, 1, 1, 0}};
 
   auto struct_col =
     cudf::test::structs_column_wrapper({names_col, ages_col}, {1, 1, 1, 0, 0, 1}).release();
@@ -433,7 +435,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, ListOfStructOfList)
 {
   using namespace cudf::test;
 
-  auto list_col = lists_column_wrapper<TypeParam>{
+  auto list_col = lists_column_wrapper<TypeParam, int32_t>{
     {{0}, {1}, {}, {3}, {4}, {5, 5}, {6}, {}, {8}, {9}},
     cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2; })};
 
@@ -453,7 +455,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, ListOfStructOfList)
 
   // Compare with expected values.
 
-  auto expected_level0_list = lists_column_wrapper<TypeParam>{
+  auto expected_level0_list = lists_column_wrapper<TypeParam, int32_t>{
     {{}, {1}, {}, {3}, {}, {5, 5}, {}, {}, {}, {9}},
     make_counting_transform_iterator(0, [](auto i) { return i % 2; })};
 
@@ -476,7 +478,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, StructOfListOfStruct)
 {
   using namespace cudf::test;
 
-  auto ints_col = fixed_width_column_wrapper<TypeParam>{
+  auto ints_col = fixed_width_column_wrapper<TypeParam, int32_t>{
     {0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
     make_counting_transform_iterator(0, [](auto i) { return i % 2; })};
 
@@ -501,8 +503,8 @@ TYPED_TEST(TypedStructColumnWrapperTest, StructOfListOfStruct)
 
   // Check that the struct is constructed as expected.
 
-  auto expected_ints_col = fixed_width_column_wrapper<TypeParam>{{0, 1, 0, 3, 0, 5, 0, 0, 0, 0},
-                                                                 {0, 1, 0, 1, 0, 1, 0, 0, 0, 0}};
+  auto expected_ints_col = fixed_width_column_wrapper<TypeParam, int32_t>{
+    {0, 1, 0, 3, 0, 5, 0, 0, 0, 0}, {0, 1, 0, 1, 0, 1, 0, 0, 0, 0}};
 
   auto expected_structs_col =
     structs_column_wrapper{{expected_ints_col}, {1, 1, 1, 1, 1, 1, 0, 0, 0, 0}}.release();

@@ -446,8 +446,7 @@ table_with_metadata reader::impl::read(int skip_rows, int num_rows, cudaStream_t
                   stream);
 
       for (size_t i = 0; i < column_types.size(); ++i) {
-        out_columns.emplace_back(
-          make_column(column_types[i], num_rows, out_buffers[i], stream, _mr));
+        out_columns.emplace_back(make_column(out_buffers[i], stream, _mr));
       }
     }
   }

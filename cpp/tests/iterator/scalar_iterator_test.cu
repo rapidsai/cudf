@@ -21,7 +21,8 @@ TYPED_TEST_CASE(IteratorTest, TestingTypes);
 TYPED_TEST(IteratorTest, scalar_iterator)
 {
   using T = TypeParam;
-  T init  = static_cast<T>(cudf::test::UniformRandomGenerator<int>(-128, 128).generate());
+  T init  = cudf::test::make_type_param_scalar<T>(
+    cudf::test::UniformRandomGenerator<int>(-128, 128).generate());
   // data and valid arrays
   thrust::host_vector<T> host_values(100, init);
   std::vector<bool> host_bools(100, true);
@@ -51,7 +52,8 @@ TYPED_TEST(IteratorTest, scalar_iterator)
 TYPED_TEST(IteratorTest, null_scalar_iterator)
 {
   using T = TypeParam;
-  T init  = static_cast<T>(cudf::test::UniformRandomGenerator<int>(-128, 128).generate());
+  T init  = cudf::test::make_type_param_scalar<T>(
+    cudf::test::UniformRandomGenerator<int>(-128, 128).generate());
   // data and valid arrays
   std::vector<T> host_values(100, init);
   std::vector<bool> host_bools(100, true);

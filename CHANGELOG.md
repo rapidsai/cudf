@@ -22,7 +22,6 @@
 - PR #5364 Validate array interface during buffer construction
 - PR #5418 Add support for `DataFrame.info`
 - PR #5425 Add Python `Groupby.rolling()`
-- PR #5359 Add duration types
 - PR #5434 Add nvtext function generate_character_grams
 - PR #5442 Add support for `cudf.isclose`
 - PR #5444 Remove usage of deprecated RMM APIs and headers.
@@ -45,6 +44,7 @@
 - PR #5659 Added support for rapids-compose for Java bindings and other enhancements
 - PR #5637 Parameterize Null comparator behaviour in Joins
 - PR #5623 Add `is_ipv4` strings API
+- PR #5723 Parquet reader - add support for nested LIST columns
 - PR #5669 Add support for reading JSON files with missing or out-of-order fields
 - PR #5674 Support JIT backend on PowerPC64
 - PR #5629 Add `ListColumn` and `ListDtype`
@@ -79,6 +79,7 @@
 - PR #5859 Add conversion form `fixed_point` to `bool`
 - PR #5781 Add duration types support in cudf(python/cython)
 - PR #5815 LIST Support for ColumnVector
+- PR #5931 Support for `add_calendrical_months` API
 - PR #5992 Add support for `.dt.strftime`
 
 ## Improvements
@@ -171,6 +172,7 @@
 - PR #5720 Replace owning raw pointers with std::unique_ptr
 - PR #5702 Add inherited methods to python docs and other docs fixes
 - PR #5733 Add support for `size` property in `DataFrame`/ `Series` / `Index`/ `MultiIndex`
+- PR #5735 Force timestamp creation only with duration
 - PR #5743 Reduce number of test cases in concatenate benchmark
 - PR #5748 Disable `tolist` API in `Series` & `Index` and add `tolist` dispatch in `dask-cudf`
 - PR #5744 Reduce number of test cases in reduction benchmark
@@ -192,6 +194,7 @@
 - PR #5834 Add support for dictionary column in concatenate
 - PR #5832 Make dictionary_wrapper constructor from a value explicit
 - PR #5833 Pin `dask` and `distributed` version to `2.22.0`
+- PR #5856 Bump Pandas support to >=1.0,<1.2
 - PR #5855 Java interface to limit RMM maximum pool size
 - PR #5853 Disable `fixed_point` for use in `copy_if`
 - PR #5854 Raise informative error in `DataFrame.iterrows` and `DataFrame.itertuples`
@@ -206,11 +209,15 @@
 - PR #5899 Add in gather support for Java
 - PR #5906 Add macros for showing line of failures in unit tests
 - PR #5933 Add in APIs to read/write arrow IPC formatted data from java 
+- PR #3918 Update cuDF internals doc
 - PR #5970 Map data to pandas through arrow, always
 - PR #6012 Remove `cudf._cuda` and replace usages with `rmm._cuda`
+- PR #6045 Parametrize parquet_reader_list tests
+- PR #6053 Import traits.hpp for cudftestutils consumers
 
 ## Bug Fixes
 
+- PR #6034 Specify `--basetemp` for `py.test` run
 - PR #5793 Fix leak in mutable_table_device_view by deleting _descendant_storage in table_device_view_base::destroy
 - PR #5525 Make sure to allocate bitmasks of string columns only once
 - PR #5336 Initialize conversion tables on a per-context basis
@@ -315,8 +322,11 @@
 - PR #5949 Find Arrow include directory for JNI builds
 - PR #5964 Fix API doc page title tag
 - PR #5981 Handle `nat` in `fillna` for datetime and timedelta types
+- PR #6016 Fix benchmark fixture segfault
 - PR #6003 Fix concurrent JSON reads crash
-
+- PR #6032 Change black version to 19.10b0 in .pre-commit-config.yaml
+- PR #6041 Fix Java memory resource handler to rethrow original exception object
+- PR #6057 Fix issue in parquet reader with reading columns out of file-order
 
 # cuDF 0.14.0 (03 Jun 2020)
 
