@@ -13,6 +13,7 @@
 - PR #5971 Add cuStreamz README for basic installation and use
 - PR #6002 Add Java bindings for md5
 - PR #6067 Added compute codes for aarch64 devices
+- PR #5861 Move `fixed_point::scale` to `data_type`
 
 ## Bug Fixes
 
@@ -217,7 +218,6 @@
 - PR #5855 Java interface to limit RMM maximum pool size
 - PR #5853 Disable `fixed_point` for use in `copy_if`
 - PR #5854 Raise informative error in `DataFrame.iterrows` and `DataFrame.itertuples`
-- PR #5861 Move `fixed_point::scale` to `data_type`
 - PR #5864 Replace cnmem with pool_memory_resource in test/benchmark fixtures
 - PR #5863 Explicitly require `ucx-py` on CI
 - PR #5879 Added support of sub-types and object wrappers in concat()
