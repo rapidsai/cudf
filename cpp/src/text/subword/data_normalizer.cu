@@ -190,22 +190,18 @@ __device__ uint32_t extract_code_points_from_utf8(unsigned char const* strings,
  * tokens and match up token ids.
  *
  * @param[in] strings The input strings with characters to normalize to code point values.
- * @param[in] device_strings_offsets Offsets to individual strings in the input vector.
  * @param[in] total_bytes Total number of bytes in the input `strings` vector.
  * @param[in] cp_metadata The metadata lookup table for every unicode code point value.
  * @param[in] aux_table Aux table for mapping some multi-byte code point values.
  * @param[in] do_lower_case True if normalization should include lower-casing.
- * @param[in] num_strings Total number of strings in the input `strings` vector.
  * @param[out] code_points The resulting code point values from normalization.
  * @param[out] chars_per_thread Output number of code point values per string.
  */
 __global__ void kernel_data_normalizer(unsigned char const* strings,
-                                       uint32_t const* device_strings_offsets,
                                        size_t const total_bytes,
                                        uint32_t const* cp_metadata,
                                        uint64_t const* aux_table,
                                        bool const do_lower_case,
-                                       uint32_t const num_strings,
                                        uint32_t* code_points,
                                        uint32_t* chars_per_thread)
 {
@@ -302,12 +298,10 @@ uvector_pair data_normalizer::normalize(char const* d_strings,
 
   kernel_data_normalizer<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
     reinterpret_cast<const unsigned char*>(d_strings),
-    d_strings_offsets->data(),
     bytes_count,
     d_cp_metadata,
     d_aux_table,
     do_lower_case,
-    num_strings,
     d_code_points->data(),
     d_chars_per_thread.data());
 
