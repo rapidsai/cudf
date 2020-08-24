@@ -766,3 +766,32 @@ TEST_F(StringsDurationsTest, Errors)
   cudf::test::fixed_width_column_wrapper<cudf::duration_s> durations{cudf::duration_s{1530705600}};
   EXPECT_THROW(cudf::strings::from_durations(durations, ""), cudf::logic_error);
 }
+
+TEST_F(StringsDurationsTest, PandasDurationSeconds)
+{
+  using T = cudf::duration_s;
+  cudf::test::fixed_width_column_wrapper<T> durations{
+    T{0L},          // 0 days 00:00:00
+    T{1L},          // 0 days 00:00:01
+    T{118800L},     // 1 days 09:00:00
+    T{31568404L},   // 365 days 09:00:04
+    T{-118800L},    // -2 days +15:00:00
+    T{-31568404L},  // -366 days +14:59:56
+  };
+  auto results = cudf::strings::from_durations(durations, "%P");
+  cudf::test::strings_column_wrapper expected{"0 days 00:00:00.000000000",
+                                              "0 days 00:00:01.000000000",
+                                              "1 days 09:00:00.000000000",
+                                              "365 days 09:00:04.000000000",
+                                              "-2 days +15:00:00.000000000",  //"-1 days 09:00:00",
+                                              "-366 days +14:59:56.000000000" //"-365 days 09:00:04"
+                                              };
+  cudf::test::print(*results);
+  cudf::test::print(expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  //auto new_durations = cudf::strings::to_durations(cudf::strings_column_view(expected),
+  //                                                 cudf::data_type(cudf::type_to_id<T>()),
+  //                                                 "%D days %H:%M:%S");
+  //CUDF_TEST_EXPECT_COLUMNS_EQUAL(*new_durations, durations);
+}
