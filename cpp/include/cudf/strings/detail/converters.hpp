@@ -107,6 +107,29 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
                                         cudaStream_t stream,
                                         rmm::mr::device_memory_resource* mr);
 
+/**
+ * @copydoc to_durations(strings_column_view const&,data_type,std::string
+ * const&,rmm::mr::device_memory_resource*)
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<column> to_durations(strings_column_view const& strings,
+                                     data_type duration_type,
+                                     std::string const& format,
+                                     cudaStream_t stream,
+                                     rmm::mr::device_memory_resource* mr);
+
+/**
+ * @copydoc from_durations(strings_column_view const&,std::string
+ * const&,rmm::mr::device_memory_resource*)
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<column> from_durations(column_view const& durations,
+                                       std::string const& format,
+                                       cudaStream_t stream,
+                                       rmm::mr::device_memory_resource* mr);
+
 }  // namespace detail
 }  // namespace strings
 }  // namespace cudf
