@@ -3,6 +3,7 @@
 from cudf.core.column.categorical import CategoricalColumn
 from cudf.core.column.column import (
     ColumnBase,
+    arange,
     as_column,
     build_categorical_column,
     build_column,
@@ -11,6 +12,7 @@ from cudf.core.column.column import (
     column_empty_like,
     column_empty_like_same_mask,
     deserialize_columns,
+    full,
     serialize_columns,
 )
 from cudf.core.column.datetime import DatetimeColumn  # noqa: F401
