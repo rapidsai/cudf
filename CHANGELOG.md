@@ -1,3 +1,22 @@
+# cuDF 0.16.0 (Date TBD)
+
+## New Features
+
+- PR #5974 Use libcudf instead of cupy for `arange` or column creation from a scalar.
+
+## Improvements
+
+- PR #5956 Add/Update tests for cuStreamz
+- PR #5953 Use stable sort when doing a sort groupby
+- PR #5973 Link to the Code of Conduct in CONTRIBUTING.md
+- PR #5917 Just use `None` for `strides` in `Buffer`
+- PR #5971 Add cuStreamz README for basic installation and use
+- PR #6002 Add Java bindings for md5
+- PR #6067 Added compute codes for aarch64 devices
+
+## Bug Fixes
+
+
 # cuDF 0.15.0 (Date TBD)
 
 ## New Features
@@ -208,7 +227,7 @@
 - PR #5894 Small code improvement / cleanup
 - PR #5899 Add in gather support for Java
 - PR #5906 Add macros for showing line of failures in unit tests
-- PR #5933 Add in APIs to read/write arrow IPC formatted data from java 
+- PR #5933 Add in APIs to read/write arrow IPC formatted data from java
 - PR #3918 Update cuDF internals doc
 - PR #5970 Map data to pandas through arrow, always
 - PR #6012 Remove `cudf._cuda` and replace usages with `rmm._cuda`
@@ -2076,7 +2095,8 @@
 - PR #1607 Revert change of `column.to_dense_buffer` always return by copy for performance concerns
 - PR #1618 ORC reader: fix assert & data output when nrows/skiprows isn't aligned to stripe boundaries
 - PR #1631 Fix failure of TYPES_TEST on some gcc-7 based systems.
-- PR #1641 CSV Reader: Fix skip_blank_lines behavior with Windows line terminators (\r\n)
+- PR #1641 CSV Reader: Fix skip_blank_lines behavior with Windows line terminators (
+)
 - PR #1648 ORC reader: fix non-deterministic output when skiprows is non-zero
 - PR #1676 Fix groupby `as_index` behaviour with `MultiIndex`
 - PR #1659 Fix bug caused by empty groupbys and multiindex slicing throwing exceptions
