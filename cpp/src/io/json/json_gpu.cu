@@ -144,7 +144,7 @@ __inline__ __device__ cudf::timestamp_D decode_value(const char *data,
                                                      uint64_t end,
                                                      ParseOptions const &opts)
 {
-  return parseDateFormat(data, start, end, opts.dayfirst);
+  return cudf::timestamp_D{cudf::duration_D{parseDateFormat(data, start, end, opts.dayfirst)}};
 }
 
 /**
@@ -164,7 +164,7 @@ __inline__ __device__ cudf::timestamp_s decode_value(const char *data,
                                                      ParseOptions const &opts)
 {
   auto milli = parseDateTimeFormat(data, start, end, opts.dayfirst);
-  return milli / 1000;
+  return cudf::timestamp_s{cudf::duration_s{milli / 1000}};
 }
 
 /**
@@ -184,7 +184,7 @@ __inline__ __device__ cudf::timestamp_ms decode_value(const char *data,
                                                       ParseOptions const &opts)
 {
   auto milli = parseDateTimeFormat(data, start, end, opts.dayfirst);
-  return milli;
+  return cudf::timestamp_ms{cudf::duration_ms{milli}};
 }
 
 /**
@@ -204,7 +204,7 @@ __inline__ __device__ cudf::timestamp_us decode_value(const char *data,
                                                       ParseOptions const &opts)
 {
   auto milli = parseDateTimeFormat(data, start, end, opts.dayfirst);
-  return milli * 1000;
+  return cudf::timestamp_us{cudf::duration_us{milli * 1000}};
 }
 
 /**
@@ -224,7 +224,7 @@ __inline__ __device__ cudf::timestamp_ns decode_value(const char *data,
                                                       ParseOptions const &opts)
 {
   auto milli = parseDateTimeFormat(data, start, end, opts.dayfirst);
-  return milli * 1000000;
+  return cudf::timestamp_ns{cudf::duration_ns{milli * 1000000}};
 }
 
 // The purpose of this is merely to allow compilation ONLY
@@ -774,7 +774,7 @@ __global__ void collect_keys_info_kernel(const char *data,
                                          const uint64_t *rec_starts,
                                          cudf::size_type num_records,
                                          unsigned long long int *keys_cnt,
-                                         mutable_table_device_view *keys_info)
+                                         thrust::optional<mutable_table_device_view> keys_info)
 {
   auto const rec_id = threadIdx.x + (blockDim.x * blockIdx.x);
   if (rec_id >= num_records) return;
@@ -788,7 +788,7 @@ __global__ void collect_keys_info_kernel(const char *data,
        field_range.key_begin < row_data_range.second;
        field_range = advance(field_range.value_end)) {
     auto const idx = atomicAdd(keys_cnt, 1);
-    if (nullptr != keys_info) {
+    if (keys_info.has_value()) {
       auto const len                              = field_range.key_end - field_range.key_begin;
       keys_info->column(0).element<uint64_t>(idx) = field_range.key_begin - data;
       keys_info->column(1).element<uint16_t>(idx) = len;
@@ -874,7 +874,7 @@ void collect_keys_info(const char *data,
                        const uint64_t *rec_starts,
                        cudf::size_type num_records,
                        unsigned long long int *keys_cnt,
-                       mutable_table_device_view *keys_info,
+                       thrust::optional<mutable_table_device_view> keys_info,
                        cudaStream_t stream)
 {
   int block_size;

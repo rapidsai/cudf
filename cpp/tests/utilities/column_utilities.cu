@@ -21,6 +21,7 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
@@ -48,8 +49,7 @@ namespace {
 
 template <bool check_exact_equality>
 struct column_property_comparator {
-  template <typename T>
-  void operator()(cudf::column_view const& lhs, cudf::column_view const& rhs)
+  void compare_common(cudf::column_view const& lhs, cudf::column_view const& rhs)
   {
     EXPECT_EQ(lhs.type(), rhs.type());
     EXPECT_EQ(lhs.size(), rhs.size());
@@ -60,22 +60,27 @@ struct column_property_comparator {
     if (check_exact_equality || lhs.size() > 0) {
       EXPECT_EQ(lhs.num_children(), rhs.num_children());
     }
+  }
 
-    // only recurse for true nested types.
-    // - strings are an odd case of not being a nested type which do have children. but because
-    //   of the way strings handle offsets (sliced/split columns), direct comparison between two
-    //   sets of child columns can produce false failures - the sizes may not match.  the truly
-    //   correct way to do this would be to implement a specialization for strings (and
-    //   dictionaries, lists, etc) that explicitly understand this structure.  but for now, this
-    //   seems to be ok.
-    if (cudf::is_nested<T>()) {
-      for (size_type idx = 0; idx < lhs.num_children(); idx++) {
-        cudf::type_dispatcher(lhs.child(idx).type(),
-                              column_property_comparator<check_exact_equality>{},
-                              lhs.child(idx),
-                              rhs.child(idx));
-      }
-    }
+  template <typename T, std::enable_if_t<!std::is_same<T, cudf::list_view>::value>* = nullptr>
+  void operator()(cudf::column_view const& lhs, cudf::column_view const& rhs)
+  {
+    compare_common(lhs, rhs);
+  }
+
+  template <typename T, std::enable_if_t<std::is_same<T, cudf::list_view>::value>* = nullptr>
+  void operator()(cudf::column_view const& lhs, cudf::column_view const& rhs)
+  {
+    compare_common(lhs, rhs);
+
+    cudf::lists_column_view lhs_l(lhs);
+    cudf::lists_column_view rhs_l(rhs);
+
+    // recurse
+    cudf::type_dispatcher(lhs_l.child().type(),
+                          column_property_comparator<check_exact_equality>{},
+                          lhs_l.get_sliced_child(0),
+                          rhs_l.get_sliced_child(0));
   }
 };
 
@@ -197,12 +202,12 @@ struct column_comparator_impl {
                   bool print_all_differences,
                   int depth)
   {
+    auto d_lhs = cudf::table_device_view::create(table_view{{lhs}});
+    auto d_rhs = cudf::table_device_view::create(table_view{{rhs}});
+
     using ComparatorType = std::conditional_t<check_exact_equality,
                                               corresponding_rows_unequal,
                                               corresponding_rows_not_equivalent>;
-
-    auto d_lhs = cudf::table_device_view::create(table_view{{lhs}});
-    auto d_rhs = cudf::table_device_view::create(table_view{{rhs}});
 
     // worst case - everything is different
     thrust::device_vector<int> differences(lhs.size());
@@ -237,36 +242,85 @@ struct column_comparator_impl<list_view, check_exact_equality> {
     CUDF_EXPECTS(lhs_l.size() == rhs_l.size(), "List column size mismatch");
     if (lhs_l.size() == 0) { return; }
 
-    // using the row_equality_operator directly on a list column is a bad idea for several
-    // reasons:
-    // - at the moment, the row_equality_operator doesn't support lists
+    // worst case - everything is different
+    thrust::device_vector<int> differences(lhs.size());
+
+    // TODO : determine how equals/equivalency should work for columns with divergent underlying
+    // data, but equivalent null masks. Example:
     //
-    // - if it -did-, a "row" in a list column can itself be nested.  so to do a row
-    //   comparison involves actually recursing through the hierarchy of data. this recursion
-    //   would be happening for each row compared, which is algorithmically terrible.
+    // List<int32_t>:
+    // Length : 3
+    // Offsets : 0, 3, 5, 5
+    // Nulls: 011
+    // Children :
+    //   1, 2, 3, 4, 5
     //
-    // Instead, we can simply walk the hierarchy once, checking each pair of offset columns for
-    // equivalency and then finally checking the leaves, which are not nested types.
-    cudf::type_dispatcher(lhs_l.offsets().type(),
+    // List<int32_t>:
+    // Length : 3
+    // Offsets : 0, 3, 5, 7
+    // Nulls: 011
+    // Children :
+    //   1, 2, 3, 4, 5, 7, 8
+    //
+    // These two columns are seemingly equivalent, since their top level rows are the same, with
+    // just the last element being null. However, pyArrow will say these are -not- equal and
+    // does not appear to have an equivalent() check.  So the question is : should we be handling
+    // this case when someone calls expect_columns_equivalent()?
+
+    // compare offsets, taking slicing into account
+
+    // left side
+    size_type lhs_shift = cudf::detail::get_value<size_type>(lhs_l.offsets(), lhs_l.offset(), 0);
+    auto lhs_offsets    = thrust::make_transform_iterator(
+      lhs_l.offsets().begin<size_type>() + lhs_l.offset(),
+      [lhs_shift] __device__(size_type offset) { return offset - lhs_shift; });
+    auto lhs_valids = thrust::make_transform_iterator(
+      thrust::make_counting_iterator(0),
+      [mask = lhs_l.null_mask(), offset = lhs_l.offset()] __device__(size_type index) {
+        return mask == nullptr ? true : cudf::bit_is_set(mask, index + offset);
+      });
+
+    // right side
+    size_type rhs_shift = cudf::detail::get_value<size_type>(rhs_l.offsets(), rhs_l.offset(), 0);
+    auto rhs_offsets    = thrust::make_transform_iterator(
+      rhs_l.offsets().begin<size_type>() + rhs_l.offset(),
+      [rhs_shift] __device__(size_type offset) { return offset - rhs_shift; });
+    auto rhs_valids = thrust::make_transform_iterator(
+      thrust::make_counting_iterator(0),
+      [mask = rhs_l.null_mask(), offset = rhs_l.offset()] __device__(size_type index) {
+        return mask == nullptr ? true : cudf::bit_is_set(mask, index + offset);
+      });
+
+    auto diff_iter = thrust::copy_if(
+      thrust::device,
+      thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(lhs_l.size() + 1),
+      differences.begin(),
+      [lhs_offsets, rhs_offsets, lhs_valids, rhs_valids, num_rows = lhs_l.size()] __device__(
+        size_type index) {
+        // last offset has no validity associated with it
+        if (index < num_rows - 1) {
+          if (lhs_valids[index] != rhs_valids[index]) { return true; }
+          // if validity matches -and- is false, we can ignore the actual values. this
+          // is technically not checking "equal()", but it's how the non-list code path handles it
+          if (!lhs_valids[index]) { return false; }
+        }
+        return lhs_offsets[index] == rhs_offsets[index] ? false : true;
+      });
+
+    // shrink back down
+    differences.resize(thrust::distance(differences.begin(), diff_iter));
+    print_differences(differences, lhs, rhs, print_all_differences, depth);
+
+    // recurse
+    auto lhs_child = lhs_l.get_sliced_child(0);
+    auto rhs_child = rhs_l.get_sliced_child(0);
+    cudf::type_dispatcher(lhs_child.type(),
                           column_comparator<check_exact_equality>{},
-                          lhs_l.offsets(),
-                          rhs_l.offsets(),
-                          print_all_differences,
-                          depth);
-    cudf::type_dispatcher(lhs_l.child().type(),
-                          column_comparator<check_exact_equality>{},
-                          lhs_l.child(),
-                          rhs_l.child(),
+                          lhs_child,
+                          rhs_child,
                           print_all_differences,
                           depth + 1);
-
-    // TODO:  to display differences between list columns what we really want to do is
-    //        - if there are differences in the leaf values, display those.
-    //
-    //        otherwise
-    //
-    //        - determine the first level at which there are list differences (via the offsets),
-    //          do a gather on those rows and display them.
   }
 };
 
@@ -440,6 +494,37 @@ std::string get_nested_type_str(cudf::column_view const& view)
   return cudf::jit::get_type_name(view.type());
 }
 
+template <typename NestedColumnView>
+std::string nested_offsets_to_string(NestedColumnView const& c, std::string const& delimiter = ", ")
+{
+  column_view offsets = (c.parent()).child(NestedColumnView::offsets_column_index);
+  CUDF_EXPECTS(offsets.type().id() == type_id::INT32,
+               "Column does not appear to be an offsets column");
+  CUDF_EXPECTS(offsets.offset() == 0, "Offsets column has an internal offset!");
+  size_type output_size = c.size() + 1;
+
+  // the first offset value to normalize everything against
+  size_type first = cudf::detail::get_value<size_type>(offsets, c.offset(), 0);
+  rmm::device_vector<size_type> shifted_offsets(output_size);
+
+  // normalize the offset values for the column offset
+  size_type const* d_offsets = offsets.head<size_type>() + c.offset();
+  thrust::transform(
+    rmm::exec_policy(0)->on(0),
+    d_offsets,
+    d_offsets + output_size,
+    shifted_offsets.begin(),
+    [first] __device__(int32_t offset) { return static_cast<size_type>(offset - first); });
+
+  thrust::host_vector<size_type> h_shifted_offsets(shifted_offsets);
+  std::ostringstream buffer;
+  for (size_t idx = 0; idx < h_shifted_offsets.size(); idx++) {
+    buffer << h_shifted_offsets[idx];
+    if (idx < h_shifted_offsets.size() - 1) { buffer << delimiter; }
+  }
+  return buffer.str();
+}
+
 struct column_view_printer {
   template <typename Element, typename std::enable_if_t<is_numeric<Element>()>* = nullptr>
   void operator()(cudf::column_view const& col,
@@ -580,18 +665,22 @@ struct column_view_printer {
   {
     lists_column_view lcv(col);
 
+    // propage slicing to the child if necessary
+    column_view child    = lcv.get_sliced_child(0);
+    bool const is_sliced = lcv.offset() > 0 || child.offset() > 0;
+
     std::string tmp =
-      get_nested_type_str(col) + ":\n" + indent + "Length : " + std::to_string(lcv.size()) + "\n" +
-      indent + "Offsets : " + (lcv.size() > 0 ? to_string(lcv.offsets(), ", ") : "") + "\n" +
+      get_nested_type_str(col) + (is_sliced ? "(sliced)" : "") + ":\n" + indent +
+      "Length : " + std::to_string(lcv.size()) + "\n" + indent +
+      "Offsets : " + (lcv.size() > 0 ? nested_offsets_to_string(lcv) : "") + "\n" +
       (lcv.has_nulls() ? indent + "Null count: " + std::to_string(lcv.null_count()) + "\n" +
                            detail::to_string(bitmask_to_host(col), col.size(), indent) + "\n"
                        : "") +
       indent + "Children :\n" +
-      (lcv.child().type().id() != type_id::LIST && lcv.child().has_nulls()
-         ? indent + detail::to_string(bitmask_to_host(lcv.child()), lcv.child().size(), indent) +
-             "\n"
+      (child.type().id() != type_id::LIST && child.has_nulls()
+         ? indent + detail::to_string(bitmask_to_host(child), child.size(), indent) + "\n"
          : "") +
-      (detail::to_string(lcv.child(), ", ", indent + "   ")) + "\n";
+      (detail::to_string(child, ", ", indent + "   ")) + "\n";
 
     out.push_back(tmp);
   }

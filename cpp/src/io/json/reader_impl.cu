@@ -21,6 +21,8 @@
 
 #include "reader_impl.hpp"
 
+#include <thrust/optional.h>
+
 #include <rmm/thrust_rmm_allocator.h>
 #include <rmm/device_scalar.hpp>
 
@@ -28,13 +30,12 @@
 #include <cudf/groupby.hpp>
 #include <cudf/io/readers.hpp>
 #include <cudf/sorting.hpp>
+#include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <io/comp/io_uncomp.h>
 #include <io/utilities/parsing_utils.cuh>
 #include <io/utilities/type_conversion.cuh>
-
-#include <cudf/table/table.hpp>
 
 namespace cudf {
 namespace io {
@@ -146,7 +147,7 @@ std::unique_ptr<table> create_json_keys_info_table(
                                          record_starts.data().get(),
                                          record_starts.size(),
                                          key_counter.data(),
-                                         nullptr,
+                                         {},
                                          stream);
 
   // Allocate columns to store hash value, length, and offset of each JSON object key in the input
@@ -156,9 +157,8 @@ std::unique_ptr<table> create_json_keys_info_table(
   info_columns.emplace_back(make_numeric_column(data_type(type_id::UINT16), num_keys));
   info_columns.emplace_back(make_numeric_column(data_type(type_id::UINT32), num_keys));
   // Create a table out of these columns to pass them around more easily
-  auto info_table = std::make_unique<table>(std::move(info_columns));
-  rmm::device_scalar<mutable_table_device_view> info_table_mdv(
-    *mutable_table_device_view::create(info_table->mutable_view(), stream), stream);
+  auto info_table           = std::make_unique<table>(std::move(info_columns));
+  auto const info_table_mdv = mutable_table_device_view::create(info_table->mutable_view(), stream);
 
   // Reset the key counter - now used for indexing
   key_counter.set_value(0, stream);
@@ -169,7 +169,7 @@ std::unique_ptr<table> create_json_keys_info_table(
                                          record_starts.data().get(),
                                          record_starts.size(),
                                          key_counter.data(),
-                                         info_table_mdv.data(),
+                                         {*info_table_mdv},
                                          stream);
   return info_table;
 }
@@ -265,7 +265,7 @@ void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size)
  * Sets the uncomp_data_ and uncomp_size_ data members
  * Loads the data into device memory if byte range parameters are not used
  */
-void reader::impl::decompress_input()
+void reader::impl::decompress_input(cudaStream_t stream)
 {
   const auto compression_type = infer_compression_type(
     args_.compression, filepath_, {{"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}});
@@ -279,7 +279,7 @@ void reader::impl::decompress_input()
     uncomp_data_ = uncomp_data_owner_.data();
     uncomp_size_ = uncomp_data_owner_.size();
   }
-  if (load_whole_file_) data_ = rmm::device_buffer(uncomp_data_, uncomp_size_);
+  if (load_whole_file_) data_ = rmm::device_buffer(uncomp_data_, uncomp_size_, stream);
 }
 
 /**
@@ -325,7 +325,7 @@ void reader::impl::set_record_starts(cudaStream_t stream)
   // Previous call stores the record pinput_file.typeositions as encountered by all threads
   // Sort the record positions as subsequent processing may require filtering
   // certain rows or other processing on specific records
-  thrust::sort(rmm::exec_policy()->on(0), rec_starts_.begin(), rec_starts_.end());
+  thrust::sort(rmm::exec_policy()->on(stream), rec_starts_.begin(), rec_starts_.end());
 
   auto filtered_count = prefilter_count;
   if (allow_newlines_in_strings_) {
@@ -343,7 +343,7 @@ void reader::impl::set_record_starts(cudaStream_t stream)
     }
 
     rec_starts_ = h_rec_starts;
-    thrust::sort(rmm::exec_policy()->on(0), rec_starts_.begin(), rec_starts_.end());
+    thrust::sort(rmm::exec_policy()->on(stream), rec_starts_.begin(), rec_starts_.end());
   }
 
   // Exclude the ending newline as it does not precede a record start
@@ -360,7 +360,7 @@ void reader::impl::set_record_starts(cudaStream_t stream)
  * Also updates the array of record starts to match the device data offset.
  *
  */
-void reader::impl::upload_data_to_device()
+void reader::impl::upload_data_to_device(cudaStream_t stream)
 {
   size_t start_offset = 0;
   size_t end_offset   = uncomp_size_;
@@ -382,7 +382,7 @@ void reader::impl::upload_data_to_device()
     // Adjust row start positions to account for the data subcopy
     start_offset = h_rec_starts.front();
     rec_starts_.resize(h_rec_starts.size());
-    thrust::transform(rmm::exec_policy()->on(0),
+    thrust::transform(rmm::exec_policy()->on(stream),
                       rec_starts_.begin(),
                       rec_starts_.end(),
                       thrust::make_constant_iterator(start_offset),
@@ -395,7 +395,7 @@ void reader::impl::upload_data_to_device()
                "Error finding the record within the specified byte range.\n");
 
   // Upload the raw data that is within the rows of interest
-  data_ = rmm::device_buffer(uncomp_data_ + start_offset, bytes_to_upload);
+  data_ = rmm::device_buffer(uncomp_data_ + start_offset, bytes_to_upload, stream);
 }
 
 /**
@@ -600,7 +600,7 @@ table_with_metadata reader::impl::convert_data_to_table(cudaStream_t stream)
   for (size_t i = 0; i < num_columns; ++i) {
     out_buffers[i].null_count() = num_records - h_valid_counts[i];
 
-    out_columns.emplace_back(make_column(dtypes_[i], num_records, out_buffers[i]));
+    out_columns.emplace_back(make_column(out_buffers[i]));
   }
 
   CUDF_EXPECTS(!out_columns.empty(), "Error converting json input into gdf columns.\n");
@@ -642,14 +642,14 @@ table_with_metadata reader::impl::read(size_t range_offset, size_t range_size, c
   ingest_raw_input(range_offset, range_size);
   CUDF_EXPECTS(buffer_ != nullptr, "Ingest failed: input data is null.\n");
 
-  decompress_input();
+  decompress_input(stream);
   CUDF_EXPECTS(uncomp_data_ != nullptr, "Ingest failed: uncompressed input data is null.\n");
   CUDF_EXPECTS(uncomp_size_ != 0, "Ingest failed: uncompressed input data has zero size.\n");
 
   set_record_starts(stream);
   CUDF_EXPECTS(!rec_starts_.empty(), "Error enumerating records.\n");
 
-  upload_data_to_device();
+  upload_data_to_device(stream);
   CUDF_EXPECTS(data_.size() != 0, "Error uploading input data to the GPU.\n");
 
   set_column_names(stream);

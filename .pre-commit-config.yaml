@@ -1,14 +1,14 @@
 repos:
       - repo: https://github.com/timothycrosley/isort
-        rev: 5.0.4
+        rev: 5.0.7
         hooks:
               - id: isort
       - repo: https://github.com/ambv/black
-        rev: stable
+        rev: 19.10b0
         hooks:
               - id: black
       - repo: https://gitlab.com/pycqa/flake8
-        rev: 3.8.1
+        rev: 3.8.3
         hooks:
               - id: flake8
                 alias: flake8
@@ -16,7 +16,7 @@ repos:
                 args: ["--config=python/.flake8"]
                 types: [python]
       - repo: https://gitlab.com/pycqa/flake8
-        rev: 3.8.1
+        rev: 3.8.3
         hooks:
               - id: flake8
                 alias: flake8-cython

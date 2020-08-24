@@ -7,6 +7,7 @@ import pytest
 
 import cudf
 from cudf import DataFrame, Series
+from cudf.core._compat import PANDAS_GE_110
 from cudf.tests import utils
 from cudf.tests.utils import INTEGER_TYPES, assert_eq
 
@@ -381,6 +382,10 @@ def test_series_loc_string():
 
 
 def test_series_loc_datetime():
+    if PANDAS_GE_110:
+        kwargs = {"check_freq": False}
+    else:
+        kwargs = {}
     ps = pd.Series(
         [1, 2, 3, 4, 5], index=pd.date_range("20010101", "20010105")
     )
@@ -399,11 +404,13 @@ def test_series_loc_datetime():
     )
 
     assert_eq(
-        ps.loc["2001-01-02":"2001-01-05"], gs.loc["2001-01-02":"2001-01-05"]
+        ps.loc["2001-01-02":"2001-01-05"],
+        gs.loc["2001-01-02":"2001-01-05"],
+        **kwargs,
     )
-    assert_eq(ps.loc["2001-01-02":], gs.loc["2001-01-02":])
-    assert_eq(ps.loc[:"2001-01-04"], gs.loc[:"2001-01-04"])
-    assert_eq(ps.loc[::2], gs.loc[::2])
+    assert_eq(ps.loc["2001-01-02":], gs.loc["2001-01-02":], **kwargs)
+    assert_eq(ps.loc[:"2001-01-04"], gs.loc[:"2001-01-04"], **kwargs)
+    assert_eq(ps.loc[::2], gs.loc[::2], **kwargs)
     #
     # assert_eq(ps.loc[['2001-01-01', '2001-01-04', '2001-01-05']],
     #           gs.loc[['2001-01-01', '2001-01-04', '2001-01-05']])
@@ -428,6 +435,7 @@ def test_series_loc_datetime():
     assert_eq(
         ps.loc[[True, False, True, False, True]],
         gs.loc[[True, False, True, False, True]],
+        **kwargs,
     )
 
 

@@ -15,7 +15,7 @@ def validate_setup():
 
     import warnings
 
-    from cudf._cuda.gpu import (
+    from rmm._cuda.gpu import (
         CUDARuntimeError,
         cudaDeviceAttr,
         cudaError,

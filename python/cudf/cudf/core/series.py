@@ -971,15 +971,14 @@ class Series(Frame, Serializable):
             preprocess = self.copy()
 
         preprocess.index = preprocess.index._clean_nulls_from_index()
-        if isinstance(preprocess._column, cudf.core.column.TimeDeltaColumn):
-            preprocess._column = preprocess._column._repr_str_col()
-            output = preprocess.to_pandas().__repr__()
-        elif (
+        if (
             preprocess.nullable
             and not isinstance(
                 preprocess._column, cudf.core.column.CategoricalColumn
             )
             and not is_list_dtype(preprocess.dtype)
+        ) or isinstance(
+            preprocess._column, cudf.core.column.timedelta.TimeDeltaColumn
         ):
             output = (
                 preprocess.astype("O")
@@ -2318,7 +2317,7 @@ class Series(Frame, Serializable):
     def reverse(self):
         """Reverse the Series
         """
-        rinds = cupy.arange((self._column.size - 1), -1, -1, dtype=np.int32)
+        rinds = column.arange((self._column.size - 1), -1, -1, dtype=np.int32)
         col = self._column[rinds]
         index = self.index._values[rinds]
         return self._copy_construct(data=col, index=index)
@@ -2432,8 +2431,8 @@ class Series(Frame, Serializable):
         except ValueError:
             return _return_sentinel_series()
 
-        order = column.as_column(cupy.arange(len(self)))
-        codes = column.as_column(cupy.arange(len(cats), dtype=dtype))
+        order = column.arange(len(self))
+        codes = column.arange(len(cats), dtype=dtype)
 
         value = cudf.DataFrame({"value": cats, "code": codes})
         codes = cudf.DataFrame(
@@ -4136,10 +4135,10 @@ class Series(Frame, Serializable):
         rhs = cudf.DataFrame(index=as_index(index))
         if how == "left":
             tmp_col_id = str(uuid4())
-            lhs[tmp_col_id] = cupy.arange(len(lhs))
+            lhs[tmp_col_id] = column.arange(len(lhs))
         elif how == "right":
             tmp_col_id = str(uuid4())
-            rhs[tmp_col_id] = cupy.arange(len(rhs))
+            rhs[tmp_col_id] = column.arange(len(rhs))
         result = lhs.join(rhs, how=how, sort=sort)
         if how == "left" or how == "right":
             result = result.sort_values(tmp_col_id)[0]

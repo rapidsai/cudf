@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,9 +77,9 @@ struct SchemaElement {
 };
 
 /**
- * @brief Thrift-derived struct describing a column of data
+ * @brief Thrift-derived struct describing a column chunk
  **/
-struct ColumnMetaData {
+struct ColumnChunkMetaData {
   Type type = BOOLEAN;
   std::vector<Encoding> encodings;
   std::vector<std::string> path_in_schema;
@@ -107,7 +107,7 @@ struct ColumnMetaData {
 struct ColumnChunk {
   std::string file_path = "";
   int64_t file_offset   = 0;
-  ColumnMetaData meta_data;
+  ColumnChunkMetaData meta_data;
   int64_t offset_index_offset = 0;  // File offset of ColumnChunk's OffsetIndex
   int32_t offset_index_length = 0;  // Size of ColumnChunk's OffsetIndex, in bytes
   int64_t column_index_offset = 0;  // File offset of ColumnChunk's ColumnIndex
@@ -115,6 +115,10 @@ struct ColumnChunk {
 
   // Following fields are derived from other fields
   int schema_idx = -1;  // Index in flattened schema (derived from path_in_schema)
+  // if this is a non-nested type, this index will be the same as schema_idx.
+  // for a nested type, this will point to the fundamental leaf type schema
+  // element (int, string, etc)
+  int leaf_schema_idx = -1;
 };
 
 /**
@@ -289,7 +293,7 @@ class CompactProtocolReader {
   DECL_PARQUET_STRUCT(SchemaElement);
   DECL_PARQUET_STRUCT(RowGroup);
   DECL_PARQUET_STRUCT(ColumnChunk);
-  DECL_PARQUET_STRUCT(ColumnMetaData);
+  DECL_PARQUET_STRUCT(ColumnChunkMetaData);
   DECL_PARQUET_STRUCT(PageHeader);
   DECL_PARQUET_STRUCT(DataPageHeader);
   DECL_PARQUET_STRUCT(DictionaryPageHeader);
@@ -364,7 +368,7 @@ class CompactProtocolWriter {
   DECL_CPW_STRUCT(RowGroup);
   DECL_CPW_STRUCT(KeyValue);
   DECL_CPW_STRUCT(ColumnChunk);
-  DECL_CPW_STRUCT(ColumnMetaData);
+  DECL_CPW_STRUCT(ColumnChunkMetaData);
 #undef DECL_CPW_STRUCT
 
  protected:

@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
@@ -75,7 +76,10 @@ constexpr auto types_to_ids()
  * @return Vector of TypeParam with the values specified
  */
 template <typename TypeParam, typename T>
-auto make_type_param_vector(std::initializer_list<T> const& init_list)
+typename std::enable_if<cudf::is_fixed_width<TypeParam>() &&
+                          !cudf::is_timestamp_t<TypeParam>::value,
+                        std::vector<TypeParam>>::type
+make_type_param_vector(std::initializer_list<T> const& init_list)
 {
   std::vector<TypeParam> vec(init_list.size());
   std::transform(std::cbegin(init_list), std::cend(init_list), std::begin(vec), [](auto const& e) {
@@ -85,6 +89,43 @@ auto make_type_param_vector(std::initializer_list<T> const& init_list)
       return static_cast<TypeParam>(e);
   });
   return vec;
+}
+
+template <typename TypeParam, typename T>
+typename std::enable_if<cudf::is_timestamp_t<TypeParam>::value, std::vector<TypeParam>>::type
+make_type_param_vector(std::initializer_list<T> const& init_list)
+{
+  std::vector<TypeParam> vec(init_list.size());
+  std::transform(std::cbegin(init_list), std::cend(init_list), std::begin(vec), [](auto const& e) {
+    return TypeParam{typename TypeParam::duration{e}};
+  });
+  return vec;
+}
+
+/**
+ * @brief Convert the numeric value of type T to a fixed width type of type TypeParam.
+ *
+ * This function is necessary because some types (such as timestamp types) are not directly
+ * constructible from numeric types. This function is offered as a convenience to allow
+ * implicitly constructing such objects from numeric values.
+ *
+ * @param init_value Value used to initialize the fixed width type
+ * @return A fixed width type - [u]int32/float/duration etc. of type TypeParam with the
+ *         value specified
+ */
+template <typename TypeParam, typename T>
+std::enable_if_t<cudf::is_fixed_width<TypeParam>() && !cudf::is_timestamp_t<TypeParam>::value,
+                 TypeParam>
+make_type_param_scalar(T const init_value)
+{
+  return static_cast<TypeParam>(init_value);
+}
+
+template <typename TypeParam, typename T>
+std::enable_if_t<cudf::is_timestamp_t<TypeParam>::value, TypeParam> make_type_param_scalar(
+  T const init_value)
+{
+  return TypeParam{typename TypeParam::duration(init_value)};
 }
 
 /**

@@ -1,9 +1,8 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 """
-Tests for cudf DataFrames:
-All tests have been cloned from the test_dataframes module in the streamz
-repository. Some of these tests pass with cudf, and others are marked with
-xfail, where a pandas-like method is not yet implemented in cudf. But these
-tests should pass as and when cudf rolls out more pandas-like methods.
+Tests for Streamz Dataframes (SDFs) built on top of cuDF DataFrames.
+*** Borrowed from streamz.dataframe.tests | License at thirdparty/LICENSE ***
 """
 from __future__ import division, print_function
 
@@ -300,25 +299,6 @@ def test_groupby_aggregate(agg, grouper, indexer, stream):
 
     assert_eq(L[0], g)
     assert_eq(L[-1], h)
-
-
-@pytest.mark.xfail(
-    reason="AttributeError: 'StringColumn' object"
-    "has no attribute 'value_counts'"
-)
-def test_value_counts(stream):
-    s = cudf.Series(["a", "b", "a"])
-
-    a = Series(example=s, stream=stream)
-
-    b = a.value_counts()
-    assert b._stream_type == "updating"
-    result = b.stream.gather().sink_to_list()
-
-    a.emit(s)
-    a.emit(s)
-
-    assert_eq(result[-1], cudf.concat([s, s]).value_counts())
 
 
 def test_repr(stream):
@@ -762,3 +742,195 @@ def test_custom_aggregation():
     sdf.emit(df)
 
     assert L == [1, -198, -397]
+
+
+def test_groupby_aggregate_with_start_state(stream):
+    example = cudf.DataFrame({"name": [], "amount": []})
+    sdf = DataFrame(stream, example=example).groupby(["name"])
+    output0 = sdf.amount.sum(start=None).stream.gather().sink_to_list()
+    output1 = (
+        sdf.amount.mean(with_state=True, start=None)
+        .stream.gather()
+        .sink_to_list()
+    )
+    output2 = sdf.amount.count(start=None).stream.gather().sink_to_list()
+
+    df = cudf.DataFrame({"name": ["Alice", "Tom"], "amount": [50, 100]})
+    stream.emit(df)
+
+    out_df0 = cudf.DataFrame({"name": ["Alice", "Tom"], "amount": [50, 100]})
+    out_df1 = cudf.DataFrame(
+        {"name": ["Alice", "Tom"], "amount": [50.0, 100.0]}
+    )
+    out_df2 = cudf.DataFrame({"name": ["Alice", "Tom"], "amount": [1, 1]})
+    assert assert_eq(output0[0].reset_index(), out_df0)
+    assert assert_eq(output1[0][1].reset_index(), out_df1)
+    assert assert_eq(output2[0].reset_index(), out_df2)
+
+    example = cudf.DataFrame({"name": [], "amount": []})
+    sdf = DataFrame(stream, example=example).groupby(["name"])
+    output3 = sdf.amount.sum(start=output0[0]).stream.gather().sink_to_list()
+    output4 = (
+        sdf.amount.mean(with_state=True, start=output1[0][0])
+        .stream.gather()
+        .sink_to_list()
+    )
+    output5 = sdf.amount.count(start=output2[0]).stream.gather().sink_to_list()
+    df = cudf.DataFrame(
+        {"name": ["Alice", "Tom", "Linda"], "amount": [50, 100, 200]}
+    )
+    stream.emit(df)
+
+    out_df2 = cudf.DataFrame(
+        {"name": ["Alice", "Linda", "Tom"], "amount": [100, 200, 200]}
+    )
+    out_df3 = cudf.DataFrame(
+        {"name": ["Alice", "Linda", "Tom"], "amount": [50.0, 200.0, 100.0]}
+    )
+    out_df4 = cudf.DataFrame(
+        {"name": ["Alice", "Linda", "Tom"], "amount": [2, 1, 2]}
+    )
+    assert assert_eq(output3[0].reset_index(), out_df2)
+    assert assert_eq(output4[0][1].reset_index(), out_df3)
+    assert assert_eq(output5[0].reset_index(), out_df4)
+
+
+def test_reductions_with_start_state(stream):
+    example = cudf.DataFrame({"name": [], "amount": []})
+    sdf = DataFrame(stream, example=example)
+    output0 = sdf.amount.mean(start=(10, 2)).stream.gather().sink_to_list()
+    output1 = sdf.amount.count(start=3).stream.gather().sink_to_list()
+    output2 = sdf.amount.sum(start=10).stream.gather().sink_to_list()
+
+    df = cudf.DataFrame(
+        {"name": ["Alice", "Tom", "Linda"], "amount": [50, 100, 200]}
+    )
+    stream.emit(df)
+
+    assert output0[0] == 72.0
+    assert output1[0] == 6
+    assert output2[0] == 360
+
+
+def test_rolling_aggs_with_start_state(stream):
+    example = cudf.DataFrame({"name": [], "amount": []})
+    sdf = DataFrame(stream, example=example)
+    output0 = (
+        sdf.rolling(2, with_state=True, start=())
+        .amount.sum()
+        .stream.gather()
+        .sink_to_list()
+    )
+
+    df = cudf.DataFrame(
+        {"name": ["Alice", "Tom", "Linda"], "amount": [50, 100, 200]}
+    )
+    stream.emit(df)
+    df = cudf.DataFrame({"name": ["Bob"], "amount": [250]})
+    stream.emit(df)
+    assert assert_eq(
+        output0[-1][0].reset_index(drop=True),
+        cudf.Series([200, 250], name="amount"),
+    )
+    assert assert_eq(
+        output0[-1][1].reset_index(drop=True),
+        cudf.Series([450], name="amount"),
+    )
+
+    stream = Stream()
+    example = cudf.DataFrame({"name": [], "amount": []})
+    sdf = DataFrame(stream, example=example)
+    output1 = (
+        sdf.rolling(2, with_state=True, start=output0[-1][0])
+        .amount.sum()
+        .stream.gather()
+        .sink_to_list()
+    )
+    df = cudf.DataFrame({"name": ["Alice"], "amount": [50]})
+    stream.emit(df)
+    assert assert_eq(
+        output1[-1][0].reset_index(drop=True),
+        cudf.Series([250, 50], name="amount"),
+    )
+    assert assert_eq(
+        output1[-1][1].reset_index(drop=True),
+        cudf.Series([300], name="amount"),
+    )
+
+
+def test_window_aggs_with_start_state(stream):
+    example = cudf.DataFrame({"name": [], "amount": []})
+    sdf = DataFrame(stream, example=example)
+    output0 = (
+        sdf.window(2, with_state=True, start=None)
+        .amount.sum()
+        .stream.gather()
+        .sink_to_list()
+    )
+
+    df = cudf.DataFrame(
+        {"name": ["Alice", "Tom", "Linda"], "amount": [50, 100, 200]}
+    )
+    stream.emit(df)
+    df = cudf.DataFrame({"name": ["Bob"], "amount": [250]})
+    stream.emit(df)
+    assert output0[-1][1] == 450
+
+    stream = Stream()
+    example = cudf.DataFrame({"name": [], "amount": []})
+    sdf = DataFrame(stream, example=example)
+    output1 = (
+        sdf.window(2, with_state=True, start=output0[-1][0])
+        .amount.sum()
+        .stream.gather()
+        .sink_to_list()
+    )
+    df = cudf.DataFrame({"name": ["Alice"], "amount": [50]})
+    stream.emit(df)
+    assert output1[-1][1] == 300
+
+
+def test_windowed_groupby_aggs_with_start_state(stream):
+    example = cudf.DataFrame({"name": [], "amount": []})
+    sdf = DataFrame(stream, example=example)
+    output0 = (
+        sdf.window(5, with_state=True, start=None)
+        .groupby(["name"])
+        .amount.sum()
+        .stream.gather()
+        .sink_to_list()
+    )
+
+    df = cudf.DataFrame(
+        {"name": ["Alice", "Tom", "Linda"], "amount": [50, 100, 200]}
+    )
+    stream.emit(df)
+    df = cudf.DataFrame(
+        {"name": ["Alice", "Linda", "Bob"], "amount": [250, 300, 350]}
+    )
+    stream.emit(df)
+
+    stream = Stream()
+    example = cudf.DataFrame({"name": [], "amount": []})
+    sdf = DataFrame(stream, example=example)
+    output1 = (
+        sdf.window(5, with_state=True, start=output0[-1][0])
+        .groupby(["name"])
+        .amount.sum()
+        .stream.gather()
+        .sink_to_list()
+    )
+    df = cudf.DataFrame(
+        {
+            "name": ["Alice", "Linda", "Tom", "Bob"],
+            "amount": [50, 100, 150, 200],
+        }
+    )
+    stream.emit(df)
+    out_df1 = cudf.DataFrame(
+        {
+            "name": ["Alice", "Bob", "Linda", "Tom"],
+            "amount": [50, 550, 100, 150],
+        }
+    )
+    assert_eq(output1[-1][1].reset_index(), out_df1)

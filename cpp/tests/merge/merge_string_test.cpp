@@ -190,10 +190,9 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyColumns)
 
   auto seq_out2 = cudf::test::make_counting_transform_iterator(0, [outputRows](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
-      bool ret = (row % 2 == 0);
-      return static_cast<TypeParam>(ret);
+      return (row % 2 == 0) ? 1 : 0;
     } else
-      return static_cast<TypeParam>(row);
+      return (row);
   });
   fixed_width_column_wrapper<TypeParam, typename decltype(seq_out2)::value_type> expectedDataWrap2(
     seq_out2, seq_out2 + outputRows);
@@ -381,10 +380,9 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyNullColumns)
 
   auto seq_out2 = cudf::test::make_counting_transform_iterator(0, [outputRows](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
-      bool ret = (row % 2 == 0);
-      return static_cast<TypeParam>(ret);
+      return (row % 2 == 0) ? 1 : 0;
     } else
-      return static_cast<TypeParam>(row);
+      return (row);
   });
   fixed_width_column_wrapper<TypeParam, typename decltype(seq_out2)::value_type> expectedDataWrap2(
     seq_out2, seq_out2 + outputRows);
