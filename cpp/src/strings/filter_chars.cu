@@ -36,8 +36,8 @@ using char_range = thrust::pair<char_utf8, char_utf8>;
 
 namespace {
 /**
- * @brief This is the translate functor for replacing individual characters
- * in each string.
+ * @brief This is the filter functor for replacing characters
+ * in each string given a vector of char_range values.
  */
 struct filter_fn {
   column_device_view const d_strings;
