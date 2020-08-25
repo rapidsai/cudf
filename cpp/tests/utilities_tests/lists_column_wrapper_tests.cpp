@@ -70,6 +70,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, List)
     EXPECT_EQ(data.size(), 2);
     test::fixed_width_column_wrapper<T, int32_t> e_data({2, 3});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_data, data);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_data, data);
   }
 
   // List<T>, 1 row
@@ -1394,6 +1395,8 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListsOfStructs)
 
   cudf::test::expect_columns_equal(*expected_struct_column,
                                    lists_column_view(*lists_column).child());
+  cudf::test::expect_columns_equivalent(*expected_struct_column,
+                                        lists_column_view(*lists_column).child());
 }
 
 TYPED_TEST(ListColumnWrapperTestTyped, ListsOfStructsWithValidity)
@@ -1429,6 +1432,8 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListsOfStructsWithValidity)
     test::structs_column_wrapper{{expected_numeric_column, expected_bool_column}}.release();
 
   cudf::test::expect_columns_equal(*expected_struct_column,
+                                   lists_column_view(*lists_column).child());
+  cudf::test::expect_columns_equivalent(*expected_struct_column,
                                    lists_column_view(*lists_column).child());
 }
 
@@ -1469,6 +1474,9 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListsOfListsOfStructs)
     test::structs_column_wrapper{{expected_numeric_column, expected_bool_column}}.release();
 
   cudf::test::expect_columns_equal(
+    *expected_struct_column,
+    lists_column_view{lists_column_view{*lists_of_lists_of_structs_column}.child()}.child());
+  cudf::test::expect_columns_equivalent(
     *expected_struct_column,
     lists_column_view{lists_column_view{*lists_of_lists_of_structs_column}.child()}.child());
 }
@@ -1517,6 +1525,9 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListsOfListsOfStructsWithValidity)
     test::structs_column_wrapper{{expected_numeric_column, expected_bool_column}}.release();
 
   cudf::test::expect_columns_equal(
+    *expected_struct_column,
+    lists_column_view{lists_column_view{*lists_of_lists_of_structs_column}.child()}.child());
+  cudf::test::expect_columns_equivalent(
     *expected_struct_column,
     lists_column_view{lists_column_view{*lists_of_lists_of_structs_column}.child()}.child());
 }
@@ -1582,5 +1593,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, LargeListsOfStructsWithValidity)
       .release();
 
   cudf::test::expect_columns_equal(*expected_struct_column,
+                                   lists_column_view(*lists_column).child());
+  cudf::test::expect_columns_equivalent(*expected_struct_column,
                                    lists_column_view(*lists_column).child());
 }

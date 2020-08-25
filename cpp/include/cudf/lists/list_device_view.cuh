@@ -112,6 +112,11 @@ class lists_column_device_view
             return underlying.child(1);
         }
 
+        CUDA_DEVICE_CALLABLE bool nullable() const
+        {
+            return underlying.nullable();
+        }
+
         CUDA_DEVICE_CALLABLE bool is_null(size_type idx) const
         {
             return underlying.is_null(idx);
@@ -138,16 +143,18 @@ __device__ bool element_equality_comparator<has_nulls>::operator()(size_type lhs
 CUDA_DEVICE_CALLABLE list_device_view::list_device_view(lists_column_device_view const& lists_column, size_type const& row_index)
     : lists_column(lists_column), _row_index(row_index)
 {
-    // TODO: release_assert(idx in [0, offsets.size()));
-
+    release_assert((row_index >= 0 && row_index < lists_column.size())); // TODO: Add descriptive message.
     column_device_view const& offsets = lists_column.offsets();
+    release_assert((row_index < offsets.size()));                        // TODO: Add descriptive message.
     begin_offset = offsets.element<size_type>(row_index);
+    release_assert((begin_offset >= 0 && begin_offset < child().size()));// TODO: Add descriptive message.
     _size = offsets.element<size_type>(row_index+1) - begin_offset;
 }
 
 CUDA_DEVICE_CALLABLE size_type list_device_view::element_offset(size_type idx) const
 {
-    // TODO: release_assert() for idx < size of list row.
+    release_assert((idx >= 0 && idx < size()));                          // TODO: Add descriptive message.
+    release_assert(!is_null() && !is_null(idx));                        // TODO: Add descriptive message.
     return begin_offset + idx;
 }
 
@@ -160,6 +167,7 @@ CUDA_DEVICE_CALLABLE T list_device_view::element(size_type idx) const
 CUDA_DEVICE_CALLABLE bool list_device_view::is_null(size_type idx) const
 {
     // TODO: release_assert() for idx < size of list row.
+    release_assert((idx >= 0 && idx < size()));                          // TODO: Add descriptive message.
     auto element_offset = begin_offset + idx;
     return lists_column.child().is_null(element_offset);
 }

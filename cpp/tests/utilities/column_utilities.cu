@@ -16,6 +16,7 @@
 
 #include "column_utilities.hpp"
 #include "cudf/utilities/error.hpp"
+#include "cudf/utilities/traits.hpp"
 #include "cudf/utilities/type_dispatcher.hpp"
 #include "detail/column_utilities.hpp"
 #include "thrust/iterator/counting_iterator.h"
@@ -50,15 +51,10 @@ namespace {
 
 template <bool check_exact_equality, bool compare_sizes=true> 
 struct column_property_comparator {
-<<<<<<< HEAD
   void compare_common(cudf::column_view const& lhs, cudf::column_view const& rhs)
-=======
-  template <typename T>
-  void operator()(cudf::column_view const& lhs, cudf::column_view const& rhs) 
->>>>>>> [WIP] [list_eq] Initial commit:
   {
     EXPECT_EQ(lhs.type(), rhs.type());
-    if (compare_sizes) { EXPECT_EQ(lhs.size(), rhs.size()); }
+    if (compare_sizes) { EXPECT_EQ(lhs.size(), rhs.size()); } 
     if (lhs.size() > 0 && check_exact_equality) { EXPECT_EQ(lhs.nullable(), rhs.nullable()); }
 
     // equivalent, but not exactly equal columns can have a different number of children if their
@@ -68,11 +64,21 @@ struct column_property_comparator {
     }
   }
 
-<<<<<<< HEAD
   template <typename T, std::enable_if_t<!std::is_same<T, cudf::list_view>::value>* = nullptr>
   void operator()(cudf::column_view const& lhs, cudf::column_view const& rhs)
   {
     compare_common(lhs, rhs);
+    if (cudf::is_nested<T>()) {
+      // Nested types that aren't lists. E.g. Structs.
+      // Must check that the children have matching properties.
+      for (size_type idx = 0; idx < lhs.num_children(); idx++) {
+        cudf::type_dispatcher(
+          lhs.child(idx).type(),
+          column_property_comparator<check_exact_equality>{},
+          lhs.child(idx),
+          rhs.child(idx));
+      }
+    }
   }
 
   template <typename T, std::enable_if_t<std::is_same<T, cudf::list_view>::value>* = nullptr>
@@ -84,32 +90,11 @@ struct column_property_comparator {
     cudf::lists_column_view rhs_l(rhs);
 
     // recurse
+    // Note: For list_view, skip size-checks for children, if not checking for exact equivalence.
     cudf::type_dispatcher(lhs_l.child().type(),
-                          column_property_comparator<check_exact_equality>{},
+                          column_property_comparator<check_exact_equality, check_exact_equality>{},
                           lhs_l.get_sliced_child(0),
                           rhs_l.get_sliced_child(0));
-=======
-    // only recurse for true nested types.
-    // - strings are an odd case of not being a nested type which do have children. but because
-    //   of the way strings handle offsets (sliced/split columns), direct comparison between two
-    //   sets of child columns can produce false failures - the sizes may not match.  the truly
-    //   correct way to do this would be to implement a specialization for strings (and
-    //   dictionaries, lists, etc) that explicitly understand this structure.  but for now, this
-    //   seems to be ok.
-    if (cudf::is_nested<T>()) {
-      for (size_type idx = 0; idx < lhs.num_children(); idx++) {
-        cudf::type_dispatcher(
-          lhs.child(idx).type(),
-          column_property_comparator<
-            check_exact_equality, 
-            check_exact_equality 
-            || !std::is_same<T, cudf::list_view>::value>{}, // Skip child-col size checks for
-                                                            // equivalence checks on lists. 
-          lhs.child(idx),
-          rhs.child(idx));
-      }
-    }
->>>>>>> [WIP] [list_eq] Initial commit:
   }
 };
 
