@@ -72,6 +72,9 @@ def read_orc(
         ValueError("URL content-encoding decompression is not supported")
 
     if filters is not None:
+        # Track whether or not everything was filtered
+        filtered_everything = False
+
         # Create bytestream and reader
         f = (
             filepath_or_buffer
@@ -79,7 +82,7 @@ def read_orc(
             else open(filepath_or_buffer, "rb")
         )
         r = pyorc.Reader(f)
-        
+
         # Get relevant columns
         cols = set()
         for conjunction in filters:
@@ -98,7 +101,10 @@ def read_orc(
             stripes = sorted(stripes)
 
         num_rows_scanned = 0
+        num_rows_to_read = 0
+        has_row_group_passed = False
         filtered_stripes = []
+        filtered_stripes_num_rows = 0
         for stripe_idx in stripes:
             # Read in statistics for relevant columns
             stripe = r.read_stripe(stripe_idx)
@@ -109,19 +115,46 @@ def read_orc(
 
             # Apply filters to each row group
             filter_stripe = True
+            num_rows_scanned_in_stripe = 0
             for row_group_idx in range(num_row_groups):
+                row_group_size = next(iter(stats.values()))[row_group_idx][
+                    "number_of_values"
+                ]
                 if _filter_row_group(filters, stats, row_group_idx):
-                    pass
+                    # If this is the first row group to pass filters,
+                    # update skiprows
+                    if not has_row_group_passed:
+                        skip_rows = (
+                            max(skip_rows, num_rows_scanned)
+                            if skip_rows
+                            else num_rows_scanned
+                        )
+                        has_row_group_passed = True
+                    else:
+                        num_rows_to_read = row_group_size
                 else:
                     filter_stripe = False
-                num_rows_scanned += next(iter(stats.values()))[row_group_idx]["number_of_values"]
+                num_rows_scanned += row_group_size
+                num_rows_scanned_in_stripe += row_group_size
             if filter_stripe:
                 filtered_stripes.append(stripe_idx)
-        stripes = [
-            stripe_idx
-            for stripe_idx in stripes
-            if stripe_idx in filtered_stripes
-        ]
+                filtered_stripes_num_rows += num_rows_scanned_in_stripe
+        if len(stripes) == 0:
+            filtered_everything = True
+        num_rows = (
+            min(num_rows, num_rows_to_read) if num_rows else num_rows_to_read
+        )
+        stripes = (
+            [
+                stripe_idx
+                for stripe_idx in stripes
+                if stripe_idx in filtered_stripes
+            ]
+            if filtered_stripes_num_rows < num_rows
+            else []
+        )
+        print("skip_rows=" + str(skip_rows))
+        print("num_rows=" + str(num_rows))
         print(stripes)
 
         # If file object was read from, close
@@ -129,7 +162,7 @@ def read_orc(
             f.close()
 
         # Return if empty
-        if len(stripes) == 0:
+        if filtered_everything:
             return cudf.DataFrame([])
             # return read_orc(
             #     filepath_or_buffer,
