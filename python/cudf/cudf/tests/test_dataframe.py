@@ -6954,7 +6954,12 @@ def test_dataframe_iterrows_itertuples():
     "df",
     [
         gd.DataFrame(
-            {"a": [1, 2, 3], "b": [10, 22, 33], "c": [0.3234, 0.23432, 0.0]}
+            {
+                "a": [1, 2, 3],
+                "b": [10, 22, 33],
+                "c": [0.3234, 0.23432, 0.0],
+                "d": ["hello", "world", "hello"],
+            }
         ),
         gd.DataFrame(
             {
@@ -6974,14 +6979,89 @@ def test_dataframe_iterrows_itertuples():
                 "datetime_data": gd.Series([1, 2, 1], dtype="datetime64[ns]"),
             }
         ),
+        gd.DataFrame(
+            {
+                "int_data": [1, 2, 3],
+                "str_data": ["hello", "world", "hello"],
+                "float_data": [0.3234, 0.23432, 0.0],
+                "timedelta_data": gd.Series(
+                    [1, 2, 1], dtype="timedelta64[ns]"
+                ),
+                "datetime_data": gd.Series([1, 2, 1], dtype="datetime64[ns]"),
+                "category_data": gd.Series(["a", "a", "b"], dtype="category"),
+            }
+        ),
     ],
 )
-@pytest.mark.parametrize("include", [None, "all"])
-def test_describe_misc(df, include):
+@pytest.mark.parametrize(
+    "include",
+    [None, "all", ["object"], ["int"], ["object", "int", "category"]],
+)
+def test_describe_misc_include(df, include):
     pdf = df.to_pandas()
 
     expected = pdf.describe(include=include, datetime_is_numeric=True)
     actual = df.describe(include=include, datetime_is_numeric=True)
+
+    for col in expected.columns:
+        if expected[col].dtype == np.dtype("object"):
+            expected[col] = expected[col].fillna(-1).astype("str")
+            actual[col] = actual[col].fillna(-1).astype("str")
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        gd.DataFrame(
+            {
+                "a": [1, 2, 3],
+                "b": [10, 22, 33],
+                "c": [0.3234, 0.23432, 0.0],
+                "d": ["hello", "world", "hello"],
+            }
+        ),
+        gd.DataFrame(
+            {
+                "a": [1, 2, 3],
+                "b": ["hello", "world", "hello"],
+                "c": [0.3234, 0.23432, 0.0],
+            }
+        ),
+        gd.DataFrame(
+            {
+                "int_data": [1, 2, 3],
+                "str_data": ["hello", "world", "hello"],
+                "float_data": [0.3234, 0.23432, 0.0],
+                "timedelta_data": gd.Series(
+                    [1, 2, 1], dtype="timedelta64[ns]"
+                ),
+                "datetime_data": gd.Series([1, 2, 1], dtype="datetime64[ns]"),
+            }
+        ),
+        gd.DataFrame(
+            {
+                "int_data": [1, 2, 3],
+                "str_data": ["hello", "world", "hello"],
+                "float_data": [0.3234, 0.23432, 0.0],
+                "timedelta_data": gd.Series(
+                    [1, 2, 1], dtype="timedelta64[ns]"
+                ),
+                "datetime_data": gd.Series([1, 2, 1], dtype="datetime64[ns]"),
+                "category_data": gd.Series(["a", "a", "b"], dtype="category"),
+            }
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "exclude", [None, ["object"], ["int"], ["object", "int", "category"]]
+)
+def test_describe_misc_exclude(df, exclude):
+    pdf = df.to_pandas()
+
+    expected = pdf.describe(exclude=exclude, datetime_is_numeric=True)
+    actual = df.describe(exclude=exclude, datetime_is_numeric=True)
 
     for col in expected.columns:
         if expected[col].dtype == np.dtype("object"):
