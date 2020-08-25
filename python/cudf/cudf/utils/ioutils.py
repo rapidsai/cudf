@@ -961,10 +961,13 @@ def get_filepath_or_buffer(
         storage_options = kwargs.get("storage_options")
         # fsspec does not expanduser so handle here
         path_or_data = os.path.expanduser(path_or_data)
-
-        fs, _, paths = fsspec.get_fs_token_paths(
-            path_or_data, mode=mode, storage_options=storage_options
-        )
+        try:
+            fs, _, paths = fsspec.get_fs_token_paths(
+                path_or_data, mode=mode, storage_options=storage_options
+            )
+        except ValueError:
+            # assume the input is actually raw data, not a path
+            return path_or_data, compression
         if len(paths) == 0:
             raise IOError(f"{path_or_data} could not be resolved to any files")
         elif len(paths) > 1:

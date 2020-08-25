@@ -318,3 +318,9 @@ def test_json_null_literal(buffer):
             df["1"]._column.default_na_value(),
         ],
     )
+
+
+def test_fsspec_failure():
+    # if `fsspec.get_fs_token_paths` tries to interpret the input string as file path it will throw
+    # input including '://' should cause an error
+    cudf.read_json('{"fie://ld": "s3://path"}', lines=True, engine="cudf")
