@@ -4119,6 +4119,9 @@ class StringMethods(ColumnMethodsMixin):
         Encodes words to token ids using vocabulary from a pretrained
         tokenizer.
 
+        This function requires about 21x the number of character bytes
+        in the input strings column as working memory.
+
         Parameters
         ----------
         hash_file : str

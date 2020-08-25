@@ -39,6 +39,7 @@ namespace detail {
  * The algorithm produces tow vectors of integers `uvector_pair`.
  * The first is the size of 3 uint32 values per input byte (of the strings buffer).
  * The second is the same size as the input offsets vector -- number of strings + 1.
+ *
  * A temporary buffer is created equal to 1 uint32 value per input byte.
  * This means 16x the number bytes of the input strings buffer must be available
  * to call the `normalize()` function in this class.

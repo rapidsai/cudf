@@ -109,8 +109,20 @@ struct tokenizer_result {
  * a 4-byte token-id mapped from the provided vocabulary table.
  *
  * Essentially each string is converted into one or more vectors of token-ids
- * in the output column. The total number of these vectors x `max_sequence_length`
- * is the size of the output column.
+ * in the output column. The total number of these vectors times `max_sequence_length`
+ * is the size of the `tensor_token_ids` output column. For `do_truncate==true`:
+ * ```
+ * size of tensor_token_ids = max_sequence_length * strings.size()
+ * size of tensor_attention_mask = max_sequence_length * strings.size()
+ * size of tensor_metadata = 3 * strings.size()
+ * ```
+ *
+ * For `do_truncate==false` the number of rows per output string depend on the
+ * number of tokens resolved and the `stride` value which may repeat tokens
+ * in subsequent overflow rows.
+ *
+ * This function requires about 21x the number of character bytes in the input
+ * strings column as working memory.
  *
  * @throw cudf::logic_error if `stride > max_sequence_length`
  * @throw cudf::logic_error if `max_sequence_length * max_rows_tensor` is

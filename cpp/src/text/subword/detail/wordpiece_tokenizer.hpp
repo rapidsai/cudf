@@ -34,10 +34,11 @@ namespace detail {
  * The `tokenize()` function produces two device vectors `uvector_pair`.
  * The first is the token-ids for each word identified in the input strings.
  * The second is the offsets to identify which ids go with each string.
+ *
  * Temporary buffers are created equal to 3 uint32 values plus 1 byte per input byte.
  * Also the normalize step allocates an additional 16x bytes per input byte but 8x
  * of this memory is reused by the `tokenize()` function.
- * This means 13x + 12x = 25x the number bytes of the input strings buffer must be
+ * This means 13x + 8x = 21x the number bytes of the input strings buffer must be
  * available to call the `tokenize()` function in this class.
  */
 class wordpiece_tokenizer {
