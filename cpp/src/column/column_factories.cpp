@@ -147,14 +147,12 @@ std::unique_ptr<column> make_fixed_width_column(data_type type,
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(is_fixed_width(type), "Invalid, non-fixed-width type.");
 
-  if (is_timestamp(type)) {
-    return make_timestamp_column(type, size, state, stream, mr);
-  } else if (is_duration(type)) {
-    return make_duration_column(type, size, state, stream, mr);
-  } else if (is_fixed_point(type)) {
-    return make_fixed_point_column(type, size, state, stream, mr);
-  }
-  return make_numeric_column(type, size, state, stream, mr);
+  // clang-format off
+  if      (is_timestamp  (type)) return make_timestamp_column  (type, size, state, stream, mr);
+  else if (is_duration   (type)) return make_duration_column   (type, size, state, stream, mr);
+  else if (is_fixed_point(type)) return make_fixed_point_column(type, size, state, stream, mr);
+  else                           return make_numeric_column    (type, size, state, stream, mr);
+  /// clang-format on
 }
 
 struct column_from_scalar_dispatch {
