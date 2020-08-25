@@ -1,6 +1,7 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 import pandas as pd
+from cudf.core.dtypes import BooleanDtype
 
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
@@ -99,7 +100,7 @@ def apply_boolean_mask(Table source_table, Column boolean_mask):
     Table obtained from applying mask
     """
 
-    assert pd.api.types.is_bool_dtype(boolean_mask.dtype)
+    assert isinstance(boolean_mask.dtype, BooleanDtype)
 
     cdef unique_ptr[table] c_result
     cdef table_view source_table_view = source_table.view()

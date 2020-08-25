@@ -272,6 +272,7 @@ class NumericalColumn(column.ColumnBase):
         """
         Return col with *to_replace* replaced with *value*.
         """
+
         to_replace_col = _normalize_find_and_replace_input(
             self.dtype, to_replace
         )
@@ -379,14 +380,15 @@ class NumericalColumn(column.ColumnBase):
         safely cast to dtype
         """
         if self.dtype.kind == to_dtype.kind:
-            if self.dtype <= to_dtype:
+            # todo: implement >, < for cudf.Dtype
+            if self.dtype.to_numpy <= to_dtype.to_numpy:
                 return True
             else:
                 # Kinds are the same but to_dtype is smaller
-                if "float" in to_dtype.name:
-                    info = np.finfo(to_dtype)
-                elif "int" in to_dtype.name:
-                    info = np.iinfo(to_dtype)
+                if isinstance(to_dtype, cudf.Floating):
+                    info = np.finfo(to_dtype.to_numpy)
+                elif isinstance(to_dtype, cudf.Integer):
+                    info = np.iinfo(to_dtype.to_numpy)
                 min_, max_ = info.min, info.max
 
                 if (self.min() > min_) and (self.max() < max_):
@@ -396,7 +398,7 @@ class NumericalColumn(column.ColumnBase):
 
         # want to cast int to float
         elif to_dtype.kind == "f" and self.dtype.kind in {"i", "u"}:
-            info = np.finfo(to_dtype)
+            info = np.finfo(to_dtype.to_numpy)
             biggest_exact_int = 2 ** (info.nmant + 1)
             if (self.min() >= -biggest_exact_int) and (
                 self.max() <= biggest_exact_int
@@ -415,7 +417,7 @@ class NumericalColumn(column.ColumnBase):
 
         # want to cast float to int:
         elif to_dtype.kind in {"i", "u"} and self.dtype.kind == "f":
-            info = np.iinfo(to_dtype)
+            info = np.iinfo(to_dtype.to_numpy)
             min_, max_ = info.min, info.max
             # best we can do is hope to catch it here and avoid compare
             if (self.min() >= min_) and (self.max() <= max_):
@@ -503,11 +505,10 @@ def _normalize_find_and_replace_input(input_column_dtype, col_to_normalize):
         col_to_normalize_dtype = col_to_normalize.dtype
     else:
         raise TypeError(f"Type {type(col_to_normalize)} not supported")
-
     if (
         col_to_normalize_dtype.kind == "f"
         and input_column_dtype.kind in {"i", "u"}
-    ) or (col_to_normalize_dtype.num > input_column_dtype.num):
+    ) or (col_to_normalize_dtype.to_numpy.num > input_column_dtype.to_numpy.num):
         raise TypeError(
             f"Potentially unsafe cast for non-equivalent "
             f"{col_to_normalize_dtype.name} "

@@ -70,6 +70,8 @@ ALL_TYPES = NUMERIC_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | OTHER_TYPES
 def np_to_pa_dtype(dtype):
     """Util to convert numpy dtype to PyArrow dtype.
     """
+    if isinstance(dtype, cudf.Generic):
+        return dtype.pa_type
     # special case when dtype is np.datetime64
     if dtype.kind == "M":
         time_unit, _ = np.datetime_data(dtype)
@@ -102,7 +104,7 @@ def get_numeric_type_info(dtype):
 def numeric_normalize_types(*args):
     """Cast all args to a common type using numpy promotion logic
     """
-    dtype = np.result_type(*[a.dtype for a in args])
+    dtype = np.result_type(*[a.dtype.to_numpy for a in args])
     return [a.astype(dtype) for a in args]
 
 
@@ -255,6 +257,8 @@ def to_cudf_compatible_scalar(val, dtype=None):
     val = pd.api.types.pandas_dtype(type(val)).type(val)
 
     if dtype is not None:
+        if isinstance(dtype, cudf.Generic):
+            dtype = dtype.to_numpy
         val = val.astype(dtype)
 
     if val.dtype.type is np.datetime64:
@@ -381,25 +385,27 @@ def min_column_type(x, expected_type):
     If the column is not a subtype of `np.signedinteger` or `np.floating`
     returns the same dtype as the dtype of `x` without modification
     """
-
     if not isinstance(x, cudf.core.column.NumericalColumn):
         raise TypeError("Argument x must be of type column.NumericalColumn")
     if x.valid_count == 0:
         return x.dtype
+    x_np_dtype = x.dtype.to_numpy
+    expected_type = cudf.dtype(expected_type).to_numpy
 
-    if np.issubdtype(x.dtype, np.floating):
+    if np.issubdtype(x_np_dtype, np.floating):
         max_bound_dtype = np.min_scalar_type(x.max())
         min_bound_dtype = np.min_scalar_type(x.min())
         result_type = np.promote_types(max_bound_dtype, min_bound_dtype)
         if result_type == np.dtype("float16"):
             # cuDF does not support float16 dtype
             result_type = np.dtype("float32")
-        return result_type
+        return cudf.dtype(result_type)
 
     if np.issubdtype(expected_type, np.integer):
         max_bound_dtype = np.min_scalar_type(x.max())
         min_bound_dtype = np.min_scalar_type(x.min())
-        return np.promote_types(max_bound_dtype, min_bound_dtype)
+        result = np.promote_types(max_bound_dtype, min_bound_dtype)
+        return cudf.dtype(result)
 
     return x.dtype
 

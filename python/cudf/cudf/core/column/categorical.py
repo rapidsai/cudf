@@ -308,8 +308,9 @@ class CategoricalAccessor(ColumnMethodsMixin):
                 f"existing categories."
             )
         common_dtype = np.find_common_type(
-            [old_categories.dtype, new_categories.dtype], []
+            [old_categories.dtype.to_numpy, new_categories.dtype.to_numpy], []
         )
+        common_dtype = cudf.dtype(common_dtype)
 
         new_categories = new_categories.astype(common_dtype, copy=False)
         old_categories = old_categories.astype(common_dtype, copy=False)
@@ -1254,7 +1255,7 @@ def _create_empty_categorical_column(categorical_column, dtype):
             cudf.utils.utils.scalar_broadcast_to(
                 categorical_column.default_na_value(),
                 categorical_column.size,
-                np.dtype(categorical_column.cat().codes),
+                categorical_column.cat().codes.dtype,
             )
         ),
         offset=categorical_column.offset,

@@ -4740,7 +4740,7 @@ class StringColumn(column.ColumnBase):
 
     def _find_first_and_last(self, value):
         found_indices = self.str().contains(f"^{value}$")
-        found_indices = libcudf.unary.cast(found_indices, dtype=np.int32)
+        found_indices = libcudf.unary.cast(found_indices, dtype=cudf.Int32Dtype())
         first = column.as_column(found_indices).find_first_value(1)
         last = column.as_column(found_indices).find_last_value(1)
         return first, last

@@ -365,7 +365,7 @@ cdef class Column:
         else:
             col = self
 
-        cdef _Dtype pydtype = self.dtype
+        cdef _Dtype pydtype = col.dtype
         cdef libcudf_types.data_type dtype = pydtype.get_libcudf_type()
         cdef libcudf_types.size_type offset = self.offset
         cdef vector[column_view] children

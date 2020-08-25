@@ -516,9 +516,9 @@ class ColumnBase(Column, Serializable):
             arg = as_column(arg)
             if len(arg) == 0:
                 arg = as_column([], dtype="int32")
-            if pd.api.types.is_integer_dtype(arg.dtype):
+            if pd.api.types.is_integer_dtype(arg.dtype) or isinstance(arg.dtype, cudf.Integer):
                 return self.take(arg)
-            if pd.api.types.is_bool_dtype(arg.dtype):
+            if pd.api.types.is_bool_dtype(arg.dtype) or isinstance(arg.dtype, cudf.BooleanDtype):
                 return self.apply_boolean_mask(arg)
             raise NotImplementedError(type(arg))
 

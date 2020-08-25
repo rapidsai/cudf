@@ -26,6 +26,10 @@ pa_to_pd_dtypes = {
     pa.timestamp("us"): np.dtype("datetime64[us]"),
     pa.timestamp("ms"): np.dtype("datetime64[ms]"),
     pa.timestamp("s"): np.dtype("datetime64[s]"),
+    pa.duration("ns"): np.dtype('timedelta64[ns]'),
+    pa.duration("us"): np.dtype('timedelta64[us]'),
+    pa.duration("ms"): np.dtype('timedelta64[ms]'),
+    pa.duration("s"): np.dtype('timedelta64[s]'),
 }
 
 pa_to_np_dtypes = {
@@ -45,6 +49,10 @@ pa_to_np_dtypes = {
     pa.timestamp("us"): np.dtype("datetime64[us]"),
     pa.timestamp("ms"): np.dtype("datetime64[ms]"),
     pa.timestamp("s"): np.dtype("datetime64[s]"),
+    pa.duration("ns"): np.dtype('timedelta64[ns]'),
+    pa.duration("us"): np.dtype('timedelta64[us]'),
+    pa.duration("ms"): np.dtype('timedelta64[ms]'),
+    pa.duration("s"): np.dtype('timedelta64[s]'),
     None: None,
 }
 
@@ -192,7 +200,6 @@ class Float64Dtype(Floating):
 
 
 class BooleanDtype(Generic):
-    is_boolean = True
 
     def __init__(self):
         self.pa_type = pa.bool_()
@@ -289,6 +296,8 @@ def make_dtype_from_string(obj):
             return Float32Dtype()
     elif "bool" in obj:
         return BooleanDtype()
+    elif "category" in obj:
+        return "category"
 
 
 def make_dtype_from_numpy(obj):
@@ -300,6 +309,8 @@ def make_dtype_from_numpy(obj):
 def dtype(obj):
     if obj is None:
         return None
+    if isinstance(obj, pd.CategoricalDtype):
+        return cudf.CategoricalDtype.from_pandas(obj)
     if isinstance(obj, CategoricalDtype):
         return obj
     elif isinstance(obj, Generic):
@@ -335,6 +346,9 @@ class CategoricalDtype(Generic):
         """
         self._categories = self._init_categories(categories)
         self.ordered = ordered
+
+    def __repr__(self):
+        return self.to_pandas().__repr__()
 
     @property
     def categories(self):

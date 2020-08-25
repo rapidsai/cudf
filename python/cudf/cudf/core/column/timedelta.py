@@ -44,7 +44,7 @@ class TimeDeltaColumn(column.ColumnBase):
             The number of null values.
             If None, it is calculated automatically.
         """
-        dtype = np.dtype(dtype)
+        dtype = cudf.dtype(dtype)
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
 
@@ -60,11 +60,9 @@ class TimeDeltaColumn(column.ColumnBase):
         if not (self.dtype.type is np.timedelta64):
             raise TypeError(f"{self.dtype} is not a supported duration type")
 
-        self._time_unit, _ = np.datetime_data(self.dtype)
-
     def __contains__(self, item):
         try:
-            item = np.timedelta64(item, self._time_unit)
+            item = np.timedelta64(item, self.dtype._time_unit)
         except ValueError:
             # If item cannot be converted to duration type
             # np.timedelta64 raises ValueError, hence `item`
@@ -111,7 +109,7 @@ class TimeDeltaColumn(column.ColumnBase):
 
     def _binary_op_floordiv(self, rhs):
         lhs, rhs = self, rhs
-        if pd.api.types.is_timedelta64_dtype(rhs.dtype):
+        if cudf.api.types.is_timedelta64_dtype(rhs.dtype):
             common_dtype = determine_out_dtype(self.dtype, rhs.dtype)
             lhs = lhs.astype(common_dtype).astype("float64")
 
@@ -148,7 +146,7 @@ class TimeDeltaColumn(column.ColumnBase):
         return out_dtype
 
     def _binary_op_mod(self, rhs):
-        if pd.api.types.is_timedelta64_dtype(rhs.dtype):
+        if cudf.api.types.is_timedelta64_dtype(rhs.dtype):
             out_dtype = determine_out_dtype(self.dtype, rhs.dtype)
         elif rhs.dtype.kind in ("f", "i", "u"):
             out_dtype = self.dtype
@@ -160,8 +158,8 @@ class TimeDeltaColumn(column.ColumnBase):
         return out_dtype
 
     def _binary_op_eq_ne(self, rhs):
-        if pd.api.types.is_timedelta64_dtype(rhs.dtype):
-            out_dtype = np.bool
+        if cudf.api.types.is_timedelta64_dtype(rhs.dtype):
+            out_dtype = cudf.BooleanDtype()
         else:
             raise TypeError(
                 f"Equality of {self.dtype} with {rhs.dtype} "
@@ -170,8 +168,8 @@ class TimeDeltaColumn(column.ColumnBase):
         return out_dtype
 
     def _binary_op_lt_gt_le_ge(self, rhs):
-        if pd.api.types.is_timedelta64_dtype(rhs.dtype):
-            return np.bool
+        if cudf.api.types.is_timedelta64_dtype(rhs.dtype):
+            return cudf.BooleanDtype()
         else:
             raise TypeError(
                 f"Invalid comparison between dtype={self.dtype}"
@@ -180,7 +178,7 @@ class TimeDeltaColumn(column.ColumnBase):
 
     def _binary_op_truediv(self, rhs):
         lhs, rhs = self, rhs
-        if pd.api.types.is_timedelta64_dtype(rhs.dtype):
+        if cudf.api.types.is_timedelta64_dtype(rhs.dtype):
             common_dtype = determine_out_dtype(self.dtype, rhs.dtype)
             lhs = lhs.astype(common_dtype).astype("float64")
 
@@ -234,7 +232,8 @@ class TimeDeltaColumn(column.ColumnBase):
 
         if reflect:
             lhs, rhs = rhs, lhs
-
+        import pdb
+        pdb.set_trace()
         return binop(lhs, rhs, op=op, out_dtype=out_dtype)
 
     def normalize_binop_value(self, other):
@@ -575,24 +574,24 @@ def binop(lhs, rhs, op, out_dtype):
 
 
 def determine_out_dtype(lhs_dtype, rhs_dtype):
-    if np.can_cast(np.dtype(lhs_dtype), np.dtype(rhs_dtype)):
-        return rhs_dtype
-    elif np.can_cast(np.dtype(rhs_dtype), np.dtype(lhs_dtype)):
-        return lhs_dtype
+    if np.can_cast(cudf.dtype(lhs_dtype).to_numpy, cudf.dtype(rhs_dtype).to_numpy):
+        return cudf.dtype(rhs_dtype)
+    elif np.can_cast(cudf.dtype(rhs_dtype).to_numpy, cudf.dtype(lhs_dtype).to_numpy):
+        return cudf.dtype(lhs_dtype)
     else:
         raise TypeError(f"Cannot type-cast {lhs_dtype} and {rhs_dtype}")
 
 
 def _timedelta_binary_op_add(lhs, rhs):
-    if pd.api.types.is_timedelta64_dtype(rhs.dtype):
+    if isinstance(rhs.dtype, cudf.Timedelta):
         out_dtype = determine_out_dtype(lhs.dtype, rhs.dtype)
-    elif pd.api.types.is_datetime64_dtype(rhs.dtype):
+    elif isinstance(rhs.dtype, cudf.Datetime):
         units = ["s", "ms", "us", "ns"]
         lhs_time_unit = cudf.utils.dtypes.get_time_unit(lhs)
         lhs_unit = units.index(lhs_time_unit)
         rhs_time_unit = cudf.utils.dtypes.get_time_unit(rhs)
         rhs_unit = units.index(rhs_time_unit)
-        out_dtype = np.dtype(f"datetime64[{units[max(lhs_unit, rhs_unit)]}]")
+        out_dtype = cudf.dtype(np.dtype(f"datetime64[{units[max(lhs_unit, rhs_unit)]}]"))
     else:
         raise TypeError(
             f"Addition of {lhs.dtype} with {rhs.dtype} "
@@ -603,19 +602,15 @@ def _timedelta_binary_op_add(lhs, rhs):
 
 
 def _timedelta_binary_op_sub(lhs, rhs):
-    if pd.api.types.is_timedelta64_dtype(
-        lhs.dtype
-    ) and pd.api.types.is_timedelta64_dtype(rhs.dtype):
+    if isinstance(lhs.dtype, cudf.Timedelta) and isinstance(rhs.dtype, cudf.Timedelta):
         out_dtype = determine_out_dtype(lhs.dtype, rhs.dtype)
-    elif pd.api.types.is_timedelta64_dtype(
-        rhs.dtype
-    ) and pd.api.types.is_datetime64_dtype(lhs.dtype):
+    elif isinstance(rhs.dtype, cudf.Timedelta) and isinstance(lhs.dtype, cudf.Datetime):
         units = ["s", "ms", "us", "ns"]
         lhs_time_unit = cudf.utils.dtypes.get_time_unit(lhs)
         lhs_unit = units.index(lhs_time_unit)
         rhs_time_unit = cudf.utils.dtypes.get_time_unit(rhs)
         rhs_unit = units.index(rhs_time_unit)
-        out_dtype = np.dtype(f"datetime64[{units[max(lhs_unit, rhs_unit)]}]")
+        out_dtype = cudf.dtype(np.dtype(f"datetime64[{units[max(lhs_unit, rhs_unit)]}]"))
     else:
         raise TypeError(
             f"Subtraction of {lhs.dtype} with {rhs.dtype} "

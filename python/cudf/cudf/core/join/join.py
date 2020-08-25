@@ -356,7 +356,7 @@ class Merge(object):
             dtype_r, CategoricalDtype
         ):
             # categories are not equal
-            libcudf_join_type = np.dtype("O")
+            libcudf_join_type = cudf.StringDtype()
         elif how == "left":
             check_col = rcol.fillna(0)
             if not check_col.can_cast_safely(dtype_l):
@@ -393,20 +393,20 @@ class Merge(object):
                 raise ValueError(ctgry_err.format(lcol, "left"))
             libcudf_join_type = rcol.cat().categories.dtype
         elif how in {"inner", "outer"}:
-            if (np.issubdtype(dtype_l, np.number)) and (
-                np.issubdtype(dtype_r, np.number)
+            if (isinstance(dtype_l, cudf.Number)) and (
+                isinstance(dtype_r, cudf.Number)
             ):
                 if dtype_l.kind == dtype_r.kind:
                     # both ints or both floats
-                    libcudf_join_type = max(dtype_l, dtype_r)
+                    libcudf_join_type = cudf.dtype(max(dtype_l.to_numpy, dtype_r.to_numpy))
                 else:
-                    libcudf_join_type = np.find_common_type(
-                        [], [dtype_l, dtype_r]
-                    )
-            elif np.issubdtype(dtype_l, np.datetime64) and np.issubdtype(
-                dtype_r, np.datetime64
+                    libcudf_join_type = cudf.dtype(np.find_common_type(
+                        [], [dtype_l.to_numpy, dtype_r.to_numpy]
+                    ))
+            elif isinstance(dtype_l, cudf.Datetime) and isinstance(
+                dtype_r, cudf.Datetime
             ):
-                libcudf_join_type = max(dtype_l, dtype_r)
+                libcudf_join_type = cudf.dtype(max(dtype_l, dtype_r))
         return libcudf_join_type
 
     def libcudf_to_output_casting_rules(self, lcol, rcol, how):

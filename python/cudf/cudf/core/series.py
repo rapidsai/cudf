@@ -1588,9 +1588,9 @@ class Series(Frame, Serializable):
 
         Returns a new Series.
         """
-        if np.issubdtype(self.dtype, np.integer):
+        if isinstance(self.dtype, cudf.Integer):
             return self._unaryop("invert")
-        elif np.issubdtype(self.dtype, np.bool_):
+        elif isinstance(self.dtype, cudf.BooleanDtype):
             return self._unaryop("not")
         else:
             raise TypeError(
