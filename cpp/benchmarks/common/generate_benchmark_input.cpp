@@ -95,10 +95,9 @@ T random_element(std::mt19937& engine)
   static constexpr auto timestamp_spread = 1. / (2 * 365 * 24 * 60 * 60);  // one in two years
 
   // Generate a number of seconds that is 50% likely to be shorter than two years
-  static std::geometric_distribution<int64_t> seconds_gen{timestamp_spread};
+  std::geometric_distribution<int64_t> seconds_gen{timestamp_spread};
   // Generate a random value for the nanoseconds within a second
-  static std::uniform_int_distribution<int64_t> nanoseconds_gen{0,
-                                                                nanoseconds<cudf::timestamp_s>()};
+  std::uniform_int_distribution<int64_t> nanoseconds_gen{0, nanoseconds<cudf::timestamp_s>()};
 
   // Subtract the seconds from the 2020 timestamp to generate a reccent timestamp
   auto const timestamp_ns =
@@ -113,10 +112,9 @@ T random_element(std::mt19937& engine)
   static constexpr auto duration_spread = 1. / (365 * 24 * 60 * 60);  // one in a year
 
   // Generate a number of seconds that is 50% likely to be shorter than a year
-  static std::geometric_distribution<int64_t> seconds_gen{duration_spread};
+  std::geometric_distribution<int64_t> seconds_gen{duration_spread};
   // Generate a random value for the nanoseconds within a second
-  static std::uniform_int_distribution<int64_t> nanoseconds_gen{0,
-                                                                nanoseconds<cudf::timestamp_s>()};
+  std::uniform_int_distribution<int64_t> nanoseconds_gen{0, nanoseconds<cudf::timestamp_s>()};
 
   // Subtract the seconds from the 2020 timestamp to generate a reccent timestamp
   auto const duration_ns =
@@ -160,7 +158,7 @@ T random_element(std::mt19937& engine)
   static constexpr T upper_bound = std::numeric_limits<T>::max();
 
   // Use the type dependent standard deviation
-  static std::normal_distribution<> gaussian{0., stddev<T>()};
+  std::normal_distribution<> gaussian{0., stddev<T>()};
 
   auto elem = gaussian(engine);
   // Use absolute value for unsigned types
@@ -178,7 +176,7 @@ T random_element(std::mt19937& engine)
 template <>
 bool random_element<bool>(std::mt19937& engine)
 {
-  static std::uniform_int_distribution<> uniform{0, 1};
+  std::uniform_int_distribution<> uniform{0, 1};
   return uniform(engine) == 1;
 }
 
@@ -249,11 +247,9 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(std::mt199
   auto const char_cnt = offsets.back() + 1;
   std::vector<char> chars;
   chars.reserve(char_cnt);
-  // Use a pattern so there can be more unique strings in the column
-  std::generate_n(std::back_inserter(chars), char_cnt, []() {
-    static size_t i = 0;
-    return 'a' + (i++ % 26);
-  });
+  std::uniform_int_distribution<char> char_gen{'!', '~'};
+  std::generate_n(std::back_inserter(chars), char_cnt, [&]() { return char_gen(engine); });
+  std::cout << chars.data() << std::endl;
 
   return cudf::make_strings_column(chars, offsets);
 }
