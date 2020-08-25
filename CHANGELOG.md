@@ -16,6 +16,8 @@
 
 ## Bug Fixes
 
+- PR #6082 Fix cuIO error when input strings contain "://"
+
 
 # cuDF 0.15.0 (Date TBD)
 
