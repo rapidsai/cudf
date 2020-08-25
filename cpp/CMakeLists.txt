@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #=============================================================================
-cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.18 FATAL_ERROR)
 
 project(CUDA_DATAFRAME VERSION 0.16.0 LANGUAGES C CXX CUDA)
 
@@ -160,10 +160,11 @@ option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
 
 # CPM options
-options(CPM_USE_LOCAL_PACKAGES "Search locally installed packages first before using CPM" ON)
-
-# include CPM
+set(CPM_SOURCE_CACHE "/home/mhooks/dev/rapids/compose/etc/.ccache/CPM")
 include(cmake/CPM.cmake)
+option(CPM_USE_LOCAL_PACKAGES "Search locally installed packages first before using CPM" ON)
+
+
 
 ###################################################################################################
 # - cudart options --------------------------------------------------------------------------------
@@ -207,6 +208,12 @@ elseif(DEFINED ENV{CONDA_PREFIX})
     set(CONDA_LINK_DIRS "$ENV{CONDA_PREFIX}/lib")
     message(STATUS "Conda environment detected, CMAKE_SYSTEM_PREFIX_PATH set to: ${CMAKE_SYSTEM_PREFIX_PATH}")
 endif("$ENV{CONDA_BUILD}" STREQUAL "1")
+
+###################################################################################################
+# - find CIDAToolkit ------------------------------------------------------------------------------------
+
+find_package(CUDAToolkit)
+set(CMAKE_CUDA_ARCHITECTURES ${GPU_ARCHS})
 
 ###################################################################################################
 # - find arrow ------------------------------------------------------------------------------------
@@ -267,9 +274,18 @@ CPMFindPackage(
   GITHUB_REPOSITORY madler/zlib
   GIT_TAG 1.2.11
   VERSION 1.2.11
-  FIND_PACKAGE_ARGUMENTS "COMPONENTS filesystem"
 )
 
+target_link_libraries(cudf PUBLIC ZLIB)
+add_library(ZLIB INTERFACE IMPORTED)
+if (ZLIB_ADDED)
+message(STATUS "ZLIB: ZLIB_FOUND set to ${ZLIB_FOUND}")
+message(STATUS "ZLIB: ZLIB_LIBRARIES set to ${ZLIB_LIBRARIES}")
+message(STATUS "ZLIB: ZLIB_INCLUDE_DIRS set to ${ZLIB_INCLUDE_DIRS}")
+
+  add_library(ZLIB INTERFACE IMPORTED)
+endif (ZLIB_ADDED)
+message(STATUS "ZLIB: ZLIB_FOUND set to ${ZLIB_FOUND}")
 message(STATUS "ZLIB: ZLIB_LIBRARIES set to ${ZLIB_LIBRARIES}")
 message(STATUS "ZLIB: ZLIB_INCLUDE_DIRS set to ${ZLIB_INCLUDE_DIRS}")
 
@@ -293,7 +309,7 @@ CPMFindPackage(
   FIND_PACKAGE_ARGUMENTS "COMPONENTS filesystem"
 )
 
-target_link_libraries(CPMExampleBoost PRIVATE Boost::filesystem pthread)
+target_link_libraries(Boost PRIVATE Boost::filesystem pthread)
 
 message(STATUS "BOOST: Boost_LIBRARIES set to ${Boost_LIBRARIES}")
 message(STATUS "BOOST: Boost_INCLUDE_DIRS set to ${Boost_INCLUDE_DIRS}")
@@ -321,6 +337,7 @@ message(STATUS "RMM: RMM_INCLUDE set to ${RMM_INCLUDE}")
 
 add_library(rmm SHARED IMPORTED ${RMM_LIBRARY})
 if(RMM_INCLUDE AND RMM_LIBRARY)
+    set_target_properties(rmm PROPERTIES CMAKE_CUDA_ARCHITECTURES ${GPU_ARCHS})
     set_target_properties(rmm PROPERTIES IMPORTED_LOCATION ${RMM_LIBRARY})
 endif(RMM_INCLUDE AND RMM_LIBRARY)
 
@@ -366,7 +383,7 @@ if(BUILD_TESTS)
       "INSTALL_GTEST OFF"
       "gtest_force_shared_crt"
   )
-
+  set_target_properties(googletest PROPERTIES CMAKE_CUDA_ARCHITECTURES ${GPU_ARCHS})
   set_target_properties(googletest PROPERTIES CXX_STANDARD $ENV{CXX})
   enable_testing() 
 endif(BUILD_TESTS)
