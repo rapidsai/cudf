@@ -12,6 +12,7 @@
 - PR #5917 Just use `None` for `strides` in `Buffer`
 - PR #5971 Add cuStreamz README for basic installation and use
 - PR #6002 Add Java bindings for md5
+- PR #6060 Add support for all types in `Series.describe` and `DataFrame.describe`
 - PR #6067 Added compute codes for aarch64 devices
 
 ## Bug Fixes
