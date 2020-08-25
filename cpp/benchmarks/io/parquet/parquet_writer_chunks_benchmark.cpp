@@ -54,8 +54,8 @@ void PQ_write(benchmark::State& state)
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    cudf_io::write_parquet_opts opts =
-      cudf_io::write_parquet_opts::builder(cudf_io::sink_info(), view);
+    cudf_io::parquet_writer_options opts =
+      cudf_io::parquet_writer_options::builder(cudf_io::sink_info(), view);
     cudf_io::write_parquet(opts);
   }
 
@@ -78,8 +78,8 @@ void PQ_write_chunked(benchmark::State& state)
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    cudf_io::chunked_parquet_writer_options opts{cudf_io::sink_info()};
-
+    cudf_io::chunked_parquet_writer_options opts =
+      cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info());
     auto writer_state = cudf_io::write_parquet_chunked_begin(opts);
     std::for_each(
       tables.begin(), tables.end(), [&writer_state](std::unique_ptr<cudf::table> const& tbl) {
