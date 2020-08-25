@@ -48,8 +48,7 @@ THE SOFTWARE.
 
 */
 
-#ifndef __BROTLI_DICT_H__
-#define __BROTLI_DICT_H__
+#pragma once
 
 #include <cstdint>
 
@@ -84,5 +83,3 @@ const brotli_dictionary_s *get_brotli_dictionary(void);
 
 }  // namespace io
 }  // namespace cudf
-
-#endif  // __BROTLI_DICT_H__

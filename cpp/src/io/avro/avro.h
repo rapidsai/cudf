@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef __IO_AVRO_H__
-#define __IO_AVRO_H__
+#pragma once
 
 #include <stddef.h>
 #include <stdint.h>
@@ -143,5 +142,3 @@ class container {
 }  // namespace avro
 }  // namespace io
 }  // namespace cudf
-
-#endif  // __IO_AVRO_H__

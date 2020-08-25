@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef __IO_ORC_GPU_H__
-#define __IO_ORC_GPU_H__
+#pragma once
 
 #include <io/comp/gpuinflate.h>
 #include <io/statistics/column_stats.h>
@@ -450,5 +449,3 @@ cudaError_t orc_encode_statistics(uint8_t *blob_bfr,
 }  // namespace orc
 }  // namespace io
 }  // namespace cudf
-
-#endif  // __IO_ORC_GPU_H__

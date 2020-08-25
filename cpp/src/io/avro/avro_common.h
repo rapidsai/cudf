@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef __IO_AVRO_COMMON_H__
-#define __IO_AVRO_COMMON_H__
+#pragma once
 
 #include <stdint.h>
 
@@ -59,5 +58,3 @@ enum type_kind_e {
 }  // namespace avro
 }  // namespace io
 }  // namespace cudf
-
-#endif  // __IO_AVRO_COMMON_H__

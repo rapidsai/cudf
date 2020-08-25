@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef __IO_ORC_H__
-#define __IO_ORC_H__
+#pragma once
 
 #include <stddef.h>
 #include <stdint.h>
@@ -259,5 +258,3 @@ class OrcDecompressor {
 }  // namespace orc
 }  // namespace io
 }  // namespace cudf
-
-#endif  // __IO_ORC_H__

@@ -48,8 +48,7 @@ THE SOFTWARE.
 
 */
 
-#ifndef __BROTLI_TABLES_H__
-#define __BROTLI_TABLES_H__
+#pragma once
 
 #define CONSTANT static const __device__ __constant__
 
@@ -2649,5 +2648,3 @@ CONSTANT uint8_t kTransformsData[] = {
 };
 
 CONSTANT int kNumTransforms = (int)(sizeof(kTransformsData) / (3 * sizeof(kTransformsData[0])));
-
-#endif  // __BROTLI_TABLES_H__

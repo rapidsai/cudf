@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef __IO_PARQUET_COMMON_H__
-#define __IO_PARQUET_COMMON_H__
+#pragma once
 
 namespace cudf {
 namespace io {
@@ -139,5 +138,3 @@ enum {
 }  // namespace parquet
 }  // namespace io
 }  // namespace cudf
-
-#endif  // __IO_PARQUET_COMMON_H__
