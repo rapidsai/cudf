@@ -367,17 +367,17 @@ def test_series_size(data):
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES)
 def test_series_describe_numeric(dtype):
-    ps = pd.Series([0, 1, 2, 3], dtype=dtype)
+    ps = pd.Series([0, 1, 2, 3, 1, 2, 3], dtype=dtype)
     gs = cudf.from_pandas(ps)
     actual = gs.describe()
-    expected = ps.describe(datetime_is_numeric=True)
+    expected = ps.describe()
 
     assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize("dtype", DATETIME_TYPES)
 def test_series_describe_datetime(dtype):
-    gs = cudf.Series([0, 1, 2, 3], dtype=dtype)
+    gs = cudf.Series([0, 1, 2, 3, 1, 2, 3], dtype=dtype)
     ps = gs.to_pandas()
 
     pdf_results = ps.describe(datetime_is_numeric=True)
@@ -403,7 +403,7 @@ def test_series_describe_datetime(dtype):
 
 @pytest.mark.parametrize("dtype", TIMEDELTA_TYPES)
 def test_series_describe_timedelta(dtype):
-    ps = pd.Series([0, 1, 2, 3], dtype=dtype)
+    ps = pd.Series([0, 1, 2, 3, 1, 2, 3], dtype=dtype)
     gs = cudf.from_pandas(ps)
 
     expected = ps.describe()
