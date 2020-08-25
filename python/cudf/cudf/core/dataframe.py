@@ -4599,20 +4599,24 @@ class DataFrame(Frame, Serializable):
         upper percentiles. By default the lower percentile is ``25`` and the
         upper percentile is ``75``. The ``50`` percentile is the
         same as the median.
+
         For strings dtype or datetime dtype, the result's index
         will include ``count``, ``unique``, ``top``, and ``freq``. The ``top``
         is the most common value. The ``freq`` is the most common value's
         frequency. Timestamps also include the ``first`` and ``last`` items.
+
         If multiple object values have the highest count, then the
         ``count`` and ``top`` results will be arbitrarily chosen from
         among those with the highest count.
+
         For mixed data types provided via a ``DataFrame``, the default is to
         return only an analysis of numeric columns. If the dataframe consists
         only of object and categorical data without any numeric columns, the
         default is to return an analysis of both the object and categorical
         columns. If ``include='all'`` is provided as an option, the result
         will include a union of attributes of each type.
-        The `include` and `exclude` parameters can be used to limit
+
+        The ``include`` and ``exclude`` parameters can be used to limit
         which columns in a ``DataFrame`` are analyzed for the output.
         The parameters are ignored when analyzing a ``Series``.
 
@@ -4622,53 +4626,180 @@ class DataFrame(Frame, Serializable):
 
         >>> import cudf
         >>> s = cudf.Series([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-        >>> print(s.describe())
-           stats   values
-        0  count     10.0
-        1   mean      5.5
-        2    std  3.02765
-        3    min      1.0
-        4    25%      2.5
-        5    50%      5.5
-        6    75%      7.5
-        7    max     10.0
+        >>> s
+        0     1
+        1     2
+        2     3
+        3     4
+        4     5
+        5     6
+        6     7
+        7     8
+        8     9
+        9    10
+        dtype: int64
+        >>> s.describe()
+        count    10.00000
+        mean      5.50000
+        std       3.02765
+        min       1.00000
+        25%       3.25000
+        50%       5.50000
+        75%       7.75000
+        max      10.00000
+        dtype: float64
 
-        Describing a ``DataFrame``. By default all numeric fields
-        are returned.
+        Describing a categorical ``Series``.
 
-        >>> gdf = cudf.DataFrame()
-        >>> gdf['a'] = [1,2,3]
-        >>> gdf['b'] = [1.0, 2.0, 3.0]
-        >>> gdf['c'] = ['x', 'y', 'z']
-        >>> gdf['d'] = [1.0, 2.0, 3.0]
-        >>> gdf['d'] = gdf['d'].astype('float32')
-        >>> print(gdf.describe())
-           stats    a    b    d
-        0  count  3.0  3.0  3.0
-        1   mean  2.0  2.0  2.0
-        2    std  1.0  1.0  1.0
-        3    min  1.0  1.0  1.0
-        4    25%  1.5  1.5  1.5
-        5    50%  1.5  1.5  1.5
-        6    75%  2.5  2.5  2.5
-        7    max  3.0  3.0  3.0
+        >>> s = cudf.Series(['a', 'b', 'a', 'b', 'c', 'a'], dtype='category')
+        >>> s
+        0    a
+        1    b
+        2    a
+        3    b
+        4    c
+        5    a
+        dtype: category
+        Categories (3, object): ['a', 'b', 'c']
+        >>> s.describe()
+        count     6
+        unique    3
+        top       a
+        freq      3
+        dtype: object
 
-        Using the ``include`` keyword to describe only specific dtypes.
+        Describing a timestamp ``Series``.
 
-        >>> gdf = cudf.DataFrame()
-        >>> gdf['a'] = [1,2,3]
-        >>> gdf['b'] = [1.0, 2.0, 3.0]
-        >>> gdf['c'] = ['x', 'y', 'z']
-        >>> print(gdf.describe(include='int'))
-           stats    a
-        0  count  3.0
-        1   mean  2.0
-        2    std  1.0
-        3    min  1.0
-        4    25%  1.5
-        5    50%  1.5
-        6    75%  2.5
-        7    max  3.0
+        >>> import numpy as np
+        >>> s = cudf.Series([
+        ...   np.datetime64("2000-01-01"),
+        ...   np.datetime64("2010-01-01"),
+        ...   np.datetime64("2010-01-01")
+        ... ])
+        >>> s
+        0   2000-01-01
+        1   2010-01-01
+        2   2010-01-01
+        dtype: datetime64[s]
+        >>> s.describe()
+        count                                3
+        mean     2006-09-01 08:00:00.000000000
+        min      2000-01-01 00:00:00.000000000
+        25%      2004-12-31 12:00:00.000000000
+        50%      2010-01-01 00:00:00.000000000
+        75%      2010-01-01 00:00:00.000000000
+        max      2010-01-01 00:00:00.000000000
+        dtype: object
+
+        Describing a ``DataFrame``. By default only numeric fields are
+        returned.
+
+        >>> df = cudf.DataFrame({"categorical": cudf.Series(['d', 'e', 'f'],
+        ...                         dtype='category'),
+        ...                      "numeric": [1, 2, 3],
+        ...                      "object": ['a', 'b', 'c']
+        ... })
+        >>> df
+          categorical  numeric object
+        0           d        1      a
+        1           e        2      b
+        2           f        3      c
+        >>> df.describe()
+               numeric
+        count      3.0
+        mean       2.0
+        std        1.0
+        min        1.0
+        25%        1.5
+        50%        2.0
+        75%        2.5
+        max        3.0
+
+        Describing all columns of a ``DataFrame`` regardless of data type.
+
+        >>> df.describe(include='all')
+               categorical numeric object
+        count            3     3.0      3
+        unique           3    <NA>      3
+        top              d    <NA>      a
+        freq             1    <NA>      1
+        mean          <NA>     2.0   <NA>
+        std           <NA>     1.0   <NA>
+        min           <NA>     1.0   <NA>
+        25%           <NA>     1.5   <NA>
+        50%           <NA>     2.0   <NA>
+        75%           <NA>     2.5   <NA>
+        max           <NA>     3.0   <NA>
+
+        Describing a column from a ``DataFrame`` by accessing it as an
+        attribute.
+
+        >>> df.numeric.describe()
+        count    3.0
+        mean     2.0
+        std      1.0
+        min      1.0
+        25%      1.5
+        50%      2.0
+        75%      2.5
+        max      3.0
+        Name: numeric, dtype: float64
+
+        Including only numeric columns in a ``DataFrame`` description.
+
+        >>> df.describe(include=[np.number])
+               numeric
+        count      3.0
+        mean       2.0
+        std        1.0
+        min        1.0
+        25%        1.5
+        50%        2.0
+        75%        2.5
+        max        3.0
+
+        Including only string columns in a ``DataFrame`` description.
+
+        >>> df.describe(include=[object])
+               object
+        count       3
+        unique      3
+        top         a
+        freq        1
+
+        Including only categorical columns from a ``DataFrame`` description.
+
+        >>> df.describe(include=['category'])
+               categorical
+        count            3
+        unique           3
+        top              d
+        freq             1
+
+        Excluding numeric columns from a ``DataFrame`` description.
+
+        >>> df.describe(exclude=[np.number])
+               categorical object
+        count            3      3
+        unique           3      3
+        top              d      a
+        freq             1      1
+
+        Excluding object columns from a ``DataFrame`` description.
+
+        >>> df.describe(exclude=[object])
+               categorical numeric
+        count            3     3.0
+        unique           3    <NA>
+        top              d    <NA>
+        freq             1    <NA>
+        mean          <NA>     2.0
+        std           <NA>     1.0
+        min           <NA>     1.0
+        25%           <NA>     1.5
+        50%           <NA>     2.0
+        75%           <NA>     2.5
+        max           <NA>     3.0
         """
 
         if not include and not exclude:
@@ -4685,12 +4816,10 @@ class DataFrame(Frame, Serializable):
 
             data_to_describe = self
         else:
-            if not include:
-                include = np.number
-
             data_to_describe = self.select_dtypes(
                 include=include, exclude=exclude
             )
+
             if data_to_describe.empty:
                 raise ValueError("No data of included types.")
 

@@ -3882,7 +3882,7 @@ class Series(Frame, Serializable):
                 + _format_percentile_names(percentiles)
                 + ["max"]
             )
-            # import pdb;pdb.set_trace()
+
             data = (
                 [self.mean().to_numpy(), self.std().to_numpy(), self.min()]
                 + self.quantile(percentiles).to_array(fillna="pandas").tolist()
