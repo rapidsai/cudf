@@ -55,7 +55,7 @@ struct update_strings_lengths_fn {
 /**
  * @brief Retrieve the code point metadata table.
  *
- * This is a singleton instance that copies are large table of integers into
+ * This is a singleton instance that copies a large table of integers into
  * device memory on the very first call.
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
@@ -65,7 +65,7 @@ codepoint_metadata_type const* get_codepoint_metadata(cudaStream_t stream);
 /**
  * @brief Retrieve the aux code point metadata table.
  *
- * This is a singleton instance that copies are large table of integers into
+ * This is a singleton instance that copies a large table of integers into
  * device memory on the very first call.
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.

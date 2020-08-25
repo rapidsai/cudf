@@ -36,7 +36,7 @@ namespace detail {
  * characters, strips accents from letters in the text and standardizes whitespace
  * characters to all be the code point for the " " literal.
  *
- * The algorithm produces tow vectors of integers `uvector_pair`.
+ * The algorithm produces two vectors of integers `uvector_pair`.
  * The first is the size of 3 uint32 values per input byte (of the strings buffer).
  * The second is the same size as the input offsets vector -- number of strings + 1.
  *

@@ -117,7 +117,7 @@ struct tokenizer_result {
  * size of tensor_metadata = 3 * strings.size()
  * ```
  *
- * For `do_truncate==false` the number of rows per output string depend on the
+ * For `do_truncate==false` the number of rows per output string depends on the
  * number of tokens resolved and the `stride` value which may repeat tokens
  * in subsequent overflow rows.
  *
