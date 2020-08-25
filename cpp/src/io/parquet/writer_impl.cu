@@ -502,7 +502,7 @@ void writer::impl::write_chunked_begin(pq_chunked_state &state)
 {
   // Write file header
   file_header_s fhdr;
-  fhdr.magic = PARQUET_MAGIC;
+  fhdr.magic = parquet_magic;
   out_sink_->host_write(&fhdr, sizeof(fhdr));
   state.current_chunk_offset = sizeof(file_header_s);
 }
@@ -932,14 +932,14 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write_chunked_end(
   file_ender_s fendr;
   buffer_.resize(0);
   fendr.footer_len = static_cast<uint32_t>(cpw.write(&state.md));
-  fendr.magic      = PARQUET_MAGIC;
+  fendr.magic      = parquet_magic;
   out_sink_->host_write(buffer_.data(), buffer_.size());
   out_sink_->host_write(&fendr, sizeof(fendr));
   out_sink_->flush();
 
   // Optionally output raw file metadata with the specified column chunk file path
   if (return_filemetadata) {
-    file_header_s fhdr = {PARQUET_MAGIC};
+    file_header_s fhdr = {parquet_magic};
     buffer_.resize(0);
     buffer_.insert(buffer_.end(),
                    reinterpret_cast<const uint8_t *>(&fhdr),
@@ -1032,12 +1032,12 @@ std::unique_ptr<std::vector<uint8_t>> writer::merge_rowgroup_metadata(
   // Thrift-encode the resulting output
   file_header_s fhdr;
   file_ender_s fendr;
-  fhdr.magic = PARQUET_MAGIC;
+  fhdr.magic = parquet_magic;
   output.insert(output.end(),
                 reinterpret_cast<const uint8_t *>(&fhdr),
                 reinterpret_cast<const uint8_t *>(&fhdr) + sizeof(fhdr));
   fendr.footer_len = static_cast<uint32_t>(cpw.write(&md));
-  fendr.magic      = PARQUET_MAGIC;
+  fendr.magic      = parquet_magic;
   output.insert(output.end(),
                 reinterpret_cast<const uint8_t *>(&fendr),
                 reinterpret_cast<const uint8_t *>(&fendr) + sizeof(fendr));

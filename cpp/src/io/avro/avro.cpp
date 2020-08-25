@@ -39,7 +39,7 @@ bool container::parse(file_metadata *md, size_t max_num_rows, size_t first_row)
   sig4 |= getb() << 8;
   sig4 |= getb() << 16;
   sig4 |= getb() << 24;
-  if (sig4 != AVRO_MAGIC) { return false; }
+  if (sig4 != avro_magic) { return false; }
   for (;;) {
     uint32_t num_md_items = static_cast<uint32_t>(get_i64());
     if (num_md_items == 0) { break; }

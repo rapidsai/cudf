@@ -88,41 +88,53 @@ For more information on these sources, see the manual.
 namespace cudf {
 namespace io {
 #ifdef _MSC_VER
-#define bswap_32(v) _byteswap_ulong(v)
-#define bswap_64(v) _byteswap_uint64(v)
+
+template <typename T>
+inline T bswap_32(T val)
+{
+  return _byteswap_ulong(val);
+}
+
+template <typename T>
+inline T bswap_64(T val)
+{
+  return _byteswap_uint64(val);
+}
+
 #else
-#define bswap_32(v) __builtin_bswap32(v)
-#define bswap_64(v) __builtin_bswap64(v)
+
+template <typename T>
+inline T bswap_32(T val)
+{
+  return __builtin_bswap32(val);
+}
+
+template <typename T>
+inline T bswap_64(T val)
+{
+  return __builtin_bswap64(val);
+}
+
 #endif
 
 // Constants for the fast MTF decoder.
-#define MTFA_SIZE 4096
-#define MTFL_SIZE 16
-
-// Header bytes.
-#define BZ_HDR_B 0x42 /* 'B' */
-#define BZ_HDR_Z 0x5a /* 'Z' */
-#define BZ_HDR_h 0x68 /* 'h' */
-#define BZ_HDR_0 0x30 /* '0' */
+constexpr int mtfa_size = 4096;
+constexpr int mtfl_size = 4096;
 
 // Constants for the back end.
-
-#define BZ_MAX_ALPHA_SIZE 258
-#define BZ_MAX_CODE_LEN 23
-
-#define BZ_RUNA 0
-#define BZ_RUNB 1
-
-#define BZ_N_GROUPS 6
-#define BZ_G_SIZE 50
-
-#define BZ_MAX_SELECTORS (2 + (900000 / BZ_G_SIZE))
+constexpr int bz_max_alpha_size = 258;
+constexpr int bz_max_code_len = 23;
+constexpr int bz_runa = 0;
+constexpr int bz_runb = 1;
+constexpr int bz_n_groups = 6;
+constexpr int bz_g_size = 50;
+constexpr int bz_max_selectors =  (2 + (900000 / bz_g_size));
 
 typedef struct {
   int32_t minLen;
-  int32_t limit[BZ_MAX_CODE_LEN];
-  int32_t base[BZ_MAX_CODE_LEN];
-  uint16_t perm[BZ_MAX_ALPHA_SIZE];
+  int32_t limit[bz_max_code_len];
+  int32_t base[bz_max_code_len];
+  uint16_t perm[bz_max_alpha_size];
 } huff_s;
 
 // Decoder state
@@ -154,12 +166,12 @@ typedef struct {
   uint8_t seqToUnseq[256];
 
   // for decoding the MTF values
-  int32_t mtfbase[256 / MTFL_SIZE];
-  uint8_t mtfa[MTFA_SIZE];
-  uint8_t selector[BZ_MAX_SELECTORS];
-  uint8_t len[BZ_MAX_ALPHA_SIZE];
+  int32_t mtfbase[256 / mtfl_size];
+  uint8_t mtfa[mtfa_size];
+  uint8_t selector[bz_max_selectors];
+  uint8_t len[bz_max_alpha_size];
 
-  huff_s ht[BZ_N_GROUPS];
+  huff_s ht[bz_n_groups];
 } unbz_state_s;
 
 // return next 32 bits
@@ -217,16 +229,16 @@ int32_t bz2_decompress_block(unbz_state_s *s)
   // Start-of-block signature
   sig0 = getbits(s, 24);
   sig1 = getbits(s, 24);
-  if (sig0 != 0x314159 || sig1 != 0x265359) { return BZ_DATA_ERROR; }
+  if (sig0 != 0x314159 || sig1 != 0x265359) { return bz_data_error; }
 
   s->currBlockNo++;
 
   skipbits(s, 32);  // block CRC
 
-  if (getbits(s, 1)) return BZ_DATA_ERROR;  // blockRandomized not supported (old bzip versions)
+  if (getbits(s, 1)) return bz_data_error;  // blockRandomized not supported (old bzip versions)
 
   s->origPtr = getbits(s, 24);
-  if (s->origPtr < 0 || s->origPtr > 10 + 100000 * s->blockSize100k) return BZ_DATA_ERROR;
+  if (s->origPtr < 0 || s->origPtr > 10 + 100000 * s->blockSize100k) return bz_data_error;
 
   // Receive the mapping table
   inUse16 = getbits(s, 16);
@@ -239,23 +251,23 @@ int32_t bz2_decompress_block(unbz_state_s *s)
       }
     }
   }
-  if (nInUse == 0) return BZ_DATA_ERROR;
+  if (nInUse == 0) return bz_data_error;
   alphaSize = nInUse + 2;
 
   // Now the selectors
   {
-    uint32_t pos;  // BZ_N_GROUPS * 4-bit
+    uint32_t pos;  // bz_n_groups * 4-bit
 
     nGroups    = getbits(s, 3);
     nSelectors = getbits(s, 15);
-    if (nGroups < 2 || nGroups > 6 || nSelectors < 1 || nSelectors > BZ_MAX_SELECTORS)
-      return BZ_DATA_ERROR;
+    if (nGroups < 2 || nGroups > 6 || nSelectors < 1 || nSelectors > bz_max_selectors)
+      return bz_data_error;
 
     pos = 0x76543210;
     for (i = 0; i < nSelectors; i++) {
       uint32_t selectorMtf = 0, mask, tmp;
       for (int32_t v = next32bits(s); v < 0; v <<= 1) {
-        if (++selectorMtf >= (uint32_t)nGroups) return BZ_DATA_ERROR;
+        if (++selectorMtf >= (uint32_t)nGroups) return bz_data_error;
       }
       skipbits(s, selectorMtf + 1);
       // Undo the MTF values for the selectors.
@@ -271,13 +283,13 @@ int32_t bz2_decompress_block(unbz_state_s *s)
     int32_t pp, vec;
     uint8_t *length = &s->len[0];
     int32_t curr    = getbits(s, 5);
-    int32_t minLen  = BZ_MAX_CODE_LEN - 1;
+    int32_t minLen  = bz_max_code_len - 1;
     int32_t maxLen  = 0;
     huff_s *sel     = &s->ht[t];
     for (i = 0; i < alphaSize; i++) {
       for (;;) {
         uint32_t v = showbits(s, 2);
-        if (curr < 1 || curr > 20) return BZ_DATA_ERROR;
+        if (curr < 1 || curr > 20) return bz_data_error;
         if (v < 2) {
           skipbits(s, 1);
           break;
@@ -299,13 +311,13 @@ int32_t bz2_decompress_block(unbz_state_s *s)
           pp++;
         };
 
-    for (i = 0; i < BZ_MAX_CODE_LEN; i++) {
+    for (i = 0; i < bz_max_code_len; i++) {
       sel->base[i]  = 0;
       sel->limit[i] = 0;
     }
     for (i = 0; i < alphaSize; i++) sel->base[length[i] + 1]++;
 
-    for (i = 1; i < BZ_MAX_CODE_LEN; i++) sel->base[i] += sel->base[i - 1];
+    for (i = 1; i < bz_max_code_len; i++) sel->base[i] += sel->base[i - 1];
 
     vec = 0;
     for (i = minLen; i <= maxLen; i++) {
@@ -328,10 +340,10 @@ int32_t bz2_decompress_block(unbz_state_s *s)
 
   // MTF init
   {
-    int32_t kk = MTFA_SIZE - 1;
-    for (int32_t ii = 256 / MTFL_SIZE - 1; ii >= 0; ii--) {
-      for (int32_t jj = MTFL_SIZE - 1; jj >= 0; jj--) {
-        s->mtfa[kk--] = (uint8_t)(ii * MTFL_SIZE + jj);
+    int32_t kk = mtfa_size - 1;
+    for (int32_t ii = 256 / mtfl_size - 1; ii >= 0; ii--) {
+      for (int32_t jj = mtfl_size - 1; jj >= 0; jj--) {
+        s->mtfa[kk--] = (uint8_t)(ii * mtfl_size + jj);
       }
       s->mtfbase[ii] = kk + 1;
     }
@@ -350,8 +362,8 @@ int32_t bz2_decompress_block(unbz_state_s *s)
       uint32_t next32, zvec;
       int32_t zn;
       if (groupPos == 0) {
-        if (++groupNo >= nSelectors) return BZ_DATA_ERROR;
-        groupPos = BZ_G_SIZE;
+        if (++groupNo >= nSelectors) return bz_data_error;
+        groupPos = bz_g_size;
         gSel     = &s->ht[s->selector[groupNo]];
       }
       groupPos--;
@@ -360,20 +372,20 @@ int32_t bz2_decompress_block(unbz_state_s *s)
       for (;;) {
         zvec = next32 >> (32u - (uint32_t)zn);
         if (zn > 20)  // the longest code
-          return BZ_DATA_ERROR;
+          return bz_data_error;
         if (zvec <= (uint32_t)gSel->limit[zn]) break;
         zn++;
       }
       skipbits(s, zn);
       zvec -= gSel->base[zn];
-      if (zvec >= BZ_MAX_ALPHA_SIZE) return BZ_DATA_ERROR;
+      if (zvec >= bz_max_alpha_size) return bz_data_error;
       nextSym = gSel->perm[zvec];
-      if (nextSym > BZ_RUNB) break;
+      if (nextSym > bz_runb) break;
       es += N << nextSym;
       N <<= 1;
     }
     if (es > 0) {
-      if (nblock + es > nblockMAX) return BZ_DATA_ERROR;
+      if (nblock + es > nblockMAX) return bz_data_error;
       uc = s->seqToUnseq[s->mtfa[s->mtfbase[0]]];
       s->unzftab[uc] += es;
       do {
@@ -383,10 +395,10 @@ int32_t bz2_decompress_block(unbz_state_s *s)
 
     if (nextSym == EOB) break;
 
-    if (nblock >= nblockMAX) return BZ_DATA_ERROR;
+    if (nblock >= nblockMAX) return bz_data_error;
     nn = nextSym - 1;
     // uc = MTF ( nextSym-1 )
-    if (nn < MTFL_SIZE) {
+    if (nn < mtfl_size) {
       // avoid general-case expense
       int32_t pp = s->mtfbase[0];
       uc         = s->mtfa[pp + nn];
@@ -405,8 +417,8 @@ int32_t bz2_decompress_block(unbz_state_s *s)
       s->mtfa[pp] = uc;
     } else {
       // general case
-      int32_t lno = nn / MTFL_SIZE;
-      int32_t off = nn % MTFL_SIZE;
+      int32_t lno = nn / mtfl_size;
+      int32_t off = nn % mtfl_size;
       int32_t pp  = s->mtfbase[lno] + off;
       uc          = s->mtfa[pp];
       while (pp > s->mtfbase[lno]) {
@@ -416,15 +428,15 @@ int32_t bz2_decompress_block(unbz_state_s *s)
       s->mtfbase[lno]++;
       while (lno > 0) {
         s->mtfbase[lno]--;
-        s->mtfa[s->mtfbase[lno]] = s->mtfa[s->mtfbase[lno - 1] + MTFL_SIZE - 1];
+        s->mtfa[s->mtfbase[lno]] = s->mtfa[s->mtfbase[lno - 1] + mtfl_size - 1];
         lno--;
       }
       s->mtfbase[0]--;
       s->mtfa[s->mtfbase[0]] = uc;
       if (s->mtfbase[0] == 0) {
-        int kk = MTFA_SIZE - 1;
-        for (int ii = 256 / MTFL_SIZE - 1; ii >= 0; ii--) {
-          for (int jj = MTFL_SIZE - 1; jj >= 0; jj--) {
+        int kk = mtfa_size - 1;
+        for (int ii = 256 / mtfl_size - 1; ii >= 0; ii--) {
+          for (int jj = mtfl_size - 1; jj >= 0; jj--) {
             s->mtfa[kk] = s->mtfa[s->mtfbase[ii] + jj];
             kk--;
           }
@@ -438,7 +450,7 @@ int32_t bz2_decompress_block(unbz_state_s *s)
   }
 
   // Now we know what nblock is, we can do a better sanity check on s->origPtr.
-  if (s->origPtr < 0 || s->origPtr >= nblock) return BZ_DATA_ERROR;
+  if (s->origPtr < 0 || s->origPtr >= nblock) return bz_data_error;
 
   // compute the T^(-1) vector
   {
@@ -472,12 +484,12 @@ int32_t bz2_decompress_block(unbz_state_s *s)
       s->cur    = save_cur;
       s->bitbuf = save_bitbuf;
       s->bitpos = save_bitpos;
-      return BZ_OK;
+      return bz_ok;
     } else if (sig0 == 0x177245 && sig1 == 0x385090) {
       // End-of-stream signature
-      return BZ_STREAM_END;
+      return bz_stream_end;
     } else {
-      return BZ_DATA_ERROR;
+      return bz_data_error;
     }
   }
 }
@@ -533,7 +545,7 @@ int32_t cpu_bz2_uncompress(
   int ret;
   size_t last_valid_block_in, last_valid_block_out;
 
-  if (dest == NULL || destLen == NULL || source == NULL || sourceLen < 12) return BZ_PARAM_ERROR;
+  if (dest == NULL || destLen == NULL || source == NULL || sourceLen < 12) return bz_param_error;
 
   s.tt          = NULL;
   s.currBlockNo = 0;
@@ -552,10 +564,10 @@ int32_t cpu_bz2_uncompress(
   s.save_nblock = 0;
 
   v = getbits(&s, 24);
-  if (v != (('B' << 16) | ('Z' << 8) | 'h')) return BZ_DATA_ERROR_MAGIC;
+  if (v != (('B' << 16) | ('Z' << 8) | 'h')) return bz_data_error_magic;
 
   v = getbits(&s, 8) - '0';
-  if (v < 1 || v > 9) return BZ_DATA_ERROR_MAGIC;
+  if (v < 1 || v > 9) return bz_data_error_magic;
   s.blockSize100k = v;
 
   last_valid_block_in  = 0;
@@ -567,32 +579,32 @@ int32_t cpu_bz2_uncompress(
     {
       s.cur    = source + (size_t)(bit_offs >> 3);
       s.bitpos = (uint32_t)(bit_offs & 7);
-      if (s.cur + 8 > s.end) return BZ_PARAM_ERROR;
+      if (s.cur + 8 > s.end) return bz_param_error;
       s.bitbuf = bswap_64(*(const uint64_t *)s.cur);
     }
   }
 
   s.tt = (uint32_t *)malloc(s.blockSize100k * 100000 * sizeof(int32_t));
-  if (s.tt == NULL) return BZ_MEM_ERROR;
+  if (s.tt == NULL) return bz_mem_error;
 
   do {
     last_valid_block_in  = ((s.cur - s.base) << 3) + (s.bitpos);
     last_valid_block_out = s.out - s.outbase;
 
     ret = bz2_decompress_block(&s);
-    if (ret == BZ_OK || ret == BZ_STREAM_END) {
+    if (ret == bz_ok || ret == bz_stream_end) {
       bzUnRLE(&s);
       if (s.nblock_used != s.save_nblock + 1 || s.out > s.outend) {
-        ret = (s.out < s.outend) ? BZ_UNEXPECTED_EOF : BZ_OUTBUFF_FULL;
+        ret = (s.out < s.outend) ? bz_unexpected_eof : bz_outbuff_full;
       }
     }
-  } while (ret == BZ_OK);
+  } while (ret == bz_ok);
 
-  if (ret == BZ_STREAM_END) {
+  if (ret == bz_stream_end) {
     // normal termination
     last_valid_block_in  = ((s.cur - s.base) << 3) + (s.bitpos);
     last_valid_block_out = s.out - s.outbase;
-    ret                  = BZ_OK;
+    ret                  = bz_ok;
   }
 
   *destLen = last_valid_block_out;

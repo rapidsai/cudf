@@ -28,7 +28,7 @@
 namespace cudf {
 namespace io {
 namespace parquet {
-#define PARQUET_MAGIC (('P' << 0) | ('A' << 8) | ('R' << 16) | ('1' << 24))
+constexpr uint32_t parquet_magic = (('P' << 0) | ('A' << 8) | ('R' << 16) | ('1' << 24));
 
 /**
  * @brief Struct that describes the Parquet file data header

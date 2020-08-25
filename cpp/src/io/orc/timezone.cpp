@@ -21,11 +21,33 @@ namespace cudf {
 namespace io {
 // NOTE: Assumes little-endian platform
 #ifdef _MSC_VER
-#define bswap_32(v) _byteswap_ulong(v)
-#define bswap_64(v) _byteswap_uint64(v)
+
+template <typename T>
+inline T bswap_32(T val)
+{
+  return _byteswap_ulong(val);
+}
+
+template <typename T>
+inline T bswap_64(T val)
+{
+  return _byteswap_uint64(val);
+}
+
 #else
-#define bswap_32(v) __builtin_bswap32(v)
-#define bswap_64(v) __builtin_bswap64(v)
+
+template <typename T>
+inline T bswap_32(T val)
+{
+  return __builtin_bswap32(val);
+}
+
+template <typename T>
+inline T bswap_64(T val)
+{
+  return __builtin_bswap64(val);
+}
+
 #endif
 
 #define TZIF_MAGIC (('T' << 0) | ('Z' << 8) | ('i' << 16) | ('f' << 24))
