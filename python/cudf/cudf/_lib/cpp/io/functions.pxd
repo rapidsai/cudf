@@ -113,51 +113,6 @@ cdef extern from "cudf/io/functions.hpp" \
         read_orc_args &args
     ) except +
 
-    cdef cppclass read_parquet_args:
-        read_parquet_args() except +
-        cudf_io_types.source_info get_source_info() except +
-        vector[string] column_names() except +
-        vector[vector[size_type]] get_row_groups() except +
-        size_type rows_to_skip() except +
-        size_type get_num_rows() except +
-        bool is_strings_to_categorical() except +
-        bool utilize_pandas_metadata() except +
-        data_type get_timestamp_type() except +
-
-        @staticmethod
-        read_parquet_args_builder build(cudf_io_types.source_info src) except +
-
-    cdef cppclass read_parquet_args_builder:
-        read_parquet_args_builder() except +
-        read_parquet_args_builder(
-            cudf_io_types.source_info src
-        ) except +
-        read_parquet_args_builder& with_column_names(
-            vector[string] column_names
-        ) except +
-        read_parquet_args_builder& with_row_groups(
-            vector[vector[size_type]] row_groups
-        ) except +
-        read_parquet_args_builder& with_skip_rows(
-            size_type skip_rows
-        ) except +
-        read_parquet_args_builder& with_num_rows(
-            size_type num_rows
-        ) except +
-        read_parquet_args_builder& with_strings_to_categorical(
-            bool strings_to_categorical
-        ) except +
-        read_parquet_args_builder& with_utilize_pandas_metadata(
-            bool use_pandas_metadata
-        ) except +
-        read_parquet_args_builder& with_timestamp_type(
-            data_type timestamp_type
-        ) except +
-        read_parquet_args get_args() except +
-
-    cdef cudf_io_types.table_with_metadata read_parquet(
-        read_parquet_args args) except +
-
     cdef cppclass write_csv_args:
         cudf_io_types.sink_info snk
         cudf_table_view.table_view table
@@ -193,83 +148,6 @@ cdef extern from "cudf/io/functions.hpp" \
 
     cdef void write_orc(write_orc_args args) except +
 
-    cdef cppclass write_parquet_args:
-        write_parquet_args() except +
-        cudf_io_types.sink_info get_sink_info() except +
-        cudf_io_types.compression_type get_compression_type() except +
-        cudf_io_types.statistics_freq get_stats_level() except +
-        cudf_table_view.table_view get_table() except +
-        const cudf_io_types.table_metadata get_metadata() except +
-        bool is_filemetadata_required() except +
-        string get_metadata_out_file_path() except+
-
-        @staticmethod
-        write_parquet_args_builder build(
-            cudf_io_types.sink_info sink_,
-            cudf_table_view.table_view table_
-        ) except +
-
-    cdef cppclass write_parquet_args_builder:
-
-        write_parquet_args_builder() except +
-        write_parquet_args_builder(
-            cudf_io_types.sink_info sink_,
-            cudf_table_view.table_view table_
-        ) except +
-        write_parquet_args_builder& with_metadata(
-            cudf_io_types.table_metadata *m
-        ) except +
-        write_parquet_args_builder& generate_statistics(
-            cudf_io_types.statistics_freq sf
-        ) except +
-        write_parquet_args_builder& with_compression(
-            cudf_io_types.compression_type compression
-        ) except +
-        write_parquet_args_builder& filemetadata_required(
-            bool req
-        ) except +
-        write_parquet_args_builder& with_metadata_out_file_path(
-            string metadata_out_file_path
-        ) except +
-
-        write_parquet_args get_args() except +
-
-    cdef unique_ptr[vector[uint8_t]] \
-        write_parquet(write_parquet_args args) except +
-
-    cdef cppclass write_parquet_chunked_args:
-        cudf_io_types.sink_info sink
-        cudf_io_types.compression_type compression
-        cudf_io_types.statistics_freq stats_level
-        const cudf_io_types.table_metadata *metadata
-
-        write_parquet_chunked_args() except +
-        write_parquet_chunked_args(
-            cudf_io_types.sink_info sink_,
-            cudf_io_types.table_metadata *table_metadata_,
-            cudf_io_types.compression_type compression_,
-            cudf_io_types.statistics_freq stats_lvl_
-        ) except +
-
-    cdef shared_ptr[pq_chunked_state] \
-        write_parquet_chunked_begin(write_parquet_chunked_args args) except +
-
-    cdef void write_parquet_chunked(cudf_table_view.table_view table_,
-                                    shared_ptr[pq_chunked_state]) except +
-
-    cdef unique_ptr[vector[uint8_t]] write_parquet_chunked_end(
-        shared_ptr[pq_chunked_state],
-        bool return_meta,
-        string metadata_out_file_path,
-    ) except +
-
     cdef unique_ptr[vector[uint8_t]] merge_rowgroup_metadata(
         const vector[unique_ptr[vector[uint8_t]]]& metadata_list
     ) except +
-
-
-cdef extern from "cudf/io/functions.hpp" \
-        namespace "cudf::io::detail::parquet" nogil:
-
-    cdef cppclass pq_chunked_state:
-        pass

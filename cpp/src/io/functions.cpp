@@ -15,7 +15,9 @@
  */
 
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/functions.hpp>
+#include <cudf/io/parquet.hpp>
 #include <cudf/io/readers.hpp>
 #include <cudf/io/writers.hpp>
 #include <cudf/table/table.hpp>
@@ -26,6 +28,32 @@
 
 namespace cudf {
 namespace io {
+// Returns builder for parquet_reader_options
+parquet_reader_options_builder parquet_reader_options::builder(source_info const& src)
+{
+  return parquet_reader_options_builder{src};
+}
+
+// Returns builder for parquet_writer_options
+parquet_writer_options_builder parquet_writer_options::builder(sink_info const& sink,
+                                                               table_view const& table)
+{
+  return parquet_writer_options_builder{sink, table};
+}
+
+// Returns builder for parquet_writer_options
+parquet_writer_options_builder parquet_writer_options::builder()
+{
+  return parquet_writer_options_builder();
+}
+
+// Returns builder for chunked_parquet_writer_options
+chunked_parquet_writer_options_builder chunked_parquet_writer_options::builder(
+  sink_info const& sink)
+{
+  return chunked_parquet_writer_options_builder(sink);
+}
+
 namespace {
 template <typename reader, typename reader_options>
 std::unique_ptr<reader> make_reader(source_info const& src_info,
@@ -249,37 +277,35 @@ using namespace cudf::io::detail::parquet;
 namespace detail_parquet = cudf::io::detail::parquet;
 
 // Freeform API wraps the detail reader class API
-table_with_metadata read_parquet(read_parquet_args const& args, rmm::mr::device_memory_resource* mr)
+table_with_metadata read_parquet(parquet_reader_options const& options,
+                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  detail_parquet::reader_options options{args.column_names(),
-                                         args.is_strings_to_categorical(),
-                                         args.utilize_pandas_metadata(),
-                                         args.get_timestamp_type()};
-  auto reader = make_reader<detail_parquet::reader>(args.get_source_info(), options, mr);
+  auto reader    = make_reader<detail_parquet::reader>(options.source(), options, mr);
+  auto skip_rows = options.get(parquet_reader_options::size_type_param_id::SKIP_ROWS);
+  auto num_rows  = options.get(parquet_reader_options::size_type_param_id::NUM_ROWS);
 
-  auto row_groups = args.get_row_groups();
+  auto row_groups = options.row_groups();
   if (row_groups.size() > 0) {
     return reader->read_row_groups(row_groups);
-  } else if (args.rows_to_skip() != -1 || args.get_num_rows() != -1) {
-    return reader->read_rows(args.rows_to_skip(), args.get_num_rows());
+  } else if ((skip_rows != -1) || (num_rows != -1)) {
+    return reader->read_rows(skip_rows, num_rows);
   } else {
     return reader->read_all();
   }
 }
 
 // Freeform API wraps the detail writer class API
-std::unique_ptr<std::vector<uint8_t>> write_parquet(write_parquet_args const& args,
+std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const& options,
                                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  detail_parquet::writer_options options{args.get_compression_type(), args.get_stats_level()};
-  auto writer = make_writer<detail_parquet::writer>(args.get_sink_info(), options, mr);
+  auto writer = make_writer<detail_parquet::writer>(options.sink(), options, mr);
 
-  return writer->write_all(args.get_table(),
-                           args.get_metadata(),
-                           args.is_filemetadata_required(),
-                           args.get_metadata_out_file_path());
+  return writer->write_all(options.table(),
+                           options.metadata(),
+                           options.is_filemetadata_required(),
+                           options.metadata_out_file_path());
 }
 
 /**
@@ -298,18 +324,19 @@ std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
  *
  **/
 std::shared_ptr<pq_chunked_state> write_parquet_chunked_begin(
-  write_parquet_chunked_args const& args, rmm::mr::device_memory_resource* mr)
+  chunked_parquet_writer_options const& op, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  detail_parquet::writer_options options{args.compression, args.stats_level};
+  parquet_writer_options options =
+    parquet_writer_options::builder().compression(op.compression()).stats_level(op.stats_level());
 
   auto state = std::make_shared<pq_chunked_state>();
-  state->wp  = make_writer<detail_parquet::writer>(args.sink, options, mr);
+  state->wp  = make_writer<detail_parquet::writer>(op.sink(), options, mr);
 
   // have to make a copy of the metadata here since we can't really
   // guarantee the lifetime of the incoming pointer
-  if (args.metadata != nullptr) {
-    state->user_metadata_with_nullability = *args.metadata;
+  if (op.nullable_metadata() != nullptr) {
+    state->user_metadata_with_nullability = *op.nullable_metadata();
     state->user_metadata                  = &state->user_metadata_with_nullability;
   }
   state->stream = 0;

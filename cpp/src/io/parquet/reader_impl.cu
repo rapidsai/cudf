@@ -987,7 +987,7 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
 }
 
 reader::impl::impl(std::vector<std::unique_ptr<datasource>> &&sources,
-                   reader_options const &options,
+                   parquet_reader_options const &options,
                    rmm::mr::device_memory_resource *mr)
   : _sources(std::move(sources)), _mr(mr)
 {
@@ -995,13 +995,17 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>> &&sources,
   _metadata = std::make_unique<aggregate_metadata>(_sources);
 
   // Select only columns required by the options
-  _selected_columns = _metadata->select_columns(options.columns, options.use_pandas_metadata);
+  _selected_columns = _metadata->select_columns(
+    options.columns(), options.get(parquet_reader_options::boolean_param_id::USE_PANDAS_METADATA));
 
   // Override output timestamp resolution if requested
-  if (options.timestamp_type.id() != type_id::EMPTY) { _timestamp_type = options.timestamp_type; }
+  if (options.timestamp_type().id() != type_id::EMPTY) {
+    _timestamp_type = options.timestamp_type();
+  }
 
   // Strings may be returned as either string or categorical columns
-  _strings_to_categorical = options.strings_to_categorical;
+  _strings_to_categorical =
+    options.get(parquet_reader_options::boolean_param_id::STRINGS_TO_CATEGORICAL);
 }
 
 table_with_metadata reader::impl::read(size_type skip_rows,
@@ -1244,7 +1248,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
 // Forward to implementation
 reader::reader(std::vector<std::string> const &filepaths,
-               reader_options const &options,
+               parquet_reader_options const &options,
                rmm::mr::device_memory_resource *mr)
   : _impl(std::make_unique<impl>(datasource::create(filepaths), options, mr))
 {
@@ -1252,7 +1256,7 @@ reader::reader(std::vector<std::string> const &filepaths,
 
 // Forward to implementation
 reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
-               reader_options const &options,
+               parquet_reader_options const &options,
                rmm::mr::device_memory_resource *mr)
   : _impl(std::make_unique<impl>(std::move(sources), options, mr))
 {

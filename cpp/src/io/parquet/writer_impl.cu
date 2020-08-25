@@ -476,11 +476,11 @@ void writer::impl::encode_pages(hostdevice_vector<gpu::EncColumnChunk> &chunks,
 }
 
 writer::impl::impl(std::unique_ptr<data_sink> sink,
-                   writer_options const &options,
+                   parquet_writer_options const &options,
                    rmm::mr::device_memory_resource *mr)
   : _mr(mr),
-    compression_(to_parquet_compression(options.compression)),
-    stats_granularity_(options.stats_granularity),
+    compression_(to_parquet_compression(options.compression())),
+    stats_granularity_(options.stats_level()),
     out_sink_(std::move(sink))
 {
 }
@@ -959,7 +959,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write_chunked_end(
 
 // Forward to implementation
 writer::writer(std::unique_ptr<data_sink> sink,
-               writer_options const &options,
+               parquet_writer_options const &options,
                rmm::mr::device_memory_resource *mr)
   : _impl(std::make_unique<impl>(std::move(sink), options, mr))
 {

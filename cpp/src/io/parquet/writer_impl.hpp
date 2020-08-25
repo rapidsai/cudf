@@ -28,6 +28,8 @@
 #include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/io/detail/parquet.hpp>
+#include <cudf/io/parquet.hpp>
 #include <cudf/io/writers.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
@@ -68,7 +70,7 @@ class writer::impl {
    * @param mr Device memory resource to use for device memory allocation
    **/
   explicit impl(std::unique_ptr<data_sink> sink,
-                writer_options const& options,
+                parquet_writer_options const& options,
                 rmm::mr::device_memory_resource* mr);
 
   /**

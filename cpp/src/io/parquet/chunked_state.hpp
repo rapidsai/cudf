@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <cudf/io/detail/parquet.hpp>
 #include "parquet.h"
 
 namespace cudf {

@@ -27,18 +27,20 @@ from cudf._lib.cpp.table.table_view cimport (
     table_view
 )
 from cudf._lib.move cimport move
-from cudf._lib.cpp.io.functions cimport (
-    write_parquet_args,
-    write_parquet_args_builder,
-    write_parquet as parquet_writer,
-    merge_rowgroup_metadata as parquet_merge_metadata,
-    read_parquet_args,
+from cudf._lib.cpp.io.parquet cimport (
     read_parquet as parquet_reader,
-    write_parquet_chunked_args,
+    parquet_reader_options,
+    parquet_writer_options,
+    write_parquet as parquet_writer,
+    chunked_parquet_writer_options,
+    chunked_parquet_writer_options_builder,
     write_parquet_chunked_begin,
     write_parquet_chunked,
     write_parquet_chunked_end,
     pq_chunked_state
+)
+from cudf._lib.cpp.io.functions cimport (
+    merge_rowgroup_metadata as parquet_merge_metadata
 )
 from cudf._lib.io.utils cimport (
     make_source_info,
@@ -170,7 +172,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     cdef size_type cpp_skip_rows = skip_rows if skip_rows is not None else 0
     cdef size_type cpp_num_rows = num_rows if num_rows is not None else -1
     cdef vector[vector[size_type]] cpp_row_groups
-    cdef data_type timestamp_type = cudf_types.data_type(
+    cdef data_type cpp_timestamp_type = cudf_types.data_type(
         cudf_types.type_id.EMPTY
     )
 
@@ -181,18 +183,27 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     if row_groups is not None:
         cpp_row_groups = row_groups
 
+    cdef parquet_reader_options args
     # Setup parquet reader arguments
-    cdef read_parquet_args args = move(read_parquet_args.build(source).
-                                       with_column_names(cpp_columns).
-                                       with_row_groups(cpp_row_groups).
-                                       with_skip_rows(cpp_skip_rows).
-                                       with_num_rows(cpp_num_rows).
-                                       with_strings_to_categorical(
-                                           cpp_strings_to_categorical).
-                                       with_utilize_pandas_metadata(
-                                           cpp_use_pandas_metadata).
-                                       with_timestamp_type(timestamp_type).
-                                       get_args())
+    args = move(parquet_reader_options.builder(source).
+                columns(cpp_columns).
+                row_groups(cpp_row_groups).
+                set(parquet_reader_options.
+                    boolean_param_id.STRINGS_TO_CATEGORICAL,
+                    cpp_strings_to_categorical).
+                set(parquet_reader_options.
+                    boolean_param_id.USE_PANDAS_METADATA,
+                    cpp_use_pandas_metadata).
+                set(parquet_reader_options.
+                    size_type_param_id.
+                    SKIP_ROWS,
+                    cpp_skip_rows).
+                set(parquet_reader_options.
+                    size_type_param_id.
+                    NUM_ROWS,
+                    cpp_num_rows).
+                timestamp_type(cpp_timestamp_type).
+                build())
 
     # Read Parquet
     cdef cudf_io_types.table_with_metadata c_out_table
@@ -297,7 +308,7 @@ cpdef write_parquet(
     cdef cudf_io_types.compression_type comp_type = _get_comp_type(compression)
     cdef cudf_io_types.statistics_freq stat_freq = _get_stat_freq(statistics)
 
-    cdef write_parquet_args args
+    cdef parquet_writer_options args
     cdef unique_ptr[vector[uint8_t]] out_metadata_c
     cdef string metadata_out_file_path
     cdef bool return_filemetadata = False
@@ -308,13 +319,13 @@ cpdef write_parquet(
     # Perform write
     with nogil:
         args = move(
-            write_parquet_args.build(sink, tv).
-            with_metadata(tbl_meta.get()).
-            with_compression(comp_type).
-            generate_statistics(stat_freq).
-            with_metadata_out_file_path(metadata_out_file_path).
+            parquet_writer_options.builder(sink, tv).
+            metadata(tbl_meta.get()).
+            compression(comp_type).
+            stats_level(stat_freq).
+            metadata_out_file_path(metadata_out_file_path).
             filemetadata_required(return_filemetadata).
-            get_args()
+            build()
         )
         out_metadata_c = move(parquet_writer(args))
 
@@ -410,11 +421,13 @@ cdef class ParquetWriter:
             str.encode(pandas_metadata)
 
         # call write_parquet_chunked_begin
-        cdef write_parquet_chunked_args args
+        cdef chunked_parquet_writer_options args
         with nogil:
-            args = write_parquet_chunked_args(self.sink,
-                                              tbl_meta.get(),
-                                              self.comp_type, self.stat_freq)
+            args = move(chunked_parquet_writer_options.builder(self.sink).
+                        nullable_metadata(tbl_meta.get()).
+                        compression(self.comp_type).
+                        stats_level(self.stat_freq).
+                        build())
             self.state = write_parquet_chunked_begin(args)
 
 
