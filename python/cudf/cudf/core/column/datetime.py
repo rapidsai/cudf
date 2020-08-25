@@ -204,9 +204,7 @@ class DatetimeColumn(column.ColumnBase):
         )
 
     def median(self, dtype=np.float64):
-        return pd.Timestamp(
-            self.as_numerical.median(dtype=dtype), unit=self.time_unit
-        )
+        raise TypeError(f"cannot perform median with type {self.dtype}")
 
     def quantile(self, q, interpolation, exact):
         result = self.as_numerical.quantile(
