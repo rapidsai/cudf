@@ -15,6 +15,7 @@ except ImportError:
     # Numba <= 0.49
     from numba import numpy_support
 
+from cudf.core._compat import NUMBA_LE_0501
 
 # GPU array type casting
 
@@ -105,7 +106,7 @@ def gpu_mark_found_int(arr, val, out, not_found):
 def gpu_mark_found_float(arr, val, out, not_found):
     i = cuda.grid(1)
     if i < arr.size:
-        if check_equals_float(arr[i], val):
+        if check_equals_float(arr[i], float(val) if NUMBA_LE_0501 else val):
             out[i] = i
         else:
             out[i] = not_found
