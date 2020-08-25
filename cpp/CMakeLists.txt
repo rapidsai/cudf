@@ -269,22 +269,7 @@ file(INSTALL ${LIBCXX_INCLUDE_DIR}     DESTINATION ${CMAKE_BINARY_DIR}/include/l
 ###################################################################################################
 # - find zlib -------------------------------------------------------------------------------------
 
-CPMFindPackage(
-  NAME ZLIB
-  GITHUB_REPOSITORY madler/zlib
-  GIT_TAG 1.2.11
-  VERSION 1.2.11
-)
-
-target_link_libraries(cudf PUBLIC ZLIB)
-add_library(ZLIB INTERFACE IMPORTED)
-if (ZLIB_ADDED)
-message(STATUS "ZLIB: ZLIB_FOUND set to ${ZLIB_FOUND}")
-message(STATUS "ZLIB: ZLIB_LIBRARIES set to ${ZLIB_LIBRARIES}")
-message(STATUS "ZLIB: ZLIB_INCLUDE_DIRS set to ${ZLIB_INCLUDE_DIRS}")
-
-  add_library(ZLIB INTERFACE IMPORTED)
-endif (ZLIB_ADDED)
+find_package(ZLIB REQUIRED)
 message(STATUS "ZLIB: ZLIB_FOUND set to ${ZLIB_FOUND}")
 message(STATUS "ZLIB: ZLIB_LIBRARIES set to ${ZLIB_LIBRARIES}")
 message(STATUS "ZLIB: ZLIB_INCLUDE_DIRS set to ${ZLIB_INCLUDE_DIRS}")
@@ -308,8 +293,6 @@ CPMFindPackage(
   VERSION 1.70.0
   FIND_PACKAGE_ARGUMENTS "COMPONENTS filesystem"
 )
-
-target_link_libraries(Boost PRIVATE Boost::filesystem pthread)
 
 message(STATUS "BOOST: Boost_LIBRARIES set to ${Boost_LIBRARIES}")
 message(STATUS "BOOST: Boost_INCLUDE_DIRS set to ${Boost_INCLUDE_DIRS}")
@@ -824,7 +807,7 @@ endif(HT_DEFAULT_ALLOCATOR)
 # - link libraries --------------------------------------------------------------------------------
 
 # link targets for cuDF
-target_link_libraries(cudf rmm arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+target_link_libraries(cudf PRIVATE rmm arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES} Boost::filesystem pthread ZLIB)
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
