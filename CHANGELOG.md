@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #5974 Use libcudf instead of cupy for `arange` or column creation from a scalar.
+- PR #6076 Add durations type support for csv writer, reader
 
 ## Improvements
 
