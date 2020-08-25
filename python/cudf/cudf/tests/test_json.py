@@ -319,6 +319,7 @@ def test_json_null_literal(buffer):
         ],
     )
 
+
 def test_json_bad_protocol_string():
     test_string = '{"field": "s3://path"}'
 
@@ -326,4 +327,3 @@ def test_json_bad_protocol_string():
     got = cudf.read_json(test_string, lines=True)
 
     assert_eq(expect, got)
-
