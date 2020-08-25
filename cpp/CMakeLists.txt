@@ -159,6 +159,12 @@ option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
 
+# CPM options
+options(CPM_USE_LOCAL_PACKAGES "Search locally installed packages first before using CPM" ON)
+
+# include CPM
+include(cmake/CPM.cmake)
+
 ###################################################################################################
 # - cudart options --------------------------------------------------------------------------------
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
@@ -256,7 +262,13 @@ file(INSTALL ${LIBCXX_INCLUDE_DIR}     DESTINATION ${CMAKE_BINARY_DIR}/include/l
 ###################################################################################################
 # - find zlib -------------------------------------------------------------------------------------
 
-find_package(ZLIB REQUIRED)
+CPMFindPackage(
+  NAME ZLIB
+  GITHUB_REPOSITORY madler/zlib
+  GIT_TAG 1.2.11
+  VERSION 1.2.11
+  FIND_PACKAGE_ARGUMENTS "COMPONENTS filesystem"
+)
 
 message(STATUS "ZLIB: ZLIB_LIBRARIES set to ${ZLIB_LIBRARIES}")
 message(STATUS "ZLIB: ZLIB_INCLUDE_DIRS set to ${ZLIB_INCLUDE_DIRS}")
@@ -273,10 +285,15 @@ endif(ZLIB_FOUND)
 # Don't look for a CMake configuration file
 set(Boost_NO_BOOST_CMAKE ON)
 
-find_package(
-    Boost REQUIRED MODULE
-    COMPONENTS filesystem
+CPMFindPackage(
+  NAME Boost
+  GITHUB_REPOSITORY Orphis/boost-cmake
+  GIT_TAG 1.70.0
+  VERSION 1.70.0
+  FIND_PACKAGE_ARGUMENTS "COMPONENTS filesystem"
 )
+
+target_link_libraries(CPMExampleBoost PRIVATE Boost::filesystem pthread)
 
 message(STATUS "BOOST: Boost_LIBRARIES set to ${Boost_LIBRARIES}")
 message(STATUS "BOOST: Boost_INCLUDE_DIRS set to ${Boost_INCLUDE_DIRS}")
@@ -340,16 +357,18 @@ endif(PER_THREAD_DEFAULT_STREAM)
 # - add gtest -------------------------------------------------------------------------------------
 
 if(BUILD_TESTS)
-    include(CTest)
-    include(ConfigureGoogleTest)
+  CPMAddPackage(
+    NAME googletest
+    GITHUB_REPOSITORY google/googletest
+    GIT_TAG release-1.10.0
+    VERSION 1.10.0
+    OPTIONS
+      "INSTALL_GTEST OFF"
+      "gtest_force_shared_crt"
+  )
 
-    if(GTEST_FOUND)
-        message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
-        include_directories(${GTEST_INCLUDE_DIR})
-        add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
-    else()
-        message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
-    endif(GTEST_FOUND)
+  set_target_properties(googletest PROPERTIES CXX_STANDARD $ENV{CXX})
+  enable_testing() 
 endif(BUILD_TESTS)
 
 message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
@@ -359,15 +378,17 @@ message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
 
 if(BUILD_BENCHMARKS)
 
-  include(ConfigureGoogleBenchmark)
+  CPMAddPackage(
+    NAME benchmark
+    GITHUB_REPOSITORY google/benchmark
+    VERSION 1.4.1
+    OPTIONS
+      "BENCHMARK_ENABLE_TESTING Off"
+  )
 
-  if(GBENCH_FOUND)
-    message(STATUS "Google C++ Benchmarking Framework (Google Benchmark) found in ${GBENCH_ROOT}")
-    include_directories(${GBENCH_INCLUDE_DIR})
-    add_subdirectory(${CMAKE_SOURCE_DIR}/benchmarks)
-  else()
-    message(AUTHOR_WARNING "Google C++ Benchmarking Framework (Google Benchmark) not found: automated tests are disabled.")
-  endif(GBENCH_FOUND)
+  if (benchmark_ADDED)
+    set_target_properties(benchmark PROPERTIES CXX_STANDARD $ENV{CXX})
+  endif()
 
 endif(BUILD_BENCHMARKS)
 
