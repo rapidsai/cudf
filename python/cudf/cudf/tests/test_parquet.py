@@ -130,7 +130,7 @@ def parquet_file(request, tmp_path_factory, pdf):
 
 @pytest.fixture(scope="module")
 def rdg_seed():
-    return int(os.environ.get("RDG_SEED", "42"))
+    return int(os.environ.get("TEST_CUDF_RDG_SEED", "42"))
 
 
 def make_pdf(nrows, ncolumns=1, nvalids=0, dtype=np.int64):
