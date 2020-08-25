@@ -8,7 +8,7 @@ function logger() {
   echo -e "\n>>>> $@\n"
 }
 
-# Install the master version of dask and distributed
+# Install the latest version of dask and distributed
 logger "pip install git+https://github.com/dask/distributed.git --upgrade --no-deps"
 pip install "git+https://github.com/dask/distributed.git" --upgrade --no-deps
 
