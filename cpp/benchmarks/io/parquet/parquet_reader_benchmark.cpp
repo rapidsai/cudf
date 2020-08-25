@@ -23,9 +23,11 @@
 
 #include <cudf/io/functions.hpp>
 
+#include <chrono>
+
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
 
-constexpr int64_t data_size        = 512 << 20;
+constexpr size_t data_size         = 512 << 20;
 constexpr cudf::size_type num_cols = 64;
 
 namespace cudf_io = cudf::io;
@@ -35,15 +37,19 @@ class ParquetRead : public cudf::benchmark {
 
 void PQ_read(benchmark::State& state)
 {
-  auto const data_types     = get_type_or_group(state.range(0));
-  int64_t const total_bytes = state.range(1);
+  auto const data_types = get_type_or_group(state.range(0));
   cudf_io::compression_type const compression =
-    state.range(2) ? cudf_io::compression_type::SNAPPY : cudf_io::compression_type::NONE;
+    state.range(1) ? cudf_io::compression_type::SNAPPY : cudf_io::compression_type::NONE;
 
   std::vector<char> out_buffer;
-  out_buffer.reserve(total_bytes);
+  out_buffer.reserve(data_size);
+  auto t1        = std::chrono::high_resolution_clock::now();
+  auto const tbl = create_random_table(data_types, num_cols, data_size, true);
+  auto t2        = std::chrono::high_resolution_clock::now();
 
-  auto const tbl  = create_random_table(data_types, num_cols, total_bytes, true);
+  auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
+
+  std::cout << duration << std::endl;
   auto const view = tbl->view();
 
   cudf_io::write_parquet_args write_args{
@@ -57,15 +63,15 @@ void PQ_read(benchmark::State& state)
     cudf_io::read_parquet(read_args);
   }
 
-  state.SetBytesProcessed(total_bytes * state.iterations());
+  state.SetBytesProcessed(data_size * state.iterations());
 }
 
-#define PARQ_RD_BENCHMARK_DEFINE(name, type_or_group, compression)        \
-  BENCHMARK_DEFINE_F(ParquetRead, name##_##compression)                   \
-  (::benchmark::State & state) { PQ_read(state); }                        \
-  BENCHMARK_REGISTER_F(ParquetRead, name##_##compression)                 \
-    ->Args({static_cast<int32_t>(type_or_group), data_size, compression}) \
-    ->Unit(benchmark::kMillisecond)                                       \
+#define PARQ_RD_BENCHMARK_DEFINE(name, type_or_group, compression) \
+  BENCHMARK_DEFINE_F(ParquetRead, name##_##compression)            \
+  (::benchmark::State & state) { PQ_read(state); }                 \
+  BENCHMARK_REGISTER_F(ParquetRead, name##_##compression)          \
+    ->Args({static_cast<int32_t>(type_or_group), compression})     \
+    ->Unit(benchmark::kMillisecond)                                \
     ->UseManualTime();
 
 PARQ_RD_BENCHMARK_DEFINE(integral, type_group_id::INTEGRAL, UNCOMPRESSED);
