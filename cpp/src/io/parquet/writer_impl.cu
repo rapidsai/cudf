@@ -1048,9 +1048,8 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
       }
       state.md.row_groups[global_r].columns[i].meta_data.path_in_schema =
         parquet_columns[i].get_path_in_schema();
-      state.md.row_groups[global_r].columns[i].meta_data.codec = UNCOMPRESSED;
-      state.md.row_groups[global_r].columns[i].meta_data.num_values =
-        state.md.row_groups[global_r].num_rows;
+      state.md.row_groups[global_r].columns[i].meta_data.codec      = UNCOMPRESSED;
+      state.md.row_groups[global_r].columns[i].meta_data.num_values = ck->num_values;
     }
     f += fragments_in_chunk;
     start_row += (uint32_t)state.md.row_groups[global_r].num_rows;

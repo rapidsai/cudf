@@ -18,6 +18,7 @@
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/cudf_gtest.hpp>
+#include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
 
 #include <cudf/concatenate.hpp>
@@ -161,15 +162,6 @@ inline auto random_values(size_t size)
   std::generate_n(values.begin(), size, [&]() { return T{dist(engine)}; });
 
   return values;
-}
-
-// Helper function to compare two tables
-void CUDF_TEST_EXPECT_TABLES_EQUAL(cudf::table_view const& lhs, cudf::table_view const& rhs)
-{
-  EXPECT_EQ(lhs.num_columns(), rhs.num_columns());
-  auto expected = lhs.begin();
-  auto result   = rhs.begin();
-  while (result != rhs.end()) { CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected++, *result++); }
 }
 
 }  // namespace
@@ -531,7 +523,7 @@ TEST_F(ParquetWriterTest, ListColumn)
 
   table_view expected({col0, col1, col2, col3, /* col4, */ col5, col6});
 
-  auto filepath = ("ListColumn.parquet");
+  auto filepath = temp_env->get_temp_filepath("ListColumn.parquet");
   cudf_io::write_parquet_args out_args{cudf_io::sink_info{filepath}, expected, &expected_metadata};
   out_args.compression = cudf::io::compression_type::NONE;
   cudf_io::write_parquet(out_args);

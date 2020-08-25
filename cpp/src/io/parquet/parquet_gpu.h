@@ -217,6 +217,8 @@ struct PageFragment {
   uint32_t fragment_data_size;  //!< Size of fragment data in bytes
   uint32_t dict_data_size;      //!< Size of dictionary for this fragment
   uint32_t num_values;          //!< Number of values in fragment. Different from num_rows for list
+  uint32_t num_leaf_values;     //!< Number of leaf values in fragment. Does not include nulls at
+                                //!< non-leaf level
   uint32_t non_nulls;           //!< Number of non-null values
   uint16_t num_rows;            //!< Number of rows in fragment
   uint16_t num_dict_vals;       //!< Number of unique dictionary entries

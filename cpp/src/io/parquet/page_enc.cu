@@ -147,7 +147,19 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
     end_value_idx   = s->col.nesting_offsets[i][end_value_idx];
   }
   size_type nvals = end_value_idx - start_value_idx;
-  if (!t) { s->frag.num_values = nvals; }
+  if (!t) {
+    s->frag.num_leaf_values = nvals;
+
+    // The number of rep/def values can be more than num leaf values because leaf values do not
+    // contain nulls at non-leaf level but rep/def values have an entry for null/empty. For any row,
+    // the location of these pre-calc level values can be obtained from level_offsets which are
+    // per-row offsets into these values. But they only contain offsets from the top level of
+    // nesting. So List<List<int>> will only contain one level_offsets.
+    size_type first_level_val_idx = s->col.level_offsets[start_row];
+    size_type last_level_val_idx  = s->col.level_offsets[start_row + nrows];
+    s->frag.num_values            = last_level_val_idx - first_level_val_idx;
+  }
+  if (t == 0) printf("block %d nvals in frag %d\n", blockIdx.x, nvals);
 
   for (uint32_t i = 0; i < nvals; i += 512) {
     const uint32_t *valid = s->col.valid_map_base;
@@ -421,19 +433,20 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
   }
   __syncthreads();
   if (t < 32) {
-    uint32_t fragments_in_chunk = 0;
-    uint32_t rows_in_page       = 0;
-    uint32_t values_in_page     = 0;
-    uint32_t page_size          = 0;
-    uint32_t num_pages          = 0;
-    uint32_t num_values         = 0;
-    uint32_t page_start         = 0;
-    uint32_t page_offset        = ck_g.ck_stat_size;
-    uint32_t num_dict_entries   = 0;
-    uint32_t comp_page_offset   = ck_g.ck_stat_size;
-    uint32_t cur_row            = ck_g.start_row;
-    uint32_t ck_max_stats_len   = 0;
-    uint32_t max_stats_len      = 0;
+    uint32_t fragments_in_chunk  = 0;
+    uint32_t rows_in_page        = 0;
+    uint32_t values_in_page      = 0;
+    uint32_t leaf_values_in_page = 0;
+    uint32_t page_size           = 0;
+    uint32_t num_pages           = 0;
+    uint32_t num_rows            = 0;
+    uint32_t page_start          = 0;
+    uint32_t page_offset         = ck_g.ck_stat_size;
+    uint32_t num_dict_entries    = 0;
+    uint32_t comp_page_offset    = ck_g.ck_stat_size;
+    uint32_t cur_row             = ck_g.start_row;
+    uint32_t ck_max_stats_len    = 0;
+    uint32_t max_stats_len       = 0;
 
     if (!t) {
       pagestats_g.col         = &col_desc[blockIdx.x];
@@ -479,7 +492,7 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
     do {
       uint32_t fragment_data_size, max_page_size, minmax_len = 0;
       SYNCWARP();
-      if (num_values < ck_g.num_values) {
+      if (num_rows < ck_g.num_rows) {
         if (t < sizeof(PageFragment) / sizeof(uint32_t)) {
           reinterpret_cast<uint32_t *>(&frag_g)[t] =
             reinterpret_cast<const uint32_t *>(&ck_g.fragments[fragments_in_chunk])[t];
@@ -495,14 +508,15 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
       SYNCWARP();
       if (ck_g.has_dictionary && fragments_in_chunk < ck_g.num_dict_fragments) {
         fragment_data_size =
-          frag_g.num_values * 2;  // Assume worst-case of 2-bytes per dictionary index
+          frag_g.num_leaf_values * 2;  // Assume worst-case of 2-bytes per dictionary index
       } else {
         fragment_data_size = frag_g.fragment_data_size;
       }
+      // TODO (dm): this convoluted logic to limit page size needs refactoring
       max_page_size = (values_in_page * 2 >= ck_g.num_values)
                         ? 256 * 1024
                         : (values_in_page * 3 >= ck_g.num_values) ? 384 * 1024 : 512 * 1024;
-      if (num_values >= ck_g.num_values ||
+      if (num_rows >= ck_g.num_rows ||
           (values_in_page > 0 &&
            (page_size + fragment_data_size > max_page_size ||
             (ck_g.has_dictionary && fragments_in_chunk == ck_g.num_dict_fragments)))) {
@@ -544,24 +558,12 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
             }
             page_g.max_hdr_size += stats_hdr_len;
           }
-          page_g.page_data       = ck_g.uncompressed_bfr + page_offset;
-          page_g.compressed_data = ck_g.compressed_bfr + comp_page_offset;
-          page_g.start_row       = cur_row;
-          page_g.num_rows        = rows_in_page;
-          page_g.num_leaf_values = values_in_page;
-
-          if (col_g.nesting_levels > 0) {
-            // The number of rep/def values can be more than num data values because data values do
-            // not contain nulls but rep/def values have an entry for null/empty. For any row, the
-            // location of these pre-calc level values can be obtained from level_offsets which are
-            // per-row offsets into these values. But they only contain offsets from the top level
-            // of nesting. So List<List<int>> will only contain one level_offsets.
-            size_type page_first_val_idx = col_g.level_offsets[page_g.start_row];
-            size_type page_last_val_idx  = col_g.level_offsets[page_g.start_row + page_g.num_rows];
-            page_g.num_values            = page_last_val_idx - page_first_val_idx;
-          } else {
-            page_g.num_values = page_g.num_rows;
-          }
+          page_g.page_data        = ck_g.uncompressed_bfr + page_offset;
+          page_g.compressed_data  = ck_g.compressed_bfr + comp_page_offset;
+          page_g.start_row        = cur_row;
+          page_g.num_rows         = rows_in_page;
+          page_g.num_leaf_values  = leaf_values_in_page;
+          page_g.num_values       = values_in_page;
           uint32_t def_level_bits = col_g.level_bits & 0xf;
           uint32_t rep_level_bits = col_g.level_bits >> 4;
           uint32_t def_level_size =
@@ -591,18 +593,20 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
             reinterpret_cast<uint32_t *>(&pagestats_g)[t];
         }
         num_pages++;
-        page_size      = 0;
-        rows_in_page   = 0;
-        values_in_page = 0;
-        page_start     = fragments_in_chunk;
-        max_stats_len  = 0;
+        page_size           = 0;
+        rows_in_page        = 0;
+        values_in_page      = 0;
+        leaf_values_in_page = 0;
+        page_start          = fragments_in_chunk;
+        max_stats_len       = 0;
       }
       max_stats_len = max(max_stats_len, minmax_len);
       num_dict_entries += frag_g.num_dict_vals;
       page_size += fragment_data_size;
       rows_in_page += frag_g.num_rows;
       values_in_page += frag_g.num_values;
-      num_values += frag_g.num_values;
+      leaf_values_in_page += frag_g.num_leaf_values;
+      num_rows += frag_g.num_rows;
       fragments_in_chunk++;
     } while (frag_g.num_rows != 0);
     SYNCWARP();
@@ -981,13 +985,12 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
         s->rle_out     = s->cur + 4;
       }
       __syncthreads();
-      size_type col_last_val_idx = s->col.level_offsets[s->col.num_rows];
+      size_type page_first_val_idx = s->col.level_offsets[s->page.start_row];
+      size_type col_last_val_idx   = s->col.level_offsets[s->col.num_rows];
       while (s->rle_numvals < s->page.num_values) {
         uint32_t rle_numvals = s->rle_numvals;
         uint32_t nvals       = min(s->page.num_values - rle_numvals, 128);
-        // TODO (dm): Investigate the below: it should've been page_first_val_idx instead of
-        // s->page.start_row
-        uint32_t idx = s->page.start_row + rle_numvals + t;
+        uint32_t idx         = page_first_val_idx + rle_numvals + t;
         uint32_t lvl_val =
           (rle_numvals + t < s->page.num_values && idx < col_last_val_idx) ? lvl_val_data[idx] : 0;
         s->vals[(rle_numvals + t) & (RLE_BFRSZ - 1)] = lvl_val;
