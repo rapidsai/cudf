@@ -14,17 +14,6 @@ cimport cudf._lib.cpp.table.table_view as cudf_table_view
 cdef extern from "cudf/io/functions.hpp" \
         namespace "cudf::io" nogil:
 
-    cdef cppclass read_avro_args:
-        cudf_io_types.source_info source
-        vector[string] columns
-        size_type skip_rows
-        size_type num_rows
-        read_avro_args() except +
-        read_avro_args(cudf_io_types.source_info &info) except +
-
-    cdef cudf_io_types.table_with_metadata read_avro(
-        read_avro_args &args) except +
-
     cdef cppclass read_json_args:
         cudf_io_types.source_info source
         bool lines

@@ -38,51 +38,6 @@ namespace cudf {
 namespace io {
 
 /**
- * @brief Settings to use for `read_avro()`
- *
- * @ingroup io_readers
- */
-struct read_avro_args {
-  source_info source;
-
-  /// Names of column to read; empty is all
-  std::vector<std::string> columns;
-
-  /// Rows to skip from the start; -1 is none
-  size_type skip_rows = -1;
-  /// Rows to read; -1 is all
-  size_type num_rows = -1;
-
-  read_avro_args() = default;
-
-  explicit read_avro_args(source_info const& src) : source(src) {}
-};
-
-/**
- * @brief Reads an Avro dataset into a set of columns
- *
- * @ingroup io_readers
- *
- * The following code snippet demonstrates how to read a dataset from a file:
- * @code
- *  ...
- *  std::string filepath = "dataset.avro";
- *  cudf::read_avro_args args{cudf::source_info(filepath)};
- *  ...
- *  auto result = cudf::read_avro(args);
- * @endcode
- *
- * @param args Settings for controlling reading behavior
- * @param mr Device memory resource used to allocate device memory of the table in the returned
- * table_with_metadata
- *
- * @return The set of columns along with metadata
- */
-table_with_metadata read_avro(
-  read_avro_args const& args,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
-/**
  * @brief Input arguments to the `read_json` interface
  *
  * @ingroup io_readers

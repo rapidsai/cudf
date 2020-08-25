@@ -21,6 +21,7 @@ from cudf._lib.cpp.groupby cimport (
 from cudf._lib.cpp.table.table_view cimport table_view
 from pyarrow.includes.libarrow cimport CMessageReader
 cimport cudf._lib.cpp.io.types as cudf_io_types
+from cudf._lib.cpp.io.avro cimport avro_reader_options
 
 
 # Note: declaring `move()` with `except +` doesn't work.
@@ -77,3 +78,4 @@ cdef extern from "<utility>" namespace "std" nogil:
     cdef pair[unique_ptr[column], table_view] move(
         pair[unique_ptr[column], table_view]
     )
+    cdef avro_reader_options move(avro_reader_options)

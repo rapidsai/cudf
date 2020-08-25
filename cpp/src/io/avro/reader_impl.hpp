@@ -27,6 +27,7 @@
 #include <io/utilities/column_buffer.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 
+#include <cudf/io/detail/avro.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/readers.hpp>
 
@@ -58,7 +59,7 @@ class reader::impl {
    * @param mr Device memory resource to use for device memory allocation
    */
   explicit impl(std::unique_ptr<datasource> source,
-                reader_options const &options,
+                avro_reader_options const &options,
                 rmm::mr::device_memory_resource *mr);
 
   /**
