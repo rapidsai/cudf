@@ -2690,12 +2690,10 @@ def test_dataframe_describe_exclude():
     df["x"] = df.x.astype("int64")
     df["y"] = np.random.normal(10, 1, data_length)
     pdf = df.to_pandas()
-    gdf_results = df.describe(exclude=["float"]).to_pandas()
+    gdf_results = df.describe(exclude=["float"])
     pdf_results = pdf.describe(exclude=["float"])
 
-    np.testing.assert_array_almost_equal(
-        gdf_results.values, pdf_results.values, decimal=4
-    )
+    assert_eq(gdf_results, pdf_results)
 
 
 def test_dataframe_describe_include():
@@ -2707,12 +2705,10 @@ def test_dataframe_describe_include():
     df["x"] = df.x.astype("int64")
     df["y"] = np.random.normal(10, 1, data_length)
     pdf = df.to_pandas()
-    gdf_results = df.describe(include=["int"]).to_pandas()
+    gdf_results = df.describe(include=["int"])
     pdf_results = pdf.describe(include=["int"])
 
-    np.testing.assert_array_almost_equal(
-        gdf_results.values, pdf_results.values, decimal=4
-    )
+    assert_eq(gdf_results, pdf_results)
 
 
 def test_dataframe_describe_default():
@@ -2723,7 +2719,7 @@ def test_dataframe_describe_default():
     df["x"] = np.random.normal(10, 1, data_length)
     df["y"] = np.random.normal(10, 1, data_length)
     pdf = df.to_pandas()
-    gdf_results = df.describe().to_pandas()
+    gdf_results = df.describe()
     pdf_results = pdf.describe()
 
     assert_eq(pdf_results, gdf_results)
@@ -2761,7 +2757,7 @@ def test_dataframe_describe_percentiles():
     df["x"] = np.random.normal(10, 1, data_length)
     df["y"] = np.random.normal(10, 1, data_length)
     pdf = df.to_pandas()
-    gdf_results = df.describe(percentiles=sample_percentiles).to_pandas()
+    gdf_results = df.describe(percentiles=sample_percentiles)
     pdf_results = pdf.describe(percentiles=sample_percentiles)
 
     assert_eq(pdf_results, gdf_results)
@@ -3228,7 +3224,7 @@ def test_create_dataframe_cols_empty_data(a, b, misc_data, non_list_data):
 
 def test_empty_dataframe_describe():
     pdf = pd.DataFrame({"a": [], "b": []})
-    gdf = gd.DataFrame.from_pandas(pdf)
+    gdf = gd.from_pandas(pdf)
 
     expected = pdf.describe()
     actual = gdf.describe()
@@ -6952,3 +6948,44 @@ def test_dataframe_iterrows_itertuples():
         ),
     ):
         df.iterrows()
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        gd.DataFrame(
+            {"a": [1, 2, 3], "b": [10, 22, 33], "c": [0.3234, 0.23432, 0.0]}
+        ),
+        gd.DataFrame(
+            {
+                "a": [1, 2, 3],
+                "b": ["hello", "world", "hello"],
+                "c": [0.3234, 0.23432, 0.0],
+            }
+        ),
+        gd.DataFrame(
+            {
+                "int_data": [1, 2, 3],
+                "str_data": ["hello", "world", "hello"],
+                "float_data": [0.3234, 0.23432, 0.0],
+                "timedelta_data": gd.Series(
+                    [1, 2, 1], dtype="timedelta64[ns]"
+                ),
+                "datetime_data": gd.Series([1, 2, 1], dtype="datetime64[ns]"),
+            }
+        ),
+    ],
+)
+@pytest.mark.parametrize("include", [None, "all"])
+def test_describe_misc(df, include):
+    pdf = df.to_pandas()
+
+    expected = pdf.describe(include=include, datetime_is_numeric=True)
+    actual = df.describe(include=include, datetime_is_numeric=True)
+
+    for col in expected.columns:
+        if expected[col].dtype == np.dtype("object"):
+            expected[col] = expected[col].fillna(-1).astype("str")
+            actual[col] = actual[col].fillna(-1).astype("str")
+
+    assert_eq(expected, actual)
