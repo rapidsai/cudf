@@ -134,7 +134,6 @@ template <typename Element,
             std::enable_if_t<std::is_same<Element, cudf::list_view>::value>*>
 __device__ bool element_equality_comparator<has_nulls>::operator()(size_type lhs_element_index, size_type rhs_element_index)
 {
-    printf("CALEB: element_equality_comparator<list_view>::operator()!\n");
     cudf::detail::lists_column_device_view lhs_device_view{lhs};
     cudf::detail::lists_column_device_view rhs_device_view{rhs};
     return lhs_device_view[lhs_element_index] == rhs_device_view[rhs_element_index];
@@ -197,11 +196,10 @@ class list_element_equality_comparator
                   std::enable_if_t<!std::is_same<T, cudf::struct_view>::value>* = nullptr>
         CUDA_DEVICE_CALLABLE bool operator()(size_type i)
         {
-            printf("CALEB: list_element_equality_comparator::op()!\n");
             if (has_nulls)
             {
-                bool lhs_is_null = lhs.is_null(i); // TODO: lhs.is_nullable() &&
-                bool rhs_is_null = rhs.is_null(i); // TODO: rhs.is_nullable()?
+                bool lhs_is_null = lhs.is_null(i); 
+                bool rhs_is_null = rhs.is_null(i); 
                 if (lhs_is_null && rhs_is_null)
                 {
                     return nulls_are_equal;
@@ -265,20 +263,16 @@ class list_element_equality_comparator
 
 CUDA_DEVICE_CALLABLE bool list_device_view::operator == (list_device_view const& rhs) const
 {
-    printf("CALEB: list_device_view::operator ==()!\n");
-
     auto element_type{lists_column.child().type()};
     release_assert(rhs.lists_column.child().type() == element_type && "List-Element type mismatch!");
 
     if (is_null() && rhs.is_null())
     {
-        printf("BOTH NULL! EQUAL!\n");
         return true;
     }
 
     if (size() != rhs.size())
     {
-        printf("CALEB: list_device_view::operator ==()! Sizes are different! \n");
         return false;
     }
 

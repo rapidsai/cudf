@@ -41,8 +41,6 @@ class list_view {
         __device__ bool operator == (list_view const& rhs) const
         {
             release_assert(!"list_view::operator ==() should not be called directly.");
-            printf("CALEB: list_view::operator ==()!\n");
-
             return false;
         }
 
