@@ -4589,8 +4589,8 @@ class DataFrame(Frame, Serializable):
 
         Returns
         -------
-        output_frame : DataFrame
-            Summary statistics of relevant columns in the original dataframe.
+        output_frame : Series or DataFrame
+            Summary statistics of the Series or Dataframe provided.
 
         Notes
         -----
