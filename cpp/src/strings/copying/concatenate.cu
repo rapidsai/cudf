@@ -82,6 +82,8 @@ auto create_strings_device_views(std::vector<column_view> const& views, cudaStre
 
   // Compute the partition offsets and size of offset column
   // Note: Using 64-bit size_t so we can detect overflow of 32-bit size_type
+  // TODO(rongou): revert back to transform_inclusive_scan once
+  // https://github.com/thrust/thrust/issues/1260 is fixed.
   // Note: Using separate transform and inclusive_scan because transform_inclusive_scan fails to
   // compile with:
   // error: no suitable constructor exists to convert from "size_t" to "cudf::column_device_view"
