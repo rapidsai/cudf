@@ -329,30 +329,11 @@ struct column_to_strings_fn {
     return conv_col_ptr;
   }
 
-    template <typename column_type>
+  template <typename column_type>
   std::enable_if_t<cudf::is_duration<column_type>(), std::unique_ptr<column>> operator()(
     column_view const& column) const
   {
-    std::string format{"%P"}; //"D days %+%H:%M:%S"
-
-    // handle the cases where delimiter / line-terminator can be
-    // "-" or ":", in which case they are to be dropped from the format:
-    //
-    std::string delimiter{options_.inter_column_delimiter()};
-    std::string newline{options_.line_terminator()};
-
-    constexpr char const* dash{"-"};
-    constexpr char const* colon{":"};
-    if (delimiter == dash || newline == dash) {
-      format.erase(std::remove(format.begin(), format.end(), dash[0]), format.end());
-    }
-
-    if (delimiter == colon || newline == colon) {
-      format.erase(std::remove(format.begin(), format.end(), colon[0]), format.end());
-    }
-
-    auto conv_col_ptr = cudf::strings::from_durations(column, format, mr_);
-
+    auto conv_col_ptr = cudf::strings::from_durations(column, std::string{"%P"});
     return conv_col_ptr;
   }
 

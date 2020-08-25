@@ -85,6 +85,7 @@ struct format_compiler {
       {'I', 2},   // HH
       {'M', 2},   // MM
       {'S', -1},  // 2 to 13 SS[.mmm][uuu][nnn] (uuu,nnn are not in std::format)
+      {'s', 12},  // 12 SS.mmmuuunnn (not in std::format)
       {'p', 2},   // AM/PM
       {'R', 5},   // 5 HH:MM
       {'T', 8},   // 8 HH:MM:SS"
@@ -201,8 +202,7 @@ struct duration_to_string_size_fn {
                                       timeparts->second != 0 || timeparts->subsecond != 0));
         // [-] %d days [+]HH:MM:SS.mmmuuunnn
         return count_digits(day) + 6 + timeparts->is_negative + 18;
-        }
-        break;
+      } break;
       default: return 2;
     }
   }
@@ -326,34 +326,44 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
     return ptr + digits + 1;
   }
 
+  inline __device__ char* nanosecond(char* ptr, duration_component const* timeparts)
+  {
+    auto value = duration_ns(T(timeparts->subsecond)).count();
+    *ptr       = '.';
+    for (int idx = 9; idx > 0; idx--) {
+      *(ptr + idx) = '0' + std::abs(value % 10);
+      value /= 10;
+    }
+    return ptr + 10;
+  }
+
   inline __device__ char* pandas_format(char* ptr, duration_component const* timeparts)
   {
     // adjust for pandas format
-    duration_component pandas_timeparts=*timeparts;
+    duration_component pandas_timeparts = *timeparts;
     if (timeparts->is_negative) {
       duration_ns nanoseconds = simt::std::chrono::hours(timeparts->hour) +
                                 simt::std::chrono::minutes(timeparts->minute) +
                                 duration_s(timeparts->second) + T(timeparts->subsecond);
       nanoseconds += simt::std::chrono::hours(24);
       dissect_duration(nanoseconds, &pandas_timeparts);
-      pandas_timeparts.day = timeparts->day - (pandas_timeparts.day==0);
+      pandas_timeparts.day = timeparts->day - (pandas_timeparts.day == 0);
     }
     if (timeparts->is_negative) *ptr++ = '-';
-    ptr = day(ptr, &pandas_timeparts);
-    *ptr++ = ' '; *ptr++ = 'd'; *ptr++ = 'a'; *ptr++ = 'y'; *ptr++ = 's'; *ptr++ = ' ';
+    ptr    = day(ptr, &pandas_timeparts);
+    *ptr++ = ' ';
+    *ptr++ = 'd';
+    *ptr++ = 'a';
+    *ptr++ = 'y';
+    *ptr++ = 's';
+    *ptr++ = ' ';
     if (timeparts->is_negative) *ptr++ = '+';
     ptr    = hour_24(ptr, &pandas_timeparts);
     *ptr++ = ':';
     ptr    = minute(ptr, &pandas_timeparts);
     *ptr++ = ':';
     ptr    = second(ptr, &pandas_timeparts);
-    auto value       = timeparts->subsecond;
-    *ptr             = '.';
-    for (int idx = 9; idx > 0; idx--) {
-      *(ptr + idx) = '0' + std::abs(value % 10);
-      value /= 10;
-    }
-    return ptr+10;
+    return nanosecond(ptr, &pandas_timeparts);
   }
 
   __device__ char* format_from_parts(duration_component const* timeparts, char* ptr)
@@ -387,6 +397,10 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
         case 'f':  // sub-second
           ptr = subsecond(ptr, timeparts);
           break;
+        case 's':  // second.nanosecond
+          ptr = second(ptr, timeparts);
+          ptr = nanosecond(ptr, timeparts);
+          break;
         case 'p': ptr = am_or_pm(ptr, timeparts); break;
         case 'R':  // HH:MM 24-hour
           ptr    = hour_24(ptr, timeparts);
@@ -409,9 +423,7 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
           *ptr++ = ' ';
           ptr    = am_or_pm(ptr, timeparts);
           break;
-        case 'P':
-          ptr = pandas_format(ptr, timeparts);
-          break;
+        case 'P': ptr = pandas_format(ptr, timeparts); break;
         default:  // ignore everything else
           break;
       }
@@ -611,6 +623,7 @@ struct parse_duration {
           timeparts->minute = parse_minute(ptr, item_length);
           break;
         case 'S':  // [-]SS[.mmm][uuu][nnn]
+        case 's':
           timeparts->second = parse_second(ptr, item_length);
           if (*(ptr + item_length) == '.') {
             item_length++;
