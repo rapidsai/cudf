@@ -1826,13 +1826,17 @@ class GenericIndex(Index):
 
         Parameters
         ----------
+        name : object, default None
+            Name of index, use original name when None
         deep : bool, default True
             Make a deep copy of the data.
-            With ``deep=False`` the is not copied.
+            With ``deep=False`` the original data is used
+        dtype : numpy dtype, default None
+            Target datatype to cast into, use original dtype when None
 
         Returns
         -------
-        copy : Index
+        New index instance with same data, casted to new dtype
         """
 
         dtype = self.dtype if dtype is None else dtype
