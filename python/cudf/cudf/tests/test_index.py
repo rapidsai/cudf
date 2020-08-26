@@ -276,24 +276,20 @@ def test_set_index_as_property():
 
 @pytest.mark.parametrize("deep", [True, False])
 @pytest.mark.parametrize("name", ["x"])
-@pytest.mark.parametrize(
-    "dtype", SIGNED_INTEGER_TYPES
-)
+@pytest.mark.parametrize("dtype", SIGNED_INTEGER_TYPES)
 def test_index_copy_range(name, deep, dtype):
     idx = cudf.core.index.RangeIndex(1, 5)
     idx_copy = idx.copy(name=name, deep=deep, dtype=dtype)
 
     idx.name = name
     assert_eq(idx, idx_copy)
-    assert(pd.api.types.is_dtype_equal(idx_copy.dtype, dtype))
+    assert pd.api.types.is_dtype_equal(idx_copy.dtype, dtype)
     assert_eq(idx_copy.name, name)
 
 
 @pytest.mark.parametrize("deep", [True, False])
 @pytest.mark.parametrize("name", ["x"])
-@pytest.mark.parametrize(
-    "dtype,", ["datetime64[ns]", "int64"]
-)
+@pytest.mark.parametrize("dtype,", ["datetime64[ns]", "int64"])
 def test_index_copy_datetime(name, deep, dtype):
     cidx = cudf.DatetimeIndex(["2001", "2002", "2003"], dtype="datetime64[ns]")
     pidx = cidx.to_pandas()
@@ -309,9 +305,7 @@ def test_index_copy_datetime(name, deep, dtype):
 
 @pytest.mark.parametrize("deep", [True, False])
 @pytest.mark.parametrize("name", ["x"])
-@pytest.mark.parametrize(
-    "dtype", ["category", "object"]
-)
+@pytest.mark.parametrize("dtype", ["category", "object"])
 def test_index_copy_string(name, deep, dtype):
     pidx = pd.Index(["a", "b", "c"])
     cidx = cudf.from_pandas(pidx)
@@ -326,7 +320,7 @@ def test_index_copy_string(name, deep, dtype):
 @pytest.mark.parametrize("name", ["x"])
 @pytest.mark.parametrize(
     "dtype",
-    NUMERIC_TYPES + ["datetime64[ns]", "timedelta64[ns]"] + OTHER_TYPES
+    NUMERIC_TYPES + ["datetime64[ns]", "timedelta64[ns]"] + OTHER_TYPES,
 )
 def test_index_copy_integer(name, deep, dtype):
     """Test for NumericIndex Copy Casts
@@ -342,9 +336,7 @@ def test_index_copy_integer(name, deep, dtype):
 
 @pytest.mark.parametrize("deep", [True, False])
 @pytest.mark.parametrize("name", ["x"])
-@pytest.mark.parametrize(
-    "dtype", SIGNED_TYPES
-)
+@pytest.mark.parametrize("dtype", SIGNED_TYPES)
 def test_index_copy_float(name, deep, dtype):
     """Test for NumericIndex Copy Casts
     """
@@ -359,9 +351,7 @@ def test_index_copy_float(name, deep, dtype):
 
 @pytest.mark.parametrize("deep", [True, False])
 @pytest.mark.parametrize("name", ["x"])
-@pytest.mark.parametrize(
-    "dtype", NUMERIC_TYPES + ["category"]
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["category"])
 def test_index_copy_category(name, deep, dtype):
     cidx = cudf.core.index.CategoricalIndex([1, 2, 3])
     pidx = cidx.to_pandas()

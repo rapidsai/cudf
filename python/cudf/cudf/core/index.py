@@ -1552,7 +1552,8 @@ class RangeIndex(Index):
         """
         if name is None and dtype is None:
             return RangeIndex(
-                start=self._start, stop=self._stop, name=self.name)
+                start=self._start, stop=self._stop, name=self.name
+            )
 
         dtype = self.dtype if dtype is None else dtype
 
@@ -1561,8 +1562,7 @@ class RangeIndex(Index):
 
         name = self.name if name is None else name
 
-        _idx_new = RangeIndex(
-            start=self._start, stop=self._stop, name=name)
+        _idx_new = RangeIndex(start=self._start, stop=self._stop, name=name)
 
         return _idx_new.astype(dtype, copy=deep)
 
@@ -1843,7 +1843,8 @@ class GenericIndex(Index):
         name = self.name if name is None else name
 
         result = as_index(
-            self._values.copy(deep=deep).astype(dtype), name=name)
+            self._values.copy(deep=deep).astype(dtype), name=name
+        )
         return result
 
     def __sizeof__(self):
