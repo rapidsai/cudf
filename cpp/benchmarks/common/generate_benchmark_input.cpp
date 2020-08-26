@@ -193,6 +193,7 @@ bool random_element<bool>(std::mt19937& engine)
 template <typename T>
 std::unique_ptr<cudf::column> create_random_column(std::mt19937& engine, cudf::size_type num_rows)
 {
+  // make_fixed_width_column then mutable_view, then get null_mask and data, then fill
   float const null_frequency = 0.01;
   cudf::test::fixed_width_column_wrapper<T> wrapped_col;
   auto rand_elements = cudf::test::make_counting_transform_iterator(
@@ -229,26 +230,29 @@ template <>
 std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(std::mt19937& engine,
                                                                       cudf::size_type num_rows)
 {
-  float const null_frequency = 0.01;
-
+  float const null_frequency          = 0.01;
   static constexpr int avg_string_len = 16;
 
-  std::poisson_distribution<> dist(avg_string_len);
+  auto const char_cnt        = avg_string_len * num_rows;
+  cudf::size_type null_count = 0;
+
+  std::poisson_distribution<> len_dist(avg_string_len);
+  std::uniform_real_distribution<float> null_dist;
+  std::uniform_int_distribution<char> char_dist{'!', '~'};
 
   std::vector<int32_t> offsets{0};
   offsets.reserve(num_rows + 1);
-  for (int i = 1; i < num_rows; ++i) { offsets.push_back(offsets.back() + dist(engine)); }
-  auto const char_cnt = offsets.back() + 1;
   std::vector<char> chars;
   chars.reserve(char_cnt);
-  std::uniform_int_distribution<char> char_gen{'!', '~'};
-  std::generate_n(std::back_inserter(chars), char_cnt, [&]() { return char_gen(engine); });
-
   auto const bits_per_word = sizeof(cudf::bitmask_type) * 8;
   std::vector<cudf::bitmask_type> null_mask((num_rows + bits_per_word - 1) / bits_per_word, ~0);
-  std::uniform_real_distribution<float> null_dist;
-  cudf::size_type null_count = 0;
+
   for (int row = 1; row < num_rows; ++row) {
+    offsets.push_back(offsets.back() + len_dist(engine));
+    std::generate_n(std::back_inserter(chars), offsets.rbegin()[0] - offsets.rbegin()[1], [&]() {
+      return char_dist(engine);
+    });
+
     if (null_dist(engine) <= null_frequency) {
       null_mask[row / bits_per_word] &= ~(cudf::bitmask_type(1) << row % bits_per_word);
       ++null_count;
