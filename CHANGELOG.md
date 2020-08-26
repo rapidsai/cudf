@@ -22,6 +22,7 @@
 
 
 # cuDF 0.15.0 (Date TBD)
+# cuDF 0.15.0 (26 Aug 2020)
 
 ## New Features
 
