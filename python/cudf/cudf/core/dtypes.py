@@ -298,7 +298,15 @@ def make_dtype_from_string(obj):
         return BooleanDtype()
     elif "category" in obj:
         return "category"
-
+    elif "timedelta" in obj:
+        if obj == 'timedelta64[ns]':
+            return Timedelta64NSDtype()
+        if obj == 'timedelta64[us]':
+            return Timedelta64USDtype()
+        if obj == 'timedelta64[ms]':
+            return Timedelta64MSDtype()
+        if obj == 'timedelta64[s]':
+            return Timedelta64SDtype()
 
 def make_dtype_from_numpy(obj):
     np_to_pd_types = {v: k for k, v in pd_to_np_dtypes.items()}

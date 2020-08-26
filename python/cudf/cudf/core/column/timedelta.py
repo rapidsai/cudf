@@ -16,10 +16,10 @@ from cudf.utils.dtypes import is_scalar, np_to_pa_dtype
 from cudf.utils.utils import buffers_from_pyarrow
 
 _dtype_to_format_conversion = {
-    "timedelta64[ns]": "%D days %H:%M:%S",
-    "timedelta64[us]": "%D days %H:%M:%S",
-    "timedelta64[ms]": "%D days %H:%M:%S",
-    "timedelta64[s]": "%D days %H:%M:%S",
+    "Timedelta64NS": "%D days %H:%M:%S",
+    "Timedelta64US": "%D days %H:%M:%S",
+    "Timedelta64MS": "%D days %H:%M:%S",
+    "Timedelta64S": "%D days %H:%M:%S",
 }
 
 
@@ -232,8 +232,6 @@ class TimeDeltaColumn(column.ColumnBase):
 
         if reflect:
             lhs, rhs = rhs, lhs
-        import pdb
-        pdb.set_trace()
         return binop(lhs, rhs, op=op, out_dtype=out_dtype)
 
     def normalize_binop_value(self, other):
@@ -342,7 +340,7 @@ class TimeDeltaColumn(column.ColumnBase):
             kwargs["format"] = fmt
         if len(self) > 0:
             return string._numeric_to_str_typecast_functions[
-                np.dtype(self.dtype)
+                self.dtype
             ](self, **kwargs)
         else:
             return column.column_empty(0, dtype="object", masked=False)
