@@ -48,7 +48,7 @@ void ORC_read(benchmark::State& state)
   std::vector<char> out_buffer;
   out_buffer.reserve(total_bytes);
 
-  auto const tbl  = create_random_table({cudf::type_id::INT32}, num_cols, col_bytes, true);
+  auto const tbl  = create_random_table({cudf::type_id::INT32}, num_cols, col_bytes);
   auto const view = tbl->view();
 
   cudf_io::write_orc_args args{cudf_io::sink_info(&out_buffer), view, nullptr, compression};

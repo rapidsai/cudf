@@ -186,25 +186,21 @@ bool random_element<bool>(std::mt19937& engine)
  * The templated implementation is used for all fixed width types. String columns are generated
  * using the specialization implemented below.
  *
- * @param[in] col_bytes Size of the generated column, in bytes
- * @param[in] include_validity Whether to include the null mask in the columns
+ * @param[in] TODO
  *
  * @return Column filled with random data
  */
 template <typename T>
-std::unique_ptr<cudf::column> create_random_column(std::mt19937& engine,
-                                                   cudf::size_type num_rows,
-                                                   bool include_validity)
+std::unique_ptr<cudf::column> create_random_column(std::mt19937& engine, cudf::size_type num_rows)
 {
-  // Every 100th element is invalid
-  // TODO: should this also be random?
-  auto valids = cudf::test::make_counting_transform_iterator(
-    0, [](auto i) { return i % 100 == 0 ? false : true; });
-
+  float const null_frequency = 0.01;
   cudf::test::fixed_width_column_wrapper<T> wrapped_col;
   auto rand_elements = cudf::test::make_counting_transform_iterator(
     0, [&](auto row) { return random_element<T>(engine); });
-  if (include_validity) {
+  if (null_frequency > 0.0) {
+    std::uniform_real_distribution<float> null_dist;
+    auto valids = cudf::test::make_counting_transform_iterator(
+      0, [&](auto) { return null_dist(engine) > null_frequency; });
     wrapped_col =
       cudf::test::fixed_width_column_wrapper<T>(rand_elements, rand_elements + num_rows, valids);
   } else {
@@ -212,7 +208,7 @@ std::unique_ptr<cudf::column> create_random_column(std::mt19937& engine,
       cudf::test::fixed_width_column_wrapper<T>(rand_elements, rand_elements + num_rows);
   }
   auto col = wrapped_col.release();
-  col->has_nulls();
+  col->has_nulls();  // set the null count
   return col;
 }
 
@@ -225,17 +221,15 @@ std::unique_ptr<cudf::column> create_random_column(std::mt19937& engine,
  * Due to random generation of the length of the columns elements, the resulting column will have a
  * slightly different size from @ref col_bytes.
  *
- * @param[in] col_bytes Size of the generated column, in bytes
- * @param[in] include_validity Whether to include the null mask in the columns
+ * @param[in] TODO
  *
  * @return Column filled with random data
  */
 template <>
 std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(std::mt19937& engine,
-                                                                      cudf::size_type num_rows,
-                                                                      bool include_validity)
+                                                                      cudf::size_type num_rows)
 {
-  // TODO: have some elements be null
+  float const null_frequency = 0.01;
 
   static constexpr int avg_string_len = 16;
 
@@ -249,50 +243,47 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(std::mt199
   chars.reserve(char_cnt);
   std::uniform_int_distribution<char> char_gen{'!', '~'};
   std::generate_n(std::back_inserter(chars), char_cnt, [&]() { return char_gen(engine); });
-  std::cout << chars.data() << std::endl;
 
-  return cudf::make_strings_column(chars, offsets);
+  auto const bits_per_word = sizeof(cudf::bitmask_type) * 8;
+  std::vector<cudf::bitmask_type> null_mask((num_rows + bits_per_word - 1) / bits_per_word, ~0);
+  std::uniform_real_distribution<float> null_dist;
+  cudf::size_type null_count = 0;
+  for (int row = 1; row < num_rows; ++row) {
+    if (null_dist(engine) <= null_frequency) {
+      null_mask[row / bits_per_word] &= ~(cudf::bitmask_type(1) << row % bits_per_word);
+      ++null_count;
+    }
+  }
+  return cudf::make_strings_column(chars, offsets, null_mask, null_count);
 }
 
 template <>
 std::unique_ptr<cudf::column> create_random_column<cudf::dictionary32>(std::mt19937& engine,
-                                                                       cudf::size_type num_rows,
-                                                                       bool include_validity)
+                                                                       cudf::size_type num_rows)
 {
   CUDF_FAIL("not implemented yet");
 }
 
 template <>
 std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(std::mt19937& engine,
-                                                                    cudf::size_type num_rows,
-                                                                    bool include_validity)
+                                                                    cudf::size_type num_rows)
 {
   CUDF_FAIL("not implemented yet");
 }
 
 template <>
 std::unique_ptr<cudf::column> create_random_column<cudf::struct_view>(std::mt19937& engine,
-                                                                      cudf::size_type num_rows,
-                                                                      bool include_validity)
+                                                                      cudf::size_type num_rows)
 {
   CUDF_FAIL("not implemented yet");
 }
 
 struct create_rand_col_fn {
-  std::mt19937& engine;  // move to operator() params
-  cudf::size_type num_rows;
-  bool include_validity;
-
  public:
-  create_rand_col_fn(std::mt19937& engine, cudf::size_type num_rows, bool include_validity)
-    : engine{engine}, num_rows{num_rows}, include_validity{include_validity}
-  {
-  }
-
   template <typename T>
-  std::unique_ptr<cudf::column> operator()()
+  std::unique_ptr<cudf::column> operator()(std::mt19937& engine, cudf::size_type num_rows)
   {
-    return create_random_column<T>(engine, num_rows, include_validity);
+    return create_random_column<T>(engine, num_rows);
   }
 };
 
@@ -300,14 +291,12 @@ using columns_vector = std::vector<std::unique_ptr<cudf::column>>;
 
 columns_vector create_random_columns(std::vector<cudf::type_id> dtype_ids,
                                      std::mt19937 engine,
-                                     cudf::size_type num_rows,
-                                     bool include_validity)
+                                     cudf::size_type num_rows)
 {
   columns_vector output_columns;
   std::transform(
     dtype_ids.begin(), dtype_ids.end(), std::back_inserter(output_columns), [&](auto tid) {
-      return cudf::type_dispatcher(cudf::data_type(tid),
-                                   create_rand_col_fn{engine, num_rows, include_validity});
+      return cudf::type_dispatcher(cudf::data_type(tid), create_rand_col_fn{}, engine, num_rows);
     });
   return output_columns;
 }
@@ -324,8 +313,7 @@ std::vector<cudf::type_id> repeat_dtypes(std::vector<cudf::type_id> const& dtype
 
 std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> dtype_ids,
                                                  cudf::size_type num_cols,
-                                                 size_t table_bytes,
-                                                 bool include_validity)
+                                                 size_t table_bytes)
 {
   auto const out_dtype_ids = repeat_dtypes(dtype_ids, num_cols);
   size_t const avg_row_bytes =
@@ -349,8 +337,7 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> dtyp
                                         create_random_columns,
                                         std::move(thread_types),
                                         std::move(thread_engine),
-                                        num_rows,
-                                        include_validity));
+                                        num_rows));
     next_col += thread_num_cols;
   }
 

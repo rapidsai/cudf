@@ -41,7 +41,7 @@ void CSV_write(benchmark::State& state)
 
   int64_t const col_bytes = total_bytes / num_cols;
 
-  auto const tbl  = create_random_table({cudf::type_id::INT32}, num_cols, col_bytes, true);
+  auto const tbl  = create_random_table({cudf::type_id::INT32}, num_cols, col_bytes);
   auto const view = tbl->view();
 
   for (auto _ : state) {

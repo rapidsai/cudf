@@ -19,5 +19,4 @@
 
 std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> dtype_ids,
                                                  cudf::size_type num_cols,
-                                                 size_t table_bytes,
-                                                 bool include_validity);
+                                                 size_t table_bytes);

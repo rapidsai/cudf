@@ -44,7 +44,7 @@ void PQ_read(benchmark::State& state)
   std::vector<char> out_buffer;
   out_buffer.reserve(data_size);
   auto t1        = std::chrono::high_resolution_clock::now();
-  auto const tbl = create_random_table(data_types, num_cols, data_size, true);
+  auto const tbl = create_random_table(data_types, num_cols, data_size);
   auto t2        = std::chrono::high_resolution_clock::now();
 
   auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
@@ -79,7 +79,7 @@ PARQ_RD_BENCHMARK_DEFINE(floats, type_group_id::FLOATING_POINT, UNCOMPRESSED);
 PARQ_RD_BENCHMARK_DEFINE(timestamps, type_group_id::TIMESTAMP, UNCOMPRESSED);
 PARQ_RD_BENCHMARK_DEFINE(string, cudf::type_id::STRING, UNCOMPRESSED);
 
-PARQ_RD_BENCHMARK_DEFINE(integral, type_group_id::INTEGRAL, USE_SNAPPY);
-PARQ_RD_BENCHMARK_DEFINE(floats, type_group_id::FLOATING_POINT, USE_SNAPPY);
-PARQ_RD_BENCHMARK_DEFINE(timestamps, type_group_id::TIMESTAMP, USE_SNAPPY);
-PARQ_RD_BENCHMARK_DEFINE(string, cudf::type_id::STRING, USE_SNAPPY);
+// PARQ_RD_BENCHMARK_DEFINE(integral, type_group_id::INTEGRAL, USE_SNAPPY);
+// PARQ_RD_BENCHMARK_DEFINE(floats, type_group_id::FLOATING_POINT, USE_SNAPPY);
+// PARQ_RD_BENCHMARK_DEFINE(timestamps, type_group_id::TIMESTAMP, USE_SNAPPY);
+// PARQ_RD_BENCHMARK_DEFINE(string, cudf::type_id::STRING, USE_SNAPPY);
