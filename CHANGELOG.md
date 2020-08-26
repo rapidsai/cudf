@@ -21,7 +21,6 @@
 - PR #6081 Fix issue where fsspec thinks it has a protocol string
 
 
-# cuDF 0.15.0 (Date TBD)
 # cuDF 0.15.0 (26 Aug 2020)
 
 ## New Features
