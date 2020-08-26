@@ -29,6 +29,7 @@ struct frag_init_state_s {
   EncColumnDesc col;
   PageFragment frag;
   uint32_t total_dupes;
+  size_type start_value_idx;
   volatile uint32_t scratch_red[32];
   uint32_t dict[MAX_PAGE_FRAGMENT_SIZE];
   union {
@@ -104,7 +105,8 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
 
   frag_init_state_s *const s = &state_g;
   uint32_t t                 = threadIdx.x;
-  uint32_t start_row, nrows, dtype_len, dtype_len_in, dtype;
+  uint32_t start_row, dtype_len, dtype_len_in, dtype;
+  size_type start_value_idx, nvals;
 
   if (t < sizeof(EncColumnDesc) / sizeof(uint32_t)) {
     reinterpret_cast<uint32_t *>(&s->col)[t] =
@@ -126,6 +128,32 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
     s->frag.fragment_data_size = 0;
     s->frag.dict_data_size     = 0;
     s->total_dupes             = 0;
+
+  // To use num_vals instead of num_rows, we need to calculate num_vals on the fly.
+  // For list<list<int>>, values between i and i+50 can be calculated by
+  // off_11 = off[i], off_12 = off[i+50]
+  // off_21 = child.off[off_11], off_22 = child.off[off_12]
+    start_value_idx         = start_row;
+    size_type end_value_idx = start_row + s->frag.num_rows;
+  for (size_type i = 0; i < s->col.nesting_levels; i++) {
+    start_value_idx = s->col.nesting_offsets[i][start_value_idx];
+    end_value_idx   = s->col.nesting_offsets[i][end_value_idx];
+  }
+    s->frag.num_leaf_values = end_value_idx - start_value_idx;
+    s->start_value_idx      = start_value_idx;
+
+    if (s->col.nesting_levels > 0) {
+      // The number of rep/def values can be more than num data values because data values do
+      // not contain nulls but rep/def values have an entry for null/empty. For any row, the
+      // location of these pre-calc level values can be obtained from level_offsets which are
+      // per-row offsets into these values. But they only contain offsets from the top level
+      // of nesting. So List<List<int>> will only contain one level_offsets.
+    size_type first_level_val_idx = s->col.level_offsets[start_row];
+      size_type last_level_val_idx  = s->col.level_offsets[start_row + s->frag.num_rows];
+    s->frag.num_values            = last_level_val_idx - first_level_val_idx;
+    } else {
+      s->frag.num_values = s->frag.num_rows;
+    }
   }
   dtype     = s->col.physical_type;
   dtype_len = (dtype == INT64 || dtype == DOUBLE) ? 8 : (dtype == BOOLEAN) ? 1 : 4;
@@ -135,31 +163,9 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
     dtype_len_in = (dtype == BYTE_ARRAY) ? sizeof(nvstrdesc_s) : dtype_len;
   }
   __syncthreads();
-  // To use num_vals instead of num_rows, we need to calculate num_vals on the fly.
-  // For list<list<int>>, values between i and i+50 can be calculated by
-  // off_11 = off[i], off_12 = off[i+50]
-  // off_21 = child.off[off_11], off_22 = child.off[off_12]
-  nrows                     = s->frag.num_rows;
-  size_type start_value_idx = start_row;
-  size_type end_value_idx   = start_row + nrows;
-  for (size_type i = 0; i < s->col.nesting_levels; i++) {
-    start_value_idx = s->col.nesting_offsets[i][start_value_idx];
-    end_value_idx   = s->col.nesting_offsets[i][end_value_idx];
-  }
-  size_type nvals = end_value_idx - start_value_idx;
-  if (!t) {
-    s->frag.num_leaf_values = nvals;
 
-    // The number of rep/def values can be more than num leaf values because leaf values do not
-    // contain nulls at non-leaf level but rep/def values have an entry for null/empty. For any row,
-    // the location of these pre-calc level values can be obtained from level_offsets which are
-    // per-row offsets into these values. But they only contain offsets from the top level of
-    // nesting. So List<List<int>> will only contain one level_offsets.
-    size_type first_level_val_idx = s->col.level_offsets[start_row];
-    size_type last_level_val_idx  = s->col.level_offsets[start_row + nrows];
-    s->frag.num_values            = last_level_val_idx - first_level_val_idx;
-  }
-  if (t == 0) printf("block %d nvals in frag %d\n", blockIdx.x, nvals);
+  nvals           = s->frag.num_leaf_values;
+  start_value_idx = s->start_value_idx;
 
   for (uint32_t i = 0; i < nvals; i += 512) {
     const uint32_t *valid = s->col.valid_map_base;
