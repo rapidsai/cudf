@@ -2459,7 +2459,7 @@ class Series(Frame, Serializable):
             - *cats* contains the categories in order that the N-th
               item corresponds to the (N-1) code.
         """
-        cats = self.unique().astype(self.dtype)
+        cats = self.dropna().unique().astype(self.dtype)
 
         name = self.name  # label_encoding mutates self.name
         labels = self.label_encoding(cats=cats, na_sentinel=na_sentinel)
