@@ -307,14 +307,8 @@ cdef class Column:
             col = self.base_children[0]
         else:
             col = self
-        data_dtype = col.dtype
-
-        cdef libcudf_types.type_id tid = <libcudf_types.type_id> (
-            <underlying_type_t_type_id> (
-                np_to_cudf_types[np.dtype(data_dtype)]
-            )
-        )
-        cdef libcudf_types.data_type dtype = libcudf_types.data_type(tid)
+        cdef _Dtype pydtype = col.dtype
+        cdef libcudf_types.data_type dtype = pydtype.get_libcudf_type()
         cdef libcudf_types.size_type offset = self.offset
         cdef vector[mutable_column_view] children
         cdef void* data
