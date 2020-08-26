@@ -55,23 +55,20 @@ struct execute_wrap {
     int bidx                  = 0;
 
     for (auto itr = d_str.begin(); itr != d_str.end(); ++itr) {
-      auto the_chr = *itr;
-
-      auto pos = itr.position();
+      auto const the_chr = *itr;
+      auto const pos     = itr.position();
 
       // execute conditions:
-      //
       if (the_chr <= ' ') {  // convert all whitespace to space
         d_buffer[bidx]        = ' ';
         byteOffsetToLastSpace = bidx;
         charOffsetToLastSpace = pos;
       }
-      if ((pos - spos) >= width_) {
-        if (byteOffsetToLastSpace >= 0) {
-          d_buffer[byteOffsetToLastSpace] = '\n';
-          spos                            = charOffsetToLastSpace;
-          byteOffsetToLastSpace = charOffsetToLastSpace = -1;
-        }
+      if (pos - spos >= width_ && byteOffsetToLastSpace >= 0) {
+        d_buffer[byteOffsetToLastSpace] = '\n';
+        spos                            = charOffsetToLastSpace;
+        byteOffsetToLastSpace           = -1;
+        charOffsetToLastSpace           = -1;
       }
       bidx += detail::bytes_in_char_utf8(the_chr);
     }
