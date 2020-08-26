@@ -14,6 +14,7 @@
 - PR #6002 Add Java bindings for md5
 - PR #6067 Added compute codes for aarch64 devices
 - PR #6083 Small cleanup
+- PR #6092 Add `name` and `dtype` field to `Index.copy`
 
 ## Bug Fixes
 
@@ -181,12 +182,12 @@
 - PR #5602 Add support for concatenation of `Series` & `DataFrame` in `cudf.concat` when `axis=0`
 - PR #5603 Refactor JIT `parser.cpp`
 - PR #5643 Update `isort` to 5.0.4
-- PR #5648 OO interface for hash join with explicit `build/probe` semantic 
+- PR #5648 OO interface for hash join with explicit `build/probe` semantic
 - PR #5662 Make Java ColumnVector(long nativePointer) constructor public
 - PR #5681 Pin black, flake8 and isort
 - PR #5679 Use `pickle5` to test older Python versions
 - PR #5684 Use `pickle5` in `Serializable` (when available)
-- PR #5419 Support rolling, groupby_rolling for durations 
+- PR #5419 Support rolling, groupby_rolling for durations
 - PR #5687 Change strings::split_record to return a lists column
 - PR #5708 Add support for `dummy_na` in `get_dummies`
 - PR #5709 Update java build to help cu-spacial with java bindings
