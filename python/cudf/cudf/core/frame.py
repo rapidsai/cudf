@@ -289,8 +289,10 @@ class Frame(libcudf.table.Table):
                     dtypes[idx] = min_scalar_type(len(categories[idx]))
                 # Otherwise raise an error if columns have different dtypes
                 elif not all(
-                    is_dtype_equal(c.dtype, dtypes[idx]) for c in cols
+                    c.dtype == dtypes[idx] for c in cols
                 ):
+                    import pdb
+                    pdb.set_trace()
                     raise ValueError("All columns must be the same type")
             return categories
 

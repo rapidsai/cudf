@@ -1512,7 +1512,7 @@ class RangeIndex(Index):
     @cached_property
     def _values(self):
         if len(self) > 0:
-            vals = cupy.arange(self._start, self._stop, dtype=self.dtype)
+            vals = cupy.arange(self._start, self._stop, dtype=self.dtype.to_numpy)
             return column.as_column(vals)
         else:
             return column.column_empty(0, masked=False, dtype=self.dtype)
@@ -1625,7 +1625,7 @@ class RangeIndex(Index):
         """
         `dtype` of the range of values in RangeIndex.
         """
-        return np.dtype(np.int64)
+        return cudf.Int64Dtype()
 
     @property
     def is_contiguous(self):
@@ -2524,7 +2524,6 @@ def as_index(arbitrary, **kwargs):
         - DatetimeIndex for Datetime input.
         - GenericIndex for all other inputs.
     """
-
     kwargs = _setdefault_name(arbitrary, **kwargs)
     if isinstance(arbitrary, cudf.MultiIndex):
         return arbitrary

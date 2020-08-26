@@ -3179,11 +3179,11 @@ class DataFrame(Frame, Serializable):
             return cuda.as_cuda_array(matrix)
 
         if any(
-            (is_categorical_dtype(c) or np.issubdtype(c, np.dtype("object")))
+            (is_categorical_dtype(c) or isinstance(c.dtype, cudf.StringDtype))
             for c in cols
         ):
             raise TypeError("non-numeric data not yet supported")
-        dtype = np.find_common_type(cols, [])
+        dtype = np.find_common_type([c.dtype.to_numpy for c in cols], [])
         for k, c in self._data.items():
             if c.has_nulls:
                 errmsg = (
@@ -6003,7 +6003,7 @@ class DataFrame(Frame, Serializable):
             msg = "Kurtosis only supports int, float, and bool dtypes."
             raise NotImplementedError(msg)
 
-        self = self.select_dtypes(include=[np.number, np.bool])
+        self = self.select_dtypes(include=[cudf.Number(), cudf.BooleanDtype()])
         return self._apply_support_method(
             "kurtosis",
             axis=axis,
@@ -6313,7 +6313,7 @@ class DataFrame(Frame, Serializable):
             )
 
         include, exclude = map(
-            lambda x: frozenset(map(cudf_dtype_from_pydata_dtype, x)),
+            lambda x: frozenset(map(cudf.dtype, x)),
             selection,
         )
 
@@ -6332,9 +6332,9 @@ class DataFrame(Frame, Serializable):
                 # category handling
                 if is_categorical_dtype(i_dtype):
                     include_subtypes.add(i_dtype)
-                elif issubclass(dtype.type, i_dtype):
-                    include_subtypes.add(dtype.type)
-
+                elif issubclass(dtype, i_dtype):
+                    include_subtypes.add(dtype)
+    
         # exclude all subtypes
         exclude_subtypes = set()
         for dtype in self.dtypes:
@@ -6342,11 +6342,11 @@ class DataFrame(Frame, Serializable):
                 # category handling
                 if is_categorical_dtype(e_dtype):
                     exclude_subtypes.add(e_dtype)
-                elif issubclass(dtype.type, e_dtype):
-                    exclude_subtypes.add(dtype.type)
+                elif issubclass(dtype, e_dtype):
+                    exclude_subtypes.add(dtype)
 
         include_all = set(
-            [cudf_dtype_from_pydata_dtype(d) for d in self.dtypes]
+            [cudf.dtype(d) for d in self.dtypes]
         )
 
         if include:
@@ -6359,7 +6359,7 @@ class DataFrame(Frame, Serializable):
         inclusion = inclusion - exclude_subtypes
 
         for k, col in self._data.items():
-            infered_type = cudf_dtype_from_pydata_dtype(col.dtype)
+            infered_type = cudf.dtype(col.dtype)
             if infered_type in inclusion:
                 df.insert(len(df._data), k, col)
 

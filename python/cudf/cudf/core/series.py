@@ -3099,9 +3099,7 @@ class Series(Frame, Serializable):
                 result_col[first_index:] = None
 
         # pandas always returns int64 dtype if original dtype is int or `bool`
-        if np.issubdtype(result_col.dtype, np.integer) or np.issubdtype(
-            result_col.dtype, np.bool_
-        ):
+        if isinstance(result_col.dtype, (cudf.Integer, cudf.BooleanDtype)):
             return Series(
                 result_col.astype(np.int64)._apply_scan_op("sum"),
                 name=self.name,
@@ -3161,9 +3159,7 @@ class Series(Frame, Serializable):
                 result_col[first_index:] = None
 
         # pandas always returns int64 dtype if original dtype is int or `bool`
-        if np.issubdtype(result_col.dtype, np.integer) or np.issubdtype(
-            result_col.dtype, np.bool_
-        ):
+        if isinstance(result_col.dtype, (cudf.Integer, cudf.BooleanDtype)):
             return Series(
                 result_col.astype(np.int64)._apply_scan_op("product"),
                 name=self.name,

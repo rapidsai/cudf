@@ -14,7 +14,7 @@ def is_string_dtype(obj):
 
 def is_numerical_dtype(obj):
     if isinstance(obj, cudf.Generic):
-        return isinstance(obj, cudf.Number)
+        return isinstance(obj, (cudf.Number, cudf.BooleanDtype))
     if is_categorical_dtype(obj):
         return False
     if is_list_dtype(obj):
@@ -29,6 +29,8 @@ def is_categorical_dtype(obj):
     """Infer whether a given pandas, numpy, or cuDF Column, Series, or dtype
     is a pandas CategoricalDtype.
     """
+    if isinstance(obj, cudf.Generic) and not isinstance(obj, cudf.CategoricalDtype):
+        return False
     if obj is None:
         return False
     if isinstance(obj, cudf.CategoricalDtype):

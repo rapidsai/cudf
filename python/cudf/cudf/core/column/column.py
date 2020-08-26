@@ -200,7 +200,7 @@ class ColumnBase(Column, Serializable):
                 [
                     o
                     for o in not_null_cols
-                    if not isinstance(o.dtype, (cudf.Number, cudf.Datetime))
+                    if not isinstance(o.dtype, (cudf.Number)) or isinstance(o.dtype, cudf.Datetime)
                 ]
             )
             == 0
@@ -1421,8 +1421,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             if pa.types.is_dictionary(pa_type):
                 new_dtype = "category"
             else:
-                new_dtype = np.dtype(pa_type.to_pandas_dtype())
-
+                new_dtype = cudf.dtype(pa_type)
         data = ColumnBase._concat(gpu_cols, dtype=new_dtype)
 
     elif isinstance(arbitrary, (pd.Series, pd.Categorical)):

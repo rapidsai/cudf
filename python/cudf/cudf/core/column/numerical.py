@@ -17,7 +17,7 @@ from cudf.utils.dtypes import (
     numeric_normalize_types,
 )
 from cudf.utils.utils import buffers_from_pyarrow
-
+from cudf.core.dtypes import Float64Dtype
 class NumericalColumn(column.ColumnBase):
     def __init__(
         self, data, dtype, mask=None, size=None, offset=0, null_count=None
@@ -200,18 +200,22 @@ class NumericalColumn(column.ColumnBase):
             return out
 
     def sum(self, dtype=None):
-        return libcudf.reduce.reduce("sum", self, dtype=dtype)
+        try:
+            return libcudf.reduce.reduce("sum", self, dtype=dtype)
+        except:
+            import pdb
+            pdb.set_trace()
 
     def product(self, dtype=None):
         return libcudf.reduce.reduce("product", self, dtype=dtype)
 
-    def mean(self, dtype=np.float64):
-        return libcudf.reduce.reduce("mean", self, dtype=dtype)
+    def mean(self, dtype=Float64Dtype()):
+            return libcudf.reduce.reduce("mean", self, dtype=dtype)
 
-    def var(self, ddof=1, dtype=np.float64):
+    def var(self, ddof=1, dtype=Float64Dtype()):
         return libcudf.reduce.reduce("var", self, dtype=dtype, ddof=ddof)
 
-    def std(self, ddof=1, dtype=np.float64):
+    def std(self, ddof=1, dtype=Float64Dtype()):
         return libcudf.reduce.reduce("std", self, dtype=dtype, ddof=ddof)
 
     def sum_of_squares(self, dtype=None):

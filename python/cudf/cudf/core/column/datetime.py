@@ -151,7 +151,7 @@ class DatetimeColumn(column.ColumnBase):
         )
 
     def as_datetime_column(self, dtype, **kwargs):
-        dtype = np.dtype(dtype)
+        dtype = cudf.dtype(dtype)
         if dtype == self.dtype:
             return self
         return libcudf.unary.cast(self, dtype=dtype)
