@@ -15,9 +15,11 @@
  */
 
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/io/functions.hpp>
 #include <cudf/io/avro.hpp>
 #include <cudf/io/detail/avro.hpp>
+#include <cudf/io/detail/json.hpp>
+#include <cudf/io/functions.hpp>
+#include <cudf/io/json.hpp>
 #include <cudf/io/readers.hpp>
 #include <cudf/io/writers.hpp>
 #include <cudf/table/table.hpp>
@@ -32,8 +34,17 @@ namespace io {
 /**
  * @brief create avro_reader_options_builder which will build avro_reader_options
  */
-avro_reader_options_builder avro_reader_options::builder(source_info const& src) {
-    return avro_reader_options_builder(src);
+avro_reader_options_builder avro_reader_options::builder(source_info const& src)
+{
+  return avro_reader_options_builder(src);
+}
+
+/**
+ * @brief create json_reader_options_builder which will build json_reader_options
+ */
+json_reader_options_builder json_reader_options::builder(source_info const& src)
+{
+  return json_reader_options_builder(src);
 }
 
 namespace {
@@ -86,7 +97,7 @@ table_with_metadata read_avro(avro_reader_options const& opts, rmm::mr::device_m
   namespace avro = cudf::io::detail::avro;
 
   CUDF_FUNC_RANGE();
-  auto reader = make_reader<avro::reader>(opts.source(), opts, mr);
+  auto reader    = make_reader<avro::reader>(opts.source(), opts, mr);
   auto skip_rows = opts.get(avro_reader_options::size_type_param_id::SKIP_ROWS);
   auto num_rows  = opts.get(avro_reader_options::size_type_param_id::NUM_ROWS);
 
@@ -98,16 +109,17 @@ table_with_metadata read_avro(avro_reader_options const& opts, rmm::mr::device_m
 }
 
 // Freeform API wraps the detail reader class API
-table_with_metadata read_json(read_json_args const& args, rmm::mr::device_memory_resource* mr)
+table_with_metadata read_json(json_reader_options const& opts, rmm::mr::device_memory_resource* mr)
 {
   namespace json = cudf::io::detail::json;
 
   CUDF_FUNC_RANGE();
-  json::reader_options options{args.lines, args.compression, args.dtype, args.dayfirst};
-  auto reader = make_reader<json::reader>(args.source, options, mr);
+  auto reader = make_reader<json::reader>(opts.source(), opts, mr);
 
-  if (args.byte_range_offset != 0 || args.byte_range_size != 0) {
-    return reader->read_byte_range(args.byte_range_offset, args.byte_range_size);
+  auto byte_range_offset = opts.get(json_reader_options::size_type_param_id::BYTE_RANGE_OFFSET);
+  auto byte_range_size   = opts.get(json_reader_options::size_type_param_id::BYTE_RANGE_SIZE);
+  if (byte_range_offset != 0 || byte_range_size != 0) {
+    return reader->read_byte_range(byte_range_offset, byte_range_size);
   } else {
     return reader->read_all();
   }

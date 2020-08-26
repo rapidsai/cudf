@@ -15,22 +15,30 @@
  */
 
 /**
- * @file avro.hpp
+ * @file json.hpp
  * @brief cuDF-IO reader classes API
  */
 
 #pragma once
 
-#include <cudf/io/avro.hpp>
+#include <cudf/io/json.hpp>
+
+// Forward declarations
+namespace arrow {
+namespace io {
+class RandomAccessFile;
+}
+}  // namespace arrow
 
 //! cuDF interfaces
 namespace cudf {
 //! IO interfaces
 namespace io {
 namespace detail {
-namespace avro {
+namespace json {
+
 /**
- * @brief Class to read Avro dataset data into columns.
+ * @brief Class to read JSON dataset data into columns.
  */
 class reader {
  private:
@@ -46,7 +54,7 @@ class reader {
    * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::vector<std::string> const &filepaths,
-                  avro_reader_options const &options,
+                  json_reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
   /**
@@ -57,7 +65,7 @@ class reader {
    * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
-                  avro_reader_options const &options,
+                  json_reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
   /**
@@ -65,28 +73,29 @@ class reader {
    */
   ~reader();
 
-  /**
-   * @brief Reads the entire dataset.
+  /*
+   * @brief Reads and returns the entire data set.
    *
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   *
-   * @return The set of columns along with table metadata
+   * @return cudf::table object that contains the array of cudf::column.
    */
   table_with_metadata read_all(cudaStream_t stream = 0);
 
-  /**
-   * @brief Reads and returns a range of rows.
+  /*
+   * @brief Reads and returns all the rows within a byte range.
    *
-   * @param skip_rows Number of rows to skip from the start
-   * @param num_rows Number of rows to read; use `0` for all remaining data
-   * @param metadata Optional location to return table metadata
-   * @param stream CUDA stream used for device memory operations and kernel launches.
+   * The returned data includes the row that straddles the end of the range.
+   * In other words, a row is included as long as the row begins within the byte
+   * range.
    *
-   * @return The set of columns along with table metadata
+   * @param[in] offset Byte offset from the start
+   * @param[in] size Number of bytes from the offset; set to 0 for all remaining
+   *
+   * @return cudf::table object that contains the array of cudf::column
    */
-  table_with_metadata read_rows(size_type skip_rows, size_type num_rows, cudaStream_t stream = 0);
+  table_with_metadata read_byte_range(size_t offset, size_t size, cudaStream_t stream = 0);
 };
-}  // namespace avro
+
+}  // namespace json
 }  // namespace detail
 }  // namespace io
 }  // namespace cudf

@@ -21,7 +21,7 @@ cdef extern from "cudf/io/avro.hpp" \
             NUM_ROWS \
                 """cudf::io::avro_reader_options::
                     size_type_param_id::NUM_ROWS"""
-        
+
         cudf_io_types.source_info source_info() except +
         vector[string] columns() except +
         size_type get(size_type_param_id id) except +
@@ -43,7 +43,7 @@ cdef extern from "cudf/io/avro.hpp" \
             avro_reader_options.size_type_param_id  param_id,
             size_type val
         ) except +
-        
+
         avro_reader_options build() except +
 
     cdef cudf_io_types.table_with_metadata read_avro(

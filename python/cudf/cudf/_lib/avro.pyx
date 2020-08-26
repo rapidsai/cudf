@@ -46,8 +46,7 @@ cpdef read_avro(datasource, columns=None, skip_rows=-1, num_rows=-1):
             <size_type> skip_rows
         ).
         set(avro_reader_options.size_type_param_id.NUM_ROWS,
-            <size_type> num_rows
-        ).
+            <size_type> num_rows).
         build()
     )
 

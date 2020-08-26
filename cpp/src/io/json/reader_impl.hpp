@@ -31,7 +31,8 @@
 #include <io/utilities/column_buffer.hpp>
 
 #include <cudf/io/datasource.hpp>
-#include <cudf/io/readers.hpp>
+#include <cudf/io/detail/json.hpp>
+#include <cudf/io/json.hpp>
 
 namespace cudf {
 namespace io {
@@ -49,7 +50,7 @@ using col_map_ptr_type = std::unique_ptr<col_map_type, std::function<void(col_ma
 class reader::impl {
  public:
  private:
-  const reader_options args_{};
+  const json_reader_options options_{};
 
   rmm::mr::device_memory_resource *mr_ = nullptr;
 
@@ -176,7 +177,7 @@ class reader::impl {
    */
   explicit impl(std::unique_ptr<datasource> source,
                 std::string filepath,
-                reader_options const &args,
+                json_reader_options const &options,
                 rmm::mr::device_memory_resource *mr);
 
   /**

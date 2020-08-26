@@ -240,7 +240,9 @@ std::pair<std::vector<std::string>, col_map_ptr_type> reader::impl::get_json_obj
 void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size)
 {
   size_t map_range_size = 0;
-  if (range_size != 0) { map_range_size = range_size + calculate_max_row_size(args_.dtype.size()); }
+  if (range_size != 0) {
+    map_range_size = range_size + calculate_max_row_size(options_.dtypes().size());
+  }
 
   // Support delayed opening of the file if using memory mapping datasource
   // This allows only mapping of a subset of the file if using byte range
@@ -267,8 +269,10 @@ void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size)
  */
 void reader::impl::decompress_input(cudaStream_t stream)
 {
-  const auto compression_type = infer_compression_type(
-    args_.compression, filepath_, {{"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}});
+  const auto compression_type =
+    infer_compression_type(options_.compression(),
+                           filepath_,
+                           {{"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}});
   if (compression_type == "none") {
     // Do not use the owner vector here to avoid extra copy
     uncomp_data_ = reinterpret_cast<const char *>(buffer_->data());
@@ -474,18 +478,18 @@ void set_null_count(size_type num_rows,
  */
 void reader::impl::set_data_types(cudaStream_t stream)
 {
-  if (!args_.dtype.empty()) {
-    CUDF_EXPECTS(args_.dtype.size() == metadata.column_names.size(),
+  auto const dtype = options_.dtypes();
+  if (!dtype.empty()) {
+    CUDF_EXPECTS(dtype.size() == metadata.column_names.size(),
                  "Need to specify the type of each column.\n");
     // Assume that the dtype is in dictionary format only if all elements contain a colon
-    const bool is_dict =
-      std::all_of(args_.dtype.begin(), args_.dtype.end(), [](const std::string &s) {
-        return std::find(s.begin(), s.end(), ':') != s.end();
-      });
+    const bool is_dict = std::all_of(dtype.begin(), dtype.end(), [](const std::string &s) {
+      return std::find(s.begin(), s.end(), ':') != s.end();
+    });
     if (is_dict) {
       std::map<std::string, data_type> col_type_map;
 
-      for (const auto &ts : args_.dtype) {
+      for (const auto &ts : dtype) {
         const size_t colon_idx = ts.find(":");
         const std::string col_name(ts.begin(), ts.begin() + colon_idx);
         const std::string type_str(ts.begin() + colon_idx + 1, ts.end());
@@ -494,16 +498,16 @@ void reader::impl::set_data_types(cudaStream_t stream)
       }
 
       // Using the map here allows O(n log n) complexity
-      for (size_t col = 0; col < args_.dtype.size(); ++col) {
+      for (size_t col = 0; col < dtype.size(); ++col) {
         dtypes_.push_back(col_type_map[metadata.column_names[col]]);
         // dtypes_extra_info_.push_back(col_type_info_map[column_names_[col]]);
       }
     } else {
       auto dtype_ = std::back_inserter(dtypes_);
       // auto dtype_info_ = std::back_inserter(dtypes_extra_info_);
-      for (size_t col = 0; col < args_.dtype.size(); ++col) {
-        // std::tie(dtype_, dtype_info_) = convertStringToDtype(args_.dtype[col]);
-        dtype_ = convert_string_to_dtype(args_.dtype[col]);
+      for (size_t col = 0; col < dtype.size(); ++col) {
+        // std::tie(dtype_, dtype_info_) = convertStringToDtype(options_.dtype[col]);
+        dtype_ = convert_string_to_dtype(dtype[col]);
       }
     }
   } else {
@@ -610,11 +614,12 @@ table_with_metadata reader::impl::convert_data_to_table(cudaStream_t stream)
 
 reader::impl::impl(std::unique_ptr<datasource> source,
                    std::string filepath,
-                   reader_options const &options,
+                   json_reader_options const &options,
                    rmm::mr::device_memory_resource *mr)
-  : source_(std::move(source)), filepath_(filepath), args_(options), mr_(mr)
+  : source_(std::move(source)), filepath_(filepath), options_(options), mr_(mr)
 {
-  CUDF_EXPECTS(args_.lines, "Only JSON Lines format is currently supported.\n");
+  CUDF_EXPECTS(options_.get(json_reader_options::boolean_param_id::LINES),
+               "Only JSON Lines format is currently supported.\n");
 
   d_true_trie_         = createSerializedTrie({"true"});
   opts_.trueValuesTrie = d_true_trie_.data().get();
@@ -625,7 +630,7 @@ reader::impl::impl(std::unique_ptr<datasource> source,
   d_na_trie_         = createSerializedTrie({"null"});
   opts_.naValuesTrie = d_na_trie_.data().get();
 
-  opts_.dayfirst = options.dayfirst;
+  opts_.dayfirst = options.get(json_reader_options::boolean_param_id::DAYFIRST);
 }
 
 /**
@@ -663,7 +668,7 @@ table_with_metadata reader::impl::read(size_t range_offset, size_t range_size, c
 
 // Forward to implementation
 reader::reader(std::vector<std::string> const &filepaths,
-               reader_options const &options,
+               json_reader_options const &options,
                rmm::mr::device_memory_resource *mr)
 {
   CUDF_EXPECTS(filepaths.size() == 1, "Only a single source is currently supported.");
@@ -674,7 +679,7 @@ reader::reader(std::vector<std::string> const &filepaths,
 
 // Forward to implementation
 reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
-               reader_options const &options,
+               json_reader_options const &options,
                rmm::mr::device_memory_resource *mr)
 {
   CUDF_EXPECTS(sources.size() == 1, "Only a single source is currently supported.");

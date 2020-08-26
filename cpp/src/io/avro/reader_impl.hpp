@@ -27,8 +27,8 @@
 #include <io/utilities/column_buffer.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 
-#include <cudf/io/detail/avro.hpp>
 #include <cudf/io/datasource.hpp>
+#include <cudf/io/detail/avro.hpp>
 #include <cudf/io/readers.hpp>
 
 #include <memory>

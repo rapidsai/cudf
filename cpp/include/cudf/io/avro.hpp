@@ -58,10 +58,9 @@ class avro_reader_options {
 
   explicit avro_reader_options(source_info const& src) : _source(src) {}
 
-  friend avro_reader_options_builder; 
+  friend avro_reader_options_builder;
 
-  public:
-
+ public:
   avro_reader_options() = default;
 
   /**
@@ -103,8 +102,7 @@ class avro_reader_options {
   static avro_reader_options_builder builder(source_info const& src);
 };
 
-class avro_reader_options_builder
-{
+class avro_reader_options_builder {
   avro_reader_options options;
 
  public:
@@ -124,8 +122,7 @@ class avro_reader_options_builder
   /**
    * @brief Set size_type class members
    */
-  avro_reader_options_builder& set(avro_reader_options::size_type_param_id param_id,
-                                      size_type val)
+  avro_reader_options_builder& set(avro_reader_options::size_type_param_id param_id, size_type val)
   {
     switch (param_id) {
       case avro_reader_options::size_type_param_id::SKIP_ROWS: options._skip_rows = val; break;
@@ -170,5 +167,5 @@ class avro_reader_options_builder
 table_with_metadata read_avro(
   avro_reader_options const& args,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-} //namespace io
-} //namespace cudf
+}  // namespace io
+}  // namespace cudf
