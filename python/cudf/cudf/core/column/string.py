@@ -3619,13 +3619,13 @@ class StringMethods(ColumnMethodsMixin):
 
     def filter_characters(self, table, keep=True, repl=None, **kwargs):
         """
-        Remove specified characters from each string using the given
-        mapping table.
+        Remove characters from each string using the character ranges
+        in the given mapping table.
 
         Parameters
         ----------
         table : dict
-            Table is a range of Unicode ordinals to filter.
+            This table is a range of Unicode ordinals to filter.
             The minimum value is the key and the maximum value is the value.
             You can use `str.maketrans()
             <https://docs.python.org/3/library/stdtypes.html#str.maketrans>`_
@@ -3633,8 +3633,9 @@ class StringMethods(ColumnMethodsMixin):
             Overlapping ranges will cause undefined results.
             Range values are inclusive.
         keep : boolean
-            If False, the character ranges in the table are removed.
-            If True, the character ranges in the table are removed.
+            If False, the character ranges in the ``table`` are removed.
+            If True, the character ranges in the ``table`` are removed.
+            Default is True.
         repl : str
             Optional replacement string to use in place of removed characters.
 

@@ -54,18 +54,26 @@ std::unique_ptr<column> translate(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Removes specified characters from each string in a strings column.
+ * @brief Removes ranges of characters from each string in a strings column.
  *
- * This can also be used to keep only specified characters and remove all others
- * from each string.
- *
- * Null string entries result in null entries in the output column.
+ * This can also be used to keep only the specified character ranges
+ * and remove all others from each string.
  *
  * @code{.pseudo}
  * Example:
- * s = ["aa","bbb","cccc","abcd"]
- *
+ * s = ["aeiou","AEIOU","0123456789"]
+ * f = [{'a','l'}, {'M','Z'}, {'4','6'}]
+ * r1 = filter_characters(s, f)
+ * r1 is now ["aei", "OU", "456"]
+ * r2 = filter_characters(s, f, false)
+ * r2 is now ["ou", "AEI", "0123789"]
+ * r3 = filter_characters(s, f, true, "*")
+ * r3 is now ["aei**", "***OU", "****456***"]
  * @endcode
+ *
+ * Null string entries result in null entries in the output column.
+ *
+ * @throw cudf::logic_error if `replacement` is invalid
  *
  * @param strings Strings instance for this operation.
  * @param characters_to_filter Table of character ranges to filter on.
@@ -73,7 +81,7 @@ std::unique_ptr<column> translate(
  * are removed.
  * @param replacement Optional replacement string for each character removed.
  * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New column with padded strings.
+ * @return New column with filtered strings.
  */
 std::unique_ptr<column> filter_characters(
   strings_column_view const& strings,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,17 +48,31 @@ struct filter_fn {
   int32_t const* d_offsets{};
   char* d_chars{};
 
-  __device__ bool replace_char(char_utf8 ch)
+  /**
+   * @brief Return true if this character should be removed.
+   *
+   * @param ch Character to check
+   * @return True if character should be removed.
+   */
+  __device__ bool remove_char(char_utf8 ch)
   {
     auto const entry =
       thrust::find_if(thrust::seq, table_begin, table_end, [ch] __device__(auto const& range) {
         return (range.first <= ch) && (ch <= range.second);
       });
-    // return true if keep=true and entry-not-found OR
-    //             if keep=false and entry-found
+    // if keep==true and entry-not-found OR
+    // if keep==false and entry-found
     return keep_characters == (entry == table_end);
   }
 
+  /**
+   * @brief Execute the filter operation on each string.
+   *
+   * This is also used to calculate the size of the output.
+   *
+   * @param idx Index of the current string to process.
+   * @return The size of the output for this string.
+   */
   __device__ size_type operator()(size_type idx)
   {
     if (d_strings.is_null(idx)) return 0;
@@ -69,7 +83,7 @@ struct filter_fn {
     for (auto itr = d_str.begin(); itr != d_str.end(); ++itr) {
       auto const char_size = bytes_in_char_utf8(*itr);
       string_view const d_newchar =
-        replace_char(*itr) ? d_replacement : string_view(in_ptr + itr.byte_offset(), char_size);
+        remove_char(*itr) ? d_replacement : string_view(in_ptr + itr.byte_offset(), char_size);
       nbytes += d_newchar.size_bytes() - char_size;
       if (out_ptr) out_ptr = cudf::strings::detail::copy_string(out_ptr, d_newchar);
     }
@@ -79,7 +93,9 @@ struct filter_fn {
 
 }  // namespace
 
-//
+/**
+ * @copydoc cudf::strings::filter_characters
+ */
 std::unique_ptr<column> filter_characters(
   strings_column_view const& strings,
   std::vector<std::pair<cudf::char_utf8, cudf::char_utf8>> characters_to_filter,
@@ -91,24 +107,24 @@ std::unique_ptr<column> filter_characters(
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_empty_strings_column(mr, stream);
   CUDF_EXPECTS(replacement.is_valid(), "Parameter replacement must be valid");
+  cudf::string_view d_replacement(replacement.data(), replacement.size());
 
+  // convert input table for copy to device memory
   size_type table_size = static_cast<size_type>(characters_to_filter.size());
-  // convert input table
   thrust::host_vector<char_range> htable(table_size);
   std::transform(
     characters_to_filter.begin(), characters_to_filter.end(), htable.begin(), [](auto entry) {
       return char_range{entry.first, entry.second};
     });
-  // copy translate table to device memory
-  rmm::device_vector<char_range> table(htable);
+  rmm::device_vector<char_range> table(htable);  // copy filter table to device memory
 
   auto execpol        = rmm::exec_policy(stream);
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
-  cudf::string_view d_replacement(replacement.data(), replacement.size());
 
   // create null mask
   rmm::device_buffer null_mask = copy_bitmask(strings.parent(), stream, mr);
+
   // create offsets column
   filter_fn ffn{d_strings, keep_characters, table.begin(), table.end(), d_replacement};
   auto offsets_transformer_itr =
@@ -138,8 +154,9 @@ std::unique_ptr<column> filter_characters(
 
 }  // namespace detail
 
-// external APIs
-
+/**
+ * @copydoc cudf::strings::filter_characters
+ */
 std::unique_ptr<column> filter_characters(
   strings_column_view const& strings,
   std::vector<std::pair<cudf::char_utf8, cudf::char_utf8>> characters_to_filter,
