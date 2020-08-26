@@ -268,7 +268,7 @@ file(INSTALL ${LIBCXX_INCLUDE_DIR}     DESTINATION ${CMAKE_BINARY_DIR}/include/l
 ###################################################################################################
 # - find zlib -------------------------------------------------------------------------------------
 
-find_package(ZLIB REQUIRED)
+find_package(ZLIB REQUIRED QUIET)
 message(STATUS "ZLIB: ZLIB_FOUND set to ${ZLIB_FOUND}")
 message(STATUS "ZLIB: ZLIB_LIBRARIES set to ${ZLIB_LIBRARIES}")
 message(STATUS "ZLIB: ZLIB_INCLUDE_DIRS set to ${ZLIB_INCLUDE_DIRS}")
