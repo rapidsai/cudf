@@ -7,7 +7,7 @@ import rmm
 
 import cudf
 from cudf.core.buffer import Buffer
-from cudf.utils.dtypes import is_categorical_dtype, is_list_dtype
+from cudf.api.types import is_categorical_dtype, is_list_dtype
 import cudf._lib as libcudfxx
 
 from cpython.buffer cimport PyObject_CheckBuffer

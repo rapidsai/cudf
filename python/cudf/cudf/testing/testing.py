@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 
 import cudf
-from cudf.utils.dtypes import is_categorical_dtype
+from cudf.api.types import is_categorical_dtype
 
 
 def _check_isinstance(left, right, obj):

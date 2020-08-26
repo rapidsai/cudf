@@ -40,13 +40,11 @@ from cudf.utils import applyutils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     cudf_dtype_from_pydata_dtype,
-    is_categorical_dtype,
-    is_list_dtype,
     is_list_like,
     is_scalar,
-    is_string_dtype,
     numeric_normalize_types,
 )
+from cudf.api.types import is_categorical_dtype, is_list_dtype, is_string_dtype
 from cudf.utils.utils import OrderedColumnDict
 
 

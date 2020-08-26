@@ -30,15 +30,13 @@ from cudf.utils.dtypes import (
     NUMERIC_TYPES,
     check_cast_unsupported_dtype,
     get_time_unit,
-    is_categorical_dtype,
-    is_list_dtype,
-    is_numerical_dtype,
     is_scalar,
-    is_string_dtype,
     min_unsigned_type,
     np_to_pa_dtype,
 )
 from cudf.utils.utils import mask_dtype
+from cudf.api.types import is_categorical_dtype, is_list_dtype, is_numerical_dtype, is_string_dtype
+
 
 class ColumnBase(Column, Serializable):
     def __init__(

@@ -14,11 +14,11 @@ from cudf.core.column import column
 from cudf.core.column.methods import ColumnMethodsMixin
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils.dtypes import (
-    is_categorical_dtype,
     is_mixed_with_object_dtype,
     min_signed_type,
     min_unsigned_type,
 )
+from cudf.api.types import is_categorical_dtype
 
 
 class CategoricalAccessor(ColumnMethodsMixin):

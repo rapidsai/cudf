@@ -6,12 +6,12 @@ import pandas as pd
 import cudf
 from cudf._lib.nvtx import annotate
 from cudf.utils.dtypes import (
-    is_categorical_dtype,
     is_column_like,
     is_list_like,
     is_scalar,
     to_cudf_compatible_scalar,
 )
+from cudf.api.types import is_categorical_dtype
 
 
 def indices_from_labels(obj, labels):

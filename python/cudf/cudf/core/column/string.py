@@ -140,13 +140,10 @@ from cudf.core.column.methods import ColumnMethodsMixin
 from cudf.utils import utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
-    can_convert_to_column,
-    is_list_dtype,
-    is_scalar,
-    is_string_dtype,
+    can_convert_to_column, is_scalar
 )
 from cudf.utils.utils import buffers_from_pyarrow
-
+from cudf.api.types import is_list_dtype, is_string_dtype
 from cudf.core.dtypes import dtype
 
 _str_to_numeric_typecast_functions = {

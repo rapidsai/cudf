@@ -26,12 +26,12 @@ from cudf.core.frame import Frame
 from cudf.utils import ioutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
-    is_categorical_dtype,
     is_list_like,
     is_mixed_with_object_dtype,
     is_scalar,
     numeric_normalize_types,
 )
+from cudf.api.types import is_categorical_dtype
 from cudf.utils.utils import cached_property
 from cudf.core.dtypes import dtype
 

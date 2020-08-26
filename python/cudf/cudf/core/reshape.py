@@ -10,8 +10,8 @@ from cudf.core.column import (
     build_categorical_column,
 )
 from cudf.utils import cudautils
-from cudf.utils.dtypes import is_categorical_dtype, is_list_like
-
+from cudf.utils.dtypes import is_list_like
+from cudf.api.types import is_categorical_dtype
 _axis_map = {0: 0, 1: 1, "index": 0, "columns": 1}
 
 

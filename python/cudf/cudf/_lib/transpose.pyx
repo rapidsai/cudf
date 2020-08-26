@@ -1,7 +1,7 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 import cudf
-from cudf.utils.dtypes import is_categorical_dtype
+from cudf.api.types import is_categorical_dtype
 
 from libcpp.memory cimport unique_ptr
 from libcpp.pair cimport pair

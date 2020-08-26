@@ -15,12 +15,11 @@ from cudf._lib.nvtx import annotate
 from cudf.core.column import as_column, build_categorical_column
 from cudf.utils import utils
 from cudf.utils.dtypes import (
-    is_categorical_dtype,
     is_column_like,
-    is_numerical_dtype,
     is_scalar,
     min_scalar_type,
 )
+from cudf.api.types import is_numerical_dtype, is_categorical_dtype
 
 
 class Frame(libcudf.table.Table):
@@ -270,9 +269,9 @@ class Frame(libcudf.table.Table):
                 dtypes[idx] = cols[0].dtype
                 # If all the non-null dtypes are int/float, find a common dtype
                 if all(is_numerical_dtype(col.dtype) for col in cols):
-                    dtypes[idx] = np.find_common_type(
-                        [col.dtype for col in cols], []
-                    )
+                    dtypes[idx] = cudf.dtype(np.find_common_type(
+                        [col.dtype.to_numpy for col in cols], []
+                    ))
                 # If all categorical dtypes, combine the categories
                 elif all(
                     isinstance(col, cudf.core.column.CategoricalColumn)
