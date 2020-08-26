@@ -26,10 +26,9 @@ from cudf.tests.utils import (
     SIGNED_INTEGER_TYPES,
     UNSIGNED_TYPES,
     SIGNED_TYPES,
-    TIMEDELTA_TYPES,
-    ALL_TYPES,
     assert_eq,
 )
+
 
 def test_df_set_index_from_series():
     df = DataFrame()
@@ -326,7 +325,8 @@ def test_index_copy_string(name, deep, dtype):
 @pytest.mark.parametrize("deep", [True, False])
 @pytest.mark.parametrize("name", ["x"])
 @pytest.mark.parametrize(
-    "dtype", NUMERIC_TYPES+["datetime64[ns]", "timedelta64[ns]"]+OTHER_TYPES
+    "dtype",
+    NUMERIC_TYPES + ["datetime64[ns]", "timedelta64[ns]"] + OTHER_TYPES
 )
 def test_index_copy_integer(name, deep, dtype):
     """Test for NumericIndex Copy Casts
@@ -360,7 +360,7 @@ def test_index_copy_float(name, deep, dtype):
 @pytest.mark.parametrize("deep", [True, False])
 @pytest.mark.parametrize("name", ["x"])
 @pytest.mark.parametrize(
-    "dtype", NUMERIC_TYPES+["category"]
+    "dtype", NUMERIC_TYPES + ["category"]
 )
 def test_index_copy_category(name, deep, dtype):
     cidx = cudf.core.index.CategoricalIndex([1, 2, 3])
