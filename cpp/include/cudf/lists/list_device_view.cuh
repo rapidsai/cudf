@@ -48,8 +48,7 @@ class list_device_view {
             lists_column_device_view const& lists_column, 
             size_type const& idx);
 
-        list_device_view(list_device_view const&) = default;
-        list_device_view& operator=(list_device_view const&) = default; // TODO: Remove.
+        ~list_device_view() = default;
 
         CUDA_DEVICE_CALLABLE bool operator == (list_device_view const& rhs) const;
         CUDA_DEVICE_CALLABLE bool operator != (list_device_view const& rhs) const
@@ -165,7 +164,6 @@ CUDA_DEVICE_CALLABLE T list_device_view::element(size_type idx) const
 
 CUDA_DEVICE_CALLABLE bool list_device_view::is_null(size_type idx) const
 {
-    // TODO: release_assert() for idx < size of list row.
     release_assert((idx >= 0 && idx < size()));                          // TODO: Add descriptive message.
     auto element_offset = begin_offset + idx;
     return lists_column.child().is_null(element_offset);
@@ -221,8 +219,8 @@ class list_element_equality_comparator
             // release_assert(false && "list_element_equality_comparator does not support STRUCT!");
             if (has_nulls)
             {
-                bool lhs_is_null = lhs.is_null(i); // TODO: lhs.is_nullable() &&
-                bool rhs_is_null = rhs.is_null(i); // TODO: rhs.is_nullable()?
+                bool lhs_is_null = lhs.is_null(i); 
+                bool rhs_is_null = rhs.is_null(i); 
                 if (lhs_is_null && rhs_is_null)
                 {
                     return nulls_are_equal;
@@ -269,6 +267,11 @@ CUDA_DEVICE_CALLABLE bool list_device_view::operator == (list_device_view const&
     if (is_null() && rhs.is_null())
     {
         return true;
+    }
+
+    if (is_null() != rhs.is_null())
+    {
+        return false;
     }
 
     if (size() != rhs.size())
