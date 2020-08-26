@@ -13,8 +13,13 @@
 - PR #5971 Add cuStreamz README for basic installation and use
 - PR #6002 Add Java bindings for md5
 - PR #6051 Add builder API for cuIO `write_parquet_args` and `read_parquet_args`
+- PR #6067 Added compute codes for aarch64 devices
+- PR #6083 Small cleanup
 
 ## Bug Fixes
+
+- PR #6073 Fix issue related to `.loc` incase of `DatetimeIndex`
+- PR #6081 Fix issue where fsspec thinks it has a protocol string
 
 
 # cuDF 0.15.0 (Date TBD)
@@ -30,6 +35,7 @@
 - PR #5327 Add `cudf::cross_join` feature
 - PR #5204 Concatenate strings columns using row separator as strings column
 - PR #5342 Add support for `StringMethods.__getitem__`
+- PR #5358 Add zero-copy `column_view` cast for compatible types
 - PR #3504 Add External Kafka Datasource
 - PR #5356 Use `size_type` instead of `scalar` in `cudf::repeat`.
 - PR #5397 Add internal implementation of nested loop equijoins.
@@ -98,6 +104,7 @@
 - PR #5859 Add conversion form `fixed_point` to `bool`
 - PR #5781 Add duration types support in cudf(python/cython)
 - PR #5815 LIST Support for ColumnVector
+- PR #5931 Support for `add_calendrical_months` API
 - PR #5992 Add support for `.dt.strftime`
 
 ## Improvements
@@ -212,6 +219,7 @@
 - PR #5834 Add support for dictionary column in concatenate
 - PR #5832 Make dictionary_wrapper constructor from a value explicit
 - PR #5833 Pin `dask` and `distributed` version to `2.22.0`
+- PR #5856 Bump Pandas support to >=1.0,<1.2
 - PR #5855 Java interface to limit RMM maximum pool size
 - PR #5853 Disable `fixed_point` for use in `copy_if`
 - PR #5854 Raise informative error in `DataFrame.iterrows` and `DataFrame.itertuples`
@@ -228,6 +236,8 @@
 - PR #3918 Update cuDF internals doc
 - PR #5970 Map data to pandas through arrow, always
 - PR #6012 Remove `cudf._cuda` and replace usages with `rmm._cuda`
+- PR #6045 Parametrize parquet_reader_list tests
+- PR #6053 Import traits.hpp for cudftestutils consumers
 
 ## Bug Fixes
 
@@ -340,7 +350,7 @@
 - PR #6003 Fix concurrent JSON reads crash
 - PR #6032 Change black version to 19.10b0 in .pre-commit-config.yaml
 - PR #6041 Fix Java memory resource handler to rethrow original exception object
-
+- PR #6057 Fix issue in parquet reader with reading columns out of file-order
 
 # cuDF 0.14.0 (03 Jun 2020)
 

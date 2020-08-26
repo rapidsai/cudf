@@ -105,7 +105,12 @@ def gpu_mark_found_int(arr, val, out, not_found):
 def gpu_mark_found_float(arr, val, out, not_found):
     i = cuda.grid(1)
     if i < arr.size:
-        if check_equals_float(arr[i], val):
+        # TODO: Remove val typecast to float(val)
+        # once numba minimum version is pinned
+        # at 0.51.1, this will have a very slight
+        # performance improvement. Related
+        # discussion in : https://github.com/rapidsai/cudf/pull/6073
+        if check_equals_float(arr[i], float(val)):
             out[i] = i
         else:
             out[i] = not_found
@@ -144,7 +149,7 @@ def find_index_of_val(arr, val, mask=None, compare="eq"):
     mask : mask of the array
     compare: str ('gt', 'lt', or 'eq' (default))
     """
-    found = cuda.device_array_like(arr)
+    found = cuda.device_array(shape=(arr.shape), dtype="int32")
     if found.size > 0:
         if compare == "gt":
             gpu_mark_gt.forall(found.size)(arr, val, found, arr.size)
