@@ -583,6 +583,12 @@ MAP_CASTABLE_TYPES(cudf::timestamp_s, cudf::timestamp_s::duration::rep);
 MAP_CASTABLE_TYPES(cudf::timestamp_ms, cudf::timestamp_ms::duration::rep);
 MAP_CASTABLE_TYPES(cudf::timestamp_us, cudf::timestamp_us::duration::rep);
 MAP_CASTABLE_TYPES(cudf::timestamp_ns, cudf::timestamp_ns::duration::rep);
+// Allow cast between durations and integer representation
+MAP_CASTABLE_TYPES(cudf::duration_D, cudf::duration_D::rep);
+MAP_CASTABLE_TYPES(cudf::duration_s, cudf::duration_s::rep);
+MAP_CASTABLE_TYPES(cudf::duration_ms, cudf::duration_ms::rep);
+MAP_CASTABLE_TYPES(cudf::duration_us, cudf::duration_us::rep);
+MAP_CASTABLE_TYPES(cudf::duration_ns, cudf::duration_ns::rep);
 
 template <typename FromType>
 struct is_logically_castable_to_impl {

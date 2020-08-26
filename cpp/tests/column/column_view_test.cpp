@@ -40,6 +40,11 @@ struct rep_type_impl<T, std::enable_if_t<cudf::is_timestamp<T>()>> {
 };
 
 template <typename T>
+struct rep_type_impl<T, std::enable_if_t<cudf::is_duration<T>()>> {
+  using type = typename T::rep;
+};
+
+template <typename T>
 using rep_type_t = typename rep_type_impl<T>::type;
 
 template <typename T>
@@ -60,7 +65,7 @@ void do_logical_cast(cudf::column_view const& input, Iterator begin, Iterator en
     // Cast integer to timestamp or vice versa
     cudf::data_type type{cudf::type_to_id<ToType>()};
     auto output = cudf::logical_cast(input, type);
-    cudf::test::fixed_width_column_wrapper<ToType> expected(begin, end);
+    cudf::test::fixed_width_column_wrapper<ToType, cudf::size_type> expected(begin, end);
     cudf::test::expect_columns_equal(output, expected);
   } else {
     // Other casts not allowed
@@ -74,7 +79,7 @@ TYPED_TEST(ColumnViewAllTypesTests, LogicalCast)
   auto begin = thrust::make_counting_iterator(1);
   auto end   = thrust::make_counting_iterator(16);
 
-  cudf::test::fixed_width_column_wrapper<TypeParam> input(begin, end);
+  cudf::test::fixed_width_column_wrapper<TypeParam, cudf::size_type> input(begin, end);
 
   do_logical_cast<TypeParam, int8_t>(input, begin, end);
   do_logical_cast<TypeParam, int16_t>(input, begin, end);
@@ -83,6 +88,11 @@ TYPED_TEST(ColumnViewAllTypesTests, LogicalCast)
   do_logical_cast<TypeParam, float>(input, begin, end);
   do_logical_cast<TypeParam, double>(input, begin, end);
   do_logical_cast<TypeParam, bool>(input, begin, end);
+  do_logical_cast<TypeParam, cudf::duration_D>(input, begin, end);
+  do_logical_cast<TypeParam, cudf::duration_s>(input, begin, end);
+  do_logical_cast<TypeParam, cudf::duration_ms>(input, begin, end);
+  do_logical_cast<TypeParam, cudf::duration_us>(input, begin, end);
+  do_logical_cast<TypeParam, cudf::duration_ns>(input, begin, end);
   do_logical_cast<TypeParam, cudf::timestamp_D>(input, begin, end);
   do_logical_cast<TypeParam, cudf::timestamp_s>(input, begin, end);
   do_logical_cast<TypeParam, cudf::timestamp_ms>(input, begin, end);
