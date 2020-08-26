@@ -375,7 +375,7 @@ def test_series_factorize(data, na_sentinel):
     psr = gsr.to_pandas()
 
     expected_labels, expected_cats = psr.factorize(na_sentinel=na_sentinel)
-    actual_labels, actual_cats = psr.factorize(na_sentinel=na_sentinel)
+    actual_labels, actual_cats = gsr.factorize(na_sentinel=na_sentinel)
 
-    assert_eq(expected_labels, actual_labels)
-    assert_eq(expected_cats, actual_cats)
+    assert_eq(expected_labels, actual_labels.to_array())
+    assert_eq(expected_cats.values, actual_cats.to_array())

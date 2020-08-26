@@ -2416,7 +2416,7 @@ class Series(Frame, Serializable):
             )
 
         if dtype is None:
-            dtype = min_scalar_type(len(cats), 8)
+            dtype = min_scalar_type(max(len(cats), na_sentinel), 8)
 
         cats = column.as_column(cats)
         if is_mixed_with_object_dtype(self, cats):
