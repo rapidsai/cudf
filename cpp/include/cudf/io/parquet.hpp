@@ -130,12 +130,12 @@ class parquet_reader_options {
   /**
    * @brief Returns names of column to be read
    */
-  std::vector<std::string> columns() const { return _columns; }
+  std::vector<std::string>& columns() const { return _columns; }
 
   /**
    * @brief Returns list of individual row groups to be read
    */
-  std::vector<std::vector<size_type>> row_groups() const { return _row_groups; }
+  std::vector<std::vector<size_type>>& row_groups() const { return _row_groups; }
 
   /**
    * @brief Returns timestamp_type used to cast timestamp columns
