@@ -29,6 +29,7 @@ from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_list_like,
     is_mixed_with_object_dtype,
+    is_range_compatible_dtype,
     is_scalar,
     numeric_normalize_types,
 )
@@ -1533,11 +1534,37 @@ class RangeIndex(Index):
         else:
             return False
 
-    def copy(self, deep=True):
+    def copy(self, name=None, deep=True, dtype=None):
         """
         Make a copy of this object.
+
+        Parameters
+        ----------
+        name : object optional (default: None), name of index
+        deep : Bool (default: True)
+            Ignored for RangeIndex
+        dtype : numpy dtype (default: None)
+            Target dtype for underlying range data
+
+        Returns
+        -------
+        New RangeIndex instance with same range, casted to new dtype
         """
-        return RangeIndex(start=self._start, stop=self._stop, name=self.name)
+        if name is None and dtype is None:
+            return RangeIndex(
+                start=self._start, stop=self._stop, name=self.name)
+
+        dtype = self.dtype if dtype is None else dtype
+
+        if not is_range_compatible_dtype(dtype):
+            raise ValueError(f"Expected Signed Integer Type, Got {dtype}")
+
+        name = self.name if name is None else name
+
+        _idx_new = RangeIndex(
+            start=self._start, stop=self._stop, name=name)
+
+        return _idx_new.astype(dtype, copy=deep)
 
     def __repr__(self):
         return (
@@ -1793,7 +1820,7 @@ class GenericIndex(Index):
     def _values(self):
         return next(iter(self._data.columns))
 
-    def copy(self, deep=True):
+    def copy(self, name=None, deep=True, dtype=None):
         """
         Make a copy of this object.
 
@@ -1807,8 +1834,12 @@ class GenericIndex(Index):
         -------
         copy : Index
         """
-        result = as_index(self._values.copy(deep=deep))
-        result.name = self.name
+
+        dtype = self.dtype if dtype is None else dtype
+        name = self.name if name is None else name
+
+        result = as_index(
+            self._values.copy(deep=deep).astype(dtype), name=name)
         return result
 
     def __sizeof__(self):
