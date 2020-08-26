@@ -208,7 +208,7 @@ template <typename T>
 std::unique_ptr<cudf::column> create_random_column(std::mt19937& engine, cudf::size_type num_rows)
 {
   // make_fixed_width_column then mutable_view, then get null_mask and data, then fill
-  float const null_frequency        = 0.9;
+  float const null_frequency        = 0.01;
   cudf::size_type const avg_run_len = 4;
   std::gamma_distribution<float> rl_dist(4.f, avg_run_len / 4.f);
   std::uniform_real_distribution<float> null_dist;
