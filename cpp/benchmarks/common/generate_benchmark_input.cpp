@@ -6,6 +6,8 @@
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 
+#include <rmm/device_buffer.hpp>
+
 #include <future>
 #include <memory>
 #include <random>
@@ -180,6 +182,18 @@ bool random_element<bool>(std::mt19937& engine)
   return uniform(engine) == 1;
 }
 
+size_t null_mask_size(cudf::size_type num_rows)
+{
+  auto const bits_per_word = sizeof(cudf::bitmask_type) * 8;
+  return (num_rows + bits_per_word - 1) / bits_per_word;
+}
+
+void reset_null_mask_bit(std::vector<cudf::bitmask_type>& null_mask, cudf::size_type row)
+{
+  auto const bits_per_word = sizeof(cudf::bitmask_type) * 8;
+  null_mask[row / bits_per_word] &= ~(cudf::bitmask_type(1) << row % bits_per_word);
+}
+
 /**
  * @brief Creates a column with random content of the given type
  *
@@ -194,23 +208,34 @@ template <typename T>
 std::unique_ptr<cudf::column> create_random_column(std::mt19937& engine, cudf::size_type num_rows)
 {
   // make_fixed_width_column then mutable_view, then get null_mask and data, then fill
-  float const null_frequency = 0.01;
-  cudf::test::fixed_width_column_wrapper<T> wrapped_col;
-  auto rand_elements = cudf::test::make_counting_transform_iterator(
-    0, [&](auto row) { return random_element<T>(engine); });
-  if (null_frequency > 0.0) {
-    std::uniform_real_distribution<float> null_dist;
-    auto valids = cudf::test::make_counting_transform_iterator(
-      0, [&](auto) { return null_dist(engine) > null_frequency; });
-    wrapped_col =
-      cudf::test::fixed_width_column_wrapper<T>(rand_elements, rand_elements + num_rows, valids);
-  } else {
-    wrapped_col =
-      cudf::test::fixed_width_column_wrapper<T>(rand_elements, rand_elements + num_rows);
+  float const null_frequency        = 0.9;
+  cudf::size_type const avg_run_len = 4;
+  std::gamma_distribution<float> rl_dist(4.f, avg_run_len / 4.f);
+  std::uniform_real_distribution<float> null_dist;
+
+  auto const dtype = cudf::data_type{cudf::type_to_id<T>()};
+  T* h_data;
+  CUDA_TRY(cudaMallocHost(&h_data, num_rows * size_of(dtype)));
+  cudf::size_type null_count = 0;
+  std::vector<cudf::bitmask_type> null_mask(null_mask_size(num_rows), ~0);
+  for (cudf::size_type i = 0; i < num_rows; ++i) {
+    auto const is_valid = null_dist(engine) >= null_frequency;
+    if (!is_valid) {
+      reset_null_mask_bit(null_mask, i);
+      ++null_count;
+    } else {
+      h_data[i] = random_element<T>(engine);
+    }
   }
-  auto col = wrapped_col.release();
-  col->has_nulls();  // set the null count
-  return col;
+  auto d_data = rmm::device_buffer(h_data, num_rows * size_of(dtype), cudaStream_t(0));
+  cudaFree(h_data);
+  return std::make_unique<cudf::column>(
+    dtype,
+    num_rows,
+    std::move(d_data),
+    rmm::device_buffer(
+      null_mask.data(), null_mask.size() * sizeof(cudf::bitmask_type), cudaStream_t(0)),
+    null_count);
 }
 
 /**
@@ -245,7 +270,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(std::mt199
   std::vector<char> chars;
   chars.reserve(char_cnt);
   auto const bits_per_word = sizeof(cudf::bitmask_type) * 8;
-  std::vector<cudf::bitmask_type> null_mask((num_rows + bits_per_word - 1) / bits_per_word, ~0);
+  std::vector<cudf::bitmask_type> null_mask(null_mask_size(num_rows), ~0);
 
   for (int row = 1; row < num_rows; ++row) {
     offsets.push_back(offsets.back() + len_dist(engine));
@@ -253,7 +278,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(std::mt199
       return char_dist(engine);
     });
 
-    if (null_dist(engine) <= null_frequency) {
+    if (null_frequency > 0.f && null_dist(engine) < null_frequency) {
       null_mask[row / bits_per_word] &= ~(cudf::bitmask_type(1) << row % bits_per_word);
       ++null_count;
     }
