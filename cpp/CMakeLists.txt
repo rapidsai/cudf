@@ -166,7 +166,7 @@ option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
 # Setting cache directory for `compose`'s `.ccache` directory. The default location (/etc/.cache) has 
 # some issues with permissions. This is not sustainable and should not be merged.
 # It's here to get this running so we can talk about it. I need some guidance on the prefered acceptable
-# location for a cache.
+# location for a cache. Should it be `thirdparty`?
 # https://github.com/TheLartians/CPM.cmake
 set(CPM_SOURCE_CACHE "$ENV{HOME}/compose/etc/.ccache/CPM") 
 include(cmake/CPM.cmake)
@@ -386,6 +386,11 @@ endif(PER_THREAD_DEFAULT_STREAM)
 if(BUILD_TESTS)
   find_package(GTEST QUIET)
 
+  # This method detects if it's local, but if it is not availible uses CPM to install the package.
+  # By default CPM does not add the standard variables that come with find package such as `GTEST_LIBRARY_DIR`.
+  # So we detect then use `CPMAddPackage` and set the library dir ourselves. 
+  # Possibly this is worth patching to support but I don't fully grok the design decision yet.
+
   if (GTEST_FOUND)
     message(STATUS "Google Test Framework Found.")
   else()
@@ -398,6 +403,7 @@ if(BUILD_TESTS)
         "INSTALL_GTEST OFF"
         "gtest_force_shared_crt"
     )
+    set(GTEST_LIBRARY_DIR gtest)
     enable_testing()
   endif()
 endif(BUILD_TESTS)
@@ -407,7 +413,7 @@ message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
 ###################################################################################################
 # - add google benchmark --------------------------------------------------------------------------
 
-# TODO: Linking for benchmarks is currently broken. To test `benchmarks` building with `build.sh`
+# TODO: Linking for the `benchmark` library is currently broken. To test `benchmarks` building with `build.sh`
 # you will need to change `BUILD_BENCHMARKS=OFF` to `ON` in the `build.sh`
 if(BUILD_BENCHMARKS)
 
