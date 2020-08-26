@@ -117,6 +117,7 @@ if("${GPU_ARCHS}" STREQUAL "ALL")
   endif()
   
 endif()
+set(CMAKE_CUDA_ARCHITECTURES ${GPU_ARCHS})
 message("GPU_ARCHS = ${GPU_ARCHS}")
 
 foreach(arch ${GPU_ARCHS})
@@ -160,10 +161,12 @@ option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
 
 # CPM options
-set(CPM_SOURCE_CACHE "/home/mhooks/dev/rapids/compose/etc/.ccache/CPM")
-include(cmake/CPM.cmake)
-option(CPM_USE_LOCAL_PACKAGES "Search locally installed packages first before using CPM" ON)
-
+option(USE_CPM "Use CPM Package Manager" ON)
+if (USE_CPM)
+  set(CPM_SOURCE_CACHE "$ENV{HOME}/compose/etc/.ccache/CPM")
+  include(cmake/CPM.cmake)
+  option(CPM_USE_LOCAL_PACKAGES "Search locally installed packages first before using CPM" ON)
+endif(USE_CPM)
 
 
 ###################################################################################################
@@ -194,6 +197,8 @@ include(CheckLibraryExists)
 
 add_subdirectory(thirdparty)
 
+
+
 ###################################################################################################
 # - conda environment -----------------------------------------------------------------------------
 
@@ -208,12 +213,6 @@ elseif(DEFINED ENV{CONDA_PREFIX})
     set(CONDA_LINK_DIRS "$ENV{CONDA_PREFIX}/lib")
     message(STATUS "Conda environment detected, CMAKE_SYSTEM_PREFIX_PATH set to: ${CMAKE_SYSTEM_PREFIX_PATH}")
 endif("$ENV{CONDA_BUILD}" STREQUAL "1")
-
-###################################################################################################
-# - find CIDAToolkit ------------------------------------------------------------------------------------
-
-find_package(CUDAToolkit)
-set(CMAKE_CUDA_ARCHITECTURES ${GPU_ARCHS})
 
 ###################################################################################################
 # - find arrow ------------------------------------------------------------------------------------
@@ -237,7 +236,7 @@ else()
       HINTS "$ENV{ARROW_ROOT}/include")
 
   find_library(ARROW_LIB "arrow"
-      NAMES libarrow
+      NAMES libarrowFind
       HINTS "$ENV{ARROW_ROOT}/lib" "$ENV{ARROW_ROOT}/build")
 
   find_library(ARROW_CUDA_LIB "arrow_cuda"
@@ -286,14 +285,23 @@ endif(ZLIB_FOUND)
 # Don't look for a CMake configuration file
 set(Boost_NO_BOOST_CMAKE ON)
 
-CPMFindPackage(
-  NAME Boost
-  GITHUB_REPOSITORY Orphis/boost-cmake
-  GIT_TAG 1.70.0
-  VERSION 1.70.0
-  FIND_PACKAGE_ARGUMENTS "COMPONENTS filesystem"
+find_package(
+    Boost REQUIRED MODULE
+    COMPONENTS filesystem
+    QUIET
 )
 
+if (NOT Boost_FOUND AND USE_CPM)
+  CPMFindPackage(
+    NAME Boost
+    GITHUB_REPOSITORY Orphis/boost-cmake
+    GIT_TAG 1.70.0
+    VERSION 1.70.0
+    FIND_PACKAGE_ARGUMENTS "COMPONENTS filesystem"
+  )
+endif (NOT Boost_FOUND AND USE_CPM)
+
+message(STATUS "BOOST: Boost_ADDED set to ${BOOST_ADDED} ")
 message(STATUS "BOOST: Boost_LIBRARIES set to ${Boost_LIBRARIES}")
 message(STATUS "BOOST: Boost_INCLUDE_DIRS set to ${Boost_INCLUDE_DIRS}")
 
@@ -357,18 +365,24 @@ endif(PER_THREAD_DEFAULT_STREAM)
 # - add gtest -------------------------------------------------------------------------------------
 
 if(BUILD_TESTS)
-  CPMAddPackage(
-    NAME googletest
-    GITHUB_REPOSITORY google/googletest
-    GIT_TAG release-1.10.0
-    VERSION 1.10.0
-    OPTIONS
-      "INSTALL_GTEST OFF"
-      "gtest_force_shared_crt"
-  )
-  set_target_properties(googletest PROPERTIES CMAKE_CUDA_ARCHITECTURES ${GPU_ARCHS})
-  set_target_properties(googletest PROPERTIES CXX_STANDARD $ENV{CXX})
-  enable_testing() 
+  find_package(GTEST QUIET)
+
+  if (GTEST_FOUND)
+    message(STATUS "Google Test Framework Found.")
+  elseif (NOT GTEST_FOUND AND USE_CPM)
+    CPMAddPackage(
+      NAME GTEST
+      GITHUB_REPOSITORY google/googletest
+      GIT_TAG release-1.10.0
+      VERSION 1.10.0
+      OPTIONS
+        "INSTALL_GTEST OFF"
+        "gtest_force_shared_crt"
+    )
+    enable_testing()
+  else() 
+    message(STATUS "Google C++ Test Framework cannot be found and cannot be installed from source. `-DUSE_CPM=YES` to install.")
+  endif()
 endif(BUILD_TESTS)
 
 message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
@@ -521,7 +535,8 @@ add_library(cudf
             src/io/comp/uncomp.cpp
             src/io/comp/brotli_dict.cpp
             src/io/comp/debrotli.cu
-            src/io/comp/snap.cu
+            src/io/comp/snap.cu    #set_target_properties(GTEST PROPERTIES CMAKE_CUDA_ARCHITECTURES ${GPU_ARCHS})
+            #set_target_properties(GTEST PROPERTIES CXX_STANDARD $ENV{CXX})
             src/io/comp/unsnap.cu
             src/io/comp/gpuinflate.cu
             src/io/functions.cpp
@@ -807,7 +822,7 @@ endif(HT_DEFAULT_ALLOCATOR)
 # - link libraries --------------------------------------------------------------------------------
 
 # link targets for cuDF
-target_link_libraries(cudf PRIVATE rmm arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES} Boost::filesystem pthread ZLIB)
+target_link_libraries(cudf PUBLIC rmm arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ZLIB Boost::filesystem)
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
@@ -832,9 +847,9 @@ add_custom_target(install_cudf
                   COMMAND "${CMAKE_COMMAND}" -DCOMPONENT=cudf -P "${CMAKE_BINARY_DIR}/cmake_install.cmake"
                   DEPENDS cudf)
 
-if(BUILD_TESTS)
-    add_dependencies(install_cudf cudftestutil)
-endif(BUILD_TESTS)
+#if(BUILD_TESTS)
+#    add_dependencies(install_cudf cudftestutil)
+#endif(BUILD_TESTS)
 
 add_custom_target(build_tests_cudf
                   DEPENDS ${CUDF_TEST_LIST})
