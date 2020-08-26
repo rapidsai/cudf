@@ -302,40 +302,6 @@ class Series(Frame, Serializable):
         """
         return self._column.values_host
 
-    @classmethod
-    def from_arrow(cls, s):
-        """Convert from a PyArrow Array.
-
-        Parameters
-        ----------
-        s : PyArrow Object
-            PyArrow Object which has to be converted to cudf Series.
-
-        Raises
-        ------
-        TypeError for invalid input type.
-
-        Examples
-        --------
-        >>> import pyarrow as pa
-        >>> import cudf
-        >>> import pyarrow as pa
-        >>> data = pa.array([1, 2, 3])
-        >>> data
-        <pyarrow.lib.Int64Array object at 0x7f67007e07c0>
-        [
-        1,
-        2,
-        3
-        ]
-        >>> cudf.Series.from_arrow(data)
-        0    1
-        1    2
-        2    3
-        dtype: int64
-        """
-        return cls(s)
-
     def serialize(self):
         header = {}
         frames = []
@@ -426,6 +392,57 @@ class Series(Frame, Serializable):
         cls = type(self)
         params.update(kwargs)
         return cls(**params)
+
+    @classmethod
+    def from_arrow(cls, array):
+        """Convert from PyArrow Array/ChunkedArray to Series.
+        Parameters
+        ----------
+        array : PyArrow Array/ChunkedArray
+            PyArrow Object which has to be converted to cudf Series.
+
+        Raises
+        ------
+        TypeError for invalid input type.
+
+        Returns
+        -------
+        cudf Series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pyarrow as pa
+        >>> cudf.Series.from_arrow(pa.array(["a", "b", None]))
+        0       a
+        1       b
+        2    <NA>
+        dtype: object
+        """
+
+        return cls(cudf.core.column.ColumnBase.from_arrow(array))
+
+    def to_arrow(self):
+        """
+        Convert Series to a PyArrow Array.
+
+        Returns
+        -------
+        PyArrow Array
+
+        Examples
+        --------
+        >>> import cudf
+        >>> sr = cudf.Series(["a", "b", None])
+        >>> sr.to_arrow()
+        <pyarrow.lib.StringArray object at 0x7f796b0e7600>
+        [
+          "a",
+          "b",
+          null
+        ]
+        """
+        return self._column.to_arrow()
 
     def copy(self, deep=True):
         """
@@ -2005,25 +2022,6 @@ class Series(Frame, Serializable):
         s = self._column.to_pandas(index=index)
         s.name = self.name
         return s
-
-    def to_arrow(self):
-        """
-        Convert Series to a PyArrow Array.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([-3, 10, 15, 20])
-        >>> ser.to_arrow()
-        <pyarrow.lib.Int64Array object at 0x7f5e769499f0>
-        [
-        -3,
-        10,
-        15,
-        20
-        ]
-        """
-        return self._column.to_arrow()
 
     @property
     def data(self):

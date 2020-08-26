@@ -1,4 +1,5 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
+
 import pickle
 import warnings
 from numbers import Number
@@ -35,6 +36,7 @@ from cudf.utils.dtypes import (
     is_numerical_dtype,
     is_scalar,
     is_string_dtype,
+    min_signed_type,
     min_unsigned_type,
     np_to_pa_dtype,
 )
@@ -287,6 +289,131 @@ class ColumnBase(Column, Serializable):
     def dropna(self):
         dropped_col = self.as_frame().dropna()._as_column()
         return dropped_col
+
+    def to_arrow(self):
+        """Convert to PyArrow Array
+
+        Examples
+        --------
+        >>> import cudf
+        >>> col = cudf.core.column.as_column([1, 2, 3, 4])
+        >>> col.to_arrow()
+        <pyarrow.lib.Int64Array object at 0x7f886547f830>
+        [
+          1,
+          2,
+          3,
+          4
+        ]
+        """
+        if isinstance(self, cudf.core.column.CategoricalColumn):
+            # arrow doesn't support unsigned codes
+            signed_type = (
+                min_signed_type(self.codes.max())
+                if self.codes.size > 0
+                else np.int8
+            )
+            codes = self.codes.astype(signed_type)
+            categories = self.categories
+
+            out_indices = libcudf.interop.to_arrow(
+                libcudf.table.Table(
+                    cudf.core.column_accessor.ColumnAccessor({"None": codes})
+                ),
+                ["None"],
+                keep_index=False,
+            )
+            out_dictionary = libcudf.interop.to_arrow(
+                libcudf.table.Table(
+                    cudf.core.column_accessor.ColumnAccessor(
+                        {"None": categories}
+                    )
+                ),
+                ["None"],
+                keep_index=False,
+            )
+
+            return pa.DictionaryArray.from_arrays(
+                out_indices["None"].chunk(0),
+                out_dictionary["None"].chunk(0),
+                ordered=self.ordered,
+            )
+
+        elif isinstance(self, cudf.core.column.StringColumn) and (
+            self.null_count == len(self)
+        ):
+            return pa.NullArray.from_buffers(
+                pa.null(), len(self), [pa.py_buffer((b""))]
+            )
+
+        return libcudf.interop.to_arrow(
+            libcudf.table.Table(
+                cudf.core.column_accessor.ColumnAccessor({"None": self})
+            ),
+            ["None"],
+            keep_index=False,
+        )["None"].chunk(0)
+
+    @classmethod
+    def from_arrow(cls, array):
+        """
+        Convert PyArrow Array/ChunkedArray to column
+
+        Parameters
+        ----------
+        array : PyArrow Array/ChunkedArray
+
+        Returns
+        -------
+        column
+
+        Examples
+        --------
+        >>> import pyarrow as pa
+        >>> import cudf
+        >>> cudf.core.column.ColumnBase.from_arrow(pa.array([1, 2, 3, 4]))
+        <cudf.core.column.numerical.NumericalColumn object at 0x7f8865497ef0>
+        """
+        if not isinstance(array, (pa.Array, pa.ChunkedArray)):
+            raise TypeError("array should be PyArrow array or chunked array")
+
+        data = pa.table([array], [None])
+        if isinstance(array.type, pa.DictionaryType):
+            indices_table = pa.table(
+                {
+                    "None": pa.chunked_array(
+                        [chunk.indices for chunk in data["None"].chunks],
+                        type=array.type.index_type,
+                    )
+                }
+            )
+            dictionaries_table = pa.table(
+                {
+                    "None": pa.chunked_array(
+                        [chunk.dictionary for chunk in data["None"].chunks],
+                        type=array.type.value_type,
+                    )
+                }
+            )
+
+            codes = libcudf.interop.from_arrow(
+                indices_table, indices_table.column_names
+            )._data["None"]
+            categories = libcudf.interop.from_arrow(
+                dictionaries_table, dictionaries_table.column_names
+            )._data["None"]
+
+            return build_categorical_column(
+                categories=categories,
+                codes=codes,
+                mask=codes.base_mask,
+                size=codes.size,
+                ordered=array.type.ordered,
+            )
+
+        return libcudf.interop.from_arrow(data, data.column_names)._data[
+            "None"
+        ]
 
     def _get_mask_as_column(self):
         return libcudf.transform.mask_to_bools(self)
@@ -872,6 +999,12 @@ class ColumnBase(Column, Serializable):
     def astype(self, dtype, **kwargs):
         if is_categorical_dtype(dtype):
             return self.as_categorical_column(dtype, **kwargs)
+        elif pd.api.types.pandas_dtype(dtype).type in {
+            np.str_,
+            np.object_,
+            str,
+        }:
+            return self.as_string_column(dtype, **kwargs)
         elif is_list_dtype(dtype):
             if not self.dtype == dtype:
                 raise NotImplementedError(
@@ -882,8 +1015,6 @@ class ColumnBase(Column, Serializable):
             return self.as_datetime_column(dtype, **kwargs)
         elif np.issubdtype(dtype, np.timedelta64):
             return self.as_timedelta_column(dtype, **kwargs)
-        elif pd.api.types.pandas_dtype(dtype).type in (np.str_, np.object_):
-            return self.as_string_column(dtype, **kwargs)
         else:
             return self.as_numerical_column(dtype, **kwargs)
 
@@ -1338,80 +1469,18 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 col = utils.time_col_replace_nulls(col)
         return col
 
-    elif isinstance(arbitrary, pa.Array):
-        if isinstance(arbitrary, pa.StringArray):
-            data = cudf.core.column.StringColumn.from_arrow(arbitrary)
-        elif isinstance(arbitrary, pa.NullArray):
+    elif isinstance(arbitrary, (pa.Array, pa.ChunkedArray)):
+        col = ColumnBase.from_arrow(arbitrary)
+        if isinstance(arbitrary, pa.NullArray):
             if type(dtype) == str and dtype == "empty":
                 new_dtype = pd.api.types.pandas_dtype(
                     arbitrary.type.to_pandas_dtype()
                 )
             else:
                 new_dtype = pd.api.types.pandas_dtype(dtype)
+            col = col.astype(new_dtype)
 
-            if is_categorical_dtype(new_dtype):
-                arbitrary = arbitrary.dictionary_encode()
-            else:
-                if nan_as_null is False:
-                    # casting a null array doesn't make nans valid
-                    # so we create one with valid nans from scratch:
-                    if new_dtype == np.dtype("object"):
-                        arbitrary = utils.scalar_broadcast_to(
-                            None, (len(arbitrary),), dtype=new_dtype
-                        )
-                    else:
-                        arbitrary = utils.scalar_broadcast_to(
-                            np.nan, (len(arbitrary),), dtype=new_dtype
-                        )
-                else:
-                    arbitrary = arbitrary.cast(np_to_pa_dtype(new_dtype))
-            data = as_column(arbitrary, nan_as_null=nan_as_null)
-        elif isinstance(arbitrary, pa.DictionaryArray):
-            data = cudf.core.column.CategoricalColumn.from_arrow(arbitrary)
-        elif isinstance(arbitrary, pa.TimestampArray):
-            data = cudf.core.column.DatetimeColumn.from_arrow(arbitrary)
-        elif isinstance(arbitrary, pa.DurationArray):
-            data = cudf.core.column.TimeDeltaColumn.from_arrow(arbitrary)
-        elif isinstance(arbitrary, pa.Date64Array):
-            raise NotImplementedError
-            data = cudf.core.column.DatetimeColumn.from_arrow(
-                arbitrary, dtype=np.dtype("M8[ms]")
-            )
-        elif isinstance(arbitrary, pa.Date32Array):
-            # No equivalent np dtype and not yet supported
-            warnings.warn(
-                "Date32 values are not yet supported so this will "
-                "be typecast to a Date64 value",
-                UserWarning,
-            )
-            data = as_column(arbitrary.cast(pa.int32())).astype("M8[ms]")
-        elif isinstance(arbitrary, pa.BooleanArray):
-            # Arrow uses 1 bit per value while we use int8
-            dtype = np.dtype(np.bool)
-            arbitrary = arbitrary.cast(pa.int8())
-            data = cudf.core.column.NumericalColumn.from_arrow(
-                arbitrary, dtype=dtype
-            )
-        elif isinstance(arbitrary, pa.ListArray):
-            data = cudf.core.column.ListColumn.from_arrow(arbitrary)
-        else:
-            data = cudf.core.column.NumericalColumn.from_arrow(arbitrary)
-
-    elif isinstance(arbitrary, pa.ChunkedArray):
-        gpu_cols = [
-            as_column(chunk, dtype=dtype) for chunk in arbitrary.chunks
-        ]
-
-        if dtype:
-            new_dtype = dtype
-        else:
-            pa_type = arbitrary.type
-            if pa.types.is_dictionary(pa_type):
-                new_dtype = "category"
-            else:
-                new_dtype = np.dtype(pa_type.to_pandas_dtype())
-
-        data = ColumnBase._concat(gpu_cols, dtype=new_dtype)
+        return col
 
     elif isinstance(arbitrary, (pd.Series, pd.Categorical)):
         if isinstance(arbitrary, pd.Series) and isinstance(
