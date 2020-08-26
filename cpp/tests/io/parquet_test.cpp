@@ -1288,15 +1288,14 @@ TEST_F(ParquetReaderTest, ReorderedColumns)
     cudf_io::table_metadata md;
     md.column_names.push_back("a");
     md.column_names.push_back("b");
-    cudf_io::write_parquet_args args{cudf_io::sink_info{filepath}, tbl};
-    args.metadata = &md;
-    cudf_io::write_parquet(args);
+    cudf_io::parquet_writer_options opts =
+      cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, tbl).metadata(&md);
+    cudf_io::write_parquet(opts);
 
     // read them out of order
-    cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
-    read_args.columns.push_back("b");
-    read_args.columns.push_back("a");
-    auto result = cudf_io::read_parquet(read_args);
+    cudf_io::parquet_reader_options read_opts =
+      cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath}).columns({"b", "a"});
+    auto result = cudf_io::read_parquet(read_opts);
 
     cudf::test::expect_columns_equal(result.tbl->view().column(0), b);
     cudf::test::expect_columns_equal(result.tbl->view().column(1), a);
@@ -1311,15 +1310,14 @@ TEST_F(ParquetReaderTest, ReorderedColumns)
     cudf_io::table_metadata md;
     md.column_names.push_back("a");
     md.column_names.push_back("b");
-    cudf_io::write_parquet_args args{cudf_io::sink_info{filepath}, tbl};
-    args.metadata = &md;
-    cudf_io::write_parquet(args);
+    cudf_io::parquet_writer_options opts =
+      cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, tbl).metadata(&md);
+    cudf_io::write_parquet(opts);
 
     // read them out of order
-    cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
-    read_args.columns.push_back("b");
-    read_args.columns.push_back("a");
-    auto result = cudf_io::read_parquet(read_args);
+    cudf_io::parquet_reader_options read_opts =
+      cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath}).columns({"b", "a"});
+    auto result = cudf_io::read_parquet(read_opts);
 
     cudf::test::expect_columns_equal(result.tbl->view().column(0), b);
     cudf::test::expect_columns_equal(result.tbl->view().column(1), a);
@@ -1339,18 +1337,16 @@ TEST_F(ParquetReaderTest, ReorderedColumns)
   md.column_names.push_back("b");
   md.column_names.push_back("c");
   md.column_names.push_back("d");
-  cudf_io::write_parquet_args args{cudf_io::sink_info{filepath}, tbl};
-  args.metadata = &md;
-  cudf_io::write_parquet(args);
+  cudf_io::parquet_writer_options opts =
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, tbl).metadata(&md);
+  cudf_io::write_parquet(opts);
 
   {
     // read them out of order
-    cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
-    read_args.columns.push_back("d");
-    read_args.columns.push_back("a");
-    read_args.columns.push_back("b");
-    read_args.columns.push_back("c");
-    auto result = cudf_io::read_parquet(read_args);
+    cudf_io::parquet_reader_options read_opts =
+      cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
+        .columns({"d", "a", "b", "c"});
+    auto result = cudf_io::read_parquet(read_opts);
 
     cudf::test::expect_columns_equal(result.tbl->view().column(0), d);
     cudf::test::expect_columns_equal(result.tbl->view().column(1), a);
@@ -1360,12 +1356,10 @@ TEST_F(ParquetReaderTest, ReorderedColumns)
 
   {
     // read them out of order
-    cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
-    read_args.columns.push_back("c");
-    read_args.columns.push_back("d");
-    read_args.columns.push_back("a");
-    read_args.columns.push_back("b");
-    auto result = cudf_io::read_parquet(read_args);
+    cudf_io::parquet_reader_options read_opts =
+      cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
+        .columns({"c", "d", "a", "b"});
+    auto result = cudf_io::read_parquet(read_opts);
 
     cudf::test::expect_columns_equal(result.tbl->view().column(0), c);
     cudf::test::expect_columns_equal(result.tbl->view().column(1), d);
@@ -1375,12 +1369,10 @@ TEST_F(ParquetReaderTest, ReorderedColumns)
 
   {
     // read them out of order
-    cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
-    read_args.columns.push_back("d");
-    read_args.columns.push_back("c");
-    read_args.columns.push_back("b");
-    read_args.columns.push_back("a");
-    auto result = cudf_io::read_parquet(read_args);
+    cudf_io::parquet_reader_options read_opts =
+      cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
+        .columns({"d", "c", "b", "a"});
+    auto result = cudf_io::read_parquet(read_opts);
 
     cudf::test::expect_columns_equal(result.tbl->view().column(0), d);
     cudf::test::expect_columns_equal(result.tbl->view().column(1), c);

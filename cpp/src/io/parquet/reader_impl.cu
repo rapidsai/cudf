@@ -503,7 +503,7 @@ class aggregate_metadata {
    *
    * @return List of column names
    */
-  auto select_columns(std::vector<std::string> use_names, bool include_index) const
+  auto select_columns(std::vector<std::string> const &use_names, bool include_index) const
   {
     std::vector<std::pair<int, std::string>> selection;
     if (use_names.empty()) {
@@ -511,8 +511,9 @@ class aggregate_metadata {
       for (const auto &name : column_names) { selection.emplace_back(selection.size(), name); }
     } else {
       // Load subset of columns; include PANDAS index unless excluded
-      if (include_index) { add_pandas_index_names(use_names); }
-      for (const auto &use_name : use_names) {
+      std::vector<std::string> local_use_names = use_names;
+      if (include_index) { add_pandas_index_names(local_use_names); }
+      for (const auto &use_name : local_use_names) {
         for (size_t i = 0; i < column_names.size(); ++i) {
           if (column_names[i] == use_name) {
             selection.emplace_back(i, column_names[i]);
