@@ -24,11 +24,24 @@ namespace cudf {
 namespace detail {
 /**
  * @copydoc cudf::drop_nulls(table_view const&, std::vector<size_type> const&,
- *                                         cudf::size_type, rmm::mr::device_memory_resource*)
+ *                           cudf::size_type, rmm::mr::device_memory_resource*)
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<table> drop_nulls(
+  table_view const& input,
+  std::vector<size_type> const& keys,
+  cudf::size_type keep_threshold,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
+
+/**
+ * @copydoc cudf::drop_nans(table_view const&, std::vector<size_type> const&,
+ *                          cudf::size_type, rmm::mr::device_memory_resource*)
+ *
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<table> drop_nans(
   table_view const& input,
   std::vector<size_type> const& keys,
   cudf::size_type keep_threshold,
@@ -60,14 +73,23 @@ std::unique_ptr<table> drop_duplicates(
   cudaStream_t stream                 = 0);
 
 /**
- * @copydoc cudf::unique_count
+ * @copydoc cudf::distinct_count(column_view const&, null_policy, nan_policy)
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
-cudf::size_type unique_count(column_view const& input,
-                             null_policy null_handling,
-                             nan_policy nan_handling,
-                             cudaStream_t stream = 0);
+cudf::size_type distinct_count(column_view const& input,
+                               null_policy null_handling,
+                               nan_policy nan_handling,
+                               cudaStream_t stream = 0);
+
+/**
+ * @copydoc cudf::distinct_count(table_view const&, null_equality)
+ *
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ */
+cudf::size_type distinct_count(table_view const& input,
+                               null_equality nulls_equal = null_equality::EQUAL,
+                               cudaStream_t stream       = 0);
 
 }  // namespace detail
 }  // namespace cudf

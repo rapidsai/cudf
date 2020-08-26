@@ -16,6 +16,7 @@
 
 #include <cudf/copying.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/reshape.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
@@ -35,11 +36,12 @@ struct tile_functor {
 
 }  // anonymous namespace
 
+namespace detail {
 std::unique_ptr<table> tile(const table_view &in,
                             size_type count,
+                            cudaStream_t stream,
                             rmm::mr::device_memory_resource *mr)
 {
-  CUDF_FUNC_RANGE();
   CUDF_EXPECTS(count >= 0, "Count cannot be negative");
 
   auto in_num_rows = in.num_rows();
@@ -50,7 +52,16 @@ std::unique_ptr<table> tile(const table_view &in,
   auto counting_it  = thrust::make_counting_iterator<size_type>(0);
   auto tiled_it     = thrust::make_transform_iterator(counting_it, tile_functor{in_num_rows});
 
-  return detail::gather(in, tiled_it, tiled_it + out_num_rows, false, mr);
+  return detail::gather(in, tiled_it, tiled_it + out_num_rows, false, mr, stream);
+}
+}  // namespace detail
+
+std::unique_ptr<table> tile(const table_view &in,
+                            size_type count,
+                            rmm::mr::device_memory_resource *mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::tile(in, count, 0, mr);
 }
 
 }  // namespace cudf

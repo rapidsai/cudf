@@ -16,14 +16,17 @@
 
 #pragma once
 
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <tests/utilities/cudf_gtest.hpp>
 #include <tests/utilities/cxxopts.hpp>
 
-#include <rmm/mr/device/cnmem_memory_resource.hpp>
+#include <rmm/mr/device/binning_memory_resource.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
-#include <rmm/mr/device/default_memory_resource.hpp>
 #include <rmm/mr/device/managed_memory_resource.hpp>
+#include <rmm/mr/device/owning_wrapper.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/mr/device/pool_memory_resource.hpp>
 
 #include <ftw.h>
 #include <random>
@@ -39,7 +42,7 @@ namespace test {
  * ```
  **/
 class BaseFixture : public ::testing::Test {
-  rmm::mr::device_memory_resource *_mr{rmm::mr::get_default_resource()};
+  rmm::mr::device_memory_resource *_mr{rmm::mr::get_current_device_resource()};
 
  public:
   /**
@@ -70,8 +73,8 @@ struct uniform_distribution_impl<T, std::enable_if_t<cudf::is_boolean<T>()>> {
 };
 
 template <typename T>
-struct uniform_distribution_impl<T, std::enable_if_t<cudf::is_timestamp<T>()>> {
-  using type = std::uniform_int_distribution<typename T::duration::rep>;
+struct uniform_distribution_impl<T, std::enable_if_t<cudf::is_chrono<T>()>> {
+  using type = std::uniform_int_distribution<typename T::rep>;
 };
 
 template <typename T>
@@ -129,7 +132,7 @@ class UniformRandomGenerator {
    * @param lower Lower bound of the range
    * @param upper Upper bound of the desired range
    */
-  template <typename TL = T, std::enable_if_t<!cudf::is_timestamp<TL>()> * = nullptr>
+  template <typename TL = T, std::enable_if_t<!cudf::is_chrono<TL>()> * = nullptr>
   UniformRandomGenerator(T lower,
                          T upper,
                          uint64_t seed = detail::random_generator_incrementing_seed())
@@ -144,9 +147,9 @@ class UniformRandomGenerator {
    * @param lower Lower bound of the range
    * @param upper Upper bound of the desired range
    */
-  template <typename TL = T, std::enable_if_t<cudf::is_timestamp<TL>()> * = nullptr>
-  UniformRandomGenerator(long lower,
-                         long upper,
+  template <typename TL = T, std::enable_if_t<cudf::is_chrono<TL>()> * = nullptr>
+  UniformRandomGenerator(typename TL::rep lower,
+                         typename TL::rep upper,
                          uint64_t seed = detail::random_generator_incrementing_seed())
     : dist{lower, upper}, rng{std::mt19937_64{seed}()}
   {
@@ -155,11 +158,49 @@ class UniformRandomGenerator {
   /**
    * @brief Returns the next random number.
    **/
-  T generate() { return T{dist(rng)}; }
+  template <typename TL = T, std::enable_if_t<!cudf::is_timestamp<TL>()> * = nullptr>
+  T generate()
+  {
+    return T{dist(rng)};
+  }
+
+  template <typename TL = T, std::enable_if_t<cudf::is_timestamp<TL>()> * = nullptr>
+  T generate()
+  {
+    return T{typename T::duration{dist(rng)}};
+  }
 
  private:
   uniform_distribution dist{};  ///< Distribution
   Engine rng;                   ///< Random generator
+};
+
+class temp_directory {
+  std::string _path;
+
+ public:
+  temp_directory(const std::string &base_name)
+  {
+    std::string dir_template("/tmp");
+    if (const char *env_p = std::getenv("WORKSPACE")) dir_template = env_p;
+    dir_template += "/" + base_name + ".XXXXXX";
+    auto const tmpdirptr = mkdtemp(const_cast<char *>(dir_template.data()));
+    if (tmpdirptr == nullptr) CUDF_FAIL("Temporary directory creation failure: " + dir_template);
+    _path = dir_template + "/";
+  }
+
+  static int rm_files(const char *pathname, const struct stat *sbuf, int type, struct FTW *ftwb)
+  {
+    return remove(pathname);
+  }
+
+  ~temp_directory()
+  {
+    // TODO: should use std::filesystem instead, once C++17 support added
+    nftw(_path.c_str(), rm_files, 10, FTW_DEPTH | FTW_MOUNT | FTW_PHYS);
+  }
+
+  const std::string &path() const { return _path; }
 };
 
 /**
@@ -172,45 +213,42 @@ class UniformRandomGenerator {
  * ```
  **/
 class TempDirTestEnvironment : public ::testing::Environment {
+  temp_directory const tmpdir{"gtest"};
+
  public:
-  std::string tmpdir;
-
-  void SetUp()
-  {
-    std::string tmp("/tmp");
-    if (const char *env_p = std::getenv("WORKSPACE")) tmp = env_p;
-    tmp += "/gtest.XXXXXX";
-    auto tmpdirptr = mkdtemp(const_cast<char *>(tmp.data()));
-    if (tmpdirptr == nullptr) CUDF_FAIL("Temporary directory creation failure: " + tmp);
-    tmpdir = tmpdirptr;
-    tmpdir += "/";
-  }
-
-  void TearDown()
-  {
-    // TODO: should use std::filesystem instead, once C++17 support added
-    nftw(tmpdir.c_str(), rm_files, 10, FTW_DEPTH | FTW_MOUNT | FTW_PHYS);
-  }
-
-  static int rm_files(const char *pathname, const struct stat *sbuf, int type, struct FTW *ftwb)
-  {
-    return remove(pathname);
-  }
-
   /**
    * @brief Get directory path to use for temporary files
    *
    * @return std::string The temporary directory path
    */
-  std::string get_temp_dir() { return tmpdir; }
+  std::string get_temp_dir() { return tmpdir.path(); }
 
   /**
    * @brief Get a temporary filepath to use for the specified filename
    *
    * @return std::string The temporary filepath
    */
-  std::string get_temp_filepath(std::string filename) { return tmpdir + filename; }
+  std::string get_temp_filepath(std::string filename) { return tmpdir.path() + filename; }
 };
+
+/// MR factory functions
+inline auto make_cuda() { return std::make_shared<rmm::mr::cuda_memory_resource>(); }
+
+inline auto make_managed() { return std::make_shared<rmm::mr::managed_memory_resource>(); }
+
+inline auto make_pool()
+{
+  return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(make_cuda());
+}
+
+inline auto make_binning()
+{
+  auto pool = make_pool();
+  // Add a binning_memory_resource with fixed-size bins of sizes 256, 512, 1024, 2048 and 4096KiB
+  // Larger allocations will use the pool resource
+  auto mr = rmm::mr::make_owning_wrapper<rmm::mr::binning_memory_resource>(pool, 18, 22);
+  return mr;
+}
 
 /**
  * @brief Creates a memory resource for the unit test environment
@@ -227,12 +265,13 @@ class TempDirTestEnvironment : public ::testing::Environment {
  *        Accepted types are "pool", "cuda", and "managed" only.
  * @return Memory resource instance
  */
-inline std::unique_ptr<rmm::mr::device_memory_resource> create_memory_resource(
+inline std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
   std::string const &allocation_mode)
 {
-  if (allocation_mode == "cuda") return std::make_unique<rmm::mr::cuda_memory_resource>();
-  if (allocation_mode == "pool") return std::make_unique<rmm::mr::cnmem_memory_resource>();
-  if (allocation_mode == "managed") return std::make_unique<rmm::mr::managed_memory_resource>();
+  if (allocation_mode == "binning") return make_binning();
+  if (allocation_mode == "cuda") return make_cuda();
+  if (allocation_mode == "pool") return make_pool();
+  if (allocation_mode == "managed") make_managed();
   CUDF_FAIL("Invalid RMM allocation mode: " + allocation_mode);
 }
 
@@ -278,6 +317,6 @@ inline auto parse_cudf_test_opts(int argc, char **argv)
     auto const cmd_opts = parse_cudf_test_opts(argc, argv);             \
     auto const rmm_mode = cmd_opts["rmm_mode"].as<std::string>();       \
     auto resource       = cudf::test::create_memory_resource(rmm_mode); \
-    rmm::mr::set_default_resource(resource.get());                      \
+    rmm::mr::set_current_device_resource(resource.get());               \
     return RUN_ALL_TESTS();                                             \
   }

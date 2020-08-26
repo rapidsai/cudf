@@ -27,7 +27,7 @@ struct scalar_construction_helper {
   std::enable_if_t<is_fixed_width<T>(), std::unique_ptr<scalar>> operator()(
     cudaStream_t stream, rmm::mr::device_memory_resource* mr) const
   {
-    auto s = new ScalarType(0, false, stream, mr);
+    auto s = new ScalarType(T{}, false, stream, mr);
     return std::unique_ptr<scalar>(s);
   }
 
@@ -59,6 +59,16 @@ std::unique_ptr<scalar> make_timestamp_scalar(data_type type,
   return type_dispatcher(type, scalar_construction_helper{}, stream, mr);
 }
 
+// Allocate storage for a single duration element
+std::unique_ptr<scalar> make_duration_scalar(data_type type,
+                                             cudaStream_t stream,
+                                             rmm::mr::device_memory_resource* mr)
+{
+  CUDF_EXPECTS(is_duration(type), "Invalid, non-duration type.");
+
+  return type_dispatcher(type, scalar_construction_helper{}, stream, mr);
+}
+
 // Allocate storage for a single fixed width element
 std::unique_ptr<scalar> make_fixed_width_scalar(data_type type,
                                                 cudaStream_t stream,
@@ -83,14 +93,18 @@ template <>
 std::unique_ptr<cudf::scalar> default_scalar_functor::operator()<dictionary32>()
 {
   CUDF_FAIL("dictionary type not supported");
-  return nullptr;
 }
 
 template <>
 std::unique_ptr<cudf::scalar> default_scalar_functor::operator()<list_view>()
 {
   CUDF_FAIL("list_view type not supported");
-  return nullptr;
+}
+
+template <>
+std::unique_ptr<cudf::scalar> default_scalar_functor::operator()<struct_view>()
+{
+  CUDF_FAIL("struct_view type not supported");
 }
 
 }  // namespace

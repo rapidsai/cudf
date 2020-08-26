@@ -31,14 +31,14 @@ Provides `allocate` and `deallocate` member functions for device memory allocati
 
 ### Default Memory Resources
 
-RMM provides a "default" memory resource that can be accessed and updated via the `rmm::mr::get_default_resource()` and `rmm::mr::set_default_resource(...)` functions, respectively. All memory resource arguments should be defaulted to use the return value of `rmm::mr::get_default_resource()`. 
+RMM provides a "default" memory resource that can be accessed and updated via the `rmm::mr::get_current_device_resource()` and `rmm::mr::set_current_device_resource(...)` functions, respectively. All memory resource arguments should be defaulted to use the return value of `rmm::mr::get_current_device_resource()`. 
 
 
 ## `rmm::device_buffer`
 
 The fundamental device memory owning class in `libcudf++`. 
 
-Allocates non-typed, uninitialized device memory using a `device_memory_resource`. If no resource is explicitly provided, uses `rmm::mr::get_default_resource()`. 
+Allocates non-typed, uninitialized device memory using a `device_memory_resource`. If no resource is explicitly provided, uses `rmm::mr::get_current_device_resource()`. 
 
 Movable and copyable. A copy performs a deep copy of the `device_buffer`'s device memory, whereas a move moves ownership of the device memory from one `device_buffer` to another.
 
@@ -188,7 +188,7 @@ Any libcudf API that allocates memory that is *returned* to a user must accept a
 // Returned `column` contains newly allocated memory, 
 // therefore the API must accept a memory resource pointer
 std::unique_ptr<column> returns_output_memory(..., 
-                                              rmm::device_memory_resource * mr = rmm::mr::get_default_resource());
+                                              rmm::device_memory_resource * mr = rmm::mr::get_current_device_resource());
 
 // This API does not allocate any new *output* memory, therefore
 // a memory resource is unnecessary
@@ -199,9 +199,9 @@ void does_not_allocate_output_memory(...);
 
 Not all memory allocated within a libcudf feature is returned to the caller.
 Oftentimes in implementing an algorithm, it is necessary to allocate temporary, scratch memory for intermediate results.
-For these temporary memory allocations, the default resource returned from `rmm::mr::get_default_resource()` should *always* be used. Example:
+For these temporary memory allocations, the default resource returned from `rmm::mr::get_current_device_resource()` should *always* be used. Example:
 ```c++
-rmm::device_buffer some_function(..., rmm::mr::device_memory_resource mr * = rmm::mr::get_default_resource()){
+rmm::device_buffer some_function(..., rmm::mr::device_memory_resource mr * = rmm::mr::get_current_device_resource()){
     rmm::device_buffer returned_buffer(..., mr); // Returned buffer uses the passed in MR
     ...
     rmm::device_buffer temporary_buffer(...); // Temporary buffer uses default MR
@@ -421,9 +421,9 @@ This simplified example of how the `type_dispatcher` works shows how the value o
 template <typename F>
 void type_dispatcher(data_type t, F f){
     switch(t.id())
-       case INT32: f.template operator()<int32_t>()
-       case INT64: f.template operator()<int64_t>()
-       case FLOAT: f.template operator()<float>()
+       case type_id::INT32: f.template operator()<int32_t>()
+       case type_id::INT64: f.template operator()<int64_t>()
+       case type_id::FLOAT: f.template operator()<float>()
        ...
 }
 ```
@@ -435,9 +435,9 @@ struct size_of_functor{
 template <typename T>
 int operator()(){ return sizeof(T); }
 };
-cudf::type_dispatcher(data_type{INT8}, size_of_functor{});  // returns 1
-cudf::type_dispatcher(data_type{INT32}, size_of_functor{});  // returns 4
-cudf::type_dispatcher(data_type{FLOAT64}, size_of_functor{});  // returns 8
+cudf::type_dispatcher(data_type{type_id::INT8}, size_of_functor{});  // returns 1
+cudf::type_dispatcher(data_type{type_id::INT32}, size_of_functor{});  // returns 4
+cudf::type_dispatcher(data_type{type_id::FLOAT64}, size_of_functor{});  // returns 8
 ```
 
 By default, the `type_dispatcher` uses `cudf::type_to_id<t>` to provide the mapping
@@ -782,7 +782,7 @@ std::unique_ptr<column> new_function(cudf::column_view input,
                                      cudf::mutable_column_view in_out, 
                                      cudf::table_view input_table,
                                      cudf::mutable_table_view in_out_table,
-                                     device_memory_resource* mr = rmm::get_default_resource());
+                                     device_memory_resource* mr = rmm::get_current_device_resource());
  } // namespace experimental
  } // namespace cudf
 ```
@@ -931,10 +931,3 @@ In effect, this allowed us to treat columns of strings as fixed-width, numeric c
 
 However, there was extra work required to manage the `NVCategory` columns--all of which should be removed when porting to libcudf++.
 Any use of a function from `cudf/cpp/include/cudf/utilities/legacy/nvcategory_util.hpp` should be removed from the new implementation.
-
-
-
-
-
-
-

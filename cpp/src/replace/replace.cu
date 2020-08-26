@@ -75,7 +75,7 @@ __device__ auto get_new_value(cudf::size_type idx,
 {
   auto found_ptr =
     thrust::find(thrust::seq, values_to_replace_begin, values_to_replace_end, input_data[idx]);
-  T new_value{0};
+  T new_value{};
   bool output_is_valid{true};
 
   if (found_ptr != values_to_replace_end) {
@@ -1023,8 +1023,9 @@ namespace detail {
 void normalize_nans_and_zeros(mutable_column_view in_out, cudaStream_t stream = 0)
 {
   if (in_out.size() == 0) { return; }
-  CUDF_EXPECTS(in_out.type() == data_type(FLOAT32) || in_out.type() == data_type(FLOAT64),
-               "Expects float or double input");
+  CUDF_EXPECTS(
+    in_out.type() == data_type(type_id::FLOAT32) || in_out.type() == data_type(type_id::FLOAT64),
+    "Expects float or double input");
 
   // wrapping the in_out data in a column_view so we can call the same lower level code.
   // that we use for the non in-place version.

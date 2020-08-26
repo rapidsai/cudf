@@ -17,6 +17,8 @@ from cudf.tests.utils import assert_eq
         lambda: cudf.Series([1, 2, 3], index=[4, 5, 6]),
         lambda: cudf.Series([1, None, 3]),
         lambda: cudf.Series([1, 2, 3], index=[4, 5, None]),
+        lambda: cudf.Series([1, 2, 3])[:2],
+        lambda: cudf.Series([1, 2, 3])[:2]._column,
         lambda: cudf.Series(["a", "bb", "ccc"]),
         lambda: cudf.Series(["a", None, "ccc"]),
         lambda: cudf.DataFrame({"x": [1, 2, 3]}),

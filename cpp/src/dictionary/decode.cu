@@ -17,6 +17,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/detail/encode.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/table/table.hpp>
@@ -32,9 +33,9 @@ std::unique_ptr<column> decode(dictionary_column_view const& source,
                                rmm::mr::device_memory_resource* mr,
                                cudaStream_t stream)
 {
-  if (source.size() == 0) return make_empty_column(data_type{EMPTY});
+  if (source.size() == 0) return make_empty_column(data_type{type_id::EMPTY});
 
-  column_view indices{cudf::data_type{cudf::INT32},
+  column_view indices{cudf::data_type{cudf::type_id::INT32},
                       source.size(),
                       source.indices().head<int32_t>(),
                       nullptr,
@@ -61,6 +62,7 @@ std::unique_ptr<column> decode(dictionary_column_view const& source,
 std::unique_ptr<column> decode(dictionary_column_view const& source,
                                rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::decode(source, mr);
 }
 

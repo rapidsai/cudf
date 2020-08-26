@@ -20,10 +20,6 @@ export HOME=$WORKSPACE
 # Switch to project root; also root of repo checkout
 cd $WORKSPACE
 
-# Get latest tag and number of commits since tag
-export GIT_DESCRIBE_TAG=`git describe --abbrev=0 --tags`
-export GIT_DESCRIBE_NUMBER=`git rev-list ${GIT_DESCRIBE_TAG}..HEAD --count`
-
 # If nightly build, append current YYMMDD to version
 if [[ "$BUILD_MODE" = "branch" && "$SOURCE_BRANCH" = branch-* ]] ; then
   export VERSION_SUFFIX=`date +%y%m%d`
@@ -52,20 +48,20 @@ conda config --set ssl_verify False
 # BUILD - Conda package builds (conda deps: libcudf <- libcudf_cffi <- cudf)
 ################################################################################
 
-logger "Build conda pkg for libNVStrings..."
-source ci/cpu/libnvstrings/build_libnvstrings.sh
-
-logger "Build conda pkg for nvstrings..."
-source ci/cpu/nvstrings/build_nvstrings.sh
-
 logger "Build conda pkg for libcudf..."
 source ci/cpu/libcudf/build_libcudf.sh
+
+logger "Build conda pkg for libcudf_kafka..."
+source ci/cpu/libcudf_kafka/build_libcudf_kafka.sh
 
 logger "Build conda pkg for cudf..."
 source ci/cpu/cudf/build_cudf.sh
 
 logger "Build conda pkg for dask-cudf..."
 source ci/cpu/dask-cudf/build_dask_cudf.sh
+
+logger "Build conda pkg for cudf_kafka..."
+source ci/cpu/cudf_kafka/build_cudf_kafka.sh
 
 logger "Build conda pkg for custreamz..."
 source ci/cpu/custreamz/build_custreamz.sh

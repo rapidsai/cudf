@@ -38,7 +38,8 @@ TYPED_TEST(groupby_nunique_test, basic)
     using R = cudf::detail::target_type_t<V, aggregation::NUNIQUE>;
 
     fixed_width_column_wrapper<K> keys { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
-    fixed_width_column_wrapper<V> vals { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    fixed_width_column_wrapper<V, int32_t> vals(
+            {0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
 
     fixed_width_column_wrapper<K> expect_keys { 1, 2, 3 };
     fixed_width_column_wrapper<R> expect_vals { 3, 4, 3 };
@@ -74,7 +75,7 @@ TYPED_TEST(groupby_nunique_test, basic_duplicates)
     using R = cudf::detail::target_type_t<V, aggregation::NUNIQUE>;
 
     fixed_width_column_wrapper<K> keys { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
-    fixed_width_column_wrapper<V> vals { 0, 1, 2, 3, 4, 5, 3, 2, 2, 9};
+    fixed_width_column_wrapper<V, int32_t> vals({0, 1, 2, 3, 4, 5, 3, 2, 2, 9});
 
     fixed_width_column_wrapper<K> expect_keys { 1, 2, 3 };
     fixed_width_column_wrapper<R> expect_vals { 2, 4, 1 };
@@ -94,7 +95,7 @@ TYPED_TEST(groupby_nunique_test, zero_valid_keys)
     using R = cudf::detail::target_type_t<V, aggregation::NUNIQUE>;
 
     fixed_width_column_wrapper<K> keys( { 1, 2, 3}, all_null() );
-    fixed_width_column_wrapper<V> vals  { 3, 4, 5};
+    fixed_width_column_wrapper<V, int32_t> vals({3, 4, 5});
 
     fixed_width_column_wrapper<K> expect_keys { };
     fixed_width_column_wrapper<R> expect_vals { };
@@ -110,7 +111,7 @@ TYPED_TEST(groupby_nunique_test, zero_valid_values)
     using R = cudf::detail::target_type_t<V, aggregation::NUNIQUE>;
 
     fixed_width_column_wrapper<K> keys  { 1, 1, 1};
-    fixed_width_column_wrapper<V> vals( { 3, 4, 5}, all_null() );
+    fixed_width_column_wrapper<V, int32_t> vals({3, 4, 5}, all_null());
 
     fixed_width_column_wrapper<K> expect_keys { 1 };
     fixed_width_column_wrapper<R> expect_vals { 0 };
@@ -127,8 +128,8 @@ TYPED_TEST(groupby_nunique_test, null_keys_and_values)
 
     fixed_width_column_wrapper<K> keys({ 1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
                                        { 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});
-    fixed_width_column_wrapper<V> vals({ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 4},
-                                                { 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
+    fixed_width_column_wrapper<V, int32_t> vals({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 4},
+                                                {0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
 
                                           //  { 1, 1,     2, 2, 2,   3, 3,    4}
     fixed_width_column_wrapper<K> expect_keys({ 1,        2,         3,       4}, all_valid());
@@ -152,8 +153,8 @@ TYPED_TEST(groupby_nunique_test, null_keys_and_values_with_duplicates)
 
     fixed_width_column_wrapper<K> keys({ 1, 2, 3, 3, 1, 2, 2, 1, 3, 3, 2, 4, 4, 2},
                                        { 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1});
-    fixed_width_column_wrapper<V> vals({ 0, 1, 2, 2, 3, 4, 5, 6, 7, 8, 9, 4, 4, 2},
-                                       { 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 0});
+    fixed_width_column_wrapper<V, int32_t> vals({0, 1, 2, 2, 3, 4, 5, 6, 7, 8, 9, 4, 4, 2},
+                                                {0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 0});
 
                                           //  { 1, 1,     2, 2, 2,    3, 3,    4}
     fixed_width_column_wrapper<K> expect_keys({ 1,        2,          3,       4}, all_valid());
@@ -179,8 +180,8 @@ TYPED_TEST(groupby_nunique_test, include_nulls)
 
     fixed_width_column_wrapper<K> keys({ 1, 2, 3, 3, 1, 2, 2, 1, 3, 3, 2, 4, 4, 2},
                                        { 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1});
-    fixed_width_column_wrapper<V> vals({ 0, 1, 2, 2, 3, 4, 5, 6, 7, 8, 9, 4, 4, 2},
-                                       { 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 0});
+    fixed_width_column_wrapper<V, int32_t> vals({0, 1, 2, 2, 3, 4, 5, 6, 7, 8, 9, 4, 4, 2},
+                                                {0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 0});
 
                                           //  { 1, 1,     2, 2, 2,    3, 3,    4}
     fixed_width_column_wrapper<K> expect_keys({ 1,        2,          3,       4}, all_valid());

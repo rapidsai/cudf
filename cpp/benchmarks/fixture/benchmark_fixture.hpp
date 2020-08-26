@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,10 +15,23 @@
  */
 
 #include <benchmark/benchmark.h>
-#include <rmm/rmm_api.h>
-#include <rmm/thrust_rmm_allocator.h>
+#include <rmm/mr/device/cuda_memory_resource.hpp>
+#include <rmm/mr/device/owning_wrapper.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/mr/device/pool_memory_resource.hpp>
 
 namespace cudf {
+
+namespace {
+// memory resource factory helpers
+inline auto make_cuda() { return std::make_shared<rmm::mr::cuda_memory_resource>(); }
+
+inline auto make_pool()
+{
+  return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(make_cuda());
+}
+}  // namespace
+
 /**
  * @brief Google Benchmark fixture for libcudf benchmarks
  *
@@ -54,11 +67,16 @@ class benchmark : public ::benchmark::Fixture {
  public:
   virtual void SetUp(const ::benchmark::State& state)
   {
-    rmmOptions_t options{PoolAllocation, 0, false};
-    rmmInitialize(&options);
+    mr = make_pool();
+    rmm::mr::set_current_device_resource(mr.get());  // set default resource to pool
   }
 
-  virtual void TearDown(const ::benchmark::State& state) { rmmFinalize(); }
+  virtual void TearDown(const ::benchmark::State& state)
+  {
+    // reset default resource to the initial resource
+    rmm::mr::set_current_device_resource(nullptr);
+    mr.reset();
+  }
 
   // eliminate partial override warnings (see benchmark/benchmark.h)
   virtual void SetUp(::benchmark::State& st) { SetUp(const_cast<const ::benchmark::State&>(st)); }
@@ -66,6 +84,8 @@ class benchmark : public ::benchmark::Fixture {
   {
     TearDown(const_cast<const ::benchmark::State&>(st));
   }
+
+  std::shared_ptr<rmm::mr::device_memory_resource> mr;
 };
 
 };  // namespace cudf

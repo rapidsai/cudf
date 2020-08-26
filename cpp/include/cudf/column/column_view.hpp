@@ -193,7 +193,7 @@ class column_view_base {
   size_type offset() const noexcept { return _offset; }
 
  protected:
-  data_type _type{EMPTY};            ///< Element type
+  data_type _type{type_id::EMPTY};   ///< Element type
   size_type _size{};                 ///< Number of elements
   void const* _data{};               ///< Pointer to device memory containing elements
   bitmask_type const* _null_mask{};  ///< Pointer to device memory containing
@@ -334,6 +334,16 @@ class column_view : public detail::column_view_base {
    * @brief Returns the number of child columns.
    **/
   size_type num_children() const noexcept { return _children.size(); }
+
+  /**
+   * @brief Returns iterator to the beginning of the ordered sequence of child column-views.
+   */
+  auto child_begin() const noexcept { return _children.cbegin(); }
+
+  /**
+   * @brief Returns iterator to the end of the ordered sequence of child column-views.
+   */
+  auto child_end() const noexcept { return _children.cend(); }
 
  private:
   std::vector<column_view> _children{};  ///< Based on element type, children

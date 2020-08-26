@@ -1,26 +1,66 @@
-def validate_setup(check_dask=True):
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
+
+def validate_setup():
     import os
 
     # TODO: Remove the following check once we arrive at a solution for #4827
     # This is a temporary workaround to unblock internal testing
     # related issue: https://github.com/rapidsai/cudf/issues/4827
-    if not check_dask and "DASK_PARENT" in os.environ:
+    if (
+        "RAPIDS_NO_INITIALIZE" in os.environ
+        or "CUDF_NO_INITIALIZE" in os.environ
+    ):
         return
 
-    from cudf._cuda.gpu import (
-        getDeviceCount,
-        driverGetVersion,
-        runtimeGetVersion,
-        getDeviceAttribute,
-        CudaDeviceAttr,
-        CUDARuntimeError,
-        deviceGetName,
-    )
     import warnings
+
+    from rmm._cuda.gpu import (
+        CUDARuntimeError,
+        cudaDeviceAttr,
+        cudaError,
+        deviceGetName,
+        driverGetVersion,
+        getDeviceAttribute,
+        getDeviceCount,
+        runtimeGetVersion,
+    )
+
+    def _try_get_old_or_new_symbols():
+        try:
+            # CUDA 10.2+ symbols
+            return [
+                cudaError.cudaErrorDeviceUninitialized,
+                cudaError.cudaErrorTimeout,
+            ]
+        except AttributeError:
+            # CUDA 10.1 symbols
+            return [cudaError.cudaErrorDeviceUninitilialized]
+
+    notify_caller_errors = {
+        cudaError.cudaErrorInitializationError,
+        cudaError.cudaErrorInsufficientDriver,
+        cudaError.cudaErrorInvalidDeviceFunction,
+        cudaError.cudaErrorInvalidDevice,
+        cudaError.cudaErrorStartupFailure,
+        cudaError.cudaErrorInvalidKernelImage,
+        cudaError.cudaErrorAlreadyAcquired,
+        cudaError.cudaErrorOperatingSystem,
+        cudaError.cudaErrorNotPermitted,
+        cudaError.cudaErrorNotSupported,
+        cudaError.cudaErrorSystemNotReady,
+        cudaError.cudaErrorSystemDriverMismatch,
+        cudaError.cudaErrorCompatNotSupportedOnDevice,
+        *_try_get_old_or_new_symbols(),
+        cudaError.cudaErrorUnknown,
+        cudaError.cudaErrorApiFailureBase,
+    }
 
     try:
         gpus_count = getDeviceCount()
-    except CUDARuntimeError:
+    except CUDARuntimeError as e:
+        if e.status in notify_caller_errors:
+            raise e
         # If there is no GPU detected, set `gpus_count` to -1
         gpus_count = -1
 
@@ -31,7 +71,7 @@ def validate_setup(check_dask=True):
         # 75 - Indicates to get "cudaDevAttrComputeCapabilityMajor" attribute
         # 0 - Get GPU 0
         major_version = getDeviceAttribute(
-            CudaDeviceAttr.cudaDevAttrComputeCapabilityMajor, 0
+            cudaDeviceAttr.cudaDevAttrComputeCapabilityMajor, 0
         )
 
         if major_version >= 6:
@@ -47,15 +87,14 @@ def validate_setup(check_dask=True):
         else:
             device_name = deviceGetName(0)
             minor_version = getDeviceAttribute(
-                CudaDeviceAttr.cudaDevAttrComputeCapabilityMinor, 0
+                cudaDeviceAttr.cudaDevAttrComputeCapabilityMinor, 0
             )
             warnings.warn(
-                "You will need a GPU with NVIDIA Pascal™ or newer architecture"
-                "\nDetected GPU 0: " + device_name + "\n"
-                "Detected Compute Capability: "
-                + str(major_version)
-                + "."
-                + str(minor_version)
+                f"You will need a GPU with NVIDIA Pascal™ or "
+                f"newer architecture"
+                f"\nDetected GPU 0: {device_name} \n"
+                f"Detected Compute Capability: "
+                f"{major_version}.{minor_version}"
             )
 
         cuda_runtime_version = runtimeGetVersion()
@@ -69,10 +108,9 @@ def validate_setup(check_dask=True):
             minor_version = cuda_runtime_version % 100
             major_version = (cuda_runtime_version - minor_version) // 1000
             raise UnSupportedCUDAError(
-                "Detected CUDA Runtime version is {0}.{1}"
-                "Please update your CUDA Runtime to 10.0 or above".format(
-                    major_version, str(minor_version)[0]
-                )
+                f"Detected CUDA Runtime version is "
+                f"{major_version}.{str(minor_version)[0]}"
+                f"Please update your CUDA Runtime to 10.0 or above"
             )
 
         cuda_driver_supported_rt_version = driverGetVersion()
@@ -91,10 +129,10 @@ def validate_setup(check_dask=True):
             from cudf.errors import UnSupportedCUDAError
 
             raise UnSupportedCUDAError(
-                "We couldn't detect the GPU driver\
-            properly. Please follow the linux installation guide to\
-            ensure your driver is properly installed.\
-            : https://docs.nvidia.com/cuda/cuda-installation-guide-linux/"
+                "We couldn't detect the GPU driver "
+                "properly. Please follow the linux installation guide to "
+                "ensure your driver is properly installed "
+                ": https://docs.nvidia.com/cuda/cuda-installation-guide-linux/"
             )
 
         elif cuda_driver_supported_rt_version >= cuda_runtime_version:
@@ -105,14 +143,12 @@ def validate_setup(check_dask=True):
             from cudf.errors import UnSupportedCUDAError
 
             raise UnSupportedCUDAError(
-                "Please update your NVIDIA GPU Driver to support CUDA \
-                    Runtime.\n"
-                "Detected CUDA Runtime version : "
-                + str(cuda_runtime_version)
-                + "\n"
-                "Latest version of CUDA \
-                    supported by current NVIDIA GPU Driver : "
-                + str(cuda_driver_supported_rt_version)
+                f"Please update your NVIDIA GPU Driver to support CUDA "
+                f"Runtime.\n"
+                f"Detected CUDA Runtime version : {cuda_runtime_version}"
+                f"\n"
+                f"Latest version of CUDA supported by current "
+                f"NVIDIA GPU Driver : {cuda_driver_supported_rt_version}"
             )
 
     else:

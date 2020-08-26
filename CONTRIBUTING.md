@@ -75,7 +75,7 @@ that committed code follows our standards. You can use the tools to
 automatically format your python code by running:
 
 ```bash
-isort --recursive --atomic --apply python
+isort --atomic python/**/*.py
 black python
 ```
 
@@ -129,7 +129,7 @@ Compiler requirements:
 
 * `gcc`     version 5.4+
 * `nvcc`    version 10.0+
-* `cmake`   version 3.12.4+
+* `cmake`   version 3.14.0+
 
 CUDA/GPU requirements:
 
@@ -138,21 +138,6 @@ CUDA/GPU requirements:
 * Pascal architecture or better
 
 You can obtain CUDA from [https://developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads).
-
-Since `cmake` will download and build Apache Arrow you may need to install Boost C++ (version 1.58+) before running
-`cmake`:
-
-```bash
-# Install Boost C++ for Ubuntu 16.04/18.04
-$ sudo apt-get install libboost-all-dev
-```
-
-or
-
-```bash
-# Install Boost C++ for Conda
-$ conda install -c conda-forge boost
-```
 
 ## Script to build cuDF from source
 
@@ -175,7 +160,6 @@ conda env create --name cudf_dev --file conda/environments/cudf_dev_cuda10.0.yml
 # activate the environment
 conda activate cudf_dev
 ```
-- If using CUDA 10.0, create the environment with `conda env create --name cudf_dev --file conda/environments/cudf_dev_cuda10.0.yml` instead.
 - For other CUDA versions, check the corresponding cudf_dev_cuda*.yml file in conda/environments
 
 - Build and install `libcudf` after its dependencies. CMake depends on the `nvcc` executable being on your path or defined in `$CUDACXX`.
@@ -199,20 +183,13 @@ $ ./build.sh                                                              # To b
 ```
 - To build only the C++ component with the script
 ```bash
-$ ./build.sh libnvstrings libcudf                                         # Build only the cuDF C++ components and install them to $INSTALL_PREFIX if set, otherwise $CONDA_PREFIX
+$ ./build.sh libcudf                                                      # Build only the cuDF C++ components and install them to $INSTALL_PREFIX if set, otherwise $CONDA_PREFIX
 ```
 
 - To run tests (Optional):
 ```bash
 $ make test
 ```
-
-- Build the `nvstrings` python packages, in the `python/nvstrings` folder:
-```bash
-$ cd $CUDF_HOME/python/nvstrings
-$ python setup.py install
-```
-
 - Build the `cudf` python package, in the `python/cudf` folder:
 ```bash
 $ cd $CUDF_HOME/python/cudf
@@ -299,7 +276,7 @@ For detailed information on usage of this script, see [here](ci/local/README.md)
 
 ## Automated Build in Docker Container
 
-A Dockerfile is provided with a preconfigured conda environment for building and installing cuDF from source based off of the master branch.
+A Dockerfile is provided with a preconfigured conda environment for building and installing cuDF from source based off of the main branch.
 
 ### Prerequisites
 
@@ -340,8 +317,8 @@ flag. Below is a list of the available arguments and their purpose:
 | `NUMBA_VERSION` | newest | >=0.40.0 | set numba version |
 | `NUMPY_VERSION` | newest | >=1.14.3 | set numpy version |
 | `PANDAS_VERSION` | newest | >=0.23.4 | set pandas version |
-| `PYARROW_VERSION` | 0.15.0 | Not supported | set pyarrow version |
-| `CMAKE_VERSION` | newest | >=3.12 | set cmake version |
+| `PYARROW_VERSION` | 0.17.1 | Not supported | set pyarrow version |
+| `CMAKE_VERSION` | newest | >=3.14 | set cmake version |
 | `CYTHON_VERSION` | 0.29 | Not supported | set Cython version |
 | `PYTHON_VERSION` | 3.6 | 3.7 | set python version |
 

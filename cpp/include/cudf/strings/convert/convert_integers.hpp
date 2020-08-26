@@ -100,6 +100,31 @@ std::unique_ptr<column> hex_to_integers(
   data_type output_type,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/**
+ * @brief Returns a boolean column identifying strings in which all
+ * characters are valid for conversion to integers from hex.
+ *
+ * The output row entry will be set to `true` if the corresponding string element
+ * has at least one character in [0-9A-Za-z]. Also, the string may start
+ * with '0x'.
+ *
+ * @code{.pseudo}
+ * Example:
+ * s = ['123', '-456', '', 'AGE', '+17EA', '0x9EF' '123ABC']
+ * b = s.is_hex(s)
+ * b is [true, false, false, false, false, true, true]
+ * @endcode
+ *
+ * Any null row results in a null entry for that row in the output column.
+ *
+ * @param strings Strings instance for this operation.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return New column of boolean results for each string.
+ */
+std::unique_ptr<column> is_hex(
+  strings_column_view const& strings,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
 /** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

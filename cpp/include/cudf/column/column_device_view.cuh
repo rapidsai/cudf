@@ -21,6 +21,7 @@
 #include <cudf/lists/list_view.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/structs/struct_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -208,7 +209,7 @@ class alignas(16) column_device_view_base {
   }
 
  protected:
-  data_type _type{EMPTY};            ///< Element type
+  data_type _type{type_id::EMPTY};   ///< Element type
   cudf::size_type _size{};           ///< Number of elements
   void const* _data{};               ///< Pointer to device memory containing elements
   bitmask_type const* _null_mask{};  ///< Pointer to device memory containing

@@ -21,6 +21,7 @@
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include "cudf/structs/struct_view.hpp"
 
 namespace cudf {
 namespace reduction {
@@ -50,10 +51,9 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
   Op simple_op{};
 
   if (col.has_nulls()) {
-    auto it =
-      thrust::make_transform_iterator(cudf::detail::make_null_replacement_iterator(
-                                        *dcol, simple_op.template get_identity<ElementType>()),
-                                      simple_op.template get_element_transformer<ResultType>());
+    auto it = thrust::make_transform_iterator(
+      dcol->pair_begin<ElementType, true>(),
+      simple_op.template get_null_replacing_element_transformer<ResultType>());
     result = detail::reduce(it, col.size(), Op{}, mr, stream);
   } else {
     auto it = thrust::make_transform_iterator(
@@ -77,11 +77,14 @@ struct result_type_dispatcher {
     //  - same dtypes (including cudf::wrappers)
     //  - any arithmetic dtype to any arithmetic dtype
     //  - bool to/from any arithmetic dtype
-    return std::is_convertible<ElementType, ResultType>::value &&
+    //  - fixed_point to fixed_point
+    return cudf::is_convertible<ElementType, ResultType>::value &&
            (std::is_arithmetic<ResultType>::value ||
             std::is_same<Op, cudf::reduction::op::min>::value ||
-            std::is_same<Op, cudf::reduction::op::max>::value) &&
-           !std::is_same<ResultType, cudf::list_view>::value;
+            std::is_same<Op, cudf::reduction::op::max>::value ||
+            cudf::is_fixed_point<ResultType>()) &&
+           !std::is_same<ResultType, cudf::list_view>::value &&
+           !std::is_same<ResultType, cudf::struct_view>::value;
   }
 
  public:
@@ -117,8 +120,9 @@ struct element_type_dispatcher {
     return !((std::is_same<ElementType, cudf::string_view>::value &&
               !(std::is_same<Op, cudf::reduction::op::min>::value ||
                 std::is_same<Op, cudf::reduction::op::max>::value))
-             // disable for list views
-             || std::is_same<ElementType, cudf::list_view>::value);
+             // disable for list/struct views
+             || std::is_same<ElementType, cudf::list_view>::value ||
+             std::is_same<ElementType, cudf::struct_view>::value);
   }
 
  public:

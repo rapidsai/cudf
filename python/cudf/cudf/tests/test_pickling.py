@@ -1,6 +1,5 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-import pickle
 import sys
 
 import numpy as np
@@ -10,6 +9,14 @@ import pytest
 from cudf.core import DataFrame, GenericIndex, Series
 from cudf.core.buffer import Buffer
 from cudf.tests.utils import assert_eq
+
+if sys.version_info < (3, 8):
+    try:
+        import pickle5 as pickle
+    except ImportError:
+        import pickle
+else:
+    import pickle
 
 
 def check_serialization(df):
@@ -32,13 +39,13 @@ def check_serialization(df):
         for b in buffers:
             assert isinstance(b, pickle.PickleBuffer)
         loaded = pickle.loads(serialbytes, buffers=buffers)
-        pd.util.testing.assert_frame_equal(loaded.to_pandas(), df.to_pandas())
+        assert_eq(loaded, df)
 
 
 def assert_frame_picklable(df):
     serialbytes = pickle.dumps(df)
     loaded = pickle.loads(serialbytes)
-    pd.util.testing.assert_frame_equal(loaded.to_pandas(), df.to_pandas())
+    assert_eq(loaded, df)
 
 
 def test_pickle_dataframe_numeric():
@@ -73,8 +80,9 @@ def test_sizeof_dataframe():
     assert sizeof >= nbytes
 
     serialized_nbytes = len(pickle.dumps(df, protocol=pickle.HIGHEST_PROTOCOL))
-    # Serialized size should be close to what __sizeof__ is giving
-    np.testing.assert_approx_equal(sizeof, serialized_nbytes, significant=2)
+
+    # assert at least sizeof bytes were serialized
+    assert serialized_nbytes >= sizeof
 
 
 def test_pickle_index():
@@ -86,7 +94,7 @@ def test_pickle_index():
 
 
 def test_pickle_buffer():
-    arr = np.arange(10)
+    arr = np.arange(10).view("|u1")
     buf = Buffer(arr)
     assert buf.size == arr.nbytes
     pickled = pickle.dumps(buf)

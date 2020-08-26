@@ -11,7 +11,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -23,16 +23,7 @@ def make_numeric_dataframe(nrows, dtype):
 
 @pytest.fixture(params=[0, 1, 10, 100])
 def pdf(request):
-    types = [
-        "bool",
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "float32",
-        "float64",
-        "datetime64[ms]",
-    ]
+    types = NUMERIC_TYPES + DATETIME_TYPES + ["bool"]
     renamer = {
         "C_l0_g" + str(idx): "col_" + val for (idx, val) in enumerate(types)
     }
@@ -45,7 +36,7 @@ def pdf(request):
         nrows=nrows, ncols=ncols, data_gen_f=lambda r, c: r, r_idx_type="i"
     )
     # Delete the name of the column index, and rename the row index
-    del test_pdf.columns.name
+    test_pdf.columns.name = None
     test_pdf.index.name = "test_index"
 
     # Cast all the column dtypes to objects, rename them, and then cast to
@@ -142,7 +133,14 @@ def test_json_writer(tmpdir, pdf, gdf):
         assert os.path.exists(pdf_series_fname)
         assert os.path.exists(gdf_series_fname)
 
-        expect_series = pd.read_json(pdf_series_fname, typ="series")
+        try:
+            # xref 'https://github.com/pandas-dev/pandas/pull/33373')
+            expect_series = pd.read_json(pdf_series_fname, typ="series")
+        except TypeError as e:
+            if str(e) == "<class 'bool'> is not convertible to datetime":
+                continue
+            else:
+                raise e
         got_series = pd.read_json(gdf_series_fname, typ="series")
 
         assert_eq(expect_series, got_series)
@@ -250,8 +248,7 @@ def test_json_lines_compression(tmpdir, ext, out_comp, in_comp):
     cu_df = cudf.read_json(
         str(fname), compression=in_comp, lines=True, dtype=["int", "int"]
     )
-
-    pd.util.testing.assert_frame_equal(pd_df, cu_df.to_pandas())
+    assert_eq(pd_df, cu_df)
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
@@ -297,7 +294,13 @@ def test_json_bool_values():
 
 
 @pytest.mark.parametrize(
-    "buffer", ["[null,]\n[1.0, ]", '{"0":null,"1":}\n{"0":1.0,"1": }']
+    "buffer",
+    [
+        "[1.0,]\n[null, ]",
+        '{"0":1.0,"1":}\n{"0":null,"1": }',
+        '{ "0" : 1.0 , "1" : }\n{ "0" : null , "1" : }',
+        '{"0":1.0}\n{"1":}',
+    ],
 )
 def test_json_null_literal(buffer):
     df = cudf.read_json(buffer, lines=True)
@@ -306,6 +309,12 @@ def test_json_null_literal(buffer):
     # second column contains only empty fields, type should be set to int8
     np.testing.assert_array_equal(df.dtypes, ["float64", "int8"])
     np.testing.assert_array_equal(
-        df["0"].to_array(fillna=np.nan), [np.nan, 1.0]
+        df["0"].to_array(fillna=np.nan), [1.0, np.nan]
     )
-    np.testing.assert_array_equal(df["1"].to_array(fillna=np.nan), [-1, -1])
+    np.testing.assert_array_equal(
+        df["1"].to_array(fillna=np.nan),
+        [
+            df["1"]._column.default_na_value(),
+            df["1"]._column.default_na_value(),
+        ],
+    )

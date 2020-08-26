@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
 
 project(CUDF_BENCHS LANGUAGES C CXX CUDA)
 
@@ -22,19 +22,23 @@ endfunction(ConfigureBench)
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
-include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
-                    "${CMAKE_BINARY_DIR}/include"
+include_directories("${CUB_INCLUDE_DIR}"
+                    "${THRUST_INCLUDE_DIR}"
+                    "${JITIFY_INCLUDE_DIR}"
+                    "${LIBCUDACXX_INCLUDE_DIR}")
+
+if(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
+    include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
+endif(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
+                  
+include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_SOURCE_DIR}"
                     "${CMAKE_SOURCE_DIR}/src"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/cub"
                     "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/jitify"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include"
                     "${GTEST_INCLUDE_DIR}"
                     "${GBENCH_INCLUDE_DIR}"
                     "${ARROW_INCLUDE_DIR}"
-                    "${FLATBUFFERS_INCLUDE_DIR}"
                     "${RMM_INCLUDE}"
                     "${CMAKE_CURRENT_SOURCE_DIR}")
 
@@ -44,7 +48,6 @@ include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
                  "${CMAKE_BINARY_DIR}/lib"
                  "${CMAKE_BINARY_DIR}"
-                 "${FLATBUFFERS_LIBRARY_DIR}"
                  "${GTEST_LIBRARY_DIR}"
                  "${GBENCH_LIBRARY_DIR}"
                  "${RMM_LIBRARY}")
@@ -139,6 +142,14 @@ set(TD_BENCH_SRC
 ConfigureBench(TYPE_DISPATCHER_BENCH "${TD_BENCH_SRC}")
 
 ###################################################################################################
+# - reduction benchmark ---------------------------------------------------------------------------
+
+set(REDUCTION_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/reduction/reduce_benchmark.cpp")
+
+ConfigureBench(REDUCTION_BENCH "${REDUCTION_BENCH_SRC}")
+
+###################################################################################################
 # - groupby benchmark -----------------------------------------------------------------------------
 
 set(GROUPBY_BENCH_SRC
@@ -172,9 +183,73 @@ set(NULLMASK_BENCH_SRC
 ConfigureBench(NULLMASK_BENCH "${NULLMASK_BENCH_SRC}")
 
 ###################################################################################################
+# - parquet writer chunks benchmark -----------------------------------------------------------------------------
+
+set(PARQUET_WRITER_CHUNKS_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/io/parquet/parquet_writer_chunks_benchmark.cpp")
+
+ConfigureBench(PARQUET_WRITER_CHUNKS_BENCH "${PARQUET_WRITER_CHUNKS_BENCH_SRC}")
+
+###################################################################################################
+# - parquet reader benchmark ----------------------------------------------------------------------
+
+set(PARQUET_READER_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/io/parquet/parquet_reader_benchmark.cpp")
+
+ConfigureBench(PARQUET_READER_BENCH "${PARQUET_READER_BENCH_SRC}")
+
+###################################################################################################
+# - orc reader benchmark --------------------------------------------------------------------------
+
+set(ORC_READER_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/io/orc/orc_reader_benchmark.cpp")
+
+ConfigureBench(ORC_READER_BENCH "${ORC_READER_BENCH_SRC}")
+
+###################################################################################################
+# - csv reader benchmark --------------------------------------------------------------------------
+
+set(CSV_READER_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/io/csv/csv_reader_benchmark.cpp")
+
+ConfigureBench(CSV_READER_BENCH "${CSV_READER_BENCH_SRC}")
+
+###################################################################################################
 # - parquet writer benchmark -----------------------------------------------------------------------------
 
 set(PARQUET_WRITER_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/io/parquet_writer_benchmark.cu")
+  "${CMAKE_CURRENT_SOURCE_DIR}/io/parquet/parquet_writer_benchmark.cpp")
 
 ConfigureBench(PARQUET_WRITER_BENCH "${PARQUET_WRITER_BENCH_SRC}")
+
+###################################################################################################
+# - orc writer benchmark -----------------------------------------------------------------------------
+
+set(ORC_WRITER_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/io/orc/orc_writer_benchmark.cpp")
+
+ConfigureBench(ORC_WRITER_BENCH "${ORC_WRITER_BENCH_SRC}")
+
+###################################################################################################
+# - csv writer benchmark -----------------------------------------------------------------------------
+
+set(CSV_WRITER_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/io/csv/csv_writer_benchmark.cpp")
+
+ConfigureBench(CSV_WRITER_BENCH "${CSV_WRITER_BENCH_SRC}")
+
+###################################################################################################
+# - subword tokenizer benchmark -------------------------------------------------------------------
+
+set(SUBWORD_TOKENIZER_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/text/subword_benchmark.cpp")
+
+ConfigureBench(SUBWORD_TOKENIZER_BENCH "${SUBWORD_TOKENIZER_BENCH_SRC}")
+
+###################################################################################################
+# - convert to string benchmark -------------------------------------------------------------------
+
+set(DURATION_TO_STRING_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/string/convert_durations_benchmark.cpp")
+
+ConfigureBench(DURATION_TO_STRING_BENCH "${DURATION_TO_STRING_BENCH_SRC}")

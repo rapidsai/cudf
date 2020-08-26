@@ -42,7 +42,7 @@ TEST_F(StringsConvertTest, ToBooleans)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsConvertTest, FromBooleans)
@@ -60,25 +60,26 @@ TEST_F(StringsConvertTest, FromBooleans)
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
 
   auto results = cudf::strings::from_booleans(column);
-  cudf::test::expect_columns_equal(*results, strings);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings);
 }
 
 TEST_F(StringsConvertTest, ZeroSizeStringsColumnBoolean)
 {
-  cudf::column_view zero_size_column(cudf::data_type{cudf::BOOL8}, 0, nullptr, nullptr, 0);
+  cudf::column_view zero_size_column(cudf::data_type{cudf::type_id::BOOL8}, 0, nullptr, nullptr, 0);
   auto results = cudf::strings::from_booleans(zero_size_column);
   cudf::test::expect_strings_empty(results->view());
 }
 
 TEST_F(StringsConvertTest, ZeroSizeBooleansColumn)
 {
-  cudf::column_view zero_size_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+  cudf::column_view zero_size_column(
+    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   auto results = cudf::strings::to_booleans(zero_size_column);
   EXPECT_EQ(0, results->size());
 }
 
 TEST_F(StringsConvertTest, BooleanError)
 {
-  auto column = cudf::make_numeric_column(cudf::data_type{cudf::INT32}, 100);
+  auto column = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32}, 100);
   EXPECT_THROW(cudf::strings::from_booleans(column->view()), cudf::logic_error);
 }

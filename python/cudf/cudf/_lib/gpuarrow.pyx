@@ -2,31 +2,30 @@
 
 from libcpp.memory cimport unique_ptr
 from cudf._lib.move cimport move
-from cudf._lib.arrow._cuda cimport (
-    CudaBuffer
-)
-from cudf._lib.cpp.arrow.libarrow_cuda cimport (
-    CCudaBufferReader
-)
+from pyarrow._cuda cimport CudaBuffer
+from pyarrow.includes.libarrow_cuda cimport CCudaBufferReader
 from cudf._lib.cpp.gpuarrow cimport CCudaMessageReader
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
+from pyarrow.includes.common cimport GetResultValue
 from pyarrow.includes.libarrow cimport (
     CMessage,
     CBufferReader,
     CMessageReader,
+    CIpcReadOptions,
     CRecordBatchStreamReader
 )
 from pyarrow.lib cimport (
     _CRecordBatchReader,
     Buffer,
     Schema,
-    check_status,
     pyarrow_wrap_schema
 )
 import pyarrow as pa
 
 
 cdef class CudaRecordBatchStreamReader(_CRecordBatchReader):
+    cdef:
+        CIpcReadOptions options
 
     cdef readonly:
         Schema schema
@@ -42,8 +41,8 @@ cdef class CudaRecordBatchStreamReader(_CRecordBatchReader):
 
         with nogil:
             message_reader = CCudaMessageReader.Open(data_, schema_)
-            check_status(CRecordBatchStreamReader.Open2(
-                move(message_reader), &self.reader
+            self.reader = GetResultValue(CRecordBatchStreamReader.Open2(
+                move(message_reader), self.options
             ))
 
         self.schema = pyarrow_wrap_schema(self.reader.get().schema())

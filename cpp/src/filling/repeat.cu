@@ -135,22 +135,20 @@ std::unique_ptr<table> repeat(table_view const& input_table,
 }
 
 std::unique_ptr<table> repeat(table_view const& input_table,
-                              scalar const& count,
+                              size_type count,
                               rmm::mr::device_memory_resource* mr,
                               cudaStream_t stream)
 {
-  CUDF_EXPECTS(count.is_valid(), "count cannot be null");
-  auto stride = cudf::type_dispatcher(count.type(), count_accessor{&count}, stream);
-  CUDF_EXPECTS(stride >= 0, "count value should be non-negative");
+  CUDF_EXPECTS(count >= 0, "count value should be non-negative");
   CUDF_EXPECTS(
-    static_cast<int64_t>(input_table.num_rows()) * stride <= std::numeric_limits<size_type>::max(),
+    static_cast<int64_t>(input_table.num_rows()) * count <= std::numeric_limits<size_type>::max(),
     "The resulting table has more rows than size_type's limit.");
 
-  if ((input_table.num_rows() == 0) || (stride == 0)) { return cudf::empty_like(input_table); }
+  if ((input_table.num_rows() == 0) || (count == 0)) { return cudf::empty_like(input_table); }
 
-  auto output_size = input_table.num_rows() * stride;
+  auto output_size = input_table.num_rows() * count;
   auto map_begin   = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0), [stride] __device__(auto i) { return i / stride; });
+    thrust::make_counting_iterator(0), [count] __device__(auto i) { return i / count; });
   auto map_end = map_begin + output_size;
 
   return gather(input_table, map_begin, map_end, false, mr, stream);
@@ -168,7 +166,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
 }
 
 std::unique_ptr<table> repeat(table_view const& input_table,
-                              scalar const& count,
+                              size_type count,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();

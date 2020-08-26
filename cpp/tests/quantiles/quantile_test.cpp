@@ -87,13 +87,21 @@ struct test_case {
 template <typename T>
 test_case<T> interpolate_center()
 {
-  auto low   = std::numeric_limits<T>::lowest();
-  auto max   = std::numeric_limits<T>::max();
-  auto mid_d = std::is_floating_point<T>::value ? 0.0 : -0.5;
+  auto low     = std::numeric_limits<T>::lowest();
+  auto max     = std::numeric_limits<T>::max();
+  double mid_d = [] {
+    if (std::is_floating_point<T>::value) return 0.0;
+    if (std::is_signed<T>::value) return -0.5;
+    return static_cast<double>(std::numeric_limits<T>::max()) / 2.0;
+  }();
 
   // int64_t is internally casted to a double, meaning the lerp center point
   // is float-like.
-  auto lin_d = std::is_floating_point<T>::value || std::is_same<T, int64_t>::value ? 0.0 : -0.5;
+  double lin_d = [] {
+    if (std::is_floating_point<T>::value || std::is_same<T, int64_t>::value) return 0.0;
+    if (std::is_signed<T>::value) return -0.5;
+    return static_cast<double>(std::numeric_limits<T>::max()) / 2.0;
+  }();
   auto max_d = static_cast<double>(max);
   auto low_d = static_cast<double>(low);
   return test_case<T>{fixed_width_column_wrapper<T>({low, max}),
@@ -304,9 +312,13 @@ std::enable_if_t<std::is_floating_point<T>::value, test_case<T>> unsorted()
 template <typename T>
 std::enable_if_t<std::is_integral<T>::value and not cudf::is_boolean<T>(), test_case<T>> unsorted()
 {
-  return test_case<T>{fixed_width_column_wrapper<T>({6, 0, 3, 4, 2, 1, -1, 1, 6}),
-                      {q_expect{0.0, -1, -1, -1, -1, -1}},
-                      fixed_width_column_wrapper<cudf::size_type>({6, 1, 7, 5, 4, 2, 3, 8, 0})};
+  return std::is_signed<T>()
+           ? test_case<T>{fixed_width_column_wrapper<T>({6, 0, 3, 4, 2, 1, -1, 1, 6}),
+                          {q_expect{0.0, -1, -1, -1, -1, -1}},
+                          fixed_width_column_wrapper<cudf::size_type>({6, 1, 7, 5, 4, 2, 3, 8, 0})}
+           : test_case<T>{fixed_width_column_wrapper<T>({6, 0, 3, 4, 2, 1, 1, 1, 6}),
+                          {q_expect{0.0, 1, 1, 1, 1, 1}},
+                          fixed_width_column_wrapper<cudf::size_type>({6, 1, 7, 5, 4, 2, 3, 8, 0})};
 }
 
 template <typename T>
@@ -347,27 +359,27 @@ void test(testdata::test_case<T> test_case)
     auto actual_higher =
       quantile(test_case.column, q, interpolation::HIGHER, test_case.ordered_indices);
     auto expected_higher_col = make_expected_column(expected.higher);
-    expect_columns_equal(expected_higher_col, actual_higher->view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_higher_col, actual_higher->view());
 
     auto actual_lower =
       quantile(test_case.column, q, interpolation::LOWER, test_case.ordered_indices);
     auto expected_lower_col = make_expected_column(expected.lower);
-    expect_columns_equal(expected_lower_col, actual_lower->view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_col, actual_lower->view());
 
     auto actual_linear =
       quantile(test_case.column, q, interpolation::LINEAR, test_case.ordered_indices);
     auto expected_linear_col = make_expected_column(expected.linear);
-    expect_columns_equal(expected_linear_col, actual_linear->view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_linear_col, actual_linear->view());
 
     auto actual_midpoint =
       quantile(test_case.column, q, interpolation::MIDPOINT, test_case.ordered_indices);
     auto expected_midpoint_col = make_expected_column(expected.midpoint);
-    expect_columns_equal(expected_midpoint_col, actual_midpoint->view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_midpoint_col, actual_midpoint->view());
 
     auto actual_nearest =
       quantile(test_case.column, q, interpolation::NEAREST, test_case.ordered_indices);
     auto expected_nearest_col = make_expected_column(expected.nearest);
-    expect_columns_equal(expected_nearest_col, actual_nearest->view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_nearest_col, actual_nearest->view());
   }
 }
 
@@ -424,14 +436,14 @@ TYPED_TEST(QuantileUnsupportedTypesTest, TestZeroElements)
 
 TYPED_TEST(QuantileUnsupportedTypesTest, TestOneElements)
 {
-  fixed_width_column_wrapper<TypeParam> input({0});
+  fixed_width_column_wrapper<TypeParam, int32_t> input({0});
 
   EXPECT_THROW(cudf::quantile(input, {0}), cudf::logic_error);
 }
 
 TYPED_TEST(QuantileUnsupportedTypesTest, TestMultipleElements)
 {
-  fixed_width_column_wrapper<TypeParam> input({0, 1, 2});
+  fixed_width_column_wrapper<TypeParam, int32_t> input({0, 1, 2});
 
   EXPECT_THROW(cudf::quantile(input, {0}), cudf::logic_error);
 }

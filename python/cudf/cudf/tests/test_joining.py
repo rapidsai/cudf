@@ -1,12 +1,11 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
-
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
 from cudf.core import DataFrame, Series
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import INTEGER_TYPES, NUMERIC_TYPES, assert_eq
 
 
 def make_params():
@@ -107,10 +106,8 @@ def test_dataframe_join_how(aa, bb, how, method):
             # TODO: What is the less hacky way?
             expect.index.name = "bob"
             got.index.name = "mary"
-            pd.util.testing.assert_frame_equal(
-                got.to_pandas()
-                .sort_values(got.columns.to_list())
-                .reset_index(drop=True),
+            assert_eq(
+                got.sort_values(got.columns.to_list()).reset_index(drop=True),
                 expect.sort_values(expect.columns.to_list()).reset_index(
                     drop=True
                 ),
@@ -184,11 +181,8 @@ def test_dataframe_join_cats():
     expect = lhs.to_pandas().join(rhs.to_pandas())
 
     # Note: pandas make an object Index after joining
-    pd.util.testing.assert_frame_equal(
-        got.sort_values(by="b")
-        .to_pandas()
-        .sort_index()
-        .reset_index(drop=True),
+    assert_eq(
+        got.sort_values(by="b").sort_index().reset_index(drop=True),
         expect.reset_index(drop=True),
     )
 
@@ -220,7 +214,10 @@ def test_dataframe_join_combine_cats():
     expect.index = expect.index.astype("category")
     got = lhs.join(rhs, how="outer")
 
-    assert_eq(sorted(expect.index), sorted(got.index))
+    # TODO: Remove copying to host
+    # after https://github.com/rapidsai/cudf/issues/5676
+    # is implemented
+    assert_eq(expect.index.sort_values(), got.index.to_pandas().sort_values())
 
 
 @pytest.mark.parametrize("how", ["left", "right", "inner", "outer"])
@@ -249,7 +246,7 @@ def test_dataframe_join_mismatch_cats(how):
     join_gdf = gdf1.join(gdf2, how=how, sort=True, method="hash")
     join_pdf = pdf1.join(pdf2, how=how)
 
-    got = join_gdf.to_pandas()
+    got = join_gdf.fillna(-1).to_pandas()
     expect = join_pdf.fillna(-1)  # note: cudf join doesn't mask NA
 
     # We yield a categorical here whereas pandas gives Object.
@@ -320,7 +317,7 @@ def test_dataframe_merge_on(on):
         list(pddf_joined.columns)
     ).reset_index(drop=True)
 
-    pd.util.testing.assert_frame_equal(cdf_result, pdf_result, check_like=True)
+    assert_eq(cdf_result, pdf_result, check_like=True)
 
     merge_func_result_cdf = (
         join_result_cudf.to_pandas()
@@ -328,9 +325,7 @@ def test_dataframe_merge_on(on):
         .reset_index(drop=True)
     )
 
-    pd.util.testing.assert_frame_equal(
-        merge_func_result_cdf, cdf_result, check_like=True
-    )
+    assert_eq(merge_func_result_cdf, cdf_result, check_like=True)
 
 
 def test_dataframe_merge_on_unknown_column():
@@ -486,8 +481,9 @@ def test_dataframe_pairs_of_triples(pairs, max, rows, how):
 
 def test_safe_merging_with_left_empty():
     import numpy as np
-    from cudf import DataFrame
     import pandas as pd
+
+    from cudf import DataFrame
 
     np.random.seed(0)
 
@@ -963,8 +959,8 @@ def test_merge_multi(kwargs):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("dtype_l", ["int8", "int16", "int32", "int64"])
-@pytest.mark.parametrize("dtype_r", ["int8", "int16", "int32", "int64"])
+@pytest.mark.parametrize("dtype_l", INTEGER_TYPES)
+@pytest.mark.parametrize("dtype_r", INTEGER_TYPES)
 def test_typecast_on_join_int_to_int(dtype_l, dtype_r):
     other_data = ["a", "b", "c"]
 
@@ -1028,16 +1024,13 @@ def test_typecast_on_join_float_to_float(dtype_l, dtype_r):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize(
-    "dtype_l", ["int8", "int16", "int32", "int64", "float32", "float64"]
-)
-@pytest.mark.parametrize(
-    "dtype_r", ["int8", "int16", "int32", "int64", "float32", "float64"]
-)
+@pytest.mark.parametrize("dtype_l", NUMERIC_TYPES)
+@pytest.mark.parametrize("dtype_r", NUMERIC_TYPES)
 def test_typecast_on_join_mixed_int_float(dtype_l, dtype_r):
-    if ("int" in dtype_l and "int" in dtype_r) or (
-        "float" in dtype_l and "float" in dtype_r
-    ):
+    if (
+        ("int" in dtype_l or "long" in dtype_l)
+        and ("int" in dtype_r or "long" in dtype_r)
+    ) or ("float" in dtype_l and "float" in dtype_r):
         pytest.skip("like types not tested in this function")
 
     other_data = ["a", "b", "c", "d", "e", "f"]
@@ -1097,13 +1090,17 @@ def test_typecast_on_join_no_float_round():
         (np.dtype("int8"), np.dtype("int16")),
         (np.dtype("int16"), np.dtype("int32")),
         (np.dtype("int32"), np.dtype("int64")),
+        (np.dtype("uint8"), np.dtype("uint16")),
+        (np.dtype("uint16"), np.dtype("uint32")),
+        (np.dtype("uint32"), np.dtype("uint64")),
         (np.dtype("float32"), np.dtype("float64")),
         (np.dtype("int32"), np.dtype("float32")),
+        (np.dtype("uint32"), np.dtype("float32")),
     ],
 )
 def test_typecast_on_join_overflow_unsafe(dtypes):
     dtype_l, dtype_r = dtypes
-    if dtype_l.kind == "i":
+    if dtype_l.kind in {"i", "u"}:
         dtype_l_max = np.iinfo(dtype_l).max
     elif dtype_l.kind == "f":
         dtype_l_max = np.finfo(dtype_r).max
@@ -1193,6 +1190,147 @@ def test_typecast_on_join_categorical(dtype_l, dtype_r):
 
     got = gdf_l.merge(gdf_r, on="join_col", how="inner")
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    ("lhs", "rhs"),
+    [
+        (["a", "b"], ["a"]),
+        (["a"], ["a", "b"]),
+        (["a", "b"], ["b"]),
+        (["b"], ["a", "b"]),
+        (["a"], ["a"]),
+    ],
+)
+@pytest.mark.parametrize("how", ["left", "right", "outer", "inner"])
+@pytest.mark.parametrize("level", ["a", "b", 0, 1])
+def test_index_join(lhs, rhs, how, level):
+    l_pdf = pd.DataFrame({"a": [2, 3, 1, 4], "b": [3, 7, 8, 1]})
+    r_pdf = pd.DataFrame({"a": [1, 5, 4, 0], "b": [3, 9, 8, 4]})
+    l_df = DataFrame.from_pandas(l_pdf)
+    r_df = DataFrame.from_pandas(r_pdf)
+    p_lhs = l_pdf.set_index(lhs).index
+    p_rhs = r_pdf.set_index(rhs).index
+    g_lhs = l_df.set_index(lhs).index
+    g_rhs = r_df.set_index(rhs).index
+
+    expected = (
+        p_lhs.join(p_rhs, level=level, how=how)
+        .to_frame(index=False)
+        .sort_values(by=lhs)
+        .reset_index(drop=True)
+    )
+    got = (
+        g_lhs.join(g_rhs, level=level, how=how)
+        .to_frame(index=False)
+        .sort_values(by=lhs)
+        .reset_index(drop=True)
+    )
+
+    assert_eq(expected, got)
+
+
+def test_index_join_corner_cases():
+    l_pdf = pd.DataFrame({"a": [2, 3, 1, 4], "b": [3, 7, 8, 1]})
+    r_pdf = pd.DataFrame(
+        {"a": [1, 5, 4, 0], "b": [3, 9, 8, 4], "c": [2, 3, 6, 0]}
+    )
+    l_df = DataFrame.from_pandas(l_pdf)
+    r_df = DataFrame.from_pandas(r_pdf)
+
+    # Join when column name doesn't match with level
+    lhs = ["a", "b"]
+    # level and rhs don't match
+    rhs = ["c"]
+    level = "b"
+    how = "outer"
+    p_lhs = l_pdf.set_index(lhs).index
+    p_rhs = r_pdf.set_index(rhs).index
+    g_lhs = l_df.set_index(lhs).index
+    g_rhs = r_df.set_index(rhs).index
+    expected = (
+        p_lhs.join(p_rhs, level=level, how=how)
+        .to_frame(index=False)
+        .sort_values(by=lhs)
+        .reset_index(drop=True)
+    )
+    got = (
+        g_lhs.join(g_rhs, level=level, how=how)
+        .to_frame(index=False)
+        .sort_values(by=lhs)
+        .reset_index(drop=True)
+    )
+
+    assert_eq(expected, got)
+
+    # sort is supported only in case of two non-MultiIndex join
+    # Join when column name doesn't match with level
+    lhs = ["a"]
+    # level and rhs don't match
+    rhs = ["a"]
+    level = "b"
+    how = "left"
+    p_lhs = l_pdf.set_index(lhs).index
+    p_rhs = r_pdf.set_index(rhs).index
+    g_lhs = l_df.set_index(lhs).index
+    g_rhs = r_df.set_index(rhs).index
+    expected = p_lhs.join(p_rhs, how=how, sort=True)
+    got = g_lhs.join(g_rhs, how=how, sort=True)
+
+    assert_eq(expected, got)
+
+    # Pandas Index.join on categorical column returns generic column
+    # but cudf will be returning a categorical column itself.
+    lhs = ["a", "b"]
+    rhs = ["a"]
+    level = "a"
+    how = "inner"
+    l_df["a"] = l_df["a"].astype("category")
+    r_df["a"] = r_df["a"].astype("category")
+    p_lhs = l_pdf.set_index(lhs).index
+    p_rhs = r_pdf.set_index(rhs).index
+    g_lhs = l_df.set_index(lhs).index
+    g_rhs = r_df.set_index(rhs).index
+    expected = (
+        p_lhs.join(p_rhs, level=level, how=how)
+        .to_frame(index=False)
+        .sort_values(by=lhs)
+        .reset_index(drop=True)
+    )
+    got = (
+        g_lhs.join(g_rhs, level=level, how=how)
+        .to_frame(index=False)
+        .sort_values(by=lhs)
+        .reset_index(drop=True)
+    )
+
+    got["a"] = got["a"].astype(expected["a"].dtype)
+
+    assert_eq(expected, got)
+
+
+def test_index_join_exception_cases():
+    l_df = DataFrame({"a": [2, 3, 1, 4], "b": [3, 7, 8, 1]})
+    r_df = DataFrame({"a": [1, 5, 4, 0], "b": [3, 9, 8, 4], "c": [2, 3, 6, 0]})
+
+    # Join between two MultiIndex
+    lhs = ["a", "b"]
+    rhs = ["a", "c"]
+    level = "a"
+    how = "outer"
+    g_lhs = l_df.set_index(lhs).index
+    g_rhs = r_df.set_index(rhs).index
+
+    with pytest.raises(TypeError):
+        g_lhs.join(g_rhs, level=level, how=how)
+
+    # Improper level value, level should be an int or scalar value
+    level = ["a"]
+    rhs = ["a"]
+    g_lhs = l_df.set_index(lhs).index
+    g_rhs = r_df.set_index(rhs).index
+    with pytest.raises(ValueError):
+        g_lhs.join(g_rhs, level=level, how=how)
 
 
 def test_typecast_on_join_indexes():
@@ -1349,5 +1487,32 @@ def test_series_dataframe_mixed_merging(lhs, rhs, how, kwargs):
 
     expect = check_lhs.merge(check_rhs, how=how, **kwargs)
     got = lhs.merge(rhs, how=how, **kwargs)
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "how", ["left", "inner", "right", "leftanti", "leftsemi"]
+)
+def test_merge_with_lists(how):
+    pd_left = pd.DataFrame(
+        {
+            "a": [1, 2, 3, 4, 5, 6],
+            "b": [[1, 2, 3], [4, 5], None, [6], [7, 8, None], []],
+            "c": ["a", "b", "c", "d", "e", "f"],
+        }
+    )
+    pd_right = pd.DataFrame(
+        {
+            "a": [4, 3, 2, 1, 0, -1],
+            "d": [[[1, 2], None], [], [[3, 4]], None, [[5], [6, 7]], [[8]]],
+        }
+    )
+
+    gd_left = cudf.from_pandas(pd_left)
+    gd_right = cudf.from_pandas(pd_right)
+
+    expect = pd_left.merge(pd_right, on="a")
+    got = gd_left.merge(gd_right, on="a")
 
     assert_eq(expect, got)

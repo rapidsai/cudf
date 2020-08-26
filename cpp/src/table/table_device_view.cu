@@ -19,8 +19,6 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <rmm/rmm.h>
-
 #include <algorithm>
 #include <numeric>
 #include <vector>
@@ -30,6 +28,7 @@ namespace detail {
 template <typename ColumnDeviceView, typename HostTableView>
 void table_device_view_base<ColumnDeviceView, HostTableView>::destroy()
 {
+  delete _descendant_storage;
   delete this;
 }
 

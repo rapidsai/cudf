@@ -185,7 +185,8 @@ struct udf_aggregation final : derived_aggregation<udf_aggregation> {
   size_t hash_impl() const
   {
     return std::hash<std::string>{}(_source) ^ std::hash<std::string>{}(_operator_name) ^
-           std::hash<std::string>{}(_function_name) ^ std::hash<int>{}(_output_type.id());
+           std::hash<std::string>{}(_function_name) ^
+           std::hash<int>{}(static_cast<int32_t>(_output_type.id()));
   }
 };
 
@@ -253,18 +254,19 @@ struct target_type_impl<Source, aggregation::ALL> {
 };
 
 // Always use `double` for MEAN
-// Except for timestamp where result is timestamp. (Use FloorDiv)
+// Except for chrono types where result is chrono. (Use FloorDiv)
+// TODO: MEAN should be only be enabled for duration types - not for timestamps
 template <typename Source, aggregation::Kind k>
 struct target_type_impl<Source,
                         k,
-                        std::enable_if_t<!is_timestamp<Source>() && (k == aggregation::MEAN)>> {
+                        std::enable_if_t<!is_chrono<Source>() && (k == aggregation::MEAN)>> {
   using type = double;
 };
 
 template <typename Source, aggregation::Kind k>
 struct target_type_impl<Source,
                         k,
-                        std::enable_if_t<is_timestamp<Source>() && (k == aggregation::MEAN)>> {
+                        std::enable_if_t<is_chrono<Source>() && (k == aggregation::MEAN)>> {
   using type = Source;
 };
 
@@ -292,11 +294,10 @@ struct target_type_impl<
   using type = Source;
 };
 
-// Summing/Multiplying timestamps, use same type accumulator
+// Summing/Multiplying chrono types, use same type accumulator
+// TODO: Sum/Product should only be enabled for duration types - not for timestamps
 template <typename Source, aggregation::Kind k>
-struct target_type_impl<Source,
-                        k,
-                        std::enable_if_t<is_timestamp<Source>() && is_sum_product_agg(k)>> {
+struct target_type_impl<Source, k, std::enable_if_t<is_chrono<Source>() && is_sum_product_agg(k)>> {
   using type = Source;
 };
 

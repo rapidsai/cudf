@@ -1,14 +1,16 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 import os
 import shutil
 import sysconfig
 from distutils.sysconfig import get_python_lib
 
 import numpy as np
-import versioneer
+import pyarrow as pa
 from Cython.Build import cythonize
 from setuptools import find_packages, setup
 from setuptools.extension import Extension
+
+import versioneer
 
 install_requires = ["numba", "cython"]
 
@@ -31,6 +33,8 @@ if not os.path.isdir(CUDA_HOME):
 
 cuda_include_dir = os.path.join(CUDA_HOME, "include")
 
+CUDF_ROOT = os.environ.get("CUDF_ROOT", "../../cpp/build/")
+
 try:
     nthreads = int(os.environ.get("PARALLEL_LEVEL", "0") or "0")
 except Exception:
@@ -43,15 +47,22 @@ extensions = [
         include_dirs=[
             "../../cpp/include/cudf",
             "../../cpp/include",
-            "../../cpp/build/include",
-            "../../thirdparty/cub",
-            "../../thirdparty/libcudacxx/include",
+            os.path.join(CUDF_ROOT, "include"),
+            os.path.join(CUDF_ROOT, "_deps/libcudacxx-src/include"),
+            os.path.join(
+                os.path.dirname(sysconfig.get_path("include")),
+                "libcudf/libcudacxx",
+            ),
             os.path.dirname(sysconfig.get_path("include")),
             np.get_include(),
+            pa.get_include(),
             cuda_include_dir,
         ],
-        library_dirs=[get_python_lib(), os.path.join(os.sys.prefix, "lib")],
-        libraries=["cudf"],
+        library_dirs=(
+            pa.get_library_dirs()
+            + [get_python_lib(), os.path.join(os.sys.prefix, "lib")]
+        ),
+        libraries=["cudf"] + pa.get_libraries(),
         language="c++",
         extra_compile_args=["-std=c++14"],
     )
@@ -84,7 +95,7 @@ setup(
     ),
     packages=find_packages(include=["cudf", "cudf.*"]),
     package_data=dict.fromkeys(
-        find_packages(include=["cudf._lib*", "cudf._cuda*"]), ["*.pxd"],
+        find_packages(include=["cudf._lib*"]), ["*.pxd"],
     ),
     cmdclass=versioneer.get_cmdclass(),
     install_requires=install_requires,

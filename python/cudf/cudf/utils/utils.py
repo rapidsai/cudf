@@ -1,3 +1,4 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
 import functools
 from collections import OrderedDict
 from math import floor, isinf, isnan
@@ -7,11 +8,14 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from numba import njit
+from pyarrow.cuda import CudaBuffer as arrowCudaBuffer
 
 import rmm
 
 import cudf
+from cudf.core import column
 from cudf.core.buffer import Buffer
+from cudf.utils.dtypes import to_cudf_compatible_scalar
 
 mask_dtype = np.dtype(np.int32)
 mask_bitsize = mask_dtype.itemsize * 8
@@ -58,34 +62,30 @@ def check_equals_int(a, b):
 
 
 def scalar_broadcast_to(scalar, size, dtype=None):
-    from cudf.utils.dtypes import to_cudf_compatible_scalar, is_string_dtype
-    from cudf.core.column import column_empty
 
     if isinstance(size, (tuple, list)):
         size = size[0]
 
-    if scalar is None:
+    if scalar is None or (
+        isinstance(scalar, (np.datetime64, np.timedelta64))
+        and np.isnat(scalar)
+    ):
         if dtype is None:
             dtype = "object"
-        return column_empty(size, dtype=dtype, masked=True)
+        return column.column_empty(size, dtype=dtype, masked=True)
 
     if isinstance(scalar, pd.Categorical):
         return scalar_broadcast_to(scalar.categories[0], size).astype(dtype)
 
-    if isinstance(scalar, str) and (is_string_dtype(dtype) or dtype is None):
-        dtype = "object"
-    else:
-        scalar = to_cudf_compatible_scalar(scalar, dtype=dtype)
-        dtype = scalar.dtype
+    scalar = to_cudf_compatible_scalar(scalar, dtype=dtype)
+    dtype = scalar.dtype
 
-    if np.dtype(dtype) == np.dtype("object"):
-        from cudf.core.column import as_column
-
+    if np.dtype(dtype).kind in ("O", "U"):
         gather_map = cupy.zeros(size, dtype="int32")
-        scalar_str_col = as_column([scalar], dtype="str")
+        scalar_str_col = column.as_column([scalar], dtype="str")
         return scalar_str_col[gather_map]
     else:
-        out_col = column_empty(size, dtype=dtype)
+        out_col = column.column_empty(size, dtype=dtype)
         if out_col.size != 0:
             out_col.data_array_view[:] = scalar
         return out_col
@@ -104,7 +104,7 @@ def normalize_index(index, size, doraise=True):
 list_types_tuple = (list, np.array)
 
 
-def buffers_from_pyarrow(pa_arr, dtype=None):
+def buffers_from_pyarrow(pa_arr):
     """
     Given a pyarrow array returns a 5 length tuple of:
         - size
@@ -113,12 +113,13 @@ def buffers_from_pyarrow(pa_arr, dtype=None):
         - cudf.Buffer --> data
         - cudf.Buffer --> string characters
     """
-    from cudf._lib.null_mask import bitmask_allocation_size_bytes
 
     buffers = pa_arr.buffers()
 
     if pa_arr.null_count:
-        mask_size = bitmask_allocation_size_bytes(len(pa_arr))
+        mask_size = cudf._lib.null_mask.bitmask_allocation_size_bytes(
+            len(pa_arr)
+        )
         pamask = pyarrow_buffer_to_cudf_buffer(buffers[0], mask_size=mask_size)
     else:
         pamask = None
@@ -142,7 +143,6 @@ def pyarrow_buffer_to_cudf_buffer(arrow_buf, mask_size=0):
     Given a PyArrow Buffer backed by either host or device memory, convert it
     to a cuDF Buffer
     """
-    from cudf._lib.arrow._cuda import CudaBuffer as arrowCudaBuffer
 
     # Try creating a PyArrow CudaBuffer from the PyArrow Buffer object, it
     # fails with an ArrowTypeError if it's a host based Buffer so we catch and
@@ -188,9 +188,8 @@ def get_result_name(left, right):
     -------
     name : object {string or None}
     """
-    from cudf import Series, Index
 
-    if isinstance(right, (Series, Index, pd.Series, pd.Index)):
+    if isinstance(right, (cudf.Series, cudf.Index, pd.Series, pd.Index)):
         name = compare_and_get_name(left, right)
     else:
         name = left.name
@@ -258,10 +257,9 @@ def get_null_series(size, dtype=np.bool):
     -------
     a null cudf series of provided `size` and `dtype`
     """
-    from cudf.core import Series, column
 
     empty_col = column.column_empty(size, dtype, True)
-    return Series(empty_col)
+    return cudf.Series(empty_col)
 
 
 # taken from dask array
@@ -339,7 +337,7 @@ class ColumnValuesMappingMixin:
 
     def __setitem__(self, key, value):
 
-        value = cudf.core.column.as_column(value)
+        value = column.as_column(value)
         super().__setitem__(key, value)
 
 
@@ -417,16 +415,26 @@ def to_nested_dict(d):
 
 
 def time_col_replace_nulls(input_col):
-    from cudf.core.column import column_empty_like, as_column
-    import cudf._lib.replace as replace
 
-    null = column_empty_like(input_col, masked=True, newsize=1)
-    out_col = replace.replace(
+    null = column.column_empty_like(input_col, masked=True, newsize=1)
+    out_col = cudf._lib.replace.replace(
         input_col,
-        as_column(
-            Buffer(np.array([np.datetime64("NaT")], dtype=input_col.dtype)),
+        column.as_column(
+            Buffer(
+                np.array(
+                    [input_col.default_na_value()], dtype=input_col.dtype
+                ).view("|u1")
+            ),
             dtype=input_col.dtype,
         ),
         null,
     )
     return out_col
+
+
+def raise_iteration_error(obj):
+    raise TypeError(
+        f"{obj.__class__.__name__} object is not iterable. "
+        f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
+        f"if you wish to iterate over the values."
+    )

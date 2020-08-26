@@ -27,3 +27,13 @@ cdef extern from "nvtext/tokenize.hpp" namespace "nvtext" nogil:
         const column_view & strings,
         const column_view & delimiters
     ) except +
+
+    cdef unique_ptr[column] character_tokenize(
+        const column_view & strings
+    ) except +
+
+    cdef unique_ptr[column] detokenize(
+        const column_view & strings,
+        const column_view & row_indices,
+        const string_scalar & separator
+    ) except +

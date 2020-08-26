@@ -20,6 +20,8 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/dictionary/detail/concatenate.hpp>
+#include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/strings/detail/concatenate.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -304,7 +306,7 @@ struct concatenate_dispatch {
 template <>
 std::unique_ptr<column> concatenate_dispatch::operator()<cudf::dictionary32>()
 {
-  CUDF_FAIL("dictionary concatenate not yet supported");
+  return cudf::dictionary::detail::concatenate(views, stream, mr);
 }
 
 template <>
@@ -316,7 +318,7 @@ std::unique_ptr<column> concatenate_dispatch::operator()<cudf::string_view>()
 template <>
 std::unique_ptr<column> concatenate_dispatch::operator()<cudf::list_view>()
 {
-  CUDF_FAIL("list_view concatenate not yet supported");
+  return cudf::lists::detail::concatenate(views, stream, mr);
 }
 
 // Concatenates the elements from a vector of column_views

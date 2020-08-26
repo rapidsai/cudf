@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/valid_if.cuh>
@@ -61,8 +62,8 @@ struct dispatch_compute_indices {
       thrust::make_counting_iterator<size_type>(0),
       [d_new_keys] __device__(size_type idx) { return d_new_keys.template element<Element>(idx); });
 
-    auto result =
-      make_numeric_column(data_type{INT32}, input.size(), mask_state::UNALLOCATED, stream, mr);
+    auto result = make_numeric_column(
+      data_type{type_id::INT32}, input.size(), mask_state::UNALLOCATED, stream, mr);
     auto d_result = result->mutable_view().data<int32_t>();
     auto execpol  = rmm::exec_policy(stream);
     thrust::lower_bound(execpol->on(stream),
@@ -85,7 +86,6 @@ struct dispatch_compute_indices {
              cudaStream_t stream)
   {
     CUDF_FAIL("list_view dictionary set_keys not supported yet");
-    return nullptr;
   }
 };
 
@@ -150,6 +150,7 @@ std::unique_ptr<column> set_keys(dictionary_column_view const& dictionary_column
                                  column_view const& keys,
                                  rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::set_keys(dictionary_column, keys, mr);
 }
 

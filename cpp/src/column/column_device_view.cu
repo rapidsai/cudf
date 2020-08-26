@@ -19,7 +19,6 @@
 #include <cudf/utilities/error.hpp>
 #include <numeric>
 
-#include <rmm/rmm_api.h>
 #include <rmm/thrust_rmm_allocator.h>
 
 namespace cudf {

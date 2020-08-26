@@ -137,13 +137,13 @@ std::unique_ptr<table> repeat(
  * size_type.
  *
  * @param input_table Input table
- * @param count Non-null scalar of an integral type
+ * @param count Number of repetitions
  * @param mr Device memory resource used to allocate the returned table's device memory.
  * @return The result table containing the repetitions
  */
 std::unique_ptr<table> repeat(
   table_view const& input_table,
-  scalar const& count,
+  size_type count,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
