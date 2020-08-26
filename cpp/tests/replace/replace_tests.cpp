@@ -16,13 +16,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/null_mask.hpp>
-#include <cudf/replace.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/cudf_gtest.hpp>
 #include <tests/utilities/type_lists.hpp>
+
+#include <cudf/null_mask.hpp>
+#include <cudf/replace.hpp>
+#include "cudf/fixed_point/fixed_point.hpp"
 
 #include <thrust/device_vector.h>
 
@@ -94,7 +96,7 @@ TEST_F(ReplaceStringsTest, Strings)
   cudf::test::strings_column_wrapper expected_wrapper{
     expected.begin(), expected.end(), ex_valid.begin()};
 
-  cudf::test::expect_columns_equal(*result, expected_wrapper);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_wrapper);
 }
 
 // Strings test
@@ -118,7 +120,7 @@ TEST_F(ReplaceStringsTest, StringsReplacementNulls)
   cudf::test::strings_column_wrapper expected_wrapper{
     expected.begin(), expected.end(), ex_valid.begin()};
 
-  cudf::test::expect_columns_equal(*result, expected_wrapper);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_wrapper);
 }
 
 // Strings test
@@ -142,7 +144,7 @@ TEST_F(ReplaceStringsTest, StringsResultAllNulls)
   cudf::test::strings_column_wrapper expected_wrapper{
     expected.begin(), expected.end(), ex_valid.begin()};
 
-  cudf::test::expect_columns_equal(*result, expected_wrapper);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_wrapper);
 }
 
 // Strings test
@@ -166,7 +168,7 @@ TEST_F(ReplaceStringsTest, StringsResultAllEmpty)
   cudf::test::strings_column_wrapper expected_wrapper{
     expected.begin(), expected.end(), ex_valid.begin()};
 
-  cudf::test::expect_columns_equal(*result, expected_wrapper);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_wrapper);
 }
 
 // Strings test
@@ -189,7 +191,7 @@ TEST_F(ReplaceStringsTest, StringsInputNulls)
   cudf::test::strings_column_wrapper expected_wrapper{
     expected.begin(), expected.end(), ex_valid.begin()};
 
-  cudf::test::expect_columns_equal(*result, expected_wrapper);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_wrapper);
 }
 
 // Strings test
@@ -214,7 +216,7 @@ TEST_F(ReplaceStringsTest, StringsInputAndReplacementNulls)
   cudf::test::strings_column_wrapper expected_wrapper{
     expected.begin(), expected.end(), ex_valid.begin()};
 
-  cudf::test::expect_columns_equal(*result, expected_wrapper);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_wrapper);
 }
 
 // Strings test
@@ -237,7 +239,7 @@ TEST_F(ReplaceStringsTest, StringsEmptyReplacement)
   cudf::test::strings_column_wrapper expected_wrapper{
     expected.begin(), expected.end(), ex_valid.begin()};
 
-  cudf::test::expect_columns_equal(*result, expected_wrapper);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_wrapper);
 }
 
 // Strings test
@@ -278,7 +280,7 @@ TEST_F(ReplaceStringsTest, StringsLargeScale)
   ASSERT_NO_THROW(result = cudf::find_and_replace_all(
                     input_wrapper, values_to_replace_wrapper, replacement_wrapper, mr()));
 
-  cudf::test::expect_columns_equal(*result, expected_wrapper);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_wrapper);
 }
 
 //// This is the main test feature
@@ -380,7 +382,7 @@ void test_replace(
     expected = cudf::test::fixed_width_column_wrapper<T>(
       reference_result.begin(), reference_result.end(), expected_valid.begin());
 
-  expect_columns_equal(expected, *actual_result);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *actual_result);
 }
 
 using Types = cudf::test::NumericTypes;
@@ -525,7 +527,42 @@ TYPED_TEST(ReplaceTest, LargeScaleReplaceTest)
   std::for_each(input_column.begin(), input_column.end(), [](TypeParam& d) { d += 1; });
   cudf::test::fixed_width_column_wrapper<TypeParam> expected(input_column.begin(),
                                                              input_column.end());
-  expect_columns_equal(expected, *actual_result);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *actual_result);
+}
+
+template <typename T>
+struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+};
+
+template <typename T>
+using wrapper = cudf::test::fixed_width_column_wrapper<T>;
+TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointReplace)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+
+  auto const ONE = decimalXX{1, scale_type{0}};
+  auto const TWO = decimalXX{2, scale_type{0}};
+  auto const sz  = std::size_t{1000};
+
+  auto vec1       = std::vector<decimalXX>(sz);
+  auto const vec2 = std::vector<decimalXX>(sz, TWO);
+
+  std::generate(vec1.begin(), vec1.end(), [&, i = 0]() mutable { return ++i % 2 ? ONE : TWO; });
+
+  auto const to_replace  = std::vector<decimalXX>{ONE};
+  auto const replacement = std::vector<decimalXX>{TWO};
+
+  auto const input_w       = wrapper<decimalXX>(vec1.begin(), vec1.end());
+  auto const to_replace_w  = wrapper<decimalXX>(to_replace.begin(), to_replace.end());
+  auto const replacement_w = wrapper<decimalXX>(replacement.begin(), replacement.end());
+  auto const expected_w    = wrapper<decimalXX>(vec2.begin(), vec2.end());
+
+  auto const result = cudf::find_and_replace_all(input_w, to_replace_w, replacement_w);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

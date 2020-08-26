@@ -32,23 +32,21 @@ namespace cudf {
 namespace detail {
 // TODO: Use chrono::utc_clock when available in libcu++?
 template <class Duration>
-using time_point = simt::std::chrono::time_point<simt::std::chrono::system_clock, Duration>;
+using time_point = simt::std::chrono::sys_time<Duration>;
 
 template <class Duration>
 struct timestamp : time_point<Duration> {
+  // Bring over base class constructors and make them visible here
+  using time_point<Duration>::time_point;
+
+  // This is needed as __shared__ objects of this type can't be assigned in device code
+  // when the initializer list constructs subobjects with values, which is what std::time_point
+  // does.
   constexpr timestamp() : time_point<Duration>(Duration()){};
-  constexpr timestamp(Duration d) : time_point<Duration>(d){};
-  constexpr timestamp(typename Duration::rep r) : time_point<Duration>(Duration(r)){};
-  /**
-   * @brief Constructs a new timestamp by copying the contents of another
-   * `time_point` and converting its duration value if necessary.
-   *
-   * @param other The `timestamp` to copy
-   */
-  // TODO: This explict truncation is intended?
-  template <class FromDuration>
-  inline constexpr explicit timestamp(time_point<FromDuration> const& other)
-    : time_point<Duration>(simt::std::chrono::duration_cast<Duration>(other.time_since_epoch())){};
+
+  // The inherited copy constructor will hide the auto generated copy constructor;
+  // hence, explicitly define and delegate
+  constexpr timestamp(const time_point<Duration>& other) : time_point<Duration>(other) {}
 };
 }  // namespace detail
 
@@ -99,21 +97,15 @@ namespace std {
  *
  * Pass through to return the limits of the underlying numeric representation.
  **/
-#define TIMESTAMP_LIMITS(TypeName)                                  \
-  template <>                                                       \
-  struct numeric_limits<TypeName> {                                 \
-    static constexpr TypeName max() noexcept                        \
-    {                                                               \
-      return std::numeric_limits<typename TypeName::rep>::max();    \
-    }                                                               \
-    static constexpr TypeName lowest() noexcept                     \
-    {                                                               \
-      return std::numeric_limits<typename TypeName::rep>::lowest(); \
-    }                                                               \
-    static constexpr TypeName min() noexcept                        \
-    {                                                               \
-      return std::numeric_limits<typename TypeName::rep>::min();    \
-    }                                                               \
+#define TIMESTAMP_LIMITS(TypeName)                                                                \
+  template <>                                                                                     \
+  struct numeric_limits<TypeName> {                                                               \
+    static constexpr TypeName max() noexcept { return TypeName::max(); }                          \
+    static constexpr TypeName lowest() noexcept                                                   \
+    {                                                                                             \
+      return TypeName{TypeName::duration{std::numeric_limits<typename TypeName::rep>::lowest()}}; \
+    }                                                                                             \
+    static constexpr TypeName min() noexcept { return TypeName::min(); }                          \
   }
 
 TIMESTAMP_LIMITS(cudf::timestamp_D);

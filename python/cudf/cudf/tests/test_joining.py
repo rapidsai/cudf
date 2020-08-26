@@ -106,10 +106,8 @@ def test_dataframe_join_how(aa, bb, how, method):
             # TODO: What is the less hacky way?
             expect.index.name = "bob"
             got.index.name = "mary"
-            pd.util.testing.assert_frame_equal(
-                got.to_pandas()
-                .sort_values(got.columns.to_list())
-                .reset_index(drop=True),
+            assert_eq(
+                got.sort_values(got.columns.to_list()).reset_index(drop=True),
                 expect.sort_values(expect.columns.to_list()).reset_index(
                     drop=True
                 ),
@@ -183,11 +181,8 @@ def test_dataframe_join_cats():
     expect = lhs.to_pandas().join(rhs.to_pandas())
 
     # Note: pandas make an object Index after joining
-    pd.util.testing.assert_frame_equal(
-        got.sort_values(by="b")
-        .to_pandas()
-        .sort_index()
-        .reset_index(drop=True),
+    assert_eq(
+        got.sort_values(by="b").sort_index().reset_index(drop=True),
         expect.reset_index(drop=True),
     )
 
@@ -322,7 +317,7 @@ def test_dataframe_merge_on(on):
         list(pddf_joined.columns)
     ).reset_index(drop=True)
 
-    pd.util.testing.assert_frame_equal(cdf_result, pdf_result, check_like=True)
+    assert_eq(cdf_result, pdf_result, check_like=True)
 
     merge_func_result_cdf = (
         join_result_cudf.to_pandas()
@@ -330,9 +325,7 @@ def test_dataframe_merge_on(on):
         .reset_index(drop=True)
     )
 
-    pd.util.testing.assert_frame_equal(
-        merge_func_result_cdf, cdf_result, check_like=True
-    )
+    assert_eq(merge_func_result_cdf, cdf_result, check_like=True)
 
 
 def test_dataframe_merge_on_unknown_column():
@@ -1494,5 +1487,32 @@ def test_series_dataframe_mixed_merging(lhs, rhs, how, kwargs):
 
     expect = check_lhs.merge(check_rhs, how=how, **kwargs)
     got = lhs.merge(rhs, how=how, **kwargs)
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "how", ["left", "inner", "right", "leftanti", "leftsemi"]
+)
+def test_merge_with_lists(how):
+    pd_left = pd.DataFrame(
+        {
+            "a": [1, 2, 3, 4, 5, 6],
+            "b": [[1, 2, 3], [4, 5], None, [6], [7, 8, None], []],
+            "c": ["a", "b", "c", "d", "e", "f"],
+        }
+    )
+    pd_right = pd.DataFrame(
+        {
+            "a": [4, 3, 2, 1, 0, -1],
+            "d": [[[1, 2], None], [], [[3, 4]], None, [[5], [6, 7]], [[8]]],
+        }
+    )
+
+    gd_left = cudf.from_pandas(pd_left)
+    gd_right = cudf.from_pandas(pd_right)
+
+    expect = pd_left.merge(pd_right, on="a")
+    got = gd_left.merge(gd_right, on="a")
 
     assert_eq(expect, got)

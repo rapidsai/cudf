@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -158,19 +158,19 @@ __device__ void skip_struct_field(byte_stream_s *bs, int t)
     }
 
 PARQUET_BEGIN_STRUCT(gpuParseDataPageHeader)
-PARQUET_FLD_INT32(1, page.num_values)
+PARQUET_FLD_INT32(1, page.num_input_values)
 PARQUET_FLD_ENUM(2, page.encoding, Encoding);
 PARQUET_FLD_ENUM(3, page.definition_level_encoding, Encoding);
 PARQUET_FLD_ENUM(4, page.repetition_level_encoding, Encoding);
 PARQUET_END_STRUCT()
 
 PARQUET_BEGIN_STRUCT(gpuParseDictionaryPageHeader)
-PARQUET_FLD_INT32(1, page.num_values)
+PARQUET_FLD_INT32(1, page.num_input_values)
 PARQUET_FLD_ENUM(2, page.encoding, Encoding);
 PARQUET_END_STRUCT()
 
 PARQUET_BEGIN_STRUCT(gpuParseDataPageHeaderV2)
-PARQUET_FLD_INT32(1, page.num_values)
+PARQUET_FLD_INT32(1, page.num_input_values)
 PARQUET_FLD_INT32(3, page.num_rows)
 PARQUET_FLD_ENUM(4, page.encoding, Encoding);
 PARQUET_FLD_ENUM(5, page.definition_level_encoding, Encoding);
@@ -191,7 +191,7 @@ PARQUET_END_STRUCT()
  *
  * @param[in] chunks List of column chunks
  * @param[in] num_chunks Number of column chunks
- **/
+ */
 // blockDim {128,1,1}
 extern "C" __global__ void __launch_bounds__(128)
   gpuDecodePageHeaders(ColumnChunkDesc *chunks, int32_t num_chunks)
@@ -218,9 +218,13 @@ extern "C" __global__ void __launch_bounds__(128)
     PageInfo *page_info;
 
     if (!t) {
-      bs->base = bs->cur = bs->ck.compressed_data;
-      bs->end            = bs->base + bs->ck.compressed_size;
-      bs->page.chunk_idx = chunk;
+      bs->base = bs->cur  = bs->ck.compressed_data;
+      bs->end             = bs->base + bs->ck.compressed_size;
+      bs->page.chunk_idx  = chunk;
+      bs->page.column_idx = bs->ck.dst_col_index;
+      // this computation is only valid for flat schemas. for nested schemas,
+      // they will be recomputed in the preprocess step by examining repetition and
+      // definition levels
       bs->page.chunk_row = 0;
       bs->page.num_rows  = 0;
     }
@@ -234,22 +238,23 @@ extern "C" __global__ void __launch_bounds__(128)
       int index_out = -1;
 
       if (t == 0) {
+        // this computation is only valid for flat schemas. for nested schemas,
+        // they will be recomputed in the preprocess step by examining repetition and
+        // definition levels
         bs->page.chunk_row += bs->page.num_rows;
         bs->page.num_rows = 0;
         if (gpuParsePageHeader(bs) && bs->page.compressed_page_size >= 0) {
           switch (bs->page_type) {
             case DATA_PAGE:
-              // TODO: Unless the file only uses V2 page headers or has no complex nesting (num_rows
-              // == num_values), we can't infer num_rows at this time
-              // -> we'll need another pass after decompression to parse the definition and
-              // repetition levels to infer the correct value of num_rows
-              bs->page.num_rows = bs->page.num_values;  // Assumes num_rows == num_values
-                                                        // Fall-through to V2
+              // this computation is only valid for flat schemas. for nested schemas,
+              // they will be recomputed in the preprocess step by examining repetition and
+              // definition levels
+              bs->page.num_rows = bs->page.num_input_values;
             case DATA_PAGE_V2:
               index_out = num_dict_pages + data_page_count;
               data_page_count++;
               bs->page.flags = 0;
-              values_found += bs->page.num_values;
+              values_found += bs->page.num_input_values;
               break;
             case DICTIONARY_PAGE:
               index_out = dictionary_page_count;
@@ -291,7 +296,7 @@ extern "C" __global__ void __launch_bounds__(128)
  *
  * @param[in] chunks List of column chunks
  * @param[in] num_chunks Number of column chunks
- **/
+ */
 // blockDim {128,1,1}
 extern "C" __global__ void __launch_bounds__(128)
   gpuBuildStringDictionaryIndex(ColumnChunkDesc *chunks, int32_t num_chunks)
@@ -314,7 +319,7 @@ extern "C" __global__ void __launch_bounds__(128)
     nvstrdesc_s *dict_index = ck->str_dict_index;
     const uint8_t *dict     = ck->page_info[0].page_data;
     int dict_size           = ck->page_info[0].uncompressed_page_size;
-    int num_entries         = ck->page_info[0].num_values;
+    int num_entries         = ck->page_info[0].num_input_values;
     int pos = 0, cur = 0;
     for (int i = 0; i < num_entries; i++) {
       int len = 0;

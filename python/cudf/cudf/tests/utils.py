@@ -28,6 +28,7 @@ FLOAT_TYPES = sorted(list(dtypeutils.FLOAT_TYPES))
 SIGNED_TYPES = sorted(list(dtypeutils.SIGNED_TYPES))
 NUMERIC_TYPES = sorted(list(dtypeutils.NUMERIC_TYPES))
 DATETIME_TYPES = sorted(list(dtypeutils.DATETIME_TYPES))
+TIMEDELTA_TYPES = sorted(list(dtypeutils.TIMEDELTA_TYPES))
 OTHER_TYPES = sorted(list(dtypeutils.OTHER_TYPES))
 ALL_TYPES = sorted(list(dtypeutils.ALL_TYPES))
 

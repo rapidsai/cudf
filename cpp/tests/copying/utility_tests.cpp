@@ -40,7 +40,7 @@ TYPED_TEST(EmptyLikeTest, ColumnNumericTests)
   auto input    = make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()}, size, state);
   auto expected = make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()}, 0);
   auto got      = cudf::empty_like(input->view());
-  cudf::test::expect_columns_equal(*expected, *got);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *got);
 }
 
 struct EmptyLikeStringTest : public EmptyLikeTest<std::string> {
@@ -91,7 +91,7 @@ void expect_tables_prop_equal(cudf::table_view lhs, cudf::table_view rhs)
 {
   EXPECT_EQ(lhs.num_columns(), rhs.num_columns());
   for (cudf::size_type index = 0; index < lhs.num_columns(); index++)
-    cudf::test::expect_column_properties_equal(lhs.column(index), rhs.column(index));
+    CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(lhs.column(index), rhs.column(index));
 }
 
 struct EmptyLikeTableTest : public cudf::test::BaseFixture {
@@ -124,7 +124,7 @@ TYPED_TEST(AllocateLikeTest, ColumnNumericTestSameSize)
   auto expected = make_numeric_column(
     cudf::data_type{cudf::type_to_id<TypeParam>()}, size, cudf::mask_state::UNINITIALIZED);
   auto got = cudf::allocate_like(input->view());
-  cudf::test::expect_column_properties_equal(*expected, *got);
+  CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(*expected, *got);
 }
 
 TYPED_TEST(AllocateLikeTest, ColumnNumericTestSpecifiedSize)
@@ -138,7 +138,7 @@ TYPED_TEST(AllocateLikeTest, ColumnNumericTestSpecifiedSize)
                                       specified_size,
                                       cudf::mask_state::UNINITIALIZED);
   auto got      = cudf::allocate_like(input->view(), specified_size);
-  cudf::test::expect_column_properties_equal(*expected, *got);
+  CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(*expected, *got);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

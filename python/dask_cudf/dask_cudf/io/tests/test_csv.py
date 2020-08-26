@@ -9,9 +9,9 @@ import pytest
 import dask
 from dask import dataframe as dd
 
-import dask_cudf
-
 import cudf
+
+import dask_cudf
 
 
 def test_csv_roundtrip(tmp_path):

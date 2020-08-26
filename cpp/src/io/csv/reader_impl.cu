@@ -219,10 +219,8 @@ table_with_metadata reader::impl::read(size_t range_offset,
       h_uncomp_data = reinterpret_cast<const char *>(buffer->data());
       h_uncomp_size = buffer->size();
     } else {
-      getUncompressedHostData(reinterpret_cast<const char *>(buffer->data()),
-                              buffer->size(),
-                              compression_type_,
-                              h_uncomp_data_owner);
+      h_uncomp_data_owner = getUncompressedHostData(
+        reinterpret_cast<const char *>(buffer->data()), buffer->size(), compression_type_);
       h_uncomp_data = h_uncomp_data_owner.data();
       h_uncomp_size = h_uncomp_data_owner.size();
     }
@@ -377,8 +375,7 @@ table_with_metadata reader::impl::read(size_t range_offset,
         out_columns.emplace_back(
           cudf::strings::replace(col->view(), dblquotechar, quotechar, -1, mr_));
       } else {
-        out_columns.emplace_back(
-          make_column(column_types[i], num_records, out_buffers[i], stream, mr_));
+        out_columns.emplace_back(make_column(out_buffers[i], stream, mr_));
       }
     }
   } else {

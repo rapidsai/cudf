@@ -44,7 +44,7 @@ TEST_F(ApplyBooleanMask, NonNullBooleanMask)
 
   auto got = cudf::apply_boolean_mask(input, boolean_mask);
 
-  cudf::test::expect_tables_equal(expected, got->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got->view());
 }
 
 TEST_F(ApplyBooleanMask, NullBooleanMask)
@@ -63,7 +63,7 @@ TEST_F(ApplyBooleanMask, NullBooleanMask)
 
   auto got = cudf::apply_boolean_mask(input, boolean_mask);
 
-  cudf::test::expect_tables_equal(expected, got->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got->view());
 }
 
 TEST_F(ApplyBooleanMask, EmptyMask)
@@ -81,7 +81,7 @@ TEST_F(ApplyBooleanMask, EmptyMask)
 
   auto got = cudf::apply_boolean_mask(input, boolean_mask);
 
-  cudf::test::expect_tables_equal(expected, got->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got->view());
 }
 
 TEST_F(ApplyBooleanMask, WrongMaskType)
@@ -122,7 +122,7 @@ TEST_F(ApplyBooleanMask, StringColumnTest)
 
   auto got = cudf::apply_boolean_mask(input, boolean_mask);
 
-  cudf::test::expect_tables_equal(expected, got->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got->view());
 }
 
 TEST_F(ApplyBooleanMask, withoutNullString)
@@ -140,7 +140,7 @@ TEST_F(ApplyBooleanMask, withoutNullString)
   cudf::test::strings_column_wrapper expect_col1({"d", "e", "k"});
   cudf::table_view expect_cudf_table_view{{expect_col1}};
 
-  cudf::test::expect_tables_equal(expect_cudf_table_view, tableView);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expect_cudf_table_view, tableView);
 }
 
 TEST_F(ApplyBooleanMask, NoNullInput)
@@ -167,7 +167,7 @@ TEST_F(ApplyBooleanMask, NoNullInput)
     {9526, 9347, 9569, 9807, 9279, 9691});
   cudf::table_view expected({col_expected});
   auto got = cudf::apply_boolean_mask(input, mask);
-  cudf::test::expect_tables_equal(expected, got->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got->view());
 }
 
 CUDF_TEST_PROGRAM_MAIN()

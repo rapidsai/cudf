@@ -15,10 +15,14 @@
  */
 
 #include <cudf/column/column.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/lists/detail/copying.hpp>
+#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/copying.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -180,7 +184,7 @@ struct create_column_from_view {
   std::unique_ptr<column> operator()()
   {
     cudf::strings_column_view sview(view);
-    return cudf::strings::detail::slice(sview, 0, view.size(), 1, stream, mr);
+    return cudf::strings::detail::copy_slice(sview, 0, view.size(), 1, stream, mr);
   }
 
   template <typename ColumnType,
@@ -188,8 +192,17 @@ struct create_column_from_view {
   std::unique_ptr<column> operator()()
   {
     std::vector<std::unique_ptr<column>> children;
-    for (size_type i = 0; i < view.num_children(); ++i)
-      children.emplace_back(std::make_unique<column>(view.child(i), stream, mr));
+    if (view.num_children()) {
+      cudf::dictionary_column_view dict_view(view);
+      auto indices_view = column_view(data_type{type_id::INT32},
+                                      view.size(),
+                                      dict_view.indices().data<int32_t>(),
+                                      nullptr,
+                                      0,
+                                      view.offset());
+      children.emplace_back(std::make_unique<column>(indices_view, stream, mr));
+      children.emplace_back(std::make_unique<column>(dict_view.keys(), stream, mr));
+    }
     return std::make_unique<column>(view.type(),
                                     view.size(),
                                     rmm::device_buffer{0, stream, mr},
@@ -223,7 +236,15 @@ struct create_column_from_view {
             std::enable_if_t<std::is_same<ColumnType, cudf::list_view>::value> * = nullptr>
   std::unique_ptr<column> operator()()
   {
-    CUDF_FAIL("list_view not supported yet");
+    auto lists_view = lists_column_view(view);
+    return cudf::lists::detail::copy_slice(lists_view, 0, view.size(), stream, mr);
+  }
+
+  template <typename ColumnType,
+            std::enable_if_t<std::is_same<ColumnType, cudf::struct_view>::value> * = nullptr>
+  std::unique_ptr<column> operator()()
+  {
+    CUDF_FAIL("struct_view not supported yet");
   }
 };
 }  // anonymous namespace

@@ -390,7 +390,7 @@ def test_repartition_simple_divisions(start, stop):
     b = gdf.repartition(npartitions=stop)
     assert a.divisions == b.divisions
 
-    dd.utils.assert_eq(a, b)
+    dd.assert_eq(a, b)
 
 
 @pytest.mark.parametrize("npartitions", [2, 17, 20])

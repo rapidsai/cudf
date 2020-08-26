@@ -300,14 +300,15 @@ struct parse_datetime {
 
   __device__ T operator()(size_type idx)
   {
-    if (d_strings.is_null(idx)) return 0;
+    T epoch_time{typename T::duration{0}};
+    if (d_strings.is_null(idx)) return epoch_time;
     string_view d_str = d_strings.element<string_view>(idx);
-    if (d_str.empty()) return 0;
+    if (d_str.empty()) return epoch_time;
     //
-    int32_t timeparts[TP_ARRAYSIZE] = {0, 1, 1};       // month and day are 1-based
-    if (parse_into_parts(d_str, timeparts)) return 0;  // unexpected parse case
+    int32_t timeparts[TP_ARRAYSIZE] = {0, 1, 1};                // month and day are 1-based
+    if (parse_into_parts(d_str, timeparts)) return epoch_time;  // unexpected parse case
     //
-    return static_cast<T>(timestamp_from_parts(timeparts, units));
+    return T{T::duration(timestamp_from_parts(timeparts, units))};
   }
 };
 

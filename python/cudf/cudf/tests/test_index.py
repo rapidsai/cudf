@@ -550,6 +550,46 @@ def test_index_argsort(data):
 @pytest.mark.parametrize(
     "data",
     [
+        pd.Index([1, 10, 2, 100, -10], name="abc"),
+        pd.Index(["z", "x", "a", "c", "b"]),
+        pd.Index(["z", "x", "a", "c", "b"], dtype="category"),
+        pd.Index(
+            [-10.2, 100.1, -100.2, 0.0, 0.23], name="this is a float index"
+        ),
+        pd.Index([102, 1001, 1002, 0.0, 23], dtype="datetime64[ns]"),
+        pd.Index([13240.2, 1001, 100.2, 0.0, 23], dtype="datetime64[ns]"),
+        pd.RangeIndex(0, 10, 1),
+        pd.Index([-10.2, 100.1, -100.2, 0.0, 23], dtype="timedelta64[ns]"),
+    ],
+)
+@pytest.mark.parametrize("ascending", [True, False])
+@pytest.mark.parametrize("return_indexer", [True, False])
+def test_index_sort_values(data, ascending, return_indexer):
+    pdi = data
+    gdi = cudf.from_pandas(pdi)
+
+    expected = pdi.sort_values(
+        ascending=ascending, return_indexer=return_indexer
+    )
+    actual = gdi.sort_values(
+        ascending=ascending, return_indexer=return_indexer
+    )
+
+    if return_indexer:
+        expected_indexer = expected[1]
+        actual_indexer = actual[1]
+
+        assert_eq(expected_indexer, actual_indexer)
+
+        expected = expected[0]
+        actual = actual[0]
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
         [1, 10, 2, 100, -10],
         ["z", "x", "a", "c", "b"],
         [-10.2, 100.1, -100.2, 0.0, 0.23],
@@ -1282,48 +1322,15 @@ def test_index_empty(data, dtype):
     assert_eq(pdi.empty, gdi.empty)
 
 
+@pytest.mark.parametrize("data", [[1, 2, 3, 4], []])
 @pytest.mark.parametrize(
-    "pdi",
-    [
-        pd.MultiIndex(
-            levels=[[], [], []],
-            codes=[[], [], []],
-            names=["one", "two", "three"],
-        ),
-        pd.MultiIndex.from_tuples(
-            list(
-                zip(
-                    *[
-                        [
-                            "bar",
-                            "bar",
-                            "baz",
-                            "baz",
-                            "foo",
-                            "foo",
-                            "qux",
-                            "qux",
-                        ],
-                        [
-                            "one",
-                            "two",
-                            "one",
-                            "two",
-                            "one",
-                            "two",
-                            "one",
-                            "two",
-                        ],
-                    ]
-                )
-            )
-        ),
-    ],
+    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
 )
-def test_multiIndex_empty(pdi):
-    gdi = cudf.from_pandas(pdi)
+def test_index_size(data, dtype):
+    pdi = pd.Index(data, dtype=dtype)
+    gdi = cudf.Index(data, dtype=dtype)
 
-    assert_eq(pdi.empty, gdi.empty)
+    assert_eq(pdi.size, gdi.size)
 
 
 @pytest.mark.parametrize("data", [[1, 2, 3, 1, 2, 3, 4], [], [1], [1, 2, 3]])
@@ -1337,15 +1344,22 @@ def test_index_drop_duplicates(data, dtype):
     assert_eq(pdi.drop_duplicates(), gdi.drop_duplicates())
 
 
-@pytest.mark.parametrize("data", [[1, 2, 3, 1, 2, 3, 4], [], [1], [1, 2, 3]])
+@pytest.mark.parametrize("data", [[1, 2, 3, 1, 2, 3, 4], []])
 @pytest.mark.parametrize(
     "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
 )
 def test_index_tolist(data, dtype):
-    pdi = pd.Index(data, dtype=dtype)
     gdi = cudf.Index(data, dtype=dtype)
 
-    assert_eq(pdi.tolist(), gdi.tolist())
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            r"cuDF does not support conversion to host memory "
+            r"via `tolist()` method. Consider using "
+            r"`.to_arrow().to_pylist()` to construct a Python list."
+        ),
+    ):
+        gdi.tolist()
 
 
 @pytest.mark.parametrize("data", [[], [1], [1, 2, 3]])
@@ -1375,3 +1389,31 @@ def test_index_values_host(data, dtype):
     pdi = pd.Index(data, dtype=dtype)
 
     np.testing.assert_array_equal(gdi.values_host, pdi.values)
+
+
+@pytest.mark.parametrize(
+    "data,fill_value",
+    [
+        ([1, 2, 3, 1, None, None], 1),
+        ([None, None, 3.2, 1, None, None], 10.0),
+        ([None, "a", "3.2", "z", None, None], "helloworld"),
+        (pd.Series(["a", "b", None], dtype="category"), "b"),
+        (pd.Series([None, None, 1.0], dtype="category"), 1.0),
+        (
+            np.array([1, 2, 3, None], dtype="datetime64[s]"),
+            np.datetime64("2005-02-25"),
+        ),
+        (
+            np.array(
+                [None, None, 122, 3242234, None, 6237846],
+                dtype="datetime64[ms]",
+            ),
+            np.datetime64("2005-02-25"),
+        ),
+    ],
+)
+def test_index_fillna(data, fill_value):
+    pdi = pd.Index(data)
+    gdi = cudf.Index(data)
+
+    assert_eq(pdi.fillna(fill_value), gdi.fillna(fill_value))

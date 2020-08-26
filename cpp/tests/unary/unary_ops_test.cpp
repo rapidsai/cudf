@@ -84,7 +84,7 @@ TYPED_TEST(cudf_logical_test, LogicalNot)
 
   auto output = cudf::unary_operation(input, cudf::unary_op::NOT);
 
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_logical_test, SimpleLogicalNot)
@@ -92,7 +92,7 @@ TYPED_TEST(cudf_logical_test, SimpleLogicalNot)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{true, true, true, true}};
   cudf::test::fixed_width_column_wrapper<bool> expected{{false, false, false, false}};
   auto output = cudf::unary_operation(input, cudf::unary_op::NOT);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_logical_test, SimpleLogicalNotWithNullMask)
@@ -100,7 +100,7 @@ TYPED_TEST(cudf_logical_test, SimpleLogicalNotWithNullMask)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{true, true, true, true}, {1, 0, 1, 1}};
   cudf::test::fixed_width_column_wrapper<bool> expected{{false, true, false, false}, {1, 0, 1, 1}};
   auto output = cudf::unary_operation(input, cudf::unary_op::NOT);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_logical_test, EmptyLogicalNot)
@@ -108,7 +108,7 @@ TYPED_TEST(cudf_logical_test, EmptyLogicalNot)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{};
   cudf::test::fixed_width_column_wrapper<bool> expected{};
   auto output = cudf::unary_operation(input, cudf::unary_op::NOT);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 template <typename T>
@@ -140,7 +140,7 @@ TYPED_TEST(cudf_math_test, ABS)
 
   auto const output = cudf::unary_operation(input, cudf::unary_op::ABS);
 
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_test, SQRT)
@@ -167,7 +167,7 @@ TYPED_TEST(cudf_math_test, SQRT)
 
   auto const output = cudf::unary_operation(input, cudf::unary_op::SQRT);
 
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_test, SimpleABS)
@@ -176,7 +176,7 @@ TYPED_TEST(cudf_math_test, SimpleABS)
   cudf::test::fixed_width_column_wrapper<TypeParam> input(v.begin(), v.end());
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{2, 1, 1, 2}};
   auto output = cudf::unary_operation(input, cudf::unary_op::ABS);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_test, SimpleSQRT)
@@ -184,7 +184,7 @@ TYPED_TEST(cudf_math_test, SimpleSQRT)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{1, 4, 9, 16}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{1, 2, 3, 4}};
   auto output = cudf::unary_operation(input, cudf::unary_op::SQRT);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_test, SimpleCBRT)
@@ -192,7 +192,7 @@ TYPED_TEST(cudf_math_test, SimpleCBRT)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{1, 27, 125}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{1, 3, 5}};
   auto output = cudf::unary_operation(input, cudf::unary_op::CBRT);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_test, SimpleSQRTWithNullMask)
@@ -200,7 +200,7 @@ TYPED_TEST(cudf_math_test, SimpleSQRTWithNullMask)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{1, 4, 9, 16}, {1, 1, 0, 1}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{1, 2, 9, 4}, {1, 1, 0, 1}};
   auto output = cudf::unary_operation(input, cudf::unary_op::SQRT);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_test, SimpleCBRTWithNullMask)
@@ -208,7 +208,7 @@ TYPED_TEST(cudf_math_test, SimpleCBRTWithNullMask)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{1, 27, 125}, {1, 1, 0}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{1, 3, 125}, {1, 1, 0}};
   auto output = cudf::unary_operation(input, cudf::unary_op::CBRT);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_test, EmptyABS)
@@ -216,7 +216,7 @@ TYPED_TEST(cudf_math_test, EmptyABS)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{};
   auto output = cudf::unary_operation(input, cudf::unary_op::ABS);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_test, EmptySQRT)
@@ -224,7 +224,7 @@ TYPED_TEST(cudf_math_test, EmptySQRT)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{};
   auto output = cudf::unary_operation(input, cudf::unary_op::SQRT);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 template <typename T>
@@ -240,7 +240,7 @@ TYPED_TEST(cudf_math_with_floating_point_test, SimpleSIN)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{0.0}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{0.0}};
   auto output = cudf::unary_operation(input, cudf::unary_op::SIN);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_with_floating_point_test, SimpleCOS)
@@ -248,7 +248,7 @@ TYPED_TEST(cudf_math_with_floating_point_test, SimpleCOS)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{0.0}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{1.0}};
   auto output = cudf::unary_operation(input, cudf::unary_op::COS);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_with_floating_point_test, SimpleSINH)
@@ -256,7 +256,7 @@ TYPED_TEST(cudf_math_with_floating_point_test, SimpleSINH)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{0.0}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{0.0}};
   auto output = cudf::unary_operation(input, cudf::unary_op::SINH);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_with_floating_point_test, SimpleCOSH)
@@ -264,7 +264,7 @@ TYPED_TEST(cudf_math_with_floating_point_test, SimpleCOSH)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{0.0}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{1.0}};
   auto output = cudf::unary_operation(input, cudf::unary_op::COSH);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_with_floating_point_test, SimpleTANH)
@@ -272,7 +272,7 @@ TYPED_TEST(cudf_math_with_floating_point_test, SimpleTANH)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{0.0}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{0.0}};
   auto output = cudf::unary_operation(input, cudf::unary_op::TANH);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_with_floating_point_test, SimpleiASINH)
@@ -280,7 +280,7 @@ TYPED_TEST(cudf_math_with_floating_point_test, SimpleiASINH)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{0.0}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{0.0}};
   auto output = cudf::unary_operation(input, cudf::unary_op::ARCSINH);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_with_floating_point_test, SimpleACOSH)
@@ -288,7 +288,7 @@ TYPED_TEST(cudf_math_with_floating_point_test, SimpleACOSH)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{1.0}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{0.0}};
   auto output = cudf::unary_operation(input, cudf::unary_op::ARCCOSH);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_with_floating_point_test, SimpleATANH)
@@ -296,7 +296,7 @@ TYPED_TEST(cudf_math_with_floating_point_test, SimpleATANH)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{0.0}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{0.0}};
   auto output = cudf::unary_operation(input, cudf::unary_op::ARCTANH);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_with_floating_point_test, SimpleFLOOR)
@@ -304,7 +304,7 @@ TYPED_TEST(cudf_math_with_floating_point_test, SimpleFLOOR)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{1.1, 3.3, 5.5, 7.7}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{1.0, 3.0, 5.0, 7.0}};
   auto output = cudf::unary_operation(input, cudf::unary_op::FLOOR);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_with_floating_point_test, SimpleCEIL)
@@ -312,7 +312,7 @@ TYPED_TEST(cudf_math_with_floating_point_test, SimpleCEIL)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{1.1, 3.3, 5.5, 7.7}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{2.0, 4.0, 6.0, 8.0}};
   auto output = cudf::unary_operation(input, cudf::unary_op::CEIL);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_with_floating_point_test, SimpleRINT)
@@ -323,7 +323,7 @@ TYPED_TEST(cudf_math_with_floating_point_test, SimpleRINT)
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{
     T(2.0), T(4.0), T(-2.0), T(-4.0), T(0.0), T(NAN)};
   auto output = cudf::unary_operation(input, cudf::unary_op::RINT);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_with_floating_point_test, RINTNonFloatingFail)
@@ -344,7 +344,7 @@ TYPED_TEST(cudf_math_with_floating_point_test, SimpleCBRT)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{1, 27, 343, 4913}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{1, 3, 7, 17}};
   auto output = cudf::unary_operation(input, cudf::unary_op::CBRT);
-  cudf::test::expect_columns_equal(expected, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 template <typename T>
@@ -385,7 +385,7 @@ TYPED_TEST(IsNull, AllValid)
 
   std::unique_ptr<cudf::column> got = cudf::is_null(col);
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 TYPED_TEST(IsNull, WithInvalids)
@@ -400,7 +400,7 @@ TYPED_TEST(IsNull, WithInvalids)
 
   std::unique_ptr<cudf::column> got = cudf::is_null(col);
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 TYPED_TEST(IsNull, EmptyColumns)
@@ -415,7 +415,7 @@ TYPED_TEST(IsNull, EmptyColumns)
 
   std::unique_ptr<cudf::column> got = cudf::is_null(col);
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 template <typename T>
@@ -436,7 +436,7 @@ TYPED_TEST(IsNotNull, AllValid)
 
   std::unique_ptr<cudf::column> got = cudf::is_valid(col);
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 TYPED_TEST(IsNotNull, WithInvalids)
@@ -451,7 +451,7 @@ TYPED_TEST(IsNotNull, WithInvalids)
 
   std::unique_ptr<cudf::column> got = cudf::is_valid(col);
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 TYPED_TEST(IsNotNull, EmptyColumns)
@@ -466,7 +466,7 @@ TYPED_TEST(IsNotNull, EmptyColumns)
 
   std::unique_ptr<cudf::column> got = cudf::is_valid(col);
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 static const auto test_timestamps_D = std::vector<int32_t>{
@@ -499,6 +499,12 @@ static const auto test_timestamps_ns = std::vector<int64_t>{
   1674631932929000000,  // 2023-01-25 07:32:12.929000000 GMT
 };
 
+static const auto test_durations_D  = test_timestamps_D;
+static const auto test_durations_s  = test_timestamps_s;
+static const auto test_durations_ms = test_timestamps_ms;
+static const auto test_durations_us = test_timestamps_us;
+static const auto test_durations_ns = test_timestamps_ns;
+
 template <typename T>
 inline auto make_data_type()
 {
@@ -508,16 +514,16 @@ inline auto make_data_type()
 template <typename T, typename R>
 inline auto make_column(std::vector<R> data)
 {
-  return cudf::test::fixed_width_column_wrapper<T>(data.begin(), data.end());
+  return cudf::test::fixed_width_column_wrapper<T, R>(data.begin(), data.end());
 }
 
 template <typename T, typename R>
 inline auto make_column(std::vector<R> data, std::vector<bool> mask)
 {
-  return cudf::test::fixed_width_column_wrapper<T>(data.begin(), data.end(), mask.begin());
+  return cudf::test::fixed_width_column_wrapper<T, R>(data.begin(), data.end(), mask.begin());
 }
 
-inline cudf::column make_exp_timestamp_column(cudf::type_id type_id)
+inline cudf::column make_exp_chrono_column(cudf::type_id type_id)
 {
   switch (type_id) {
     case cudf::type_id::TIMESTAMP_DAYS:
@@ -550,6 +556,36 @@ inline cudf::column make_exp_timestamp_column(cudf::type_id type_id)
         test_timestamps_ns.size(),
         rmm::device_buffer{test_timestamps_ns.data(),
                            test_timestamps_ns.size() * sizeof(test_timestamps_ns.front())});
+    case cudf::type_id::DURATION_DAYS:
+      return cudf::column(
+        cudf::data_type{type_id},
+        test_durations_D.size(),
+        rmm::device_buffer{test_durations_D.data(),
+                           test_durations_D.size() * sizeof(test_durations_D.front())});
+    case cudf::type_id::DURATION_SECONDS:
+      return cudf::column(
+        cudf::data_type{type_id},
+        test_durations_s.size(),
+        rmm::device_buffer{test_durations_s.data(),
+                           test_durations_s.size() * sizeof(test_durations_s.front())});
+    case cudf::type_id::DURATION_MILLISECONDS:
+      return cudf::column(
+        cudf::data_type{type_id},
+        test_durations_ms.size(),
+        rmm::device_buffer{test_durations_ms.data(),
+                           test_durations_ms.size() * sizeof(test_durations_ms.front())});
+    case cudf::type_id::DURATION_MICROSECONDS:
+      return cudf::column(
+        cudf::data_type{type_id},
+        test_durations_us.size(),
+        rmm::device_buffer{test_durations_us.data(),
+                           test_durations_us.size() * sizeof(test_durations_us.front())});
+    case cudf::type_id::DURATION_NANOSECONDS:
+      return cudf::column(
+        cudf::data_type{type_id},
+        test_durations_ns.size(),
+        rmm::device_buffer{test_durations_ns.data(),
+                           test_durations_ns.size() * sizeof(test_durations_ns.front())});
     default: CUDF_FAIL("");
   }
 };
@@ -557,13 +593,13 @@ inline cudf::column make_exp_timestamp_column(cudf::type_id type_id)
 template <typename T, typename R>
 inline auto make_column(thrust::host_vector<R> data)
 {
-  return cudf::test::fixed_width_column_wrapper<T>(data.begin(), data.end());
+  return cudf::test::fixed_width_column_wrapper<T, R>(data.begin(), data.end());
 }
 
 template <typename T, typename R>
 inline auto make_column(thrust::host_vector<R> data, thrust::host_vector<bool> mask)
 {
-  return cudf::test::fixed_width_column_wrapper<T>(data.begin(), data.end(), mask.begin());
+  return cudf::test::fixed_width_column_wrapper<T, R>(data.begin(), data.end(), mask.begin());
 }
 
 template <typename T, typename R>
@@ -575,13 +611,13 @@ void validate_cast_result(cudf::column_view expected, cudf::column_view actual)
   std::vector<cudf::bitmask_type> null_mask;
   std::tie(h_data, null_mask) = to_host<T>(expected);
   if (null_mask.size() == 0) {
-    expect_columns_equal(make_column<R, T>(h_data), actual);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(make_column<R, T>(h_data), actual);
   } else {
     thrust::host_vector<bool> h_null_mask(expected.size());
     for (cudf::size_type i = 0; i < expected.size(); ++i) {
       h_null_mask[i] = cudf::bit_is_set(null_mask.data(), i);
     }
-    expect_columns_equal(make_column<R, T>(h_data, h_null_mask), actual);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(make_column<R, T>(h_data, h_null_mask), actual);
   }
 }
 
@@ -598,22 +634,27 @@ TEST_F(CastTimestampsSimple, IsIdempotent)
   auto timestamps_us = make_column<cudf::timestamp_us>(test_timestamps_us);
   auto timestamps_ns = make_column<cudf::timestamp_ns>(test_timestamps_ns);
 
-  auto timestamps_D_rep  = cudf::cast(timestamps_D, make_data_type<cudf::timestamp_D::rep>());
-  auto timestamps_s_rep  = cudf::cast(timestamps_s, make_data_type<cudf::timestamp_s::rep>());
-  auto timestamps_ms_rep = cudf::cast(timestamps_ms, make_data_type<cudf::timestamp_ms::rep>());
-  auto timestamps_us_rep = cudf::cast(timestamps_us, make_data_type<cudf::timestamp_us::rep>());
-  auto timestamps_ns_rep = cudf::cast(timestamps_ns, make_data_type<cudf::timestamp_ns::rep>());
+  // Timestamps to duration
+  auto timestamps_D_dur = cudf::cast(timestamps_D, make_data_type<cudf::timestamp_D::duration>());
+  auto timestamps_s_dur = cudf::cast(timestamps_s, make_data_type<cudf::timestamp_s::duration>());
+  auto timestamps_ms_dur =
+    cudf::cast(timestamps_ms, make_data_type<cudf::timestamp_ms::duration>());
+  auto timestamps_us_dur =
+    cudf::cast(timestamps_us, make_data_type<cudf::timestamp_us::duration>());
+  auto timestamps_ns_dur =
+    cudf::cast(timestamps_ns, make_data_type<cudf::timestamp_ns::duration>());
 
+  // Duration back to timestamp
   auto timestamps_D_got =
-    cudf::cast(*timestamps_D_rep, cudf::data_type{cudf::type_id::TIMESTAMP_DAYS});
+    cudf::cast(*timestamps_D_dur, cudf::data_type{cudf::type_id::TIMESTAMP_DAYS});
   auto timestamps_s_got =
-    cudf::cast(*timestamps_s_rep, cudf::data_type{cudf::type_id::TIMESTAMP_SECONDS});
+    cudf::cast(*timestamps_s_dur, cudf::data_type{cudf::type_id::TIMESTAMP_SECONDS});
   auto timestamps_ms_got =
-    cudf::cast(*timestamps_ms_rep, cudf::data_type{cudf::type_id::TIMESTAMP_MILLISECONDS});
+    cudf::cast(*timestamps_ms_dur, cudf::data_type{cudf::type_id::TIMESTAMP_MILLISECONDS});
   auto timestamps_us_got =
-    cudf::cast(*timestamps_us_rep, cudf::data_type{cudf::type_id::TIMESTAMP_MICROSECONDS});
+    cudf::cast(*timestamps_us_dur, cudf::data_type{cudf::type_id::TIMESTAMP_MICROSECONDS});
   auto timestamps_ns_got =
-    cudf::cast(*timestamps_ns_rep, cudf::data_type{cudf::type_id::TIMESTAMP_NANOSECONDS});
+    cudf::cast(*timestamps_ns_dur, cudf::data_type{cudf::type_id::TIMESTAMP_NANOSECONDS});
 
   validate_cast_result<cudf::timestamp_D, cudf::timestamp_D>(timestamps_D, *timestamps_D_got);
   validate_cast_result<cudf::timestamp_s, cudf::timestamp_s>(timestamps_s, *timestamps_s_got);
@@ -622,111 +663,159 @@ TEST_F(CastTimestampsSimple, IsIdempotent)
   validate_cast_result<cudf::timestamp_ns, cudf::timestamp_ns>(timestamps_ns, *timestamps_ns_got);
 }
 
-template <typename T>
-struct CastTimestampsTyped : public cudf::test::BaseFixture {
+struct CastDurationsSimple : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(CastTimestampsTyped, cudf::test::TimestampTypes);
-
-// Return a list of timestamp type ids whose precision is greater than or equal
-// to the input type id
-std::vector<cudf::type_id> get_higher_precision_timestamp_type_ids(cudf::type_id search)
+TEST_F(CastDurationsSimple, IsIdempotent)
 {
-  bool found = false;
+  using namespace cudf::test;
+
+  auto durations_D  = make_column<cudf::duration_D>(test_durations_D);
+  auto durations_s  = make_column<cudf::duration_s>(test_durations_s);
+  auto durations_ms = make_column<cudf::duration_ms>(test_durations_ms);
+  auto durations_us = make_column<cudf::duration_us>(test_durations_us);
+  auto durations_ns = make_column<cudf::duration_ns>(test_durations_ns);
+
+  auto durations_D_rep  = cudf::cast(durations_D, make_data_type<cudf::duration_D::rep>());
+  auto durations_s_rep  = cudf::cast(durations_s, make_data_type<cudf::duration_s::rep>());
+  auto durations_ms_rep = cudf::cast(durations_ms, make_data_type<cudf::duration_ms::rep>());
+  auto durations_us_rep = cudf::cast(durations_us, make_data_type<cudf::duration_us::rep>());
+  auto durations_ns_rep = cudf::cast(durations_ns, make_data_type<cudf::duration_ns::rep>());
+
+  auto durations_D_got =
+    cudf::cast(*durations_D_rep, cudf::data_type{cudf::type_id::DURATION_DAYS});
+  auto durations_s_got =
+    cudf::cast(*durations_s_rep, cudf::data_type{cudf::type_id::DURATION_SECONDS});
+  auto durations_ms_got =
+    cudf::cast(*durations_ms_rep, cudf::data_type{cudf::type_id::DURATION_MILLISECONDS});
+  auto durations_us_got =
+    cudf::cast(*durations_us_rep, cudf::data_type{cudf::type_id::DURATION_MICROSECONDS});
+  auto durations_ns_got =
+    cudf::cast(*durations_ns_rep, cudf::data_type{cudf::type_id::DURATION_NANOSECONDS});
+
+  validate_cast_result<cudf::duration_D, cudf::duration_D>(durations_D, *durations_D_got);
+  validate_cast_result<cudf::duration_s, cudf::duration_s>(durations_s, *durations_s_got);
+  validate_cast_result<cudf::duration_ms, cudf::duration_ms>(durations_ms, *durations_ms_got);
+  validate_cast_result<cudf::duration_us, cudf::duration_us>(durations_us, *durations_us_got);
+  validate_cast_result<cudf::duration_ns, cudf::duration_ns>(durations_ns, *durations_ns_got);
+}
+
+template <typename T>
+struct CastChronosTyped : public cudf::test::BaseFixture {
+};
+
+TYPED_TEST_CASE(CastChronosTyped, cudf::test::ChronoTypes);
+
+// Return a list of chrono type ids whose precision is greater than or equal
+// to the input type id
+std::vector<cudf::type_id> get_higher_precision_chrono_type_ids(cudf::type_id search)
+{
+  size_t idx = 0;
   std::vector<cudf::type_id> gte_ids{};
+  // Arranged such that for every pair of types, the types that precede them have a lower precision
   std::vector<cudf::type_id> timestamp_ids{cudf::type_id::TIMESTAMP_DAYS,
+                                           cudf::type_id::DURATION_DAYS,
                                            cudf::type_id::TIMESTAMP_SECONDS,
+                                           cudf::type_id::DURATION_SECONDS,
                                            cudf::type_id::TIMESTAMP_MILLISECONDS,
+                                           cudf::type_id::DURATION_MILLISECONDS,
                                            cudf::type_id::TIMESTAMP_MICROSECONDS,
-                                           cudf::type_id::TIMESTAMP_NANOSECONDS};
+                                           cudf::type_id::DURATION_MICROSECONDS,
+                                           cudf::type_id::TIMESTAMP_NANOSECONDS,
+                                           cudf::type_id::DURATION_NANOSECONDS};
   for (cudf::type_id type_id : timestamp_ids) {
-    if (found || (found = (type_id == search))) { gte_ids.emplace_back(type_id); }
+    if (type_id == search) break;
+    idx++;
   }
+
+  for (auto i = idx - idx % 2; i < timestamp_ids.size(); ++i)
+    gte_ids.emplace_back(timestamp_ids[i]);
   return gte_ids;
 }
 
-// Test that all timestamps whose precision is >= to the TypeParam
+// Test that all chrono types whose precision is >= to the TypeParam
 // down-casts appropriately to the lower-precision TypeParam
-TYPED_TEST(CastTimestampsTyped, DownCastingFloorsValues)
+TYPED_TEST(CastChronosTyped, DownCastingFloorsValues)
 {
   using T = TypeParam;
   using namespace cudf::test;
-  auto dtype_exp      = make_data_type<T>();
-  auto timestamps_exp = make_exp_timestamp_column(dtype_exp.id());
-  // Construct a list of the timestamp type_ids whose precision is
+  auto dtype_exp  = make_data_type<T>();
+  auto chrono_exp = make_exp_chrono_column(dtype_exp.id());
+  // Construct a list of the chrono type_ids whose precision is
   // greater than or equal to the precision of TypeParam's, e.g:
-  // timestamp_ms -> {timestamp_ms, timestamp_us, timestamp_ns};
-  // timestamp_us -> {timestamp_us, timestamp_ns};
-  // etc.
-  auto higher_precision_type_ids = get_higher_precision_timestamp_type_ids(cudf::type_to_id<T>());
+  // timestamp_ms -> {timestamp_ms, duration_ms, timestamp_us, duration_us, timestamp_ns,
+  // duration_ns}; duration_us -> {timestamp_us, duration_us, timestamp_ns, duration_ns}; etc.
+  auto higher_precision_type_ids = get_higher_precision_chrono_type_ids(cudf::type_to_id<T>());
   // For each higher-precision type, down-cast to TypeParam and validate
   // that the values were floored.
   for (cudf::type_id higher_precision_type_id : higher_precision_type_ids) {
-    auto timestamps_src = make_exp_timestamp_column(higher_precision_type_id);
-    auto timestamps_got = cudf::cast(timestamps_src, dtype_exp);
-    expect_columns_equal(*timestamps_got, timestamps_exp);
+    auto chrono_src = make_exp_chrono_column(higher_precision_type_id);
+    auto chrono_got = cudf::cast(chrono_src, dtype_exp);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*chrono_got, chrono_exp);
   }
 }
 
 // Specific test to ensure down-casting to days happens correctly
-TYPED_TEST(CastTimestampsTyped, DownCastingToDaysFloorsValues)
+TYPED_TEST(CastChronosTyped, DownCastingToDaysFloorsValues)
 {
   using T = TypeParam;
   using namespace cudf::test;
 
-  auto dtype_src      = make_data_type<T>();
-  auto dtype_out      = make_data_type<cudf::timestamp_D>();
-  auto timestamps_src = make_exp_timestamp_column(dtype_src.id());
-  auto timestamps_exp = make_column<cudf::timestamp_D>(test_timestamps_D);
+  auto dtype_src  = make_data_type<T>();
+  auto chrono_src = make_exp_chrono_column(dtype_src.id());
 
-  auto timestamps_got = cudf::cast(timestamps_src, dtype_out);
+  // Convert {timestamp|duration}_X => timestamp_D
+  auto timestamp_dtype_out = make_data_type<cudf::timestamp_D>();
+  auto timestamps_got      = cudf::cast(chrono_src, timestamp_dtype_out);
+  auto timestamp_exp       = make_column<cudf::timestamp_D>(test_timestamps_D);
 
-  validate_cast_result<cudf::timestamp_D, cudf::timestamp_D>(timestamps_exp, *timestamps_got);
+  validate_cast_result<cudf::timestamp_D, cudf::timestamp_D>(timestamp_exp, *timestamps_got);
+
+  // Convert {timestamp|duration}_X => duration_D
+  auto duration_dtype_out = make_data_type<cudf::duration_D>();
+  auto duration_got       = cudf::cast(chrono_src, duration_dtype_out);
+  auto duration_exp       = make_column<cudf::duration_D>(test_durations_D);
+
+  validate_cast_result<cudf::duration_D, cudf::duration_D>(duration_exp, *duration_got);
 }
 
-template <typename T>
 struct CastToTimestamps : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(CastToTimestamps, cudf::test::NumericTypes);
-
-TYPED_TEST(CastToTimestamps, AllValid)
+// Cast duration types to timestamps (as integral types can't be converted)
+TEST_F(CastToTimestamps, AllValid)
 {
-  using T = TypeParam;
   using namespace cudf::test;
 
-  auto timestamps_D  = make_column<T>(test_timestamps_D);
-  auto timestamps_s  = make_column<T>(test_timestamps_s);
-  auto timestamps_ms = make_column<T>(test_timestamps_ms);
-  auto timestamps_us = make_column<T>(test_timestamps_us);
-  auto timestamps_ns = make_column<T>(test_timestamps_ns);
+  auto durations_D  = make_column<cudf::duration_D>(test_durations_D);
+  auto durations_s  = make_column<cudf::duration_s>(test_durations_s);
+  auto durations_ms = make_column<cudf::duration_ms>(test_durations_ms);
+  auto durations_us = make_column<cudf::duration_us>(test_durations_us);
+  auto durations_ns = make_column<cudf::duration_ns>(test_durations_ns);
 
-  auto timestamps_D_got = cudf::cast(timestamps_D, cudf::data_type{cudf::type_id::TIMESTAMP_DAYS});
+  auto timestamps_D_got = cudf::cast(durations_D, cudf::data_type{cudf::type_id::TIMESTAMP_DAYS});
   auto timestamps_s_got =
-    cudf::cast(timestamps_s, cudf::data_type{cudf::type_id::TIMESTAMP_SECONDS});
+    cudf::cast(durations_s, cudf::data_type{cudf::type_id::TIMESTAMP_SECONDS});
   auto timestamps_ms_got =
-    cudf::cast(timestamps_ms, cudf::data_type{cudf::type_id::TIMESTAMP_MILLISECONDS});
+    cudf::cast(durations_ms, cudf::data_type{cudf::type_id::TIMESTAMP_MILLISECONDS});
   auto timestamps_us_got =
-    cudf::cast(timestamps_us, cudf::data_type{cudf::type_id::TIMESTAMP_MICROSECONDS});
+    cudf::cast(durations_us, cudf::data_type{cudf::type_id::TIMESTAMP_MICROSECONDS});
   auto timestamps_ns_got =
-    cudf::cast(timestamps_ns, cudf::data_type{cudf::type_id::TIMESTAMP_NANOSECONDS});
+    cudf::cast(durations_ns, cudf::data_type{cudf::type_id::TIMESTAMP_NANOSECONDS});
 
-  validate_cast_result<T, cudf::timestamp_D>(timestamps_D, *timestamps_D_got);
-  validate_cast_result<T, cudf::timestamp_s>(timestamps_s, *timestamps_s_got);
-  validate_cast_result<T, cudf::timestamp_ms>(timestamps_ms, *timestamps_ms_got);
-  validate_cast_result<T, cudf::timestamp_us>(timestamps_us, *timestamps_us_got);
-  validate_cast_result<T, cudf::timestamp_ns>(timestamps_ns, *timestamps_ns_got);
+  validate_cast_result<cudf::duration_D, cudf::timestamp_D>(durations_D, *timestamps_D_got);
+  validate_cast_result<cudf::duration_s, cudf::timestamp_s>(durations_s, *timestamps_s_got);
+  validate_cast_result<cudf::duration_ms, cudf::timestamp_ms>(durations_ms, *timestamps_ms_got);
+  validate_cast_result<cudf::duration_us, cudf::timestamp_us>(durations_us, *timestamps_us_got);
+  validate_cast_result<cudf::duration_ns, cudf::timestamp_ns>(durations_ns, *timestamps_ns_got);
 }
 
-template <typename T>
 struct CastFromTimestamps : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(CastFromTimestamps, cudf::test::NumericTypes);
-
-TYPED_TEST(CastFromTimestamps, AllValid)
+// Convert timestamps to duration types
+TEST_F(CastFromTimestamps, AllValid)
 {
-  using T = TypeParam;
   using namespace cudf::test;
 
   auto timestamps_D  = make_column<cudf::timestamp_D>(test_timestamps_D);
@@ -735,28 +824,27 @@ TYPED_TEST(CastFromTimestamps, AllValid)
   auto timestamps_us = make_column<cudf::timestamp_us>(test_timestamps_us);
   auto timestamps_ns = make_column<cudf::timestamp_ns>(test_timestamps_ns);
 
-  auto timestamps_D_exp  = make_column<T>(test_timestamps_D);
-  auto timestamps_s_exp  = make_column<T>(test_timestamps_s);
-  auto timestamps_ms_exp = make_column<T>(test_timestamps_ms);
-  auto timestamps_us_exp = make_column<T>(test_timestamps_us);
-  auto timestamps_ns_exp = make_column<T>(test_timestamps_ns);
+  auto duration_D_exp  = make_column<cudf::duration_D>(test_durations_D);
+  auto duration_s_exp  = make_column<cudf::duration_s>(test_durations_s);
+  auto duration_ms_exp = make_column<cudf::duration_us>(test_durations_ms);
+  auto duration_us_exp = make_column<cudf::duration_ms>(test_durations_us);
+  auto duration_ns_exp = make_column<cudf::duration_ns>(test_durations_ns);
 
-  auto timestamps_D_got  = cudf::cast(timestamps_D, make_data_type<T>());
-  auto timestamps_s_got  = cudf::cast(timestamps_s, make_data_type<T>());
-  auto timestamps_ms_got = cudf::cast(timestamps_ms, make_data_type<T>());
-  auto timestamps_us_got = cudf::cast(timestamps_us, make_data_type<T>());
-  auto timestamps_ns_got = cudf::cast(timestamps_ns, make_data_type<T>());
+  auto durations_D_got  = cudf::cast(timestamps_D, make_data_type<cudf::duration_D>());
+  auto durations_s_got  = cudf::cast(timestamps_s, make_data_type<cudf::duration_s>());
+  auto durations_ms_got = cudf::cast(timestamps_ms, make_data_type<cudf::duration_ms>());
+  auto durations_us_got = cudf::cast(timestamps_us, make_data_type<cudf::duration_us>());
+  auto durations_ns_got = cudf::cast(timestamps_ns, make_data_type<cudf::duration_ns>());
 
-  validate_cast_result<T, T>(timestamps_D_exp, *timestamps_D_got);
-  validate_cast_result<T, T>(timestamps_s_exp, *timestamps_s_got);
-  validate_cast_result<T, T>(timestamps_ms_exp, *timestamps_ms_got);
-  validate_cast_result<T, T>(timestamps_us_exp, *timestamps_us_got);
-  validate_cast_result<T, T>(timestamps_ns_exp, *timestamps_ns_got);
+  validate_cast_result<cudf::duration_D, cudf::duration_D>(duration_D_exp, *durations_D_got);
+  validate_cast_result<cudf::duration_s, cudf::duration_s>(duration_s_exp, *durations_s_got);
+  validate_cast_result<cudf::duration_ms, cudf::duration_ms>(duration_ms_exp, *durations_ms_got);
+  validate_cast_result<cudf::duration_us, cudf::duration_us>(duration_us_exp, *durations_us_got);
+  validate_cast_result<cudf::duration_ns, cudf::duration_ns>(duration_ns_exp, *durations_ns_got);
 }
 
-TYPED_TEST(CastFromTimestamps, WithNulls)
+TEST_F(CastFromTimestamps, WithNulls)
 {
-  using T = TypeParam;
   using namespace cudf::test;
 
   auto timestamps_D  = make_column<cudf::timestamp_D>(test_timestamps_D, {true, false, true});
@@ -765,23 +853,122 @@ TYPED_TEST(CastFromTimestamps, WithNulls)
   auto timestamps_us = make_column<cudf::timestamp_us>(test_timestamps_us, {true, false, true});
   auto timestamps_ns = make_column<cudf::timestamp_ns>(test_timestamps_ns, {true, false, true});
 
-  auto timestamps_D_exp  = make_column<T>(test_timestamps_D, {true, false, true});
-  auto timestamps_s_exp  = make_column<T>(test_timestamps_s, {true, false, true});
-  auto timestamps_ms_exp = make_column<T>(test_timestamps_ms, {true, false, true});
-  auto timestamps_us_exp = make_column<T>(test_timestamps_us, {true, false, true});
-  auto timestamps_ns_exp = make_column<T>(test_timestamps_ns, {true, false, true});
+  auto duration_D_exp  = make_column<cudf::duration_D>(test_durations_D, {true, false, true});
+  auto duration_s_exp  = make_column<cudf::duration_s>(test_durations_s, {true, false, true});
+  auto duration_ms_exp = make_column<cudf::duration_us>(test_durations_ms, {true, false, true});
+  auto duration_us_exp = make_column<cudf::duration_ms>(test_durations_us, {true, false, true});
+  auto duration_ns_exp = make_column<cudf::duration_ns>(test_durations_ns, {true, false, true});
 
-  auto timestamps_D_got  = cudf::cast(timestamps_D, make_data_type<T>());
-  auto timestamps_s_got  = cudf::cast(timestamps_s, make_data_type<T>());
-  auto timestamps_ms_got = cudf::cast(timestamps_ms, make_data_type<T>());
-  auto timestamps_us_got = cudf::cast(timestamps_us, make_data_type<T>());
-  auto timestamps_ns_got = cudf::cast(timestamps_ns, make_data_type<T>());
+  auto durations_D_got  = cudf::cast(timestamps_D, make_data_type<cudf::duration_D>());
+  auto durations_s_got  = cudf::cast(timestamps_s, make_data_type<cudf::duration_s>());
+  auto durations_ms_got = cudf::cast(timestamps_ms, make_data_type<cudf::duration_ms>());
+  auto durations_us_got = cudf::cast(timestamps_us, make_data_type<cudf::duration_us>());
+  auto durations_ns_got = cudf::cast(timestamps_ns, make_data_type<cudf::duration_ns>());
 
-  validate_cast_result<T, T>(timestamps_D_exp, *timestamps_D_got);
-  validate_cast_result<T, T>(timestamps_s_exp, *timestamps_s_got);
-  validate_cast_result<T, T>(timestamps_ms_exp, *timestamps_ms_got);
-  validate_cast_result<T, T>(timestamps_us_exp, *timestamps_us_got);
-  validate_cast_result<T, T>(timestamps_ns_exp, *timestamps_ns_got);
+  validate_cast_result<cudf::duration_D, cudf::duration_D>(duration_D_exp, *durations_D_got);
+  validate_cast_result<cudf::duration_s, cudf::duration_s>(duration_s_exp, *durations_s_got);
+  validate_cast_result<cudf::duration_ms, cudf::duration_ms>(duration_ms_exp, *durations_ms_got);
+  validate_cast_result<cudf::duration_us, cudf::duration_us>(duration_us_exp, *durations_us_got);
+  validate_cast_result<cudf::duration_ns, cudf::duration_ns>(duration_ns_exp, *durations_ns_got);
+}
+
+template <typename T>
+struct CastToDurations : public cudf::test::BaseFixture {
+};
+
+TYPED_TEST_CASE(CastToDurations, cudf::test::IntegralTypes);
+
+TYPED_TEST(CastToDurations, AllValid)
+{
+  using T = TypeParam;
+  using namespace cudf::test;
+
+  auto durations_D  = make_column<T>(test_durations_D);
+  auto durations_s  = make_column<T>(test_durations_s);
+  auto durations_ms = make_column<T>(test_durations_ms);
+  auto durations_us = make_column<T>(test_durations_us);
+  auto durations_ns = make_column<T>(test_durations_ns);
+
+  auto durations_D_got = cudf::cast(durations_D, cudf::data_type{cudf::type_id::DURATION_DAYS});
+  auto durations_s_got = cudf::cast(durations_s, cudf::data_type{cudf::type_id::DURATION_SECONDS});
+  auto durations_ms_got =
+    cudf::cast(durations_ms, cudf::data_type{cudf::type_id::DURATION_MILLISECONDS});
+  auto durations_us_got =
+    cudf::cast(durations_us, cudf::data_type{cudf::type_id::DURATION_MICROSECONDS});
+  auto durations_ns_got =
+    cudf::cast(durations_ns, cudf::data_type{cudf::type_id::DURATION_NANOSECONDS});
+
+  validate_cast_result<T, cudf::duration_D>(durations_D, *durations_D_got);
+  validate_cast_result<T, cudf::duration_s>(durations_s, *durations_s_got);
+  validate_cast_result<T, cudf::duration_ms>(durations_ms, *durations_ms_got);
+  validate_cast_result<T, cudf::duration_us>(durations_us, *durations_us_got);
+  validate_cast_result<T, cudf::duration_ns>(durations_ns, *durations_ns_got);
+}
+
+template <typename T>
+struct CastFromDurations : public cudf::test::BaseFixture {
+};
+
+TYPED_TEST_CASE(CastFromDurations, cudf::test::NumericTypes);
+
+TYPED_TEST(CastFromDurations, AllValid)
+{
+  using T = TypeParam;
+  using namespace cudf::test;
+
+  auto durations_D  = make_column<cudf::duration_D>(test_durations_D);
+  auto durations_s  = make_column<cudf::duration_s>(test_durations_s);
+  auto durations_ms = make_column<cudf::duration_ms>(test_durations_ms);
+  auto durations_us = make_column<cudf::duration_us>(test_durations_us);
+  auto durations_ns = make_column<cudf::duration_ns>(test_durations_ns);
+
+  auto durations_D_exp  = make_column<T>(test_durations_D);
+  auto durations_s_exp  = make_column<T>(test_durations_s);
+  auto durations_ms_exp = make_column<T>(test_durations_ms);
+  auto durations_us_exp = make_column<T>(test_durations_us);
+  auto durations_ns_exp = make_column<T>(test_durations_ns);
+
+  auto durations_D_got  = cudf::cast(durations_D, make_data_type<T>());
+  auto durations_s_got  = cudf::cast(durations_s, make_data_type<T>());
+  auto durations_ms_got = cudf::cast(durations_ms, make_data_type<T>());
+  auto durations_us_got = cudf::cast(durations_us, make_data_type<T>());
+  auto durations_ns_got = cudf::cast(durations_ns, make_data_type<T>());
+
+  validate_cast_result<T, T>(durations_D_exp, *durations_D_got);
+  validate_cast_result<T, T>(durations_s_exp, *durations_s_got);
+  validate_cast_result<T, T>(durations_ms_exp, *durations_ms_got);
+  validate_cast_result<T, T>(durations_us_exp, *durations_us_got);
+  validate_cast_result<T, T>(durations_ns_exp, *durations_ns_got);
+}
+
+TYPED_TEST(CastFromDurations, WithNulls)
+{
+  using T = TypeParam;
+  using namespace cudf::test;
+
+  auto durations_D  = make_column<cudf::duration_D>(test_durations_D, {true, false, true});
+  auto durations_s  = make_column<cudf::duration_s>(test_durations_s, {true, false, true});
+  auto durations_ms = make_column<cudf::duration_ms>(test_durations_ms, {true, false, true});
+  auto durations_us = make_column<cudf::duration_us>(test_durations_us, {true, false, true});
+  auto durations_ns = make_column<cudf::duration_ns>(test_durations_ns, {true, false, true});
+
+  auto durations_D_exp  = make_column<T>(test_durations_D, {true, false, true});
+  auto durations_s_exp  = make_column<T>(test_durations_s, {true, false, true});
+  auto durations_ms_exp = make_column<T>(test_durations_ms, {true, false, true});
+  auto durations_us_exp = make_column<T>(test_durations_us, {true, false, true});
+  auto durations_ns_exp = make_column<T>(test_durations_ns, {true, false, true});
+
+  auto durations_D_got  = cudf::cast(durations_D, make_data_type<T>());
+  auto durations_s_got  = cudf::cast(durations_s, make_data_type<T>());
+  auto durations_ms_got = cudf::cast(durations_ms, make_data_type<T>());
+  auto durations_us_got = cudf::cast(durations_us, make_data_type<T>());
+  auto durations_ns_got = cudf::cast(durations_ns, make_data_type<T>());
+
+  validate_cast_result<T, T>(durations_D_exp, *durations_D_got);
+  validate_cast_result<T, T>(durations_s_exp, *durations_s_got);
+  validate_cast_result<T, T>(durations_ms_exp, *durations_ms_got);
+  validate_cast_result<T, T>(durations_us_exp, *durations_us_got);
+  validate_cast_result<T, T>(durations_ns_exp, *durations_ns_got);
 }
 
 template <typename T>
@@ -800,7 +987,7 @@ TYPED_TEST(IsNAN, AllValid)
 
   std::unique_ptr<cudf::column> got = cudf::is_nan(col);
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 TYPED_TEST(IsNAN, WithNull)
@@ -815,7 +1002,7 @@ TYPED_TEST(IsNAN, WithNull)
 
   std::unique_ptr<cudf::column> got = cudf::is_nan(col);
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 TYPED_TEST(IsNAN, EmptyColumn)
@@ -827,7 +1014,7 @@ TYPED_TEST(IsNAN, EmptyColumn)
 
   std::unique_ptr<cudf::column> got = cudf::is_nan(col);
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 TYPED_TEST(IsNAN, NonFloatingColumn)
@@ -855,7 +1042,7 @@ TYPED_TEST(IsNotNAN, AllValid)
 
   std::unique_ptr<cudf::column> got = cudf::is_not_nan(col);
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 TYPED_TEST(IsNotNAN, WithNull)
@@ -870,7 +1057,7 @@ TYPED_TEST(IsNotNAN, WithNull)
 
   std::unique_ptr<cudf::column> got = cudf::is_not_nan(col);
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 TYPED_TEST(IsNotNAN, EmptyColumn)
@@ -882,7 +1069,7 @@ TYPED_TEST(IsNotNAN, EmptyColumn)
 
   std::unique_ptr<cudf::column> got = cudf::is_not_nan(col);
 
-  cudf::test::expect_columns_equal(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 TYPED_TEST(IsNotNAN, NonFloatingColumn)

@@ -11,6 +11,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib import string_casting as str_cast
 from cudf._lib.column import Column
+from cudf._lib.nvtext.edit_distance import edit_distance as cpp_edit_distance
 from cudf._lib.nvtext.generate_ngrams import (
     generate_character_ngrams as cpp_generate_character_ngrams,
     generate_ngrams as cpp_generate_ngrams,
@@ -18,10 +19,19 @@ from cudf._lib.nvtext.generate_ngrams import (
 from cudf._lib.nvtext.ngrams_tokenize import (
     ngrams_tokenize as cpp_ngrams_tokenize,
 )
-from cudf._lib.nvtext.normalize import normalize_spaces as cpp_normalize_spaces
+from cudf._lib.nvtext.normalize import (
+    normalize_characters as cpp_normalize_characters,
+    normalize_spaces as cpp_normalize_spaces,
+)
 from cudf._lib.nvtext.replace import (
     filter_tokens as cpp_filter_tokens,
     replace_tokens as cpp_replace_tokens,
+)
+from cudf._lib.nvtext.stemmer import (
+    LetterType,
+    is_letter as cpp_is_letter,
+    is_letter_multi as cpp_is_letter_multi,
+    porter_stemmer_measure as cpp_porter_stemmer_measure,
 )
 from cudf._lib.nvtext.subword_tokenize import (
     subword_tokenize as cpp_subword_tokenize,
@@ -29,6 +39,7 @@ from cudf._lib.nvtext.subword_tokenize import (
 from cudf._lib.nvtext.tokenize import (
     character_tokenize as cpp_character_tokenize,
     count_tokens as cpp_count_tokens,
+    detokenize as cpp_detokenize,
     tokenize as cpp_tokenize,
 )
 from cudf._lib.nvtx import annotate
@@ -134,6 +145,7 @@ from cudf.utils.dtypes import (
     is_scalar,
     is_string_dtype,
 )
+from cudf.utils.utils import buffers_from_pyarrow
 
 _str_to_numeric_typecast_functions = {
     np.dtype("int8"): str_cast.stoi8,
@@ -153,6 +165,10 @@ _str_to_numeric_typecast_functions = {
     np.dtype("datetime64[ms]"): str_cast.timestamp2int,
     np.dtype("datetime64[us]"): str_cast.timestamp2int,
     np.dtype("datetime64[ns]"): str_cast.timestamp2int,
+    np.dtype("timedelta64[s]"): str_cast.timedelta2int,
+    np.dtype("timedelta64[ms]"): str_cast.timedelta2int,
+    np.dtype("timedelta64[us]"): str_cast.timedelta2int,
+    np.dtype("timedelta64[ns]"): str_cast.timedelta2int,
 }
 
 _numeric_to_str_typecast_functions = {
@@ -173,6 +189,10 @@ _numeric_to_str_typecast_functions = {
     np.dtype("datetime64[ms]"): str_cast.int2timestamp,
     np.dtype("datetime64[us]"): str_cast.int2timestamp,
     np.dtype("datetime64[ns]"): str_cast.int2timestamp,
+    np.dtype("timedelta64[s]"): str_cast.int2timedelta,
+    np.dtype("timedelta64[ms]"): str_cast.int2timedelta,
+    np.dtype("timedelta64[us]"): str_cast.int2timedelta,
+    np.dtype("timedelta64[ns]"): str_cast.int2timedelta,
 }
 
 
@@ -404,7 +424,7 @@ class StringMethods(ColumnMethodsMixin):
                 self._column, as_scalar(sep), as_scalar(na_rep, "str")
             )
         else:
-            other_cols = _get_cols_list(others)
+            other_cols = _get_cols_list(self._parent, others)
             all_cols = [self._column] + other_cols
             data = cpp_concatenate(
                 cudf.DataFrame(
@@ -418,10 +438,10 @@ class StringMethods(ColumnMethodsMixin):
             data = [""]
         out = self._return_or_inplace(data, **kwargs)
         if len(out) == 1 and others is None:
-            if isinstance(out, StringColumn):
-                out = out[0]
-            else:
+            if isinstance(out, cudf.Series):
                 out = out.iloc[0]
+            else:
+                out = out[0]
         return out
 
     def join(self, sep):
@@ -679,8 +699,8 @@ class StringMethods(ColumnMethodsMixin):
 
         if can_convert_to_column(pat) and can_convert_to_column(repl):
             warnings.warn(
-                "`n` parameter is not supported when \
-                `pat` and `repl` are list-like inputs"
+                "`n` parameter is not supported when "
+                "`pat` and `repl` are list-like inputs"
             )
 
             return self._return_or_inplace(
@@ -960,7 +980,7 @@ class StringMethods(ColumnMethodsMixin):
         4     True
         5    False
         dtype: bool
-        >>> s = cudf.Series(["this is plain text", "\t\n", "9.9", "9.9.9"])
+        >>> s = cudf.Series(["this is plain text", "\\t\\n", "9.9", "9.9.9"])
         >>> s.str.isfloat()
         0    False
         1    False
@@ -1941,7 +1961,8 @@ class StringMethods(ColumnMethodsMixin):
         Examples
         --------
         >>> import cudf
-        >>> data = ["this is a regular sentence", "https://docs.python.org/index.html", None]       # noqa E501
+        >>> data = ["this is a regular sentence",
+        ...     "https://docs.python.org/index.html", None]
         >>> s = cudf.Series(data)
         >>> s
         0            this is a regular sentence
@@ -1984,9 +2005,9 @@ class StringMethods(ColumnMethodsMixin):
 
         result_table = cpp_split(self._column, as_scalar(pat, "str"), n)
         if len(result_table._data) == 1:
-            if result_table._data[0].null_count == len(self._column):
+            if result_table._data[0].null_count == len(self._parent):
                 result_table = []
-            elif self._column.null_count == len(self._column):
+            if self._column.null_count == len(self._column):
                 result_table = [self._column.copy()]
 
         return self._return_or_inplace(result_table, **kwargs,)
@@ -2029,6 +2050,7 @@ class StringMethods(ColumnMethodsMixin):
         `NotImplementedError` if anything other than the default value is
         set. The handling of the n keyword depends on the number of
         found splits:
+
             - If found splits > n, make first n splits only
             - If found splits <= n, make all splits
             - If for a certain row the number of found splits < n,
@@ -2037,7 +2059,9 @@ class StringMethods(ColumnMethodsMixin):
         Examples
         --------
         >>> import cudf
-        >>> data = ["this is a regular sentence","https://docs.python.org/3/tutorial/index.html",None]      # noqa E501
+        >>> data = ["this is a regular sentence",
+        ... "https://docs.python.org/3/tutorial/index.html",
+        ... None]
         >>> s = cudf.Series(data)
         >>> s.str.rsplit(n=2)
                                                        0        1         2
@@ -2816,8 +2840,8 @@ class StringMethods(ColumnMethodsMixin):
             )
         elif break_long_words is None:
             warnings.warn(
-                "wrap current implementation defaults to \
-                    `break_long_words`=False"
+                "wrap current implementation defaults to "
+                "`break_long_words`=False"
             )
 
         break_on_hyphens = kwargs.get("break_on_hyphens", None)
@@ -2827,8 +2851,8 @@ class StringMethods(ColumnMethodsMixin):
             )
         elif break_on_hyphens is None:
             warnings.warn(
-                "wrap current implementation defaults to \
-                    `break_on_hyphens`=False"
+                "wrap current implementation defaults to "
+                "`break_on_hyphens`=False"
             )
 
         return self._return_or_inplace(cpp_wrap(self._column, width), **kwargs)
@@ -3087,8 +3111,8 @@ class StringMethods(ColumnMethodsMixin):
         """
         if "na" in kwargs:
             warnings.warn(
-                "`na` parameter is not yet supported, \
-                as cudf uses native strings instead of Python objects"
+                "`na` parameter is not yet supported, "
+                "as cudf uses native strings instead of Python objects"
             )
 
         if pat is None:
@@ -3152,8 +3176,8 @@ class StringMethods(ColumnMethodsMixin):
         """
         if "na" in kwargs:
             warnings.warn(
-                "`na` parameter is not yet supported, \
-                as cudf uses native strings instead of Python objects"
+                "`na` parameter is not yet supported, "
+                "as cudf uses native strings instead of Python objects"
             )
 
         if pat is None:
@@ -3436,8 +3460,8 @@ class StringMethods(ColumnMethodsMixin):
 
         if "na" in kwargs:
             warnings.warn(
-                "`na` parameter is not yet supported, \
-                as cudf uses native strings instead of Python objects"
+                "`na` parameter is not yet supported, "
+                "as cudf uses native strings instead of Python objects"
             )
 
         return self._return_or_inplace(
@@ -3463,7 +3487,8 @@ class StringMethods(ColumnMethodsMixin):
         1      e f.g
         2      4-5,6
         dtype: object
-        >>> data = ["https%3A%2F%2Frapids.ai%2Fstart.html", "https%3A%2F%2Fmedium.com%2Frapids-ai"]     # noqa E501
+        >>> data = ["https%3A%2F%2Frapids.ai%2Fstart.html",
+        ...     "https%3A%2F%2Fmedium.com%2Frapids-ai"]
         >>> s = cudf.Series(data)
         >>> s.str.url_decode()
         0    https://rapids.ai/start.html
@@ -3494,7 +3519,8 @@ class StringMethods(ColumnMethodsMixin):
         1        e%20f.g
         2        4-5%2C6
         dtype: object
-        >>> data = ["https://rapids.ai/start.html", "https://medium.com/rapids-ai"]         # noqa E501
+        >>> data = ["https://rapids.ai/start.html",
+        ...     "https://medium.com/rapids-ai"]
         >>> s = cudf.Series(data)
         >>> s.str.url_encode()
         0    https%3A%2F%2Frapids.ai%2Fstart.html
@@ -3610,6 +3636,55 @@ class StringMethods(ColumnMethodsMixin):
             cpp_normalize_spaces(self._column), **kwargs
         )
 
+    def normalize_characters(self, do_lower=True, **kwargs):
+        """
+        Normalizes strings characters for tokenizing.
+
+        This uses the normalizer that is built into the
+        subword_tokenize function which includes:
+
+            - adding padding around punctuation (unicode category starts with
+              "P") as well as certain ASCII symbols like "^" and "$"
+            - adding padding around the CJK Unicode block characters
+            - changing whitespace (e.g. ``\\t``, ``\\n``, ``\\r``) to space
+            - removing control characters (unicode categories "Cc" and "Cf")
+
+        If `do_lower_case = true`, lower-casing also removes the accents.
+        The accents cannot be removed from upper-case characters without
+        lower-casing and lower-casing cannot be performed without also
+        removing accents. However, if the accented character is already
+        lower-case, then only the accent is removed.
+
+        Parameters
+        ----------
+        do_lower : bool, Default is True
+            If set to True, characters will be lower-cased and accents
+            will be removed. If False, accented and upper-case characters
+            are not transformed.
+
+        Returns
+        -------
+        Series or Index of object.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series(["héllo, \\tworld","ĂĆCĖÑTED","$99"])
+        >>> ser.str.normalize_characters()
+        0    hello ,  world
+        1          accented
+        2              $ 99
+        dtype: object
+        >>> ser.str.normalize_characters(do_lower=False)
+        0    héllo ,  world
+        1          ĂĆCĖÑTED
+        2              $ 99
+        dtype: object
+        """
+        return self._return_or_inplace(
+            cpp_normalize_characters(self._column, do_lower), **kwargs
+        )
+
     def tokenize(self, delimiter=" ", **kwargs):
         """
         Each string is split into tokens using the provided delimiter(s).
@@ -3643,6 +3718,41 @@ class StringMethods(ColumnMethodsMixin):
         kwargs.setdefault("retain_index", False)
         return self._return_or_inplace(
             cpp_tokenize(self._column, delimiter), **kwargs
+        )
+
+    def detokenize(self, indices, separator=" ", **kwargs):
+        """
+        Combines tokens into strings by concatenating them in the order
+        in which they appear in the ``indices`` column. The ``separator`` is
+        concatenated between each token.
+
+        Parameters
+        ----------
+        indices : list of ints
+            Each value identifies the output row for the corresponding token.
+        separator : str
+            The string concatenated between each token in an output row.
+            Default is space.
+
+        Returns
+        -------
+        Series or Index of object.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> strs = cudf.Series(["hello", "world", "one", "two", "three"])
+        >>> indices = cudf.Series([0, 0, 1, 1, 2])
+        >>> strs.str.detokenize(indices)
+        0    hello world
+        1        one two
+        2          three
+        dtype: object
+        """
+        separator = _massage_string_arg(separator, "separator")
+        kwargs.setdefault("retain_index", False)
+        return self._return_or_inplace(
+            cpp_detokenize(self._column, indices._column, separator), **kwargs
         )
 
     def character_tokenize(self, **kwargs):
@@ -4080,6 +4190,168 @@ class StringMethods(ColumnMethodsMixin):
             cupy.asarray(metadata),
         )
 
+    def porter_stemmer_measure(self, **kwargs):
+        """
+        Compute the Porter Stemmer measure for each string.
+        The Porter Stemmer algorithm is described `here
+        <https://tartarus.org/martin/PorterStemmer/def.txt>`_.
+
+        Returns
+        -------
+        Series or Index of object.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series(["hello", "super"])
+        >>> ser.str.porter_stemmer_measure()
+        0    1
+        1    2
+        dtype: int32
+        """
+        return self._return_or_inplace(
+            cpp_porter_stemmer_measure(self._column), **kwargs
+        )
+
+    def is_consonant(self, position, **kwargs):
+        """
+        Return true for strings where the character at ``position`` is a
+        consonant. The ``position`` parameter may also be a list of integers
+        to check different characters per string.
+        If the ``position`` is larger than the string length, False is
+        returned for that string.
+
+        Parameters
+        ----------
+        position: int or list-like
+           The character position to check within each string.
+
+        Returns
+        -------
+        Series or Index of bool dtype.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series(["toy", "trouble"])
+        >>> ser.str.is_consonant(1)
+        0    False
+        1     True
+        dtype: bool
+        >>> positions = cudf.Series([2, 3])
+        >>> ser.str.is_consonant(positions)
+        0     True
+        1    False
+        dtype: bool
+         """
+        ltype = LetterType.CONSONANT
+
+        if can_convert_to_column(position):
+            return self._return_or_inplace(
+                cpp_is_letter_multi(
+                    self._column, ltype, column.as_column(position)
+                ),
+                **kwargs,
+            )
+
+        return self._return_or_inplace(
+            cpp_is_letter(self._column, ltype, position), **kwargs
+        )
+
+    def is_vowel(self, position, **kwargs):
+        """
+        Return true for strings where the character at ``position`` is a
+        vowel -- not a consonant. The ``position`` parameter may also be
+        a list of integers to check different characters per string.
+        If the ``position`` is larger than the string length, False is
+        returned for that string.
+
+        Parameters
+        ----------
+        position: int or list-like
+           The character position to check within each string.
+
+        Returns
+        -------
+        Series or Index of bool dtype.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series(["toy", "trouble"])
+        >>> ser.str.is_vowel(1)
+        0     True
+        1    False
+        dtype: bool
+        >>> positions = cudf.Series([2, 3])
+        >>> ser.str.is_vowel(positions)
+        0    False
+        1     True
+        dtype: bool
+        """
+        ltype = LetterType.VOWEL
+
+        if can_convert_to_column(position):
+            return self._return_or_inplace(
+                cpp_is_letter_multi(
+                    self._column, ltype, column.as_column(position)
+                ),
+                **kwargs,
+            )
+
+        return self._return_or_inplace(
+            cpp_is_letter(self._column, ltype, position), **kwargs
+        )
+
+    def edit_distance(self, targets, **kwargs):
+        """
+        The ``targets`` strings are measured against the strings in this
+        instance using the Levenshtein edit distance algorithm.
+        https://www.cuelogic.com/blog/the-levenshtein-algorithm
+
+        The ``targets`` parameter may also be a single string in which
+        case the edit distance is computed for all the strings against
+        that single string.
+
+        Parameters
+        ----------
+        targets : array-like, Sequence or Series or str
+            The string(s) to measure against each string.
+
+        Returns
+        -------
+        Series or Index of int32.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> sr = cudf.Series(["puppy", "doggy", "kitty"])
+        >>> targets = cudf.Series(["pup", "dogie", "kitten"])
+        >>> sr.str.edit_distance(targets=targets)
+        0    2
+        1    2
+        2    2
+        dtype: int32
+        >>> sr.str.edit_distance("puppy")
+        0    0
+        1    4
+        2    4
+        dtype: int32
+        """
+        if is_scalar(targets):
+            targets_column = column.as_column([targets])
+        elif can_convert_to_column(targets):
+            targets_column = column.as_column(targets)
+        else:
+            raise TypeError(
+                f"targets should be an str, array-like or Series object, "
+                f"found {type(targets)}"
+            )
+
+        return self._return_or_inplace(
+            cpp_edit_distance(self._column, targets_column), **kwargs
+        )
+
 
 def _massage_string_arg(value, name, allow_col=False):
     if isinstance(value, str):
@@ -4147,6 +4419,13 @@ class StringColumn(column.ColumnBase):
                 size = children[0].size - 1
             size = size - offset
 
+        if len(children) == 0 and size != 0:
+            # all nulls-column:
+            offsets = column.full(size + 1, 0, dtype="int32")
+
+            chars = cudf.core.column.as_column([], dtype="int8")
+            children = (offsets, chars)
+
         super().__init__(
             None,
             size,
@@ -4200,54 +4479,6 @@ class StringColumn(column.ColumnBase):
         # TODO: Implement dtype validation of the children here somehow
         super().set_base_children(value)
 
-    @property
-    def children(self):
-        if self._children is None:
-            if len(self.base_children) == 0:
-                self._children = ()
-            elif self.offset == 0 and self.base_children[0].size == (
-                self.size + 1
-            ):
-                self._children = self.base_children
-            else:
-                # First get the base columns for chars and offsets
-                chars_column = self.base_children[1]
-                offsets_column = self.base_children[0]
-
-                # Shift offsets column by the parent offset.
-                offsets_column = column.build_column(
-                    data=offsets_column.base_data,
-                    dtype=offsets_column.dtype,
-                    mask=offsets_column.base_mask,
-                    size=self.size + 1,
-                    offset=self.offset,
-                )
-
-                # Now run a subtraction binary op to shift all of the offsets
-                # by the respective number of characters relative to the
-                # parent offset
-                chars_offset = libcudf.copying.get_element(offsets_column, 0)
-                offsets_column = offsets_column.binary_operator(
-                    "sub", chars_offset
-                )
-
-                # Shift the chars offset by the new first element of the
-                # offsets column
-                chars_size = libcudf.copying.get_element(
-                    offsets_column, self.size
-                )
-
-                chars_column = column.build_column(
-                    data=chars_column.base_data,
-                    dtype=chars_column.dtype,
-                    mask=chars_column.base_mask,
-                    size=chars_size.value,
-                    offset=chars_offset.value,
-                )
-
-                self._children = (offsets_column, chars_column)
-        return self._children
-
     def __contains__(self, item):
         return True in self.str().contains(f"^{item}$")
 
@@ -4280,6 +4511,18 @@ class StringColumn(column.ColumnBase):
     def _set_mask(self, value):
         super()._set_mask(value)
 
+    @classmethod
+    def from_arrow(cls, array):
+        pa_size, pa_offset, nbuf, obuf, sbuf = buffers_from_pyarrow(array)
+        children = (
+            column.build_column(data=obuf, dtype="int32"),
+            column.build_column(data=sbuf, dtype="int8"),
+        )
+
+        return StringColumn(
+            mask=nbuf, children=children, size=pa_size, offset=pa_offset
+        )
+
     @property
     def _nbytes(self):
         if self.size == 0:
@@ -4296,35 +4539,53 @@ class StringColumn(column.ColumnBase):
             if "format" not in kwargs:
                 if len(self) > 0:
                     # infer on host from the first not na element
-                    fmt = datetime.infer_format(self[self.notna()][0])
-                    kwargs.update(format=fmt)
+                    # or return all null column if all values
+                    # are null in current column
+                    if self.null_count == len(self):
+                        return column.column_empty(
+                            len(self), dtype=out_dtype, masked=True
+                        )
+                    else:
+                        fmt = datetime.infer_format(self[self.notna()][0])
+                        kwargs.update(format=fmt)
 
             # Check for None strings
             if len(self) > 0 and self.binary_operator("eq", "None").any():
                 raise ValueError("Could not convert `None` value to datetime")
 
             boolean_match = self.binary_operator("eq", "NaT")
+        elif out_dtype.type is np.timedelta64:
+            if "format" not in kwargs:
+                if len(self) > 0:
+                    kwargs.update(format="%D days %H:%M:%S")
+
+            boolean_match = self.binary_operator("eq", "NaT")
         elif out_dtype.kind in {"i", "u"}:
             if not cpp_is_integer(self).all():
                 raise ValueError(
-                    "Could not convert strings to integer \
-                        type due to presence of non-integer values."
+                    "Could not convert strings to integer "
+                    "type due to presence of non-integer values."
                 )
         elif out_dtype.kind == "f":
             if not cpp_is_float(self).all():
                 raise ValueError(
-                    "Could not convert strings to float \
-                        type due to presence of non-floating values."
+                    "Could not convert strings to float "
+                    "type due to presence of non-floating values."
                 )
 
         result_col = _str_to_numeric_typecast_functions[out_dtype](
             self, **kwargs
         )
-        if (out_dtype.type is np.datetime64) and boolean_match.any():
+        if (
+            out_dtype.type in (np.datetime64, np.timedelta64)
+        ) and boolean_match.any():
             result_col[boolean_match] = None
         return result_col
 
     def as_datetime_column(self, dtype, **kwargs):
+        return self.as_numerical_column(dtype, **kwargs)
+
+    def as_timedelta_column(self, dtype, **kwargs):
         return self.as_numerical_column(dtype, **kwargs)
 
     def as_string_column(self, dtype, **kwargs):
@@ -4354,12 +4615,6 @@ class StringColumn(column.ColumnBase):
             return pa.StringArray.from_buffers(
                 len(self), obuf, sbuf, nbuf, self.null_count
             )
-
-    def to_pandas(self, index=None):
-        pd_series = self.to_arrow().to_pandas()
-        if index is not None:
-            pd_series.index = index
-        return pd_series
 
     @property
     def values_host(self):
@@ -4413,6 +4668,8 @@ class StringColumn(column.ColumnBase):
     def serialize(self):
         header = {"null_count": self.null_count}
         header["type-serialized"] = pickle.dumps(type(self))
+        header["size"] = pickle.dumps(self.size)
+
         frames = []
         sub_headers = []
 
@@ -4430,6 +4687,7 @@ class StringColumn(column.ColumnBase):
 
     @classmethod
     def deserialize(cls, header, frames):
+        size = pickle.loads(header["size"])
         # Deserialize the mask, value, and offset frames
         buffers = [Buffer(each_frame) for each_frame in frames]
 
@@ -4444,7 +4702,11 @@ class StringColumn(column.ColumnBase):
             children.append(column_type.deserialize(h, [b]))
 
         col = column.build_column(
-            data=None, dtype="str", mask=nbuf, children=tuple(children)
+            data=None,
+            dtype="str",
+            mask=nbuf,
+            children=tuple(children),
+            size=size,
         )
         return col
 
@@ -4557,7 +4819,11 @@ def _string_column_binop(lhs, rhs, op, out_dtype):
     return out
 
 
-def _get_cols_list(others):
+def _get_cols_list(parent_obj, others):
+
+    parent_index = (
+        parent_obj.index if isinstance(parent_obj, cudf.Series) else parent_obj
+    )
 
     if (
         can_convert_to_column(others)
@@ -4574,9 +4840,26 @@ def _get_cols_list(others):
         If others is a list-like object (in our case lists & tuples)
         just another Series/Index, great go ahead with concatenation.
         """
-        cols_list = [column.as_column(frame, dtype="str") for frame in others]
+        cols_list = [
+            column.as_column(frame.reindex(parent_index), dtype="str")
+            if (
+                parent_index is not None
+                and isinstance(frame, cudf.Series)
+                and not frame.index.equals(parent_index)
+            )
+            else column.as_column(frame, dtype="str")
+            for frame in others
+        ]
+
         return cols_list
     elif others is not None:
+        if (
+            parent_index is not None
+            and isinstance(others, cudf.Series)
+            and not others.index.equals(parent_index)
+        ):
+            others = others.reindex(parent_index)
+
         return [column.as_column(others, dtype="str")]
     else:
         raise TypeError(

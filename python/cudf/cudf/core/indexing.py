@@ -1,5 +1,4 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
-import cupy
 import numpy as np
 import pandas as pd
 
@@ -34,8 +33,8 @@ def indices_from_labels(obj, labels):
     # join is not guaranteed to maintain the index ordering
     # so we will sort it with its initial ordering which is stored
     # in column "__"
-    lhs = cudf.DataFrame({"__": cupy.arange(len(labels))}, index=labels)
-    rhs = cudf.DataFrame({"_": cupy.arange(len(obj))}, index=obj.index)
+    lhs = cudf.DataFrame({"__": column.arange(len(labels))}, index=labels)
+    rhs = cudf.DataFrame({"_": column.arange(len(obj))}, index=obj.index)
     return lhs.join(rhs).sort_values("__")["_"]
 
 
@@ -73,9 +72,9 @@ class _SeriesIlocIndexer(object):
         if isinstance(arg, tuple):
             arg = list(arg)
         data = self._sr._column[arg]
-        index = self._sr.index.take(arg)
         if is_scalar(data) or data is None:
             return data
+        index = self._sr.index.take(arg)
         return self._sr._copy_construct(data=data, index=index)
 
     def __setitem__(self, key, value):
@@ -322,7 +321,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 else:
                     tmp_col_name = str(uuid4())
                     other_df = DataFrame(
-                        {tmp_col_name: cupy.arange(len(tmp_arg[0]))},
+                        {tmp_col_name: column.arange(len(tmp_arg[0]))},
                         index=as_index(tmp_arg[0]),
                     )
                     df = other_df.join(columns_df, how="inner")
@@ -432,11 +431,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             return self._downcast_to_series(df, arg)
 
         if df.shape[0] == 0 and df.shape[1] == 0 and isinstance(arg[0], slice):
-            from cudf.core.index import RangeIndex
-
-            slice_len = len(self._df)
-            start, stop, step = arg[0].indices(slice_len)
-            df._index = RangeIndex(start, stop)
+            df._index = as_index(self._df.index[arg[0]])
         return df
 
     @annotate("ILOC_SETITEM", color="blue", domain="cudf_python")

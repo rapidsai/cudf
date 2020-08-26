@@ -20,6 +20,7 @@
 #include "datetime.cuh"
 
 #include <cudf/detail/utilities/trie.cuh>
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/lists/list_view.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -208,7 +209,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
   while (col < num_columns) {
     if (start > stop) { break; }
 
-    pos = cudf::io::gpu::seek_field_end(raw_csv, opts, pos, stop);
+    pos = cudf::io::gpu::seek_field_end(raw_csv + pos, raw_csv + stop, opts) - raw_csv;
 
     // Checking if this is a column that the user wants --- user can filter
     // columns
@@ -310,7 +311,7 @@ __inline__ __device__ cudf::timestamp_D decode_value(const char *data,
                                                      long end,
                                                      ParseOptions const &opts)
 {
-  return parseDateFormat(data, start, end, opts.dayfirst);
+  return timestamp_D{cudf::duration_D{parseDateFormat(data, start, end, opts.dayfirst)}};
 }
 
 template <>
@@ -320,7 +321,7 @@ __inline__ __device__ cudf::timestamp_s decode_value(const char *data,
                                                      ParseOptions const &opts)
 {
   auto milli = parseDateTimeFormat(data, start, end, opts.dayfirst);
-  return milli / 1000;
+  return timestamp_s{cudf::duration_s{milli / 1000}};
 }
 
 template <>
@@ -330,7 +331,7 @@ __inline__ __device__ cudf::timestamp_ms decode_value(const char *data,
                                                       ParseOptions const &opts)
 {
   auto milli = parseDateTimeFormat(data, start, end, opts.dayfirst);
-  return milli;
+  return timestamp_ms{cudf::duration_ms{milli}};
 }
 
 template <>
@@ -340,7 +341,7 @@ __inline__ __device__ cudf::timestamp_us decode_value(const char *data,
                                                       ParseOptions const &opts)
 {
   auto milli = parseDateTimeFormat(data, start, end, opts.dayfirst);
-  return milli * 1000;
+  return timestamp_us{cudf::duration_us{milli * 1000}};
 }
 
 template <>
@@ -350,7 +351,7 @@ __inline__ __device__ cudf::timestamp_ns decode_value(const char *data,
                                                       ParseOptions const &opts)
 {
   auto milli = parseDateTimeFormat(data, start, end, opts.dayfirst);
-  return milli * 1000000;
+  return timestamp_ns{cudf::duration_ns{milli * 1000000}};
 }
 
 // The purpose of this is merely to allow compilation ONLY
@@ -400,6 +401,39 @@ __inline__ __device__ cudf::list_view decode_value(const char *data,
                                                    ParseOptions const &opts)
 {
   return cudf::list_view{};
+}
+
+// The purpose of this is merely to allow compilation ONLY
+// TODO : make this work for csv
+template <>
+__inline__ __device__ numeric::decimal32 decode_value(const char *data,
+                                                      long start,
+                                                      long end,
+                                                      ParseOptions const &opts)
+{
+  return numeric::decimal32{};
+}
+
+// The purpose of this is merely to allow compilation ONLY
+// TODO : make this work for csv
+template <>
+__inline__ __device__ numeric::decimal64 decode_value(const char *data,
+                                                      long start,
+                                                      long end,
+                                                      ParseOptions const &opts)
+{
+  return numeric::decimal64{};
+}
+
+// The purpose of this is merely to allow compilation ONLY
+// TODO : make this work for csv
+template <>
+__inline__ __device__ cudf::struct_view decode_value(const char *data,
+                                                     long start,
+                                                     long end,
+                                                     ParseOptions const &opts)
+{
+  return cudf::struct_view{};
 }
 
 /**
@@ -556,7 +590,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
   while (col < num_columns) {
     if (start > stop) break;
 
-    pos = cudf::io::gpu::seek_field_end(raw_csv, opts, pos, stop);
+    pos = cudf::io::gpu::seek_field_end(raw_csv + pos, raw_csv + stop, opts) - raw_csv;
 
     if (flags[col] & column_parse::enabled) {
       // check if the entire field is a NaN string - consistent with pandas

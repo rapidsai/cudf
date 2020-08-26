@@ -7,6 +7,7 @@ import pytest
 
 import cudf
 from cudf import DataFrame, Series
+from cudf.core._compat import PANDAS_GE_110
 from cudf.tests import utils
 from cudf.tests.utils import INTEGER_TYPES, assert_eq
 
@@ -361,6 +362,22 @@ def test_series_loc_numerical():
     assert_eq(ps.loc[[5, 8, 9]], gs.loc[cupy.array([5, 8, 9])])
 
 
+def test_series_loc_float_index():
+    ps = pd.Series([1, 2, 3, 4, 5], index=[5.43, 6.34, 7.34, 8.0, 9.1])
+    gs = Series.from_pandas(ps)
+
+    assert_eq(ps.loc[5.43], gs.loc[5.43])
+    assert_eq(ps.loc[8], gs.loc[8])
+    assert_eq(ps.loc[6.1:8], gs.loc[6.1:8])
+    assert_eq(ps.loc[:7.1], gs.loc[:7.1])
+    assert_eq(ps.loc[6.345:], gs.loc[6.345:])
+    assert_eq(ps.loc[::2], gs.loc[::2])
+    assert_eq(
+        ps.loc[[True, False, True, False, True]],
+        gs.loc[[True, False, True, False, True]],
+    )
+
+
 def test_series_loc_string():
     ps = pd.Series(
         [1, 2, 3, 4, 5], index=["one", "two", "three", "four", "five"]
@@ -381,6 +398,10 @@ def test_series_loc_string():
 
 
 def test_series_loc_datetime():
+    if PANDAS_GE_110:
+        kwargs = {"check_freq": False}
+    else:
+        kwargs = {}
     ps = pd.Series(
         [1, 2, 3, 4, 5], index=pd.date_range("20010101", "20010105")
     )
@@ -399,16 +420,19 @@ def test_series_loc_datetime():
     )
 
     assert_eq(
-        ps.loc["2001-01-02":"2001-01-05"], gs.loc["2001-01-02":"2001-01-05"]
+        ps.loc["2001-01-02":"2001-01-05"],
+        gs.loc["2001-01-02":"2001-01-05"],
+        **kwargs,
     )
-    assert_eq(ps.loc["2001-01-02":], gs.loc["2001-01-02":])
-    assert_eq(ps.loc[:"2001-01-04"], gs.loc[:"2001-01-04"])
-    assert_eq(ps.loc[::2], gs.loc[::2])
-    #
-    # assert_eq(ps.loc[['2001-01-01', '2001-01-04', '2001-01-05']],
-    #           gs.loc[['2001-01-01', '2001-01-04', '2001-01-05']])
-    # looks like a bug in Pandas doesn't let us check for the above,
-    # so instead:
+    assert_eq(ps.loc["2001-01-02":], gs.loc["2001-01-02":], **kwargs)
+    assert_eq(ps.loc[:"2001-01-04"], gs.loc[:"2001-01-04"], **kwargs)
+    assert_eq(ps.loc[::2], gs.loc[::2], **kwargs)
+
+    assert_eq(
+        ps.loc[["2001-01-01", "2001-01-04", "2001-01-05"]],
+        gs.loc[["2001-01-01", "2001-01-04", "2001-01-05"]],
+    )
+
     assert_eq(
         ps.loc[
             [
@@ -428,6 +452,13 @@ def test_series_loc_datetime():
     assert_eq(
         ps.loc[[True, False, True, False, True]],
         gs.loc[[True, False, True, False, True]],
+        **kwargs,
+    )
+
+    just_less_than_max = ps.index.max() - pd.Timedelta("5m")
+
+    assert_eq(
+        ps.loc[:just_less_than_max], gs.loc[:just_less_than_max], **kwargs
     )
 
 
@@ -698,7 +729,7 @@ def test_dataframe_masked_slicing(nelem, slice_start, slice_end):
     expect = do_slice(gdf.to_pandas())
     got = do_slice(gdf).to_pandas()
 
-    pd.testing.assert_frame_equal(expect, got)
+    assert_eq(expect, got, check_dtype=False)
 
 
 def test_dataframe_boolean_mask_with_None():
@@ -1134,3 +1165,117 @@ def test_loc_datetime_index(sli, is_dataframe):
     got = gd_data.loc[sli]
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "gdf",
+    [
+        cudf.DataFrame({"a": range(1000000)}),
+        cudf.DataFrame({"a": range(1000000), "b": range(1000000)}),
+        cudf.DataFrame({"a": range(20), "b": range(20)}),
+        cudf.DataFrame(
+            {
+                "a": range(20),
+                "b": range(20),
+                "c": ["abc", "def", "xyz", "def", "pqr"] * 4,
+            }
+        ),
+        cudf.DataFrame(index=[1, 2, 3]),
+        cudf.DataFrame(index=range(1000000)),
+        cudf.DataFrame(columns=["a", "b", "c", "d"]),
+        cudf.DataFrame(columns=["a"], index=range(1000000)),
+        cudf.DataFrame(
+            columns=["a", "col2", "...col n"], index=range(1000000)
+        ),
+        cudf.DataFrame(index=cudf.Series(range(1000000)).astype("str")),
+        cudf.DataFrame(
+            columns=["a", "b", "c", "d"],
+            index=cudf.Series(range(1000000)).astype("str"),
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "slice",
+    [
+        slice(250000, 500000),
+        slice(250000, 250001),
+        slice(500000),
+        slice(1, 10),
+        slice(10, 20),
+        slice(15, 24000),
+        slice(6),
+    ],
+)
+def test_dataframe_sliced(gdf, slice):
+    pdf = gdf.to_pandas()
+
+    actual = gdf[slice]
+    expected = pdf[slice]
+
+    assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "gdf",
+    [
+        cudf.DataFrame({"a": range(10000)}),
+        cudf.DataFrame(
+            {
+                "a": range(10000),
+                "b": range(10000),
+                "c": range(10000),
+                "d": range(10000),
+                "e": range(10000),
+                "f": range(10000),
+            }
+        ),
+        cudf.DataFrame({"a": range(20), "b": range(20)}),
+        cudf.DataFrame(
+            {
+                "a": range(20),
+                "b": range(20),
+                "c": ["abc", "def", "xyz", "def", "pqr"] * 4,
+            }
+        ),
+        cudf.DataFrame(index=[1, 2, 3]),
+        cudf.DataFrame(index=range(10000)),
+        cudf.DataFrame(columns=["a", "b", "c", "d"]),
+        cudf.DataFrame(columns=["a"], index=range(10000)),
+        cudf.DataFrame(columns=["a", "col2", "...col n"], index=range(10000)),
+        cudf.DataFrame(index=cudf.Series(range(10000)).astype("str")),
+        cudf.DataFrame(
+            columns=["a", "b", "c", "d"],
+            index=cudf.Series(range(10000)).astype("str"),
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "slice", [slice(6), slice(1), slice(7), slice(1, 3)],
+)
+def test_dataframe_iloc_index(gdf, slice):
+    pdf = gdf.to_pandas()
+
+    actual = gdf.iloc[:, slice]
+    expected = pdf.iloc[:, slice]
+
+    assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [[0], [1], [2]],
+        [[0, 1], [2, 3], [4, 5]],
+        [[[0, 1], [2]], [[3, 4]], [[5, 6]]],
+        [None, [[0, 1], [2]], [[3, 4], [5, 6]]],
+        [[], [[0, 1], [2]], [[3, 4], [5, 6]]],
+        [[], [["a", "b"], None], [["c", "d"], []]],
+    ],
+)
+@pytest.mark.parametrize(
+    "key", [[], [0], [0, 1], [0, 1, 0], slice(None), slice(0, 2), slice(1, 3)]
+)
+def test_iloc_with_lists(data, key):
+    psr = pd.Series(data)
+    gsr = cudf.Series(data)
+    assert_eq(psr.iloc[key], gsr.iloc[key])

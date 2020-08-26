@@ -8,6 +8,7 @@ from numpy.testing import assert_array_equal
 
 import cudf
 from cudf.core import DataFrame, Series
+from cudf.core._compat import PANDAS_GE_110
 from cudf.tests.utils import assert_eq
 
 _now = np.datetime64("now")
@@ -288,7 +289,7 @@ def test_groupby_apply_grouped():
     expect = expect_grpby.apply(emulate)
     expect = expect.sort_values(["key1", "key2"])
 
-    pd.util.testing.assert_frame_equal(expect, got)
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("nelem", [100, 500])
@@ -1009,6 +1010,8 @@ def test_groupby_median(agg, by):
 @pytest.mark.parametrize("agg", [lambda x: x.nunique(), "nunique"])
 @pytest.mark.parametrize("by", ["a", ["a", "b"], ["a", "c"]])
 def test_groupby_nunique(agg, by):
+    if not PANDAS_GE_110:
+        pytest.xfail("pandas >= 1.1 required")
     pdf = pd.DataFrame(
         {"a": [1, 1, 1, 2, 3], "b": [1, 2, 2, 2, 1], "c": [1, 2, None, 4, 5]}
     )
@@ -1132,3 +1135,71 @@ def test_groupby_attribute_error():
 
     with pytest.raises(AttributeError, match=err_msg):
         gb.sum()
+
+
+@pytest.mark.parametrize(
+    "by",
+    [
+        "a",
+        "b",
+        ["a"],
+        ["b"],
+        ["a", "b"],
+        ["b", "a"],
+        np.array([0, 0, 0, 1, 1, 1, 2]),
+    ],
+)
+def test_groupby_groups(by):
+    pdf = pd.DataFrame(
+        {"a": [1, 2, 1, 2, 1, 2, 3], "b": [1, 2, 3, 4, 5, 6, 7]}
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    pdg = pdf.groupby(by)
+    gdg = gdf.groupby(by)
+
+    for key in pdg.groups:
+        assert key in gdg.groups
+        assert_eq(pdg.groups[key], gdg.groups[key])
+
+
+@pytest.mark.parametrize(
+    "by",
+    [
+        "a",
+        "b",
+        ["a"],
+        ["b"],
+        ["a", "b"],
+        ["b", "a"],
+        ["a", "c"],
+        ["a", "b", "c"],
+    ],
+)
+def test_groupby_groups_multi(by):
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 2, 1, 2, 1, 2, 3],
+            "b": ["a", "b", "a", "b", "b", "c", "c"],
+            "c": [1, 2, 3, 4, 5, 6, 7],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    pdg = pdf.groupby(by)
+    gdg = gdf.groupby(by)
+
+    for key in pdg.groups:
+        assert key in gdg.groups
+        assert_eq(pdg.groups[key], gdg.groups[key])
+
+
+def test_groupby_nunique_series():
+    pdf = pd.DataFrame({"a": [1, 1, 1, 2, 2, 2], "b": [1, 2, 3, 1, 1, 2]})
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.groupby("a")["b"].nunique(),
+        gdf.groupby("a")["b"].nunique(),
+        check_dtype=False,
+    )

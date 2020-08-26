@@ -132,6 +132,13 @@ set(SEARCH_BENCH_SRC
 
 ConfigureBench(SEARCH_BENCH "${SEARCH_BENCH_SRC}")
 
+###################################################################################################
+# - sort benchmark --------------------------------------------------------------------------------
+
+set(SORT_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/sort/sort_benchmark.cu")
+
+ConfigureBench(SORT_BENCH "${SORT_BENCH_SRC}")
 
 ###################################################################################################
 # - type_dispatcher benchmark ---------------------------------------------------------------------
@@ -245,3 +252,11 @@ set(SUBWORD_TOKENIZER_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/text/subword_benchmark.cpp")
 
 ConfigureBench(SUBWORD_TOKENIZER_BENCH "${SUBWORD_TOKENIZER_BENCH_SRC}")
+
+###################################################################################################
+# - convert to string benchmark -------------------------------------------------------------------
+
+set(DURATION_TO_STRING_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/string/convert_durations_benchmark.cpp")
+
+ConfigureBench(DURATION_TO_STRING_BENCH "${DURATION_TO_STRING_BENCH_SRC}")
