@@ -160,13 +160,18 @@ option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
 
-# CPM options
-option(USE_CPM "Use CPM Package Manager" ON)
-if (USE_CPM)
-  set(CPM_SOURCE_CACHE "$ENV{HOME}/compose/etc/.ccache/CPM")
-  include(cmake/CPM.cmake)
-  option(CPM_USE_LOCAL_PACKAGES "Search locally installed packages first before using CPM" ON)
-endif(USE_CPM)
+###################################################################################################
+# - CPM options --------------------------------------------------------------------------------
+
+# Setting cache directory for `compose`'s `.ccache` directory. The default location (/etc/.cache) has 
+# some issues with permissions. This is not sustainable and should not be merged.
+# It's here to get this running so we can talk about it. I need some guidance on the prefered acceptable
+# location for a cache.
+# https://github.com/TheLartians/CPM.cmake
+set(CPM_SOURCE_CACHE "$ENV{HOME}/compose/etc/.ccache/CPM") 
+include(cmake/CPM.cmake)
+option(CPM_USE_LOCAL_PACKAGES "Search locally installed packages first before using CPM" ON)
+
 
 
 ###################################################################################################
@@ -197,8 +202,6 @@ include(CheckLibraryExists)
 
 add_subdirectory(thirdparty)
 
-
-
 ###################################################################################################
 # - conda environment -----------------------------------------------------------------------------
 
@@ -216,6 +219,12 @@ endif("$ENV{CONDA_BUILD}" STREQUAL "1")
 
 ###################################################################################################
 # - find arrow ------------------------------------------------------------------------------------
+
+# TODO: CPM and Arrow. `CPMFindPackage` is set to default to using the system libraries first. Using
+# the `CPM` `Options` property we can define our build configuration for a package and if not matched
+# build from source. I think this is ideal but I have not implimented it for arrow.
+#
+# https://github.com/TheLartians/CPM.cmake#comparison-to-pure-fetchcontent--externalproject
 
 option(ARROW_STATIC_LIB "Build and statically link with Arrow libraries" OFF)
 
@@ -269,6 +278,16 @@ file(INSTALL ${LIBCXX_INCLUDE_DIR}     DESTINATION ${CMAKE_BINARY_DIR}/include/l
 # - find zlib -------------------------------------------------------------------------------------
 
 find_package(ZLIB REQUIRED QUIET)
+
+if (NOT ZLIB_FOUND)
+  CPMFindPackage(
+    NAME ZLIB
+    GITHUB_REPOSITORY madler/zlib
+    GIT_TAG 1.2.11
+    VERSION 1.2.11
+  )
+endif()
+
 message(STATUS "ZLIB: ZLIB_FOUND set to ${ZLIB_FOUND}")
 message(STATUS "ZLIB: ZLIB_LIBRARIES set to ${ZLIB_LIBRARIES}")
 message(STATUS "ZLIB: ZLIB_INCLUDE_DIRS set to ${ZLIB_INCLUDE_DIRS}")
@@ -291,7 +310,7 @@ find_package(
     QUIET
 )
 
-if (NOT Boost_FOUND AND USE_CPM)
+if (NOT Boost_FOUND)
   CPMFindPackage(
     NAME Boost
     GITHUB_REPOSITORY Orphis/boost-cmake
@@ -299,7 +318,7 @@ if (NOT Boost_FOUND AND USE_CPM)
     VERSION 1.70.0
     FIND_PACKAGE_ARGUMENTS "COMPONENTS filesystem"
   )
-endif (NOT Boost_FOUND AND USE_CPM)
+endif (NOT Boost_FOUND)
 
 message(STATUS "BOOST: Boost_ADDED set to ${BOOST_ADDED} ")
 message(STATUS "BOOST: Boost_LIBRARIES set to ${Boost_LIBRARIES}")
@@ -337,7 +356,7 @@ endif(RMM_INCLUDE AND RMM_LIBRARY)
 
 find_path(
     DLPACK_INCLUDE "dlpack"
-    HINTS "$ENV{DLPACK_ROOT}/include"
+    HINTS "$ENV{DLPACK_ROOT}/inclZLIB_LIBRARIESude"
 )
 
 message(STATUS "DLPACK: DLPACK_INCLUDE set to ${DLPACK_INCLUDE}")
@@ -369,7 +388,7 @@ if(BUILD_TESTS)
 
   if (GTEST_FOUND)
     message(STATUS "Google Test Framework Found.")
-  elseif (NOT GTEST_FOUND AND USE_CPM)
+  else()
     CPMAddPackage(
       NAME GTEST
       GITHUB_REPOSITORY google/googletest
@@ -380,8 +399,6 @@ if(BUILD_TESTS)
         "gtest_force_shared_crt"
     )
     enable_testing()
-  else() 
-    message(STATUS "Google C++ Test Framework cannot be found and cannot be installed from source. `-DUSE_CPM=YES` to install.")
   endif()
 endif(BUILD_TESTS)
 
@@ -390,21 +407,23 @@ message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
 ###################################################################################################
 # - add google benchmark --------------------------------------------------------------------------
 
+# TODO: Linking for benchmarks is currently broken. To test `benchmarks` building with `build.sh`
+# you will need to change `BUILD_BENCHMARKS=OFF` to `ON` in the `build.sh`
 if(BUILD_BENCHMARKS)
 
   CPMAddPackage(
     NAME benchmark
     GITHUB_REPOSITORY google/benchmark
-    VERSION 1.4.1
+    VERSION 1.5.1
+    GIT_TAG v1.5.1
     OPTIONS
-      "BENCHMARK_ENABLE_TESTING Off"
+    "BENCHMARK_ENABLE_TESTING Off"
   )
 
-  if (benchmark_ADDED)
-    set_target_properties(benchmark PROPERTIES CXX_STANDARD $ENV{CXX})
-  endif()
-
 endif(BUILD_BENCHMARKS)
+if(benchmark_ADDED)
+  target_include_directories(benchmark INTERFACE ${benchmark_SOURCE_DIR})
+endif()
 
 message(STATUS "BENCHMARK_LIST set to: ${BENCHMARK_LIST}")
 
@@ -822,7 +841,7 @@ endif(HT_DEFAULT_ALLOCATOR)
 # - link libraries --------------------------------------------------------------------------------
 
 # link targets for cuDF
-target_link_libraries(cudf PUBLIC rmm arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ZLIB Boost::filesystem)
+target_link_libraries(cudf PUBLIC rmm arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ZLIB::ZLIB Boost::filesystem)
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
@@ -847,6 +866,10 @@ add_custom_target(install_cudf
                   COMMAND "${CMAKE_COMMAND}" -DCOMPONENT=cudf -P "${CMAKE_BINARY_DIR}/cmake_install.cmake"
                   DEPENDS cudf)
 
+# TODO: Adding this breaks with cmake 3.18. This appears to be superfluis with the new CUDA
+# detection tools and builds with tests seem to function correctly without this, but 
+# I have not confidently confirmed this. Our `conda` environment setup seems to break some of the new
+# `cmake` CUDA functions but solving that issue should simplify our `CMakeLists.txt` considerably.
 #if(BUILD_TESTS)
 #    add_dependencies(install_cudf cudftestutil)
 #endif(BUILD_TESTS)
