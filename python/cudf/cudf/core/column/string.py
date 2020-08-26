@@ -4109,8 +4109,6 @@ class StringMethods(ColumnMethodsMixin):
         stride=48,
         do_lower=True,
         do_truncate=False,
-        max_num_strings=100,
-        max_num_chars=100000,
         max_rows_tensor=500,
         **kwargs,
     ):
@@ -4118,6 +4116,9 @@ class StringMethods(ColumnMethodsMixin):
         Run CUDA BERT subword tokenizer on cuDF strings column.
         Encodes words to token ids using vocabulary from a pretrained
         tokenizer.
+
+        This function requires about 21x the number of character bytes
+        in the input strings column as working memory.
 
         Parameters
         ----------
@@ -4145,10 +4146,6 @@ class StringMethods(ColumnMethodsMixin):
             max_length. Each input string will result in exactly one output
             sequence. If set to false, there may be multiple output
             sequences when the max_length is smaller than generated tokens.
-        max_num_strings : int, Default is 100
-            The maximum number of strings to be encoded.
-        max_num_chars : int, Default is 100000
-            The maximum number of characters in the input strings column.
         max_rows_tensor : int, Default is 500
             The maximum number of rows in the output
 
@@ -4178,8 +4175,6 @@ class StringMethods(ColumnMethodsMixin):
             stride,
             do_lower,
             do_truncate,
-            max_num_strings,
-            max_num_chars,
             max_rows_tensor,
         )
         return (

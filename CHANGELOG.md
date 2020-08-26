@@ -7,17 +7,23 @@
 ## Improvements
 
 - PR #5946  Add cython and python support for libcudf `to_arrow` and `from_arrow`
+- PR #5919 Remove max_strings and max_chars from nvtext::subword_tokenize
 - PR #5956 Add/Update tests for cuStreamz
 - PR #5953 Use stable sort when doing a sort groupby
 - PR #5973 Link to the Code of Conduct in CONTRIBUTING.md
 - PR #5917 Just use `None` for `strides` in `Buffer`
 - PR #5971 Add cuStreamz README for basic installation and use
 - PR #6002 Add Java bindings for md5
+- PR #6067 Added compute codes for aarch64 devices
+- PR #6083 Small cleanup
 
 ## Bug Fixes
 
+- PR #6073 Fix issue related to `.loc` incase of `DatetimeIndex`
+- PR #6081 Fix issue where fsspec thinks it has a protocol string
 
-# cuDF 0.15.0 (Date TBD)
+
+# cuDF 0.15.0 (26 Aug 2020)
 
 ## New Features
 
@@ -30,6 +36,7 @@
 - PR #5327 Add `cudf::cross_join` feature
 - PR #5204 Concatenate strings columns using row separator as strings column
 - PR #5342 Add support for `StringMethods.__getitem__`
+- PR #5358 Add zero-copy `column_view` cast for compatible types
 - PR #3504 Add External Kafka Datasource
 - PR #5356 Use `size_type` instead of `scalar` in `cudf::repeat`.
 - PR #5397 Add internal implementation of nested loop equijoins.
@@ -344,7 +351,7 @@
 - PR #6003 Fix concurrent JSON reads crash
 - PR #6032 Change black version to 19.10b0 in .pre-commit-config.yaml
 - PR #6041 Fix Java memory resource handler to rethrow original exception object
-
+- PR #6057 Fix issue in parquet reader with reading columns out of file-order
 
 # cuDF 0.14.0 (03 Jun 2020)
 
