@@ -452,10 +452,10 @@ TYPED_TEST(TypedStructColumnWrapperTest, ListOfStructOfList)
     {{0}, {1}, {}, {3}, {4}, {5, 5}, {6}, {}, {8}, {9}},
     cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2; })};
 
-  // TODO: Struct<List> cannot be compared with expect_columns_equal(),
-  // if the struct has null values. After lists support "equivalence"
-  // comparisons, the structs column needs to be modified to add nulls.
-  auto struct_of_lists_col = structs_column_wrapper{{list_col}}.release();
+  auto struct_of_lists_col = structs_column_wrapper{
+    {list_col},
+    make_counting_transform_iterator(0, [](auto i) { return i!=1; })
+  }.release();
 
   auto list_of_struct_of_list_validity =
     make_counting_transform_iterator(0, [](auto i) { return i % 3; });
@@ -470,12 +470,13 @@ TYPED_TEST(TypedStructColumnWrapperTest, ListOfStructOfList)
 
   auto expected_level0_list = lists_column_wrapper<TypeParam, int32_t>{
     {{}, {1}, {}, {3}, {}, {5, 5}, {}, {}, {}, {9}},
-    make_counting_transform_iterator(0, [](auto i) { return i % 2; })};
+    make_counting_transform_iterator(0, [](auto i) { return i % 2 && i!=1; })};
 
-  auto expected_level2_struct = structs_column_wrapper{{expected_level0_list}}.release();
+  auto expected_level2_struct = structs_column_wrapper{
+    {expected_level0_list},
+    make_counting_transform_iterator(0, [](auto i) { return i!=1; })
+  }.release();
 
-  expect_columns_equal(cudf::lists_column_view(*list_of_struct_of_list).child(),
-                            *expected_level2_struct);
   expect_columns_equivalent(cudf::lists_column_view(*list_of_struct_of_list).child(),
                             *expected_level2_struct);
 
@@ -486,8 +487,14 @@ TYPED_TEST(TypedStructColumnWrapperTest, ListOfStructOfList)
     cudf::UNKNOWN_NULL_COUNT,
     detail::make_null_mask(list_of_struct_of_list_validity, list_of_struct_of_list_validity + 5));
 
-  expect_columns_equal(*list_of_struct_of_list, *expected_level3_list);
-  // TODO: FIX! expect_columns_equivalent(*list_of_struct_of_list, *expected_level3_list);
+  {
+    // Need to increase thread stack size to accommodate recursion.
+    size_t stack_size{0};
+    cudaDeviceGetLimit(&stack_size, cudaLimitStackSize);  // Fetch   stack size.
+    cudaDeviceSetLimit(cudaLimitStackSize, stack_size*2); // Double  stack size.
+    expect_columns_equivalent(*list_of_struct_of_list, *expected_level3_list);
+    cudaDeviceSetLimit(cudaLimitStackSize, stack_size);   // Restore stack size.
+  }
 }
 
 TYPED_TEST(TypedStructColumnWrapperTest, StructOfListOfStruct)
