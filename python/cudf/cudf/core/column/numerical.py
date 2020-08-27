@@ -1,6 +1,5 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
 import numpy as np
-import pyarrow as pa
 from pandas.api.types import is_integer_dtype
 
 import cudf
@@ -13,10 +12,8 @@ from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import (
     min_column_type,
     min_signed_type,
-    np_to_pa_dtype,
     numeric_normalize_types,
 )
-from cudf.utils.utils import buffers_from_pyarrow
 
 
 class NumericalColumn(column.ColumnBase):
@@ -167,37 +164,6 @@ class NumericalColumn(column.ColumnBase):
         if dtype == self.dtype:
             return self
         return libcudf.unary.cast(self, dtype)
-
-    @classmethod
-    def from_arrow(cls, array, dtype=None):
-        if dtype is None:
-            dtype = np.dtype(array.type.to_pandas_dtype())
-
-        pa_size, pa_offset, pamask, padata, _ = buffers_from_pyarrow(array)
-        return NumericalColumn(
-            data=padata,
-            mask=pamask,
-            dtype=dtype,
-            size=pa_size,
-            offset=pa_offset,
-        )
-
-    def to_arrow(self):
-        mask = None
-        if self.nullable:
-            mask = pa.py_buffer(self.mask_array_view.copy_to_host())
-        data = pa.py_buffer(self.data_array_view.copy_to_host())
-        pa_dtype = np_to_pa_dtype(self.dtype)
-        out = pa.Array.from_buffers(
-            type=pa_dtype,
-            length=len(self),
-            buffers=[mask, data],
-            null_count=self.null_count,
-        )
-        if self.dtype == np.bool:
-            return out.cast(pa.bool_())
-        else:
-            return out
 
     def sum(self, dtype=None):
         return libcudf.reduce.reduce("sum", self, dtype=dtype)

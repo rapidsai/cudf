@@ -131,4 +131,16 @@ size_type count_descendants(column_view parent)
   return count;
 }
 
+column_view logical_cast(column_view const& input, data_type type)
+{
+  CUDF_EXPECTS(is_logically_castable(input._type, type), "types are not logically castable");
+  return column_view{type,
+                     input._size,
+                     input._data,
+                     input._null_mask,
+                     input._null_count,
+                     input._offset,
+                     input._children};
+}
+
 }  // namespace cudf
