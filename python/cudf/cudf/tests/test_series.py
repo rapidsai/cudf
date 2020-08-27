@@ -431,3 +431,24 @@ def test_series_describe_other_types(ps):
         assert_eq(expected.fillna("a").astype("str"), actual.fillna("a"))
     else:
         assert_eq(expected.astype("str"), actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3, 2, 1],
+        [1, 2, None, 3, 1, 1],
+        [],
+        ["a", "b", "c", None, "z", "a"],
+    ],
+)
+@pytest.mark.parametrize("na_sentinel", [99999, 11, -1, 0])
+def test_series_factorize(data, na_sentinel):
+    gsr = cudf.Series(data)
+    psr = gsr.to_pandas()
+
+    expected_labels, expected_cats = psr.factorize(na_sentinel=na_sentinel)
+    actual_labels, actual_cats = gsr.factorize(na_sentinel=na_sentinel)
+
+    assert_eq(expected_labels, actual_labels.to_array())
+    assert_eq(expected_cats.values, actual_cats.to_array())
