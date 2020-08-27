@@ -17,8 +17,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/table/table_device_view.cuh>
 
-namespace cudf
-{
+namespace cudf {
 /**
  * @brief A specialization for floating-point `Element` type to check if
  * `lhs` is equivalent to `rhs`. `nan == nan`.
@@ -103,7 +102,7 @@ class element_equality_comparator {
   template <typename Element,
             std::enable_if_t<std::is_same<Element, cudf::list_view>::value>* = nullptr>
   __device__ bool operator()(size_type lhs_element_index, size_type rhs_element_index);
-  
+
   template <typename Element,
             std::enable_if_t<not cudf::is_equality_comparable<Element, Element>()>* = nullptr>
   __device__ bool operator()(size_type lhs_element_index, size_type rhs_element_index)
@@ -145,4 +144,4 @@ class row_equality_comparator {
   bool nulls_are_equal;
 };
 
-}
+}  // namespace cudf

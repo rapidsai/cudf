@@ -49,12 +49,12 @@ namespace test {
 
 namespace {
 
-template <bool check_exact_equality, bool compare_sizes=true> 
+template <bool check_exact_equality, bool compare_sizes = true>
 struct column_property_comparator {
   void compare_common(cudf::column_view const& lhs, cudf::column_view const& rhs)
   {
     EXPECT_EQ(lhs.type(), rhs.type());
-    if (compare_sizes) { EXPECT_EQ(lhs.size(), rhs.size()); } 
+    if (compare_sizes) { EXPECT_EQ(lhs.size(), rhs.size()); }
     if (lhs.size() > 0 && check_exact_equality) { EXPECT_EQ(lhs.nullable(), rhs.nullable()); }
 
     // equivalent, but not exactly equal columns can have a different number of children if their
@@ -72,11 +72,10 @@ struct column_property_comparator {
       // Nested types that aren't lists. E.g. Structs.
       // Must check that the children have matching properties.
       for (size_type idx = 0; idx < lhs.num_children(); idx++) {
-        cudf::type_dispatcher(
-          lhs.child(idx).type(),
-          column_property_comparator<check_exact_equality>{},
-          lhs.child(idx),
-          rhs.child(idx));
+        cudf::type_dispatcher(lhs.child(idx).type(),
+                              column_property_comparator<check_exact_equality>{},
+                              lhs.child(idx),
+                              rhs.child(idx));
       }
     }
   }
@@ -339,9 +338,11 @@ struct column_comparator_impl<list_view, check_exact_equality> {
 };
 
 template <>
-struct column_comparator_impl<list_view, false>
-{
-  void operator()(column_view const& lhs, column_view const& rhs, bool print_all_differences, int depth)
+struct column_comparator_impl<list_view, false> {
+  void operator()(column_view const& lhs,
+                  column_view const& rhs,
+                  bool print_all_differences,
+                  int depth)
   {
     using ComparatorType = corresponding_rows_not_equivalent;
 
@@ -349,7 +350,8 @@ struct column_comparator_impl<list_view, false>
     CUDF_EXPECTS(lhs.type().id() == rhs.type().id(), "Expected same data-type.");
 
     // If lhs and rhs have different row-counts, fail also.
-    CUDF_EXPECTS(lhs.size() == rhs.size(), "Expected same row-count!"); // TODO: More descriptive message.
+    CUDF_EXPECTS(lhs.size() == rhs.size(),
+                 "Expected same row-count!");  // TODO: More descriptive message.
 
     auto d_lhs = cudf::table_device_view::create(table_view{{lhs}});
     auto d_rhs = cudf::table_device_view::create(table_view{{rhs}});
@@ -365,7 +367,8 @@ struct column_comparator_impl<list_view, false>
 
     // shrink back down
     differences.resize(thrust::distance(differences.begin(), diff_iter));
-    print_differences(differences, lhs, rhs, print_all_differences, depth);}
+    print_differences(differences, lhs, rhs, print_all_differences, depth);
+  }
 };
 
 template <bool check_exact_equality>

@@ -408,10 +408,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
     return d_children[child_index];
   }
 
-  __device__ size_type num_children() const noexcept
-  {
-    return _num_children;
-  }
+  __device__ size_type num_children() const noexcept { return _num_children; }
 
  protected:
   column_device_view* d_children{};  ///< Array of `column_device_view`

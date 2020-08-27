@@ -17,9 +17,9 @@
 
 #include <cudf/types.hpp>
 // #include <cudf/column/column_device_view.cuh>
-#include <cudf/detail/utilities/release_assert.cuh>
-#include <cstdio>
 #include <cuda_runtime.h>
+#include <cstdio>
+#include <cudf/detail/utilities/release_assert.cuh>
 
 /**
  * @file list_view.cuh
@@ -34,16 +34,13 @@ namespace cudf {
  *
  */
 class list_view {
-
-    public:
-
-        // Not intended to be invoked. This allows type_dispatcher to function.
-        __device__ bool operator == (list_view const& rhs) const
-        {
-            release_assert(!"list_view::operator ==() should not be called directly.");
-            return false;
-        }
-
+ public:
+  // Not intended to be invoked. This allows type_dispatcher to function.
+  __device__ bool operator==(list_view const& rhs) const
+  {
+    release_assert(!"list_view::operator ==() should not be called directly.");
+    return false;
+  }
 };
 
 }  // namespace cudf

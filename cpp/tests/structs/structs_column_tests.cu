@@ -154,7 +154,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestColumnWrapperConstruction)
                 thrust::make_counting_iterator(0) + expected_children.size(),
                 [&](auto idx) {
                   cudf::test::expect_columns_equal(struct_col_view.child(idx),
-                                                        expected_children[idx]->view());
+                                                   expected_children[idx]->view());
                   cudf::test::expect_columns_equivalent(struct_col_view.child(idx),
                                                         expected_children[idx]->view());
                 });
@@ -219,13 +219,11 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestStructsContainingLists)
       {7, 8},  // Null.
       {9}      // Null.
     },
-    cudf::test::make_counting_transform_iterator(0, [](auto i) {
-      return i < 4;
-    })}.release();
+    cudf::test::make_counting_transform_iterator(
+      0, [](auto i) { return i < 4; })}.release();
 
-  cudf::test::expect_columns_equivalent(
-   struct_col->view().child(1),
-   expected_last_two_lists_col->view());
+  cudf::test::expect_columns_equivalent(struct_col->view().child(1),
+                                        expected_last_two_lists_col->view());
 }
 
 TYPED_TEST(TypedStructColumnWrapperTest, StructOfStructs)
@@ -434,7 +432,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestListsOfStructs)
   // Verify that child columns is as it was set.
 
   cudf::test::expect_columns_equal(expected_unchanged_struct_col,
-                                        cudf::lists_column_view(*list_col).child());
+                                   cudf::lists_column_view(*list_col).child());
 
   cudf::test::expect_columns_equivalent(expected_unchanged_struct_col,
                                         cudf::lists_column_view(*list_col).child());
@@ -453,9 +451,9 @@ TYPED_TEST(TypedStructColumnWrapperTest, ListOfStructOfList)
     cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2; })};
 
   auto struct_of_lists_col = structs_column_wrapper{
-    {list_col},
-    make_counting_transform_iterator(0, [](auto i) { return i!=1; })
-  }.release();
+    {list_col}, make_counting_transform_iterator(0, [](auto i) {
+      return i != 1;
+    })}.release();
 
   auto list_of_struct_of_list_validity =
     make_counting_transform_iterator(0, [](auto i) { return i % 3; });
@@ -470,12 +468,12 @@ TYPED_TEST(TypedStructColumnWrapperTest, ListOfStructOfList)
 
   auto expected_level0_list = lists_column_wrapper<TypeParam, int32_t>{
     {{}, {1}, {}, {3}, {}, {5, 5}, {}, {}, {}, {9}},
-    make_counting_transform_iterator(0, [](auto i) { return i % 2 && i!=1; })};
+    make_counting_transform_iterator(0, [](auto i) { return i % 2 && i != 1; })};
 
   auto expected_level2_struct = structs_column_wrapper{
-    {expected_level0_list},
-    make_counting_transform_iterator(0, [](auto i) { return i!=1; })
-  }.release();
+    {expected_level0_list}, make_counting_transform_iterator(0, [](auto i) {
+      return i != 1;
+    })}.release();
 
   expect_columns_equivalent(cudf::lists_column_view(*list_of_struct_of_list).child(),
                             *expected_level2_struct);
@@ -490,10 +488,10 @@ TYPED_TEST(TypedStructColumnWrapperTest, ListOfStructOfList)
   {
     // Need to increase thread stack size to accommodate recursion.
     size_t stack_size{0};
-    cudaDeviceGetLimit(&stack_size, cudaLimitStackSize);  // Fetch   stack size.
-    cudaDeviceSetLimit(cudaLimitStackSize, stack_size*2); // Double  stack size.
+    cudaDeviceGetLimit(&stack_size, cudaLimitStackSize);     // Fetch   stack size.
+    cudaDeviceSetLimit(cudaLimitStackSize, stack_size * 2);  // Double  stack size.
     expect_columns_equivalent(*list_of_struct_of_list, *expected_level3_list);
-    cudaDeviceSetLimit(cudaLimitStackSize, stack_size);   // Restore stack size.
+    cudaDeviceSetLimit(cudaLimitStackSize, stack_size);  // Restore stack size.
   }
 }
 
@@ -588,17 +586,15 @@ TYPED_TEST(TypedStructColumnWrapperTest, EmptyColumnsOfStructs)
 
   {
     auto non_empty_column_of_numbers =
-      fixed_width_column_wrapper<TypeParam, int32_t>{1,2,3,4,5}.release();
-  
-    auto list_offsets =
-      fixed_width_column_wrapper<size_type>{0}.release();
-  
-    auto empty_list_column =
-      cudf::make_lists_column(
-        0, std::move(list_offsets), std::move(non_empty_column_of_numbers), 0, {});
+      fixed_width_column_wrapper<TypeParam, int32_t>{1, 2, 3, 4, 5}.release();
+
+    auto list_offsets = fixed_width_column_wrapper<size_type>{0}.release();
+
+    auto empty_list_column = cudf::make_lists_column(
+      0, std::move(list_offsets), std::move(non_empty_column_of_numbers), 0, {});
 
     auto expected_empty_list = lists_column_wrapper<TypeParam>{}.release();
-  
+
     expect_columns_equivalent(*expected_empty_list, *empty_list_column);
 
     std::vector<std::unique_ptr<cudf::column>> struct_members;

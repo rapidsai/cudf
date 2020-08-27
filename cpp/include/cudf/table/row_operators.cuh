@@ -17,9 +17,9 @@
 #pragma once
 
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/lists/list_device_view.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/detail/utilities/release_assert.cuh>
+#include <cudf/lists/list_device_view.cuh>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/traits.hpp>
@@ -107,7 +107,6 @@ __device__ weak_ordering relational_compare(Element lhs, Element rhs)
 {
   return detail::compare_elements(lhs, rhs);
 }
-
 
 /**
  * @brief Performs a relational comparison between two elements in two columns.
