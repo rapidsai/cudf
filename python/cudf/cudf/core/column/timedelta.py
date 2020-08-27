@@ -24,7 +24,7 @@ _dtype_to_format_conversion = {
 
 class TimeDeltaColumn(column.ColumnBase):
     def __init__(
-        self, data, dtype, size=None, mask=None, offset=0, null_count=None
+        self, data, dtype, size, mask=None, offset=0, null_count=None
     ):
         """
         Parameters
