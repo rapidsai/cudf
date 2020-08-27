@@ -35,7 +35,7 @@ from cudf.utils.dtypes import (
     np_to_pa_dtype,
 )
 from cudf.utils.utils import mask_dtype
-from cudf.api.types import is_categorical_dtype, is_list_dtype, is_numerical_dtype, is_string_dtype
+from cudf.api.types import is_categorical_dtype, is_list_dtype, is_numerical_dtype, is_string_dtype, is_bool_dtype
 
 
 class ColumnBase(Column, Serializable):
@@ -552,7 +552,7 @@ class ColumnBase(Column, Serializable):
                 nelem = abs(key_stop - key_start)
         else:
             key = as_column(key)
-            if pd.api.types.is_bool_dtype(key.dtype):
+            if is_bool_dtype(key.dtype):
                 if not len(key) == len(self):
                     raise ValueError(
                         "Boolean mask must be of same length as column"

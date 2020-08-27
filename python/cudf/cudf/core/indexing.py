@@ -452,8 +452,8 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
 
 def _normalize_dtypes(df):
     if len(df.columns) > 0:
-        dtypes = df.dtypes.values.tolist()
-        normalized_dtype = np.result_type(*dtypes)
+        dtypes = [d.to_numpy for d in df.dtypes.values.tolist()]
+        normalized_dtype = cudf.dtype(np.result_type(*dtypes))
         for name, col in df._data.items():
             df[name] = col.astype(normalized_dtype)
     return df

@@ -291,8 +291,6 @@ class Frame(libcudf.table.Table):
                 elif not all(
                     c.dtype == dtypes[idx] for c in cols
                 ):
-                    import pdb
-                    pdb.set_trace()
                     raise ValueError("All columns must be the same type")
             return categories
 

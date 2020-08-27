@@ -4921,8 +4921,8 @@ class DataFrame(Frame, Serializable):
         -------
         numpy recarray
         """
-        members = [("index", self.index.dtype)] if index else []
-        members += [(col, self[col].dtype) for col in self._data.names]
+        members = [("index", self.index.dtype.to_numpy)] if index else []
+        members += [(col, self[col].dtype.to_numpy) for col in self._data.names]
         dtype = np.dtype(members)
         ret = np.recarray(len(self), dtype=dtype)
         if index:
@@ -6049,7 +6049,7 @@ class DataFrame(Frame, Serializable):
             msg = "Skew only supports int, float, and bool dtypes."
             raise NotImplementedError(msg)
 
-        self = self.select_dtypes(include=[np.number, np.bool])
+        self = self.select_dtypes(include=[cudf.Number(), cudf.BooleanDtype()])
         return self._apply_support_method(
             "skew",
             axis=axis,
@@ -6332,7 +6332,7 @@ class DataFrame(Frame, Serializable):
                 # category handling
                 if is_categorical_dtype(i_dtype):
                     include_subtypes.add(i_dtype)
-                elif issubclass(dtype, i_dtype):
+                elif isinstance(dtype, i_dtype.__class__):
                     include_subtypes.add(dtype)
     
         # exclude all subtypes

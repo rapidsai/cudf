@@ -3,6 +3,10 @@ import cudf
 import numpy as np
 from pandas.core.dtypes.dtypes import CategoricalDtype, CategoricalDtypeType
 
+def is_bool_dtype(obj):
+    # todo - pd.api.types.is_bool_dtype should not give false, nor work at all probably
+    return isinstance(obj, cudf.BooleanDtype) or pd.api.types.is_bool_dtype(obj)
+
 def is_datetime64_dtype(obj):
     return isinstance(obj, cudf.Datetime) or pd.api.types.is_datetime64_dtype(obj)
 

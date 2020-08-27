@@ -1,19 +1,19 @@
 import numpy as np
 import pandas as pd
 import pytest
-
+import cudf
 from cudf import Series
 from cudf.tests.utils import assert_eq
 
 
 def test_can_cast_safely_same_kind():
     data = Series([1, 2, 3], dtype="int32")._column
-    to_dtype = np.dtype("int64")
+    to_dtype = cudf.dtype("int64")
 
     assert data.can_cast_safely(to_dtype)
 
     data = Series([1, 2, 3], dtype="int64")._column
-    to_dtype = np.dtype("int32")
+    to_dtype = cudf.dtype("int32")
 
     assert data.can_cast_safely(to_dtype)
 
@@ -21,12 +21,12 @@ def test_can_cast_safely_same_kind():
     assert not data.can_cast_safely(to_dtype)
 
     data = Series([1, 2, 3], dtype="uint32")._column
-    to_dtype = np.dtype("uint64")
+    to_dtype = cudf.dtype("uint64")
 
     assert data.can_cast_safely(to_dtype)
 
     data = Series([1, 2, 3], dtype="uint64")._column
-    to_dtype = np.dtype("uint32")
+    to_dtype = cudf.dtype("uint32")
 
     assert data.can_cast_safely(to_dtype)
 
@@ -36,7 +36,7 @@ def test_can_cast_safely_same_kind():
 
 def test_can_cast_safely_mixed_kind():
     data = Series([1, 2, 3], dtype="int32")._column
-    to_dtype = np.dtype("float32")
+    to_dtype = cudf.dtype("float32")
     assert data.can_cast_safely(to_dtype)
 
     # too big to fit into f32 exactly
@@ -44,18 +44,18 @@ def test_can_cast_safely_mixed_kind():
     assert not data.can_cast_safely(to_dtype)
 
     data = Series([1, 2, 3], dtype="uint32")._column
-    to_dtype = np.dtype("float32")
+    to_dtype = cudf.dtype("float32")
     assert data.can_cast_safely(to_dtype)
 
     # too big to fit into f32 exactly
     data = Series([1, 2, 2 ** 24 + 1], dtype="uint32")._column
     assert not data.can_cast_safely(to_dtype)
 
-    to_dtype = np.dtype("float64")
+    to_dtype = cudf.dtype("float64")
     assert data.can_cast_safely(to_dtype)
 
     data = Series([1.0, 2.0, 3.0], dtype="float32")._column
-    to_dtype = np.dtype("int32")
+    to_dtype = cudf.dtype("int32")
     assert data.can_cast_safely(to_dtype)
 
     # not integer float
@@ -97,7 +97,7 @@ def test_to_pandas_nullable_bool():
 
 def test_can_cast_safely_has_nulls():
     data = Series([1, 2, 3, None], dtype="float32")._column
-    to_dtype = np.dtype("int64")
+    to_dtype = cudf.dtype("int64")
 
     assert data.can_cast_safely(to_dtype)
 
