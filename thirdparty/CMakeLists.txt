@@ -32,6 +32,7 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/thrust/thrust.git
     GIT_TAG        1.9.10
     GIT_SHALLOW    true
+    PATCH_COMMAND COMMAND patch -p1 < "${CMAKE_CURRENT_SOURCE_DIR}/thrust-ret-if-fail.patch"
 )
 
 FetchContent_GetProperties(thrust)

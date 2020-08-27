@@ -16,8 +16,6 @@
 
 #pragma once
 
-#include <rmm/thrust_rmm_allocator.h>
-
 namespace nvtext {
 namespace detail {
 
