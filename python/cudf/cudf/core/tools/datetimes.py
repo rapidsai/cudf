@@ -281,7 +281,7 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
             col = (
                 col.astype("int")
                 .astype("str")
-                .as_datetime_column(dtype="datetime64[ns]", format=format)
+                .as_datetime_column(dtype="datetime64[s]", format=format)
             )
         else:
             col = col.as_datetime_column(dtype="datetime64[ns]")
