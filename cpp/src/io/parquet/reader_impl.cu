@@ -997,8 +997,7 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>> &&sources,
   _metadata = std::make_unique<aggregate_metadata>(_sources);
 
   // Select only columns required by the options
-  _selected_columns = _metadata->select_columns(
-    options.columns(), options.get(parquet_reader_options::boolean_param_id::USE_PANDAS_METADATA));
+  _selected_columns = _metadata->select_columns(options.columns(), options.use_pandas_metadata());
 
   // Override output timestamp resolution if requested
   if (options.timestamp_type().id() != type_id::EMPTY) {
@@ -1006,8 +1005,7 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>> &&sources,
   }
 
   // Strings may be returned as either string or categorical columns
-  _strings_to_categorical =
-    options.get(parquet_reader_options::boolean_param_id::STRINGS_TO_CATEGORICAL);
+  _strings_to_categorical = options.convert_strings_to_categories();
 }
 
 table_with_metadata reader::impl::read(size_type skip_rows,
@@ -1249,6 +1247,21 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
 }
 
+table_with_metadata reader::impl::read(parquet_reader_options const &options, cudaStream_t stream)
+{
+  auto skip_rows         = options.skip_rows();
+  auto num_rows          = options.num_rows();
+  auto const &row_groups = options.row_groups();
+
+  if (row_groups.size() > 0) {
+    return read(0, -1, row_groups, stream);
+  } else if ((skip_rows != -1) || (num_rows != -1)) {
+    return read(skip_rows, (num_rows != 0) ? num_rows : -1, {}, stream);
+  } else {
+    return read(0, -1, {}, stream);
+  }
+}
+
 // Forward to implementation
 reader::reader(std::vector<std::string> const &filepaths,
                parquet_reader_options const &options,
@@ -1269,19 +1282,9 @@ reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
 reader::~reader() = default;
 
 // Forward to implementation
-table_with_metadata reader::read_all(cudaStream_t stream) { return _impl->read(0, -1, {}, stream); }
-
-// Forward to implementation
-table_with_metadata reader::read_row_groups(std::vector<std::vector<size_type>> const &row_groups,
-                                            cudaStream_t stream)
+table_with_metadata reader::read(parquet_reader_options const &options, cudaStream_t stream)
 {
-  return _impl->read(0, -1, row_groups, stream);
-}
-
-// Forward to implementation
-table_with_metadata reader::read_rows(size_type skip_rows, size_type num_rows, cudaStream_t stream)
-{
-  return _impl->read(skip_rows, (num_rows != 0) ? num_rows : -1, {}, stream);
+  return _impl->read(options, stream);
 }
 
 }  // namespace parquet

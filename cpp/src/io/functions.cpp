@@ -281,18 +281,9 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto reader    = make_reader<detail_parquet::reader>(options.source(), options, mr);
-  auto skip_rows = options.get(parquet_reader_options::size_type_param_id::SKIP_ROWS);
-  auto num_rows  = options.get(parquet_reader_options::size_type_param_id::NUM_ROWS);
+  auto reader = make_reader<detail_parquet::reader>(options.source(), options, mr);
 
-  auto row_groups = options.row_groups();
-  if (row_groups.size() > 0) {
-    return reader->read_row_groups(row_groups);
-  } else if ((skip_rows != -1) || (num_rows != -1)) {
-    return reader->read_rows(skip_rows, num_rows);
-  } else {
-    return reader->read_all();
-  }
+  return reader->read(options);
 }
 
 // Freeform API wraps the detail writer class API
@@ -305,7 +296,7 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
   return writer->write_all(options.table(),
                            options.metadata(),
                            options.is_filemetadata_required(),
-                           options.metadata_out_file_path());
+                           options.column_chunks_file_path());
 }
 
 /**
@@ -361,10 +352,10 @@ void write_parquet_chunked(table_view const& table, std::shared_ptr<pq_chunked_s
 std::unique_ptr<std::vector<uint8_t>> write_parquet_chunked_end(
   std::shared_ptr<pq_chunked_state>& state,
   bool return_filemetadata,
-  const std::string& metadata_out_file_path)
+  const std::string& column_chunks_file_path)
 {
   CUDF_FUNC_RANGE();
-  auto meta = state->wp->write_chunked_end(*state, return_filemetadata, metadata_out_file_path);
+  auto meta = state->wp->write_chunked_end(*state, return_filemetadata, column_chunks_file_path);
   state.reset();
   return meta;
 }

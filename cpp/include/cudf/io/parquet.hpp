@@ -54,13 +54,13 @@ class parquet_reader_options {
 
   /// List of individual row groups to read (ignored if empty)
   std::vector<std::vector<size_type>> _row_groups;
-  /// Rows to skip from the start; -1 is none
+  /// Number of rows to skip from the start; -1 is none
   size_type _skip_rows = -1;
-  /// Rows to read; -1 is all
+  /// NUmber of rows to read; -1 is all
   size_type _num_rows = -1;
 
   /// Whether to store string data as categorical type
-  bool _strings_to_categorical = false;
+  bool _convert_strings_to_categories = false;
   /// Whether to use PANDAS metadata to load columns
   bool _use_pandas_metadata = true;
   /// Cast timestamp columns to a specific type
@@ -72,23 +72,6 @@ class parquet_reader_options {
 
  public:
   explicit parquet_reader_options() = default;
-
-  /**
-   * @brief enum class for parquet_reader_options boolean parameters
-   */
-
-  enum class boolean_param_id : int8_t {
-    STRINGS_TO_CATEGORICAL,  // Whether to store string data as categorical type
-    USE_PANDAS_METADATA,     // Whether to use PANDAS metadata to load columns
-  };
-
-  /**
-   * @brief enum class for parquet_reader_options size_type parameters
-   */
-  enum class size_type_param_id : int8_t {
-    SKIP_ROWS,  // Rows to skip from the start
-    NUM_ROWS    // Rows to read
-  };
 
   /**
    * @brief create parquet_reader_options_builder which will build parquet_reader_options
@@ -104,28 +87,24 @@ class parquet_reader_options {
   source_info const& source() const { return _source; }
 
   /**
-   * @brief Returns boolean parameter values as per the corresponding enum
+   * @breif Returns true/false depending on whether strings should be converted to categories or not
    */
-  bool get(boolean_param_id param_id) const
-  {
-    switch (param_id) {
-      case boolean_param_id::STRINGS_TO_CATEGORICAL: return _strings_to_categorical;
-      case boolean_param_id::USE_PANDAS_METADATA: return _use_pandas_metadata;
-      default: CUDF_FAIL("Unsupported boolean_param_id enum");
-    }
-  }
+  bool convert_strings_to_categories() const { return _convert_strings_to_categories; }
 
   /**
-   * @brief Returns size_type parameter values as per the corresponding enum
+   * @breif Returns true/false depending whether to use pandas metadata or not while reading
    */
-  size_type get(size_type_param_id param_id) const
-  {
-    switch (param_id) {
-      case size_type_param_id::SKIP_ROWS: return _skip_rows;
-      case size_type_param_id::NUM_ROWS: return _num_rows;
-      default: CUDF_FAIL("Unsupported size_type_param_id enum");
-    }
-  }
+  bool use_pandas_metadata() const { return _use_pandas_metadata; }
+
+  /**
+   * @breif Returns number of rows to skip from the start
+   */
+  size_type skip_rows() const { return _skip_rows; }
+
+  /**
+   * @breif Returns number of rows to read
+   */
+  size_type num_rows() const { return _num_rows; }
 
   /**
    * @brief Returns names of column to be read
@@ -179,36 +158,39 @@ class parquet_reader_options_builder {
     return *this;
   }
 
-  /**
-   * @brief Set boolean class members
+  /*
+   * @brief Set to convert strings to categories
    */
-  parquet_reader_options_builder& set(parquet_reader_options::boolean_param_id param_id, bool val)
+  parquet_reader_options_builder& convert_strings_to_categories(bool val)
   {
-    switch (param_id) {
-      case parquet_reader_options::boolean_param_id::STRINGS_TO_CATEGORICAL:
-        options._strings_to_categorical = val;
-        break;
-      case parquet_reader_options::boolean_param_id::USE_PANDAS_METADATA:
-        options._use_pandas_metadata = val;
-        break;
-      default: CUDF_FAIL("Unsupported boolean_param_id enum");
-    }
-
+    options._convert_strings_to_categories = val;
     return *this;
   }
 
-  /**
-   * @brief Set size_type class members
+  /*
+   * @brief Set to use pandas metadata to read
    */
-  parquet_reader_options_builder& set(parquet_reader_options::size_type_param_id param_id,
-                                      size_type val)
+  parquet_reader_options_builder& use_pandas_metadata(bool val)
   {
-    switch (param_id) {
-      case parquet_reader_options::size_type_param_id::SKIP_ROWS: options._skip_rows = val; break;
-      case parquet_reader_options::size_type_param_id::NUM_ROWS: options._num_rows = val; break;
-      default: CUDF_FAIL("Unsupported size_type_param_id enum");
-    }
+    options._use_pandas_metadata = val;
+    return *this;
+  }
 
+  /*
+   * @brief Set number of rows to skip
+   */
+  parquet_reader_options_builder& skip_rows(size_type val)
+  {
+    options._skip_rows = val;
+    return *this;
+  }
+
+  /*
+   * @brief Set number of rows to read
+   */
+  parquet_reader_options_builder& num_rows(size_type val)
+  {
+    options._num_rows = val;
     return *this;
   }
 
@@ -282,7 +264,7 @@ class parquet_writer_options {
   /// Optionally return the raw parquet file metadata output
   bool _return_filemetadata = false;
   /// Column chunks file path to be set in the raw output metadata
-  std::string _metadata_out_file_path;
+  std::string _column_chunks_file_path;
 
   explicit parquet_writer_options(sink_info const& sink, table_view const& table)
     : _sink(sink), _table(table)
@@ -344,7 +326,7 @@ class parquet_writer_options {
   /**
    * @brief Returns Column chunks file path to be set in the raw output metadata
    */
-  std::string metadata_out_file_path() const { return _metadata_out_file_path; }
+  std::string column_chunks_file_path() const { return _column_chunks_file_path; }
 };
 
 class parquet_writer_options_builder {
@@ -395,11 +377,11 @@ class parquet_writer_options_builder {
   }
 
   /**
-   * @brief Set metadata_out_file_path to parquet_writer_options
+   * @brief Set column_chunks_file_path to parquet_writer_options
    */
-  parquet_writer_options_builder& metadata_out_file_path(std::string file_path)
+  parquet_writer_options_builder& column_chunks_file_path(std::string file_path)
   {
-    options._metadata_out_file_path.assign(file_path);
+    options._column_chunks_file_path.assign(file_path);
     return *this;
   }
 
@@ -613,15 +595,15 @@ void write_parquet_chunked(table_view const& table,
  * @param[in] state Opaque state information about the writer process. Must be the same pointer
  * returned from write_parquet_chunked_begin()
  * @param[in] return_filemetadata If true, return the raw file metadata
- * @param[in] metadata_out_file_path Column chunks file path to be set in the raw output metadata
+ * @param[in] column_chunks_file_path Column chunks file path to be set in the raw output metadata
  *
  * @return A blob that contains the file metadata (parquet FileMetadata thrift message) if
  *         requested in parquet_writer_options (empty blob otherwise)
  */
 std::unique_ptr<std::vector<uint8_t>> write_parquet_chunked_end(
   std::shared_ptr<detail::parquet::pq_chunked_state>& state,
-  bool return_filemetadata                  = false,
-  const std::string& metadata_out_file_path = "");
+  bool return_filemetadata                   = false,
+  const std::string& column_chunks_file_path = "");
 
 }  // namespace io
 }  // namespace cudf

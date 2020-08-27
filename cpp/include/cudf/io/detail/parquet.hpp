@@ -63,35 +63,12 @@ class reader {
   /**
    * @brief Reads the entire dataset.
    *
+   * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    */
-  table_with_metadata read_all(cudaStream_t stream = 0);
-
-  /**
-   * @brief Reads specific row groups.
-   *
-   * @param row_group_list Indices of the row groups
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   *
-   * @return The set of columns along with table metadata
-   *
-   * @throw cudf::logic_error if row group index is out of range
-   */
-  table_with_metadata read_row_groups(std::vector<std::vector<size_type>> const& row_group_list,
-                                      cudaStream_t stream = 0);
-
-  /**
-   * @brief Reads a range of rows.
-   *
-   * @param skip_rows Number of rows to skip from the start
-   * @param num_rows Number of rows to read; use `0` for all remaining data
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   *
-   * @return The set of columns along with table metadata
-   */
-  table_with_metadata read_rows(size_type skip_rows, size_type num_rows, cudaStream_t stream = 0);
+  table_with_metadata read(parquet_reader_options const& options, cudaStream_t stream = 0);
 };
 
 /**
@@ -125,14 +102,14 @@ class writer {
    * @param table Set of columns to output
    * @param metadata Table metadata and column names
    * @param return_filemetadata If true, return the raw file metadata
-   * @param metadata_out_file_path Column chunks file path to be set in the raw output metadata
+   * @param column_chunks_file_path Column chunks file path to be set in the raw output metadata
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   std::unique_ptr<std::vector<uint8_t>> write_all(table_view const& table,
                                                   const table_metadata* metadata = nullptr,
                                                   bool return_filemetadata       = false,
-                                                  const std::string metadata_out_file_path = "",
-                                                  cudaStream_t stream                      = 0);
+                                                  const std::string column_chunks_file_path = "",
+                                                  cudaStream_t stream                       = 0);
 
   /**
    * @brief Begins the chunked/streamed write process.
@@ -157,14 +134,14 @@ class writer {
    * @param[in] pq_chunked_state State information that crosses _begin() / write_chunked() / _end()
    * boundaries.
    * @param[in] return_filemetadata If true, return the raw file metadata
-   * @param[in] metadata_out_file_path Column chunks file path to be set in the raw output metadata
+   * @param[in] column_chunks_file_path Column chunks file path to be set in the raw output metadata
    *
    * @return A parquet-compatible blob that contains the data for all rowgroups in the list
    */
   std::unique_ptr<std::vector<uint8_t>> write_chunked_end(
     struct pq_chunked_state& state,
-    bool return_filemetadata                  = false,
-    const std::string& metadata_out_file_path = "");
+    bool return_filemetadata                   = false,
+    const std::string& column_chunks_file_path = "");
 
   /**
    * @brief Merges multiple metadata blobs returned by write_all into a single metadata blob

@@ -188,20 +188,10 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     args = move(parquet_reader_options.builder(source).
                 columns(cpp_columns).
                 row_groups(cpp_row_groups).
-                set(parquet_reader_options.
-                    boolean_param_id.STRINGS_TO_CATEGORICAL,
-                    cpp_strings_to_categorical).
-                set(parquet_reader_options.
-                    boolean_param_id.USE_PANDAS_METADATA,
-                    cpp_use_pandas_metadata).
-                set(parquet_reader_options.
-                    size_type_param_id.
-                    SKIP_ROWS,
-                    cpp_skip_rows).
-                set(parquet_reader_options.
-                    size_type_param_id.
-                    NUM_ROWS,
-                    cpp_num_rows).
+                convert_strings_to_categories(cpp_strings_to_categorical).
+                use_pandas_metadata(cpp_use_pandas_metadata).
+                skip_rows(cpp_skip_rows).
+                num_rows(cpp_num_rows).
                 timestamp_type(cpp_timestamp_type).
                 build())
 
@@ -310,10 +300,10 @@ cpdef write_parquet(
 
     cdef parquet_writer_options args
     cdef unique_ptr[vector[uint8_t]] out_metadata_c
-    cdef string metadata_out_file_path
+    cdef string c_column_chunks_file_path
     cdef bool return_filemetadata = False
     if metadata_file_path is not None:
-        metadata_out_file_path = str.encode(metadata_file_path)
+        c_column_chunks_file_path = str.encode(metadata_file_path)
         return_filemetadata = True
 
     # Perform write
@@ -323,7 +313,7 @@ cpdef write_parquet(
             metadata(tbl_meta.get()).
             compression(comp_type).
             stats_level(stat_freq).
-            metadata_out_file_path(metadata_out_file_path).
+            column_chunks_file_path(c_column_chunks_file_path).
             filemetadata_required(return_filemetadata).
             build()
         )
@@ -378,14 +368,14 @@ cdef class ParquetWriter:
     def close(self, object metadata_file_path=None):
         cdef unique_ptr[vector[uint8_t]] out_metadata_c
         cdef bool return_meta
-        cdef string metadata_out_file_path
+        cdef string column_chunks_file_path
 
         if not self.state:
             return None
 
         # Update metadata-collection options
         if metadata_file_path is not None:
-            metadata_out_file_path = str.encode(metadata_file_path)
+            column_chunks_file_path = str.encode(metadata_file_path)
             return_meta = True
         else:
             return_meta = False
@@ -393,7 +383,7 @@ cdef class ParquetWriter:
         with nogil:
             out_metadata_c = move(
                 write_parquet_chunked_end(
-                    self.state, return_meta, metadata_out_file_path
+                    self.state, return_meta, column_chunks_file_path
                 )
             )
             self.state.reset()

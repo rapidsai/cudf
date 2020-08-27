@@ -12,33 +12,15 @@ cimport cudf._lib.cpp.table.table_view as cudf_table_view
 
 cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
     cdef cppclass parquet_reader_options:
-        ctypedef enum boolean_param_id \
-                """cudf::io::parquet_reader_options::"
-                boolean_param_id""":
-            STRINGS_TO_CATEGORICAL \
-                """cudf::io::parquet_reader_options::
-                boolean_param_id::STRINGS_TO_CATEGORICAL"""
-            USE_PANDAS_METADATA \
-                """cudf::io::parquet_reader_options::
-                boolean_param_id::USE_PANDAS_METADATA"""
-
-        ctypedef enum size_type_param_id \
-                """cudf::io::parquet_reader_options::
-                size_type_param_id""":
-            SKIP_ROWS \
-                """cudf::io::parquet_reader_options::
-                size_type_param_id::SKIP_ROWS"""
-            NUM_ROWS \
-                """cudf::io::parquet_reader_options::
-                    size_type_param_id::NUM_ROWS"""
-
         parquet_reader_options() except +
         cudf_io_types.source_info source_info() except +
         vector[string] columns() except +
         vector[vector[size_type]] row_groups() except +
         data_type timestamp_type() except +
-        bool get(boolean_param_id id) except +
-        size_type get(size_type_param_id id) except +
+        bool convert_strings_to_categories() except +
+        bool use_pandas_metadata() except +
+        size_type skip_rows() except +
+        size_type num_rows() except +
 
         @staticmethod
         parquet_reader_options_builder builder(
@@ -56,14 +38,12 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         parquet_reader_options_builder& row_groups(
             vector[vector[size_type]] row_grp
         ) except +
-        parquet_reader_options_builder& set(
-            parquet_reader_options.boolean_param_id param_id,
+        parquet_reader_options_builder& convert_strings_to_categories(
             bool val
         ) except +
-        parquet_reader_options_builder& set(
-            parquet_reader_options.size_type_param_id  param_id,
-            size_type val
-        ) except +
+        parquet_reader_options_builder& use_pandas_metadata(bool val) except +
+        parquet_reader_options_builder& skip_rows(size_type val) except +
+        parquet_reader_options_builder& num_rows(size_type val) except +
         parquet_reader_options_builder& timestamp_type(
             data_type type
         ) except +
@@ -80,7 +60,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         cudf_table_view.table_view table() except +
         const cudf_io_types.table_metadata metadata() except +
         bool is_filemetadata_required() except +
-        string metadata_out_file_path() except+
+        string column_chunks_file_path() except+
 
         @staticmethod
         parquet_writer_options_builder builder(
@@ -107,8 +87,8 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         parquet_writer_options_builder& filemetadata_required(
             bool req
         ) except +
-        parquet_writer_options_builder& metadata_out_file_path(
-            string metadata_out_file_path
+        parquet_writer_options_builder& column_chunks_file_path(
+            string column_chunks_file_path
         ) except +
 
         parquet_writer_options build() except +
@@ -156,7 +136,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
     cdef unique_ptr[vector[uint8_t]] write_parquet_chunked_end(
         shared_ptr[pq_chunked_state],
         bool return_meta,
-        string metadata_out_file_path,
+        string column_chunks_file_path,
     ) except +
 
 cdef extern from "cudf/io/parquet.hpp" \

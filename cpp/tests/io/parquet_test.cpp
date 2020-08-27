@@ -522,7 +522,7 @@ TEST_F(ParquetWriterTest, MultiIndex)
 
   cudf_io::parquet_reader_options in_args =
     cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
-      .set(cudf_io::parquet_reader_options::boolean_param_id::USE_PANDAS_METADATA, true)
+      .use_pandas_metadata(true)
       .columns({"int8s", "int16s", "int32s"});
   auto result = cudf_io::read_parquet(in_args);
 
@@ -1197,8 +1197,7 @@ TEST_F(ParquetReaderTest, UserBounds)
 
     // attempt to read more rows than there actually are
     cudf_io::parquet_reader_options read_args =
-      cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
-        .set(cudf_io::parquet_reader_options::size_type_param_id::NUM_ROWS, 16);
+      cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath}).num_rows(16);
     auto result = cudf_io::read_parquet(read_args);
 
     // we should only get back 4 rows
@@ -1218,8 +1217,7 @@ TEST_F(ParquetReaderTest, UserBounds)
 
     // attempt to read more rows than there actually are
     cudf_io::parquet_reader_options read_args =
-      cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
-        .set(cudf_io::parquet_reader_options::size_type_param_id::SKIP_ROWS, 4);
+      cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath}).skip_rows(4);
     auto result = cudf_io::read_parquet(read_args);
 
     // we should get empty columns back
@@ -1241,8 +1239,7 @@ TEST_F(ParquetReaderTest, UserBounds)
 
     // attempt to read more rows than there actually are
     cudf_io::parquet_reader_options read_args =
-      cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
-        .set(cudf_io::parquet_reader_options::size_type_param_id::NUM_ROWS, 0);
+      cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath}).num_rows(0);
     auto result = cudf_io::read_parquet(read_args);
 
     // we should be getting back 0 rows, but at the moment we get back 4.  this is
@@ -1267,8 +1264,8 @@ TEST_F(ParquetReaderTest, UserBounds)
     // attempt to read more rows than there actually are
     cudf_io::parquet_reader_options read_args =
       cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
-        .set(cudf_io::parquet_reader_options::size_type_param_id::SKIP_ROWS, 4)
-        .set(cudf_io::parquet_reader_options::size_type_param_id::NUM_ROWS, 0);
+        .skip_rows(4)
+        .num_rows(0);
     auto result = cudf_io::read_parquet(read_args);
 
     // we should get empty columns back
