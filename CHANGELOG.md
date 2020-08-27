@@ -16,6 +16,7 @@
 - PR #6002 Add Java bindings for md5
 - PR #6067 Added compute codes for aarch64 devices
 - PR #6083 Small cleanup
+- PR #6091 Changes to expect_columns_equivalent to support lists
 
 ## Bug Fixes
 
