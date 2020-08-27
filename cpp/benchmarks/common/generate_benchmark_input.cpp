@@ -239,7 +239,7 @@ template <typename T>
 std::unique_ptr<cudf::column> create_random_column(std::mt19937& engine, cudf::size_type num_rows)
 {
   float const null_frequency        = 0.01;
-  cudf::size_type const cardinality = 100;
+  cudf::size_type const cardinality = 1000;
   cudf::size_type const avg_run_len = 4;
 
   std::uniform_real_distribution<float> null_dist;
@@ -253,7 +253,7 @@ std::unique_ptr<cudf::column> create_random_column(std::mt19937& engine, cudf::s
   }
 
   std::uniform_int_distribution<cudf::size_type> sample_dist{0, cardinality - 1};
-  std::gamma_distribution<float> rl_dist(4.f, avg_run_len / 4.f);
+  std::gamma_distribution<float> run_len_dist(4.f, avg_run_len / 4.f);
   pinned_buffer<T> data{pinned_alloc<T>(num_rows), cudaFreeHost};
   std::vector<cudf::bitmask_type> null_mask(null_mask_size(num_rows), ~0);
 
@@ -267,6 +267,18 @@ std::unique_ptr<cudf::column> create_random_column(std::mt19937& engine, cudf::s
                      data.get(),
                      null_mask,
                      row);
+    }
+
+    if (avg_run_len > 1) {
+      int const run_len = std::min<int>(num_rows - row, std::round(run_len_dist(engine)));
+      for (int offset = 1; offset < run_len; ++offset) {
+        set_element_at([&]() { return data[row]; },
+                       [&]() { return get_null_mask_bit(null_mask, row); },
+                       data.get(),
+                       null_mask,
+                       row + offset);
+      }
+      row += std::max(run_len - 1, 0);
     }
   }
 
@@ -298,10 +310,12 @@ void copy_string(cudf::size_type src_idx,
                  string_col_data& dst)
 {
   if (!get_null_mask_bit(src.null_mask, src_idx)) reset_null_mask_bit(dst.null_mask, dst_idx);
-  dst.chars.insert(dst.chars.end(),
-                   src.chars.begin() + src.offsets[src_idx],
-                   src.chars.begin() + src.offsets[src_idx + 1]);
-  dst.offsets.push_back(dst.offsets.back() + src.offsets[src_idx + 1] - src.offsets[src_idx]);
+  auto const str_len = src.offsets[src_idx + 1] - src.offsets[src_idx];
+  dst.chars.resize(dst.chars.size() + str_len);
+  // TODO don't copy if null?
+  std::copy_n(
+    src.chars.begin() + src.offsets[src_idx], str_len, dst.chars.begin() + dst.offsets.back());
+  dst.offsets.push_back(dst.chars.size());
 }
 
 template <typename Length_gen, typename Char_gen, typename Valid_gen>
@@ -341,13 +355,14 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(std::mt199
 
   float const null_frequency        = 0.01;
   int const avg_string_len          = 16;
-  cudf::size_type const cardinality = 0;
+  cudf::size_type const cardinality = 1000;
   cudf::size_type const avg_run_len = 4;
 
   auto const char_cnt = avg_string_len * num_rows;
 
   std::poisson_distribution<> len_dist(avg_string_len);
   std::uniform_real_distribution<float> null_dist;
+  std::gamma_distribution<float> run_len_dist(4.f, avg_run_len / 4.f);
   std::uniform_int_distribution<char> char_dist{'!', '~'};
   auto length_gen = [&]() { return len_dist(engine); };
   auto char_gen   = [&]() { return char_dist(engine); };
@@ -366,7 +381,13 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(std::mt199
     } else {
       copy_string(sample_dist(engine), samples, row, out_col);
     }
-    // TODO repeat here
+    if (avg_run_len > 1) {
+      int const run_len = std::min<int>(num_rows - row, std::round(run_len_dist(engine)));
+      for (int offset = 1; offset < run_len; ++offset) {
+        copy_string(row, out_col, row + offset, out_col);
+      }
+      row += std::max(run_len - 1, 0);
+    }
   }
 
   return cudf::make_strings_column(out_col.chars, out_col.offsets, out_col.null_mask);
