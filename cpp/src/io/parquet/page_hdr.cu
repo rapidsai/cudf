@@ -229,40 +229,9 @@ struct FunctionSwitchImpl<0>
 };
 
 template <typename... Operator>
-__device__ bool function_switch(byte_stream_s *bs, int t, const int &fld, thrust::tuple<Operator...>& ops)
-{
-  constexpr int index = thrust::tuple_size<thrust::tuple<Operator...>>::value - 1;
-  return FunctionSwitchImpl<index>::run(bs, t, fld, ops);
-}
-
-template <typename... Operator>
-struct FunctionBuilder
-{
-  thrust::tuple<Operator...> &op_;
-
-  __device__
-  FunctionBuilder(thrust::tuple<Operator...> &op) : op_(op) {}
-
-  inline __device__ bool run(byte_stream_s *bs)
-  {
-    int fld = 0;
-    for (;;) {
-      int c, t, f;
-      c = getb(bs);
-      if (!c) break;
-      f   = c >> 4;
-      t   = c & 0xf;
-      fld = (f) ? fld + f : get_i32(bs);
-      bool exit_function = function_switch(bs, t, fld, op_);
-      if (exit_function) { return false; }
-    }
-    return true;
-  }
-};
-
-template <typename... Operator>
 inline __device__ bool function_builder(thrust::tuple<Operator...> &op, byte_stream_s *bs)
 {
+  constexpr int index = thrust::tuple_size<thrust::tuple<Operator...>>::value - 1;
   int fld = 0;
   for (;;) {
     int c, t, f;
@@ -271,20 +240,11 @@ inline __device__ bool function_builder(thrust::tuple<Operator...> &op, byte_str
     f   = c >> 4;
     t   = c & 0xf;
     fld = (f) ? fld + f : get_i32(bs);
-    bool exit_function = function_switch(bs, t, fld, op);
+    bool exit_function = FunctionSwitchImpl<index>::run(bs, t, fld, op);
     if (exit_function) { return false; }
   }
   return true;
 }
-
-//__device__ bool gpuParseDataPageHeader(byte_stream_s *bs)
-//{
-//  auto t = std::make_tuple(
-//      ParquetFieldInt32(1, bs->page.num_input_values),
-//      ParquetFieldEnum<Encoding>(2, bs->page.encoding),
-//      ParquetFieldEnum<Encoding>(3, bs->page.definition_level_encoding),
-//      ParquetFieldEnum<Encoding>(4, bs->page.repetition_level_encoding));
-//}
 
 __device__ bool gpuParseDataPageHeader(byte_stream_s *bs)
 {
