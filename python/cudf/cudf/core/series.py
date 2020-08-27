@@ -2414,7 +2414,7 @@ class Series(Frame, Serializable):
             )
 
         if dtype is None:
-            dtype = min_scalar_type(len(cats), 8)
+            dtype = min_scalar_type(max(len(cats), na_sentinel), 8)
 
         cats = column.as_column(cats)
         if is_mixed_with_object_dtype(self, cats):
@@ -2456,8 +2456,23 @@ class Series(Frame, Serializable):
             - *labels* contains the encoded values
             - *cats* contains the categories in order that the N-th
               item corresponds to the (N-1) code.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['a', 'a', 'c'])
+        >>> codes, uniques = s.factorize()
+        >>> codes
+        0    0
+        1    0
+        2    1
+        dtype: int8
+        >>> uniques
+        0    a
+        1    c
+        dtype: object
         """
-        cats = self.unique().astype(self.dtype)
+        cats = self.dropna().unique().astype(self.dtype)
 
         name = self.name  # label_encoding mutates self.name
         labels = self.label_encoding(cats=cats, na_sentinel=na_sentinel)

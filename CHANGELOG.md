@@ -21,6 +21,7 @@
 
 - PR #6073 Fix issue related to `.loc` incase of `DatetimeIndex`
 - PR #6081 Fix issue where fsspec thinks it has a protocol string
+- PR #6100 Fix issue in `Series.factorize` to correctly pick `na_sentinel` value
 
 
 # cuDF 0.15.0 (26 Aug 2020)
