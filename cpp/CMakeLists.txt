@@ -89,16 +89,33 @@ if("${GPU_ARCHS}" STREQUAL "")
 endif()
 
 if("${GPU_ARCHS}" STREQUAL "ALL")
-  set(GPU_ARCHS "60")
-  if((CUDA_VERSION_MAJOR EQUAL 9) OR (CUDA_VERSION_MAJOR GREATER 9))
-    set(GPU_ARCHS "${GPU_ARCHS};70")
+  
+  # Check for embedded vs workstation architectures
+  if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
+    # This is being built for Linux4Tegra or SBSA ARM64
+    set(GPU_ARCHS "62")
+    if((CUDA_VERSION_MAJOR EQUAL 9) OR (CUDA_VERSION_MAJOR GREATER 9))
+      set(GPU_ARCHS "${GPU_ARCHS};72")
+    endif()
+    if((CUDA_VERSION_MAJOR EQUAL 11) OR (CUDA_VERSION_MAJOR GREATER 11))
+      set(GPU_ARCHS "${GPU_ARCHS};75;80")
+    endif()
+
+  else()
+    # This is being built for an x86 or x86_64 architecture
+    set(GPU_ARCHS "60")
+    if((CUDA_VERSION_MAJOR EQUAL 9) OR (CUDA_VERSION_MAJOR GREATER 9))
+      set(GPU_ARCHS "${GPU_ARCHS};70")
+    endif()
+    if((CUDA_VERSION_MAJOR EQUAL 10) OR (CUDA_VERSION_MAJOR GREATER 10))
+      set(GPU_ARCHS "${GPU_ARCHS};75")
+    endif()
+    if((CUDA_VERSION_MAJOR EQUAL 11) OR (CUDA_VERSION_MAJOR GREATER 11))
+      set(GPU_ARCHS "${GPU_ARCHS};80")
+    endif()
+
   endif()
-  if((CUDA_VERSION_MAJOR EQUAL 10) OR (CUDA_VERSION_MAJOR GREATER 10))
-    set(GPU_ARCHS "${GPU_ARCHS};75")
-  endif()
-  if((CUDA_VERSION_MAJOR EQUAL 11) OR (CUDA_VERSION_MAJOR GREATER 11))
-    set(GPU_ARCHS "${GPU_ARCHS};80")
-  endif()
+  
 endif()
 message("GPU_ARCHS = ${GPU_ARCHS}")
 
