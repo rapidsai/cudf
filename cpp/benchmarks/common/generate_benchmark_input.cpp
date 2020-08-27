@@ -90,7 +90,7 @@ constexpr int64_t nanoseconds()
  * @tparam T Timestamp type
  */
 template <typename T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
-T random_element(std::mt19937& engine)
+T random_value(std::mt19937& engine)
 {
   // Timestamp for June 2020
   static constexpr int64_t current_ns    = 1591053936l * nanoseconds<cudf::timestamp_s>();
@@ -109,7 +109,7 @@ T random_element(std::mt19937& engine)
 }
 
 template <typename T, std::enable_if_t<cudf::is_duration<T>()>* = nullptr>
-T random_element(std::mt19937& engine)
+T random_value(std::mt19937& engine)
 {
   static constexpr auto duration_spread = 1. / (365 * 24 * 60 * 60);  // one in a year
 
@@ -126,7 +126,7 @@ T random_element(std::mt19937& engine)
 }
 
 template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
-T random_element(std::mt19937& engine)
+T random_value(std::mt19937& engine)
 {
   return T{};
 }
@@ -154,7 +154,7 @@ constexpr auto stddev()
  * @tparam T Numeric type
  */
 template <typename T, std::enable_if_t<cudf::is_numeric<T>()>* = nullptr>
-T random_element(std::mt19937& engine)
+T random_value(std::mt19937& engine)
 {
   static constexpr T lower_bound = std::numeric_limits<T>::lowest();
   static constexpr T upper_bound = std::numeric_limits<T>::max();
@@ -176,7 +176,7 @@ T random_element(std::mt19937& engine)
  * @return The random boolean value
  */
 template <>
-bool random_element<bool>(std::mt19937& engine)
+bool random_value<bool>(std::mt19937& engine)
 {
   std::uniform_int_distribution<> uniform{0, 1};
   return uniform(engine) == 1;
@@ -187,11 +187,16 @@ size_t null_mask_size(cudf::size_type num_rows)
   auto const bits_per_word = sizeof(cudf::bitmask_type) * 8;
   return (num_rows + bits_per_word - 1) / bits_per_word;
 }
-
-void reset_null_mask_bit(std::vector<cudf::bitmask_type>& null_mask, cudf::size_type row)
+bool get_null_mask_bit(cudf::bitmask_type* null_mask_data, cudf::size_type row)
 {
   auto const bits_per_word = sizeof(cudf::bitmask_type) * 8;
-  null_mask[row / bits_per_word] &= ~(cudf::bitmask_type(1) << row % bits_per_word);
+  return null_mask_data[row / bits_per_word] & (cudf::bitmask_type(1) << row % bits_per_word);
+}
+
+void reset_null_mask_bit(cudf::bitmask_type* null_mask_data, cudf::size_type row)
+{
+  auto const bits_per_word = sizeof(cudf::bitmask_type) * 8;
+  null_mask_data[row / bits_per_word] &= ~(cudf::bitmask_type(1) << row % bits_per_word);
 }
 
 /**
@@ -207,28 +212,57 @@ void reset_null_mask_bit(std::vector<cudf::bitmask_type>& null_mask, cudf::size_
 template <typename T>
 std::unique_ptr<cudf::column> create_random_column(std::mt19937& engine, cudf::size_type num_rows)
 {
-  // make_fixed_width_column then mutable_view, then get null_mask and data, then fill
   float const null_frequency        = 0.01;
+  cudf::size_type const cardinality = 0;
   cudf::size_type const avg_run_len = 4;
   std::gamma_distribution<float> rl_dist(4.f, avg_run_len / 4.f);
   std::uniform_real_distribution<float> null_dist;
 
+  T* h_samples     = nullptr;
   auto const dtype = cudf::data_type{cudf::type_to_id<T>()};
-  T* h_data;
-  CUDA_TRY(cudaMallocHost(&h_data, num_rows * size_of(dtype)));
-  cudf::size_type null_count = 0;
-  std::vector<cudf::bitmask_type> null_mask(null_mask_size(num_rows), ~0);
-  for (cudf::size_type i = 0; i < num_rows; ++i) {
-    auto const is_valid = null_dist(engine) >= null_frequency;
-    if (!is_valid) {
-      reset_null_mask_bit(null_mask, i);
-      ++null_count;
-    } else {
-      h_data[i] = random_element<T>(engine);
+  std::vector<cudf::bitmask_type> samples_null_mask;
+  if (cardinality > 0) {
+    CUDA_TRY(cudaMallocHost(&h_samples, cardinality * sizeof(T)));
+    samples_null_mask.insert(
+      samples_null_mask.end(), null_mask_size(cardinality), cudf::bitmask_type(~0));
+
+    for (cudf::size_type i = 0; i < cardinality; ++i) {
+      if (null_dist(engine) < null_frequency) {
+        reset_null_mask_bit(samples_null_mask.data(), i);
+      } else {
+        h_samples[i] = random_value<T>(engine);
+      }
     }
   }
+
+  T* h_data;
+  CUDA_TRY(cudaMallocHost(&h_data, num_rows * sizeof(T)));
+  cudf::size_type null_count = 0;
+  std::vector<cudf::bitmask_type> null_mask(null_mask_size(num_rows), ~0);
+
+  std::uniform_int_distribution<cudf::size_type> sample_dist{0, cardinality - 1};
+  for (cudf::size_type i = 0; i < num_rows; ++i) {
+    if (cardinality == 0) {
+      if (null_dist(engine) >= null_frequency) {
+        h_data[i] = random_value<T>(engine);
+      } else {
+        reset_null_mask_bit(null_mask.data(), i);
+        ++null_count;
+      }
+    } else {
+      auto const sample_idx = sample_dist(engine);
+      if (get_null_mask_bit(samples_null_mask.data(), sample_idx)) {
+        h_data[i] = h_samples[sample_idx];
+      } else {
+        reset_null_mask_bit(null_mask.data(), i);
+        ++null_count;
+      }
+    }
+  }
+  CUDA_TRY(cudaFreeHost(h_samples));
+
   auto d_data = rmm::device_buffer(h_data, num_rows * size_of(dtype), cudaStream_t(0));
-  cudaFree(h_data);
+  CUDA_TRY(cudaFreeHost(h_data));
   return std::make_unique<cudf::column>(
     dtype,
     num_rows,
@@ -241,11 +275,11 @@ std::unique_ptr<cudf::column> create_random_column(std::mt19937& engine, cudf::s
 /**
  * @brief Creates a string column with random content
  *
- * Uses a Poisson distribution around the mean string length. The average length of elements is 16
- * and currently there is no way to modify this via parameters.
+ * Uses a Poisson distribution around the mean string length. The average length of elements is
+ * 16 and currently there is no way to modify this via parameters.
  *
- * Due to random generation of the length of the columns elements, the resulting column will have a
- * slightly different size from @ref col_bytes.
+ * Due to random generation of the length of the columns elements, the resulting column will
+ * have a slightly different size from @ref col_bytes.
  *
  * @param[in] TODO
  *
@@ -358,7 +392,7 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> dtyp
   auto seed_engine = deterministic_engine();  // pass the seed param here
   std::vector<std::future<columns_vector>> col_futures;
   for (unsigned int i = 0; i < processor_count && next_col < num_cols; ++i) {
-    auto thread_engine         = deterministic_engine(random_element<unsigned>(seed_engine));
+    auto thread_engine         = deterministic_engine(random_value<unsigned>(seed_engine));
     auto const thread_num_cols = std::min(num_cols - next_col, cols_per_thread);
     std::vector<cudf::type_id> thread_types(out_dtype_ids.begin() + next_col,
                                             out_dtype_ids.begin() + next_col + thread_num_cols);
