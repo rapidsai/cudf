@@ -64,7 +64,8 @@ public enum DType {
   //DICTIONARY32(4, 22, "NO IDEA"),
 
   STRING(0, 23, "str"),
-  LIST(0, 24, "list");
+  LIST(0, 24, "list"),
+  STRUCT(0, 27, "struct");
 
   private static final DType[] D_TYPES = DType.values();
   final int sizeInBytes;

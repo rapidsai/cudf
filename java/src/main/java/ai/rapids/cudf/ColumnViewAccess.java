@@ -29,7 +29,7 @@ public interface ColumnViewAccess<T> extends AutoCloseable {
 
   /**
    * IMPORTANT: It creates a new ColumnView, so you MUST close it once you are done.
-   * @param childIndex the child index
+   * @param childIndex the children index
    * @return a new ColumnViewAccess which should be closed afterwards.
    */
   ColumnViewAccess<T> getChildColumnViewAccess(int childIndex);

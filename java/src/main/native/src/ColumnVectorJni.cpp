@@ -51,6 +51,7 @@
 #include <cudf/unary.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/structs/structs_column_view.hpp>
 
 #include "cudf_jni_apis.hpp"
 
@@ -1217,10 +1218,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_hash(JNIEnv *env,
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeCudfColumnView(
     JNIEnv *env, jobject j_object, jint j_type, jlong j_data, jlong j_data_size, jlong j_offset,
-    jlong j_valid, jint j_null_count, jint size, jlong j_child) {
+    jlong j_valid, jint j_null_count, jint size, jlongArray j_children) {
 
   JNI_ARG_CHECK(env, (size != 0), "size is 0", 0);
   try {
+    using cudf::column_view;
     cudf::jni::auto_set_device(env);
     cudf::type_id n_type = static_cast<cudf::type_id>(j_type);
     cudf::data_type n_data_type(n_type);
@@ -1246,12 +1248,27 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeCudfColumnView(
       ret.reset(new cudf::column_view(cudf::data_type{cudf::type_id::STRING}, size, nullptr, valid,
                                       j_null_count, 0, {offsets_column, data_column}));
     } else if (n_type == cudf::type_id::LIST) {
-         JNI_NULL_CHECK(env, j_offset, "offset is null", 0);
-         cudf::column_view *child_view = reinterpret_cast<cudf::column_view *>(j_child);
-         cudf::size_type *offsets = reinterpret_cast<cudf::size_type *>(j_offset);
-         cudf::column_view offsets_column(cudf::data_type{cudf::type_id::INT32}, size + 1, offsets);
-         ret.reset(new cudf::column_view(cudf::data_type{cudf::type_id::LIST}, size, nullptr, valid,
+      JNI_NULL_CHECK(env, j_offset, "offset is null", 0);
+      jlong *childs = env->GetLongArrayElements(j_children, 0);
+      cudf::column_view *child_view = reinterpret_cast<cudf::column_view *>(childs[0]);
+      cudf::size_type *offsets = reinterpret_cast<cudf::size_type *>(j_offset);
+      cudf::column_view offsets_column(cudf::data_type{cudf::type_id::INT32}, size + 1, offsets);
+      ret.reset(new cudf::column_view(cudf::data_type{cudf::type_id::LIST}, size, nullptr, valid,
                                                  j_null_count, 0, {offsets_column, *child_view}));
+   } else if (n_type == cudf::type_id::STRUCT) {
+     JNI_NULL_CHECK(env, j_offset, "offset is null", 0);
+     cudf::size_type *offsets = reinterpret_cast<cudf::size_type *>(j_offset);
+     cudf::column_view offsets_column(cudf::data_type{cudf::type_id::INT32}, size + 1, offsets);
+     cudf::jni::native_jpointerArray<long> children(env, j_children);
+     jlong *childs = env->GetLongArrayElements(j_children, 0);
+     std::vector<column_view> children_vector(children.size() + 1);
+     children_vector[0] = offsets_column;
+     for (int i = 1; i < children.size() + 1; i++) {
+       cudf::column_view *child_view = reinterpret_cast<cudf::column_view *>(childs[i - 1]);
+       children_vector[i] = *child_view;
+     }
+     ret.reset(new cudf::column_view(cudf::data_type{cudf::type_id::STRUCT}, size, nullptr, valid,
+       j_null_count, 0, children_vector));
    } else {
      ret.reset(new cudf::column_view(n_data_type, size, data, valid, j_null_count));
     }
@@ -1363,10 +1380,17 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_getChildCvPointer(JNIEn
     try {
       cudf::jni::auto_set_device(env);
       cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
-      std::unique_ptr<cudf::lists_column_view> view = std::make_unique<cudf::lists_column_view>(*column);
-      // first child is always offsets which we do not want to get from this call
-      std::unique_ptr<cudf::column_view> next_view = std::make_unique<cudf::column_view>(column->child(1 + child_index));
-      return reinterpret_cast<jlong>(next_view.release());
+      if (column->type().id() == cudf::type_id::LIST) {
+        std::unique_ptr<cudf::lists_column_view> view = std::make_unique<cudf::lists_column_view>(*column);
+        // first child is always offsets which we do not want to get from this call
+        std::unique_ptr<cudf::column_view> next_view = std::make_unique<cudf::column_view>(column->child(1 + child_index));
+        return reinterpret_cast<jlong>(next_view.release());
+      } else {
+        std::unique_ptr<cudf::structs_column_view> view = std::make_unique<cudf::structs_column_view>(*column);
+        // first child is always offsets which we do not want to get from this call
+        std::unique_ptr<cudf::column_view> next_view = std::make_unique<cudf::column_view>(column->child(1 + child_index));
+        return reinterpret_cast<jlong>(next_view.release());
+      }
     }
     CATCH_STD(env, 0);
 }
@@ -1397,6 +1421,16 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_getNativeOffsetsPo
         ret[0] = 0;
         ret[1] = 0;
       }
+    } else if (column->type().id() == cudf::type_id::STRUCT) {
+          if (column->size() > 0) {
+            cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
+            cudf::column_view offsets_view = column->child(0);
+            ret[0] = reinterpret_cast<jlong>(offsets_view.data<char>());
+            ret[1] = sizeof(int) * offsets_view.size();
+          } else {
+            ret[0] = 0;
+            ret[1] = 0;
+          }
     } else {
       ret[0] = 0;
       ret[1] = 0;
