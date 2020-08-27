@@ -16,6 +16,7 @@
 
 #include <io/utilities/block_utils.cuh>
 #include "parquet_gpu.h"
+#include <thrust/tuple.h>
 
 namespace cudf {
 namespace io {
@@ -157,12 +158,150 @@ __device__ void skip_struct_field(byte_stream_s *bs, int t)
     return true;                            \
     }
 
-PARQUET_BEGIN_STRUCT(gpuParseDataPageHeader)
-PARQUET_FLD_INT32(1, page.num_input_values)
-PARQUET_FLD_ENUM(2, page.encoding, Encoding);
-PARQUET_FLD_ENUM(3, page.definition_level_encoding, Encoding);
-PARQUET_FLD_ENUM(4, page.repetition_level_encoding, Encoding);
-PARQUET_END_STRUCT()
+struct ParquetFieldInt32
+{
+  int field;
+  int32_t &val;
+
+  __device__
+  ParquetFieldInt32(int f, int32_t &v) : field(f), val(v) {}
+
+  inline __device__ bool
+    operator()(byte_stream_s *bs, int t)
+    {
+      val = get_i32(bs);
+      if (t != ST_FLD_I32) return true;
+      else return false;
+    }
+};
+
+template <typename Enum>
+struct ParquetFieldEnum
+{
+  int field;
+  uint8_t &val;
+
+  __device__
+  ParquetFieldEnum(int f, uint8_t &v) : field(f), val(v) {}
+
+  inline __device__ bool
+    operator()(byte_stream_s *bs, int t)
+    {
+      val = (Enum)get_i32(bs);
+      if (t != ST_FLD_I32) return true;
+      else return false;
+    }
+};
+
+template <int index>
+struct FunctionSwitchImpl
+{
+  template <typename... Operator>
+  static inline __device__ bool run(byte_stream_s *bs, int t, const int &fld, thrust::tuple<Operator...>& ops)
+  {
+    if (fld == thrust::get<index>(ops).field)
+    {
+      return thrust::get<index>(ops)(bs, t);
+    }
+    else
+    {
+      return FunctionSwitchImpl<index-1>::run(bs, t, fld, ops);
+    }
+  }
+};
+
+template <>
+struct FunctionSwitchImpl<0>
+{
+  template <typename... Operator>
+  static inline __device__ bool run(byte_stream_s *bs, int t, const int &fld, thrust::tuple<Operator...>& ops)
+  {
+    if (fld == thrust::get<0>(ops).field)
+    {
+      return thrust::get<0>(ops)(bs, t);
+    }
+    else
+    {
+      skip_struct_field(bs, t);
+      return false;
+    }
+  }
+};
+
+template <typename... Operator>
+__device__ bool function_switch(byte_stream_s *bs, int t, const int &fld, thrust::tuple<Operator...>& ops)
+{
+  constexpr int index = thrust::tuple_size<thrust::tuple<Operator...>>::value - 1;
+  return FunctionSwitchImpl<index>::run(bs, t, fld, ops);
+}
+
+template <typename... Operator>
+struct FunctionBuilder
+{
+  thrust::tuple<Operator...> &op_;
+
+  __device__
+  FunctionBuilder(thrust::tuple<Operator...> &op) : op_(op) {}
+
+  inline __device__ bool run(byte_stream_s *bs)
+  {
+    int fld = 0;
+    for (;;) {
+      int c, t, f;
+      c = getb(bs);
+      if (!c) break;
+      f   = c >> 4;
+      t   = c & 0xf;
+      fld = (f) ? fld + f : get_i32(bs);
+      bool exit_function = function_switch(bs, t, fld, op_);
+      if (exit_function) { return false; }
+    }
+    return true;
+  }
+};
+
+template <typename... Operator>
+inline __device__ bool function_builder(thrust::tuple<Operator...> &op, byte_stream_s *bs)
+{
+  int fld = 0;
+  for (;;) {
+    int c, t, f;
+    c = getb(bs);
+    if (!c) break;
+    f   = c >> 4;
+    t   = c & 0xf;
+    fld = (f) ? fld + f : get_i32(bs);
+    bool exit_function = function_switch(bs, t, fld, op);
+    if (exit_function) { return false; }
+  }
+  return true;
+}
+
+//__device__ bool gpuParseDataPageHeader(byte_stream_s *bs)
+//{
+//  auto t = std::make_tuple(
+//      ParquetFieldInt32(1, bs->page.num_input_values),
+//      ParquetFieldEnum<Encoding>(2, bs->page.encoding),
+//      ParquetFieldEnum<Encoding>(3, bs->page.definition_level_encoding),
+//      ParquetFieldEnum<Encoding>(4, bs->page.repetition_level_encoding));
+//}
+
+__device__ bool gpuParseDataPageHeader(byte_stream_s *bs)
+{
+  auto op = thrust::make_tuple(
+      ParquetFieldInt32(1, bs->page.num_input_values),
+      ParquetFieldEnum<Encoding>(2, bs->page.encoding),
+      ParquetFieldEnum<Encoding>(3, bs->page.definition_level_encoding),
+      ParquetFieldEnum<Encoding>(4, bs->page.repetition_level_encoding));
+  return function_builder(op, bs);
+}
+
+//PARQUET_BEGIN_STRUCT(gpuParseDataPageHeader)
+//PARQUET_FLD_INT32(1, page.num_input_values)
+//PARQUET_FLD_ENUM(2, page.encoding, Encoding);
+//PARQUET_FLD_ENUM(3, page.definition_level_encoding, Encoding);
+//PARQUET_FLD_ENUM(4, page.repetition_level_encoding, Encoding);
+//PARQUET_END_STRUCT()
 
 PARQUET_BEGIN_STRUCT(gpuParseDictionaryPageHeader)
 PARQUET_FLD_INT32(1, page.num_input_values)
@@ -177,14 +316,62 @@ PARQUET_FLD_ENUM(5, page.definition_level_encoding, Encoding);
 PARQUET_FLD_ENUM(6, page.repetition_level_encoding, Encoding);
 PARQUET_END_STRUCT()
 
-PARQUET_BEGIN_STRUCT(gpuParsePageHeader)
-PARQUET_FLD_ENUM(1, page_type, PageType)
-PARQUET_FLD_INT32(2, page.uncompressed_page_size)
-PARQUET_FLD_INT32(3, page.compressed_page_size)
-PARQUET_FLD_STRUCT(5, gpuParseDataPageHeader)
-PARQUET_FLD_STRUCT(7, gpuParseDictionaryPageHeader)
-PARQUET_FLD_STRUCT(8, gpuParseDataPageHeaderV2)
-PARQUET_END_STRUCT()
+//PARQUET_BEGIN_STRUCT(gpuParsePageHeader)
+//PARQUET_FLD_ENUM(1, page_type, PageType)
+//PARQUET_FLD_INT32(2, page.uncompressed_page_size)
+//PARQUET_FLD_INT32(3, page.compressed_page_size)
+//PARQUET_FLD_STRUCT(5, gpuParseDataPageHeader)
+//PARQUET_FLD_STRUCT(7, gpuParseDictionaryPageHeader)
+//PARQUET_FLD_STRUCT(8, gpuParseDataPageHeaderV2)
+//PARQUET_END_STRUCT()
+
+
+__device__ bool gpuParsePageHeader(byte_stream_s *bs)
+{
+  int fld = 0;
+  for (;;) {
+    int c, t, f;
+    c = getb(bs);
+    if (!c) break;
+    f   = c >> 4;
+    t   = c & 0xf;
+    fld = (f) ? fld + f : get_i32(bs);
+    bool exit_function = false;
+    if (fld == 1)
+    {
+      bs->page_type = (PageType)get_i32(bs);
+      if (t != ST_FLD_I32) exit_function = true;
+    }
+    else if (fld == 2)
+    {
+      bs->page.uncompressed_page_size = get_i32(bs);
+      if (t != ST_FLD_I32) exit_function = true;
+    }
+    else if (fld == 3)
+    {
+      bs->page.compressed_page_size = get_i32(bs);
+      if (t != ST_FLD_I32) exit_function = true;
+    }
+    else if (fld == 5)
+    {
+      if (t != ST_FLD_STRUCT || !gpuParseDataPageHeader(bs)) exit_function = true;
+    }
+    else if (fld == 7)
+    {
+      if (t != ST_FLD_STRUCT || !gpuParseDictionaryPageHeader(bs)) exit_function = true;
+    }
+    else if (fld == 8)
+    {
+      if (t != ST_FLD_STRUCT || !gpuParseDataPageHeaderV2(bs)) exit_function = true;
+    }
+    else
+    {
+        skip_struct_field(bs, t);
+    }
+    if (exit_function) { return false; }
+  }
+  return true;
+}
 
 /**
  * @brief Kernel for outputting page headers from the specified column chunks
