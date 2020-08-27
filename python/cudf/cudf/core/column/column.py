@@ -1607,7 +1607,6 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         mask = bools_to_mask(as_column(mask).unary_operator("not"))
 
         data = data.set_mask(mask)
-
     else:
         try:
             data = as_column(
@@ -1631,9 +1630,10 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
 
             except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError):
                 if is_categorical_dtype(dtype):
-                    sr = pd.Series(arbitrary, dtype="category")
-                    dtype = cudf.CategoricalDtype.from_pandas(sr.dtype)
-                    data = as_column(sr, nan_as_null=nan_as_null, dtype=dtype)
+                    if isinstance(dtype, pd.CategoricalDtype) or dtype is 'category':
+                        data = as_column(pd.Series(arbitrary, dtype=dtype), nan_as_null=nan_as_null)
+                    else:
+                        data = as_column(arbitrary, nan_as_null=nan_as_null).astype(dtype)
                 elif isinstance(cudf.dtype(dtype), cudf.StringDtype):
                     sr = pd.Series(arbitrary, dtype="str")
                     data = as_column(sr, nan_as_null=nan_as_null)
