@@ -190,7 +190,7 @@ def test_series_init_none():
     sr1 = Series()
     got = sr1.to_string()
     print(got)
-    expect = "Series([], dtype: float64)"
+    expect = "Series([], dtype: Float64)"
     # values should match despite whitespace difference
     assert got.split() == expect.split()
 
@@ -198,7 +198,7 @@ def test_series_init_none():
     sr2 = Series(None)
     got = sr2.to_string()
     print(got)
-    expect = "Series([], dtype: float64)"
+    expect = "Series([], dtype: Float64)"
     # values should match despite whitespace difference
     assert got.split() == expect.split()
 
@@ -449,9 +449,9 @@ def test_dataframe_astype(nelem):
     df = DataFrame()
     data = np.asarray(range(nelem), dtype=np.int32)
     df["a"] = data
-    assert df["a"].dtype is np.dtype(np.int32)
+    assert df["a"].dtype == gd.Int32Dtype()
     df["b"] = df["a"].astype(np.float32)
-    assert df["b"].dtype is np.dtype(np.float32)
+    assert df["b"].dtype == gd.Float32Dtype()
     np.testing.assert_equal(df["a"].to_array(), df["b"].to_array())
 
 
@@ -460,9 +460,9 @@ def test_index_astype(nelem):
     df = DataFrame()
     data = np.asarray(range(nelem), dtype=np.int32)
     df["a"] = data
-    assert df.index.dtype is np.dtype(np.int64)
+    assert df.index.dtype == gd.Int64Dtype()
     df.index = df.index.astype(np.float32)
-    assert df.index.dtype is np.dtype(np.float32)
+    assert df.index.dtype == gd.Float32Dtype()
     df["a"] = df["a"].astype(np.float32)
     np.testing.assert_equal(df.index.to_array(), df["a"].to_array())
     df["b"] = df["a"]
@@ -1545,9 +1545,7 @@ def gdf(pdf):
 @pytest.mark.parametrize("skipna", [True, False, None])
 def test_dataframe_reductions(data, func, skipna):
     pdf = pd.DataFrame(data=data)
-    print(func(pdf, skipna=skipna))
     gdf = DataFrame.from_pandas(pdf)
-    print(func(gdf, skipna=skipna))
     assert_eq(func(pdf, skipna=skipna), func(gdf, skipna=skipna))
 
 

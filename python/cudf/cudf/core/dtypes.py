@@ -326,6 +326,8 @@ def dtype(obj):
     elif issubclass(obj.__class__, Generic):
         return obj()
     if isinstance(obj, np.dtype):
+        if obj.type is np.str_:
+            return StringDtype()
         return np_to_cudf_dtypes[obj]
     elif isinstance(obj, pa.lib.DataType):
         return pa_to_cudf_dtypes[obj]
@@ -448,7 +450,7 @@ class CategoricalDtype(Generic):
         return cls(categories=categories, ordered=ordered)
 
 
-class ListDtype(ExtensionDtype):
+class ListDtype(Generic):
 
     name = "list"
 
@@ -483,7 +485,7 @@ class ListDtype(ExtensionDtype):
 
     @classmethod
     def from_arrow(cls, typ):
-        obj = object.__new__(cls)
+        obj = ListDtype.__new__(ListDtype)
         obj._typ = typ
         return obj
 

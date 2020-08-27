@@ -406,7 +406,7 @@ class Merge(object):
             elif isinstance(dtype_l, cudf.Datetime) and isinstance(
                 dtype_r, cudf.Datetime
             ):
-                libcudf_join_type = cudf.dtype(max(dtype_l, dtype_r))
+                libcudf_join_type = cudf.dtype(max(dtype_l.to_numpy, dtype_r.to_numpy))
         return libcudf_join_type
 
     def libcudf_to_output_casting_rules(self, lcol, rcol, how):

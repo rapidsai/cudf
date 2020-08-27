@@ -7,7 +7,7 @@ from cudf._lib.move cimport move
 from cudf._lib.scalar import as_scalar
 from cudf._lib.scalar cimport Scalar
 from cudf._lib.types import np_to_cudf_types
-from cudf._lib.types cimport underlying_type_t_type_id
+from cudf._lib.types cimport underlying_type_t_type_id, _Dtype
 
 from cudf.core.column.column import as_column
 
@@ -555,12 +555,8 @@ def timestamp2int(
     if input_col.size == 0:
         return as_column([], dtype=kwargs.get('dtype'))
     cdef column_view input_column_view = input_col.view()
-    cdef type_id tid = <type_id> (
-        <underlying_type_t_type_id> (
-            np_to_cudf_types[kwargs.get('dtype')]
-        )
-    )
-    cdef data_type out_type = data_type(tid)
+    cdef _Dtype pydtype = kwargs.get('dtype')
+    cdef data_type out_type = pydtype.get_libcudf_type()
     cdef string c_timestamp_format = kwargs.get('format').encode('UTF-8')
     cdef unique_ptr[column] c_result
     with nogil:

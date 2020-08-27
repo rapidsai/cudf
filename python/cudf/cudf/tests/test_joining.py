@@ -802,7 +802,7 @@ def test_join_empty_table_dtype():
     gright = DataFrame.from_pandas(right)
     pd_merge = left.merge(right, how="left", left_on=["a"], right_on=["b"])
     gd_merge = gleft.merge(gright, how="left", left_on=["a"], right_on=["b"])
-    assert_eq(pd_merge["a"].dtype, gd_merge["a"].dtype)
+    assert gd_merge['a'].dtype == pd_merge['a'].dtype
 
 
 @pytest.mark.parametrize("how", ["outer", "inner", "left", "right"])
@@ -1108,11 +1108,14 @@ def test_typecast_on_join_overflow_unsafe(dtypes):
     lhs = cudf.DataFrame({"a": [1, 2, 3, 4, 5]}, dtype=dtype_l)
     rhs = cudf.DataFrame({"a": [1, 2, 3, 4, dtype_l_max + 1]}, dtype=dtype_r)
 
+    l_typ_warn = cudf.dtype(dtype_l).name
+    r_typ_warn = cudf.dtype(dtype_r).name
+
     with pytest.warns(
         UserWarning,
         match=(
             f"can't safely cast column"
-            f" from right with type {dtype_r} to {dtype_l}"
+            f" from right with type {r_typ_warn} to {l_typ_warn}"
         ),
     ):
         merged = lhs.merge(rhs, on="a", how="left")  # noqa: F841

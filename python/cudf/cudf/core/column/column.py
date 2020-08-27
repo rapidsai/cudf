@@ -143,7 +143,7 @@ class ColumnBase(Column, Serializable):
         Return a CuPy representation of the Column.
         """
         if len(self) == 0:
-            return cupy.asarray([], dtype=self.dtype)
+            return cupy.asarray([], dtype=self.dtype.to_numpy)
 
         if self.has_nulls:
             raise ValueError("Column must have no nulls.")
@@ -1632,6 +1632,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError):
                 if is_categorical_dtype(dtype):
                     sr = pd.Series(arbitrary, dtype="category")
+                    dtype = cudf.CategoricalDtype.from_pandas(sr.dtype)
                     data = as_column(sr, nan_as_null=nan_as_null, dtype=dtype)
                 elif isinstance(cudf.dtype(dtype), cudf.StringDtype):
                     sr = pd.Series(arbitrary, dtype="str")
