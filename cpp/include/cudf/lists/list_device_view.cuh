@@ -19,6 +19,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/table/element_equality_comparator.cuh>
 #include <cstdio>
+#include "cudf/utilities/bit.hpp"
 #include "cudf/utilities/type_dispatcher.hpp"
 #include <cuda_runtime.h>
 
@@ -36,6 +37,9 @@ namespace detail {
 /**
  * @brief A non-owning, immutable view of device data that represents
  * a list of elements of arbitrary type (including further nested lists).
+ * 
+ * Analogous to list_view, a list_device_view represents a single row
+ * of lists, within a lists column.
  *
  */
 class list_device_view {
@@ -44,6 +48,12 @@ class list_device_view {
 
     public:
 
+        /**
+         * @brief Constructs list_device_view from the column that contains it.
+         *
+         * @param lists_column The list_column_device_view that contains this row.
+         * @param idx The row-index for this list row.
+         */
         CUDA_DEVICE_CALLABLE list_device_view(
             lists_column_device_view const& lists_column, 
             size_type const& idx);
@@ -56,19 +66,57 @@ class list_device_view {
             return !(*this == rhs);
         }
 
+        /**
+         * @brief Fetches the offset in the list column's child that corresponds to
+         * the element at the specified list index.
+         *
+         * Consider the following lists column:
+         *  [ 
+         *   [0,1,2], 
+         *   [3,4,5], 
+         *   [6,7,8] 
+         *  ]
+         *
+         * The list's internals would look like:
+         *  offsets: [0, 3, 6, 9]
+         *  child  : [0, 1, 2, 3, 4, 5, 6, 7, 8]
+         * 
+         * The second list row (i.e. row_index=1) is [3,4,5].
+         * The third element (i.e. idx=2) of the second list row is 5.
+         * 
+         * The offset of this element as stored in the child column (i.e. 5)
+         * may be fetched using this method.
+         */
         CUDA_DEVICE_CALLABLE size_type element_offset(size_type idx) const;
 
+        /**
+         * @brief Fetches the element at the specified index, within the list row.
+         *
+         * @tparam The type of the list's element.
+         * @param The index into the list row
+         * @return The element at the specified index of the list row.
+         */
         template<typename T>
         CUDA_DEVICE_CALLABLE T element(size_type idx) const;
 
-        // Check if element at index idx is null.
+        /**
+         * @brief Checks whether element is null at specified index in the list row.
+         */
         CUDA_DEVICE_CALLABLE bool is_null(size_type idx) const;
 
-        // Check if list itself is null.
+        /**
+         * @brief Checks whether this list row is null.
+         */
         CUDA_DEVICE_CALLABLE bool is_null() const;
 
+        /**
+         * @brief Fetches the number of elements in this list row.
+         */
         CUDA_DEVICE_CALLABLE size_type size() const {return _size;}
 
+        /**
+         * @brief Fetches the lists_column_device_view that contains this list.
+         */
         CUDA_DEVICE_CALLABLE lists_column_device_view const& get_column() const {return lists_column;}
 
     private:
@@ -82,6 +130,11 @@ class list_device_view {
 
 namespace detail {
 
+/**
+ * @brief Given a column-device-view, an instance of this class provides a
+ * wrapper on this compound column for list operations.
+ * Analogous to list_column_view.
+ */
 class lists_column_device_view 
 {
     public:
@@ -96,26 +149,45 @@ class lists_column_device_view
             :underlying(underlying)
         {}
 
+        /**
+         * @brief Fetches the list row at the specified index.
+         * @param idx The index into the list column at which the list row 
+         * is to be fetched
+         * @return list_device_view for the list row at the specified index.
+         */
         CUDA_DEVICE_CALLABLE cudf::list_device_view operator[](size_type idx) const
         {
             return cudf::list_device_view{*this, idx};
         }
 
+        /**
+         * @brief Fetches the offsets column of the underlying list column.
+         */
         CUDA_DEVICE_CALLABLE column_device_view offsets() const
         {
             return underlying.child(0);
         }
 
+        /**
+         * @brief Fetches the child column of the underlying list column.
+         */
         CUDA_DEVICE_CALLABLE column_device_view child() const
         {
             return underlying.child(1);
         }
 
+        /**
+         * @brief Indicates whether the list column is nullable.
+         */
         CUDA_DEVICE_CALLABLE bool nullable() const
         {
             return underlying.nullable();
         }
 
+        /**
+         * @brief Indicates whether the row (i.e. list) at the specified
+         * index is null.
+         */
         CUDA_DEVICE_CALLABLE bool is_null(size_type idx) const
         {
             return underlying.is_null(idx);
@@ -141,18 +213,21 @@ __device__ bool element_equality_comparator<has_nulls>::operator()(size_type lhs
 CUDA_DEVICE_CALLABLE list_device_view::list_device_view(lists_column_device_view const& lists_column, size_type const& row_index)
     : lists_column(lists_column), _row_index(row_index)
 {
-    release_assert((row_index >= 0 && row_index < lists_column.size())); // TODO: Add descriptive message.
+    release_assert( row_index >= 0 && row_index < lists_column.size() 
+        && "row_index out of bounds"); 
+
     column_device_view const& offsets = lists_column.offsets();
-    release_assert((row_index < offsets.size()));                        // TODO: Add descriptive message.
+    release_assert( row_index < offsets.size() && "row_index should not have exceeded offset size"); 
+
     begin_offset = offsets.element<size_type>(row_index);
-    release_assert((begin_offset >= 0 && begin_offset < child().size()));// TODO: Add descriptive message.
+    release_assert(begin_offset >= 0 && begin_offset < child().size() && "begin_offset out of bounds.");
     _size = offsets.element<size_type>(row_index+1) - begin_offset;
 }
 
 CUDA_DEVICE_CALLABLE size_type list_device_view::element_offset(size_type idx) const
 {
-    release_assert((idx >= 0 && idx < size()));                          // TODO: Add descriptive message.
-    release_assert(!is_null() && !is_null(idx));                        // TODO: Add descriptive message.
+    release_assert(idx >= 0 && idx < size() && "idx out of bounds");
+    release_assert(!is_null() && !is_null(idx) && "Cannot read null element.");
     return begin_offset + idx;
 }
 
@@ -164,7 +239,7 @@ CUDA_DEVICE_CALLABLE T list_device_view::element(size_type idx) const
 
 CUDA_DEVICE_CALLABLE bool list_device_view::is_null(size_type idx) const
 {
-    release_assert((idx >= 0 && idx < size()));                          // TODO: Add descriptive message.
+    release_assert(idx >= 0 && idx < size() && "Index out of bounds.");
     auto element_offset = begin_offset + idx;
     return lists_column.child().is_null(element_offset);
 }
@@ -283,7 +358,6 @@ CUDA_DEVICE_CALLABLE bool list_device_view::operator == (list_device_view const&
     {
         // List of lists.
         // Must compare each list that this list-element contains, against rhs's.
-
         lists_column_device_view lhs_lists_column{lists_column.child()};
         lists_column_device_view rhs_lists_column{rhs.lists_column.child()};
         for(size_type i{0}; i<size(); ++i)
