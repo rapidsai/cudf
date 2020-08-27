@@ -24,7 +24,7 @@ _dtype_to_format_conversion = {
 
 class TimeDeltaColumn(column.ColumnBase):
     def __init__(
-        self, data, dtype, size, mask=None, offset=0, null_count=None
+        self, data, dtype, size=None, mask=None, offset=0, null_count=None
     ):
         """
         Parameters
@@ -46,6 +46,9 @@ class TimeDeltaColumn(column.ColumnBase):
         dtype = np.dtype(dtype)
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
+        if size is None:
+            size = data.size // dtype.itemsize
+            size = size - offset
 
         super().__init__(
             data,
