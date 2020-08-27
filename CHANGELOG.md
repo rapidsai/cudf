@@ -21,6 +21,7 @@
 
 - PR #6073 Fix issue related to `.loc` incase of `DatetimeIndex`
 - PR #6081 Fix issue where fsspec thinks it has a protocol string
+- PR #6100 Fix issue in `Series.factorize` to correctly pick `na_sentinel` value
 
 
 # cuDF 0.15.0 (26 Aug 2020)
@@ -352,6 +353,8 @@
 - PR #6032 Change black version to 19.10b0 in .pre-commit-config.yaml
 - PR #6041 Fix Java memory resource handler to rethrow original exception object
 - PR #6057 Fix issue in parquet reader with reading columns out of file-order
+- PR #6098 Patch Thrust to workaround CUDA_CUB_RET_IF_FAIL macro clearing CUDA errors
+
 
 # cuDF 0.14.0 (03 Jun 2020)
 
