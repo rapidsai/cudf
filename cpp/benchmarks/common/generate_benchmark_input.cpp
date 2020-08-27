@@ -199,6 +199,15 @@ void reset_null_mask_bit(cudf::bitmask_type* null_mask_data, cudf::size_type row
   null_mask_data[row / bits_per_word] &= ~(cudf::bitmask_type(1) << row % bits_per_word);
 }
 
+template < typename T, typename Val_gen, typename Valid_gen>
+void set_element_at(Val_gen const& value_gen, Valid_gen const& valid_gen, T* values, cudf::bitmask_type* null_mask, cudf::size_type idx){
+  if (valid_gen()){
+    values[idx] = value_gen();
+  } else {
+    reset_null_mask_bit(null_mask, idx);
+  }
+}
+
 /**
  * @brief Creates a column with random content of the given type
  *
@@ -215,61 +224,49 @@ std::unique_ptr<cudf::column> create_random_column(std::mt19937& engine, cudf::s
   float const null_frequency        = 0.01;
   cudf::size_type const cardinality = 0;
   cudf::size_type const avg_run_len = 4;
-  std::gamma_distribution<float> rl_dist(4.f, avg_run_len / 4.f);
+  
   std::uniform_real_distribution<float> null_dist;
+  auto value_gen = [&]() { return random_value<T>(engine); };
+  auto valid_gen = [&]() { return null_dist(engine) >= null_frequency; };
 
-  T* h_samples     = nullptr;
-  auto const dtype = cudf::data_type{cudf::type_to_id<T>()};
-  std::vector<cudf::bitmask_type> samples_null_mask;
+  T* samples     = nullptr;
+  CUDA_TRY(cudaMallocHost(&samples, cardinality * sizeof(T)));
+  std::vector<cudf::bitmask_type> samples_null_mask(null_mask_size(cardinality), cudf::bitmask_type(~0));
   if (cardinality > 0) {
-    CUDA_TRY(cudaMallocHost(&h_samples, cardinality * sizeof(T)));
-    samples_null_mask.insert(
-      samples_null_mask.end(), null_mask_size(cardinality), cudf::bitmask_type(~0));
-
-    for (cudf::size_type i = 0; i < cardinality; ++i) {
-      if (null_dist(engine) < null_frequency) {
-        reset_null_mask_bit(samples_null_mask.data(), i);
-      } else {
-        h_samples[i] = random_value<T>(engine);
-      }
+    for (cudf::size_type si = 0; si < cardinality; ++si) {
+      set_element_at(value_gen, valid_gen, samples, samples_null_mask.data(), si);
     }
   }
 
-  T* h_data;
-  CUDA_TRY(cudaMallocHost(&h_data, num_rows * sizeof(T)));
-  cudf::size_type null_count = 0;
+  T* data;
+  CUDA_TRY(cudaMallocHost(&data, num_rows * sizeof(T)));
   std::vector<cudf::bitmask_type> null_mask(null_mask_size(num_rows), ~0);
-
+  
   std::uniform_int_distribution<cudf::size_type> sample_dist{0, cardinality - 1};
-  for (cudf::size_type i = 0; i < num_rows; ++i) {
+  std::gamma_distribution<float> rl_dist(4.f, avg_run_len / 4.f);
+  for (cudf::size_type row = 0; row < num_rows; ++row) {
     if (cardinality == 0) {
-      if (null_dist(engine) >= null_frequency) {
-        h_data[i] = random_value<T>(engine);
-      } else {
-        reset_null_mask_bit(null_mask.data(), i);
-        ++null_count;
-      }
+      set_element_at(value_gen, valid_gen, data, null_mask.data(), row);
     } else {
       auto const sample_idx = sample_dist(engine);
-      if (get_null_mask_bit(samples_null_mask.data(), sample_idx)) {
-        h_data[i] = h_samples[sample_idx];
-      } else {
-        reset_null_mask_bit(null_mask.data(), i);
-        ++null_count;
-      }
+      set_element_at(
+        [&]() { return samples[sample_idx]; }, 
+        [&]() { return get_null_mask_bit(samples_null_mask.data(), sample_idx); }, 
+        data, 
+        null_mask.data(), 
+        row);
     }
   }
-  CUDA_TRY(cudaFreeHost(h_samples));
+  CUDA_TRY(cudaFreeHost(samples));
 
-  auto d_data = rmm::device_buffer(h_data, num_rows * size_of(dtype), cudaStream_t(0));
-  CUDA_TRY(cudaFreeHost(h_data));
+  auto d_data = rmm::device_buffer(data, num_rows * sizeof(T), cudaStream_t(0));
+  CUDA_TRY(cudaFreeHost(data));
   return std::make_unique<cudf::column>(
-    dtype,
+    cudf::data_type{cudf::type_to_id<T>()},
     num_rows,
     std::move(d_data),
     rmm::device_buffer(
-      null_mask.data(), null_mask.size() * sizeof(cudf::bitmask_type), cudaStream_t(0)),
-    null_count);
+      null_mask.data(), null_mask.size() * sizeof(cudf::bitmask_type), cudaStream_t(0)));
 }
 
 /**
