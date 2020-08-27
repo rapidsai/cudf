@@ -146,13 +146,13 @@ class corresponding_rows_not_equivalent {
   }
 };
 
-std::string make_differences_message(thrust::device_vector<int> const& differences,
-                                     column_view const& lhs,
-                                     column_view const& rhs,
-                                     bool all_differences,
-                                     int depth)
+std::string differences_message(thrust::device_vector<int> const& differences,
+                                column_view const& lhs,
+                                column_view const& rhs,
+                                bool all_differences,
+                                int depth)
 {
-  CUDF_EXPECTS(not differences.empty(), "Shouldn't enter this function if `differences` are empty");
+  CUDF_EXPECTS(not differences.empty(), "Shouldn't enter this function if `differences` is empty");
 
   std::string const depth_str = depth > 0 ? "depth " + std::to_string(depth) + '\n' : "";
 
@@ -204,18 +204,18 @@ struct column_comparator_impl {
                                               corresponding_rows_unequal,
                                               corresponding_rows_not_equivalent>;
 
-    auto diffs = thrust::device_vector<int>(lhs.size());  // worst case - everything is different
-    auto diff_iter = thrust::copy_if(thrust::device,
+    auto differences = thrust::device_vector<int>(lhs.size());  // worst case: everything different
+    auto diff_iter   = thrust::copy_if(thrust::device,
                                      thrust::make_counting_iterator(0),
                                      thrust::make_counting_iterator(lhs.size()),
-                                     diffs.begin(),
+                                     differences.begin(),
                                      ComparatorType(*d_lhs, *d_rhs));
 
-    diffs.resize(thrust::distance(diffs.begin(), diff_iter));  // shrink back down
+    differences.resize(thrust::distance(differences.begin(), diff_iter));  // shrink back down
 
-    if (not diffs.empty()) {
-      auto const msg = make_differences_message(diffs, lhs, rhs, print_all_differences, depth);
-      EXPECT_EQ(diffs.size(), size_t{0}) << msg;
+    if (not differences.empty()) {
+      auto const msg = differences_message(differences, lhs, rhs, print_all_differences, depth);
+      EXPECT_EQ(differences.size(), size_t{0}) << msg;
     }
   }
 };
@@ -239,7 +239,7 @@ struct column_comparator_impl<list_view, check_exact_equality> {
     if (lhs_l.size() == 0) { return; }
 
     // worst case - everything is different
-    thrust::device_vector<int> diffs(lhs.size());
+    thrust::device_vector<int> differences(lhs.size());
 
     // TODO : determine how equals/equivalency should work for columns with divergent underlying
     // data, but equivalent null masks. Example:
@@ -291,7 +291,7 @@ struct column_comparator_impl<list_view, check_exact_equality> {
       thrust::device,
       thrust::make_counting_iterator(0),
       thrust::make_counting_iterator(lhs_l.size() + 1),
-      diffs.begin(),
+      differences.begin(),
       [lhs_offsets, rhs_offsets, lhs_valids, rhs_valids, num_rows = lhs_l.size()] __device__(
         size_type index) {
         // last offset has no validity associated with it
@@ -304,11 +304,11 @@ struct column_comparator_impl<list_view, check_exact_equality> {
         return lhs_offsets[index] == rhs_offsets[index] ? false : true;
       });
 
-    diffs.resize(thrust::distance(diffs.begin(), diff_iter));  // shrink back down
+    differences.resize(thrust::distance(differences.begin(), diff_iter));  // shrink back down
 
-    if (not diffs.empty()) {
-      auto const msg = make_differences_message(diffs, lhs, rhs, print_all_differences, depth);
-      EXPECT_EQ(diffs.size(), size_t{0}) << msg;
+    if (not differences.empty()) {
+      auto const msg = differences_message(differences, lhs, rhs, print_all_differences, depth);
+      EXPECT_EQ(differences.size(), size_t{0}) << msg;
     }
 
     // recurse
