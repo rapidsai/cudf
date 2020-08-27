@@ -245,6 +245,11 @@ class data_type {
    **/
   CUDA_HOST_DEVICE_CALLABLE type_id id() const noexcept { return _id; }
 
+  /**
+   * @brief Returns the scale (for fixed_point types)
+   **/
+  CUDA_HOST_DEVICE_CALLABLE int32_t scale() const noexcept { return _scale; }
+
  private:
   type_id _id{type_id::EMPTY};
   // Store additional type specific metadata, timezone, decimal precision and scale, etc.
