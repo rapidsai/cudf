@@ -164,7 +164,7 @@ class metadata {
    *
    * @return List of stripe info and total number of selected rows
    **/
-  auto select_stripes(const std::vector<size_type> &stripe_list,
+  auto select_stripes(const std::vector<size_type> &stripes,
                       size_type &row_start,
                       size_type &row_count)
   {
@@ -604,7 +604,7 @@ reader::impl::impl(std::unique_ptr<datasource> source,
 
 table_with_metadata reader::impl::read(size_type skip_rows,
                                        size_type num_rows,
-                                       const std::vector<size_type> &stripe_list,
+                                       const std::vector<size_type> &stripes,
                                        cudaStream_t stream)
 {
   std::vector<std::unique_ptr<column>> out_columns;

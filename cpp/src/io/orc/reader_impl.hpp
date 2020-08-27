@@ -76,7 +76,7 @@ class reader::impl {
    */
   table_with_metadata read(size_type skip_rows,
                            size_type num_rows,
-                           const std::vector<size_type> &stripe_list,
+                           const std::vector<size_type> &stripes,
                            cudaStream_t stream);
 
  private:

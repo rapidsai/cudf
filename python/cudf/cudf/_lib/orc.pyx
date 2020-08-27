@@ -130,7 +130,7 @@ cdef read_orc_args make_read_orc_args(filepath_or_buffer,
     cdef read_orc_args args = read_orc_args(
         make_source_info([filepath_or_buffer])
     )
-    args.stripe_list = stripes
+    args.stripes = stripes
     args.skip_rows = skip_rows
     args.num_rows = num_rows
     args.timestamp_type = data_type(timestamp_type)
