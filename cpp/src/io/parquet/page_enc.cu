@@ -87,6 +87,9 @@ inline __device__ uint32_t uint64_init_hash(uint64_t v)
 /**
  * @brief Initializes encoder page fragments
  *
+ * Based on the number of rows in each fragment, populates the value count, the size of data in the
+ * fragment, the number of unique values, and the data size of unique values.
+ *
  * @param[in] frag Fragment array [fragment_id][column_id]
  * @param[in] col_desc Column description array [column_id]
  * @param[in] num_fragments Number of fragments per column
@@ -129,16 +132,16 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
     s->frag.dict_data_size     = 0;
     s->total_dupes             = 0;
 
-  // To use num_vals instead of num_rows, we need to calculate num_vals on the fly.
-  // For list<list<int>>, values between i and i+50 can be calculated by
-  // off_11 = off[i], off_12 = off[i+50]
-  // off_21 = child.off[off_11], off_22 = child.off[off_12]
+    // To use num_vals instead of num_rows, we need to calculate num_vals on the fly.
+    // For list<list<int>>, values between i and i+50 can be calculated by
+    // off_11 = off[i], off_12 = off[i+50]
+    // off_21 = child.off[off_11], off_22 = child.off[off_12]
     start_value_idx         = start_row;
     size_type end_value_idx = start_row + s->frag.num_rows;
-  for (size_type i = 0; i < s->col.nesting_levels; i++) {
-    start_value_idx = s->col.nesting_offsets[i][start_value_idx];
-    end_value_idx   = s->col.nesting_offsets[i][end_value_idx];
-  }
+    for (size_type i = 0; i < s->col.nesting_levels; i++) {
+      start_value_idx = s->col.nesting_offsets[i][start_value_idx];
+      end_value_idx   = s->col.nesting_offsets[i][end_value_idx];
+    }
     s->frag.num_leaf_values = end_value_idx - start_value_idx;
     s->start_value_idx      = start_value_idx;
 
@@ -148,9 +151,9 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
       // location of these pre-calc level values can be obtained from level_offsets which are
       // per-row offsets into these values. But they only contain offsets from the top level
       // of nesting. So List<List<int>> will only contain one level_offsets.
-    size_type first_level_val_idx = s->col.level_offsets[start_row];
+      size_type first_level_val_idx = s->col.level_offsets[start_row];
       size_type last_level_val_idx  = s->col.level_offsets[start_row + s->frag.num_rows];
-    s->frag.num_values            = last_level_val_idx - first_level_val_idx;
+      s->frag.num_values            = last_level_val_idx - first_level_val_idx;
     } else {
       s->frag.num_values = s->frag.num_rows;
     }
