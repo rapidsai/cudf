@@ -15,6 +15,18 @@
 #include <vector>
 
 /**
+ * @brief Helper for pinned host memory
+ **/
+template <typename T>
+using pinned_buffer = std::unique_ptr<T[], decltype(&cudaFreeHost)>;
+template <typename T>
+auto pinned_alloc = [](size_t count) {
+  T* ptr = nullptr;
+  CUDA_TRY(cudaMallocHost(&ptr, count * sizeof(T)));
+  return ptr;
+};
+
+/**
  * @file generate_benchmark_input.hpp
  * @brief Contains functions that generate columns filled with random data.
  *
@@ -187,21 +199,26 @@ size_t null_mask_size(cudf::size_type num_rows)
   auto const bits_per_word = sizeof(cudf::bitmask_type) * 8;
   return (num_rows + bits_per_word - 1) / bits_per_word;
 }
-bool get_null_mask_bit(cudf::bitmask_type* null_mask_data, cudf::size_type row)
+bool get_null_mask_bit(std::vector<cudf::bitmask_type> const& null_mask_data, cudf::size_type row)
 {
   auto const bits_per_word = sizeof(cudf::bitmask_type) * 8;
   return null_mask_data[row / bits_per_word] & (cudf::bitmask_type(1) << row % bits_per_word);
 }
 
-void reset_null_mask_bit(cudf::bitmask_type* null_mask_data, cudf::size_type row)
+void reset_null_mask_bit(std::vector<cudf::bitmask_type>& null_mask_data, cudf::size_type row)
 {
   auto const bits_per_word = sizeof(cudf::bitmask_type) * 8;
   null_mask_data[row / bits_per_word] &= ~(cudf::bitmask_type(1) << row % bits_per_word);
 }
 
-template < typename T, typename Val_gen, typename Valid_gen>
-void set_element_at(Val_gen const& value_gen, Valid_gen const& valid_gen, T* values, cudf::bitmask_type* null_mask, cudf::size_type idx){
-  if (valid_gen()){
+template <typename T, typename Val_gen, typename Valid_gen>
+void set_element_at(Val_gen const& value_gen,
+                    Valid_gen const& valid_gen,
+                    T* values,
+                    std::vector<cudf::bitmask_type>& null_mask,
+                    cudf::size_type idx)
+{
+  if (valid_gen()) {
     values[idx] = value_gen();
   } else {
     reset_null_mask_bit(null_mask, idx);
@@ -222,51 +239,85 @@ template <typename T>
 std::unique_ptr<cudf::column> create_random_column(std::mt19937& engine, cudf::size_type num_rows)
 {
   float const null_frequency        = 0.01;
-  cudf::size_type const cardinality = 0;
+  cudf::size_type const cardinality = 100;
   cudf::size_type const avg_run_len = 4;
-  
+
   std::uniform_real_distribution<float> null_dist;
   auto value_gen = [&]() { return random_value<T>(engine); };
-  auto valid_gen = [&]() { return null_dist(engine) >= null_frequency; };
+  auto valid_gen = [&]() { return null_frequency == 0.f || null_dist(engine) >= null_frequency; };
 
-  T* samples     = nullptr;
-  CUDA_TRY(cudaMallocHost(&samples, cardinality * sizeof(T)));
-  std::vector<cudf::bitmask_type> samples_null_mask(null_mask_size(cardinality), cudf::bitmask_type(~0));
-  if (cardinality > 0) {
-    for (cudf::size_type si = 0; si < cardinality; ++si) {
-      set_element_at(value_gen, valid_gen, samples, samples_null_mask.data(), si);
-    }
+  pinned_buffer<T> samples{pinned_alloc<T>(cardinality), cudaFreeHost};
+  std::vector<cudf::bitmask_type> samples_null_mask(null_mask_size(cardinality), ~0);
+  for (cudf::size_type si = 0; si < cardinality; ++si) {
+    set_element_at(value_gen, valid_gen, samples.get(), samples_null_mask, si);
   }
 
-  T* data;
-  CUDA_TRY(cudaMallocHost(&data, num_rows * sizeof(T)));
-  std::vector<cudf::bitmask_type> null_mask(null_mask_size(num_rows), ~0);
-  
   std::uniform_int_distribution<cudf::size_type> sample_dist{0, cardinality - 1};
   std::gamma_distribution<float> rl_dist(4.f, avg_run_len / 4.f);
+  pinned_buffer<T> data{pinned_alloc<T>(num_rows), cudaFreeHost};
+  std::vector<cudf::bitmask_type> null_mask(null_mask_size(num_rows), ~0);
+
   for (cudf::size_type row = 0; row < num_rows; ++row) {
     if (cardinality == 0) {
-      set_element_at(value_gen, valid_gen, data, null_mask.data(), row);
+      set_element_at(value_gen, valid_gen, data.get(), null_mask, row);
     } else {
       auto const sample_idx = sample_dist(engine);
-      set_element_at(
-        [&]() { return samples[sample_idx]; }, 
-        [&]() { return get_null_mask_bit(samples_null_mask.data(), sample_idx); }, 
-        data, 
-        null_mask.data(), 
-        row);
+      set_element_at([&]() { return samples[sample_idx]; },
+                     [&]() { return get_null_mask_bit(samples_null_mask, sample_idx); },
+                     data.get(),
+                     null_mask,
+                     row);
     }
   }
-  CUDA_TRY(cudaFreeHost(samples));
 
-  auto d_data = rmm::device_buffer(data, num_rows * sizeof(T), cudaStream_t(0));
-  CUDA_TRY(cudaFreeHost(data));
   return std::make_unique<cudf::column>(
     cudf::data_type{cudf::type_to_id<T>()},
     num_rows,
-    std::move(d_data),
+    rmm::device_buffer(data.get(), num_rows * sizeof(T), cudaStream_t(0)),
     rmm::device_buffer(
       null_mask.data(), null_mask.size() * sizeof(cudf::bitmask_type), cudaStream_t(0)));
+}
+
+struct string_col_data {
+  std::vector<char> chars;
+  std::vector<int32_t> offsets;
+  std::vector<cudf::bitmask_type> null_mask;
+  explicit string_col_data(cudf::size_type rows, cudf::size_type size)
+  {
+    offsets.reserve(rows + 1);
+    offsets.push_back(0);
+    chars.reserve(size);
+    null_mask.insert(null_mask.end(), null_mask_size(rows), ~0);
+  }
+};
+
+// Assumes that the null mask is initialized with all bits valid
+void copy_string(cudf::size_type src_idx,
+                 string_col_data const& src,
+                 cudf::size_type dst_idx,
+                 string_col_data& dst)
+{
+  if (!get_null_mask_bit(src.null_mask, src_idx)) reset_null_mask_bit(dst.null_mask, dst_idx);
+  dst.chars.insert(dst.chars.end(),
+                   src.chars.begin() + src.offsets[src_idx],
+                   src.chars.begin() + src.offsets[src_idx + 1]);
+  dst.offsets.push_back(dst.offsets.back() + src.offsets[src_idx + 1] - src.offsets[src_idx]);
+}
+
+template <typename Length_gen, typename Char_gen, typename Valid_gen>
+void append_string(Length_gen const& len_gen,
+                   Char_gen const& char_gen,
+                   Valid_gen const& valid_gen,
+                   string_col_data& column_data)
+{
+  auto const idx = column_data.offsets.size() - 1;
+  column_data.offsets.push_back(column_data.offsets.back() + len_gen());
+  std::generate_n(std::back_inserter(column_data.chars),
+                  column_data.offsets[idx + 1] - column_data.offsets[idx],
+                  [&]() { return char_gen(); });
+
+  // TODO: use empty string for invalid fields?
+  if (!valid_gen()) { reset_null_mask_bit(column_data.null_mask, idx); }
 }
 
 /**
@@ -286,35 +337,39 @@ template <>
 std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(std::mt19937& engine,
                                                                       cudf::size_type num_rows)
 {
-  float const null_frequency          = 0.01;
-  static constexpr int avg_string_len = 16;
+  size_t constexpr bits_per_word = sizeof(cudf::bitmask_type) * 8;
 
-  auto const char_cnt        = avg_string_len * num_rows;
-  cudf::size_type null_count = 0;
+  float const null_frequency        = 0.01;
+  int const avg_string_len          = 16;
+  cudf::size_type const cardinality = 0;
+  cudf::size_type const avg_run_len = 4;
+
+  auto const char_cnt = avg_string_len * num_rows;
 
   std::poisson_distribution<> len_dist(avg_string_len);
   std::uniform_real_distribution<float> null_dist;
   std::uniform_int_distribution<char> char_dist{'!', '~'};
+  auto length_gen = [&]() { return len_dist(engine); };
+  auto char_gen   = [&]() { return char_dist(engine); };
+  auto valid_gen  = [&]() { return null_frequency == 0.f || null_dist(engine) >= null_frequency; };
 
-  std::vector<int32_t> offsets{0};
-  offsets.reserve(num_rows + 1);
-  std::vector<char> chars;
-  chars.reserve(char_cnt);
-  auto const bits_per_word = sizeof(cudf::bitmask_type) * 8;
-  std::vector<cudf::bitmask_type> null_mask(null_mask_size(num_rows), ~0);
-
-  for (int row = 1; row < num_rows; ++row) {
-    offsets.push_back(offsets.back() + len_dist(engine));
-    std::generate_n(std::back_inserter(chars), offsets.rbegin()[0] - offsets.rbegin()[1], [&]() {
-      return char_dist(engine);
-    });
-
-    if (null_frequency > 0.f && null_dist(engine) < null_frequency) {
-      null_mask[row / bits_per_word] &= ~(cudf::bitmask_type(1) << row % bits_per_word);
-      ++null_count;
-    }
+  string_col_data samples(cardinality, cardinality * avg_string_len);
+  for (cudf::size_type si = 0; si < cardinality; ++si) {
+    append_string(length_gen, char_gen, valid_gen, samples);
   }
-  return cudf::make_strings_column(chars, offsets, null_mask, null_count);
+
+  string_col_data out_col(num_rows, num_rows * avg_string_len);
+  std::uniform_int_distribution<cudf::size_type> sample_dist{0, cardinality - 1};
+  for (cudf::size_type row = 0; row < num_rows; ++row) {
+    if (cardinality == 0) {
+      append_string(length_gen, char_gen, valid_gen, out_col);
+    } else {
+      copy_string(sample_dist(engine), samples, row, out_col);
+    }
+    // TODO repeat here
+  }
+
+  return cudf::make_strings_column(out_col.chars, out_col.offsets, out_col.null_mask);
 }
 
 template <>
