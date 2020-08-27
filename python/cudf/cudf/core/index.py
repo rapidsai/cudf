@@ -1534,7 +1534,7 @@ class RangeIndex(Index):
         else:
             return False
 
-    def copy(self, name=None, deep=True, dtype=None):
+    def copy(self, deep=True, name=None, dtype=None):
         """
         Make a copy of this object.
 
@@ -1562,9 +1562,11 @@ class RangeIndex(Index):
 
         name = self.name if name is None else name
 
-        _idx_new = RangeIndex(start=self._start, stop=self._stop, name=name)
+        _idx_new = as_index(
+            self._values.copy(deep=deep).astype(dtype), name=name
+        )
 
-        return _idx_new.astype(dtype, copy=deep)
+        return _idx_new
 
     def __repr__(self):
         return (
@@ -1820,7 +1822,7 @@ class GenericIndex(Index):
     def _values(self):
         return next(iter(self._data.columns))
 
-    def copy(self, name=None, deep=True, dtype=None):
+    def copy(self, deep=True, name=None, dtype=None):
         """
         Make a copy of this object.
 
