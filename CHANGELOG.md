@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #5974 Use libcudf instead of cupy for `arange` or column creation from a scalar.
+- PR #6119 Add support for `dayofweek` property in `DateTimeIndex` and `DatetimeProperties`
 
 ## Improvements
 
