@@ -38,7 +38,7 @@ std::unique_ptr<column> group_collect(column_view const &values,
 
   return make_lists_column(num_groups,
                            std::move(offsets),
-                           std::make_unique<cudf::column>(values),
+                           std::make_unique<cudf::column>(values, stream, mr),
                            0,
                            std::move(null_mask),
                            stream,
