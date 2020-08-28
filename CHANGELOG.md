@@ -17,6 +17,7 @@
 - PR #6002 Add Java bindings for md5
 - PR #6067 Added compute codes for aarch64 devices
 - PR #6083 Small cleanup
+- PR #5984 Support gather() on CUDF struct columns
 
 ## Bug Fixes
 
