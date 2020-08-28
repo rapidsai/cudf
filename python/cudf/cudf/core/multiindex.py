@@ -852,7 +852,7 @@ class MultiIndex(Index):
         popped_names = []
         names = list(self.names)
 
-        for i in reversed(sorted(ilevels)):
+        for i in sorted(ilevels, reverse=True):
             names.pop(i)
             n = self._data.names[i]
             popped_data[n] = self._data.pop(n)
