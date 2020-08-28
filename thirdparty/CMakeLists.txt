@@ -31,6 +31,7 @@ FetchContent_Declare(
     # August 17, 2020
     GIT_TAG        f881e4b77833f4b4cb90e998a6c634eaabc2da61
     GIT_SHALLOW    true
+    PATCH_COMMAND COMMAND patch -p1 < "${CMAKE_CURRENT_SOURCE_DIR}/thrust-ret-if-fail.patch"
 )
 
 FetchContent_GetProperties(thrust)

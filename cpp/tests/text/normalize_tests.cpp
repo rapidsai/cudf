@@ -79,8 +79,19 @@ TEST_F(TextNormalizeTest, AllNullStrings)
 {
   cudf::test::strings_column_wrapper strings({"", "", ""}, {0, 0, 0});
   cudf::strings_column_view strings_view(strings);
+  auto results = nvtext::normalize_spaces(strings_view);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings);
+  results = nvtext::normalize_characters(strings_view, false);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings);
+}
+
+TEST_F(TextNormalizeTest, SomeNullStrings)
+{
+  cudf::test::strings_column_wrapper strings({"", ".", "a"}, {0, 1, 1});
+  cudf::strings_column_view strings_view(strings);
   auto results = nvtext::normalize_characters(strings_view, false);
-  EXPECT_EQ(results->size(), 0);
+  cudf::test::strings_column_wrapper expected({"", " . ", "a"}, {0, 1, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(TextNormalizeTest, NormalizeCharacters)
