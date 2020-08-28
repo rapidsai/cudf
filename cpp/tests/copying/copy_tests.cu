@@ -299,11 +299,11 @@ TYPED_TEST(CopyTestNumeric, CopyIfElseTestScalarColumn)
 
   cudf::numeric_scalar<T> lhs_w(5);
 
-  T rhs[]      = {6, 6, 6, 6};
+  T rhs[]      = {static_cast<T>(6), static_cast<T>(6), static_cast<T>(6), static_cast<T>(6)};
   bool rhs_v[] = {1, 0, 1, 1};
   wrapper<T> rhs_w(rhs, rhs + num_els, rhs_v);
 
-  T expected[] = {5, 6, 6, 5};
+  T expected[] = {static_cast<T>(5), static_cast<T>(6), static_cast<T>(6), static_cast<T>(5)};
   wrapper<T> expected_w(expected, expected + num_els, rhs_v);
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
@@ -320,13 +320,13 @@ TYPED_TEST(CopyTestNumeric, CopyIfElseTestColumnScalar)
   bool mask_v[] = {1, 1, 1, 0};
   cudf::test::fixed_width_column_wrapper<bool> mask_w(mask, mask + num_els, mask_v);
 
-  T lhs[]      = {5, 5, 5, 5};
+  T lhs[]      = {static_cast<T>(5), static_cast<T>(5), static_cast<T>(5), static_cast<T>(5)};
   bool lhs_v[] = {0, 1, 1, 1};
   wrapper<T> lhs_w(lhs, lhs + num_els, lhs_v);
 
   cudf::numeric_scalar<T> rhs_w(6);
 
-  T expected[] = {5, 6, 6, 6};
+  T expected[] = {static_cast<T>(5), static_cast<T>(6), static_cast<T>(6), static_cast<T>(6)};
   wrapper<T> expected_w(expected, expected + num_els, lhs_v);
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
@@ -345,7 +345,7 @@ TYPED_TEST(CopyTestNumeric, CopyIfElseTestScalarScalar)
   cudf::numeric_scalar<T> lhs_w(5);
   cudf::numeric_scalar<T> rhs_w(6, false);
 
-  T expected[] = {5, 6, 6, 5};
+  T expected[] = {static_cast<T>(5), static_cast<T>(6), static_cast<T>(6), static_cast<T>(5)};
   wrapper<T> expected_w(expected, expected + num_els, mask);
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
