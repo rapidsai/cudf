@@ -627,8 +627,7 @@ class DataFrameGroupBy(GroupBy):
         """
         Return the number of unique values per group
         """
-        # For DataFrameGroupBy, Pandas includes key columns for nunique:
-        return self.agg(dict.fromkeys(self.obj._data.keys(), "nunique"))
+        return self.agg("nunique")
 
 
 class SeriesGroupBy(GroupBy):

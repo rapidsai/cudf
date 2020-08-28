@@ -13,7 +13,6 @@ from cudf._lib.scalar import Scalar, as_scalar
 from cudf.core.column import column, string
 from cudf.core.column.datetime import _numpy_to_pandas_conversion
 from cudf.utils.dtypes import is_scalar, np_to_pa_dtype
-from cudf.utils.utils import buffers_from_pyarrow
 
 _dtype_to_format_conversion = {
     "timedelta64[ns]": "%D days %H:%M:%S",
@@ -71,30 +70,6 @@ class TimeDeltaColumn(column.ColumnBase):
             # cannot exist in `self`.
             return False
         return item.view("int64") in self.as_numerical
-
-    def _repr_str_col(self):
-        # NOTE: This is for __repr__ purposes only.
-        # Typecasting to "str" yields different output
-        # when compared to __repr__ output of a duration type
-        # A Typecast to "str" preserves "Days" field even if
-        # the number of days in all rows are <= 0, whereas
-        # in __repr__ output the number of "Days" are truncated
-        # from the output if the number of days in all the rows
-        # are <= 0, hence this is an interal API which truncates "Days"
-        # from the output repr to both match pandas and have
-        # cleaner output.
-
-        if not (
-            self.binary_operator(op="gt", rhs=np.timedelta64(1, "D"))
-        ).any():
-            format = "%H:%M:%S"
-        else:
-            format = None
-
-        result = self.as_string_column(dtype="str", format=format)
-        if self.has_nulls:
-            result = result.fillna(cudf._NA_REP)
-        return result
 
     def to_arrow(self):
         mask = None
@@ -270,21 +245,6 @@ class TimeDeltaColumn(column.ColumnBase):
             mask=self.base_mask,
             offset=self.offset,
             size=self.size,
-        )
-
-    @classmethod
-    def from_arrow(cls, array, dtype=None):
-        if dtype is None:
-            dtype = np.dtype("m8[{}]".format(array.type.unit))
-
-        pa_size, pa_offset, pamask, padata, _ = buffers_from_pyarrow(array)
-
-        return TimeDeltaColumn(
-            data=padata,
-            mask=pamask,
-            dtype=dtype,
-            size=pa_size,
-            offset=pa_offset,
         )
 
     def default_na_value(self):

@@ -221,7 +221,7 @@ extern "C" __global__ void __launch_bounds__(128)
       bs->base = bs->cur  = bs->ck.compressed_data;
       bs->end             = bs->base + bs->ck.compressed_size;
       bs->page.chunk_idx  = chunk;
-      bs->page.column_idx = bs->ck.col_index;
+      bs->page.column_idx = bs->ck.dst_col_index;
       // this computation is only valid for flat schemas. for nested schemas,
       // they will be recomputed in the preprocess step by examining repetition and
       // definition levels

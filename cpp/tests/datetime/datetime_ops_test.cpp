@@ -55,6 +55,10 @@ TYPED_TEST(NonTimestampTest, TestThrowsOnNonTimestamp)
   EXPECT_THROW(extract_second(col), cudf::logic_error);
   EXPECT_THROW(last_day_of_month(col), cudf::logic_error);
   EXPECT_THROW(day_of_year(col), cudf::logic_error);
+  EXPECT_THROW(
+    add_calendrical_months(
+      col, cudf::column{cudf::data_type{cudf::type_id::INT16}, 0, rmm::device_buffer{0}}),
+    cudf::logic_error);
 }
 
 struct BasicDatetimeOpsTest : public cudf::test::BaseFixture {
@@ -393,6 +397,141 @@ TEST_F(BasicDatetimeOpsTest, TestDayOfYearWithEmptyColumn)
   auto timestamps_d = fixed_width_column_wrapper<cudf::timestamp_s>{};
   auto out_col      = day_of_year(timestamps_d);
   EXPECT_EQ(out_col->size(), 0);
+}
+
+TEST_F(BasicDatetimeOpsTest, TestAddMonthsWithInvalidColType)
+{
+  using namespace cudf::test;
+  using namespace cudf::datetime;
+  using namespace simt::std::chrono;
+
+  // Time in seconds since epoch
+  // Dates converted using epochconverter.com
+  auto timestamps_s =
+    cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{
+      662688000L  // 1991-01-01 00:00:00 GMT
+    };
+
+  // Months has to be an INT16 type
+  auto months = cudf::test::fixed_width_column_wrapper<int32_t>{-2};
+
+  EXPECT_THROW(add_calendrical_months(timestamps_s, months), cudf::logic_error);
+}
+
+TEST_F(BasicDatetimeOpsTest, TestAddMonthsWithIncorrectColSizes)
+{
+  using namespace cudf::test;
+  using namespace cudf::datetime;
+  using namespace simt::std::chrono;
+
+  // Time in seconds since epoch
+  // Dates converted using epochconverter.com
+  auto timestamps_s =
+    cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{
+      662688000L  // 1991-01-01 00:00:00 GMT
+    };
+
+  // Provide more number of months rows than timestamp rows
+  auto months = cudf::test::fixed_width_column_wrapper<int16_t>{-2, 3};
+
+  EXPECT_THROW(add_calendrical_months(timestamps_s, months), cudf::logic_error);
+}
+
+TEST_F(BasicDatetimeOpsTest, TestAddMonthsWithSeconds)
+{
+  using namespace cudf::test;
+  using namespace cudf::datetime;
+  using namespace simt::std::chrono;
+
+  // Time in seconds since epoch
+  // Dates converted using epochconverter.com
+  auto timestamps_s =
+    cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{
+      662688000L,   // 1991-01-01 00:00:00 GMT
+      949496401L,   // 2000-02-02 13:00:01 GMT - leap year
+      1056931201L,  // 2003-06-30 00:00:01 GMT - last day of month
+      1056964201L,  // 2003-06-30 09:10:01 GMT - last day of month
+      1056974401L,  // 2003-06-30 12:00:01 GMT - last day of month
+      1056994021L,  // 2003-06-30 17:27:01 GMT - last day of month
+      0L,           // This is the UNIX epoch - 1970-01-01
+      0L,           // This is the UNIX epoch - 1970-01-01
+      -131586588L,  // 1965-10-31 00:10:12 GMT
+      -131550590L,  // 1965-10-31 10:10:10 GMT
+      -131544000L,  // 1965-10-31 12:00:00 GMT
+      -131536728L   // 1965-10-31 14:01:12 GMT
+    };
+
+  auto months =
+    cudf::test::fixed_width_column_wrapper<int16_t>{-2, 6, -1, 1, -4, 8, -2, 10, 4, -20, 1, 3};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    *add_calendrical_months(timestamps_s, months),
+    cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{
+      657417600L,   // 1990-11-01 00:00:00 GMT
+      965221201L,   // 2000-08-02 13:00:01 GMT
+      1054252801L,  // 2003-05-30 00:00:01 GMT
+      1059556201L,  // 2003-07-30 09:10:01 GMT
+      1046433601L,  // 2003-02-28 12:00:01 GMT
+      1078075621L,  // 2004-02-29 17:27:01 GMT
+      -5270400L,    // 1969-11-01
+      26265600L,    // 1970-11-01
+      -121218588L,  // 1966-02-28 00:10:12 GMT
+      -184254590L,  // 1964-02-29 10:10:10 GMT
+      -128952000L,  // 1965-11-30 12:00:00 GMT
+      -123587928L   // 1966-01-31 14:01:12 GMT
+    },
+    true);
+}
+
+TEST_F(BasicDatetimeOpsTest, TestAddMonthsWithSecondsAndNullValues)
+{
+  using namespace cudf::test;
+  using namespace cudf::datetime;
+  using namespace simt::std::chrono;
+
+  // Time in seconds since epoch
+  // Dates converted using epochconverter.com
+  auto timestamps_s =
+    cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{
+      {
+        662688000L,   // 1991-01-01 00:00:00 GMT
+        949496401L,   // 2000-02-02 13:00:01 GMT - leap year
+        1056931201L,  // 2003-06-30 00:00:01 GMT - last day of month
+        1056964201L,  // 2003-06-30 09:10:01 GMT - last day of month
+        1056974401L,  // 2003-06-30 12:00:01 GMT - last day of month
+        1056994021L,  // 2003-06-30 17:27:01 GMT - last day of month
+        0L,           // This is the UNIX epoch - 1970-01-01
+        0L,           // This is the UNIX epoch - 1970-01-01
+        -131586588L,  // 1965-10-31 00:10:12 GMT
+        -131550590L,  // 1965-10-31 10:10:10 GMT
+        -131544000L,  // 1965-10-31 12:00:00 GMT
+        -131536728L   // 1965-10-31 14:01:12 GMT
+      },
+      {true, false, true, false, true, false, true, false, true, true, true, true}};
+
+  auto months = cudf::test::fixed_width_column_wrapper<int16_t>{
+    {-2, 6, -1, 1, -4, 8, -2, 10, 4, -20, 1, 3},
+    {false, true, true, false, true, true, true, true, true, true, true, true}};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    *add_calendrical_months(timestamps_s, months),
+    cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{
+      {
+        0L,           // null value
+        0L,           // null value
+        1054252801L,  // 2003-05-30 00:00:01 GMT
+        0L,           // null value
+        1046433601L,  // 2003-02-28 12:00:01 GMT
+        0L,           // null value
+        -5270400L,    // 1969-11-01
+        0L,           // null value
+        -121218588L,  // 1966-02-28 00:10:12 GMT
+        -184254590L,  // 1964-02-29 10:10:10 GMT
+        -128952000L,  // 1965-11-30 12:00:00 GMT
+        -123587928L   // 1966-01-31 14:01:12 GMT
+      },
+      {false, false, true, false, true, false, true, false, true, true, true, true}},
+    true);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

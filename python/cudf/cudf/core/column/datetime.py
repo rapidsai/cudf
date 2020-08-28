@@ -4,15 +4,13 @@ import re
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.nvtx import annotate
 from cudf._lib.scalar import Scalar, as_scalar
 from cudf.core.column import column, string
-from cudf.utils.dtypes import is_scalar, np_to_pa_dtype
-from cudf.utils.utils import buffers_from_pyarrow
+from cudf.utils.dtypes import is_scalar
 
 # nanoseconds per time_unit
 _numpy_to_pandas_conversion = {
@@ -179,19 +177,6 @@ class DatetimeColumn(column.ColumnBase):
         else:
             return column.column_empty(0, dtype="object", masked=False)
 
-    def to_arrow(self):
-        mask = None
-        if self.nullable:
-            mask = pa.py_buffer(self.mask_array_view.copy_to_host())
-        data = pa.py_buffer(self.as_numerical.data_array_view.copy_to_host())
-        pa_dtype = np_to_pa_dtype(self.dtype)
-        return pa.Array.from_buffers(
-            type=pa_dtype,
-            length=len(self),
-            buffers=[mask, data],
-            null_count=self.null_count,
-        )
-
     def default_na_value(self):
         """Returns the default NA value for this column
         """
@@ -259,7 +244,7 @@ class DatetimeColumn(column.ColumnBase):
         Returns offset of first value that matches
         """
         value = pd.to_datetime(value)
-        value = column.as_column(value).as_numerical[0]
+        value = column.as_column(value, dtype=self.dtype).as_numerical[0]
         return self.as_numerical.find_first_value(value, closest=closest)
 
     def find_last_value(self, value, closest=False):
@@ -267,27 +252,12 @@ class DatetimeColumn(column.ColumnBase):
         Returns offset of last value that matches
         """
         value = pd.to_datetime(value)
-        value = column.as_column(value).as_numerical[0]
+        value = column.as_column(value, dtype=self.dtype).as_numerical[0]
         return self.as_numerical.find_last_value(value, closest=closest)
 
     @property
     def is_unique(self):
         return self.as_numerical.is_unique
-
-    @classmethod
-    def from_arrow(cls, array, dtype=None):
-        if dtype is None:
-            dtype = np.dtype("M8[{}]".format(array.type.unit))
-
-        pa_size, pa_offset, pamask, padata, _ = buffers_from_pyarrow(array)
-
-        return DatetimeColumn(
-            data=padata,
-            mask=pamask,
-            dtype=dtype,
-            size=pa_size,
-            offset=pa_offset,
-        )
 
     def can_cast_safely(self, to_dtype):
         if np.issubdtype(to_dtype, np.datetime64):

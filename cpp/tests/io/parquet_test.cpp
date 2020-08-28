@@ -1205,4 +1205,116 @@ TEST_F(ParquetReaderTest, UserBounds)
   }
 }
 
+TEST_F(ParquetReaderTest, ReorderedColumns)
+{
+  {
+    auto a = cudf::test::strings_column_wrapper{{"a", "", "c"}, {true, false, true}};
+    auto b = cudf::test::fixed_width_column_wrapper<int>{1, 2, 3};
+
+    cudf::table_view tbl{{a, b}};
+    auto filepath = temp_env->get_temp_filepath("ReorderedColumns.parquet");
+    cudf_io::table_metadata md;
+    md.column_names.push_back("a");
+    md.column_names.push_back("b");
+    cudf_io::write_parquet_args args{cudf_io::sink_info{filepath}, tbl};
+    args.metadata = &md;
+    cudf_io::write_parquet(args);
+
+    // read them out of order
+    cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
+    read_args.columns.push_back("b");
+    read_args.columns.push_back("a");
+    auto result = cudf_io::read_parquet(read_args);
+
+    cudf::test::expect_columns_equal(result.tbl->view().column(0), b);
+    cudf::test::expect_columns_equal(result.tbl->view().column(1), a);
+  }
+
+  {
+    auto a = cudf::test::fixed_width_column_wrapper<int>{1, 2, 3};
+    auto b = cudf::test::strings_column_wrapper{{"a", "", "c"}, {true, false, true}};
+
+    cudf::table_view tbl{{a, b}};
+    auto filepath = temp_env->get_temp_filepath("ReorderedColumns2.parquet");
+    cudf_io::table_metadata md;
+    md.column_names.push_back("a");
+    md.column_names.push_back("b");
+    cudf_io::write_parquet_args args{cudf_io::sink_info{filepath}, tbl};
+    args.metadata = &md;
+    cudf_io::write_parquet(args);
+
+    // read them out of order
+    cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
+    read_args.columns.push_back("b");
+    read_args.columns.push_back("a");
+    auto result = cudf_io::read_parquet(read_args);
+
+    cudf::test::expect_columns_equal(result.tbl->view().column(0), b);
+    cudf::test::expect_columns_equal(result.tbl->view().column(1), a);
+  }
+
+  auto a = cudf::test::fixed_width_column_wrapper<int>{1, 2, 3, 10, 20, 30};
+  auto b = cudf::test::strings_column_wrapper{{"a", "", "c", "cats", "dogs", "owls"},
+                                              {true, false, true, true, false, true}};
+  auto c = cudf::test::fixed_width_column_wrapper<int>{{15, 16, 17, 25, 26, 32},
+                                                       {false, true, true, true, true, false}};
+  auto d = cudf::test::strings_column_wrapper{"ducks", "sheep", "cows", "fish", "birds", "ants"};
+
+  cudf::table_view tbl{{a, b, c, d}};
+  auto filepath = temp_env->get_temp_filepath("ReorderedColumns3.parquet");
+  cudf_io::table_metadata md;
+  md.column_names.push_back("a");
+  md.column_names.push_back("b");
+  md.column_names.push_back("c");
+  md.column_names.push_back("d");
+  cudf_io::write_parquet_args args{cudf_io::sink_info{filepath}, tbl};
+  args.metadata = &md;
+  cudf_io::write_parquet(args);
+
+  {
+    // read them out of order
+    cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
+    read_args.columns.push_back("d");
+    read_args.columns.push_back("a");
+    read_args.columns.push_back("b");
+    read_args.columns.push_back("c");
+    auto result = cudf_io::read_parquet(read_args);
+
+    cudf::test::expect_columns_equal(result.tbl->view().column(0), d);
+    cudf::test::expect_columns_equal(result.tbl->view().column(1), a);
+    cudf::test::expect_columns_equal(result.tbl->view().column(2), b);
+    cudf::test::expect_columns_equal(result.tbl->view().column(3), c);
+  }
+
+  {
+    // read them out of order
+    cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
+    read_args.columns.push_back("c");
+    read_args.columns.push_back("d");
+    read_args.columns.push_back("a");
+    read_args.columns.push_back("b");
+    auto result = cudf_io::read_parquet(read_args);
+
+    cudf::test::expect_columns_equal(result.tbl->view().column(0), c);
+    cudf::test::expect_columns_equal(result.tbl->view().column(1), d);
+    cudf::test::expect_columns_equal(result.tbl->view().column(2), a);
+    cudf::test::expect_columns_equal(result.tbl->view().column(3), b);
+  }
+
+  {
+    // read them out of order
+    cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
+    read_args.columns.push_back("d");
+    read_args.columns.push_back("c");
+    read_args.columns.push_back("b");
+    read_args.columns.push_back("a");
+    auto result = cudf_io::read_parquet(read_args);
+
+    cudf::test::expect_columns_equal(result.tbl->view().column(0), d);
+    cudf::test::expect_columns_equal(result.tbl->view().column(1), c);
+    cudf::test::expect_columns_equal(result.tbl->view().column(2), b);
+    cudf::test::expect_columns_equal(result.tbl->view().column(3), a);
+  }
+}
+
 CUDF_TEST_PROGRAM_MAIN()

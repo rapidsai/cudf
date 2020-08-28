@@ -158,21 +158,21 @@ class metadata {
   /**
    * @brief Filters and reads the info of only a selection of stripes
    *
-   * @param[in] stripe_list Indices of individual stripes
+   * @param[in] stripes Indices of individual stripes
    * @param[in] row_start Starting row of the selection
    * @param[in,out] row_count Total number of rows selected
    *
    * @return List of stripe info and total number of selected rows
    **/
-  auto select_stripes(const std::vector<size_type> &stripe_list,
+  auto select_stripes(const std::vector<size_type> &stripes,
                       size_type &row_start,
                       size_type &row_count)
   {
     std::vector<OrcStripeInfo> selection;
 
-    if (!stripe_list.empty()) {
+    if (!stripes.empty()) {
       size_t stripe_rows = 0;
-      for (const auto &stripe_idx : stripe_list) {
+      for (const auto &stripe_idx : stripes) {
         CUDF_EXPECTS(stripe_idx >= 0 && stripe_idx < get_num_stripes(), "Invalid stripe index");
         selection.emplace_back(&ff.stripes[stripe_idx], nullptr);
         stripe_rows += ff.stripes[stripe_idx].numberOfRows;
@@ -604,14 +604,14 @@ reader::impl::impl(std::unique_ptr<datasource> source,
 
 table_with_metadata reader::impl::read(size_type skip_rows,
                                        size_type num_rows,
-                                       const std::vector<size_type> &stripe_list,
+                                       const std::vector<size_type> &stripes,
                                        cudaStream_t stream)
 {
   std::vector<std::unique_ptr<column>> out_columns;
   table_metadata out_metadata;
 
   // Select only stripes required (aka row groups)
-  const auto selected_stripes = _metadata->select_stripes(stripe_list, skip_rows, num_rows);
+  const auto selected_stripes = _metadata->select_stripes(stripes, skip_rows, num_rows);
 
   // Association between each ORC column and its cudf::column
   std::vector<int32_t> orc_col_map(_metadata->get_num_columns(), -1);
@@ -841,10 +841,9 @@ table_with_metadata reader::read_all(cudaStream_t stream)
 }
 
 // Forward to implementation
-table_with_metadata reader::read_stripes(const std::vector<size_type> &stripe_list,
-                                         cudaStream_t stream)
+table_with_metadata reader::read_stripes(const std::vector<size_type> &stripes, cudaStream_t stream)
 {
-  return _impl->read(0, -1, stripe_list, stream);
+  return _impl->read(0, -1, stripes, stream);
 }
 
 // Forward to implementation
