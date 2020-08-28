@@ -16,21 +16,34 @@ def _filter_row_group(filters, stats, row_group_idx):
     for conjunction in filters:
         res = True
         for col, op, val in conjunction:
-            row_group_stats = stats[col][row_group_idx]
+            row_group_stats = stats[col]
             if op == "=" or op == "==":
                 if (
-                    row_group_stats["minimum"]
-                    and val < row_group_stats["minimum"]
+                    row_group_stats["minimum"][row_group_idx]
+                    and val < row_group_stats["minimum"][row_group_idx]
                 ):
                     res = False
                 if (
-                    row_group_stats["maximum"]
-                    and val > row_group_stats["maximum"]
+                    row_group_stats["maximum"][row_group_idx]
+                    and val > row_group_stats["maximum"][row_group_idx]
                 ):
                     res = False
         if res:
             return True
     return False
+
+
+def _read_row_group_statistics(r, stripe_idx, cols):
+    stripe = r.read_stripe(stripe_idx)
+    stats = {}
+    for col in cols:
+        col_row_groups_stats = stripe[col]._stats
+        stats[col] = {
+            "minimum": [col_row_group_stats['minimum'] for col_row_group_stats in col_row_groups_stats],
+            "maximum": [col_row_group_stats['maximum'] for col_row_group_stats in col_row_groups_stats],
+            "number_of_values": [col_row_group_stats['number_of_values'] for col_row_group_stats in col_row_groups_stats]
+        }
+    return stats
 
 
 @ioutils.doc_read_orc_metadata()
@@ -79,9 +92,10 @@ def read_orc(
         f = (
             filepath_or_buffer
             if ioutils.is_file_like(filepath_or_buffer)
-            else open(filepath_or_buffer, "rb")
+            else open(filepath_or_buffer, "rb", buffering=0)
         )
-        r = pyorc.Reader(f)
+        # m = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+        r = pyorc.Reader(f, column_names=list(set([col for conjunction in filters for col, op, val in conjunction])))
 
         # Get relevant columns
         cols = set()
@@ -92,13 +106,18 @@ def read_orc(
                 conjunction[i] = (col, op, val)
         cols = sorted(cols)
 
-        print(conjunction)
+        # Prepare stripes or selection
+        stripes = sorted(stripes) if stripes else range(r.num_of_stripes)
 
-        # Select stripes
-        if not stripes:
-            stripes = range(r.num_of_stripes)
-        else:
-            stripes = sorted(stripes)
+        # Read in row-group statistics for each stripe for relevant columns
+        row_group_stats = {}
+        for stripe_idx in stripes:
+            row_group_stats[stripe_idx] = _read_row_group_statistics(r, stripe_idx, cols)
+        del r
+        if isinstance(filepath_or_buffer, str):
+            f.close()
+        
+        return cudf.DataFrame([])
 
         num_rows_scanned = 0
         num_rows_to_read = 0
@@ -106,19 +125,15 @@ def read_orc(
         filtered_stripes = []
         filtered_stripes_num_rows = 0
         for stripe_idx in stripes:
-            # Read in statistics for relevant columns
-            stripe = r.read_stripe(stripe_idx)
-            stats = {}
-            for col in cols:
-                stats[col] = stripe[col]._stats
-            num_row_groups = len(stats[cols[-1]])
+            stats = row_group_stats[stripe_idx]
+            num_row_groups = len(stats[cols[-1]]["number_of_values"])
 
             # Apply filters to each row group
             filter_stripe = True
             num_rows_scanned_in_stripe = 0
             for row_group_idx in range(num_row_groups):
-                row_group_size = next(iter(stats.values()))[row_group_idx][
-                    "number_of_values"
+                row_group_size = next(iter(stats.values()))["number_of_values"][
+                    row_group_idx
                 ]
                 if _filter_row_group(filters, stats, row_group_idx):
                     # If this is the first row group to pass filters,
@@ -153,31 +168,10 @@ def read_orc(
             if filtered_stripes_num_rows < num_rows
             else []
         )
-        print("skip_rows=" + str(skip_rows))
-        print("num_rows=" + str(num_rows))
-        print(stripes)
-
-        # If file object was read from, close
-        if isinstance(filepath_or_buffer, str):
-            f.close()
 
         # Return if empty
         if filtered_everything:
             return cudf.DataFrame([])
-            # return read_orc(
-            #     filepath_or_buffer,
-            #     engine=engine,
-            #     columns=columns,
-            #     filters=None,
-            #     stripes=None,
-            #     skip_rows=skip_rows,
-            #     num_rows=1,
-            #     use_index=use_index,
-            #     decimals_as_float=decimals_as_float,
-            #     force_decimal_scale=force_decimal_scale,
-            #     timestamp_type=timestamp_type,
-            #     **kwargs,
-            # ).iloc[0:0]
 
     if engine == "cudf":
         df = DataFrame._from_table(
