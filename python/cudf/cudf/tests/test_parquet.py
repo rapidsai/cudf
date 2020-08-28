@@ -129,8 +129,8 @@ def parquet_file(request, tmp_path_factory, pdf):
 
 
 @pytest.fixture(scope="module")
-def seed():
-    return 42
+def rdg_seed():
+    return int(os.environ.get("TEST_CUDF_RDG_SEED", "42"))
 
 
 def make_pdf(nrows, ncolumns=1, nvalids=0, dtype=np.int64):
@@ -324,7 +324,7 @@ def test_parquet_read_metadata(tmpdir, pdf):
         assert a == b
 
 
-def test_parquet_read_filtered(tmpdir, seed):
+def test_parquet_read_filtered(tmpdir, rdg_seed):
     # Generate data
     fname = tmpdir.join("filtered.parquet")
     dg.generate(
@@ -345,7 +345,7 @@ def test_parquet_read_filtered(tmpdir, seed):
                     True,
                 ),
             ],
-            seed=seed,
+            seed=rdg_seed,
         ),
         format={"name": "parquet", "row_group_size": 64},
     )
