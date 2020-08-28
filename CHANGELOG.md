@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #5843 Add `filters` parameter to Python `read_parquet` function for filtering row groups
+- PR #6116 Add `filters` parameter to Python `read_orc` function or filtering
 - PR #5974 Use libcudf instead of cupy for `arange` or column creation from a scalar.
 
 ## Improvements

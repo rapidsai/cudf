@@ -14,16 +14,115 @@ import pyorc
 import numpy as np
 
 
+def _apply_filter_bool_eq(val, col_stats):
+    if col_stats["kind"] == 0:
+        if val == True:
+            if (
+                "true_count" in col_stats and col_stats["true_count"] == 0
+            ) or (
+                "false_count" in col_stats
+                and col_stats["false_count"] == col_stats["number_of_values"]
+            ):
+                return False
+        elif val == False:
+            if (
+                "false_count" in col_stats and col_stats["false_count"] == 0
+            ) or (
+                "true_count" in col_stats
+                and col_stats["true_count"] == col_stats["number_of_values"]
+            ):
+                return False
+    return True
+
+
+def _apply_filter_not_eq(val, col_stats):
+    return (
+        ("minimum" in col_stats and val < col_stats["minimum"])
+        or ("lower_bound" in col_stats and val < col_stats["lower_bound"])
+        or ("maximum" in col_stats and val > col_stats["maximum"])
+        or ("upper_bound" in col_stats and val > col_stats["upper_bound"])
+    )
+
+
 def _apply_filters(filters, stats):
     for conjunction in filters:
         res = True
         for col, op, val in conjunction:
+            # Get stats
             col_stats = stats[col]
+            if "lower_bound" in col_stats:
+                col_stats["minimum"] = col_stats["lower_bound"]
+            if "upper_bound" in col_stats:
+                col_stats["maximum"] = col_stats["upper_bound"]
+
+            # Apply operators
             if op == "=" or op == "==":
-                if col_stats["minimum"] and val < col_stats["minimum"]:
+                if _apply_filter_not_eq(val, col_stats):
                     res = False
-                if col_stats["maximum"] and val > col_stats["maximum"]:
+                if (
+                    "has_null" in col_stats
+                    and np.isnan(val)
+                    and col_stats["has_null"]
+                ):
                     res = False
+                if not _apply_filter_bool_eq(val, col_stats):
+                    res = False
+            elif op == "!=":
+                if (
+                    "minimum" in col_stats
+                    and "maximum" in col_stats
+                    and val == col_stats["minimum"]
+                    and val == col_stats["maximum"]
+                ):
+                    res = False
+                if _apply_filter_bool_eq(val, col_stats):
+                    res = False
+            elif op == "<":
+                if "minimum" in col_stats and val <= col_stats["minimum"]:
+                    res = False
+            elif op == "<=":
+                if "minimum" in col_stats and val < col_stats["minimum"]:
+                    res = False
+            elif op == ">":
+                if "maximum" in col_stats and val >= col_stats["maximum"]:
+                    res = False
+                if (
+                    "sum" in col_stats
+                    and "minimum" in col_stats
+                    and col_stats["minimum"] >= 0
+                    and col_stats["sum"] <= val
+                ):
+                    res = False
+                if (
+                    "sum" in col_stats
+                    and "minimum" in col_stats
+                    and col_stats["maximum"] <= 0
+                    and col_stats["sum"] >= val
+                ):
+                    res = False
+            elif op == ">=":
+                if "maximum" in col_stats and val > col_stats["maximum"]:
+                    res = False
+                if (
+                    "sum" in col_stats
+                    and "minimum" in col_stats
+                    and col_stats["minimum"] >= 0
+                    and col_stats["sum"] < val
+                ):
+                    res = False
+                if (
+                    "sum" in col_stats
+                    and "maximum" in col_stats
+                    and col_stats["maximum"] <= 0
+                    and col_stats["sum"] > val
+                ):
+                    res = False
+            else:
+                raise ValueError(
+                    '"{0}" is not a valid operator in predicates.'.format(
+                        (col, op, val)
+                    )
+                )
         if res:
             return True
     return False
