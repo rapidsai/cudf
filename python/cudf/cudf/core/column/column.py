@@ -1198,9 +1198,9 @@ class ColumnBase(Column, Serializable):
         if nrows * ncols == 0:
             return cudf.core.frame.Frame({})
 
-        scatter_map = cudf.Series(column_indices) * nrows + cudf.Series(
-            row_indices
-        )
+        scatter_map = column_indices.binary_operator(
+            "mul", np.int32(nrows)
+        ).binary_operator("add", row_indices)
         target = cudf.core.frame.Frame(
             {None: column_empty_like(self, masked=True, newsize=nrows * ncols)}
         )
