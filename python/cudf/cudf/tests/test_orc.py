@@ -207,7 +207,8 @@ def test_orc_read_filtered(datadir, engine):
     df_filtered = cudf.read_orc(path, engine=engine, filters=[[("int1", "==", 1)]])
 
     # Compare
-    assert len(df_filtered) < len(df)
+    assert len(df) == 11000
+    assert len(df_filtered) == 5000
 
 
 @pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
