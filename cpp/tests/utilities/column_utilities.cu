@@ -180,9 +180,6 @@ std::string differences_message(thrust::device_vector<int> const& differences,
     auto diff_lhs = cudf::detail::slice(lhs, index, index + 1);
     auto diff_rhs = cudf::detail::slice(rhs, index, index + 1);
 
-    std::vector<std::string> h_left_strings  = to_strings(diff_lhs);
-    std::vector<std::string> h_right_strings = to_strings(diff_rhs);
-
     return depth_str + "first difference: " + "lhs[" + std::to_string(index) +
            "] = " + to_string(diff_lhs, "") + ", rhs[" + std::to_string(index) +
            "] = " + to_string(diff_rhs, "");
