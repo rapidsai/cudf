@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #5974 Use libcudf instead of cupy for `arange` or column creation from a scalar.
+- PR #6119 Add support for `dayofweek` property in `DateTimeIndex` and `DatetimeProperties`
 
 ## Improvements
 
@@ -24,6 +25,7 @@
 - PR #6081 Fix issue where fsspec thinks it has a protocol string
 - PR #6100 Fix issue in `Series.factorize` to correctly pick `na_sentinel` value
 - PR #6110 Handle `format` for other input types in `to_datetime`
+- PR #6118 Fix Java build for ORC read args change and update package version
 
 
 # cuDF 0.15.0 (26 Aug 2020)
