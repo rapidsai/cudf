@@ -16,7 +16,7 @@ import numpy as np
 
 def _apply_filter_bool_eq(val, col_stats):
     if col_stats["kind"] == 0:
-        if val == True:
+        if val is True:
             if (
                 "true_count" in col_stats and col_stats["true_count"] == 0
             ) or (
@@ -24,7 +24,7 @@ def _apply_filter_bool_eq(val, col_stats):
                 and col_stats["false_count"] == col_stats["number_of_values"]
             ):
                 return False
-        elif val == False:
+        elif val is False:
             if (
                 "false_count" in col_stats and col_stats["false_count"] == 0
             ) or (
@@ -208,7 +208,8 @@ def read_orc(
         # Prepare stripes or selection
         stripes = sorted(stripes) if stripes else range(r.num_of_stripes)
 
-        # Read in row-group-level statistics for each stripe for relevant columns
+        # Read in row-group-level statistics for each stripe for
+        # relevant columns
         num_row_groups = [None] * r.num_of_stripes
         row_group_stats = [None] * r.num_of_stripes
         for stripe_idx in stripes:
