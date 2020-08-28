@@ -208,6 +208,7 @@ def test_orc_read_filtered(datadir, engine, predicate, expected_len):
     except pa.ArrowIOError as e:
         pytest.skip(".orc file is not found: %s" % e)
 
+    # TODO: Remove this if not needed by this test
     num_rows, stripes, col_names = cudf.io.read_orc_metadata(path)
 
     # Create filtered dataframe

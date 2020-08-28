@@ -8,124 +8,9 @@ from pyarrow import orc as orc
 import cudf
 from cudf import _lib as libcudf
 from cudf.utils import ioutils
+from cudf.utils import filterutils
 
 import pyorc
-
-import pandas as pd
-
-
-def _apply_filter_bool_eq(val, col_stats):
-    if col_stats["kind"] == 0:
-        if val is True:
-            if (
-                "true_count" in col_stats and col_stats["true_count"] == 0
-            ) or (
-                "false_count" in col_stats
-                and col_stats["false_count"] == col_stats["number_of_values"]
-            ):
-                return False
-        elif val is False:
-            if (
-                "false_count" in col_stats and col_stats["false_count"] == 0
-            ) or (
-                "true_count" in col_stats
-                and col_stats["true_count"] == col_stats["number_of_values"]
-            ):
-                return False
-    return True
-
-
-def _apply_filter_not_eq(val, col_stats):
-    return (
-        ("minimum" in col_stats and val < col_stats["minimum"])
-        or ("lower_bound" in col_stats and val < col_stats["lower_bound"])
-        or ("maximum" in col_stats and val > col_stats["maximum"])
-        or ("upper_bound" in col_stats and val > col_stats["upper_bound"])
-    )
-
-
-def _apply_filters(filters, stats):
-    for conjunction in filters:
-        res = True
-        for col, op, val in conjunction:
-            # Get stats
-            col_stats = stats[col]
-            if "lower_bound" in col_stats:
-                col_stats["minimum"] = col_stats["lower_bound"]
-            if "upper_bound" in col_stats:
-                col_stats["maximum"] = col_stats["upper_bound"]
-
-            # Apply operators
-            if op == "=" or op == "==":
-                if _apply_filter_not_eq(val, col_stats):
-                    res = False
-                if (
-                    "has_null" in col_stats
-                    and pd.isnull(val)
-                    and col_stats["has_null"]
-                ):
-                    res = False
-                if not _apply_filter_bool_eq(val, col_stats):
-                    res = False
-            elif op == "!=":
-                if (
-                    "minimum" in col_stats
-                    and "maximum" in col_stats
-                    and val == col_stats["minimum"]
-                    and val == col_stats["maximum"]
-                ):
-                    res = False
-                if _apply_filter_bool_eq(val, col_stats):
-                    res = False
-            elif op == "<":
-                if "minimum" in col_stats and val <= col_stats["minimum"]:
-                    res = False
-            elif op == "<=":
-                if "minimum" in col_stats and val < col_stats["minimum"]:
-                    res = False
-            elif op == ">":
-                if "maximum" in col_stats and val >= col_stats["maximum"]:
-                    res = False
-                if (
-                    "sum" in col_stats
-                    and "minimum" in col_stats
-                    and col_stats["minimum"] >= 0
-                    and col_stats["sum"] <= val
-                ):
-                    res = False
-                if (
-                    "sum" in col_stats
-                    and "minimum" in col_stats
-                    and col_stats["maximum"] <= 0
-                    and col_stats["sum"] >= val
-                ):
-                    res = False
-            elif op == ">=":
-                if "maximum" in col_stats and val > col_stats["maximum"]:
-                    res = False
-                if (
-                    "sum" in col_stats
-                    and "minimum" in col_stats
-                    and col_stats["minimum"] >= 0
-                    and col_stats["sum"] < val
-                ):
-                    res = False
-                if (
-                    "sum" in col_stats
-                    and "maximum" in col_stats
-                    and col_stats["maximum"] <= 0
-                    and col_stats["sum"] > val
-                ):
-                    res = False
-            else:
-                raise ValueError(
-                    '"{0}" is not a valid operator in predicates.'.format(
-                        (col, op, val)
-                    )
-                )
-        if res:
-            return True
-    return False
 
 
 def _read_stripe_stats(r, stripe_idx, cols):
@@ -217,11 +102,11 @@ def read_orc(
             filters_with_ids.append(conjunction_with_ids)
         cols = sorted(cols)
 
-        # Perform file-level filtering
+        # Apply filters to file-level statistics
         file_stats = {}
         for col in cols:
             file_stats[col] = r[col].statistics
-        if not _apply_filters(filters_with_ids, file_stats):
+        if not filterutils._apply_filters(filters_with_ids, file_stats):
             return _make_empty_df(filepath_or_buffer, columns)
 
         # Prepare stripes or selection
@@ -243,7 +128,7 @@ def read_orc(
         # Track whether or not all row groups are filtered out
         filtered_everything = False
 
-        # Apply filters to row groups
+        # Apply filters to row-group-level statistics
         num_rows_scanned = 0
         num_rows_to_skip = 0
         num_rows_to_read = 0
@@ -261,7 +146,9 @@ def read_orc(
                 row_group_size = next(iter(stats[row_group_idx].values()))[
                     "number_of_values"
                 ]
-                if _apply_filters(filters_with_ids, stats[row_group_idx]):
+                if filterutils._apply_filters(
+                    filters_with_ids, stats[row_group_idx]
+                ):
                     # If this is the first row group to pass filters,
                     # update skiprows
                     if num_rows_to_read == 0:
@@ -273,6 +160,9 @@ def read_orc(
                     num_rows_to_read += row_group_size
                 num_rows_scanned += row_group_size
                 num_rows_scanned_in_stripe += row_group_size
+
+            # Track which stripes passed filters and # of rows in
+            # filtered stripes
             if filter_stripe:
                 filtered_stripes.append(stripe_idx)
                 filtered_stripes_num_rows += num_rows_scanned_in_stripe
