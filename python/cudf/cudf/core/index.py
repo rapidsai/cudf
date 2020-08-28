@@ -226,6 +226,55 @@ class Index(Frame, Serializable):
     def __iter__(self):
         cudf.utils.utils.raise_iteration_error(obj=self)
 
+    @classmethod
+    def from_arrow(cls, array):
+        """Convert PyArrow Array/ChunkedArray to Index
+
+        Parameters
+        ----------
+        array : PyArrow Array/ChunkedArray
+            PyArrow Object which has to be converted to Index
+
+        Raises
+        ------
+        TypeError for invalid input type.
+
+        Returns
+        -------
+        cudf Index
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pyarrow as pa
+        >>> cudf.Index.from_arrow(pa.array(["a", "b", None]))
+        StringIndex(['a' 'b' None], dtype='object')
+        """
+
+        return cls(cudf.core.column.column.ColumnBase.from_arrow(array))
+
+    def to_arrow(self):
+        """Convert Index to PyArrow Array
+
+        Returns
+        -------
+        PyArrow Array
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ind = cudf.Index(["a", "b", None])
+        >>> ind.to_arrow()
+        <pyarrow.lib.StringArray object at 0x7f796b0e7750>
+        [
+          "a",
+          "b",
+          null
+        ]
+        """
+
+        return self._data.columns[0].to_arrow()
+
     @property
     def values_host(self):
         """
@@ -518,25 +567,6 @@ class Index(Frame, Serializable):
         <class 'cudf.core.index.GenericIndex'>
         """
         return pd.Index(self._values.to_pandas(), name=self.name)
-
-    def to_arrow(self):
-        """
-        Convert Index to a PyArrow Array.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> idx = cudf.Index([-3, 10, 15, 20])
-        >>> idx.to_arrow()
-        <pyarrow.lib.Int64Array object at 0x7fcaa6f53440>
-        [
-        -3,
-        10,
-        15,
-        20
-        ]
-        """
-        return self._values.to_arrow()
 
     def tolist(self):
 
@@ -2267,23 +2297,6 @@ class TimedeltaIndex(GenericIndex):
     @property
     def inferred_freq(self):
         raise NotImplementedError("inferred_freq is not yet supported")
-
-    def _clean_nulls_from_index(self):
-        """
-        Convert all na values(if any) in Index object
-        to `<NA>` as a preprocessing step to `__repr__` methods.
-
-        This will involve changing type of Index object
-        to StringIndex but it is the responsibility of the `__repr__`
-        methods using this method to replace or handle representation
-        of the actual types correctly.
-        """
-        return cudf.Index(
-            self._values._repr_str_col().fillna(cudf._NA_REP)
-            if self._values.has_nulls
-            else self._values._repr_str_col(),
-            name=self.name,
-        )
 
 
 class CategoricalIndex(GenericIndex):
