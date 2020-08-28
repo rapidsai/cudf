@@ -71,6 +71,7 @@ class parquet_reader_options {
   friend parquet_reader_options_builder;
 
  public:
+  /// This is just to please cython
   explicit parquet_reader_options() = default;
 
   /**
@@ -109,17 +110,7 @@ class parquet_reader_options {
   /**
    * @brief Returns names of column to be read
    */
-  std::vector<std::string>& columns() { return _columns; }
-
-  /**
-   * @brief Returns names of column to be read
-   */
   std::vector<std::string> const& columns() const { return _columns; }
-
-  /**
-   * @brief Returns list of individual row groups to be read
-   */
-  std::vector<std::vector<size_type>>& row_groups() { return _row_groups; }
 
   /**
    * @brief Returns list of individual row groups to be read
@@ -130,6 +121,41 @@ class parquet_reader_options {
    * @brief Returns timestamp_type used to cast timestamp columns
    */
   data_type timestamp_type() const { return _timestamp_type; }
+
+  /**
+   * @brief Set column names which needs to be read
+   */
+  void columns(std::vector<std::string> col_names) { _columns = std::move(col_names); }
+
+  /**
+   * @brief Set vector of individual row groups to read
+   */
+  void row_groups(std::vector<std::vector<size_type>> row_grp) { _row_groups = std::move(row_grp); }
+
+  /*
+   * @brief Set to convert strings to categories
+   */
+  void convert_strings_to_categories(bool val) { _convert_strings_to_categories = val; }
+
+  /*
+   * @brief Set to use pandas metadata to read
+   */
+  void use_pandas_metadata(bool val) { _use_pandas_metadata = val; }
+
+  /*
+   * @brief Set number of rows to skip
+   */
+  void skip_rows(size_type val) { _skip_rows = val; }
+
+  /*
+   * @brief Set number of rows to read
+   */
+  void num_rows(size_type val) { _num_rows = val; }
+
+  /*
+   * @brief timestamp_type used to cast timestamp columns
+   */
+  void timestamp_type(data_type type) { _timestamp_type = type; }
 };
 
 class parquet_reader_options_builder {
@@ -209,7 +235,9 @@ class parquet_reader_options_builder {
   operator parquet_reader_options &&() { return std::move(options); }
 
   /**
-   * @brief move parquet_reader_options member once options is built
+   * @brief move parquet_reader_options member once options is built.
+   * This has been added since cython can't overload this kind ogf operator
+   *
    */
   parquet_reader_options&& build() { return std::move(options); }
 };
@@ -274,6 +302,7 @@ class parquet_writer_options {
   friend class parquet_writer_options_builder;
 
  public:
+  /// This is just to please cython
   parquet_writer_options() = default;
 
   /**
@@ -316,7 +345,7 @@ class parquet_writer_options {
   /**
    * @brief Returns associated metadata
    */
-  const table_metadata* metadata() const { return _metadata; }
+  table_metadata const* metadata() const { return _metadata; }
 
   /**
    * @brief Returns True/False for filemetadata is requried or not
@@ -327,6 +356,34 @@ class parquet_writer_options {
    * @brief Returns Column chunks file path to be set in the raw output metadata
    */
   std::string column_chunks_file_path() const { return _column_chunks_file_path; }
+
+  /**
+   * @brief Set metadata to parquet_writer_options
+   */
+  void metadata(table_metadata const* m) { _metadata = m; }
+
+  /**
+   * @brief Set statistics_freq to parquet_writer_options
+   */
+  void stats_level(statistics_freq sf) { _stats_level = sf; }
+
+  /**
+   * @brief Set compression type to parquet_writer_options
+   */
+  void compression(compression_type comp_type) { _compression = comp_type; }
+
+  /**
+   * @brief Set whether filemetadata is required or not to parquet_writer_options
+   */
+  void filemetadata_required(bool req) { _return_filemetadata = req; }
+
+  /**
+   * @brief Set column_chunks_file_path to parquet_writer_options
+   */
+  void column_chunks_file_path(std::string file_path)
+  {
+    _column_chunks_file_path.assign(file_path);
+  }
 };
 
 class parquet_writer_options_builder {
@@ -392,6 +449,7 @@ class parquet_writer_options_builder {
 
   /**
    * @brief move parquet_writer_options member once options is built
+   * This has been added since cython can't overload this kind ogf operator
    */
   parquet_writer_options&& build() { return std::move(options); }
 };

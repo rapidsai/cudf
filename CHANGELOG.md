@@ -12,7 +12,7 @@
 - PR #5917 Just use `None` for `strides` in `Buffer`
 - PR #5971 Add cuStreamz README for basic installation and use
 - PR #6002 Add Java bindings for md5
-- PR #6051 Add builder API for cuIO `write_parquet_args` and `read_parquet_args`
+- PR #6051 Add builder API for cuIO `parquet_writer_options` and `parquet_reader_options`
 - PR #6067 Added compute codes for aarch64 devices
 - PR #6083 Small cleanup
 

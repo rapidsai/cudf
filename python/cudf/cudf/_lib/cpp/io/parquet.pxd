@@ -62,6 +62,22 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         bool is_filemetadata_required() except +
         string column_chunks_file_path() except+
 
+        void metadata(
+            cudf_io_types.table_metadata *m
+        ) except +
+        void stats_level(
+            cudf_io_types.statistics_freq sf
+        ) except +
+        void compression(
+            cudf_io_types.compression_type compression
+        ) except +
+        void filemetadata_required(
+            bool req
+        ) except +
+        void column_chunks_file_path(
+            string column_chunks_file_path
+        ) except +
+
         @staticmethod
         parquet_writer_options_builder builder(
             cudf_io_types.sink_info sink_,
@@ -103,6 +119,16 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         cudf_io_types.statistics_freq stats_level() except +
         cudf_io_types.table_metadata_with_nullability* nullable_metadata(
         ) except+
+
+        void nullable_metadata(
+            cudf_io_types.table_metadata_with_nullability *m
+        ) except +
+        void stats_level(
+            cudf_io_types.statistics_freq sf
+        ) except +
+        void compression(
+            cudf_io_types.compression_type compression
+        ) except +
 
         @staticmethod
         chunked_parquet_writer_options_builder builder(
