@@ -55,7 +55,7 @@ class parquet_reader_options {
   /// List of individual row groups to read (ignored if empty)
   std::vector<std::vector<size_type>> _row_groups;
   /// Number of rows to skip from the start; -1 is none
-  size_type _skip_rows = -1;
+  size_type _skip_rows = 0;
   /// NUmber of rows to read; -1 is all
   size_type _num_rows = -1;
 
@@ -130,7 +130,14 @@ class parquet_reader_options {
   /**
    * @brief Set vector of individual row groups to read
    */
-  void row_groups(std::vector<std::vector<size_type>> row_grp) { _row_groups = std::move(row_grp); }
+  void row_groups(std::vector<std::vector<size_type>> row_grp)
+  {
+    if ((!row_grp.empty()) and ((_skip_rows != 0) or (_num_rows != -1))) {
+      CUDF_FAIL("row_groups can't be set along with skip_rows and num_rows");
+    }
+
+    _row_groups = std::move(row_grp);
+  }
 
   /*
    * @brief Set to convert strings to categories
@@ -145,12 +152,26 @@ class parquet_reader_options {
   /*
    * @brief Set number of rows to skip
    */
-  void skip_rows(size_type val) { _skip_rows = val; }
+  void skip_rows(size_type val)
+  {
+    if ((val != 0) and (!_row_groups.empty())) {
+      CUDF_FAIL("skip_rows can't be set along with a valid row_groups");
+    }
+
+    _skip_rows = val;
+  }
 
   /*
    * @brief Set number of rows to read
    */
-  void num_rows(size_type val) { _num_rows = val; }
+  void num_rows(size_type val)
+  {
+    if ((val != -1) and (!_row_groups.empty())) {
+      CUDF_FAIL("num_rows can't be set along with a valid row_groups");
+    }
+
+    _num_rows = val;
+  }
 
   /*
    * @brief timestamp_type used to cast timestamp columns
@@ -162,6 +183,7 @@ class parquet_reader_options_builder {
   parquet_reader_options options;
 
  public:
+  /// This is just to please cython
   explicit parquet_reader_options_builder() = default;
 
   explicit parquet_reader_options_builder(source_info const& src) : options(src) {}
@@ -180,7 +202,7 @@ class parquet_reader_options_builder {
    */
   parquet_reader_options_builder& row_groups(std::vector<std::vector<size_type>> row_grp)
   {
-    options._row_groups = std::move(row_grp);
+    options.row_groups(std::move(row_grp));
     return *this;
   }
 
@@ -207,7 +229,7 @@ class parquet_reader_options_builder {
    */
   parquet_reader_options_builder& skip_rows(size_type val)
   {
-    options._skip_rows = val;
+    options.skip_rows(val);
     return *this;
   }
 
@@ -216,7 +238,7 @@ class parquet_reader_options_builder {
    */
   parquet_reader_options_builder& num_rows(size_type val)
   {
-    options._num_rows = val;
+    options.num_rows(val);
     return *this;
   }
 
@@ -395,7 +417,8 @@ class parquet_writer_options_builder {
   {
   }
 
-  explicit parquet_writer_options_builder() {}
+  /// This is just to please cython
+  explicit parquet_writer_options_builder() = default;
 
   /**
    * @brief Set metadata to parquet_writer_options
