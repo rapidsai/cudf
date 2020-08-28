@@ -1242,12 +1242,8 @@ TEST_F(ParquetReaderTest, UserBounds)
       cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath}).num_rows(0);
     auto result = cudf_io::read_parquet(read_args);
 
-    // we should be getting back 0 rows, but at the moment we get back 4.  this is
-    // a bug to be fixed.
-    auto expect_size_fail = [](cudf::column_view const& col) {
-      CUDF_EXPECTS(col.size() == 0, "Expected to get back 0 rows");
-    };
-    EXPECT_THROW(expect_size_fail(result.tbl->view().column(0)), cudf::logic_error);
+    EXPECT_EQ(result.tbl->view().num_columns(), 4);
+    EXPECT_EQ(result.tbl->view().column(0).size(), 0);
   }
 
   // trying to read 0 rows past the end of the # of actual rows should result

@@ -1247,21 +1247,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
 }
 
-table_with_metadata reader::impl::read(parquet_reader_options const &options, cudaStream_t stream)
-{
-  auto skip_rows         = options.skip_rows();
-  auto num_rows          = options.num_rows();
-  auto const &row_groups = options.row_groups();
-
-  if (row_groups.size() > 0) {
-    return read(0, -1, row_groups, stream);
-  } else if ((skip_rows != -1) || (num_rows != -1)) {
-    return read(skip_rows, (num_rows != 0) ? num_rows : -1, {}, stream);
-  } else {
-    return read(0, -1, {}, stream);
-  }
-}
-
 // Forward to implementation
 reader::reader(std::vector<std::string> const &filepaths,
                parquet_reader_options const &options,
@@ -1284,7 +1269,9 @@ reader::~reader() = default;
 // Forward to implementation
 table_with_metadata reader::read(parquet_reader_options const &options, cudaStream_t stream)
 {
-  return _impl->read(options, stream);
+  // auto skip_rows         = options.skip_rows();
+  // auto num_rows          = options.num_rows();
+  return _impl->read(options.skip_rows(), options.num_rows(), options.row_groups(), stream);
 }
 
 }  // namespace parquet
