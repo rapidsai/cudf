@@ -14,6 +14,7 @@ from cudf._lib.aggregation cimport make_aggregation, aggregation
 from libcpp.memory cimport unique_ptr
 import numpy as np
 from cudf.core.dtypes import dtype as cudf_dtype
+from cudf.api.types import find_common_type
 
 
 def reduce(reduction_op, Column incol, dtype=None, **kwargs):
@@ -33,7 +34,7 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
 
     col_dtype = incol.dtype
     if reduction_op in ['sum', 'sum_of_squares', 'product']:
-        col_dtype = np.find_common_type([col_dtype.to_numpy], [np.uint64])
+        col_dtype = find_common_type([col_dtype], [np.uint64])
     col_dtype = cudf_dtype(col_dtype) if dtype is None else cudf_dtype(dtype)
 
     cdef column_view c_incol_view = incol.view()

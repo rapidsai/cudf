@@ -3183,7 +3183,7 @@ class DataFrame(Frame, Serializable):
             for c in cols
         ):
             raise TypeError("non-numeric data not yet supported")
-        dtype = np.find_common_type([c.dtype.to_numpy for c in cols], [])
+        dtype = cudf.api.types.find_common_type([c.dtype for c in cols], [])
         for k, c in self._data.items():
             if c.has_nulls:
                 errmsg = (
@@ -3191,7 +3191,7 @@ class DataFrame(Frame, Serializable):
                     "hint: use .fillna() to replace null values"
                 )
                 raise ValueError(errmsg.format(k))
-        cupy_dtype = dtype
+        cupy_dtype = dtype.to_numpy
         if np.issubdtype(cupy_dtype, np.datetime64):
             cupy_dtype = np.dtype("int64")
 
@@ -6313,7 +6313,7 @@ class DataFrame(Frame, Serializable):
             )
 
         include, exclude = map(
-            lambda x: frozenset(map(cudf.dtype, x)),
+            lambda x: frozenset(map(cudf_dtype_from_pydata_dtype, x)),
             selection,
         )
 
@@ -6332,8 +6332,8 @@ class DataFrame(Frame, Serializable):
                 # category handling
                 if is_categorical_dtype(i_dtype):
                     include_subtypes.add(i_dtype)
-                elif isinstance(dtype, i_dtype.__class__):
-                    include_subtypes.add(dtype)
+                elif isinstance(dtype, i_dtype):
+                    include_subtypes.add(dtype.__class__)
     
         # exclude all subtypes
         exclude_subtypes = set()
@@ -6346,9 +6346,8 @@ class DataFrame(Frame, Serializable):
                     exclude_subtypes.add(dtype)
 
         include_all = set(
-            [cudf.dtype(d) for d in self.dtypes]
+            [cudf_dtype_from_pydata_dtype(d) for d in self.dtypes]
         )
-
         if include:
             inclusion = include_all & include_subtypes
         elif exclude:
@@ -6359,7 +6358,7 @@ class DataFrame(Frame, Serializable):
         inclusion = inclusion - exclude_subtypes
 
         for k, col in self._data.items():
-            infered_type = cudf.dtype(col.dtype)
+            infered_type = cudf.dtype(col.dtype).__class__
             if infered_type in inclusion:
                 df.insert(len(df._data), k, col)
 

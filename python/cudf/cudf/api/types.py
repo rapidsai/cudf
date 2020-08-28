@@ -89,3 +89,9 @@ def is_list_dtype(obj):
         or (isinstance(obj, str) and obj == cudf.core.dtypes.ListDtype.name)
         or (hasattr(obj, "dtype") and is_list_dtype(obj.dtype))
     )
+
+def find_common_type(array_types=[], scalar_types=[]):
+    array_types = [d.to_numpy if isinstance(d, cudf.Generic) else d for d in array_types]
+    scalar_types = [d.to_numpy if isinstance(d, cudf.Generic) else d for d in scalar_types]
+
+    return cudf.dtype(np.find_common_type(array_types, scalar_types))

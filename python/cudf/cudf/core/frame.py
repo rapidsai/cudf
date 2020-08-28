@@ -269,9 +269,7 @@ class Frame(libcudf.table.Table):
                 dtypes[idx] = cols[0].dtype
                 # If all the non-null dtypes are int/float, find a common dtype
                 if all(is_numerical_dtype(col.dtype) for col in cols):
-                    dtypes[idx] = cudf.dtype(np.find_common_type(
-                        [col.dtype.to_numpy for col in cols], []
-                    ))
+                    dtypes[idx] = cudf.api.types.find_common_type([col.dtype for col in cols], [])
                 # If all categorical dtypes, combine the categories
                 elif all(
                     isinstance(col, cudf.core.column.CategoricalColumn)

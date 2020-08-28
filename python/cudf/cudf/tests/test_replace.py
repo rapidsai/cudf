@@ -455,7 +455,7 @@ def test_series_fillna_invalid_dtype(data_dtype):
         gdf.fillna(fill_value)
     raises.match(
         "Cannot safely cast non-equivalent {} to {}".format(
-            type(fill_value).__name__, gdf.dtype.type.__name__
+            type(fill_value).__name__, gdf.dtype.name
         )
     )
 

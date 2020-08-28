@@ -77,6 +77,13 @@ class Generic(ExtensionDtype, _Dtype):
             return True
         return False
 
+    def __str__(self):
+        return str(self.to_pandas)
+
+    @property
+    def num(self):
+        return self.to_numpy.num
+
     @property
     def to_numpy(self):
         return pa_to_np_dtypes[self.pa_type]
@@ -287,7 +294,7 @@ def make_dtype_from_string(obj):
             return UInt32Dtype()
         elif obj in {"uint16", "UInt16"}:
             return UInt16Dtype()
-        elif obj in {"uint8", "Uint8"}:
+        elif obj in {"uint8", "UInt8"}:
             return UInt8Dtype()
     elif "float" in obj or "Float" in obj:
         if obj in {"float64", "Float64"}:
@@ -315,11 +322,14 @@ def make_dtype_from_numpy(obj):
 
 
 def dtype(obj):
+
     if obj is None:
         return None
     if isinstance(obj, pd.CategoricalDtype):
         return cudf.CategoricalDtype.from_pandas(obj)
     if isinstance(obj, CategoricalDtype):
+        if obj is 'category':
+            return cudf.CategoricalDtype()
         return obj
     elif isinstance(obj, Generic):
         return obj
@@ -337,6 +347,14 @@ def dtype(obj):
         return pd_to_cudf_dtypes[obj]
     elif isinstance(obj, pd.core.arrays.numpy_.PandasDtype):
         return make_dtype_from_string(obj.name)
+    elif obj is np.number:
+        return cudf.Number
+    elif obj is np.datetime64:
+        return cudf.Datetime
+    elif obj is np.timedelta64:
+        return cudf.Timedelta
+
+
     else:
         try:
             if issubclass(obj, np.generic):
@@ -359,6 +377,9 @@ class CategoricalDtype(Generic):
 
     def __repr__(self):
         return self.to_pandas().__repr__()
+
+    def __hash__(self):
+        return hash(self.__repr__())
 
     @property
     def categories(self):

@@ -307,10 +307,7 @@ class CategoricalAccessor(ColumnMethodsMixin):
                 f"type-cast new_categories to the same type as "
                 f"existing categories."
             )
-        common_dtype = np.find_common_type(
-            [old_categories.dtype.to_numpy, new_categories.dtype.to_numpy], []
-        )
-        common_dtype = cudf.dtype(common_dtype)
+        common_dtype = cudf.api.types.find_common_type([old_categories.dtype, new_categories.dtype], [])
 
         new_categories = new_categories.astype(common_dtype, copy=False)
         old_categories = old_categories.astype(common_dtype, copy=False)

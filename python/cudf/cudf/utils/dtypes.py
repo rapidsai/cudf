@@ -137,13 +137,14 @@ def cudf_dtype_from_pydata_dtype(dtype):
     """ Given a numpy or pandas dtype, converts it into the equivalent cuDF
         Python dtype.
     """
-
+    if isinstance(dtype, cudf.Generic):
+        return dtype.__class__
     if is_categorical_dtype(dtype):
         return cudf.core.dtypes.CategoricalDtype
     elif np.issubdtype(dtype, np.datetime64):
         dtype = np.datetime64
 
-    return infer_dtype_from_object(dtype)
+    return cudf.dtype(infer_dtype_from_object(dtype)).__class__
 
 
 def is_scalar(val):

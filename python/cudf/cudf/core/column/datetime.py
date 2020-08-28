@@ -27,10 +27,10 @@ _numpy_to_pandas_conversion = {
 }
 
 _dtype_to_format_conversion = {
-    "datetime64[ns]": "%Y-%m-%d %H:%M:%S.%9f",
-    "datetime64[us]": "%Y-%m-%d %H:%M:%S.%6f",
-    "datetime64[ms]": "%Y-%m-%d %H:%M:%S.%3f",
-    "datetime64[s]": "%Y-%m-%d %H:%M:%S",
+    "Datetime64NS": "%Y-%m-%d %H:%M:%S.%9f",
+    "Datetime64US": "%Y-%m-%d %H:%M:%S.%6f",
+    "Datetime64MS": "%Y-%m-%d %H:%M:%S.%3f",
+    "Datetime64S": "%Y-%m-%d %H:%M:%S",
 }
 
 

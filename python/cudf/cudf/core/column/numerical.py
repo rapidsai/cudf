@@ -30,6 +30,13 @@ class NumericalColumn(column.ColumnBase):
             The dtype associated with the data Buffer
         mask : Buffer, optional
         """
+        try:
+            cudf.dtype(dtype)
+            dtype.itemsize
+
+        except:
+            import pdb
+            pdb.set_trace()
         dtype = cudf.dtype(dtype)
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
@@ -512,7 +519,7 @@ def _normalize_find_and_replace_input(input_column_dtype, col_to_normalize):
     if (
         col_to_normalize_dtype.kind == "f"
         and input_column_dtype.kind in {"i", "u"}
-    ) or (col_to_normalize_dtype.to_numpy.num > input_column_dtype.to_numpy.num):
+    ) or (col_to_normalize_dtype.num > input_column_dtype.num):
         raise TypeError(
             f"Potentially unsafe cast for non-equivalent "
             f"{col_to_normalize_dtype.name} "

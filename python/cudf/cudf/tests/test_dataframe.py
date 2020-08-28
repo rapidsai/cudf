@@ -2523,6 +2523,8 @@ def test_select_dtype():
         pdf.select_dtypes(include=["float64"]),
         gdf.select_dtypes(include=["float64"]),
     )
+    import pdb
+    pdb.set_trace()
     assert_eq(
         pdf.select_dtypes(include=["object", "int", "category"]),
         gdf.select_dtypes(include=["object", "int", "category"]),

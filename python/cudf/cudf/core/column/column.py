@@ -205,12 +205,12 @@ class ColumnBase(Column, Serializable):
             )
             == 0
         ):
-            np_col_dtypes = [o.dtype.to_numpy for o in not_null_cols]
+            cudf_col_dtypes = [o.dtype for o in not_null_cols]
             # Use NumPy to find a common dtype
-            np_common_dtype = np.find_common_type(np_col_dtypes, [])
+            cudf_common_dtype = cudf.api.types.find_common_type(cudf_col_dtypes, [])
             # Cast all columns to the common dtype
             for i in range(len(objs)):
-                objs[i] = objs[i].astype(cudf.dtype(np_common_dtype))
+                objs[i] = objs[i].astype(cudf_common_dtype)
 
         # Find the first non-null column:
         head = objs[0]
@@ -1010,7 +1010,7 @@ class ColumnBase(Column, Serializable):
         header = {}
         frames = []
         header["type-serialized"] = pickle.dumps(type(self))
-        header["dtype"] = self.dtype.str
+        header["dtype"] = str(self.dtype)
 
         data_header, data_frames = self.data.serialize()
         header["data"] = data_header
@@ -1164,7 +1164,7 @@ def build_column(
             offset=offset,
             null_count=null_count,
         )
-    elif dtype.type is np.timedelta64:
+    elif isinstance(dtype, cudf.Timedelta):
         return cudf.core.column.TimeDeltaColumn(
             data=data,
             dtype=dtype,

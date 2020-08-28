@@ -46,10 +46,12 @@ def test_null_series(nrows, dtype):
         psrepr = psrepr.replace(
             str(sr._column.default_na_value()) + "\n", "<NA>\n"
         )
-    if "UInt" in psrepr:
-        psrepr = psrepr.replace("UInt", "uint")
-    elif "Int" in psrepr:
-        psrepr = psrepr.replace("Int", "int")
+    if "uint" in psrepr:
+        psrepr = psrepr.replace("uint", "UInt")
+    elif "int" in psrepr:
+        psrepr = psrepr.replace("int", "Int")
+    elif 'float' in psrepr:
+        psrepr = psrepr.replace("float", "Float")
     assert psrepr.split() == sr.__repr__().split()
 
 
