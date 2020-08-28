@@ -1205,18 +1205,20 @@ def test_groupby_nunique_series():
     )
 
 
-def test_groupby_list_simple():
+@pytest.mark.parametrize("list_agg", [list, "collect"])
+def test_groupby_list_simple(list_agg):
     pdf = pd.DataFrame({"a": [1, 1, 1, 2, 2, 2], "b": [1, 2, None, 4, 5, 6]})
     gdf = cudf.from_pandas(pdf)
 
     assert_eq(
         pdf.groupby("a").agg({"b": list}),
-        gdf.groupby("a").agg({"b": list}),
+        gdf.groupby("a").agg({"b": list_agg}),
         check_dtype=False,
     )
 
 
-def test_groupby_list_of_lists():
+@pytest.mark.parametrize("list_agg", [list, "collect"])
+def test_groupby_list_of_lists(list_agg):
     pdf = pd.DataFrame(
         {
             "a": [1, 1, 1, 2, 2, 2],
@@ -1227,17 +1229,39 @@ def test_groupby_list_of_lists():
 
     assert_eq(
         pdf.groupby("a").agg({"b": list}),
-        gdf.groupby("a").agg({"b": list}),
+        gdf.groupby("a").agg({"b": list_agg}),
         check_dtype=False,
     )
 
 
-def test_groupby_list_single_element():
+@pytest.mark.parametrize("list_agg", [list, "collect"])
+def test_groupby_list_single_element(list_agg):
     pdf = pd.DataFrame({"a": [1, 2], "b": [3, None]})
     gdf = cudf.from_pandas(pdf)
 
     assert_eq(
         pdf.groupby("a").agg({"b": list}),
-        gdf.groupby("a").agg({"b": list}),
+        gdf.groupby("a").agg({"b": list_agg}),
+        check_dtype=False,
+    )
+
+
+def test_groupby_list_columns_excluded():
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 2, 2],
+            "b": [1, 2, 3, 4],
+            "c": [[1, 2], [3, 4], [5, 6], [7, 8]],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.groupby("a").mean(), gdf.groupby("a").mean(), check_dtype=False
+    )
+
+    assert_eq(
+        pdf.groupby("a").agg("mean"),
+        gdf.groupby("a").agg("mean"),
         check_dtype=False,
     )
