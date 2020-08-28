@@ -212,7 +212,7 @@ struct column_comparator_impl {
 
     if (not differences.empty()) {
       auto const msg = differences_message(differences, lhs, rhs, print_all_differences, depth);
-      EXPECT_EQ(differences.size(), size_t{0}) << msg;
+      GTEST_FAIL() << msg;
     }
   }
 };
@@ -305,7 +305,7 @@ struct column_comparator_impl<list_view, check_exact_equality> {
 
     if (not differences.empty()) {
       auto const msg = differences_message(differences, lhs, rhs, print_all_differences, depth);
-      EXPECT_EQ(differences.size(), size_t{0}) << msg;
+      GTEST_FAIL() << msg;
     }
 
     // recurse
