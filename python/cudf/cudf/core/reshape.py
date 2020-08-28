@@ -730,7 +730,7 @@ def _pivot(df, index, columns):
     )
 
 
-def pivot(df, index=None, columns=None, values=None):
+def pivot(data, index=None, columns=None, values=None):
     """
     Return reshaped DataFrame organized by the given index and column values.
 
@@ -740,6 +740,7 @@ def pivot(df, index=None, columns=None, values=None):
 
     Parameters
     ----------
+    data : DataFrame
     index : column name, optional
         Column used to construct the index of the result.
     columns : column name, optional
@@ -780,9 +781,10 @@ def pivot(df, index=None, columns=None, values=None):
         2  <NA>  <NA>  three
 
     """
+    df = data
     if values is None:
         values = df._columns_view(
-            col for col in df.columns if col not in (index, columns)
+            col for col in df._column_names if col not in (index, columns)
         )
     else:
         values = df._columns_view(values)
@@ -795,10 +797,12 @@ def pivot(df, index=None, columns=None, values=None):
     # Create a DataFrame composed of columns from both
     # columns and index
     columns_index = {}
-    for i, col in enumerate(
-        itertools.chain(index._data.columns, columns._data.columns)
-    ):
-        columns_index[i] = col
+    columns_index = {
+        i: col
+        for i, col in enumerate(
+            itertools.chain(index._data.columns, columns._data.columns)
+        )
+    }
     columns_index = cudf.DataFrame(columns_index)
 
     # Check that each row is unique:
