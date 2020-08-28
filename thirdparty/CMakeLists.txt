@@ -8,7 +8,7 @@ message("Fetching CUB")
 FetchContent_Declare(
     cub
     GIT_REPOSITORY https://github.com/thrust/cub.git
-    # August 17, 2020
+    # August 28, 2020
     GIT_TAG        2442f44532ffcc53298c7e3a298feb5134563860
     GIT_SHALLOW    true
 )
@@ -28,10 +28,9 @@ message("Fetching Thrust")
 FetchContent_Declare(
     thrust
     GIT_REPOSITORY https://github.com/thrust/thrust.git
-    # August 17, 2020
-    GIT_TAG        f881e4b77833f4b4cb90e998a6c634eaabc2da61
+    # August 28, 2020
+    GIT_TAG        ec5baea36da04c592b94f9dff8e2589bfaf97ebd
     GIT_SHALLOW    true
-    PATCH_COMMAND COMMAND patch -p1 < "${CMAKE_CURRENT_SOURCE_DIR}/thrust-ret-if-fail.patch"
 )
 
 FetchContent_GetProperties(thrust)
