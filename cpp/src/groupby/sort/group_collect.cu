@@ -31,7 +31,7 @@ std::unique_ptr<column> group_collect(column_view const &values,
 {
   rmm::device_buffer offsets_data(
     group_offsets.data().get(), group_offsets.size() * sizeof(cudf::size_type), stream, mr);
-  rmm::device_buffer null_mask(0);
+  rmm::device_buffer null_mask(0, stream, mr);
 
   auto offsets = std::make_unique<cudf::column>(
     cudf::data_type{cudf::type_id::INT32}, num_groups + 1, offsets_data);
