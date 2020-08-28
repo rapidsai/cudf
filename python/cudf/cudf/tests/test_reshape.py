@@ -355,7 +355,6 @@ def test_pivot_simple(index, column, data):
         expect,
         got,
         check_dtype=False,
-        nullable_pd_dtype=True,
         check_index_type=check_index_and_columns,
         check_column_type=check_index_and_columns,
     )
@@ -376,7 +375,6 @@ def test_pivot_multi_values():
     assert_eq(
         pdf.pivot(index="foo", columns="bar", values=["baz", "zoo"]),
         gdf.pivot(index="foo", columns="bar", values=["baz", "zoo"]),
-        nullable_pd_dtype=True,
         check_dtype=False,
     )
 
@@ -415,10 +413,7 @@ def test_unstack(level):
     ).set_index(["foo", "bar", "baz"])
     gdf = cudf.from_pandas(pdf)
     assert_eq(
-        pdf.unstack(level=level),
-        gdf.unstack(level=level),
-        nullable_pd_dtype=True,
-        check_dtype=False,
+        pdf.unstack(level=level), gdf.unstack(level=level), check_dtype=False,
     )
 
 
