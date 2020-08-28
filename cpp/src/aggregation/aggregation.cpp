@@ -116,7 +116,7 @@ std::unique_ptr<aggregation> make_row_number_aggregation()
 {
   return std::make_unique<aggregation>(aggregation::ROW_NUMBER);
 }
-/// Factory to create a ROW_NUMBER aggregation
+/// Factory to create a COLLECT aggregation
 std::unique_ptr<aggregation> make_collect_aggregation()
 {
   return std::make_unique<aggregation>(aggregation::COLLECT);
