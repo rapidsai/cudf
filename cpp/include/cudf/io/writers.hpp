@@ -79,7 +79,7 @@ class writer {
    */
   explicit writer(std::unique_ptr<cudf::io::data_sink> sinkp,
                   writer_options const& options,
-                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header
@@ -165,7 +165,7 @@ class writer {
    */
   explicit writer(std::unique_ptr<cudf::io::data_sink> sink,
                   writer_options const& options,
-                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header
@@ -335,7 +335,7 @@ class writer {
   writer(std::unique_ptr<cudf::io::data_sink> sinkp,
          writer_options const& options,
          rmm::mr::device_memory_resource* mr =
-           rmm::mr::get_default_resource());  // cannot provide definition here (because _impl is
+           rmm::mr::get_current_device_resource());  // cannot provide definition here (because _impl is
                                               // incomplete, hence unique_ptr has not enough
                                               // sizeof() info)
 

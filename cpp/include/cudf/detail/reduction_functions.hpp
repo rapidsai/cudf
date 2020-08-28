@@ -37,7 +37,7 @@ namespace reduction {
  */
 std::unique_ptr<scalar> sum(column_view const& col,
                             data_type const output_dtype,
-                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                            rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
                             cudaStream_t stream                 = 0);
 /**
  * @brief Computes minimum of elements in input column
@@ -54,7 +54,7 @@ std::unique_ptr<scalar> sum(column_view const& col,
  */
 std::unique_ptr<scalar> min(column_view const& col,
                             data_type const output_dtype,
-                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                            rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
                             cudaStream_t stream                 = 0);
 /**
  * @brief Computes maximum of elements in input column
@@ -71,7 +71,7 @@ std::unique_ptr<scalar> min(column_view const& col,
  */
 std::unique_ptr<scalar> max(column_view const& col,
                             data_type const output_dtype,
-                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                            rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
                             cudaStream_t stream                 = 0);
 /**
  * @brief Computes any of elements in input column is true when typecasted to bool
@@ -89,7 +89,7 @@ std::unique_ptr<scalar> max(column_view const& col,
  */
 std::unique_ptr<scalar> any(column_view const& col,
                             data_type const output_dtype,
-                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                            rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
                             cudaStream_t stream                 = 0);
 /**
  * @brief Computes all of elements in input column is true when typecasted to bool
@@ -107,7 +107,7 @@ std::unique_ptr<scalar> any(column_view const& col,
  */
 std::unique_ptr<scalar> all(column_view const& col,
                             data_type const output_dtype,
-                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                            rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
                             cudaStream_t stream                 = 0);
 /**
  * @brief Computes product of elements in input column
@@ -126,7 +126,7 @@ std::unique_ptr<scalar> all(column_view const& col,
 std::unique_ptr<scalar> product(
   column_view const& col,
   data_type const output_dtype,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 /**
@@ -146,7 +146,7 @@ std::unique_ptr<scalar> product(
 std::unique_ptr<scalar> sum_of_squares(
   column_view const& col,
   data_type const output_dtype,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 /**
@@ -165,7 +165,7 @@ std::unique_ptr<scalar> sum_of_squares(
  */
 std::unique_ptr<scalar> mean(column_view const& col,
                              data_type const output_dtype,
-                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                             rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
                              cudaStream_t stream                 = 0);
 
 /**
@@ -186,7 +186,7 @@ std::unique_ptr<scalar> variance(
   column_view const& col,
   data_type const output_dtype,
   cudf::size_type ddof,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 /**
@@ -207,7 +207,7 @@ std::unique_ptr<scalar> standard_deviation(
   column_view const& col,
   data_type const output_dtype,
   cudf::size_type ddof,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 }  // namespace reduction

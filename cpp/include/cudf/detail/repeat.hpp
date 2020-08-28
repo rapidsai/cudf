@@ -32,7 +32,7 @@ namespace detail {
 std::unique_ptr<table> repeat(table_view const& input_table,
                               column_view const& count,
                               bool check_count,
-                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                              rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
                               cudaStream_t stream                 = 0);
 
 /**
@@ -43,7 +43,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
  */
 std::unique_ptr<table> repeat(table_view const& input_table,
                               size_type count,
-                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                              rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
                               cudaStream_t stream                 = 0);
 
 }  // namespace detail

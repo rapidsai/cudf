@@ -260,7 +260,7 @@ std::unique_ptr<column> clamp(column_view const& input,
                               ScalarIterator const& lo_replace_itr,
                               ScalarIterator const& hi_itr,
                               ScalarIterator const& hi_replace_itr,
-                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                              rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
                               cudaStream_t stream                 = 0)
 {
   return clamper<T>(input, lo_itr, lo_replace_itr, hi_itr, hi_replace_itr, mr, stream);
@@ -274,7 +274,7 @@ struct dispatch_clamp {
     scalar const& lo_replace,
     scalar const& hi,
     scalar const& hi_replace,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
     cudaStream_t stream                 = 0)
   {
     auto lo_itr         = make_pair_iterator<T>(lo);
@@ -352,7 +352,7 @@ std::unique_ptr<column> clamp(column_view const& input,
                               scalar const& lo_replace,
                               scalar const& hi,
                               scalar const& hi_replace,
-                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                              rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
                               cudaStream_t stream                 = 0)
 {
   CUDF_EXPECTS(lo.type() == hi.type(), "mismatching types of limit scalars");

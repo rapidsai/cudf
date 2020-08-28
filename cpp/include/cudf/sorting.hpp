@@ -59,7 +59,7 @@ std::unique_ptr<column> sorted_order(
   table_view input,
   std::vector<order> const& column_order         = {},
   std::vector<null_order> const& null_precedence = {},
-  rmm::mr::device_memory_resource* mr            = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Computes the row indices that would produce `input` in a stable
@@ -73,7 +73,7 @@ std::unique_ptr<column> stable_sorted_order(
   table_view input,
   std::vector<order> const& column_order         = {},
   std::vector<null_order> const& null_precedence = {},
-  rmm::mr::device_memory_resource* mr            = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Checks whether the rows of a `table` are sorted in a lexicographical
@@ -112,7 +112,7 @@ bool is_sorted(cudf::table_view const& table,
 std::unique_ptr<table> sort(table_view input,
                             std::vector<order> const& column_order         = {},
                             std::vector<null_order> const& null_precedence = {},
-                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+                            rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Performs a key-value sort.
@@ -140,7 +140,7 @@ std::unique_ptr<table> sort_by_key(
   table_view const& keys,
   std::vector<order> const& column_order         = {},
   std::vector<null_order> const& null_precedence = {},
-  rmm::mr::device_memory_resource* mr            = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Computes the ranks of input column in sorted order.
@@ -178,7 +178,7 @@ std::unique_ptr<column> rank(column_view const& input,
                              null_policy null_handling,
                              null_order null_precedence,
                              bool percentage,
-                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+                             rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace cudf

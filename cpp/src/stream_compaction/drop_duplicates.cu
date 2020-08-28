@@ -109,7 +109,7 @@ column_view get_unique_ordered_indices(cudf::table_view const& keys,
 {
   // sort only indices
   auto sorted_indices = sorted_order(
-    keys, std::vector<order>{}, std::vector<null_order>{}, rmm::mr::get_default_resource(), stream);
+    keys, std::vector<order>{}, std::vector<null_order>{}, rmm::mr::get_current_device_resource(), stream);
 
   // extract unique indices
   auto device_input_table = cudf::table_device_view::create(keys, stream);
@@ -151,7 +151,7 @@ cudf::size_type distinct_count(table_view const& keys,
 {
   // sort only indices
   auto sorted_indices = sorted_order(
-    keys, std::vector<order>{}, std::vector<null_order>{}, rmm::mr::get_default_resource(), stream);
+    keys, std::vector<order>{}, std::vector<null_order>{}, rmm::mr::get_current_device_resource(), stream);
 
   // count unique elements
   auto sorted_row_index   = sorted_indices->view().data<cudf::size_type>();

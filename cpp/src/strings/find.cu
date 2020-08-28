@@ -95,7 +95,7 @@ std::unique_ptr<column> find(strings_column_view const& strings,
                              string_scalar const& target,
                              size_type start                     = 0,
                              size_type stop                      = -1,
-                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                             rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
                              cudaStream_t stream                 = 0)
 {
   auto pfn = [] __device__(
@@ -114,7 +114,7 @@ std::unique_ptr<column> rfind(strings_column_view const& strings,
                               string_scalar const& target,
                               size_type start                     = 0,
                               size_type stop                      = -1,
-                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                              rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
                               cudaStream_t stream                 = 0)
 {
   auto pfn = [] __device__(
@@ -281,7 +281,7 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
 std::unique_ptr<column> contains(
   strings_column_view const& strings,
   string_scalar const& target,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
@@ -293,7 +293,7 @@ std::unique_ptr<column> contains(
 std::unique_ptr<column> starts_with(
   strings_column_view const& strings,
   string_scalar const& target,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
@@ -305,7 +305,7 @@ std::unique_ptr<column> starts_with(
 std::unique_ptr<column> starts_with(
   strings_column_view const& strings,
   strings_column_view const& targets,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
@@ -317,7 +317,7 @@ std::unique_ptr<column> starts_with(
 std::unique_ptr<column> ends_with(
   strings_column_view const& strings,
   string_scalar const& target,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
@@ -333,7 +333,7 @@ std::unique_ptr<column> ends_with(
 std::unique_ptr<column> ends_with(
   strings_column_view const& strings,
   strings_column_view const& targets,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   auto pfn = [] __device__(string_view d_string, string_view d_target) {

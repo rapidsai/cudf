@@ -83,7 +83,7 @@ std::unique_ptr<column> fill(column_view const& input,
                              size_type begin,
                              size_type end,
                              scalar const& value,
-                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+                             rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Repeat rows of a Table.
@@ -119,7 +119,7 @@ std::unique_ptr<table> repeat(
   table_view const& input_table,
   column_view const& count,
   bool check_count                    = false,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Repeat rows of a Table.
@@ -144,7 +144,7 @@ std::unique_ptr<table> repeat(
 std::unique_ptr<table> repeat(
   table_view const& input_table,
   size_type count,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Fills a column with a sequence of value specified by an initial value and a step.
@@ -173,7 +173,7 @@ std::unique_ptr<column> sequence(
   size_type size,
   scalar const& init,
   scalar const& step,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Fills a column with a sequence of value specified by an initial value and a step of 1.
@@ -198,7 +198,7 @@ std::unique_ptr<column> sequence(
 std::unique_ptr<column> sequence(
   size_type size,
   scalar const& init,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace cudf
