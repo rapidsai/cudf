@@ -352,12 +352,8 @@ struct read_orc_args {
   /// Names of column to read; empty is all
   std::vector<std::string> columns;
 
-  /// Stripe to read; -1 is all
-  size_type stripe = -1;
-  /// Number of stripes to read starting from `stripe`; default is one if stripe >= 0
-  size_type stripe_count = -1;
   /// List of individual stripes to read (ignored if empty)
-  std::vector<size_type> stripe_list;
+  std::vector<size_type> stripes;
   /// Rows to skip from the start; -1 is none
   size_type skip_rows = -1;
   /// Rows to read; -1 is all
