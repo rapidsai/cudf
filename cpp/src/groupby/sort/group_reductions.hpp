@@ -224,7 +224,7 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
  *
  * @param values Grouped values to get sum of
  * @param group_offsets Offsets of groups' starting points within @p values
- * @param num_groups Number of groups ( unique values in @p group_labels )
+ * @param num_groups Number of groups
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
