@@ -60,10 +60,10 @@ TYPED_TEST(groupby_count_test, empty_cols)
     using R = cudf::detail::target_type_t<V, aggregation::COUNT_VALID>;
 
     fixed_width_column_wrapper<K> keys        { };
-    fixed_width_column_wrapper<V, int> vals        { };
+    fixed_width_column_wrapper<V> vals;
 
     fixed_width_column_wrapper<K> expect_keys { };
-    fixed_width_column_wrapper<R, int> expect_vals { };
+    fixed_width_column_wrapper<R> expect_vals;
 
     auto agg = cudf::make_count_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));

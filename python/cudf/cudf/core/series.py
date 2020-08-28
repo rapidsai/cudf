@@ -302,40 +302,6 @@ class Series(Frame, Serializable):
         """
         return self._column.values_host
 
-    @classmethod
-    def from_arrow(cls, s):
-        """Convert from a PyArrow Array.
-
-        Parameters
-        ----------
-        s : PyArrow Object
-            PyArrow Object which has to be converted to cudf Series.
-
-        Raises
-        ------
-        TypeError for invalid input type.
-
-        Examples
-        --------
-        >>> import pyarrow as pa
-        >>> import cudf
-        >>> import pyarrow as pa
-        >>> data = pa.array([1, 2, 3])
-        >>> data
-        <pyarrow.lib.Int64Array object at 0x7f67007e07c0>
-        [
-        1,
-        2,
-        3
-        ]
-        >>> cudf.Series.from_arrow(data)
-        0    1
-        1    2
-        2    3
-        dtype: int64
-        """
-        return cls(s)
-
     def serialize(self):
         header = {}
         frames = []
@@ -426,6 +392,57 @@ class Series(Frame, Serializable):
         cls = type(self)
         params.update(kwargs)
         return cls(**params)
+
+    @classmethod
+    def from_arrow(cls, array):
+        """Convert from PyArrow Array/ChunkedArray to Series.
+        Parameters
+        ----------
+        array : PyArrow Array/ChunkedArray
+            PyArrow Object which has to be converted to cudf Series.
+
+        Raises
+        ------
+        TypeError for invalid input type.
+
+        Returns
+        -------
+        cudf Series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pyarrow as pa
+        >>> cudf.Series.from_arrow(pa.array(["a", "b", None]))
+        0       a
+        1       b
+        2    <NA>
+        dtype: object
+        """
+
+        return cls(cudf.core.column.ColumnBase.from_arrow(array))
+
+    def to_arrow(self):
+        """
+        Convert Series to a PyArrow Array.
+
+        Returns
+        -------
+        PyArrow Array
+
+        Examples
+        --------
+        >>> import cudf
+        >>> sr = cudf.Series(["a", "b", None])
+        >>> sr.to_arrow()
+        <pyarrow.lib.StringArray object at 0x7f796b0e7600>
+        [
+          "a",
+          "b",
+          null
+        ]
+        """
+        return self._column.to_arrow()
 
     def copy(self, deep=True):
         """
@@ -971,15 +988,14 @@ class Series(Frame, Serializable):
             preprocess = self.copy()
 
         preprocess.index = preprocess.index._clean_nulls_from_index()
-        if isinstance(preprocess._column, cudf.core.column.TimeDeltaColumn):
-            preprocess._column = preprocess._column._repr_str_col()
-            output = preprocess.to_pandas().__repr__()
-        elif (
+        if (
             preprocess.nullable
             and not isinstance(
                 preprocess._column, cudf.core.column.CategoricalColumn
             )
             and not is_list_dtype(preprocess.dtype)
+        ) or isinstance(
+            preprocess._column, cudf.core.column.timedelta.TimeDeltaColumn
         ):
             output = (
                 preprocess.astype("O")
@@ -1005,7 +1021,7 @@ class Series(Frame, Serializable):
                 na_rep=cudf._NA_REP,
             )
         else:
-            output = preprocess.to_pandas(nullable_pd_dtype=False).__repr__()
+            output = preprocess.to_pandas().__repr__()
 
         lines = output.split("\n")
 
@@ -2000,40 +2016,12 @@ class Series(Frame, Serializable):
         >>> type(pds)
         <class 'pandas.core.series.Series'>
         """
-        nullable_pd_dtype = kwargs.get("nullable_pd_dtype", None)
-
-        if nullable_pd_dtype is None:
-            if self.dtype.kind in ("i", "u", "b"):
-                nullable_pd_dtype = True
-            else:
-                nullable_pd_dtype = False
 
         if index is True:
             index = self.index.to_pandas()
-        s = self._column.to_pandas(
-            index=index, nullable_pd_dtype=nullable_pd_dtype
-        )
+        s = self._column.to_pandas(index=index)
         s.name = self.name
         return s
-
-    def to_arrow(self):
-        """
-        Convert Series to a PyArrow Array.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([-3, 10, 15, 20])
-        >>> ser.to_arrow()
-        <pyarrow.lib.Int64Array object at 0x7f5e769499f0>
-        [
-        -3,
-        10,
-        15,
-        20
-        ]
-        """
-        return self._column.to_arrow()
 
     @property
     def data(self):
@@ -2426,7 +2414,7 @@ class Series(Frame, Serializable):
             )
 
         if dtype is None:
-            dtype = min_scalar_type(len(cats), 8)
+            dtype = min_scalar_type(max(len(cats), na_sentinel), 8)
 
         cats = column.as_column(cats)
         if is_mixed_with_object_dtype(self, cats):
@@ -2468,8 +2456,23 @@ class Series(Frame, Serializable):
             - *labels* contains the encoded values
             - *cats* contains the categories in order that the N-th
               item corresponds to the (N-1) code.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['a', 'a', 'c'])
+        >>> codes, uniques = s.factorize()
+        >>> codes
+        0    0
+        1    0
+        2    1
+        dtype: int8
+        >>> uniques
+        0    a
+        1    c
+        dtype: object
         """
-        cats = self.unique().astype(self.dtype)
+        cats = self.dropna().unique().astype(self.dtype)
 
         name = self.name  # label_encoding mutates self.name
         labels = self.label_encoding(cats=cats, na_sentinel=na_sentinel)
@@ -4314,36 +4317,281 @@ class DatetimeProperties(object):
 
     @property
     def year(self):
+        """
+        The year of the datetime.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pandas as pd
+        >>> datetime_series = cudf.Series(pd.date_range("2000-01-01",
+        ...         periods=3, freq="Y"))
+        >>> datetime_series
+        0   2000-12-31
+        1   2001-12-31
+        2   2002-12-31
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.year
+        0    2000
+        1    2001
+        2    2002
+        dtype: int16
+        """
         return self._get_dt_field("year")
 
     @property
     def month(self):
+        """
+        The month as January=1, December=12.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_series = cudf.Series(pd.date_range("2000-01-01",
+        ...         periods=3, freq="M"))
+        >>> datetime_series
+        0   2000-01-31
+        1   2000-02-29
+        2   2000-03-31
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.month
+        0    1
+        1    2
+        2    3
+        dtype: int16
+        """
         return self._get_dt_field("month")
 
     @property
     def day(self):
+        """
+        The day of the datetime.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_series = cudf.Series(pd.date_range("2000-01-01",
+        ...         periods=3, freq="D"))
+        >>> datetime_series
+        0   2000-01-01
+        1   2000-01-02
+        2   2000-01-03
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.day
+        0    1
+        1    2
+        2    3
+        dtype: int16
+        """
         return self._get_dt_field("day")
 
     @property
     def hour(self):
+        """
+        The hours of the datetime.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_series = cudf.Series(pd.date_range("2000-01-01",
+        ...         periods=3, freq="h"))
+        >>> datetime_series
+        0   2000-01-01 00:00:00
+        1   2000-01-01 01:00:00
+        2   2000-01-01 02:00:00
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.hour
+        0    0
+        1    1
+        2    2
+        dtype: int16
+        """
         return self._get_dt_field("hour")
 
     @property
     def minute(self):
+        """
+        The minutes of the datetime.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_series = cudf.Series(pd.date_range("2000-01-01",
+        ...         periods=3, freq="T"))
+        >>> datetime_series
+        0   2000-01-01 00:00:00
+        1   2000-01-01 00:01:00
+        2   2000-01-01 00:02:00
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.minute
+        0    0
+        1    1
+        2    2
+        dtype: int16
+        """
         return self._get_dt_field("minute")
 
     @property
     def second(self):
+        """
+        The seconds of the datetime.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_series = cudf.Series(pd.date_range("2000-01-01",
+        ...         periods=3, freq="s"))
+        >>> datetime_series
+        0   2000-01-01 00:00:00
+        1   2000-01-01 00:00:01
+        2   2000-01-01 00:00:02
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.second
+        0    0
+        1    1
+        2    2
+        dtype: int16
+        """
         return self._get_dt_field("second")
 
     @property
     def weekday(self):
+        """
+        The day of the week with Monday=0, Sunday=6.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_series = cudf.Series(pd.date_range('2016-12-31',
+        ...     '2017-01-08', freq='D'))
+        >>> datetime_series
+        0   2016-12-31
+        1   2017-01-01
+        2   2017-01-02
+        3   2017-01-03
+        4   2017-01-04
+        5   2017-01-05
+        6   2017-01-06
+        7   2017-01-07
+        8   2017-01-08
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.weekday
+        0    5
+        1    6
+        2    0
+        3    1
+        4    2
+        5    3
+        6    4
+        7    5
+        8    6
+        dtype: int16
+        """
         return self._get_dt_field("weekday")
 
     def _get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)
         return Series(
             data=out_column, index=self.series._index, name=self.series.name
+        )
+
+    def strftime(self, date_format, *args, **kwargs):
+        """
+        Convert to Series using specified ``date_format``.
+
+        Return a Series of formatted strings specified by ``date_format``,
+        which supports the same string format as the python standard library.
+        Details of the string format can be found in `python string format doc
+        <https://docs.python.org/3/library/datetime.html#strftime-and-strptime-behavior>`_.
+
+        Parameters
+        ----------
+        date_format : str
+            Date format string (e.g. “%Y-%m-%d”).
+
+        Returns
+        -------
+        Series
+            Series of formatted strings.
+
+        Notes
+        -----
+
+        The following date format identifiers are not yet supported: ``%a``,
+        ``%A``, ``%w``, ``%b``, ``%B``, ``%U``, ``%W``, ``%c``, ``%x``,
+        ``%X``, ``%G``, ``%u``, ``%V``
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pandas as pd
+        >>> weekday_series = cudf.Series(pd.date_range("2000-01-01", periods=3,
+        ...      freq="q"))
+        >>> weekday_series.dt.strftime("%Y-%m-%d")
+        >>> weekday_series
+        0   2000-03-31
+        1   2000-06-30
+        2   2000-09-30
+        dtype: datetime64[ns]
+        0    2000-03-31
+        1    2000-06-30
+        2    2000-09-30
+        dtype: object
+        >>> weekday_series.dt.strftime("%Y %d %m")
+        0    2000 31 03
+        1    2000 30 06
+        2    2000 30 09
+        dtype: object
+        >>> weekday_series.dt.strftime("%Y / %d / %m")
+        0    2000 / 31 / 03
+        1    2000 / 30 / 06
+        2    2000 / 30 / 09
+        dtype: object
+        """
+
+        if not isinstance(date_format, str):
+            raise TypeError(
+                f"'date_format' must be str, not {type(date_format)}"
+            )
+
+        # TODO: Remove following validations
+        # once https://github.com/rapidsai/cudf/issues/5991
+        # is implemented
+        not_implemented_formats = {
+            "%a",
+            "%A",
+            "%w",
+            "%b",
+            "%B",
+            "%U",
+            "%W",
+            "%c",
+            "%x",
+            "%X",
+            "%G",
+            "%u",
+            "%V",
+        }
+        for d_format in not_implemented_formats:
+            if d_format in date_format:
+                raise NotImplementedError(
+                    f"{d_format} date-time format is not "
+                    f"supported yet, Please follow this issue "
+                    f"https://github.com/rapidsai/cudf/issues/5991 "
+                    f"for tracking purposes."
+                )
+
+        str_col = self.series._column.as_string_column(
+            dtype="str", format=date_format
+        )
+        return Series(
+            data=str_col, index=self.series._index, name=self.series.name
         )
 
 

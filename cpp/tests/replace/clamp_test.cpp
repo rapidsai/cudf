@@ -208,8 +208,8 @@ TYPED_TEST(ClampTestNumeric, WithNoNull)
 {
   using T = TypeParam;
 
-  T lo(2);
-  T hi(8);
+  T lo(cudf::test::make_type_param_scalar<T>(2));
+  T hi(cudf::test::make_type_param_scalar<T>(8));
   auto input = cudf::test::make_type_param_vector<T>({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
 
   auto got = this->run_clamp(input, {}, lo, true, hi, true, lo, true, hi, true);
@@ -223,8 +223,8 @@ TYPED_TEST(ClampTestNumeric, LowerNull)
 {
   using T = TypeParam;
 
-  T lo(2);
-  T hi(8);
+  T lo(cudf::test::make_type_param_scalar<T>(2));
+  T hi(cudf::test::make_type_param_scalar<T>(8));
   auto input = cudf::test::make_type_param_vector<T>({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
 
   auto got = this->run_clamp(input, {}, lo, false, hi, true, lo, false, hi, true);
@@ -238,8 +238,8 @@ TYPED_TEST(ClampTestNumeric, UpperNull)
 {
   using T = TypeParam;
 
-  T lo(2);
-  T hi(8);
+  T lo(cudf::test::make_type_param_scalar<T>(2));
+  T hi(cudf::test::make_type_param_scalar<T>(8));
   auto input = cudf::test::make_type_param_vector<T>({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
 
   auto got = this->run_clamp(input, {}, lo, true, hi, false, lo, true, hi, false);
@@ -253,8 +253,8 @@ TYPED_TEST(ClampTestNumeric, InputNull)
 {
   using T = TypeParam;
 
-  T lo(2);
-  T hi(8);
+  T lo(cudf::test::make_type_param_scalar<T>(2));
+  T hi(cudf::test::make_type_param_scalar<T>(8));
   auto input = cudf::test::make_type_param_vector<T>({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
   std::vector<cudf::size_type> input_validity({0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0});
 
@@ -270,10 +270,10 @@ TYPED_TEST(ClampTestNumeric, InputNulliWithReplace)
 {
   using T = TypeParam;
 
-  T lo(2);
-  T hi(8);
-  T lo_replace(16);
-  T hi_replace(32);
+  T lo(cudf::test::make_type_param_scalar<T>(2));
+  T hi(cudf::test::make_type_param_scalar<T>(8));
+  T lo_replace(cudf::test::make_type_param_scalar<T>(16));
+  T hi_replace(cudf::test::make_type_param_scalar<T>(32));
   auto input = cudf::test::make_type_param_vector<T>({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
   std::vector<cudf::size_type> input_validity({0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0});
 

@@ -67,7 +67,7 @@ TYPED_TEST(IteratorTest, non_null_iterator)
 TYPED_TEST(IteratorTest, null_iterator)
 {
   using T = TypeParam;
-  T init  = T{0};
+  T init  = cudf::test::make_type_param_scalar<T>(0);
   // data and valid arrays
   auto host_values = cudf::test::make_type_param_vector<T>({0, 6, 0, -14, 13, 64, -13, -20, 45});
   std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1, 1});
@@ -89,7 +89,8 @@ TYPED_TEST(IteratorTest, null_iterator)
   // std::cout << "expected <null_iterator> = " << expected_value << std::endl;
 
   // GPU test
-  auto it_dev = cudf::detail::make_null_replacement_iterator(*d_col, T{0});
+  auto it_dev =
+    cudf::detail::make_null_replacement_iterator(*d_col, cudf::test::make_type_param_scalar<T>(0));
   this->iterator_test_cub(expected_value, it_dev, d_col->size());
   this->values_equal_test(replaced_array, *d_col);
 }
@@ -340,7 +341,8 @@ TYPED_TEST(IteratorTest, error_handling)
                               "the data type mismatch");
   }
 
-  CUDF_EXPECT_THROW_MESSAGE((cudf::detail::make_null_replacement_iterator(*d_col_no_null, T{0})),
+  CUDF_EXPECT_THROW_MESSAGE((cudf::detail::make_null_replacement_iterator(
+                              *d_col_no_null, cudf::test::make_type_param_scalar<T>(0))),
                             "Unexpected non-nullable column.");
 
   CUDF_EXPECT_THROW_MESSAGE((d_col_no_null->pair_begin<T, true>()),
@@ -350,7 +352,7 @@ TYPED_TEST(IteratorTest, error_handling)
 
   // scalar iterator
   using ScalarType = cudf::scalar_type_t<T>;
-  std::unique_ptr<cudf::scalar> s(new ScalarType{T{1}, false});
+  std::unique_ptr<cudf::scalar> s(new ScalarType{cudf::test::make_type_param_scalar<T>(1), false});
   CUDF_EXPECT_THROW_MESSAGE((cudf::detail::make_scalar_iterator<T>(*s)),
                             "the scalar value must be valid");
   CUDF_EXPECT_NO_THROW((cudf::detail::make_pair_iterator<T>(*s)));

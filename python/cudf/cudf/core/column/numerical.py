@@ -1,7 +1,5 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
 import numpy as np
-import pandas as pd
-import pyarrow as pa
 from pandas.api.types import is_integer_dtype
 
 import cudf
@@ -12,13 +10,10 @@ from cudf.core.buffer import Buffer
 from cudf.core.column import as_column, build_column, column, string
 from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import (
-    cudf_dtypes_to_pandas_dtypes,
     min_column_type,
     min_signed_type,
-    np_to_pa_dtype,
     numeric_normalize_types,
 )
-from cudf.utils.utils import buffers_from_pyarrow
 
 
 class NumericalColumn(column.ColumnBase):
@@ -169,66 +164,6 @@ class NumericalColumn(column.ColumnBase):
         if dtype == self.dtype:
             return self
         return libcudf.unary.cast(self, dtype)
-
-    @classmethod
-    def from_arrow(cls, array, dtype=None):
-        if dtype is None:
-            dtype = np.dtype(array.type.to_pandas_dtype())
-
-        pa_size, pa_offset, pamask, padata, _ = buffers_from_pyarrow(array)
-        return NumericalColumn(
-            data=padata,
-            mask=pamask,
-            dtype=dtype,
-            size=pa_size,
-            offset=pa_offset,
-        )
-
-    def to_pandas(self, index=None, nullable_pd_dtype=False):
-        if nullable_pd_dtype:
-            arrow_data = self.to_arrow()
-            host_dtype = cudf_dtypes_to_pandas_dtypes.get(
-                self.dtype, self.dtype
-            )
-            if hasattr(host_dtype, "__from_arrow__"):
-                pandas_array = host_dtype.__from_arrow__(arrow_data)
-
-            else:
-                pandas_array = arrow_data.to_pandas()
-
-            result = pd.Series(pandas_array, copy=True)
-            if index is not None:
-                result.index = index
-            return result
-        else:
-            if self.has_nulls and self.dtype == np.bool:
-                # Boolean series in Pandas that contains None/NaN is of dtype
-                # `np.object`, which is not natively supported in GDF.
-                ret = self.astype(np.int8).fillna(-1).to_array()
-                ret = pd.Series(ret, index=index)
-                ret = ret.where(ret >= 0, other=None)
-                ret.replace(to_replace=1, value=True, inplace=True)
-                ret.replace(to_replace=0, value=False, inplace=True)
-                return ret
-            else:
-                return pd.Series(self.to_array(fillna="pandas"), index=index)
-
-    def to_arrow(self):
-        mask = None
-        if self.nullable:
-            mask = pa.py_buffer(self.mask_array_view.copy_to_host())
-        data = pa.py_buffer(self.data_array_view.copy_to_host())
-        pa_dtype = np_to_pa_dtype(self.dtype)
-        out = pa.Array.from_buffers(
-            type=pa_dtype,
-            length=len(self),
-            buffers=[mask, data],
-            null_count=self.null_count,
-        )
-        if self.dtype == np.bool:
-            return out.cast(pa.bool_())
-        else:
-            return out
 
     def sum(self, dtype=None):
         return libcudf.reduce.reduce("sum", self, dtype=dtype)

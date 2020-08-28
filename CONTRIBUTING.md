@@ -164,7 +164,6 @@ conda env create --name cudf_dev --file conda/environments/cudf_dev_cuda10.0.yml
 # activate the environment
 conda activate cudf_dev
 ```
-- If using CUDA 10.0, create the environment with `conda env create --name cudf_dev --file conda/environments/cudf_dev_cuda10.0.yml` instead.
 - For other CUDA versions, check the corresponding cudf_dev_cuda*.yml file in conda/environments
 
 - Build and install `libcudf` after its dependencies. CMake depends on the `nvcc` executable being on your path or defined in `$CUDACXX`.
@@ -281,7 +280,7 @@ For detailed information on usage of this script, see [here](ci/local/README.md)
 
 ## Automated Build in Docker Container
 
-A Dockerfile is provided with a preconfigured conda environment for building and installing cuDF from source based off of the master branch.
+A Dockerfile is provided with a preconfigured conda environment for building and installing cuDF from source based off of the main branch.
 
 ### Prerequisites
 
@@ -318,7 +317,7 @@ flag. Below is a list of the available arguments and their purpose:
 | `LINUX_VERSION` | ubuntu16.04 | ubuntu18.04 | set Ubuntu version |
 | `CC` & `CXX` | 5 | 7 | set gcc/g++ version; **NOTE:** gcc7 requires Ubuntu 18.04 |
 | `CUDF_REPO` | This repo | Forks of cuDF | set git URL to use for `git clone` |
-| `CUDF_BRANCH` | master | Any branch name | set git branch to checkout of `CUDF_REPO` |
+| `CUDF_BRANCH` | main | Any branch name | set git branch to checkout of `CUDF_REPO` |
 | `NUMBA_VERSION` | newest | >=0.40.0 | set numba version |
 | `NUMPY_VERSION` | newest | >=1.14.3 | set numpy version |
 | `PANDAS_VERSION` | newest | >=0.23.4 | set pandas version |

@@ -7,6 +7,7 @@ import pytest
 
 import cudf
 from cudf import DataFrame, Series
+from cudf.core._compat import PANDAS_GE_110
 from cudf.tests import utils
 from cudf.tests.utils import INTEGER_TYPES, assert_eq
 
@@ -165,9 +166,7 @@ def test_dataframe_column_name_indexing():
 
     for i in range(1, len(pdf.columns) + 1):
         for idx in combinations(pdf.columns, i):
-            assert pdf[list(idx)].equals(
-                df[list(idx)].to_pandas(nullable_pd_dtype=False)
-            )
+            assert pdf[list(idx)].equals(df[list(idx)].to_pandas())
 
     # test for only numeric columns
     df = pd.DataFrame()
@@ -363,6 +362,22 @@ def test_series_loc_numerical():
     assert_eq(ps.loc[[5, 8, 9]], gs.loc[cupy.array([5, 8, 9])])
 
 
+def test_series_loc_float_index():
+    ps = pd.Series([1, 2, 3, 4, 5], index=[5.43, 6.34, 7.34, 8.0, 9.1])
+    gs = Series.from_pandas(ps)
+
+    assert_eq(ps.loc[5.43], gs.loc[5.43])
+    assert_eq(ps.loc[8], gs.loc[8])
+    assert_eq(ps.loc[6.1:8], gs.loc[6.1:8])
+    assert_eq(ps.loc[:7.1], gs.loc[:7.1])
+    assert_eq(ps.loc[6.345:], gs.loc[6.345:])
+    assert_eq(ps.loc[::2], gs.loc[::2])
+    assert_eq(
+        ps.loc[[True, False, True, False, True]],
+        gs.loc[[True, False, True, False, True]],
+    )
+
+
 def test_series_loc_string():
     ps = pd.Series(
         [1, 2, 3, 4, 5], index=["one", "two", "three", "four", "five"]
@@ -383,6 +398,10 @@ def test_series_loc_string():
 
 
 def test_series_loc_datetime():
+    if PANDAS_GE_110:
+        kwargs = {"check_freq": False}
+    else:
+        kwargs = {}
     ps = pd.Series(
         [1, 2, 3, 4, 5], index=pd.date_range("20010101", "20010105")
     )
@@ -401,16 +420,19 @@ def test_series_loc_datetime():
     )
 
     assert_eq(
-        ps.loc["2001-01-02":"2001-01-05"], gs.loc["2001-01-02":"2001-01-05"]
+        ps.loc["2001-01-02":"2001-01-05"],
+        gs.loc["2001-01-02":"2001-01-05"],
+        **kwargs,
     )
-    assert_eq(ps.loc["2001-01-02":], gs.loc["2001-01-02":])
-    assert_eq(ps.loc[:"2001-01-04"], gs.loc[:"2001-01-04"])
-    assert_eq(ps.loc[::2], gs.loc[::2])
-    #
-    # assert_eq(ps.loc[['2001-01-01', '2001-01-04', '2001-01-05']],
-    #           gs.loc[['2001-01-01', '2001-01-04', '2001-01-05']])
-    # looks like a bug in Pandas doesn't let us check for the above,
-    # so instead:
+    assert_eq(ps.loc["2001-01-02":], gs.loc["2001-01-02":], **kwargs)
+    assert_eq(ps.loc[:"2001-01-04"], gs.loc[:"2001-01-04"], **kwargs)
+    assert_eq(ps.loc[::2], gs.loc[::2], **kwargs)
+
+    assert_eq(
+        ps.loc[["2001-01-01", "2001-01-04", "2001-01-05"]],
+        gs.loc[["2001-01-01", "2001-01-04", "2001-01-05"]],
+    )
+
     assert_eq(
         ps.loc[
             [
@@ -430,6 +452,13 @@ def test_series_loc_datetime():
     assert_eq(
         ps.loc[[True, False, True, False, True]],
         gs.loc[[True, False, True, False, True]],
+        **kwargs,
+    )
+
+    just_less_than_max = ps.index.max() - pd.Timedelta("5m")
+
+    assert_eq(
+        ps.loc[:just_less_than_max], gs.loc[:just_less_than_max], **kwargs
     )
 
 
@@ -700,7 +729,7 @@ def test_dataframe_masked_slicing(nelem, slice_start, slice_end):
     expect = do_slice(gdf.to_pandas())
     got = do_slice(gdf).to_pandas()
 
-    assert_eq(expect, got)
+    assert_eq(expect, got, check_dtype=False)
 
 
 def test_dataframe_boolean_mask_with_None():
@@ -717,7 +746,7 @@ def test_dataframe_boolean_mask_with_None():
 @pytest.mark.parametrize("dtype", [int, float, str])
 def test_empty_boolean_mask(dtype):
     gdf = cudf.datasets.randomdata(nrows=0, dtypes={"a": dtype})
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
 
     compare_val = dtype(1)
 
@@ -1100,7 +1129,7 @@ def test_sliced_indexing():
 def test_iloc_categorical_index(index):
     gdf = cudf.DataFrame({"data": range(len(index))}, index=index)
     gdf.index = gdf.index.astype("category")
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
     expect = pdf.iloc[:, 0]
     got = gdf.iloc[:, 0]
     assert_eq(expect, got)
@@ -1178,7 +1207,7 @@ def test_loc_datetime_index(sli, is_dataframe):
     ],
 )
 def test_dataframe_sliced(gdf, slice):
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
 
     actual = gdf[slice]
     expected = pdf[slice]
@@ -1224,7 +1253,7 @@ def test_dataframe_sliced(gdf, slice):
     "slice", [slice(6), slice(1), slice(7), slice(1, 3)],
 )
 def test_dataframe_iloc_index(gdf, slice):
-    pdf = gdf.to_pandas(nullable_pd_dtype=False)
+    pdf = gdf.to_pandas()
 
     actual = gdf.iloc[:, slice]
     expected = pdf.iloc[:, slice]

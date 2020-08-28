@@ -32,13 +32,14 @@
 
 namespace cudf_io = cudf::io;
 
-template <typename T>
-using column_wrapper = typename std::conditional<std::is_same<T, cudf::string_view>::value,
-                                                 cudf::test::strings_column_wrapper,
-                                                 cudf::test::fixed_width_column_wrapper<T>>::type;
-using column         = cudf::column;
-using table          = cudf::table;
-using table_view     = cudf::table_view;
+template <typename T, typename SourceElementT = T>
+using column_wrapper =
+  typename std::conditional<std::is_same<T, cudf::string_view>::value,
+                            cudf::test::strings_column_wrapper,
+                            cudf::test::fixed_width_column_wrapper<T, SourceElementT>>::type;
+using column     = cudf::column;
+using table      = cudf::table;
+using table_view = cudf::table_view;
 
 // Global environment for temporary files
 auto const temp_env = static_cast<cudf::test::TempDirTestEnvironment*>(
@@ -149,12 +150,12 @@ void CUDF_TEST_EXPECT_TABLES_EQUAL(cudf::table_view const& lhs, cudf::table_view
 
 TYPED_TEST(OrcWriterNumericTypeTest, SingleColumn)
 {
-  auto sequence =
-    cudf::test::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
+  auto sequence = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i; });
   auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   constexpr auto num_rows = 100;
-  column_wrapper<TypeParam> col(sequence, sequence + num_rows, validity);
+  column_wrapper<TypeParam, typename decltype(sequence)::value_type> col(
+    sequence, sequence + num_rows, validity);
 
   std::vector<std::unique_ptr<column>> cols;
   cols.push_back(col.release());
@@ -174,12 +175,12 @@ TYPED_TEST(OrcWriterNumericTypeTest, SingleColumn)
 
 TYPED_TEST(OrcWriterNumericTypeTest, SingleColumnWithNulls)
 {
-  auto sequence =
-    cudf::test::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
+  auto sequence = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i; });
   auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return (i % 2); });
 
   constexpr auto num_rows = 100;
-  column_wrapper<TypeParam> col(sequence, sequence + num_rows, validity);
+  column_wrapper<TypeParam, typename decltype(sequence)::value_type> col(
+    sequence, sequence + num_rows, validity);
 
   std::vector<std::unique_ptr<column>> cols;
   cols.push_back(col.release());
@@ -199,12 +200,13 @@ TYPED_TEST(OrcWriterNumericTypeTest, SingleColumnWithNulls)
 
 TYPED_TEST(OrcWriterTimestampTypeTest, Timestamps)
 {
-  auto sequence = cudf::test::make_counting_transform_iterator(
-    0, [](auto i) { return TypeParam(std::rand() / 10); });
+  auto sequence =
+    cudf::test::make_counting_transform_iterator(0, [](auto i) { return (std::rand() / 10); });
   auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   constexpr auto num_rows = 100;
-  column_wrapper<TypeParam> col(sequence, sequence + num_rows, validity);
+  column_wrapper<TypeParam, typename decltype(sequence)::value_type> col(
+    sequence, sequence + num_rows, validity);
 
   std::vector<std::unique_ptr<column>> cols;
   cols.push_back(col.release());
@@ -225,13 +227,14 @@ TYPED_TEST(OrcWriterTimestampTypeTest, Timestamps)
 
 TYPED_TEST(OrcWriterTimestampTypeTest, TimestampsWithNulls)
 {
-  auto sequence = cudf::test::make_counting_transform_iterator(
-    0, [](auto i) { return TypeParam(std::rand() / 10); });
+  auto sequence =
+    cudf::test::make_counting_transform_iterator(0, [](auto i) { return (std::rand() / 10); });
   auto validity =
     cudf::test::make_counting_transform_iterator(0, [](auto i) { return (i > 30) && (i < 60); });
 
   constexpr auto num_rows = 100;
-  column_wrapper<TypeParam> col(sequence, sequence + num_rows, validity);
+  column_wrapper<TypeParam, typename decltype(sequence)::value_type> col(
+    sequence, sequence + num_rows, validity);
 
   std::vector<std::unique_ptr<column>> cols;
   cols.push_back(col.release());
@@ -477,7 +480,7 @@ TEST_F(OrcWriterTest, negTimestampsNano)
   // this test has to hardcode test values which are < -1 second.
   // Details: https://github.com/rapidsai/cudf/pull/5529#issuecomment-648768925
   using namespace cudf::test;
-  auto timestamps_ns = fixed_width_column_wrapper<cudf::timestamp_ns>{
+  auto timestamps_ns = fixed_width_column_wrapper<cudf::timestamp_ns, cudf::timestamp_ns::rep>{
     -131968727238000000,
     -1530705634500000000,
     -1674638741932929000,
@@ -663,8 +666,8 @@ TEST_F(OrcChunkedWriterTest, ReadStripes)
   cudf_io::write_orc_chunked_end(state);
 
   cudf_io::read_orc_args read_args{cudf_io::source_info{filepath}};
-  read_args.stripe_list = {1, 0, 1};
-  auto result           = cudf_io::read_orc(read_args);
+  read_args.stripes = {1, 0, 1};
+  auto result       = cudf_io::read_orc(read_args);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
 }
@@ -681,9 +684,9 @@ TEST_F(OrcChunkedWriterTest, ReadStripesError)
   cudf_io::write_orc_chunked_end(state);
 
   cudf_io::read_orc_args read_args{cudf_io::source_info{filepath}};
-  read_args.stripe_list = {0, 1};
+  read_args.stripes = {0, 1};
   EXPECT_THROW(cudf_io::read_orc(read_args), cudf::logic_error);
-  read_args.stripe_list = {-1};
+  read_args.stripes = {-1};
   EXPECT_THROW(cudf_io::read_orc(read_args), cudf::logic_error);
 }
 

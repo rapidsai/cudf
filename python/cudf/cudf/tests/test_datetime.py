@@ -705,6 +705,24 @@ def test_to_datetime_units(data, unit):
         (["10/11/2012", "01/01/2010", "07/07/2016", "02/02/2014"], "%m/%d/%Y"),
         (["10/11/2012", "01/01/2010", "07/07/2016", "02/02/2014"], "%d/%m/%Y"),
         (["10/11/2012", "01/01/2010", "07/07/2016", "02/02/2014"], None),
+        (pd.Series([2015, 2020, 2021]), "%Y"),
+        pytest.param(
+            pd.Series(["1", "2", "1"]),
+            "%m",
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/6109"
+                "https://github.com/pandas-dev/pandas/issues/35934"
+            ),
+        ),
+        pytest.param(
+            pd.Series(["14", "20", "10"]),
+            "%d",
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/6109"
+                "https://github.com/pandas-dev/pandas/issues/35934"
+            ),
+        ),
+        (pd.Series([2015, 2020.0, 2021.2]), "%Y"),
     ],
 )
 @pytest.mark.parametrize("infer_datetime_format", [True, False])
@@ -1002,3 +1020,85 @@ def test_datetime_invalid_ops():
             sr * 1
     else:
         raise AssertionError("Expected psr * 1 to fail")
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
+        [1, 2, 3],
+        [None, 1, 10, 11, None],
+        [None, None, None, None, None],
+        [None],
+    ],
+)
+@pytest.mark.parametrize("dtype", DATETIME_TYPES)
+@pytest.mark.parametrize(
+    "fill_value",
+    [
+        np.datetime64("2005-02"),
+        np.datetime64("2005-02-25"),
+        np.datetime64("2005-02-25T03:30"),
+        np.datetime64("nat"),
+    ],
+)
+def test_datetime_fillna(data, dtype, fill_value):
+    sr = cudf.Series(data, dtype=dtype)
+    psr = sr.to_pandas()
+
+    expected = psr.dropna()
+    actual = sr.dropna()
+
+    assert_eq(expected, actual)
+
+    expected = psr.fillna(fill_value)
+    actual = sr.fillna(fill_value)
+
+    assert_eq(expected, actual)
+
+    expected = expected.dropna()
+    actual = actual.dropna()
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data", [[1, 2, 3, None], [], [100121, 1221312, 321312321, 1232131223]]
+)
+@pytest.mark.parametrize("dtype", DATETIME_TYPES)
+@pytest.mark.parametrize(
+    "date_format", ["%d - %m", "%y/%H", "%Y", "%I - %M / %S", "%f", "%j", "%p"]
+)
+def test_datetime_strftime(data, dtype, date_format):
+    gsr = cudf.Series(data, dtype=dtype)
+    psr = gsr.to_pandas()
+
+    expected = psr.dt.strftime(date_format=date_format)
+    actual = gsr.dt.strftime(date_format=date_format)
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "date_format",
+    [
+        "%a",
+        "%A",
+        "%w",
+        "%b",
+        "%B",
+        "%U",
+        "%W",
+        "%c",
+        "%x",
+        "%X",
+        "%G",
+        "%u",
+        "%V",
+    ],
+)
+def test_datetime_strftime_not_implemented_formats(date_format):
+    gsr = cudf.Series([1, 2, 3], dtype="datetime64[ms]")
+
+    with pytest.raises(NotImplementedError):
+        gsr.dt.strftime(date_format=date_format)
