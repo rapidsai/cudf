@@ -193,7 +193,7 @@ std::unique_ptr<aggregation> make_nth_element_aggregation(
 /// Factory to create a ROW_NUMBER aggregation
 std::unique_ptr<aggregation> make_row_number_aggregation();
 
-/// Factory to create a ROW_NUMBER aggregation
+/// Factory to create a COLLECT_NUMBER aggregation
 std::unique_ptr<aggregation> make_collect_aggregation();
 
 /**
