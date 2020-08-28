@@ -69,7 +69,7 @@ class reader::impl {
    *
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows Number of rows to read
-   * @param stripe_list Indices of individual stripes to load if non-empty
+   * @param stripes Indices of individual stripes to load if non-empty
    * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with metadata

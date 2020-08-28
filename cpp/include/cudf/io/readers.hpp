@@ -466,15 +466,14 @@ class reader {
   /**
    * @brief Reads and returns specific stripes.
    *
-   * @param stripe_list Indices of the stripes to read
+   * @param stripes Indices of the stripes to read
    * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    *
    * @throw cudf::logic_error if stripe index is out of range
    */
-  table_with_metadata read_stripes(const std::vector<size_type> &stripe_list,
-                                   cudaStream_t stream = 0);
+  table_with_metadata read_stripes(const std::vector<size_type> &stripes, cudaStream_t stream = 0);
 
   /**
    * @brief Reads and returns a range of rows.
