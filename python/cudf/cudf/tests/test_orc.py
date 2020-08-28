@@ -193,7 +193,15 @@ def test_orc_reader_strings(datadir):
 
 
 @pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
-def test_orc_read_filtered(datadir, engine):
+@pytest.mark.parametrize(
+    "predicate,expected_len",
+    [
+        ([[("int1", "==", 1)]], 5000),
+        ([[("int1", "<=", 2)]], 10000),
+        ([[("int1", "==", -1)]], 0),
+    ],
+)
+def test_orc_read_filtered(datadir, engine, predicate, expected_len):
     path = datadir / "TestOrcFile.testStripeLevelStats.orc"
     try:
         pdf = cudf.read_orc(path, engine=engine)
@@ -202,18 +210,11 @@ def test_orc_read_filtered(datadir, engine):
 
     num_rows, stripes, col_names = cudf.io.read_orc_metadata(path)
 
-    # Create filtered dataframes to compare
-    df_filtered = cudf.read_orc(
-        path, engine=engine, filters=[[("int1", "==", 1)]]
-    )
-    df_filtered_le = cudf.read_orc(
-        path, engine=engine, filters=[[("int1", "<=", 2)]]
-    )
+    # Create filtered dataframe
+    df_filtered = cudf.read_orc(path, engine=engine, filters=predicate)
 
-    # Compare
-    assert len(pdf) == 11000
-    assert len(df_filtered) == 5000
-    assert len(df_filtered_le) == 10000
+    # Assert # of rows after filtering
+    assert len(df_filtered) == expected_len
 
 
 @pytest.mark.parametrize("engine", ["cudf", "pyarrow"])

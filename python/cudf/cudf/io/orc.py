@@ -142,6 +142,18 @@ def _read_stripe_stats(r, stripe_idx, cols):
     return num_row_groups, stats
 
 
+def _make_empty_df(filepath_or_buffer, columns):
+    orc_file = orc.ORCFile(filepath_or_buffer)
+    schema = orc_file.schema
+    col_names = schema.names if columns is None else columns
+    empty = {}
+    for col_name in col_names:
+        empty[col_name] = cudf.Series(
+            [], dtype=schema.field(col_name).type.to_pandas_dtype(),
+        )
+    return cudf.DataFrame(empty)
+
+
 @ioutils.doc_read_orc_metadata()
 def read_orc_metadata(path):
     """{docstring}"""
@@ -181,12 +193,9 @@ def read_orc(
         ValueError("URL content-encoding decompression is not supported")
 
     if filters is not None:
-        # Sanitize filters
+        # Coerce filters into list of lists of tuples
         if isinstance(filters[0][0], str):
             filters = [filters]
-
-        # Track whether or not everything was filtered
-        filtered_everything = False
 
         # Create bytestream and reader
         f = (
@@ -198,12 +207,22 @@ def read_orc(
 
         # Get relevant columns
         cols = set()
+        filters_with_ids = []
         for conjunction in filters:
+            conjunction_with_ids = []
             for i, (col, op, val) in enumerate(conjunction):
-                col = r.schema.find_column_id(col)
-                cols.add(col)
-                conjunction[i] = (col, op, val)
+                col_id = r.schema.find_column_id(col)
+                cols.add(col_id)
+                conjunction_with_ids.append((col_id, op, val))
+            filters_with_ids.append(conjunction_with_ids)
         cols = sorted(cols)
+
+        # Perform file-level filtering
+        file_stats = {}
+        for col in cols:
+            file_stats[col] = r[col].statistics
+        if not _apply_filters(filters_with_ids, file_stats):
+            return _make_empty_df(filepath_or_buffer, columns)
 
         # Prepare stripes or selection
         stripes = sorted(stripes) if stripes else range(r.num_of_stripes)
@@ -220,6 +239,9 @@ def read_orc(
             num_row_groups[stripe_idx] = curr_stripe_num_row_groups
             row_group_stats[stripe_idx] = curr_stripe_row_group_stats
         f.close()
+
+        # Track whether or not all row groups are filtered out
+        filtered_everything = False
 
         # Apply filters to row groups
         num_rows_scanned = 0
@@ -239,7 +261,7 @@ def read_orc(
                 row_group_size = next(iter(stats[row_group_idx].values()))[
                     "number_of_values"
                 ]
-                if _apply_filters(filters, stats[row_group_idx]):
+                if _apply_filters(filters_with_ids, stats[row_group_idx]):
                     # If this is the first row group to pass filters,
                     # update skiprows
                     if num_rows_to_read == 0:
@@ -273,15 +295,7 @@ def read_orc(
 
         # Return empty if everything was filtered
         if filtered_everything:
-            orc_file = orc.ORCFile(filepath_or_buffer)
-            schema = orc_file.schema
-            col_names = schema.names if columns is None else columns
-            empty = {}
-            for col_name in col_names:
-                empty[col_name] = cudf.Series(
-                    [], dtype=schema.field(col_name).type.to_pandas_dtype(),
-                )
-            return cudf.DataFrame(empty)
+            return _make_empty_df(filepath_or_buffer, columns)
 
     if engine == "cudf":
         df = DataFrame._from_table(
