@@ -588,11 +588,10 @@ namespace {
 template <typename ElementTo, typename SourceElementT = ElementTo>
 struct column_wrapper_constructor {
   template <typename ValueIter, typename ValidityIter>
-  auto operator()(ValueIter begin,
-                  ValueIter end,
-                  ValidityIter validity_begin) const
+  auto operator()(ValueIter begin, ValueIter end, ValidityIter validity_begin) const
   {
-    return cudf::test::fixed_width_column_wrapper<ElementTo, SourceElementT>{begin, end, validity_begin};
+    return cudf::test::fixed_width_column_wrapper<ElementTo, SourceElementT>{
+      begin, end, validity_begin};
   }
 };
 
@@ -630,9 +629,10 @@ auto get_expected_column(std::vector<SourceElementT> const& input_values,
       return is_valid(i) ? input_values[gather_map[i]] : SourceElementT{};
     });
 
-  return column_wrapper_constructor<ElementTo, SourceElementT>()(gather_iter,
-                                         gather_iter + expected_row_count,
-                                         cudf::test::make_counting_transform_iterator(0, is_valid))
+  return column_wrapper_constructor<ElementTo, SourceElementT>()(
+           gather_iter,
+           gather_iter + expected_row_count,
+           cudf::test::make_counting_transform_iterator(0, is_valid))
     .release();
 }
 }  // namespace
@@ -684,24 +684,23 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestSimpleStructGather)
     get_expected_column<std::string>(names, names_validity, struct_validity, gather_map);
   expect_columns_equivalent(*expected_names_column, gathered_struct_col.child(0));
 
-  auto expected_ages_column = get_expected_column<TypeParam, int32_t>(ages, ages_validity, struct_validity, gather_map);
+  auto expected_ages_column =
+    get_expected_column<TypeParam, int32_t>(ages, ages_validity, struct_validity, gather_map);
   expect_columns_equivalent(*expected_ages_column, gathered_struct_col.child(1));
 
   auto expected_bool_column =
     get_expected_column<bool>(std::vector<bool>(is_human.begin(), is_human.end()),
-                        is_human_validity,
-                        struct_validity,
-                        gather_map);
+                              is_human_validity,
+                              struct_validity,
+                              gather_map);
   expect_columns_equivalent(*expected_bool_column, gathered_struct_col.child(2));
 
   std::vector<std::unique_ptr<cudf::column>> expected_columns;
   expected_columns.push_back(std::move(expected_names_column));
   expected_columns.push_back(std::move(expected_ages_column));
   expected_columns.push_back(std::move(expected_bool_column));
-  auto expected_struct_column = structs_column_wrapper{
-    std::move(expected_columns),
-    std::vector<bool>{
-      0, 1, 1, 1, 1}}.release();
+  auto expected_struct_column =
+    structs_column_wrapper{std::move(expected_columns), std::vector<bool>{0, 1, 1, 1, 1}}.release();
 
   expect_columns_equivalent(*expected_struct_column, gathered_struct_col);
 }
