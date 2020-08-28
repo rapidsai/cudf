@@ -222,7 +222,7 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
 /**
  * @brief Internal API to collect grouped values into a lists column
  *
- * @param values Grouped values to get sum of
+ * @param values Grouped values to collect
  * @param group_offsets Offsets of groups' starting points within @p values
  * @param num_groups Number of groups
  * @param mr Device memory resource used to allocate the returned column's device memory
