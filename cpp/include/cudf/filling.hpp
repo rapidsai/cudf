@@ -79,11 +79,12 @@ void fill_in_place(mutable_column_view& destination,
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return The result output column
  */
-std::unique_ptr<column> fill(column_view const& input,
-                             size_type begin,
-                             size_type end,
-                             scalar const& value,
-                             rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> fill(
+  column_view const& input,
+  size_type begin,
+  size_type end,
+  scalar const& value,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Repeat rows of a Table.

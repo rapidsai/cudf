@@ -198,7 +198,8 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
     CUDF_EXPECTS(keys.type() == keys_type, "key types of all dictionary columns must match");
     return keys;
   });
-  auto all_keys = cudf::detail::concatenate(keys_views, rmm::mr::get_current_device_resource(), stream);
+  auto all_keys =
+    cudf::detail::concatenate(keys_views, rmm::mr::get_current_device_resource(), stream);
 
   // sort keys and remove duplicates;
   // this becomes the keys child for the output dictionary column

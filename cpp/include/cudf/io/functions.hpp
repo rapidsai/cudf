@@ -269,8 +269,9 @@ struct read_csv_args {
  *
  * @return The set of columns along with metadata
  */
-table_with_metadata read_csv(read_csv_args const& args,
-                             rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+table_with_metadata read_csv(
+  read_csv_args const& args,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Settings to use for `write_csv()`
@@ -398,8 +399,9 @@ struct read_orc_args {
  *
  * @return The set of columns
  */
-table_with_metadata read_orc(read_orc_args const& args,
-                             rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+table_with_metadata read_orc(
+  read_orc_args const& args,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Settings to use for `read_parquet()`

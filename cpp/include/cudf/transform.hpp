@@ -63,7 +63,8 @@ std::unique_ptr<column> transform(
  * null count obtained by replacing `NaN` in `input` with null.
  **/
 std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
-  column_view const& input, rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  column_view const& input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Creates a bitmask from a column of boolean elements.
@@ -81,7 +82,8 @@ std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
  * `false` represent `invalid`/`0`.
  **/
 std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
-  column_view const& input, rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  column_view const& input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Encode the values of the given column as integers

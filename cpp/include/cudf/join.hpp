@@ -444,7 +444,7 @@ class hash_join {
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
     common_columns_output_side common_columns_output_side = common_columns_output_side::PROBE,
     null_equality compare_nulls                           = null_equality::EQUAL,
-    rmm::mr::device_memory_resource* mr                   = rmm::mr::get_current_device_resource()) const;
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
   /**
    * @brief Performs a left join by probing in the internal hash table.

@@ -109,10 +109,11 @@ bool is_sorted(cudf::table_view const& table,
  * @param mr Device memory resource used to allocate the returned table's device memory
  * @return New table containing the desired sorted order of `input`
  */
-std::unique_ptr<table> sort(table_view input,
-                            std::vector<order> const& column_order         = {},
-                            std::vector<null_order> const& null_precedence = {},
-                            rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<table> sort(
+  table_view input,
+  std::vector<order> const& column_order         = {},
+  std::vector<null_order> const& null_precedence = {},
+  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Performs a key-value sort.
@@ -172,13 +173,14 @@ std::unique_ptr<table> sort_by_key(
  * column by default or else `double` when `method=rank_method::AVERAGE` or
  *`percentage=True`
  */
-std::unique_ptr<column> rank(column_view const& input,
-                             rank_method method,
-                             order column_order,
-                             null_policy null_handling,
-                             null_order null_precedence,
-                             bool percentage,
-                             rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> rank(
+  column_view const& input,
+  rank_method method,
+  order column_order,
+  null_policy null_handling,
+  null_order null_precedence,
+  bool percentage,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace cudf

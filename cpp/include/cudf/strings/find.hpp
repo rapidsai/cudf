@@ -48,11 +48,12 @@ namespace strings {
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New integer column with character position values.
  */
-std::unique_ptr<column> find(strings_column_view const& strings,
-                             string_scalar const& target,
-                             size_type start                     = 0,
-                             size_type stop                      = -1,
-                             rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> find(
+  strings_column_view const& strings,
+  string_scalar const& target,
+  size_type start                     = 0,
+  size_type stop                      = -1,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a column of character position values where the target

@@ -232,9 +232,10 @@ namespace detail {
 //
 struct column_merger {
   using index_vector = rmm::device_vector<index_type>;
-  explicit column_merger(index_vector const& row_order,
-                         rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-                         cudaStream_t stream                 = nullptr)
+  explicit column_merger(
+    index_vector const& row_order,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+    cudaStream_t stream                 = nullptr)
     : dv_row_order_(row_order), mr_(mr), stream_(stream)
   {
   }

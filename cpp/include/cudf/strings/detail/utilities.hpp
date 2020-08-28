@@ -49,7 +49,8 @@ std::unique_ptr<column> create_chars_child_column(
  * @return Empty strings column
  */
 std::unique_ptr<column> make_empty_strings_column(
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(), cudaStream_t stream = 0);
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
  * @brief Creates a string_view vector from a strings column.

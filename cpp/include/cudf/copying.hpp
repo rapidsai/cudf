@@ -544,11 +544,12 @@ std::unique_ptr<column> copy_if_else(
  * @throw cudf::logic_error if @p input dtype is not fixed-with.
  * @throw cudf::logic_error if @p fill_value dtype does not match @p input dtype.
  */
-std::unique_ptr<column> shift(column_view const& input,
-                              size_type offset,
-                              scalar const& fill_value,
-                              rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-                              cudaStream_t stream                 = 0);
+std::unique_ptr<column> shift(
+  column_view const& input,
+  size_type offset,
+  scalar const& fill_value,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
  * @brief   Returns a new column, where each element is selected from either @p lhs or

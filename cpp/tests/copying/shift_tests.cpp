@@ -32,7 +32,8 @@ using TestTypes = cudf::test::Types<int32_t>;
 
 template <typename T, typename ScalarType = cudf::scalar_type_t<T>>
 std::unique_ptr<cudf::scalar> make_scalar(
-  cudaStream_t stream = 0, rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  cudaStream_t stream                 = 0,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto s = new ScalarType(cudf::test::make_type_param_scalar<T>(0), false, stream, mr);
   return std::unique_ptr<cudf::scalar>(s);

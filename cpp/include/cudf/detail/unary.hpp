@@ -73,10 +73,11 @@ std::unique_ptr<cudf::column> unary_operation(
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> cast(column_view const& input,
-                             data_type type,
-                             rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-                             cudaStream_t stream                 = 0);
+std::unique_ptr<column> cast(
+  column_view const& input,
+  data_type type,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
  * @copydoc cudf::is_nan

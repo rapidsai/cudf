@@ -246,7 +246,8 @@ std::unique_ptr<column> clamp(
  * @returns new column with the modified data
  */
 std::unique_ptr<column> normalize_nans_and_zeros(
-  column_view const& input, rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  column_view const& input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Modifies a column of floating-point elements to replace all `-NaN` and `-0.0` with `+NaN`

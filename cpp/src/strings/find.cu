@@ -91,12 +91,13 @@ std::unique_ptr<column> find_fn(strings_column_view const& strings,
 
 }  // namespace
 
-std::unique_ptr<column> find(strings_column_view const& strings,
-                             string_scalar const& target,
-                             size_type start                     = 0,
-                             size_type stop                      = -1,
-                             rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-                             cudaStream_t stream                 = 0)
+std::unique_ptr<column> find(
+  strings_column_view const& strings,
+  string_scalar const& target,
+  size_type start                     = 0,
+  size_type stop                      = -1,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0)
 {
   auto pfn = [] __device__(
                string_view d_string, string_view d_target, size_type start, size_type stop) {
@@ -110,12 +111,13 @@ std::unique_ptr<column> find(strings_column_view const& strings,
   return find_fn(strings, target, start, stop, pfn, mr, stream);
 }
 
-std::unique_ptr<column> rfind(strings_column_view const& strings,
-                              string_scalar const& target,
-                              size_type start                     = 0,
-                              size_type stop                      = -1,
-                              rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-                              cudaStream_t stream                 = 0)
+std::unique_ptr<column> rfind(
+  strings_column_view const& strings,
+  string_scalar const& target,
+  size_type start                     = 0,
+  size_type stop                      = -1,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0)
 {
   auto pfn = [] __device__(
                string_view d_string, string_view d_target, size_type start, size_type stop) {
