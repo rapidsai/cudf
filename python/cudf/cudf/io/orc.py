@@ -11,7 +11,7 @@ from cudf.utils import ioutils
 
 import pyorc
 
-import numpy as np
+import pandas as pd
 
 
 def _apply_filter_bool_eq(val, col_stats):
@@ -61,7 +61,7 @@ def _apply_filters(filters, stats):
                     res = False
                 if (
                     "has_null" in col_stats
-                    and np.isnan(val)
+                    and pd.isnull(val)
                     and col_stats["has_null"]
                 ):
                     res = False
