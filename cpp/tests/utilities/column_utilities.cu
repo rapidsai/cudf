@@ -210,10 +210,8 @@ struct column_comparator_impl {
 
     differences.resize(thrust::distance(differences.begin(), diff_iter));  // shrink back down
 
-    if (not differences.empty()) {
-      auto const msg = differences_message(differences, lhs, rhs, print_all_differences, depth);
-      GTEST_FAIL() << msg;
-    }
+    if (not differences.empty())
+      GTEST_FAIL() << differences_message(differences, lhs, rhs, print_all_differences, depth);
   }
 };
 
@@ -303,10 +301,8 @@ struct column_comparator_impl<list_view, check_exact_equality> {
 
     differences.resize(thrust::distance(differences.begin(), diff_iter));  // shrink back down
 
-    if (not differences.empty()) {
-      auto const msg = differences_message(differences, lhs, rhs, print_all_differences, depth);
-      GTEST_FAIL() << msg;
-    }
+    if (not differences.empty())
+      GTEST_FAIL() << differences_message(differences, lhs, rhs, print_all_differences, depth);
 
     // recurse
     auto lhs_child = lhs_l.get_sliced_child(0);
