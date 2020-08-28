@@ -10,11 +10,10 @@ import numpy as np
 import pandas as pd
 
 import cudf
+from cudf import _lib as libcudf
 from cudf.core.column import column
 from cudf.core.frame import Frame
 from cudf.core.index import Index, as_index
-
-import cudf._lib as libcudf
 
 
 class MultiIndex(Index):
@@ -923,7 +922,7 @@ class MultiIndex(Index):
         popped_names = []
         names = list(self.names)
 
-        for i in reversed(sorted(ilevels)):
+        for i in sorted(ilevels, reverse=True):
             names.pop(i)
             n = self._data.names[i]
             popped_data[n] = self._data.pop(n)
