@@ -199,7 +199,7 @@ struct parse_datetime {
     auto length = d_string.size_bytes();
     for (size_t idx = 0; idx < items_count; ++idx) {
       auto item   = d_format_items[idx];
-      item.length = std::min(item.length, length);
+      item.length = static_cast<int8_t>(std::min(static_cast<size_type>(item.length), length));
       if (item.item_type == format_char_type::literal) {
         // static character we'll just skip;
         // consume item.length bytes from string
