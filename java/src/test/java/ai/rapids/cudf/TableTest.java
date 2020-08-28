@@ -168,8 +168,8 @@ public class TableTest extends CudfTestBase {
     }
   }
 
-  public static void assertPartialColumnsAreEqual(HostColumnVector.NestedHostColumnVector expected,
-                                                  HostColumnVector.NestedHostColumnVector cv,
+  public static void assertPartialColumnsAreEqual(BaseHostColumnVector expected,
+                                                  BaseHostColumnVector cv,
                                                   String colName, boolean enableNullCheck) {
     assertEquals(expected.getType(), cv.getType(), "Type For Column " + colName);
     assertEquals(expected.getRows(), cv.getRows(), "Row Count For Column " + colName);
