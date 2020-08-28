@@ -304,8 +304,6 @@ TEST_F(StringsDatetimeTest, Errors)
   EXPECT_THROW(cudf::strings::from_timestamps(timestamps, ""), cudf::logic_error);
 }
 
-//#include <cudf/unary.hpp>
-
 TEST_F(StringsDatetimeTest, ToTimestampSingleSpecifier)
 {
   cudf::test::strings_column_wrapper strings{"12", "10", "09", "05"};
