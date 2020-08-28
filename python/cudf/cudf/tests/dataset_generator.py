@@ -199,19 +199,14 @@ def generate(
             ],
         )
         pool.close()
+        pool.join()
 
     # Convert to Pandas DataFrame and sort columns appropriately
     tbl = pa.Table.from_arrays(column_data, schema=schema,)
     if columns_to_sort:
         tbl = tbl.to_pandas()
         tbl = tbl.sort_values(columns_to_sort)
-        tbl = pa.Table.from_pandas(tbl)
-
-        # TODO: Use this with PyArrow 1.0.1
-        # pdf = tbl.to_pandas()
-        # pdf = pdf.set_index(columns_to_sort)
-        # gather_map = pdf.index.argsort()
-        # tbl = tbl.take(gather_map)
+        tbl = pa.Table.from_pandas(tbl, schema)
 
     # Write
     _write(tbl, path, format)
