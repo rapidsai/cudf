@@ -54,6 +54,11 @@ std::unique_ptr<column> translate(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
+ * @brief Removes or keeps the specified character ranges in cudf::strings::filter_characters
+ */
+enum class filter_type : bool { KEEP, REMOVE };
+
+/**
  * @brief Removes ranges of characters from each string in a strings column.
  *
  * This can also be used to keep only the specified character ranges
@@ -86,7 +91,7 @@ std::unique_ptr<column> translate(
 std::unique_ptr<column> filter_characters(
   strings_column_view const& strings,
   std::vector<std::pair<cudf::char_utf8, cudf::char_utf8>> characters_to_filter,
-  bool keep_characters                = true,
+  filter_type keep_characters         = filter_type::KEEP,
   string_scalar const& replacement    = string_scalar(""),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 

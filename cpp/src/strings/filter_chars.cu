@@ -41,7 +41,7 @@ namespace {
  */
 struct filter_fn {
   column_device_view const d_strings;
-  bool keep_characters;
+  filter_type keep_characters;
   rmm::device_vector<char_range>::iterator table_begin;
   rmm::device_vector<char_range>::iterator table_end;
   string_view const d_replacement;
@@ -62,7 +62,7 @@ struct filter_fn {
       });
     // if keep==true and entry-not-found OR
     // if keep==false and entry-found
-    return keep_characters == (entry == table_end);
+    return (keep_characters == filter_type::KEEP) == (entry == table_end);
   }
 
   /**
@@ -99,7 +99,7 @@ struct filter_fn {
 std::unique_ptr<column> filter_characters(
   strings_column_view const& strings,
   std::vector<std::pair<cudf::char_utf8, cudf::char_utf8>> characters_to_filter,
-  bool keep_characters,
+  filter_type keep_characters,
   string_scalar const& replacement,
   cudaStream_t stream,
   rmm::mr::device_memory_resource* mr)
@@ -160,7 +160,7 @@ std::unique_ptr<column> filter_characters(
 std::unique_ptr<column> filter_characters(
   strings_column_view const& strings,
   std::vector<std::pair<cudf::char_utf8, cudf::char_utf8>> characters_to_filter,
-  bool keep_characters,
+  filter_type keep_characters,
   string_scalar const& replacement,
   rmm::mr::device_memory_resource* mr)
 {

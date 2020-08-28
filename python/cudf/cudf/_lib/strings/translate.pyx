@@ -9,6 +9,7 @@ from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.scalar.scalar cimport string_scalar
 from cudf._lib.cpp.strings.translate cimport (
     translate as cpp_translate,
+    filter_type as filter_type,
     filter_characters as cpp_filter_characters
 )
 from cudf._lib.column cimport Column
@@ -79,11 +80,17 @@ def filter_characters(Column source_strings,
             key = int.from_bytes(key.encode(), byteorder='big')
         c_mapping_table.push_back((key, value))
 
+    cdef filter_type c_keep
+    if keep is True:
+        c_keep = filter_type.KEEP
+    else:
+        c_keep = filter_type.REMOVE
+
     with nogil:
         c_result = move(cpp_filter_characters(
             source_view,
             c_mapping_table,
-            keep,
+            c_keep,
             scalar_repl[0]
         ))
 

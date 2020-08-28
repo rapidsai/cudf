@@ -88,20 +88,21 @@ TEST_F(StringsTranslateTest, FilterCharacters)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
-    auto results = cudf::strings::filter_characters(strings_view, filter_table, false);
+    auto results = cudf::strings::filter_characters(
+      strings_view, filter_table, cudf::strings::filter_type::REMOVE);
     cudf::test::strings_column_wrapper expected({"eee ddd", " ", "", "", "", "dd"}, validity);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
-    auto results =
-      cudf::strings::filter_characters(strings_view, filter_table, true, cudf::string_scalar("_"));
+    auto results = cudf::strings::filter_characters(
+      strings_view, filter_table, cudf::strings::filter_type::KEEP, cudf::string_scalar("_"));
     cudf::test::strings_column_wrapper expected({"_______", "bb_cc", "", "", "12309", "_éb_"},
                                                 validity);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     auto results = cudf::strings::filter_characters(
-      strings_view, filter_table, false, cudf::string_scalar("++"));
+      strings_view, filter_table, cudf::strings::filter_type::REMOVE, cudf::string_scalar("++"));
     cudf::test::strings_column_wrapper expected(
       {"eee ddd", "++++ ++++", "", "", "++++++++++", "d++++d"}, validity);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
@@ -113,7 +114,8 @@ TEST_F(StringsTranslateTest, ErrorTest)
   cudf::test::strings_column_wrapper h_strings({"string left intentionally blank"});
   auto strings_view = cudf::strings_column_view(h_strings);
   std::vector<std::pair<cudf::char_utf8, cudf::char_utf8>> filter_table;
-  EXPECT_THROW(cudf::strings::filter_characters(
-                 strings_view, filter_table, true, cudf::string_scalar("", false)),
-               cudf::logic_error);
+  EXPECT_THROW(
+    cudf::strings::filter_characters(
+      strings_view, filter_table, cudf::strings::filter_type::KEEP, cudf::string_scalar("", false)),
+    cudf::logic_error);
 }
