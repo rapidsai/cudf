@@ -13,6 +13,7 @@
 - PR #5973 Link to the Code of Conduct in CONTRIBUTING.md
 - PR #5917 Just use `None` for `strides` in `Buffer`
 - PR #5971 Add cuStreamz README for basic installation and use
+- PR #6024 Expose selecting multiple ORC stripes to read from Python
 - PR #6002 Add Java bindings for md5
 - PR #6067 Added compute codes for aarch64 devices
 - PR #6083 Small cleanup
@@ -22,6 +23,8 @@
 - PR #6073 Fix issue related to `.loc` incase of `DatetimeIndex`
 - PR #6081 Fix issue where fsspec thinks it has a protocol string
 - PR #6100 Fix issue in `Series.factorize` to correctly pick `na_sentinel` value
+- PR #6110 Handle `format` for other input types in `to_datetime`
+- PR #6118 Fix Java build for ORC read args change and update package version
 
 
 # cuDF 0.15.0 (26 Aug 2020)

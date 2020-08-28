@@ -1059,7 +1059,6 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readORC(
 
     cudf::io::read_orc_args read_arg{*source};
     read_arg.columns = n_filter_col_names.as_cpp_vector();
-    read_arg.stripe = -1;
     read_arg.skip_rows = -1;
     read_arg.num_rows = -1;
     read_arg.use_index = false;
