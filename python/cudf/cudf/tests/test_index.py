@@ -7,6 +7,7 @@ import re
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 
 import cudf
@@ -1417,3 +1418,78 @@ def test_index_fillna(data, fill_value):
     gdi = cudf.Index(data)
 
     assert_eq(pdi.fillna(fill_value), gdi.fillna(fill_value))
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3, 1, None, None],
+        [None, None, 3.2, 1, None, None],
+        [None, "a", "3.2", "z", None, None],
+        pd.Series(["a", "b", None], dtype="category"),
+        np.array([1, 2, 3, None], dtype="datetime64[s]"),
+    ],
+)
+def test_index_to_arrow(data):
+    pdi = pd.Index(data)
+    gdi = cudf.Index(data)
+
+    expected_arrow_array = pa.Array.from_pandas(pdi)
+    got_arrow_array = gdi.to_arrow()
+
+    assert_eq(expected_arrow_array, got_arrow_array)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [None, None, 3.2, 1, None, None],
+        [None, "a", "3.2", "z", None, None],
+        pd.Series(["a", "b", None], dtype="category"),
+        np.array([1, 2, 3, None], dtype="datetime64[s]"),
+    ],
+)
+def test_index_from_arrow(data):
+    pdi = pd.Index(data)
+
+    arrow_array = pa.Array.from_pandas(pdi)
+    expected_index = pd.Index(arrow_array.to_pandas())
+    gdi = cudf.Index.from_arrow(arrow_array)
+
+    assert_eq(expected_index, gdi)
+
+
+def test_multiindex_to_arrow():
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 2, 1, 2, 3],
+            "b": [1.0, 2.0, 3.0, 4.0, 5.0],
+            "c": np.array([1, 2, 3, None, 5], dtype="datetime64[s]"),
+            "d": ["a", "b", "c", "d", "e"],
+        }
+    )
+    pdf["a"] = pdf["a"].astype("category")
+    df = cudf.from_pandas(pdf)
+    gdi = cudf.Index(df)
+
+    expected = pa.Table.from_pandas(pdf)
+    got = gdi.to_arrow()
+
+    assert_eq(expected, got)
+
+
+def test_multiindex_from_arrow():
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 2, 1, 2, 3],
+            "b": [1.0, 2.0, 3.0, 4.0, 5.0],
+            "c": np.array([1, 2, 3, None, 5], dtype="datetime64[s]"),
+            "d": ["a", "b", "c", "d", "e"],
+        }
+    )
+    pdf["a"] = pdf["a"].astype("category")
+    ptb = pa.Table.from_pandas(pdf)
+    gdi = cudf.MultiIndex.from_arrow(ptb)
+    pdi = pd.MultiIndex.from_frame(pdf)
+
+    assert_eq(pdi, gdi)
