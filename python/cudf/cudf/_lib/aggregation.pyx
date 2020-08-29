@@ -124,9 +124,17 @@ cdef class _AggregationFactory:
         return agg
 
     @classmethod
-    def count(cls):
+    def count(cls, dropna=True):
+        cdef libcudf_types.null_policy c_null_handling
+        if dropna:
+            c_null_handling = libcudf_types.null_policy.EXCLUDE
+        else:
+            c_null_handling = libcudf_types.null_policy.INCLUDE
+
         cdef Aggregation agg = Aggregation.__new__(Aggregation)
-        agg.c_obj = move(libcudf_aggregation.make_count_aggregation())
+        agg.c_obj = move(libcudf_aggregation.make_count_aggregation(
+            c_null_handling
+        ))
         return agg
 
     @classmethod
