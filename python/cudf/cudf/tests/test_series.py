@@ -497,19 +497,63 @@ def test_series_value_counts_optional_arguments(ascending, dropna, normalize):
     )
 
 
-# @pytest.mark.parametrize("df",
-# [
-#     cudf.Series([1, 2, 3]),
-#     cudf.Series([2, 3, -1, 0, 1]),
-#     cudf.Series([1, 2, 3, None, 2, 1]),
-#     cudf.Series([1, 2, 3, None, 2, 1, None]),
-# ])
-# @pytest.mark.parametrize("dropna", [True, False])
-# def test_series_mode(df, dropna):
-#     pdf = df.to_pandas()
+@pytest.mark.parametrize(
+    "df",
+    [
+        cudf.Series([1, 2, 3]),
+        cudf.Series([None]),
+        cudf.Series([4]),
+        cudf.Series([2, 3, -1, 0, 1], name="test name"),
+        cudf.Series(
+            [1, 2, 3, None, 2, 1], index=["a", "v", "d", "e", "f", "g"]
+        ),
+        cudf.Series([1, 2, 3, None, 2, 1, None], name="abc"),
+        cudf.Series(["ab", "bc", "ab", None, "bc", None, None]),
+        cudf.Series([None, None, None, None, None], dtype="str"),
+        cudf.Series([None, None, None, None, None]),
+        cudf.Series(
+            [
+                123213,
+                23123,
+                123123,
+                12213123,
+                12213123,
+                12213123,
+                23123,
+                2312323123,
+                None,
+                None,
+            ],
+            dtype="timedelta64[ns]",
+        ),
+        cudf.Series(
+            [
+                None,
+                1,
+                2,
+                3242434,
+                3233243,
+                1,
+                2,
+                1023,
+                None,
+                12213123,
+                None,
+                2312323123,
+                None,
+                None,
+            ],
+            dtype="datetime64[ns]",
+        ),
+        cudf.Series(name="empty series"),
+        cudf.Series(["a", "b", "c", " ", "a", "b", "z"], dtype="category"),
+    ],
+)
+@pytest.mark.parametrize("dropna", [True, False])
+def test_series_mode(df, dropna):
+    pdf = df.to_pandas()
 
-#     expected = pdf.mode(dropna=dropna)
-#     actual = df.mode(dropna=dropna)
-#     print(expected)
-#     print(actual)
-#     assert_eq(expected, actual, check_dtype=False)
+    expected = pdf.mode(dropna=dropna)
+    actual = df.mode(dropna=dropna)
+
+    assert_eq(expected, actual, check_dtype=False)

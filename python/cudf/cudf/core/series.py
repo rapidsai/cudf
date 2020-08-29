@@ -3388,13 +3388,72 @@ class Series(Frame, Serializable):
         return self.quantile(0.5, interpolation="linear", exact=True)
 
     def mode(self, dropna=True):
-        if dropna:
-            s = self.dropna()
-        else:
-            s = self
-        val_counts = s.value_counts(ascending=False)
-        val_counts = val_counts[val_counts == val_counts.iloc[0]]
-        return Series(val_counts.index, name=self.name)
+        """
+        Return the mode(s) of the dataset.
+
+        Always returns Series even if only one value is returned.
+
+        Parameters
+        ----------
+        dropna : bool, default True
+            Don't consider counts of NA/NaN/NaT.
+
+        Returns
+        -------
+        Series
+            Modes of the Series in sorted order.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([7, 6, 5, 4, 3, 2, 1])
+        >>> series
+        0    7
+        1    6
+        2    5
+        3    4
+        4    3
+        5    2
+        6    1
+        dtype: int64
+        >>> series.mode()
+        0    1
+        1    2
+        2    3
+        3    4
+        4    5
+        5    6
+        6    7
+        dtype: int64
+
+        We can include ``<NA>`` values in mode by
+        passing ``dropna=False``.
+
+        >>> series = cudf.Series([7, 4, 3, 3, 7, None, None])
+        >>> series
+        0       7
+        1       4
+        2       3
+        3       3
+        4       7
+        5    <NA>
+        6    <NA>
+        dtype: int64
+        >>> series.mode()
+        0    3
+        1    7
+        dtype: int64
+        >>> series.mode(dropna=False)
+        0       3
+        1       7
+        2    <NA>
+        dtype: int64
+        """
+        val_counts = self.value_counts(ascending=False, dropna=dropna)
+        if len(val_counts) > 0:
+            val_counts = val_counts[val_counts == val_counts.iloc[0]]
+
+        return Series(val_counts.index.sort_values(), name=self.name)
 
     def round(self, decimals=0):
         """Round a Series to a configurable number of decimal places.
