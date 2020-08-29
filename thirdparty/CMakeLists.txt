@@ -10,7 +10,6 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/thrust/cub.git
     # August 28, 2020
     GIT_TAG        2442f44532ffcc53298c7e3a298feb5134563860
-    GIT_SHALLOW    true
 )
 
 FetchContent_GetProperties(cub)
@@ -29,8 +28,7 @@ FetchContent_Declare(
     thrust
     GIT_REPOSITORY https://github.com/thrust/thrust.git
     # August 28, 2020
-    GIT_TAG        ec5baea36da04c592b94f9dff8e2589bfaf97ebd
-    GIT_SHALLOW    true
+    GIT_TAG        52a8bda46c5c2128414d1d47f546b486ff0be2f0
 )
 
 FetchContent_GetProperties(thrust)
