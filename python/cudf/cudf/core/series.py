@@ -3385,6 +3385,15 @@ class Series(Frame, Serializable):
         # enforce linear in case the default ever changes
         return self.quantile(0.5, interpolation="linear", exact=True)
 
+    def mode(self, dropna=True):
+        if dropna:
+            s = self.dropna()
+        else:
+            s = self
+        val_counts = s.value_counts(ascending=False)
+        val_counts = val_counts[val_counts == val_counts.iloc[0]]
+        return Series(val_counts.index, name=self.name)
+
     def round(self, decimals=0):
         """Round a Series to a configurable number of decimal places.
         """
@@ -3673,7 +3682,6 @@ class Series(Frame, Serializable):
 
         dropna : bool, default True
             Don’t include counts of NaN and None.
-            dropna == False is not supported
 
         Returns
         -------
@@ -3694,17 +3702,19 @@ class Series(Frame, Serializable):
             raise NotImplementedError(
                 "Only normalize == False is currently supported"
             )
-        if dropna is not True:
-            raise NotImplementedError(
-                "Only dropna == True is currently supported"
-            )
+
         if bins is not None:
             raise NotImplementedError("bins is not yet supported")
 
-        if self.null_count == len(self):
-            return Series(np.array([], dtype=np.int32), name=self.name)
+        if dropna and self.null_count == len(self):
+            return Series(
+                [],
+                dtype=np.int32,
+                name=self.name,
+                index=cudf.Index([], dtype=self.dtype),
+            )
 
-        res = self.groupby(self).count()
+        res = self.groupby(self, dropna=dropna).count(dropna=dropna)
         res.index.name = None
 
         if sort:
