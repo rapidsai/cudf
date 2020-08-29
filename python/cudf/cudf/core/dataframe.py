@@ -4768,7 +4768,9 @@ class DataFrame(Frame, Serializable):
 
     @classmethod
     def from_arrow(cls, table):
-        """Convert from PyArrow Table to DataFrame.
+        """
+        Convert from PyArrow Table to DataFrame.
+
         Parameters
         ----------
         table : PyArrow Table Object
