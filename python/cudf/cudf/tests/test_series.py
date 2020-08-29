@@ -391,8 +391,9 @@ def test_series_factorize(data, na_sentinel):
     ],
 )
 @pytest.mark.parametrize("dropna", [True, False])
+@pytest.mark.parametrize("normalize", [True, False])
 @pytest.mark.parametrize("nulls", ["none", "some"])
-def test_series_datetime_value_counts(data, nulls, dropna):
+def test_series_datetime_value_counts(data, nulls, normalize, dropna):
     psr = pd.Series(data)
 
     if len(data) > 0:
@@ -404,8 +405,8 @@ def test_series_datetime_value_counts(data, nulls, dropna):
             psr[p] = None
 
     gsr = cudf.from_pandas(psr)
-    expected = psr.value_counts(dropna=dropna)
-    got = gsr.value_counts(dropna=dropna)
+    expected = psr.value_counts(dropna=dropna, normalize=normalize)
+    got = gsr.value_counts(dropna=dropna, normalize=normalize)
 
     assert_eq(expected.sort_index(), got.sort_index(), check_dtype=False)
     assert_eq(
@@ -416,8 +417,9 @@ def test_series_datetime_value_counts(data, nulls, dropna):
 
 
 @pytest.mark.parametrize("dropna", [True, False])
+@pytest.mark.parametrize("normalize", [True, False])
 @pytest.mark.parametrize("num_elements", [10, 100, 1000])
-def test_categorical_value_counts(num_elements, dropna):
+def test_categorical_value_counts(dropna, normalize, num_elements):
     # create categorical series
     np.random.seed(12)
     pd_cat = pd.Categorical(
@@ -430,12 +432,16 @@ def test_categorical_value_counts(num_elements, dropna):
     # gdf
     gdf = cudf.DataFrame()
     gdf["a"] = cudf.Series.from_categorical(pd_cat)
-    gdf_value_counts = gdf["a"].value_counts(dropna=dropna)
+    gdf_value_counts = gdf["a"].value_counts(
+        dropna=dropna, normalize=normalize
+    )
 
     # pandas
     pdf = pd.DataFrame()
     pdf["a"] = pd_cat
-    pdf_value_counts = pdf["a"].value_counts(dropna=dropna)
+    pdf_value_counts = pdf["a"].value_counts(
+        dropna=dropna, normalize=normalize
+    )
 
     # verify
     assert_eq(
@@ -451,27 +457,37 @@ def test_categorical_value_counts(num_elements, dropna):
 
 
 @pytest.mark.parametrize("dropna", [True, False])
-def test_series_value_counts(dropna):
+@pytest.mark.parametrize("normalize", [True, False])
+def test_series_value_counts(dropna, normalize):
     for size in [10 ** x for x in range(5)]:
         arr = np.random.randint(low=-1, high=10, size=size)
         mask = arr != -1
         sr = cudf.Series.from_masked_array(arr, cudf.Series(mask).as_mask())
         sr.name = "col"
 
-        expect = sr.to_pandas().value_counts(dropna=dropna).sort_index()
-        got = sr.value_counts(dropna=dropna).sort_index()
+        expect = (
+            sr.to_pandas()
+            .value_counts(dropna=dropna, normalize=normalize)
+            .sort_index()
+        )
+        got = sr.value_counts(dropna=dropna, normalize=normalize).sort_index()
 
         assert_eq(expect, got, check_dtype=False, check_index_type=False)
 
 
 @pytest.mark.parametrize("ascending", [True, False])
 @pytest.mark.parametrize("dropna", [True, False])
-def test_series_value_counts_optional_arguments(ascending, dropna):
+@pytest.mark.parametrize("normalize", [True, False])
+def test_series_value_counts_optional_arguments(ascending, dropna, normalize):
     psr = pd.Series([1.0, 2.0, 2.0, 3.0, 3.0, 3.0, None])
     gsr = cudf.from_pandas(psr)
 
-    expected = psr.value_counts(ascending=ascending, dropna=dropna)
-    got = gsr.value_counts(ascending=ascending, dropna=dropna)
+    expected = psr.value_counts(
+        ascending=ascending, dropna=dropna, normalize=normalize
+    )
+    got = gsr.value_counts(
+        ascending=ascending, dropna=dropna, normalize=normalize
+    )
 
     assert_eq(expected.sort_index(), got.sort_index(), check_dtype=False)
     assert_eq(

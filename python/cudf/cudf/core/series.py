@@ -395,7 +395,9 @@ class Series(Frame, Serializable):
 
     @classmethod
     def from_arrow(cls, array):
-        """Convert from PyArrow Array/ChunkedArray to Series.
+        """
+        Convert from PyArrow Array/ChunkedArray to Series.
+
         Parameters
         ----------
         array : PyArrow Array/ChunkedArray
@@ -3666,9 +3668,8 @@ class Series(Frame, Serializable):
         Parameters
         ----------
         normalize : bool, default False
-            If True then the object returned will contain the
-            relative frequencies of the unique values. normalize == True
-            is not supported.
+            If True then the object returned will contain
+            the relative frequencies of the unique values.
 
         sort : bool, default True
             Sort by frequencies.
@@ -3691,17 +3692,58 @@ class Series(Frame, Serializable):
         --------
         >>> import cudf
         >>> sr = cudf.Series([1.0, 2.0, 2.0, 3.0, 3.0, 3.0, None])
+        >>> sr
+        0     1.0
+        1     2.0
+        2     2.0
+        3     3.0
+        4     3.0
+        5     3.0
+        6    <NA>
+        dtype: float64
+        >>> sr.value_counts()
+        3.0    3
+        2.0    2
+        1.0    1
+        dtype: int32
+
+        The order of the counts can be changed by passing ``ascending=True``:
+
         >>> sr.value_counts(ascending=True)
         1.0    1
         2.0    2
         3.0    3
         dtype: int32
-        """
 
-        if normalize is not False:
-            raise NotImplementedError(
-                "Only normalize == False is currently supported"
-            )
+        With ``normalize`` set to True, returns the relative frequency
+        by dividing all values by the sum of values.
+
+        >>> sr.value_counts(normalize=True)
+        3.0    0.500000
+        2.0    0.333333
+        1.0    0.166667
+        dtype: float64
+
+        To include ``NA`` value counts, pass ``dropna=False``:
+
+        >>> sr = cudf.Series([1.0, 2.0, 2.0, 3.0, None, 3.0, 3.0, None])
+        >>> sr
+        0     1.0
+        1     2.0
+        2     2.0
+        3     3.0
+        4    <NA>
+        5     3.0
+        6     3.0
+        7    <NA>
+        dtype: float64
+        >>> sr.value_counts(dropna=False)
+        3.0     3
+        2.0     2
+        <NA>    2
+        1.0     1
+        dtype: int32
+        """
 
         if bins is not None:
             raise NotImplementedError("bins is not yet supported")
@@ -3718,7 +3760,10 @@ class Series(Frame, Serializable):
         res.index.name = None
 
         if sort:
-            return res.sort_values(ascending=ascending)
+            res = res.sort_values(ascending=ascending)
+
+        if normalize:
+            res = res / float(res._column.sum())
         return res
 
     def scale(self):
