@@ -291,7 +291,7 @@ class TimeDeltaColumn(column.ColumnBase):
 
     @property
     def time_unit(self):
-        return self._time_unit
+        return self.dtype._time_unit
 
     def fillna(self, fill_value):
         col = self
@@ -346,7 +346,7 @@ class TimeDeltaColumn(column.ColumnBase):
             return column.column_empty(0, dtype="object", masked=False)
 
     def as_timedelta_column(self, dtype, **kwargs):
-        dtype = np.dtype(dtype)
+        dtype = cudf.dtype(dtype)
         if dtype == self.dtype:
             return self
         return libcudf.unary.cast(self, dtype=dtype)

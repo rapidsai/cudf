@@ -2474,7 +2474,7 @@ class StringIndex(GenericIndex):
     def __repr__(self):
         return (
             f"{self.__class__.__name__}({self._values.to_array()},"
-            f" dtype='object'"
+            f" dtype='String'"
             + (
                 f", name={pd.io.formats.printing.default_pprint(self.name)}"
                 if self.name is not None
@@ -2524,6 +2524,7 @@ def as_index(arbitrary, **kwargs):
         - DatetimeIndex for Datetime input.
         - GenericIndex for all other inputs.
     """
+
     kwargs = _setdefault_name(arbitrary, **kwargs)
     if isinstance(arbitrary, cudf.MultiIndex):
         return arbitrary
@@ -2533,7 +2534,7 @@ def as_index(arbitrary, **kwargs):
         return idx
     elif isinstance(arbitrary, NumericalColumn):
         try:
-            return _dtype_to_index[arbitrary.dtype.type](arbitrary, **kwargs)
+            return _dtype_to_index[arbitrary.dtype](arbitrary, **kwargs)
         except KeyError:
             return GenericIndex(arbitrary, **kwargs)
     elif isinstance(arbitrary, StringColumn):

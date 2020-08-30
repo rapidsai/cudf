@@ -1008,6 +1008,7 @@ class Series(Frame, Serializable):
         else:
             output = preprocess.to_pandas().__repr__()
 
+        output = _fix_nullable_dtype_repr(output)
         lines = output.split("\n")
 
         if isinstance(preprocess._column, cudf.core.column.CategoricalColumn):
@@ -5008,3 +5009,56 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
         result_col[equal_nulls] = True
 
     return Series(result_col, index=index)
+
+def _fix_nullable_dtype_repr(string):
+
+    to_replace = [
+        'uint8',
+        'uint16',
+        'uint32', 
+        'uint64', 
+        'int8', 
+        'int16', 
+        'int32', 
+        'int64', 
+        'float32', 
+        'float64', 
+        'bool', 
+        'object', 
+        'datetime64[ns]', 
+        'datetime64[us]', 
+        'datetime64[ms]', 
+        'datetime64[s]'
+        'timedelta64[ns]',
+        'timedelta64[us]',
+        'timedelta64[ms]',
+        'timedelta64[s]'
+    ]
+
+
+    replacements = [
+        'UInt8',
+        'UInt16',
+        'UInt32',
+        'UInt64',
+        'Int8',
+        'Int16',
+        'Int32',
+        'Int64',
+        'Float32',
+        'Float64',
+        'Boolean',
+        'String',
+        'Datetime64NS',
+        'Datetime64US',
+        'Datetime64MS',
+        'Datetime64S',
+        'Timedelta64NS',
+        'Timedelta64US',
+        'Timedelta64MS',
+        'Timedelta64S'
+    ]
+
+    for tr, rp in zip(to_replace, replacements):
+        string = string.replace(tr, rp)
+    return string

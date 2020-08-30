@@ -78,7 +78,7 @@ class Generic(ExtensionDtype, _Dtype):
         return False
 
     def __str__(self):
-        return str(self.to_pandas)
+        return self.name
 
     @property
     def num(self):
@@ -243,21 +243,25 @@ class Timedelta64NSDtype(Timedelta):
     def __init__(self):
         self.pa_type = pa.duration('ns')
         self._name = "Timedelta64NS"
+        self._time_unit = 'ns'
 
 class Timedelta64USDtype(Timedelta):
     def __init__(self):
         self.pa_type = pa.duration('us')
         self._name = "Timedelta64US"
+        self._time_unit = 'us'
 
 class Timedelta64MSDtype(Timedelta):
     def __init__(self):
         self.pa_type = pa.duration('ms')
         self._name = "Timedelta64MS"
+        self._time_unit = 'ms'
 
 class Timedelta64SDtype(Timedelta):
     def __init__(self):
         self.pa_type = pa.duration('s')
         self._name = "Timedelta64S"
+        self._time_unit = 's'
 
 class StringDtype(Flexible):
     is_string = True

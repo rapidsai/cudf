@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from hypothesis import given, settings, strategies as st
+from cudf.core.series import _fix_nullable_dtype_repr
 
 import cudf
 from cudf.tests import utils
@@ -46,12 +47,11 @@ def test_null_series(nrows, dtype):
         psrepr = psrepr.replace(
             str(sr._column.default_na_value()) + "\n", "<NA>\n"
         )
-    if "uint" in psrepr:
-        psrepr = psrepr.replace("uint", "UInt")
-    elif "int" in psrepr:
-        psrepr = psrepr.replace("int", "Int")
-    elif 'float' in psrepr:
-        psrepr = psrepr.replace("float", "Float")
+    from cudf.core.series import _fix_nullable_dtype_repr
+    # todo: this is kind of self-fulfilling since this is what is
+    # called inside _repr_ as well
+    psrepr = _fix_nullable_dtype_repr(psrepr)
+
     assert psrepr.split() == sr.__repr__().split()
 
 
@@ -92,7 +92,8 @@ def test_full_series(nrows, dtype):
     ps = pd.Series(np.random.randint(0, 100, size)).astype(dtype)
     sr = cudf.from_pandas(ps)
     pd.options.display.max_rows = int(nrows)
-    assert ps.__repr__() == sr.__repr__()
+    psrepr = _fix_nullable_dtype_repr(ps.__repr__())
+    assert psrepr == sr.__repr__()
 
 
 @pytest.mark.parametrize("dtype", repr_categories)
@@ -154,9 +155,8 @@ def test_integer_dataframe(x):
 def test_integer_series(x):
     sr = cudf.Series(x)
     ps = pd.Series(x)
-    print(sr)
-    print(ps)
-    assert sr.__repr__() == ps.__repr__()
+    psrepr = _fix_nullable_dtype_repr(ps.__repr__())
+    assert sr.__repr__() == psrepr
 
 
 @given(st.lists(st.floats()))
@@ -172,7 +172,8 @@ def test_float_dataframe(x):
 def test_float_series(x):
     sr = cudf.Series(x, nan_as_null=False)
     ps = pd.Series(x)
-    assert sr.__repr__() == ps.__repr__()
+    psrepr = _fix_nullable_dtype_repr(ps.__repr__())
+    assert sr.__repr__() == psrepr
 
 
 @pytest.fixture
@@ -201,7 +202,11 @@ def test_mixed_dataframe(mixed_pdf, mixed_gdf):
 
 def test_mixed_series(mixed_pdf, mixed_gdf):
     for col in mixed_gdf.columns:
-        assert mixed_gdf[col].__repr__() == mixed_pdf[col].__repr__()
+        try:
+            assert mixed_gdf[col].__repr__() == _fix_nullable_dtype_repr(mixed_pdf[col].__repr__())
+        except:
+            import pdb
+            pdb.set_trace()
 
 
 def test_MI():
@@ -253,8 +258,8 @@ def test_generic_index(length, dtype):
         index=np.random.randint(0, high=100, size=length).astype(dtype),
     )
     gsr = cudf.Series.from_pandas(psr)
-
-    assert psr.index.__repr__() == gsr.index.__repr__()
+    psrepr = _fix_nullable_dtype_repr(psr.index.__repr__())
+    assert psrepr == gsr.index.__repr__()
 
 
 @pytest.mark.parametrize(
@@ -316,23 +321,23 @@ def test_dataframe_sliced(gdf, slice, max_seq_items, max_rows):
     [
         (
             cudf.Index([1, 2, 3, None]),
-            "Int64Index([1, 2, 3, <NA>], dtype='int64')",
+            "Int64Index([1, 2, 3, <NA>], dtype='Int64')",
         ),
         (
             cudf.Index([None, 2.2, 3.324342, None]),
-            "Float64Index([<NA>, 2.2, 3.324342, <NA>], dtype='float64')",
+            "Float64Index([<NA>, 2.2, 3.324342, <NA>], dtype='Float64')",
         ),
         (
             cudf.Index([None, None, None], name="hello"),
-            "Float64Index([<NA>, <NA>, <NA>], dtype='float64', name='hello')",
+            "Float64Index([<NA>, <NA>, <NA>], dtype='Float64', name='hello')",
         ),
         (
             cudf.Index([None], name="hello"),
-            "Float64Index([<NA>], dtype='float64', name='hello')",
+            "Float64Index([<NA>], dtype='Float64', name='hello')",
         ),
         (
-            cudf.Index([None], dtype="int8", name="hello"),
-            "Int8Index([<NA>], dtype='int8', name='hello')",
+            cudf.Index([None], dtype="Int8", name="hello"),
+            "Int8Index([<NA>], dtype='Int8', name='hello')",
         ),
         (
             cudf.Index([None] * 50, dtype="object"),
@@ -340,20 +345,20 @@ def test_dataframe_sliced(gdf, slice, max_seq_items, max_rows):
             "None None None None None None\n None None None None None None "
             "None None None None None None None None\n None None None None "
             "None None None None None None None None None None\n None None "
-            "None None None None None None], dtype='object')",
+            "None None None None None None], dtype='String')",
         ),
         (
             cudf.Index([None] * 20, dtype="uint32"),
             "UInt32Index([<NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, "
             "<NA>,\n       <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, "
-            "<NA>,\n       <NA>, <NA>],\n      dtype='uint32')",
+            "<NA>,\n       <NA>, <NA>],\n      dtype='UInt32')",
         ),
         (
             cudf.Index(
                 [None, 111, 22, 33, None, 23, 34, 2343, None], dtype="int16"
             ),
             "Int16Index([<NA>, 111, 22, 33, <NA>, 23, 34, 2343, <NA>], "
-            "dtype='int16')",
+            "dtype='Int16')",
         ),
         (
             cudf.Index([1, 2, 3, None], dtype="category"),
@@ -370,32 +375,32 @@ def test_dataframe_sliced(gdf, slice, max_seq_items, max_rows):
             "DatetimeIndex([1970-01-01 00:00:00.000000010, "
             "1970-01-01 00:00:00.000000020,"
             "\n       1970-01-01 00:00:00.000000030, <NA>],\n      "
-            "dtype='datetime64[ns]')",
+            "dtype='Datetime64NS')",
         ),
         (
             cudf.Index(np.array([10, 20, 30, None], dtype="datetime64[s]")),
             "DatetimeIndex([1970-01-01 00:00:10, "
             "1970-01-01 00:00:20, 1970-01-01 00:00:30,\n"
-            "       <NA>],\n      dtype='datetime64[s]')",
+            "       <NA>],\n      dtype='Datetime64S')",
         ),
         (
             cudf.Index(np.array([10, 20, 30, None], dtype="datetime64[us]")),
             "DatetimeIndex([1970-01-01 00:00:00.000010, "
             "1970-01-01 00:00:00.000020,\n       "
             "1970-01-01 00:00:00.000030, <NA>],\n      "
-            "dtype='datetime64[us]')",
+            "dtype='Datetime64US')",
         ),
         (
             cudf.Index(np.array([10, 20, 30, None], dtype="datetime64[ms]")),
             "DatetimeIndex([1970-01-01 00:00:00.010, "
             "1970-01-01 00:00:00.020,\n       "
             "1970-01-01 00:00:00.030, <NA>],\n      "
-            "dtype='datetime64[ms]')",
+            "dtype='Datetime64MS')",
         ),
         (
             cudf.Index(np.array([None] * 10, dtype="datetime64[ms]")),
             "DatetimeIndex([<NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, "
-            "<NA>,\n       <NA>],\n      dtype='datetime64[ms]')",
+            "<NA>,\n       <NA>],\n      dtype='Datetime64MS')",
         ),
     ],
 )
@@ -576,7 +581,7 @@ def test_series_null_index_repr(sr, pandas_special_case):
         # Whereas cudf is consistent with strings `null` values
         # to be printed as `None` everywhere.
         actual_repr = gsr.__repr__().replace("None", "<NA>")
-    assert expected_repr.split() == actual_repr.split()
+    assert _fix_nullable_dtype_repr(expected_repr).split() == actual_repr.split()
 
 
 @pytest.mark.parametrize(
@@ -614,7 +619,7 @@ def test_timedelta_series_s_us_repr(data, dtype):
     psr = sr.to_pandas()
 
     expected = (
-        psr.__repr__().replace("timedelta64[ns]", dtype).replace("NaT", "<NA>")
+        psr.__repr__().replace("timedelta64[ns]", str(sr.dtype)).replace("NaT", "<NA>")
     )
     actual = sr.__repr__()
 
@@ -628,7 +633,7 @@ def test_timedelta_series_s_us_repr(data, dtype):
             cudf.Series([], dtype="timedelta64[ns]"),
             textwrap.dedent(
                 """
-            Series([], dtype: timedelta64[ns])
+            Series([], dtype: Timedelta64NS)
             """
             ),
         ),
@@ -636,7 +641,7 @@ def test_timedelta_series_s_us_repr(data, dtype):
             cudf.Series([], dtype="timedelta64[ms]"),
             textwrap.dedent(
                 """
-            Series([], dtype: timedelta64[ms])
+            Series([], dtype: Timedelta64MS)
             """
             ),
         ),
@@ -647,7 +652,7 @@ def test_timedelta_series_s_us_repr(data, dtype):
             0    00:00:00.001000000
             1    00:00:00.000200000
             2    00:00:00.003000000
-            dtype: timedelta64[ns]
+            dtype: Timedelta64NS
             """
             ),
         ),
@@ -658,7 +663,7 @@ def test_timedelta_series_s_us_repr(data, dtype):
             0    00:16:40
             1    00:03:20
             2    00:50:00
-            dtype: timedelta64[ms]
+            dtype: Timedelta64MS
             """
             ),
         ),
@@ -669,7 +674,7 @@ def test_timedelta_series_s_us_repr(data, dtype):
             0    00:00:00.001000000
             1    00:00:00.000200000
             2                  <NA>
-            dtype: timedelta64[ns]
+            dtype: Timedelta64NS
             """
             ),
         ),
@@ -680,7 +685,7 @@ def test_timedelta_series_s_us_repr(data, dtype):
             0    00:16:40
             1    00:03:20
             2        <NA>
-            dtype: timedelta64[ms]
+            dtype: Timedelta64MS
             """
             ),
         ),
@@ -695,7 +700,7 @@ def test_timedelta_series_s_us_repr(data, dtype):
             2    <NA>
             3    <NA>
             4    <NA>
-            dtype: timedelta64[ns]
+            dtype: Timedelta64NS
             """
             ),
         ),
@@ -710,7 +715,7 @@ def test_timedelta_series_s_us_repr(data, dtype):
             2    <NA>
             3    <NA>
             4    <NA>
-            dtype: timedelta64[ms]
+            dtype: Timedelta64MS
             """
             ),
         ),
@@ -726,7 +731,7 @@ def test_timedelta_series_s_us_repr(data, dtype):
             3    00:00:00.000000343
             4    00:00:00.004353534
             5    00:00:00.000435342
-            dtype: timedelta64[ns]
+            dtype: Timedelta64NS
             """
             ),
         ),
@@ -742,7 +747,7 @@ def test_timedelta_series_s_us_repr(data, dtype):
             3    00:00:00.343
             4    01:12:33.534
             5    00:07:15.342
-            dtype: timedelta64[ms]
+            dtype: Timedelta64MS
             """
             ),
         ),
@@ -760,7 +765,7 @@ def test_timedelta_series_s_us_repr(data, dtype):
             4              00:00:00
             5    00:00:00.000000332
             6    00:00:00.000000323
-            dtype: timedelta64[ns]
+            dtype: Timedelta64NS
             """
             ),
         ),
@@ -778,7 +783,7 @@ def test_timedelta_series_s_us_repr(data, dtype):
             4        00:00:00
             5    00:00:00.332
             6    00:00:00.323
-            dtype: timedelta64[ms]
+            dtype: Timedelta64MS
             """
             ),
         ),
@@ -804,7 +809,7 @@ def test_timedelta_series_s_us_repr(data, dtype):
             4     11573 days 23:39:03.241
             5        42 days 01:35:48.734
             6         0 days 00:00:23.234
-            dtype: timedelta64[ms]
+            dtype: Timedelta64MS
             """
             ),
         ),
@@ -830,7 +835,7 @@ def test_timedelta_series_s_us_repr(data, dtype):
             4    00:16:39.992343241
             5    00:00:03.634548734
             6    00:00:00.000023234
-            dtype: timedelta64[ns]
+            dtype: Timedelta64NS
             """
             ),
         ),
@@ -857,7 +862,7 @@ def test_timedelta_series_s_us_repr(data, dtype):
             4     11573 days 23:39:03.241
             5        42 days 01:35:48.734
             6         0 days 00:00:23.234
-            Name: abc, dtype: timedelta64[ms]
+            Name: abc, dtype: Timedelta64MS
             """
             ),
         ),
@@ -885,7 +890,7 @@ def test_timedelta_series_s_us_repr(data, dtype):
             y    00:16:39.992343241
             l    00:00:03.634548734
             m    00:00:00.000023234
-            Name: hello, dtype: timedelta64[ns]
+            Name: hello, dtype: Timedelta64NS
             """
             ),
         ),
@@ -1060,14 +1065,14 @@ def test_timedelta_dataframe_repr(df, expected_repr):
         (
             cudf.Index([1000000, 200000, 3000000], dtype="timedelta64[ms]"),
             "TimedeltaIndex(['00:16:40', '00:03:20', '00:50:00'], "
-            "dtype='timedelta64[ms]')",
+            "dtype='Timedelta64MS')",
         ),
         (
             cudf.Index(
                 [None, None, None, None, None], dtype="timedelta64[us]"
             ),
             "TimedeltaIndex([<NA>, <NA>, <NA>, <NA>, <NA>], "
-            "dtype='timedelta64[us]')",
+            "dtype='Timedelta64US')",
         ),
         (
             cudf.Index(
@@ -1085,7 +1090,7 @@ def test_timedelta_dataframe_repr(df, expected_repr):
             "TimedeltaIndex([00:02:16.457654, <NA>, 00:04:05.345345, "
             "00:03:43.432411, <NA>,"
             "       01:00:34.548734, 00:00:00.023234],"
-            "      dtype='timedelta64[us]')",
+            "      dtype='Timedelta64US')",
         ),
         (
             cudf.Index(
@@ -1103,7 +1108,7 @@ def test_timedelta_dataframe_repr(df, expected_repr):
             "TimedeltaIndex([1579 days 08:54:14, <NA>, 2839 days 15:29:05,"
             "       2586 days 00:33:31, <NA>, 42066 days 12:52:14, "
             "0 days 06:27:14],"
-            "      dtype='timedelta64[s]')",
+            "      dtype='Timedelta64S')",
         ),
     ],
 )
