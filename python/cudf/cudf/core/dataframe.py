@@ -5843,6 +5843,17 @@ class DataFrame(Frame, Serializable):
             **kwargs,
         )
 
+    def mode(self, axis=0, numeric_only=False, dropna=True, **kwargs):
+        if axis not in (0, "index"):
+            raise NotImplementedError("Only axis=0 is currently supported")
+
+        mode_results = [self[col].mode(dropna=dropna) for col in self._data]
+
+        df = cudf.concat(mode_results, axis=1)
+        df.columns = self.columns
+
+        return df
+
     def std(
         self,
         axis=None,
