@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 #include <io/utilities/block_utils.cuh>
-#include "parquet_gpu.h"
+#include "parquet_gpu.hpp"
 
 namespace cudf {
 namespace io {
@@ -418,7 +418,7 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
         page_g.page_data       = ck_g.uncompressed_bfr + page_offset;
         page_g.compressed_data = ck_g.compressed_bfr + comp_page_offset;
         page_g.num_fragments   = 0;
-        page_g.page_type       = DICTIONARY_PAGE;
+        page_g.page_type       = PageType::DICTIONARY_PAGE;
         page_g.dict_bits_plus1 = 0;
         page_g.chunk_id        = blockIdx.y * num_columns + blockIdx.x;
         page_g.hdr_size        = 0;
@@ -501,7 +501,7 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
               : 0;
           page_g.num_fragments   = fragments_in_chunk - page_start;
           page_g.chunk_id        = blockIdx.y * num_columns + blockIdx.x;
-          page_g.page_type       = DATA_PAGE;
+          page_g.page_type       = PageType::DATA_PAGE;
           page_g.dict_bits_plus1 = dict_bits_plus1;
           page_g.hdr_size        = 0;
           page_g.max_hdr_size    = 32;  // Max size excluding statistics
@@ -842,7 +842,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
   if (!t) { s->cur = s->page.page_data + s->page.max_hdr_size; }
   __syncthreads();
   // Encode NULLs
-  if (s->page.page_type != DICTIONARY_PAGE && s->col.level_bits != 0) {
+  if (s->page.page_type != PageType::DICTIONARY_PAGE && s->col.level_bits != 0) {
     const uint32_t *valid = s->col.valid_map_base;
     uint32_t def_lvl_bits = s->col.level_bits & 0xf;
     if (def_lvl_bits != 0) {
@@ -905,7 +905,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
     uint32_t row   = s->page.start_row + cur_row + t;
     uint32_t is_valid, warp_valids, len, pos;
 
-    if (s->page.page_type == DICTIONARY_PAGE) {
+    if (s->page.page_type == PageType::DICTIONARY_PAGE) {
       is_valid = (cur_row + t < s->page.num_rows);
       row      = (is_valid) ? s->col.dict_data[row] : row;
     } else {
@@ -1158,9 +1158,9 @@ inline __device__ uint8_t *cpw_put_fldh(uint8_t *p, int f, int cur, int t)
   *p++    = 0;                \
   cur_fld = f;
 
-#define CPW_FLD_INT32(f, v)                          \
-  p       = cpw_put_fldh(p, f, cur_fld, ST_FLD_I32); \
-  p       = cpw_put_int32(p, v);                     \
+#define CPW_FLD_INT32(f, v)                           \
+  p       = cpw_put_fldh(p, f, cur_fld, ST_FLD_I32);  \
+  p       = cpw_put_int32(p, static_cast<int32_t>(v));\
   cur_fld = f;
 
 #define CPW_FLD_INT64(f, v)                          \
@@ -1284,30 +1284,30 @@ __global__ void __launch_bounds__(128) gpuEncodePageHeaders(EncPage *pages,
       compressed_page_size = uncompressed_page_size;
     }
     CPW_BEGIN_STRUCT(hdr_start)
-    int page_type = page_g.page_type;
+    PageType page_type = page_g.page_type;
     // NOTE: For dictionary encoding, parquet v2 recommends using PLAIN in dictionary page and
     // RLE_DICTIONARY in data page, but parquet v1 uses PLAIN_DICTIONARY in both dictionary and data
     // pages (actual encoding is identical).
-    int encoding;
+    Encoding encoding;
     if (enable_bool_rle) {
       encoding =
         (col_g.physical_type != BOOLEAN)
-        ? (page_type == DICTIONARY_PAGE || page_g.dict_bits_plus1 != 0) ? PLAIN_DICTIONARY : PLAIN
-        : RLE;
+        ? (page_type == PageType::DICTIONARY_PAGE || page_g.dict_bits_plus1 != 0) ? Encoding::PLAIN_DICTIONARY : Encoding::PLAIN
+        : Encoding::RLE;
     } else {
       encoding =
-        (page_type == DICTIONARY_PAGE || page_g.dict_bits_plus1 != 0) ? PLAIN_DICTIONARY : PLAIN;
+        (page_type == PageType::DICTIONARY_PAGE || page_g.dict_bits_plus1 != 0) ? Encoding::PLAIN_DICTIONARY : Encoding::PLAIN;
     }
     CPW_FLD_INT32(1, page_type)
     CPW_FLD_INT32(2, uncompressed_page_size)
     CPW_FLD_INT32(3, compressed_page_size)
-    if (page_type == DATA_PAGE) {
+    if (page_type == PageType::DATA_PAGE) {
       // DataPageHeader
       CPW_FLD_STRUCT_BEGIN(5)
       CPW_FLD_INT32(1, page_g.num_rows)  // NOTE: num_values != num_rows for list types
       CPW_FLD_INT32(2, encoding)         // encoding
-      CPW_FLD_INT32(3, RLE)              // definition_level_encoding
-      CPW_FLD_INT32(4, RLE)              // repetition_level_encoding
+      CPW_FLD_INT32(3, Encoding::RLE)              // definition_level_encoding
+      CPW_FLD_INT32(4, Encoding::RLE)              // repetition_level_encoding
       // Optionally encode page-level statistics
       if (page_stats) {
         CPW_FLD_STRUCT_BEGIN(5)

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "parquet.h"
+#include "parquet.hpp"
 
 #include <algorithm>
 
@@ -390,11 +390,11 @@ int CompactProtocolReader::WalkSchema(
   write(&s->m);                         \
   cur_fld = id;
 
-#define CPW_FLD_INT32_LIST(id, m)                                           \
-  put_fldh(id, cur_fld, ST_FLD_LIST);                                       \
-  putb((uint8_t)((std::min(s->m.size(), (size_t)0xfu) << 4) | ST_FLD_I32)); \
-  if (s->m.size() >= 0xf) put_uint(s->m.size());                            \
-  for (auto i = 0; i < s->m.size(); i++) { put_int(s->m[i]); }              \
+#define CPW_FLD_INT32_LIST(id, m)                                                   \
+  put_fldh(id, cur_fld, ST_FLD_LIST);                                               \
+  putb((uint8_t)((std::min(s->m.size(), (size_t)0xfu) << 4) | ST_FLD_I32));         \
+  if (s->m.size() >= 0xf) put_uint(s->m.size());                                    \
+  for (auto i = 0; i < s->m.size(); i++) { put_int(static_cast<int32_t>(s->m[i])); }\
   cur_fld = id;
 
 #define CPW_FLD_STRING_LIST(id, m)                                                     \

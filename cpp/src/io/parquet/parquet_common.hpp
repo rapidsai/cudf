@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 namespace cudf {
 namespace io {
 namespace parquet {
@@ -72,7 +74,7 @@ enum ConvertedType {
 /**
  * @brief Encoding types for the actual data stream
  **/
-enum Encoding {
+enum class Encoding : uint8_t {
   PLAIN                   = 0,
   GROUP_VAR_INT           = 1,  // Deprecated, never used
   PLAIN_DICTIONARY        = 2,
@@ -110,7 +112,7 @@ enum FieldRepetitionType {
 /**
  * @brief Types of pages
  **/
-enum PageType {
+enum class PageType : uint8_t {
   DATA_PAGE       = 0,
   INDEX_PAGE      = 1,
   DICTIONARY_PAGE = 2,

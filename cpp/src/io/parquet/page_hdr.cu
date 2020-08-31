@@ -15,7 +15,7 @@
  */
 
 #include <io/utilities/block_utils.cuh>
-#include "parquet_gpu.h"
+#include "parquet_gpu.hpp"
 #include <thrust/tuple.h>
 
 namespace cudf {
@@ -122,42 +122,6 @@ __device__ void skip_struct_field(byte_stream_s *bs, int t)
   } while (rep_cnt || struct_depth);
 }
 
-#define PARQUET_BEGIN_STRUCT(fn)         \
-  __device__ bool fn(byte_stream_s *bs)  \
-  {                                      \
-    int fld = 0;                         \
-    for (;;) {                           \
-      int c, t, f;                       \
-      c = getb(bs);                      \
-      if (!c) break;                     \
-      f   = c >> 4;                      \
-      t   = c & 0xf;                     \
-      fld = (f) ? fld + f : get_i32(bs); \
-      switch (fld) {
-#define PARQUET_FLD_ENUM(id, m, mt)    \
-  case id:                             \
-    bs->m = (mt)get_i32(bs);           \
-    if (t != ST_FLD_I32) return false; \
-    break;
-
-#define PARQUET_FLD_INT32(id, m)       \
-  case id:                             \
-    bs->m = get_i32(bs);               \
-    if (t != ST_FLD_I32) return false; \
-    break;
-
-#define PARQUET_FLD_STRUCT(id, m)                   \
-  case id:                                          \
-    if (t != ST_FLD_STRUCT || !m(bs)) return false; \
-    break;
-
-#define PARQUET_END_STRUCT()                \
-  default: skip_struct_field(bs, t); break; \
-    }                                       \
-    }                                       \
-    return true;                            \
-    }
-
 struct ParquetFieldInt32
 {
   int field;
@@ -179,16 +143,33 @@ template <typename Enum>
 struct ParquetFieldEnum
 {
   int field;
-  uint8_t &val;
+  Enum &val;
 
   __device__
-  ParquetFieldEnum(int f, uint8_t &v) : field(f), val(v) {}
+  ParquetFieldEnum(int f, Enum &v) : field(f), val(v) {}
 
   inline __device__ bool
     operator()(byte_stream_s *bs, int t)
     {
       val = (Enum)get_i32(bs);
       if (t != ST_FLD_I32) return true;
+      else return false;
+    }
+};
+
+template <typename Operator>
+struct ParquetFieldStruct
+{
+  int field;
+  Operator op;
+
+  __device__
+  ParquetFieldStruct(int f) : field(f) {}
+
+  inline __device__ bool
+    operator()(byte_stream_s *bs, int t)
+    {
+      if ((t != ST_FLD_STRUCT) || !op(bs)) return true;
       else return false;
     }
 };
@@ -246,92 +227,58 @@ inline __device__ bool function_builder(thrust::tuple<Operator...> &op, byte_str
   return true;
 }
 
-__device__ bool gpuParseDataPageHeader(byte_stream_s *bs)
+struct gpuParseDataPageHeader
 {
-  auto op = thrust::make_tuple(
-      ParquetFieldInt32(1, bs->page.num_input_values),
-      ParquetFieldEnum<Encoding>(2, bs->page.encoding),
-      ParquetFieldEnum<Encoding>(3, bs->page.definition_level_encoding),
-      ParquetFieldEnum<Encoding>(4, bs->page.repetition_level_encoding));
-  return function_builder(op, bs);
-}
-
-//PARQUET_BEGIN_STRUCT(gpuParseDataPageHeader)
-//PARQUET_FLD_INT32(1, page.num_input_values)
-//PARQUET_FLD_ENUM(2, page.encoding, Encoding);
-//PARQUET_FLD_ENUM(3, page.definition_level_encoding, Encoding);
-//PARQUET_FLD_ENUM(4, page.repetition_level_encoding, Encoding);
-//PARQUET_END_STRUCT()
-
-PARQUET_BEGIN_STRUCT(gpuParseDictionaryPageHeader)
-PARQUET_FLD_INT32(1, page.num_input_values)
-PARQUET_FLD_ENUM(2, page.encoding, Encoding);
-PARQUET_END_STRUCT()
-
-PARQUET_BEGIN_STRUCT(gpuParseDataPageHeaderV2)
-PARQUET_FLD_INT32(1, page.num_input_values)
-PARQUET_FLD_INT32(3, page.num_rows)
-PARQUET_FLD_ENUM(4, page.encoding, Encoding);
-PARQUET_FLD_ENUM(5, page.definition_level_encoding, Encoding);
-PARQUET_FLD_ENUM(6, page.repetition_level_encoding, Encoding);
-PARQUET_END_STRUCT()
-
-//PARQUET_BEGIN_STRUCT(gpuParsePageHeader)
-//PARQUET_FLD_ENUM(1, page_type, PageType)
-//PARQUET_FLD_INT32(2, page.uncompressed_page_size)
-//PARQUET_FLD_INT32(3, page.compressed_page_size)
-//PARQUET_FLD_STRUCT(5, gpuParseDataPageHeader)
-//PARQUET_FLD_STRUCT(7, gpuParseDictionaryPageHeader)
-//PARQUET_FLD_STRUCT(8, gpuParseDataPageHeaderV2)
-//PARQUET_END_STRUCT()
-
-
-__device__ bool gpuParsePageHeader(byte_stream_s *bs)
-{
-  int fld = 0;
-  for (;;) {
-    int c, t, f;
-    c = getb(bs);
-    if (!c) break;
-    f   = c >> 4;
-    t   = c & 0xf;
-    fld = (f) ? fld + f : get_i32(bs);
-    bool exit_function = false;
-    if (fld == 1)
-    {
-      bs->page_type = (PageType)get_i32(bs);
-      if (t != ST_FLD_I32) exit_function = true;
-    }
-    else if (fld == 2)
-    {
-      bs->page.uncompressed_page_size = get_i32(bs);
-      if (t != ST_FLD_I32) exit_function = true;
-    }
-    else if (fld == 3)
-    {
-      bs->page.compressed_page_size = get_i32(bs);
-      if (t != ST_FLD_I32) exit_function = true;
-    }
-    else if (fld == 5)
-    {
-      if (t != ST_FLD_STRUCT || !gpuParseDataPageHeader(bs)) exit_function = true;
-    }
-    else if (fld == 7)
-    {
-      if (t != ST_FLD_STRUCT || !gpuParseDictionaryPageHeader(bs)) exit_function = true;
-    }
-    else if (fld == 8)
-    {
-      if (t != ST_FLD_STRUCT || !gpuParseDataPageHeaderV2(bs)) exit_function = true;
-    }
-    else
-    {
-        skip_struct_field(bs, t);
-    }
-    if (exit_function) { return false; }
+  __device__ bool operator()(byte_stream_s *bs)
+  {
+    auto op = thrust::make_tuple(
+        ParquetFieldInt32(1, bs->page.num_input_values),
+        ParquetFieldEnum<Encoding>(2, bs->page.encoding),
+        ParquetFieldEnum<Encoding>(3, bs->page.definition_level_encoding),
+        ParquetFieldEnum<Encoding>(4, bs->page.repetition_level_encoding));
+    return function_builder(op, bs);
   }
-  return true;
-}
+};
+
+struct gpuParseDictionaryPageHeader
+{
+  __device__ bool operator()(byte_stream_s *bs)
+  {
+    auto op = thrust::make_tuple(
+        ParquetFieldInt32(1, bs->page.num_input_values),
+        ParquetFieldEnum<Encoding>(2, bs->page.encoding));
+    return function_builder(op, bs);
+  }
+};
+
+struct gpuParseDataPageHeaderV2
+{
+  __device__ bool operator()(byte_stream_s *bs)
+  {
+    auto op = thrust::make_tuple(
+        ParquetFieldInt32(1, bs->page.num_input_values),
+        ParquetFieldInt32(3, bs->page.num_rows),
+        ParquetFieldEnum<Encoding>(4, bs->page.encoding),
+        ParquetFieldEnum<Encoding>(5, bs->page.definition_level_encoding),
+        ParquetFieldEnum<Encoding>(6, bs->page.repetition_level_encoding));
+    return function_builder(op, bs);
+  }
+};
+
+struct gpuParsePageHeader
+{
+  __device__ bool operator()(byte_stream_s *bs)
+  {
+    auto op = thrust::make_tuple(
+        ParquetFieldEnum<PageType>(1, bs->page_type),
+        ParquetFieldInt32(2, bs->page.uncompressed_page_size),
+        ParquetFieldInt32(3, bs->page.compressed_page_size),
+        ParquetFieldStruct<gpuParseDataPageHeader>(5),
+        ParquetFieldStruct<gpuParseDictionaryPageHeader>(7),
+        ParquetFieldStruct<gpuParseDataPageHeaderV2>(8));
+    return function_builder(op, bs);
+  }
+};
 
 /**
  * @brief Kernel for outputting page headers from the specified column chunks
@@ -343,6 +290,7 @@ __device__ bool gpuParsePageHeader(byte_stream_s *bs)
 extern "C" __global__ void __launch_bounds__(128)
   gpuDecodePageHeaders(ColumnChunkDesc *chunks, int32_t num_chunks)
 {
+  gpuParsePageHeader parse_page_header;
   __shared__ byte_stream_s bs_g[4];
 
   int t                   = threadIdx.x & 0x1f;
@@ -390,20 +338,20 @@ extern "C" __global__ void __launch_bounds__(128)
         // definition levels
         bs->page.chunk_row += bs->page.num_rows;
         bs->page.num_rows = 0;
-        if (gpuParsePageHeader(bs) && bs->page.compressed_page_size >= 0) {
+        if (parse_page_header(bs) && bs->page.compressed_page_size >= 0) {
           switch (bs->page_type) {
-            case DATA_PAGE:
+            case PageType::DATA_PAGE:
               // this computation is only valid for flat schemas. for nested schemas,
               // they will be recomputed in the preprocess step by examining repetition and
               // definition levels
               bs->page.num_rows = bs->page.num_input_values;
-            case DATA_PAGE_V2:
+            case PageType::DATA_PAGE_V2:
               index_out = num_dict_pages + data_page_count;
               data_page_count++;
               bs->page.flags = 0;
               values_found += bs->page.num_input_values;
               break;
-            case DICTIONARY_PAGE:
+            case PageType::DICTIONARY_PAGE:
               index_out = dictionary_page_count;
               dictionary_page_count++;
               bs->page.flags = PAGEINFO_FLAGS_DICTIONARY;

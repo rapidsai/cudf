@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "parquet_common.h"
+#include "parquet_common.hpp"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -162,9 +162,9 @@ struct FileMetaData {
  **/
 struct DataPageHeader {
   int32_t num_values                 = 0;  // Number of values, including NULLs, in this data page.
-  Encoding encoding                  = PLAIN;  // Encoding used for this data page
-  Encoding definition_level_encoding = PLAIN;  // Encoding used for definition levels
-  Encoding repetition_level_encoding = PLAIN;  // Encoding used for repetition levels
+  Encoding encoding                  = Encoding::PLAIN;  // Encoding used for this data page
+  Encoding definition_level_encoding = Encoding::PLAIN;  // Encoding used for definition levels
+  Encoding repetition_level_encoding = Encoding::PLAIN;  // Encoding used for repetition levels
 };
 
 /**
@@ -172,7 +172,7 @@ struct DataPageHeader {
  **/
 struct DictionaryPageHeader {
   int32_t num_values = 0;      // Number of values in the dictionary
-  Encoding encoding  = PLAIN;  // Encoding using this dictionary page
+  Encoding encoding  = Encoding::PLAIN;  // Encoding using this dictionary page
 };
 
 /**
@@ -185,7 +185,7 @@ struct DictionaryPageHeader {
  * skipped during reading.
  **/
 struct PageHeader {
-  PageType type = DATA_PAGE;  // the type of the page: indicates which of the *_header fields is set
+  PageType type = PageType::DATA_PAGE;  // the type of the page: indicates which of the *_header fields is set
   int32_t uncompressed_page_size = 0;  // Uncompressed page size in bytes (not including the header)
   int32_t compressed_page_size   = 0;  // Compressed page size in bytes (not including the header)
   DataPageHeader data_page_header;
