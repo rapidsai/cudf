@@ -70,9 +70,9 @@ enum class filter_type : bool { KEEP, REMOVE };
  * f = [{'a','l'}, {'M','Z'}, {'4','6'}]
  * r1 = filter_characters(s, f)
  * r1 is now ["aei", "OU", "456"]
- * r2 = filter_characters(s, f, false)
+ * r2 = filter_characters(s, f, REMOVE)
  * r2 is now ["ou", "AEI", "0123789"]
- * r3 = filter_characters(s, f, true, "*")
+ * r3 = filter_characters(s, f, KEEP, "*")
  * r3 is now ["aei**", "***OU", "****456***"]
  * @endcode
  *

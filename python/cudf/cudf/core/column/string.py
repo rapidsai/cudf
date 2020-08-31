@@ -3632,7 +3632,7 @@ class StringMethods(ColumnMethodsMixin):
             Range values are inclusive.
         keep : boolean
             If False, the character ranges in the ``table`` are removed.
-            If True, the character ranges in the ``table`` are removed.
+            If True, the character ranges not in the ``table`` are removed.
             Default is True.
         repl : str
             Optional replacement string to use in place of removed characters.
