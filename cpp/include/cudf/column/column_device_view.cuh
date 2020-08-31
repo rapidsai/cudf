@@ -18,6 +18,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <cudf/column/column_view.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/lists/list_view.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -717,6 +718,18 @@ __device__ inline dictionary32 const column_device_view::element<dictionary32>(
 {
   size_type index = element_index + offset();  // account for this view's _offset
   return dictionary32{d_children[0].element<int32_t>(index)};
+}
+
+// TODO add docs
+template <>
+__device__ inline numeric::decimal32 const column_device_view::element<numeric::decimal32>(
+  size_type element_index) const noexcept
+{
+  if (_type.scale() == 0)  // TODO fix: this is a hack - fix with thrust optional
+    return data<numeric::decimal32>()[element_index];
+  else
+    return numeric::decimal32{numeric::scaled_integer<int32_t>{data<int32_t>()[element_index],
+                                                               numeric::scale_type{_type.scale()}}};
 }
 
 namespace detail {
