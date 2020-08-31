@@ -1,6 +1,129 @@
 #pragma once
 
+#include <map>
+
 #include <cudf/table/table.hpp>
+#include <cudf/utilities/traits.hpp>
+
+enum class type_group_id : int32_t {
+  INTEGRAL = static_cast<int32_t>(cudf::type_id::NUM_TYPE_IDS),
+  FLOATING_POINT,
+  TIMESTAMP,
+  DURATION,
+  FIXED_POINT,
+  COMPOUND,
+  NESTED,
+};
+
+enum class rand_dist_id : int8_t {
+  DEFAULT = 0,
+  UNIFORM,
+  NORMAL,
+  GEOMETRIC,
+  BERNOULLI,
+};
+
+template <typename T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
+rand_dist_id default_distribution()
+{
+  return rand_dist_id::GEOMETRIC;
+}
+
+template <typename T, std::enable_if_t<cudf::is_duration<T>()>* = nullptr>
+rand_dist_id default_distribution()
+{
+  return rand_dist_id::GEOMETRIC;
+}
+
+template <typename T,
+          std::enable_if_t<!std::is_unsigned<T>::value && cudf::is_numeric<T>()>* = nullptr>
+rand_dist_id default_distribution()
+{
+  return rand_dist_id::NORMAL;
+}
+
+template <typename T,
+          std::enable_if_t<!std::is_same<T, bool>::value && std::is_unsigned<T>::value &&
+                           cudf::is_numeric<T>()>* = nullptr>
+rand_dist_id default_distribution()
+{
+  return rand_dist_id::GEOMETRIC;
+}
+
+template <typename T, std::enable_if_t<std::is_same<T, bool>::value>* = nullptr>
+rand_dist_id default_distribution()
+{
+  return rand_dist_id::BERNOULLI;
+}
+
+/**
+ * @brief nanosecond count in the unit of @ref T.
+ *
+ * @tparam T Timestamp type
+ */
+template <typename T>
+constexpr int64_t nanoseconds()
+{
+  using ratio = std::ratio_divide<typename T::period, typename cudf::timestamp_ns::period>;
+  return ratio::num / ratio::den;
+}
+
+template <typename T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
+std::pair<int64_t, int64_t> default_range()
+{
+  static constexpr int64_t year_ns = 365l * 24 * 60 * 60 * nanoseconds<cudf::timestamp_s>();
+  return {50 * year_ns, 0};
+}
+
+template <typename T, std::enable_if_t<cudf::is_duration<T>()>* = nullptr>
+std::pair<int64_t, int64_t> default_range()
+{
+  static constexpr int64_t year_ns = 365l * 24 * 60 * 60 * nanoseconds<cudf::timestamp_s>();
+  return {0, 2 * year_ns};
+}
+
+template <typename T, std::enable_if_t<cudf::is_numeric<T>()>* = nullptr>
+std::pair<T, T> default_range()
+{
+  return {std::numeric_limits<T>::lowest(), std::numeric_limits<T>::max()};
+}
+
+template <typename T>
+struct numeric_dist_params {
+  rand_dist_id distribution_type;
+  T lower_bound;
+  T upper_bound;
+};
+
+class distribution_parameters {
+  std::map<cudf::type_id, numeric_dist_params<uint64_t>> int_params;
+  std::map<cudf::type_id, numeric_dist_params<double>> float_params;
+
+ public:
+  template <typename T, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
+  numeric_dist_params<T> get_params(cudf::type_id tid)
+  {
+    auto it = int_params.find(tid);
+    if (it == int_params.end()) {
+      auto const range = default_range<T>();
+      return numeric_dist_params<T>{default_distribution<T>, range.first, range.second};
+    } else
+      return *it;
+  }
+
+  template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value, T>* = nullptr>
+  numeric_dist_params<T> get_params(cudf::type_id tid)
+  {
+    auto it = float_params.find(tid);
+    if (it == float_params.end()) {
+      auto const range = default_range<T>();
+      return numeric_dist_params<T>{default_distribution<T>, range.first, range.second};
+    } else
+      return *it;
+  }
+};
+
+std::vector<cudf::type_id> get_type_or_group(int32_t id);
 
 /**
  * @file generate_benchmark_input.hpp
