@@ -15,9 +15,7 @@
  */
 
 #include "column_utilities.hpp"
-#include "cudf/utilities/type_dispatcher.hpp"
 #include "detail/column_utilities.hpp"
-#include "thrust/iterator/counting_iterator.h"
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/copy.hpp>
@@ -30,6 +28,8 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/bit.hpp>
+#include "cudf/fixed_point/fixed_point.hpp"
+#include "cudf/utilities/type_dispatcher.hpp"
 
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/cudf_gtest.hpp>
@@ -38,6 +38,7 @@
 
 #include <thrust/equal.h>
 #include <thrust/logical.h>
+#include "thrust/iterator/counting_iterator.h"
 
 #include <numeric>
 #include <sstream>
@@ -563,13 +564,30 @@ struct column_view_printer {
                   std::vector<std::string>& out,
                   std::string const& indent)
   {
-    auto const h_data = cudf::test::to_host<Element>(col);
+    // TODO delete
+    std::cout << "Hit column_view_printer for fp. The scale is: " << col.type().scale() << '\n';
 
     out.resize(col.size());
-    std::transform(
-      std::begin(h_data.first), std::end(h_data.first), out.begin(), [&](auto fixed_point_number) {
-        return std::to_string(static_cast<double>(fixed_point_number));
-      });
+
+    if (col.type().scale() == 0) {  // TODO fix: this is a hack - fix with thrust optional
+      auto const h_data = cudf::test::to_host<Element>(col);
+
+      std::transform(std::begin(h_data.first),
+                     std::end(h_data.first),
+                     out.begin(),
+                     [&](auto fixed_point_number) {
+                       return std::to_string(static_cast<double>(fixed_point_number));
+                     });
+    } else {
+      auto const h_data = cudf::test::to_host<int32_t>(col);
+
+      std::transform(
+        std::begin(h_data.first), std::end(h_data.first), out.begin(), [&](auto value) {
+          auto const fp = numeric::decimal32{
+            numeric::scaled_integer<int32_t>{value, numeric::scale_type{col.type().scale()}}};
+          return std::to_string(static_cast<double>(fp));
+        });
+    }
   }
 
   template <typename Element,
