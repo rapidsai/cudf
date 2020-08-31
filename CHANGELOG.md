@@ -17,6 +17,7 @@
 ## Bug Fixes
 
 - PR #6081 Fix issue where fsspec thinks it has a protocol string
+- PR #6128 Add support for numpy RandomState handling in `sample`
 
 
 # cuDF 0.15.0 (Date TBD)
