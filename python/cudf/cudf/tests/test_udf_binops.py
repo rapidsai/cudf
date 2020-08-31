@@ -5,6 +5,7 @@ import numba
 import numpy as np
 import pytest
 
+import cudf
 from cudf import _lib as libcudf
 from cudf.core import Series
 from cudf.utils import dtypes as dtypeutils
@@ -44,7 +45,7 @@ def test_generic_ptx(dtype):
     output_type = numpy_support.as_dtype(result.signature.return_type)
 
     out_col = libcudf.binaryop.binaryop_udf(
-        lhs_col, rhs_col, ptx_code, output_type.type
+        lhs_col, rhs_col, ptx_code, cudf.dtype(output_type.type)
     )
 
     result = lhs_arr ** 3 + rhs_arr

@@ -224,15 +224,8 @@ def binaryop_udf(Column lhs, Column rhs, udf_ptx, dtype):
     """
     cdef column_view c_lhs = lhs.view()
     cdef column_view c_rhs = rhs.view()
-
-    cdef type_id tid = (
-        <type_id> (
-            <underlying_type_t_type_id> (
-                np_to_cudf_types[np.dtype(dtype)]
-            )
-        )
-    )
-    cdef data_type c_dtype = data_type(tid)
+    cdef _Dtype pydtype = dtype
+    cdef data_type c_dtype = pydtype.get_libcudf_type()
 
     cdef string cpp_str = udf_ptx.encode("UTF-8")
 

@@ -67,7 +67,7 @@ TIMEDELTA_TYPES = {
 }
 OTHER_TYPES = {"bool", "category", "str"}
 ALL_TYPES = NUMERIC_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | OTHER_TYPES
-
+NEW_NUMERIC_TYPES = {'Int8', 'Int16', 'Int32', 'Int64', 'UInt8', 'UInt16', 'UInt32', 'UInt64', 'Float32', 'Float64'}
 
 def np_to_pa_dtype(dtype):
     """Util to convert numpy dtype to PyArrow dtype.
