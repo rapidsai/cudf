@@ -725,11 +725,14 @@ template <>
 __device__ inline numeric::decimal32 const column_device_view::element<numeric::decimal32>(
   size_type element_index) const noexcept
 {
-  if (_type.scale() == 0)  // TODO fix: this is a hack - fix with thrust optional
-    return data<numeric::decimal32>()[element_index];
-  else
-    return numeric::decimal32{numeric::scaled_integer<int32_t>{data<int32_t>()[element_index],
-                                                               numeric::scale_type{_type.scale()}}};
+  using namespace numeric;
+  if (_type.scale().has_value()) {
+    auto const scale       = scale_type{_type.scale().value()};
+    auto const fixed_point = scaled_integer<int32_t>{data<int32_t>()[element_index], scale};
+    return decimal32{fixed_point};
+  } else {
+    return data<decimal32>()[element_index];
+  }
 }
 
 namespace detail {

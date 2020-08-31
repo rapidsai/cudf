@@ -564,27 +564,20 @@ struct column_view_printer {
                   std::vector<std::string>& out,
                   std::string const& indent)
   {
-    // TODO delete
-    std::cout << "Hit column_view_printer for fp. The scale is: " << col.type().scale() << '\n';
-
     out.resize(col.size());
 
-    if (col.type().scale() == 0) {  // TODO fix: this is a hack - fix with thrust optional
-      auto const h_data = cudf::test::to_host<Element>(col);
-
-      std::transform(std::begin(h_data.first),
-                     std::end(h_data.first),
-                     out.begin(),
-                     [&](auto fixed_point_number) {
-                       return std::to_string(static_cast<double>(fixed_point_number));
-                     });
-    } else {
+    if (col.type().scale().has_value()) {
       auto const h_data = cudf::test::to_host<int32_t>(col);
-
       std::transform(
-        std::begin(h_data.first), std::end(h_data.first), out.begin(), [&](auto value) {
-          auto const fp = numeric::decimal32{
-            numeric::scaled_integer<int32_t>{value, numeric::scale_type{col.type().scale()}}};
+        std::cbegin(h_data.first), std::cend(h_data.first), out.begin(), [&](auto const& value) {
+          auto const scale = numeric::scale_type{col.type().scale().value()};
+          auto const fp    = numeric::decimal32{numeric::scaled_integer<int32_t>{value, scale}};
+          return std::to_string(static_cast<double>(fp));
+        });
+    } else {
+      auto const h_data = cudf::test::to_host<Element>(col);
+      std::transform(
+        std::cbegin(h_data.first), std::cend(h_data.first), out.begin(), [&](auto const& fp) {
           return std::to_string(static_cast<double>(fp));
         });
     }
