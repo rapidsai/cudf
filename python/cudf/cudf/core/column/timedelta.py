@@ -14,7 +14,7 @@ from cudf.core.column import column, string
 from cudf.core.column.datetime import _numpy_to_pandas_conversion
 from cudf.utils.dtypes import is_scalar, np_to_pa_dtype
 from cudf.utils.utils import buffers_from_pyarrow
-
+from cudf.api.types import can_cast
 _dtype_to_format_conversion = {
     "Timedelta64NS": "%D days %H:%M:%S",
     "Timedelta64US": "%D days %H:%M:%S",
@@ -118,13 +118,13 @@ class TimeDeltaColumn(column.ColumnBase):
                     if isinstance(rhs, Scalar):
                         rhs = np.timedelta64(rhs.value)
 
-                    rhs = rhs.astype(common_dtype).astype("float64")
+                    rhs = rhs.astype(common_dtype.to_numpy).astype("float64")
                 else:
                     rhs = as_scalar(None, "float64")
             else:
-                rhs = rhs.astype(common_dtype).astype("float64")
+                rhs = rhs.astype(common_dtype.to_numpy).astype("float64")
 
-            out_dtype = np.dtype("int64")
+            out_dtype = cudf.Int64Dtype()
         elif rhs.dtype.kind in ("f", "i", "u"):
             out_dtype = self.dtype
         else:
@@ -187,13 +187,13 @@ class TimeDeltaColumn(column.ColumnBase):
                     if isinstance(rhs, Scalar):
                         rhs = np.timedelta64(rhs.value)
 
-                    rhs = rhs.astype(common_dtype).astype("float64")
+                    rhs = rhs.astype(common_dtype.to_numpy).astype("float64")
                 else:
                     rhs = as_scalar(None, "float64")
             else:
                 rhs = rhs.astype(common_dtype).astype("float64")
 
-            out_dtype = np.dtype("float64")
+            out_dtype = cudf.Float64Dtype()
         elif rhs.dtype.kind in ("f", "i", "u"):
             out_dtype = self.dtype
         else:
@@ -206,7 +206,6 @@ class TimeDeltaColumn(column.ColumnBase):
 
     def binary_operator(self, op, rhs, reflect=False):
         lhs, rhs = self, rhs
-
         if op in ("eq", "ne"):
             out_dtype = self._binary_op_eq_ne(rhs)
         elif op in ("lt", "gt", "le", "ge"):
@@ -251,7 +250,7 @@ class TimeDeltaColumn(column.ColumnBase):
                 other = other.astype("timedelta64[s]")
             else:
                 common_dtype = determine_out_dtype(self.dtype, other.dtype)
-                other = other.astype(common_dtype)
+                other = other.astype(common_dtype.to_numpy)
             return as_scalar(other)
         elif np.isscalar(other):
             return as_scalar(other)
@@ -298,7 +297,7 @@ class TimeDeltaColumn(column.ColumnBase):
         if is_scalar(fill_value):
             if isinstance(fill_value, np.timedelta64):
                 dtype = determine_out_dtype(self.dtype, fill_value.dtype)
-                fill_value = fill_value.astype(dtype)
+                fill_value = fill_value.astype(dtype.to_numpy)
                 col = col.astype(dtype)
             elif not isinstance(fill_value, Scalar):
                 fill_value = np.timedelta64(fill_value)
@@ -572,9 +571,9 @@ def binop(lhs, rhs, op, out_dtype):
 
 
 def determine_out_dtype(lhs_dtype, rhs_dtype):
-    if np.can_cast(cudf.dtype(lhs_dtype).to_numpy, cudf.dtype(rhs_dtype).to_numpy):
+    if can_cast(lhs_dtype, rhs_dtype):
         return cudf.dtype(rhs_dtype)
-    elif np.can_cast(cudf.dtype(rhs_dtype).to_numpy, cudf.dtype(lhs_dtype).to_numpy):
+    elif can_cast(rhs_dtype, lhs_dtype):
         return cudf.dtype(lhs_dtype)
     else:
         raise TypeError(f"Cannot type-cast {lhs_dtype} and {rhs_dtype}")

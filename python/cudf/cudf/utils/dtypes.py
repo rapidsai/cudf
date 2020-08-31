@@ -360,7 +360,7 @@ def check_cast_unsupported_dtype(dtype):
     else:
         dtype = np.dtype(dtype)
 
-    if dtype in cudf._lib.types.np_to_cudf_types:
+    if cudf.dtype(dtype) in cudf._lib.types.np_to_cudf_types:
         return dtype
 
     if dtype == np.dtype("float16"):

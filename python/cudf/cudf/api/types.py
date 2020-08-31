@@ -95,3 +95,11 @@ def find_common_type(array_types=[], scalar_types=[]):
     scalar_types = [d.to_numpy if isinstance(d, cudf.Generic) else d for d in scalar_types]
 
     return cudf.dtype(np.find_common_type(array_types, scalar_types))
+
+def can_cast(dtype_l, dtype_r):
+    if isinstance(dtype_l, cudf.Generic):
+        dtype_l = dtype_l.to_numpy
+    if isinstance(dtype_r, cudf.Generic):
+        dtype_r = dtype_r.to_numpy
+
+    return np.can_cast(dtype_l, dtype_r)

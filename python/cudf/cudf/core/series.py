@@ -1381,7 +1381,7 @@ class Series(Frame, Serializable):
     __div__ = __truediv__
 
     def _bitwise_binop(self, other, op):
-        if (isinstance(self.dtype, (cudf.BooleanDtype, cudf.Integer))) and (isinstance(other.dtype, (cudf.BooleanDtype, cudf.Integer))):
+        if (isinstance(self.dtype, (cudf.BooleanDtype, cudf.Integer, cudf.Timedelta))) and (isinstance(other.dtype, (cudf.BooleanDtype, cudf.Integer, cudf.Timedelta))):
             ser = self._binaryop(other, op)
             if isinstance(self.dtype, cudf.BooleanDtype) or isinstance(other.dtype, cudf.BooleanDtype):
                 ser = ser.astype(cudf.BooleanDtype())
@@ -5028,7 +5028,7 @@ def _fix_nullable_dtype_repr(string):
         'datetime64[ns]', 
         'datetime64[us]', 
         'datetime64[ms]', 
-        'datetime64[s]'
+        'datetime64[s]',
         'timedelta64[ns]',
         'timedelta64[us]',
         'timedelta64[ms]',
@@ -5058,7 +5058,6 @@ def _fix_nullable_dtype_repr(string):
         'Timedelta64MS',
         'Timedelta64S'
     ]
-
     for tr, rp in zip(to_replace, replacements):
         string = string.replace(tr, rp)
     return string

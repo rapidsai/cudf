@@ -18,6 +18,28 @@ from cudf.core.dtypes import ListDtype
 
 cimport cudf._lib.cpp.types as libcudf_types
 from cudf._lib.cpp.types cimport data_type
+from cudf.core.dtypes import (
+    Int8Dtype,
+    Int16Dtype,
+    Int32Dtype, 
+    Int64Dtype, 
+    UInt8Dtype,
+    UInt16Dtype,
+    UInt32Dtype,
+    UInt64Dtype,
+    Float32Dtype,
+    Float64Dtype,
+    StringDtype,
+    BooleanDtype,
+    Timedelta64NSDtype,
+    Timedelta64USDtype,
+    Timedelta64MSDtype,
+    Timedelta64SDtype,
+    Datetime64NSDtype,
+    Datetime64USDtype,
+    Datetime64MSDtype,
+    Datetime64SDtype,
+)
 
 
 class TypeId(IntEnum):
@@ -64,49 +86,49 @@ class TypeId(IntEnum):
 
 
 np_to_cudf_types = {
-    np.dtype("int8"): TypeId.INT8,
-    np.dtype("int16"): TypeId.INT16,
-    np.dtype("int32"): TypeId.INT32,
-    np.dtype("int64"): TypeId.INT64,
-    np.dtype("uint8"): TypeId.UINT8,
-    np.dtype("uint16"): TypeId.UINT16,
-    np.dtype("uint32"): TypeId.UINT32,
-    np.dtype("uint64"): TypeId.UINT64,
-    np.dtype("float32"): TypeId.FLOAT32,
-    np.dtype("float64"): TypeId.FLOAT64,
-    np.dtype("datetime64[s]"): TypeId.TIMESTAMP_SECONDS,
-    np.dtype("datetime64[ms]"): TypeId.TIMESTAMP_MILLISECONDS,
-    np.dtype("datetime64[us]"): TypeId.TIMESTAMP_MICROSECONDS,
-    np.dtype("datetime64[ns]"): TypeId.TIMESTAMP_NANOSECONDS,
-    np.dtype("object"): TypeId.STRING,
-    np.dtype("bool"): TypeId.BOOL8,
-    np.dtype("timedelta64[s]"): TypeId.DURATION_SECONDS,
-    np.dtype("timedelta64[ms]"): TypeId.DURATION_MILLISECONDS,
-    np.dtype("timedelta64[us]"): TypeId.DURATION_MICROSECONDS,
-    np.dtype("timedelta64[ns]"): TypeId.DURATION_NANOSECONDS,
+    Int8Dtype(): TypeId.INT8,
+    Int16Dtype(): TypeId.INT16,
+    Int32Dtype(): TypeId.INT32,
+    Int64Dtype(): TypeId.INT64,
+    UInt8Dtype(): TypeId.UINT8,
+    UInt16Dtype(): TypeId.UINT16,
+    UInt32Dtype(): TypeId.UINT32,
+    UInt64Dtype(): TypeId.UINT64,
+    Float32Dtype(): TypeId.FLOAT32,
+    Float64Dtype(): TypeId.FLOAT64,
+    Datetime64SDtype(): TypeId.TIMESTAMP_SECONDS,
+    Datetime64MSDtype(): TypeId.TIMESTAMP_MILLISECONDS,
+    Datetime64USDtype(): TypeId.TIMESTAMP_MICROSECONDS,
+    Datetime64NSDtype(): TypeId.TIMESTAMP_NANOSECONDS,
+    StringDtype(): TypeId.STRING,
+    BooleanDtype(): TypeId.BOOL8,
+    Timedelta64SDtype(): TypeId.DURATION_SECONDS,
+    Timedelta64MSDtype(): TypeId.DURATION_MILLISECONDS,
+    Timedelta64USDtype(): TypeId.DURATION_MICROSECONDS,
+    Timedelta64NSDtype(): TypeId.DURATION_NANOSECONDS,
 }
 
 cudf_to_np_types = {
-    TypeId.INT8: np.dtype("int8"),
-    TypeId.INT16: np.dtype("int16"),
-    TypeId.INT32: np.dtype("int32"),
-    TypeId.INT64: np.dtype("int64"),
-    TypeId.UINT8: np.dtype("uint8"),
-    TypeId.UINT16: np.dtype("uint16"),
-    TypeId.UINT32: np.dtype("uint32"),
-    TypeId.UINT64: np.dtype("uint64"),
-    TypeId.FLOAT32: np.dtype("float32"),
-    TypeId.FLOAT64: np.dtype("float64"),
-    TypeId.TIMESTAMP_SECONDS: np.dtype("datetime64[s]"),
-    TypeId.TIMESTAMP_MILLISECONDS: np.dtype("datetime64[ms]"),
-    TypeId.TIMESTAMP_MICROSECONDS: np.dtype("datetime64[us]"),
-    TypeId.TIMESTAMP_NANOSECONDS: np.dtype("datetime64[ns]"),
-    TypeId.STRING: np.dtype("object"),
-    TypeId.BOOL8: np.dtype("bool"),
-    TypeId.DURATION_SECONDS: np.dtype("timedelta64[s]"),
-    TypeId.DURATION_MILLISECONDS: np.dtype("timedelta64[ms]"),
-    TypeId.DURATION_MICROSECONDS: np.dtype("timedelta64[us]"),
-    TypeId.DURATION_NANOSECONDS: np.dtype("timedelta64[ns]"),
+    TypeId.INT8: Int8Dtype(),
+    TypeId.INT16: Int16Dtype(),
+    TypeId.INT32: Int32Dtype(),
+    TypeId.INT64: Int64Dtype(),
+    TypeId.UINT8: UInt8Dtype(),
+    TypeId.UINT16: UInt16Dtype(),
+    TypeId.UINT32: UInt32Dtype(),
+    TypeId.UINT64: UInt64Dtype(),
+    TypeId.FLOAT32: Float32Dtype(),
+    TypeId.FLOAT64: Float64Dtype(),
+    TypeId.TIMESTAMP_SECONDS: Datetime64SDtype(),
+    TypeId.TIMESTAMP_MILLISECONDS: Datetime64MSDtype(),
+    TypeId.TIMESTAMP_MICROSECONDS: Datetime64USDtype(),
+    TypeId.TIMESTAMP_NANOSECONDS: Datetime64NSDtype(),
+    TypeId.STRING: StringDtype(),
+    TypeId.BOOL8: BooleanDtype(),
+    TypeId.DURATION_SECONDS: Timedelta64SDtype(),
+    TypeId.DURATION_MILLISECONDS: Timedelta64MSDtype(),
+    TypeId.DURATION_MICROSECONDS: Timedelta64USDtype(),
+    TypeId.DURATION_NANOSECONDS: Timedelta64NSDtype(),
 }
 
 duration_unit_map = {
@@ -169,10 +191,9 @@ cdef class _Dtype:
         cdef data_type libcudf_type 
 
         if not isinstance(self, ListDtype):
-            np_dtype = self.to_numpy
             tid = <libcudf_types.type_id> (
                     <underlying_type_t_type_id> (
-                        np_to_cudf_types[np_dtype]
+                        np_to_cudf_types[self]
                     )
                 )
         else:

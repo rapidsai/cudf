@@ -4531,7 +4531,6 @@ class StringColumn(column.ColumnBase):
             return self.children[1].size
 
     def as_numerical_column(self, dtype, **kwargs):
-
         out_dtype = cudf.dtype(dtype)
         kwargs.update(dtype=out_dtype)
 
@@ -4554,7 +4553,7 @@ class StringColumn(column.ColumnBase):
                 raise ValueError("Could not convert `None` value to datetime")
 
             boolean_match = self.binary_operator("eq", "NaT")
-        elif out_dtype.type is cudf.Timedelta:
+        elif out_dtype.type is np.timedelta64:
             if "format" not in kwargs:
                 if len(self) > 0:
                     kwargs.update(format="%D days %H:%M:%S")

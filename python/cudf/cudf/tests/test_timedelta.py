@@ -976,7 +976,7 @@ def test_timedelta_invalid_ops():
         with pytest.raises(
             TypeError,
             match=re.escape(
-                f"Addition of {sr.dtype} with {np.dtype('int64')} "
+                f"Addition of {sr.dtype} with Int64 "
                 f"cannot be performed."
             ),
         ):
@@ -990,7 +990,7 @@ def test_timedelta_invalid_ops():
         with pytest.raises(
             TypeError,
             match=re.escape(
-                f"Addition of {sr.dtype} with {np.dtype('object')} "
+                f"Addition of {sr.dtype} with String "
                 f"cannot be performed."
             ),
         ):
@@ -1021,7 +1021,7 @@ def test_timedelta_invalid_ops():
         with pytest.raises(
             TypeError,
             match=re.escape(
-                f"Modulus of {sr.dtype} with {np.dtype('object')} "
+                f"Modulus of {sr.dtype} with String "
                 f"cannot be performed."
             ),
         ):
@@ -1157,13 +1157,14 @@ def test_timedelta_invalid_ops():
 
 
 def test_timedelta_datetime_cast_invalid():
+    from cudf.core.series import _fix_nullable_dtype_repr
     sr = cudf.Series([1, 2, 3], dtype="timedelta64[ns]")
     psr = sr.to_pandas()
 
     try:
         psr.astype("datetime64[ns]")
     except TypeError as e:
-        with pytest.raises(type(e), match=re.escape(e.__str__())):
+        with pytest.raises(type(e), match=re.escape(_fix_nullable_dtype_repr(e.__str__()))):
             sr.astype("datetime64[ns]")
     else:
         raise AssertionError("Expected timedelta to datetime typecast to fail")
@@ -1174,7 +1175,7 @@ def test_timedelta_datetime_cast_invalid():
     try:
         psr.astype("timedelta64[ns]")
     except TypeError as e:
-        with pytest.raises(type(e), match=re.escape(e.__str__())):
+        with pytest.raises(type(e), match=re.escape(_fix_nullable_dtype_repr(e.__str__()))):
             sr.astype("timedelta64[ns]")
     else:
         raise AssertionError("Expected datetime to timedelta typecast to fail")

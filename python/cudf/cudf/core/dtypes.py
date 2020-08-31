@@ -301,7 +301,7 @@ def make_dtype_from_string(obj):
         elif obj in {"uint8", "UInt8"}:
             return UInt8Dtype()
     elif "float" in obj or "Float" in obj:
-        if obj in {"float64", "Float64"}:
+        if obj in {"float64", "Float64", 'float', 'Float'}:
             return Float64Dtype()
         elif obj in {"float32", "Float32"}:
             return Float32Dtype()
@@ -342,7 +342,11 @@ def dtype(obj):
     if isinstance(obj, np.dtype):
         if obj.type is np.str_:
             return StringDtype()
-        return np_to_cudf_dtypes[obj]
+        try:
+            return np_to_cudf_dtypes[obj]
+        except KeyError:
+            import pdb
+            pdb.set_trace()
     elif isinstance(obj, pa.lib.DataType):
         return pa_to_cudf_dtypes[obj]
     elif isinstance(obj, str):
