@@ -5,7 +5,6 @@ import warnings
 import cupy
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 
 import cudf
 from cudf import _lib as libcudf
@@ -145,7 +144,6 @@ from cudf.utils.dtypes import (
     is_scalar,
     is_string_dtype,
 )
-from cudf.utils.utils import buffers_from_pyarrow
 
 _str_to_numeric_typecast_functions = {
     np.dtype("int8"): str_cast.stoi8,
@@ -4111,8 +4109,6 @@ class StringMethods(ColumnMethodsMixin):
         stride=48,
         do_lower=True,
         do_truncate=False,
-        max_num_strings=100,
-        max_num_chars=100000,
         max_rows_tensor=500,
         **kwargs,
     ):
@@ -4120,6 +4116,9 @@ class StringMethods(ColumnMethodsMixin):
         Run CUDA BERT subword tokenizer on cuDF strings column.
         Encodes words to token ids using vocabulary from a pretrained
         tokenizer.
+
+        This function requires about 21x the number of character bytes
+        in the input strings column as working memory.
 
         Parameters
         ----------
@@ -4147,10 +4146,6 @@ class StringMethods(ColumnMethodsMixin):
             max_length. Each input string will result in exactly one output
             sequence. If set to false, there may be multiple output
             sequences when the max_length is smaller than generated tokens.
-        max_num_strings : int, Default is 100
-            The maximum number of strings to be encoded.
-        max_num_chars : int, Default is 100000
-            The maximum number of characters in the input strings column.
         max_rows_tensor : int, Default is 500
             The maximum number of rows in the output
 
@@ -4180,8 +4175,6 @@ class StringMethods(ColumnMethodsMixin):
             stride,
             do_lower,
             do_truncate,
-            max_num_strings,
-            max_num_chars,
             max_rows_tensor,
         )
         return (
@@ -4511,18 +4504,6 @@ class StringColumn(column.ColumnBase):
     def _set_mask(self, value):
         super()._set_mask(value)
 
-    @classmethod
-    def from_arrow(cls, array):
-        pa_size, pa_offset, nbuf, obuf, sbuf = buffers_from_pyarrow(array)
-        children = (
-            column.build_column(data=obuf, dtype="int32"),
-            column.build_column(data=sbuf, dtype="int8"),
-        )
-
-        return StringColumn(
-            mask=nbuf, children=children, size=pa_size, offset=pa_offset
-        )
-
     @property
     def _nbytes(self):
         if self.size == 0:
@@ -4590,31 +4571,6 @@ class StringColumn(column.ColumnBase):
 
     def as_string_column(self, dtype, **kwargs):
         return self
-
-    def to_arrow(self):
-        if len(self) == 0:
-            sbuf = np.empty(0, dtype="int8")
-            obuf = np.empty(0, dtype="int32")
-            nbuf = None
-        else:
-            sbuf = self.children[1].data.to_host_array().view("int8")
-            obuf = self.children[0].data.to_host_array().view("int32")
-            nbuf = None
-            if self.null_count > 0:
-                nbuf = self.mask.to_host_array().view("int8")
-                nbuf = pa.py_buffer(nbuf)
-
-        sbuf = pa.py_buffer(sbuf)
-        obuf = pa.py_buffer(obuf)
-
-        if self.null_count == len(self):
-            return pa.NullArray.from_buffers(
-                pa.null(), len(self), [pa.py_buffer((b""))], self.null_count
-            )
-        else:
-            return pa.StringArray.from_buffers(
-                len(self), obuf, sbuf, nbuf, self.null_count
-            )
 
     @property
     def values_host(self):
