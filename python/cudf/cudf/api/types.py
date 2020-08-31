@@ -103,3 +103,11 @@ def can_cast(dtype_l, dtype_r):
         dtype_r = dtype_r.to_numpy
 
     return np.can_cast(dtype_l, dtype_r)
+
+def result_type(dtype_l, dtype_r):
+    if isinstance(dtype_l, cudf.Generic):
+        dtype_l = dtype_l.to_numpy
+    if isinstance(dtype_r, cudf.Generic):
+        dtype_r = dtype_r.to_numpy
+
+    return cudf.dtype(np.result_type(dtype_l, dtype_r))

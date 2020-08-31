@@ -95,8 +95,8 @@ class _SeriesIlocIndexer(object):
         ):
             # normalize types if necessary:
             if not pd.api.types.is_integer(key):
-                to_dtype = np.result_type(value.dtype, self._sr._column.dtype)
-                value = value.astype(to_dtype)
+                to_dtype = cudf.api.types.result_type(value.dtype, self._sr._column.dtype)
+                value = value.astype(to_dtype.to_numpy)
                 self._sr._column._mimic_inplace(
                     self._sr._column.astype(to_dtype), inplace=True
                 )

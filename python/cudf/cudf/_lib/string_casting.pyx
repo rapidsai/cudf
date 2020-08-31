@@ -52,7 +52,18 @@ from cudf._lib.cpp.types cimport (
 
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
-
+from cudf.core.dtypes import (
+    Int8Dtype,
+    Int16Dtype,
+    Int32Dtype, 
+    Int64Dtype, 
+    UInt8Dtype,
+    UInt16Dtype,
+    UInt32Dtype,
+    UInt64Dtype,
+    Float32Dtype,
+    Float64Dtype,
+)
 
 def floating_to_string(Column input_col):
     cdef column_view input_column_view = input_col.view()
@@ -112,7 +123,7 @@ def stod(Column input_col, **kwargs):
     A Column with strings cast to double
     """
 
-    return string_to_floating(input_col, np.dtype("float64"))
+    return string_to_floating(input_col, Float64Dtype())
 
 
 def ftos(Column input_col, **kwargs):
@@ -144,7 +155,7 @@ def stof(Column input_col, **kwargs):
     A Column with strings cast to float
     """
 
-    return string_to_floating(input_col, np.dtype("float32"))
+    return string_to_floating(input_col, Float32Dtype())
 
 
 def integer_to_string(Column input_col):
@@ -205,7 +216,7 @@ def stoi8(Column input_col, **kwargs):
     A Column with strings cast to int8
     """
 
-    return string_to_integer(input_col, np.dtype("int8"))
+    return string_to_integer(input_col, Int8Dtype())
 
 
 def i16tos(Column input_col, **kwargs):
@@ -237,7 +248,7 @@ def stoi16(Column input_col, **kwargs):
     A Column with strings cast to int16
     """
 
-    return string_to_integer(input_col, np.dtype("int16"))
+    return string_to_integer(input_col, Int16Dtype())
 
 
 def itos(Column input_col, **kwargs):
@@ -269,7 +280,7 @@ def stoi(Column input_col, **kwargs):
     A Column with strings cast to int32
     """
 
-    return string_to_integer(input_col, np.dtype("int32"))
+    return string_to_integer(input_col, Int32Dtype())
 
 
 def ltos(Column input_col, **kwargs):
@@ -301,7 +312,7 @@ def stol(Column input_col, **kwargs):
     A Column with strings cast to int64
     """
 
-    return string_to_integer(input_col, np.dtype("int64"))
+    return string_to_integer(input_col, Int64Dtype())
 
 
 def ui8tos(Column input_col, **kwargs):
@@ -333,7 +344,7 @@ def stoui8(Column input_col, **kwargs):
     A Column with strings cast to uint8
     """
 
-    return string_to_integer(input_col, np.dtype("uint8"))
+    return string_to_integer(input_col, UInt8Dtype())
 
 
 def ui16tos(Column input_col, **kwargs):
@@ -365,7 +376,7 @@ def stoui16(Column input_col, **kwargs):
     A Column with strings cast to uint16
     """
 
-    return string_to_integer(input_col, np.dtype("uint16"))
+    return string_to_integer(input_col, UInt16Dtype())
 
 
 def uitos(Column input_col, **kwargs):
@@ -397,7 +408,7 @@ def stoui(Column input_col, **kwargs):
     A Column with strings cast to uint32
     """
 
-    return string_to_integer(input_col, np.dtype("uint32"))
+    return string_to_integer(input_col, UInt32Dtype())
 
 
 def ultos(Column input_col, **kwargs):
@@ -429,7 +440,7 @@ def stoul(Column input_col, **kwargs):
     A Column with strings cast to uint64
     """
 
-    return string_to_integer(input_col, np.dtype("uint64"))
+    return string_to_integer(input_col, UInt64Dtype())
 
 
 def _to_booleans(Column input_col, object string_true="True"):
@@ -717,7 +728,7 @@ def htoi(Column input_col, **kwargs):
     cdef column_view input_column_view = input_col.view()
     cdef type_id tid = <type_id> (
         <underlying_type_t_type_id> (
-            np_to_cudf_types[kwargs.get('dtype', np.dtype("int64"))]
+            np_to_cudf_types[kwargs.get('dtype', Int64Dtype())]
         )
     )
     cdef data_type c_out_type = data_type(tid)
