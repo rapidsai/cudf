@@ -735,6 +735,21 @@ __device__ inline numeric::decimal32 const column_device_view::element<numeric::
   }
 }
 
+// TODO add docs
+template <>
+__device__ inline numeric::decimal64 const column_device_view::element<numeric::decimal64>(
+  size_type element_index) const noexcept
+{
+  using namespace numeric;
+  if (_type.scale().has_value()) {
+    auto const scale       = scale_type{_type.scale().value()};
+    auto const fixed_point = scaled_integer<int64_t>{data<int64_t>()[element_index], scale};
+    return decimal64{fixed_point};
+  } else {
+    return data<decimal64>()[element_index];
+  }
+}
+
 namespace detail {
 /**
  * @brief value accessor of column without null bitmask
