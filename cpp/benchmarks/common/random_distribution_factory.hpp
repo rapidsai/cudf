@@ -76,14 +76,13 @@ std::function<T(std::mt19937&)> make_rand_generator(rand_dist_id dist_type,
   switch (dist_type) {
     case rand_dist_id::NORMAL:
       return [lower_bound, dist = make_normal_dist(lower_bound, upper_bound)](
-               std::mt19937& engine) { return dist(engine) - lower_bound; };
+               std::mt19937& engine) mutable -> T { return dist(engine) - lower_bound; };
     case rand_dist_id::UNIFORM:
-      return [dist = make_uniform_dist(lower_bound, upper_bound)](std::mt19937& engine) {
-        return dist(engine);
-      };
+      return [dist = make_uniform_dist(lower_bound, upper_bound)](
+               std::mt19937& engine) mutable -> T { return dist(engine); };
     case rand_dist_id::GEOMETRIC:
       return [lower_bound, upper_bound, dist = make_geometric_dist(lower_bound, upper_bound)](
-               std::mt19937& engine) {
+               std::mt19937& engine) mutable -> T {
         if (lower_bound <= upper_bound)
           return dist(engine);
         else
@@ -100,16 +99,14 @@ std::function<T(std::mt19937&)> make_rand_generator(rand_dist_id dist_type,
 {
   switch (dist_type) {
     case rand_dist_id::NORMAL:
-      return [dist = make_normal_dist(lower_bound, upper_bound)](std::mt19937& engine) {
-        return dist(engine);
-      };
+      return [dist = make_normal_dist(lower_bound, upper_bound)](
+               std::mt19937& engine) mutable -> T { return dist(engine); };
     case rand_dist_id::UNIFORM:
-      return [dist = make_uniform_dist(lower_bound, upper_bound)](std::mt19937& engine) {
-        return dist(engine);
-      };
+      return [dist = make_uniform_dist(lower_bound, upper_bound)](
+               std::mt19937& engine) mutable -> T { return dist(engine); };
     case rand_dist_id::GEOMETRIC:
       return [lower_bound, upper_bound, dist = make_geometric_dist(lower_bound, upper_bound)](
-               std::mt19937& engine) {
+               std::mt19937& engine) mutable -> T {
         if (lower_bound <= upper_bound)
           return dist(engine);
         else

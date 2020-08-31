@@ -39,7 +39,7 @@ template <typename T,
           std::enable_if_t<!std::is_unsigned<T>::value && cudf::is_numeric<T>()>* = nullptr>
 rand_dist_id default_distribution()
 {
-  return rand_dist_id::NORMAL;
+  return rand_dist_id::UNIFORM;
 }
 
 template <typename T,
@@ -47,7 +47,7 @@ template <typename T,
                            cudf::is_numeric<T>()>* = nullptr>
 rand_dist_id default_distribution()
 {
-  return rand_dist_id::GEOMETRIC;
+  return rand_dist_id::UNIFORM;
 }
 
 template <typename T, std::enable_if_t<std::is_same<T, bool>::value>* = nullptr>
@@ -71,14 +71,14 @@ constexpr int64_t nanoseconds()
 template <typename T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
 std::pair<int64_t, int64_t> default_range()
 {
-  static constexpr int64_t year_ns = 365l * 24 * 60 * 60 * nanoseconds<cudf::timestamp_s>();
+  static constexpr int64_t year_ns = 365l * 24 * 60 * 60;
   return {50 * year_ns, 0};
 }
 
 template <typename T, std::enable_if_t<cudf::is_duration<T>()>* = nullptr>
 std::pair<int64_t, int64_t> default_range()
 {
-  static constexpr int64_t year_ns = 365l * 24 * 60 * 60 * nanoseconds<cudf::timestamp_s>();
+  static constexpr int64_t year_ns = 365l * 24 * 60 * 60;
   return {0, 2 * year_ns};
 }
 

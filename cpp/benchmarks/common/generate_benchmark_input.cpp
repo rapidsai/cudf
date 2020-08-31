@@ -113,8 +113,14 @@ struct random_value_fn<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
   static constexpr int64_t current_ns    = 1591053936l * nanoseconds<cudf::timestamp_s>();
   static constexpr auto timestamp_spread = 1. / (2 * 365 * 24 * 60 * 60);  // one in two years
 
-  std::geometric_distribution<int64_t> seconds_gen{timestamp_spread};
+  std::function<int64_t(std::mt19937&)> seconds_gen;
   std::uniform_int_distribution<int64_t> nanoseconds_gen{0, nanoseconds<cudf::timestamp_s>()};
+
+  random_value_fn()
+  {
+    auto const range = default_range<T>();
+    seconds_gen = make_rand_generator<int64_t>(rand_dist_id::GEOMETRIC, range.first, range.second);
+  }
 
   T operator()(std::mt19937& engine)
   {
@@ -157,15 +163,14 @@ struct random_value_fn<
   static constexpr T lower_bound = std::numeric_limits<T>::lowest();
   static constexpr T upper_bound = std::numeric_limits<T>::max();
 
-  std::normal_distribution<> gaussian{0., stddev<T>()};
+  std::function<T(std::mt19937&)> gen;
+  random_value_fn()
+  {
+    gen = make_rand_generator<T>(rand_dist_id::NORMAL, lower_bound, upper_bound);
+  }
   T operator()(std::mt19937& engine)
   {
-    auto elem = gaussian(engine);
-    // Use absolute value for unsigned types
-    if (lower_bound >= 0) elem = abs(elem);
-    elem = std::max(std::min(elem, (double)upper_bound), (double)lower_bound);
-
-    return T(elem);
+    return std::max(std::min(gen(engine), upper_bound), lower_bound);
   }
 };
 
@@ -176,8 +181,8 @@ struct random_value_fn<
  */
 template <typename T>
 struct random_value_fn<T, typename std::enable_if_t<std::is_same<T, bool>::value>> {
-  std::uniform_int_distribution<int> uniform{0, 1};
-  T operator()(std::mt19937& engine) { return uniform(engine) == 1; }
+  std::bernoulli_distribution b_dist{0.5};
+  T operator()(std::mt19937& engine) { return b_dist(engine); }
 };
 
 size_t null_mask_size(cudf::size_type num_rows)
@@ -226,13 +231,13 @@ std::unique_ptr<cudf::column> create_random_column(std::mt19937& engine, cudf::s
 {
   distribution_parameters dp{};
   float const null_frequency        = 0.01;
-  cudf::size_type const cardinality = 0;
-  cudf::size_type const avg_run_len = 2;
+  cudf::size_type const cardinality = 1000;
+  cudf::size_type const avg_run_len = 4;
 
-  std::uniform_real_distribution<float> null_dist;
+  std::bernoulli_distribution null_dist{null_frequency};
   random_value_fn<T> random_value_gen;
   auto value_gen = [&]() { return random_value_gen(engine); };
-  auto valid_gen = [&]() { return null_frequency == 0.f || null_dist(engine) >= null_frequency; };
+  auto valid_gen = [&]() { return null_frequency == 0.f || !null_dist(engine); };
 
   pinned_buffer<T> samples{pinned_alloc<T>(cardinality), cudaFreeHost};
   std::vector<cudf::bitmask_type> samples_null_mask(null_mask_size(cardinality), ~0);
@@ -349,12 +354,12 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(std::mt199
   auto const char_cnt = avg_string_len * num_rows;
 
   std::poisson_distribution<> len_dist(avg_string_len);
-  std::uniform_real_distribution<float> null_dist;
+  std::bernoulli_distribution null_dist{null_frequency};
   std::gamma_distribution<float> run_len_dist(4.f, avg_run_len / 4.f);
   std::uniform_int_distribution<char> char_dist{'!', '~'};
   auto length_gen = [&]() { return len_dist(engine); };
   auto char_gen   = [&]() { return char_dist(engine); };
-  auto valid_gen  = [&]() { return null_frequency == 0.f || null_dist(engine) >= null_frequency; };
+  auto valid_gen  = [&]() { return null_frequency == 0.f || null_dist(engine); };
 
   string_col_data samples(cardinality, cardinality * avg_string_len);
   for (cudf::size_type si = 0; si < cardinality; ++si) {
