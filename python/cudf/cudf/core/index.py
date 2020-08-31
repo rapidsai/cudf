@@ -1563,17 +1563,19 @@ class RangeIndex(Index):
         else:
             return False
 
-    def copy(self, deep=False, name=None, dtype=None):
+    def copy(self, name=None, deep=False, dtype=None, names=None):
         """
         Make a copy of this object.
 
         Parameters
         ----------
         name : object optional (default: None), name of index
-        deep : Bool (default: True)
+        deep : Bool (default: False)
             Ignored for RangeIndex
-        dtype : numpy dtype (default: None)
+        dtype : numpy dtype optional (default: None)
             Target dtype for underlying range data
+        names : list-like optional (default: False)
+            Kept compatibility with MultiIndex. Should not be used.
 
         Returns
         -------
@@ -1845,7 +1847,7 @@ class GenericIndex(Index):
     def _values(self):
         return next(iter(self._data.columns))
 
-    def copy(self, deep=False, name=None, dtype=None):
+    def copy(self, name=None, deep=False, dtype=None, names=None):
         """
         Make a copy of this object.
 
@@ -1858,10 +1860,12 @@ class GenericIndex(Index):
             With ``deep=False`` the original data is used
         dtype : numpy dtype, default None
             Target datatype to cast into, use original dtype when None
+        names : list-like, default False
+            Kept compatibility with MultiIndex. Should not be used.
 
         Returns
         -------
-        New index instance with same data, casted to new dtype
+        New index instance, casted to new dtype
         """
 
         dtype = self.dtype if dtype is None else dtype
