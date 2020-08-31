@@ -117,31 +117,4 @@ class element_equality_comparator {
   bool nulls_are_equal;
 };
 
-template <bool has_nulls = true>
-class row_equality_comparator {
- public:
-  row_equality_comparator(table_device_view lhs, table_device_view rhs, bool nulls_are_equal = true)
-    : lhs{lhs}, rhs{rhs}, nulls_are_equal{nulls_are_equal}
-  {
-    CUDF_EXPECTS(lhs.num_columns() == rhs.num_columns(), "Mismatched number of columns.");
-  }
-
-  __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const noexcept
-  {
-    auto equal_elements = [=](column_device_view l, column_device_view r) {
-      return cudf::type_dispatcher(l.type(),
-                                   element_equality_comparator<has_nulls>{l, r, nulls_are_equal},
-                                   lhs_row_index,
-                                   rhs_row_index);
-    };
-
-    return thrust::equal(thrust::seq, lhs.begin(), lhs.end(), rhs.begin(), equal_elements);
-  }
-
- private:
-  table_device_view lhs;
-  table_device_view rhs;
-  bool nulls_are_equal;
-};
-
 }  // namespace cudf
