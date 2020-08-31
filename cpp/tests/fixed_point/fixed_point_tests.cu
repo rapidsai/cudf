@@ -15,6 +15,7 @@
  */
 
 #include <tests/utilities/base_fixture.hpp>
+#include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/type_lists.hpp>
 
 #include <cudf/column/column_factories.hpp>
@@ -763,6 +764,26 @@ TEST_F(FixedPointTest, Decimal32DeviceDereference)
 
   EXPECT_EQ(*expected.cbegin(), *result_it);
   EXPECT_TRUE(std::equal(expected.cbegin(), expected.cend(), result_it));
+}
+
+TEST_F(FixedPointTest, FixedPointColumnWrapper)
+{
+  using namespace numeric;
+
+  // fixed_point_column_wrapper
+  auto const w =
+    cudf::test::fixed_point_column_wrapper<int32_t>{{110, 220, 330, 550}, scale_type{-2}};
+
+  // fixed_width_column_wrapper
+  auto const ONE   = decimal32{1.1, scale_type{-2}};
+  auto const TWO   = decimal32{2.2, scale_type{-2}};
+  auto const THREE = decimal32{3.3, scale_type{-2}};
+  auto const FOUR  = decimal32{5.5, scale_type{-2}};
+
+  auto const vec = std::vector<decimal32>{ONE, TWO, THREE, FOUR};
+  auto const col = cudf::test::fixed_width_column_wrapper<decimal32>(vec.begin(), vec.end());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(col, w);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
