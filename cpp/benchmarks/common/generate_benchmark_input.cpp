@@ -95,6 +95,8 @@ size_t avg_element_bytes(cudf::type_id tid)
 {
   return cudf::type_dispatcher(cudf::data_type(tid), avg_element_size_fn{});
 }
+template <typename T, typename Enable = void>
+struct random_value_fn;
 
 /**
  * @brief Creates an random timestamp
@@ -106,30 +108,28 @@ size_t avg_element_bytes(cudf::type_id tid)
  * @return The random timestamp
  * @tparam T Timestamp type
  */
-template <typename T, std::enable_if_t<cudf::is_chrono<T>()>* = nullptr>
-T random_value(std::mt19937& engine)
-{
-  // Timestamp for June 2020
+template <typename T>
+struct random_value_fn<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
   static constexpr int64_t current_ns    = 1591053936l * nanoseconds<cudf::timestamp_s>();
   static constexpr auto timestamp_spread = 1. / (2 * 365 * 24 * 60 * 60);  // one in two years
 
-  // Generate a number of seconds that is 50% likely to be shorter than two years
   std::geometric_distribution<int64_t> seconds_gen{timestamp_spread};
-  // Generate a random value for the nanoseconds within a second
   std::uniform_int_distribution<int64_t> nanoseconds_gen{0, nanoseconds<cudf::timestamp_s>()};
 
-  // Subtract the seconds from the 2020 timestamp to generate a reccent timestamp
-  auto const timestamp_ns =
-    current_ns - seconds_gen(engine) * nanoseconds<cudf::timestamp_s>() - nanoseconds_gen(engine);
-  // Return value in the type's precision
-  return T(typename T::duration{timestamp_ns / nanoseconds<T>()});
-}
+  T operator()(std::mt19937& engine)
+  {
+    // Subtract the seconds from the 2020 timestamp to generate a reccent timestamp
+    auto const timestamp_ns =
+      current_ns - seconds_gen(engine) * nanoseconds<cudf::timestamp_s>() - nanoseconds_gen(engine);
+    // Return value in the type's precision
+    return T(typename T::duration{timestamp_ns / nanoseconds<T>()});
+  }
+};
 
-template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
-T random_value(std::mt19937& engine)
-{
-  return T{};
-}
+template <typename T>
+struct random_value_fn<T, typename std::enable_if_t<cudf::is_fixed_point<T>()>> {
+  T operator()(std::mt19937& engine) { return T{}; }
+};
 /*
 TMP
 */
@@ -150,34 +150,35 @@ constexpr auto stddev()
  * @return The random number
  * @tparam T Numeric type
  */
-template <typename T, std::enable_if_t<cudf::is_numeric<T>()>* = nullptr>
-T random_value(std::mt19937& engine)
-{
+template <typename T>
+struct random_value_fn<
+  T,
+  typename std::enable_if_t<!std::is_same<T, bool>::value && cudf::is_numeric<T>()>> {
   static constexpr T lower_bound = std::numeric_limits<T>::lowest();
   static constexpr T upper_bound = std::numeric_limits<T>::max();
 
-  // Use the type dependent standard deviation
   std::normal_distribution<> gaussian{0., stddev<T>()};
+  T operator()(std::mt19937& engine)
+  {
+    auto elem = gaussian(engine);
+    // Use absolute value for unsigned types
+    if (lower_bound >= 0) elem = abs(elem);
+    elem = std::max(std::min(elem, (double)upper_bound), (double)lower_bound);
 
-  auto elem = gaussian(engine);
-  // Use absolute value for unsigned types
-  if (lower_bound >= 0) elem = abs(elem);
-  elem = std::max(std::min(elem, (double)upper_bound), (double)lower_bound);
-
-  return T(elem);
-}
+    return T(elem);
+  }
+};
 
 /**
  * @brief Creates an boolean value with 50:50 probability
  *
  * @return The random boolean value
  */
-template <>
-bool random_value<bool>(std::mt19937& engine)
-{
-  std::uniform_int_distribution<> uniform{0, 1};
-  return uniform(engine) == 1;
-}
+template <typename T>
+struct random_value_fn<T, typename std::enable_if_t<std::is_same<T, bool>::value>> {
+  std::uniform_int_distribution<int> uniform{0, 1};
+  T operator()(std::mt19937& engine) { return uniform(engine) == 1; }
+};
 
 size_t null_mask_size(cudf::size_type num_rows)
 {
@@ -225,11 +226,12 @@ std::unique_ptr<cudf::column> create_random_column(std::mt19937& engine, cudf::s
 {
   distribution_parameters dp{};
   float const null_frequency        = 0.01;
-  cudf::size_type const cardinality = 1000;
-  cudf::size_type const avg_run_len = 4;
+  cudf::size_type const cardinality = 0;
+  cudf::size_type const avg_run_len = 2;
 
   std::uniform_real_distribution<float> null_dist;
-  auto value_gen = [&]() { return random_value<T>(engine); };
+  random_value_fn<T> random_value_gen;
+  auto value_gen = [&]() { return random_value_gen(engine); };
   auto valid_gen = [&]() { return null_frequency == 0.f || null_dist(engine) >= null_frequency; };
 
   pinned_buffer<T> samples{pinned_alloc<T>(cardinality), cudaFreeHost};
@@ -450,8 +452,9 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> dtyp
 
   auto seed_engine = deterministic_engine();  // pass the seed param here
   std::vector<std::future<columns_vector>> col_futures;
+  random_value_fn<unsigned> seed_dist;
   for (unsigned int i = 0; i < processor_count && next_col < num_cols; ++i) {
-    auto thread_engine         = deterministic_engine(random_value<unsigned>(seed_engine));
+    auto thread_engine         = deterministic_engine(seed_dist(seed_engine));
     auto const thread_num_cols = std::min(num_cols - next_col, cols_per_thread);
     std::vector<cudf::type_id> thread_types(out_dtype_ids.begin() + next_col,
                                             out_dtype_ids.begin() + next_col + thread_num_cols);
