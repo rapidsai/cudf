@@ -874,9 +874,9 @@ TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize)
                  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
 
   T c1a[num_els];
-  for (auto& e : c1a) { e = static_cast<T>(5); }
+  std::fill(c1a, c1a + num_els, static_cast<T>(5));
   T c1b[num_els];
-  for (auto& e : c1b) { e = static_cast<T>(6); }
+  std::fill(c1b, c1b + num_els, static_cast<T>(6));
   column_wrapper<T> c1a_w(c1a, c1a + num_els, mask);
   column_wrapper<T> c1b_w(c1b, c1b + num_els, mask);
   cols.push_back(c1a_w.release());
@@ -884,9 +884,9 @@ TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize)
   cudf::table tbl1(std::move(cols));
 
   T c2a[num_els];
-  for (auto& e : c2a) { e = static_cast<T>(8); }
+  std::fill(c2a, c2a + num_els, static_cast<T>(8));
   T c2b[num_els];
-  for (auto& e : c2b) { e = static_cast<T>(9); }
+  std::fill(c2b, c2b + num_els, static_cast<T>(9));
   column_wrapper<T> c2a_w(c2a, c2a + num_els, mask);
   column_wrapper<T> c2b_w(c2b, c2b + num_els, mask);
   cols.push_back(c2a_w.release());
@@ -922,9 +922,9 @@ TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize2)
                  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
 
   T c1a[num_els];
-  for (auto& e : c1a) { e = static_cast<T>(5); }
+  std::fill(c1a, c1a + num_els, static_cast<T>(5));
   T c1b[num_els];
-  for (auto& e : c1b) { e = static_cast<T>(6); }
+  std::fill(c1b, c1b + num_els, static_cast<T>(6));
   column_wrapper<T> c1a_w(c1a, c1a + num_els, mask);
   column_wrapper<T> c1b_w(c1b, c1b + num_els, mask);
   cols.push_back(c1a_w.release());
@@ -932,9 +932,9 @@ TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize2)
   cudf::table tbl1(std::move(cols));
 
   T c2a[num_els];
-  for (auto& e : c2a) { e = static_cast<T>(8); }
+  std::fill(c2a, c2a + num_els, static_cast<T>(8));
   T c2b[num_els];
-  for (auto& e : c2b) { e = static_cast<T>(9); }
+  std::fill(c2b, c2b + num_els, static_cast<T>(9));
   column_wrapper<T> c2a_w(c2a, c2a + num_els, mask);
   column_wrapper<T> c2b_w(c2b, c2b + num_els, mask);
   cols.push_back(c2a_w.release());
