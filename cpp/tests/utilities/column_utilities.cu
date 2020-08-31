@@ -567,11 +567,12 @@ struct column_view_printer {
     out.resize(col.size());
 
     if (col.type().scale().has_value()) {
-      auto const h_data = cudf::test::to_host<int32_t>(col);
+      using RepType     = typename Element::representation_type;
+      auto const h_data = cudf::test::to_host<RepType>(col);
       std::transform(
         std::cbegin(h_data.first), std::cend(h_data.first), out.begin(), [&](auto const& value) {
           auto const scale = numeric::scale_type{col.type().scale().value()};
-          auto const fp    = numeric::decimal32{numeric::scaled_integer<int32_t>{value, scale}};
+          auto const fp    = Element{numeric::scaled_integer<RepType>{value, scale}};
           return std::to_string(static_cast<double>(fp));
         });
     } else {
