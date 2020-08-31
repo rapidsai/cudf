@@ -178,11 +178,11 @@ table_with_metadata reader::impl::read(cudaStream_t stream)
   std::vector<std::unique_ptr<column>> out_columns;
   table_metadata metadata;
 
-  auto range_offset = opts_.byte_range_offset();
-  auto range_size = opts_.byte_range_size();
-  auto skip_rows = opts_.skiprows();
+  auto range_offset  = opts_.byte_range_offset();
+  auto range_size    = opts_.byte_range_size();
+  auto skip_rows     = opts_.skiprows();
   auto skip_end_rows = opts_.skipfooter();
-  auto num_rows = opts_.nrows();
+  auto num_rows      = opts_.nrows();
 
   if (range_offset > 0 || range_size > 0) {
     CUDF_EXPECTS(compression_type_ == "none",
@@ -600,9 +600,10 @@ std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream)
       }
     }
   } else {
-    const bool is_dict = std::all_of(opts_.dtypes().begin(), opts_.dtypes().end(), [](const auto &s) {
-      return s.find(':') != std::string::npos;
-    });
+    const bool is_dict =
+      std::all_of(opts_.dtypes().begin(), opts_.dtypes().end(), [](const auto &s) {
+        return s.find(':') != std::string::npos;
+      });
 
     if (!is_dict) {
       if (opts_.dtypes().size() == 1) {
@@ -779,10 +780,7 @@ reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
 reader::~reader() = default;
 
 // Forward to implementation
-table_with_metadata reader::read(cudaStream_t stream)
-{
-  return _impl->read(stream);
-}
+table_with_metadata reader::read(cudaStream_t stream) { return _impl->read(stream); }
 
 }  // namespace csv
 }  // namespace detail

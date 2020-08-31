@@ -28,10 +28,10 @@
 #include <io/utilities/column_buffer.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 
-#include <cudf/io/datasource.hpp>
-#include <cudf/io/readers.hpp>
-#include <cudf/io/detail/csv.hpp>
 #include <cudf/io/csv.hpp>
+#include <cudf/io/datasource.hpp>
+#include <cudf/io/detail/csv.hpp>
+#include <cudf/io/readers.hpp>
 
 #include <memory>
 #include <string>

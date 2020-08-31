@@ -15,9 +15,9 @@
  */
 
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/io/functions.hpp>
 #include <cudf/io/csv.hpp>
 #include <cudf/io/detail/csv.hpp>
+#include <cudf/io/functions.hpp>
 #include <cudf/io/readers.hpp>
 #include <cudf/io/writers.hpp>
 #include <cudf/table/table.hpp>
