@@ -275,24 +275,20 @@ def test_set_index_as_property():
     assert_eq(head.index, idx[:5])
 
 
-@pytest.mark.parametrize("deep", [True, False])
 @pytest.mark.parametrize("name", ["x"])
 @pytest.mark.parametrize("dtype", SIGNED_INTEGER_TYPES)
-def test_index_copy_range(name, deep, dtype):
+def test_index_copy_range(name, dtype, deep=True):
     idx = cudf.core.index.RangeIndex(1, 5)
     idx_copy = idx.copy(name=name, deep=deep, dtype=dtype)
 
     idx.name = name
     assert_eq(idx, idx_copy)
-    assert pd.api.types.is_dtype_equal(idx_copy.dtype, dtype)
-    assert_eq(idx_copy.name, name)
 
 
-@pytest.mark.parametrize("deep", [True, False])
 @pytest.mark.parametrize("name", ["x"])
 @pytest.mark.parametrize("dtype,", ["datetime64[ns]", "int64"])
-def test_index_copy_datetime(name, deep, dtype):
-    cidx = cudf.DatetimeIndex(["2001", "2002", "2003"], dtype="datetime64[ns]")
+def test_index_copy_datetime(name, dtype, deep=True):
+    cidx = cudf.DatetimeIndex(["2001", "2002", "2003"])
     pidx = cidx.to_pandas()
 
     pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
@@ -304,12 +300,11 @@ def test_index_copy_datetime(name, deep, dtype):
     assert_eq(pidx_copy, cidx_copy)
 
 
-@pytest.mark.parametrize("deep", [True, False])
 @pytest.mark.parametrize("name", ["x"])
 @pytest.mark.parametrize("dtype", ["category", "object"])
-def test_index_copy_string(name, deep, dtype):
-    pidx = pd.Index(["a", "b", "c"])
-    cidx = cudf.from_pandas(pidx)
+def test_index_copy_string(name, dtype, deep=True):
+    cidx = cudf.core.index.StringIndex(["a", "b", "c"])
+    pidx = cidx.to_pandas()
 
     pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
     cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
@@ -317,13 +312,12 @@ def test_index_copy_string(name, deep, dtype):
     assert_eq(pidx_copy, cidx_copy)
 
 
-@pytest.mark.parametrize("deep", [True, False])
 @pytest.mark.parametrize("name", ["x"])
 @pytest.mark.parametrize(
     "dtype",
     NUMERIC_TYPES + ["datetime64[ns]", "timedelta64[ns]"] + OTHER_TYPES,
 )
-def test_index_copy_integer(name, deep, dtype):
+def test_index_copy_integer(name, dtype, deep=True):
     """Test for NumericIndex Copy Casts
     """
     cidx = cudf.Int64Index([1, 2, 3])
@@ -335,13 +329,12 @@ def test_index_copy_integer(name, deep, dtype):
     assert_eq(pidx_copy, cidx_copy)
 
 
-@pytest.mark.parametrize("deep", [True, False])
 @pytest.mark.parametrize("name", ["x"])
 @pytest.mark.parametrize("dtype", SIGNED_TYPES)
-def test_index_copy_float(name, deep, dtype):
+def test_index_copy_float(name, dtype, deep=True):
     """Test for NumericIndex Copy Casts
     """
-    cidx = cudf.Float64Index([1, 2, 3])
+    cidx = cudf.Float64Index([1.0, 2.0, 3.0])
     pidx = cidx.to_pandas()
 
     pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
@@ -350,10 +343,9 @@ def test_index_copy_float(name, deep, dtype):
     assert_eq(pidx_copy, cidx_copy)
 
 
-@pytest.mark.parametrize("deep", [True, False])
 @pytest.mark.parametrize("name", ["x"])
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["category"])
-def test_index_copy_category(name, deep, dtype):
+def test_index_copy_category(name, dtype, deep=True):
     cidx = cudf.core.index.CategoricalIndex([1, 2, 3])
     pidx = cidx.to_pandas()
 
@@ -361,6 +353,77 @@ def test_index_copy_category(name, deep, dtype):
     cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
 
     assert_eq(pidx_copy, cidx_copy)
+
+
+@pytest.mark.parametrize("deep", [True, False])
+@pytest.mark.parametrize(
+    "idx",
+    [
+        cudf.DatetimeIndex(["2001", "2002", "2003"]),
+        cudf.core.index.StringIndex(["a", "b", "c"]),
+        cudf.Int64Index([1, 2, 3]),
+        cudf.Float64Index([1.0, 2.0, 3.0]),
+        cudf.CategoricalIndex([1, 2, 3]),
+        cudf.CategoricalIndex(["a", "b", "c"]),
+    ],
+)
+def test_index_copy_deep(idx, deep):
+    """Test if deep copy creates a new instance for device data.
+    The general criterion is to compare `Buffer.ptr` between two data objects.
+    Specifically for:
+        - CategoricalIndex, this applies to both `.codes` and `.categories`
+        - StringIndex, to every element in `._base_children`
+        - Others, to `.base_data`
+    No test is defined for RangeIndex.
+    """
+    idx_copy = idx.copy(deep=deep)
+    same_ref = not deep
+    if isinstance(idx, cudf.CategoricalIndex):
+        assert (
+            idx._values.codes.base_data.ptr
+            == idx_copy._values.codes.base_data.ptr
+        ) == same_ref
+        if isinstance(
+            idx._values.categories, cudf.core.column.string.StringColumn
+        ):
+            children = idx._values.categories._base_children
+            copy_children = idx_copy._values.categories._base_children
+            assert all(
+                [
+                    (
+                        children[i].base_data.ptr
+                        == copy_children[i].base_data.ptr
+                    )
+                    == same_ref
+                    for i in range(len(children))
+                ]
+            )
+        elif isinstance(
+            idx._values.categories, cudf.core.column.numerical.NumericalColumn
+        ):
+            assert (
+                idx._values.categories.base_data.ptr
+                == idx_copy._values.categories.base_data.ptr
+            ) == same_ref
+    elif isinstance(idx, cudf.core.index.StringIndex):
+        children = idx._values._base_children
+        copy_children = idx_copy._values._base_children
+        assert all(
+            [
+                (
+                    (
+                        children[i].base_data.ptr
+                        == copy_children[i].base_data.ptr
+                    )
+                    == same_ref
+                )
+                for i in range(len(children))
+            ]
+        )
+    else:
+        assert (
+            idx._values.base_data.ptr == idx_copy._values.base_data.ptr
+        ) == same_ref
 
 
 @pytest.mark.parametrize("idx", [[1, None, 3, None, 5]])

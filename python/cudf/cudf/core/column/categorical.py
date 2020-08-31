@@ -1166,9 +1166,10 @@ class CategoricalColumn(column.ColumnBase):
     def copy(self, deep=True):
         if deep:
             copied_col = libcudf.copying.copy_column(self)
+            copied_cat = libcudf.copying.copy_column(self.dtype._categories)
 
             return column.build_categorical_column(
-                categories=self.dtype.categories,
+                categories=copied_cat,
                 codes=column.as_column(
                     copied_col.base_data, dtype=copied_col.dtype
                 ),
