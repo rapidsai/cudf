@@ -66,7 +66,16 @@ def numerical_data():
     return np.arange(1, 10)
 
 
-fields = ["year", "month", "day", "hour", "minute", "second", "weekday"]
+fields = [
+    "year",
+    "month",
+    "day",
+    "hour",
+    "minute",
+    "second",
+    "weekday",
+    "dayofweek",
+]
 
 
 @pytest.mark.parametrize("data", [data1(), data2()])
@@ -705,6 +714,24 @@ def test_to_datetime_units(data, unit):
         (["10/11/2012", "01/01/2010", "07/07/2016", "02/02/2014"], "%m/%d/%Y"),
         (["10/11/2012", "01/01/2010", "07/07/2016", "02/02/2014"], "%d/%m/%Y"),
         (["10/11/2012", "01/01/2010", "07/07/2016", "02/02/2014"], None),
+        (pd.Series([2015, 2020, 2021]), "%Y"),
+        pytest.param(
+            pd.Series(["1", "2", "1"]),
+            "%m",
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/6109"
+                "https://github.com/pandas-dev/pandas/issues/35934"
+            ),
+        ),
+        pytest.param(
+            pd.Series(["14", "20", "10"]),
+            "%d",
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/6109"
+                "https://github.com/pandas-dev/pandas/issues/35934"
+            ),
+        ),
+        (pd.Series([2015, 2020.0, 2021.2]), "%Y"),
     ],
 )
 @pytest.mark.parametrize("infer_datetime_format", [True, False])
