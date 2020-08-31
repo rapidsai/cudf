@@ -5843,14 +5843,30 @@ class DataFrame(Frame, Serializable):
             **kwargs,
         )
 
-    def mode(self, axis=0, numeric_only=False, dropna=True, **kwargs):
+    def mode(self, axis=0, numeric_only=False, dropna=True):
         if axis not in (0, "index"):
             raise NotImplementedError("Only axis=0 is currently supported")
 
-        mode_results = [self[col].mode(dropna=dropna) for col in self._data]
+        if numeric_only:
+            data_df = self.select_dtypes(
+                include=[np.number], exclude=["datetime64", "timedelta64"]
+            )
+        else:
+            data_df = self
+
+        mode_results = [
+            data_df[col].mode(dropna=dropna) for col in data_df._data
+        ]
+
+        if len(mode_results) == 0:
+            df = DataFrame(index=self.index)
+            return df
 
         df = cudf.concat(mode_results, axis=1)
-        df.columns = self.columns
+        if isinstance(df, cudf.Series):
+            df = df.to_frame()
+
+        df.columns = data_df.columns
 
         return df
 

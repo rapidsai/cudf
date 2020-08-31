@@ -6873,3 +6873,45 @@ def test_dataframe_iterrows_itertuples():
         ),
     ):
         df.iterrows()
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        gd.DataFrame({"a": [1, 2, 3]}),
+        gd.DataFrame(
+            {"a": [1, 2, 3], "b": ["a", "z", "c"]}, index=["a", "z", "x"]
+        ),
+        gd.DataFrame(
+            {
+                "a": [1, 2, 3, None, 2, 1, None],
+                "b": ["a", "z", "c", "a", "v", "z", "z"],
+            }
+        ),
+        gd.DataFrame({"a": [], "b": []}),
+        gd.DataFrame({"a": [None, None], "b": [None, None]}),
+        gd.DataFrame(
+            {
+                "a": ["hello", "world", "rapids", "ai", "nvidia"],
+                "b": gd.Series([1, 21, 21, 11, 11], dtype="timedelta64[s]"),
+            }
+        ),
+        gd.DataFrame(
+            {
+                "a": ["hello", None, "world", "rapids", None, "ai", "nvidia"],
+                "b": gd.Series(
+                    [1, 21, None, 11, None, 11, None], dtype="datetime64[s]"
+                ),
+            }
+        ),
+    ],
+)
+@pytest.mark.parametrize("numeric_only", [True, False])
+@pytest.mark.parametrize("dropna", [True, False])
+def test_dataframe_mode(df, numeric_only, dropna):
+    pdf = df.to_pandas()
+
+    expected = pdf.mode(numeric_only=numeric_only, dropna=dropna)
+    actual = df.mode(numeric_only=numeric_only, dropna=dropna)
+
+    assert_eq(expected, actual, check_dtype=False)
