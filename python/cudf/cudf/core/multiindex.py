@@ -911,33 +911,51 @@ class MultiIndex(Index):
 
     def _poplevels(self, level):
         """
-        Pop the specified levels from self
+        Remove and return the specified levels from self.
+
+        Parameters
+        ----------
+        level : level name or index, list
+            One or more levels to remove
+
+        Returns
+        -------
+        Index composed of the removed levels. If only a single level
+        is removed, a flat index is returned.
         """
         if not pd.api.types.is_list_like(level):
             level = (level,)
 
-        ilevels = [self._level_index_from_level(lev) for lev in level]
+        ilevels = sorted([self._level_index_from_level(lev) for lev in level])
 
         popped_data = OrderedDict({})
         popped_names = []
         names = list(self.names)
 
-        for i in sorted(ilevels, reverse=True):
-            names.pop(i)
+        # build the popped data and names
+        for i in ilevels:
             n = self._data.names[i]
-            popped_data[n] = self._data.pop(n)
-            popped_names.insert(0, self.names[i])
-            popped_data.move_to_end(n, last=False)
+            popped_data[n] = self._data[n]
+            popped_names.append(self.names[i])
 
-        result = cudf.core.index.Index._from_table(
+        # pop the levels out from self
+        # this must be done iterating backwards
+        for i in reversed(ilevels):
+            n = self._data.names[i]
+            names.pop(i)
+            self._data.pop(n)
+
+        # construct the popped result
+        popped = cudf.core.index.Index._from_table(
             cudf.core.frame.Frame(popped_data)
         )
-        result.names = popped_names
+        popped.names = popped_names
 
+        # update self
         self.names = names
         self._compute_levels_and_codes()
 
-        return result
+        return popped
 
     def droplevel(self, level=-1):
         """
