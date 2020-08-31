@@ -1767,8 +1767,7 @@ class Frame(libcudf.table.Table):
                     np.iinfo(np.int64).max, dtype=np.int64
                 )
             elif isinstance(random_state, np.random.mtrand.RandomState):
-                keys = random_state.get_state()[1]
-                pos = random_state.get_state()[2]
+                _, keys, pos, _, _ = random_state.get_state()
                 seed = 0 if pos >= len(keys) else pos
             else:
                 seed = np.int64(random_state)
