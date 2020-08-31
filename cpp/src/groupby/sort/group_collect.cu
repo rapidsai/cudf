@@ -33,7 +33,7 @@ std::unique_ptr<column> group_collect(column_view const &values,
     group_offsets.data().get(), group_offsets.size() * sizeof(cudf::size_type), stream, mr);
 
   auto offsets = std::make_unique<cudf::column>(
-    cudf::data_type{cudf::type_id::INT32}, num_groups + 1, offsets_data);
+    cudf::type_to_id<size_type>, num_groups + 1, std::move(offsets_data));
 
   return make_lists_column(num_groups,
                            std::move(offsets),
