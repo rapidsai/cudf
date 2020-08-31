@@ -2,7 +2,9 @@
 
 ## New Features
 
+- PR #5843 Add `filters` parameter to Python `read_parquet` function for filtering row groups
 - PR #5974 Use libcudf instead of cupy for `arange` or column creation from a scalar.
+- PR #6119 Add support for `dayofweek` property in `DateTimeIndex` and `DatetimeProperties`
 
 ## Improvements
 
@@ -18,6 +20,7 @@
 - PR #6067 Added compute codes for aarch64 devices
 - PR #6083 Small cleanup
 - PR #6092 Add `name` and `dtype` field to `Index.copy`
+- PR #6103 Small refactor of `print_differences`
 
 ## Bug Fixes
 
