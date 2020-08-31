@@ -1676,9 +1676,10 @@ class Frame(libcudf.table.Table):
             replace == True is not yet supported for axis = 1/"columns"
         weights : str or ndarray-like, optional
             Only supported for axis=1/"columns"
-        random_state : int or None, default None
+        random_state : int, numpy RandomState or None, default None
             Seed for the random number generator (if int), or None.
             If None, a random seed will be chosen.
+            if RandomState, seed will be extracted from current state.
         axis : {0 or ‘index’, 1 or ‘columns’, None}, default None
             Axis to sample. Accepts axis number or name.
             Default is stat axis for given data type
@@ -1753,11 +1754,17 @@ class Frame(libcudf.table.Table):
                     "weights is not yet supported for axis=0/index"
                 )
 
-            seed = (
-                np.random.randint(np.iinfo(np.int64).max, dtype=np.int64)
-                if random_state is None
-                else np.int64(random_state)
-            )
+            if random_state is None:
+                seed = np.random.randint(
+                    np.iinfo(np.int64).max, dtype=np.int64
+                )
+            elif isinstance(random_state, np.random.mtrand.RandomState):
+                pos = random_state._bit_generator.state["state"]["pos"]
+                seed = random_state._bit_generator.state["state"]["key"][
+                    0 if pos == 624 else pos
+                ]
+            else:
+                seed = np.int64(random_state)
 
             result = self._from_table(
                 libcudf.copying.sample(
