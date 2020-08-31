@@ -85,8 +85,8 @@ std::unique_ptr<cudf::column> normalize_spaces(
  * A null input element at row `i` produces a corresponding null entry
  * for row `i` in the output column.
  *
- * This function requires 8x the number of bytes in the input strings
- * column as working memory.
+ * This function requires about 16x the number of character bytes in the input
+ * strings column as working memory.
  *
  * @param strings The input strings to normalize.
  * @param do_lower_case If true, upper-case characters are converted to
