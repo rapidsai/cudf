@@ -16,29 +16,29 @@
 
 #pragma once
 
-#include <algorithm>
+#include <tests/utilities/column_utilities.hpp>
+#include <tests/utilities/cudf_gtest.hpp>
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/concatenate.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <rmm/device_buffer.hpp>
-#include <tests/utilities/cudf_gtest.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
+
+#include <algorithm>
 #include <iterator>
 #include <memory>
 #include <numeric>
-
-#include <cudf/concatenate.hpp>
-#include <cudf/copying.hpp>
-#include <tests/utilities/column_utilities.hpp>
-
-#include <cudf/lists/lists_column_view.hpp>
-#include "cudf/fixed_point/fixed_point.hpp"
 
 namespace cudf {
 namespace test {
@@ -105,6 +105,13 @@ class column_wrapper {
  protected:
   std::unique_ptr<cudf::column> wrapped{};  ///< The wrapped column
 };
+
+// TODO add docs
+template <typename Iterator>
+cudf::size_type size_type_distance(Iterator begin, Iterator end)
+{
+  return static_cast<cudf::size_type>(std::distance(begin, end));
+}
 
 /**
  * @brief Convert between source and target types when they differ and where possible.
@@ -189,12 +196,13 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 template <typename ValidityIterator>
 std::vector<bitmask_type> make_null_mask_vector(ValidityIterator begin, ValidityIterator end)
 {
-  cudf::size_type size = std::distance(begin, end);
-  auto num_words       = cudf::bitmask_allocation_size_bytes(size) / sizeof(bitmask_type);
-  std::vector<bitmask_type> null_mask(num_words, 0);
-  for (auto i = 0; i < size; ++i) {
-    if (*(begin + i)) { set_bit_unsafe(null_mask.data(), i); }
-  }
+  auto const size      = size_type_distance(begin, end);
+  auto const num_words = cudf::bitmask_allocation_size_bytes(size) / sizeof(bitmask_type);
+
+  auto null_mask = std::vector<bitmask_type>(num_words, 0);
+  for (auto i = 0; i < size; ++i)
+    if (*(begin + i)) set_bit_unsafe(null_mask.data(), i);
+
   return null_mask;
 }
 
@@ -291,7 +299,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
   template <typename InputIterator>
   fixed_width_column_wrapper(InputIterator begin, InputIterator end) : column_wrapper{}
   {
-    cudf::size_type size = std::distance(begin, end);
+    auto const size = detail::size_type_distance(begin, end);
     wrapped.reset(new cudf::column{cudf::data_type{cudf::type_to_id<ElementTo>()},
                                    size,
                                    detail::make_elements<ElementTo, SourceElementT>(begin, end)});
@@ -324,8 +332,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
   fixed_width_column_wrapper(InputIterator begin, InputIterator end, ValidityIterator v)
     : column_wrapper{}
   {
-    cudf::size_type size = std::distance(begin, end);
-
+    auto const size = detail::size_type_distance(begin, end);
     wrapped.reset(new cudf::column{cudf::data_type{cudf::type_to_id<ElementTo>()},
                                    size,
                                    detail::make_elements<ElementTo, SourceElementT>(begin, end),
@@ -421,6 +428,31 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
                              InputIterator end,
                              std::initializer_list<bool> const& validity)
     : fixed_width_column_wrapper(begin, end, std::cbegin(validity))
+  {
+  }
+};
+
+template <typename Rep>
+class fixed_point_column_wrapper : public detail::column_wrapper {
+ public:
+  template <typename FixedPointRepIterator>
+  fixed_point_column_wrapper(FixedPointRepIterator begin,
+                             FixedPointRepIterator end,
+                             numeric::scale_type scale)
+    : column_wrapper{}
+  {
+    auto const size         = detail::size_type_distance(begin, end);
+    auto const elements     = thrust::host_vector<Rep>(begin, end);
+    auto const is_decimal32 = std::is_same<Rep, int32_t>::value;
+    auto const id           = is_decimal32 ? type_id::DECIMAL32 : type_id::DECIMAL64;
+    auto const data_type    = cudf::data_type{id, static_cast<int32_t>(scale)};
+
+    wrapped.reset(
+      new cudf::column{data_type, size, rmm::device_buffer{elements.data(), size * sizeof(Rep)}});
+  }
+
+  fixed_point_column_wrapper(std::initializer_list<Rep> values, numeric::scale_type scale)
+    : fixed_point_column_wrapper(std::cbegin(values), std::cend(values), scale)
   {
   }
 };
@@ -869,8 +901,8 @@ class lists_column_wrapper : public detail::column_wrapper {
     // generate offsets
     size_type count = 0;
     std::vector<size_type> offsetv;
-    std::transform(cols.begin(),
-                   cols.end(),
+    std::transform(cols.cbegin(),
+                   cols.cend(),
                    valids,
                    std::back_inserter(offsetv),
                    [&](cudf::column_view const& col, bool valid) {
@@ -885,6 +917,7 @@ class lists_column_wrapper : public detail::column_wrapper {
       cudf::test::fixed_width_column_wrapper<size_type>(offsetv.begin(), offsetv.end()).release();
 
     // concatenate them together, skipping children that are null.
+    // TODO use thrust::transform_if here
     std::vector<column_view> children;
     for (size_t idx = 0; idx < cols.size(); idx++) {
       if (!valids[idx]) { continue; }
@@ -1017,9 +1050,9 @@ class lists_column_wrapper : public detail::column_wrapper {
                          // "a List<List<List<int>>> that's empty at the top level"
                          //
                          // { {{{1, 2, 3}}}, {4, 5, 6} }
-                         // In this case, row 1 is a a concrete List<int> with actual values.  There
-                         // is no way to rectify the differences so we will treat it as a true
-                         // column mismatch.
+                         // In this case, row 1 is a a concrete List<int> with actual values.
+                         // There is no way to rectify the differences so we will treat it as a
+                         // true column mismatch.
                          CUDF_EXPECTS(l.wrapped->size() == 0, "Mismatch in column types!");
                          stubs.push_back(empty_like(expected_hierarchy));
                        } else {
@@ -1170,7 +1203,7 @@ class structs_column_wrapper : public detail::column_wrapper {
   template <typename V>
   void init(std::vector<std::unique_ptr<cudf::column>>&& child_columns, V validity_iterator)
   {
-    size_type num_rows = child_columns.empty() ? 0 : child_columns[0]->size();
+    size_type const num_rows = child_columns.empty() ? 0 : child_columns[0]->size();
 
     CUDF_EXPECTS(std::all_of(child_columns.begin(),
                              child_columns.end(),
