@@ -24,7 +24,8 @@
 #include "orc.h"
 
 #include <cudf/io/data_sink.hpp>
-#include <cudf/io/writers.hpp>
+#include <cudf/io/detail/orc.hpp>
+#include <cudf/io/orc.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 

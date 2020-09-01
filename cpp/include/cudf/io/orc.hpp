@@ -36,9 +36,18 @@
 namespace cudf {
 //! In-development features
 namespace io {
-
+/**
+ * @brief Builds settings to use for `read_orc()`
+ *
+ * @ingroup io_readers
+ */
 class orc_reader_options_builder;
 
+/**
+ * @brief Settings to use for `read_orc()`
+ *
+ * @ingroup io_readers
+ */
 class orc_reader_options {
   source_info _source;
 
@@ -285,7 +294,7 @@ class orc_reader_options_builder {
  * @code
  *  ...
  *  std::string filepath = "dataset.orc";
- *  cudf::orc_reader_options options{cudf::source_info(filepath)};
+ *  cudf::orc_reader_options options = cudf::orc_reader_options::builder(cudf::source_info(filepath));
  *  ...
  *  auto result = cudf::read_orc(options);
  * @endcode
@@ -298,5 +307,345 @@ class orc_reader_options_builder {
  */
 table_with_metadata read_orc(orc_reader_options const& options,
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+
+
+/**
+ * @brief Builds settings to use for `write_orc()`
+ *
+ * @ingroup io_writers
+ */
+class orc_writer_options_builder;
+
+/**
+ * @brief Settings to use for `write_orc()`
+ *
+ * @ingroup io_writers
+ */
+class orc_writer_options {
+  /// Specify the sink to use for writer output
+  sink_info _sink;
+  /// Specify the compression format to use
+  compression_type _compression = compression_type::AUTO;
+  /// Enable writing column statistics
+  bool _enable_statistics = true;
+  /// Set of columns to output
+  table_view _table;
+  /// Optional associated metadata
+  const table_metadata* _metadata = nullptr;
+
+  friend orc_writer_options_builder;
+
+  explicit orc_writer_options(sink_info const& sink, table_view const& table): _sink(sink), _table(table){}
+  public:
+  explicit orc_writer_options() = default;
+
+  /**
+   * @brief Returns sink info
+   */
+  sink_info const& sink() const {return _sink;}
+
+  /**
+   * @brief Returns compression type
+   */
+  compression_type compression() const {return _compression;}
+
+  /**
+   * @brief Whether writing column statistics is enabled/disabled
+   */
+  bool enable_statistics() const {return _enable_statistics;}
+
+  /**
+   * @brief Returns table to be written to output
+   */
+  table_view table() const {return _table;}
+
+  /**
+   * @brief Returns associated metadata
+   */
+  table_metadata const* metadata() const {return _metadata;}
+
+
+  // Setters
+  
+  /**
+   * @brief Sets compression type
+   */
+  void compression(compression_type comp) {_compression = comp;}
+
+  /**
+   * @brief Enable/Disable writing column statistics
+   */
+  void enable_statistics(bool val) {_enable_statistics = val;}
+
+  /**
+   * @brief Returns table to be written to output
+   */
+  void table(table_view tbl) {_table = tbl;}
+
+  /**
+   * @brief Returns associated metadata
+   */
+  void metadata(table_metadata* meta) {_metadata = meta;}
+
+  /**
+   * @brief Returns builder to update options
+   */
+  static orc_writer_options_builder builder(sink_info const& sink, table_view const& table);
+};
+
+class orc_writer_options_builder {
+    orc_writer_options options;
+
+    public:
+    orc_writer_options_builder() = default;
+
+    orc_writer_options_builder(sink_info const& sink, table_view const& table):options{sink, table}{}
+
+    /**
+   * @brief Sets compression type
+   */
+  orc_writer_options_builder& compression(compression_type comp) {
+      options._compression = comp;
+      return *this;
+  }
+
+  /**
+   * @brief Enable/Disable writing column statistics
+   */
+  orc_writer_options_builder& enable_statistics(bool val) {
+      options._enable_statistics = val;
+      return *this;
+  }
+
+  /**
+   * @brief Returns table to be written to output
+   */
+  orc_writer_options_builder& table(table_view tbl) {
+      options._table = tbl;
+      return *this;
+  }
+
+  /**
+   * @brief Returns associated metadata
+   */
+  orc_writer_options_builder& metadata(table_metadata* meta) {
+      options._metadata = meta;
+      return *this;
+  }
+
+  /**
+   * @brief move orc_writer_options member once options is built
+   */
+  operator orc_writer_options &&() {return std::move(options);}
+
+  /**
+   * @brief move orc_writer_options member once options is built
+   */
+  orc_writer_options&& build() {return std::move(options);}
+};
+
+/**
+ * @brief Writes a set of columns to ORC format
+ *
+ * @ingroup io_writers
+ *
+ * The following code snippet demonstrates how to write columns to a file:
+ * @code
+ *  ...
+ *  std::string filepath = "dataset.orc";
+ *  cudf::orc_writer_options options = cudf::orc_writer_options::builder(cudf::sink_info(filepath), table->view());
+ *  ...
+ *  cudf::write_orc(options);
+ * @endcode
+ *
+ * @param options Settings for controlling reading behavior
+ * @param mr Device memory resource to use for device memory allocation
+ */
+void write_orc(orc_writer_options const& options,
+               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Builds settings to use for `write_orc_chunked()`
+ *
+ * @ingroup io_writers
+ */
+class chunked_orc_writer_options_builder;
+
+/**
+ * @brief Settings to use for `write_orc_chunked()`
+ *
+ * @ingroup io_writers
+ */
+class chunked_orc_writer_options {
+  /// Specify the sink to use for writer output
+  sink_info _sink;
+  /// Specify the compression format to use
+  compression_type _compression = compression_type::AUTO;
+  /// Enable writing column statistics
+  bool _enable_statistics = true;
+  /// Optional associated metadata
+  const table_metadata_with_nullability* _metadata = nullptr;
+
+  friend chunked_orc_writer_options_builder;
+
+  chunked_orc_writer_options(sink_info const& sink): _sink(sink){}
+
+  public:
+  explicit chunked_orc_writer_options() = default;
+
+  /**
+   * @brief Returns sink info
+   */
+  sink_info const& sink() const {return _sink;}
+
+  /**
+   * @brief Returns compression type
+   */
+  compression_type compression() const {return _compression;}
+
+  /**
+   * @brief Whether writing column statistics is enabled/disabled
+   */
+  bool enable_statistics() const {return _enable_statistics;}
+
+  /**
+   * @brief Returns associated metadata
+   */
+  table_metadata_with_nullability const* metadata() const {return _metadata;}
+
+  // Setters
+
+  /**
+   * @brief Sets compression type
+   */
+  void compression(compression_type comp) {_compression = comp;}
+
+  /**
+   * @brief Enable/Disable writing column statistics
+   */
+  void enable_statistics(bool val) {_enable_statistics = val;}
+
+  /**
+   * @brief Returns associated metadata
+   */
+  void metadata(table_metadata_with_nullability* meta) {_metadata = meta;}
+
+  /**
+   * @brief Returns builder to update options
+   */
+  static chunked_orc_writer_options_builder builder(sink_info const& sink);
+};
+
+class chunked_orc_writer_options_builder {
+    chunked_orc_writer_options options;
+
+    public:
+    chunked_orc_writer_options_builder() = default;
+
+    chunked_orc_writer_options_builder(sink_info const& sink):options{sink}{}
+
+    /**
+   * @brief Sets compression type
+   */
+  chunked_orc_writer_options_builder& compression(compression_type comp) {
+      options._compression = comp;
+      return *this;
+  }
+
+  /**
+   * @brief Enable/Disable writing column statistics
+   */
+  chunked_orc_writer_options_builder& enable_statistics(bool val) {
+      options._enable_statistics = val;
+      return *this;
+  }
+
+  /**
+   * @brief Returns associated metadata
+   */
+  chunked_orc_writer_options_builder& metadata(table_metadata_with_nullability* meta) {
+      options._metadata = meta;
+      return *this;
+  }
+
+  /**
+   * @brief move chunked_rc_writer_options member once options is built
+   */
+  operator chunked_orc_writer_options &&() {return std::move(options);}
+
+  /**
+   * @brief move chunked_rc_writer_options member once options is built
+   */
+  chunked_orc_writer_options&& build() {return std::move(options);}
+};
+
+namespace detail {
+namespace orc {
+/**
+ * @brief Forward declaration of anonymous chunked-writer state struct.
+ */
+struct orc_chunked_state;
+}  // namespace orc
+}  // namespace detail
+
+/**
+ * @brief Begin the process of writing an ORC file in a chunked/stream form.
+ *
+ * @ingroup io_writers
+ *
+ * The intent of the write_orc_chunked_ path is to allow writing of an
+ * arbitrarily large / arbitrary number of rows to an ORC file in multiple passes.
+ *
+ * The following code snippet demonstrates how to write a single ORC file containing
+ * one logical table by writing a series of individual cudf::tables.
+ * @code
+ *  ...
+ *  std::string filepath = "dataset.orc";
+ *  cudf::io::chunked_orc_writer_options options{cudf::sink_info(filepath), table->view()};
+ *  ...
+ *  auto state = cudf::write_orc_chunked_begin(options);
+ *    cudf::write_orc_chunked(table0, state);
+ *    cudf::write_orc_chunked(table1, state);
+ *    ...
+ *  cudf_write_orc_chunked_end(state);
+ * @endcode
+ *
+ * @param[in] options Settings for controlling writing behavior
+ * @param[in] mr Device memory resource to use for device memory allocation
+ *
+ * @returns pointer to an anonymous state structure storing information about the chunked write.
+ * this pointer must be passed to all subsequent write_orc_chunked() and write_orc_chunked_end()
+ *          calls.
+ */
+std::shared_ptr<detail::orc::orc_chunked_state> write_orc_chunked_begin(
+  chunked_orc_writer_options const& options,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Write a single table as a subtable of a larger logical orc file/table.
+ *
+ * @ingroup io_writers
+ *
+ * All tables passed into multiple calls of this function must contain the same # of columns and
+ * have columns of the same type.
+ *
+ * @param[in] table The table data to be written.
+ * @param[in] state Opaque state information about the writer process. Must be the same pointer
+ * returned from write_orc_chunked_begin()
+ */
+void write_orc_chunked(table_view const& table,
+                       std::shared_ptr<detail::orc::orc_chunked_state> state);
+
+/**
+ * @brief Finish writing a chunked/stream orc file.
+ *
+ * @ingroup io_writers
+ *
+ * @param[in] state Opaque state information about the writer process. Must be the same pointer
+ * returned from write_orc_chunked_begin()
+ */
+void write_orc_chunked_end(std::shared_ptr<detail::orc::orc_chunked_state>& state);
+
 } // namespace io
 } // namespace cudf

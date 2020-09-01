@@ -77,6 +77,64 @@ class reader {
 
 };
 
+/**
+ * @brief Class to write ORC dataset data into columns.
+ */
+class writer {
+ private:
+  class impl;
+  std::unique_ptr<impl> _impl;
+
+ public:
+  /**
+   * @brief Constructor for output to a file.
+   *
+   * @param sinkp The data sink to write the data to
+   * @param options Settings for controlling writing behavior
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  explicit writer(std::unique_ptr<cudf::io::data_sink> sink,
+                  orc_writer_options const& options,
+                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+  /**
+   * @brief Destructor explicitly-declared to avoid inlined in header
+   */
+  ~writer();
+
+  /**
+   * @brief Writes the entire dataset.
+   *
+   * @param table Set of columns to output
+   * @param metadata Table metadata and column names
+   * @param stream CUDA stream used for device memory operations and kernel launches.
+   */
+  void write(table_view const& table,
+                 const table_metadata* metadata = nullptr,
+                 cudaStream_t stream            = 0);
+
+  /**
+   * @brief Begins the chunked/streamed write process.
+   *
+   * @param[in] state State information that crosses _begin() / write_chunked() / _end() boundaries.
+   */
+  void write_chunked_begin(struct orc_chunked_state& state);
+
+  /**
+   * @brief Writes a single subtable as part of a larger ORC file/table write.
+   *
+   * @param[in] table The table information to be written
+   * @param[in] state State information that crosses _begin() / write_chunked() / _end() boundaries.
+   */
+  void write_chunked(table_view const& table, struct orc_chunked_state& state);
+
+  /**
+   * @brief Finishes the chunked/streamed write process.
+   *
+   * @param[in] state State information that crosses _begin() / write_chunked() / _end() boundaries.
+   */
+  void write_chunked_end(struct orc_chunked_state& state);
+};
 } // namespace orc
 } // namespace detail
 } // namespace io
