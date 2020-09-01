@@ -189,19 +189,8 @@ TYPED_TEST(TypedStructGatherTest, TestGatherStructOfLists)
 
   auto lists_column_exemplar = []() {
     return lists_column_wrapper<TypeParam, int32_t>{
-      {
-        {5},
-        {10, 15},
-        {20, 25, 30},
-        {35, 40, 45, 50},
-        {55, 60, 65},
-        {70, 75},
-        {80},
-        {},
-        {}
-      },
-      make_counting_transform_iterator(0, [](auto i) { return !(i % 3); })
-    };
+      {{5}, {10, 15}, {20, 25, 30}, {35, 40, 45, 50}, {55, 60, 65}, {70, 75}, {80}, {}, {}},
+      make_counting_transform_iterator(0, [](auto i) { return !(i % 3); })};
   };
 
   auto lists_column = std::make_unique<cudf::column>(cudf::column(lists_column_exemplar(), 0));
@@ -229,9 +218,11 @@ TYPED_TEST(TypedStructGatherTest, TestGatherStructOfLists)
   auto list_column_before_gathering = lists_column_exemplar().release();
 
   auto expected_gathered_list_column =
-    cudf::gather(cudf::table_view{std::vector<cudf::column_view>{list_column_before_gathering->view()}},
-                 gather_map_col->view())->get_column(0);
-                
+    cudf::gather(
+      cudf::table_view{std::vector<cudf::column_view>{list_column_before_gathering->view()}},
+      gather_map_col->view())
+      ->get_column(0);
+
   expect_columns_equivalent(expected_gathered_list_column.view(), gathered_struct_col.child(0));
 }
 
@@ -243,19 +234,16 @@ TYPED_TEST(TypedStructGatherTest, TestGatherStructOfListsOfLists)
 
   auto lists_column_exemplar = []() {
     return lists_column_wrapper<TypeParam, int32_t>{
-      {
-        {{5,5}},
-        {{10, 15}},
-        {{20, 25}, {30}},
-        {{35, 40}, {45, 50}},
-        {{55}, {60, 65}},
-        {{70, 75}},
-        {{80, 80}},
-        {},
-        {}
-      },
-      make_counting_transform_iterator(0, [](auto i) { return !(i % 3); })
-    };
+      {{{5, 5}},
+       {{10, 15}},
+       {{20, 25}, {30}},
+       {{35, 40}, {45, 50}},
+       {{55}, {60, 65}},
+       {{70, 75}},
+       {{80, 80}},
+       {},
+       {}},
+      make_counting_transform_iterator(0, [](auto i) { return !(i % 3); })};
   };
 
   auto lists_column = std::make_unique<cudf::column>(cudf::column(lists_column_exemplar(), 0));
@@ -283,9 +271,11 @@ TYPED_TEST(TypedStructGatherTest, TestGatherStructOfListsOfLists)
   auto list_column_before_gathering = lists_column_exemplar().release();
 
   auto expected_gathered_list_column =
-    cudf::gather(cudf::table_view{std::vector<cudf::column_view>{list_column_before_gathering->view()}},
-                 gather_map_col->view())->get_column(0);
-                
+    cudf::gather(
+      cudf::table_view{std::vector<cudf::column_view>{list_column_before_gathering->view()}},
+      gather_map_col->view())
+      ->get_column(0);
+
   expect_columns_equivalent(expected_gathered_list_column.view(), gathered_struct_col.child(0));
 }
 
@@ -296,20 +286,15 @@ TYPED_TEST(TypedStructGatherTest, TestGatherStructOfStructs)
   // Testing gather() on struct<struct<numeric>>
 
   auto numeric_column_exemplar = []() {
-    return fixed_width_column_wrapper<TypeParam, int32_t> {
+    return fixed_width_column_wrapper<TypeParam, int32_t>{
       {5, 10, 15, 20, 25, 30, 35, 45, 50, 55, 60, 65, 70, 75},
-      make_counting_transform_iterator(0, [](auto i) { return !(i % 3); })
-    };
+      make_counting_transform_iterator(0, [](auto i) { return !(i % 3); })};
   };
 
   auto numeric_column = numeric_column_exemplar();
-  auto structs_column = structs_column_wrapper{
-    {numeric_column}
-  };
+  auto structs_column = structs_column_wrapper{{numeric_column}};
 
-  auto struct_of_structs_column = structs_column_wrapper{
-    {structs_column}
-  }.release();
+  auto struct_of_structs_column = structs_column_wrapper{{structs_column}}.release();
 
   // Gather to new struct column.
   auto gather_map = std::vector<int>{-1, 4, 3, 2, 1, 7, 3};
@@ -328,8 +313,10 @@ TYPED_TEST(TypedStructGatherTest, TestGatherStructOfStructs)
 
   auto numeric_column_before_gathering = numeric_column_exemplar().release();
   auto expected_gathered_column =
-    cudf::gather(cudf::table_view{std::vector<cudf::column_view>{numeric_column_before_gathering->view()}},
-                 gather_map_col->view())->get_column(0);
+    cudf::gather(
+      cudf::table_view{std::vector<cudf::column_view>{numeric_column_before_gathering->view()}},
+      gather_map_col->view())
+      ->get_column(0);
 
   expect_columns_equivalent(expected_gathered_column, gathered_struct_col.child(0).child(0).view());
 }
@@ -342,10 +329,9 @@ TYPED_TEST(TypedStructGatherTest, TestGatherStructOfStructsWithValidity)
 
   // Factory to construct numeric column with configurable null-mask.
   auto numeric_column_exemplar = [](std::function<bool(size_type)> pred) {
-    return fixed_width_column_wrapper<TypeParam, int32_t> {
+    return fixed_width_column_wrapper<TypeParam, int32_t>{
       {5, 10, 15, 20, 25, 30, 35, 45, 50, 55, 60, 65, 70, 75},
-      make_counting_transform_iterator(0, [=](auto i) { return pred(i); })
-    };
+      make_counting_transform_iterator(0, [=](auto i) { return pred(i); })};
   };
 
   // Validity predicates.
@@ -355,11 +341,8 @@ TYPED_TEST(TypedStructGatherTest, TestGatherStructOfStructsWithValidity)
   // Construct struct-of-struct-of-numerics.
   auto numeric_column = numeric_column_exemplar(every_3rd_element_null);
   auto structs_column = structs_column_wrapper{
-    {numeric_column}, make_counting_transform_iterator(0, twelfth_element_null)
-  };
-  auto struct_of_structs_column = structs_column_wrapper{
-    {structs_column}
-  }.release();
+    {numeric_column}, make_counting_transform_iterator(0, twelfth_element_null)};
+  auto struct_of_structs_column = structs_column_wrapper{{structs_column}}.release();
 
   // Gather to new struct column.
   auto gather_map = std::vector<int>{-1, 4, 3, 2, 1, 7, 3};
@@ -376,11 +359,15 @@ TYPED_TEST(TypedStructGatherTest, TestGatherStructOfStructsWithValidity)
   // Verify that the underlying numeric column presents as if
   // it had itself been gathered individually.
 
-  auto final_predicate = [=](size_type i) { return every_3rd_element_null(i) && twelfth_element_null(i); };
+  auto final_predicate = [=](size_type i) {
+    return every_3rd_element_null(i) && twelfth_element_null(i);
+  };
   auto numeric_column_before_gathering = numeric_column_exemplar(final_predicate).release();
   auto expected_gathered_column =
-    cudf::gather(cudf::table_view{std::vector<cudf::column_view>{numeric_column_before_gathering->view()}},
-                 gather_map_col->view())->get_column(0);
+    cudf::gather(
+      cudf::table_view{std::vector<cudf::column_view>{numeric_column_before_gathering->view()}},
+      gather_map_col->view())
+      ->get_column(0);
 
   expect_columns_equivalent(expected_gathered_column, gathered_struct_col.child(0).child(0).view());
 }
