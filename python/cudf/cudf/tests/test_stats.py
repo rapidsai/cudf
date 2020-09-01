@@ -469,8 +469,14 @@ def test_min_count_ops(data, ops, skipna, min_count):
     )
 
 
-def test_cov_corr_invalid_dtypes():
-    gsr = Series([1, 2, 3, 4], dtype="datetime64[ns]")
+@pytest.mark.parametrize(
+    "gsr",
+    [
+        Series([1, 2, 3, 4], dtype="datetime64[ns]"),
+        Series([1, 2, 3, 4], dtype="timedelta64[ns]"),
+    ],
+)
+def test_cov_corr_invalid_dtypes(gsr):
     psr = gsr.to_pandas()
 
     try:
