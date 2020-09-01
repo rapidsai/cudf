@@ -3738,7 +3738,7 @@ class Series(Frame, Serializable):
 
         bins : int, optional
             Rather than count values, group them into half-open bins,
-            works with numeric data. Not yet supported.
+            works with numeric data. This Parameter is not yet supported.
 
         dropna : bool, default True
             Don’t include counts of NaN and None.
@@ -3746,6 +3746,14 @@ class Series(Frame, Serializable):
         Returns
         -------
         result : Series contanining counts of unique values.
+
+        See also
+        --------
+        Series.count
+            Number of non-NA elements in a Series.
+
+        cudf.core.dataframe.DataFrame.count
+            Number of non-NA elements in a DataFrame.
 
         Examples
         --------
