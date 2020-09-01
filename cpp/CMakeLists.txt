@@ -44,6 +44,8 @@ set(CMAKE_C_COMPILER $ENV{CC})
 set(CMAKE_CXX_COMPILER $ENV{CXX})
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 set(CMAKE_CUDA_STANDARD 14)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
@@ -100,7 +102,6 @@ if("${GPU_ARCHS}" STREQUAL "ALL")
     if((CUDA_VERSION_MAJOR EQUAL 11) OR (CUDA_VERSION_MAJOR GREATER 11))
       set(GPU_ARCHS "${GPU_ARCHS};75;80")
     endif()
-
   else()
     # This is being built for an x86 or x86_64 architecture
     set(GPU_ARCHS "60")
@@ -113,18 +114,14 @@ if("${GPU_ARCHS}" STREQUAL "ALL")
     if((CUDA_VERSION_MAJOR EQUAL 11) OR (CUDA_VERSION_MAJOR GREATER 11))
       set(GPU_ARCHS "${GPU_ARCHS};80")
     endif()
-
   endif()
-  
 endif()
-message("GPU_ARCHS = ${GPU_ARCHS}")
+
+message(STATUS "GPU_ARCHS: ${GPU_ARCHS}")
 
 foreach(arch ${GPU_ARCHS})
-  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_${arch},code=sm_${arch}")
+  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_${arch},code=compute_${arch}")
 endforeach()
-
-list(GET GPU_ARCHS -1 ptx)
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_${ptx},code=compute_${ptx}")
 
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr")
 
@@ -175,7 +172,7 @@ endif(CUDA_STATIC_RUNTIME)
 ###################################################################################################
 # - cmake modules ---------------------------------------------------------------------------------
 
-set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODULE_PATH})
+set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules")
 
 include(FeatureSummary)
 include(CheckIncludeFiles)
@@ -250,8 +247,8 @@ endif(ARROW_INCLUDE_DIR AND ARROW_LIB AND ARROW_CUDA_LIB)
 file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include/libcudacxx")
 file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include/libcxx/include")
 
-file(INSTALL ${LIBCUDACXX_INCLUDE_DIR} DESTINATION ${CMAKE_BINARY_DIR}/include/libcudacxx/)
-file(INSTALL ${LIBCXX_INCLUDE_DIR}     DESTINATION ${CMAKE_BINARY_DIR}/include/libcxx/include/)
+file(INSTALL ${LIBCUDACXX_INCLUDE_DIR} DESTINATION "${CMAKE_BINARY_DIR}/include/libcudacxx")
+file(INSTALL ${LIBCXX_INCLUDE_DIR}     DESTINATION "${CMAKE_BINARY_DIR}/include/libcxx/include")
 
 ###################################################################################################
 # - find zlib -------------------------------------------------------------------------------------
@@ -415,226 +412,45 @@ endif(CONDA_LINK_DIRS)
 ###################################################################################################
 # - library targets -------------------------------------------------------------------------------
 
-add_library(cudf
-            src/comms/ipc/ipc.cpp
-            src/merge/merge.cu
-            src/partitioning/round_robin.cu
-            src/join/join.cu
-            src/join/hash_join.cu
-            src/join/cross_join.cu
-            src/join/semi_join.cu
-            src/sort/is_sorted.cu
-            src/binaryop/binaryop.cpp
-            src/binaryop/compiled/binary_ops.cu
-            src/binaryop/jit/code/kernel.cpp
-            src/binaryop/jit/code/operation.cpp
-            src/binaryop/jit/code/traits.cpp
-            src/interop/from_arrow.cu
-            src/interop/to_arrow.cpp
-            src/interop/dlpack.cpp
-            src/jit/type.cpp
-            src/jit/parser.cpp
-            src/jit/cache.cpp
-            src/jit/launcher.cpp
-            src/transform/jit/code/kernel.cpp
-            src/transform/transform.cpp
-            src/transform/nans_to_nulls.cu
-            src/transform/bools_to_mask.cu
-            src/transform/mask_to_bools.cu
-            src/transform/encode.cpp
-            src/stream_compaction/apply_boolean_mask.cu
-            src/stream_compaction/drop_nulls.cu
-            src/stream_compaction/drop_nans.cu
-            src/stream_compaction/drop_duplicates.cu
-            src/datetime/datetime_ops.cu
-            src/hash/hashing.cu
-            src/partitioning/partitioning.cu
-            src/quantiles/quantile.cu
-            src/quantiles/quantiles.cu
-            src/reductions/reductions.cpp
-            src/reductions/min.cu
-            src/reductions/max.cu
-            src/reductions/any.cu
-            src/reductions/all.cu
-            src/reductions/sum.cu
-            src/reductions/product.cu
-            src/reductions/sum_of_squares.cu
-            src/reductions/mean.cu
-            src/reductions/var.cu
-            src/reductions/std.cu
-            src/reductions/scan.cu
-            src/replace/replace.cu
-            src/replace/clamp.cu
-            src/reshape/interleave_columns.cu
-            src/transpose/transpose.cu
-            src/unary/cast_ops.cu
-            src/unary/null_ops.cu
-            src/unary/nan_ops.cu
-            src/unary/math_ops.cu
-            src/unary/unary_ops.cuh
-            src/io/avro/avro_gpu.cu
-            src/io/avro/avro.cpp
-            src/io/avro/reader_impl.cu
-            src/io/csv/csv_gpu.cu
-            src/io/csv/reader_impl.cu
-            src/io/csv/writer_impl.cu
-            src/io/json/reader_impl.cu
-            src/io/json/json_gpu.cu
-            src/io/orc/orc.cpp
-            src/io/orc/timezone.cpp
-            src/io/orc/stripe_data.cu
-            src/io/orc/stripe_init.cu
-            src/io/orc/stripe_enc.cu
-            src/io/orc/dict_enc.cu
-            src/io/orc/stats_enc.cu
-            src/io/orc/reader_impl.cu
-            src/io/orc/writer_impl.cu
-            src/io/parquet/page_data.cu
-            src/io/parquet/page_hdr.cu
-            src/io/parquet/page_enc.cu
-            src/io/parquet/page_dict.cu
-            src/io/parquet/parquet.cpp
-            src/io/parquet/reader_impl.cu
-            src/io/parquet/writer_impl.cu
-            src/io/comp/cpu_unbz2.cpp
-            src/io/comp/uncomp.cpp
-            src/io/comp/brotli_dict.cpp
-            src/io/comp/debrotli.cu
-            src/io/comp/snap.cu
-            src/io/comp/unsnap.cu
-            src/io/comp/gpuinflate.cu
-            src/io/functions.cpp
-            src/io/statistics/column_stats.cu
-            src/io/utilities/datasource.cpp
-            src/io/utilities/parsing_utils.cu
-            src/io/utilities/type_conversion.cu
-            src/io/utilities/data_sink.cpp
-            src/copying/gather.cu
-            src/copying/copy.cpp
-            src/copying/sample.cu
-            src/copying/scatter.cu
-            src/copying/shift.cu
-            src/copying/copy.cu
-            src/copying/concatenate.cu
-            src/copying/slice.cpp
-            src/copying/split.cpp
-            src/copying/contiguous_split.cu
-            src/copying/copy_range.cu
-            src/copying/get_element.cu
-            src/filling/fill.cu
-            src/filling/repeat.cu
-            src/filling/sequence.cu
-            src/reshape/tile.cu
-            src/search/search.cu
-            src/column/column.cu
-            src/column/column_view.cpp
-            src/column/column_device_view.cu
-            src/column/column_factories.cpp
-            src/table/table_view.cpp
-            src/table/table_device_view.cu
-            src/table/table.cpp
-            src/bitmask/null_mask.cu
-            src/rolling/rolling.cu
-            src/rolling/jit/code/kernel.cpp
-            src/rolling/jit/code/operation.cpp
-            src/sort/sort.cu
-            src/sort/stable_sort.cu
-            src/sort/rank.cu
-            src/strings/attributes.cu
-            src/strings/case.cu
-            src/strings/wrap.cu
-            src/strings/capitalize.cu
-            src/strings/char_types/char_types.cu
-            src/strings/char_types/char_cases.cu
-            src/strings/combine.cu
-            src/strings/contains.cu
-            src/strings/convert/convert_booleans.cu
-            src/strings/convert/convert_datetime.cu
-            src/strings/convert/convert_durations.cu
-            src/strings/convert/convert_floats.cu
-            src/strings/convert/convert_hex.cu
-            src/strings/convert/convert_integers.cu
-            src/strings/convert/convert_ipv4.cu
-            src/strings/convert/convert_urls.cu
-            src/strings/copying/concatenate.cu
-            src/strings/copying/copying.cu
-            src/strings/extract.cu
-            src/strings/find.cu
-            src/strings/findall.cu
-            src/strings/find_multiple.cu
-            src/strings/filling/fill.cu
-            src/strings/padding.cu
-            src/strings/regex/regcomp.cpp
-            src/strings/regex/regexec.cu
-            src/strings/replace/replace_re.cu
-            src/strings/replace/backref_re.cu
-            src/strings/replace/backref_re_medium.cu
-            src/strings/replace/backref_re_large.cu
-            src/strings/replace/multi_re.cu
-            src/strings/replace/replace.cu
-            src/strings/sorting/sorting.cu
-            src/strings/split/partition.cu
-            src/strings/split/split.cu
-            src/strings/split/split_record.cu
-            src/strings/strings_column_factories.cu
-            src/strings/strings_column_view.cu
-            src/strings/strings_scalar_factories.cpp
-            src/strings/strip.cu
-            src/strings/substring.cu
-            src/strings/translate.cu
-            src/strings/utilities.cu
-            src/lists/extract.cu
-            src/lists/lists_column_factories.cu
-            src/lists/lists_column_view.cu
-            src/lists/copying/concatenate.cu
-            src/lists/copying/gather.cu
-            src/lists/copying/copying.cu
-            src/structs/structs_column_view.cu
-            src/structs/structs_column_factories.cu
-            src/text/detokenize.cu
-            src/text/edit_distance.cu
-            src/text/generate_ngrams.cu
-            src/text/normalize.cu
-            src/text/stemmer.cu
-            src/text/tokenize.cu
-            src/text/ngrams_tokenize.cu
-            src/text/replace.cu
-            src/text/subword/load_hash_file.cu
-            src/text/subword/data_normalizer.cu
-            src/text/subword/wordpiece_tokenizer.cu
-            src/text/subword/subword_tokenize.cu
-            src/scalar/scalar.cpp
-            src/scalar/scalar_factories.cpp
-            src/dictionary/add_keys.cu
-            src/dictionary/detail/concatenate.cu
-            src/dictionary/dictionary_column_view.cpp
-            src/dictionary/dictionary_factories.cu
-            src/dictionary/decode.cu
-            src/dictionary/encode.cu
-            src/dictionary/remove_keys.cu
-            src/dictionary/search.cu
-            src/dictionary/set_keys.cu
-            src/groupby/groupby.cu
-            src/groupby/hash/groupby.cu
-            src/groupby/sort/groupby.cu
-            src/groupby/sort/sort_helper.cu
-            src/groupby/sort/group_sum.cu
-            src/groupby/sort/group_min.cu
-            src/groupby/sort/group_max.cu
-            src/groupby/sort/group_argmax.cu
-            src/groupby/sort/group_argmin.cu
-            src/groupby/sort/group_count.cu
-            src/groupby/sort/group_nunique.cu
-            src/groupby/sort/group_nth_element.cu
-            src/groupby/sort/group_std.cu
-            src/groupby/sort/group_quantiles.cu
-            src/aggregation/aggregation.cpp
-            src/aggregation/aggregation.cu
-            src/aggregation/result_cache.cpp
-)
+function(add_library_module MODULE MODULE_DIR)
+  file(GLOB_RECURSE MODULE_SRC "${MODULE_DIR}/*")
+  add_library(${MODULE} OBJECT ${MODULE_SRC})
+  set_target_properties(${MODULE} PROPERTIES BUILD_RPATH "\$ORIGIN")
+endfunction()
 
-# Override RPATH for cudf
-set_target_properties(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")
+add_library_module(cudf_agg       "${CMAKE_SOURCE_DIR}/src/aggregation")
+add_library_module(cudf_binop     "${CMAKE_SOURCE_DIR}/src/binaryop")
+add_library_module(cudf_bitmask   "${CMAKE_SOURCE_DIR}/src/bitmask")
+add_library_module(cudf_column    "${CMAKE_SOURCE_DIR}/src/column")
+add_library_module(cudf_comms     "${CMAKE_SOURCE_DIR}/src/comms")
+add_library_module(cudf_copying   "${CMAKE_SOURCE_DIR}/src/copying")
+add_library_module(cudf_datetime  "${CMAKE_SOURCE_DIR}/src/datetime")
+add_library_module(cudf_dict      "${CMAKE_SOURCE_DIR}/src/dictionary")
+add_library_module(cudf_filling   "${CMAKE_SOURCE_DIR}/src/filling")
+add_library_module(cudf_groupby   "${CMAKE_SOURCE_DIR}/src/groupby")
+add_library_module(cudf_hash      "${CMAKE_SOURCE_DIR}/src/hash")
+add_library_module(cudf_interop   "${CMAKE_SOURCE_DIR}/src/interop")
+add_library_module(cudf_io        "${CMAKE_SOURCE_DIR}/src/io")
+add_library_module(cudf_jit       "${CMAKE_SOURCE_DIR}/src/jit")
+add_library_module(cudf_join      "${CMAKE_SOURCE_DIR}/src/join")
+add_library_module(cudf_lists     "${CMAKE_SOURCE_DIR}/src/lists")
+add_library_module(cudf_merge     "${CMAKE_SOURCE_DIR}/src/merge")
+add_library_module(cudf_part      "${CMAKE_SOURCE_DIR}/src/partitioning")
+add_library_module(cudf_quant     "${CMAKE_SOURCE_DIR}/src/quantiles")
+add_library_module(cudf_reduce    "${CMAKE_SOURCE_DIR}/src/reductions")
+add_library_module(cudf_replace   "${CMAKE_SOURCE_DIR}/src/replace")
+add_library_module(cudf_rolling   "${CMAKE_SOURCE_DIR}/src/rolling")
+add_library_module(cudf_scalar    "${CMAKE_SOURCE_DIR}/src/scalar")
+add_library_module(cudf_search    "${CMAKE_SOURCE_DIR}/src/search")
+add_library_module(cudf_sort      "${CMAKE_SOURCE_DIR}/src/sort")
+add_library_module(cudf_streamc   "${CMAKE_SOURCE_DIR}/src/stream_compaction")
+add_library_module(cudf_strings   "${CMAKE_SOURCE_DIR}/src/strings")
+add_library_module(cudf_structs   "${CMAKE_SOURCE_DIR}/src/structs")
+add_library_module(cudf_table     "${CMAKE_SOURCE_DIR}/src/table")
+add_library_module(cudf_text      "${CMAKE_SOURCE_DIR}/src/text")
+add_library_module(cudf_xform     "${CMAKE_SOURCE_DIR}/src/transform")
+add_library_module(cudf_xpose     "${CMAKE_SOURCE_DIR}/src/transpose")
+add_library_module(cudf_unop      "${CMAKE_SOURCE_DIR}/src/unary")
 
 ###################################################################################################
 # - jitify ----------------------------------------------------------------------------------------
@@ -763,7 +579,39 @@ add_custom_target(stringify_run DEPENDS
                   ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/cassert.jit
                   )
 
-add_dependencies(cudf stringify_run)
+add_dependencies(cudf_agg       stringify_run)
+add_dependencies(cudf_binop     stringify_run)
+add_dependencies(cudf_bitmask   stringify_run)
+add_dependencies(cudf_column    stringify_run)
+add_dependencies(cudf_comms     stringify_run)
+add_dependencies(cudf_copying   stringify_run)
+add_dependencies(cudf_datetime  stringify_run)
+add_dependencies(cudf_dict      stringify_run)
+add_dependencies(cudf_filling   stringify_run)
+add_dependencies(cudf_groupby   stringify_run)
+add_dependencies(cudf_hash      stringify_run)
+add_dependencies(cudf_interop   stringify_run)
+add_dependencies(cudf_io        stringify_run)
+add_dependencies(cudf_jit       stringify_run)
+add_dependencies(cudf_join      stringify_run)
+add_dependencies(cudf_lists     stringify_run)
+add_dependencies(cudf_merge     stringify_run)
+add_dependencies(cudf_part      stringify_run)
+add_dependencies(cudf_quant     stringify_run)
+add_dependencies(cudf_reduce    stringify_run)
+add_dependencies(cudf_replace   stringify_run)
+add_dependencies(cudf_rolling   stringify_run)
+add_dependencies(cudf_scalar    stringify_run)
+add_dependencies(cudf_search    stringify_run)
+add_dependencies(cudf_sort      stringify_run)
+add_dependencies(cudf_streamc   stringify_run)
+add_dependencies(cudf_strings   stringify_run)
+add_dependencies(cudf_structs   stringify_run)
+add_dependencies(cudf_table     stringify_run)
+add_dependencies(cudf_text      stringify_run)
+add_dependencies(cudf_xform     stringify_run)
+add_dependencies(cudf_xpose     stringify_run)
+add_dependencies(cudf_unop      stringify_run)
 
 ###################################################################################################
 # - build options ---------------------------------------------------------------------------------
@@ -784,27 +632,103 @@ endif(HT_DEFAULT_ALLOCATOR)
 
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
+set(CUDF_MODULES cudf_agg
+                 cudf_binop
+                 cudf_bitmask
+                 cudf_column
+                 cudf_comms
+                 cudf_copying
+                 cudf_datetime
+                 cudf_dict
+                 cudf_filling
+                 cudf_groupby
+                 cudf_hash
+                 cudf_interop
+                 cudf_io
+                 cudf_jit
+                 cudf_join
+                 cudf_lists
+                 cudf_merge
+                 cudf_part
+                 cudf_quant
+                 cudf_reduce
+                 cudf_replace
+                 cudf_rolling
+                 cudf_scalar
+                 cudf_search
+                 cudf_sort
+                 cudf_streamc
+                 cudf_strings
+                 cudf_structs
+                 cudf_table
+                 cudf_text
+                 cudf_xform
+                 cudf_xpose
+                 cudf_unop
+)
+
+foreach(MODULE IN LISTS CUDF_MODULES)
+  list(APPEND CUDF_MODULE_TARGETS "\$<TARGET_OBJECTS:${MODULE}>")
+endforeach()
+
+set(NUM_LIBRARY_PARTITIONS 1 CACHE INTERNAL "")
+message(STATUS "Number of libraries to be created: ${NUM_LIBRARY_PARTITIONS}")
+
+list(LENGTH CUDF_MODULES NUM_MODULES)
+math(EXPR VALUE ${NUM_MODULES}/${NUM_LIBRARY_PARTITIONS})
+set(NUM_MODULES_PER_LIB ${VALUE} CACHE INTERNAL "")
+math(EXPR VALUE ${NUM_MODULES}%${NUM_LIBRARY_PARTITIONS})
+set(NUM_MODULES_PER_LIB_REM ${VALUE})
+message(STATUS "Number of modules per library partition: ${NUM_MODULES_PER_LIB} with remainder ${NUM_MODULES_PER_LIB_REM}")
+
+if(${NUM_LIBRARY_PARTITIONS} GREATER_EQUAL 2)
+  math(EXPR STOP ${NUM_LIBRARY_PARTITIONS}-2)
+  foreach(INDEX RANGE ${STOP})
+    math(EXPR START_INDEX ${INDEX}*${NUM_MODULES_PER_LIB})
+    list(SUBLIST CUDF_MODULE_TARGETS ${START_INDEX} ${NUM_MODULES_PER_LIB} LIB_TARGETS)
+    message(STATUS "Targets for cudf_partition_${INDEX}: ${LIB_TARGETS}")
+    add_library("cudf_partition_${INDEX}" ${LIB_TARGETS})
+    list(APPEND CUDF_LIBRARIES "cudf_partition_${INDEX}")
+  endforeach()
+
+  math(EXPR INDEX ${NUM_LIBRARY_PARTITIONS}-1)
+  math(EXPR START_INDEX ${INDEX}*${NUM_MODULES_PER_LIB})
+  math(EXPR NMODULES ${NUM_MODULES_PER_LIB}+${NUM_MODULES_PER_LIB_REM})
+  list(SUBLIST CUDF_MODULE_TARGETS ${START_INDEX} ${NMODULES} LIB_TARGETS)
+  message(STATUS "Targets for cudf_partition_${INDEX}: ${LIB_TARGETS}")
+  add_library("cudf_partition_${INDEX}" ${LIB_TARGETS})
+  list(APPEND CUDF_LIBRARIES "cudf_partition_${INDEX}")
+else ()
+  message(STATUS "Targets for libcudf: ${CUDF_MODULE_TARGETS}")
+  add_library("cudf" ${CUDF_MODULE_TARGETS})
+  list(APPEND CUDF_LIBRARIES "cudf")
+endif()
+
+message(STATUS "cuDF library partitions: ${CUDF_LIBRARIES}")
 
 # link targets for cuDF
-target_link_libraries(cudf rmm arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+foreach(CUDF_LIBRARY IN LISTS CUDF_LIBRARIES)
+  target_link_libraries(${CUDF_LIBRARY} rmm arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+endforeach()
 
-###################################################################################################
-# - install targets -------------------------------------------------------------------------------
+##################################################################################################
+# - install targets ------------------------------------------------------------------------------
 
 # install targets for cuDF
-install(TARGETS cudf
+install(TARGETS ${CUDF_LIBRARIES}
         DESTINATION lib
         COMPONENT cudf)
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf
-        DESTINATION include
+
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/cudf"
+        DESTINATION "include"
         COMPONENT cudf)
 
-install(DIRECTORY ${CMAKE_BINARY_DIR}/include/libcxx
-        DESTINATION include/libcudf
+install(DIRECTORY "${CMAKE_BINARY_DIR}/include/libcxx"
+        DESTINATION "include/libcudf"
         COMPONENT cudf)
 
-install(DIRECTORY ${CMAKE_BINARY_DIR}/include/libcudacxx
-        DESTINATION include/libcudf
+install(DIRECTORY "${CMAKE_BINARY_DIR}/include/libcudacxx"
+        DESTINATION "include/libcudf"
         COMPONENT cudf)
 
 add_custom_target(install_cudf

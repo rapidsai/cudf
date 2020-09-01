@@ -27,6 +27,7 @@
 - PR #6100 Fix issue in `Series.factorize` to correctly pick `na_sentinel` value
 - PR #6110 Handle `format` for other input types in `to_datetime`
 - PR #6118 Fix Java build for ORC read args change and update package version
+- PR #XXXX Fix CUDA C/C++ debug builds
 
 
 # cuDF 0.15.0 (26 Aug 2020)
