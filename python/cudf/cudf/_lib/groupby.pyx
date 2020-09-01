@@ -46,6 +46,7 @@ _CATEGORICAL_AGGS = {
 
 _STRING_AGGS = {
     "count",
+    "size",
     "max",
     "min",
     "nunique",
