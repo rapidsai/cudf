@@ -1,5 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
+import re
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -465,3 +467,31 @@ def test_min_count_ops(data, ops, skipna, min_count):
         getattr(psr, ops)(skipna=skipna, min_count=min_count),
         getattr(gsr, ops)(skipna=skipna, min_count=min_count),
     )
+
+
+def test_cov_corr_invalid_dtypes():
+    gsr = Series([1, 2, 3, 4], dtype="datetime64[ns]")
+    psr = gsr.to_pandas()
+
+    try:
+        psr.corr(psr)
+    except Exception as e:
+        with pytest.raises(
+            type(e),
+            match=re.escape(
+                f"cannot perform corr with types {gsr.dtype}, {gsr.dtype}"
+            ),
+        ):
+            gsr.corr(gsr)
+
+    try:
+        psr.cov(psr)
+    except Exception as e:
+        with pytest.raises(
+            type(e),
+            match=re.escape(
+                f"cannot perform covarience with types {gsr.dtype}, "
+                f"{gsr.dtype}"
+            ),
+        ):
+            gsr.cov(gsr)
