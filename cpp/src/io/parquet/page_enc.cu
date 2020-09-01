@@ -1145,44 +1145,72 @@ inline __device__ uint8_t *cpw_put_fldh(uint8_t *p, int f, int cur, int t)
   }
 }
 
-#define CPW_BEGIN_STRUCT(hdr_start) \
-  {                                 \
-    uint8_t *p  = hdr_start;        \
-    int cur_fld = 0;
+struct cpw{
+  uint8_t *p;
+  int cur_fld;
 
-#define CPW_FLD_STRUCT_BEGIN(f)                         \
-  p       = cpw_put_fldh(p, f, cur_fld, ST_FLD_STRUCT); \
-  cur_fld = 0;
+  inline __device__
+  cpw(uint8_t *hdr_start) :
+    p(hdr_start), cur_fld(0) {}
 
-#define CPW_FLD_STRUCT_END(f) \
-  *p++    = 0;                \
-  cur_fld = f;
-
-#define CPW_FLD_INT32(f, v)                           \
-  p       = cpw_put_fldh(p, f, cur_fld, ST_FLD_I32);  \
-  p       = cpw_put_int32(p, static_cast<int32_t>(v));\
-  cur_fld = f;
-
-#define CPW_FLD_INT64(f, v)                          \
-  p       = cpw_put_fldh(p, f, cur_fld, ST_FLD_I64); \
-  p       = cpw_put_int64(p, v);                     \
-  cur_fld = f;
-
-#define CPW_FLD_BINARY(f, v, l)                   \
-  p = cpw_put_fldh(p, f, cur_fld, ST_FLD_BINARY); \
-  p = cpw_put_uint32(p, l);                       \
-  memcpy(p, v, l);                                \
-  p += l;                                         \
-  cur_fld = f;
-
-#define CPW_END_STRUCT(hdr_end) \
-  *p++    = 0;                  \
-  hdr_end = p;                  \
+  inline __device__
+  void field_struct_begin(int f)
+  {
+    p = cpw_put_fldh(p, f, cur_fld, ST_FLD_STRUCT);
+    cur_fld = 0;
   }
 
-#define CPW_END_STRUCT_NOTERMINATION(hdr_end) \
-  hdr_end = p;                                \
+  inline __device__
+  void field_struct_end(int f)
+  {
+    *p++    = 0;
+    cur_fld = f;
   }
+
+  template <typename T>
+  inline __device__
+  void field_int32(int f, T v)
+  {
+    p       = cpw_put_fldh(p, f, cur_fld, ST_FLD_I32);
+    p       = cpw_put_int32(p, static_cast<int32_t>(v));
+    cur_fld = f;
+  }
+
+  template <typename T>
+  inline __device__
+  void field_int64(int f, T v)
+  {
+    p       = cpw_put_fldh(p, f, cur_fld, ST_FLD_I64);
+    p       = cpw_put_int64(p, static_cast<int64_t>(v));
+    cur_fld = f;
+  }
+
+  inline __device__
+  void field_binary(int f, const void *v, uint32_t l)
+  {
+    p = cpw_put_fldh(p, f, cur_fld, ST_FLD_BINARY);
+    p = cpw_put_uint32(p, l);
+    memcpy(p, v, l);
+    p += l;
+    cur_fld = f;
+  }
+
+  inline __device__
+  void end(uint8_t **hdr_end, bool termination_flag = true)
+  {
+    if (termination_flag == false)
+    {
+      *p++ = 0;
+    }
+    *hdr_end = p;
+  }
+
+  inline __device__
+  uint8_t* get_ptr(void) { return p; }
+
+  inline __device__
+  void set_ptr(uint8_t* ptr) { p = ptr; }
+};
 
 __device__ uint8_t *EncodeStatistics(uint8_t *start,
                                      const statistics_chunk *s,
@@ -1206,8 +1234,8 @@ __device__ uint8_t *EncodeStatistics(uint8_t *start,
     case dtype_string:
     default: dtype_len = 0; break;
   }
-  CPW_BEGIN_STRUCT(start)
-  CPW_FLD_INT64(3, s->null_count)
+  cpw c(start);
+  c.field_int64(3, s->null_count);
   if (s->has_minmax) {
     const void *vmin, *vmax;
     uint32_t lmin, lmax;
@@ -1229,10 +1257,10 @@ __device__ uint8_t *EncodeStatistics(uint8_t *start,
         vmax = &s->max_value;
       }
     }
-    CPW_FLD_BINARY(5, vmax, lmax);
-    CPW_FLD_BINARY(6, vmin, lmin);
+    c.field_binary(5, vmax, lmax);
+    c.field_binary(6, vmin, lmin);
   }
-  CPW_END_STRUCT_NOTERMINATION(end);
+  c.end(&end);
   return end;
 }
 
@@ -1283,7 +1311,7 @@ __global__ void __launch_bounds__(128) gpuEncodePageHeaders(EncPage *pages,
       hdr_start            = page_g.page_data;
       compressed_page_size = uncompressed_page_size;
     }
-    CPW_BEGIN_STRUCT(hdr_start)
+    cpw c(hdr_start);
     PageType page_type = page_g.page_type;
     // NOTE: For dictionary encoding, parquet v2 recommends using PLAIN in dictionary page and
     // RLE_DICTIONARY in data page, but parquet v1 uses PLAIN_DICTIONARY in both dictionary and data
@@ -1298,31 +1326,31 @@ __global__ void __launch_bounds__(128) gpuEncodePageHeaders(EncPage *pages,
       encoding =
         (page_type == PageType::DICTIONARY_PAGE || page_g.dict_bits_plus1 != 0) ? Encoding::PLAIN_DICTIONARY : Encoding::PLAIN;
     }
-    CPW_FLD_INT32(1, page_type)
-    CPW_FLD_INT32(2, uncompressed_page_size)
-    CPW_FLD_INT32(3, compressed_page_size)
+    c.field_int32(1, page_type);
+    c.field_int32(2, uncompressed_page_size);
+    c.field_int32(3, compressed_page_size);
     if (page_type == PageType::DATA_PAGE) {
       // DataPageHeader
-      CPW_FLD_STRUCT_BEGIN(5)
-      CPW_FLD_INT32(1, page_g.num_rows)  // NOTE: num_values != num_rows for list types
-      CPW_FLD_INT32(2, encoding)         // encoding
-      CPW_FLD_INT32(3, Encoding::RLE)              // definition_level_encoding
-      CPW_FLD_INT32(4, Encoding::RLE)              // repetition_level_encoding
+      c.field_struct_begin(5);
+      c.field_int32(1, page_g.num_rows);  // NOTE: num_values != num_rows for list types
+      c.field_int32(2, encoding);         // encoding
+      c.field_int32(3, Encoding::RLE);    // definition_level_encoding
+      c.field_int32(4, Encoding::RLE);    // repetition_level_encoding
       // Optionally encode page-level statistics
       if (page_stats) {
-        CPW_FLD_STRUCT_BEGIN(5)
-        p = EncodeStatistics(p, &page_stats[start_page + blockIdx.x], &col_g, fp_scratch);
-        CPW_FLD_STRUCT_END(5)
+        c.field_struct_begin(5);
+        c.set_ptr(EncodeStatistics(c.get_ptr(), &page_stats[start_page + blockIdx.x], &col_g, fp_scratch));
+        c.field_struct_end(5);
       }
-      CPW_FLD_STRUCT_END(5)
+      c.field_struct_end(5);
     } else {
       // DictionaryPageHeader
-      CPW_FLD_STRUCT_BEGIN(7)
-      CPW_FLD_INT32(1, ck_g.total_dict_entries)  // number of values in dictionary
-      CPW_FLD_INT32(2, encoding)
-      CPW_FLD_STRUCT_END(7)
+      c.field_struct_begin(7);
+      c.field_int32(1, ck_g.total_dict_entries);  // number of values in dictionary
+      c.field_int32(2, encoding);
+      c.field_struct_end(7);
     }
-    CPW_END_STRUCT(hdr_end)
+    c.end(&hdr_end, false);
     page_g.hdr_size = (uint32_t)(hdr_end - hdr_start);
   }
   __syncthreads();
