@@ -6,14 +6,11 @@ from libcpp.string cimport string
 from libcpp.vector cimport vector
 from cudf._lib.cpp.column.column cimport column
 
-from cudf._lib.cpp.io.functions cimport (
-    write_orc_args,
-    write_orc as libcudf_write_orc
-)
-
 from cudf._lib.cpp.io.orc cimport (
     orc_reader_options,
     read_orc as libcudf_read_orc,
+    orc_writer_options,
+    write_orc as libcudf_write_orc,
 )
 from cudf._lib.cpp.io.types cimport (
     compression_type,
@@ -106,14 +103,16 @@ cpdef write_orc(Table table,
     for col_name in table._column_names:
         metadata_.column_names.push_back(str.encode(col_name))
 
-    cdef write_orc_args c_write_orc_args = write_orc_args(
-        sink_info_c,
-        table.data_view(), &metadata_, compression_,
-        <bool> (True if enable_statistics else False)
+    cdef orc_writer_options c_orc_writer_options = move(
+        orc_writer_options.builder(sink_info_c, table.data_view()).
+        metadata(&metadata_).
+        compression(compression_).
+        enable_statistics(<bool> (True if enable_statistics else False)).
+        build()
     )
 
     with nogil:
-        libcudf_write_orc(c_write_orc_args)
+        libcudf_write_orc(c_orc_writer_options)
 
 
 cdef size_type get_size_t_arg(arg, name) except*:

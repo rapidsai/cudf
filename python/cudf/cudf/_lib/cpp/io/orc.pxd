@@ -60,3 +60,34 @@ cdef extern from "cudf/io/orc.hpp" \
         orc_reader_options opts
     ) except +
 
+
+    cdef cppclass orc_writer_options:
+        orc_writer_options()
+        cudf_io_types.sink_info sink() except+
+        cudf_io_types.compression_type compression() except+
+        bool enable_statistics() except+
+        cudf_table_view.table_view table() except+
+        const cudf_io_types.table_metadata *metadata() except+
+
+        # setter
+        void compression(cudf_io_types.compression_type comp) except+
+        void enable_statistics(bool val) except+
+        void table(cudf_table_view.table_view tbl) except+
+        void metadata(cudf_io_types.table_metadata meta) except+
+
+        @staticmethod
+        orc_writer_options_builder builder(
+            cudf_io_types.sink_info &sink,
+            cudf_table_view.table_view &tbl
+        ) except+
+
+    cdef cppclass orc_writer_options_builder:
+        # setter
+        orc_writer_options_builder& compression(cudf_io_types.compression_type comp) except+
+        orc_writer_options_builder& enable_statistics(bool val) except+
+        orc_writer_options_builder& table(cudf_table_view.table_view tbl) except+
+        orc_writer_options_builder& metadata(cudf_io_types.table_metadata *meta) except+
+
+        orc_writer_options build() except+
+
+    cdef void write_orc(orc_writer_options options) except +
