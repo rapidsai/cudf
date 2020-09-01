@@ -329,21 +329,18 @@ TYPED_TEST(TypedStructGatherTest, TestGatherStructOfListOfStructs)
 
   auto numeric_column_exemplar = []() {
     return fixed_width_column_wrapper<TypeParam, int32_t>{
-      {5, 10, 15, 20, 25, 30, 35, 45, 50, 55, 60, 65, 70, 75}
-    };
+      {5, 10, 15, 20, 25, 30, 35, 45, 50, 55, 60, 65, 70, 75}};
   };
 
-  auto numeric_column = numeric_column_exemplar();
-  auto structs_column = structs_column_wrapper{{numeric_column}}.release();
-  auto list_of_structs_column =
-    cudf::make_lists_column(
-      7, 
-      fixed_width_column_wrapper<int32_t>{0,2,4,6,8,10,12,14}.release(),
-      std::move(structs_column),
-      cudf::UNKNOWN_NULL_COUNT,
-      {}
-    );
-      
+  auto numeric_column         = numeric_column_exemplar();
+  auto structs_column         = structs_column_wrapper{{numeric_column}}.release();
+  auto list_of_structs_column = cudf::make_lists_column(
+    7,
+    fixed_width_column_wrapper<int32_t>{0, 2, 4, 6, 8, 10, 12, 14}.release(),
+    std::move(structs_column),
+    cudf::UNKNOWN_NULL_COUNT,
+    {});
+
   std::vector<std::unique_ptr<cudf::column>> vector_of_columns;
   vector_of_columns.push_back(std::move(list_of_structs_column));
   auto struct_of_list_of_structs = structs_column_wrapper{std::move(vector_of_columns)}.release();
@@ -353,28 +350,24 @@ TYPED_TEST(TypedStructGatherTest, TestGatherStructOfListOfStructs)
   auto gather_map_col =
     fixed_width_column_wrapper<int32_t>(gather_map.begin(), gather_map.end()).release();
 
-  auto gathered_table =
-    cudf::gather(cudf::table_view{std::vector<cudf::column_view>{struct_of_list_of_structs->view()}},
-                 gather_map_col->view());
+  auto gathered_table = cudf::gather(
+    cudf::table_view{std::vector<cudf::column_view>{struct_of_list_of_structs->view()}},
+    gather_map_col->view());
 
   auto gathered_struct_col      = gathered_table->get_column(0);
   auto gathered_struct_col_view = cudf::structs_column_view{gathered_struct_col};
 
   // Construct expected gather result.
 
-  auto expected_numeric_col = 
-    fixed_width_column_wrapper<TypeParam, int32_t>{
-      {70, 75, 50, 55, 35, 45, 25, 30, 15, 20}
-    };
+  auto expected_numeric_col =
+    fixed_width_column_wrapper<TypeParam, int32_t>{{70, 75, 50, 55, 35, 45, 25, 30, 15, 20}};
   auto expected_struct_col = structs_column_wrapper{{expected_numeric_col}}.release();
   auto expected_list_of_structs_column =
-    cudf::make_lists_column(
-      5,
-      fixed_width_column_wrapper<int32_t>{0,2,4,6,8,10}.release(),
-      std::move(expected_struct_col),
-      cudf::UNKNOWN_NULL_COUNT,
-      {}
-    );
+    cudf::make_lists_column(5,
+                            fixed_width_column_wrapper<int32_t>{0, 2, 4, 6, 8, 10}.release(),
+                            std::move(expected_struct_col),
+                            cudf::UNKNOWN_NULL_COUNT,
+                            {});
   std::vector<std::unique_ptr<cudf::column>> expected_vector_of_columns;
   expected_vector_of_columns.push_back(std::move(expected_list_of_structs_column));
   auto expected_struct_of_list_of_struct =
