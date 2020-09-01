@@ -395,7 +395,9 @@ class Series(Frame, Serializable):
 
     @classmethod
     def from_arrow(cls, array):
-        """Convert from PyArrow Array/ChunkedArray to Series.
+        """
+        Convert from PyArrow Array/ChunkedArray to Series.
+
         Parameters
         ----------
         array : PyArrow Array/ChunkedArray
@@ -3402,6 +3404,74 @@ class Series(Frame, Serializable):
         # enforce linear in case the default ever changes
         return self.quantile(0.5, interpolation="linear", exact=True)
 
+    def mode(self, dropna=True):
+        """
+        Return the mode(s) of the dataset.
+
+        Always returns Series even if only one value is returned.
+
+        Parameters
+        ----------
+        dropna : bool, default True
+            Don't consider counts of NA/NaN/NaT.
+
+        Returns
+        -------
+        Series
+            Modes of the Series in sorted order.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([7, 6, 5, 4, 3, 2, 1])
+        >>> series
+        0    7
+        1    6
+        2    5
+        3    4
+        4    3
+        5    2
+        6    1
+        dtype: int64
+        >>> series.mode()
+        0    1
+        1    2
+        2    3
+        3    4
+        4    5
+        5    6
+        6    7
+        dtype: int64
+
+        We can include ``<NA>`` values in mode by
+        passing ``dropna=False``.
+
+        >>> series = cudf.Series([7, 4, 3, 3, 7, None, None])
+        >>> series
+        0       7
+        1       4
+        2       3
+        3       3
+        4       7
+        5    <NA>
+        6    <NA>
+        dtype: int64
+        >>> series.mode()
+        0    3
+        1    7
+        dtype: int64
+        >>> series.mode(dropna=False)
+        0       3
+        1       7
+        2    <NA>
+        dtype: int64
+        """
+        val_counts = self.value_counts(ascending=False, dropna=dropna)
+        if len(val_counts) > 0:
+            val_counts = val_counts[val_counts == val_counts.iloc[0]]
+
+        return Series(val_counts.index.sort_values(), name=self.name)
+
     def round(self, decimals=0):
         """Round a Series to a configurable number of decimal places.
         """
@@ -3694,9 +3764,8 @@ class Series(Frame, Serializable):
         Parameters
         ----------
         normalize : bool, default False
-            If True then the object returned will contain the
-            relative frequencies of the unique values. normalize == True
-            is not supported.
+            If True then the object returned will contain
+            the relative frequencies of the unique values.
 
         sort : bool, default True
             Sort by frequencies.
@@ -3706,46 +3775,99 @@ class Series(Frame, Serializable):
 
         bins : int, optional
             Rather than count values, group them into half-open bins,
-            works with numeric data. Not yet supported.
+            works with numeric data. This Parameter is not yet supported.
 
         dropna : bool, default True
             Don’t include counts of NaN and None.
-            dropna == False is not supported
 
         Returns
         -------
         result : Series contanining counts of unique values.
 
+        See also
+        --------
+        Series.count
+            Number of non-NA elements in a Series.
+
+        cudf.core.dataframe.DataFrame.count
+            Number of non-NA elements in a DataFrame.
+
         Examples
         --------
         >>> import cudf
         >>> sr = cudf.Series([1.0, 2.0, 2.0, 3.0, 3.0, 3.0, None])
+        >>> sr
+        0     1.0
+        1     2.0
+        2     2.0
+        3     3.0
+        4     3.0
+        5     3.0
+        6    <NA>
+        dtype: float64
+        >>> sr.value_counts()
+        3.0    3
+        2.0    2
+        1.0    1
+        dtype: int32
+
+        The order of the counts can be changed by passing ``ascending=True``:
+
         >>> sr.value_counts(ascending=True)
         1.0    1
         2.0    2
         3.0    3
         dtype: int32
+
+        With ``normalize`` set to True, returns the relative frequency
+        by dividing all values by the sum of values.
+
+        >>> sr.value_counts(normalize=True)
+        3.0    0.500000
+        2.0    0.333333
+        1.0    0.166667
+        dtype: float64
+
+        To include ``NA`` value counts, pass ``dropna=False``:
+
+        >>> sr = cudf.Series([1.0, 2.0, 2.0, 3.0, None, 3.0, 3.0, None])
+        >>> sr
+        0     1.0
+        1     2.0
+        2     2.0
+        3     3.0
+        4    <NA>
+        5     3.0
+        6     3.0
+        7    <NA>
+        dtype: float64
+        >>> sr.value_counts(dropna=False)
+        3.0     3
+        2.0     2
+        <NA>    2
+        1.0     1
+        dtype: int32
         """
 
-        if normalize is not False:
-            raise NotImplementedError(
-                "Only normalize == False is currently supported"
-            )
-        if dropna is not True:
-            raise NotImplementedError(
-                "Only dropna == True is currently supported"
-            )
         if bins is not None:
             raise NotImplementedError("bins is not yet supported")
 
-        if self.null_count == len(self):
-            return Series(np.array([], dtype=np.int32), name=self.name)
+        if dropna and self.null_count == len(self):
+            return Series(
+                [],
+                dtype=np.int32,
+                name=self.name,
+                index=cudf.Index([], dtype=self.dtype),
+            )
 
-        res = self.groupby(self).count()
+        res = self.groupby(self, dropna=dropna).count(dropna=dropna)
         res.index.name = None
 
         if sort:
-            return res.sort_values(ascending=ascending)
+            res = res.sort_values(ascending=ascending)
+
+        if normalize:
+            res = res / float(res._column.sum())
         return res
 
     def scale(self):

@@ -116,6 +116,11 @@ std::unique_ptr<aggregation> make_row_number_aggregation()
 {
   return std::make_unique<aggregation>(aggregation::ROW_NUMBER);
 }
+/// Factory to create a COLLECT aggregation
+std::unique_ptr<aggregation> make_collect_aggregation()
+{
+  return std::make_unique<aggregation>(aggregation::COLLECT);
+}
 /// Factory to create a UDF aggregation
 std::unique_ptr<aggregation> make_udf_aggregation(udf_type type,
                                                   std::string const& user_defined_aggregator,
