@@ -517,10 +517,7 @@ struct column_gatherer_impl<struct_view, MapItRoot> {
   {
     structs_column_view structs_column(column);
     auto gather_map_size{std::distance(gather_map_begin, gather_map_end)};
-    if (gather_map_size == -1) {
-      return make_empty_column(
-        data_type{type_id::STRUCT});  // TODO: Construct empty member columns, if required.
-    }
+    if (gather_map_size == 0) { return empty_like(column); }
 
     std::vector<std::unique_ptr<cudf::column>> output_struct_members;
     std::transform(structs_column.child_begin(),
