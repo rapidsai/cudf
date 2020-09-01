@@ -432,16 +432,16 @@ cpdef write_csv(
             metadata_.column_names.push_back(str(col_name).encode())
 
     cdef csv_writer_options options = move(
-            csv_writer_options.builder(sink_info_c, input_table_view).
-            metadata(&metadata_).
-            na_rep(na_c).
-            include_header(include_header_c).
-            rows_per_chunk(rows_per_chunk_c).
-            line_terminator(line_term_c).
-            inter_column_delimiter(delim_c).
-            true_value(true_value_c).
-            false_value(false_value_c).
-            build()
+        csv_writer_options.builder(sink_info_c, input_table_view).
+        metadata(&metadata_).
+        na_rep(na_c).
+        include_header(include_header_c).
+        rows_per_chunk(rows_per_chunk_c).
+        line_terminator(line_term_c).
+        inter_column_delimiter(delim_c).
+        true_value(true_value_c).
+        false_value(false_value_c).
+        build()
     )
 
     with nogil:

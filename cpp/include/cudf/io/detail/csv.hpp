@@ -91,8 +91,8 @@ class writer {
    * @param mr Device memory resource to use for device memory allocation
    */
   writer(std::unique_ptr<cudf::io::data_sink> sinkp,
-         csv_writer_options const& options,
-         rmm::mr::device_memory_resource* mr =
+         csv_writer_options const &options,
+         rmm::mr::device_memory_resource *mr =
            rmm::mr::get_default_resource());  // cannot provide definition here (because _impl is
                                               // incomplete, hence unique_ptr has not enough
                                               // sizeof() info)
@@ -109,9 +109,9 @@ class writer {
    * @param metadata Table metadata and column names
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  void write(table_view const& table,
-                 const table_metadata* metadata = nullptr,
-                 cudaStream_t stream            = 0);
+  void write(table_view const &table,
+             const table_metadata *metadata = nullptr,
+             cudaStream_t stream            = 0);
 };
 }  // namespace csv
 }  // namespace detail

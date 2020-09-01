@@ -40,7 +40,8 @@ csv_reader_options_builder csv_reader_options::builder(source_info const& src)
 /**
  * @breif csv_writer_options builder
  */
-csv_writer_options_builder csv_writer_options::builder(sink_info const& sink, table_view const& table)
+csv_writer_options_builder csv_writer_options::builder(sink_info const& sink,
+                                                       table_view const& table)
 {
   return csv_writer_options_builder{sink, table};
 }

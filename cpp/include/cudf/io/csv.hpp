@@ -571,6 +571,9 @@ class csv_reader_options {
    */
   void timestamp_type(data_type type) { _timestamp_type = type; }
 
+  /**
+   * @brief Creates a builder through which all options can be set
+   */
   static csv_reader_options_builder builder(source_info const& src);
 };
 
@@ -932,127 +935,236 @@ class csv_reader_options_builder {
 table_with_metadata read_csv(csv_reader_options const& options,
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/**
+ *@breif Builder to build options for `writer_csv()`
+ */
 class csv_writer_options_builder;
 
+/**
+ * @brief Settings to use for `write_csv()`
+ *
+ * @ingroup io_writers
+ */
 class csv_writer_options {
-    // Specify the sink to use for writer output
-    sink_info _sink;
-    // Set of columns to output
-    table_view _table;
-    // string to use for null entries
-    std::string _na_rep = "";
-    // Indicates whether to write headers to csv
-    bool _include_header = true;
-    // maximum number of rows to process for each file write
-    int _rows_per_chunk = 8;
-    // character to use for separating lines (default "\n")
-    std::string _line_terminator = "\n";
-    // character to use for separating lines (default "\n")
-    char _inter_column_delimiter = ',';
-    // string to use for values !=0 in INT8 types (default 'true')
-    std::string _true_value = std::string{"true"};
-    // string to use for values ==0 in INT8 types (default 'false')
-    std::string _false_value = std::string{"false"};
-    // Optional associated metadata
-    table_metadata const* _metadata = nullptr;
+  // Specify the sink to use for writer output
+  sink_info _sink;
+  // Set of columns to output
+  table_view _table;
+  // string to use for null entries
+  std::string _na_rep = "";
+  // Indicates whether to write headers to csv
+  bool _include_header = true;
+  // maximum number of rows to process for each file write
+  int _rows_per_chunk = 8;
+  // character to use for separating lines (default "\n")
+  std::string _line_terminator = "\n";
+  // character to use for separating lines (default "\n")
+  char _inter_column_delimiter = ',';
+  // string to use for values !=0 in INT8 types (default 'true')
+  std::string _true_value = std::string{"true"};
+  // string to use for values ==0 in INT8 types (default 'false')
+  std::string _false_value = std::string{"false"};
+  // Optional associated metadata
+  table_metadata const* _metadata = nullptr;
 
-    explicit csv_writer_options(sink_info const& sink, table_view const& table): _sink(sink), _table(table){}
+  explicit csv_writer_options(sink_info const& sink, table_view const& table)
+    : _sink(sink), _table(table)
+  {
+  }
 
-    friend csv_writer_options_builder;
-    public:
+  friend csv_writer_options_builder;
 
-    explicit csv_writer_options() = default;
+ public:
+  explicit csv_writer_options() = default;
 
-    sink_info const& sink(void) const { return _sink; }
+  /**
+   * @brief Returns sink used for writer output
+   */
+  sink_info const& sink(void) const { return _sink; }
 
-    table_view const& table(void) const { return _table;}
+  /**
+   * @brief Returns table that would be written to ouput
+   */
+  table_view const& table(void) const { return _table; }
 
-    table_metadata const* metadata(void) const { return _metadata;}
+  /**
+   * @brief Returns optional associated metadata
+   */
+  table_metadata const* metadata(void) const { return _metadata; }
 
-    std::string na_rep(void) const {return _na_rep;}
+  /**
+   * @brief Returns string to used for null entries
+   */
+  std::string na_rep(void) const { return _na_rep; }
 
-    bool include_header(void) const {return _include_header;}
+  /**
+   * @brief Whether to write headers to csv
+   */
+  bool include_header(void) const { return _include_header; }
 
-    int rows_per_chunk(void) const {return _rows_per_chunk;}
+  /**
+   * @brief Returns maximum number of rows to process for each file write
+   */
+  int rows_per_chunk(void) const { return _rows_per_chunk; }
 
-    std::string line_terminator(void) const {return _line_terminator;}
+  /**
+   * @brief Returns character used for separating lines
+   */
+  std::string line_terminator(void) const { return _line_terminator; }
 
-    char inter_column_delimiter(void) const {return _inter_column_delimiter;}
+  /**
+   * @brief Returns character used for separating lines
+   */
+  char inter_column_delimiter(void) const { return _inter_column_delimiter; }
 
-    std::string true_value(void) const {return _true_value;}
+  /**
+   * @brief Returns string used for values !=0 in INT8 types
+   */
+  std::string true_value(void) const { return _true_value; }
 
-    std::string false_value(void) const {return _false_value;}
+  /**
+   * @brief Returns string used for values ==0 in INT8 types
+   */
+  std::string false_value(void) const { return _false_value; }
 
-    // Setter
-    void metadata(table_metadata* metadata) { _metadata = metadata; }
+  // Setter
+  /**
+   * @brief Sets optional associated metadata
+   */
+  void metadata(table_metadata* metadata) { _metadata = metadata; }
 
-    void na_rep(std::string val) { _na_rep = val;}
+  /**
+   * @brief Sets string to used for null entries
+   */
+  void na_rep(std::string val) { _na_rep = val; }
 
-    void include_header(bool val) {_include_header = val;}
+  /**
+   * @brief Enables/Disables headers being written to csv
+   */
+  void include_header(bool val) { _include_header = val; }
 
-    void rows_per_chunk(int val) {_rows_per_chunk = val;}
+  /**
+   * @brief Sets maximum number of rows to process for each file write
+   */
+  void rows_per_chunk(int val) { _rows_per_chunk = val; }
 
-    void line_terminator(std::string term) {_line_terminator = term;}
+  /**
+   * @brief Sets character used for separating lines
+   */
+  void line_terminator(std::string term) { _line_terminator = term; }
 
-    void inter_column_delimiter(char delim) {_inter_column_delimiter = delim;}
+  /**
+   * @brief Sets character used for separating lines
+   */
+  void inter_column_delimiter(char delim) { _inter_column_delimiter = delim; }
 
-    void true_value(std::string val) {_true_value = val;}
+  /**
+   * @brief Sets string used for values !=0 in INT8 types
+   */
+  void true_value(std::string val) { _true_value = val; }
 
-    void false_value(std::string val) {_false_value = val;}
+  /**
+   * @brief Sets string used for values ==0 in INT8 types
+   */
+  void false_value(std::string val) { _false_value = val; }
 
-    static csv_writer_options_builder builder(sink_info const& sink, table_view const& table); 
+  /**
+   * @brief Creates a builder through which all options can be set
+   */
+  static csv_writer_options_builder builder(sink_info const& sink, table_view const& table);
 };
 
 class csv_writer_options_builder {
-    csv_writer_options options;
+  csv_writer_options options;
 
-    public:
-    explicit csv_writer_options_builder() = default;
-    explicit csv_writer_options_builder(sink_info const& sink, table_view const& table): options{sink, table} {}
+ public:
+  explicit csv_writer_options_builder() = default;
+  explicit csv_writer_options_builder(sink_info const& sink, table_view const& table)
+    : options{sink, table}
+  {
+  }
 
-    csv_writer_options_builder& metadata(table_metadata* metadata) { 
-        options._metadata = metadata;
-        return *this;
-    }
+  /**
+   * @brief Sets optional associated metadata
+   */
+  csv_writer_options_builder& metadata(table_metadata* metadata)
+  {
+    options._metadata = metadata;
+    return *this;
+  }
 
-    csv_writer_options_builder& na_rep(std::string val) { 
-        options._na_rep = val;
-        return *this;
-    };
+  /**
+   * @brief Sets optional associated metadata
+   */
+  csv_writer_options_builder& na_rep(std::string val)
+  {
+    options._na_rep = val;
+    return *this;
+  };
 
-    csv_writer_options_builder& include_header(bool val) {
-        options._include_header = val;
-        return *this;
-    }
+  /**
+   * @brief Enables/Disables headers being written to csv
+   */
+  csv_writer_options_builder& include_header(bool val)
+  {
+    options._include_header = val;
+    return *this;
+  }
 
-    csv_writer_options_builder& rows_per_chunk(int val) {
-        options._rows_per_chunk = val;
-        return *this;
-    }
+  /**
+   * @brief Sets maximum number of rows to process for each file write
+   */
+  csv_writer_options_builder& rows_per_chunk(int val)
+  {
+    options._rows_per_chunk = val;
+    return *this;
+  }
 
-    csv_writer_options_builder& line_terminator(std::string term) {
-        options._line_terminator = term;
-        return *this;
-    }
+  /**
+   * @brief Sets character used for separating lines
+   */
+  csv_writer_options_builder& line_terminator(std::string term)
+  {
+    options._line_terminator = term;
+    return *this;
+  }
 
-    csv_writer_options_builder& inter_column_delimiter(char delim) {
-        options._inter_column_delimiter = delim;
-        return *this;
-    }
+  /**
+   * @brief Sets character used for separating lines
+   */
+  csv_writer_options_builder& inter_column_delimiter(char delim)
+  {
+    options._inter_column_delimiter = delim;
+    return *this;
+  }
 
-    csv_writer_options_builder& true_value(std::string val) {
-        options._true_value = val;
-        return *this;
-   }
+  /**
+   * @brief Sets string used for values !=0 in INT8 types
+   */
+  csv_writer_options_builder& true_value(std::string val)
+  {
+    options._true_value = val;
+    return *this;
+  }
 
-    csv_writer_options_builder& false_value(std::string val) {
-        options._false_value = val;
-        return *this;
-    }
+  /**
+   * @brief Sets string used for values ==0 in INT8 types
+   */
+  csv_writer_options_builder& false_value(std::string val)
+  {
+    options._false_value = val;
+    return *this;
+  }
 
-    operator csv_writer_options &&() {return std::move(options);}
+  /**
+   * @brief move csv_writer_options member once options is built
+   */
+  operator csv_writer_options &&() { return std::move(options); }
 
-    csv_writer_options&& build() { return std::move(options); }
+  /**
+   * @brief move csv_parquet_writer_options member once options is built
+   */
+  csv_writer_options&& build() { return std::move(options); }
 };
 
 /**

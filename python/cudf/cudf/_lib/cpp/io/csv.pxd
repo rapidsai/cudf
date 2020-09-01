@@ -219,7 +219,6 @@ cdef extern from "cudf/io/csv.hpp" \
         csv_reader_options &options
     ) except +
 
-
     cdef cppclass csv_writer_options:
         csv_writer_options() except+
 
