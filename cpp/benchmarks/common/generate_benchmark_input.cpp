@@ -99,6 +99,18 @@ template <typename T, typename Enable = void>
 struct random_value_fn;
 
 /**
+ * @brief nanosecond count in the unit of @ref T.
+ *
+ * @tparam T Timestamp type
+ */
+template <typename T>
+constexpr int64_t to_nanoseconds(int64_t t)
+{
+  using ratio = std::ratio_divide<typename T::period, typename cudf::timestamp_ns::period>;
+  return t * ratio::num / ratio::den;
+}
+
+/**
  * @brief Creates an random timestamp
  *
  * Generates 'recent' timestamps. All timstamps are earlier that June 2020. The period between the
@@ -110,25 +122,39 @@ struct random_value_fn;
  */
 template <typename T>
 struct random_value_fn<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
-  static constexpr int64_t current_ns    = 1591053936l * nanoseconds<cudf::timestamp_s>();
-  static constexpr auto timestamp_spread = 1. / (2 * 365 * 24 * 60 * 60);  // one in two years
-
   std::function<int64_t(std::mt19937&)> seconds_gen;
-  std::uniform_int_distribution<int64_t> nanoseconds_gen{0, nanoseconds<cudf::timestamp_s>()};
+  std::function<int64_t(std::mt19937&)> nanoseconds_gen;
 
   random_value_fn()
   {
-    auto const range = default_range<T>();
-    seconds_gen = make_rand_generator<int64_t>(rand_dist_id::GEOMETRIC, range.first, range.second);
+    auto const rand_dist                       = rand_dist_id::GEOMETRIC;
+    auto const range                           = default_range<T>();
+    std::pair<int64_t, int64_t> const range_ns = {to_nanoseconds<T>(range.first),
+                                                  to_nanoseconds<T>(range.second)};
+    std::pair<int64_t, int64_t> const range_s  = {
+      range_ns.first / to_nanoseconds<cudf::timestamp_s>(1),
+      range_ns.second / to_nanoseconds<cudf::timestamp_s>(1)};
+    if (range_ns.first != range_ns.second)
+      seconds_gen = make_rand_generator<int64_t>(rand_dist, range_s.first, range_s.second);
+    else
+      seconds_gen = [=](std::mt19937&) { return range_ns.second; };
+
+    auto const range_size_ns = range_ns.second - range_ns.first;
+    // Don't need nanoseconds for days or seconds
+    if (to_nanoseconds<T>(1) < 1000000000)
+      nanoseconds_gen = make_rand_generator<int64_t>(
+        rand_dist_id::UNIFORM, std::min(range_size_ns, 0l), std::max(range_size_ns, 0l));
+    else
+      nanoseconds_gen = [=](std::mt19937&) { return 0; };
   }
 
   T operator()(std::mt19937& engine)
   {
     // Subtract the seconds from the 2020 timestamp to generate a reccent timestamp
     auto const timestamp_ns =
-      current_ns - seconds_gen(engine) * nanoseconds<cudf::timestamp_s>() - nanoseconds_gen(engine);
+      to_nanoseconds<cudf::timestamp_s>(seconds_gen(engine)) + nanoseconds_gen(engine);
     // Return value in the type's precision
-    return T(typename T::duration{timestamp_ns / nanoseconds<T>()});
+    return T(typename T::duration{timestamp_ns / to_nanoseconds<T>(1)});
   }
 };
 

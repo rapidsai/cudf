@@ -56,30 +56,25 @@ rand_dist_id default_distribution()
   return rand_dist_id::BERNOULLI;
 }
 
-/**
- * @brief nanosecond count in the unit of @ref T.
- *
- * @tparam T Timestamp type
- */
 template <typename T>
-constexpr int64_t nanoseconds()
+constexpr int64_t from_days(int64_t t)
 {
-  using ratio = std::ratio_divide<typename T::period, typename cudf::timestamp_ns::period>;
-  return ratio::num / ratio::den;
+  using ratio = std::ratio_divide<typename cudf::timestamp_D::period, typename T::period>;
+  return t * ratio::num / ratio::den;
 }
 
 template <typename T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
 std::pair<int64_t, int64_t> default_range()
 {
-  static constexpr int64_t year_ns = 365l * 24 * 60 * 60;
-  return {50 * year_ns, 0};
+  static constexpr int64_t year = from_days<T>(365l);
+  return {50 * year, 0};
 }
 
 template <typename T, std::enable_if_t<cudf::is_duration<T>()>* = nullptr>
 std::pair<int64_t, int64_t> default_range()
 {
-  static constexpr int64_t year_ns = 365l * 24 * 60 * 60;
-  return {0, 2 * year_ns};
+  static constexpr int64_t year = from_days<T>(365l);
+  return {0, 2 * year};
 }
 
 template <typename T, std::enable_if_t<cudf::is_numeric<T>()>* = nullptr>
@@ -89,35 +84,37 @@ std::pair<T, T> default_range()
 }
 
 template <typename T>
-struct numeric_dist_params {
+struct dist_params {
   rand_dist_id distribution_type;
   T lower_bound;
   T upper_bound;
 };
 
 class distribution_parameters {
-  std::map<cudf::type_id, numeric_dist_params<uint64_t>> int_params;
-  std::map<cudf::type_id, numeric_dist_params<double>> float_params;
+  std::map<cudf::type_id, dist_params<uint64_t>> int_params;
+  std::map<cudf::type_id, dist_params<double>> float_params;
+
+  double bool_p = 0.5;
 
  public:
   template <typename T, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
-  numeric_dist_params<T> get_params(cudf::type_id tid)
+  dist_params<T> get_params(cudf::type_id tid)
   {
     auto it = int_params.find(tid);
     if (it == int_params.end()) {
       auto const range = default_range<T>();
-      return numeric_dist_params<T>{default_distribution<T>, range.first, range.second};
+      return dist_params<T>{default_distribution<T>, range.first, range.second};
     } else
       return *it;
   }
 
   template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value, T>* = nullptr>
-  numeric_dist_params<T> get_params(cudf::type_id tid)
+  dist_params<T> get_params(cudf::type_id tid)
   {
     auto it = float_params.find(tid);
     if (it == float_params.end()) {
       auto const range = default_range<T>();
-      return numeric_dist_params<T>{default_distribution<T>, range.first, range.second};
+      return dist_params<T>{default_distribution<T>, range.first, range.second};
     } else
       return *it;
   }
