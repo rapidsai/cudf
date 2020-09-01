@@ -64,7 +64,7 @@ class orc_reader_options {
   bool _decimals_as_float = true;
   /// For decimals as int, optional forced decimal scale;
   /// -1 is auto (column scale), >=0: number of fractional digits
-  int _forced_decimals_scale = -1;
+  size_type _forced_decimals_scale = -1;
 
   friend orc_reader_options_builder;
 
@@ -121,7 +121,7 @@ class orc_reader_options {
   /**
    * @brief Returns whether decimal scale is inferred or forced to have limited fractional digits
    */
-  int forced_decimals_scale() const {return _forced_decimals_scale;}
+  size_type forced_decimals_scale() const {return _forced_decimals_scale;}
 
   // Setters
 
@@ -177,7 +177,7 @@ class orc_reader_options {
   /**
    * @brief Sets whether decimal scale is inferred or forced to have limited fractional digits
    */
-  void forced_decimals_scale(int val) {_forced_decimals_scale = val;}
+  void forced_decimals_scale(size_type val) {_forced_decimals_scale = val;}
 
   /**
    * @brief Creates `orc_reader_options_builder` which is used to update options
@@ -260,7 +260,7 @@ class orc_reader_options_builder {
   /**
    * @brief Sets whether decimal scale is inferred or forced to have limited fractional digits
    */
-  orc_reader_options_builder& forced_decimals_scale(int val) {
+  orc_reader_options_builder& forced_decimals_scale(size_type val) {
       options._forced_decimals_scale = val;
      return *this;
   }

@@ -137,7 +137,7 @@ class reader::impl {
   bool _use_np_dtypes        = true;
   bool _has_timestamp_column = false;
   bool _decimals_as_float    = true;
-  int _decimals_as_int_scale = -1;
+  size_type _decimals_as_int_scale = -1;
   data_type _timestamp_type{type_id::EMPTY};
 };
 
