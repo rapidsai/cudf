@@ -340,6 +340,12 @@ class TimeDeltaColumn(column.ColumnBase):
                 self.as_numerical.sum(dtype=dtype), unit=self.time_unit
             )
 
+    def product(self, dtype=None):
+        raise TypeError(f"cannot perform prod with type {self.dtype}")
+
+    def var(self, ddof=1, dtype=np.float64):
+        raise TypeError(f"cannot perform var with type {self.dtype}")
+
     def components(self, index=None):
         """
         Return a Dataframe of the components of the Timedeltas.

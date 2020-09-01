@@ -1,6 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-import pandas as pd
+import cudf
 from cudf._lib.cpp.reduce cimport cpp_reduce, cpp_scan, scan_type
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.types cimport data_type, type_id
@@ -58,11 +58,7 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
         if reduction_op == 'product':
             return incol.dtype.type(1)
 
-        if pd.api.types.is_datetime64_dtype(col_dtype) \
-                or pd.api.types.is_timedelta64_dtype(col_dtype):
-            return col_dtype.type("nat")
-        else:
-            return np.nan
+        return cudf.utils.dtypes._get_nan_for_dtype(col_dtype)
 
     with nogil:
         c_result = move(cpp_reduce(

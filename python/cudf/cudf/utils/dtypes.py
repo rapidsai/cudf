@@ -442,3 +442,12 @@ def get_time_unit(obj):
 
     time_unit, _ = np.datetime_data(obj.dtype)
     return time_unit
+
+
+def _get_nan_for_dtype(dtype):
+    if pd.api.types.is_datetime64_dtype(
+        dtype
+    ) or pd.api.types.is_timedelta64_dtype(dtype):
+        return dtype.type("nat")
+    else:
+        return np.nan
