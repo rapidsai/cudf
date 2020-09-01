@@ -199,6 +199,9 @@ def test_orc_reader_strings(datadir):
         ([[("int1", "==", 1)]], 5000),
         ([[("int1", "<=", 2)]], 10000),
         ([[("int1", "==", -1)]], 0),
+        ([[("int1", "in", range(3))]], 10000),
+        ([[("int1", "in", {1, 3})]], 6000),
+        ([[("int1", "not in", {1, 3})]], 5000),
     ],
 )
 def test_orc_read_filtered(datadir, engine, predicate, expected_len):

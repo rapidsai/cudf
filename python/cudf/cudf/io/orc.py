@@ -112,6 +112,21 @@ def read_orc(
         # Prepare stripes or selection
         stripes = sorted(stripes) if stripes else range(r.num_of_stripes)
 
+        # Determine set of stripes
+        # Filter stripes using metadata, skiprows, numrows
+        # Compute numrows in stripes
+        # Filter row groups using stripe footers, skiprows, numrows
+        # If row groups are consecutive, determine skiprows and numrows
+        # If row groups are not consecutive, maybe determine skiprows and numrows for each row group and then concatenate
+        # Compare numrows in stripes to skiprows and numrows
+
+        # Determine set of stripes
+        # Filter stripes using metadata loaded by libcudf, skiprows, numrows
+        # Read in selected stripes for columns referenced by predicate
+        # Use loc to get rows that pass predicate (TODO: Maybe use where + Numba)
+        # Compute set of row ranges to read given skiprows, numrows (TODO: Maybe somehow read in stripes instead in some cases)
+        # Read in all data for row ranges and concatenate
+
         # Read in row-group-level statistics for each stripe for
         # relevant columns
         num_row_groups = [None] * r.num_of_stripes
@@ -134,6 +149,7 @@ def read_orc(
         num_rows_to_read = 0
         filtered_stripes = []
         filtered_stripes_num_rows = 0
+        # TODO: Stop assuming that all stripes are consecutive
         for stripe_idx in stripes:
             # Get stats and # of row groups of current stripe
             stats = row_group_stats[stripe_idx]

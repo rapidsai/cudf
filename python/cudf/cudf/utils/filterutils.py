@@ -117,7 +117,13 @@ def _apply_predicate(col, op, val, col_stats):
                 for elem in val
             ]
         )
+        # TODO: Change this to only accept val is range or date range
     ):
+        # return False if any elem in val == min == max
+        # return False if all values between min and max is in val
+        # create range of values from min to max
+        # if val is a range, check that min-max is subset of val
+        # if val is not range, check that every val between min and max is in val
         return False
     return True
 
