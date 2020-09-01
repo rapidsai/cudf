@@ -276,7 +276,8 @@ class MultiIndex(Index):
 
     @classmethod
     def from_arrow(cls, table):
-        """Convert PyArrow Table to MultiIndex
+        """
+        Convert PyArrow Table to MultiIndex
 
         Parameters
         ----------
