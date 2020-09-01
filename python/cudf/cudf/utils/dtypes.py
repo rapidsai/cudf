@@ -13,6 +13,7 @@ from pandas.core.dtypes.dtypes import CategoricalDtype, CategoricalDtypeType
 import cudf
 from cudf._lib.scalar import Scalar
 from cudf.api.types import is_categorical_dtype
+import inspect
 
 
 _NA_REP = "<NA>"
@@ -139,12 +140,19 @@ def cudf_dtype_from_pydata_dtype(dtype):
     """
     if isinstance(dtype, cudf.Generic):
         return dtype.__class__
+    if inspect.isclass(dtype):
+        if issubclass(dtype, cudf.Generic):
+            return dtype
     if is_categorical_dtype(dtype):
         return cudf.core.dtypes.CategoricalDtype
     elif np.issubdtype(dtype, np.datetime64):
         dtype = np.datetime64
 
-    return cudf.dtype(infer_dtype_from_object(dtype)).__class__
+    result = cudf.dtype(infer_dtype_from_object(dtype))
+    if isinstance(result, cudf.Generic): 
+        return result.__class__
+    elif inspect.isclass(result):
+        return result
 
 
 def is_scalar(val):

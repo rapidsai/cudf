@@ -3206,7 +3206,7 @@ class DataFrame(Frame, Serializable):
         for colidx, inpcol in enumerate(cols):
             dense = inpcol.astype(cupy_dtype)
             matrix[:, colidx] = dense
-        return cuda.as_cuda_array(matrix).view(dtype)
+        return cuda.as_cuda_array(matrix).view(cupy_dtype)
 
     def as_matrix(self, columns=None):
         """Convert to a matrix in host memory.
@@ -6324,20 +6324,20 @@ class DataFrame(Frame, Serializable):
                     inc_ex=(include & exclude)
                 )
             )
-
         # include all subtypes
+
         include_subtypes = set()
-        for dtype in self.dtypes:
+        for dtype in (d.__class__ for d in self.dtypes):
             for i_dtype in include:
                 # category handling
                 if is_categorical_dtype(i_dtype):
                     include_subtypes.add(i_dtype)
-                elif isinstance(dtype, i_dtype):
-                    include_subtypes.add(dtype.__class__)
+                elif issubclass(dtype, i_dtype):
+                    include_subtypes.add(dtype)
     
         # exclude all subtypes
         exclude_subtypes = set()
-        for dtype in self.dtypes:
+        for dtype in (d.__class__ for d in self.dtypes):
             for e_dtype in exclude:
                 # category handling
                 if is_categorical_dtype(e_dtype):
@@ -6367,7 +6367,7 @@ class DataFrame(Frame, Serializable):
     @ioutils.doc_to_parquet()
     def to_parquet(self, path, *args, **kwargs):
         """{docstring}"""
-        from cudf.io import parquet as pq
+        from cudf.io import parquet as pq6
 
         return pq.to_parquet(self, path, *args, **kwargs)
 

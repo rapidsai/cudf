@@ -3902,7 +3902,7 @@ class Series(Frame, Serializable):
             # pandas defaults
             percentiles = np.array([0.25, 0.5, 0.75])
 
-        if np.issubdtype(self.dtype, np.number):
+        if isinstance(self.dtype, cudf.Number):
             return describe_numeric(self)
         else:
             raise NotImplementedError(

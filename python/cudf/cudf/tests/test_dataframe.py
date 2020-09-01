@@ -25,6 +25,7 @@ from cudf.tests.utils import (
     does_not_raise,
     gen_rand,
 )
+from cudf.core.dtypes import Number
 
 
 def test_init_via_list_of_tuples():
@@ -2516,15 +2517,12 @@ def test_select_dtype():
         nrows=20, dtypes={"a": "category", "b": int, "c": float, "d": str}
     )
     pdf = gdf.to_pandas()
-
     assert_eq(pdf.select_dtypes("float64"), gdf.select_dtypes("float64"))
     assert_eq(pdf.select_dtypes(np.float64), gdf.select_dtypes(np.float64))
     assert_eq(
         pdf.select_dtypes(include=["float64"]),
         gdf.select_dtypes(include=["float64"]),
     )
-    import pdb
-    pdb.set_trace()
     assert_eq(
         pdf.select_dtypes(include=["object", "int", "category"]),
         gdf.select_dtypes(include=["object", "int", "category"]),
@@ -2536,7 +2534,7 @@ def test_select_dtype():
     )
     assert_eq(
         pdf.select_dtypes(include=np.number),
-        gdf.select_dtypes(include=np.number),
+        gdf.select_dtypes(include=Number),
     )
     assert_eq(
         pdf.select_dtypes(include=[np.int64, np.float64]),
