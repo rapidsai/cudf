@@ -15,6 +15,8 @@
  */
 
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/io/detail/orc.hpp>
+#include <cudf/io/orc.hpp>
 #include <cudf/io/functions.hpp>
 #include <cudf/io/readers.hpp>
 #include <cudf/io/writers.hpp>
@@ -26,6 +28,10 @@
 
 namespace cudf {
 namespace io {
+
+// Returns builder for parquet_reader_options
+orc_reader_options_builder orc_reader_options::builder(source_info const& src) {return orc_reader_options_builder{src};}
+
 namespace {
 template <typename reader, typename reader_options>
 std::unique_ptr<reader> make_reader(source_info const& src_info,
@@ -167,24 +173,12 @@ void write_csv(write_csv_args const& args, rmm::mr::device_memory_resource* mr)
 namespace detail_orc = cudf::io::detail::orc;
 
 // Freeform API wraps the detail reader class API
-table_with_metadata read_orc(read_orc_args const& args, rmm::mr::device_memory_resource* mr)
+table_with_metadata read_orc(orc_reader_options const& options, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  detail_orc::reader_options options{args.columns,
-                                     args.use_index,
-                                     args.use_np_dtypes,
-                                     args.timestamp_type,
-                                     args.decimals_as_float,
-                                     args.forced_decimals_scale};
-  auto reader = make_reader<detail_orc::reader>(args.source, options, mr);
+  auto reader = make_reader<detail_orc::reader>(options.source(), options, mr);
 
-  if (args.stripes.size() > 0) {
-    return reader->read_stripes(args.stripes);
-  } else if (args.skip_rows != -1 || args.num_rows != -1) {
-    return reader->read_rows(args.skip_rows, args.num_rows);
-  } else {
-    return reader->read_all();
-  }
+  return reader->read(options);
 }
 
 // Freeform API wraps the detail writer class API

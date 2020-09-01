@@ -342,66 +342,6 @@ void write_csv(write_csv_args const& args,
                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Settings to use for `read_orc()`
- *
- * @ingroup io_readers
- */
-struct read_orc_args {
-  source_info source;
-
-  /// Names of column to read; empty is all
-  std::vector<std::string> columns;
-
-  /// List of individual stripes to read (ignored if empty)
-  std::vector<size_type> stripes;
-  /// Rows to skip from the start; -1 is none
-  size_type skip_rows = -1;
-  /// Rows to read; -1 is all
-  size_type num_rows = -1;
-
-  /// Whether to use row index to speed-up reading
-  bool use_index = true;
-
-  /// Whether to use numpy-compatible dtypes
-  bool use_np_dtypes = true;
-  /// Cast timestamp columns to a specific type
-  data_type timestamp_type{type_id::EMPTY};
-
-  /// Whether to convert decimals to float64
-  bool decimals_as_float = true;
-  /// For decimals as int, optional forced decimal scale;
-  /// -1 is auto (column scale), >=0: number of fractional digits
-  int forced_decimals_scale = -1;
-
-  read_orc_args() = default;
-
-  explicit read_orc_args(source_info const& src) : source(src) {}
-};
-
-/**
- * @brief Reads an ORC dataset into a set of columns
- *
- * @ingroup io_readers
- *
- * The following code snippet demonstrates how to read a dataset from a file:
- * @code
- *  ...
- *  std::string filepath = "dataset.orc";
- *  cudf::read_orc_args args{cudf::source_info(filepath)};
- *  ...
- *  auto result = cudf::read_orc(args);
- * @endcode
- *
- * @param args Settings for controlling reading behavior
- * @param mr Device memory resource used to allocate device memory of the table in the returned
- * table_with_metadata
- *
- * @return The set of columns
- */
-table_with_metadata read_orc(read_orc_args const& args,
-                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
-/**
  * @brief Settings to use for `read_parquet()`
  */
 struct read_parquet_args {
