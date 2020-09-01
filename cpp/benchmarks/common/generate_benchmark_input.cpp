@@ -125,17 +125,16 @@ struct random_value_fn<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
   std::function<int64_t(std::mt19937&)> seconds_gen;
   std::function<int64_t(std::mt19937&)> nanoseconds_gen;
 
-  random_value_fn()
+  random_value_fn(dist_params<T> params)
   {
-    auto const rand_dist                       = rand_dist_id::GEOMETRIC;
-    auto const range                           = default_range<T>();
-    std::pair<int64_t, int64_t> const range_ns = {to_nanoseconds<T>(range.first),
-                                                  to_nanoseconds<T>(range.second)};
+    std::pair<int64_t, int64_t> const range_ns = {to_nanoseconds<T>(params.lower_bound),
+                                                  to_nanoseconds<T>(params.upper_bound)};
     std::pair<int64_t, int64_t> const range_s  = {
       range_ns.first / to_nanoseconds<cudf::timestamp_s>(1),
       range_ns.second / to_nanoseconds<cudf::timestamp_s>(1)};
     if (range_ns.first != range_ns.second)
-      seconds_gen = make_rand_generator<int64_t>(rand_dist, range_s.first, range_s.second);
+      seconds_gen =
+        make_rand_generator<int64_t>(params.distribution_type, range_s.first, range_s.second);
     else
       seconds_gen = [=](std::mt19937&) { return range_ns.second; };
 
@@ -145,7 +144,7 @@ struct random_value_fn<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
       nanoseconds_gen = make_rand_generator<int64_t>(
         rand_dist_id::UNIFORM, std::min(range_size_ns, 0l), std::max(range_size_ns, 0l));
     else
-      nanoseconds_gen = [=](std::mt19937&) { return 0; };
+      nanoseconds_gen = [](std::mt19937&) { return 0; };
   }
 
   T operator()(std::mt19937& engine)
@@ -160,40 +159,25 @@ struct random_value_fn<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
 
 template <typename T>
 struct random_value_fn<T, typename std::enable_if_t<cudf::is_fixed_point<T>()>> {
+  random_value_fn(dist_params<T>) {}
   T operator()(std::mt19937& engine) { return T{}; }
 };
-/*
-TMP
-*/
-template <typename T>
-constexpr auto stddev()
-{
-  return 1l << (sizeof(T) * 4);
-}
 
-/**
- * @brief Creates an random numeric value with a normal distribution
- *
- * Zero is always used as the mean for teh distribution. Unsigned types are generated as the
- * absolute value of the normal distribution output.
- * Different standard deviations are used depending on the type size, in order to generate larger
- * range of values for when the types supports it.
- *
- * @return The random number
- * @tparam T Numeric type
- */
 template <typename T>
 struct random_value_fn<
   T,
   typename std::enable_if_t<!std::is_same<T, bool>::value && cudf::is_numeric<T>()>> {
-  static constexpr T lower_bound = std::numeric_limits<T>::lowest();
-  static constexpr T upper_bound = std::numeric_limits<T>::max();
-
+  T const lower_bound;
+  T const upper_bound;
   std::function<T(std::mt19937&)> gen;
-  random_value_fn()
+
+  random_value_fn(dist_params<T> params)
+    : lower_bound{params.lower_bound},
+      upper_bound{params.upper_bound},
+      gen{make_rand_generator<T>(params.distribution_type, params.lower_bound, params.upper_bound)}
   {
-    gen = make_rand_generator<T>(rand_dist_id::NORMAL, lower_bound, upper_bound);
   }
+
   T operator()(std::mt19937& engine)
   {
     return std::max(std::min(gen(engine), upper_bound), lower_bound);
@@ -207,8 +191,15 @@ struct random_value_fn<
  */
 template <typename T>
 struct random_value_fn<T, typename std::enable_if_t<std::is_same<T, bool>::value>> {
-  std::bernoulli_distribution b_dist{0.5};
-  T operator()(std::mt19937& engine) { return b_dist(engine); }
+  std::bernoulli_distribution b_dist;
+
+  random_value_fn(dist_params<T> params) : b_dist{params.p} {}
+  T operator()(std::mt19937& engine)
+  {
+    bool retval = b_dist(engine);
+    std::cout << retval;
+    return retval;
+  }
 };
 
 size_t null_mask_size(cudf::size_type num_rows)
@@ -261,7 +252,7 @@ std::unique_ptr<cudf::column> create_random_column(std::mt19937& engine, cudf::s
   cudf::size_type const avg_run_len = 4;
 
   std::bernoulli_distribution null_dist{null_frequency};
-  random_value_fn<T> random_value_gen;
+  random_value_fn<T> random_value_gen{dp.get_params<T>()};
   auto value_gen = [&]() { return random_value_gen(engine); };
   auto valid_gen = [&]() { return null_frequency == 0.f || !null_dist(engine); };
 
@@ -483,7 +474,8 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> dtyp
 
   auto seed_engine = deterministic_engine();  // pass the seed param here
   std::vector<std::future<columns_vector>> col_futures;
-  random_value_fn<unsigned> seed_dist;
+  random_value_fn<unsigned> seed_dist(
+    {rand_dist_id::UNIFORM, 0, std::numeric_limits<unsigned>::max()});
   for (unsigned int i = 0; i < processor_count && next_col < num_cols; ++i) {
     auto thread_engine         = deterministic_engine(seed_dist(seed_engine));
     auto const thread_num_cols = std::min(num_cols - next_col, cols_per_thread);

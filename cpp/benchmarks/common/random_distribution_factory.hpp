@@ -56,7 +56,7 @@ auto make_geometric_dist(T range_start, T range_end)
   uT const range_size                  = range_end - range_start;
   constexpr double percentage_in_range = 0.99;
   double const p                       = 1 - exp(log(1 - percentage_in_range) / range_size);
-  return std::geometric_distribution<T>(p);
+  return std::geometric_distribution<T>(p ? p : std::numeric_limits<double>::epsilon());
 }
 
 template <typename T, std::enable_if_t<cudf::is_floating_point<T>()>* = nullptr>

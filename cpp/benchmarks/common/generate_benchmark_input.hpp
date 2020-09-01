@@ -39,7 +39,7 @@ template <typename T,
           std::enable_if_t<!std::is_unsigned<T>::value && cudf::is_numeric<T>()>* = nullptr>
 rand_dist_id default_distribution()
 {
-  return rand_dist_id::UNIFORM;
+  return rand_dist_id::NORMAL;
 }
 
 template <typename T,
@@ -47,7 +47,7 @@ template <typename T,
                            cudf::is_numeric<T>()>* = nullptr>
 rand_dist_id default_distribution()
 {
-  return rand_dist_id::UNIFORM;
+  return rand_dist_id::GEOMETRIC;
 }
 
 template <typename T, std::enable_if_t<std::is_same<T, bool>::value>* = nullptr>
@@ -83,40 +83,97 @@ std::pair<T, T> default_range()
   return {std::numeric_limits<T>::lowest(), std::numeric_limits<T>::max()};
 }
 
+template <typename T, typename Enable = void>
+struct dist_params;
+
 template <typename T>
-struct dist_params {
+struct dist_params<
+  T,
+  typename std::enable_if_t<!std::is_same<T, bool>::value && cudf::is_numeric<T>()>> {
   rand_dist_id distribution_type;
   T lower_bound;
   T upper_bound;
 };
 
+template <typename T>
+struct dist_params<T, typename std::enable_if_t<std::is_same<T, bool>::value>> {
+  double p;
+};
+
+template <typename T>
+struct dist_params<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
+  rand_dist_id distribution_type;
+  int64_t lower_bound;
+  int64_t upper_bound;
+};
+
+template <typename T>
+struct dist_params<T, typename std::enable_if_t<cudf::is_fixed_point<T>()>> {
+};
+
 class distribution_parameters {
+  // TODO fill the map with defaults
   std::map<cudf::type_id, dist_params<uint64_t>> int_params;
   std::map<cudf::type_id, dist_params<double>> float_params;
 
   double bool_p = 0.5;
 
  public:
-  template <typename T, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
-  dist_params<T> get_params(cudf::type_id tid)
+  template <typename T,
+            typename std::enable_if_t<!std::is_same<T, bool>::value && std::is_integral<T>::value,
+                                      T>* = nullptr>
+  dist_params<T> get_params()
   {
-    auto it = int_params.find(tid);
+    auto it = int_params.find(cudf::type_to_id<T>());
     if (it == int_params.end()) {
       auto const range = default_range<T>();
-      return dist_params<T>{default_distribution<T>, range.first, range.second};
-    } else
-      return *it;
+      return dist_params<T>{default_distribution<T>(), range.first, range.second};
+    } else {
+      auto& val = it->second;
+      return {
+        val.distribution_type, static_cast<T>(val.lower_bound), static_cast<T>(val.upper_bound)};
+    }
   }
 
   template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value, T>* = nullptr>
-  dist_params<T> get_params(cudf::type_id tid)
+  dist_params<T> get_params()
   {
-    auto it = float_params.find(tid);
+    auto it = float_params.find(cudf::type_to_id<T>());
     if (it == float_params.end()) {
       auto const range = default_range<T>();
-      return dist_params<T>{default_distribution<T>, range.first, range.second};
-    } else
-      return *it;
+      return dist_params<T>{default_distribution<T>(), range.first, range.second};
+    } else {
+      auto& val = it->second;
+      return {
+        val.distribution_type, static_cast<T>(val.lower_bound), static_cast<T>(val.upper_bound)};
+    }
+  }
+
+  template <typename T, std::enable_if_t<std::is_same<T, bool>::value>* = nullptr>
+  dist_params<T> get_params()
+  {
+    return dist_params<T>{bool_p};
+  }
+
+  template <typename T, typename std::enable_if_t<cudf::is_chrono<T>()>* = nullptr>
+  dist_params<T> get_params()
+  {
+    auto it = int_params.find(cudf::type_to_id<T>());
+    if (it == int_params.end()) {
+      auto const range = default_range<T>();
+      return dist_params<T>{default_distribution<T>(), range.first, range.second};
+    } else {
+      auto& val = it->second;
+      return {val.distribution_type,
+              static_cast<int64_t>(val.lower_bound),
+              static_cast<int64_t>(val.upper_bound)};
+    }
+  }
+
+  template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
+  dist_params<T> get_params()
+  {
+    return {};
   }
 };
 
