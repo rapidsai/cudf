@@ -66,14 +66,14 @@ enum class filter_type : bool { KEEP, REMOVE };
  *
  * @code{.pseudo}
  * Example:
- * s = ["aeiou","AEIOU","0123456789"]
- * f = [{'a','l'}, {'M','Z'}, {'4','6'}]
+ * s = ["aeiou", "AEIOU", "0123456789", "bcdOPQ5"]
+ * f = [{'M','Z'}, {'a','l'}, {'4','6'}]
  * r1 = filter_characters(s, f)
- * r1 is now ["aei", "OU", "456"]
+ * r1 is now ["aei", "OU", "456", "bcdOPQ5"]
  * r2 = filter_characters(s, f, REMOVE)
- * r2 is now ["ou", "AEI", "0123789"]
+ * r2 is now ["ou", "AEI", "0123789", ""]
  * r3 = filter_characters(s, f, KEEP, "*")
- * r3 is now ["aei**", "***OU", "****456***"]
+ * r3 is now ["aei**", "***OU", "****456***", "bcdOPQ5"]
  * @endcode
  *
  * Null string entries result in null entries in the output column.
