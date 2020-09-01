@@ -932,5 +932,149 @@ class csv_reader_options_builder {
 table_with_metadata read_csv(csv_reader_options const& options,
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+class csv_writer_options_builder;
+
+class csv_writer_options {
+    // Specify the sink to use for writer output
+    sink_info _sink;
+    // Set of columns to output
+    table_view _table;
+    // string to use for null entries
+    std::string _na_rep = "";
+    // Indicates whether to write headers to csv
+    bool _include_header = true;
+    // maximum number of rows to process for each file write
+    int _rows_per_chunk = 8;
+    // character to use for separating lines (default "\n")
+    std::string _line_terminator = "\n";
+    // character to use for separating lines (default "\n")
+    char _inter_column_delimiter = ',';
+    // string to use for values !=0 in INT8 types (default 'true')
+    std::string _true_value = std::string{"true"};
+    // string to use for values ==0 in INT8 types (default 'false')
+    std::string _false_value = std::string{"false"};
+    // Optional associated metadata
+    table_metadata const* _metadata = nullptr;
+
+    explicit csv_writer_options(sink_info const& sink, table_view const& table): _sink(sink), _table(table){}
+
+    friend csv_writer_options_builder;
+    public:
+
+    explicit csv_writer_options() = default;
+
+    sink_info const& sink(void) const { return _sink; }
+
+    table_view const& table(void) const { return _table;}
+
+    table_metadata const* metadata(void) const { return _metadata;}
+
+    std::string na_rep(void) const {return _na_rep;}
+
+    bool include_header(void) const {return _include_header;}
+
+    int rows_per_chunk(void) const {return _rows_per_chunk;}
+
+    std::string line_terminator(void) const {return _line_terminator;}
+
+    char inter_column_delimiter(void) const {return _inter_column_delimiter;}
+
+    std::string true_value(void) const {return _true_value;}
+
+    std::string false_value(void) const {return _false_value;}
+
+    // Setter
+    void metadata(table_metadata* metadata) { _metadata = metadata; }
+
+    void na_rep(std::string val) { _na_rep = val;}
+
+    void include_header(bool val) {_include_header = val;}
+
+    void rows_per_chunk(int val) {_rows_per_chunk = val;}
+
+    void line_terminator(std::string term) {_line_terminator = term;}
+
+    void inter_column_delimiter(char delim) {_inter_column_delimiter = delim;}
+
+    void true_value(std::string val) {_true_value = val;}
+
+    void false_value(std::string val) {_false_value = val;}
+
+    static csv_writer_options_builder builder(sink_info const& sink, table_view const& table); 
+};
+
+class csv_writer_options_builder {
+    csv_writer_options options;
+
+    public:
+    explicit csv_writer_options_builder() = default;
+    explicit csv_writer_options_builder(sink_info const& sink, table_view const& table): options{sink, table} {}
+
+    csv_writer_options_builder& metadata(table_metadata* metadata) { 
+        options._metadata = metadata;
+        return *this;
+    }
+
+    csv_writer_options_builder& na_rep(std::string val) { 
+        options._na_rep = val;
+        return *this;
+    };
+
+    csv_writer_options_builder& include_header(bool val) {
+        options._include_header = val;
+        return *this;
+    }
+
+    csv_writer_options_builder& rows_per_chunk(int val) {
+        options._rows_per_chunk = val;
+        return *this;
+    }
+
+    csv_writer_options_builder& line_terminator(std::string term) {
+        options._line_terminator = term;
+        return *this;
+    }
+
+    csv_writer_options_builder& inter_column_delimiter(char delim) {
+        options._inter_column_delimiter = delim;
+        return *this;
+    }
+
+    csv_writer_options_builder& true_value(std::string val) {
+        options._true_value = val;
+        return *this;
+   }
+
+    csv_writer_options_builder& false_value(std::string val) {
+        options._false_value = val;
+        return *this;
+    }
+
+    operator csv_writer_options &&() {return std::move(options);}
+
+    csv_writer_options&& build() { return std::move(options); }
+};
+
+/**
+ * @brief Writes a set of columns to CSV format
+ *
+ * The following code snippet demonstrates how to write columns to a file:
+ * @code
+ *  #include <cudf/io/functions.hpp>
+ *  ...
+ *  std::string filepath = "dataset.csv";
+ *  cudf::io::sink_info sink_info(filepath);
+ *
+ *  cudf::io::csv_writer_options args{sink_info, table->view(), na, include_header,
+ * rows_per_chunk};
+ *  ...
+ *  cudf::io::write_csv(args);
+ * @endcode
+ *
+ * @param args Settings for controlling writing behavior
+ * @param mr Device memory resource to use for device memory allocation
+ */
+void write_csv(csv_writer_options const& args,
+               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 }  // namespace io
 }  // namespace cudf

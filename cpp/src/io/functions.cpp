@@ -37,6 +37,14 @@ csv_reader_options_builder csv_reader_options::builder(source_info const& src)
   return csv_reader_options_builder{src};
 }
 
+/**
+ * @breif csv_writer_options builder
+ */
+csv_writer_options_builder csv_writer_options::builder(sink_info const& sink, table_view const& table)
+{
+  return csv_writer_options_builder{sink, table};
+}
+
 namespace {
 template <typename reader, typename reader_options>
 std::unique_ptr<reader> make_reader(source_info const& src_info,
@@ -125,13 +133,13 @@ table_with_metadata read_csv(csv_reader_options const& options, rmm::mr::device_
 }
 
 // Freeform API wraps the detail writer class API
-void write_csv(write_csv_args const& args, rmm::mr::device_memory_resource* mr)
+void write_csv(csv_writer_options const& options, rmm::mr::device_memory_resource* mr)
 {
   using namespace cudf::io::detail;
 
-  auto writer = make_writer<csv::writer>(args.sink(), args, mr);
+  auto writer = make_writer<csv::writer>(options.sink(), options, mr);
 
-  writer->write_all(args.table(), args.metadata());
+  writer->write(options.table(), options.metadata());
 }
 
 namespace detail_orc = cudf::io::detail::orc;

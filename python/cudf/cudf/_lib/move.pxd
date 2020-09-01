@@ -19,7 +19,7 @@ from cudf._lib.cpp.groupby cimport (
     aggregation_result
 )
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.io.csv cimport csv_reader_options
+from cudf._lib.cpp.io.csv cimport csv_reader_options, csv_writer_options
 from pyarrow.includes.libarrow cimport CMessageReader
 cimport cudf._lib.cpp.io.types as cudf_io_types
 
@@ -79,3 +79,4 @@ cdef extern from "<utility>" namespace "std" nogil:
         pair[unique_ptr[column], table_view]
     )
     cdef csv_reader_options move(csv_reader_options)
+    cdef csv_writer_options move(csv_writer_options)

@@ -219,7 +219,7 @@ struct column_to_strings_fn {
                (std::is_floating_point<column_type>::value) || (cudf::is_timestamp<column_type>()));
   }
 
-  explicit column_to_strings_fn(writer_options const& options,
+  explicit column_to_strings_fn(csv_writer_options const& options,
                                 rmm::mr::device_memory_resource* mr = nullptr,
                                 cudaStream_t stream                 = nullptr)
     : options_(options), mr_(mr), stream_(stream)
@@ -337,7 +337,7 @@ struct column_to_strings_fn {
   }
 
  private:
-  writer_options const& options_;
+  csv_writer_options const& options_;
   rmm::mr::device_memory_resource* mr_;
   cudaStream_t stream_;
 };
@@ -345,7 +345,7 @@ struct column_to_strings_fn {
 
 // Forward to implementation
 writer::writer(std::unique_ptr<data_sink> sink,
-               writer_options const& options,
+               csv_writer_options const& options,
                rmm::mr::device_memory_resource* mr)
   : _impl(std::make_unique<impl>(std::move(sink), options, mr))
 {
@@ -355,7 +355,7 @@ writer::writer(std::unique_ptr<data_sink> sink,
 writer::~writer() = default;
 
 writer::impl::impl(std::unique_ptr<data_sink> sink,
-                   writer_options const& options,
+                   csv_writer_options const& options,
                    rmm::mr::device_memory_resource* mr)
   : out_sink_(std::move(sink)), mr_(mr), options_(options)
 {
@@ -533,7 +533,7 @@ void writer::impl::write(table_view const& table,
   write_chunked_end(table, metadata, stream);
 }
 
-void writer::write_all(table_view const& table, const table_metadata* metadata, cudaStream_t stream)
+void writer::write(table_view const& table, const table_metadata* metadata, cudaStream_t stream)
 {
   _impl->write(table, metadata, stream);
 }

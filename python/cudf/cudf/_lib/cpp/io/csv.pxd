@@ -213,8 +213,61 @@ cdef extern from "cudf/io/csv.hpp" \
         csv_reader_options_builder& dayfirst(bool val) except+
         csv_reader_options_builder& timestamp_type(data_type type) except+
 
-        csv_reader_options build() except +
+        csv_reader_options build() except+
 
     cdef cudf_io_types.table_with_metadata read_csv(
         csv_reader_options &options
     ) except +
+
+
+    cdef cppclass csv_writer_options:
+        csv_writer_options() except+
+
+        cudf_io_types.sink_info sink() except+
+        cudf_table_view.table_view table() except+
+        cudf_io_types.table_metadata metadata() except+
+        string na_rep() except+
+        bool include_header() except+
+        size_type rows_per_chunk() except+
+        string line_terminator() except+
+        char inter_column_delimiter() except+
+        string true_value() except+
+        string false_value() except+
+
+        # setter
+        void metadata(cudf_io_types.table_metadata* val) except+
+        void na_rep(string val) except+
+        void include_header(bool val) except+
+        void rows_per_chunk(size_type val) except+
+        void line_terminator(string term) except+
+        void inter_column_delimiter(char delim) except+
+        void true_value(string val) except+
+        void false_value(string val) except+
+
+        @staticmethod
+        csv_writer_options_builder builder(
+            cudf_io_types.sink_info sink,
+            cudf_table_view.table_view table
+        ) except+
+
+    cdef cppclass csv_writer_options_builder:
+        csv_writer_options_builder() except+
+        csv_writer_options_builder(
+            cudf_io_types.sink_info sink,
+            cudf_table_view.table_view table
+        ) except+
+
+        csv_writer_options_builder& metadata(
+            cudf_io_types.table_metadata* val
+        ) except+
+        csv_writer_options_builder& na_rep(string val) except+
+        csv_writer_options_builder& include_header(bool val) except+
+        csv_writer_options_builder& rows_per_chunk(size_type val) except+
+        csv_writer_options_builder& line_terminator(string term) except+
+        csv_writer_options_builder& inter_column_delimiter(char delim) except+
+        csv_writer_options_builder& true_value(string val) except+
+        csv_writer_options_builder& false_value(string val) except+
+
+        csv_writer_options build() except+
+
+    cdef void write_csv(csv_writer_options args) except +

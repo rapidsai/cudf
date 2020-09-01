@@ -74,6 +74,45 @@ class reader {
    */
   table_with_metadata read(cudaStream_t stream = 0);
 };
+
+class writer {
+ public:
+  class impl;
+
+ private:
+  std::unique_ptr<impl> _impl;
+
+ public:
+  /**
+   * @brief Constructor for output to a file.
+   *
+   * @param sinkp The data sink to write the data to
+   * @param options Settings for controlling writing behavior
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  writer(std::unique_ptr<cudf::io::data_sink> sinkp,
+         csv_writer_options const& options,
+         rmm::mr::device_memory_resource* mr =
+           rmm::mr::get_default_resource());  // cannot provide definition here (because _impl is
+                                              // incomplete, hence unique_ptr has not enough
+                                              // sizeof() info)
+
+  /**
+   * @brief Destructor explicitly-declared to avoid inlined in header
+   */
+  ~writer();
+
+  /**
+   * @brief Writes the entire dataset.
+   *
+   * @param table Set of columns to output
+   * @param metadata Table metadata and column names
+   * @param stream CUDA stream used for device memory operations and kernel launches.
+   */
+  void write(table_view const& table,
+                 const table_metadata* metadata = nullptr,
+                 cudaStream_t stream            = 0);
+};
 }  // namespace csv
 }  // namespace detail
 }  // namespace io

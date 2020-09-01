@@ -20,14 +20,11 @@ from libcpp cimport bool
 
 from libc.stdint cimport int32_t
 
-from cudf._lib.cpp.io.functions cimport (
-    write_csv as cpp_write_csv,
-    write_csv_args
-)
-
 from cudf._lib.cpp.io.csv cimport (
     read_csv as cpp_read_csv,
     csv_reader_options,
+    write_csv as cpp_write_csv,
+    csv_writer_options,
 )
 
 from cudf._lib.cpp.io.types cimport (
@@ -434,13 +431,18 @@ cpdef write_csv(
         for col_name in table._column_names:
             metadata_.column_names.push_back(str(col_name).encode())
 
-    cdef unique_ptr[write_csv_args] write_csv_args_c = (
-        make_unique[write_csv_args](
-            sink_info_c, input_table_view, na_c, include_header_c,
-            rows_per_chunk_c, line_term_c, delim_c, true_value_c,
-            false_value_c, &metadata_
-        )
+    cdef csv_writer_options options = move(
+            csv_writer_options.builder(sink_info_c, input_table_view).
+            metadata(&metadata_).
+            na_rep(na_c).
+            include_header(include_header_c).
+            rows_per_chunk(rows_per_chunk_c).
+            line_terminator(line_term_c).
+            inter_column_delimiter(delim_c).
+            true_value(true_value_c).
+            false_value(false_value_c).
+            build()
     )
 
     with nogil:
-        cpp_write_csv(write_csv_args_c.get()[0])
+        cpp_write_csv(options)
