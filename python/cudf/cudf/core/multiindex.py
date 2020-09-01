@@ -921,12 +921,16 @@ class MultiIndex(Index):
         Returns
         -------
         Index composed of the removed levels. If only a single level
-        is removed, a flat index is returned.
+        is removed, a flat index is returned. If no levels are specified
+        (empty list), None is returned.
         """
         if not pd.api.types.is_list_like(level):
             level = (level,)
 
         ilevels = sorted([self._level_index_from_level(lev) for lev in level])
+
+        if not ilevels:
+            return None
 
         popped_data = OrderedDict({})
         popped_names = []
@@ -943,7 +947,7 @@ class MultiIndex(Index):
         for i in reversed(ilevels):
             n = self._data.names[i]
             names.pop(i)
-            self._data.pop(n)
+            popped_data[n] = self._data.pop(n)
 
         # construct the popped result
         popped = cudf.core.index.Index._from_table(
