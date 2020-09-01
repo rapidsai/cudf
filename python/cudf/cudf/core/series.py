@@ -3945,7 +3945,7 @@ class Series(Frame, Serializable):
                 "Diff currently requires columns with no null values"
             )
 
-        if not np.issubdtype(self.dtype, np.number):
+        if not isinstance(self.dtype, cudf.Number):
             raise NotImplementedError(
                 "Diff currently only supports numeric dtypes"
             )
@@ -3953,7 +3953,7 @@ class Series(Frame, Serializable):
         # TODO: move this libcudf
         input_col = self._column
         output_col = column_empty_like(input_col)
-        output_mask = column_empty_like(input_col, dtype="bool")
+        output_mask = column_empty_like(input_col, dtype=cudf.BooleanDtype())
         if output_col.size > 0:
             cudautils.gpu_diff.forall(output_col.size)(
                 input_col, output_col, output_mask, periods

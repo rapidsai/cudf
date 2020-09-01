@@ -769,7 +769,7 @@ class ColumnBase(Column, Serializable):
             lhs_cats = lhs.cat().categories._values
             rhs_cats = rhs.cat().categories._values
 
-            if not np.issubdtype(rhs_cats.dtype, lhs_cats.dtype):
+            if not isinstance(rhs_cats.dtype, type(lhs_cats.dtype)):
                 # If they're not the same dtype, short-circuit if the values
                 # list doesn't have any nulls. If it does have nulls, make
                 # the values list a Categorical with a single null
@@ -1083,7 +1083,6 @@ def column_empty(row_count, dtype="object", masked=False):
     """
     dtype = pd.api.types.pandas_dtype(dtype)
     children = ()
-
     if is_categorical_dtype(dtype):
         data = None
         children = (

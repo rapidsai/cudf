@@ -360,6 +360,10 @@ def min_column_type(x, expected_type):
 
 
 def check_cast_unsupported_dtype(dtype):
+
+    if isinstance(dtype, cudf.Generic):
+        return dtype.to_numpy
+
     if is_categorical_dtype(dtype):
         return dtype
 

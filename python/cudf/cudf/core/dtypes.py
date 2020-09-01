@@ -329,6 +329,12 @@ def dtype(obj):
 
     if obj is None:
         return None
+    if obj is str:
+        return cudf.StringDtype()
+    if obj is int:
+        return cudf.Int64Dtype()
+    if obj is float:
+        return cudf.Float64Dtype()
     if isinstance(obj, pd.CategoricalDtype):
         return cudf.CategoricalDtype.from_pandas(obj)
     if isinstance(obj, CategoricalDtype):
@@ -477,6 +483,10 @@ class CategoricalDtype(Generic):
             categories_header, categories_frames
         )
         return cls(categories=categories, ordered=ordered)
+
+    @property
+    def kind(self):
+        return 'O'
 
 
 class ListDtype(Generic):

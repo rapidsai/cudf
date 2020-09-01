@@ -4522,7 +4522,7 @@ class DataFrame(Frame, Serializable):
                 deep = True
             else:
                 deep = False
-                if "object" in dtype_counts or self.index.dtype == "object":
+                if "String" in dtype_counts or self.index.dtype == cudf.StringDtype():
                     size_qualifier = "+"
             mem_usage = self.memory_usage(index=True, deep=deep).sum()
             lines.append(
@@ -5308,12 +5308,12 @@ class DataFrame(Frame, Serializable):
                     isinstance(
                         self[col]._column, cudf.core.column.CategoricalColumn
                     )
-                    or np.issubdtype(self[col].dtype, np.dtype("object"))
+                    or isinstance(self[col].dtype, cudf.StringDtype)
                 ) or (
                     isinstance(
                         values._column, cudf.core.column.CategoricalColumn
                     )
-                    or np.issubdtype(values.dtype, np.dtype("object"))
+                    or isinstance(values.dtype, cudf.StringDtype)
                 ):
                     result[col] = utils.scalar_broadcast_to(False, len(self))
                 else:
@@ -5371,8 +5371,8 @@ class DataFrame(Frame, Serializable):
             )
             raise ValueError(msg)
 
-        filtered = self.select_dtypes(include=[np.number, np.bool])
-        common_dtype = np.find_common_type(filtered.dtypes, [])
+        filtered = self.select_dtypes(include=[cudf.Number, cudf.BooleanDtype])
+        common_dtype = cudf.api.types.find_common_type(filtered.dtypes, [])
         coerced = filtered.astype(common_dtype)
         return coerced
 

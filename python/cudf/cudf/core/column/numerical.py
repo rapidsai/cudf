@@ -233,7 +233,7 @@ class NumericalColumn(column.ColumnBase):
             msg = "Decimal values < 0 are not yet supported."
             raise NotImplementedError(msg)
 
-        if np.issubdtype(self.dtype, np.integer):
+        if isinstance(self.dtype, cudf.Integer):
             return self
 
         data = Buffer(
