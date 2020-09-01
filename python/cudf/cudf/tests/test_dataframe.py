@@ -6520,11 +6520,12 @@ def test_dataframe_sample_basic(n, frac, replace, axis):
 
 
 @pytest.mark.parametrize("replace", [True, False])
-def test_dataframe_reproducibility(replace):
+@pytest.mark.parametrize("random_state", [1, np.random.mtrand.RandomState(10)])
+def test_dataframe_reproducibility(replace, random_state):
     df = DataFrame({"a": cupy.arange(0, 1024)})
 
-    expected = df.sample(1024, replace=replace, random_state=1)
-    out = df.sample(1024, replace=replace, random_state=1)
+    expected = df.sample(1024, replace=replace, random_state=random_state)
+    out = df.sample(1024, replace=replace, random_state=random_state)
 
     assert_eq(expected, out)
 
