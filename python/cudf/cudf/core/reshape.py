@@ -810,7 +810,7 @@ def pivot(data, index=None, columns=None, values=None):
     return _pivot(values, index, columns)
 
 
-def unstack(df, level):
+def unstack(df, level, fill_value=None):
     """
     Pivot one or more levels of the (necessarily hierarchical) index labels.
 
@@ -823,6 +823,8 @@ def unstack(df, level):
     level : level name or index, list-like
         Integer, name or list of such, specifying one or more
         levels of the index to pivot
+    fill_value
+        Non-functional argument provided for compatibility with Pandas.
 
     Returns
     -------
@@ -878,6 +880,8 @@ def unstack(df, level):
     1     5  <NA>     6  <NA>     7
     2  <NA>     8  <NA>     9  <NA>
     """
+    if fill_value is not None:
+        raise NotImplementedError("fill_value is not supported.")
     if pd.api.types.is_list_like(level):
         if not level:
             return df

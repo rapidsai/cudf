@@ -6718,8 +6718,10 @@ class DataFrame(Frame, Serializable):
         )
 
     @copy_docstring(reshape.unstack)
-    def unstack(self, level=-1):
-        return cudf.core.reshape.unstack(self, level=level)
+    def unstack(self, level=-1, fill_value=None):
+        return cudf.core.reshape.unstack(
+            self, level=level, fill_value=fill_value
+        )
 
 
 def from_pandas(obj, nan_as_null=None):
