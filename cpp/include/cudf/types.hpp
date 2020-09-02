@@ -239,7 +239,6 @@ class data_type {
    **/
   explicit constexpr data_type(type_id id) : _id{id} {}
 
-  // TODO think about thrust::optional here
   explicit constexpr data_type(type_id id, int32_t scale) : _id{id}, _scale{scale} {}
 
   /**
