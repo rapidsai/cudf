@@ -2683,19 +2683,7 @@ class Series(Frame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        skipna = True if skipna is None else skipna
-
-        if skipna:
-            result_series = self.nans_to_nulls()
-            if result_series.has_nulls:
-                result_series = result_series.dropna()
-        else:
-            if self.has_nulls:
-                return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-
-            result_series = self
-
-        return result_series._column.min(dtype=dtype)
+        return self._column.min(skipna=skipna, dtype=dtype)
 
     def max(
         self,
@@ -2745,19 +2733,7 @@ class Series(Frame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        skipna = True if skipna is None else skipna
-
-        if skipna:
-            result_series = self.nans_to_nulls()
-            if result_series.has_nulls:
-                result_series = result_series.dropna()
-        else:
-            if self.has_nulls:
-                return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-
-            result_series = self
-
-        return result_series._column.max(dtype=dtype)
+        return self._column.max(skipna=skipna, dtype=dtype)
 
     def sum(
         self,
@@ -2816,30 +2792,9 @@ class Series(Frame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        if isinstance(self._column, DatetimeColumn):
-            raise TypeError(f"cannot perform sum with type {self.dtype}")
-
-        skipna = True if skipna is None else skipna
-
-        if skipna:
-            result_series = self.nans_to_nulls()
-            if result_series.has_nulls:
-                result_series = result_series.dropna()
-        else:
-            if self.has_nulls:
-                return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-
-            result_series = self
-
-        if min_count > 0:
-            valid_count = len(result_series) - result_series.null_count
-            if valid_count < min_count:
-                return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-        elif min_count < 0:
-            msg = "min_count value cannot be negative({0}), will default to 0."
-            warnings.warn(msg.format(min_count))
-
-        return result_series._column.sum(dtype=dtype)
+        return self._column.sum(
+            skipna=skipna, dtype=dtype, min_count=min_count
+        )
 
     def product(
         self,
@@ -2898,30 +2853,9 @@ class Series(Frame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        if isinstance(self._column, (DatetimeColumn, TimeDeltaColumn)):
-            raise TypeError(f"cannot perform prod with type {self.dtype}")
-
-        skipna = True if skipna is None else skipna
-
-        if skipna:
-            result_series = self.nans_to_nulls()
-            if result_series.has_nulls:
-                result_series = result_series.dropna()
-        else:
-            if self.has_nulls:
-                return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-
-            result_series = self
-
-        if min_count > 0:
-            valid_count = len(result_series) - result_series.null_count
-            if valid_count < min_count:
-                return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-        elif min_count < 0:
-            msg = "min_count value cannot be negative({0}), will default to 0."
-            warnings.warn(msg.format(min_count))
-
-        return result_series._column.product(dtype=dtype)
+        return self._column.product(
+            skipna=skipna, dtype=dtype, min_count=min_count
+        )
 
     def prod(
         self,
@@ -3246,19 +3180,7 @@ class Series(Frame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        skipna = True if skipna is None else skipna
-
-        if skipna:
-            result_series = self.nans_to_nulls()
-            if result_series.has_nulls:
-                result_series = result_series.dropna()
-        else:
-            if self.has_nulls:
-                return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-
-            result_series = self
-
-        return result_series._column.mean()
+        return self._column.mean(skipna=skipna)
 
     def std(
         self,
@@ -3307,22 +3229,7 @@ class Series(Frame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        if isinstance(self._column, DatetimeColumn):
-            raise TypeError(f"cannot perform std with type {self.dtype}")
-
-        skipna = True if skipna is None else skipna
-
-        if skipna:
-            result_series = self.nans_to_nulls()
-            if result_series.has_nulls:
-                result_series = result_series.dropna()
-        else:
-            if self.has_nulls:
-                return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-
-            result_series = self
-
-        return result_series._column.std(ddof=ddof)
+        return self._column.std(skipna=skipna, ddof=ddof)
 
     def var(
         self,
@@ -3371,22 +3278,7 @@ class Series(Frame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        if isinstance(self._column, (DatetimeColumn, TimeDeltaColumn)):
-            raise TypeError(f"cannot perform var with type {self.dtype}")
-
-        skipna = True if skipna is None else skipna
-
-        if skipna:
-            result_series = self.nans_to_nulls()
-            if result_series.has_nulls:
-                result_series = result_series.dropna()
-        else:
-            if self.has_nulls:
-                return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-
-            result_series = self
-
-        return result_series._column.var(ddof=ddof)
+        return self._column.var(skipna=skipna, ddof=ddof)
 
     def sum_of_squares(self, dtype=None):
         return self._column.sum_of_squares(dtype=dtype)

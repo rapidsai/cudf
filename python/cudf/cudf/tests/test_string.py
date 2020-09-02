@@ -2719,7 +2719,7 @@ def test_str_sum(data):
 def test_str_mean():
     sr = Series(["a", "b", "c", "d", "e"])
 
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(TypeError):
         sr.mean()
 
 

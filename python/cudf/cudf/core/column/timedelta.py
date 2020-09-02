@@ -314,9 +314,10 @@ class TimeDeltaColumn(column.ColumnBase):
             return self
         return libcudf.unary.cast(self, dtype=dtype)
 
-    def mean(self, dtype=np.float64):
+    def mean(self, skipna=None, dtype=np.float64):
         return pd.Timedelta(
-            self.as_numerical.mean(dtype=dtype), unit=self.time_unit
+            self.as_numerical.mean(skipna=skipna, dtype=dtype),
+            unit=self.time_unit,
         )
 
     def median(self, dtype=np.float64):
@@ -332,19 +333,16 @@ class TimeDeltaColumn(column.ColumnBase):
             return [pd.Timedelta(result[0], unit=self.time_unit)]
         return result.astype(self.dtype)
 
-    def sum(self, dtype=None):
+    def sum(self, skipna=None, dtype=None, min_count=0):
         if len(self) == 0:
             return pd.Timedelta(None, unit=self.time_unit)
         else:
             return pd.Timedelta(
-                self.as_numerical.sum(dtype=dtype), unit=self.time_unit
+                self.as_numerical.sum(
+                    skipna=skipna, dtype=dtype, min_count=min_count
+                ),
+                unit=self.time_unit,
             )
-
-    def product(self, dtype=None):
-        raise TypeError(f"cannot perform prod with type {self.dtype}")
-
-    def var(self, ddof=1, dtype=np.float64):
-        raise TypeError(f"cannot perform var with type {self.dtype}")
 
     def components(self, index=None):
         """

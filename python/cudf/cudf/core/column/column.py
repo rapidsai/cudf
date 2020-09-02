@@ -1159,11 +1159,64 @@ class ColumnBase(Column, Serializable):
             mask = Buffer.deserialize(header["mask"], [frames[1]])
         return build_column(data=data, dtype=dtype, mask=mask)
 
-    def min(self, dtype=None):
-        return libcudf.reduce.reduce("min", self, dtype=dtype)
+    def min(self, skipna=None, dtype=None):
+        result_col = self._process_for_reduction(skipna=skipna)
+        if isinstance(result_col, ColumnBase):
+            return libcudf.reduce.reduce("min", result_col, dtype=dtype)
+        else:
+            return result_col
 
-    def max(self, dtype=None):
-        return libcudf.reduce.reduce("max", self, dtype=dtype)
+    def max(self, skipna=None, dtype=None):
+        result_col = self._process_for_reduction(skipna=skipna)
+        if isinstance(result_col, ColumnBase):
+            return libcudf.reduce.reduce("max", result_col, dtype=dtype)
+        else:
+            return result_col
+
+    def sum(self, skipna=None, dtype=None, min_count=0):
+        raise TypeError(f"cannot perform sum with type {self.dtype}")
+
+    def product(self, skipna=None, dtype=None, min_count=0):
+        raise TypeError(f"cannot perform prod with type {self.dtype}")
+
+    def mean(self, skipna=None, dtype=None):
+        raise TypeError(f"cannot perform mean with type {self.dtype}")
+
+    def std(self, skipna=None, ddof=1, dtype=np.float64):
+        raise TypeError(f"cannot perform std with type {self.dtype}")
+
+    def var(self, skipna=None, ddof=1, dtype=np.float64):
+        raise TypeError(f"cannot perform var with type {self.dtype}")
+
+    def nans_to_nulls(self):
+        if self.dtype.kind == "f":
+            col = self.fillna(np.nan)
+            newmask = libcudf.transform.nans_to_nulls(col)
+            return self.set_mask(newmask)
+        else:
+            return self
+
+    def _process_for_reduction(self, skipna=None, min_count=0):
+        skipna = True if skipna is None else skipna
+
+        if skipna:
+            result_col = self.nans_to_nulls()
+            if result_col.has_nulls:
+                result_col = result_col.dropna()
+        else:
+            if self.has_nulls:
+                return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+
+            result_col = self
+
+        if min_count > 0:
+            valid_count = len(result_col) - result_col.null_count
+            if valid_count < min_count:
+                return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+        elif min_count < 0:
+            msg = "min_count value cannot be negative({0}), will default to 0."
+            warnings.warn(msg.format(min_count))
+        return result_col
 
 
 def column_empty_like(column, dtype=None, masked=False, newsize=None):

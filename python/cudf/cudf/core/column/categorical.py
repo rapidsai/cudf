@@ -1214,18 +1214,6 @@ class CategoricalColumn(column.ColumnBase):
             "Categorical column views are not currently supported"
         )
 
-    def sum(self, dtype=None):
-        raise TypeError("Categorical cannot perform the operation sum")
-
-    def product(self, dtype=None):
-        raise TypeError("Categorical cannot perform the operation prod")
-
-    def std(self, ddof=1, dtype=np.float64):
-        raise TypeError("Categorical cannot perform the operation std")
-
-    def var(self, ddof=1, dtype=np.float64):
-        raise TypeError("Categorical cannot perform the operation var")
-
 
 def _create_empty_categorical_column(categorical_column, dtype):
 

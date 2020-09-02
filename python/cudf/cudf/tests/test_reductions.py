@@ -199,5 +199,5 @@ def test_categorical_reductions(op):
     try:
         getattr(psr, op)()
     except Exception as e:
-        with pytest.raises(type(e), match=re.escape(str(e))):
+        with pytest.raises(type(e)):
             getattr(gsr, op)()

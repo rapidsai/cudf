@@ -290,18 +290,6 @@ class DatetimeColumn(column.ColumnBase):
         else:
             return False
 
-    def sum(self, dtype=None):
-        raise TypeError(f"cannot perform sum with type {self.dtype}")
-
-    def product(self, dtype=None):
-        raise TypeError(f"cannot perform prod with type {self.dtype}")
-
-    def std(self, ddof=1, dtype=np.float64):
-        raise TypeError(f"cannot perform std with type {self.dtype}")
-
-    def var(self, ddof=1, dtype=np.float64):
-        raise TypeError(f"cannot perform var with type {self.dtype}")
-
 
 @annotate("BINARY_OP", color="orange", domain="cudf_python")
 def binop(lhs, rhs, op, out_dtype):

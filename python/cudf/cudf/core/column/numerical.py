@@ -1,4 +1,5 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
+
 import numpy as np
 from pandas.api.types import is_integer_dtype
 
@@ -165,20 +166,46 @@ class NumericalColumn(column.ColumnBase):
             return self
         return libcudf.unary.cast(self, dtype)
 
-    def sum(self, dtype=None):
-        return libcudf.reduce.reduce("sum", self, dtype=dtype)
+    def sum(self, skipna=None, dtype=None, min_count=0):
+        result_col = self._process_for_reduction(
+            skipna=skipna, min_count=min_count
+        )
+        if isinstance(result_col, cudf.core.column.ColumnBase):
+            return libcudf.reduce.reduce("sum", result_col, dtype=dtype)
+        else:
+            return result_col
 
-    def product(self, dtype=None):
-        return libcudf.reduce.reduce("product", self, dtype=dtype)
+    def product(self, skipna=None, dtype=None, min_count=0):
+        result_col = self._process_for_reduction(
+            skipna=skipna, min_count=min_count
+        )
+        if isinstance(result_col, cudf.core.column.ColumnBase):
+            return libcudf.reduce.reduce("product", result_col, dtype=dtype)
+        else:
+            return result_col
 
-    def mean(self, dtype=np.float64):
-        return libcudf.reduce.reduce("mean", self, dtype=dtype)
+    def mean(self, skipna=None, dtype=np.float64):
+        result_col = self._process_for_reduction(skipna=skipna)
+        if isinstance(result_col, cudf.core.column.ColumnBase):
+            return libcudf.reduce.reduce("mean", result_col, dtype=dtype)
+        else:
+            return result_col
 
-    def var(self, ddof=1, dtype=np.float64):
-        return libcudf.reduce.reduce("var", self, dtype=dtype, ddof=ddof)
+    def var(self, skipna=None, ddof=1, dtype=np.float64):
+        result = self._process_for_reduction(skipna=skipna)
+        if isinstance(result, cudf.core.column.ColumnBase):
+            return libcudf.reduce.reduce("var", result, dtype=dtype, ddof=ddof)
+        else:
+            return result
 
-    def std(self, ddof=1, dtype=np.float64):
-        return libcudf.reduce.reduce("std", self, dtype=dtype, ddof=ddof)
+    def std(self, skipna=None, ddof=1, dtype=np.float64):
+        result_col = self._process_for_reduction(skipna=skipna)
+        if isinstance(result_col, cudf.core.column.ColumnBase):
+            return libcudf.reduce.reduce(
+                "std", result_col, dtype=dtype, ddof=ddof
+            )
+        else:
+            return result_col
 
     def sum_of_squares(self, dtype=None):
         return libcudf.reduce.reduce("sum_of_squares", self, dtype=dtype)
