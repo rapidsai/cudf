@@ -32,6 +32,9 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/transform.h>
+#include "cudf/null_mask.hpp"
+#include "cudf/types.hpp"
+#include "cudf/utilities/error.hpp"
 #include "transform_mutable_iterator.h"
 
 using namespace numeric;
@@ -786,6 +789,19 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointColumnWrapper)
   auto const col = cudf::test::fixed_width_column_wrapper<decimalXX>(vec.begin(), vec.end());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(col, w);
+}
+
+TYPED_TEST(FixedPointTestBothReps, NoScaleSet)
+{
+  using namespace numeric;
+  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
+  using RepType   = TypeParam;
+
+  auto const is_decimal32 = std::is_same<RepType, int32_t>::value;
+  auto const id           = is_decimal32 ? cudf::type_id::DECIMAL32 : cudf::type_id::DECIMAL64;
+  auto const null_mask    = cudf::create_null_mask(0, cudf::mask_state::ALL_NULL);
+
+  EXPECT_THROW(cudf::make_fixed_point_column(cudf::data_type{id}, 0, null_mask), cudf::logic_error);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
