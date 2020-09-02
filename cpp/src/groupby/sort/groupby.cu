@@ -397,6 +397,18 @@ void store_result_functor::operator()<aggregation::NTH_ELEMENT>(aggregation cons
                                              mr,
                                              stream));
 }
+
+template <>
+void store_result_functor::operator()<aggregation::COLLECT>(aggregation const& agg)
+{
+  if (cache.has_result(col_idx, agg)) return;
+
+  auto result = detail::group_collect(
+    get_grouped_values(), helper.group_offsets(), helper.num_groups(), mr, stream);
+
+  cache.add_result(col_idx, agg, std::move(result));
+};
+
 }  // namespace detail
 
 // Sort-based groupby
