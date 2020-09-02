@@ -1867,12 +1867,8 @@ class Series(Frame, Serializable):
         """
         Convert nans (if any) to nulls
         """
-        if self.dtype.kind == "f":
-            sr = self.fillna(np.nan)
-            newmask = libcudf.transform.nans_to_nulls(sr._column)
-            return self.set_mask(newmask)
-        else:
-            return self
+        result_col = self._column.nans_to_nulls()
+        return self._copy_construct(data=result_col)
 
     def all(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
         """
