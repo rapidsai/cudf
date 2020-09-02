@@ -23,6 +23,21 @@ def read_orc_metadata(path):
     return num_rows, num_stripes, col_names
 
 
+@ioutils.doc_read_orc_statistics()
+def read_orc_statistics(
+    filepath_or_buffer, **kwargs,
+):
+    """{docstring}"""
+
+    filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
+        path_or_data=filepath_or_buffer, compression=None, **kwargs
+    )
+    if compression is not None:
+        ValueError("URL content-encoding decompression is not supported")
+
+    return libcudf.orc.read_orc_statistics(filepath_or_buffer)
+
+
 @ioutils.doc_read_orc()
 def read_orc(
     filepath_or_buffer,

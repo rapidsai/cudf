@@ -16,11 +16,13 @@
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/functions.hpp>
+#include <cudf/io/orc_statistics.hpp>
 #include <cudf/io/readers.hpp>
 #include <cudf/io/writers.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include "io/orc/orc.h"
 #include "orc/chunked_state.hpp"
 #include "parquet/chunked_state.hpp"
 
@@ -165,6 +167,61 @@ void write_csv(write_csv_args const& args, rmm::mr::device_memory_resource* mr)
 }
 
 namespace detail_orc = cudf::io::detail::orc;
+
+// Freeform API wraps the detail reader class API
+std::vector<std::string> read_orc_statistics(source_info const& src_info)
+{
+  // Get source to read statistics from
+  std::unique_ptr<datasource> source;
+  if (src_info.type == io_type::FILEPATH) {
+    CUDF_EXPECTS(src_info.filepaths.size() == 1, "Only a single source is currently supported.");
+    source = cudf::io::datasource::create(src_info.filepaths[0]);
+  } else if (src_info.type == io_type::HOST_BUFFER) {
+    CUDF_EXPECTS(src_info.buffers.size() == 1, "Only a single source is currently supported.");
+    source = cudf::io::datasource::create(src_info.buffers[0]);
+  } else if (src_info.type == io_type::USER_IMPLEMENTED) {
+    CUDF_EXPECTS(src_info.user_sources.size() == 1, "Only a single source is currently supported.");
+    source = cudf::io::datasource::create(src_info.user_sources[0]);
+  } else {
+    CUDF_FAIL("Unsupported source type");
+  }
+
+  const auto len         = source->size();
+  const auto max_ps_size = std::min(len, static_cast<size_t>(256));
+
+  // Read uncompressed postscript section (max 255 bytes + 1 byte for length)
+  auto buffer            = source->host_read(len - max_ps_size, max_ps_size);
+  const size_t ps_length = buffer->data()[max_ps_size - 1];
+  const uint8_t* ps_data = &buffer->data()[max_ps_size - ps_length - 1];
+  orc::ProtobufReader pb;
+  orc::PostScript ps;
+  pb.init(ps_data, ps_length);
+  CUDF_EXPECTS(pb.read(&ps, ps_length), "Cannot read postscript");
+  CUDF_EXPECTS(ps.footerLength + ps_length < len, "Invalid footer length");
+
+  // If compression is used, all the rest of the metadata is compressed
+  // If no compressed is used, the decompressor is simply a pass-through
+  std::unique_ptr<orc::OrcDecompressor> decompressor =
+    std::make_unique<orc::OrcDecompressor>(ps.compression, ps.compressionBlockSize);
+
+  // Read compressed filefooter section
+  buffer           = source->host_read(len - ps_length - 1 - ps.footerLength, ps.footerLength);
+  size_t ff_length = 0;
+  auto ff_data     = decompressor->Decompress(buffer->data(), ps.footerLength, &ff_length);
+  orc::FileFooter ff;
+  pb.init(ff_data, ff_length);
+  CUDF_EXPECTS(pb.read(&ff, ff_length), "Cannot read filefooter");
+  CUDF_EXPECTS(ff.types.size() > 0, "No columns found");
+
+  // Get file-level statistics
+  std::vector<orc::ColumnStatistics> file_level_statistics = ff.statistics;
+  std::vector<std::string> file_level_statistics_blobs;
+  std::for_each(
+    file_level_statistics.begin(), file_level_statistics.end(), [&](orc::ColumnStatistics stats) {
+      file_level_statistics_blobs.push_back(std::string(stats.begin(), stats.end()));
+    });
+  return file_level_statistics_blobs;
+}
 
 // Freeform API wraps the detail reader class API
 table_with_metadata read_orc(read_orc_args const& args, rmm::mr::device_memory_resource* mr)

@@ -5,6 +5,8 @@ from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from cudf._lib.cpp.column.column cimport column
 
+
+from cudf._lib.cpp.io.orc_statistics cimport read_orc_statistics as libcudf_read_orc_statistics
 from cudf._lib.cpp.io.functions cimport (
     read_orc_args,
     write_orc_args,
@@ -28,6 +30,17 @@ from cudf._lib.table cimport Table
 from cudf._lib.types import np_to_cudf_types
 from cudf._lib.types cimport underlying_type_t_type_id
 import numpy as np
+
+
+cpdef read_orc_statistics(filepath_or_buffer):
+    """
+    Cython function to call into libcudf API, see `read_orc_statistics`.
+
+    See Also
+    --------
+    cudf.io.orc.read_orc_statistics
+    """
+    return libcudf_read_orc_statistics(make_source_info([filepath_or_buffer]))
 
 
 cpdef read_orc(filepath_or_buffer, columns=None, stripes=None,
