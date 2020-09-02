@@ -83,11 +83,10 @@ template <>
 size_t avg_element_size<cudf::string_view>(data_parameters const& data_params)
 {
   auto const dist = data_params.get_params<cudf::string_view>().length_params;
-  if (dist.distribution_type == rand_dist_id::NORMAL ||
-      dist.distribution_type == rand_dist_id::UNIFORM) {
+  if (dist.id == distribution_id::NORMAL || dist.id == distribution_id::UNIFORM) {
     return dist.lower_bound / 2. + dist.upper_bound / 2.;
   }
-  if (dist.distribution_type == rand_dist_id::GEOMETRIC) {
+  if (dist.id == distribution_id::GEOMETRIC) {
     auto const range_size = dist.lower_bound < dist.upper_bound
                               ? dist.upper_bound - dist.lower_bound
                               : dist.lower_bound - dist.upper_bound;
@@ -142,7 +141,7 @@ struct random_value_fn<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
   std::function<int64_t(std::mt19937&)> seconds_gen;
   std::function<int64_t(std::mt19937&)> nanoseconds_gen;
 
-  random_value_fn(dist_params<T> params)
+  random_value_fn(distribution_desc<T> params)
   {
     std::pair<int64_t, int64_t> const range_ns = {to_nanoseconds<T>(params.lower_bound),
                                                   to_nanoseconds<T>(params.upper_bound)};
@@ -150,8 +149,7 @@ struct random_value_fn<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
       range_ns.first / to_nanoseconds<cudf::timestamp_s>(1),
       range_ns.second / to_nanoseconds<cudf::timestamp_s>(1)};
     if (range_ns.first != range_ns.second)
-      seconds_gen =
-        make_rand_generator<int64_t>(params.distribution_type, range_s.first, range_s.second);
+      seconds_gen = make_rand_generator<int64_t>(params.id, range_s.first, range_s.second);
     else
       seconds_gen = [=](std::mt19937&) { return range_ns.second; };
 
@@ -159,7 +157,7 @@ struct random_value_fn<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
     // Don't need nanoseconds for days or seconds
     if (to_nanoseconds<T>(1) < 1000000000)
       nanoseconds_gen = make_rand_generator<int64_t>(
-        rand_dist_id::UNIFORM, std::min(range_size_ns, 0l), std::max(range_size_ns, 0l));
+        distribution_id::UNIFORM, std::min(range_size_ns, 0l), std::max(range_size_ns, 0l));
     else
       nanoseconds_gen = [](std::mt19937&) { return 0; };
   }
@@ -176,7 +174,7 @@ struct random_value_fn<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
 
 template <typename T>
 struct random_value_fn<T, typename std::enable_if_t<cudf::is_fixed_point<T>()>> {
-  random_value_fn(dist_params<T> const&) {}
+  random_value_fn(distribution_desc<T> const&) {}
   T operator()(std::mt19937& engine) { return T{}; }
 };
 
@@ -188,10 +186,10 @@ struct random_value_fn<
   T const upper_bound;
   std::function<T(std::mt19937&)> gen;
 
-  random_value_fn(dist_params<T> const& params)
-    : lower_bound{params.lower_bound},
-      upper_bound{params.upper_bound},
-      gen{make_rand_generator<T>(params.distribution_type, params.lower_bound, params.upper_bound)}
+  random_value_fn(distribution_desc<T> const& desc)
+    : lower_bound{desc.lower_bound},
+      upper_bound{desc.upper_bound},
+      gen{make_rand_generator<T>(desc.id, desc.lower_bound, desc.upper_bound)}
   {
   }
 
@@ -210,7 +208,7 @@ template <typename T>
 struct random_value_fn<T, typename std::enable_if_t<std::is_same<T, bool>::value>> {
   std::bernoulli_distribution b_dist;
 
-  random_value_fn(dist_params<T> const& params) : b_dist{params.probability_true} {}
+  random_value_fn(distribution_desc<T> const& desc) : b_dist{desc.probability_true} {}
   T operator()(std::mt19937& engine) { return b_dist(engine); }
 };
 
@@ -471,9 +469,9 @@ std::vector<cudf::type_id> repeat_dtypes(std::vector<cudf::type_id> const& dtype
 
 std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> dtype_ids,
                                                  cudf::size_type num_cols,
-                                                 size_t table_bytes)
+                                                 size_t table_bytes,
+                                                 data_parameters data_params)
 {
-  data_parameters data_params;
   auto const out_dtype_ids = repeat_dtypes(dtype_ids, num_cols);
   size_t const avg_row_bytes =
     std::accumulate(out_dtype_ids.begin(), out_dtype_ids.end(), 0ul, [&](size_t sum, auto tid) {
@@ -488,7 +486,7 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> dtyp
   auto seed_engine = deterministic_engine();  // pass the seed param here
   std::vector<std::future<columns_vector>> col_futures;
   random_value_fn<unsigned> seed_dist(
-    {rand_dist_id::UNIFORM, 0, std::numeric_limits<unsigned>::max()});
+    {distribution_id::UNIFORM, 0, std::numeric_limits<unsigned>::max()});
   for (unsigned int i = 0; i < processor_count && next_col < num_cols; ++i) {
     auto thread_engine         = deterministic_engine(seed_dist(seed_engine));
     auto const thread_num_cols = std::min(num_cols - next_col, cols_per_thread);

@@ -75,18 +75,18 @@ auto make_geometric_dist(T range_start, T range_end)
 }
 
 template <typename T, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
-std::function<T(std::mt19937&)> make_rand_generator(rand_dist_id dist_type,
+std::function<T(std::mt19937&)> make_rand_generator(distribution_id did,
                                                     T lower_bound,
                                                     T upper_bound)
 {
-  switch (dist_type) {
-    case rand_dist_id::NORMAL:
+  switch (did) {
+    case distribution_id::NORMAL:
       return [lower_bound, dist = make_normal_dist(lower_bound, upper_bound)](
                std::mt19937& engine) mutable -> T { return dist(engine) - lower_bound; };
-    case rand_dist_id::UNIFORM:
+    case distribution_id::UNIFORM:
       return [dist = make_uniform_dist(lower_bound, upper_bound)](
                std::mt19937& engine) mutable -> T { return dist(engine); };
-    case rand_dist_id::GEOMETRIC:
+    case distribution_id::GEOMETRIC:
       return [lower_bound, upper_bound, dist = make_geometric_dist(lower_bound, upper_bound)](
                std::mt19937& engine) mutable -> T {
         if (lower_bound <= upper_bound)
@@ -94,23 +94,23 @@ std::function<T(std::mt19937&)> make_rand_generator(rand_dist_id dist_type,
         else
           return lower_bound - dist(engine) + lower_bound;
       };
-    default: CUDF_FAIL("Unsupported random distribution");
+    default: CUDF_FAIL("Unsupported probability distribution");
   }
 }
 
 template <typename T, std::enable_if_t<cudf::is_floating_point<T>()>* = nullptr>
-std::function<T(std::mt19937&)> make_rand_generator(rand_dist_id dist_type,
+std::function<T(std::mt19937&)> make_rand_generator(distribution_id dist_id,
                                                     T lower_bound,
                                                     T upper_bound)
 {
-  switch (dist_type) {
-    case rand_dist_id::NORMAL:
+  switch (dist_id) {
+    case distribution_id::NORMAL:
       return [dist = make_normal_dist(lower_bound, upper_bound)](
                std::mt19937& engine) mutable -> T { return dist(engine); };
-    case rand_dist_id::UNIFORM:
+    case distribution_id::UNIFORM:
       return [dist = make_uniform_dist(lower_bound, upper_bound)](
                std::mt19937& engine) mutable -> T { return dist(engine); };
-    case rand_dist_id::GEOMETRIC:
+    case distribution_id::GEOMETRIC:
       return [lower_bound, upper_bound, dist = make_geometric_dist(lower_bound, upper_bound)](
                std::mt19937& engine) mutable -> T {
         if (lower_bound <= upper_bound)

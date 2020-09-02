@@ -16,31 +16,31 @@ enum class type_group_id : int32_t {
   NESTED,
 };
 
-enum class rand_dist_id : int8_t {
+enum class distribution_id : int8_t {
   UNIFORM,
   NORMAL,
   GEOMETRIC,
 };
 namespace {
 template <typename T, std::enable_if_t<cudf::is_chrono<T>()>* = nullptr>
-rand_dist_id default_distribution()
+distribution_id default_distribution_id()
 {
-  return rand_dist_id::GEOMETRIC;
+  return distribution_id::GEOMETRIC;
 }
 
 template <typename T,
           std::enable_if_t<!std::is_unsigned<T>::value && cudf::is_numeric<T>()>* = nullptr>
-rand_dist_id default_distribution()
+distribution_id default_distribution_id()
 {
-  return rand_dist_id::NORMAL;
+  return distribution_id::NORMAL;
 }
 
 template <typename T,
           std::enable_if_t<!std::is_same<T, bool>::value && std::is_unsigned<T>::value &&
                            cudf::is_numeric<T>()>* = nullptr>
-rand_dist_id default_distribution()
+distribution_id default_distribution_id()
 {
-  return rand_dist_id::GEOMETRIC;
+  return distribution_id::GEOMETRIC;
 }
 
 template <typename T>
@@ -72,111 +72,108 @@ std::pair<T, T> default_range()
 }  // namespace
 
 template <typename T, typename Enable = void>
-struct dist_params;
+struct distribution_desc;
 
 template <typename T>
-struct dist_params<
+struct distribution_desc<
   T,
   typename std::enable_if_t<!std::is_same<T, bool>::value && cudf::is_numeric<T>()>> {
-  rand_dist_id distribution_type;
+  distribution_id id;
   T lower_bound;
   T upper_bound;
 };
 
 template <typename T>
-struct dist_params<T, typename std::enable_if_t<std::is_same<T, bool>::value>> {
+struct distribution_desc<T, typename std::enable_if_t<std::is_same<T, bool>::value>> {
   double probability_true;
 };
 
 template <typename T>
-struct dist_params<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
-  rand_dist_id distribution_type;
+struct distribution_desc<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
+  distribution_id id;
   int64_t lower_bound;
   int64_t upper_bound;
 };
 
 template <typename T>
-struct dist_params<T, typename std::enable_if_t<std::is_same<T, cudf::string_view>::value>> {
-  dist_params<uint32_t> length_params;
+struct distribution_desc<T, typename std::enable_if_t<std::is_same<T, cudf::string_view>::value>> {
+  distribution_desc<uint32_t> length_params;
 };
 
 template <typename T>
-struct dist_params<T, typename std::enable_if_t<cudf::is_fixed_point<T>()>> {
+struct distribution_desc<T, typename std::enable_if_t<cudf::is_fixed_point<T>()>> {
 };
 
 class data_parameters {
-  std::map<cudf::type_id, dist_params<uint64_t>> int_params;
-  std::map<cudf::type_id, dist_params<double>> float_params;
+  std::map<cudf::type_id, distribution_desc<uint64_t>> int_params;
+  std::map<cudf::type_id, distribution_desc<double>> float_params;
   double bool_probability_true = 0.5;
 
  public:
   template <typename T,
             typename std::enable_if_t<!std::is_same<T, bool>::value && std::is_integral<T>::value,
                                       T>* = nullptr>
-  dist_params<T> get_params() const
+  distribution_desc<T> get_params() const
   {
     auto it = int_params.find(cudf::type_to_id<T>());
     if (it == int_params.end()) {
       auto const range = default_range<T>();
-      return dist_params<T>{default_distribution<T>(), range.first, range.second};
+      return distribution_desc<T>{default_distribution_id<T>(), range.first, range.second};
     } else {
-      auto& val = it->second;
-      return {
-        val.distribution_type, static_cast<T>(val.lower_bound), static_cast<T>(val.upper_bound)};
+      auto& desc = it->second;
+      return {desc.id, static_cast<T>(desc.lower_bound), static_cast<T>(desc.upper_bound)};
     }
   }
 
   template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value, T>* = nullptr>
-  dist_params<T> get_params() const
+  distribution_desc<T> get_params() const
   {
     auto it = float_params.find(cudf::type_to_id<T>());
     if (it == float_params.end()) {
       auto const range = default_range<T>();
-      return dist_params<T>{default_distribution<T>(), range.first, range.second};
+      return distribution_desc<T>{default_distribution_id<T>(), range.first, range.second};
     } else {
-      auto& val = it->second;
-      return {
-        val.distribution_type, static_cast<T>(val.lower_bound), static_cast<T>(val.upper_bound)};
+      auto& desc = it->second;
+      return {desc.id, static_cast<T>(desc.lower_bound), static_cast<T>(desc.upper_bound)};
     }
   }
 
   template <typename T, std::enable_if_t<std::is_same<T, bool>::value>* = nullptr>
-  dist_params<T> get_params() const
+  distribution_desc<T> get_params() const
   {
-    return dist_params<T>{bool_probability_true};
+    return distribution_desc<T>{bool_probability_true};
   }
 
   template <typename T, typename std::enable_if_t<cudf::is_chrono<T>()>* = nullptr>
-  dist_params<T> get_params() const
+  distribution_desc<T> get_params() const
   {
     auto it = int_params.find(cudf::type_to_id<T>());
     if (it == int_params.end()) {
       auto const range = default_range<T>();
-      return dist_params<T>{default_distribution<T>(), range.first, range.second};
+      return distribution_desc<T>{default_distribution_id<T>(), range.first, range.second};
     } else {
-      auto& val = it->second;
-      return {val.distribution_type,
-              static_cast<int64_t>(val.lower_bound),
-              static_cast<int64_t>(val.upper_bound)};
+      auto& desc = it->second;
+      return {
+        desc.id, static_cast<int64_t>(desc.lower_bound), static_cast<int64_t>(desc.upper_bound)};
     }
   }
 
   template <typename T, std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
-  dist_params<T> get_params() const
+  distribution_desc<T> get_params() const
   {
     auto it = int_params.find(cudf::type_to_id<T>());
     if (it == int_params.end()) {
-      return dist_params<T>{{rand_dist_id::NORMAL, 0, 32}};
+      return distribution_desc<T>{{distribution_id::NORMAL, 0, 32}};
     } else {
-      auto& val = it->second;
-      return {{val.distribution_type,
-               static_cast<uint32_t>(val.lower_bound),
-               static_cast<uint32_t>(val.upper_bound)}};
+      auto& desc = it->second;
+      return {{desc.id,
+               static_cast<uint32_t>(desc.lower_bound),
+               static_cast<uint32_t>(desc.upper_bound)}};
     }
   }
 
   template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
-  dist_params<T> get_params() const
+  distribution_desc<T> get_params() const
   {
     return {};
   }
@@ -201,4 +198,5 @@ std::vector<cudf::type_id> get_type_or_group(int32_t id);
 
 std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> dtype_ids,
                                                  cudf::size_type num_cols,
-                                                 size_t table_bytes);
+                                                 size_t table_bytes,
+                                                 data_parameters data_params = data_parameters{});
