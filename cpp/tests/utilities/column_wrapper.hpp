@@ -440,7 +440,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * @endcode
    *
    * @param elements The list of pairs of element and validity booleans
-   **/
+   */
   template <typename ElementFrom>
   fixed_width_column_wrapper(std::initializer_list<std::pair<ElementFrom, bool>> elements)
   {
@@ -449,7 +449,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
     auto end = begin + elements.size();
     auto v =
       thrust::make_transform_iterator(elements.begin(), [](auto const& e) { return e.second; });
-    wrapped = fixed_width_column_wrapper<ElementFrom>(begin, end, v).release();
+    wrapped = fixed_width_column_wrapper<ElementTo, ElementFrom>(begin, end, v).release();
   }
 };
 
@@ -458,6 +458,20 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
  **/
 class strings_column_wrapper : public detail::column_wrapper {
  public:
+  /**
+   * @brief Default constructor initializes an empty column of strings
+   **/
+  strings_column_wrapper() : column_wrapper{}
+  {
+    std::vector<std::string> empty;
+    std::vector<char> chars;
+    std::vector<int32_t> offsets;
+    auto all_valid = make_counting_transform_iterator(0, [](auto i) { return true; });
+    std::tie(chars, offsets) =
+      detail::make_chars_and_offsets(empty.begin(), empty.end(), all_valid);
+    wrapped = cudf::make_strings_column(chars, offsets);
+  }
+
   /**
    * @brief Construct a non-nullable column of strings from the range
    * `[begin,end)`.
@@ -588,6 +602,36 @@ class strings_column_wrapper : public detail::column_wrapper {
                          std::initializer_list<bool> validity)
     : strings_column_wrapper(std::cbegin(strings), std::cend(strings), std::cbegin(validity))
   {
+  }
+
+  /**
+   * @brief Construct a nullable column from a list of pairs of strings
+   * and validity booleans of each string.
+   *
+   * The validity of each string is determined by the boolean element in the pair
+   * where `true` indicates the string is valid, and `false` indicates the
+   * string is null.
+   *
+   * Example:
+   * @code{.cpp}
+   * // Creates a nullable STRING column with 7 string elements:
+   * // {NULL, "this", NULL, "a", NULL, "of", NULL}
+   * using p = std::pair<std::string, bool>;
+   * strings_column_wrapper s( p{"", false}, p{"this", true}, p{"is", false},
+   *                           p{"a", true}, p{"column", false}, p{"of", true},
+   *                           p{"strings", false} );
+   * @endcode
+   *
+   * @param strings The list of pairs of strings and validity booleans
+   */
+  strings_column_wrapper(std::initializer_list<std::pair<std::string, bool>> strings)
+  {
+    auto begin =
+      thrust::make_transform_iterator(strings.begin(), [](auto const& s) { return s.first; });
+    auto end = begin + strings.size();
+    auto v =
+      thrust::make_transform_iterator(strings.begin(), [](auto const& s) { return s.second; });
+    wrapped = strings_column_wrapper(begin, end, v).release();
   }
 };
 

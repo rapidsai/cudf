@@ -219,7 +219,7 @@ using StringTypes = cudf::test::Types<string_view>;
  * Example:
  * ```
  * // Invokes all typed fixture tests for all string types in libcudf
- * TYPED_TEST_CASE(MyTypedFixture, cudf::test::StringTypes);
+ * TYPED_TEST_CASE(MyTypedFixture, cudf::test::ListTypes);
  * ```
  */
 using ListTypes = cudf::test::Types<list_view>;
