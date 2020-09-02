@@ -194,12 +194,7 @@ struct random_value_fn<T, typename std::enable_if_t<std::is_same<T, bool>::value
   std::bernoulli_distribution b_dist;
 
   random_value_fn(dist_params<T> params) : b_dist{params.p} {}
-  T operator()(std::mt19937& engine)
-  {
-    bool retval = b_dist(engine);
-    std::cout << retval;
-    return retval;
-  }
+  T operator()(std::mt19937& engine) { return b_dist(engine); }
 };
 
 size_t null_mask_size(cudf::size_type num_rows)
@@ -246,15 +241,15 @@ void set_element_at(Val_gen const& value_gen,
 template <typename T>
 std::unique_ptr<cudf::column> create_random_column(std::mt19937& engine, cudf::size_type num_rows)
 {
-  distribution_parameters dp{};
+  data_parameters dp{};
   float const null_frequency        = 0.01;
   cudf::size_type const cardinality = 1000;
   cudf::size_type const avg_run_len = 4;
 
   std::bernoulli_distribution null_dist{null_frequency};
-  random_value_fn<T> random_value_gen{dp.get_params<T>()};
-  auto value_gen = [&]() { return random_value_gen(engine); };
-  auto valid_gen = [&]() { return null_frequency == 0.f || !null_dist(engine); };
+  auto random_value_gen = random_value_fn<T>{dp.get_params<T>()};
+  auto value_gen        = [&]() { return random_value_gen(engine); };
+  auto valid_gen        = [&]() { return null_frequency == 0.f || !null_dist(engine); };
 
   pinned_buffer<T> samples{pinned_alloc<T>(cardinality), cudaFreeHost};
   std::vector<cudf::bitmask_type> samples_null_mask(null_mask_size(cardinality), ~0);
@@ -322,9 +317,10 @@ void copy_string(cudf::size_type src_idx,
   if (!get_null_mask_bit(src.null_mask, src_idx)) reset_null_mask_bit(dst.null_mask, dst_idx);
   auto const str_len = src.offsets[src_idx + 1] - src.offsets[src_idx];
   dst.chars.resize(dst.chars.size() + str_len);
-  // TODO don't copy if null?
-  std::copy_n(
-    src.chars.begin() + src.offsets[src_idx], str_len, dst.chars.begin() + dst.offsets.back());
+  if (get_null_mask_bit(src.null_mask, src_idx)) {
+    std::copy_n(
+      src.chars.begin() + src.offsets[src_idx], str_len, dst.chars.begin() + dst.offsets.back());
+  }
   dst.offsets.push_back(dst.chars.size());
 }
 
@@ -361,6 +357,7 @@ template <>
 std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(std::mt19937& engine,
                                                                       cudf::size_type num_rows)
 {
+  data_parameters dp{};
   size_t constexpr bits_per_word = sizeof(cudf::bitmask_type) * 8;
 
   float const null_frequency        = 0.01;
@@ -370,7 +367,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(std::mt199
 
   auto const char_cnt = avg_string_len * num_rows;
 
-  std::poisson_distribution<> len_dist(avg_string_len);
+  auto len_dist = random_value_fn<uint32_t>{dp.get_params<cudf::string_view>().length_params};
   std::bernoulli_distribution null_dist{null_frequency};
   std::gamma_distribution<float> run_len_dist(4.f, avg_run_len / 4.f);
   std::uniform_int_distribution<char> char_dist{'!', '~'};

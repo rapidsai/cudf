@@ -108,10 +108,15 @@ struct dist_params<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
 };
 
 template <typename T>
+struct dist_params<T, typename std::enable_if_t<std::is_same<T, cudf::string_view>::value>> {
+  dist_params<uint32_t> length_params;
+};
+
+template <typename T>
 struct dist_params<T, typename std::enable_if_t<cudf::is_fixed_point<T>()>> {
 };
 
-class distribution_parameters {
+class data_parameters {
   // TODO fill the map with defaults
   std::map<cudf::type_id, dist_params<uint64_t>> int_params;
   std::map<cudf::type_id, dist_params<double>> float_params;
@@ -168,6 +173,12 @@ class distribution_parameters {
               static_cast<int64_t>(val.lower_bound),
               static_cast<int64_t>(val.upper_bound)};
     }
+  }
+
+  template <typename T, std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
+  dist_params<T> get_params()
+  {
+    return dist_params<T>{default_distribution<int32_t>(), 0,200};
   }
 
   template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
