@@ -8,6 +8,7 @@ import cudf as gd
 from cudf.core import DataFrame, Series
 from cudf.core.index import as_index
 from cudf.tests.utils import assert_eq
+from cudf.core.series import _fix_nullable_dtype_repr
 
 
 @pytest.fixture
@@ -67,7 +68,7 @@ def test_categorical_integer():
 3 c
 4 a
 dtype: category
-Categories (3, object): [a, b, c]
+Categories (3, String): [a, b, c]
 """
     assert string.split() == expect_str.split()
 
@@ -360,7 +361,7 @@ def test_categorical_as_ordered(pd_str_cat, inplace):
 
     assert cd_sr_1.cat.ordered is True
     assert cd_sr_1.cat.ordered == pd_sr_1.cat.ordered
-    assert str(cd_sr_1) == str(pd_sr_1)
+    assert str(cd_sr_1) == _fix_nullable_dtype_repr(str(pd_sr_1))
 
 
 @pytest.mark.parametrize("inplace", [True, False])
@@ -379,7 +380,7 @@ def test_categorical_as_unordered(pd_str_cat, inplace):
 
     assert cd_sr_1.cat.ordered is False
     assert cd_sr_1.cat.ordered == pd_sr_1.cat.ordered
-    assert str(cd_sr_1) == str(pd_sr_1)
+    assert str(cd_sr_1) == _fix_nullable_dtype_repr(str(pd_sr_1))
 
 
 @pytest.mark.parametrize("from_ordered", [True, False])
@@ -394,7 +395,7 @@ def test_categorical_reorder_categories(
 
     assert_eq(pd_sr, cd_sr)
 
-    assert str(pd_sr) == str(cd_sr)
+    assert _fix_nullable_dtype_repr(str(pd_sr)) == str(cd_sr)
 
     kwargs = dict(ordered=to_ordered, inplace=inplace)
 
@@ -405,7 +406,7 @@ def test_categorical_reorder_categories(
 
     assert_eq(pd_sr_1, cd_sr_1)
 
-    assert str(cd_sr_1) == str(pd_sr_1)
+    assert str(cd_sr_1) == _fix_nullable_dtype_repr(str(pd_sr_1))
 
 
 @pytest.mark.parametrize("inplace", [True, False])
@@ -416,7 +417,7 @@ def test_categorical_add_categories(pd_str_cat, inplace):
 
     assert_eq(pd_sr, cd_sr)
 
-    assert str(pd_sr) == str(cd_sr)
+    assert _fix_nullable_dtype_repr(str(pd_sr)) == str(cd_sr)
 
     pd_sr_1 = pd_sr.cat.add_categories(["d"], inplace=inplace)
     cd_sr_1 = cd_sr.cat.add_categories(["d"], inplace=inplace)
@@ -437,7 +438,7 @@ def test_categorical_remove_categories(pd_str_cat, inplace):
 
     assert_eq(pd_sr, cd_sr)
 
-    assert str(pd_sr) == str(cd_sr)
+    assert _fix_nullable_dtype_repr(str(pd_sr)) == str(cd_sr)
 
     pd_sr_1 = pd_sr.cat.remove_categories(["a"], inplace=inplace)
     cd_sr_1 = cd_sr.cat.remove_categories(["a"], inplace=inplace)

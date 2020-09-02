@@ -184,7 +184,7 @@ def to_datetime(
                         column.datetime._numpy_to_pandas_conversion[u]
                         / (
                             column.datetime._numpy_to_pandas_conversion["s"]
-                            if np.datetime_data(col.dtype)[0] == "s"
+                            if np.datetime_data(col.dtype.to_numpy)[0] == "s"
                             else 1
                         )
                     )
@@ -261,7 +261,7 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
         return col
     elif col.dtype.kind == "m":
         raise TypeError(
-            f"dtype {col.dtype} cannot be converted to {_unit_dtype_map[unit]}"
+            f"dtype {col.dtype} cannot be converted to {str(cudf.dtype(_unit_dtype_map[unit]))}"
         )
 
     if col.dtype.kind in ("f"):

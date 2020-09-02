@@ -398,6 +398,11 @@ def get_time_unit(obj):
         ),
     ):
         return obj.time_unit
+    elif isinstance(obj, cudf.Generic):
+        return obj._time_unit
+    elif isinstance(obj.dtype, cudf.Generic):
+        return obj.dtype._time_unit
 
     time_unit, _ = np.datetime_data(obj.dtype)
+
     return time_unit

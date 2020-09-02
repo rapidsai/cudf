@@ -405,6 +405,9 @@ class Merge(object):
                 dtype_r, cudf.Datetime
             ):
                 libcudf_join_type = cudf.dtype(max(dtype_l.to_numpy, dtype_r.to_numpy))
+        if libcudf_join_type is None:
+            # todo: test this
+            raise TypeError(f"Cant find an implicit common type for {dtype_l} and {dtype_r}")
         return libcudf_join_type
 
     def libcudf_to_output_casting_rules(self, lcol, rcol, how):

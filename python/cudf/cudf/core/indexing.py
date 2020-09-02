@@ -207,13 +207,13 @@ class _DataFrameIndexer(object):
             ):
                 return False
             else:
-                if pd.api.types.is_bool_dtype(
+                if cudf.api.types.is_bool_dtype(
                     as_column(arg[0]).dtype
                 ) and not isinstance(arg[1], slice):
                     return True
             dtypes = df.dtypes.values.tolist()
             all_numeric = all(
-                [pd.api.types.is_numeric_dtype(t) for t in dtypes]
+                [cudf.api.types.is_numerical_dtype(t) for t in dtypes]
             )
             if all_numeric:
                 return True
@@ -316,8 +316,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 if len(tmp_arg[0]) == 0:
                     return columns_df._empty_like(keep_index=True)
                 tmp_arg = (column.as_column(tmp_arg[0]), tmp_arg[1])
-
-                if pd.api.types.is_bool_dtype(tmp_arg[0]):
+                if cudf.api.types.is_bool_dtype(tmp_arg[0]):
                     df = columns_df._apply_boolean_mask(tmp_arg[0])
                 else:
                     tmp_col_name = str(uuid4())
@@ -344,7 +343,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 df.index = as_index(start)
             else:
                 row_selection = column.as_column(arg[0])
-                if pd.api.types.is_bool_dtype(row_selection.dtype):
+                if cudf.api.types.is_bool_dtype(row_selection.dtype):
                     df.index = self._df.index.take(row_selection)
                 else:
                     df.index = as_index(row_selection)

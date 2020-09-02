@@ -4821,8 +4821,12 @@ class DataFrame(Frame, Serializable):
 
         # We may want to add additional metadata to this in the future, but
         # for now lets just piggyback off of what's done for Pandas
+
+        # egregious hack
+        metadata_df = self.head(0).to_pandas()
+
         metadata = pa.pandas_compat.construct_metadata(
-            self,
+            metadata_df,
             names,
             index_columns,
             index_descriptors,

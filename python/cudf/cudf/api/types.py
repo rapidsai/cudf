@@ -5,6 +5,8 @@ from pandas.core.dtypes.dtypes import CategoricalDtype, CategoricalDtypeType
 
 def is_bool_dtype(obj):
     # todo - pd.api.types.is_bool_dtype should not give false, nor work at all probably
+    if hasattr(obj, "dtype"):
+        obj = obj.dtype
     return isinstance(obj, cudf.BooleanDtype) or pd.api.types.is_bool_dtype(obj)
 
 def is_datetime64_dtype(obj):

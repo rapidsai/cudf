@@ -80,7 +80,6 @@ def test_feather_reader(feather_file, columns):
         .to_arrow(preserve_index=False)
         .to_pandas()
     )
-
     assert_eq(expect, got, check_categorical=False)
 
 

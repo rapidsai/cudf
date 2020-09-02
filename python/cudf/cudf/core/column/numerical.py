@@ -174,6 +174,9 @@ class NumericalColumn(column.ColumnBase):
         # expect a cudf dtype always here
         if dtype == self.dtype:
             return self
+        if dtype is None:
+            import pdb
+            pdb.set_trace()
         return libcudf.unary.cast(self, dtype)
 
     @classmethod

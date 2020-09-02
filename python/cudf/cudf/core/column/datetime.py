@@ -293,10 +293,11 @@ class DatetimeColumn(column.ColumnBase):
         )
 
     def can_cast_safely(self, to_dtype):
-        if np.issubdtype(to_dtype, np.datetime64):
+        to_dtype = cudf.dtype(to_dtype)
+        if isinstance(to_dtype, cudf.Datetime):
 
-            to_res, _ = np.datetime_data(to_dtype)
-            self_res, _ = np.datetime_data(self.dtype)
+            to_res, _ = np.datetime_data(to_dtype.to_numpy)
+            self_res, _ = np.datetime_data(self.dtype.to_numpy)
 
             max_int = np.iinfo(np.dtype("int64")).max
 

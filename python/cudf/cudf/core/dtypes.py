@@ -348,11 +348,8 @@ def dtype(obj):
     if isinstance(obj, np.dtype):
         if obj.type is np.str_:
             return StringDtype()
-        try:
-            return np_to_cudf_dtypes[obj]
-        except KeyError:
-            import pdb
-            pdb.set_trace()
+        else:
+            return np_to_cudf_dtypes.get(obj, None)
     elif isinstance(obj, pa.lib.DataType):
         return pa_to_cudf_dtypes[obj]
     elif isinstance(obj, str):
