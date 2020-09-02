@@ -4,6 +4,7 @@
 
 - PR #5974 Use libcudf instead of cupy for `arange` or column creation from a scalar.
 - PR #6119 Add support for `dayofweek` property in `DateTimeIndex` and `DatetimeProperties`
+- PR #6139 Add column conversion to big endian byte list.
 
 ## Improvements
 
