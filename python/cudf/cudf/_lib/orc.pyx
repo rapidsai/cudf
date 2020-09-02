@@ -6,7 +6,7 @@ from libcpp.string cimport string
 from libcpp.vector cimport vector
 from cudf._lib.cpp.column.column cimport column
 
-from cudf._lib.cpp.io.orc_statistics cimport read_orc_statistics as libcudf_read_orc_statistics
+from cudf._lib.cpp.io.orc_metadata cimport read_orc_statistics as libcudf_read_orc_statistics
 from cudf._lib.cpp.io.orc cimport (
     orc_reader_options,
     read_orc as libcudf_read_orc,

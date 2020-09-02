@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
+#include <algorithm>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/detail/orc.hpp>
-#include <cudf/io/orc.hpp>
 #include <cudf/io/functions.hpp>
-#include <cudf/io/orc_statistics.hpp>
+#include <cudf/io/orc.hpp>
+#include <cudf/io/orc_metadata.hpp>
 #include <cudf/io/readers.hpp>
 #include <cudf/io/writers.hpp>
 #include <cudf/table/table.hpp>
@@ -32,11 +33,21 @@ namespace cudf {
 namespace io {
 
 // Returns builder for orc_reader_options
-orc_reader_options_builder orc_reader_options::builder(source_info const& src) {return orc_reader_options_builder{src};}
+orc_reader_options_builder orc_reader_options::builder(source_info const& src)
+{
+  return orc_reader_options_builder{src};
+}
 // Returns builder for orc_writer_options
-orc_writer_options_builder orc_writer_options::builder(sink_info const& sink, table_view const& table) {return orc_writer_options_builder{sink, table};}
+orc_writer_options_builder orc_writer_options::builder(sink_info const& sink,
+                                                       table_view const& table)
+{
+  return orc_writer_options_builder{sink, table};
+}
 // Returns builder for chunked_orc_writer_options
-chunked_orc_writer_options_builder chunked_orc_writer_options::builder(sink_info const& sink) {return chunked_orc_writer_options_builder{sink};}
+chunked_orc_writer_options_builder chunked_orc_writer_options::builder(sink_info const& sink)
+{
+  return chunked_orc_writer_options_builder{sink};
+}
 
 namespace {
 template <typename reader, typename reader_options>
@@ -179,7 +190,7 @@ void write_csv(write_csv_args const& args, rmm::mr::device_memory_resource* mr)
 namespace detail_orc = cudf::io::detail::orc;
 
 // Freeform API wraps the detail reader class API
-std::vector<std::string> read_orc_statistics(source_info const& src_info)
+std::vector<std::vector<std::string>> read_orc_statistics(source_info const& src_info)
 {
   // Get source to read statistics from
   std::unique_ptr<datasource> source;
@@ -196,6 +207,7 @@ std::vector<std::string> read_orc_statistics(source_info const& src_info)
     CUDF_FAIL("Unsupported source type");
   }
 
+  // Get size of file and size of postscript
   const auto len         = source->size();
   const auto max_ps_size = std::min(len, static_cast<size_t>(256));
 
@@ -223,14 +235,42 @@ std::vector<std::string> read_orc_statistics(source_info const& src_info)
   CUDF_EXPECTS(pb.read(&ff, ff_length), "Cannot read filefooter");
   CUDF_EXPECTS(ff.types.size() > 0, "No columns found");
 
-  // Get file-level statistics
-  std::vector<orc::ColumnStatistics> file_level_statistics = ff.statistics;
-  std::vector<std::string> file_level_statistics_blobs;
-  std::for_each(
-    file_level_statistics.begin(), file_level_statistics.end(), [&](orc::ColumnStatistics stats) {
-      file_level_statistics_blobs.push_back(std::string(stats.begin(), stats.end()));
-    });
-  return file_level_statistics_blobs;
+  // Read compressed metadata section
+  buffer =
+    source->host_read(len - ps_length - 1 - ps.footerLength - ps.metadataLength, ps.metadataLength);
+  size_t md_length = 0;
+  auto md_data     = decompressor->Decompress(buffer->data(), ps.metadataLength, &md_length);
+  orc::Metadata md;
+  pb.init(md_data, md_length);
+  CUDF_EXPECTS(pb.read(&md, md_length), "Cannot read metadata");
+
+  // Initialize statistics to return
+  std::vector<std::vector<std::string>> statistics_blobs;
+
+  // Get column names
+  std::vector<std::string> column_names;
+  for (auto i = 0; i < ff.types.size(); i++) {
+    column_names.push_back(ff.GetColumnName(i));
+  }
+  statistics_blobs.push_back(column_names);
+
+  // Get file-level statistics, statistics of each column of file
+  std::vector<std::string> file_column_statistics_blobs;
+  for (orc::ColumnStatistics stats : ff.statistics) {
+    file_column_statistics_blobs.push_back(std::string(stats.begin(), stats.end()));
+  }
+  statistics_blobs.push_back(file_column_statistics_blobs);
+
+  // Get row-group-level statistics
+  for (orc::StripeStatistics stripe_stats : md.stripeStats) {
+    std::vector<std::string> stripe_column_statistics_blobs;
+    for (orc::ColumnStatistics stats : stripe_stats.colStats) {
+      stripe_column_statistics_blobs.push_back(std::string(stats.begin(), stats.end()));
+    }
+    statistics_blobs.push_back(stripe_column_statistics_blobs);
+  }
+
+  return statistics_blobs;
 }
 
 // Freeform API wraps the detail reader class API
