@@ -32,6 +32,7 @@
 - PR #6110 Handle `format` for other input types in `to_datetime`
 - PR #6118 Fix Java build for ORC read args change and update package version
 - PR #6128 Add support for numpy RandomState handling in `sample`
+- PR #6137 Fix issue where `np.nan` is being return instead of `NAT` for datetime/duration types
 
 
 # cuDF 0.15.0 (26 Aug 2020)
