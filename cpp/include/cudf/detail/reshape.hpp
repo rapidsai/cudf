@@ -20,7 +20,6 @@
 
 #include <memory>
 
-
 namespace cudf {
 namespace detail {
 /**
@@ -33,11 +32,10 @@ std::unique_ptr<table> tile(table_view const& input,
                             cudaStream_t stream                 = 0,
                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-
-
 }  // namespace detail
 
-std::unique_ptr<column> byte_cast(column_view const& input_column,
-                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                     cudaStream_t stream = 0);
+std::unique_ptr<column> byte_cast(
+  column_view const& input_column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 }  // namespace cudf

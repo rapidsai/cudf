@@ -14,20 +14,13 @@
  * limitations under the License.
  */
 
-#include <cstdint>
-#include <limits>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/table_utilities.hpp>
-#include <tests/utilities/type_lists.hpp>
-
-#include <cudf/reshape.hpp>
 #include "cudf/detail/reshape.hpp"
 
+#include <tests/utilities/base_fixture.hpp>
+#include <tests/utilities/column_wrapper.hpp>
+#include <tests/utilities/type_lists.hpp>
 
 using namespace cudf::test;
-
 
 class ByteCastTest : public cudf::test::BaseFixture {
 };
@@ -35,39 +28,56 @@ class ByteCastTest : public cudf::test::BaseFixture {
 TEST_F(ByteCastTest, PrimitiveValuesNoNulls)
 {
   using limits16 = std::numeric_limits<int16_t>;
-  // fixed_width_column_wrapper<int16_t> const int16_col({short(0), short(100), short(-100), limits16::min(), limits16::max()});
-  fixed_width_column_wrapper<int16_t> const int16_col({short(0), short(100), short(-100), limits16::min(), limits16::max()});
-  lists_column_wrapper<uint8_t> const int16_expected({{0x00, 0x00}, {0x00, 0x64}, {0xff, 0x9c}, {0x80, 0x00}, {0x7f, 0xff}});
+  // fixed_width_column_wrapper<int16_t> const int16_col({short(0), short(100), short(-100),
+  // limits16::min(), limits16::max()});
+  fixed_width_column_wrapper<int16_t> const int16_col(
+    {short(0), short(100), short(-100), limits16::min(), limits16::max()});
+  lists_column_wrapper<uint8_t> const int16_expected(
+    {{0x00, 0x00}, {0x00, 0x64}, {0xff, 0x9c}, {0x80, 0x00}, {0x7f, 0xff}});
 
   using limits32 = std::numeric_limits<int32_t>;
-  fixed_width_column_wrapper<int32_t> const int32_col({0, 100, -100, limits32::min(), limits32::max()});
-  lists_column_wrapper<uint8_t> const int32_expected({{0x00, 0x00, 0x00, 0x00}, {0x00, 0x00, 0x00, 0x64}, {0xff, 0xff, 0xff, 0x9c}, {0x80, 0x00, 0x00, 0x00}, {0x7f, 0xff, 0xff, 0xff}});
+  fixed_width_column_wrapper<int32_t> const int32_col(
+    {0, 100, -100, limits32::min(), limits32::max()});
+  lists_column_wrapper<uint8_t> const int32_expected({{0x00, 0x00, 0x00, 0x00},
+                                                      {0x00, 0x00, 0x00, 0x64},
+                                                      {0xff, 0xff, 0xff, 0x9c},
+                                                      {0x80, 0x00, 0x00, 0x00},
+                                                      {0x7f, 0xff, 0xff, 0xff}});
 
   using limits64 = std::numeric_limits<int64_t>;
-  fixed_width_column_wrapper<int64_t> const int64_col({long(0), long(100), long(-100), limits64::min(), limits64::max()});
-  lists_column_wrapper<uint8_t> const int64_expected({{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-                                                      {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x64},
-                                                      {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x9c},
-                                                      {0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-                                                      {0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}});
+  fixed_width_column_wrapper<int64_t> const int64_col(
+    {long(0), long(100), long(-100), limits64::min(), limits64::max()});
+  lists_column_wrapper<uint8_t> const int64_expected(
+    {{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+     {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x64},
+     {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x9c},
+     {0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+     {0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}});
 
   using limitsfp32 = std::numeric_limits<float>;
-  fixed_width_column_wrapper<float> const fp32_col({float(0.0), float(100.0), float(-100.0), limitsfp32::min(), limitsfp32::max()});
-  lists_column_wrapper<uint8_t> const fp32_expected({{0x00, 0x00, 0x00, 0x00}, {0x42, 0xc8, 0x00, 0x00}, {0xc2, 0xc8, 0x00, 0x00}, {0x00, 0x80, 0x00, 0x00}, {0x7f, 0x7f, 0xff, 0xff}});
+  fixed_width_column_wrapper<float> const fp32_col(
+    {float(0.0), float(100.0), float(-100.0), limitsfp32::min(), limitsfp32::max()});
+  lists_column_wrapper<uint8_t> const fp32_expected({{0x00, 0x00, 0x00, 0x00},
+                                                     {0x42, 0xc8, 0x00, 0x00},
+                                                     {0xc2, 0xc8, 0x00, 0x00},
+                                                     {0x00, 0x80, 0x00, 0x00},
+                                                     {0x7f, 0x7f, 0xff, 0xff}});
 
   using limitsfp64 = std::numeric_limits<double>;
-  fixed_width_column_wrapper<double> const fp64_col({double(0.0), double(100.0), double(-100.0), limitsfp64::min(), limitsfp64::max()});
-  lists_column_wrapper<uint8_t> const fp64_expected({{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-                                                     {0x40, 0x59, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-                                                     {0xc0, 0x59, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-                                                     {0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-                                                     {0x7f, 0xef, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}});
-  
+  fixed_width_column_wrapper<double> const fp64_col(
+    {double(0.0), double(100.0), double(-100.0), limitsfp64::min(), limitsfp64::max()});
+  lists_column_wrapper<uint8_t> const fp64_expected(
+    {{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+     {0x40, 0x59, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+     {0xc0, 0x59, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+     {0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+     {0x7f, 0xef, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}});
+
   auto const output_int16 = cudf::byte_cast(int16_col);
   auto const output_int32 = cudf::byte_cast(int32_col);
   auto const output_int64 = cudf::byte_cast(int64_col);
-  auto const output_fp32 = cudf::byte_cast(fp32_col);
-  auto const output_fp64 = cudf::byte_cast(fp64_col);
+  auto const output_fp32  = cudf::byte_cast(fp32_col);
+  auto const output_fp64  = cudf::byte_cast(fp64_col);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_int16->view(), int16_expected, true);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_int32->view(), int32_expected, true);
@@ -78,51 +88,143 @@ TEST_F(ByteCastTest, PrimitiveValuesNoNulls)
 
 TEST_F(ByteCastTest, PrimitiveValuesWithNulls)
 {
-  
-  auto even_valids = cudf::test::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
-  auto odd_valids = cudf::test::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? false : true; });
+  auto even_validity = make_counting_transform_iterator(0, [](auto i) { return (i + 1) % 2; });
+  auto odd_validity  = make_counting_transform_iterator(0, [](auto i) { return i % 2; });
 
   using limits16 = std::numeric_limits<int16_t>;
-  fixed_width_column_wrapper<int16_t> const int16_col({short(0), short(100), short(-100), limits16::min(), limits16::max()}, {0, 1, 0, 1, 0});
-  lists_column_wrapper<uint8_t> const int16_expected({{0xee, 0xff}, {0x00, 0x64}, {0xee, 0xff}, {0x80, 0x00}, {0xee, 0xff}}, odd_valids);
+  fixed_width_column_wrapper<int16_t> const int16_col(
+    {short(0), short(100), short(-100), limits16::min(), limits16::max()}, {0, 1, 0, 1, 0});
+  // auto int16_data =
+  //   fixed_width_column_wrapper<uint8_t>{0xee, 0xff, 0x00, 0x64, 0xee, 0xff, 0x80, 0x00, 0xee,
+  //   0xff};
+  auto int16_data =
+    fixed_width_column_wrapper<uint8_t>{0x00, 0x00, 0x00, 0x64, 0xff, 0x9c, 0x80, 0x00, 0x7f, 0xff};
 
-  // using limits32 = std::numeric_limits<int32_t>;
-  // fixed_width_column_wrapper<int32_t> const int32_col({0, 100, -100, limits32::min(), limits32::max()}, {1, 0, 1, 0, 1});
-  // lists_column_wrapper<uint8_t> const int32_expected({{0x00, 0x00, 0x00, 0x00}, {0xcc, 0xdd, 0xee, 0xff}, {0xff, 0xff, 0xff, 0x9c}, {0xcc, 0xdd, 0xee, 0xff}, {0x7f, 0xff, 0xff, 0xff}}, even_valids);
+  auto int16_expected = cudf::make_lists_column(
+    5,
+    std::move(fixed_width_column_wrapper<cudf::size_type>{0, 2, 4, 6, 8, 10}.release()),
+    std::move(int16_data.release()),
+    3,
+    detail::make_null_mask(odd_validity, odd_validity + 5));
 
-  // using limits64 = std::numeric_limits<int64_t>;
-  // fixed_width_column_wrapper<int64_t> const int64_col({long(0), long(100), long(-100), limits64::min(), limits64::max()}, {0, 1, 0, 1, 0});
-  // lists_column_wrapper<uint8_t> const int64_expected({{0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff},
-  //                                                     {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x64},
-  //                                                     {0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff},
-  //                                                     {0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-  //                                                     {0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff}}, odd_valids);
+  using limits32 = std::numeric_limits<int32_t>;
+  fixed_width_column_wrapper<int32_t> const int32_col(
+    {0, 100, -100, limits32::min(), limits32::max()}, {1, 0, 1, 0, 1});
+  // auto int32_data =
+  //   fixed_width_column_wrapper<uint8_t>{0x00, 0x00, 0x00, 0x00, 0xcc, 0xdd, 0xee, 0xff, 0xff,
+  //   0xff,
+  //                                       0xff, 0x9c, 0xcc, 0xdd, 0xee, 0xff, 0x7f, 0xff, 0xff,
+  //                                       0xff};
+  auto int32_data =
+    fixed_width_column_wrapper<uint8_t>{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x64, 0xff, 0xff,
+                                        0xff, 0x9c, 0x80, 0x00, 0x00, 0x00, 0x7f, 0xff, 0xff, 0xff};
+  auto int32_expected = cudf::make_lists_column(
+    5,
+    std::move(fixed_width_column_wrapper<cudf::size_type>{0, 4, 8, 12, 16, 20}.release()),
+    std::move(int32_data.release()),
+    3,
+    detail::make_null_mask(even_validity, even_validity + 5));
 
-  // using limitsfp32 = std::numeric_limits<float>;
-  // fixed_width_column_wrapper<float> const fp32_col({float(0.0), float(100.0), float(-100.0), limitsfp32::min(), limitsfp32::max()}, {1, 0, 1, 0, 1});
-  // lists_column_wrapper<uint8_t> const fp32_expected({{0x00, 0x00, 0x00, 0x00}, {0xcc, 0xdd, 0xee, 0xff}, {0xc2, 0xc8, 0x00, 0x00}, {0xcc, 0xdd, 0xee, 0xff}, {0x7f, 0x7f, 0xff, 0xff}}, even_valids);
+  using limits64 = std::numeric_limits<int64_t>;
+  fixed_width_column_wrapper<int64_t> const int64_col(
+    {long(0), long(100), long(-100), limits64::min(), limits64::max()}, {0, 1, 0, 1, 0});
+  // auto int64_data = fixed_width_column_wrapper<uint8_t>{
+  //   0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  //   0x00, 0x64, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x80, 0x00, 0x00, 0x00,
+  //   0x00, 0x00, 0x00, 0x00, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff};
+  auto int64_data = fixed_width_column_wrapper<uint8_t>{
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x64, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x9c, 0x80, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+  auto int64_expected = cudf::make_lists_column(
+    5,
+    std::move(fixed_width_column_wrapper<cudf::size_type>{0, 8, 16, 24, 32, 40}.release()),
+    std::move(int64_data.release()),
+    3,
+    detail::make_null_mask(odd_validity, odd_validity + 5));
 
-  // using limitsfp64 = std::numeric_limits<double>;
-  // fixed_width_column_wrapper<double> const fp64_col({double(0.0), double(100.0), double(-100.0), limitsfp64::min(), limitsfp64::max()}, {0, 1, 0, 1, 0});
-  // lists_column_wrapper<uint8_t> const fp64_expected({{0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff},
-  //                                                    {0x40, 0x59, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-  //                                                    {0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff},
-  //                                                    {0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-  //                                                    {0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff}}, odd_valids);
-  
+  using limitsfp32 = std::numeric_limits<float>;
+  fixed_width_column_wrapper<float> const fp32_col(
+    {float(0.0), float(100.0), float(-100.0), limitsfp32::min(), limitsfp32::max()},
+    {1, 0, 1, 0, 1});
+  // auto fp32_data =
+  //   fixed_width_column_wrapper<uint8_t>{0x00, 0x00, 0x00, 0x00, 0xcc, 0xdd, 0xee, 0xff, 0xc2,
+  //   0xc8,
+  //                                       0x00, 0x00, 0xcc, 0xdd, 0xee, 0xff, 0x7f, 0x7f, 0xff,
+  //                                       0xff};
+  auto fp32_data =
+    fixed_width_column_wrapper<uint8_t>{0x00, 0x00, 0x00, 0x00, 0x42, 0xc8, 0x00, 0x00, 0xc2, 0xc8,
+                                        0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x7f, 0x7f, 0xff, 0xff};
+  auto fp32_expected = cudf::make_lists_column(
+    5,
+    std::move(fixed_width_column_wrapper<cudf::size_type>{0, 4, 8, 12, 16, 20}.release()),
+    std::move(fp32_data.release()),
+    3,
+    detail::make_null_mask(even_validity, even_validity + 5));
+
+  using limitsfp64 = std::numeric_limits<double>;
+  fixed_width_column_wrapper<double> const fp64_col(
+    {double(0.0), double(100.0), double(-100.0), limitsfp64::min(), limitsfp64::max()},
+    {0, 1, 0, 1, 0});
+  // auto fp64_data = fixed_width_column_wrapper<uint8_t>{
+  //   0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x40, 0x59, 0x00, 0x00, 0x00, 0x00,
+  //   0x00, 0x00, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00, 0x10, 0x00, 0x00,
+  //   0x00, 0x00, 0x00, 0x00, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff};
+  auto fp64_data = fixed_width_column_wrapper<uint8_t>{
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x59, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0xc0, 0x59, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x7f, 0xef, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+  auto fp64_expected = cudf::make_lists_column(
+    5,
+    std::move(fixed_width_column_wrapper<cudf::size_type>{0, 8, 16, 24, 32, 40}.release()),
+    std::move(fp64_data.release()),
+    3,
+    detail::make_null_mask(odd_validity, odd_validity + 5));
+
   auto const output_int16 = cudf::byte_cast(int16_col);
-  // auto const output_int32 = cudf::byte_cast(int32_col);
-  // auto const output_int64 = cudf::byte_cast(int64_col);
-  // auto const output_fp32 = cudf::byte_cast(fp32_col);
-  // auto const output_fp64 = cudf::byte_cast(fp64_col);
+  auto const output_int32 = cudf::byte_cast(int32_col);
+  auto const output_int64 = cudf::byte_cast(int64_col);
+  auto const output_fp32  = cudf::byte_cast(fp32_col);
+  auto const output_fp64  = cudf::byte_cast(fp64_col);
 
-  // CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_int16->view(), int16_expected, true);
-  // CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_int32->view(), int32_expected, true);
-  // CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_int64->view(), int64_expected, true);
-  // CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_fp32->view(), fp32_expected, true);
-  // CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_fp64->view(), fp64_expected, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(output_int16->view(), int16_expected->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(output_int32->view(), int32_expected->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(output_int64->view(), int64_expected->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(output_fp32->view(), fp32_expected->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(output_fp64->view(), fp64_expected->view());
+}
+
+TEST_F(ByteCastTest, StringValues)
+{
+  strings_column_wrapper const strings_col(
+    {"", "The quick", " brown fox...", "!\"#$%&\'()*+,-./", "0123456789:;<=>?@", "[\\]^_`{|}~"});
+  lists_column_wrapper<int8_t> const strings_expected(
+    {{},
+     {0x54, 0x68, 0x65, 0x20, 0x71, 0x75, 0x69, 0x63, 0x6b},
+     {0x20, 0x62, 0x72, 0x6f, 0x77, 0x6e, 0x20, 0x66, 0x6f, 0x78, 0x2e, 0x2e, 0x2e},
+     {0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f},
+     {0x30,
+      0x31,
+      0x32,
+      0x33,
+      0x34,
+      0x35,
+      0x36,
+      0x37,
+      0x38,
+      0x39,
+      0x3a,
+      0x3b,
+      0x3c,
+      0x3d,
+      0x3e,
+      0x3f,
+      0x40},
+     {0x5b, 0x5c, 0x5d, 0x5e, 0x5f, 0x60, 0x7b, 0x7c, 0x7d, 0x7e}});
+
+  auto const output_strings = cudf::byte_cast(strings_col);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_strings->view(), strings_expected, true);
 }
 
 template <typename T>
@@ -140,7 +242,8 @@ TYPED_TEST(ByteCastTestFloatTyped, TestExtremes)
   T inf   = std::numeric_limits<T>::infinity();
 
   fixed_width_column_wrapper<T> const col1({T(0.0), T(100.0), T(-100.0), min, max, nan, inf, -inf});
-  fixed_width_column_wrapper<T> const col2({T(-0.0), T(100.0), T(-100.0), min, max, -nan, inf, -inf});
+  fixed_width_column_wrapper<T> const col2(
+    {T(-0.0), T(100.0), T(-100.0), min, max, -nan, inf, -inf});
 
   auto const output1 = cudf::byte_cast(col1);
   auto const output2 = cudf::byte_cast(col2);
