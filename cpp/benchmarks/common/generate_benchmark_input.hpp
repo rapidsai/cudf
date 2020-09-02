@@ -8,6 +8,7 @@
 enum class type_group_id : int32_t {
   INTEGRAL = static_cast<int32_t>(cudf::type_id::NUM_TYPE_IDS),
   FLOATING_POINT,
+  NUMERIC,
   TIMESTAMP,
   DURATION,
   FIXED_POINT,
@@ -16,11 +17,9 @@ enum class type_group_id : int32_t {
 };
 
 enum class rand_dist_id : int8_t {
-  DEFAULT = 0,
   UNIFORM,
   NORMAL,
   GEOMETRIC,
-  BERNOULLI,
 };
 
 template <typename T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
@@ -48,12 +47,6 @@ template <typename T,
 rand_dist_id default_distribution()
 {
   return rand_dist_id::GEOMETRIC;
-}
-
-template <typename T, std::enable_if_t<std::is_same<T, bool>::value>* = nullptr>
-rand_dist_id default_distribution()
-{
-  return rand_dist_id::BERNOULLI;
 }
 
 template <typename T>
@@ -117,10 +110,8 @@ struct dist_params<T, typename std::enable_if_t<cudf::is_fixed_point<T>()>> {
 };
 
 class data_parameters {
-  // TODO fill the map with defaults
   std::map<cudf::type_id, dist_params<uint64_t>> int_params;
   std::map<cudf::type_id, dist_params<double>> float_params;
-
   double bool_p = 0.5;
 
  public:
@@ -177,8 +168,15 @@ class data_parameters {
 
   template <typename T, std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
   dist_params<T> get_params()
-  {
-    return dist_params<T>{default_distribution<int32_t>(), 0,200};
+  {    auto it = int_params.find(cudf::type_to_id<T>());
+    if (it == int_params.end()) {
+      return dist_params<T>{rand_dist_id::NORMAL, 0,32};
+    } else {
+      auto& val = it->second;
+      return {{val.distribution_type,
+               static_cast<uint32_t>(val.lower_bound),
+               static_cast<uint32_t>(val.upper_bound)}};
+    }
   }
 
   template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
