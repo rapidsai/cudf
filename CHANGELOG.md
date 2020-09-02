@@ -2,8 +2,11 @@
 
 ## New Features
 
+- PR #5843 Add `filters` parameter to Python `read_parquet` function for filtering row groups
 - PR #5974 Use libcudf instead of cupy for `arange` or column creation from a scalar.
+- PR #5874 Add `COLLECT` groupby aggregation
 - PR #6119 Add support for `dayofweek` property in `DateTimeIndex` and `DatetimeProperties`
+- PR #6125 Add support for `Series.mode` and `DataFrame.mode`
 
 ## Improvements
 
@@ -13,19 +16,23 @@
 - PR #5953 Use stable sort when doing a sort groupby
 - PR #5973 Link to the Code of Conduct in CONTRIBUTING.md
 - PR #5917 Just use `None` for `strides` in `Buffer`
+- PR #6015 Upgrade CUB/Thrust to the latest commit
 - PR #5971 Add cuStreamz README for basic installation and use
 - PR #6024 Expose selecting multiple ORC stripes to read from Python
 - PR #6002 Add Java bindings for md5
 - PR #6067 Added compute codes for aarch64 devices
 - PR #6083 Small cleanup
+- PR #6103 Small refactor of `print_differences`
 
 ## Bug Fixes
 
 - PR #6073 Fix issue related to `.loc` incase of `DatetimeIndex`
 - PR #6081 Fix issue where fsspec thinks it has a protocol string
 - PR #6100 Fix issue in `Series.factorize` to correctly pick `na_sentinel` value
+- PR #6113 Fix to_timestamp to initialize default year to 1970
 - PR #6110 Handle `format` for other input types in `to_datetime`
 - PR #6118 Fix Java build for ORC read args change and update package version
+- PR #6128 Add support for numpy RandomState handling in `sample`
 
 
 # cuDF 0.15.0 (26 Aug 2020)
