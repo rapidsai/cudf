@@ -193,7 +193,9 @@ def read_orc(
         num_rows_scanned = 0
         for i, stripe_statistics in enumerate(stripes_statistics):
             num_rows_before_stripe = num_rows_scanned
-            num_rows_scanned += next(iter(stripe_statistics.values()))["number_of_values"]
+            num_rows_scanned += next(iter(stripe_statistics.values()))[
+                "number_of_values"
+            ]
             if stripes is not None and i not in stripes:
                 continue
             if skip_rows is not None and num_rows_scanned <= skip_rows:
