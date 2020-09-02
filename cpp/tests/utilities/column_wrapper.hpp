@@ -423,6 +423,34 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
     : fixed_width_column_wrapper(begin, end, std::cbegin(validity))
   {
   }
+
+  /**
+   * @brief Construct a nullable column from a list of pairs of fixed-width
+   * elements and validity booleans of each element.
+   *
+   * The validity of each element is determined by the boolean element in the pair
+   * where `true` indicates the element is valid, and `false` indicates the
+   * element is null.
+   *
+   * Example:
+   * @code{.cpp}
+   * // Creates a nullable INT32 column with 4 elements: {1, NULL, 3, NULL}
+   * using p = std::pair<int32_t, bool>;
+   * fixed_width_column_wrapper<int32_t> w( p{1, true}, p{2, false}, p{3, true}, p{4, false} );
+   * @endcode
+   *
+   * @param elements The list of pairs of element and validity booleans
+   **/
+  template <typename ElementFrom>
+  fixed_width_column_wrapper(std::initializer_list<std::pair<ElementFrom, bool>> elements)
+  {
+    auto begin =
+      thrust::make_transform_iterator(elements.begin(), [](auto const& e) { return e.first; });
+    auto end = begin + elements.size();
+    auto v =
+      thrust::make_transform_iterator(elements.begin(), [](auto const& e) { return e.second; });
+    wrapped = fixed_width_column_wrapper<ElementFrom>(begin, end, v).release();
+  }
 };
 
 /**
