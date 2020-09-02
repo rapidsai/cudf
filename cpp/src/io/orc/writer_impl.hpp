@@ -28,7 +28,8 @@
 
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/io/data_sink.hpp>
-#include <cudf/io/writers.hpp>
+#include <cudf/io/detail/orc.hpp>
+#include <cudf/io/orc.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -73,7 +74,7 @@ class writer::impl {
    * @param mr Device memory resource to use for device memory allocation
    **/
   explicit impl(std::unique_ptr<data_sink> sink,
-                writer_options const& options,
+                orc_writer_options const& options,
                 rmm::mr::device_memory_resource* mr);
 
   /**

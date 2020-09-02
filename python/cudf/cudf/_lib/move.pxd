@@ -20,6 +20,7 @@ from cudf._lib.cpp.groupby cimport (
 )
 from cudf._lib.cpp.table.table_view cimport table_view
 from pyarrow.includes.libarrow cimport CMessageReader
+from cudf._lib.cpp.io.orc cimport orc_reader_options, orc_writer_options
 cimport cudf._lib.cpp.io.types as cudf_io_types
 
 
@@ -77,3 +78,5 @@ cdef extern from "<utility>" namespace "std" nogil:
     cdef pair[unique_ptr[column], table_view] move(
         pair[unique_ptr[column], table_view]
     )
+    cdef orc_reader_options move(orc_reader_options)
+    cdef orc_writer_options move(orc_writer_options)

@@ -955,10 +955,10 @@ void writer::impl::add_uncompressed_block_headers(std::vector<uint8_t> &v)
 }
 
 writer::impl::impl(std::unique_ptr<data_sink> sink,
-                   writer_options const &options,
+                   orc_writer_options const &options,
                    rmm::mr::device_memory_resource *mr)
-  : compression_kind_(to_orc_compression(options.compression)),
-    enable_statistics_(options.enable_statistics),
+  : compression_kind_(to_orc_compression(options.compression())),
+    enable_statistics_(options.enable_statistics()),
     out_sink_(std::move(sink)),
     _mr(mr)
 {
@@ -1352,7 +1352,7 @@ void writer::impl::write_chunked_end(orc_chunked_state &state)
 
 // Forward to implementation
 writer::writer(std::unique_ptr<data_sink> sink,
-               writer_options const &options,
+               orc_writer_options const &options,
                rmm::mr::device_memory_resource *mr)
   : _impl(std::make_unique<impl>(std::move(sink), options, mr))
 {
@@ -1362,7 +1362,7 @@ writer::writer(std::unique_ptr<data_sink> sink,
 writer::~writer() = default;
 
 // Forward to implementation
-void writer::write_all(table_view const &table, const table_metadata *metadata, cudaStream_t stream)
+void writer::write(table_view const &table, const table_metadata *metadata, cudaStream_t stream)
 {
   _impl->write(table, metadata, stream);
 }
