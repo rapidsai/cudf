@@ -23,6 +23,7 @@
 - PR #6067 Added compute codes for aarch64 devices
 - PR #6083 Small cleanup
 - PR #6103 Small refactor of `print_differences`
+- PR #6124 Fix gcc-9 compilation errors on tests
 
 ## Bug Fixes
 
