@@ -2,6 +2,7 @@
 
 ## New Features
 
+- PR #5975 Add strings `filter_characters` API
 - PR #5843 Add `filters` parameter to Python `read_parquet` function for filtering row groups
 - PR #5974 Use libcudf instead of cupy for `arange` or column creation from a scalar.
 - PR #5874 Add `COLLECT` groupby aggregation
