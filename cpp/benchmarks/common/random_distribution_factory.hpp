@@ -49,23 +49,29 @@ auto make_uniform_dist(T range_start, T range_end)
   return std::uniform_real_distribution<T>(range_start, range_end);
 }
 
+template <typename T>
+double geometric_dist_p(T range_size)
+{
+  constexpr double percentage_in_range = 0.99;
+  double const p                       = 1 - exp(log(1 - percentage_in_range) / range_size);
+  return p ? p : std::numeric_limits<double>::epsilon();
+}
+
 template <typename T, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
 auto make_geometric_dist(T range_start, T range_end)
 {
-  using uT                             = typename std::make_unsigned<T>::type;
-  uT const range_size                  = range_end - range_start;
-  constexpr double percentage_in_range = 0.99;
-  double const p                       = 1 - exp(log(1 - percentage_in_range) / range_size);
-  return std::geometric_distribution<T>(p ? p : std::numeric_limits<double>::epsilon());
+  using uT = typename std::make_unsigned<T>::type;
+  if (range_start > range_end) std::swap(range_start, range_end);
+
+  uT const range_size = (uT)range_end - (uT)range_start;
+  return std::geometric_distribution<T>(geometric_dist_p(range_size));
 }
 
 template <typename T, std::enable_if_t<cudf::is_floating_point<T>()>* = nullptr>
 auto make_geometric_dist(T range_start, T range_end)
 {
-  long double const range_size         = range_end - range_start;
-  constexpr double percentage_in_range = 0.99;
-  double const p                       = 1 - exp(log(1 - percentage_in_range) / range_size);
-  return std::exponential_distribution<T>(p);
+  long double const range_size = range_end - range_start;
+  return std::exponential_distribution<T>(geometric_dist_p(range_size));
 }
 
 template <typename T, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
@@ -108,9 +114,9 @@ std::function<T(std::mt19937&)> make_rand_generator(rand_dist_id dist_type,
       return [lower_bound, upper_bound, dist = make_geometric_dist(lower_bound, upper_bound)](
                std::mt19937& engine) mutable -> T {
         if (lower_bound <= upper_bound)
-          return dist(engine);
+          return lower_bound + dist(engine);
         else
-          return (lower_bound - dist(engine)) + lower_bound;
+          return lower_bound - dist(engine);
       };
     default: CUDF_FAIL("Unsupported random distribution");
   }

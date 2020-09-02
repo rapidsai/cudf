@@ -21,14 +21,8 @@ enum class rand_dist_id : int8_t {
   NORMAL,
   GEOMETRIC,
 };
-
-template <typename T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
-rand_dist_id default_distribution()
-{
-  return rand_dist_id::GEOMETRIC;
-}
-
-template <typename T, std::enable_if_t<cudf::is_duration<T>()>* = nullptr>
+namespace {
+template <typename T, std::enable_if_t<cudf::is_chrono<T>()>* = nullptr>
 rand_dist_id default_distribution()
 {
   return rand_dist_id::GEOMETRIC;
@@ -75,6 +69,7 @@ std::pair<T, T> default_range()
 {
   return {std::numeric_limits<T>::lowest(), std::numeric_limits<T>::max()};
 }
+}  // namespace
 
 template <typename T, typename Enable = void>
 struct dist_params;
@@ -90,7 +85,7 @@ struct dist_params<
 
 template <typename T>
 struct dist_params<T, typename std::enable_if_t<std::is_same<T, bool>::value>> {
-  double p;
+  double probability_true;
 };
 
 template <typename T>
@@ -112,13 +107,13 @@ struct dist_params<T, typename std::enable_if_t<cudf::is_fixed_point<T>()>> {
 class data_parameters {
   std::map<cudf::type_id, dist_params<uint64_t>> int_params;
   std::map<cudf::type_id, dist_params<double>> float_params;
-  double bool_p = 0.5;
+  double bool_probability_true = 0.5;
 
  public:
   template <typename T,
             typename std::enable_if_t<!std::is_same<T, bool>::value && std::is_integral<T>::value,
                                       T>* = nullptr>
-  dist_params<T> get_params()
+  dist_params<T> get_params() const
   {
     auto it = int_params.find(cudf::type_to_id<T>());
     if (it == int_params.end()) {
@@ -132,7 +127,7 @@ class data_parameters {
   }
 
   template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value, T>* = nullptr>
-  dist_params<T> get_params()
+  dist_params<T> get_params() const
   {
     auto it = float_params.find(cudf::type_to_id<T>());
     if (it == float_params.end()) {
@@ -146,13 +141,13 @@ class data_parameters {
   }
 
   template <typename T, std::enable_if_t<std::is_same<T, bool>::value>* = nullptr>
-  dist_params<T> get_params()
+  dist_params<T> get_params() const
   {
-    return dist_params<T>{bool_p};
+    return dist_params<T>{bool_probability_true};
   }
 
   template <typename T, typename std::enable_if_t<cudf::is_chrono<T>()>* = nullptr>
-  dist_params<T> get_params()
+  dist_params<T> get_params() const
   {
     auto it = int_params.find(cudf::type_to_id<T>());
     if (it == int_params.end()) {
@@ -167,10 +162,11 @@ class data_parameters {
   }
 
   template <typename T, std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
-  dist_params<T> get_params()
-  {    auto it = int_params.find(cudf::type_to_id<T>());
+  dist_params<T> get_params() const
+  {
+    auto it = int_params.find(cudf::type_to_id<T>());
     if (it == int_params.end()) {
-      return dist_params<T>{rand_dist_id::NORMAL, 0,32};
+      return dist_params<T>{{rand_dist_id::NORMAL, 0, 32}};
     } else {
       auto& val = it->second;
       return {{val.distribution_type,
@@ -180,7 +176,7 @@ class data_parameters {
   }
 
   template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
-  dist_params<T> get_params()
+  dist_params<T> get_params() const
   {
     return {};
   }
