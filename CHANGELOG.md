@@ -7,6 +7,7 @@
 - PR #5874 Add `COLLECT` groupby aggregation
 - PR #6119 Add support for `dayofweek` property in `DateTimeIndex` and `DatetimeProperties`
 - PR #6125 Add support for `Series.mode` and `DataFrame.mode`
+- PR #6142 Add Python `read_orc_statistics` function for reading file- and stripe-level statistics
 
 ## Improvements
 
