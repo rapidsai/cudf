@@ -92,25 +92,6 @@ cdef extern from "cudf/io/functions.hpp" \
         read_csv_args &args
     ) except +
 
-    cdef cppclass read_orc_args:
-        cudf_io_types.source_info source
-        vector[string] columns
-        vector[size_type] stripes
-        size_type skip_rows
-        size_type num_rows
-        bool use_index
-        bool use_np_dtypes
-        data_type timestamp_type
-        bool decimals_as_float
-        int forced_decimals_scale
-
-        read_orc_args() except +
-        read_orc_args(cudf_io_types.source_info &src) except +
-
-    cdef cudf_io_types.table_with_metadata read_orc(
-        read_orc_args &args
-    ) except +
-
     cdef cppclass read_parquet_args:
         cudf_io_types.source_info source
         vector[string] columns
@@ -145,22 +126,6 @@ cdef extern from "cudf/io/functions.hpp" \
                        cudf_io_types.table_metadata *metadata_) except +
 
     cdef void write_csv(write_csv_args args) except +
-
-    cdef cppclass write_orc_args:
-        cudf_io_types.sink_info sink
-        cudf_io_types.compression_type compression
-        bool enable_statistics
-        cudf_table_view.table_view table
-        const cudf_io_types.table_metadata *metadata
-
-        write_orc_args() except +
-        write_orc_args(cudf_io_types.sink_info sink_,
-                       cudf_table_view.table_view table_,
-                       cudf_io_types.table_metadata *metadata_,
-                       cudf_io_types.compression_type compression_,
-                       bool enable_statistics_) except +
-
-    cdef void write_orc(write_orc_args args) except +
 
     cdef cppclass write_parquet_args:
         cudf_io_types.sink_info sink

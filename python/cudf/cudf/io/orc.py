@@ -8,6 +8,7 @@ from pyarrow import orc as orc
 import cudf
 from cudf import _lib as libcudf
 from cudf.utils import ioutils
+from cudf.utils import statisticsutils
 
 
 @ioutils.doc_read_orc_metadata()

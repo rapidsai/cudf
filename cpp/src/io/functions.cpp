@@ -15,6 +15,8 @@
  */
 
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/io/detail/orc.hpp>
+#include <cudf/io/orc.hpp>
 #include <cudf/io/functions.hpp>
 #include <cudf/io/orc_statistics.hpp>
 #include <cudf/io/readers.hpp>
@@ -28,6 +30,14 @@
 
 namespace cudf {
 namespace io {
+
+// Returns builder for orc_reader_options
+orc_reader_options_builder orc_reader_options::builder(source_info const& src) {return orc_reader_options_builder{src};}
+// Returns builder for orc_writer_options
+orc_writer_options_builder orc_writer_options::builder(sink_info const& sink, table_view const& table) {return orc_writer_options_builder{sink, table};}
+// Returns builder for chunked_orc_writer_options
+chunked_orc_writer_options_builder chunked_orc_writer_options::builder(sink_info const& sink) {return chunked_orc_writer_options_builder{sink};}
+
 namespace {
 template <typename reader, typename reader_options>
 std::unique_ptr<reader> make_reader(source_info const& src_info,
@@ -224,34 +234,21 @@ std::vector<std::string> read_orc_statistics(source_info const& src_info)
 }
 
 // Freeform API wraps the detail reader class API
-table_with_metadata read_orc(read_orc_args const& args, rmm::mr::device_memory_resource* mr)
+table_with_metadata read_orc(orc_reader_options const& options, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  detail_orc::reader_options options{args.columns,
-                                     args.use_index,
-                                     args.use_np_dtypes,
-                                     args.timestamp_type,
-                                     args.decimals_as_float,
-                                     args.forced_decimals_scale};
-  auto reader = make_reader<detail_orc::reader>(args.source, options, mr);
+  auto reader = make_reader<detail_orc::reader>(options.source(), options, mr);
 
-  if (args.stripes.size() > 0) {
-    return reader->read_stripes(args.stripes);
-  } else if (args.skip_rows != -1 || args.num_rows != -1) {
-    return reader->read_rows(args.skip_rows, args.num_rows);
-  } else {
-    return reader->read_all();
-  }
+  return reader->read(options);
 }
 
 // Freeform API wraps the detail writer class API
-void write_orc(write_orc_args const& args, rmm::mr::device_memory_resource* mr)
+void write_orc(orc_writer_options const& options, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  detail_orc::writer_options options{args.compression, args.enable_statistics};
-  auto writer = make_writer<detail_orc::writer>(args.sink, options, mr);
+  auto writer = make_writer<detail_orc::writer>(options.sink(), options, mr);
 
-  writer->write_all(args.table, args.metadata);
+  writer->write(options.table(), options.metadata());
 }
 
 /**
@@ -259,18 +256,19 @@ void write_orc(write_orc_args const& args, rmm::mr::device_memory_resource* mr)
  *
  **/
 std::shared_ptr<detail_orc::orc_chunked_state> write_orc_chunked_begin(
-  write_orc_chunked_args const& args, rmm::mr::device_memory_resource* mr)
+  chunked_orc_writer_options const& opts, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  detail_orc::writer_options options{args.compression, args.enable_statistics};
-
+  orc_writer_options options;
+  options.compression(opts.compression());
+  options.enable_statistics(opts.enable_statistics());
   auto state = std::make_shared<detail_orc::orc_chunked_state>();
-  state->wp  = make_writer<detail_orc::writer>(args.sink, options, mr);
+  state->wp  = make_writer<detail_orc::writer>(opts.sink(), options, mr);
 
   // have to make a copy of the metadata here since we can't really
   // guarantee the lifetime of the incoming pointer
-  if (args.metadata != nullptr) {
-    state->user_metadata_with_nullability = *args.metadata;
+  if (opts.metadata() != nullptr) {
+    state->user_metadata_with_nullability = *opts.metadata();
     state->user_metadata                  = &state->user_metadata_with_nullability;
   }
   state->stream = 0;
