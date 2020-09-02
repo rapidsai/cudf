@@ -126,30 +126,30 @@ def read_orc_statistics(
     (
         column_names,
         raw_file_statistics,
-        *raw_row_groups_statistics,
+        *raw_stripes_statistics,
     ) = statistics
 
     # Parse statistics
     cs = cs_pb2.ColumnStatistics()
     file_statistics = {}
-    row_groups_statistics = []
+    stripes_statistics = []
     for i, raw_file_stats in enumerate(raw_file_statistics):
         parsed_statistics = _parse_column_statistics(cs, raw_file_stats)
         if not parsed_statistics:
             return None
         file_statistics[column_names[i].decode("utf-8")] = parsed_statistics
-    for raw_row_group_statistics in raw_row_groups_statistics:
-        row_group_statistics = {}
-        for i, raw_file_stats in enumerate(raw_row_group_statistics):
+    for raw_stripe_statistics in raw_stripes_statistics:
+        stripe_statistics = {}
+        for i, raw_file_stats in enumerate(raw_stripe_statistics):
             parsed_statistics = _parse_column_statistics(cs, raw_file_stats)
             if not parsed_statistics:
                 return None
-            row_group_statistics[
+            stripe_statistics[
                 column_names[i].decode("utf-8")
             ] = parsed_statistics
-        row_groups_statistics.append(row_group_statistics)
+        stripes_statistics.append(stripe_statistics)
 
-    return file_statistics, row_groups_statistics
+    return file_statistics, stripes_statistics
 
 
 @ioutils.doc_read_orc()
