@@ -29,6 +29,7 @@
 namespace cudf {
 namespace {
 struct size_of_helper {
+  cudf::data_type type;
   template <typename T, typename std::enable_if_t<not is_fixed_width<T>()>* = nullptr>
   constexpr int operator()() const
   {
@@ -45,6 +46,8 @@ struct size_of_helper {
   template <typename T, typename std::enable_if_t<is_fixed_point<T>()>* = nullptr>
   constexpr int operator()() const noexcept
   {
+    if (not type.scale().has_value()) return sizeof(T);
+
     // Only want the sizeof fixed_point::Rep as fixed_point::scale is stored in data_type
     return sizeof(typename T::representation_type);
   }
@@ -54,7 +57,7 @@ struct size_of_helper {
 std::size_t size_of(data_type element_type)
 {
   CUDF_EXPECTS(is_fixed_width(element_type), "Invalid element type.");
-  return cudf::type_dispatcher(element_type, size_of_helper{});
+  return cudf::type_dispatcher(element_type, size_of_helper{element_type});
 }
 
 // Empty column of specified type
