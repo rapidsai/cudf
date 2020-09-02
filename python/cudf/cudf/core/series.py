@@ -3287,9 +3287,6 @@ class Series(Frame, Serializable):
         """Compute the median of the series
         """
 
-        if isinstance(self._column, DatetimeColumn):
-            raise TypeError(f"cannot perform median with type {self.dtype}")
-
         if not skipna and self.has_nulls:
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
@@ -3409,32 +3406,7 @@ class Series(Frame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        if isinstance(self._column, (DatetimeColumn, TimeDeltaColumn)):
-            raise TypeError(f"cannot perform kurt with type {self.dtype}")
-
-        skipna = True if skipna is None else skipna
-
-        if self.empty or (not skipna and self.has_nulls):
-            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-
-        self = self.nans_to_nulls().dropna()
-
-        if len(self) < 4:
-            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-
-        n = len(self)
-        miu = self.mean()
-        m4_numerator = ((self - miu) ** 4).sum()
-        V = self.var()
-
-        if V == 0:
-            return 0
-
-        term_one_section_one = (n * (n + 1)) / ((n - 1) * (n - 2) * (n - 3))
-        term_one_section_two = m4_numerator / (V ** 2)
-        term_two = ((n - 1) ** 2) / ((n - 2) * (n - 3))
-        kurt = term_one_section_one * term_one_section_two - 3 * term_two
-        return kurt
+        return self._column.kurtosis(skipna=skipna)
 
     # Alias for kurtosis.
     kurt = kurtosis
@@ -3471,30 +3443,7 @@ class Series(Frame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        if isinstance(self._column, (DatetimeColumn, TimeDeltaColumn)):
-            raise TypeError(f"cannot perform skew with type {self.dtype}")
-
-        skipna = True if skipna is None else skipna
-
-        if self.empty or (not skipna and self.has_nulls):
-            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-
-        self = self.nans_to_nulls().dropna()
-
-        if len(self) < 3:
-            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-
-        n = len(self)
-        miu = self.mean()
-        m3 = ((self - miu) ** 3).sum() / n
-        m2 = self.var(ddof=0)
-
-        if m2 == 0:
-            return 0
-
-        unbiased_coef = ((n * (n - 1)) ** 0.5) / (n - 2)
-        skew = unbiased_coef * m3 / (m2 ** (3 / 2))
-        return skew
+        return self._column.skew(skipna=skipna)
 
     def cov(self, other, min_periods=None):
         """
@@ -3529,14 +3478,6 @@ class Series(Frame, Serializable):
                 "min_periods parameter is not implemented yet"
             )
 
-        if isinstance(
-            self._column, (DatetimeColumn, TimeDeltaColumn)
-        ) or isinstance(other._column, (DatetimeColumn, TimeDeltaColumn)):
-            raise TypeError(
-                f"cannot perform covarience with types {self.dtype}, "
-                f"{other.dtype}"
-            )
-
         if self.empty or other.empty:
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
@@ -3545,12 +3486,7 @@ class Series(Frame, Serializable):
 
         lhs, rhs = _align_indices([lhs, rhs], how="inner")
 
-        if lhs.empty or rhs.empty or (len(lhs) == 1 and len(rhs) == 1):
-            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-
-        result = (lhs - lhs.mean()) * (rhs - rhs.mean())
-        cov_sample = result.sum() / (len(lhs) - 1)
-        return cov_sample
+        return lhs._column.cov(rhs._column)
 
     def corr(self, other, method="pearson", min_periods=None):
         """Calculates the sample correlation between two Series,
@@ -3566,12 +3502,6 @@ class Series(Frame, Serializable):
         """
 
         assert method in ("pearson",) and min_periods in (None,)
-        if isinstance(
-            self._column, (DatetimeColumn, TimeDeltaColumn)
-        ) or isinstance(other._column, (DatetimeColumn, TimeDeltaColumn)):
-            raise TypeError(
-                f"cannot perform corr with types {self.dtype}, {other.dtype}"
-            )
 
         if self.empty or other.empty:
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
@@ -3580,15 +3510,7 @@ class Series(Frame, Serializable):
         rhs = other.nans_to_nulls().dropna()
         lhs, rhs = _align_indices([lhs, rhs], how="inner")
 
-        if lhs.empty or rhs.empty:
-            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-
-        cov = lhs.cov(rhs)
-        lhs_std, rhs_std = lhs.std(), rhs.std()
-
-        if not cov or lhs_std == 0 or rhs_std == 0:
-            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-        return cov / lhs_std / rhs_std
+        return lhs._column.corr(rhs._column)
 
     def isin(self, values):
         """Check whether values are contained in Series.

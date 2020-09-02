@@ -450,6 +450,7 @@ def _get_nan_for_dtype(dtype):
     if pd.api.types.is_datetime64_dtype(
         dtype
     ) or pd.api.types.is_timedelta64_dtype(dtype):
-        return dtype.type("nat")
+        time_unit, _ = np.datetime_data(dtype)
+        return dtype.type("nat", time_unit)
     else:
-        return np.nan
+        return np.float64("nan")

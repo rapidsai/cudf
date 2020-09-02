@@ -19,7 +19,6 @@ from cudf._lib.null_mask import (
     bitmask_allocation_size_bytes,
     create_null_mask,
 )
-from cudf._lib.quantiles import quantile as cpp_quantile
 from cudf._lib.scalar import as_scalar
 from cudf._lib.stream_compaction import distinct_count as cpp_distinct_count
 from cudf._lib.transform import bools_to_mask
@@ -810,22 +809,7 @@ class ColumnBase(Column, Serializable):
         return ColumnBase._concat([self, as_column(other)])
 
     def quantile(self, q, interpolation, exact):
-
-        is_number = isinstance(q, Number)
-
-        if is_number:
-            quant = [float(q)]
-        elif isinstance(q, list) or isinstance(q, np.ndarray):
-            quant = q
-        else:
-            msg = "`q` must be either a single element, list or numpy array"
-            raise TypeError(msg)
-
-        # get sorted indices and exclude nulls
-        sorted_indices = self.as_frame()._get_sorted_inds(True, "first")
-        sorted_indices = sorted_indices[self.null_count :]
-
-        return cpp_quantile(self, quant, interpolation, sorted_indices, exact)
+        raise TypeError(f"cannot perform quantile with type {self.dtype}")
 
     def take(self, indices, keep_index=True):
         """Return Column by taking values from the corresponding *indices*.
@@ -1187,6 +1171,23 @@ class ColumnBase(Column, Serializable):
 
     def var(self, skipna=None, ddof=1, dtype=np.float64):
         raise TypeError(f"cannot perform var with type {self.dtype}")
+
+    def kurtosis(self, skipna=None):
+        raise TypeError(f"cannot perform kurt with type {self.dtype}")
+
+    def skew(self, skipna=None):
+        raise TypeError(f"cannot perform skew with type {self.dtype}")
+
+    def cov(self, other):
+        raise TypeError(
+            f"cannot perform covarience with types {self.dtype}, "
+            f"{other.dtype}"
+        )
+
+    def corr(self, other):
+        raise TypeError(
+            f"cannot perform corr with types {self.dtype}, " f"{other.dtype}"
+        )
 
     def nans_to_nulls(self):
         if self.dtype.kind == "f":

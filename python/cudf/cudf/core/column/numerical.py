@@ -1,11 +1,14 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
+from numbers import Number
+
 import numpy as np
 from pandas.api.types import is_integer_dtype
 
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.nvtx import annotate
+from cudf._lib.quantiles import quantile as cpp_quantile
 from cudf._lib.scalar import Scalar
 from cudf.core.buffer import Buffer
 from cudf.core.column import as_column, build_column, column, string
@@ -209,6 +212,106 @@ class NumericalColumn(column.ColumnBase):
 
     def sum_of_squares(self, dtype=None):
         return libcudf.reduce.reduce("sum_of_squares", self, dtype=dtype)
+
+    def kurtosis(self, skipna=None):
+        skipna = True if skipna is None else skipna
+
+        if len(self) == 0 or (not skipna and self.has_nulls):
+            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+
+        self = self.nans_to_nulls().dropna()
+
+        if len(self) < 4:
+            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+
+        n = len(self)
+        miu = self.mean()
+        m4_numerator = (
+            self.binary_operator("sub", miu).binary_operator(
+                "pow", self.normalize_binop_value(4)
+            )
+        ).sum()
+        V = self.var()
+
+        if V == 0:
+            return 0
+
+        term_one_section_one = (n * (n + 1)) / ((n - 1) * (n - 2) * (n - 3))
+        term_one_section_two = m4_numerator / (V ** 2)
+        term_two = ((n - 1) ** 2) / ((n - 2) * (n - 3))
+        kurt = term_one_section_one * term_one_section_two - 3 * term_two
+        return kurt
+
+    def skew(self, skipna=None):
+        skipna = True if skipna is None else skipna
+
+        if len(self) == 0 or (not skipna and self.has_nulls):
+            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+
+        self = self.nans_to_nulls().dropna()
+
+        if len(self) < 3:
+            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+
+        n = len(self)
+        miu = self.mean()
+        m3 = (
+            (
+                self.binary_operator("sub", miu).binary_operator(
+                    "pow", self.normalize_binop_value(3)
+                )
+            ).sum()
+        ) / n
+        m2 = self.var(ddof=0)
+
+        if m2 == 0:
+            return 0
+
+        unbiased_coef = ((n * (n - 1)) ** 0.5) / (n - 2)
+        skew = unbiased_coef * m3 / (m2 ** (3 / 2))
+        return skew
+
+    def quantile(self, q, interpolation, exact):
+        is_number = isinstance(q, Number)
+
+        if is_number:
+            quant = [float(q)]
+        elif isinstance(q, list) or isinstance(q, np.ndarray):
+            quant = q
+        else:
+            msg = "`q` must be either a single element, list or numpy array"
+            raise TypeError(msg)
+
+        # get sorted indices and exclude nulls
+        sorted_indices = self.as_frame()._get_sorted_inds(True, "first")
+        sorted_indices = sorted_indices[self.null_count :]
+
+        return cpp_quantile(self, quant, interpolation, sorted_indices, exact)
+
+    def cov(self, other):
+        if (
+            len(self) == 0
+            or len(other) == 0
+            or (len(self) == 1 and len(other) == 1)
+        ):
+            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+
+        result = self.binary_operator("sub", self.mean()).binary_operator(
+            "mul", other.binary_operator("sub", other.mean())
+        )
+        cov_sample = result.sum() / (len(self) - 1)
+        return cov_sample
+
+    def corr(self, other):
+        if len(self) == 0 or len(other) == 0:
+            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+
+        cov = self.cov(other)
+        lhs_std, rhs_std = self.std(), other.std()
+
+        if not cov or lhs_std == 0 or rhs_std == 0:
+            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+        return cov / lhs_std / rhs_std
 
     def round(self, decimals=0):
         if decimals < 0:
