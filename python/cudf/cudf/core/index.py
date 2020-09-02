@@ -2131,37 +2131,165 @@ class DatetimeIndex(GenericIndex):
 
     @property
     def year(self):
-        return self.get_dt_field("year")
+        """
+        The year of the datetime.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pandas as pd
+        >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
+        ...             periods=3, freq="Y"))
+        >>> datetime_index
+        DatetimeIndex(['2000-12-31', '2001-12-31', '2002-12-31'], dtype='datetime64[ns]')
+        >>> datetime_index.year
+        Int16Index([2000, 2001, 2002], dtype='int16')
+        """  # noqa: E501
+        return self._get_dt_field("year")
 
     @property
     def month(self):
-        return self.get_dt_field("month")
+        """
+        The month as January=1, December=12.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pandas as pd
+        >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
+        ...             periods=3, freq="M"))
+        >>> datetime_index
+        DatetimeIndex(['2000-01-31', '2000-02-29', '2000-03-31'], dtype='datetime64[ns]')
+        >>> datetime_index.month
+        Int16Index([1, 2, 3], dtype='int16')
+        """  # noqa: E501
+        return self._get_dt_field("month")
 
     @property
     def day(self):
-        return self.get_dt_field("day")
+        """
+        The day of the datetime.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
+        ...             periods=3, freq="D"))
+        >>> datetime_index
+        DatetimeIndex(['2000-01-01', '2000-01-02', '2000-01-03'], dtype='datetime64[ns]')
+        >>> datetime_index.day
+        Int16Index([1, 2, 3], dtype='int16')
+        """  # noqa: E501
+        return self._get_dt_field("day")
 
     @property
     def hour(self):
-        return self.get_dt_field("hour")
+        """
+        The hours of the datetime.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
+        ...             periods=3, freq="h"))
+        >>> datetime_index
+        DatetimeIndex(['2000-01-01 00:00:00', '2000-01-01 01:00:00',
+                    '2000-01-01 02:00:00'],
+                    dtype='datetime64[ns]')
+        >>> datetime_index.hour
+        Int16Index([0, 1, 2], dtype='int16')
+        """
+        return self._get_dt_field("hour")
 
     @property
     def minute(self):
-        return self.get_dt_field("minute")
+        """
+        The minutes of the datetime.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
+        ...             periods=3, freq="T"))
+        >>> datetime_index
+        DatetimeIndex(['2000-01-01 00:00:00', '2000-01-01 00:01:00',
+                    '2000-01-01 00:02:00'],
+                    dtype='datetime64[ns]')
+        >>> datetime_index.minute
+        Int16Index([0, 1, 2], dtype='int16')
+        """
+        return self._get_dt_field("minute")
 
     @property
     def second(self):
-        return self.get_dt_field("second")
+        """
+        The seconds of the datetime.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
+        ...             periods=3, freq="s"))
+        >>> datetime_index
+        DatetimeIndex(['2000-01-01 00:00:00', '2000-01-01 00:00:01',
+                    '2000-01-01 00:00:02'],
+                    dtype='datetime64[ns]')
+        >>> datetime_index.second
+        Int16Index([0, 1, 2], dtype='int16')
+        """
+        return self._get_dt_field("second")
 
     @property
     def weekday(self):
-        return self.get_dt_field("weekday")
+        """
+        The day of the week with Monday=0, Sunday=6.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_index = cudf.Index(pd.date_range("2016-12-31",
+        ...     "2017-01-08", freq="D"))
+        >>> datetime_index
+        DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
+                    '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
+                    '2017-01-08'],
+                    dtype='datetime64[ns]')
+        >>> datetime_index.weekday
+        Int16Index([5, 6, 0, 1, 2, 3, 4, 5, 6], dtype='int16')
+        """
+        return self._get_dt_field("weekday")
+
+    @property
+    def dayofweek(self):
+        """
+        The day of the week with Monday=0, Sunday=6.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_index = cudf.Index(pd.date_range("2016-12-31",
+        ...     "2017-01-08", freq="D"))
+        >>> datetime_index
+        DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
+                    '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
+                    '2017-01-08'],
+                    dtype='datetime64[ns]')
+        >>> datetime_index.dayofweek
+        Int16Index([5, 6, 0, 1, 2, 3, 4, 5, 6], dtype='int16')
+        """
+        return self._get_dt_field("weekday")
 
     def to_pandas(self):
         nanos = self._values.astype("datetime64[ns]")
         return pd.DatetimeIndex(nanos.to_pandas(), name=self.name)
 
-    def get_dt_field(self, field):
+    def _get_dt_field(self, field):
         out_column = self._values.get_dt_field(field)
         # column.column_empty_like always returns a Column object
         # but we need a NumericalColumn for GenericIndex..
