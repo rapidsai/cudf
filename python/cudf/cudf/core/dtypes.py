@@ -495,7 +495,7 @@ class ListDtype(Generic):
             self._typ = pa.list_(element_type._typ)
         else:
             element_type = cudf.utils.dtypes.np_to_pa_dtype(
-                np.dtype(element_type)
+                cudf.dtype(element_type)
             )
             self._typ = pa.list_(element_type)
 
@@ -512,6 +512,10 @@ class ListDtype(Generic):
             return self.element_type.leaf_type
         else:
             return self.element_type
+
+    @property
+    def kind(self):
+        return 'O'
 
     @property
     def type(self):

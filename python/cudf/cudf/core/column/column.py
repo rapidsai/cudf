@@ -1629,7 +1629,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                                    type=dtype.pa_type if dtype is not None else None, 
                                    from_pandas=True if nan_as_null is None else nan_as_null)
                 # todo: fix this ???? ????????
-                as_column_dtype = cudf.dtype(pa_data.type) if not isinstance(pa_data.type, pa.lib.DictionaryType) else None
+                as_column_dtype = cudf.dtype(pa_data.type) if not isinstance(pa_data.type, (pa.lib.DictionaryType, pa.lib.ListType)) else None
                 data = as_column(pa_data, dtype=as_column_dtype, nan_as_null=nan_as_null)
 
             except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError):
