@@ -65,19 +65,27 @@ class parquet_reader_options {
   /// Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
 
+  /**
+   * @brief Constrcutor from soucre info
+   *
+   * @param src source information used to read parquet file
+   */
   explicit parquet_reader_options(source_info const& src) : _source(src) {}
 
   friend parquet_reader_options_builder;
 
  public:
   /// This is just to please cython
+  /**
+   * @brief Default constructor
+   */
   explicit parquet_reader_options() = default;
 
   /**
    * @brief create parquet_reader_options_builder which will build parquet_reader_options
    *
    * @param src source information used to read parquet file
-   * @returns parquet_reader_options_builder
+   * @return parquet_reader_options_builder
    */
   static parquet_reader_options_builder builder(source_info const& src);
 
@@ -87,22 +95,22 @@ class parquet_reader_options {
   source_info const& get_source() const { return _source; }
 
   /**
-   * @breif Returns true/false depending on whether strings should be converted to categories or not
+   * @brief Returns true/false depending on whether strings should be converted to categories or not
    */
   bool is_enabled_convert_strings_to_categories() const { return _convert_strings_to_categories; }
 
   /**
-   * @breif Returns true/false depending whether to use pandas metadata or not while reading
+   * @brief Returns true/false depending whether to use pandas metadata or not while reading
    */
   bool is_enabled_use_pandas_metadata() const { return _use_pandas_metadata; }
 
   /**
-   * @breif Returns number of rows to skip from the start
+   * @brief Returns number of rows to skip from the start
    */
   size_type get_skip_rows() const { return _skip_rows; }
 
   /**
-   * @breif Returns number of rows to read
+   * @brief Returns number of rows to read
    */
   size_type get_num_rows() const { return _num_rows; }
 
@@ -123,11 +131,15 @@ class parquet_reader_options {
 
   /**
    * @brief Set column names which needs to be read
+   *
+   * @param col_names vector of column names
    */
   void set_columns(std::vector<std::string> col_names) { _columns = std::move(col_names); }
 
   /**
    * @brief Set vector of individual row groups to read
+   *
+   * @param row_grp vector of rowgroups to read
    */
   void set_row_groups(std::vector<std::vector<size_type>> row_grp)
   {
@@ -138,18 +150,24 @@ class parquet_reader_options {
     _row_groups = std::move(row_grp);
   }
 
-  /*
+  /**
    * @brief Set to convert strings to categories
+   *
+   * @param val bool value to enable/disable conversion of string column to categories
    */
   void enable_convert_strings_to_categories(bool val) { _convert_strings_to_categories = val; }
 
-  /*
+  /**
    * @brief Set to use pandas metadata to read
+   *
+   * @param val bool value whether to use pandas metadata
    */
   void enable_use_pandas_metadata(bool val) { _use_pandas_metadata = val; }
 
-  /*
+  /**
    * @brief Set number of rows to skip
+   *
+   * @param val number of rows to skip from start
    */
   void set_skip_rows(size_type val)
   {
@@ -160,8 +178,10 @@ class parquet_reader_options {
     _skip_rows = val;
   }
 
-  /*
+  /**
    * @brief Set number of rows to read
+   *
+   * @param val number of rows to read after skip
    */
   void set_num_rows(size_type val)
   {
@@ -172,8 +192,10 @@ class parquet_reader_options {
     _num_rows = val;
   }
 
-  /*
+  /**
    * @brief timestamp_type used to cast timestamp columns
+   *
+   * @param type timestamp data_type to which all timestamp column needs to be cast
    */
   void set_timestamp_type(data_type type) { _timestamp_type = type; }
 };
@@ -182,13 +204,24 @@ class parquet_reader_options_builder {
   parquet_reader_options options;
 
  public:
-  /// This is just to please cython
-  explicit parquet_reader_options_builder() = default;
+  // This is just to please cython
+  /**
+   * @brief Default constrcutor
+   */
+  parquet_reader_options_builder() = default;
 
+  /**
+   * @brief Constrcutor from soucre info
+   *
+   * @param src source information used to read parquet file
+   */
   explicit parquet_reader_options_builder(source_info const& src) : options(src) {}
 
   /**
    * @brief Set column names which needs to be read
+   *
+   * @param col_names vector of column names
+   * @return reference of parquet_reader_options_builder
    */
   parquet_reader_options_builder& set_columns(std::vector<std::string> col_names)
   {
@@ -198,6 +231,9 @@ class parquet_reader_options_builder {
 
   /**
    * @brief Set vector of individual row groups to read
+   *
+   * @param row_grp vector of rowgroups to read
+   * @return reference of parquet_reader_options_builder
    */
   parquet_reader_options_builder& set_row_groups(std::vector<std::vector<size_type>> row_grp)
   {
@@ -205,8 +241,11 @@ class parquet_reader_options_builder {
     return *this;
   }
 
-  /*
+  /**
    * @brief Set to convert strings to categories
+   *
+   * @param val bool value to enable/disable conversion of string column to categories
+   * @return reference of parquet_reader_options_builder
    */
   parquet_reader_options_builder& enable_convert_strings_to_categories(bool val)
   {
@@ -214,8 +253,11 @@ class parquet_reader_options_builder {
     return *this;
   }
 
-  /*
+  /**
    * @brief Set to use pandas metadata to read
+   *
+   * @param val bool value whether to use pandas metadata
+   * @return reference of parquet_reader_options_builder
    */
   parquet_reader_options_builder& enable_use_pandas_metadata(bool val)
   {
@@ -223,8 +265,11 @@ class parquet_reader_options_builder {
     return *this;
   }
 
-  /*
+  /**
    * @brief Set number of rows to skip
+   *
+   * @param val number of rows to skip from start
+   * @return reference of parquet_reader_options_builder
    */
   parquet_reader_options_builder& set_skip_rows(size_type val)
   {
@@ -232,8 +277,11 @@ class parquet_reader_options_builder {
     return *this;
   }
 
-  /*
+  /**
    * @brief Set number of rows to read
+   *
+   * @param val number of rows to read after skip
+   * @return reference of parquet_reader_options_builder
    */
   parquet_reader_options_builder& set_num_rows(size_type val)
   {
@@ -241,8 +289,11 @@ class parquet_reader_options_builder {
     return *this;
   }
 
-  /*
+  /**
    * @brief timestamp_type used to cast timestamp columns
+   *
+   * @param type timestamp data_type to which all timestamp column needs to be cast
+   * @return reference of parquet_reader_options_builder
    */
   parquet_reader_options_builder& set_timestamp_type(data_type type)
   {
@@ -316,6 +367,12 @@ class parquet_writer_options {
   /// Column chunks file path to be set in the raw output metadata
   std::string _column_chunks_file_path;
 
+  /**
+   * @brief Constructor from sink and table
+   *
+   * @param sink sink to use for writer output
+   * @param table Table to be written to output
+   */
   explicit parquet_writer_options(sink_info const& sink, table_view const& table)
     : _sink(sink), _table(table)
   {
@@ -325,6 +382,9 @@ class parquet_writer_options {
 
  public:
   /// This is just to please cython
+  /**
+   * @brief Deffault constrcutor
+   */
   parquet_writer_options() = default;
 
   /**
@@ -381,26 +441,36 @@ class parquet_writer_options {
 
   /**
    * @brief Set metadata to parquet_writer_options
+   *
+   * @param metadata asscoicated metadata
    */
-  void set_metadata(table_metadata const* m) { _metadata = m; }
+  void set_metadata(table_metadata const* metadata) { _metadata = metadata; }
 
   /**
    * @brief Set statistics_freq to parquet_writer_options
+   *
+   * @param sf statistics_freq that needs to be witten to output
    */
   void set_stats_level(statistics_freq sf) { _stats_level = sf; }
 
   /**
    * @brief Set compression type to parquet_writer_options
+   *
+   * @param comp_type compression_type to use
    */
   void set_compression(compression_type comp_type) { _compression = comp_type; }
 
   /**
    * @brief Set whether filemetadata is required or not to parquet_writer_options
+   *
+   * @param req boolean value to enable/disable return of file metadata
    */
   void enable_return_filemetadata(bool req) { _return_filemetadata = req; }
 
   /**
    * @brief Set column_chunks_file_path to parquet_writer_options
+   *
+   * @param file_path string which indicates file path
    */
   void set_column_chunks_file_path(std::string file_path)
   {
@@ -412,25 +482,40 @@ class parquet_writer_options_builder {
   parquet_writer_options options;
 
  public:
+  /// This is just to please cython
+  /**
+   * @brief Default constrcutor
+   */
+  explicit parquet_writer_options_builder() = default;
+
+  /**
+   * @brief Constructor from sink and table
+   *
+   * @param sink sink to use for writer output
+   * @param table Table to be written to output
+   */
   explicit parquet_writer_options_builder(sink_info const& sink, table_view const& table)
     : options(sink, table)
   {
   }
 
-  /// This is just to please cython
-  explicit parquet_writer_options_builder() = default;
-
   /**
    * @brief Set metadata to parquet_writer_options
+   *
+   * @param metadata asscoicated metadata
+   * @return reference to parquet_writer_options_builder
    */
-  parquet_writer_options_builder& set_metadata(table_metadata const* m)
+  parquet_writer_options_builder& set_metadata(table_metadata const* metadata)
   {
-    options._metadata = m;
+    options._metadata = metadata;
     return *this;
   }
 
   /**
    * @brief Set statistics_freq to parquet_writer_options
+   *
+   * @param sf statistics_freq that needs to be witten to output
+   * @return reference to parquet_writer_options_builder
    */
   parquet_writer_options_builder& set_stats_level(statistics_freq sf)
   {
@@ -440,6 +525,9 @@ class parquet_writer_options_builder {
 
   /**
    * @brief Set compression type to parquet_writer_options
+   *
+   * @param comp_type compression_type to use
+   * @return reference to parquet_writer_options_builder
    */
   parquet_writer_options_builder& set_compression(compression_type comp_type)
   {
@@ -449,6 +537,9 @@ class parquet_writer_options_builder {
 
   /**
    * @brief Set whether filemetadata is required or not to parquet_writer_options
+   *
+   * @param req boolean value to enable/disable return of file metadata
+   * @return reference to parquet_writer_options_builder
    */
   parquet_writer_options_builder& enable_return_filemetadata(bool req)
   {
@@ -458,6 +549,9 @@ class parquet_writer_options_builder {
 
   /**
    * @brief Set column_chunks_file_path to parquet_writer_options
+   *
+   * @param file_path string which indicates file path
+   * @return reference to parquet_writer_options_builder
    */
   parquet_writer_options_builder& set_column_chunks_file_path(std::string file_path)
   {
@@ -516,7 +610,7 @@ std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
   const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list);
 
 /**
- * @breif Builds options for chunked_parquet_writer_options
+ * @brief Builds options for chunked_parquet_writer_options
  */
 class chunked_parquet_writer_options_builder;
 
@@ -535,12 +629,20 @@ class chunked_parquet_writer_options {
   /// Optional associated metadata.
   const table_metadata_with_nullability* _nullable_metadata = nullptr;
 
+  /**
+   * @brief Constructor from sink.
+   *
+   * @param sink sink to use for writer output
+   */
   explicit chunked_parquet_writer_options(sink_info const& sink) : _sink(sink) {}
 
   friend chunked_parquet_writer_options_builder;
 
  public:
   // This is just to please cython
+  /**
+   * @brief Default constrcutor
+   */
   chunked_parquet_writer_options() = default;
 
   /**
@@ -568,6 +670,8 @@ class chunked_parquet_writer_options {
 
   /**
    * @brief Set nullable metadata to parquet_writer_options
+   *
+   * @param metadata asscoicated metadata
    */
   void set_nullable_metadata(const table_metadata_with_nullability* metadata)
   {
@@ -576,11 +680,15 @@ class chunked_parquet_writer_options {
 
   /**
    * @brief Set statistics_freq to parquet_writer_options
+   *
+   * @param sf statistics_freq that needs to be witten to output
    */
   void set_stats_level(statistics_freq sf) { _stats_level = sf; }
 
   /**
    * @brief Set compression type to parquet_writer_options
+   *
+   * @param comp_type compression_type to use
    */
   void set_compression(compression_type comp_type) { _compression = comp_type; }
 
@@ -599,12 +707,23 @@ class chunked_parquet_writer_options_builder {
 
  public:
   // This is just to please cython
+  /**
+   * @brief Default constrcutor
+   */
   chunked_parquet_writer_options_builder() = default;
 
+  /**
+   * @brief Constructor from sink.
+   *
+   * @param sink sink to use for writer output
+   */
   chunked_parquet_writer_options_builder(sink_info const& sink) : options(sink){};
 
   /**
    * @brief Set nullable metadata to parquet_writer_options
+   *
+   * @param metadata asscoicated metadata
+   * @return reference to chunked_parquet_writer_options_builder
    */
   chunked_parquet_writer_options_builder& set_nullable_metadata(
     const table_metadata_with_nullability* metadata)
@@ -615,6 +734,9 @@ class chunked_parquet_writer_options_builder {
 
   /**
    * @brief Set statistics_freq to parquet_writer_options
+   *
+   * @param sf statistics_freq that needs to be witten to output
+   * @return reference to chunked_parquet_writer_options_builder
    */
   chunked_parquet_writer_options_builder& set_stats_level(statistics_freq sf)
   {
@@ -624,6 +746,9 @@ class chunked_parquet_writer_options_builder {
 
   /**
    * @brief Set compression type to parquet_writer_options
+   *
+   * comp_type compression_type to use
+   * @return reference to chunked_parquet_writer_options_builder
    */
   chunked_parquet_writer_options_builder& set_compression(compression_type comp_type)
   {
@@ -677,7 +802,7 @@ struct pq_chunked_state;
  * @param[in] options Settings for controlling writing behavior
  * @param[in] mr Device memory resource to use for device memory allocation
  *
- * @returns pointer to an anonymous state structure storing information about the chunked write.
+ * @return pointer to an anonymous state structure storing information about the chunked write.
  * this pointer must be passed to all subsequent write_parquet_chunked() and
  * write_parquet_chunked_end() calls.
  */
