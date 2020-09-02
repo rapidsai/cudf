@@ -22,11 +22,14 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(
 
   // side effects of this function we are now dependent on:
   // - resulting column elements are sorted ascending
-  // - nulls are sorted to the end
+  // - nulls are sorted to the beginning
   auto keys_table = cudf::detail::drop_duplicates(
     input_table, columns, duplicate_keep_option::KEEP_FIRST, null_equality::EQUAL, mr, stream);
 
   if (cudf::has_nulls(keys_table->view())) {
+    // Rows with nulls appear at the top of `keys_table`, but we want them to appear at
+    // the bottom. Below, we rearrange the rows so that nulls appear at the bottom:
+
     auto num_rows = keys_table->num_rows();
     auto mask =
       cudf::detail::bitmask_and(keys_table->view(), rmm::mr::get_default_resource(), stream);
