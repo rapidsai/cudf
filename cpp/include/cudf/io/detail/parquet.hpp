@@ -61,7 +61,7 @@ class reader {
   ~reader();
 
   /**
-   * @brief Reads the entire dataset.
+   * @brief Reads the dataset as per given options.
    *
    * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches.
@@ -97,7 +97,7 @@ class writer {
   ~writer();
 
   /**
-   * @brief Writes the entire dataset.
+   * @brief Writes the dataset as per oprions provided.
    *
    * @param table Set of columns to output
    * @param metadata Table metadata and column names
@@ -105,11 +105,11 @@ class writer {
    * @param column_chunks_file_path Column chunks file path to be set in the raw output metadata
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  std::unique_ptr<std::vector<uint8_t>> write_all(table_view const& table,
-                                                  const table_metadata* metadata = nullptr,
-                                                  bool return_filemetadata       = false,
-                                                  const std::string column_chunks_file_path = "",
-                                                  cudaStream_t stream                       = 0);
+  std::unique_ptr<std::vector<uint8_t>> write(table_view const& table,
+                                              const table_metadata* metadata            = nullptr,
+                                              bool return_filemetadata                  = false,
+                                              const std::string column_chunks_file_path = "",
+                                              cudaStream_t stream                       = 0);
 
   /**
    * @brief Begins the chunked/streamed write process.

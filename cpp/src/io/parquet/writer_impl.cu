@@ -479,8 +479,8 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
                    parquet_writer_options const &options,
                    rmm::mr::device_memory_resource *mr)
   : _mr(mr),
-    compression_(to_parquet_compression(options.compression())),
-    stats_granularity_(options.stats_level()),
+    compression_(to_parquet_compression(options.get_compression())),
+    stats_granularity_(options.get_stats_level()),
     out_sink_(std::move(sink))
 {
 }
@@ -970,11 +970,11 @@ writer::writer(std::unique_ptr<data_sink> sink,
 writer::~writer() = default;
 
 // Forward to implementation
-std::unique_ptr<std::vector<uint8_t>> writer::write_all(table_view const &table,
-                                                        const table_metadata *metadata,
-                                                        bool return_filemetadata,
-                                                        const std::string column_chunks_file_path,
-                                                        cudaStream_t stream)
+std::unique_ptr<std::vector<uint8_t>> writer::write(table_view const &table,
+                                                    const table_metadata *metadata,
+                                                    bool return_filemetadata,
+                                                    const std::string column_chunks_file_path,
+                                                    cudaStream_t stream)
 {
   return _impl->write(table, metadata, return_filemetadata, column_chunks_file_path, stream);
 }

@@ -997,15 +997,16 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>> &&sources,
   _metadata = std::make_unique<aggregate_metadata>(_sources);
 
   // Select only columns required by the options
-  _selected_columns = _metadata->select_columns(options.columns(), options.use_pandas_metadata());
+  _selected_columns =
+    _metadata->select_columns(options.get_columns(), options.is_enabled_use_pandas_metadata());
 
   // Override output timestamp resolution if requested
-  if (options.timestamp_type().id() != type_id::EMPTY) {
-    _timestamp_type = options.timestamp_type();
+  if (options.get_timestamp_type().id() != type_id::EMPTY) {
+    _timestamp_type = options.get_timestamp_type();
   }
 
   // Strings may be returned as either string or categorical columns
-  _strings_to_categorical = options.convert_strings_to_categories();
+  _strings_to_categorical = options.is_enabled_convert_strings_to_categories();
 }
 
 table_with_metadata reader::impl::read(size_type skip_rows,
@@ -1269,9 +1270,8 @@ reader::~reader() = default;
 // Forward to implementation
 table_with_metadata reader::read(parquet_reader_options const &options, cudaStream_t stream)
 {
-  // auto skip_rows         = options.skip_rows();
-  // auto num_rows          = options.num_rows();
-  return _impl->read(options.skip_rows(), options.num_rows(), options.row_groups(), stream);
+  return _impl->read(
+    options.get_skip_rows(), options.get_num_rows(), options.get_row_groups(), stream);
 }
 
 }  // namespace parquet

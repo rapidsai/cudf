@@ -281,7 +281,7 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto reader = make_reader<detail_parquet::reader>(options.source(), options, mr);
+  auto reader = make_reader<detail_parquet::reader>(options.get_source(), options, mr);
 
   return reader->read(options);
 }
@@ -291,12 +291,12 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
                                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto writer = make_writer<detail_parquet::writer>(options.sink(), options, mr);
+  auto writer = make_writer<detail_parquet::writer>(options.get_sink(), options, mr);
 
-  return writer->write_all(options.table(),
-                           options.metadata(),
-                           options.is_filemetadata_required(),
-                           options.column_chunks_file_path());
+  return writer->write(options.get_table(),
+                       options.get_metadata(),
+                       options.is_enabled_return_filemetadata(),
+                       options.get_column_chunks_file_path());
 }
 
 /**
@@ -318,16 +318,17 @@ std::shared_ptr<pq_chunked_state> write_parquet_chunked_begin(
   chunked_parquet_writer_options const& op, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  parquet_writer_options options =
-    parquet_writer_options::builder().compression(op.compression()).stats_level(op.stats_level());
+  parquet_writer_options options = parquet_writer_options::builder()
+                                     .set_compression(op.get_compression())
+                                     .set_stats_level(op.get_stats_level());
 
   auto state = std::make_shared<pq_chunked_state>();
-  state->wp  = make_writer<detail_parquet::writer>(op.sink(), options, mr);
+  state->wp  = make_writer<detail_parquet::writer>(op.get_sink(), options, mr);
 
   // have to make a copy of the metadata here since we can't really
   // guarantee the lifetime of the incoming pointer
-  if (op.nullable_metadata() != nullptr) {
-    state->user_metadata_with_nullability = *op.nullable_metadata();
+  if (op.get_nullable_metadata() != nullptr) {
+    state->user_metadata_with_nullability = *op.get_nullable_metadata();
     state->user_metadata                  = &state->user_metadata_with_nullability;
   }
   state->stream = 0;

@@ -24,13 +24,12 @@
 #include <cudf/io/types.hpp>
 #include <iostream>
 
-#include <cudf/io/writers.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <memory>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 //! cuDF interfaces
@@ -56,7 +55,7 @@ class parquet_reader_options {
   std::vector<std::vector<size_type>> _row_groups;
   /// Number of rows to skip from the start; -1 is none
   size_type _skip_rows = 0;
-  /// NUmber of rows to read; -1 is all
+  /// Number of rows to read; -1 is all
   size_type _num_rows = -1;
 
   /// Whether to store string data as categorical type
@@ -85,52 +84,52 @@ class parquet_reader_options {
   /**
    * @brief Returns source info
    */
-  source_info const& source() const { return _source; }
+  source_info const& get_source() const { return _source; }
 
   /**
    * @breif Returns true/false depending on whether strings should be converted to categories or not
    */
-  bool convert_strings_to_categories() const { return _convert_strings_to_categories; }
+  bool is_enabled_convert_strings_to_categories() const { return _convert_strings_to_categories; }
 
   /**
    * @breif Returns true/false depending whether to use pandas metadata or not while reading
    */
-  bool use_pandas_metadata() const { return _use_pandas_metadata; }
+  bool is_enabled_use_pandas_metadata() const { return _use_pandas_metadata; }
 
   /**
    * @breif Returns number of rows to skip from the start
    */
-  size_type skip_rows() const { return _skip_rows; }
+  size_type get_skip_rows() const { return _skip_rows; }
 
   /**
    * @breif Returns number of rows to read
    */
-  size_type num_rows() const { return _num_rows; }
+  size_type get_num_rows() const { return _num_rows; }
 
   /**
    * @brief Returns names of column to be read
    */
-  std::vector<std::string> const& columns() const { return _columns; }
+  std::vector<std::string> const& get_columns() const { return _columns; }
 
   /**
    * @brief Returns list of individual row groups to be read
    */
-  std::vector<std::vector<size_type>> const& row_groups() const { return _row_groups; }
+  std::vector<std::vector<size_type>> const& get_row_groups() const { return _row_groups; }
 
   /**
    * @brief Returns timestamp_type used to cast timestamp columns
    */
-  data_type timestamp_type() const { return _timestamp_type; }
+  data_type get_timestamp_type() const { return _timestamp_type; }
 
   /**
    * @brief Set column names which needs to be read
    */
-  void columns(std::vector<std::string> col_names) { _columns = std::move(col_names); }
+  void set_columns(std::vector<std::string> col_names) { _columns = std::move(col_names); }
 
   /**
    * @brief Set vector of individual row groups to read
    */
-  void row_groups(std::vector<std::vector<size_type>> row_grp)
+  void set_row_groups(std::vector<std::vector<size_type>> row_grp)
   {
     if ((!row_grp.empty()) and ((_skip_rows != 0) or (_num_rows != -1))) {
       CUDF_FAIL("row_groups can't be set along with skip_rows and num_rows");
@@ -142,17 +141,17 @@ class parquet_reader_options {
   /*
    * @brief Set to convert strings to categories
    */
-  void convert_strings_to_categories(bool val) { _convert_strings_to_categories = val; }
+  void enable_convert_strings_to_categories(bool val) { _convert_strings_to_categories = val; }
 
   /*
    * @brief Set to use pandas metadata to read
    */
-  void use_pandas_metadata(bool val) { _use_pandas_metadata = val; }
+  void enable_use_pandas_metadata(bool val) { _use_pandas_metadata = val; }
 
   /*
    * @brief Set number of rows to skip
    */
-  void skip_rows(size_type val)
+  void set_skip_rows(size_type val)
   {
     if ((val != 0) and (!_row_groups.empty())) {
       CUDF_FAIL("skip_rows can't be set along with a valid row_groups");
@@ -164,7 +163,7 @@ class parquet_reader_options {
   /*
    * @brief Set number of rows to read
    */
-  void num_rows(size_type val)
+  void set_num_rows(size_type val)
   {
     if ((val != -1) and (!_row_groups.empty())) {
       CUDF_FAIL("num_rows can't be set along with a valid row_groups");
@@ -176,7 +175,7 @@ class parquet_reader_options {
   /*
    * @brief timestamp_type used to cast timestamp columns
    */
-  void timestamp_type(data_type type) { _timestamp_type = type; }
+  void set_timestamp_type(data_type type) { _timestamp_type = type; }
 };
 
 class parquet_reader_options_builder {
@@ -191,7 +190,7 @@ class parquet_reader_options_builder {
   /**
    * @brief Set column names which needs to be read
    */
-  parquet_reader_options_builder& columns(std::vector<std::string> col_names)
+  parquet_reader_options_builder& set_columns(std::vector<std::string> col_names)
   {
     options._columns = std::move(col_names);
     return *this;
@@ -200,16 +199,16 @@ class parquet_reader_options_builder {
   /**
    * @brief Set vector of individual row groups to read
    */
-  parquet_reader_options_builder& row_groups(std::vector<std::vector<size_type>> row_grp)
+  parquet_reader_options_builder& set_row_groups(std::vector<std::vector<size_type>> row_grp)
   {
-    options.row_groups(std::move(row_grp));
+    options.set_row_groups(std::move(row_grp));
     return *this;
   }
 
   /*
    * @brief Set to convert strings to categories
    */
-  parquet_reader_options_builder& convert_strings_to_categories(bool val)
+  parquet_reader_options_builder& enable_convert_strings_to_categories(bool val)
   {
     options._convert_strings_to_categories = val;
     return *this;
@@ -218,7 +217,7 @@ class parquet_reader_options_builder {
   /*
    * @brief Set to use pandas metadata to read
    */
-  parquet_reader_options_builder& use_pandas_metadata(bool val)
+  parquet_reader_options_builder& enable_use_pandas_metadata(bool val)
   {
     options._use_pandas_metadata = val;
     return *this;
@@ -227,25 +226,25 @@ class parquet_reader_options_builder {
   /*
    * @brief Set number of rows to skip
    */
-  parquet_reader_options_builder& skip_rows(size_type val)
+  parquet_reader_options_builder& set_skip_rows(size_type val)
   {
-    options.skip_rows(val);
+    options.set_skip_rows(val);
     return *this;
   }
 
   /*
    * @brief Set number of rows to read
    */
-  parquet_reader_options_builder& num_rows(size_type val)
+  parquet_reader_options_builder& set_num_rows(size_type val)
   {
-    options.num_rows(val);
+    options.set_num_rows(val);
     return *this;
   }
 
   /*
    * @brief timestamp_type used to cast timestamp columns
    */
-  parquet_reader_options_builder& timestamp_type(data_type type)
+  parquet_reader_options_builder& set_timestamp_type(data_type type)
   {
     options._timestamp_type = type;
     return *this;
@@ -273,7 +272,8 @@ class parquet_reader_options_builder {
  * @code
  *  ...
  *  std::string filepath = "dataset.parquet";
- *  cudf::parquet_reader_options options{cudf::source_info(filepath)};
+ *  cudf::io::parquet_reader_options options =
+ * cudf::io::parquet_reader_options::builder(cudf::source_info(filepath));
  *  ...
  *  auto result = cudf::read_parquet(options);
  * @endcode
@@ -328,81 +328,81 @@ class parquet_writer_options {
   parquet_writer_options() = default;
 
   /**
-   * @brief Build parquet_writer_options.
+   * @brief Create builder to create `parquet_writer_options`.
    *
    * @param sink sink to use for writer output
    * @param table Table to be written to output
    *
-   * @return parquet_writer_options_builder parquet options builder with all arguments
+   * @return parquet_writer_options_builder
    */
   static parquet_writer_options_builder builder(sink_info const& sink, table_view const& table);
 
   /**
-   * @brief Build parquet_writer_options.
+   * @brief Create builder to create `parquet_writer_options`.
    *
-   * @return parquet_writer_options_builder parquet options builder with all arguments
+   * @return parquet_writer_options_builder
    */
   static parquet_writer_options_builder builder();
 
   /**
    * @brief Returns sink info
    */
-  sink_info const& sink() const { return _sink; }
+  sink_info const& get_sink() const { return _sink; }
 
   /**
    * @brief Returns compression format used
    */
-  compression_type compression() const { return _compression; }
+  compression_type get_compression() const { return _compression; }
 
   /**
    * @brief Returns level of statistics requested in ouput file
    */
-  statistics_freq stats_level() const { return _stats_level; }
+  statistics_freq get_stats_level() const { return _stats_level; }
 
   /**
    * @brief Returns table_view
    */
-  table_view table() const { return _table; }
+  table_view get_table() const { return _table; }
 
   /**
    * @brief Returns associated metadata
    */
-  table_metadata const* metadata() const { return _metadata; }
+  table_metadata const* get_metadata() const { return _metadata; }
 
   /**
    * @brief Returns True/False for filemetadata is requried or not
    */
-  bool is_filemetadata_required() const { return _return_filemetadata; }
+  bool is_enabled_return_filemetadata() const { return _return_filemetadata; }
 
   /**
    * @brief Returns Column chunks file path to be set in the raw output metadata
    */
-  std::string column_chunks_file_path() const { return _column_chunks_file_path; }
+  std::string get_column_chunks_file_path() const { return _column_chunks_file_path; }
 
   /**
    * @brief Set metadata to parquet_writer_options
    */
-  void metadata(table_metadata const* m) { _metadata = m; }
+  void set_metadata(table_metadata const* m) { _metadata = m; }
 
   /**
    * @brief Set statistics_freq to parquet_writer_options
    */
-  void stats_level(statistics_freq sf) { _stats_level = sf; }
+  void set_stats_level(statistics_freq sf) { _stats_level = sf; }
 
   /**
    * @brief Set compression type to parquet_writer_options
    */
-  void compression(compression_type comp_type) { _compression = comp_type; }
+  void set_compression(compression_type comp_type) { _compression = comp_type; }
 
   /**
    * @brief Set whether filemetadata is required or not to parquet_writer_options
    */
-  void filemetadata_required(bool req) { _return_filemetadata = req; }
+  void enable_return_filemetadata(bool req) { _return_filemetadata = req; }
 
   /**
    * @brief Set column_chunks_file_path to parquet_writer_options
    */
-  void column_chunks_file_path(std::string file_path)
+  void set_column_chunks_file_path(std::string file_path)
   {
     _column_chunks_file_path.assign(file_path);
   }
@@ -423,7 +423,7 @@ class parquet_writer_options_builder {
   /**
    * @brief Set metadata to parquet_writer_options
    */
-  parquet_writer_options_builder& metadata(table_metadata const* m)
+  parquet_writer_options_builder& set_metadata(table_metadata const* m)
   {
     options._metadata = m;
     return *this;
@@ -432,7 +432,7 @@ class parquet_writer_options_builder {
   /**
    * @brief Set statistics_freq to parquet_writer_options
    */
-  parquet_writer_options_builder& stats_level(statistics_freq sf)
+  parquet_writer_options_builder& set_stats_level(statistics_freq sf)
   {
     options._stats_level = sf;
     return *this;
@@ -441,7 +441,7 @@ class parquet_writer_options_builder {
   /**
    * @brief Set compression type to parquet_writer_options
    */
-  parquet_writer_options_builder& compression(compression_type comp_type)
+  parquet_writer_options_builder& set_compression(compression_type comp_type)
   {
     options._compression = comp_type;
     return *this;
@@ -450,7 +450,7 @@ class parquet_writer_options_builder {
   /**
    * @brief Set whether filemetadata is required or not to parquet_writer_options
    */
-  parquet_writer_options_builder& filemetadata_required(bool req)
+  parquet_writer_options_builder& enable_return_filemetadata(bool req)
   {
     options._return_filemetadata = req;
     return *this;
@@ -459,7 +459,7 @@ class parquet_writer_options_builder {
   /**
    * @brief Set column_chunks_file_path to parquet_writer_options
    */
-  parquet_writer_options_builder& column_chunks_file_path(std::string file_path)
+  parquet_writer_options_builder& set_column_chunks_file_path(std::string file_path)
   {
     options._column_chunks_file_path.assign(file_path);
     return *this;
@@ -486,7 +486,8 @@ class parquet_writer_options_builder {
  * @code
  *  ...
  *  std::string filepath = "dataset.parquet";
- *  cudf::io::parquet_writer_options options{cudf::sink_info(filepath), table->view()};
+ *  cudf::io::parquet_writer_options options =
+ * cudf::io::parquet_writer_options::builder(cudf::sink_info(filepath), table->view());
  *  ...
  *  cudf::write_parquet(options);
  * @endcode
@@ -524,7 +525,6 @@ class chunked_parquet_writer_options_builder;
  *
  * @ingroup io_writers
  */
-
 class chunked_parquet_writer_options {
   /// Specify the sink to use for writer output
   sink_info _sink;
@@ -535,32 +535,62 @@ class chunked_parquet_writer_options {
   /// Optional associated metadata.
   const table_metadata_with_nullability* _nullable_metadata = nullptr;
 
-  chunked_parquet_writer_options(sink_info const& sink) : _sink(sink) {}
+  explicit chunked_parquet_writer_options(sink_info const& sink) : _sink(sink) {}
+
   friend chunked_parquet_writer_options_builder;
 
  public:
+  // This is just to please cython
   chunked_parquet_writer_options() = default;
 
   /**
    * @brief Returns sink info
    */
-  sink_info const& sink() const { return _sink; }
+  sink_info const& get_sink() const { return _sink; }
 
   /**
    * @brief Returns compression format used
    */
-  compression_type compression() const { return _compression; }
+  compression_type get_compression() const { return _compression; }
 
   /**
    * @brief Returns level of statistics requested in ouput file
    */
-  statistics_freq stats_level() const { return _stats_level; }
+  statistics_freq get_stats_level() const { return _stats_level; }
 
   /**
    * @brief Returns nullable metadata information
    */
-  const table_metadata_with_nullability* nullable_metadata() const { return _nullable_metadata; }
+  const table_metadata_with_nullability* get_nullable_metadata() const
+  {
+    return _nullable_metadata;
+  }
 
+  /**
+   * @brief Set nullable metadata to parquet_writer_options
+   */
+  void set_nullable_metadata(const table_metadata_with_nullability* metadata)
+  {
+    _nullable_metadata = metadata;
+  }
+
+  /**
+   * @brief Set statistics_freq to parquet_writer_options
+   */
+  void set_stats_level(statistics_freq sf) { _stats_level = sf; }
+
+  /**
+   * @brief Set compression type to parquet_writer_options
+   */
+  void set_compression(compression_type comp_type) { _compression = comp_type; }
+
+  /**
+   * @brief creates builder to build chunked_parquet_writer_options.
+   *
+   * @param sink sink to use for writer output
+   *
+   * @return chunked_parquet_writer_options_builder
+   */
   static chunked_parquet_writer_options_builder builder(sink_info const& sink);
 };
 
@@ -568,13 +598,15 @@ class chunked_parquet_writer_options_builder {
   chunked_parquet_writer_options options;
 
  public:
+  // This is just to please cython
   chunked_parquet_writer_options_builder() = default;
+
   chunked_parquet_writer_options_builder(sink_info const& sink) : options(sink){};
 
   /**
    * @brief Set nullable metadata to parquet_writer_options
    */
-  chunked_parquet_writer_options_builder& nullable_metadata(
+  chunked_parquet_writer_options_builder& set_nullable_metadata(
     const table_metadata_with_nullability* metadata)
   {
     options._nullable_metadata = metadata;
@@ -584,7 +616,7 @@ class chunked_parquet_writer_options_builder {
   /**
    * @brief Set statistics_freq to parquet_writer_options
    */
-  chunked_parquet_writer_options_builder& stats_level(statistics_freq sf)
+  chunked_parquet_writer_options_builder& set_stats_level(statistics_freq sf)
   {
     options._stats_level = sf;
     return *this;
@@ -593,7 +625,7 @@ class chunked_parquet_writer_options_builder {
   /**
    * @brief Set compression type to parquet_writer_options
    */
-  chunked_parquet_writer_options_builder& compression(compression_type comp_type)
+  chunked_parquet_writer_options_builder& set_compression(compression_type comp_type)
   {
     options._compression = comp_type;
     return *this;
@@ -632,8 +664,8 @@ struct pq_chunked_state;
  * @code
  *  ...
  *  std::string filepath = "dataset.parquet";
- *  cudf::io::chunked_parquet_writer_options options{cudf::sink_info(filepath),
- *                                                          table->view()};
+ *  cudf::io::chunked_parquet_writer_options options = cudf::io::chunked_parquet_writer_options
+ * options::builder(cudf::sink_info(filepath), table->view());
  *  ...
  *  auto state = cudf::write_parquet_chunked_begin(options);
  *    cudf::write_parquet_chunked(table0, state);
