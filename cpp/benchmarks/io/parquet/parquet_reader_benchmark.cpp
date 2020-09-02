@@ -50,7 +50,7 @@ void PQ_read(benchmark::State& state)
 
   cudf_io::parquet_writer_options write_opts =
     cudf_io::parquet_writer_options::builder(cudf_io::sink_info(&out_buffer), view)
-      .compression(compression);
+      .set_compression(compression);
   cudf_io::write_parquet(write_opts);
 
   cudf_io::parquet_reader_options read_opts = cudf_io::parquet_reader_options::builder(

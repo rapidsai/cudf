@@ -273,7 +273,7 @@ class parquet_reader_options_builder {
  *  ...
  *  std::string filepath = "dataset.parquet";
  *  cudf::io::parquet_reader_options options =
- * cudf::io::parquet_reader_options::builder(cudf::source_info(filepath));
+ *  cudf::io::parquet_reader_options::builder(cudf::source_info(filepath));
  *  ...
  *  auto result = cudf::read_parquet(options);
  * @endcode
@@ -487,7 +487,7 @@ class parquet_writer_options_builder {
  *  ...
  *  std::string filepath = "dataset.parquet";
  *  cudf::io::parquet_writer_options options =
- * cudf::io::parquet_writer_options::builder(cudf::sink_info(filepath), table->view());
+ *  cudf::io::parquet_writer_options::builder(cudf::sink_info(filepath), table->view());
  *  ...
  *  cudf::write_parquet(options);
  * @endcode
@@ -664,8 +664,8 @@ struct pq_chunked_state;
  * @code
  *  ...
  *  std::string filepath = "dataset.parquet";
- *  cudf::io::chunked_parquet_writer_options options = cudf::io::chunked_parquet_writer_options
- * options::builder(cudf::sink_info(filepath), table->view());
+ *  cudf::io::chunked_parquet_writer_options options =
+ *  cudf::io::chunked_parquet_writer_options::builder(cudf::sink_info(filepath), table->view());
  *  ...
  *  auto state = cudf::write_parquet_chunked_begin(options);
  *    cudf::write_parquet_chunked(table0, state);

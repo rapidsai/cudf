@@ -49,7 +49,8 @@ void PQ_write(benchmark::State& state)
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     cudf_io::parquet_writer_options opts =
-      cudf_io::parquet_writer_options::builder(cudf_io::sink_info(), view).compression(compression);
+      cudf_io::parquet_writer_options::builder(cudf_io::sink_info(), view)
+        .set_compression(compression);
     cudf_io::write_parquet(opts);
   }
 
