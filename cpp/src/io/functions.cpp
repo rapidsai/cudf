@@ -261,7 +261,7 @@ std::vector<std::vector<std::string>> read_orc_statistics(source_info const& src
   }
   statistics_blobs.push_back(file_column_statistics_blobs);
 
-  // Get row-group-level statistics
+  // Get stripe-level statistics
   for (orc::StripeStatistics stripe_stats : md.stripeStats) {
     std::vector<std::string> stripe_column_statistics_blobs;
     for (orc::ColumnStatistics stats : stripe_stats.colStats) {
