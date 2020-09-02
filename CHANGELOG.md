@@ -16,6 +16,7 @@
 - PR #5953 Use stable sort when doing a sort groupby
 - PR #5973 Link to the Code of Conduct in CONTRIBUTING.md
 - PR #5917 Just use `None` for `strides` in `Buffer`
+- PR #6015 Upgrade CUB/Thrust to the latest commit
 - PR #5971 Add cuStreamz README for basic installation and use
 - PR #6024 Expose selecting multiple ORC stripes to read from Python
 - PR #6002 Add Java bindings for md5
