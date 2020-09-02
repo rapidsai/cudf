@@ -2,6 +2,7 @@
 
 ## New Features
 
+- PR #5975 Add strings `filter_characters` API
 - PR #5843 Add `filters` parameter to Python `read_parquet` function for filtering row groups
 - PR #5974 Use libcudf instead of cupy for `arange` or column creation from a scalar.
 - PR #5874 Add `COLLECT` groupby aggregation
@@ -23,6 +24,8 @@
 - PR #6067 Added compute codes for aarch64 devices
 - PR #6083 Small cleanup
 - PR #6103 Small refactor of `print_differences`
+- PR #6124 Fix gcc-9 compilation errors on tests
+- PR #6141 Fix typo in custreamz README that was a result of recent changes
 
 ## Bug Fixes
 
