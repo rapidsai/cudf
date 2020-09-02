@@ -11,21 +11,7 @@ from cudf import _lib as libcudf
 from cudf.utils import ioutils
 from cudf.utils import filterutils
 
-import pyorc
-
-
-def _read_stripe_stats(r, stripe_idx, cols):
-    stripe = r.read_stripe(stripe_idx)
-    stats = []
-    num_row_groups = 0
-    for col in cols:
-        col_stats = stripe[col]._stats
-        num_row_groups = len(col_stats)
-        for i, row_group_stats in enumerate(col_stats):
-            if len(stats) <= i:
-                stats.append({})
-            stats[i][col] = row_group_stats
-    return num_row_groups, stats
+import cudf.utils.metadata.orc_column_statistics_pb2 as cs_pb2
 
 
 def _make_empty_df(filepath_or_buffer, columns):
@@ -38,9 +24,6 @@ def _make_empty_df(filepath_or_buffer, columns):
             [], dtype=schema.field(col_name).type.to_pandas_dtype(),
         )
     return cudf.DataFrame(empty)
-
-
-import cudf.utils.metadata.orc_column_statistics_pb2 as cs_pb2
 
 
 def _parse_column_statistics(cs, column_statistics_blob):
