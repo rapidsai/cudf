@@ -238,7 +238,90 @@ class MultiIndex(Index):
                     "than maximum level size at this position"
                 )
 
-    def copy(self, deep=True):
+    def copy(
+        self,
+        names=None,
+        dtype=None,
+        levels=None,
+        codes=None,
+        deep=False,
+        name=None,
+    ):
+        """Returns copy of MultiIndex object.
+
+        Returns a copy of `MultiIndex`. The `levels` and `codes` value can be
+        set to the provided parameters. When they are provided, the returned
+        value is always newly constructed.
+
+        Deep copy a `MultiIndex` applies to `._data`. `._levels` and `._codes`
+        are also applied if they exists.
+
+        Parameters
+        ----------
+        names: sequence of objects, optional (default None)
+            Names for each of the index levels.
+        dtype: object, optional (default None)
+            MultiIndex dtype, only supports None or object type
+        levels : sequence of arrays, optional (default None)
+            The unique labels for each level. Original values used if None.
+        codes: sequence of arrays, optional (default None)
+            Integers for each level designating which label at each location.
+            Original values used if None.
+        deep: Bool (default False)
+            If True, `._data`, `._levels`, `._codes` will be copied. Ignored if
+            `levels` or `codes` are specified.
+        name: object, optional (defulat None)
+            To keep consistent with `Index.copy`, should not be used.
+
+        Returns
+        -------
+        Copy of MultiIndex Instance
+
+        Examples
+        --------
+        >>> df = cudf.DataFrame({'Close': [3400.00, 226.58, 3401.80, 228.91]})
+        >>> idx1 = cudf.MultiIndex(
+        ... levels=[['2020-08-27', '2020-08-28'], ['AMZN', 'MSFT']],
+        ... codes=[[0, 0, 1, 1], [0, 1, 0, 1]],
+        ... names=['Date', 'Symbol'])
+        >>> idx2 = idx1.copy(
+        ... levels=[['day1', 'day2'], ['com1', 'com2']],
+        ... codes=[[0, 0, 1, 1], [0, 1, 0, 1]],
+        ... names=['col1', 'col2'])
+
+        >>> df.index = idx1; df
+                             Close
+        Date       Symbol
+        2020-08-27 AMZN    3400.00
+                   MSFT     226.58
+        2020-08-28 AMZN    3401.80
+                   MSFT     228.91
+
+        >>> df.index = idx2; df
+                     Close
+        col1 col2
+        day1 com1  3400.00
+             com2   226.58
+        day2 com1  3401.80
+             com2   228.91
+
+        """
+
+        dtype = object if dtype is None else dtype
+        if not pd.core.dtypes.common.is_object_dtype(dtype):
+            raise TypeError("Dtype for MultiIndex only supports object type.")
+
+        if levels is not None or codes is not None:
+            # Convert to constructor favored dtype
+            if levels is None:
+                levels = [s.values_host for s in self.levels]
+            if codes is None:
+                codes = [self.codes[x].values_host for x in self.codes]
+
+            names = self.names if names is None else names
+            mi = MultiIndex(levels=levels, codes=codes, names=names)
+            return mi
+
         mi = MultiIndex(source_data=self._source_data.copy(deep))
         if self._levels is not None:
             mi._levels = [s.copy(deep) for s in self._levels]
@@ -246,6 +329,7 @@ class MultiIndex(Index):
             mi._codes = self._codes.copy(deep)
         if self.names is not None:
             mi.names = self.names.copy()
+
         return mi
 
     def deepcopy(self):
