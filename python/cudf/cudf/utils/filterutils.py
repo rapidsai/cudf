@@ -1,5 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
+import datetime
+
 import pandas as pd
 
 
@@ -24,13 +26,11 @@ def _apply_filter_not_eq(val, col_stats):
     )
 
 
-def _apply_predicate(col, op, val, col_stats):
+def _apply_predicate(op, val, col_stats):
     # Sanitize operator
     if op not in {"=", "==", "!=", "<", "<=", ">", ">=", "in", "not in"}:
         raise ValueError(
-            '"{0}" is not a valid operator in predicates.'.format(
-                (col, op, val)
-            )
+            '"{0}" is not a valid operator in predicates.'.format(op)
         )
 
     has_min = "minimum" in col_stats
@@ -61,47 +61,49 @@ def _apply_predicate(col, op, val, col_stats):
         (op == ">" and val >= col_max) or (op == ">=" and val > col_max)
     ):
         return False
-    elif has_sum:
-        if op == ">" and (
+    elif (
+        has_sum
+        and op == ">"
+        and (
             (has_min and col_min >= 0 and col_sum <= val)
             or (has_max and col_max <= 0 and col_sum >= val)
-        ):
-            return False
-        elif op == ">=" and (
+        )
+    ):
+        return False
+    elif (
+        has_sum
+        and op == ">="
+        and (
             (has_min and col_min >= 0 and col_sum < val)
             or (has_max and col_max <= 0 and col_sum > val)
-        ):
-            return False
+        )
+    ):
+        return False
     elif op == "in":
         if (has_max and col_max < min(val)) or (
             has_min and col_min > max(val)
         ):
             return False
-        if all([_apply_filter_not_eq(elem, col_stats) for elem in val]):
+        if all(_apply_filter_not_eq(elem, col_stats) for elem in val):
             return False
-    elif (
-        op == "not in"
-        and has_min
-        and has_max
-        and any([elem >= col_min and elem <= col_max for elem in val])
-        # TODO: Change this to only accept val is range or date range
-    ):
-        # return False if any elem in val == min == max
-        # return False if all values between min and max is in val
-        # create range of values from min to max
-        # if val is a range, check that min-max is subset of val
-        # if val is not range, check that every val between min and max is in val
-        return False
+    elif op == "not in" and has_min and has_max:
+        if any(elem == col_min == col_max for elem in val):
+            return False
+        col_range = None
+        if isinstance(col_min, int):
+            col_range = range(col_min, col_max)
+        elif isinstance(col_min, datetime.datetime):
+            col_range = pd.date_range(col_min, col_max)
+        if col_range and all(elem in val for elem in col_range):
+            return False
     return True
 
 
 def _apply_filters(filters, stats):
     for conjunction in filters:
         if all(
-            [
-                _apply_predicate(col, op, val, stats[col])
-                for col, op, val in conjunction
-            ]
+            _apply_predicate(op, val, stats[col])
+            for col, op, val in conjunction
         ):
             return True
     return False

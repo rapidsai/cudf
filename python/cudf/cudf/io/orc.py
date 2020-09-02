@@ -39,6 +39,7 @@ def _make_empty_df(filepath_or_buffer, columns):
         )
     return cudf.DataFrame(empty)
 
+
 import cudf.utils.metadata.orc_column_statistics_pb2 as cs_pb2
 
 
@@ -123,11 +124,7 @@ def read_orc_statistics(
     statistics = libcudf.orc.read_orc_statistics(filepath_or_buffer)
     if not statistics:
         return None
-    (
-        column_names,
-        raw_file_statistics,
-        *raw_stripes_statistics,
-    ) = statistics
+    (column_names, raw_file_statistics, *raw_stripes_statistics,) = statistics
 
     # Parse statistics
     cs = cs_pb2.ColumnStatistics()
@@ -182,126 +179,41 @@ def read_orc(
         if isinstance(filters[0][0], str):
             filters = [filters]
 
-        # Create bytestream and reader
-        f = (
+        # Read and parse file-level and stripe-level statistics
+        file_statistics, stripes_statistics = read_orc_statistics(
             filepath_or_buffer
-            if ioutils.is_file_like(filepath_or_buffer)
-            else open(filepath_or_buffer, "rb")
         )
-        r = pyorc.Reader(f)
 
-        # Get relevant columns
-        cols = set()
-        filters_with_ids = []
-        for conjunction in filters:
-            conjunction_with_ids = []
-            for i, (col, op, val) in enumerate(conjunction):
-                col_id = r.schema.find_column_id(col)
-                cols.add(col_id)
-                conjunction_with_ids.append((col_id, op, val))
-            filters_with_ids.append(conjunction_with_ids)
-        cols = sorted(cols)
-
-        # Apply filters to file-level statistics
-        file_stats = {}
-        for col in cols:
-            file_stats[col] = r[col].statistics
-        if not filterutils._apply_filters(filters_with_ids, file_stats):
+        # Filter using file-level statistics
+        if not filterutils._apply_filters(filters, file_statistics):
             return _make_empty_df(filepath_or_buffer, columns)
 
-        # Prepare stripes or selection
-        stripes = sorted(stripes) if stripes else range(r.num_of_stripes)
-
-        # Determine set of stripes
-        # Filter stripes using metadata, skiprows, numrows
-        # Compute numrows in stripes
-        # Filter row groups using stripe footers, skiprows, numrows
-        # If row groups are consecutive, determine skiprows and numrows
-        # If row groups are not consecutive, maybe determine skiprows and numrows for each row group and then concatenate
-        # Compare numrows in stripes to skiprows and numrows
-
-        # Determine set of stripes
-        # Filter stripes using metadata loaded by libcudf, skiprows, numrows
-        # Read in selected stripes for columns referenced by predicate
-        # Use loc to get rows that pass predicate (TODO: Maybe use where + Numba)
-        # Compute set of row ranges to read given skiprows, numrows (TODO: Maybe somehow read in stripes instead in some cases)
-        # Read in all data for row ranges and concatenate
-
-        # Read in row-group-level statistics for each stripe for
-        # relevant columns
-        num_row_groups = [None] * r.num_of_stripes
-        row_group_stats = [None] * r.num_of_stripes
-        for stripe_idx in stripes:
-            (
-                curr_stripe_num_row_groups,
-                curr_stripe_row_group_stats,
-            ) = _read_stripe_stats(r, stripe_idx, cols)
-            num_row_groups[stripe_idx] = curr_stripe_num_row_groups
-            row_group_stats[stripe_idx] = curr_stripe_row_group_stats
-        f.close()
-
-        # Track whether or not all row groups are filtered out
-        filtered_everything = False
-
-        # Apply filters to row-group-level statistics
+        # Filter using stripe-level statistics
+        selected_stripes = []
         num_rows_scanned = 0
-        num_rows_to_skip = 0
-        num_rows_to_read = 0
-        filtered_stripes = []
-        filtered_stripes_num_rows = 0
-        # TODO: Stop assuming that all stripes are consecutive
-        for stripe_idx in stripes:
-            # Get stats and # of row groups of current stripe
-            stats = row_group_stats[stripe_idx]
-            curr_stripe_num_row_groups = num_row_groups[stripe_idx]
-
-            # Apply filters to each row group of current stripe
-            filter_stripe = True
-            num_rows_scanned_in_stripe = 0
-            for row_group_idx in range(curr_stripe_num_row_groups):
-                row_group_size = next(iter(stats[row_group_idx].values()))[
-                    "number_of_values"
-                ]
-                if filterutils._apply_filters(
-                    filters_with_ids, stats[row_group_idx]
-                ):
-                    # If this is the first row group to pass filters,
-                    # update skiprows
-                    if num_rows_to_read == 0:
-                        num_rows_to_skip = num_rows_scanned
-                        num_rows_to_read = row_group_size
-                else:
-                    filter_stripe = False
-                if num_rows_to_read != 0:
-                    num_rows_to_read += row_group_size
-                num_rows_scanned += row_group_size
-                num_rows_scanned_in_stripe += row_group_size
-
-            # Track which stripes passed filters and # of rows in
-            # filtered stripes
-            if filter_stripe:
-                filtered_stripes.append(stripe_idx)
-                filtered_stripes_num_rows += num_rows_scanned_in_stripe
-        if len(filtered_stripes) == 0:
-            filtered_everything = True
-
-        # Update num_rows, skip_rows, and stripes accordingly
-        if not num_rows or num_rows_to_read < num_rows:
-            skip_rows = num_rows_to_skip
-            num_rows = num_rows_to_read
-        stripes = (
-            [
-                stripe_idx
-                for stripe_idx in stripes
-                if stripe_idx in filtered_stripes
-            ]
-            if filtered_stripes_num_rows < num_rows
-            else []
-        )
+        for i, stripe_statistics in enumerate(stripes_statistics):
+            num_rows_before_stripe = num_rows_scanned
+            num_rows_scanned += next(iter(stripe_statistics.values()))["number_of_values"]
+            if stripes is not None and i not in stripes:
+                continue
+            if skip_rows is not None and num_rows_scanned <= skip_rows:
+                continue
+            else:
+                skip_rows = 0
+            if (
+                skip_rows is not None
+                and num_rows is not None
+                and num_rows_before_stripe >= skip_rows + num_rows
+            ):
+                continue
+            if filterutils._apply_filters(filters, stripe_statistics):
+                selected_stripes.append(i)
 
         # Return empty if everything was filtered
-        if filtered_everything:
+        if len(selected_stripes) == 0:
             return _make_empty_df(filepath_or_buffer, columns)
+        else:
+            stripes = selected_stripes
 
     if engine == "cudf":
         df = DataFrame._from_table(
