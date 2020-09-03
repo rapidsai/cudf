@@ -132,8 +132,8 @@ from cudf._lib.strings.substring import (
     slice_strings as cpp_slice_strings,
 )
 from cudf._lib.strings.translate import (
-    translate as cpp_translate,
     filter_characters as cpp_filter_characters,
+    translate as cpp_translate,
 )
 from cudf._lib.strings.wrap import wrap as cpp_wrap
 from cudf.core.buffer import Buffer
@@ -4500,9 +4500,6 @@ class StringColumn(column.ColumnBase):
             return result_col.str().cat()
         else:
             return result_col
-
-    def product(self, skipna=None, dtype=None, min_count=0):
-        raise TypeError("can't multiply sequence by non-int of type 'object'")
 
     def set_base_data(self, value):
         if value is not None:

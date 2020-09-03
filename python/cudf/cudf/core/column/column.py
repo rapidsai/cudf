@@ -1186,7 +1186,7 @@ class ColumnBase(Column, Serializable):
 
     def corr(self, other):
         raise TypeError(
-            f"cannot perform corr with types {self.dtype}, " f"{other.dtype}"
+            f"cannot perform corr with types {self.dtype}, {other.dtype}"
         )
 
     def nans_to_nulls(self):
@@ -1215,8 +1215,10 @@ class ColumnBase(Column, Serializable):
             if valid_count < min_count:
                 return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
         elif min_count < 0:
-            msg = "min_count value cannot be negative({0}), will default to 0."
-            warnings.warn(msg.format(min_count))
+            warnings.warn(
+                f"min_count value cannot be negative({min_count}), will "
+                f"default to 0."
+            )
         return result_col
 
 
