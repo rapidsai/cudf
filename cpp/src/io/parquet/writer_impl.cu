@@ -465,8 +465,10 @@ class parquet_column_view {
   size_type const *level_offsets() const noexcept { return _dremel_offsets.data().get(); }
   uint32_t const *repetition_levels() const noexcept { return _rep_level.data().get(); }
   uint32_t const *definition_levels() const noexcept { return _def_level.data().get(); }
-  uint16_t max_def_level() const noexcept
+  uint16_t max_def_level()
   {
+    if (_max_def_level > -1) return _max_def_level;
+
     uint16_t num_def_level = 0;
     auto curr_col          = cudf_col();
     while (curr_col.type().id() == type_id::LIST) {
@@ -475,8 +477,10 @@ class parquet_column_view {
       curr_col = lcw.child();
     }
     num_def_level += curr_col.nullable();
-    return num_def_level;
+    _max_def_level = num_def_level;
+    return _max_def_level;
   }
+  void set_def_level(uint16_t def_level) { _max_def_level = def_level; }
 
   auto name() const noexcept { return _name; }
   auto physical_type() const noexcept { return _physical_type; }
@@ -542,6 +546,7 @@ class parquet_column_view {
   rmm::device_vector<size_type> _dremel_offsets;
   rmm::device_vector<uint32_t> _rep_level;
   rmm::device_vector<uint32_t> _def_level;
+  size_type _max_def_level = -1;
 
   // String-related members
   rmm::device_buffer _indexes;
@@ -852,10 +857,12 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
         else if (state.user_metadata_with_nullability.column_nullable.size() > 0) {
           col_schema.repetition_type =
             state.user_metadata_with_nullability.column_nullable[i] ? OPTIONAL : REQUIRED;
+          col.set_def_level((col_schema.repetition_type == OPTIONAL) ? 1 : 0);
         }
         // otherwise assume the worst case.
         else {
           col_schema.repetition_type = OPTIONAL;
+          col.set_def_level(1);  // def level for OPTIONAL is 1, for REQUIRED is 0
         }
         col_schema.name         = col.name();
         col_schema.num_children = 0;  // Leaf node
@@ -906,26 +913,27 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
       desc->level_offsets   = col.level_offsets();
       desc->rep_values      = col.repetition_levels();
       desc->def_values      = col.definition_levels();
+      auto count_bits       = [](uint16_t number) {
+        int16_t nbits = 0;
+        while (number > 0) {
+          nbits++;
+          number = number >> 1;
+        }
+        return nbits;
+      };
+      desc->level_bits = count_bits(col.nesting_levels()) << 4 | count_bits(col.max_def_level());
     } else {
       desc->nesting_offsets = nullptr;
       desc->nesting_levels  = 0;
       desc->level_offsets   = nullptr;
       desc->rep_values      = nullptr;
       desc->def_values      = nullptr;
+      desc->level_bits      = (state.md.schema[1 + i].repetition_type == OPTIONAL) ? 1 : 0;
     }
     desc->num_values     = col.data_count();
     desc->num_rows       = col.row_count();
     desc->physical_type  = static_cast<uint8_t>(col.physical_type());
     desc->converted_type = static_cast<uint8_t>(col.converted_type());
-    auto count_bits      = [](uint16_t number) {
-      int16_t nbits = 0;
-      while (number > 0) {
-        nbits++;
-        number = number >> 1;
-      }
-      return nbits;
-    };
-    desc->level_bits = count_bits(col.nesting_levels()) << 4 | count_bits(col.max_def_level());
   }
 
   // Init page fragments
