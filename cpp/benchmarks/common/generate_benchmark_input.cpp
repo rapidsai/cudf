@@ -82,7 +82,7 @@ std::enable_if_t<!cudf::is_fixed_width<T>(), size_t> avg_element_size(
 template <>
 size_t avg_element_size<cudf::string_view>(data_profile const& data_params)
 {
-  auto const dist = data_params.get_params<cudf::string_view>().length_params;
+  auto const dist = data_params.get_distribution_desc<cudf::string_view>().length_params;
   if (dist.id == distribution_id::NORMAL || dist.id == distribution_id::UNIFORM) {
     return dist.lower_bound / 2. + dist.upper_bound / 2.;
   }
@@ -258,7 +258,7 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
                                                    cudf::size_type num_rows)
 {
   auto valid_dist = std::bernoulli_distribution{1. - profile.get_null_frequency()};
-  auto value_dist = random_value_fn<T>{profile.get_params<T>()};
+  auto value_dist = random_value_fn<T>{profile.get_distribution_desc<T>()};
 
   auto const cardinality = std::min(num_rows, profile.get_cardinality());
   pinned_buffer<T> samples{pinned_alloc<T>(cardinality), cudaFreeHost};
@@ -366,7 +366,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(data_profi
   auto char_dist = [&engine, dist = std::uniform_int_distribution<char>{'!', '~'}]() mutable {
     return dist(engine);
   };
-  auto len_dist = random_value_fn<uint32_t>{profile.get_params<cudf::string_view>().length_params};
+  auto len_dist = random_value_fn<uint32_t>{profile.get_distribution_desc<cudf::string_view>().length_params};
   auto valid_dist = std::bernoulli_distribution {1. - profile.get_null_frequency()};
 
   auto const avg_string_len = avg_element_size<cudf::string_view>(profile);
