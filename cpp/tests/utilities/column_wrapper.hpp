@@ -460,7 +460,7 @@ class strings_column_wrapper : public detail::column_wrapper {
  public:
   /**
    * @brief Default constructor initializes an empty column of strings
-   **/
+   */
   strings_column_wrapper() : column_wrapper{}
   {
     std::vector<std::string> empty;

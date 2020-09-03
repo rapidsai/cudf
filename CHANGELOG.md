@@ -19,6 +19,7 @@
 - PR #6067 Added compute codes for aarch64 devices
 - PR #6083 Small cleanup
 - PR #6103 Small refactor of `print_differences`
+- PR #6146 Added element/validity pair constructors for fixed_width and string wrappers
 
 ## Bug Fixes
 
