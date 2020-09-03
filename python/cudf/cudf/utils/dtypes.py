@@ -447,10 +447,13 @@ def get_time_unit(obj):
 
 
 def _get_nan_for_dtype(dtype):
+    dtype = np.dtype(dtype)
     if pd.api.types.is_datetime64_dtype(
         dtype
     ) or pd.api.types.is_timedelta64_dtype(dtype):
         time_unit, _ = np.datetime_data(dtype)
         return dtype.type("nat", time_unit)
+    elif dtype.kind == "f":
+        return dtype.type("nan")
     else:
         return np.float64("nan")
