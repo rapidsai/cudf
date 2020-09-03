@@ -193,11 +193,46 @@ def test_orc_reader_strings(datadir):
 
 
 def test_orc_read_statistics(datadir):
-    path = datadir / "TestOrcFile.testStripeStatistics.orc"
+    path = datadir / "TestOrcFile.testStripeLevelStats.orc"
     try:
-        statistics = cudf.read_orc_statistics(path, engine=engine)
+        (
+            file_statistics,
+            stripes_statistics,
+        ) = cudf.io.orc.read_orc_statistics(path)
     except pa.ArrowIOError as e:
         pytest.skip(".orc file is not found: %s" % e)
+
+    # Check numberOfValues
+    assert_eq(file_statistics["int1"]["number_of_values"], 11_000)
+    assert_eq(
+        file_statistics["int1"]["number_of_values"],
+        sum(
+            [
+                stripes_statistics[0]["int1"]["number_of_values"],
+                stripes_statistics[1]["int1"]["number_of_values"],
+                stripes_statistics[2]["int1"]["number_of_values"],
+            ]
+        ),
+    )
+    assert_eq(
+        stripes_statistics[1]["int1"]["number_of_values"],
+        stripes_statistics[1]["string1"]["number_of_values"],
+    )
+    assert_eq(stripes_statistics[2]["string1"]["number_of_values"], 1_000)
+
+    # Check other statistics
+    assert_eq(stripes_statistics[2]["string1"]["has_null"], False)
+    assert_eq(
+        file_statistics["int1"]["minimum"],
+        min(
+            stripes_statistics[0]["int1"]["minimum"],
+            stripes_statistics[1]["int1"]["minimum"],
+            stripes_statistics[2]["int1"]["minimum"],
+        ),
+    )
+    assert_eq(file_statistics["int1"]["minimum"], 1)
+    assert_eq(file_statistics["string1"]["minimum"], "one")
+
 
 @pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
 def test_orc_read_stripes(datadir, engine):
