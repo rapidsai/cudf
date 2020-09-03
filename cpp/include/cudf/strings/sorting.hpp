@@ -49,7 +49,7 @@ std::unique_ptr<cudf::column> sort(
   cudf::order order                   = cudf::order::ASCENDING,
   cudf::null_order null_order         = cudf::null_order::BEFORE,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
 }  // namespace strings
