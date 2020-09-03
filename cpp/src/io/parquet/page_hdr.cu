@@ -151,7 +151,7 @@ struct ParquetFieldEnum
   inline __device__ bool
     operator()(byte_stream_s *bs, int t)
     {
-      val = (Enum)get_i32(bs);
+      val = static_cast<Enum>(get_i32(bs));
       if (t != ST_FLD_I32) return true;
       else return false;
     }

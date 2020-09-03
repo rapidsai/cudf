@@ -23,6 +23,8 @@
 #include <algorithm>
 #include <string>
 #include <vector>
+#include <tuple>
+#include <iostream>
 
 namespace cudf {
 namespace io {
@@ -227,6 +229,7 @@ static inline int CountLeadingZeros32(uint32_t value)
  * compression codecs are supported yet.
  **/
 class CompactProtocolReader {
+
  protected:
   static const uint8_t g_list2struct[16];
 
@@ -286,18 +289,15 @@ class CompactProtocolReader {
   bool skip_struct_field(int t, int depth = 0);
 
  public:
-  // Generate Thrift structure parsing routines
-#define DECL_PARQUET_STRUCT(st) bool read(st *)
-  DECL_PARQUET_STRUCT(FileMetaData);
-  DECL_PARQUET_STRUCT(SchemaElement);
-  DECL_PARQUET_STRUCT(RowGroup);
-  DECL_PARQUET_STRUCT(ColumnChunk);
-  DECL_PARQUET_STRUCT(ColumnChunkMetaData);
-  DECL_PARQUET_STRUCT(PageHeader);
-  DECL_PARQUET_STRUCT(DataPageHeader);
-  DECL_PARQUET_STRUCT(DictionaryPageHeader);
-  DECL_PARQUET_STRUCT(KeyValue);
-#undef DECL_PARQUET_STRUCT
+  bool read(FileMetaData *f);
+  bool read(SchemaElement *s);
+  bool read(RowGroup *r);
+  bool read(ColumnChunk *c);
+  bool read(ColumnChunkMetaData *c);
+  bool read(PageHeader *p);
+  bool read(DataPageHeader *d);
+  bool read(DictionaryPageHeader *d);
+  bool read(KeyValue *k);
 
  public:
   static int NumRequiredBits(uint32_t max_level) noexcept
@@ -317,6 +317,210 @@ class CompactProtocolReader {
   const uint8_t *m_base = nullptr;
   const uint8_t *m_cur  = nullptr;
   const uint8_t *m_end  = nullptr;
+
+  struct ParquetFieldInt32
+  {
+    int field;
+    int32_t &val;
+
+    ParquetFieldInt32(int f, int32_t &v) : field(f), val(v) {}
+
+    inline bool
+      operator()(CompactProtocolReader *cpr, int *c, int t)
+      {
+        val = cpr->get_i32();
+        if (t != ST_FLD_I32) return true;
+        else return false;
+      }
+  };
+
+  struct ParquetFieldInt64
+  {
+    int field;
+    int64_t &val;
+
+    ParquetFieldInt64(int f, int64_t &v) : field(f), val(v) {}
+
+    inline bool
+      operator()(CompactProtocolReader *cpr, int *c, int t)
+      {
+        val = cpr->get_i64();
+        if (t < ST_FLD_I16 || t > ST_FLD_I64) return true;
+        else return false;
+      }
+  };
+
+  template <typename T>
+    struct ParquetFieldStructListFunctor
+    {
+      int field;
+      std::vector<T> &val;
+
+      ParquetFieldStructListFunctor(int f, std::vector<T> &v) : field(f), val(v) { }
+
+      inline bool
+        operator()(CompactProtocolReader *cpr, int *c, int t)
+        {
+          if (t != ST_FLD_LIST) return true;
+
+          int n;
+          (*c) = cpr->getb();
+          if (((*c) & 0xf) != ST_FLD_STRUCT) return true;
+          n = (*c) >> 4;
+          if (n == 0xf) n = cpr->get_u32();
+          val.resize(n);
+          for (int32_t i = 0; i < n; i++)
+          {
+            if (!(cpr->read(&val[i])))
+            {
+              return true;
+            }
+          }
+
+          return false;
+        }
+    };
+
+  template <typename T>
+    ParquetFieldStructListFunctor<T>
+    ParquetFieldStructList(int f, std::vector<T> &v)
+    {
+      return ParquetFieldStructListFunctor<T>(f, v);
+    }
+
+  struct ParquetFieldString
+  {
+    int field;
+    std::string& val;
+    ParquetFieldString(int f, std::string &v) : field(f), val(v) {}
+
+    inline bool
+      operator()(CompactProtocolReader *cpr, int *c, int t)
+      {
+        if (t != ST_FLD_BINARY) return true;
+        uint32_t n = cpr->get_u32();
+        if (n < (size_t)(cpr->m_end - cpr->m_cur)) {
+          val.assign((const char *)cpr->m_cur, n);
+          cpr->m_cur += n;
+        } else return true;
+        return false;
+      }
+  };
+
+  template <typename T>
+  struct ParquetFieldStructFunctor
+  {
+    int field;
+    T& val;
+    ParquetFieldStructFunctor(int f, T &v) : field(f), val(v) {}
+
+    inline bool
+      operator()(CompactProtocolReader *cpr, int *c, int t)
+      {
+        if (t != ST_FLD_STRUCT || !(cpr->read(&val))) return true;
+        else return false;
+      }
+  };
+
+  template <typename T>
+  ParquetFieldStructFunctor<T>
+  ParquetFieldStruct(int f, T &v)
+  {
+    return ParquetFieldStructFunctor<T>(f, v);
+  }
+
+  template <typename Enum>
+  struct ParquetFieldEnum
+  {
+    int field;
+    Enum& val;
+    ParquetFieldEnum(int f, Enum &v) : field(f), val(v) {}
+    inline bool
+      operator()(CompactProtocolReader *cpr, int *c, int t)
+      {
+        val = static_cast<Enum>(cpr->get_i32());
+        if (t != ST_FLD_I32) return true;
+        else return false;
+      }
+  };
+
+  template <typename Enum>
+  struct ParquetFieldEnumListFunctor
+  {
+    int field;
+    std::vector<Enum>& val;
+    ParquetFieldEnumListFunctor(int f, std::vector<Enum> &v) : field(f), val(v) {}
+    inline bool
+      operator()(CompactProtocolReader *cpr, int *c, int t)
+      {
+        if (t != ST_FLD_LIST) return true;
+        int n;
+        (*c) = cpr->getb();
+        if (((*c) & 0xf) != ST_FLD_I32) return true;
+        n = (*c) >> 4;
+        if (n == 0xf) n = cpr->get_u32();
+        val.resize(n);
+        for (int32_t i = 0; i < n; i++)
+        {
+          val[i] = static_cast<Enum>(cpr->get_i32());
+        }
+        return false;
+      }
+  };
+
+  template <typename T>
+  ParquetFieldEnumListFunctor<T>
+  ParquetFieldEnumList(int field, std::vector<T> &v)
+  {
+    return ParquetFieldEnumListFunctor<T>(field, v);
+  }
+
+  struct ParquetFieldStringList
+  {
+    int field;
+    std::vector<std::string> &val;
+    ParquetFieldStringList(int f, std::vector<std::string> &v) : field(f), val(v) {}
+    inline bool
+      operator()(CompactProtocolReader *cpr, int *c, int t)
+      {
+        if (t != ST_FLD_LIST) return true;
+        int n;
+        (*c) = cpr->getb();
+        if (((*c) & 0xf) != ST_FLD_BINARY) return true;
+        n = (*c) >> 4;
+        if (n == 0xf) n = cpr->get_u32();
+        val.resize(n);
+        for (int32_t i = 0; i < n; i++) {
+          uint32_t l = cpr->get_u32();
+          if (l < (size_t)(cpr->m_end - cpr->m_cur)) {
+            val[i].assign((const char *)cpr->m_cur, l);
+            cpr->m_cur += l;
+          } else
+            return true;
+        }
+        return false;
+      }
+  };
+
+  struct ParquetFieldStructBlob
+  {
+    int field;
+    std::vector<uint8_t> &val;
+    ParquetFieldStructBlob(int f, std::vector<uint8_t> &v) : field(f), val(v) {}
+    inline bool
+      operator()(CompactProtocolReader *cpr, int *c, int t)
+      {
+        if (t != ST_FLD_STRUCT) return true;
+        const uint8_t *start = cpr->m_cur;
+        cpr->skip_struct_field(t);
+        if (cpr->m_cur > start)
+        {
+          val.assign(start, cpr->m_cur - 1);
+        }
+        return false;
+      }
+  };
+
 };
 
 /**
