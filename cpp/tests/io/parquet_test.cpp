@@ -901,11 +901,9 @@ TEST_F(ParquetChunkedWriterTest, ReadRowGroupsError)
     cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
       .set_row_groups({{0, 1}});
   EXPECT_THROW(cudf_io::read_parquet(read_opts), cudf::logic_error);
-  read_opts =
-    cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath}).set_row_groups({{-1}});
+  read_opts.set_row_groups({{-1}});
   EXPECT_THROW(cudf_io::read_parquet(read_opts), cudf::logic_error);
-  read_opts = cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
-                .set_row_groups({{0}, {0}});
+  read_opts.set_row_groups({{0}, {0}});
   EXPECT_THROW(cudf_io::read_parquet(read_opts), cudf::logic_error);
 }
 
