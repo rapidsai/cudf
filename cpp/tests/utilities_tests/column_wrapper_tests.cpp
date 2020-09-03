@@ -188,7 +188,6 @@ TYPED_TEST(FixedWidthColumnWrapperTest, NullablePairListConstructorAllNullMatch)
   cudf::column_view view = col;
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(view, match_view);
-  CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(view, match_view);
 }
 
 TYPED_TEST(FixedWidthColumnWrapperTest, ReleaseWrapperAllValid)
@@ -225,10 +224,6 @@ TYPED_TEST(FixedWidthColumnWrapperTest, ReleaseWrapperAllNull)
 template <typename T>
 struct StringsColumnWrapperTest : public cudf::test::BaseFixture,
                                   cudf::test::UniformRandomGenerator<cudf::size_type> {
-  StringsColumnWrapperTest() : cudf::test::UniformRandomGenerator<cudf::size_type>{1000, 5000} {}
-
-  auto size() { return this->generate(); }
-
   auto data_type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
@@ -256,17 +251,18 @@ TYPED_TEST(StringsColumnWrapperTest, NullablePairListConstructorAllNullMatch)
   auto odd_valid =
     cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2 != 0; });
 
-  cudf::test::strings_column_wrapper match_col({"a", "string", "test", "for", "nulls"}, odd_valid);
+  cudf::test::strings_column_wrapper match_col({"a", "string", "", "test", "for", "nulls"},
+                                               odd_valid);
   cudf::column_view match_view = match_col;
 
   using p = std::pair<std::string, bool>;
   cudf::test::strings_column_wrapper col({p{"a", odd_valid[0]},
                                           p{"string", odd_valid[1]},
-                                          p{"test", odd_valid[2]},
-                                          p{"for", odd_valid[3]},
-                                          p{"nulls", odd_valid[4]}});
+                                          p{"", odd_valid[2]},
+                                          p{"test", odd_valid[3]},
+                                          p{"for", odd_valid[4]},
+                                          p{"nulls", odd_valid[5]}});
   cudf::column_view view = col;
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(view, match_view);
-  CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(view, match_view);
 }
