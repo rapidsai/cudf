@@ -339,7 +339,7 @@ def infer_format(element, **kwargs):
         if len(second_part) > 1:
             # Only infer if second_part is not an empty string.
             second_part = pd.core.tools.datetimes._guess_datetime_format(
-                "".join(second_part[1:]), **kwargs
+                second_part, **kwargs
             )
     else:
         second_part = ""
