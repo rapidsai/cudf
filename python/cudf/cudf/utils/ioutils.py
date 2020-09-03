@@ -258,6 +258,9 @@ filepath_or_buffer : str, path object, bytes, or file-like object
     `py._path.local.LocalPath`), URL (including http, ftp, and S3 locations),
     Python bytes of raw binary data, or any object with a `read()` method
     (such as builtin `open()` file handler function or `BytesIO`).
+columns : list, default None
+    If not None, statistics for only these columns will be read from the file.
+
 
 Returns
 -------

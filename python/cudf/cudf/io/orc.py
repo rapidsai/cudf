@@ -93,7 +93,7 @@ def read_orc_metadata(path):
 
 @ioutils.doc_read_orc_statistics()
 def read_orc_statistics(
-    filepath_or_buffer, **kwargs,
+    filepath_or_buffer, columns=None, **kwargs,
 ):
     """{docstring}"""
 
@@ -109,24 +109,31 @@ def read_orc_statistics(
         return None
     (column_names, raw_file_statistics, *raw_stripes_statistics,) = statistics
 
+    # Parse column names
+    column_names = [
+        column_name.decode("utf-8") for column_name in column_names
+    ]
+
     # Parse statistics
     cs = cs_pb2.ColumnStatistics()
     file_statistics = {}
     stripes_statistics = []
     for i, raw_file_stats in enumerate(raw_file_statistics):
-        parsed_statistics = _parse_column_statistics(cs, raw_file_stats)
-        if not parsed_statistics:
-            return None
-        file_statistics[column_names[i].decode("utf-8")] = parsed_statistics
-    for raw_stripe_statistics in raw_stripes_statistics:
-        stripe_statistics = {}
-        for i, raw_file_stats in enumerate(raw_stripe_statistics):
+        if columns is None or column_names[i] in columns:
             parsed_statistics = _parse_column_statistics(cs, raw_file_stats)
             if not parsed_statistics:
                 return None
-            stripe_statistics[
-                column_names[i].decode("utf-8")
-            ] = parsed_statistics
+            file_statistics[column_names[i]] = parsed_statistics
+    for raw_stripe_statistics in raw_stripes_statistics:
+        stripe_statistics = {}
+        for i, raw_file_stats in enumerate(raw_stripe_statistics):
+            if columns is None or column_names[i] in columns:
+                parsed_statistics = _parse_column_statistics(
+                    cs, raw_file_stats
+                )
+                if not parsed_statistics:
+                    return None
+                stripe_statistics[column_names[i]] = parsed_statistics
         stripes_statistics.append(stripe_statistics)
 
     return file_statistics, stripes_statistics
@@ -162,9 +169,17 @@ def read_orc(
         if isinstance(filters[0][0], str):
             filters = [filters]
 
+        # Get columns relevant to filtering
+        columns_in_predicate = [
+            col
+            for conjunction in filters
+            for (col, op, val) in conjunction
+            if columns is None or col in columns
+        ]
+
         # Read and parse file-level and stripe-level statistics
         file_statistics, stripes_statistics = read_orc_statistics(
-            filepath_or_buffer
+            filepath_or_buffer, columns_in_predicate
         )
 
         # Filter using file-level statistics
