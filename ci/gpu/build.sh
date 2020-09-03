@@ -71,8 +71,9 @@ conda install "rmm=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
               "ucx-py=${MINOR_VERSION}" \
 
 # https://docs.rapids.ai/maintainers/depmgmt/
-conda remove -f rapids-build-env rapids-notebook-env
+conda remove --force rapids-build-env rapids-notebook-env
 conda install "pyarrow=1.0.1" "arrow-cpp=1.0.1" "arrow-cpp-proc=*=cuda"
+conda clean --all
 
 # Install the master version of dask, distributed, and streamz
 logger "pip install git+https://github.com/dask/distributed.git --upgrade --no-deps"
