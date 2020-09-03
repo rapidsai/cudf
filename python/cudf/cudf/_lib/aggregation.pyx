@@ -16,8 +16,10 @@ from cudf._lib.types cimport (
     underlying_type_t_interpolation,
     underlying_type_t_null_policy,
     underlying_type_t_type_id,
+    _Dtype
 )
 from cudf._lib.types import Interpolation
+from cudf.core.dtypes import dtype as cudf_dtype
 
 try:
     # Numba >= 0.49
@@ -241,24 +243,18 @@ cdef class _AggregationFactory:
         cdef string cpp_str
 
         # Handling UDF type
-        nb_type = numpy_support.from_dtype(kwargs['dtype'])
+        nb_type = numpy_support.from_dtype(kwargs['dtype'].to_numpy)
         type_signature = (nb_type[:],)
         compiled_op = cudautils.compile_udf(op, type_signature)
-        output_np_dtype = np.dtype(compiled_op[1])
+        output_np_dtype = cudf_dtype(np.dtype(compiled_op[1]))
         cpp_str = compiled_op[0].encode('UTF-8')
-        if output_np_dtype not in np_to_cudf_types:
+        if cudf_dtype(output_np_dtype) not in np_to_cudf_types:
             raise TypeError(
                 "Result of window function has unsupported dtype {}"
                 .format(op[1])
             )
-        tid = (
-            <libcudf_types.type_id> (
-                <underlying_type_t_type_id> (
-                    np_to_cudf_types[output_np_dtype]
-                )
-            )
-        )
-        out_dtype = libcudf_types.data_type(tid)
+        cdef _Dtype pydtype = output_np_dtype
+        out_dtype = pydtype.get_libcudf_type()
 
         agg.c_obj = move(libcudf_aggregation.make_udf_aggregation(
             libcudf_aggregation.udf_type.PTX, cpp_str, out_dtype

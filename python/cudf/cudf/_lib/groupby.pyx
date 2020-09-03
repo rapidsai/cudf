@@ -178,7 +178,7 @@ def _drop_unsupported_aggs(Table values, aggs):
     if all(len(v) == 0 for v in aggs.values()):
         return aggs
 
-    from cudf.utils.dtypes import (
+    from cudf.api.types import (
         is_categorical_dtype,
         is_string_dtype,
         is_list_dtype

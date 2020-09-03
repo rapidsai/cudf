@@ -281,7 +281,7 @@ def make_dtype_from_string(obj):
             return Datetime64USDtype()
         elif obj in {"datetime64[ms]", "Datetime64MS"}:
             return Datetime64MSDtype()
-        elif obj in {"datetime64[s]", "Datetime64MS"}:
+        elif obj in {"datetime64[s]", "Datetime64S"}:
             return Datetime64SDtype()
     elif "int" in obj or "Int" in obj:
         if obj in {"int", "Int", "int64", "Int64"}:

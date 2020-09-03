@@ -4882,8 +4882,9 @@ class DataFrame(Frame, Serializable):
             index_descr.append(descr)
 
         out = super(DataFrame, data).to_arrow()
+        metadata_df = self.head(0).to_pandas()
         metadata = pa.pandas_compat.construct_metadata(
-            self,
+            metadata_df,
             out.schema.names,
             [self.index],
             index_descr,

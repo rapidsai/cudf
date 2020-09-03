@@ -378,9 +378,8 @@ def test_parquet_read_filtered_everything(tmpdir):
     # Check filter
     df_filtered = cudf.read_parquet(fname, filters=[("x", "==", 12)])
     assert_eq(len(df_filtered), 0)
-    assert_eq(df_filtered["x"].dtype, "int64")
-    assert_eq(df_filtered["y"].dtype, "object")
-
+    assert isinstance(df_filtered["x"].dtype, cudf.Int64Dtype)
+    assert isinstance(df_filtered["y"].dtype, cudf.StringDtype)
 
 def test_parquet_read_filtered_multiple_files(tmpdir):
     # Generate data
