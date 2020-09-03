@@ -27,6 +27,7 @@
 - PR #6124 Fix gcc-9 compilation errors on tests
 - PR #6141 Fix typo in custreamz README that was a result of recent changes
 - PR #6143 General improvements for java arrow IPC.
+- PR #6152 Change dictionary indices to uint32
 
 ## Bug Fixes
 
