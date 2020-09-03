@@ -45,7 +45,7 @@ namespace detail {
 std::unique_ptr<column> add_keys(
   dictionary_column_view const& dictionary_column,
   column_view const& new_keys,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   CUDF_EXPECTS(!new_keys.has_nulls(), "Keys must not have nulls");
@@ -54,7 +54,7 @@ std::unique_ptr<column> add_keys(
   // first, concatenate the keys together
   // [a,b,c,d,f] + [d,b,e] = [a,b,c,d,f,d,b,e]
   auto combined_keys = cudf::detail::concatenate(
-    std::vector<column_view>{old_keys, new_keys}, rmm::mr::get_default_resource(), stream);
+    std::vector<column_view>{old_keys, new_keys}, rmm::mr::get_current_device_resource(), stream);
   // sort and remove any duplicates from the combined keys
   // drop_duplicates([a,b,c,d,f,d,b,e]) = [a,b,c,d,e,f]
   auto table_keys = cudf::detail::drop_duplicates(table_view{{*combined_keys}},
