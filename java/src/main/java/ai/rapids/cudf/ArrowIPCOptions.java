@@ -47,10 +47,14 @@ public class ArrowIPCOptions {
   }
 
   public static class Builder {
-    private NeedGpu callback = null;
+    private NeedGpu callback = () -> {};
 
     public Builder withCallback(NeedGpu callback) {
-      this.callback = callback;
+      if (callback == null) {
+        this.callback = () -> {};
+      } else {
+        this.callback = callback;
+      }
       return this;
     }
 

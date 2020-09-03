@@ -364,6 +364,11 @@ public final class Table implements AutoCloseable {
    * Write out a table to an open handle.
    * @param handle the handle to the writer.
    * @param arrowHandle the arrow table to write out.
+   * @param maxChunkSize the maximum number of rows that could
+   *                     be written out in a single chunk.  Generally this setting will be
+   *                     followed unless for some reason the arrow table is not a single group.
+   *                     This can happen when reading arrow data, but not when converting from
+   *                     cudf.
    */
   private static native void writeArrowIPCArrowChunk(long handle,
                                                      long arrowHandle,
@@ -949,9 +954,7 @@ public final class Table implements AutoCloseable {
       }
       long arrowHandle = convertCudfToArrowTable(handle, table.nativeHandle);
       try {
-        if (callback != null) {
-          callback.doneWithTheGpu(table);
-        }
+        callback.doneWithTheGpu(table);
         writeArrowIPCArrowChunk(handle, arrowHandle, maxChunkSize);
       } finally {
         closeArrowTable(arrowHandle);
@@ -1065,9 +1068,7 @@ public final class Table implements AutoCloseable {
         if (arrowTableHandle == 0) {
           return null;
         }
-        if (callback !=  null) {
-          callback.needTheGpu();
-        }
+        callback.needTheGpu();
         return new Table(convertArrowTableToCudf(arrowTableHandle));
       } finally {
         closeArrowTable(arrowTableHandle);

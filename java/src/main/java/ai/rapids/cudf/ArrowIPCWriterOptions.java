@@ -51,7 +51,7 @@ public class ArrowIPCWriterOptions extends WriterOptions {
 
   public static class Builder extends WriterBuilder<Builder> {
     private long size = -1;
-    private DoneOnGpu callback = null;
+    private DoneOnGpu callback = (ignored) -> {};
 
     public Builder withMaxChunkSize(long size) {
       this.size = size;
@@ -59,7 +59,11 @@ public class ArrowIPCWriterOptions extends WriterOptions {
     }
 
     public Builder withCallback(DoneOnGpu callback) {
-      this.callback = callback;
+      if (callback == null) {
+        this.callback = (ignored) -> {};
+      } else {
+        this.callback = callback;
+      }
       return this;
     }
 
