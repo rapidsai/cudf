@@ -2,6 +2,7 @@
 
 ## New Features
 
+- PR #5975 Add strings `filter_characters` API
 - PR #5843 Add `filters` parameter to Python `read_parquet` function for filtering row groups
 - PR #6116 Add `filters` parameter to Python `read_orc` function or filtering
 - PR #5974 Use libcudf instead of cupy for `arange` or column creation from a scalar.
@@ -18,12 +19,15 @@
 - PR #5953 Use stable sort when doing a sort groupby
 - PR #5973 Link to the Code of Conduct in CONTRIBUTING.md
 - PR #5917 Just use `None` for `strides` in `Buffer`
+- PR #6015 Upgrade CUB/Thrust to the latest commit
 - PR #5971 Add cuStreamz README for basic installation and use
 - PR #6024 Expose selecting multiple ORC stripes to read from Python
 - PR #6002 Add Java bindings for md5
 - PR #6067 Added compute codes for aarch64 devices
 - PR #6083 Small cleanup
 - PR #6103 Small refactor of `print_differences`
+- PR #6124 Fix gcc-9 compilation errors on tests
+- PR #6141 Fix typo in custreamz README that was a result of recent changes
 
 ## Bug Fixes
 
