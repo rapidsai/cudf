@@ -461,16 +461,7 @@ class strings_column_wrapper : public detail::column_wrapper {
   /**
    * @brief Default constructor initializes an empty column of strings
    */
-  strings_column_wrapper() : column_wrapper{}
-  {
-    std::vector<std::string> empty;
-    std::vector<char> chars;
-    std::vector<int32_t> offsets;
-    auto all_valid = make_counting_transform_iterator(0, [](auto i) { return true; });
-    std::tie(chars, offsets) =
-      detail::make_chars_and_offsets(empty.begin(), empty.end(), all_valid);
-    wrapped = cudf::make_strings_column(chars, offsets);
-  }
+  strings_column_wrapper() : strings_column_wrapper(std::initializer_list<std::string>{}) {}
 
   /**
    * @brief Construct a non-nullable column of strings from the range

@@ -229,6 +229,18 @@ struct StringsColumnWrapperTest : public cudf::test::BaseFixture,
 
 TYPED_TEST_CASE(StringsColumnWrapperTest, cudf::test::StringTypes);
 
+TYPED_TEST(StringsColumnWrapperTest, EmptyList)
+{
+  cudf::test::strings_column_wrapper col;
+  cudf::column_view view = col;
+  EXPECT_EQ(view.size(), 0);
+  EXPECT_EQ(view.head(), nullptr);
+  EXPECT_EQ(view.type(), this->data_type());
+  EXPECT_FALSE(view.nullable());
+  EXPECT_FALSE(view.has_nulls());
+  EXPECT_EQ(view.offset(), 0);
+}
+
 TYPED_TEST(StringsColumnWrapperTest, NullablePairListConstructorAllNull)
 {
   using p = std::pair<std::string, bool>;
