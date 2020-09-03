@@ -24,7 +24,7 @@
 #define CUDA_DEVICE_CALLABLE inline
 #endif
 
-#include <thrust/optional.h>
+#include <thrust/optional.h>  // TODO no idea why this is needed ¯\_(ツ)_/¯
 
 #include <cudf/utilities/error.hpp>
 
@@ -261,12 +261,12 @@ class data_type {
   /**
    * @brief Returns the scale (for fixed_point types)
    **/
-  CUDA_HOST_DEVICE_CALLABLE thrust::optional<int32_t> scale() const noexcept { return _scale; }
+  CUDA_HOST_DEVICE_CALLABLE int32_t scale() const noexcept { return _scale; }
 
  private:
   type_id _id{type_id::EMPTY};
   // Store additional type specific metadata, timezone, decimal precision and scale, etc.
-  thrust::optional<int32_t> _scale{};  // numeric::scale_type not available here, use int32_t
+  int32_t _scale{};  // numeric::scale_type not available here, use int32_t
 };
 
 /**

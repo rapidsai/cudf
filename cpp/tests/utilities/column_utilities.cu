@@ -564,24 +564,15 @@ struct column_view_printer {
                   std::vector<std::string>& out,
                   std::string const& indent)
   {
+    using RepType     = typename Element::representation_type;
+    auto const h_data = cudf::test::to_host<RepType>(col);
     out.resize(col.size());
-
-    if (col.type().scale().has_value()) {
-      using RepType     = typename Element::representation_type;
-      auto const h_data = cudf::test::to_host<RepType>(col);
-      std::transform(
-        std::cbegin(h_data.first), std::cend(h_data.first), out.begin(), [&](auto const& value) {
-          auto const scale = numeric::scale_type{col.type().scale().value()};
-          auto const fp    = Element{numeric::scaled_integer<RepType>{value, scale}};
-          return std::to_string(static_cast<double>(fp));
-        });
-    } else {
-      auto const h_data = cudf::test::to_host<Element>(col);
-      std::transform(
-        std::cbegin(h_data.first), std::cend(h_data.first), out.begin(), [&](auto const& fp) {
-          return std::to_string(static_cast<double>(fp));
-        });
-    }
+    std::transform(
+      std::cbegin(h_data.first), std::cend(h_data.first), out.begin(), [&](auto const& value) {
+        auto const scale = numeric::scale_type{col.type().scale()};
+        auto const fp    = Element{numeric::scaled_integer<RepType>{value, scale}};
+        return std::to_string(static_cast<double>(fp));
+      });
   }
 
   template <typename Element,

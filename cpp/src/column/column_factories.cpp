@@ -46,8 +46,6 @@ struct size_of_helper {
   template <typename T, typename std::enable_if_t<is_fixed_point<T>()>* = nullptr>
   constexpr int operator()() const noexcept
   {
-    if (not type.scale().has_value()) return sizeof(T);
-
     // Only want the sizeof fixed_point::Rep as fixed_point::scale is stored in data_type
     return sizeof(typename T::representation_type);
   }
