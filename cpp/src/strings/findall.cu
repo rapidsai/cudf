@@ -111,7 +111,7 @@ struct findall_count_fn : public findall_fn<stack_size> {
 std::unique_ptr<table> findall_re(
   strings_column_view const& strings,
   std::string const& pattern,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   auto strings_count  = strings.size();
