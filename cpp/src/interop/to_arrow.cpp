@@ -159,27 +159,25 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::string_view>(
   column_view input_view = (tmp_column != nullptr) ? tmp_column->view() : input;
   auto child_arrays      = fetch_child_array(input_view, ar_mr, stream);
   if (child_arrays.size() == 0) {
-    std::shared_ptr<arrow::Buffer> tmp_data_buffer;
-    std::shared_ptr<arrow::Buffer> tmp_offset_buffer;
     arrow::Result<std::unique_ptr<arrow::Buffer>> result;
 
     // Empty string will have only one value in offset of 4 bytes
     result = arrow::AllocateBuffer(4, ar_mr);
     CUDF_EXPECTS(result.ok(), "Failed to allocate buffer");
-    tmp_offset_buffer                    = std::move(result.ValueOrDie());
-    tmp_offset_buffer->mutable_data()[0] = 0;
+    std::shared_ptr<arrow::Buffer> tmp_offset_buffer = std::move(result.ValueOrDie());
+    tmp_offset_buffer->mutable_data()[0]             = 0;
 
     result = arrow::AllocateBuffer(0, ar_mr);
     CUDF_EXPECTS(result.ok(), "Failed to allocate buffer");
-    tmp_data_buffer = std::move(result.ValueOrDie());
+    std::shared_ptr<arrow::Buffer> tmp_data_buffer = std::move(result.ValueOrDie());
 
     return std::make_shared<arrow::StringArray>(0, tmp_offset_buffer, tmp_data_buffer);
   }
   auto offset_buffer = child_arrays[0]->data()->buffers[1];
   auto data_buffer   = child_arrays[1]->data()->buffers[1];
   return std::make_shared<arrow::StringArray>(static_cast<int64_t>(input_view.size()),
-                                              std::move(offset_buffer),
-                                              std::move(data_buffer),
+                                              offset_buffer,
+                                              data_buffer,
                                               fetch_mask_buffer(input_view, ar_mr, stream),
                                               static_cast<int64_t>(input_view.null_count()));
 }
