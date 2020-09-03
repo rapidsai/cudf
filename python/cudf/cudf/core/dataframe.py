@@ -6371,7 +6371,7 @@ class DataFrame(Frame, Serializable):
     @ioutils.doc_to_parquet()
     def to_parquet(self, path, *args, **kwargs):
         """{docstring}"""
-        from cudf.io import parquet as pq6
+        from cudf.io import parquet as pq
 
         return pq.to_parquet(self, path, *args, **kwargs)
 
@@ -6473,12 +6473,12 @@ class DataFrame(Frame, Serializable):
         )
 
         # Collect datatypes and cast columns as that type
-        common_type = np.result_type(*self.dtypes)
+        common_type = cudf.api.types.result_type(*self.dtypes)
         homogenized = DataFrame(
             {
                 c: (
                     self._data[c].astype(common_type)
-                    if not np.issubdtype(self._data[c].dtype, common_type)
+                    if not isinstance(self._data[c].dtype, type(common_type))
                     else self._data[c]
                 )
                 for c in self._data

@@ -106,10 +106,7 @@ def can_cast(dtype_l, dtype_r):
 
     return np.can_cast(dtype_l, dtype_r)
 
-def result_type(dtype_l, dtype_r):
-    if isinstance(dtype_l, cudf.Generic):
-        dtype_l = dtype_l.to_numpy
-    if isinstance(dtype_r, cudf.Generic):
-        dtype_r = dtype_r.to_numpy
+def result_type(*arrays_and_dtypes):
 
-    return cudf.dtype(np.result_type(dtype_l, dtype_r))
+    arrays_and_dtypes = (d.to_numpy if isinstance(d, cudf.Generic) else d for d in arrays_and_dtypes)
+    return cudf.dtype(np.result_type(*arrays_and_dtypes))

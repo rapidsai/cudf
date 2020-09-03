@@ -274,14 +274,14 @@ class StringDtype(Flexible):
 def make_dtype_from_string(obj):
     if obj in {"str", "string", "object", "O"}:
         return StringDtype()
-    elif "datetime" in obj:
-        if obj == "datetime64[ns]":
+    elif "datetime" in obj or "Datetime" in obj:
+        if obj in {"datetime64[ns]", 'Datetime64NS'}:
             return Datetime64NSDtype()
-        elif obj == "datetime64[us]":
+        elif obj in {"datetime64[us]", "Datetime64US"}:
             return Datetime64USDtype()
-        elif obj == "datetime64[ms]":
+        elif obj in {"datetime64[ms]", "Datetime64MS"}:
             return Datetime64MSDtype()
-        elif obj == "datetime64[s]":
+        elif obj in {"datetime64[s]", "Datetime64MS"}:
             return Datetime64SDtype()
     elif "int" in obj or "Int" in obj:
         if obj in {"int", "Int", "int64", "Int64"}:
@@ -310,15 +310,19 @@ def make_dtype_from_string(obj):
     elif "category" in obj:
         return "category"
     elif "timedelta" in obj:
-        if obj == 'timedelta64[ns]':
+        if obj in {'timedelta64[ns]', "Timedelta64NS"}:
             return Timedelta64NSDtype()
-        if obj == 'timedelta64[us]':
+        if obj in {'timedelta64[us]', "Timedelta64US"}:
             return Timedelta64USDtype()
-        if obj == 'timedelta64[ms]':
+        if obj in {'timedelta64[ms]', "Timedelta64MS"}:
             return Timedelta64MSDtype()
-        if obj == 'timedelta64[s]':
+        if obj in {'timedelta64[s]', "Timedelta64S"}:
             return Timedelta64SDtype()
-
+    else:
+        try:
+            return np_to_cudf_dtypes[np.dtype(obj)]
+        except:
+            return None
 def make_dtype_from_numpy(obj):
     np_to_pd_types = {v: k for k, v in pd_to_np_dtypes.items()}
     result = np_to_pd_types.get(obj)
@@ -570,6 +574,7 @@ pa_to_cudf_dtypes = {
     pa.duration("us"): Timedelta64USDtype(),
     pa.duration("ms"): Timedelta64MSDtype(),
     pa.duration("s"): Timedelta64SDtype(),
+    pa.date32(): Datetime64NSDtype(),
     pa.null(): None
 }
 

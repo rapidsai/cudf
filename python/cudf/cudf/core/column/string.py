@@ -4531,7 +4531,7 @@ class StringColumn(column.ColumnBase):
             return self.children[1].size
 
     def as_numerical_column(self, dtype, **kwargs):
-        out_dtype = cudf.dtype(dtype)
+        out_dtype = cudf.dtype(dtype) if dtype is not None else cudf.Float64Dtype()
         kwargs.update(dtype=out_dtype)
 
         if out_dtype.type is np.datetime64:

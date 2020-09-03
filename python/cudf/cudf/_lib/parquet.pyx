@@ -103,7 +103,6 @@ cpdef generate_pandas_metadata(Table table, index):
             )
         else:
             types.append(np_to_pa_dtype(col.dtype))
-
     # Indexes
     if index is not False:
         for name in table._index.names:
@@ -135,16 +134,15 @@ cpdef generate_pandas_metadata(Table table, index):
                 index_descriptors.append(descr)
             else:
                 col_names.append(name)
-
+    metadata_df = table.head(0).to_pandas()
     metadata = pa.pandas_compat.construct_metadata(
-        table,
+        metadata_df,
         col_names,
         index_levels,
         index_descriptors,
         index,
         types,
     )
-
     md = metadata[b'pandas']
     json_str = md.decode("utf-8")
     return json_str
