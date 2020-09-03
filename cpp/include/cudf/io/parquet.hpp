@@ -48,25 +48,25 @@ class parquet_reader_options_builder;
 class parquet_reader_options {
   source_info _source;
 
-  /// Names of column to read; empty is all
+  // Names of column to read; empty is all
   std::vector<std::string> _columns;
 
-  /// List of individual row groups to read (ignored if empty)
+  // List of individual row groups to read (ignored if empty)
   std::vector<std::vector<size_type>> _row_groups;
-  /// Number of rows to skip from the start; 0 is none
+  // Number of rows to skip from the start; 0 is none
   size_type _skip_rows = 0;
-  /// Number of rows to read; -1 is all
+  // Number of rows to read; -1 is all
   size_type _num_rows = -1;
 
-  /// Whether to store string data as categorical type
+  // Whether to store string data as categorical type
   bool _convert_strings_to_categories = false;
-  /// Whether to use PANDAS metadata to load columns
+  // Whether to use PANDAS metadata to load columns
   bool _use_pandas_metadata = true;
-  /// Cast timestamp columns to a specific type
+  // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
 
   /**
-   * @brief Constrcutor from soucre info
+   * @brief Constructor from source info
    *
    * @param src source information used to read parquet file
    */
@@ -75,7 +75,7 @@ class parquet_reader_options {
   friend parquet_reader_options_builder;
 
  public:
-  /// This is just to please cython
+  // This is just to please cython
   /**
    * @brief Default constructor
    */
@@ -206,12 +206,12 @@ class parquet_reader_options_builder {
  public:
   // This is just to please cython
   /**
-   * @brief Default constrcutor
+   * @brief Default constructor
    */
   parquet_reader_options_builder() = default;
 
   /**
-   * @brief Constrcutor from soucre info
+   * @brief Constructor from source info
    *
    * @param src source information used to read parquet file
    */
@@ -352,19 +352,19 @@ class parquet_writer_options_builder;
  * @ingroup io_writers
  */
 class parquet_writer_options {
-  /// Specify the sink to use for writer output
+  // Specify the sink to use for writer output
   sink_info _sink;
-  /// Specify the compression format to use
+  // Specify the compression format to use
   compression_type _compression = compression_type::AUTO;
-  /// Specify the level of statistics in the output file
+  // Specify the level of statistics in the output file
   statistics_freq _stats_level = statistics_freq::STATISTICS_ROWGROUP;
-  /// Set of columns to output
+  // Set of columns to output
   table_view _table;
-  /// Optional associated metadata
+  // Optional associated metadata
   const table_metadata* _metadata = nullptr;
-  /// Optionally return the raw parquet file metadata output
+  // Optionally return the raw parquet file metadata output
   bool _return_filemetadata = false;
-  /// Column chunks file path to be set in the raw output metadata
+  // Column chunks file path to be set in the raw output metadata
   std::string _column_chunks_file_path;
 
   /**
@@ -381,9 +381,9 @@ class parquet_writer_options {
   friend class parquet_writer_options_builder;
 
  public:
-  /// This is just to please cython
+  // This is just to please cython
   /**
-   * @brief Deffault constrcutor
+   * @brief Default constructor
    */
   parquet_writer_options() = default;
 
@@ -415,7 +415,7 @@ class parquet_writer_options {
   compression_type get_compression() const { return _compression; }
 
   /**
-   * @brief Returns level of statistics requested in ouput file
+   * @brief Returns level of statistics requested in output file
    */
   statistics_freq get_stats_level() const { return _stats_level; }
 
@@ -430,7 +430,7 @@ class parquet_writer_options {
   table_metadata const* get_metadata() const { return _metadata; }
 
   /**
-   * @brief Returns True/False for filemetadata is requried or not
+   * @brief Returns True/False for filemetadata is required or not
    */
   bool is_enabled_return_filemetadata() const { return _return_filemetadata; }
 
@@ -442,14 +442,14 @@ class parquet_writer_options {
   /**
    * @brief Set metadata to parquet_writer_options
    *
-   * @param metadata asscoicated metadata
+   * @param metadata associated metadata
    */
   void set_metadata(table_metadata const* metadata) { _metadata = metadata; }
 
   /**
    * @brief Set statistics_freq to parquet_writer_options
    *
-   * @param sf statistics_freq that needs to be witten to output
+   * @param sf statistics_freq that needs to be written to output
    */
   void set_stats_level(statistics_freq sf) { _stats_level = sf; }
 
@@ -482,9 +482,9 @@ class parquet_writer_options_builder {
   parquet_writer_options options;
 
  public:
-  /// This is just to please cython
+  // This is just to please cython
   /**
-   * @brief Default constrcutor
+   * @brief Default constructor
    */
   explicit parquet_writer_options_builder() = default;
 
@@ -502,7 +502,7 @@ class parquet_writer_options_builder {
   /**
    * @brief Set metadata to parquet_writer_options
    *
-   * @param metadata asscoicated metadata
+   * @param metadata associated metadata
    * @return reference to parquet_writer_options_builder
    */
   parquet_writer_options_builder& set_metadata(table_metadata const* metadata)
@@ -514,7 +514,7 @@ class parquet_writer_options_builder {
   /**
    * @brief Set statistics_freq to parquet_writer_options
    *
-   * @param sf statistics_freq that needs to be witten to output
+   * @param sf statistics_freq that needs to be written to output
    * @return reference to parquet_writer_options_builder
    */
   parquet_writer_options_builder& set_stats_level(statistics_freq sf)
@@ -620,13 +620,13 @@ class chunked_parquet_writer_options_builder;
  * @ingroup io_writers
  */
 class chunked_parquet_writer_options {
-  /// Specify the sink to use for writer output
+  // Specify the sink to use for writer output
   sink_info _sink;
-  /// Specify the compression format to use
+  // Specify the compression format to use
   compression_type _compression = compression_type::AUTO;
-  /// Specify the level of statistics in the output file
+  // Specify the level of statistics in the output file
   statistics_freq _stats_level = statistics_freq::STATISTICS_ROWGROUP;
-  /// Optional associated metadata.
+  // Optional associated metadata.
   const table_metadata_with_nullability* _nullable_metadata = nullptr;
 
   /**
@@ -641,7 +641,7 @@ class chunked_parquet_writer_options {
  public:
   // This is just to please cython
   /**
-   * @brief Default constrcutor
+   * @brief Default constructor
    */
   chunked_parquet_writer_options() = default;
 
@@ -656,7 +656,7 @@ class chunked_parquet_writer_options {
   compression_type get_compression() const { return _compression; }
 
   /**
-   * @brief Returns level of statistics requested in ouput file
+   * @brief Returns level of statistics requested in output file
    */
   statistics_freq get_stats_level() const { return _stats_level; }
 
@@ -671,7 +671,7 @@ class chunked_parquet_writer_options {
   /**
    * @brief Set nullable metadata to parquet_writer_options
    *
-   * @param metadata asscoicated metadata
+   * @param metadata associated metadata
    */
   void set_nullable_metadata(const table_metadata_with_nullability* metadata)
   {
@@ -681,7 +681,7 @@ class chunked_parquet_writer_options {
   /**
    * @brief Set statistics_freq to parquet_writer_options
    *
-   * @param sf statistics_freq that needs to be witten to output
+   * @param sf statistics_freq that needs to be written to output
    */
   void set_stats_level(statistics_freq sf) { _stats_level = sf; }
 
@@ -708,7 +708,7 @@ class chunked_parquet_writer_options_builder {
  public:
   // This is just to please cython
   /**
-   * @brief Default constrcutor
+   * @brief Default constructor
    */
   chunked_parquet_writer_options_builder() = default;
 
@@ -722,7 +722,7 @@ class chunked_parquet_writer_options_builder {
   /**
    * @brief Set nullable metadata to parquet_writer_options
    *
-   * @param metadata asscoicated metadata
+   * @param metadata associated metadata
    * @return reference to chunked_parquet_writer_options_builder
    */
   chunked_parquet_writer_options_builder& set_nullable_metadata(
@@ -735,7 +735,7 @@ class chunked_parquet_writer_options_builder {
   /**
    * @brief Set statistics_freq to parquet_writer_options
    *
-   * @param sf statistics_freq that needs to be witten to output
+   * @param sf statistics_freq that needs to be written to output
    * @return reference to chunked_parquet_writer_options_builder
    */
   chunked_parquet_writer_options_builder& set_stats_level(statistics_freq sf)

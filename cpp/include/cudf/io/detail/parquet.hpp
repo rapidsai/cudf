@@ -96,7 +96,7 @@ class writer {
   ~writer();
 
   /**
-   * @brief Writes the dataset as per oprions provided.
+   * @brief Writes the dataset as per options provided.
    *
    * @param table Set of columns to output
    * @param metadata Table metadata and column names
