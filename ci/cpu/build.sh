@@ -43,7 +43,7 @@ conda list
 
 # https://docs.rapids.ai/maintainers/depmgmt/
 conda remove -f rapids-build-env rapids-notebook-env || true
-conda install "pyarrow=1.0.1 arrow-cpp=1.0.1 arrow-cpp-proc=*=cuda"
+conda install "pyarrow=1.0.1" "arrow-cpp=1.0.1" "arrow-cpp-proc=*=cuda"
 
 # FIX Added to deal with Anancoda SSL verification issues during conda builds
 conda config --set ssl_verify False
