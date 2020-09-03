@@ -17,18 +17,20 @@ namespace detail {
 std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(
   table_view const& input_table, rmm::mr::device_memory_resource* mr, cudaStream_t stream)
 {
-  std::vector<size_type> columns(input_table.num_columns());
-  std::iota(columns.begin(), columns.end(), 0);
+  std::vector<size_type> drop_keys(input_table.num_columns());
+  std::iota(drop_keys.begin(), drop_keys.end(), 0);
 
   // side effects of this function we are now dependent on:
   // - resulting column elements are sorted ascending
   // - nulls are sorted to the beginning
   auto keys_table = cudf::detail::drop_duplicates(
-    input_table, columns, duplicate_keep_option::KEEP_FIRST, null_equality::EQUAL, mr, stream);
+    input_table, drop_keys, duplicate_keep_option::KEEP_FIRST, null_equality::EQUAL, mr, stream);
 
   if (cudf::has_nulls(keys_table->view())) {
     // Rows with nulls appear at the top of `keys_table`, but we want them to appear at
     // the bottom. Below, we rearrange the rows so that nulls appear at the bottom:
+    // TODO: we should be able to get rid of this logic once
+    // https://github.com/rapidsai/cudf/issues/6144 is resolved
 
     auto num_rows = keys_table->num_rows();
     auto mask =
