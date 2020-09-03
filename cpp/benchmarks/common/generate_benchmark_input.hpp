@@ -104,10 +104,13 @@ template <typename T>
 struct distribution_desc<T, typename std::enable_if_t<cudf::is_fixed_point<T>()>> {
 };
 
-class data_parameters {
+class data_profile {
   std::map<cudf::type_id, distribution_desc<uint64_t>> int_params;
   std::map<cudf::type_id, distribution_desc<double>> float_params;
-  double bool_probability_true = 0.5;
+  double bool_probability        = 0.5;
+  double null_frequency          = 0.01;
+  cudf::size_type cardinality    = 2000;  // TODO: maybe sqrt(num_rows)?
+  cudf::size_type avg_run_length = 4;
 
  public:
   template <typename T,
@@ -141,7 +144,7 @@ class data_parameters {
   template <typename T, std::enable_if_t<std::is_same<T, bool>::value>* = nullptr>
   distribution_desc<T> get_params() const
   {
-    return distribution_desc<T>{bool_probability_true};
+    return distribution_desc<T>{bool_probability};
   }
 
   template <typename T, typename std::enable_if_t<cudf::is_chrono<T>()>* = nullptr>
@@ -177,6 +180,16 @@ class data_parameters {
   {
     return {};
   }
+
+  void set_bool_probability(double p) { bool_probability = p; }
+  void set_null_frequency(double f) { null_frequency = f; }
+  void set_cardinality(cudf::size_type c) { cardinality = c; }
+  void set_avg_run_length(cudf::size_type avg_rl) { avg_run_length = avg_rl; }
+
+  auto get_bool_probability() const { return bool_probability; }
+  auto get_null_frequency() const { return null_frequency; };
+  auto get_cardinality() const { return cardinality; };
+  auto get_avg_run_length() const { return avg_run_length; };
 };
 
 std::vector<cudf::type_id> get_type_or_group(int32_t id);
@@ -199,4 +212,4 @@ std::vector<cudf::type_id> get_type_or_group(int32_t id);
 std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> dtype_ids,
                                                  cudf::size_type num_cols,
                                                  size_t table_bytes,
-                                                 data_parameters data_params = data_parameters{});
+                                                 data_profile const& data_params = data_profile{});

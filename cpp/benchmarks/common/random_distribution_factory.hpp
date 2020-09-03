@@ -74,10 +74,11 @@ auto make_geometric_dist(T range_start, T range_end)
   return std::exponential_distribution<T>(geometric_dist_p(range_size));
 }
 
+template <typename T>
+using distribution_fn = std::function<T(std::mt19937&)>;
+
 template <typename T, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
-std::function<T(std::mt19937&)> make_rand_generator(distribution_id did,
-                                                    T lower_bound,
-                                                    T upper_bound)
+distribution_fn<T> make_distribution(distribution_id did, T lower_bound, T upper_bound)
 {
   switch (did) {
     case distribution_id::NORMAL:
@@ -99,9 +100,7 @@ std::function<T(std::mt19937&)> make_rand_generator(distribution_id did,
 }
 
 template <typename T, std::enable_if_t<cudf::is_floating_point<T>()>* = nullptr>
-std::function<T(std::mt19937&)> make_rand_generator(distribution_id dist_id,
-                                                    T lower_bound,
-                                                    T upper_bound)
+distribution_fn<T> make_distribution(distribution_id dist_id, T lower_bound, T upper_bound)
 {
   switch (dist_id) {
     case distribution_id::NORMAL:

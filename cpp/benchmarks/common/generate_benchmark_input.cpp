@@ -67,20 +67,20 @@ auto deterministic_engine(unsigned seed = 13377331) { return std::mt19937{seed};
 
 template <typename T>
 std::enable_if_t<cudf::is_fixed_width<T>(), size_t> avg_element_size(
-  data_parameters const& data_params)
+  data_profile const& data_params)
 {
   return sizeof(T);
 }
 
 template <typename T>
 std::enable_if_t<!cudf::is_fixed_width<T>(), size_t> avg_element_size(
-  data_parameters const& data_params)
+  data_profile const& data_params)
 {
   CUDF_FAIL("not implemented!");
 }
 
 template <>
-size_t avg_element_size<cudf::string_view>(data_parameters const& data_params)
+size_t avg_element_size<cudf::string_view>(data_profile const& data_params)
 {
   auto const dist = data_params.get_params<cudf::string_view>().length_params;
   if (dist.id == distribution_id::NORMAL || dist.id == distribution_id::UNIFORM) {
@@ -101,13 +101,13 @@ size_t avg_element_size<cudf::string_view>(data_parameters const& data_params)
 
 struct avg_element_size_fn {
   template <typename T>
-  size_t operator()(data_parameters const& data_params)
+  size_t operator()(data_profile const& data_params)
   {
     return avg_element_size<T>(data_params);
   }
 };
 
-size_t avg_element_bytes(data_parameters const& data_params, cudf::type_id tid)
+size_t avg_element_bytes(data_profile const& data_params, cudf::type_id tid)
 {
   return cudf::type_dispatcher(cudf::data_type(tid), avg_element_size_fn{}, data_params);
 }
@@ -149,14 +149,14 @@ struct random_value_fn<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
       range_ns.first / to_nanoseconds<cudf::timestamp_s>(1),
       range_ns.second / to_nanoseconds<cudf::timestamp_s>(1)};
     if (range_ns.first != range_ns.second)
-      seconds_gen = make_rand_generator<int64_t>(params.id, range_s.first, range_s.second);
+      seconds_gen = make_distribution<int64_t>(params.id, range_s.first, range_s.second);
     else
       seconds_gen = [=](std::mt19937&) { return range_ns.second; };
 
     auto const range_size_ns = range_ns.second - range_ns.first;
     // Don't need nanoseconds for days or seconds
     if (to_nanoseconds<T>(1) < 1000000000)
-      nanoseconds_gen = make_rand_generator<int64_t>(
+      nanoseconds_gen = make_distribution<int64_t>(
         distribution_id::UNIFORM, std::min(range_size_ns, 0l), std::max(range_size_ns, 0l));
     else
       nanoseconds_gen = [](std::mt19937&) { return 0; };
@@ -184,23 +184,23 @@ struct random_value_fn<
   typename std::enable_if_t<!std::is_same<T, bool>::value && cudf::is_numeric<T>()>> {
   T const lower_bound;
   T const upper_bound;
-  std::function<T(std::mt19937&)> gen;
+  distribution_fn<T> dist;
 
   random_value_fn(distribution_desc<T> const& desc)
     : lower_bound{desc.lower_bound},
       upper_bound{desc.upper_bound},
-      gen{make_rand_generator<T>(desc.id, desc.lower_bound, desc.upper_bound)}
+      dist{make_distribution<T>(desc.id, desc.lower_bound, desc.upper_bound)}
   {
   }
 
   T operator()(std::mt19937& engine)
   {
-    return std::max(std::min(gen(engine), upper_bound), lower_bound);
+    return std::max(std::min(dist(engine), upper_bound), lower_bound);
   }
 };
 
 /**
- * @brief Creates an boolean value with 50:50 probability
+ * @brief Creates an boolean value with given probability of returning `true`.
  *
  * @return The random boolean value
  */
@@ -253,16 +253,16 @@ void set_element_at(Val_gen const& value_gen,
  * @return Column filled with random data
  */
 template <typename T>
-std::unique_ptr<cudf::column> create_random_column(data_parameters const& data_params,
+std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
                                                    std::mt19937& engine,
                                                    cudf::size_type num_rows)
 {
-  float const null_frequency        = 0.01;
-  cudf::size_type const cardinality = 1000;
-  cudf::size_type const avg_run_len = 4;
+  float const null_frequency        = profile.get_null_frequency();
+  cudf::size_type const cardinality = std::min(num_rows, profile.get_cardinality());
+  cudf::size_type const avg_run_len = profile.get_avg_run_length();
 
   std::bernoulli_distribution null_dist{null_frequency};
-  auto random_value_gen = random_value_fn<T>{data_params.get_params<T>()};
+  auto random_value_gen = random_value_fn<T>{profile.get_params<T>()};
   auto value_gen        = [&]() { return random_value_gen(engine); };
   auto valid_gen        = [&]() { return null_frequency == 0.f || !null_dist(engine); };
 
@@ -339,20 +339,17 @@ void copy_string(cudf::size_type src_idx,
   dst.offsets.push_back(dst.chars.size());
 }
 
-template <typename Length_gen, typename Char_gen, typename Valid_gen>
-void append_string(Length_gen const& len_gen,
-                   Char_gen const& char_gen,
-                   Valid_gen const& valid_gen,
-                   string_col_data& column_data)
+template <typename Char_gen>
+void append_string(Char_gen& char_gen, bool valid, uint32_t length, string_col_data& column_data)
 {
   auto const idx = column_data.offsets.size() - 1;
-  column_data.offsets.push_back(column_data.offsets.back() + len_gen());
+  column_data.offsets.push_back(column_data.offsets.back() + length);
   std::generate_n(std::back_inserter(column_data.chars),
                   column_data.offsets[idx + 1] - column_data.offsets[idx],
                   [&]() { return char_gen(); });
 
   // TODO: use empty string for invalid fields?
-  if (!valid_gen()) { reset_null_mask_bit(column_data.null_mask, idx); }
+  if (!valid) { reset_null_mask_bit(column_data.null_mask, idx); }
 }
 
 /**
@@ -366,34 +363,31 @@ void append_string(Length_gen const& len_gen,
  * @return Column filled with random data
  */
 template <>
-std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(
-  data_parameters const& data_params, std::mt19937& engine, cudf::size_type num_rows)
+std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(data_profile const& profile,
+                                                                      std::mt19937& engine,
+                                                                      cudf::size_type num_rows)
 {
-  data_parameters dp{};
+  auto char_dist = [&engine, dist = std::uniform_int_distribution<char>{'!', '~'}]() mutable {
+    return dist(engine);
+  };
+  auto len_dist = random_value_fn<uint32_t>{profile.get_params<cudf::string_view>().length_params};
+  std::bernoulli_distribution valid_dist{1. - profile.get_null_frequency()};
 
-  float const null_frequency        = 0.01;
-  int const avg_string_len          = avg_element_size<cudf::string_view>(data_params);
-  cudf::size_type const cardinality = 1000;
-  cudf::size_type const avg_run_len = 4;
-
-  auto len_dist = random_value_fn<uint32_t>{dp.get_params<cudf::string_view>().length_params};
-  std::bernoulli_distribution null_dist{null_frequency};
-  std::gamma_distribution<float> run_len_dist(4.f, avg_run_len / 4.f);
-  std::uniform_int_distribution<char> char_dist{'!', '~'};
-  auto length_gen = [&]() { return len_dist(engine); };
-  auto char_gen   = [&]() { return char_dist(engine); };
-  auto valid_gen  = [&]() { return null_dist.p() == 0.f || null_dist(engine); };
-
+  auto const avg_string_len = avg_element_size<cudf::string_view>(profile);
+  auto const cardinality    = std::min(profile.get_cardinality(), num_rows);
   string_col_data samples(cardinality, cardinality * avg_string_len);
   for (cudf::size_type si = 0; si < cardinality; ++si) {
-    append_string(length_gen, char_gen, valid_gen, samples);
+    append_string(char_dist, valid_dist(engine), len_dist(engine), samples);
   }
+
+  auto const avg_run_len = profile.get_avg_run_length();
+  std::gamma_distribution<float> run_len_dist(4.f, avg_run_len / 4.f);
 
   string_col_data out_col(num_rows, num_rows * avg_string_len);
   std::uniform_int_distribution<cudf::size_type> sample_dist{0, cardinality - 1};
   for (cudf::size_type row = 0; row < num_rows; ++row) {
     if (cardinality == 0) {
-      append_string(length_gen, char_gen, valid_gen, out_col);
+      append_string(char_dist, valid_dist(engine), len_dist(engine), out_col);
     } else {
       copy_string(sample_dist(engine), samples, row, out_col);
     }
@@ -405,27 +399,29 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(
       row += std::max(run_len - 1, 0);
     }
   }
-
   return cudf::make_strings_column(out_col.chars, out_col.offsets, out_col.null_mask);
 }
 
 template <>
-std::unique_ptr<cudf::column> create_random_column<cudf::dictionary32>(
-  data_parameters const& data_params, std::mt19937& engine, cudf::size_type num_rows)
+std::unique_ptr<cudf::column> create_random_column<cudf::dictionary32>(data_profile const& profile,
+                                                                       std::mt19937& engine,
+                                                                       cudf::size_type num_rows)
 {
   CUDF_FAIL("not implemented yet");
 }
 
 template <>
-std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(
-  data_parameters const& data_params, std::mt19937& engine, cudf::size_type num_rows)
+std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile const& profile,
+                                                                    std::mt19937& engine,
+                                                                    cudf::size_type num_rows)
 {
   CUDF_FAIL("not implemented yet");
 }
 
 template <>
-std::unique_ptr<cudf::column> create_random_column<cudf::struct_view>(
-  data_parameters const& data_params, std::mt19937& engine, cudf::size_type num_rows)
+std::unique_ptr<cudf::column> create_random_column<cudf::struct_view>(data_profile const& profile,
+                                                                      std::mt19937& engine,
+                                                                      cudf::size_type num_rows)
 {
   CUDF_FAIL("not implemented yet");
 }
@@ -433,17 +429,17 @@ std::unique_ptr<cudf::column> create_random_column<cudf::struct_view>(
 struct create_rand_col_fn {
  public:
   template <typename T>
-  std::unique_ptr<cudf::column> operator()(data_parameters const& data_params,
+  std::unique_ptr<cudf::column> operator()(data_profile const& profile,
                                            std::mt19937& engine,
                                            cudf::size_type num_rows)
   {
-    return create_random_column<T>(data_params, engine, num_rows);
+    return create_random_column<T>(profile, engine, num_rows);
   }
 };
 
 using columns_vector = std::vector<std::unique_ptr<cudf::column>>;
 
-columns_vector create_random_columns(data_parameters const& data_params,
+columns_vector create_random_columns(data_profile const& profile,
                                      std::vector<cudf::type_id> dtype_ids,
                                      std::mt19937 engine,
                                      cudf::size_type num_rows)
@@ -452,7 +448,7 @@ columns_vector create_random_columns(data_parameters const& data_params,
   std::transform(
     dtype_ids.begin(), dtype_ids.end(), std::back_inserter(output_columns), [&](auto tid) {
       return cudf::type_dispatcher(
-        cudf::data_type(tid), create_rand_col_fn{}, data_params, engine, num_rows);
+        cudf::data_type(tid), create_rand_col_fn{}, profile, engine, num_rows);
     });
   return output_columns;
 }
@@ -470,12 +466,12 @@ std::vector<cudf::type_id> repeat_dtypes(std::vector<cudf::type_id> const& dtype
 std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> dtype_ids,
                                                  cudf::size_type num_cols,
                                                  size_t table_bytes,
-                                                 data_parameters data_params)
+                                                 data_profile const& profile)
 {
   auto const out_dtype_ids = repeat_dtypes(dtype_ids, num_cols);
   size_t const avg_row_bytes =
     std::accumulate(out_dtype_ids.begin(), out_dtype_ids.end(), 0ul, [&](size_t sum, auto tid) {
-      return sum + avg_element_bytes(data_params, tid);
+      return sum + avg_element_bytes(profile, tid);
     });
   cudf::size_type const num_rows = table_bytes / avg_row_bytes;
 
@@ -494,7 +490,7 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> dtyp
                                             out_dtype_ids.begin() + next_col + thread_num_cols);
     col_futures.emplace_back(std::async(std::launch::async,
                                         create_random_columns,
-                                        std::cref(data_params),
+                                        std::cref(profile),
                                         std::move(thread_types),
                                         std::move(thread_engine),
                                         num_rows));
