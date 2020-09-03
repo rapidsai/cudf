@@ -811,6 +811,9 @@ class ColumnBase(Column, Serializable):
     def quantile(self, q, interpolation, exact):
         raise TypeError(f"cannot perform quantile with type {self.dtype}")
 
+    def median(self, skipna=None):
+        raise TypeError(f"cannot perform median with type {self.dtype}")
+
     def take(self, indices, keep_index=True):
         """Return Column by taking values from the corresponding *indices*.
         """

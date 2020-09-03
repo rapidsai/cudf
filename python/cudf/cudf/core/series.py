@@ -3279,15 +3279,54 @@ class Series(Frame, Serializable):
     def sum_of_squares(self, dtype=None):
         return self._column.sum_of_squares(dtype=dtype)
 
-    def median(self, skipna=True):
-        """Compute the median of the series
+    def median(
+        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
+    ):
         """
+        Return the median of the values for the requested axis.
 
-        if not skipna and self.has_nulls:
-            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+        Parameters
+        ----------
 
-        # enforce linear in case the default ever changes
-        return self.quantile(0.5, interpolation="linear", exact=True)
+        skipna : bool, default True
+            Exclude NA/null values when computing the result.
+
+        Returns
+        -------
+        scalar
+
+        Notes
+        -----
+        Parameters currently not supported are `axis`, `level` and
+        `numeric_only`
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series([10, 25, 3, 25, 24, 6])
+        >>> ser
+        0    10
+        1    25
+        2     3
+        3    25
+        4    24
+        5     6
+        dtype: int64
+        >>> ser.median()
+        17.0
+        """
+        if axis not in (None, 0):
+            raise NotImplementedError("axis parameter is not implemented yet")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not implemented yet")
+
+        if numeric_only not in (None, True):
+            raise NotImplementedError(
+                "numeric_only parameter is not implemented yet"
+            )
+
+        return self._column.median(skipna=skipna)
 
     def mode(self, dropna=True):
         """
@@ -3773,45 +3812,27 @@ class Series(Frame, Serializable):
 
         Returns
         -------
-
-        DataFrame
+        float or Series
+            If ``q`` is an array, a Series will be returned where the
+            index is ``q`` and the values are the quantiles, otherwise
+            a float will be returned.
         """
 
-        if isinstance(q, Number) or is_list_like(q):
-            np_array_q = np.asarray(q)
-            if np.logical_or(np_array_q < 0, np_array_q > 1).any():
-                raise ValueError(
-                    "percentiles should all be in the interval [0, 1]"
-                )
-
-        # Beyond this point, q either being scalar or list-like
-        # will only have values in range [0, 1]
+        result = self._column.quantile(q, interpolation, exact)
 
         if isinstance(q, Number):
-            res = self._column.quantile(q, interpolation, exact)
-            res = res[0]
-            return (
-                cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-                if res is None
-                else res
-            )
+            return result
 
-        if not quant_index:
-            return Series(
-                self._column.quantile(q, interpolation, exact), name=self.name
-            )
-        else:
-            np_array_q = np.asarray(q)
+        if quant_index:
+            index = np.asarray(q)
             if len(self) == 0:
                 result = column_empty_like(
-                    np_array_q,
-                    dtype=self.dtype,
-                    masked=True,
-                    newsize=len(np_array_q),
+                    index, dtype=self.dtype, masked=True, newsize=len(index),
                 )
-            else:
-                result = self._column.quantile(q, interpolation, exact)
-            return Series(result, index=as_index(np_array_q), name=self.name)
+        else:
+            index = None
+
+        return Series(result, index=index, name=self.name)
 
     def describe(self, percentiles=None, include=None, exclude=None):
         """Compute summary statistics of a Series. For numeric

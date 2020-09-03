@@ -320,9 +320,9 @@ class TimeDeltaColumn(column.ColumnBase):
             unit=self.time_unit,
         )
 
-    def median(self, dtype=np.float64):
+    def median(self, skipna=None):
         return pd.Timedelta(
-            self.as_numerical.median(dtype=dtype), unit=self.time_unit
+            self.as_numerical.median(skipna=skipna), unit=self.time_unit
         )
 
     def quantile(self, q, interpolation, exact):
@@ -330,7 +330,7 @@ class TimeDeltaColumn(column.ColumnBase):
             q=q, interpolation=interpolation, exact=exact
         )
         if isinstance(q, Number):
-            return [pd.Timedelta(result[0], unit=self.time_unit)]
+            return pd.Timedelta(result, unit=self.time_unit)
         return result.astype(self.dtype)
 
     def sum(self, skipna=None, dtype=None, min_count=0):

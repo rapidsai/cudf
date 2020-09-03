@@ -176,12 +176,7 @@ def test_datetime_unsupported_reductions(op):
         getattr(psr, op)()
     except Exception as e:
         with pytest.raises(
-            type(e),
-            match=re.escape(
-                str(e).replace("median", "quantile")
-                if op == "median"
-                else str(e)
-            ),
+            type(e), match=re.escape(str(e)),
         ):
             getattr(gsr, op)()
 

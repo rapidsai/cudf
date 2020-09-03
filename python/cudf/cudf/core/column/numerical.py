@@ -272,6 +272,34 @@ class NumericalColumn(column.ColumnBase):
         return skew
 
     def quantile(self, q, interpolation, exact):
+        if isinstance(q, Number) or cudf.utils.dtypes.is_list_like(q):
+            np_array_q = np.asarray(q)
+            if np.logical_or(np_array_q < 0, np_array_q > 1).any():
+                raise ValueError(
+                    "percentiles should all be in the interval [0, 1]"
+                )
+        # Beyond this point, q either being scalar or list-like
+        # will only have values in range [0, 1]
+        result = self._numeric_quantile(q, interpolation, exact)
+        if isinstance(q, Number):
+            result = result[0]
+            return (
+                cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+                if result is None
+                else result
+            )
+        return result
+
+    def median(self, skipna=None):
+        skipna = True if skipna is None else skipna
+
+        if not skipna and self.has_nulls:
+            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+
+        # enforce linear in case the default ever changes
+        return self.quantile(0.5, interpolation="linear", exact=True)
+
+    def _numeric_quantile(self, q, interpolation, exact):
         is_number = isinstance(q, Number)
 
         if is_number:
