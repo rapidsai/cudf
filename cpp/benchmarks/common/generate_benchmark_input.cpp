@@ -228,15 +228,15 @@ void reset_null_mask_bit(std::vector<cudf::bitmask_type>& null_mask_data, cudf::
   null_mask_data[row / bitmask_bits] &= ~(cudf::bitmask_type(1) << row % bitmask_bits);
 }
 
-template <typename T, typename Val_gen, typename Valid_gen>
-void set_element_at(Val_gen const& value_gen,
-                    Valid_gen const& valid_gen,
+template <typename T>
+void set_element_at(T value,
+                    bool valid,
                     T* values,
                     std::vector<cudf::bitmask_type>& null_mask,
                     cudf::size_type idx)
 {
-  if (valid_gen()) {
-    values[idx] = value_gen();
+  if (valid) {
+    values[idx] = value;
   } else {
     reset_null_mask_bit(null_mask, idx);
   }
@@ -257,33 +257,29 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
                                                    std::mt19937& engine,
                                                    cudf::size_type num_rows)
 {
-  float const null_frequency        = profile.get_null_frequency();
-  cudf::size_type const cardinality = std::min(num_rows, profile.get_cardinality());
-  cudf::size_type const avg_run_len = profile.get_avg_run_length();
+  auto valid_dist = std::bernoulli_distribution{1. - profile.get_null_frequency()};
+  auto value_dist = random_value_fn<T>{profile.get_params<T>()};
 
-  std::bernoulli_distribution null_dist{null_frequency};
-  auto random_value_gen = random_value_fn<T>{profile.get_params<T>()};
-  auto value_gen        = [&]() { return random_value_gen(engine); };
-  auto valid_gen        = [&]() { return null_frequency == 0.f || !null_dist(engine); };
-
+  auto const cardinality = std::min(num_rows, profile.get_cardinality());
   pinned_buffer<T> samples{pinned_alloc<T>(cardinality), cudaFreeHost};
   std::vector<cudf::bitmask_type> samples_null_mask(null_mask_size(cardinality), ~0);
   for (cudf::size_type si = 0; si < cardinality; ++si) {
-    set_element_at(value_gen, valid_gen, samples.get(), samples_null_mask, si);
+    set_element_at(value_dist(engine), valid_dist(engine), samples.get(), samples_null_mask, si);
   }
 
   std::uniform_int_distribution<cudf::size_type> sample_dist{0, cardinality - 1};
+  auto const avg_run_len = profile.get_avg_run_length();
   std::gamma_distribution<float> run_len_dist(4.f, avg_run_len / 4.f);
   pinned_buffer<T> data{pinned_alloc<T>(num_rows), cudaFreeHost};
   std::vector<cudf::bitmask_type> null_mask(null_mask_size(num_rows), ~0);
 
   for (cudf::size_type row = 0; row < num_rows; ++row) {
     if (cardinality == 0) {
-      set_element_at(value_gen, valid_gen, data.get(), null_mask, row);
+      set_element_at(value_dist(engine), valid_dist(engine), data.get(), null_mask, row);
     } else {
       auto const sample_idx = sample_dist(engine);
-      set_element_at([&]() { return samples[sample_idx]; },
-                     [&]() { return get_null_mask_bit(samples_null_mask, sample_idx); },
+      set_element_at(samples[sample_idx],
+                     get_null_mask_bit(samples_null_mask, sample_idx),
                      data.get(),
                      null_mask,
                      row);
@@ -292,8 +288,8 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
     if (avg_run_len > 1) {
       int const run_len = std::min<int>(num_rows - row, std::round(run_len_dist(engine)));
       for (int offset = 1; offset < run_len; ++offset) {
-        set_element_at([&]() { return data[row]; },
-                       [&]() { return get_null_mask_bit(null_mask, row); },
+        set_element_at(data[row],
+                       get_null_mask_bit(null_mask, row),
                        data.get(),
                        null_mask,
                        row + offset);
@@ -371,7 +367,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(data_profi
     return dist(engine);
   };
   auto len_dist = random_value_fn<uint32_t>{profile.get_params<cudf::string_view>().length_params};
-  std::bernoulli_distribution valid_dist{1. - profile.get_null_frequency()};
+  auto valid_dist = std::bernoulli_distribution {1. - profile.get_null_frequency()};
 
   auto const avg_string_len = avg_element_size<cudf::string_view>(profile);
   auto const cardinality    = std::min(profile.get_cardinality(), num_rows);
