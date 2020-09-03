@@ -192,6 +192,13 @@ def test_orc_reader_strings(datadir):
     assert_eq(expect, got, check_categorical=False)
 
 
+def test_orc_read_statistics(datadir):
+    path = datadir / "TestOrcFile.testStripeStatistics.orc"
+    try:
+        statistics = cudf.read_orc_statistics(path, engine=engine)
+    except pa.ArrowIOError as e:
+        pytest.skip(".orc file is not found: %s" % e)
+
 @pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
 def test_orc_read_stripes(datadir, engine):
     path = datadir / "TestOrcFile.testDate1900.orc"
