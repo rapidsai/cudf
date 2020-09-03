@@ -4,7 +4,6 @@ from cudf.core.column import ColumnBase
 from cudf.core.column.methods import ColumnMethodsMixin
 from cudf.core.dtypes import ListDtype
 from cudf.api.types import is_list_dtype
-from cudf.utils.utils import buffers_from_pyarrow
 
 
 class ListColumn(ColumnBase):

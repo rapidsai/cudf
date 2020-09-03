@@ -14,13 +14,8 @@ from cudf.utils.dtypes import (
     min_signed_type,
     numeric_normalize_types,
 )
-<<<<<<< HEAD
-from cudf.utils.utils import buffers_from_pyarrow
 from cudf.core.dtypes import Float64Dtype
-=======
 
-
->>>>>>> branch-0.16
 class NumericalColumn(column.ColumnBase):
     def __init__(
         self, data, dtype, mask=None, size=None, offset=0, null_count=None
