@@ -75,7 +75,7 @@ std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_table
   auto string_array = get_arrow_array<cudf::string_view>(string_data, validity);
   cudf::dictionary_column_view view(dict_col->view());
   auto keys       = cudf::test::to_host<int64_t>(view.keys()).first;
-  auto indices    = cudf::test::to_host<int32_t>(view.indices()).first;
+  auto indices    = cudf::test::to_host<uint32_t>(view.indices()).first;
   auto dict_array = get_arrow_dict_array(std::vector<int64_t>(keys.begin(), keys.end()),
                                          std::vector<int32_t>(indices.begin(), indices.end()),
                                          validity);
