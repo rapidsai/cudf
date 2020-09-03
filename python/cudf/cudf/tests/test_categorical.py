@@ -6,6 +6,7 @@ import pytest
 
 import cudf as gd
 from cudf.core import DataFrame, Series
+from cudf.core._compat import PANDAS_GE_110
 from cudf.core.index import as_index
 from cudf.tests.utils import assert_eq
 from cudf.core.series import _fix_nullable_dtype_repr
@@ -47,6 +48,8 @@ t a
 
 
 def test_categorical_integer():
+    if not PANDAS_GE_110:
+        pytest.xfail(reason="pandas >=1.1 required")
     cat = pd.Categorical(["a", "_", "_", "c", "a"], categories=["a", "b", "c"])
     pdsr = pd.Series(cat)
     sr = Series(cat)
@@ -68,7 +71,7 @@ def test_categorical_integer():
 3 c
 4 a
 dtype: category
-Categories (3, String): [a, b, c]
+Categories (3, String): ['a', 'b', 'c']
 """
     assert string.split() == expect_str.split()
 

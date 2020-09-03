@@ -303,40 +303,6 @@ class Series(Frame, Serializable):
         """
         return self._column.values_host
 
-    @classmethod
-    def from_arrow(cls, s):
-        """Convert from a PyArrow Array.
-
-        Parameters
-        ----------
-        s : PyArrow Object
-            PyArrow Object which has to be converted to cudf Series.
-
-        Raises
-        ------
-        TypeError for invalid input type.
-
-        Examples
-        --------
-        >>> import pyarrow as pa
-        >>> import cudf
-        >>> import pyarrow as pa
-        >>> data = pa.array([1, 2, 3])
-        >>> data
-        <pyarrow.lib.Int64Array object at 0x7f67007e07c0>
-        [
-        1,
-        2,
-        3
-        ]
-        >>> cudf.Series.from_arrow(data)
-        0    1
-        1    2
-        2    3
-        dtype: int64
-        """
-        return cls(s)
-
     def serialize(self):
         header = {}
         frames = []
@@ -427,6 +393,59 @@ class Series(Frame, Serializable):
         cls = type(self)
         params.update(kwargs)
         return cls(**params)
+
+    @classmethod
+    def from_arrow(cls, array):
+        """
+        Convert from PyArrow Array/ChunkedArray to Series.
+
+        Parameters
+        ----------
+        array : PyArrow Array/ChunkedArray
+            PyArrow Object which has to be converted to cudf Series.
+
+        Raises
+        ------
+        TypeError for invalid input type.
+
+        Returns
+        -------
+        cudf Series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pyarrow as pa
+        >>> cudf.Series.from_arrow(pa.array(["a", "b", None]))
+        0       a
+        1       b
+        2    <NA>
+        dtype: object
+        """
+
+        return cls(cudf.core.column.ColumnBase.from_arrow(array))
+
+    def to_arrow(self):
+        """
+        Convert Series to a PyArrow Array.
+
+        Returns
+        -------
+        PyArrow Array
+
+        Examples
+        --------
+        >>> import cudf
+        >>> sr = cudf.Series(["a", "b", None])
+        >>> sr.to_arrow()
+        <pyarrow.lib.StringArray object at 0x7f796b0e7600>
+        [
+          "a",
+          "b",
+          null
+        ]
+        """
+        return self._column.to_arrow()
 
     def copy(self, deep=True):
         """
@@ -972,15 +991,14 @@ class Series(Frame, Serializable):
             preprocess = self.copy()
 
         preprocess.index = preprocess.index._clean_nulls_from_index()
-        if isinstance(preprocess._column, cudf.core.column.TimeDeltaColumn):
-            preprocess._column = preprocess._column._repr_str_col()
-            output = preprocess.to_pandas().__repr__()
-        elif (
+        if (
             preprocess.nullable
             and not isinstance(
                 preprocess._column, cudf.core.column.CategoricalColumn
             )
             and not is_list_dtype(preprocess.dtype)
+        ) or isinstance(
+            preprocess._column, cudf.core.column.timedelta.TimeDeltaColumn
         ):
             output = (
                 preprocess.astype("O")
@@ -1999,25 +2017,6 @@ class Series(Frame, Serializable):
         s.name = self.name
         return s
 
-    def to_arrow(self):
-        """
-        Convert Series to a PyArrow Array.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([-3, 10, 15, 20])
-        >>> ser.to_arrow()
-        <pyarrow.lib.Int64Array object at 0x7f5e769499f0>
-        [
-        -3,
-        10,
-        15,
-        20
-        ]
-        """
-        return self._column.to_arrow()
-
     @property
     def data(self):
         """The gpu buffer for the data
@@ -2309,7 +2308,7 @@ class Series(Frame, Serializable):
     def reverse(self):
         """Reverse the Series
         """
-        rinds = cupy.arange((self._column.size - 1), -1, -1, dtype=np.int32)
+        rinds = column.arange((self._column.size - 1), -1, -1, dtype=np.int32)
         col = self._column[rinds]
         index = self.index._values[rinds]
         return self._copy_construct(data=col, index=index)
@@ -2408,7 +2407,7 @@ class Series(Frame, Serializable):
             )
 
         if dtype is None:
-            dtype = min_scalar_type(len(cats), 8)
+            dtype = min_scalar_type(max(len(cats), na_sentinel), 8)
 
         cats = column.as_column(cats)
         if is_mixed_with_object_dtype(self, cats):
@@ -2423,8 +2422,8 @@ class Series(Frame, Serializable):
         except ValueError:
             return _return_sentinel_series()
 
-        order = column.as_column(cupy.arange(len(self)))
-        codes = column.as_column(cupy.arange(len(cats), dtype=dtype))
+        order = column.arange(len(self))
+        codes = column.arange(len(cats), dtype=dtype)
 
         value = cudf.DataFrame({"value": cats, "code": codes})
         codes = cudf.DataFrame(
@@ -2450,8 +2449,23 @@ class Series(Frame, Serializable):
             - *labels* contains the encoded values
             - *cats* contains the categories in order that the N-th
               item corresponds to the (N-1) code.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['a', 'a', 'c'])
+        >>> codes, uniques = s.factorize()
+        >>> codes
+        0    0
+        1    0
+        2    1
+        dtype: int8
+        >>> uniques
+        0    a
+        1    c
+        dtype: object
         """
-        cats = self.unique().astype(self.dtype)
+        cats = self.dropna().unique().astype(self.dtype)
 
         name = self.name  # label_encoding mutates self.name
         labels = self.label_encoding(cats=cats, na_sentinel=na_sentinel)
@@ -3360,6 +3374,74 @@ class Series(Frame, Serializable):
         # enforce linear in case the default ever changes
         return self.quantile(0.5, interpolation="linear", exact=True)
 
+    def mode(self, dropna=True):
+        """
+        Return the mode(s) of the dataset.
+
+        Always returns Series even if only one value is returned.
+
+        Parameters
+        ----------
+        dropna : bool, default True
+            Don't consider counts of NA/NaN/NaT.
+
+        Returns
+        -------
+        Series
+            Modes of the Series in sorted order.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([7, 6, 5, 4, 3, 2, 1])
+        >>> series
+        0    7
+        1    6
+        2    5
+        3    4
+        4    3
+        5    2
+        6    1
+        dtype: int64
+        >>> series.mode()
+        0    1
+        1    2
+        2    3
+        3    4
+        4    5
+        5    6
+        6    7
+        dtype: int64
+
+        We can include ``<NA>`` values in mode by
+        passing ``dropna=False``.
+
+        >>> series = cudf.Series([7, 4, 3, 3, 7, None, None])
+        >>> series
+        0       7
+        1       4
+        2       3
+        3       3
+        4       7
+        5    <NA>
+        6    <NA>
+        dtype: int64
+        >>> series.mode()
+        0    3
+        1    7
+        dtype: int64
+        >>> series.mode(dropna=False)
+        0       3
+        1       7
+        2    <NA>
+        dtype: int64
+        """
+        val_counts = self.value_counts(ascending=False, dropna=dropna)
+        if len(val_counts) > 0:
+            val_counts = val_counts[val_counts == val_counts.iloc[0]]
+
+        return Series(val_counts.index.sort_values(), name=self.name)
+
     def round(self, decimals=0):
         """Round a Series to a configurable number of decimal places.
         """
@@ -3632,9 +3714,8 @@ class Series(Frame, Serializable):
         Parameters
         ----------
         normalize : bool, default False
-            If True then the object returned will contain the
-            relative frequencies of the unique values. normalize == True
-            is not supported.
+            If True then the object returned will contain
+            the relative frequencies of the unique values.
 
         sort : bool, default True
             Sort by frequencies.
@@ -3644,46 +3725,99 @@ class Series(Frame, Serializable):
 
         bins : int, optional
             Rather than count values, group them into half-open bins,
-            works with numeric data. Not yet supported.
+            works with numeric data. This Parameter is not yet supported.
 
         dropna : bool, default True
             Don’t include counts of NaN and None.
-            dropna == False is not supported
 
         Returns
         -------
         result : Series contanining counts of unique values.
 
+        See also
+        --------
+        Series.count
+            Number of non-NA elements in a Series.
+
+        cudf.core.dataframe.DataFrame.count
+            Number of non-NA elements in a DataFrame.
+
         Examples
         --------
         >>> import cudf
         >>> sr = cudf.Series([1.0, 2.0, 2.0, 3.0, 3.0, 3.0, None])
+        >>> sr
+        0     1.0
+        1     2.0
+        2     2.0
+        3     3.0
+        4     3.0
+        5     3.0
+        6    <NA>
+        dtype: float64
+        >>> sr.value_counts()
+        3.0    3
+        2.0    2
+        1.0    1
+        dtype: int32
+
+        The order of the counts can be changed by passing ``ascending=True``:
+
         >>> sr.value_counts(ascending=True)
         1.0    1
         2.0    2
         3.0    3
         dtype: int32
+
+        With ``normalize`` set to True, returns the relative frequency
+        by dividing all values by the sum of values.
+
+        >>> sr.value_counts(normalize=True)
+        3.0    0.500000
+        2.0    0.333333
+        1.0    0.166667
+        dtype: float64
+
+        To include ``NA`` value counts, pass ``dropna=False``:
+
+        >>> sr = cudf.Series([1.0, 2.0, 2.0, 3.0, None, 3.0, 3.0, None])
+        >>> sr
+        0     1.0
+        1     2.0
+        2     2.0
+        3     3.0
+        4    <NA>
+        5     3.0
+        6     3.0
+        7    <NA>
+        dtype: float64
+        >>> sr.value_counts(dropna=False)
+        3.0     3
+        2.0     2
+        <NA>    2
+        1.0     1
+        dtype: int32
         """
 
-        if normalize is not False:
-            raise NotImplementedError(
-                "Only normalize == False is currently supported"
-            )
-        if dropna is not True:
-            raise NotImplementedError(
-                "Only dropna == True is currently supported"
-            )
         if bins is not None:
             raise NotImplementedError("bins is not yet supported")
 
-        if self.null_count == len(self):
-            return Series(np.array([], dtype=np.int32), name=self.name)
+        if dropna and self.null_count == len(self):
+            return Series(
+                [],
+                dtype=np.int32,
+                name=self.name,
+                index=cudf.Index([], dtype=self.dtype),
+            )
 
-        res = self.groupby(self).count()
+        res = self.groupby(self, dropna=dropna).count(dropna=dropna)
         res.index.name = None
 
         if sort:
-            return res.sort_values(ascending=ascending)
+            res = res.sort_values(ascending=ascending)
+
+        if normalize:
+            res = res / float(res._column.sum())
         return res
 
     def scale(self):
@@ -4123,10 +4257,10 @@ class Series(Frame, Serializable):
         rhs = cudf.DataFrame(index=as_index(index))
         if how == "left":
             tmp_col_id = str(uuid4())
-            lhs[tmp_col_id] = cupy.arange(len(lhs))
+            lhs[tmp_col_id] = column.arange(len(lhs))
         elif how == "right":
             tmp_col_id = str(uuid4())
-            rhs[tmp_col_id] = cupy.arange(len(rhs))
+            rhs[tmp_col_id] = column.arange(len(rhs))
         result = lhs.join(rhs, how=how, sort=sort)
         if how == "left" or how == "right":
             result = result.sort_values(tmp_col_id)[0]
@@ -4457,6 +4591,42 @@ class DatetimeProperties(object):
         8   2017-01-08
         dtype: datetime64[ns]
         >>> datetime_series.dt.weekday
+        0    5
+        1    6
+        2    0
+        3    1
+        4    2
+        5    3
+        6    4
+        7    5
+        8    6
+        dtype: int16
+        """
+        return self._get_dt_field("weekday")
+
+    @property
+    def dayofweek(self):
+        """
+        The day of the week with Monday=0, Sunday=6.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_series = cudf.Series(pd.date_range('2016-12-31',
+        ...     '2017-01-08', freq='D'))
+        >>> datetime_series
+        0   2016-12-31
+        1   2017-01-01
+        2   2017-01-02
+        3   2017-01-03
+        4   2017-01-04
+        5   2017-01-05
+        6   2017-01-06
+        7   2017-01-07
+        8   2017-01-08
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.dayofweek
         0    5
         1    6
         2    0

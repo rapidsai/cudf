@@ -1,6 +1,5 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
 import numpy as np
-import pyarrow as pa
 from pandas.api.types import is_integer_dtype
 
 import cudf
@@ -13,11 +12,15 @@ from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import (
     min_column_type,
     min_signed_type,
-    np_to_pa_dtype,
     numeric_normalize_types,
 )
+<<<<<<< HEAD
 from cudf.utils.utils import buffers_from_pyarrow
 from cudf.core.dtypes import Float64Dtype
+=======
+
+
+>>>>>>> branch-0.16
 class NumericalColumn(column.ColumnBase):
     def __init__(
         self, data, dtype, mask=None, size=None, offset=0, null_count=None
@@ -178,36 +181,6 @@ class NumericalColumn(column.ColumnBase):
             import pdb
             pdb.set_trace()
         return libcudf.unary.cast(self, dtype)
-
-    @classmethod
-    def from_arrow(cls, array, dtype=None):
-        if dtype is None:
-            dtype = np.dtype(array.type.to_pandas_dtype())
-
-        pa_size, pa_offset, pamask, padata, _ = buffers_from_pyarrow(array)
-        return NumericalColumn(
-            data=padata,
-            mask=pamask,
-            dtype=dtype,
-            size=pa_size,
-            offset=pa_offset,
-        )
-
-    def to_arrow(self):
-        mask = None
-        if self.nullable:
-            mask = pa.py_buffer(self.mask_array_view.copy_to_host())
-        data = pa.py_buffer(self.data_array_view.copy_to_host())
-        out = pa.Array.from_buffers(
-            type=self.dtype.pa_type if not isinstance(self.dtype, cudf.core.dtypes.BooleanDtype) else pa.int8(),
-            length=len(self),
-            buffers=[mask, data],
-            null_count=self.null_count,
-        )
-        if isinstance(self.dtype, cudf.core.dtypes.BooleanDtype):
-            return out.cast(pa.bool_())
-        else:
-            return out
 
     def sum(self, dtype=None):
         try:

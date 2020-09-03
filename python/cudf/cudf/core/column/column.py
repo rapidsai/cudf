@@ -1,4 +1,5 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
+
 import pickle
 import warnings
 from numbers import Number
@@ -31,6 +32,7 @@ from cudf.utils.dtypes import (
     check_cast_unsupported_dtype,
     get_time_unit,
     is_scalar,
+    min_signed_type,
     min_unsigned_type,
     np_to_pa_dtype,
 )
@@ -284,12 +286,133 @@ class ColumnBase(Column, Serializable):
         dropped_col = self.as_frame().dropna()._as_column()
         return dropped_col
 
+    def to_arrow(self):
+        """Convert to PyArrow Array
+
+        Examples
+        --------
+        >>> import cudf
+        >>> col = cudf.core.column.as_column([1, 2, 3, 4])
+        >>> col.to_arrow()
+        <pyarrow.lib.Int64Array object at 0x7f886547f830>
+        [
+          1,
+          2,
+          3,
+          4
+        ]
+        """
+        if isinstance(self, cudf.core.column.CategoricalColumn):
+            # arrow doesn't support unsigned codes
+            signed_type = (
+                min_signed_type(self.codes.max())
+                if self.codes.size > 0
+                else np.int8
+            )
+            codes = self.codes.astype(signed_type)
+            categories = self.categories
+
+            out_indices = libcudf.interop.to_arrow(
+                libcudf.table.Table(
+                    cudf.core.column_accessor.ColumnAccessor({"None": codes})
+                ),
+                ["None"],
+                keep_index=False,
+            )
+            out_dictionary = libcudf.interop.to_arrow(
+                libcudf.table.Table(
+                    cudf.core.column_accessor.ColumnAccessor(
+                        {"None": categories}
+                    )
+                ),
+                ["None"],
+                keep_index=False,
+            )
+
+            return pa.DictionaryArray.from_arrays(
+                out_indices["None"].chunk(0),
+                out_dictionary["None"].chunk(0),
+                ordered=self.ordered,
+            )
+
+        elif isinstance(self, cudf.core.column.StringColumn) and (
+            self.null_count == len(self)
+        ):
+            return pa.NullArray.from_buffers(
+                pa.null(), len(self), [pa.py_buffer((b""))]
+            )
+
+        return libcudf.interop.to_arrow(
+            libcudf.table.Table(
+                cudf.core.column_accessor.ColumnAccessor({"None": self})
+            ),
+            ["None"],
+            keep_index=False,
+        )["None"].chunk(0)
+
+    @classmethod
+    def from_arrow(cls, array):
+        """
+        Convert PyArrow Array/ChunkedArray to column
+
+        Parameters
+        ----------
+        array : PyArrow Array/ChunkedArray
+
+        Returns
+        -------
+        column
+
+        Examples
+        --------
+        >>> import pyarrow as pa
+        >>> import cudf
+        >>> cudf.core.column.ColumnBase.from_arrow(pa.array([1, 2, 3, 4]))
+        <cudf.core.column.numerical.NumericalColumn object at 0x7f8865497ef0>
+        """
+        if not isinstance(array, (pa.Array, pa.ChunkedArray)):
+            raise TypeError("array should be PyArrow array or chunked array")
+
+        data = pa.table([array], [None])
+        if isinstance(array.type, pa.DictionaryType):
+            indices_table = pa.table(
+                {
+                    "None": pa.chunked_array(
+                        [chunk.indices for chunk in data["None"].chunks],
+                        type=array.type.index_type,
+                    )
+                }
+            )
+            dictionaries_table = pa.table(
+                {
+                    "None": pa.chunked_array(
+                        [chunk.dictionary for chunk in data["None"].chunks],
+                        type=array.type.value_type,
+                    )
+                }
+            )
+
+            codes = libcudf.interop.from_arrow(
+                indices_table, indices_table.column_names
+            )._data["None"]
+            categories = libcudf.interop.from_arrow(
+                dictionaries_table, dictionaries_table.column_names
+            )._data["None"]
+
+            return build_categorical_column(
+                categories=categories,
+                codes=codes,
+                mask=codes.base_mask,
+                size=codes.size,
+                ordered=array.type.ordered,
+            )
+
+        return libcudf.interop.from_arrow(data, data.column_names)._data[
+            "None"
+        ]
+
     def _get_mask_as_column(self):
-        data = Buffer(cupy.ones(len(self), dtype=np.bool_))
-        mask = as_column(data=data)
-        if self.nullable:
-            mask = mask.set_mask(self._mask).fillna(False)
-        return mask
+        return libcudf.transform.mask_to_bools(self)
 
     def _memory_usage(self, **kwargs):
         return self.__sizeof__()
@@ -501,13 +624,11 @@ class ColumnBase(Column, Serializable):
                 return libcudf.copying.column_slice(self, [start, stop])[0]
             else:
                 # Need to create a gather map for given slice with stride
-                gather_map = as_column(
-                    cupy.arange(
-                        start=start,
-                        stop=stop,
-                        step=stride,
-                        dtype=np.dtype(np.int32),
-                    )
+                gather_map = arange(
+                    start=start,
+                    stop=stop,
+                    step=stride,
+                    dtype=np.dtype(np.int32),
                 )
                 return self.take(gather_map)
         else:
@@ -539,13 +660,11 @@ class ColumnBase(Column, Serializable):
             if (key_stride is None or key_stride == 1) and is_scalar(value):
                 return self._fill(value, key_start, key_stop, inplace=True)
             if key_stride != 1 or key_stride is not None or is_scalar(value):
-                key = as_column(
-                    cupy.arange(
-                        start=key_start,
-                        stop=key_stop,
-                        step=key_stride,
-                        dtype=np.dtype(np.int32),
-                    )
+                key = arange(
+                    start=key_start,
+                    stop=key_stop,
+                    step=key_stride,
+                    dtype=np.dtype(np.int32),
                 )
                 nelem = len(key)
             else:
@@ -557,7 +676,7 @@ class ColumnBase(Column, Serializable):
                     raise ValueError(
                         "Boolean mask must be of same length as column"
                     )
-                key = as_column(cupy.arange(len(self)))[key]
+                key = arange(len(self))[key]
                 if hasattr(value, "__len__") and len(value) == len(self):
                     value = as_column(value)[key]
             nelem = len(key)
@@ -758,11 +877,11 @@ class ColumnBase(Column, Serializable):
 
             # Short-circuit if rhs is all null.
             if lhs.null_count == 0 and (rhs.null_count == len(rhs)):
-                return as_column(cupy.zeros(len(self), dtype="bool"))
+                return full(len(self), False, dtype="bool")
         except ValueError:
             # pandas functionally returns all False when cleansing via
             # typecasting fails
-            return as_column(cupy.zeros(len(self), dtype="bool"))
+            return full(len(self), False, dtype="bool")
 
         # If categorical, combine categories first
         if is_categorical_dtype(lhs):
@@ -774,12 +893,14 @@ class ColumnBase(Column, Serializable):
                 # list doesn't have any nulls. If it does have nulls, make
                 # the values list a Categorical with a single null
                 if not rhs.has_nulls:
-                    return cupy.zeros(len(self), dtype="bool")
+                    return full(len(self), False, dtype="bool")
                 rhs = as_column(pd.Categorical.from_codes([-1], categories=[]))
                 rhs = rhs.cat().set_categories(lhs_cats).astype(self.dtype)
 
-        lhs = cudf.DataFrame({"x": lhs, "orig_order": cupy.arange(len(lhs))})
-        rhs = cudf.DataFrame({"x": rhs, "bool": cupy.ones(len(rhs), "bool")})
+        lhs = cudf.DataFrame({"x": lhs, "orig_order": arange(len(lhs))})
+        rhs = cudf.DataFrame(
+            {"x": rhs, "bool": full(len(rhs), True, dtype="bool")}
+        )
         res = lhs.merge(rhs, on="x", how="left").sort_values(by="orig_order")
         res = res.drop_duplicates(subset="orig_order", ignore_index=True)
         res = res._data["bool"].fillna(False)
@@ -1094,12 +1215,7 @@ def column_empty(row_count, dtype="object", masked=False):
     elif dtype.kind in "OU":
         data = None
         children = (
-            build_column(
-                data=Buffer(
-                    cupy.zeros(row_count + 1, dtype="int32").view("|u1")
-                ),
-                dtype="int32",
-            ),
+            full(row_count + 1, 0, dtype="int32"),
             build_column(
                 data=Buffer.empty(row_count * np.dtype("int8").itemsize),
                 dtype="int8",
@@ -1350,78 +1466,18 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 col = utils.time_col_replace_nulls(col)
         return col
 
-    elif isinstance(arbitrary, pa.Array):
-        if isinstance(arbitrary, pa.StringArray):
-            data = cudf.core.column.StringColumn.from_arrow(arbitrary)
-        elif isinstance(arbitrary, pa.NullArray):
+    elif isinstance(arbitrary, (pa.Array, pa.ChunkedArray)):
+        col = ColumnBase.from_arrow(arbitrary)
+        if isinstance(arbitrary, pa.NullArray):
             if type(dtype) == str and dtype == "empty":
                 new_dtype = pd.api.types.pandas_dtype(
                     arbitrary.type.to_pandas_dtype()
                 )
             else:
                 new_dtype = pd.api.types.pandas_dtype(dtype)
+            col = col.astype(new_dtype)
 
-            if is_categorical_dtype(new_dtype):
-                arbitrary = arbitrary.dictionary_encode()
-            else:
-                if nan_as_null is False:
-                    # casting a null array doesn't make nans valid
-                    # so we create one with valid nans from scratch:
-                    if new_dtype == np.dtype("object"):
-                        arbitrary = utils.scalar_broadcast_to(
-                            None, (len(arbitrary),), dtype=new_dtype
-                        )
-                    else:
-                        arbitrary = utils.scalar_broadcast_to(
-                            np.nan, (len(arbitrary),), dtype=new_dtype
-                        )
-                else:
-                    arbitrary = arbitrary.cast(np_to_pa_dtype(new_dtype))
-            data = as_column(arbitrary, nan_as_null=nan_as_null)
-        elif isinstance(arbitrary, pa.DictionaryArray):
-            data = cudf.core.column.CategoricalColumn.from_arrow(arbitrary)
-        elif isinstance(arbitrary, pa.TimestampArray):
-            data = cudf.core.column.DatetimeColumn.from_arrow(arbitrary)
-        elif isinstance(arbitrary, pa.DurationArray):
-            data = cudf.core.column.TimeDeltaColumn.from_arrow(arbitrary)
-        elif isinstance(arbitrary, pa.Date64Array):
-            raise NotImplementedError
-            data = cudf.core.column.DatetimeColumn.from_arrow(
-                arbitrary, dtype=np.dtype("M8[ms]")
-            )
-        elif isinstance(arbitrary, pa.Date32Array):
-            # No equivalent np dtype and not yet supported
-            warnings.warn(
-                "Date32 values are not yet supported so this will "
-                "be typecast to a Date64 value",
-                UserWarning,
-            )
-            data = as_column(arbitrary.cast(pa.int32())).astype("M8[ms]")
-        elif isinstance(arbitrary, pa.BooleanArray):
-            # Arrow uses 1 bit per value while we use int8
-            dtype = np.dtype(np.bool)
-            arbitrary = arbitrary.cast(pa.int8())
-            data = cudf.core.column.NumericalColumn.from_arrow(
-                arbitrary, dtype=dtype
-            )
-        elif isinstance(arbitrary, pa.ListArray):
-            data = cudf.core.column.ListColumn.from_arrow(arbitrary)
-        else:
-            data = cudf.core.column.NumericalColumn.from_arrow(arbitrary)
-    elif isinstance(arbitrary, pa.ChunkedArray):
-        gpu_cols = [
-            as_column(chunk, dtype=dtype) for chunk in arbitrary.chunks
-        ]
-
-        if dtype:
-            new_dtype = dtype
-        else:
-            pa_type = arbitrary.type
-            if pa.types.is_dictionary(pa_type):
-                new_dtype = "category"
-            else:
-                new_dtype = cudf.dtype(pa_type)
-        data = ColumnBase._concat(gpu_cols, dtype=new_dtype)
+        return col
 
     elif isinstance(arbitrary, (pd.Series, pd.Categorical)):
         if isinstance(arbitrary, pd.Series) and isinstance(
@@ -1783,3 +1839,91 @@ def deserialize_columns(headers, frames):
         frames = frames[col_frame_count:]
 
     return columns
+
+
+def arange(start, stop=None, step=1, dtype=None):
+    """
+    Returns a column with evenly spaced values within a given interval.
+
+    Values are generated within the half-open interval [start, stop).
+    The first three arguments are mapped like the range built-in function,
+    i.e. start and step are optional.
+
+    Parameters
+    ----------
+    start : int/float
+        Start of the interval.
+    stop : int/float, default is None
+        Stop of the interval.
+    step : int/float, default 1
+        Step width between each pair of consecutive values.
+    dtype : default None
+        Data type specifier. It is inferred from other arguments by default.
+
+    Returns
+    -------
+    cudf.core.column.NumericalColumn
+
+    Examples
+    --------
+    >>> import cudf
+    >>> col = cudf.core.column.arange(2, 7, 1, dtype='int16')
+    >>> col
+    <cudf.core.column.numerical.NumericalColumn object at 0x7ff7998f8b90>
+    >>> cudf.Series(col)
+    0    2
+    1    3
+    2    4
+    3    5
+    4    6
+    dtype: int16
+    """
+    if stop is None:
+        stop = start
+        start = 0
+
+    if step is None:
+        step = 1
+
+    size = int(np.ceil((stop - start) / step))
+
+    return libcudf.filling.sequence(
+        size, as_scalar(start, dtype=dtype), as_scalar(step, dtype=dtype)
+    )
+
+
+def full(size, fill_value, dtype=None):
+    """
+    Returns a column of given size and dtype, filled with a given value.
+
+    Parameters
+    ----------
+    size : int
+        size of the expected column.
+    fill_value : scalar
+         A scalar value to fill a new array.
+    dtype : default None
+        Data type specifier. It is inferred from other arguments by default.
+
+    Returns
+    -------
+    column
+
+    Examples
+    --------
+    >>> import cudf
+    >>> col = cudf.core.column.full(5, 7, dtype='int8')
+    >>> col
+    <cudf.core.column.numerical.NumericalColumn object at 0x7fa0912e8b90>
+    >>> cudf.Series(col)
+    0    7
+    1    7
+    2    7
+    3    7
+    4    7
+    dtype: int8
+    """
+
+    return libcudf.column.make_column_from_scalar(
+        as_scalar(fill_value, dtype), size
+    )

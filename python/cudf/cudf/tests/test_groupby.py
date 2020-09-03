@@ -8,6 +8,7 @@ from numpy.testing import assert_array_equal
 
 import cudf
 from cudf.core import DataFrame, Series
+from cudf.core._compat import PANDAS_GE_110
 from cudf.tests.utils import assert_eq
 
 _now = np.datetime64("now")
@@ -1009,6 +1010,8 @@ def test_groupby_median(agg, by):
 @pytest.mark.parametrize("agg", [lambda x: x.nunique(), "nunique"])
 @pytest.mark.parametrize("by", ["a", ["a", "b"], ["a", "c"]])
 def test_groupby_nunique(agg, by):
+    if not PANDAS_GE_110:
+        pytest.xfail("pandas >= 1.1 required")
     pdf = pd.DataFrame(
         {"a": [1, 1, 1, 2, 3], "b": [1, 2, 2, 2, 1], "c": [1, 2, None, 4, 5]}
     )
@@ -1198,5 +1201,67 @@ def test_groupby_nunique_series():
     assert_eq(
         pdf.groupby("a")["b"].nunique(),
         gdf.groupby("a")["b"].nunique(),
+        check_dtype=False,
+    )
+
+
+@pytest.mark.parametrize("list_agg", [list, "collect"])
+def test_groupby_list_simple(list_agg):
+    pdf = pd.DataFrame({"a": [1, 1, 1, 2, 2, 2], "b": [1, 2, None, 4, 5, 6]})
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.groupby("a").agg({"b": list}),
+        gdf.groupby("a").agg({"b": list_agg}),
+        check_dtype=False,
+    )
+
+
+@pytest.mark.parametrize("list_agg", [list, "collect"])
+def test_groupby_list_of_lists(list_agg):
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 1, 2, 2, 2],
+            "b": [[1, 2], [3, None, 5], None, [], [7, 8], [9]],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.groupby("a").agg({"b": list}),
+        gdf.groupby("a").agg({"b": list_agg}),
+        check_dtype=False,
+    )
+
+
+@pytest.mark.parametrize("list_agg", [list, "collect"])
+def test_groupby_list_single_element(list_agg):
+    pdf = pd.DataFrame({"a": [1, 2], "b": [3, None]})
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.groupby("a").agg({"b": list}),
+        gdf.groupby("a").agg({"b": list_agg}),
+        check_dtype=False,
+    )
+
+
+def test_groupby_list_columns_excluded():
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 2, 2],
+            "b": [1, 2, 3, 4],
+            "c": [[1, 2], [3, 4], [5, 6], [7, 8]],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.groupby("a").mean(), gdf.groupby("a").mean(), check_dtype=False
+    )
+
+    assert_eq(
+        pdf.groupby("a").agg("mean"),
+        gdf.groupby("a").agg("mean"),
         check_dtype=False,
     )
