@@ -131,7 +131,10 @@ from cudf._lib.strings.substring import (
     slice_from as cpp_slice_from,
     slice_strings as cpp_slice_strings,
 )
-from cudf._lib.strings.translate import translate as cpp_translate
+from cudf._lib.strings.translate import (
+    translate as cpp_translate,
+    filter_characters as cpp_filter_characters,
+)
 from cudf._lib.strings.wrap import wrap as cpp_wrap
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
@@ -3610,6 +3613,56 @@ class StringMethods(ColumnMethodsMixin):
         table = str.maketrans(table)
         return self._return_or_inplace(
             cpp_translate(self._column, table), **kwargs
+        )
+
+    def filter_characters(self, table, keep=True, repl=None, **kwargs):
+        """
+        Remove characters from each string using the character ranges
+        in the given mapping table.
+
+        Parameters
+        ----------
+        table : dict
+            This table is a range of Unicode ordinals to filter.
+            The minimum value is the key and the maximum value is the value.
+            You can use `str.maketrans()
+            <https://docs.python.org/3/library/stdtypes.html#str.maketrans>`_
+            as a helper function for making the filter table.
+            Overlapping ranges will cause undefined results.
+            Range values are inclusive.
+        keep : boolean
+            If False, the character ranges in the ``table`` are removed.
+            If True, the character ranges not in the ``table`` are removed.
+            Default is True.
+        repl : str
+            Optional replacement string to use in place of removed characters.
+
+        Returns
+        -------
+        Series or Index.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> data = ['aeiou', 'AEIOU', '0123456789']
+        >>> s = cudf.Series(data)
+        >>> s.str.filter_characters({'a':'l', 'M':'Z', '4':'6'})
+        0    aei
+        1     OU
+        2    456
+        dtype: object
+        >>> s.str.filter_characters({'a':'l', 'M':'Z', '4':'6'}, False, "_")
+        0         ___ou
+        1         AEI__
+        2    0123___789
+        dtype: object
+        """
+        if repl is None:
+            repl = ""
+        table = str.maketrans(table)
+        return self._return_or_inplace(
+            cpp_filter_characters(self._column, table, keep, as_scalar(repl)),
+            **kwargs,
         )
 
     def normalize_spaces(self, **kwargs):
