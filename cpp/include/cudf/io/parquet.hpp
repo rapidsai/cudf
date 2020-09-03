@@ -23,6 +23,7 @@
 
 #include <cudf/io/types.hpp>
 #include <iostream>
+#include <rmm/mr/device/default_memory_resource.hpp>
 
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
