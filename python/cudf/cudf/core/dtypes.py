@@ -105,9 +105,6 @@ class Generic(ExtensionDtype, _Dtype):
 
     @property
     def kind(self):
-        if isinstance(self, Floating):
-            return "f"
-        else:
             return self.to_pandas.kind
 
     @property
@@ -115,32 +112,49 @@ class Generic(ExtensionDtype, _Dtype):
         return self._name
 
     def __repr__(self):
-        return self.pa_type.__repr__()
+        return self.name
 
     def __hash__(self):
         return hash(self.__repr__())
+    
+    def _raise_construction_error(self):
+        raise TypeError(f"Cannot create {type(self)} instances")
+
+
 
 class Number(Generic):
-    pass
+    def __init__(self):
+        self._raise_construction_error()
 
 class Integer(Number):
-    pass
+    def __init__(self):
+        self._raise_construction_error()
 
 class SignedInteger(Integer):
-    pass
-
+    def __init__(self):
+        self._raise_construction_error()
+        
 class UnsignedInteger(Integer):
-    pass
+    def __init__(self):
+        self._raise_construction_error()
+        
 
 class Inexact(Number):
-    pass
-
+    def __init__(self):
+        self._raise_construction_error()
+        
 class Floating(Inexact):
-    pass
+    def __init__(self):
+        self._raise_construction_error()
+        
+    @property
+    def kind(self):
+        return "f"
 
 class Flexible(Generic):
-    pass
-
+    def __init__(self):
+        self._construction_error()
+        
 class Datetime(Generic):    
     pass
 
@@ -264,120 +278,59 @@ class Timedelta64SDtype(Timedelta):
         self._time_unit = 's'
 
 class StringDtype(Flexible):
-    is_string = True
 
     def __init__(self):
         self.pa_type = pa.string()
         self._name = "String"
 
 
-def make_dtype_from_string(obj):
-    if obj in {"str", "string", "object", "O"}:
+def cudf_dtype_from_string(obj):
+    try:
+        np_dtype = np.dtype(obj)
+        return cudf_dtype_from_numpy(np_dtype)
+    except TypeError:
+        return _cudf_dtype_from_string.get(obj, None)
+
+
+def cudf_dtype_from_numpy(obj):
+    if obj is np.str_:
         return StringDtype()
-    elif "datetime" in obj or "Datetime" in obj:
-        if obj in {"datetime64[ns]", 'Datetime64NS'}:
-            return Datetime64NSDtype()
-        elif obj in {"datetime64[us]", "Datetime64US"}:
-            return Datetime64USDtype()
-        elif obj in {"datetime64[ms]", "Datetime64MS"}:
-            return Datetime64MSDtype()
-        elif obj in {"datetime64[s]", "Datetime64S"}:
-            return Datetime64SDtype()
-    elif "int" in obj or "Int" in obj:
-        if obj in {"int", "Int", "int64", "Int64"}:
-            return Int64Dtype()
-        elif obj in {"int32", "Int32"}:
-            return Int32Dtype()
-        elif obj in {"int16", "Int16"}:
-            return Int16Dtype()
-        elif obj in {"int8", "Int8"}:
-            return Int8Dtype()
-        elif obj in {"uint64", "UInt64"}:
-            return UInt64Dtype()
-        elif obj in {"uint32", "UInt32"}:
-            return UInt32Dtype()
-        elif obj in {"uint16", "UInt16"}:
-            return UInt16Dtype()
-        elif obj in {"uint8", "UInt8"}:
-            return UInt8Dtype()
-    elif "float" in obj or "Float" in obj:
-        if obj in {"float64", "Float64", 'float', 'Float'}:
-            return Float64Dtype()
-        elif obj in {"float32", "Float32"}:
-            return Float32Dtype()
-    elif "bool" in obj:
-        return BooleanDtype()
-    elif "category" in obj:
-        return "category"
-    elif "timedelta" in obj:
-        if obj in {'timedelta64[ns]', "Timedelta64NS"}:
-            return Timedelta64NSDtype()
-        if obj in {'timedelta64[us]', "Timedelta64US"}:
-            return Timedelta64USDtype()
-        if obj in {'timedelta64[ms]', "Timedelta64MS"}:
-            return Timedelta64MSDtype()
-        if obj in {'timedelta64[s]', "Timedelta64S"}:
-            return Timedelta64SDtype()
-    else:
-        try:
-            return np_to_cudf_dtypes[np.dtype(obj)]
-        except:
-            return None
-def make_dtype_from_numpy(obj):
-    np_to_pd_types = {v: k for k, v in pd_to_np_dtypes.items()}
-    result = np_to_pd_types.get(obj)
-    return result
-
-
-def dtype(obj):
-
-    if obj is None:
-        return None
-    if obj is str:
-        return cudf.StringDtype()
-    if obj is int:
-        return cudf.Int64Dtype()
-    if obj is float:
-        return cudf.Float64Dtype()
-    if isinstance(obj, pd.CategoricalDtype):
-        return cudf.CategoricalDtype.from_pandas(obj)
-    if isinstance(obj, CategoricalDtype):
-        if obj is 'category':
-            return cudf.CategoricalDtype()
-        return obj
-    elif isinstance(obj, Generic):
-        return obj
-    elif issubclass(obj.__class__, Generic):
-        return obj()
-    if isinstance(obj, np.dtype):
-        if obj.type is np.str_:
-            return StringDtype()
-        else:
-            return np_to_cudf_dtypes.get(obj, None)
-    elif isinstance(obj, pa.lib.DataType):
-        return pa_to_cudf_dtypes[obj]
-    elif isinstance(obj, str):
-        return make_dtype_from_string(obj)
-    elif obj in pd_to_cudf_dtypes.keys():
-        return pd_to_cudf_dtypes[obj]
-    elif isinstance(obj, pd.core.arrays.numpy_.PandasDtype):
-        return make_dtype_from_string(obj.name)
     elif obj is np.number:
         return cudf.Number
     elif obj is np.datetime64:
         return cudf.Datetime
     elif obj is np.timedelta64:
         return cudf.Timedelta
+    dtype = np.dtype(obj)
+    return _cudf_dtype_from_numpy.get(obj, None)
 
-
+def dtype(obj):
+    if isinstance(obj, Generic):
+        return obj
+    elif type(obj) is type and issubclass(obj, Generic):
+        return obj()
+    elif isinstance(obj, np.dtype) or (isinstance(obj, type) and issubclass(obj, np.generic)):
+        return cudf_dtype_from_numpy(obj)
+    elif isinstance(obj, str):
+        return cudf_dtype_from_string(obj)
+    if isinstance(obj, pd.CategoricalDtype):
+        return cudf.CategoricalDtype.from_pandas(obj)
+    if isinstance(obj, CategoricalDtype):
+        if obj is 'category':
+            return cudf.CategoricalDtype()
+        return obj
+    elif obj in _pd_to_cudf_dtypes.keys():
+        return _pd_to_cudf_dtypes[obj]
+    elif isinstance(obj, pd.core.arrays.numpy_.PandasDtype):
+        return cudf_dtype_from_string(obj.name)
+    elif obj is str:
+        return cudf.StringDtype()
+    elif obj is int:
+        return cudf.Int64Dtype()
+    elif obj in {float, None}:
+        return cudf.Float64Dtype()
     else:
-        try:
-            if issubclass(obj, np.generic):
-                return np_to_cudf_dtypes[np.dtype(obj)]
-        except:
-            import pdb
-            pdb.set_trace()
-    
+        raise TypeError(f"Could not find a cuDF dtype matching {obj}")
 
 
 class CategoricalDtype(Generic):
@@ -578,7 +531,7 @@ pa_to_cudf_dtypes = {
     pa.null(): None
 }
 
-np_to_cudf_dtypes = {
+_cudf_dtype_from_numpy = {
     np.dtype("int8"): Int8Dtype(),
     np.dtype("int16"): Int16Dtype(),
     np.dtype("int32"): Int32Dtype(),
@@ -602,7 +555,7 @@ np_to_cudf_dtypes = {
     np.dtype("timedelta64[s]"): Timedelta64SDtype(),
 }
 
-pd_to_cudf_dtypes = {
+_pd_to_cudf_dtypes = {
     pd.Int8Dtype(): Int8Dtype(),
     pd.Int16Dtype(): Int16Dtype(),
     pd.Int32Dtype(): Int32Dtype(),
@@ -613,4 +566,28 @@ pd_to_cudf_dtypes = {
     pd.UInt64Dtype(): UInt64Dtype(),
     pd.BooleanDtype(): BooleanDtype(),
     pd.StringDtype(): StringDtype(),
+}
+
+_cudf_dtype_from_string = {
+    'UInt8': UInt8Dtype,
+    'UInt16': UInt16Dtype,
+    'UInt32': UInt32Dtype,
+    'UInt64': UInt64Dtype,
+    'Int8': Int8Dtype,
+    'Int16': Int16Dtype,
+    'Int32': Int32Dtype,
+    'Int64': Int64Dtype,
+    'Float': Float64Dtype,
+    'Float32': Float32Dtype,
+    'Float64': Float64Dtype,
+    'Boolean': BooleanDtype,
+    'String': StringDtype,
+    'Datetime64NS': Datetime64NSDtype,
+    'Datetime64US': Datetime64USDtype,
+    'Datetime64MS': Datetime64MSDtype,
+    'Datetime64S': Datetime64SDtype,
+    'Timedelta64NS': Timedelta64NSDtype,
+    'Timedelta64US': Timedelta64USDtype,
+    'Timedelta64MS': Timedelta64MSDtype,
+    'Timedelta64S': Timedelta64SDtype,
 }
