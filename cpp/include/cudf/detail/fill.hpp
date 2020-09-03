@@ -40,12 +40,13 @@ void fill_in_place(mutable_column_view& destination,
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> fill(column_view const& input,
-                             size_type begin,
-                             size_type end,
-                             scalar const& value,
-                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                             cudaStream_t stream                 = 0);
+std::unique_ptr<column> fill(
+  column_view const& input,
+  size_type begin,
+  size_type end,
+  scalar const& value,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0);
 
 }  // namespace detail
 }  // namespace cudf

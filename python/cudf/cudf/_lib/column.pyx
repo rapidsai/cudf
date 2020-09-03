@@ -17,6 +17,9 @@ from libcpp.pair cimport pair
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr, make_unique
 from libcpp.vector cimport vector
+from cudf._lib.cpp.strings.convert.convert_integers cimport (
+    from_integers as cpp_from_integers
+)
 
 from rmm._lib.device_buffer cimport DeviceBuffer
 
@@ -31,12 +34,14 @@ from cudf._lib.move cimport move
 from cudf._lib.cpp.column.column cimport column, column_contents
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.column.column_factories cimport (
-    make_column_from_scalar as cpp_make_column_from_scalar
+    make_column_from_scalar as cpp_make_column_from_scalar,
+    make_numeric_column
 )
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.scalar cimport Scalar
 cimport cudf._lib.cpp.types as libcudf_types
+cimport cudf._lib.cpp.unary as libcudf_unary
 
 cdef class Column:
     """
@@ -412,6 +417,23 @@ cdef class Column:
 
     @staticmethod
     cdef Column from_unique_ptr(unique_ptr[column] c_col):
+        cdef column_view view = c_col.get()[0].view()
+        cdef libcudf_types.type_id tid = view.type().id()
+        cdef libcudf_types.data_type c_dtype
+        cdef size_type length = view.size()
+        cdef libcudf_types.mask_state mask_state
+        if tid == libcudf_types.type_id.TIMESTAMP_DAYS:
+            c_dtype = libcudf_types.data_type(
+                libcudf_types.type_id.TIMESTAMP_SECONDS
+            )
+            with nogil:
+                c_col = move(libcudf_unary.cast(view, c_dtype))
+        elif tid == libcudf_types.type_id.EMPTY:
+            c_dtype = libcudf_types.data_type(libcudf_types.type_id.INT8)
+            mask_state = libcudf_types.mask_state.ALL_NULL
+            with nogil:
+                c_col = move(make_numeric_column(c_dtype, length, mask_state))
+
         size = c_col.get()[0].size()
         dtype = dtype_from_column_view(c_col.get()[0].view())
         has_nulls = c_col.get()[0].has_nulls()

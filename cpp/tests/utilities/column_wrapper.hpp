@@ -976,7 +976,7 @@ class lists_column_wrapper : public detail::column_wrapper {
       CUDF_EXPECTS(col.size() == 0, "Encountered mismatched column!");
 
       auto remainder = empty_like(expected_hierarchy);
-      return std::move(remainder);
+      return remainder;
     }
 
     lists_column_view lcv(col);
