@@ -18,12 +18,9 @@
 
 #include <benchmarks/common/generate_benchmark_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/io/cuio_benchmarks_common.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/io/functions.hpp>
-
-#include <chrono>
 
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
 
@@ -37,24 +34,21 @@ class ParquetRead : public cudf::benchmark {
 
 void PQ_read(benchmark::State& state)
 {
-  auto const data_types = get_type_or_group(state.range(0));
+  auto const data_types             = get_type_or_group(state.range(0));
+  cudf::size_type const cardinality = state.range(1);
+  cudf::size_type const run_length  = state.range(2);
   cudf_io::compression_type const compression =
-    state.range(1) ? cudf_io::compression_type::SNAPPY : cudf_io::compression_type::NONE;
+    state.range(3) ? cudf_io::compression_type::SNAPPY : cudf_io::compression_type::NONE;
+
+  data_profile table_data_profile;
+  table_data_profile.set_cardinality(cardinality);
+  table_data_profile.set_avg_run_length(run_length);
+  auto const tbl =
+    create_random_table(data_types, num_cols, table_size_bytes{data_size}, table_data_profile);
+  auto const view = tbl->view();
 
   std::vector<char> out_buffer;
   out_buffer.reserve(data_size);
-  data_profile table_data_profile;
-  // table_data_profile.set_cardinality(0);
-  auto t1 = std::chrono::high_resolution_clock::now();
-  auto const tbl =
-    create_random_table(data_types, num_cols, table_size_bytes{data_size}, table_data_profile);
-  auto t2 = std::chrono::high_resolution_clock::now();
-
-  auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
-
-  std::cout << duration << std::endl;
-  auto const view = tbl->view();
-
   cudf_io::write_parquet_args write_args{
     cudf_io::sink_info(&out_buffer), view, nullptr, compression};
   cudf_io::write_parquet(write_args);
@@ -69,20 +63,23 @@ void PQ_read(benchmark::State& state)
   state.SetBytesProcessed(data_size * state.iterations());
 }
 
-#define PARQ_RD_BENCHMARK_DEFINE(name, type_or_group, compression) \
-  BENCHMARK_DEFINE_F(ParquetRead, name##_##compression)            \
-  (::benchmark::State & state) { PQ_read(state); }                 \
-  BENCHMARK_REGISTER_F(ParquetRead, name##_##compression)          \
-    ->Args({static_cast<int32_t>(type_or_group), compression})     \
-    ->Unit(benchmark::kMillisecond)                                \
+// TODO: replace with ArgsProduct once available
+#define PARQ_RD_BENCHMARK_DEFINE(name, type_or_group) \
+  BENCHMARK_DEFINE_F(ParquetRead, name)               \
+  (::benchmark::State & state) { PQ_read(state); }    \
+  BENCHMARK_REGISTER_F(ParquetRead, name)             \
+    ->Args({int32_t(type_or_group), 0, 1, false})     \
+    ->Args({int32_t(type_or_group), 0, 1, true})      \
+    ->Args({int32_t(type_or_group), 0, 32, false})    \
+    ->Args({int32_t(type_or_group), 0, 32, true})     \
+    ->Args({int32_t(type_or_group), 1000, 1, false})  \
+    ->Args({int32_t(type_or_group), 1000, 1, true})   \
+    ->Args({int32_t(type_or_group), 1000, 32, false}) \
+    ->Args({int32_t(type_or_group), 1000, 32, true})  \
+    ->Unit(benchmark::kMillisecond)                   \
     ->UseManualTime();
 
-PARQ_RD_BENCHMARK_DEFINE(integral, type_group_id::INTEGRAL, UNCOMPRESSED);
-PARQ_RD_BENCHMARK_DEFINE(floats, type_group_id::FLOATING_POINT, UNCOMPRESSED);
-PARQ_RD_BENCHMARK_DEFINE(timestamps, type_group_id::TIMESTAMP, UNCOMPRESSED);
-PARQ_RD_BENCHMARK_DEFINE(string, cudf::type_id::STRING, UNCOMPRESSED);
-
-// PARQ_RD_BENCHMARK_DEFINE(integral, type_group_id::INTEGRAL, USE_SNAPPY);
-// PARQ_RD_BENCHMARK_DEFINE(floats, type_group_id::FLOATING_POINT, USE_SNAPPY);
-// PARQ_RD_BENCHMARK_DEFINE(timestamps, type_group_id::TIMESTAMP, USE_SNAPPY);
-// PARQ_RD_BENCHMARK_DEFINE(string, cudf::type_id::STRING, USE_SNAPPY);
+PARQ_RD_BENCHMARK_DEFINE(integral, type_group_id::INTEGRAL);
+PARQ_RD_BENCHMARK_DEFINE(floats, type_group_id::FLOATING_POINT);
+PARQ_RD_BENCHMARK_DEFINE(timestamps, type_group_id::TIMESTAMP);
+PARQ_RD_BENCHMARK_DEFINE(string, cudf::type_id::STRING);

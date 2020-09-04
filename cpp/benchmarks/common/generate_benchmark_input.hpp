@@ -7,6 +7,7 @@
 
 enum class type_group_id : int32_t {
   INTEGRAL = static_cast<int32_t>(cudf::type_id::NUM_TYPE_IDS),
+  INTEGRAL_SIGNED,
   FLOATING_POINT,
   NUMERIC,
   TIMESTAMP,
@@ -113,7 +114,7 @@ class data_profile {
 
   double bool_probability        = 0.5;
   double null_frequency          = 0.01;
-  cudf::size_type cardinality    = 2000;  // TODO: maybe sqrt(num_rows)?
+  cudf::size_type cardinality    = 2000;
   cudf::size_type avg_run_length = 4;
 
  public:

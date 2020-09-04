@@ -525,10 +525,14 @@ std::vector<cudf::type_id> get_type_or_group(int32_t id)
   trait_fn is_integral = [](cudf::data_type type) {
     return cudf::is_numeric(type) && !cudf::is_floating_point(type);
   };
+  trait_fn is_integral_signed = [](cudf::data_type type) {
+    return cudf::is_numeric(type) && !cudf::is_floating_point(type) && !cudf::is_unsigned(type);
+  };
   auto fn = [&]() -> trait_fn {
     switch (group_id) {
       case type_group_id::FLOATING_POINT: return cudf::is_floating_point;
       case type_group_id::INTEGRAL: return is_integral;
+      case type_group_id::INTEGRAL_SIGNED: return is_integral_signed;
       case type_group_id::NUMERIC: return cudf::is_numeric;
       case type_group_id::TIMESTAMP: return cudf::is_timestamp;
       case type_group_id::DURATION: return cudf::is_duration;
