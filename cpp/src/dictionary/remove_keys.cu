@@ -51,7 +51,7 @@ template <typename KeysKeeper>
 std::unique_ptr<column> remove_keys_fn(
   dictionary_column_view const& dictionary_column,
   KeysKeeper keys_to_keep_fn,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   // create keys positions column to identify original key positions after removing they keys
@@ -124,7 +124,7 @@ std::unique_ptr<column> remove_keys_fn(
 std::unique_ptr<column> remove_keys(
   dictionary_column_view const& dictionary_column,
   column_view const& keys_to_remove,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   CUDF_EXPECTS(!keys_to_remove.has_nulls(), "keys_to_remove must not have nulls");
@@ -141,7 +141,7 @@ std::unique_ptr<column> remove_keys(
 
 std::unique_ptr<column> remove_unused_keys(
   dictionary_column_view const& dictionary_column,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   // locate the keys to remove

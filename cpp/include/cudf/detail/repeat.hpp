@@ -29,11 +29,12 @@ namespace detail {
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<table> repeat(table_view const& input_table,
-                              column_view const& count,
-                              bool check_count,
-                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                              cudaStream_t stream                 = 0);
+std::unique_ptr<table> repeat(
+  table_view const& input_table,
+  column_view const& count,
+  bool check_count,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
  * @copydoc cudf::repeat(table_view const&, size_type,
@@ -41,10 +42,11 @@ std::unique_ptr<table> repeat(table_view const& input_table,
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<table> repeat(table_view const& input_table,
-                              size_type count,
-                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                              cudaStream_t stream                 = 0);
+std::unique_ptr<table> repeat(
+  table_view const& input_table,
+  size_type count,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0);
 
 }  // namespace detail
 }  // namespace cudf

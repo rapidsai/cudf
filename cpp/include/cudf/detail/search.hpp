@@ -35,7 +35,7 @@ std::unique_ptr<column> lower_bound(
   table_view const& values,
   std::vector<order> const& column_order,
   std::vector<null_order> const& null_precedence,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t steam                  = 0);
 
 /**
@@ -48,7 +48,7 @@ std::unique_ptr<column> upper_bound(
   table_view const& values,
   std::vector<order> const& column_order,
   std::vector<null_order> const& null_precedence,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 /**
@@ -59,7 +59,7 @@ std::unique_ptr<column> upper_bound(
  */
 bool contains(column_view const& col,
               scalar const& value,
-              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+              rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
               cudaStream_t stream                 = 0);
 
 /**
@@ -71,7 +71,7 @@ bool contains(column_view const& col,
 std::unique_ptr<column> contains(
   column_view const& haystack,
   column_view const& needles,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 }  // namespace detail
