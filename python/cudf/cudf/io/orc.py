@@ -58,6 +58,15 @@ def _parse_column_statistics(cs, column_statistics_blob):
         column_statistics["minimum"] = cs.decimalStatistics.minimum
         column_statistics["maximum"] = cs.decimalStatistics.maximum
         column_statistics["sum"] = cs.decimalStatistics.sum
+    elif cs.HasField("dateStatistics"):
+        column_statistics["minimum"] = datetime.datetime.fromtimestamp(
+            datetime.timedelta(cs.dateStatistics.minimumUtc).total_seconds(),
+            datetime.timezone.utc,
+        )
+        column_statistics["maximum"] = datetime.datetime.fromtimestamp(
+            datetime.timedelta(cs.dateStatistics.maximumUtc).total_seconds(),
+            datetime.timezone.utc,
+        )
     elif cs.HasField("timestampStatistics"):
         # Before ORC-135, the local timezone offset was included and they were
         # stored as minimum and maximum. After ORC-135, the timestamp is
