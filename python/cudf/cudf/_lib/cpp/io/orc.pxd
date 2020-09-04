@@ -16,26 +16,26 @@ cdef extern from "cudf/io/orc.hpp" \
     cdef cppclass orc_reader_options:
         orc_reader_options() except+
 
-        cudf_io_types.source_info source() except+
-        vector[string] columns() except+
-        vector[size_type] stripes() except+
-        size_type skip_rows() except+
-        size_type num_rows() except+
-        bool use_index() except+
-        bool use_np_dtypes() except+
-        data_type timestamp_type() except+
-        bool decimals_as_float() except+
-        int forced_decimals_scale() except+
+        cudf_io_types.source_info get_source() except+
+        vector[string] get_columns() except+
+        vector[size_type] get_stripes() except+
+        size_type get_skip_rows() except+
+        size_type get_num_rows() except+
+        bool is_enabled_use_index() except+
+        bool is_enabled_use_np_dtypes() except+
+        data_type get_timestamp_type() except+
+        bool is_enableddecimals_as_float() except+
+        int get_forced_decimals_scale() except+
 
-        void columns(vector[string] col_names) except+
-        void stripes(vector[size_type] strps) except+
-        void skip_rows(size_type rows) except+
-        void num_rows(size_type nrows) except+
-        void use_index(bool val) except+
-        void use_np_dtypes(bool val) except+
-        void timestamp_type(data_type type) except+
-        void decimals_as_float(bool val) except+
-        void forced_decimals_scale(size_type scale) except+
+        void set_columns(vector[string] col_names) except+
+        void set_stripes(vector[size_type] strps) except+
+        void set_skip_rows(size_type rows) except+
+        void set_num_rows(size_type nrows) except+
+        void enable_use_index(bool val) except+
+        void enable_use_np_dtypes(bool val) except+
+        void set_timestamp_type(data_type type) except+
+        void enable_decimals_as_float(bool val) except+
+        void set_forced_decimals_scale(size_type scale) except+
 
         @staticmethod
         orc_reader_options_builder builder(
@@ -66,17 +66,17 @@ cdef extern from "cudf/io/orc.hpp" \
 
     cdef cppclass orc_writer_options:
         orc_writer_options()
-        cudf_io_types.sink_info sink() except+
-        cudf_io_types.compression_type compression() except+
+        cudf_io_types.sink_info get_sink() except+
+        cudf_io_types.compression_type get_compression() except+
         bool enable_statistics() except+
-        cudf_table_view.table_view table() except+
-        const cudf_io_types.table_metadata *metadata() except+
+        cudf_table_view.table_view get_table() except+
+        const cudf_io_types.table_metadata *get_metadata() except+
 
         # setter
-        void compression(cudf_io_types.compression_type comp) except+
+        void set_compression(cudf_io_types.compression_type comp) except+
         void enable_statistics(bool val) except+
-        void table(cudf_table_view.table_view tbl) except+
-        void metadata(cudf_io_types.table_metadata meta) except+
+        void set_table(cudf_table_view.table_view tbl) except+
+        void set_metadata(cudf_io_types.table_metadata meta) except+
 
         @staticmethod
         orc_writer_options_builder builder(

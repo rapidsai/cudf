@@ -714,7 +714,7 @@ TEST_F(OrcChunkedWriterTest, ReadStripesError)
   cudf_io::orc_reader_options read_opts =
     cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath}).stripes({0, 1});
   EXPECT_THROW(cudf_io::read_orc(read_opts), cudf::logic_error);
-  read_opts.stripes({-1});
+  read_opts.set_stripes({-1});
   EXPECT_THROW(cudf_io::read_orc(read_opts), cudf::logic_error);
 }
 
