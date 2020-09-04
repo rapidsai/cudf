@@ -287,9 +287,19 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
                 objs, axis=axis, ignore_index=ignore_index, sort=sort
             )
     elif typ is Series:
-        return Series._concat(
-            objs, axis=axis, index=None if ignore_index else True
-        )
+        objs = [obj for obj in objs if len(obj)]
+        if len(objs) == 0:
+            return cudf.Series()
+        elif len(objs) == 1:
+            if ignore_index:
+                result = Series._concat(objs, axis=axis, index=None)
+            else:
+                result = objs[0]
+            return result
+        else:
+            return Series._concat(
+                objs, axis=axis, index=None if ignore_index else True
+            )
     elif typ is cudf.MultiIndex:
         return cudf.MultiIndex._concat(objs)
     elif issubclass(typ, Index):
