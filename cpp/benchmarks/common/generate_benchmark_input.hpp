@@ -182,10 +182,12 @@ class data_profile {
   void set_cardinality(cudf::size_type c) { cardinality = c; }
   void set_avg_run_length(cudf::size_type avg_rl) { avg_run_length = avg_rl; }
 
-  template <typename T, typename Type_enum, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
+  template <typename T,
+            typename Type_enum,
+            typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
   void set_distribution(Type_enum type_or_group, distribution_id dist, T lower_bound, T upper_bound)
   {
-    for (auto tid: get_type_or_group(static_cast<int32_t>(type_or_group))){
+    for (auto tid : get_type_or_group(static_cast<int32_t>(type_or_group))) {
       if (tid != cudf::type_id::STRING) {
         int_params[tid] = {
           dist, static_cast<uint64_t>(lower_bound), static_cast<uint64_t>(upper_bound)};
@@ -196,11 +198,14 @@ class data_profile {
     }
   }
 
-  template <typename T, typename Type_enum, typename std::enable_if_t<std::is_floating_point<T>::value, T>* = nullptr>
+  template <typename T,
+            typename Type_enum,
+            typename std::enable_if_t<std::is_floating_point<T>::value, T>* = nullptr>
   void set_distribution(Type_enum type_or_group, distribution_id dist, T lower_bound, T upper_bound)
   {
-    for (auto tid: get_type_or_group(static_cast<int32_t>(type_or_group))){
-      float_params[tid] = {dist, static_cast<double>(lower_bound), static_cast<double>(upper_bound)};
+    for (auto tid : get_type_or_group(static_cast<int32_t>(type_or_group))) {
+      float_params[tid] = {
+        dist, static_cast<double>(lower_bound), static_cast<double>(upper_bound)};
     }
   }
 
@@ -236,9 +241,11 @@ struct row_count {
 std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> const& dtype_ids,
                                                  cudf::size_type num_cols,
                                                  table_size_bytes table_bytes,
-                                                 data_profile const& data_params = data_profile{});
+                                                 data_profile const& data_params = data_profile{},
+                                                 unsigned seed                   = 1);
 
 std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> const& dtype_ids,
                                                  cudf::size_type num_cols,
                                                  row_count num_rows,
-                                                 data_profile const& data_params = data_profile{});
+                                                 data_profile const& data_params = data_profile{},
+                                                 unsigned seed                   = 1);

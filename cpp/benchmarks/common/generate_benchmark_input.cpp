@@ -458,7 +458,8 @@ std::vector<cudf::type_id> repeat_dtypes(std::vector<cudf::type_id> const& dtype
 std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> const& dtype_ids,
                                                  cudf::size_type num_cols,
                                                  table_size_bytes table_bytes,
-                                                 data_profile const& profile)
+                                                 data_profile const& profile,
+                                                 unsigned seed)
 {
   auto const out_dtype_ids = repeat_dtypes(dtype_ids, num_cols);
   size_t const avg_row_bytes =
@@ -467,20 +468,21 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> cons
     });
   cudf::size_type const num_rows = table_bytes.size / avg_row_bytes;
 
-  return create_random_table(out_dtype_ids, num_cols, row_count{num_rows}, profile);
+  return create_random_table(out_dtype_ids, num_cols, row_count{num_rows}, profile, seed);
 }
 
 std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> const& dtype_ids,
                                                  cudf::size_type num_cols,
                                                  row_count num_rows,
-                                                 data_profile const& profile)
+                                                 data_profile const& profile,
+                                                 unsigned seed)
 {
   auto const processor_count            = std::thread::hardware_concurrency();
   cudf::size_type const cols_per_thread = (num_cols + processor_count - 1) / processor_count;
   cudf::size_type next_col              = 0;
 
   auto const out_dtype_ids = repeat_dtypes(dtype_ids, num_cols);
-  auto seed_engine         = deterministic_engine();  // pass the seed param here
+  auto seed_engine         = deterministic_engine(seed);
   std::vector<std::future<columns_vector>> col_futures;
   random_value_fn<unsigned> seed_dist(
     {distribution_id::UNIFORM, 0, std::numeric_limits<unsigned>::max()});
