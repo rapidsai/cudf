@@ -27,9 +27,10 @@ namespace detail {
  *
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
-std::unique_ptr<table> tile(table_view const& input,
-                            size_type count,
-                            cudaStream_t stream                 = 0,
-                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<table> tile(
+  table_view const& input,
+  size_type count,
+  cudaStream_t stream                 = 0,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 }  // namespace detail
 }  // namespace cudf

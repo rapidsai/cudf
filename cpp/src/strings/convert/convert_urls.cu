@@ -110,7 +110,7 @@ struct url_encoder_fn {
 //
 std::unique_ptr<column> url_encode(
   strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   size_type strings_count = strings.size();
@@ -212,7 +212,7 @@ struct url_decoder_fn {
 //
 std::unique_ptr<column> url_decode(
   strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   size_type strings_count = strings.size();
