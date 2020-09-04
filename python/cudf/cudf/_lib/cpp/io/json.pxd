@@ -30,8 +30,8 @@ cdef extern from "cudf/io/json.hpp" \
         ) except+
         void set_byte_range_offset(size_type offset) except+
         void set_byte_range_size(size_type size) except+
-        void set_lines(bool val) except+
-        void set_dayfirst(bool val) except+
+        void enable_lines(bool val) except+
+        void enable_dayfirst(bool val) except+
 
         @staticmethod
         json_reader_options_builder builder(
