@@ -530,6 +530,8 @@ class CompactProtocolReader {
  *
  **/
 class CompactProtocolWriter {
+  struct CPWField;
+  //size_t writeV2(const SchemaElement *);
  public:
   CompactProtocolWriter() { m_buf = nullptr; }
   CompactProtocolWriter(std::vector<uint8_t> *output) { m_buf = output; }
