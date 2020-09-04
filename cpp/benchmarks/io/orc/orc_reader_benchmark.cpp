@@ -44,11 +44,11 @@ void ORC_read(benchmark::State& state)
   cudf_io::compression_type const compression =
     state.range(2) ? cudf_io::compression_type::SNAPPY : cudf_io::compression_type::NONE;
 
-  int64_t const col_bytes = total_bytes / num_cols;
   std::vector<char> out_buffer;
   out_buffer.reserve(total_bytes);
 
-  auto const tbl  = create_random_table({cudf::type_id::INT32}, num_cols, col_bytes);
+  auto const tbl =
+    create_random_table({cudf::type_id::INT32}, num_cols, table_size_bytes{total_bytes});
   auto const view = tbl->view();
 
   cudf_io::write_orc_args args{cudf_io::sink_info(&out_buffer), view, nullptr, compression};

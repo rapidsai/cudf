@@ -44,10 +44,11 @@ void PQ_read(benchmark::State& state)
   std::vector<char> out_buffer;
   out_buffer.reserve(data_size);
   data_profile table_data_profile;
-  // table_data_profile.set_bool_probability(0.);
-  auto t1        = std::chrono::high_resolution_clock::now();
-  auto const tbl = create_random_table(data_types, num_cols, data_size, table_data_profile);
-  auto t2        = std::chrono::high_resolution_clock::now();
+  // table_data_profile.set_cardinality(0);
+  auto t1 = std::chrono::high_resolution_clock::now();
+  auto const tbl =
+    create_random_table(data_types, num_cols, table_size_bytes{data_size}, table_data_profile);
+  auto t2 = std::chrono::high_resolution_clock::now();
 
   auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
 

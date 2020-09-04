@@ -46,10 +46,10 @@ void PQ_write(benchmark::State& state)
   int64_t total_desired_bytes = state.range(0);
   cudf::size_type num_cols    = state.range(1);
 
-  cudf::size_type el_size = 4;
-  int64_t num_rows        = total_desired_bytes / (num_cols * el_size);
+  cudf::size_type el_size  = 4;
+  cudf::size_type num_rows = total_desired_bytes / (num_cols * el_size);
 
-  auto tbl              = create_random_table({cudf::type_id::INT32}, num_cols, num_rows);
+  auto tbl = create_random_table({cudf::type_id::INT32}, num_cols, row_count{num_rows});
   cudf::table_view view = tbl->view();
 
   for (auto _ : state) {
@@ -67,12 +67,12 @@ void PQ_write_chunked(benchmark::State& state)
   cudf::size_type num_cols    = state.range(1);
   cudf::size_type num_tables  = state.range(2);
 
-  cudf::size_type el_size = 4;
-  int64_t num_rows        = (total_desired_bytes / (num_cols * el_size)) / num_tables;
+  cudf::size_type el_size  = 4;
+  cudf::size_type num_rows = (total_desired_bytes / (num_cols * el_size)) / num_tables;
 
   std::vector<std::unique_ptr<cudf::table>> tables;
   for (cudf::size_type idx = 0; idx < num_tables; idx++) {
-    tables.push_back(create_random_table({cudf::type_id::INT32}, num_cols, num_rows));
+    tables.push_back(create_random_table({cudf::type_id::INT32}, num_cols, row_count{num_rows}));
   }
 
   for (auto _ : state) {

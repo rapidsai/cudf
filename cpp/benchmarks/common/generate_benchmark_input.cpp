@@ -447,6 +447,7 @@ columns_vector create_random_columns(data_profile const& profile,
 std::vector<cudf::type_id> repeat_dtypes(std::vector<cudf::type_id> const& dtype_ids,
                                          cudf::size_type num_cols)
 {
+  if (dtype_ids.size() == num_cols) { return dtype_ids; }
   std::vector<cudf::type_id> out_dtypes;
   out_dtypes.reserve(num_cols);
   for (cudf::size_type col = 0; col < num_cols; ++col)
@@ -454,9 +455,9 @@ std::vector<cudf::type_id> repeat_dtypes(std::vector<cudf::type_id> const& dtype
   return out_dtypes;
 }
 
-std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> dtype_ids,
+std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> const& dtype_ids,
                                                  cudf::size_type num_cols,
-                                                 size_t table_bytes,
+                                                 table_size_bytes table_bytes,
                                                  data_profile const& profile)
 {
   auto const out_dtype_ids = repeat_dtypes(dtype_ids, num_cols);
@@ -464,13 +465,22 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> dtyp
     std::accumulate(out_dtype_ids.begin(), out_dtype_ids.end(), 0ul, [&](size_t sum, auto tid) {
       return sum + avg_element_bytes(profile, tid);
     });
-  cudf::size_type const num_rows = table_bytes / avg_row_bytes;
+  cudf::size_type const num_rows = table_bytes.size / avg_row_bytes;
 
+  return create_random_table(out_dtype_ids, num_cols, row_count{num_rows}, profile);
+}
+
+std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> const& dtype_ids,
+                                                 cudf::size_type num_cols,
+                                                 row_count num_rows,
+                                                 data_profile const& profile)
+{
   auto const processor_count            = std::thread::hardware_concurrency();
   cudf::size_type const cols_per_thread = (num_cols + processor_count - 1) / processor_count;
   cudf::size_type next_col              = 0;
 
-  auto seed_engine = deterministic_engine();  // pass the seed param here
+  auto const out_dtype_ids = repeat_dtypes(dtype_ids, num_cols);
+  auto seed_engine         = deterministic_engine();  // pass the seed param here
   std::vector<std::future<columns_vector>> col_futures;
   random_value_fn<unsigned> seed_dist(
     {distribution_id::UNIFORM, 0, std::numeric_limits<unsigned>::max()});
@@ -484,7 +494,7 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> dtyp
                                         std::cref(profile),
                                         std::move(thread_types),
                                         std::move(thread_engine),
-                                        num_rows));
+                                        num_rows.count));
     next_col += thread_num_cols;
   }
 

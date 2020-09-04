@@ -206,6 +206,14 @@ class data_profile {
 
 std::vector<cudf::type_id> get_type_or_group(int32_t id);
 
+struct table_size_bytes {
+  size_t size;
+};
+
+struct row_count {
+  cudf::size_type count;
+};
+
 /**
  * @file generate_benchmark_input.hpp
  * @brief Contains functions that generate columns filled with random data.
@@ -221,7 +229,12 @@ std::vector<cudf::type_id> get_type_or_group(int32_t id);
  * memory.
  */
 
-std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> dtype_ids,
+std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> const& dtype_ids,
                                                  cudf::size_type num_cols,
-                                                 size_t table_bytes,
+                                                 table_size_bytes table_bytes,
+                                                 data_profile const& data_params = data_profile{});
+
+std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> const& dtype_ids,
+                                                 cudf::size_type num_cols,
+                                                 row_count num_rows,
                                                  data_profile const& data_params = data_profile{});
