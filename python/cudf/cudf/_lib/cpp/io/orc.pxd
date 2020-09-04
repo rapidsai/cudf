@@ -38,7 +38,9 @@ cdef extern from "cudf/io/orc.hpp" \
         void forced_decimals_scale(size_type scale) except+
 
         @staticmethod
-        orc_reader_options_builder builder(cudf_io_types.source_info src) except+
+        orc_reader_options_builder builder(
+            cudf_io_types.source_info src
+        ) except+
 
     cdef cppclass orc_reader_options_builder:
         orc_reader_options_builder() except+
@@ -52,14 +54,15 @@ cdef extern from "cudf/io/orc.hpp" \
         orc_reader_options_builder& use_np_dtypes(bool val) except+
         orc_reader_options_builder& timestamp_type(data_type type) except+
         orc_reader_options_builder& decimals_as_float(bool val) except+
-        orc_reader_options_builder& forced_decimals_scale(size_type scale) except+
+        orc_reader_options_builder& forced_decimals_scale(
+            size_type scale
+        ) except+
 
         orc_reader_options build() except+
 
     cdef cudf_io_types.table_with_metadata read_orc(
         orc_reader_options opts
     ) except +
-
 
     cdef cppclass orc_writer_options:
         orc_writer_options()
@@ -83,10 +86,16 @@ cdef extern from "cudf/io/orc.hpp" \
 
     cdef cppclass orc_writer_options_builder:
         # setter
-        orc_writer_options_builder& compression(cudf_io_types.compression_type comp) except+
+        orc_writer_options_builder& compression(
+            cudf_io_types.compression_type comp
+        ) except+
         orc_writer_options_builder& enable_statistics(bool val) except+
-        orc_writer_options_builder& table(cudf_table_view.table_view tbl) except+
-        orc_writer_options_builder& metadata(cudf_io_types.table_metadata *meta) except+
+        orc_writer_options_builder& table(
+            cudf_table_view.table_view tbl
+        ) except+
+        orc_writer_options_builder& metadata(
+            cudf_io_types.table_metadata *meta
+        ) except+
 
         orc_writer_options build() except+
 
