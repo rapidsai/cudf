@@ -644,7 +644,7 @@ reader::impl::impl(std::unique_ptr<datasource> source,
 table_with_metadata reader::impl::read(json_reader_options const &options, cudaStream_t stream)
 {
   auto range_offset = options.get_byte_range_offset();
-  auto range_size = options.get_byte_range_size();
+  auto range_size   = options.get_byte_range_size();
 
   ingest_raw_input(range_offset, range_size);
   CUDF_EXPECTS(buffer_ != nullptr, "Ingest failed: input data is null.\n");

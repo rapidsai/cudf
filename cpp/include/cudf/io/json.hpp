@@ -23,6 +23,8 @@
 
 #include "types.hpp"
 
+#include <rmm/mr/device/default_memory_resource.hpp>
+
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
@@ -115,7 +117,7 @@ class json_reader_options {
   source_info const& get_source() const { return _source; }
 
   /**
-   * @brief Returns data types of the columns. 
+   * @brief Returns data types of the columns.
    */
   std::vector<std::string> const& get_dtypes() const { return _dtypes; }
 
@@ -235,9 +237,10 @@ class json_reader_options_builder {
    * @param offset Number of bytes of offset.
    * @return this for chaining.
    */
-  json_reader_options_builder& byte_range_offset(size_type offset) { 
-      options._byte_range_offset = offset;
-      return *this;
+  json_reader_options_builder& byte_range_offset(size_type offset)
+  {
+    options._byte_range_offset = offset;
+    return *this;
   }
 
   /**
@@ -246,9 +249,10 @@ class json_reader_options_builder {
    * @param size Number of bytes to read.
    * @return this for chaining
    */
-  json_reader_options_builder& byte_range_size(size_type size) { 
-      options._byte_range_size = size;
-      return *this;
+  json_reader_options_builder& byte_range_size(size_type size)
+  {
+    options._byte_range_size = size;
+    return *this;
   }
 
   /**
@@ -257,9 +261,10 @@ class json_reader_options_builder {
    * @param val Boolean value to enable/disable the option to read each line as a json object.
    * @return this for chaining.
    */
-  json_reader_options_builder& lines(bool val) {
-      options._lines = val; 
-      return *this;
+  json_reader_options_builder& lines(bool val)
+  {
+    options._lines = val;
+    return *this;
   }
 
   /**
@@ -268,9 +273,10 @@ class json_reader_options_builder {
    * @param val Boolean value to enable/disable day first parsing format.
    * @return this for chaining.
    */
-  json_reader_options_builder& dayfirst(bool val) {
-      options._dayfirst = val; 
-      return *this;
+  json_reader_options_builder& dayfirst(bool val)
+  {
+    options._dayfirst = val;
+    return *this;
   }
 
   /**

@@ -85,11 +85,9 @@ cpdef read_json(filepath_or_buffer, dtype,
         json_reader_options.builder(make_source_info([path_or_data])).
         dtypes(c_dtypes).
         compression(c_compression).
-        set(json_reader_options.boolean_param_id.LINES, c_lines).
-        set(json_reader_options.size_type_param_id.BYTE_RANGE_OFFSET,
-            c_range_offset).
-        set(json_reader_options.size_type_param_id.BYTE_RANGE_SIZE,
-            c_range_size).
+        lines(c_lines).
+        byte_range_offset(c_range_offset).
+        byte_range_size(c_range_size).
         build()
     )
 

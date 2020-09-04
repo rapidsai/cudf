@@ -359,8 +359,8 @@ reader::impl::impl(std::unique_ptr<datasource> source,
 table_with_metadata reader::impl::read(avro_reader_options const &options, cudaStream_t stream)
 {
   auto skip_rows = options.get_skip_rows();
-  auto num_rows = options.get_num_rows();
-  num_rows = (num_rows != 0)? num_rows : -1;
+  auto num_rows  = options.get_num_rows();
+  num_rows       = (num_rows != 0) ? num_rows : -1;
   std::vector<std::unique_ptr<column>> out_columns;
   table_metadata metadata_out;
 
@@ -487,7 +487,10 @@ reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
 reader::~reader() = default;
 
 // Forward to implementation
-table_with_metadata reader::read(avro_reader_options const &options, cudaStream_t stream) {return _impl->read(options, stream);}
+table_with_metadata reader::read(avro_reader_options const &options, cudaStream_t stream)
+{
+  return _impl->read(options, stream);
+}
 }  // namespace avro
 }  // namespace detail
 }  // namespace io

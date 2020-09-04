@@ -25,7 +25,7 @@ cpdef read_avro(datasource, columns=None, skip_rows=-1, num_rows=-1):
     """
 
     num_rows = -1 if num_rows is None else num_rows
-    skip_rows = -1 if skip_rows is None else skip_rows
+    skip_rows = 0 if skip_rows is None else skip_rows
 
     if not isinstance(num_rows, int) or num_rows < -1:
         raise TypeError("num_rows must be an int >= -1")
@@ -41,12 +41,8 @@ cpdef read_avro(datasource, columns=None, skip_rows=-1, num_rows=-1):
     cdef avro_reader_options options = move(
         avro_reader_options.builder(make_source_info([datasource])).
         columns(c_columns).
-        set(
-            avro_reader_options.size_type_param_id.SKIP_ROWS,
-            <size_type> skip_rows
-        ).
-        set(avro_reader_options.size_type_param_id.NUM_ROWS,
-            <size_type> num_rows).
+        skip_rows(<size_type> skip_rows).
+        num_rows(<size_type> num_rows).
         build()
     )
 

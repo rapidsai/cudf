@@ -357,8 +357,7 @@ TEST_F(JsonReaderTest, JsonLinesFileInput)
   outfile.close();
 
   cudf_io::json_reader_options in_options =
-    cudf_io::json_reader_options::builder(cudf_io::source_info{fname})
-      .lines(true);
+    cudf_io::json_reader_options::builder(cudf_io::source_info{fname}).lines(true);
 
   cudf_io::table_with_metadata result = cudf_io::read_json(in_options);
 
@@ -412,8 +411,7 @@ TEST_F(JsonReaderTest, JsonLinesObjects)
   outfile.close();
 
   cudf_io::json_reader_options in_options =
-    cudf_io::json_reader_options::builder(cudf_io::source_info{fname})
-      .lines(true);
+    cudf_io::json_reader_options::builder(cudf_io::source_info{fname}).lines(true);
 
   cudf_io::table_with_metadata result = cudf_io::read_json(in_options);
 
@@ -588,7 +586,8 @@ TEST_F(JsonReaderTest, ArrowFileSource)
   ;
   cudf_io::table_with_metadata result = cudf_io::read_json(in_options);
 
-  EXPECT_EQ(result.tbl->num_columns(), static_cast<cudf::size_type>(in_options.get_dtypes().size()));
+  EXPECT_EQ(result.tbl->num_columns(),
+            static_cast<cudf::size_type>(in_options.get_dtypes().size()));
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT8);
 
   auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });

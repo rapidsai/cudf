@@ -23,6 +23,8 @@
 
 #include "types.hpp"
 
+#include <rmm/mr/device/default_memory_resource.hpp>
+
 #include <cudf/io/writers.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -59,7 +61,7 @@ class avro_reader_options {
   /**
    * @brief Constructor from source info.
    *
-   * @param src source information used to read avro file
+   * @param src source information used to read avro file.
    */
   explicit avro_reader_options(source_info const& src) : _source(src) {}
 
@@ -98,10 +100,7 @@ class avro_reader_options {
    *
    * @param col_names Vector of column names.
    */
-  void set_columns(std::vector<std::string> col_names)
-  {
-    _columns = std::move(col_names);
-  }
+  void set_columns(std::vector<std::string> col_names) { _columns = std::move(col_names); }
 
   /**
    * @brief Sets number of rows to skip.
@@ -109,10 +108,7 @@ class avro_reader_options {
    * @param val Number of rows to skip from start.
    * @return this for chaining.
    */
-  void set_skip_rows(size_type val)
-  {
-    _skip_rows = val;
-  }
+  void set_skip_rows(size_type val) { _skip_rows = val; }
 
   /**
    * @brief Sets number of rows to read.
@@ -120,10 +116,7 @@ class avro_reader_options {
    * @param val Number of rows to read after skip.
    * @return this for chaining.
    */
-  void set_num_rows(size_type val)
-  {
-    _num_rows = val;
-  }
+  void set_num_rows(size_type val) { _num_rows = val; }
 
   /**
    * @brief create avro_reader_options_builder which will build avro_reader_options.
@@ -143,7 +136,7 @@ class avro_reader_options_builder {
    *
    * This has been added since Cython requires a default constructor to create objects on stack.
    */
-  explicit avro_reader_options_builder() = default;
+  avro_reader_options_builder() = default;
 
   /**
    * @brief Constructor from source info.
@@ -210,7 +203,8 @@ class avro_reader_options_builder {
  * @code
  *  ...
  *  std::string filepath = "dataset.avro";
- *  cudf::avro_reader_options options = cudf::avro_reader_options::builder(cudf::source_info(filepath));
+ *  cudf::avro_reader_options options =
+ * cudf::avro_reader_options::builder(cudf::source_info(filepath));
  *  ...
  *  auto result = cudf::read_avro(options);
  * @endcode
