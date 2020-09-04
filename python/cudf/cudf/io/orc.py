@@ -58,7 +58,8 @@ def _parse_column_statistics(cs, column_statistics_blob):
         # Before ORC-135, the local timezone offset was included and they were
         # stored as minimum and maximum. After ORC-135, the timestamp is
         # adjusted to UTC before being converted to milliseconds and stored
-        # in minimumUtc and maximumUtc. Therefore, minimum and maximum are not supported
+        # in minimumUtc and maximumUtc.
+        # TODO: Support minimum and maximum by reading writer's local timezone
         if cs.timestampStatistics.HasField(
             "minimumUtc"
         ) and cs.timestampStatistics.HasField("maximumUtc"):

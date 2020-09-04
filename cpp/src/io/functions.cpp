@@ -248,9 +248,7 @@ std::vector<std::vector<std::string>> read_orc_statistics(source_info const& src
 
   // Get column names
   std::vector<std::string> column_names;
-  for (auto i = 0; i < ff.types.size(); i++) {
-    column_names.push_back(ff.GetColumnName(i));
-  }
+  for (auto i = 0; i < ff.types.size(); i++) { column_names.push_back(ff.GetColumnName(i)); }
   statistics_blobs.push_back(column_names);
 
   // Get file-level statistics, statistics of each column of file
