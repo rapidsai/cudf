@@ -18,17 +18,11 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/table.hpp>
 
+#include <thrust/host_vector.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/scan.h>
+#include <thrust/sequence.h>
 #include <algorithm>
-#include <functional>
-#include <initializer_list>
-#include <iterator>
-#include <memory>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/cudf_gtest.hpp>
-#include <tests/utilities/type_lists.hpp>
-#include <tuple>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/null_mask.hpp>
@@ -36,12 +30,17 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
-#include <gtest/gtest.h>
+#include <functional>
+#include <initializer_list>
+#include <iterator>
+#include <memory>
 #include <rmm/device_buffer.hpp>
-#include <thrust/host_vector.h>
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/scan.h>
-#include <thrust/sequence.h>
+#include <tests/utilities/base_fixture.hpp>
+#include <tests/utilities/column_utilities.hpp>
+#include <tests/utilities/column_wrapper.hpp>
+#include <tests/utilities/cudf_gtest.hpp>
+#include <tests/utilities/type_lists.hpp>
+#include <tuple>
 
 using vector_of_columns = std::vector<std::unique_ptr<cudf::column>>;
 using cudf::size_type;
@@ -54,9 +53,9 @@ struct TypedStructGatherTest : public cudf::test::BaseFixture {
 };
 
 using FixedWidthTypes = cudf::test::Concat<cudf::test::IntegralTypes,
-                                                  cudf::test::FloatingPointTypes,
-                                                  cudf::test::DurationTypes,
-                                                  cudf::test::TimestampTypes>;
+                                           cudf::test::FloatingPointTypes,
+                                           cudf::test::DurationTypes,
+                                           cudf::test::TimestampTypes>;
 
 TYPED_TEST_CASE(TypedStructGatherTest, FixedWidthTypes);
 
@@ -120,9 +119,10 @@ TYPED_TEST(TypedStructGatherTest, TestSimpleStructGather)
   // Testing gather() on struct<string, numeric, bool>.
 
   // 1. String "names" column.
-  auto const names = std::vector<std::string>{"Vimes", "Carrot", "Angua", "Cheery", "Detritus", "Slant"};
+  auto const names =
+    std::vector<std::string>{"Vimes", "Carrot", "Angua", "Cheery", "Detritus", "Slant"};
   auto const names_validity = std::vector<bool>{1, 1, 1, 1, 1, 1};
-  auto names_column   = strings_column_wrapper{names.begin(), names.end(), names_validity.begin()};
+  auto names_column = strings_column_wrapper{names.begin(), names.end(), names_validity.begin()};
 
   // 2. Numeric "ages" column.
   auto const ages          = std::vector<int32_t>{5, 10, 15, 20, 25, 30};
@@ -343,7 +343,8 @@ TYPED_TEST(TypedStructGatherTest, TestGatherStructOfListOfStructs)
 
   std::vector<std::unique_ptr<cudf::column>> vector_of_columns;
   vector_of_columns.push_back(std::move(list_of_structs_column));
-  auto const struct_of_list_of_structs = structs_column_wrapper{std::move(vector_of_columns)}.release();
+  auto const struct_of_list_of_structs =
+    structs_column_wrapper{std::move(vector_of_columns)}.release();
 
   // Gather to new struct column.
   auto const gather_map = std::vector<int>{-1, 4, 3, 2, 1};
@@ -437,7 +438,8 @@ TYPED_TEST(TypedStructGatherTest, TestEmptyGather)
     fixed_width_column_wrapper<TypeParam, int32_t>{ages.begin(), ages.end(), ages_validity.begin()};
 
   auto const struct_validity = std::vector<bool>{1, 1, 1, 1, 1, 0};
-  auto const struct_column   = structs_column_wrapper{{ages_column}, struct_validity.begin()}.release();
+  auto const struct_column =
+    structs_column_wrapper{{ages_column}, struct_validity.begin()}.release();
 
   auto const gather_map = std::vector<int>{};
   auto const gather_map_col =
@@ -451,7 +453,7 @@ TYPED_TEST(TypedStructGatherTest, TestEmptyGather)
   auto const gathered_struct_col_view = cudf::structs_column_view{gathered_struct_col};
 
   // Expect empty struct column gathered.
-  auto expected_ages_column    = fixed_width_column_wrapper<TypeParam>{};
+  auto expected_ages_column          = fixed_width_column_wrapper<TypeParam>{};
   auto const expected_structs_column = structs_column_wrapper{{expected_ages_column}}.release();
 
   expect_columns_equivalent(*expected_structs_column, gathered_struct_col);
