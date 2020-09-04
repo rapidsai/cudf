@@ -148,7 +148,7 @@ std::unique_ptr<column> sequence(size_type size,
 std::unique_ptr<column> sequence(
   size_type size,
   scalar const& init,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   CUDF_EXPECTS(size >= 0, "size must be >= 0");

@@ -25,7 +25,7 @@ namespace detail {
 /**
  * @copydoc cudf::sequence(size_type size, scalar const& init, scalar const& step,
  *                                       rmm::mr::device_memory_resource* mr =
- *rmm::mr::get_default_resource())
+ *rmm::mr::get_current_device_resource())
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  **/
@@ -33,20 +33,20 @@ std::unique_ptr<column> sequence(
   size_type size,
   scalar const& init,
   scalar const& step,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 /**
  * @copydoc cudf::sequence(size_type size, scalar const& init,
                                          rmm::mr::device_memory_resource* mr =
- rmm::mr::get_default_resource())
+ rmm::mr::get_current_device_resource())
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  **/
 std::unique_ptr<column> sequence(
   size_type size,
   scalar const& init,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 }  // namespace detail

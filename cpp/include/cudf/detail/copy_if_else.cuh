@@ -162,7 +162,7 @@ std::unique_ptr<column> copy_if_else(
   LeftIter lhs_end,
   RightIter rhs,
   FilterFn filter,
-  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   using Element =

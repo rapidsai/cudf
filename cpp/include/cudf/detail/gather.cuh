@@ -579,12 +579,13 @@ struct column_gatherer_impl<struct_view, MapItRoot> {
  * @return cudf::table Result of the gather
  */
 template <typename MapIterator>
-std::unique_ptr<table> gather(table_view const& source_table,
-                              MapIterator gather_map_begin,
-                              MapIterator gather_map_end,
-                              bool nullify_out_of_bounds          = false,
-                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                              cudaStream_t stream                 = 0)
+std::unique_ptr<table> gather(
+  table_view const& source_table,
+  MapIterator gather_map_begin,
+  MapIterator gather_map_end,
+  bool nullify_out_of_bounds          = false,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0)
 {
   std::vector<std::unique_ptr<column>> destination_columns;
 

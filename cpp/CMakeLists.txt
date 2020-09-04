@@ -559,6 +559,7 @@ add_library(cudf
             src/strings/copying/concatenate.cu
             src/strings/copying/copying.cu
             src/strings/extract.cu
+            src/strings/filter_chars.cu
             src/strings/find.cu
             src/strings/findall.cu
             src/strings/find_multiple.cu
@@ -628,6 +629,7 @@ add_library(cudf
             src/groupby/sort/group_nth_element.cu
             src/groupby/sort/group_std.cu
             src/groupby/sort/group_quantiles.cu
+            src/groupby/sort/group_collect.cu
             src/aggregation/aggregation.cpp
             src/aggregation/aggregation.cu
             src/aggregation/result_cache.cpp
