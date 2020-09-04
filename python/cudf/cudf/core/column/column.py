@@ -1398,7 +1398,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
     * pandas.Categorical objects
     """
 
-    dtype = cudf.dtype(dtype) if dtype is not None else None
+    dtype = cudf.dtype(dtype)
 
     if isinstance(arbitrary, ColumnBase):
         if dtype is not None:

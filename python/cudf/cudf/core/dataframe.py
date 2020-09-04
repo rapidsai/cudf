@@ -6088,7 +6088,7 @@ class DataFrame(Frame, Serializable):
             msg = "Kurtosis only supports int, float, and bool dtypes."
             raise NotImplementedError(msg)
 
-        self = self.select_dtypes(include=[cudf.Number(), cudf.BooleanDtype()])
+        self = self.select_dtypes(include=[cudf.Number, cudf.BooleanDtype])
         return self._apply_support_method(
             "kurtosis",
             axis=axis,
@@ -6134,7 +6134,7 @@ class DataFrame(Frame, Serializable):
             msg = "Skew only supports int, float, and bool dtypes."
             raise NotImplementedError(msg)
 
-        self = self.select_dtypes(include=[cudf.Number(), cudf.BooleanDtype()])
+        self = self.select_dtypes(include=[cudf.Number, cudf.BooleanDtype])
         return self._apply_support_method(
             "skew",
             axis=axis,

@@ -285,6 +285,8 @@ class StringDtype(Flexible):
 
 
 def cudf_dtype_from_string(obj):
+    if obj == 'category':
+        return obj
     try:
         np_dtype = np.dtype(obj)
         return cudf_dtype_from_numpy(np_dtype)
@@ -302,35 +304,37 @@ def cudf_dtype_from_numpy(obj):
     elif obj is np.timedelta64:
         return cudf.Timedelta
     dtype = np.dtype(obj)
-    return _cudf_dtype_from_numpy.get(obj, None)
+    return _cudf_dtype_from_numpy.get(dtype, None)
 
 def dtype(obj):
     if isinstance(obj, Generic):
         return obj
     elif type(obj) is type and issubclass(obj, Generic):
         return obj()
-    elif isinstance(obj, np.dtype) or (isinstance(obj, type) and issubclass(obj, np.generic)):
+    elif isinstance(obj, np.dtype) or (isinstance(obj, type) and issubclass(obj, (np.generic, np.dtype))):
         return cudf_dtype_from_numpy(obj)
     elif isinstance(obj, str):
         return cudf_dtype_from_string(obj)
     if isinstance(obj, pd.CategoricalDtype):
         return cudf.CategoricalDtype.from_pandas(obj)
-    if isinstance(obj, CategoricalDtype):
-        if obj is 'category':
-            return cudf.CategoricalDtype()
-        return obj
     elif obj in _pd_to_cudf_dtypes.keys():
         return _pd_to_cudf_dtypes[obj]
     elif isinstance(obj, pd.core.arrays.numpy_.PandasDtype):
         return cudf_dtype_from_string(obj.name)
+    elif isinstance(obj, pa.lib.DataType):
+        return cudf_dtype_from_pyarrow[obj]
     elif obj is str:
         return cudf.StringDtype()
     elif obj is int:
         return cudf.Int64Dtype()
-    elif obj in {float, None}:
+    elif obj is float:
         return cudf.Float64Dtype()
+    elif obj is None:
+        return None
     else:
-        raise TypeError(f"Could not find a cuDF dtype matching {obj}")
+        raise TypeError
+        
+        #raise TypeError(f"Could not find a cuDF dtype matching {obj}")
 
 
 class CategoricalDtype(Generic):
@@ -506,7 +510,7 @@ class ListDtype(Generic):
             return f"ListDtype({self.element_type})"
 
 
-pa_to_cudf_dtypes = {
+cudf_dtype_from_pyarrow = {
     pa.uint8(): UInt8Dtype(),
     pa.uint16(): UInt16Dtype(),
     pa.uint32(): UInt32Dtype(),
