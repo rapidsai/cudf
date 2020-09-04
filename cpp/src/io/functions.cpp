@@ -19,7 +19,6 @@
 #include <cudf/io/detail/orc.hpp>
 #include <cudf/io/functions.hpp>
 #include <cudf/io/orc.hpp>
-#include <cudf/io/orc_metadata.hpp>
 #include <cudf/io/readers.hpp>
 #include <cudf/io/writers.hpp>
 #include <cudf/table/table.hpp>
