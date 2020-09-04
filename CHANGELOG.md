@@ -26,6 +26,7 @@
 - PR #6103 Small refactor of `print_differences`
 - PR #6124 Fix gcc-9 compilation errors on tests
 - PR #6141 Fix typo in custreamz README that was a result of recent changes
+- PR #6146 Added element/validity pair constructors for fixed_width and string wrappers
 - PR #6143 General improvements for java arrow IPC.
 - PR #6149 Update to Arrow v1.0.1
 
@@ -37,6 +38,7 @@
 - PR #6113 Fix to_timestamp to initialize default year to 1970
 - PR #6110 Handle `format` for other input types in `to_datetime`
 - PR #6118 Fix Java build for ORC read args change and update package version
+- PR #6121 Replace calls to get_default_resource with get_current_device_resource
 - PR #6128 Add support for numpy RandomState handling in `sample`
 
 
