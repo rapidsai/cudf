@@ -40,7 +40,7 @@
 - PR #6118 Fix Java build for ORC read args change and update package version
 - PR #6121 Replace calls to get_default_resource with get_current_device_resource
 - PR #6128 Add support for numpy RandomState handling in `sample`
-
+- PR #6157 Fix issue related to `Series.concat` to concat a non-empty and empty series.
 
 # cuDF 0.15.0 (26 Aug 2020)
 
