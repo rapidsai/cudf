@@ -139,7 +139,7 @@ struct column_scatterer_impl<dictionary32, MapIterator> {
     auto target_matched    = dictionary::detail::add_keys(target, source.keys(), mr, stream);
     auto const target_view = dictionary_column_view(target_matched->view());
     auto source_matched    = dictionary::detail::set_keys(
-      source, target_view.keys(), rmm::mr::get_default_resource(), stream);
+      source, target_view.keys(), rmm::mr::get_current_device_resource(), stream);
     auto const source_view = dictionary_column_view(source_matched->view());
 
     // now build the new indices by doing a scatter on just the matched indices
@@ -224,7 +224,7 @@ std::unique_ptr<table> scatter(
   MapIterator scatter_map_end,
   table_view const& target,
   bool check_bounds                   = false,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   CUDF_FUNC_RANGE();

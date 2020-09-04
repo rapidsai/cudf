@@ -31,7 +31,7 @@ namespace detail {
  */
 std::unique_ptr<table> from_dlpack(
   DLManagedTensor const* managed_tensor,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 /**
@@ -39,9 +39,10 @@ std::unique_ptr<table> from_dlpack(
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-DLManagedTensor* to_dlpack(table_view const& input,
-                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                           cudaStream_t stream                 = 0);
+DLManagedTensor* to_dlpack(
+  table_view const& input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0);
 
 // Creating arrow as per given type_id and buffer arguments
 template <typename... Ts>
@@ -110,7 +111,7 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
  **/
 std::unique_ptr<table> from_arrow(
   arrow::Table const& input_table,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 }  // namespace detail

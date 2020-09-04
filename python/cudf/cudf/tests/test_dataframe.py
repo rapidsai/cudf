@@ -3717,90 +3717,6 @@ def test_value_counts():
     "data",
     [
         [],
-        pd.Series(pd.date_range("2010-01-01", "2010-02-01")),
-        pd.Series([None, None], dtype="datetime64[ns]"),
-    ],
-)
-@pytest.mark.parametrize("nulls", ["none", "some"])
-def test_datetime_value_counts(data, nulls):
-    psr = pd.Series(data)
-
-    if len(data) > 0:
-        if nulls == "one":
-            p = np.random.randint(0, len(data))
-            psr[p] = None
-        elif nulls == "some":
-            p = np.random.randint(0, len(data), 2)
-            psr[p] = None
-
-    gsr = gd.Series.from_pandas(psr)
-    expected = psr.value_counts()
-    got = gsr.value_counts()
-
-    pandas_dict = expected.to_dict()
-    gdf_dict = got.to_pandas().to_dict()
-
-    assert pandas_dict == gdf_dict
-
-
-@pytest.mark.parametrize("num_elements", [10, 100, 1000])
-def test_categorical_value_counts(num_elements):
-    from string import ascii_letters, digits
-
-    # create categorical series
-    np.random.seed(12)
-    pd_cat = pd.Categorical(
-        pd.Series(
-            np.random.choice(list(ascii_letters + digits), num_elements),
-            dtype="category",
-        )
-    )
-
-    # gdf
-    gdf = gd.DataFrame()
-    gdf["a"] = gd.Series.from_categorical(pd_cat)
-    gdf_value_counts = gdf["a"].value_counts()
-
-    # pandas
-    pdf = pd.DataFrame()
-    pdf["a"] = pd_cat
-    pdf_value_counts = pdf["a"].value_counts()
-
-    # verify
-    pandas_dict = pdf_value_counts.to_dict()
-    gdf_dict = gdf_value_counts.to_pandas().to_dict()
-
-    assert pandas_dict == gdf_dict
-
-
-def test_series_value_counts():
-    for size in [10 ** x for x in range(5)]:
-        arr = np.random.randint(low=-1, high=10, size=size)
-        mask = arr != -1
-        sr = gd.Series.from_masked_array(arr, gd.Series(mask).as_mask())
-        sr.name = "col"
-        df = pd.DataFrame(data=arr[mask], columns=["col"])
-        expect = df.col.value_counts().sort_index()
-        got = sr.value_counts().sort_index()
-
-        assert_eq(expect, got, check_dtype=False)
-
-
-@pytest.mark.parametrize("ascending", [True, False])
-def test_series_value_counts_optional_arguments(ascending):
-    psr = pd.Series([1.0, 2.0, 2.0, 3.0, 3.0, 3.0, None])
-    gsr = gd.Series.from_pandas(psr)
-
-    expect = psr.value_counts(ascending=ascending)
-    got = gsr.value_counts(ascending=ascending)
-
-    assert_eq(expect, got, check_dtype=False)
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        [],
         [0, 12, 14],
         [0, 14, 12, 12, 3, 10, 12, 14],
         np.random.randint(-100, 100, 200),
@@ -6595,11 +6511,12 @@ def test_dataframe_sample_basic(n, frac, replace, axis):
 
 
 @pytest.mark.parametrize("replace", [True, False])
-def test_dataframe_reproducibility(replace):
+@pytest.mark.parametrize("random_state", [1, np.random.mtrand.RandomState(10)])
+def test_dataframe_reproducibility(replace, random_state):
     df = gd.DataFrame({"a": cupy.arange(0, 1024)})
 
-    expected = df.sample(1024, replace=replace, random_state=1)
-    out = df.sample(1024, replace=replace, random_state=1)
+    expected = df.sample(1024, replace=replace, random_state=random_state)
+    out = df.sample(1024, replace=replace, random_state=random_state)
 
     assert_eq(expected, out)
 
@@ -7069,3 +6986,45 @@ def test_describe_misc_exclude(df, exclude):
             actual[col] = actual[col].fillna(-1).astype("str")
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        gd.DataFrame({"a": [1, 2, 3]}),
+        gd.DataFrame(
+            {"a": [1, 2, 3], "b": ["a", "z", "c"]}, index=["a", "z", "x"]
+        ),
+        gd.DataFrame(
+            {
+                "a": [1, 2, 3, None, 2, 1, None],
+                "b": ["a", "z", "c", "a", "v", "z", "z"],
+            }
+        ),
+        gd.DataFrame({"a": [], "b": []}),
+        gd.DataFrame({"a": [None, None], "b": [None, None]}),
+        gd.DataFrame(
+            {
+                "a": ["hello", "world", "rapids", "ai", "nvidia"],
+                "b": gd.Series([1, 21, 21, 11, 11], dtype="timedelta64[s]"),
+            }
+        ),
+        gd.DataFrame(
+            {
+                "a": ["hello", None, "world", "rapids", None, "ai", "nvidia"],
+                "b": gd.Series(
+                    [1, 21, None, 11, None, 11, None], dtype="datetime64[s]"
+                ),
+            }
+        ),
+    ],
+)
+@pytest.mark.parametrize("numeric_only", [True, False])
+@pytest.mark.parametrize("dropna", [True, False])
+def test_dataframe_mode(df, numeric_only, dropna):
+    pdf = df.to_pandas()
+
+    expected = pdf.mode(numeric_only=numeric_only, dropna=dropna)
+    actual = df.mode(numeric_only=numeric_only, dropna=dropna)
+
+    assert_eq(expected, actual, check_dtype=False)

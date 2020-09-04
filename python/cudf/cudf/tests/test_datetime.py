@@ -1127,3 +1127,39 @@ def test_datetime_stats(data, dtype, stat):
         assert np.isnat(expected.to_numpy()) and np.isnat(actual.to_numpy())
     else:
         assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        np.datetime_as_string(
+            np.arange("2002-10-27T04:30", 4 * 60, 60, dtype="M8[m]"),
+            timezone="UTC",
+        ),
+        np.datetime_as_string(
+            np.arange("2002-10-27T04:30", 10 * 60, 1, dtype="M8[m]"),
+            timezone="UTC",
+        ),
+        np.datetime_as_string(
+            np.arange("2002-10-27T04:30", 10 * 60, 1, dtype="M8[ns]"),
+            timezone="UTC",
+        ),
+        np.datetime_as_string(
+            np.arange("2002-10-27T04:30", 10 * 60, 1, dtype="M8[us]"),
+            timezone="UTC",
+        ),
+        np.datetime_as_string(
+            np.arange("2002-10-27T04:30", 4 * 60, 60, dtype="M8[s]"),
+            timezone="UTC",
+        ),
+    ],
+)
+@pytest.mark.parametrize("dtype", DATETIME_TYPES)
+def test_datetime_infer_format(data, dtype):
+    sr = cudf.Series(data)
+    psr = pd.Series(data)
+
+    expected = psr.astype(dtype)
+    actual = sr.astype(dtype)
+
+    assert_eq(expected, actual)

@@ -4958,7 +4958,9 @@ class DataFrame(Frame, Serializable):
 
     @classmethod
     def from_arrow(cls, table):
-        """Convert from PyArrow Table to DataFrame.
+        """
+        Convert from PyArrow Table to DataFrame.
+
         Parameters
         ----------
         table : PyArrow Table Object
@@ -6030,6 +6032,106 @@ class DataFrame(Frame, Serializable):
             numeric_only=numeric_only,
             **kwargs,
         )
+
+    def mode(self, axis=0, numeric_only=False, dropna=True):
+        """
+        Get the mode(s) of each element along the selected axis.
+
+        The mode of a set of values is the value that appears most often.
+        It can be multiple values.
+
+        Parameters
+        ----------
+        axis : {0 or 'index', 1 or 'columns'}, default 0
+            The axis to iterate over while searching for the mode:
+
+            - 0 or 'index' : get mode of each column
+            - 1 or 'columns' : get mode of each row.
+        numeric_only : bool, default False
+            If True, only apply to numeric columns.
+        dropna : bool, default True
+            Don't consider counts of NA/NaN/NaT.
+
+        Returns
+        -------
+        DataFrame
+            The modes of each column or row.
+
+        See Also
+        --------
+        cudf.core.series.Series.mode : Return the highest frequency value
+            in a Series.
+        cudf.core.series.Series.value_counts : Return the counts of values
+            in a Series.
+
+        Notes
+        -----
+        ``axis`` parameter is currently not supported.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({
+        ...     "species": ["bird", "mammal", "arthropod", "bird"],
+        ...     "legs": [2, 4, 8, 2],
+        ...     "wings": [2.0, None, 0.0, None]
+        ... })
+        >>> df
+             species  legs wings
+        0       bird     2   2.0
+        1     mammal     4  <NA>
+        2  arthropod     8   0.0
+        3       bird     2  <NA>
+
+        By default, missing values are not considered, and the mode of wings
+        are both 0 and 2. The second row of species and legs contains ``NA``,
+        because they have only one mode, but the DataFrame has two rows.
+
+        >>> df.mode()
+          species  legs  wings
+        0    bird     2    0.0
+        1    <NA>  <NA>    2.0
+
+        Setting ``dropna=False``, ``NA`` values are considered and they can be
+        the mode (like for wings).
+
+        >>> df.mode(dropna=False)
+          species  legs wings
+        0    bird     2  <NA>
+
+        Setting ``numeric_only=True``, only the mode of numeric columns is
+        computed, and columns of other types are ignored.
+
+        >>> df.mode(numeric_only=True)
+           legs  wings
+        0     2    0.0
+        1  <NA>    2.0
+        """
+        if axis not in (0, "index"):
+            raise NotImplementedError("Only axis=0 is currently supported")
+
+        if numeric_only:
+            data_df = self.select_dtypes(
+                include=[np.number], exclude=["datetime64", "timedelta64"]
+            )
+        else:
+            data_df = self
+
+        mode_results = [
+            data_df[col].mode(dropna=dropna) for col in data_df._data
+        ]
+
+        if len(mode_results) == 0:
+            df = DataFrame(index=self.index)
+            return df
+
+        df = cudf.concat(mode_results, axis=1)
+        if isinstance(df, cudf.Series):
+            df = df.to_frame()
+
+        df.columns = data_df.columns
+
+        return df
 
     def std(
         self,

@@ -59,7 +59,7 @@ class table {
    **/
   table(table_view view,
         cudaStream_t stream                 = 0,
-        rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+        rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Returns the number of columns in the table
