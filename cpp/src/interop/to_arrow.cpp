@@ -127,7 +127,7 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<bool>(column_view in
                                                                   arrow::MemoryPool* ar_mr,
                                                                   cudaStream_t stream)
 {
-  auto bitmask = bools_to_mask(input, rmm::mr::get_default_resource(), stream);
+  auto bitmask = bools_to_mask(input, rmm::mr::get_current_device_resource(), stream);
 
   auto result = arrow::AllocateBuffer(static_cast<int64_t>(bitmask.first->size()), ar_mr);
   CUDF_EXPECTS(result.ok(), "Failed to allocate Arrow buffer for data");

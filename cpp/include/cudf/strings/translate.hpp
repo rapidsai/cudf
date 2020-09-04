@@ -51,7 +51,7 @@ namespace strings {
 std::unique_ptr<column> translate(
   strings_column_view const& strings,
   std::vector<std::pair<char_utf8, char_utf8>> const& chars_table,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Removes or keeps the specified character ranges in cudf::strings::filter_characters
