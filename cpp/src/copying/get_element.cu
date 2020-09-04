@@ -33,7 +33,7 @@ struct get_element_functor {
     column_view const &input,
     size_type index,
     cudaStream_t stream                 = 0,
-    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource())
+    rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
   {
     auto s = make_fixed_width_scalar(data_type(type_to_id<T>()), stream, mr);
 
@@ -57,7 +57,7 @@ struct get_element_functor {
     column_view const &input,
     size_type index,
     cudaStream_t stream                 = 0,
-    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource())
+    rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
   {
     auto device_col = column_device_view::create(input, stream);
 
@@ -82,7 +82,7 @@ struct get_element_functor {
     column_view const &input,
     size_type index,
     cudaStream_t stream                 = 0,
-    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource())
+    rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
   {
     auto dict_view = dictionary_column_view(input);
     auto key_index_scalar =
@@ -110,7 +110,7 @@ struct get_element_functor {
     column_view const &input,
     size_type index,
     cudaStream_t stream                 = 0,
-    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource())
+    rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
   {
     CUDF_FAIL("get_element_functor not supported for list_view");
   }
@@ -120,7 +120,7 @@ struct get_element_functor {
     column_view const &input,
     size_type index,
     cudaStream_t stream                 = 0,
-    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource())
+    rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
   {
     CUDF_FAIL("get_element_functor not supported for decimal32");
   }
@@ -130,7 +130,7 @@ struct get_element_functor {
     column_view const &input,
     size_type index,
     cudaStream_t stream                 = 0,
-    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource())
+    rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
   {
     CUDF_FAIL("get_element_functor not supported for decimal64");
   }
@@ -140,7 +140,7 @@ struct get_element_functor {
     column_view const &input,
     size_type index,
     cudaStream_t stream                 = 0,
-    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource())
+    rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
   {
     CUDF_FAIL("get_element_functor not supported for struct_view");
   }

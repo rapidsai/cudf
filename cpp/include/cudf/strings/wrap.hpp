@@ -59,9 +59,10 @@ namespace strings {
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  * @return Column of wrapped strings.
  */
-std::unique_ptr<column> wrap(strings_column_view const& strings,
-                             size_type width,
-                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> wrap(
+  strings_column_view const& strings,
+  size_type width,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings
