@@ -51,8 +51,11 @@ void ORC_write(benchmark::State& state)
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    cudf_io::write_orc_args args{cudf_io::sink_info(), view, nullptr, compression};
-    cudf_io::write_orc(args);
+    cudf_io::orc_writer_options options =
+      cudf_io::orc_writer_options::builder(cudf_io::sink_info(), view)
+        .metadata(nullptr)
+        .compression(compression);
+    cudf_io::write_orc(options);
   }
 
   state.SetBytesProcessed(total_bytes * state.iterations());
