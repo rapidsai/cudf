@@ -35,11 +35,20 @@ std::unique_ptr<table> tile(table_view const& input,
 }  // namespace detail
 
 /**
+ * @brief Converts primitive types and string columns to lists of bytes, mimics Spark's cast to
+ * binary type.
  *
+ * @param inpu_column column to be converted to lists of bytes.
+ * @param configuration configuration to retain or flip the endianness of a row.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param  stream CUDA stream to launch kernels within
+ *
+ * @return The column containing the lists of bytes.
  */
 std::unique_ptr<column> byte_cast(
   column_view const& input_column,
   endianess_policy configuration,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
   cudaStream_t stream                 = 0);
+
 }  // namespace cudf

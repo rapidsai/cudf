@@ -182,14 +182,14 @@ TEST_F(ByteCastTest, fp32Values)
                                                              {0x7f, 0x80, 0x00, 0x00},
                                                              {0xff, 0x80, 0x00, 0x00}});
   lists_column_wrapper<uint8_t> const fp32_expected({{0x00, 0x00, 0x00, 0x00},
-                                                     {0x42, 0xc8, 0x00, 0x00},
-                                                     {0xc2, 0xc8, 0x00, 0x00},
-                                                     {0x00, 0x80, 0x00, 0x00},
-                                                     {0x7f, 0x7f, 0xff, 0xff},
-                                                     {0x7f, 0xc0, 0x00, 0x00},
-                                                     {0x7f, 0xc0, 0x00, 0x00},
-                                                     {0x7f, 0x80, 0x00, 0x00},
-                                                     {0xff, 0x80, 0x00, 0x00}});
+                                                     {0x00, 0x00, 0xc8, 0x42},
+                                                     {0x00, 0x00, 0xc8, 0xc2},
+                                                     {0x00, 0x00, 0x80, 0x00},
+                                                     {0xff, 0xff, 0x7f, 0x7f},
+                                                     {0x00, 0x00, 0xc0, 0x7f},
+                                                     {0x00, 0x00, 0xc0, 0x7f},
+                                                     {0x00, 0x00, 0x80, 0x7f},
+                                                     {0x00, 0x00, 0x80, 0xff}});
 
   auto const output_fp32_flipped =
     cudf::byte_cast(fp32_col, cudf::endianess_policy::FLIP_ENDIANESS);

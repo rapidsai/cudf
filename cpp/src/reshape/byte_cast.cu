@@ -30,6 +30,10 @@
 namespace cudf {
 namespace detail {
 struct ByteListConversion {
+  /**
+   * @brief Function object for converting primitive types and string columns to lists of bytes,
+   * mimics Spark's cast to binary type.
+   */
   struct flip_endianness {
     char* d_chars;
     const char* d_data;
