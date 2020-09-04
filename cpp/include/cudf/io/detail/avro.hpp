@@ -68,23 +68,12 @@ class reader {
   /**
    * @brief Reads the entire dataset.
    *
+   * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    */
-  table_with_metadata read_all(cudaStream_t stream = 0);
-
-  /**
-   * @brief Reads and returns a range of rows.
-   *
-   * @param skip_rows Number of rows to skip from the start
-   * @param num_rows Number of rows to read; use `0` for all remaining data
-   * @param metadata Optional location to return table metadata
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   *
-   * @return The set of columns along with table metadata
-   */
-  table_with_metadata read_rows(size_type skip_rows, size_type num_rows, cudaStream_t stream = 0);
+  table_with_metadata read(avro_reader_options const &options, cudaStream_t stream = 0);
 };
 }  // namespace avro
 }  // namespace detail

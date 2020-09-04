@@ -241,7 +241,7 @@ void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size)
 {
   size_t map_range_size = 0;
   if (range_size != 0) {
-    map_range_size = range_size + calculate_max_row_size(options_.dtypes().size());
+    map_range_size = range_size + calculate_max_row_size(options_.get_dtypes().size());
   }
 
   // Support delayed opening of the file if using memory mapping datasource
@@ -270,7 +270,7 @@ void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size)
 void reader::impl::decompress_input(cudaStream_t stream)
 {
   const auto compression_type =
-    infer_compression_type(options_.compression(),
+    infer_compression_type(options_.get_compression(),
                            filepath_,
                            {{"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}});
   if (compression_type == "none") {
@@ -478,7 +478,7 @@ void set_null_count(size_type num_rows,
  */
 void reader::impl::set_data_types(cudaStream_t stream)
 {
-  auto const dtype = options_.dtypes();
+  auto const dtype = options_.get_dtypes();
   if (!dtype.empty()) {
     CUDF_EXPECTS(dtype.size() == metadata.column_names.size(),
                  "Need to specify the type of each column.\n");
@@ -618,8 +618,7 @@ reader::impl::impl(std::unique_ptr<datasource> source,
                    rmm::mr::device_memory_resource *mr)
   : source_(std::move(source)), filepath_(filepath), options_(options), mr_(mr)
 {
-  CUDF_EXPECTS(options_.get(json_reader_options::boolean_param_id::LINES),
-               "Only JSON Lines format is currently supported.\n");
+  CUDF_EXPECTS(options_.get_lines(), "Only JSON Lines format is currently supported.\n");
 
   d_true_trie_         = createSerializedTrie({"true"});
   opts_.trueValuesTrie = d_true_trie_.data().get();
@@ -630,7 +629,7 @@ reader::impl::impl(std::unique_ptr<datasource> source,
   d_na_trie_         = createSerializedTrie({"null"});
   opts_.naValuesTrie = d_na_trie_.data().get();
 
-  opts_.dayfirst = options.get(json_reader_options::boolean_param_id::DAYFIRST);
+  opts_.dayfirst = options.get_dayfirst();
 }
 
 /**
@@ -642,8 +641,11 @@ reader::impl::impl(std::unique_ptr<datasource> source,
  *
  * @return Table and its metadata
  */
-table_with_metadata reader::impl::read(size_t range_offset, size_t range_size, cudaStream_t stream)
+table_with_metadata reader::impl::read(json_reader_options const &options, cudaStream_t stream)
 {
+  auto range_offset = options.get_byte_range_offset();
+  auto range_size = options.get_byte_range_size();
+
   ingest_raw_input(range_offset, range_size);
   CUDF_EXPECTS(buffer_ != nullptr, "Ingest failed: input data is null.\n");
 
@@ -690,17 +692,10 @@ reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
 reader::~reader() = default;
 
 // Forward to implementation
-table_with_metadata reader::read_all(cudaStream_t stream)
+table_with_metadata reader::read(json_reader_options const &options, cudaStream_t stream)
 {
-  return table_with_metadata{_impl->read(0, 0, stream)};
+  return table_with_metadata{_impl->read(options, stream)};
 }
-
-// Forward to implementation
-table_with_metadata reader::read_byte_range(size_t offset, size_t size, cudaStream_t stream)
-{
-  return table_with_metadata{_impl->read(offset, size, stream)};
-}
-
 }  // namespace json
 }  // namespace detail
 }  // namespace io

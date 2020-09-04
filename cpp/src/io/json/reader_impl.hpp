@@ -183,13 +183,12 @@ class reader::impl {
   /**
    * @brief Read an entire set or a subset of data from the source
    *
-   * @param[in] range_offset Number of bytes offset from the start
-   * @param[in] range_size Bytes to read; use `0` for all remaining data
+   * @param[in] options Settings for controlling reading behavior
    * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return Table and its metadata
    */
-  table_with_metadata read(size_t range_offset, size_t range_size, cudaStream_t stream);
+  table_with_metadata read(json_reader_options const &options, cudaStream_t stream);
 };
 
 }  // namespace json

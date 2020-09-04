@@ -35,12 +35,12 @@ namespace cudf {
 namespace io {
 
 /**
- * @brief Builds json_reader_options to use for `read_json()`
+ * @brief Builds settings to use for `read_json()`.
  */
 class json_reader_options_builder;
 
 /**
- * @brief Input arguments to the `read_json` interface
+ * @brief Input arguments to the `read_json` interface.
  *
  * @ingroup io_readers
  *
@@ -68,109 +68,148 @@ class json_reader_options_builder;
 class json_reader_options {
   source_info _source;
 
-  ///< Data types of the column; empty to infer dtypes
+  // Data types of the column; empty to infer dtypes
   std::vector<std::string> _dtypes;
-  /// Specify the compression format of the source or infer from file extension
+  // Specify the compression format of the source or infer from file extension
   compression_type _compression = compression_type::AUTO;
 
-  ///< Read the file as a json object per line
+  // Read the file as a json object per line
   bool _lines = false;
 
-  ///< Bytes to skip from the start
+  // Bytes to skip from the start
   size_t _byte_range_offset = 0;
-  ///< Bytes to read; always reads complete rows
+  // Bytes to read; always reads complete rows
   size_t _byte_range_size = 0;
 
-  /// Whether to parse dates as DD/MM versus MM/DD
+  // Whether to parse dates as DD/MM versus MM/DD
   bool _dayfirst = false;
 
+  /**
+   * @brief Constructor from source info.
+   *
+   * @param src source information used to read parquet file.
+   */
   explicit json_reader_options(const source_info& src) : _source(src) {}
 
   friend json_reader_options_builder;
 
  public:
-  explicit json_reader_options() = default;
-
   /**
-   * @brief enum class for json_reader_options boolean parameters
-   */
-
-  enum class boolean_param_id : int8_t {
-    LINES,     // Read the file as a json object per line
-    DAYFIRST,  // hether to parse dates as DD/MM versus MM/DD
-  };
-
-  /**
-   * @brief enum class for json_reader_options size_type parameters
-   */
-  enum class size_type_param_id : int8_t {
-    BYTE_RANGE_OFFSET,  // Bytes to skip from the start
-    BYTE_RANGE_SIZE     // Bytes to read; always reads complete rows
-  };
-
-  /**
-   * @brief create json_reader_options_builder which will build json_reader_options
+   * @brief Default constructor.
    *
-   * @param src source information used to read json file
-   * @returns json_reader_options_builder
+   * This has been added since Cython requires a default constructor to create objects on stack.
+   */
+  json_reader_options() = default;
+
+  /**
+   * @brief create json_reader_options_builder which will build json_reader_options.
+   *
+   * @param src source information used to read json file.
+   * @returns builder to build the options.
    */
   static json_reader_options_builder builder(source_info const& src);
 
   /**
-   * @brief Returns source info
+   * @brief Returns source info.
    */
-  source_info const& source() const { return _source; }
+  source_info const& get_source() const { return _source; }
 
   /**
-   * @brief Returns Data types of the column
+   * @brief Returns data types of the columns. 
    */
-  std::vector<std::string>& dtypes() { return _dtypes; }
+  std::vector<std::string> const& get_dtypes() const { return _dtypes; }
 
   /**
-   * @brief Returns Data types of the column
+   * @brief Returns compression format of the source.
    */
-  std::vector<std::string> const& dtypes() const { return _dtypes; }
+  compression_type get_compression() const { return _compression; }
 
   /**
-   * @brief Returns expected compression format of the source
+   * @brief Returns number of bytes to skip from source start.
    */
-  compression_type compression() const { return _compression; }
+  size_t get_byte_range_offset() const { return _byte_range_offset; }
 
   /**
-   * @brief Returns boolean parameter values as per the corresponding enum
+   * @brief Returns number of bytes to read.
    */
-  bool get(boolean_param_id param_id) const
-  {
-    switch (param_id) {
-      case boolean_param_id::LINES: return _lines;
-      case boolean_param_id::DAYFIRST: return _dayfirst;
-      default: CUDF_FAIL("Unsupported boolean_param_id enum");
-    }
-  }
+  size_t get_byte_range_size() const { return _byte_range_size; }
 
   /**
-   * @brief Returns size_type parameter values as per the corresponding enum
+   * @brief Whether to read the file as a json object per line.
    */
-  size_type get(size_type_param_id param_id) const
-  {
-    switch (param_id) {
-      case size_type_param_id::BYTE_RANGE_OFFSET: return _byte_range_offset;
-      case size_type_param_id::BYTE_RANGE_SIZE: return _byte_range_size;
-      default: CUDF_FAIL("Unsupported size_type_param_id enum");
-    }
-  }
+  bool get_lines() const { return _lines; }
+
+  /**
+   * @brief Whether to parse dates as DD/MM versus MM/DD.
+   */
+  bool get_dayfirst() const { return _dayfirst; }
+
+  /**
+   * @brief Set data types for columns to be read.
+   *
+   * @param types Vector dtypes in string format.
+   */
+  void dtypes(std::vector<std::string> types) { _dtypes = std::move(types); }
+
+  /**
+   * @brief Set the compression type.
+   *
+   * @param comp_type The compression type used.
+   */
+  void compression(compression_type comp_type) { _compression = comp_type; }
+
+  /**
+   * @brief Set number of bytes to skip from source start.
+   *
+   * @param offset Number of bytes of offset.
+   */
+  void set_byte_range_offset(size_type offset) { _byte_range_offset = offset; }
+
+  /**
+   * @brief Set number of bytes to read.
+   *
+   * @param size Number of bytes to read.
+   */
+  void set_byte_range_size(size_type size) { _byte_range_size = size; }
+
+  /**
+   * @brief Set whether to read the file as a json object per line.
+   *
+   * @param val Boolean value to enable/disable the option to read each line as a json object.
+   */
+  void set_lines(bool val) { _lines = val; }
+
+  /**
+   * @brief Set whether to parse dates as DD/MM versus MM/DD.
+   *
+   * @param val Boolean value to enable/disable day first parsing format.
+   */
+  void set_dayfirst(bool val) { _dayfirst = val; }
 };
 
 class json_reader_options_builder {
   json_reader_options options;
 
  public:
+  /**
+   * @brief Default constructor.
+   *
+   * This has been added since Cython requires a default constructor to create objects on stack.
+   */
   explicit json_reader_options_builder() = default;
 
+  /**
+   * @brief Constructor from source info.
+   *
+   * @param src The source information used to read avro file.
+   */
   explicit json_reader_options_builder(source_info const& src) : options(src) {}
 
   /**
-   * @brief Set dtypes for columns to be read
+   * @brief Set data types for columns to be read.
+   *
+   * @param types Vector dtypes in string format.
+   * @return this for chaining.
    */
   json_reader_options_builder& dtypes(std::vector<std::string> types)
   {
@@ -179,7 +218,10 @@ class json_reader_options_builder {
   }
 
   /**
-   * @brief Set compression type to json_reader_options
+   * @brief Set the compression type.
+   *
+   * @param comp_type The compression type used.
+   * @return this for chaining.
    */
   json_reader_options_builder& compression(compression_type comp_type)
   {
@@ -188,50 +230,64 @@ class json_reader_options_builder {
   }
 
   /**
-   * @brief Set boolean class members
+   * @brief Set number of bytes to skip from source start.
+   *
+   * @param offset Number of bytes of offset.
+   * @return this for chaining.
    */
-  json_reader_options_builder& set(json_reader_options::boolean_param_id param_id, bool val)
-  {
-    switch (param_id) {
-      case json_reader_options::boolean_param_id::LINES: options._lines = val; break;
-      case json_reader_options::boolean_param_id::DAYFIRST: options._dayfirst = val; break;
-      default: CUDF_FAIL("Unsupported boolean_param_id enum");
-    }
-
-    return *this;
+  json_reader_options_builder& byte_range_offset(size_type offset) { 
+      options._byte_range_offset = offset;
+      return *this;
   }
 
   /**
-   * @brief Set size_type class members
+   * @brief Set number of bytes to read.
+   *
+   * @param size Number of bytes to read.
+   * @return this for chaining
    */
-  json_reader_options_builder& set(json_reader_options::size_type_param_id param_id, size_type val)
-  {
-    switch (param_id) {
-      case json_reader_options::size_type_param_id::BYTE_RANGE_OFFSET:
-        options._byte_range_offset = val;
-        break;
-      case json_reader_options::size_type_param_id::BYTE_RANGE_SIZE:
-        options._byte_range_size = val;
-        break;
-      default: CUDF_FAIL("Unsupported size_type_param_id enum");
-    }
-
-    return *this;
+  json_reader_options_builder& byte_range_size(size_type size) { 
+      options._byte_range_size = size;
+      return *this;
   }
 
   /**
-   * @brief move json_reader_options member once options is built
+   * @brief Set whether to read the file as a json object per line.
+   *
+   * @param val Boolean value to enable/disable the option to read each line as a json object.
+   * @return this for chaining.
+   */
+  json_reader_options_builder& lines(bool val) {
+      options._lines = val; 
+      return *this;
+  }
+
+  /**
+   * @brief Set whether to parse dates as DD/MM versus MM/DD.
+   *
+   * @param val Boolean value to enable/disable day first parsing format.
+   * @return this for chaining.
+   */
+  json_reader_options_builder& dayfirst(bool val) {
+      options._dayfirst = val; 
+      return *this;
+  }
+
+  /**
+   * @brief move json_reader_options member once it's built.
    */
   operator json_reader_options &&() { return std::move(options); }
 
   /**
-   * @brief move json_reader_options member once options is built
+   * @brief move json_reader_options member once it's built.
+   *
+   * This has been added since Cython does not support overloading of conversion operators.
    */
   json_reader_options&& build() { return std::move(options); }
 };
 
 /**
- * @brief Reads a JSON dataset into a set of columns
+ * @brief Reads a JSON dataset into a set of columns.
  *
  * @ingroup io_readers
  *
@@ -239,19 +295,19 @@ class json_reader_options_builder {
  * @code
  *  ...
  *  std::string filepath = "dataset.json";
- *  cudf::read_json_args args{cudf::source_info(filepath)};
+ *  cudf::read_json_options options = cudf::read_json_options::builder(cudf::source_info(filepath));
  *  ...
- *  auto result = cudf::read_json(args);
+ *  auto result = cudf::read_json(options);
  * @endcode
  *
- * @param args Settings for controlling reading behavior
+ * @param options Settings for controlling reading behavior.
  * @param mr Device memory resource used to allocate device memory of the table in the returned
- * table_with_metadata
+ * table_with_metadata.
  *
- * @return The set of columns along with metadata
+ * @return The set of columns along with metadata.
  */
 table_with_metadata read_json(
-  json_reader_options const& args,
+  json_reader_options const& options,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace io
