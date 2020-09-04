@@ -21,7 +21,7 @@
 #include <benchmarks/io/cuio_benchmarks_common.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
-#include <cudf/io/functions.hpp>
+#include <cudf/io/orc.hpp>
 
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
 

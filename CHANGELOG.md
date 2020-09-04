@@ -28,6 +28,7 @@
 - PR #6141 Fix typo in custreamz README that was a result of recent changes
 - PR #6146 Added element/validity pair constructors for fixed_width and string wrappers
 - PR #6143 General improvements for java arrow IPC.
+- PR #6138 Add builder API for cuIO `orc_writer_options` and `orc_reader_options`
 
 ## Bug Fixes
 
