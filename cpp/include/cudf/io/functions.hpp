@@ -149,8 +149,9 @@ struct read_csv_args {
  *
  * @return The set of columns along with metadata
  */
-table_with_metadata read_csv(read_csv_args const& args,
-                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+table_with_metadata read_csv(
+  read_csv_args const& args,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Settings to use for `write_csv()`
@@ -219,7 +220,7 @@ struct write_csv_args : detail::csv::writer_options {
  * @param mr Device memory resource to use for device memory allocation
  */
 void write_csv(write_csv_args const& args,
-               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+               rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Settings to use for `read_orc()`
@@ -232,12 +233,8 @@ struct read_orc_args {
   /// Names of column to read; empty is all
   std::vector<std::string> columns;
 
-  /// Stripe to read; -1 is all
-  size_type stripe = -1;
-  /// Number of stripes to read starting from `stripe`; default is one if stripe >= 0
-  size_type stripe_count = -1;
   /// List of individual stripes to read (ignored if empty)
-  std::vector<size_type> stripe_list;
+  std::vector<size_type> stripes;
   /// Rows to skip from the start; -1 is none
   size_type skip_rows = -1;
   /// Rows to read; -1 is all
@@ -282,8 +279,9 @@ struct read_orc_args {
  *
  * @return The set of columns
  */
-table_with_metadata read_orc(read_orc_args const& args,
-                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+table_with_metadata read_orc(
+  read_orc_args const& args,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Settings to use for `read_parquet()`
@@ -335,7 +333,7 @@ struct read_parquet_args {
  */
 table_with_metadata read_parquet(
   read_parquet_args const& args,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Settings to use for `write_orc()`
@@ -388,7 +386,7 @@ struct write_orc_args {
  * @param mr Device memory resource to use for device memory allocation
  */
 void write_orc(write_orc_args const& args,
-               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+               rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Settings to use for `write_orc_chunked()`
@@ -454,7 +452,7 @@ struct orc_chunked_state;
  */
 std::shared_ptr<detail::orc::orc_chunked_state> write_orc_chunked_begin(
   write_orc_chunked_args const& args,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Write a single table as a subtable of a larger logical orc file/table.
@@ -540,7 +538,7 @@ struct write_parquet_args {
  */
 std::unique_ptr<std::vector<uint8_t>> write_parquet(
   write_parquet_args const& args,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Merges multiple raw metadata blobs that were previously created by write_parquet
@@ -622,7 +620,7 @@ struct pq_chunked_state;
  */
 std::shared_ptr<detail::parquet::pq_chunked_state> write_parquet_chunked_begin(
   write_parquet_chunked_args const& args,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 /**
  * @brief Write a single table as a subtable of a larger logical parquet file/table.
  *
