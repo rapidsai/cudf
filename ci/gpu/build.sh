@@ -17,9 +17,8 @@ function hasArg {
     (( ${NUMARGS} != 0 )) && (echo " ${ARGS} " | grep -q " $1 ")
 }
 
-# Set path and build parallel level
+# Set path and cuda release
 export PATH=/conda/bin:/usr/local/cuda/bin:$PATH
-export PARALLEL_LEVEL=4
 export CUDA_REL=${CUDA_VERSION%.*}
 
 # Set home to the job's workspace
@@ -95,17 +94,11 @@ conda list
 logger "Check ccache status..."
 ccache -s
 
-logger "Clean ccache..."
-ccache -c
-
-logger "Check ccache status..."
-ccache -s
-
 logger "Build libcudf..."
 if [[ ${BUILD_MODE} == "pull-request" ]]; then
-    $WORKSPACE/build.sh clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests --ptds
+    $WORKSPACE/build.sh libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests --ptds
 else
-    $WORKSPACE/build.sh clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests -l --ptds
+    $WORKSPACE/build.sh libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests -l --ptds
 fi
 
 logger "Check ccache status..."
