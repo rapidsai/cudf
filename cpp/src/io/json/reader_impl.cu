@@ -618,7 +618,7 @@ reader::impl::impl(std::unique_ptr<datasource> source,
                    rmm::mr::device_memory_resource *mr)
   : source_(std::move(source)), filepath_(filepath), options_(options), mr_(mr)
 {
-  CUDF_EXPECTS(options_.get_lines(), "Only JSON Lines format is currently supported.\n");
+  CUDF_EXPECTS(options_.is_enabled_lines(), "Only JSON Lines format is currently supported.\n");
 
   d_true_trie_         = createSerializedTrie({"true"});
   opts_.trueValuesTrie = d_true_trie_.data().get();
@@ -629,7 +629,7 @@ reader::impl::impl(std::unique_ptr<datasource> source,
   d_na_trie_         = createSerializedTrie({"null"});
   opts_.naValuesTrie = d_na_trie_.data().get();
 
-  opts_.dayfirst = options.get_dayfirst();
+  opts_.dayfirst = options.is_enabled_dayfirst();
 }
 
 /**

@@ -139,12 +139,12 @@ class json_reader_options {
   /**
    * @brief Whether to read the file as a json object per line.
    */
-  bool get_lines() const { return _lines; }
+  bool is_enabled_lines() const { return _lines; }
 
   /**
    * @brief Whether to parse dates as DD/MM versus MM/DD.
    */
-  bool get_dayfirst() const { return _dayfirst; }
+  bool is_enabled_dayfirst() const { return _dayfirst; }
 
   /**
    * @brief Set data types for columns to be read.
@@ -179,14 +179,14 @@ class json_reader_options {
    *
    * @param val Boolean value to enable/disable the option to read each line as a json object.
    */
-  void set_lines(bool val) { _lines = val; }
+  void enable_lines(bool val) { _lines = val; }
 
   /**
    * @brief Set whether to parse dates as DD/MM versus MM/DD.
    *
    * @param val Boolean value to enable/disable day first parsing format.
    */
-  void set_dayfirst(bool val) { _dayfirst = val; }
+  void enable_dayfirst(bool val) { _dayfirst = val; }
 };
 
 class json_reader_options_builder {

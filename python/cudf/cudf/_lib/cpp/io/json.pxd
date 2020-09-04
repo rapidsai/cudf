@@ -20,8 +20,8 @@ cdef extern from "cudf/io/json.hpp" \
         cudf_io_types.compression_type get_compression() except +
         size_type get_byte_range_offset() except+
         size_type get_byte_range_size() except+
-        bool get_lines() except+
-        bool get_dayfirst() except+
+        bool is_enabled_lines() except+
+        bool is_enabled_dayfirst() except+
 
         # setter
         void set_dtypes(vector[string] types) except+
