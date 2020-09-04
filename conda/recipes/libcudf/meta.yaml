@@ -31,8 +31,6 @@ requirements:
     - cudatoolkit {{ cuda_version }}.*
     - arrow-cpp 1.0.1.*
     - arrow-cpp-proc * cuda
-    - double-conversion
-    - rapidjson
     - flatbuffers
     - boost-cpp >=1.72.0
     - dlpack
@@ -40,6 +38,7 @@ requirements:
     - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
     - dlpack
     - arrow-cpp-proc * cuda
+    - boost-cpp >=1.72.0
 
 test:
   commands:
