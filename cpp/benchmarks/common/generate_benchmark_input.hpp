@@ -108,6 +108,7 @@ class data_profile {
   std::map<cudf::type_id, distribution_desc<uint64_t>> int_params;
   std::map<cudf::type_id, distribution_desc<double>> float_params;
   distribution_desc<cudf::string_view> string_dist_desc{{distribution_id::NORMAL, 0, 32}};
+
   double bool_probability        = 0.5;
   double null_frequency          = 0.01;
   cudf::size_type cardinality    = 2000;  // TODO: maybe sqrt(num_rows)?
@@ -182,7 +183,13 @@ class data_profile {
   template <typename T, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
   void set_distribution_desc(cudf::type_id type, distribution_id dist, T lower_bound, T upper_bound)
   {
-    int_params[type] = {dist, static_cast<uint64_t>(lower_bound), static_cast<uint64_t>(upper_bound)};
+    if (type != cudf::type_id::STRING) {
+      int_params[type] = {
+        dist, static_cast<uint64_t>(lower_bound), static_cast<uint64_t>(upper_bound)};
+    } else {
+      string_dist_desc = {
+        {dist, static_cast<uint32_t>(lower_bound), static_cast<uint32_t>(upper_bound)}};
+    }
   }
 
   template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value, T>* = nullptr>
