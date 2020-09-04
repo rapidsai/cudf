@@ -26,6 +26,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib.null_mask import MaskState, create_null_mask
 from cudf._lib.nvtx import annotate
+from cudf.api.types import is_categorical_dtype, is_list_dtype, is_string_dtype
 from cudf.core import column
 from cudf.core.abc import Serializable
 from cudf.core.column import as_column, column_empty
@@ -44,7 +45,6 @@ from cudf.utils.dtypes import (
     is_scalar,
     numeric_normalize_types,
 )
-from cudf.api.types import is_categorical_dtype, is_list_dtype, is_string_dtype
 from cudf.utils.utils import OrderedColumnDict
 
 
@@ -4520,7 +4520,10 @@ class DataFrame(Frame, Serializable):
                 deep = True
             else:
                 deep = False
-                if "String" in dtype_counts or self.index.dtype == cudf.StringDtype():
+                if (
+                    "String" in dtype_counts
+                    or self.index.dtype == cudf.StringDtype()
+                ):
                     size_qualifier = "+"
             mem_usage = self.memory_usage(index=True, deep=deep).sum()
             lines.append(
@@ -4907,7 +4910,9 @@ class DataFrame(Frame, Serializable):
         numpy recarray
         """
         members = [("index", self.index.dtype.to_numpy)] if index else []
-        members += [(col, self[col].dtype.to_numpy) for col in self._data.names]
+        members += [
+            (col, self[col].dtype.to_numpy) for col in self._data.names
+        ]
         dtype = np.dtype(members)
         ret = np.recarray(len(self), dtype=dtype)
         if index:
@@ -6419,7 +6424,7 @@ class DataFrame(Frame, Serializable):
                     include_subtypes.add(i_dtype)
                 elif issubclass(dtype, i_dtype):
                     include_subtypes.add(dtype)
-    
+
         # exclude all subtypes
         exclude_subtypes = set()
         for dtype in (d.__class__ for d in self.dtypes):

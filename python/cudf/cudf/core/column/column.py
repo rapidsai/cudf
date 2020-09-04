@@ -23,6 +23,12 @@ from cudf._lib.quantiles import quantile as cpp_quantile
 from cudf._lib.scalar import as_scalar
 from cudf._lib.stream_compaction import distinct_count as cpp_distinct_count
 from cudf._lib.transform import bools_to_mask
+from cudf.api.types import (
+    is_bool_dtype,
+    is_categorical_dtype,
+    is_list_dtype,
+    is_string_dtype,
+)
 from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
@@ -34,10 +40,8 @@ from cudf.utils.dtypes import (
     is_scalar,
     min_signed_type,
     min_unsigned_type,
-    np_to_pa_dtype,
 )
 from cudf.utils.utils import mask_dtype
-from cudf.api.types import is_categorical_dtype, is_list_dtype, is_numerical_dtype, is_string_dtype, is_bool_dtype
 
 
 class ColumnBase(Column, Serializable):
@@ -202,14 +206,17 @@ class ColumnBase(Column, Serializable):
                 [
                     o
                     for o in not_null_cols
-                    if not isinstance(o.dtype, (cudf.Number)) or isinstance(o.dtype, cudf.Datetime)
+                    if not isinstance(o.dtype, (cudf.Number))
+                    or isinstance(o.dtype, cudf.Datetime)
                 ]
             )
             == 0
         ):
             cudf_col_dtypes = [o.dtype for o in not_null_cols]
             # Use NumPy to find a common dtype
-            cudf_common_dtype = cudf.api.types.find_common_type(cudf_col_dtypes, [])
+            cudf_common_dtype = cudf.api.types.find_common_type(
+                cudf_col_dtypes, []
+            )
             # Cast all columns to the common dtype
             for i in range(len(objs)):
                 objs[i] = objs[i].astype(cudf_common_dtype)
@@ -635,9 +642,13 @@ class ColumnBase(Column, Serializable):
             arg = as_column(arg)
             if len(arg) == 0:
                 arg = as_column([], dtype="int32")
-            if pd.api.types.is_integer_dtype(arg.dtype) or isinstance(arg.dtype, cudf.Integer):
+            if pd.api.types.is_integer_dtype(arg.dtype) or isinstance(
+                arg.dtype, cudf.Integer
+            ):
                 return self.take(arg)
-            if pd.api.types.is_bool_dtype(arg.dtype) or isinstance(arg.dtype, cudf.BooleanDtype):
+            if pd.api.types.is_bool_dtype(arg.dtype) or isinstance(
+                arg.dtype, cudf.BooleanDtype
+            ):
                 return self.apply_boolean_mask(arg)
             raise NotImplementedError(type(arg))
 
@@ -1607,9 +1618,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         elif arb_dtype.kind in ("O", "U"):
 
             pa_data = pa.Array.from_pandas(arbitrary)
-            data = as_column(
-                pa_data, dtype=cudf.dtype(pa_data.type)
-            )
+            data = as_column(pa_data, dtype=cudf.dtype(pa_data.type))
             # There is no cast operation available for pa.Array from int to
             # str, Hence instead of handling in pa.Array block, we
             # will have to type-cast here.
@@ -1681,24 +1690,44 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                     if is_categorical_dtype(dtype):
                         raise TypeError
 
-                pa_data = pa.array(arbitrary,
-                                   type=dtype.pa_type if dtype is not None else None, 
-                                   from_pandas=True if nan_as_null is None else nan_as_null)
+                pa_data = pa.array(
+                    arbitrary,
+                    type=dtype.pa_type if dtype is not None else None,
+                    from_pandas=True if nan_as_null is None else nan_as_null,
+                )
                 # todo: fix this ???? ????????
-                as_column_dtype = cudf.dtype(pa_data.type) if not isinstance(pa_data.type, (pa.lib.DictionaryType, pa.lib.ListType)) else None
-                data = as_column(pa_data, dtype=as_column_dtype, nan_as_null=nan_as_null)
+                as_column_dtype = (
+                    cudf.dtype(pa_data.type)
+                    if not isinstance(
+                        pa_data.type, (pa.lib.DictionaryType, pa.lib.ListType)
+                    )
+                    else None
+                )
+                data = as_column(
+                    pa_data, dtype=as_column_dtype, nan_as_null=nan_as_null
+                )
 
             except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError):
                 if is_categorical_dtype(dtype):
-                    if isinstance(dtype, pd.CategoricalDtype) or dtype is 'category':
-                        data = as_column(pd.Series(arbitrary, dtype=dtype), nan_as_null=nan_as_null)
+                    if (
+                        isinstance(dtype, pd.CategoricalDtype)
+                        or dtype is "category" # noqa: F632
+                    ):
+                        data = as_column(
+                            pd.Series(arbitrary, dtype=dtype),
+                            nan_as_null=nan_as_null,
+                        )
                     else:
-                        data = as_column(arbitrary, nan_as_null=nan_as_null).astype(dtype)
+                        data = as_column(
+                            arbitrary, nan_as_null=nan_as_null
+                        ).astype(dtype)
                 elif isinstance(cudf.dtype(dtype), cudf.StringDtype):
                     sr = pd.Series(arbitrary, dtype="str")
                     data = as_column(sr, nan_as_null=nan_as_null)
                 else:
-                    native_dtype = dtype.to_numpy if dtype is not None else None
+                    native_dtype = (
+                        dtype.to_numpy if dtype is not None else None
+                    )
                     if dtype is None and pd.api.types.infer_dtype(
                         arbitrary
                     ) in ("mixed", "mixed-integer"):

@@ -8,13 +8,14 @@ from cudf._lib.nvtx import annotate
 from cudf._lib.scalar import Scalar
 from cudf.core.buffer import Buffer
 from cudf.core.column import as_column, build_column, column, string
+from cudf.core.dtypes import Float64Dtype
 from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import (
     min_column_type,
     min_signed_type,
     numeric_normalize_types,
 )
-from cudf.core.dtypes import Float64Dtype
+
 
 class NumericalColumn(column.ColumnBase):
     def __init__(
@@ -79,7 +80,9 @@ class NumericalColumn(column.ColumnBase):
         if reflect:
             tmp = self
         if isinstance(rhs, (NumericalColumn, Scalar)) or np.isscalar(rhs):
-            out_dtype = np.result_type(cudf.dtype(self.dtype).to_numpy, cudf.dtype(rhs.dtype).to_numpy)
+            out_dtype = np.result_type(
+                cudf.dtype(self.dtype).to_numpy, cudf.dtype(rhs.dtype).to_numpy
+            )
             out_dtype = cudf.dtype(out_dtype)
             if binop in ["mod", "floordiv"]:
                 if (cudf.dtype(tmp.dtype) in int_dtypes) and (
@@ -134,9 +137,9 @@ class NumericalColumn(column.ColumnBase):
     def as_string_column(self, dtype, **kwargs):
 
         if len(self) > 0:
-            return string._numeric_to_str_typecast_functions[
-                self.dtype
-            ](self, **kwargs)
+            return string._numeric_to_str_typecast_functions[self.dtype](
+                self, **kwargs
+            )
         else:
             return as_column([], dtype="object")
 
@@ -167,6 +170,7 @@ class NumericalColumn(column.ColumnBase):
             return self
         if dtype is None:
             import pdb
+
             pdb.set_trace()
         return libcudf.unary.cast(self, dtype)
 
@@ -175,13 +179,14 @@ class NumericalColumn(column.ColumnBase):
             return libcudf.reduce.reduce("sum", self, dtype=dtype)
         except:
             import pdb
+
             pdb.set_trace()
 
     def product(self, dtype=None):
         return libcudf.reduce.reduce("product", self, dtype=dtype)
 
     def mean(self, dtype=Float64Dtype()):
-            return libcudf.reduce.reduce("mean", self, dtype=dtype)
+        return libcudf.reduce.reduce("mean", self, dtype=dtype)
 
     def var(self, ddof=1, dtype=Float64Dtype()):
         return libcudf.reduce.reduce("var", self, dtype=dtype, ddof=ddof)

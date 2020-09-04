@@ -640,6 +640,7 @@ def test_cudf_to_datetime(data, dayfirst, infer_datetime_format):
 )
 def test_to_datetime_errors(data):
     from cudf.core.series import _fix_nullable_dtype_repr
+
     pd_data = data
     if isinstance(pd_data, (pd.Series, pd.DataFrame, pd.Index)):
         gd_data = cudf.from_pandas(pd_data)
@@ -649,7 +650,9 @@ def test_to_datetime_errors(data):
     try:
         pd.to_datetime(pd_data)
     except Exception as e:
-        with pytest.raises(type(e), match=re.escape(_fix_nullable_dtype_repr(str(e)))):
+        with pytest.raises(
+            type(e), match=re.escape(_fix_nullable_dtype_repr(str(e)))
+        ):
             cudf.to_datetime(gd_data)
     else:
         raise AssertionError("Was expecting `pd.to_datetime` to fail")

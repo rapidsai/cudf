@@ -1,25 +1,40 @@
-import pandas as pd
-import cudf
 import numpy as np
+import pandas as pd
 from pandas.core.dtypes.dtypes import CategoricalDtype, CategoricalDtypeType
+
+import cudf
+
 
 def is_bool_dtype(obj):
     # todo - pd.api.types.is_bool_dtype should not give false, nor work at all probably
     if hasattr(obj, "dtype"):
         obj = obj.dtype
-    return isinstance(obj, cudf.BooleanDtype) or pd.api.types.is_bool_dtype(obj)
+    return isinstance(obj, cudf.BooleanDtype) or pd.api.types.is_bool_dtype(
+        obj
+    )
+
 
 def is_datetime64_dtype(obj):
-    return isinstance(obj, cudf.Datetime) or pd.api.types.is_datetime64_dtype(obj)
+    return isinstance(obj, cudf.Datetime) or pd.api.types.is_datetime64_dtype(
+        obj
+    )
+
 
 def is_timedelta64_dtype(obj):
-    return isinstance(obj, cudf.Timedelta) or pd.api.types.is_timedelta64_dtype(obj)
+    return isinstance(
+        obj, cudf.Timedelta
+    ) or pd.api.types.is_timedelta64_dtype(obj)
+
 
 def is_string_dtype(obj):
-    return isinstance(obj, cudf.StringDtype) or (pd.api.types.is_string_dtype(obj) and not is_categorical_dtype(obj))
+    return isinstance(obj, cudf.StringDtype) or (
+        pd.api.types.is_string_dtype(obj) and not is_categorical_dtype(obj)
+    )
+
 
 def is_integer_dtype(obj):
     return isinstance(obj, cudf.Integer) or pd.api.types.is_integer_dtype(obj)
+
 
 def is_numerical_dtype(obj):
     if isinstance(obj, cudf.Generic):
@@ -34,11 +49,14 @@ def is_numerical_dtype(obj):
         or np.issubdtype(obj, np.signedinteger)
     )
 
+
 def is_categorical_dtype(obj):
     """Infer whether a given pandas, numpy, or cuDF Column, Series, or dtype
     is a pandas CategoricalDtype.
     """
-    if isinstance(obj, cudf.Generic) and not isinstance(obj, cudf.CategoricalDtype):
+    if isinstance(obj, cudf.Generic) and not isinstance(
+        obj, cudf.CategoricalDtype
+    ):
         return False
     if obj is None:
         return False
@@ -85,6 +103,7 @@ def is_categorical_dtype(obj):
             return True
     return pd.api.types.is_categorical_dtype(obj)
 
+
 def is_list_dtype(obj):
     return (
         type(obj) is cudf.core.dtypes.ListDtype
@@ -95,11 +114,17 @@ def is_list_dtype(obj):
         or (hasattr(obj, "dtype") and is_list_dtype(obj.dtype))
     )
 
+
 def find_common_type(array_types=[], scalar_types=[]):
-    array_types = [d.to_numpy if isinstance(d, cudf.Generic) else d for d in array_types]
-    scalar_types = [d.to_numpy if isinstance(d, cudf.Generic) else d for d in scalar_types]
+    array_types = [
+        d.to_numpy if isinstance(d, cudf.Generic) else d for d in array_types
+    ]
+    scalar_types = [
+        d.to_numpy if isinstance(d, cudf.Generic) else d for d in scalar_types
+    ]
 
     return cudf.dtype(np.find_common_type(array_types, scalar_types))
+
 
 def can_cast(dtype_l, dtype_r):
     if isinstance(dtype_l, cudf.Generic):
@@ -109,7 +134,11 @@ def can_cast(dtype_l, dtype_r):
 
     return np.can_cast(dtype_l, dtype_r)
 
+
 def result_type(*arrays_and_dtypes):
 
-    arrays_and_dtypes = (d.to_numpy if isinstance(d, cudf.Generic) else d for d in arrays_and_dtypes)
+    arrays_and_dtypes = (
+        d.to_numpy if isinstance(d, cudf.Generic) else d
+        for d in arrays_and_dtypes
+    )
     return cudf.dtype(np.result_type(*arrays_and_dtypes))

@@ -156,7 +156,7 @@ def test_string_repr(ps_gs, item):
 
     if got_out is not None and len(got_out) > 1:
         expect = expect.replace("None", "<NA>")
-    expect = expect.replace('object', 'String')
+    expect = expect.replace("object", "String")
 
     assert expect == got
 

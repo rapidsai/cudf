@@ -13,6 +13,7 @@ from pandas.api.types import is_dict_like, is_dtype_equal
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.nvtx import annotate
+from cudf.api.types import is_categorical_dtype, is_numerical_dtype
 from cudf.core.column import as_column, build_categorical_column
 from cudf.utils import utils
 from cudf.utils.dtypes import (
@@ -21,7 +22,6 @@ from cudf.utils.dtypes import (
     min_scalar_type,
     min_signed_type,
 )
-from cudf.api.types import is_numerical_dtype, is_categorical_dtype
 
 
 class Frame(libcudf.table.Table):
@@ -277,7 +277,9 @@ class Frame(libcudf.table.Table):
                 dtypes[idx] = cols[0].dtype
                 # If all the non-null dtypes are int/float, find a common dtype
                 if all(is_numerical_dtype(col.dtype) for col in cols):
-                    dtypes[idx] = cudf.api.types.find_common_type([col.dtype for col in cols], [])
+                    dtypes[idx] = cudf.api.types.find_common_type(
+                        [col.dtype for col in cols], []
+                    )
                 # If all categorical dtypes, combine the categories
                 elif all(
                     isinstance(col, cudf.core.column.CategoricalColumn)
@@ -294,9 +296,7 @@ class Frame(libcudf.table.Table):
                     # will be re-assigned at the end
                     dtypes[idx] = min_scalar_type(len(categories[idx]))
                 # Otherwise raise an error if columns have different dtypes
-                elif not all(
-                    c.dtype == dtypes[idx] for c in cols
-                ):
+                elif not all(c.dtype == dtypes[idx] for c in cols):
                     raise ValueError("All columns must be the same type")
             return categories
 

@@ -8,8 +8,8 @@ import cudf as gd
 from cudf.core import DataFrame, Series
 from cudf.core._compat import PANDAS_GE_110
 from cudf.core.index import as_index
-from cudf.tests.utils import assert_eq
 from cudf.core.series import _fix_nullable_dtype_repr
+from cudf.tests.utils import assert_eq
 
 
 @pytest.fixture

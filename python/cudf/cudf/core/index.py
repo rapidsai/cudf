@@ -11,6 +11,7 @@ from pandas._config import get_option
 
 import cudf
 from cudf._lib.nvtx import annotate
+from cudf.api.types import is_categorical_dtype
 from cudf.core.abc import Serializable
 from cudf.core.column import (
     CategoricalColumn,
@@ -22,6 +23,7 @@ from cudf.core.column import (
     column,
 )
 from cudf.core.column.string import StringMethods as StringMethods
+from cudf.core.dtypes import dtype
 from cudf.core.frame import Frame
 from cudf.utils import ioutils, utils
 from cudf.utils.docutils import copy_docstring
@@ -31,9 +33,7 @@ from cudf.utils.dtypes import (
     is_scalar,
     numeric_normalize_types,
 )
-from cudf.api.types import is_categorical_dtype
 from cudf.utils.utils import cached_property
-from cudf.core.dtypes import dtype
 
 
 def _to_frame(this_index, index=True, name=None):

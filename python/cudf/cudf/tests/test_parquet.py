@@ -5,19 +5,18 @@ import random
 from glob import glob
 from io import BytesIO
 from string import ascii_letters
-from packaging import version
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+from packaging import version
 from pyarrow import parquet as pq
 
 import cudf
 from cudf.io.parquet import ParquetWriter, merge_parquet_filemetadata
+from cudf.tests import dataset_generator as dg
 from cudf.tests.utils import assert_eq
-
-import cudf.tests.dataset_generator as dg
 
 
 @pytest.fixture(scope="module")
@@ -380,6 +379,7 @@ def test_parquet_read_filtered_everything(tmpdir):
     assert_eq(len(df_filtered), 0)
     assert isinstance(df_filtered["x"].dtype, cudf.Int64Dtype)
     assert isinstance(df_filtered["y"].dtype, cudf.StringDtype)
+
 
 def test_parquet_read_filtered_multiple_files(tmpdir):
     # Generate data

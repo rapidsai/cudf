@@ -1,6 +1,6 @@
-import numpy as np
 import pandas as pd
 import pytest
+
 import cudf
 from cudf import Series
 from cudf.tests.utils import assert_eq

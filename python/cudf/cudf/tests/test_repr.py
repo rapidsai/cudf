@@ -6,10 +6,10 @@ import numpy as np
 import pandas as pd
 import pytest
 from hypothesis import given, settings, strategies as st
-from cudf.core.series import _fix_nullable_dtype_repr
 
 import cudf
 from cudf.core._compat import PANDAS_GE_110
+from cudf.core.series import _fix_nullable_dtype_repr
 from cudf.tests import utils
 from cudf.utils.dtypes import cudf_dtypes_to_pandas_dtypes
 
@@ -49,6 +49,7 @@ def test_null_series(nrows, dtype):
             str(sr._column.default_na_value()) + "\n", "<NA>\n"
         )
     from cudf.core.series import _fix_nullable_dtype_repr
+
     # todo: this is kind of self-fulfilling since this is what is
     # called inside _repr_ as well
     psrepr = _fix_nullable_dtype_repr(psrepr)
@@ -203,12 +204,9 @@ def test_mixed_dataframe(mixed_pdf, mixed_gdf):
 
 def test_mixed_series(mixed_pdf, mixed_gdf):
     for col in mixed_gdf.columns:
-        try:
-            assert mixed_gdf[col].__repr__() == _fix_nullable_dtype_repr(mixed_pdf[col].__repr__())
-        except:
-            import pdb
-            pdb.set_trace()
-
+        assert mixed_gdf[col].__repr__() == _fix_nullable_dtype_repr(
+            mixed_pdf[col].__repr__()
+        )
 
 def test_MI():
     gdf = cudf.DataFrame(
@@ -582,7 +580,9 @@ def test_series_null_index_repr(sr, pandas_special_case):
         # Whereas cudf is consistent with strings `null` values
         # to be printed as `None` everywhere.
         actual_repr = gsr.__repr__().replace("None", "<NA>")
-    assert _fix_nullable_dtype_repr(expected_repr).split() == actual_repr.split()
+    assert (
+        _fix_nullable_dtype_repr(expected_repr).split() == actual_repr.split()
+    )
 
 
 @pytest.mark.parametrize(
@@ -622,7 +622,9 @@ def test_timedelta_series_s_us_repr(data, dtype):
     psr = sr.to_pandas()
 
     expected = (
-        psr.__repr__().replace("timedelta64[ns]", str(sr.dtype)).replace("NaT", "<NA>")
+        psr.__repr__()
+        .replace("timedelta64[ns]", str(sr.dtype))
+        .replace("NaT", "<NA>")
     )
     actual = sr.__repr__()
 

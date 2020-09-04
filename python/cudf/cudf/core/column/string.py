@@ -132,20 +132,18 @@ from cudf._lib.strings.substring import (
     slice_strings as cpp_slice_strings,
 )
 from cudf._lib.strings.translate import (
-    translate as cpp_translate,
     filter_characters as cpp_filter_characters,
+    translate as cpp_translate,
 )
 from cudf._lib.strings.wrap import wrap as cpp_wrap
+from cudf.api.types import is_list_dtype, is_string_dtype
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
 from cudf.core.column.methods import ColumnMethodsMixin
+from cudf.core.dtypes import dtype
 from cudf.utils import utils
 from cudf.utils.docutils import copy_docstring
-from cudf.utils.dtypes import (
-    can_convert_to_column, is_scalar
-)
-from cudf.api.types import is_list_dtype, is_string_dtype
-from cudf.core.dtypes import dtype
+from cudf.utils.dtypes import can_convert_to_column, is_scalar
 
 _str_to_numeric_typecast_functions = {
     dtype("int8"): str_cast.stoi8,
@@ -4564,7 +4562,9 @@ class StringColumn(column.ColumnBase):
             return self.children[1].size
 
     def as_numerical_column(self, dtype, **kwargs):
-        out_dtype = cudf.dtype(dtype) if dtype is not None else cudf.Float64Dtype()
+        out_dtype = (
+            cudf.dtype(dtype) if dtype is not None else cudf.Float64Dtype()
+        )
         kwargs.update(dtype=out_dtype)
 
         if out_dtype.type is np.datetime64:
@@ -4744,7 +4744,9 @@ class StringColumn(column.ColumnBase):
 
     def _find_first_and_last(self, value):
         found_indices = self.str().contains(f"^{value}$")
-        found_indices = libcudf.unary.cast(found_indices, dtype=cudf.Int32Dtype())
+        found_indices = libcudf.unary.cast(
+            found_indices, dtype=cudf.Int32Dtype()
+        )
         first = column.as_column(found_indices).find_first_value(1)
         last = column.as_column(found_indices).find_last_value(1)
         return first, last
@@ -4776,7 +4778,9 @@ class StringColumn(column.ColumnBase):
         if isinstance(rhs, StringColumn) and op == "add":
             return lhs.str().cat(others=rhs)
         elif op in ("eq", "ne", "gt", "lt", "ge", "le"):
-            return _string_column_binop(self, rhs, op=op, out_dtype=cudf.BooleanDtype())
+            return _string_column_binop(
+                self, rhs, op=op, out_dtype=cudf.BooleanDtype()
+            )
         else:
             msg = "{!r} operator not supported between {} and {}"
             raise TypeError(msg.format(op, type(self), type(rhs)))

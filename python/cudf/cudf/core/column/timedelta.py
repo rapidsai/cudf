@@ -10,10 +10,11 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib.nvtx import annotate
 from cudf._lib.scalar import Scalar, as_scalar
+from cudf.api.types import can_cast
 from cudf.core.column import column, string
 from cudf.core.column.datetime import _numpy_to_pandas_conversion
 from cudf.utils.dtypes import is_scalar, np_to_pa_dtype
-from cudf.api.types import can_cast
+
 _dtype_to_format_conversion = {
     "Timedelta64NS": "%D days %H:%M:%S",
     "Timedelta64US": "%D days %H:%M:%S",
@@ -298,9 +299,9 @@ class TimeDeltaColumn(column.ColumnBase):
             )
             kwargs["format"] = fmt
         if len(self) > 0:
-            return string._numeric_to_str_typecast_functions[
-                self.dtype
-            ](self, **kwargs)
+            return string._numeric_to_str_typecast_functions[self.dtype](
+                self, **kwargs
+            )
         else:
             return column.column_empty(0, dtype="object", masked=False)
 
@@ -548,7 +549,9 @@ def _timedelta_binary_op_add(lhs, rhs):
         lhs_unit = units.index(lhs_time_unit)
         rhs_time_unit = cudf.utils.dtypes.get_time_unit(rhs)
         rhs_unit = units.index(rhs_time_unit)
-        out_dtype = cudf.dtype(np.dtype(f"datetime64[{units[max(lhs_unit, rhs_unit)]}]"))
+        out_dtype = cudf.dtype(
+            np.dtype(f"datetime64[{units[max(lhs_unit, rhs_unit)]}]")
+        )
     else:
         raise TypeError(
             f"Addition of {lhs.dtype} with {rhs.dtype} "
@@ -559,15 +562,21 @@ def _timedelta_binary_op_add(lhs, rhs):
 
 
 def _timedelta_binary_op_sub(lhs, rhs):
-    if isinstance(lhs.dtype, cudf.Timedelta) and isinstance(rhs.dtype, cudf.Timedelta):
+    if isinstance(lhs.dtype, cudf.Timedelta) and isinstance(
+        rhs.dtype, cudf.Timedelta
+    ):
         out_dtype = determine_out_dtype(lhs.dtype, rhs.dtype)
-    elif isinstance(rhs.dtype, cudf.Timedelta) and isinstance(lhs.dtype, cudf.Datetime):
+    elif isinstance(rhs.dtype, cudf.Timedelta) and isinstance(
+        lhs.dtype, cudf.Datetime
+    ):
         units = ["s", "ms", "us", "ns"]
         lhs_time_unit = cudf.utils.dtypes.get_time_unit(lhs)
         lhs_unit = units.index(lhs_time_unit)
         rhs_time_unit = cudf.utils.dtypes.get_time_unit(rhs)
         rhs_unit = units.index(rhs_time_unit)
-        out_dtype = cudf.dtype(np.dtype(f"datetime64[{units[max(lhs_unit, rhs_unit)]}]"))
+        out_dtype = cudf.dtype(
+            np.dtype(f"datetime64[{units[max(lhs_unit, rhs_unit)]}]")
+        )
     else:
         raise TypeError(
             f"Subtraction of {lhs.dtype} with {rhs.dtype} "

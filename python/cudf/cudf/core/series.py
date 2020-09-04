@@ -16,6 +16,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib.nvtx import annotate
 from cudf._lib.transform import bools_to_mask
+from cudf.api.types import is_list_dtype, is_string_dtype
 from cudf.core.abc import Serializable
 from cudf.core.column import (
     ColumnBase,
@@ -46,7 +47,6 @@ from cudf.utils.dtypes import (
     min_scalar_type,
     numeric_normalize_types,
 )
-from cudf.api.types import is_list_dtype, is_string_dtype
 
 
 class Series(Frame, Serializable):
@@ -1396,9 +1396,19 @@ class Series(Frame, Serializable):
     __div__ = __truediv__
 
     def _bitwise_binop(self, other, op):
-        if (isinstance(self.dtype, (cudf.BooleanDtype, cudf.Integer, cudf.Timedelta))) and (isinstance(other.dtype, (cudf.BooleanDtype, cudf.Integer, cudf.Timedelta))):
+        if (
+            isinstance(
+                self.dtype, (cudf.BooleanDtype, cudf.Integer, cudf.Timedelta)
+            )
+        ) and (
+            isinstance(
+                other.dtype, (cudf.BooleanDtype, cudf.Integer, cudf.Timedelta)
+            )
+        ):
             ser = self._binaryop(other, op)
-            if isinstance(self.dtype, cudf.BooleanDtype) or isinstance(other.dtype, cudf.BooleanDtype):
+            if isinstance(self.dtype, cudf.BooleanDtype) or isinstance(
+                other.dtype, cudf.BooleanDtype
+            ):
                 ser = ser.astype(cudf.BooleanDtype())
         else:
             raise TypeError(
@@ -1406,7 +1416,7 @@ class Series(Frame, Serializable):
                 f"{self.dtype.type.__name__} and {other.dtype.type.__name__}"
             )
         return ser
-        
+
     def __and__(self, other):
         """Performs vectorized bitwise and (&) on corresponding elements of two
         series.
@@ -5177,53 +5187,53 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
 
     return Series(result_col, index=index)
 
+
 def _fix_nullable_dtype_repr(string):
 
     to_replace = [
-        'uint8',
-        'uint16',
-        'uint32', 
-        'uint64', 
-        'int8', 
-        'int16', 
-        'int32', 
-        'int64', 
-        'float32', 
-        'float64', 
-        'bool', 
-        'object', 
-        'datetime64[ns]', 
-        'datetime64[us]', 
-        'datetime64[ms]', 
-        'datetime64[s]',
-        'timedelta64[ns]',
-        'timedelta64[us]',
-        'timedelta64[ms]',
-        'timedelta64[s]'
+        "uint8",
+        "uint16",
+        "uint32",
+        "uint64",
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "float32",
+        "float64",
+        "bool",
+        "object",
+        "datetime64[ns]",
+        "datetime64[us]",
+        "datetime64[ms]",
+        "datetime64[s]",
+        "timedelta64[ns]",
+        "timedelta64[us]",
+        "timedelta64[ms]",
+        "timedelta64[s]",
     ]
 
-
     replacements = [
-        'UInt8',
-        'UInt16',
-        'UInt32',
-        'UInt64',
-        'Int8',
-        'Int16',
-        'Int32',
-        'Int64',
-        'Float32',
-        'Float64',
-        'Boolean',
-        'String',
-        'Datetime64NS',
-        'Datetime64US',
-        'Datetime64MS',
-        'Datetime64S',
-        'Timedelta64NS',
-        'Timedelta64US',
-        'Timedelta64MS',
-        'Timedelta64S'
+        "UInt8",
+        "UInt16",
+        "UInt32",
+        "UInt64",
+        "Int8",
+        "Int16",
+        "Int32",
+        "Int64",
+        "Float32",
+        "Float64",
+        "Boolean",
+        "String",
+        "Datetime64NS",
+        "Datetime64US",
+        "Datetime64MS",
+        "Datetime64S",
+        "Timedelta64NS",
+        "Timedelta64US",
+        "Timedelta64MS",
+        "Timedelta64S",
     ]
     for tr, rp in zip(to_replace, replacements):
         string = string.replace(tr, rp)

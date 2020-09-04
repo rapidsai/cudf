@@ -4,13 +4,13 @@ import pandas as pd
 
 import cudf
 from cudf._lib.nvtx import annotate
+from cudf.api.types import is_categorical_dtype
 from cudf.utils.dtypes import (
     is_column_like,
     is_list_like,
     is_scalar,
     to_cudf_compatible_scalar,
 )
-from cudf.api.types import is_categorical_dtype
 
 
 def indices_from_labels(obj, labels):
@@ -94,7 +94,9 @@ class _SeriesIlocIndexer(object):
         ):
             # normalize types if necessary:
             if not pd.api.types.is_integer(key):
-                to_dtype = cudf.api.types.result_type(value.dtype, self._sr._column.dtype)
+                to_dtype = cudf.api.types.result_type(
+                    value.dtype, self._sr._column.dtype
+                )
                 value = value.astype(to_dtype.to_numpy)
                 self._sr._column._mimic_inplace(
                     self._sr._column.astype(to_dtype), inplace=True

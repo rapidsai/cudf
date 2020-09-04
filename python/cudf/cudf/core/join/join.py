@@ -2,7 +2,6 @@
 import itertools
 import warnings
 
-import numpy as np
 import pandas as pd
 
 import cudf
@@ -398,16 +397,25 @@ class Merge(object):
             ):
                 if dtype_l.kind == dtype_r.kind:
                     # both ints or both floats
-                    libcudf_join_type = cudf.dtype(max(dtype_l.to_numpy, dtype_r.to_numpy))
+                    libcudf_join_type = cudf.dtype(
+                        max(dtype_l.to_numpy, dtype_r.to_numpy)
+                    )
                 else:
-                    libcudf_join_type = cudf.api.types.find_common_type([], [dtype_l, dtype_r])
+                    libcudf_join_type = cudf.api.types.find_common_type(
+                        [], [dtype_l, dtype_r]
+                    )
             elif isinstance(dtype_l, cudf.Datetime) and isinstance(
                 dtype_r, cudf.Datetime
             ):
-                libcudf_join_type = cudf.dtype(max(dtype_l.to_numpy, dtype_r.to_numpy))
+                libcudf_join_type = cudf.dtype(
+                    max(dtype_l.to_numpy, dtype_r.to_numpy)
+                )
         if libcudf_join_type is None:
             # todo: test this
-            raise TypeError(f"Cant find an implicit common type for {dtype_l} and {dtype_r}")
+            raise TypeError(
+                f"Cant find an implicit common \
+                type for {dtype_l} and {dtype_r}"
+            )
         return libcudf_join_type
 
     def libcudf_to_output_casting_rules(self, lcol, rcol, how):

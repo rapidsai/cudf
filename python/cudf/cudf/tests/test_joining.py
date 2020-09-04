@@ -802,7 +802,7 @@ def test_join_empty_table_dtype():
     gright = DataFrame.from_pandas(right)
     pd_merge = left.merge(right, how="left", left_on=["a"], right_on=["b"])
     gd_merge = gleft.merge(gright, how="left", left_on=["a"], right_on=["b"])
-    assert gd_merge['a'].dtype == pd_merge['a'].dtype
+    assert gd_merge["a"].dtype == pd_merge["a"].dtype
 
 
 @pytest.mark.parametrize("how", ["outer", "inner", "left", "right"])

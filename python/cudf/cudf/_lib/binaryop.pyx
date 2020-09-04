@@ -23,7 +23,7 @@ from cudf._lib.cpp.types cimport (
     type_id,
 )
 
-from cudf.utils.dtypes import is_string_dtype
+from cudf.api.types import is_string_dtype
 
 from cudf._lib.cpp.binaryop cimport binary_operator
 cimport cudf._lib.cpp.binaryop as cpp_binaryop

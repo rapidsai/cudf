@@ -7,6 +7,7 @@ import pandas as pd
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.transform import bools_to_mask
+from cudf.api.types import is_categorical_dtype
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.core.column.methods import ColumnMethodsMixin
@@ -16,7 +17,6 @@ from cudf.utils.dtypes import (
     min_signed_type,
     min_unsigned_type,
 )
-from cudf.api.types import is_categorical_dtype
 
 
 class CategoricalAccessor(ColumnMethodsMixin):
@@ -305,7 +305,9 @@ class CategoricalAccessor(ColumnMethodsMixin):
                 f"type-cast new_categories to the same type as "
                 f"existing categories."
             )
-        common_dtype = cudf.api.types.find_common_type([old_categories.dtype, new_categories.dtype], [])
+        common_dtype = cudf.api.types.find_common_type(
+            [old_categories.dtype, new_categories.dtype], []
+        )
 
         new_categories = new_categories.astype(common_dtype, copy=False)
         old_categories = old_categories.astype(common_dtype, copy=False)

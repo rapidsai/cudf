@@ -58,7 +58,8 @@ def test_column_offset_and_size(pandas_input, offset, size):
         if col.size > 0:
             assert col.size == (col.children[0].size - 1)
             assert col.size == (
-                (col.children[0].data.size / col.children[0].dtype.itemsize) - 1
+                (col.children[0].data.size / col.children[0].dtype.itemsize)
+                - 1
             )
     else:
         assert col.size == (col.data.size / col.dtype.itemsize)

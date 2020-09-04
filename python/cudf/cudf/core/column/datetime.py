@@ -5,11 +5,11 @@ import re
 import numpy as np
 import pandas as pd
 
-import cudf.core.dtypes as cudf_dtypes
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.nvtx import annotate
 from cudf._lib.scalar import Scalar, as_scalar
+from cudf.core import dtypes as cudf_dtypes
 from cudf.core.column import column, string
 from cudf.utils.dtypes import is_scalar
 
@@ -170,9 +170,9 @@ class DatetimeColumn(column.ColumnBase):
             )
             kwargs["format"] = fmt
         if len(self) > 0:
-            return string._numeric_to_str_typecast_functions[
-                self.dtype
-            ](self, **kwargs)
+            return string._numeric_to_str_typecast_functions[self.dtype](
+                self, **kwargs
+            )
         else:
             return column.column_empty(0, dtype="object", masked=False)
 
@@ -184,7 +184,6 @@ class DatetimeColumn(column.ColumnBase):
     def binary_operator(self, op, rhs, reflect=False):
         lhs, rhs = self, rhs
 
-        lhs_dtype = cudf.dtype(lhs.dtype)
         rhs_dtype = cudf.dtype(rhs.dtype)
 
         if op in ("eq", "ne", "lt", "gt", "le", "ge"):
@@ -203,9 +202,9 @@ class DatetimeColumn(column.ColumnBase):
             lhs_unit = units.index(lhs_time_unit)
             rhs_time_unit = cudf.utils.dtypes.get_time_unit(rhs)
             rhs_unit = units.index(rhs_time_unit)
-            out_dtype = cudf.dtype(np.dtype(
-                f"timedelta64[{units[max(lhs_unit, rhs_unit)]}]"
-            ))
+            out_dtype = cudf.dtype(
+                np.dtype(f"timedelta64[{units[max(lhs_unit, rhs_unit)]}]")
+            )
         else:
             raise TypeError(
                 f"Series of dtype {self.dtype} cannot perform "

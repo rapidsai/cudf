@@ -143,7 +143,7 @@ def test_series_set_equal_length_object_by_mask(replace_data):
     # Lengths match in trivial case
     pd_bool_col = pd.Series([True] * len(psr))
     gd_bool_col = Series.from_pandas(pd_bool_col)
-    
+
     psr[pd_bool_col] = (
         replace_data.to_pandas()
         if hasattr(replace_data, "to_pandas")

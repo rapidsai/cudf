@@ -17,6 +17,7 @@ import cudf as gd
 from cudf.core._compat import PANDAS_GE_110
 from cudf.core.column import column
 from cudf.core.dataframe import DataFrame, Series
+from cudf.core.dtypes import Number
 from cudf.tests import utils
 from cudf.tests.utils import (
     ALL_TYPES,
@@ -26,7 +27,6 @@ from cudf.tests.utils import (
     does_not_raise,
     gen_rand,
 )
-from cudf.core.dtypes import Number
 
 
 def test_init_via_list_of_tuples():
@@ -3242,8 +3242,8 @@ def test_empty_dataframe_describe():
 
 
 def test_as_column_types():
-    from cudf.core.column import column
     from cudf import Float32Dtype, Float64Dtype, StringDtype
+    from cudf.core.column import column
 
     col = column.as_column(Series([]))
     assert isinstance(col.dtype, Float64Dtype)

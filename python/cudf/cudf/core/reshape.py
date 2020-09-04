@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 
 import cudf
+from cudf.api.types import is_categorical_dtype
 from cudf.core import DataFrame, Index, Series
 from cudf.core.column import (
     CategoricalColumn,
@@ -10,7 +11,7 @@ from cudf.core.column import (
     build_categorical_column,
 )
 from cudf.utils.dtypes import is_list_like
-from cudf.api.types import is_categorical_dtype
+
 _axis_map = {0: 0, 1: 1, "index": 0, "columns": 1}
 
 

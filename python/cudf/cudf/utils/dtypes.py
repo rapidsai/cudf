@@ -1,4 +1,5 @@
 import datetime as dt
+import inspect
 import numbers
 from collections import namedtuple
 from collections.abc import Sequence
@@ -8,13 +9,10 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from pandas.core.dtypes.common import infer_dtype_from_object
-from pandas.core.dtypes.dtypes import CategoricalDtype, CategoricalDtypeType
 
 import cudf
 from cudf._lib.scalar import Scalar
 from cudf.api.types import is_categorical_dtype
-import inspect
-
 
 _NA_REP = "<NA>"
 _np_pa_dtypes = {
@@ -68,7 +66,19 @@ TIMEDELTA_TYPES = {
 }
 OTHER_TYPES = {"bool", "category", "str"}
 ALL_TYPES = NUMERIC_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | OTHER_TYPES
-NEW_NUMERIC_TYPES = {'Int8', 'Int16', 'Int32', 'Int64', 'UInt8', 'UInt16', 'UInt32', 'UInt64', 'Float32', 'Float64'}
+NEW_NUMERIC_TYPES = {
+    "Int8",
+    "Int16",
+    "Int32",
+    "Int64",
+    "UInt8",
+    "UInt16",
+    "UInt32",
+    "UInt64",
+    "Float32",
+    "Float64",
+}
+
 
 def np_to_pa_dtype(dtype):
     """Util to convert numpy dtype to PyArrow dtype.
@@ -110,29 +120,13 @@ def numeric_normalize_types(*args):
     dtype = np.result_type(*[a.dtype.to_numpy for a in args])
     return [a.astype(dtype) for a in args]
 
-
-def is_numerical_dtype(obj):
-    if is_categorical_dtype(obj):
-        return False
-    if is_list_dtype(obj):
-        return False
-    return (
-        np.issubdtype(obj, np.bool_)
-        or np.issubdtype(obj, np.floating)
-        or np.issubdtype(obj, np.signedinteger)
-    )
-
-
-def is_string_dtype(obj):
-    return pd.api.types.is_string_dtype(obj) and not is_categorical_dtype(obj)
-
-
 def is_datetime_dtype(obj):
     if obj is None:
         return False
     if not hasattr(obj, "str"):
         return False
     return "M8" in obj.str
+
 
 def cudf_dtype_from_pydata_dtype(dtype):
     """ Given a numpy or pandas dtype, converts it into the equivalent cuDF
@@ -151,7 +145,7 @@ def cudf_dtype_from_pydata_dtype(dtype):
         dtype = np.datetime64
 
     result = cudf.dtype(infer_dtype_from_object(dtype))
-    if isinstance(result, cudf.Generic): 
+    if isinstance(result, cudf.Generic):
         return result.__class__
     elif inspect.isclass(result):
         return result
@@ -193,7 +187,7 @@ def to_cudf_compatible_scalar(val, dtype=None):
     if isinstance(val, (np.ndarray, cp.ndarray)) and val.ndim == 0:
         val = val.item()
 
-    if ((dtype is None) and isinstance(val, str)) or is_string_dtype(dtype):
+    if ((dtype is None) and isinstance(val, str)) or cudf.api.types.is_string_dtype(dtype):
         dtype = "str"
 
     if isinstance(val, dt.datetime):
