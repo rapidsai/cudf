@@ -186,14 +186,13 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     cdef parquet_reader_options args
     # Setup parquet reader arguments
     args = move(parquet_reader_options.builder(source).
-                set_columns(cpp_columns).
-                set_row_groups(cpp_row_groups).
-                enable_convert_strings_to_categories(
-                    cpp_strings_to_categorical).
-                enable_use_pandas_metadata(cpp_use_pandas_metadata).
-                set_skip_rows(cpp_skip_rows).
-                set_num_rows(cpp_num_rows).
-                set_timestamp_type(cpp_timestamp_type).
+                columns(cpp_columns).
+                row_groups(cpp_row_groups).
+                convert_strings_to_categories(cpp_strings_to_categorical).
+                use_pandas_metadata(cpp_use_pandas_metadata).
+                skip_rows(cpp_skip_rows).
+                num_rows(cpp_num_rows).
+                timestamp_type(cpp_timestamp_type).
                 build())
 
     # Read Parquet
@@ -311,11 +310,11 @@ cpdef write_parquet(
     with nogil:
         args = move(
             parquet_writer_options.builder(sink, tv).
-            set_metadata(tbl_meta.get()).
-            set_compression(comp_type).
-            set_stats_level(stat_freq).
-            set_column_chunks_file_path(c_column_chunks_file_path).
-            enable_return_filemetadata(return_filemetadata).
+            metadata(tbl_meta.get()).
+            compression(comp_type).
+            stats_level(stat_freq).
+            column_chunks_file_path(c_column_chunks_file_path).
+            return_filemetadata(return_filemetadata).
             build()
         )
         out_metadata_c = move(parquet_writer(args))
@@ -415,9 +414,9 @@ cdef class ParquetWriter:
         cdef chunked_parquet_writer_options args
         with nogil:
             args = move(chunked_parquet_writer_options.builder(self.sink).
-                        set_nullable_metadata(tbl_meta.get()).
-                        set_compression(self.comp_type).
-                        set_stats_level(self.stat_freq).
+                        nullable_metadata(tbl_meta.get()).
+                        compression(self.comp_type).
+                        stats_level(self.stat_freq).
                         build())
             self.state = write_parquet_chunked_begin(args)
 

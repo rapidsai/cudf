@@ -317,8 +317,8 @@ std::shared_ptr<pq_chunked_state> write_parquet_chunked_begin(
 {
   CUDF_FUNC_RANGE();
   parquet_writer_options options = parquet_writer_options::builder()
-                                     .set_compression(op.get_compression())
-                                     .set_stats_level(op.get_stats_level());
+                                     .compression(op.get_compression())
+                                     .stats_level(op.get_stats_level());
 
   auto state = std::make_shared<pq_chunked_state>();
   state->wp  = make_writer<detail_parquet::writer>(op.get_sink(), options, mr);

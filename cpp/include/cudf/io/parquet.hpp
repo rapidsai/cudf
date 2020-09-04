@@ -227,7 +227,7 @@ class parquet_reader_options_builder {
    * @param col_names Vector of column names.
    * @return this for chaining.
    */
-  parquet_reader_options_builder& set_columns(std::vector<std::string> col_names)
+  parquet_reader_options_builder& columns(std::vector<std::string> col_names)
   {
     options._columns = std::move(col_names);
     return *this;
@@ -239,7 +239,7 @@ class parquet_reader_options_builder {
    * @param row_groups Vector of row groups to read.
    * @return this for chaining.
    */
-  parquet_reader_options_builder& set_row_groups(std::vector<std::vector<size_type>> row_groups)
+  parquet_reader_options_builder& row_groups(std::vector<std::vector<size_type>> row_groups)
   {
     options.set_row_groups(std::move(row_groups));
     return *this;
@@ -251,7 +251,7 @@ class parquet_reader_options_builder {
    * @param val Boolean value to enable/disable conversion of string columns to categories.
    * @return this for chaining.
    */
-  parquet_reader_options_builder& enable_convert_strings_to_categories(bool val)
+  parquet_reader_options_builder& convert_strings_to_categories(bool val)
   {
     options._convert_strings_to_categories = val;
     return *this;
@@ -263,7 +263,7 @@ class parquet_reader_options_builder {
    * @param val Boolean value whether to use pandas metadata.
    * @return this for chaining.
    */
-  parquet_reader_options_builder& enable_use_pandas_metadata(bool val)
+  parquet_reader_options_builder& use_pandas_metadata(bool val)
   {
     options._use_pandas_metadata = val;
     return *this;
@@ -275,7 +275,7 @@ class parquet_reader_options_builder {
    * @param val Number of rows to skip from start.
    * @return this for chaining.
    */
-  parquet_reader_options_builder& set_skip_rows(size_type val)
+  parquet_reader_options_builder& skip_rows(size_type val)
   {
     options.set_skip_rows(val);
     return *this;
@@ -287,7 +287,7 @@ class parquet_reader_options_builder {
    * @param val Number of rows to read after skip.
    * @return this for chaining.
    */
-  parquet_reader_options_builder& set_num_rows(size_type val)
+  parquet_reader_options_builder& num_rows(size_type val)
   {
     options.set_num_rows(val);
     return *this;
@@ -299,7 +299,7 @@ class parquet_reader_options_builder {
    * @param type The timestamp data_type to which all timestamp columns need to be cast.
    * @return this for chaining.
    */
-  parquet_reader_options_builder& set_timestamp_type(data_type type)
+  parquet_reader_options_builder& timestamp_type(data_type type)
   {
     options._timestamp_type = type;
     return *this;
@@ -511,7 +511,7 @@ class parquet_writer_options_builder {
    * @param metadata Associated metadata.
    * @return this for chaining.
    */
-  parquet_writer_options_builder& set_metadata(table_metadata const* metadata)
+  parquet_writer_options_builder& metadata(table_metadata const* metadata)
   {
     options._metadata = metadata;
     return *this;
@@ -523,7 +523,7 @@ class parquet_writer_options_builder {
    * @param sf Level of statistics requested in the output file.
    * @return this for chaining.
    */
-  parquet_writer_options_builder& set_stats_level(statistics_freq sf)
+  parquet_writer_options_builder& stats_level(statistics_freq sf)
   {
     options._stats_level = sf;
     return *this;
@@ -535,7 +535,7 @@ class parquet_writer_options_builder {
    * @param compression The compression type to use.
    * @return this for chaining.
    */
-  parquet_writer_options_builder& set_compression(compression_type compression)
+  parquet_writer_options_builder& compression(compression_type compression)
   {
     options._compression = compression;
     return *this;
@@ -547,7 +547,7 @@ class parquet_writer_options_builder {
    * @param req Boolean value to enable/disable return of file metadata.
    * @return this for chaining.
    */
-  parquet_writer_options_builder& enable_return_filemetadata(bool req)
+  parquet_writer_options_builder& return_filemetadata(bool req)
   {
     options._return_filemetadata = req;
     return *this;
@@ -559,7 +559,7 @@ class parquet_writer_options_builder {
    * @param file_path String which indicates file path.
    * @return this for chaining.
    */
-  parquet_writer_options_builder& set_column_chunks_file_path(std::string file_path)
+  parquet_writer_options_builder& column_chunks_file_path(std::string file_path)
   {
     options._column_chunks_file_path.assign(file_path);
     return *this;
@@ -734,7 +734,7 @@ class chunked_parquet_writer_options_builder {
    * @param metadata Associated metadata.
    * @return this for chaining.
    */
-  chunked_parquet_writer_options_builder& set_nullable_metadata(
+  chunked_parquet_writer_options_builder& nullable_metadata(
     const table_metadata_with_nullability* metadata)
   {
     options._nullable_metadata = metadata;
@@ -747,7 +747,7 @@ class chunked_parquet_writer_options_builder {
    * @param sf Level of statistics requested in the output file.
    * @return this for chaining.
    */
-  chunked_parquet_writer_options_builder& set_stats_level(statistics_freq sf)
+  chunked_parquet_writer_options_builder& stats_level(statistics_freq sf)
   {
     options._stats_level = sf;
     return *this;
@@ -759,7 +759,7 @@ class chunked_parquet_writer_options_builder {
    * compression The compression type to use.
    * @return this for chaining.
    */
-  chunked_parquet_writer_options_builder& set_compression(compression_type compression)
+  chunked_parquet_writer_options_builder& compression(compression_type compression)
   {
     options._compression = compression;
     return *this;
