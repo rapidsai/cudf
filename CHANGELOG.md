@@ -2,24 +2,48 @@
 
 ## New Features
 
+- PR #5975 Add strings `filter_characters` API
+- PR #5843 Add `filters` parameter to Python `read_parquet` function for filtering row groups
 - PR #5974 Use libcudf instead of cupy for `arange` or column creation from a scalar.
+- PR #5874 Add `COLLECT` groupby aggregation
+- PR #6119 Add support for `dayofweek` property in `DateTimeIndex` and `DatetimeProperties`
+- PR #6125 Add support for `Series.mode` and `DataFrame.mode`
 
 ## Improvements
 
+- PR #5946  Add cython and python support for libcudf `to_arrow` and `from_arrow`
+- PR #5919 Remove max_strings and max_chars from nvtext::subword_tokenize
 - PR #5956 Add/Update tests for cuStreamz
 - PR #5953 Use stable sort when doing a sort groupby
 - PR #5973 Link to the Code of Conduct in CONTRIBUTING.md
 - PR #5917 Just use `None` for `strides` in `Buffer`
+- PR #6015 Upgrade CUB/Thrust to the latest commit
 - PR #5971 Add cuStreamz README for basic installation and use
+- PR #6024 Expose selecting multiple ORC stripes to read from Python
 - PR #6002 Add Java bindings for md5
 - PR #6067 Added compute codes for aarch64 devices
+- PR #6083 Small cleanup
+- PR #6103 Small refactor of `print_differences`
+- PR #6124 Fix gcc-9 compilation errors on tests
+- PR #6141 Fix typo in custreamz README that was a result of recent changes
+- PR #6146 Added element/validity pair constructors for fixed_width and string wrappers
+- PR #6143 General improvements for java arrow IPC.
 
 ## Bug Fixes
 
+- PR #6073 Fix issue related to `.loc` incase of `DatetimeIndex`
 - PR #6081 Fix issue where fsspec thinks it has a protocol string
+- PR #6100 Fix issue in `Series.factorize` to correctly pick `na_sentinel` value
+- PR #6106 Fix datetime limit in csv due to 32-bit arithmetic
+- PR #6113 Fix to_timestamp to initialize default year to 1970
+- PR #6110 Handle `format` for other input types in `to_datetime`
+- PR #6118 Fix Java build for ORC read args change and update package version
+- PR #6121 Replace calls to get_default_resource with get_current_device_resource
+- PR #6128 Add support for numpy RandomState handling in `sample`
+- PR #6150 Fix issue related to inferring `datetime64` format with UTC timezone in string data
 
 
-# cuDF 0.15.0 (Date TBD)
+# cuDF 0.15.0 (26 Aug 2020)
 
 ## New Features
 
@@ -32,6 +56,7 @@
 - PR #5327 Add `cudf::cross_join` feature
 - PR #5204 Concatenate strings columns using row separator as strings column
 - PR #5342 Add support for `StringMethods.__getitem__`
+- PR #5358 Add zero-copy `column_view` cast for compatible types
 - PR #3504 Add External Kafka Datasource
 - PR #5356 Use `size_type` instead of `scalar` in `cudf::repeat`.
 - PR #5397 Add internal implementation of nested loop equijoins.
@@ -347,6 +372,8 @@
 - PR #6032 Change black version to 19.10b0 in .pre-commit-config.yaml
 - PR #6041 Fix Java memory resource handler to rethrow original exception object
 - PR #6057 Fix issue in parquet reader with reading columns out of file-order
+- PR #6098 Patch Thrust to workaround CUDA_CUB_RET_IF_FAIL macro clearing CUDA errors
+
 
 # cuDF 0.14.0 (03 Jun 2020)
 

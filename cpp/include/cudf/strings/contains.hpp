@@ -48,7 +48,7 @@ namespace strings {
 std::unique_ptr<column> contains_re(
   strings_column_view const& strings,
   std::string const& pattern,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a boolean column identifying rows which
@@ -73,7 +73,7 @@ std::unique_ptr<column> contains_re(
 std::unique_ptr<column> matches_re(
   strings_column_view const& strings,
   std::string const& pattern,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns the number of times the given regex pattern
@@ -98,7 +98,7 @@ std::unique_ptr<column> matches_re(
 std::unique_ptr<column> count_re(
   strings_column_view const& strings,
   std::string const& pattern,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings

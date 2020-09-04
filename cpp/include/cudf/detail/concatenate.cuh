@@ -53,7 +53,7 @@ void concatenate_masks(std::vector<column_view> const& views,
  */
 std::unique_ptr<column> concatenate(
   std::vector<column_view> const& columns_to_concat,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 /**
@@ -63,7 +63,7 @@ std::unique_ptr<column> concatenate(
  */
 std::unique_ptr<table> concatenate(
   std::vector<table_view> const& tables_to_concat,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 }  // namespace detail
