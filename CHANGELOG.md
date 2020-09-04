@@ -46,6 +46,7 @@
 
 - PR #6157 Fix issue related to `Series.concat` to concat a non-empty and empty series.
 
+
 # cuDF 0.15.0 (26 Aug 2020)
 
 ## New Features
