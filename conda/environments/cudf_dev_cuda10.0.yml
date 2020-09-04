@@ -50,6 +50,7 @@ dependencies:
   - hypothesis
   - sphinx-markdown-tables
   - sphinx-copybutton
+  - mimesis
   - packaging
   - pip:
       - git+https://github.com/dask/dask.git

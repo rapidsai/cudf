@@ -9,11 +9,10 @@ import numpy as np
 import pandas as pd
 
 import cudf
+from cudf import _lib as libcudf
 from cudf.core.column import column
 from cudf.core.frame import Frame
 from cudf.core.index import Index, as_index
-
-import cudf._lib as libcudf
 
 
 class MultiIndex(Index):
@@ -276,7 +275,8 @@ class MultiIndex(Index):
 
     @classmethod
     def from_arrow(cls, table):
-        """Convert PyArrow Table to MultiIndex
+        """
+        Convert PyArrow Table to MultiIndex
 
         Parameters
         ----------

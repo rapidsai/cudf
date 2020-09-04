@@ -2225,6 +2225,31 @@ def test_string_str_translate(data):
     )
 
 
+def test_string_str_filter_characters():
+
+    data = [
+        "hello world",
+        "A+B+C+D",
+        "?!@#$%^&*()",
+        "accént",
+        None,
+        "$1.50",
+        "",
+    ]
+    gs = Series(data)
+    expected = Series(["helloworld", "ABCD", "", "accnt", None, "150", ""])
+    filter = {"a": "z", "A": "Z", "0": "9"}
+    assert_eq(expected, gs.str.filter_characters(filter))
+
+    expected = Series([" ", "+++", "?!@#$%^&*()", "é", None, "$.", ""])
+    assert_eq(expected, gs.str.filter_characters(filter, False))
+
+    expected = Series(
+        ["hello world", "A B C D", "           ", "acc nt", None, " 1 50", ""]
+    )
+    assert_eq(expected, gs.str.filter_characters(filter, True, " "))
+
+
 def test_string_str_code_points():
 
     data = [
