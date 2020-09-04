@@ -5355,7 +5355,7 @@ class DataFrame(Frame, Serializable):
 
         filtered = self.select_dtypes(include=[np.number, np.bool])
         common_dtype = np.find_common_type(filtered.dtypes, [])
-        if len(filtered.columns) < len(self.columns):
+        if filtered._num_columns < len(self.columns):
             msg = (
                 "Row-wise operations currently only support int, float "
                 "and bool dtypes. Non numeric columns are ignored."
