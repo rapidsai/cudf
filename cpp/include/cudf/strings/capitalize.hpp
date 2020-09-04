@@ -43,7 +43,7 @@ namespace strings {
  */
 std::unique_ptr<column> capitalize(
   strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Modifies first character after spaces to uppercase and lower-cases the rest.
@@ -67,7 +67,7 @@ std::unique_ptr<column> capitalize(
  */
 std::unique_ptr<column> title(
   strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings

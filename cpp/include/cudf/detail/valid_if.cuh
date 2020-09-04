@@ -88,7 +88,7 @@ std::pair<rmm::device_buffer, size_type> valid_if(
   InputIterator end,
   Predicate p,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(begin <= end, "Invalid range.");
 
