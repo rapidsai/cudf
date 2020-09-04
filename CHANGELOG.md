@@ -44,6 +44,7 @@
 - PR #6154 Warnings on row-wise op only when non-numeric columns are found.
 - PR #6150 Fix issue related to inferring `datetime64` format with UTC timezone in string data
 
+- PR #6157 Fix issue related to `Series.concat` to concat a non-empty and empty series.
 
 # cuDF 0.15.0 (26 Aug 2020)
 
