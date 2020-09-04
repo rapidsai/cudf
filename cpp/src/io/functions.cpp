@@ -16,8 +16,8 @@
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/detail/orc.hpp>
-#include <cudf/io/orc.hpp>
 #include <cudf/io/functions.hpp>
+#include <cudf/io/orc.hpp>
 #include <cudf/io/readers.hpp>
 #include <cudf/io/writers.hpp>
 #include <cudf/table/table.hpp>
@@ -30,11 +30,21 @@ namespace cudf {
 namespace io {
 
 // Returns builder for orc_reader_options
-orc_reader_options_builder orc_reader_options::builder(source_info const& src) {return orc_reader_options_builder{src};}
+orc_reader_options_builder orc_reader_options::builder(source_info const& src)
+{
+  return orc_reader_options_builder{src};
+}
 // Returns builder for orc_writer_options
-orc_writer_options_builder orc_writer_options::builder(sink_info const& sink, table_view const& table) {return orc_writer_options_builder{sink, table};}
+orc_writer_options_builder orc_writer_options::builder(sink_info const& sink,
+                                                       table_view const& table)
+{
+  return orc_writer_options_builder{sink, table};
+}
 // Returns builder for chunked_orc_writer_options
-chunked_orc_writer_options_builder chunked_orc_writer_options::builder(sink_info const& sink) {return chunked_orc_writer_options_builder{sink};}
+chunked_orc_writer_options_builder chunked_orc_writer_options::builder(sink_info const& sink)
+{
+  return chunked_orc_writer_options_builder{sink};
+}
 
 namespace {
 template <typename reader, typename reader_options>

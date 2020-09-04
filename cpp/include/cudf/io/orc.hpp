@@ -26,6 +26,7 @@
 #include <cudf/io/writers.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <rmm/mr/device/default_memory_resource.hpp>
 
 #include <memory>
 #include <string>
@@ -78,115 +79,119 @@ class orc_reader_options {
   friend orc_reader_options_builder;
 
   explicit orc_reader_options(source_info const& src) : _source(src) {}
-  
-  public:
+
+ public:
   explicit orc_reader_options() = default;
 
   /**
    * @brief Returns source_info
    */
-  source_info const& source() const {return _source;}
+  source_info const& source() const { return _source; }
 
   /**
    * @brief Returns names of the column to read
    */
-  std::vector<std::string> const& columns() const {return _columns;}
+  std::vector<std::string> const& columns() const { return _columns; }
 
   /**
    * @brief Returns list of individual stripes to read
    */
-  std::vector<size_type> const& stripes() const {return _stripes;}
+  std::vector<size_type> const& stripes() const { return _stripes; }
 
   /**
    * @brief Returns number of rows to skip from the start
    */
-  size_type skip_rows() const {return _skip_rows;}
+  size_type skip_rows() const { return _skip_rows; }
 
   /**
    * @brief Returns number of row to read
    */
-  size_type num_rows() const {return _num_rows;}
+  size_type num_rows() const { return _num_rows; }
 
   /**
    * @brief Whether to use row index to speed-up reading
    */
-  bool use_index() const {return _use_index;}
+  bool use_index() const { return _use_index; }
 
   /**
    * @brief Whether to use numpy-compatible dtypes
    */
-  bool use_np_dtypes() const {return _use_np_dtypes;}
-  
+  bool use_np_dtypes() const { return _use_np_dtypes; }
+
   /**
    * @brief Returns timestamp type to which timestamp column will be cast
    */
-  data_type timestamp_type() const {return _timestamp_type;}
+  data_type timestamp_type() const { return _timestamp_type; }
 
   /**
    * @brief Whether to convert decimals to float64
    */
-  bool decimals_as_float() const {return _decimals_as_float;}
+  bool decimals_as_float() const { return _decimals_as_float; }
 
   /**
    * @brief Returns whether decimal scale is inferred or forced to have limited fractional digits
    */
-  size_type forced_decimals_scale() const {return _forced_decimals_scale;}
+  size_type forced_decimals_scale() const { return _forced_decimals_scale; }
 
   // Setters
 
   /**
    * @brief Sets names of the column to read
    */
-  void columns(std::vector<std::string> col_names) {_columns = std::move(col_names);}
+  void columns(std::vector<std::string> col_names) { _columns = std::move(col_names); }
 
   /**
    * @brief Sets list of individual stripes to read
    */
-  void stripes(std::vector<size_type> strps) {
-      CUDF_EXPECTS(strps.empty() or (_skip_rows == 0 and _num_rows == -1), "Can't set both stripes along with skip_rows/num_rows");
-      _stripes = std::move(strps);
+  void stripes(std::vector<size_type> strps)
+  {
+    CUDF_EXPECTS(strps.empty() or (_skip_rows == 0 and _num_rows == -1),
+                 "Can't set both stripes along with skip_rows/num_rows");
+    _stripes = std::move(strps);
   }
 
   /**
    * @brief Sets number of rows to skip from the start
    */
-  void skip_rows(size_type rows) {
-      CUDF_EXPECTS(rows == 0 or _stripes.empty(), "Can't set both skip_rows along with stripes");
-      _skip_rows = rows;
+  void skip_rows(size_type rows)
+  {
+    CUDF_EXPECTS(rows == 0 or _stripes.empty(), "Can't set both skip_rows along with stripes");
+    _skip_rows = rows;
   }
 
   /**
    * @brief Sets number of row to read
    */
-  void num_rows(size_type nrows) {
-      CUDF_EXPECTS(nrows == -1 or _stripes.empty(), "Can't set both num_rows along with stripes");
-      _num_rows = (nrows != 0)? nrows : -1;
+  void num_rows(size_type nrows)
+  {
+    CUDF_EXPECTS(nrows == -1 or _stripes.empty(), "Can't set both num_rows along with stripes");
+    _num_rows = (nrows != 0) ? nrows : -1;
   }
 
   /**
    * @brief Enable/Disable use of row index to speed-up reading
    */
-  void use_index(bool use) {_use_index = use;}
+  void use_index(bool use) { _use_index = use; }
 
   /**
    * @brief Enable/Disable use of numpy-compatible dtypes
    */
-  void use_np_dtypes(bool use) {_use_np_dtypes = use;}
-  
+  void use_np_dtypes(bool use) { _use_np_dtypes = use; }
+
   /**
    * @brief Returns timestamp type to which timestamp column will be cast
    */
-  void timestamp_type(data_type type) {_timestamp_type = type;}
+  void timestamp_type(data_type type) { _timestamp_type = type; }
 
   /**
    * @brief Enable/Disable convertion of decimals to float64
    */
-  void decimals_as_float(bool val) {_decimals_as_float = val;}
+  void decimals_as_float(bool val) { _decimals_as_float = val; }
 
   /**
    * @brief Sets whether decimal scale is inferred or forced to have limited fractional digits
    */
-  void forced_decimals_scale(size_type val) {_forced_decimals_scale = val;}
+  void forced_decimals_scale(size_type val) { _forced_decimals_scale = val; }
 
   /**
    * @brief Creates `orc_reader_options_builder` which is used to update options
@@ -195,94 +200,103 @@ class orc_reader_options {
 };
 
 class orc_reader_options_builder {
-    orc_reader_options options;
+  orc_reader_options options;
 
-    public:
-    explicit orc_reader_options_builder() = default;
-    
-    explicit orc_reader_options_builder(source_info const& src):options{src}{};
+ public:
+  explicit orc_reader_options_builder() = default;
+
+  explicit orc_reader_options_builder(source_info const& src) : options{src} {};
 
   /**
    * @brief Sets names of the column to read
    */
-  orc_reader_options_builder& columns(std::vector<std::string> col_names) {
-     options._columns = std::move(col_names);
-     return *this;
+  orc_reader_options_builder& columns(std::vector<std::string> col_names)
+  {
+    options._columns = std::move(col_names);
+    return *this;
   }
 
   /**
    * @brief Sets list of individual stripes to read
    */
-  orc_reader_options_builder& stripes(std::vector<size_type> strps) {
-      options.stripes(std::move(strps));
-     return *this;
+  orc_reader_options_builder& stripes(std::vector<size_type> strps)
+  {
+    options.stripes(std::move(strps));
+    return *this;
   }
 
   /**
    * @brief Sets number of rows to skip from the start
    */
-  orc_reader_options_builder& skip_rows(size_type rows) {
-      options.skip_rows(rows);
-     return *this;
+  orc_reader_options_builder& skip_rows(size_type rows)
+  {
+    options.skip_rows(rows);
+    return *this;
   }
 
   /**
    * @brief Sets number of row to read
    */
-  orc_reader_options_builder& num_rows(size_type nrows) {
-      options.num_rows(nrows);
-     return *this;
+  orc_reader_options_builder& num_rows(size_type nrows)
+  {
+    options.num_rows(nrows);
+    return *this;
   }
 
   /**
    * @brief Enable/Disable use of row index to speed-up reading
    */
-  orc_reader_options_builder& use_index(bool use) {
-      options._use_index = use;
-     return *this;
+  orc_reader_options_builder& use_index(bool use)
+  {
+    options._use_index = use;
+    return *this;
   }
 
   /**
    * @brief Enable/Disable use of numpy-compatible dtypes
    */
-  orc_reader_options_builder& use_np_dtypes(bool use) {
-      options._use_np_dtypes = use;
-     return *this;
+  orc_reader_options_builder& use_np_dtypes(bool use)
+  {
+    options._use_np_dtypes = use;
+    return *this;
   }
-  
+
   /**
    * @brief Returns timestamp type to which timestamp column will be cast
    */
-  orc_reader_options_builder& timestamp_type(data_type type) {
-      options._timestamp_type = type;
-     return *this;
+  orc_reader_options_builder& timestamp_type(data_type type)
+  {
+    options._timestamp_type = type;
+    return *this;
   }
 
   /**
    * @brief Enable/Disable convertion of decimals to float64
    */
-  orc_reader_options_builder& decimals_as_float(bool val) {
-      options._decimals_as_float = val;
-     return *this;
+  orc_reader_options_builder& decimals_as_float(bool val)
+  {
+    options._decimals_as_float = val;
+    return *this;
   }
 
   /**
    * @brief Sets whether decimal scale is inferred or forced to have limited fractional digits
    */
-  orc_reader_options_builder& forced_decimals_scale(size_type val) {
-      options._forced_decimals_scale = val;
-     return *this;
+  orc_reader_options_builder& forced_decimals_scale(size_type val)
+  {
+    options._forced_decimals_scale = val;
+    return *this;
   }
 
   /**
    * @brief move orc_reader_options member once options is built
    */
-  operator orc_reader_options &&() {return std::move(options);}
-  
+  operator orc_reader_options &&() { return std::move(options); }
+
   /**
    * @brief move orc_reader_options member once options is built
    */
-  orc_reader_options&& build() {return std::move(options);}
+  orc_reader_options&& build() { return std::move(options); }
 };
 
 /**
@@ -294,7 +308,8 @@ class orc_reader_options_builder {
  * @code
  *  ...
  *  std::string filepath = "dataset.orc";
- *  cudf::orc_reader_options options = cudf::orc_reader_options::builder(cudf::source_info(filepath));
+ *  cudf::orc_reader_options options =
+ * cudf::orc_reader_options::builder(cudf::source_info(filepath));
  *  ...
  *  auto result = cudf::read_orc(options);
  * @endcode
@@ -307,8 +322,6 @@ class orc_reader_options_builder {
  */
 table_with_metadata read_orc(orc_reader_options const& options,
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
-
 
 /**
  * @brief Builds settings to use for `write_orc()`
@@ -336,57 +349,60 @@ class orc_writer_options {
 
   friend orc_writer_options_builder;
 
-  explicit orc_writer_options(sink_info const& sink, table_view const& table): _sink(sink), _table(table){}
-  public:
+  explicit orc_writer_options(sink_info const& sink, table_view const& table)
+    : _sink(sink), _table(table)
+  {
+  }
+
+ public:
   explicit orc_writer_options() = default;
 
   /**
    * @brief Returns sink info
    */
-  sink_info const& sink() const {return _sink;}
+  sink_info const& sink() const { return _sink; }
 
   /**
    * @brief Returns compression type
    */
-  compression_type compression() const {return _compression;}
+  compression_type compression() const { return _compression; }
 
   /**
    * @brief Whether writing column statistics is enabled/disabled
    */
-  bool enable_statistics() const {return _enable_statistics;}
+  bool enable_statistics() const { return _enable_statistics; }
 
   /**
    * @brief Returns table to be written to output
    */
-  table_view table() const {return _table;}
+  table_view table() const { return _table; }
 
   /**
    * @brief Returns associated metadata
    */
-  table_metadata const* metadata() const {return _metadata;}
-
+  table_metadata const* metadata() const { return _metadata; }
 
   // Setters
-  
+
   /**
    * @brief Sets compression type
    */
-  void compression(compression_type comp) {_compression = comp;}
+  void compression(compression_type comp) { _compression = comp; }
 
   /**
    * @brief Enable/Disable writing column statistics
    */
-  void enable_statistics(bool val) {_enable_statistics = val;}
+  void enable_statistics(bool val) { _enable_statistics = val; }
 
   /**
    * @brief Returns table to be written to output
    */
-  void table(table_view tbl) {_table = tbl;}
+  void table(table_view tbl) { _table = tbl; }
 
   /**
    * @brief Returns associated metadata
    */
-  void metadata(table_metadata* meta) {_metadata = meta;}
+  void metadata(table_metadata* meta) { _metadata = meta; }
 
   /**
    * @brief Returns builder to update options
@@ -395,54 +411,60 @@ class orc_writer_options {
 };
 
 class orc_writer_options_builder {
-    orc_writer_options options;
+  orc_writer_options options;
 
-    public:
-    orc_writer_options_builder() = default;
+ public:
+  orc_writer_options_builder() = default;
 
-    orc_writer_options_builder(sink_info const& sink, table_view const& table):options{sink, table}{}
+  orc_writer_options_builder(sink_info const& sink, table_view const& table) : options{sink, table}
+  {
+  }
 
-    /**
+  /**
    * @brief Sets compression type
    */
-  orc_writer_options_builder& compression(compression_type comp) {
-      options._compression = comp;
-      return *this;
+  orc_writer_options_builder& compression(compression_type comp)
+  {
+    options._compression = comp;
+    return *this;
   }
 
   /**
    * @brief Enable/Disable writing column statistics
    */
-  orc_writer_options_builder& enable_statistics(bool val) {
-      options._enable_statistics = val;
-      return *this;
+  orc_writer_options_builder& enable_statistics(bool val)
+  {
+    options._enable_statistics = val;
+    return *this;
   }
 
   /**
    * @brief Returns table to be written to output
    */
-  orc_writer_options_builder& table(table_view tbl) {
-      options._table = tbl;
-      return *this;
+  orc_writer_options_builder& table(table_view tbl)
+  {
+    options._table = tbl;
+    return *this;
   }
 
   /**
    * @brief Returns associated metadata
    */
-  orc_writer_options_builder& metadata(table_metadata* meta) {
-      options._metadata = meta;
-      return *this;
+  orc_writer_options_builder& metadata(table_metadata* meta)
+  {
+    options._metadata = meta;
+    return *this;
   }
 
   /**
    * @brief move orc_writer_options member once options is built
    */
-  operator orc_writer_options &&() {return std::move(options);}
+  operator orc_writer_options &&() { return std::move(options); }
 
   /**
    * @brief move orc_writer_options member once options is built
    */
-  orc_writer_options&& build() {return std::move(options);}
+  orc_writer_options&& build() { return std::move(options); }
 };
 
 /**
@@ -454,7 +476,8 @@ class orc_writer_options_builder {
  * @code
  *  ...
  *  std::string filepath = "dataset.orc";
- *  cudf::orc_writer_options options = cudf::orc_writer_options::builder(cudf::sink_info(filepath), table->view());
+ *  cudf::orc_writer_options options = cudf::orc_writer_options::builder(cudf::sink_info(filepath),
+ * table->view());
  *  ...
  *  cudf::write_orc(options);
  * @endcode
@@ -489,47 +512,47 @@ class chunked_orc_writer_options {
 
   friend chunked_orc_writer_options_builder;
 
-  chunked_orc_writer_options(sink_info const& sink): _sink(sink){}
+  chunked_orc_writer_options(sink_info const& sink) : _sink(sink) {}
 
-  public:
+ public:
   explicit chunked_orc_writer_options() = default;
 
   /**
    * @brief Returns sink info
    */
-  sink_info const& sink() const {return _sink;}
+  sink_info const& sink() const { return _sink; }
 
   /**
    * @brief Returns compression type
    */
-  compression_type compression() const {return _compression;}
+  compression_type compression() const { return _compression; }
 
   /**
    * @brief Whether writing column statistics is enabled/disabled
    */
-  bool enable_statistics() const {return _enable_statistics;}
+  bool enable_statistics() const { return _enable_statistics; }
 
   /**
    * @brief Returns associated metadata
    */
-  table_metadata_with_nullability const* metadata() const {return _metadata;}
+  table_metadata_with_nullability const* metadata() const { return _metadata; }
 
   // Setters
 
   /**
    * @brief Sets compression type
    */
-  void compression(compression_type comp) {_compression = comp;}
+  void compression(compression_type comp) { _compression = comp; }
 
   /**
    * @brief Enable/Disable writing column statistics
    */
-  void enable_statistics(bool val) {_enable_statistics = val;}
+  void enable_statistics(bool val) { _enable_statistics = val; }
 
   /**
    * @brief Returns associated metadata
    */
-  void metadata(table_metadata_with_nullability* meta) {_metadata = meta;}
+  void metadata(table_metadata_with_nullability* meta) { _metadata = meta; }
 
   /**
    * @brief Returns builder to update options
@@ -538,46 +561,49 @@ class chunked_orc_writer_options {
 };
 
 class chunked_orc_writer_options_builder {
-    chunked_orc_writer_options options;
+  chunked_orc_writer_options options;
 
-    public:
-    chunked_orc_writer_options_builder() = default;
+ public:
+  chunked_orc_writer_options_builder() = default;
 
-    chunked_orc_writer_options_builder(sink_info const& sink):options{sink}{}
+  chunked_orc_writer_options_builder(sink_info const& sink) : options{sink} {}
 
-    /**
+  /**
    * @brief Sets compression type
    */
-  chunked_orc_writer_options_builder& compression(compression_type comp) {
-      options._compression = comp;
-      return *this;
+  chunked_orc_writer_options_builder& compression(compression_type comp)
+  {
+    options._compression = comp;
+    return *this;
   }
 
   /**
    * @brief Enable/Disable writing column statistics
    */
-  chunked_orc_writer_options_builder& enable_statistics(bool val) {
-      options._enable_statistics = val;
-      return *this;
+  chunked_orc_writer_options_builder& enable_statistics(bool val)
+  {
+    options._enable_statistics = val;
+    return *this;
   }
 
   /**
    * @brief Returns associated metadata
    */
-  chunked_orc_writer_options_builder& metadata(table_metadata_with_nullability* meta) {
-      options._metadata = meta;
-      return *this;
+  chunked_orc_writer_options_builder& metadata(table_metadata_with_nullability* meta)
+  {
+    options._metadata = meta;
+    return *this;
   }
 
   /**
    * @brief move chunked_rc_writer_options member once options is built
    */
-  operator chunked_orc_writer_options &&() {return std::move(options);}
+  operator chunked_orc_writer_options &&() { return std::move(options); }
 
   /**
    * @brief move chunked_rc_writer_options member once options is built
    */
-  chunked_orc_writer_options&& build() {return std::move(options);}
+  chunked_orc_writer_options&& build() { return std::move(options); }
 };
 
 namespace detail {
@@ -647,5 +673,5 @@ void write_orc_chunked(table_view const& table,
  */
 void write_orc_chunked_end(std::shared_ptr<detail::orc::orc_chunked_state>& state);
 
-} // namespace io
-} // namespace cudf
+}  // namespace io
+}  // namespace cudf
