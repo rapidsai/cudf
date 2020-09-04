@@ -28,13 +28,6 @@ class NumericalColumn(column.ColumnBase):
             The dtype associated with the data Buffer
         mask : Buffer, optional
         """
-        try:
-            cudf.dtype(dtype)
-            dtype.itemsize
-
-        except:
-            import pdb
-            pdb.set_trace()
         dtype = cudf.dtype(dtype)
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")

@@ -9,54 +9,6 @@ from pandas.api.extensions import ExtensionDtype
 from cudf._lib.types import _Dtype
 import cudf
 
-pa_to_pd_dtypes = {
-    pa.uint8(): pd.UInt8Dtype(),
-    pa.uint16(): pd.UInt16Dtype(),
-    pa.uint32(): pd.UInt32Dtype(),
-    pa.uint64(): pd.UInt64Dtype(),
-    pa.int8(): pd.Int8Dtype(),
-    pa.int16(): pd.Int16Dtype(),
-    pa.int32(): pd.Int32Dtype(),
-    pa.int64(): pd.Int64Dtype(),
-    pa.bool_(): pd.BooleanDtype(),
-    pa.string(): pd.StringDtype(),
-    pa.float32(): np.float32(),
-    pa.float64(): np.float64(),
-    pa.timestamp("ns"): np.dtype("datetime64[ns]"),
-    pa.timestamp("us"): np.dtype("datetime64[us]"),
-    pa.timestamp("ms"): np.dtype("datetime64[ms]"),
-    pa.timestamp("s"): np.dtype("datetime64[s]"),
-    pa.duration("ns"): np.dtype('timedelta64[ns]'),
-    pa.duration("us"): np.dtype('timedelta64[us]'),
-    pa.duration("ms"): np.dtype('timedelta64[ms]'),
-    pa.duration("s"): np.dtype('timedelta64[s]'),
-}
-
-pa_to_np_dtypes = {
-    pa.uint8(): np.dtype("uint8"),
-    pa.uint16(): np.dtype("uint16"),
-    pa.uint32(): np.dtype("uint32"),
-    pa.uint64(): np.dtype("uint64"),
-    pa.int8(): np.dtype("int8"),
-    pa.int16(): np.dtype("int16"),
-    pa.int32(): np.dtype("int32"),
-    pa.int64(): np.dtype("int64"),
-    pa.bool_(): np.dtype("bool"),
-    pa.string(): np.dtype("object"),
-    pa.float32(): np.dtype("float32"),
-    pa.float64(): np.dtype("float64"),
-    pa.timestamp("ns"): np.dtype("datetime64[ns]"),
-    pa.timestamp("us"): np.dtype("datetime64[us]"),
-    pa.timestamp("ms"): np.dtype("datetime64[ms]"),
-    pa.timestamp("s"): np.dtype("datetime64[s]"),
-    pa.duration("ns"): np.dtype('timedelta64[ns]'),
-    pa.duration("us"): np.dtype('timedelta64[us]'),
-    pa.duration("ms"): np.dtype('timedelta64[ms]'),
-    pa.duration("s"): np.dtype('timedelta64[s]'),
-    None: None,
-}
-
-
 class Generic(ExtensionDtype, _Dtype):
     pa_type = None
 
@@ -86,11 +38,11 @@ class Generic(ExtensionDtype, _Dtype):
 
     @property
     def to_numpy(self):
-        return pa_to_np_dtypes[self.pa_type]
+        return np.dtype(self.pa_type.to_pandas_dtype())
 
     @property
     def to_pandas(self):
-        return pa_to_pd_dtypes[self.pa_type]
+        return pd.api.types.pandas_dtype(self.name)
 
     @property
     def itemsize(self):
@@ -138,7 +90,6 @@ class UnsignedInteger(Integer):
     def __init__(self):
         self._raise_construction_error()
         
-
 class Inexact(Number):
     def __init__(self):
         self._raise_construction_error()
@@ -155,11 +106,27 @@ class Flexible(Generic):
     def __init__(self):
         self._construction_error()
         
-class Datetime(Generic):    
-    pass
+class Datetime(Generic):   
+
+    @property
+    def to_numpy(self):
+        return {v:k for k,v in _cudf_dtype_from_numpy.items()}[self]
+
+    @property
+    def to_pandas(self):
+        # pandas only supports nanos
+        return np.dtype('datetime64[ns]')
 
 class Timedelta(Generic):
-    pass
+
+    @property
+    def to_numpy(self):
+        return {v:k for k,v in _cudf_dtype_from_numpy.items()}[self]
+
+    @property
+    def to_pandas(self):
+        # pandas only supports nanos
+        return np.dtype('timedelta64[ns]')
 
 class UInt8Dtype(UnsignedInteger):
     def __init__(self):
@@ -224,7 +191,7 @@ class BooleanDtype(Generic):
 
     def __init__(self):
         self.pa_type = pa.bool_()
-        self._name = "Boolean"
+        self._name = "boolean"
 
 class Datetime64NSDtype(Datetime):
     def __init__(self):
@@ -281,7 +248,7 @@ class StringDtype(Flexible):
 
     def __init__(self):
         self.pa_type = pa.string()
-        self._name = "String"
+        self._name = "string"
 
 
 def cudf_dtype_from_string(obj):
@@ -291,7 +258,10 @@ def cudf_dtype_from_string(obj):
         np_dtype = np.dtype(obj)
         return cudf_dtype_from_numpy(np_dtype)
     except TypeError:
-        return _cudf_dtype_from_string.get(obj, None)
+        result = _cudf_dtype_from_string.get(obj, None)
+        if not result:
+            raise TypeError(f"Could not find a cuDF dtype matching {obj}")
+        return result
 
 
 def cudf_dtype_from_numpy(obj):
@@ -304,7 +274,22 @@ def cudf_dtype_from_numpy(obj):
     elif obj is np.timedelta64:
         return cudf.Timedelta
     dtype = np.dtype(obj)
-    return _cudf_dtype_from_numpy.get(dtype, None)
+    if dtype.type is np.str_:
+        return StringDtype()
+    result = _cudf_dtype_from_numpy.get(dtype, None)
+    if not result:
+        raise TypeError(f"Could not find a cuDF dtype matching {obj}")
+    return result
+
+def cudf_dtype_from_pandas(obj):
+    if isinstance(obj, pd.core.arrays.numpy_.PandasDtype):
+        try:
+            return cudf_dtype_from_numpy(obj.numpy_dtype)
+        except TypeError:
+            result = _cudf_dtype_from_pandas.get(obj, None)
+            if not result:
+                raise TypeError(f"Could not find a cuDF dtype matching {obj}")
+            return result
 
 def dtype(obj):
     if isinstance(obj, Generic):
@@ -317,10 +302,8 @@ def dtype(obj):
         return cudf_dtype_from_string(obj)
     if isinstance(obj, pd.CategoricalDtype):
         return cudf.CategoricalDtype.from_pandas(obj)
-    elif obj in _pd_to_cudf_dtypes.keys():
-        return _pd_to_cudf_dtypes[obj]
-    elif isinstance(obj, pd.core.arrays.numpy_.PandasDtype):
-        return cudf_dtype_from_string(obj.name)
+    elif isinstance(obj, (ExtensionDtype, pd.core.arrays.numpy_.PandasDtype)):
+        return cudf_dtype_from_pandas(obj)
     elif isinstance(obj, pa.lib.DataType):
         return cudf_dtype_from_pyarrow[obj]
     elif obj is str:
@@ -332,6 +315,7 @@ def dtype(obj):
     elif obj is None:
         return None
     else:
+
         raise TypeError
         
         #raise TypeError(f"Could not find a cuDF dtype matching {obj}")
@@ -559,19 +543,6 @@ _cudf_dtype_from_numpy = {
     np.dtype("timedelta64[s]"): Timedelta64SDtype(),
 }
 
-_pd_to_cudf_dtypes = {
-    pd.Int8Dtype(): Int8Dtype(),
-    pd.Int16Dtype(): Int16Dtype(),
-    pd.Int32Dtype(): Int32Dtype(),
-    pd.Int64Dtype(): Int64Dtype(),
-    pd.UInt8Dtype(): UInt8Dtype(),
-    pd.UInt16Dtype(): UInt16Dtype(),
-    pd.UInt32Dtype(): UInt32Dtype(),
-    pd.UInt64Dtype(): UInt64Dtype(),
-    pd.BooleanDtype(): BooleanDtype(),
-    pd.StringDtype(): StringDtype(),
-}
-
 _cudf_dtype_from_string = {
     'UInt8': UInt8Dtype,
     'UInt16': UInt16Dtype,
@@ -594,4 +565,17 @@ _cudf_dtype_from_string = {
     'Timedelta64US': Timedelta64USDtype,
     'Timedelta64MS': Timedelta64MSDtype,
     'Timedelta64S': Timedelta64SDtype,
+}
+
+_cudf_dtype_from_pandas = {
+    pd.UInt8Dtype(): UInt8Dtype(),
+    pd.UInt16Dtype():  UInt16Dtype(),
+    pd.UInt32Dtype(): UInt32Dtype(),
+    pd.UInt64Dtype(): UInt64Dtype(),
+    pd.Int8Dtype():  Int8Dtype(),
+    pd.Int16Dtype(): Int16Dtype(),
+    pd.Int32Dtype(): Int32Dtype(),
+    pd.Int64Dtype(): Int64Dtype(),
+    pd.StringDtype(): StringDtype(),
+    pd.BooleanDtype(): BooleanDtype(),
 }

@@ -4363,7 +4363,7 @@ truediv_int_dtype_corrections = {
     "UInt16": "Float32",
     "UInt32": "Float64",
     "UInt64": "Float64",
-    "Boolean": "Float32",
+    "boolean": "Float32",
     "Int": "Float",
 }
 
