@@ -60,18 +60,19 @@ def _parse_column_statistics(cs, column_statistics_blob):
         column_statistics["sum"] = cs.decimalStatistics.sum
     elif cs.HasField("dateStatistics"):
         column_statistics["minimum"] = datetime.datetime.fromtimestamp(
-            datetime.timedelta(cs.dateStatistics.minimumUtc).total_seconds(),
+            datetime.timedelta(cs.dateStatistics.minimum).total_seconds(),
             datetime.timezone.utc,
         )
         column_statistics["maximum"] = datetime.datetime.fromtimestamp(
-            datetime.timedelta(cs.dateStatistics.maximumUtc).total_seconds(),
+            datetime.timedelta(cs.dateStatistics.maximum).total_seconds(),
             datetime.timezone.utc,
         )
     elif cs.HasField("timestampStatistics"):
         # Before ORC-135, the local timezone offset was included and they were
         # stored as minimum and maximum. After ORC-135, the timestamp is
         # adjusted to UTC before being converted to milliseconds and stored
-        # in minimumUtc and maximumUtc. Therefore, minimum and maximum are not supported
+        # in minimumUtc and maximumUtc.
+        # TODO: Support minimum and maximum by reading writer's local timezone
         if cs.timestampStatistics.HasField(
             "minimumUtc"
         ) and cs.timestampStatistics.HasField("maximumUtc"):
@@ -148,7 +149,9 @@ def read_orc_statistics(
     return file_statistics, stripes_statistics
 
 
-def _filter_stripes(filters, filepath_or_buffer, stripes=None, skip_rows=None, num_rows=None):
+def _filter_stripes(
+    filters, filepath_or_buffer, stripes=None, skip_rows=None, num_rows=None
+):
     # Coerce filters into list of lists of tuples
     if isinstance(filters[0][0], str):
         filters = [filters]

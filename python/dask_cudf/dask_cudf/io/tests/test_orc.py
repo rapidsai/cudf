@@ -1,5 +1,6 @@
 import glob
 import os
+from datetime import datetime, timezone
 
 import pytest
 
@@ -43,6 +44,34 @@ def test_read_orc_cols(engine, columns):
     df2 = dask_cudf.read_orc(sample_orc, engine=engine, columns=columns)
 
     dd.assert_eq(df1, df2, check_index=False)
+
+
+@pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
+@pytest.mark.parametrize(
+    "predicate,expected_len",
+    [
+        (None, 70_000),
+        (
+            [("date", "==", datetime(1900, 12, 25, tzinfo=timezone.utc))],
+            15_000,
+        ),
+        (
+            [("date", "<=", datetime(1928, 12, 25, tzinfo=timezone.utc))],
+            30_000,
+        ),
+        (
+            [
+                [("date", ">", datetime(1950, 12, 25, tzinfo=timezone.utc))],
+                [("date", "<=", datetime(1928, 12, 25, tzinfo=timezone.utc))],
+            ],
+            55_000,
+        ),
+    ],
+)
+def test_read_orc_filtered(tmpdir, engine, predicate, expected_len):
+    df = dask_cudf.read_orc(sample_orc, engine=engine, filters=predicate)
+
+    dd.assert_eq(len(df), expected_len)
 
 
 @pytest.mark.parametrize("compute", [True, False])

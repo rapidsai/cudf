@@ -36,9 +36,9 @@ def _apply_predicate(op, val, col_stats):
     has_min = "minimum" in col_stats
     has_max = "maximum" in col_stats
     has_sum = "sum" in col_stats
-    col_min = col_stats["minimum"]
-    col_max = col_stats["maximum"]
-    col_sum = col_stats["maximum"]
+    col_min = col_stats["minimum"] if has_min else None
+    col_max = col_stats["maximum"] if has_max else None
+    col_sum = col_stats["sum"] if has_sum else None
 
     # Apply operator
     if op == "=" or op == "==":
