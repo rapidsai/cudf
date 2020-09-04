@@ -196,10 +196,9 @@ struct EncColumnDesc : stats_column_desc {
   // TODO (dm): Evaluate if this is sufficient. At 4 bits, this allows a maximum 16 level nesting
   uint8_t level_bits;  //!< bits to encode max definition (lower nibble) & repetition (upper nibble)
                        //!< levels
-  bool is_list;        //!< Indicates whether the column is a list type
   size_type const *const
-    *nesting_offsets;  //!< If column is a list type, contains offset array of each nesting level
-  size_type nesting_levels;  //!< Number of nesting levels in column.
+    *nesting_offsets;  //!< If column is a nested type, contains offset array of each nesting level
+  size_type nesting_levels;  //!< Number of nesting levels in column. 0 means no nesting.
   size_type num_values;  //!< Number of data values in column. Different from num_rows in case of
                          //!< nested columns
 
@@ -216,12 +215,12 @@ struct EncColumnDesc : stats_column_desc {
 struct PageFragment {
   uint32_t fragment_data_size;  //!< Size of fragment data in bytes
   uint32_t dict_data_size;      //!< Size of dictionary for this fragment
-  uint32_t num_values;          //!< Number of values in fragment. Different from num_rows for list
-  uint32_t num_leaf_values;     //!< Number of leaf values in fragment. Does not include nulls at
-                                //!< non-leaf level
-  uint32_t non_nulls;           //!< Number of non-null values
-  uint16_t num_rows;            //!< Number of rows in fragment
-  uint16_t num_dict_vals;       //!< Number of unique dictionary entries
+  uint32_t num_values;  //!< Number of values in fragment. Different from num_rows for nested type
+  uint32_t num_leaf_values;  //!< Number of leaf values in fragment. Does not include nulls at
+                             //!< non-leaf level
+  uint32_t non_nulls;        //!< Number of non-null values
+  uint16_t num_rows;         //!< Number of rows in fragment
+  uint16_t num_dict_vals;    //!< Number of unique dictionary entries
 };
 
 /**
@@ -239,7 +238,7 @@ struct EncPage {
   uint32_t max_data_size;    //!< Maximum size of coded page data (excluding header)
   uint32_t start_row;        //!< First row of page
   uint32_t num_rows;         //!< Rows in page
-  uint32_t num_leaf_values;  //!< Values in page. Different from num_rows in case of list
+  uint32_t num_leaf_values;  //!< Values in page. Different from num_rows in case of nested types
   uint32_t num_values;  //!< Number of def/rep level values in page. Includes null/empty elements in
                         //!< non-leaf levels
 };
@@ -284,17 +283,17 @@ struct EncColumnChunk {
   uint32_t compressed_size;       //!< Compressed buffer size
   uint32_t start_row;             //!< First row of chunk
   uint32_t num_rows;              //!< Number of rows in chunk
-  uint32_t num_values;            //!< Number of values in chunk. Different from num_rows for list.
-  uint32_t first_fragment;        //!< First fragment of chunk
-  uint32_t first_page;            //!< First page of chunk
-  uint32_t num_pages;             //!< Number of pages in chunk
-  uint32_t dictionary_id;         //!< Dictionary id for this chunk
-  uint8_t is_compressed;          //!< Nonzero if the chunk uses compression
-  uint8_t has_dictionary;         //!< Nonzero if the chunk uses dictionary encoding
-  uint16_t num_dict_fragments;    //!< Number of fragments using dictionary
-  uint32_t dictionary_size;       //!< Size of dictionary
-  uint32_t total_dict_entries;    //!< Total number of entries in dictionary
-  uint32_t ck_stat_size;          //!< Size of chunk-level statistics (included in 1st page header)
+  uint32_t num_values;      //!< Number of values in chunk. Different from num_rows for nested types
+  uint32_t first_fragment;  //!< First fragment of chunk
+  uint32_t first_page;      //!< First page of chunk
+  uint32_t num_pages;       //!< Number of pages in chunk
+  uint32_t dictionary_id;   //!< Dictionary id for this chunk
+  uint8_t is_compressed;    //!< Nonzero if the chunk uses compression
+  uint8_t has_dictionary;   //!< Nonzero if the chunk uses dictionary encoding
+  uint16_t num_dict_fragments;  //!< Number of fragments using dictionary
+  uint32_t dictionary_size;     //!< Size of dictionary
+  uint32_t total_dict_entries;  //!< Total number of entries in dictionary
+  uint32_t ck_stat_size;        //!< Size of chunk-level statistics (included in 1st page header)
 };
 
 /**

@@ -109,7 +109,6 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
   frag_init_state_s *const s = &state_g;
   uint32_t t                 = threadIdx.x;
   uint32_t start_row, dtype_len, dtype_len_in, dtype;
-  size_type start_value_idx, nvals;
 
   if (t < sizeof(EncColumnDesc) / sizeof(uint32_t)) {
     reinterpret_cast<uint32_t *>(&s->col)[t] =
@@ -122,9 +121,8 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
   start_row = blockIdx.y * fragment_size;
   if (!t) {
     s->col.num_rows = min(s->col.num_rows, max_num_rows);
-    // fragment size = 5000. max_num_rows = total num rows in column. So frag num rows = 5000 except
-    // for the last page fragment which can be smaller.
-    // num_rows is fixed but fragment size could be larger if the data is strings
+    // frag.num_rows = fragment_size except for the last page fragment which can be smaller.
+    // num_rows is fixed but fragment size could be larger if the data is strings or nested.
     s->frag.num_rows           = min(fragment_size, max_num_rows - min(start_row, max_num_rows));
     s->frag.non_nulls          = 0;
     s->frag.num_dict_vals      = 0;
@@ -136,14 +134,13 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
     // For list<list<int>>, values between i and i+50 can be calculated by
     // off_11 = off[i], off_12 = off[i+50]
     // off_21 = child.off[off_11], off_22 = child.off[off_12]
-    start_value_idx         = start_row;
+    s->start_value_idx      = start_row;
     size_type end_value_idx = start_row + s->frag.num_rows;
     for (size_type i = 0; i < s->col.nesting_levels; i++) {
-      start_value_idx = s->col.nesting_offsets[i][start_value_idx];
-      end_value_idx   = s->col.nesting_offsets[i][end_value_idx];
+      s->start_value_idx = s->col.nesting_offsets[i][s->start_value_idx];
+      end_value_idx      = s->col.nesting_offsets[i][end_value_idx];
     }
-    s->frag.num_leaf_values = end_value_idx - start_value_idx;
-    s->start_value_idx      = start_value_idx;
+    s->frag.num_leaf_values = end_value_idx - s->start_value_idx;
 
     if (s->col.nesting_levels > 0) {
       // The number of rep/def values can be more than num data values because data values do
@@ -167,8 +164,8 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
   }
   __syncthreads();
 
-  nvals           = s->frag.num_leaf_values;
-  start_value_idx = s->start_value_idx;
+  size_type nvals           = s->frag.num_leaf_values;
+  size_type start_value_idx = s->start_value_idx;
 
   for (uint32_t i = 0; i < nvals; i += 512) {
     const uint32_t *valid = s->col.valid_map_base;
