@@ -193,6 +193,10 @@ def test_orc_reader_strings(datadir):
 
 
 def test_orc_read_statistics(datadir):
+    # Read in file containing 2 columns ("int1" and "string1") and 3 stripes
+    # (sizes 5000, 5000 and 1000 respectively). Each stripe has the same value
+    # in every one of its rows. The values the stripes have are 1, 2, and 3 in
+    # "int1" and "one", "two", and "three" in "string1".
     path = datadir / "TestOrcFile.testStripeLevelStats.orc"
     try:
         (
