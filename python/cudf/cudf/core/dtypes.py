@@ -50,10 +50,7 @@ class Generic(ExtensionDtype, _Dtype):
 
     @property
     def type(self):
-        if isinstance(self, (Floating, Datetime)):
-            return self.to_numpy.type
-        else:
-            return self.to_pandas.type
+        return CUDFType(self)
 
     @property
     def kind(self):
@@ -250,6 +247,12 @@ class StringDtype(Flexible):
         self.pa_type = pa.string()
         self._name = "string"
 
+class CUDFType(object):
+    def __init__(self, parent_dtype):
+        self.parent_dtype = parent_dtype
+
+    def __call__(self, arg):
+        return cudf._lib.scalar.Scalar(arg, dtype=self.parent_dtype)
 
 def cudf_dtype_from_string(obj):
     if obj == 'category':

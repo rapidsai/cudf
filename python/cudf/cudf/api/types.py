@@ -18,6 +18,9 @@ def is_timedelta64_dtype(obj):
 def is_string_dtype(obj):
     return isinstance(obj, cudf.StringDtype) or (pd.api.types.is_string_dtype(obj) and not is_categorical_dtype(obj))
 
+def is_integer_dtype(obj):
+    return isinstance(obj, cudf.Integer) or pd.api.types.is_integer_dtype(obj)
+
 def is_numerical_dtype(obj):
     if isinstance(obj, cudf.Generic):
         return isinstance(obj, (cudf.Number, cudf.BooleanDtype))

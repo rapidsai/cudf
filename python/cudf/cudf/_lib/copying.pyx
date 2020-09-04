@@ -1,6 +1,7 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 import pandas as pd
+from cudf.api.types import is_integer_dtype
 
 from libcpp cimport bool
 from libcpp.memory cimport make_unique, unique_ptr
@@ -129,7 +130,7 @@ def copy_range(Column input_column,
 
 
 def gather(Table source_table, Column gather_map, bool keep_index=True):
-    assert pd.api.types.is_integer_dtype(gather_map.dtype)
+    assert is_integer_dtype(gather_map.dtype)
 
     cdef unique_ptr[table] c_result
     cdef table_view source_table_view

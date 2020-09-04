@@ -107,13 +107,13 @@ cdef class Scalar:
         """
         Returns a host copy of the underlying device scalar.
         """
-        if pd.api.types.is_string_dtype(self.dtype):
+        if cudf.api.types.is_string_dtype(self.dtype):
             return _get_py_string_from_string(self.c_value)
-        elif pd.api.types.is_numeric_dtype(self.dtype):
+        elif cudf.api.types.is_numerical_dtype(self.dtype):
             return _get_np_scalar_from_numeric(self.c_value)
-        elif pd.api.types.is_datetime64_dtype(self.dtype):
+        elif cudf.api.types.is_datetime64_dtype(self.dtype):
             return _get_np_scalar_from_timestamp64(self.c_value)
-        elif pd.api.types.is_timedelta64_dtype(self.dtype):
+        elif cudf.api.types.is_timedelta64_dtype(self.dtype):
             return _get_np_scalar_from_timedelta64(self.c_value)
         else:
             raise ValueError(

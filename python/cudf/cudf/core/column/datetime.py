@@ -61,7 +61,7 @@ class DatetimeColumn(column.ColumnBase):
             null_count=null_count,
         )
 
-        if not (self.dtype.type is np.datetime64):
+        if not isinstance(self.dtype, cudf.Datetime):
             raise TypeError(f"{self.dtype} is not a supported datetime type")
 
     def __contains__(self, item):

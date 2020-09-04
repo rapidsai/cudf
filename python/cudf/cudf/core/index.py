@@ -1719,7 +1719,7 @@ class RangeIndex(Index):
         return pd.RangeIndex(
             start=self._start,
             stop=self._stop,
-            dtype=self.dtype,
+            dtype=self.dtype.to_pandas,
             name=self.name,
         )
 

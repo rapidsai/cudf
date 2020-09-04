@@ -56,7 +56,7 @@ class TimeDeltaColumn(column.ColumnBase):
             null_count=null_count,
         )
 
-        if not (self.dtype.type is np.timedelta64):
+        if not isinstance(self.dtype, cudf.Timedelta):
             raise TypeError(f"{self.dtype} is not a supported duration type")
 
     def __contains__(self, item):
