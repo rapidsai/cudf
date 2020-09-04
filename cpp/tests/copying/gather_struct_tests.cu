@@ -29,19 +29,19 @@
 #include <tests/utilities/cudf_gtest.hpp>
 #include <tests/utilities/type_lists.hpp>
 #include <tuple>
-#include "cudf/column/column_factories.hpp"
-#include "cudf/detail/utilities/device_operators.cuh"
-#include "cudf/null_mask.hpp"
-#include "cudf/structs/structs_column_view.hpp"
-#include "cudf/table/table_view.hpp"
-#include "cudf/types.hpp"
-#include "cudf/utilities/error.hpp"
-#include "gtest/gtest.h"
-#include "rmm/device_buffer.hpp"
-#include "thrust/host_vector.h"
-#include "thrust/iterator/counting_iterator.h"
-#include "thrust/scan.h"
-#include "thrust/sequence.h"
+#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/utilities/device_operators.cuh>
+#include <cudf/null_mask.hpp>
+#include <cudf/structs/structs_column_view.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
+#include <gtest/gtest.h>
+#include <rmm/device_buffer.hpp>
+#include <thrust/host_vector.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/scan.h>
+#include <thrust/sequence.h>
 
 using vector_of_columns = std::vector<std::unique_ptr<cudf::column>>;
 using cudf::size_type;
@@ -53,12 +53,12 @@ template <typename T>
 struct TypedStructGatherTest : public cudf::test::BaseFixture {
 };
 
-using FixedWidthTypesNotBool = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
+using FixedWidthTypes = cudf::test::Concat<cudf::test::IntegralTypes,
                                                   cudf::test::FloatingPointTypes,
                                                   cudf::test::DurationTypes,
                                                   cudf::test::TimestampTypes>;
 
-TYPED_TEST_CASE(TypedStructGatherTest, FixedWidthTypesNotBool);
+TYPED_TEST_CASE(TypedStructGatherTest, FixedWidthTypes);
 
 namespace {
 template <typename ElementTo, typename SourceElementT = ElementTo>
