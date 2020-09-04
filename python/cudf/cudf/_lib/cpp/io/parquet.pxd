@@ -177,8 +177,5 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         string column_chunks_file_path,
     ) except +
 
-cdef extern from "cudf/io/parquet.hpp" \
-        namespace "cudf::io::detail::parquet" nogil:
-
     cdef cppclass pq_chunked_state:
         pass

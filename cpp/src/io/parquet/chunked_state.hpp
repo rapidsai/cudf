@@ -26,8 +26,6 @@
 
 namespace cudf {
 namespace io {
-namespace detail {
-namespace parquet {
 
 enum class SingleWriteMode : bool { YES, NO };
 
@@ -37,7 +35,7 @@ enum class SingleWriteMode : bool { YES, NO };
  */
 struct pq_chunked_state {
   /// The writer to be used
-  std::unique_ptr<writer> wp;
+  std::unique_ptr<cudf::io::detail::parquet::writer> wp;
   /// Cuda stream to be used
   cudaStream_t stream;
   /// Overall file metadata.  Filled in during the process and written during write_chunked_end()
@@ -63,7 +61,5 @@ struct pq_chunked_state {
   }
 };
 
-}  // namespace parquet
-}  // namespace detail
 }  // namespace io
 }  // namespace cudf

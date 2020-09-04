@@ -22,13 +22,13 @@
 #pragma once
 
 #include <cudf/io/types.hpp>
-#include <iostream>
-#include <rmm/mr/device/default_memory_resource.hpp>
-
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/mr/device/default_memory_resource.hpp>
+
+#include <iostream>
 #include <memory>
 #include <string>
 #include <vector>
@@ -778,14 +778,10 @@ class chunked_parquet_writer_options_builder {
   chunked_parquet_writer_options&& build() { return std::move(options); }
 };
 
-namespace detail {
-namespace parquet {
 /**
  * @brief Forward declaration of anonymous chunked-writer state struct.
  */
 struct pq_chunked_state;
-}  // namespace parquet
-}  // namespace detail
 
 /**
  * @brief Begin the process of writing a parquet file in a chunked/stream form.
@@ -817,7 +813,7 @@ struct pq_chunked_state;
  * this pointer must be passed to all subsequent write_parquet_chunked() and
  * write_parquet_chunked_end() calls.
  */
-std::shared_ptr<detail::parquet::pq_chunked_state> write_parquet_chunked_begin(
+std::shared_ptr<pq_chunked_state> write_parquet_chunked_begin(
   chunked_parquet_writer_options const& options,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
@@ -833,8 +829,7 @@ std::shared_ptr<detail::parquet::pq_chunked_state> write_parquet_chunked_begin(
  * @param[in] state Opaque state information about the writer process. Must be the same pointer
  * returned from write_parquet_chunked_begin().
  */
-void write_parquet_chunked(table_view const& table,
-                           std::shared_ptr<detail::parquet::pq_chunked_state> state);
+void write_parquet_chunked(table_view const& table, std::shared_ptr<pq_chunked_state> state);
 
 /**
  * @brief Finish writing a chunked/stream parquet file.
@@ -850,7 +845,7 @@ void write_parquet_chunked(table_view const& table,
  *         requested in parquet_writer_options (empty blob otherwise).
  */
 std::unique_ptr<std::vector<uint8_t>> write_parquet_chunked_end(
-  std::shared_ptr<detail::parquet::pq_chunked_state>& state,
+  std::shared_ptr<pq_chunked_state>& state,
   bool return_filemetadata                   = false,
   const std::string& column_chunks_file_path = "");
 
