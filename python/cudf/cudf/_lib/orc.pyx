@@ -141,15 +141,18 @@ cdef size_type get_size_t_arg(arg, name) except*:
     return <size_type> arg
 
 
-cdef orc_reader_options make_orc_reader_options(filepath_or_buffer,
-                                      column_names,
-                                      stripes,
-                                      size_type skip_rows,
-                                      size_type num_rows,
-                                      type_id timestamp_type,
-                                      bool use_index,
-                                      bool decimals_as_float,
-                                      size_type force_decimal_scale) except*:
+cdef orc_reader_options make_orc_reader_options(
+    filepath_or_buffer,
+    column_names,
+    stripes,
+    size_type skip_rows,
+    size_type num_rows,
+    type_id timestamp_type,
+    bool use_index,
+    bool decimals_as_float,
+    size_type force_decimal_scale
+) except*:
+
     cdef vector[string] c_column_names
     cdef vector[size_type] strps = stripes
     c_column_names.reserve(len(column_names))
@@ -169,5 +172,5 @@ cdef orc_reader_options make_orc_reader_options(filepath_or_buffer,
         forced_decimals_scale(force_decimal_scale).
         build()
     )
-    
+
     return opts
