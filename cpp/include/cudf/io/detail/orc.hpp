@@ -29,7 +29,7 @@ namespace cudf {
 namespace io {
 namespace detail {
 namespace orc {
-    /**
+/**
  * @brief Class to read ORC dataset data into columns.
  */
 class reader {
@@ -45,9 +45,9 @@ class reader {
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit reader(std::vector<std::string> const &filepaths,
-                  orc_reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+  explicit reader(std::vector<std::string> const& filepaths,
+                  orc_reader_options const& options,
+                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
   /**
    * @brief Constructor from an array of datasources
@@ -56,9 +56,9 @@ class reader {
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
-                  orc_reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+  explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
+                  orc_reader_options const& options,
+                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header
@@ -73,8 +73,7 @@ class reader {
    *
    * @return The set of columns along with table metadata
    */
-  table_with_metadata read(orc_reader_options const &options, cudaStream_t stream = 0);
-
+  table_with_metadata read(orc_reader_options const& options, cudaStream_t stream = 0);
 };
 
 /**
@@ -110,8 +109,8 @@ class writer {
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   void write(table_view const& table,
-                 const table_metadata* metadata = nullptr,
-                 cudaStream_t stream            = 0);
+             const table_metadata* metadata = nullptr,
+             cudaStream_t stream            = 0);
 
   /**
    * @brief Begins the chunked/streamed write process.
@@ -135,7 +134,7 @@ class writer {
    */
   void write_chunked_end(struct orc_chunked_state& state);
 };
-} // namespace orc
-} // namespace detail
-} // namespace io
-} // namespace cudf
+}  // namespace orc
+}  // namespace detail
+}  // namespace io
+}  // namespace cudf
