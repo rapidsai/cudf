@@ -175,7 +175,7 @@ std::pair<std::unique_ptr<table>, std::vector<cudf::size_type>> round_robin_part
   table_view const& input,
   cudf::size_type num_partitions,
   cudf::size_type start_partition     = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   auto nrows = input.num_rows();
@@ -285,7 +285,7 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> round_robi
   table_view const& input,
   cudf::size_type num_partitions,
   cudf::size_type start_partition     = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_FUNC_RANGE();
   return cudf::detail::round_robin_partition(input, num_partitions, start_partition, mr);

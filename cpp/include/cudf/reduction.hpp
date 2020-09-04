@@ -60,7 +60,7 @@ std::unique_ptr<scalar> reduce(
   const column_view &col,
   std::unique_ptr<aggregation> const &agg,
   data_type output_dtype,
-  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief  Computes the scan of a column.
@@ -80,11 +80,12 @@ std::unique_ptr<scalar> reduce(
  * @param[in] mr Device memory resource used to allocate the returned scalar's device memory
  * @returns unique pointer to new output column
  */
-std::unique_ptr<column> scan(const column_view &input,
-                             std::unique_ptr<aggregation> const &agg,
-                             scan_type inclusive,
-                             null_policy null_handling           = null_policy::EXCLUDE,
-                             rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> scan(
+  const column_view &input,
+  std::unique_ptr<aggregation> const &agg,
+  scan_type inclusive,
+  null_policy null_handling           = null_policy::EXCLUDE,
+  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace cudf

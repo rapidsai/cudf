@@ -54,8 +54,8 @@ struct JitCacheTest : public ::testing::Test, public cudf::jit::cudfJitCache {
     // Prime up the cache so that the in-memory and file cache is populated
 
     // Single value column
-    auto column = cudf::test::fixed_width_column_wrapper<int>{{4, 0}};
-    auto expect = cudf::test::fixed_width_column_wrapper<int>{{64, 0}};
+    auto column = cudf::test::fixed_width_column_wrapper<int>({4, 0});
+    auto expect = cudf::test::fixed_width_column_wrapper<int>({64, 0});
 
     // make program
     auto program = getProgram("MemoryCacheTestProg", program_source);
