@@ -292,5 +292,7 @@ enum class hash_id {
   HASH_MD5            ///< MD5 hash function
 };
 
+enum class endianess_policy { RETAIN_ENDIANESS = 0, FLIP_ENDIANESS };
+
 /** @} */
 }  // namespace cudf
