@@ -104,6 +104,8 @@ template <typename T>
 struct distribution_desc<T, typename std::enable_if_t<cudf::is_fixed_point<T>()>> {
 };
 
+std::vector<cudf::type_id> get_type_or_group(int32_t id);
+
 class data_profile {
   std::map<cudf::type_id, distribution_desc<uint64_t>> int_params;
   std::map<cudf::type_id, distribution_desc<double>> float_params;
@@ -180,22 +182,26 @@ class data_profile {
   void set_cardinality(cudf::size_type c) { cardinality = c; }
   void set_avg_run_length(cudf::size_type avg_rl) { avg_run_length = avg_rl; }
 
-  template <typename T, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
-  void set_distribution_desc(cudf::type_id type, distribution_id dist, T lower_bound, T upper_bound)
+  template <typename T, typename Type_enum, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
+  void set_distribution(Type_enum type_or_group, distribution_id dist, T lower_bound, T upper_bound)
   {
-    if (type != cudf::type_id::STRING) {
-      int_params[type] = {
-        dist, static_cast<uint64_t>(lower_bound), static_cast<uint64_t>(upper_bound)};
-    } else {
-      string_dist_desc = {
-        {dist, static_cast<uint32_t>(lower_bound), static_cast<uint32_t>(upper_bound)}};
+    for (auto tid: get_type_or_group(static_cast<int32_t>(type_or_group))){
+      if (tid != cudf::type_id::STRING) {
+        int_params[tid] = {
+          dist, static_cast<uint64_t>(lower_bound), static_cast<uint64_t>(upper_bound)};
+      } else {
+        string_dist_desc = {
+          {dist, static_cast<uint32_t>(lower_bound), static_cast<uint32_t>(upper_bound)}};
+      }
     }
   }
 
-  template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value, T>* = nullptr>
-  void set_distribution_desc(cudf::type_id type, distribution_id dist, T lower_bound, T upper_bound)
+  template <typename T, typename Type_enum, typename std::enable_if_t<std::is_floating_point<T>::value, T>* = nullptr>
+  void set_distribution(Type_enum type_or_group, distribution_id dist, T lower_bound, T upper_bound)
   {
-    float_params[type] = {dist, static_cast<double>(lower_bound), static_cast<double>(upper_bound)};
+    for (auto tid: get_type_or_group(static_cast<int32_t>(type_or_group))){
+      float_params[tid] = {dist, static_cast<double>(lower_bound), static_cast<double>(upper_bound)};
+    }
   }
 
   auto get_bool_probability() const { return bool_probability; }
@@ -203,8 +209,6 @@ class data_profile {
   auto get_cardinality() const { return cardinality; };
   auto get_avg_run_length() const { return avg_run_length; };
 };
-
-std::vector<cudf::type_id> get_type_or_group(int32_t id);
 
 struct table_size_bytes {
   size_t size;
