@@ -58,6 +58,7 @@
 - PR #6183 Fix issues related to `Series.acos` for consistent output regardless of dtype 
 
 
+
 # cuDF 0.15.0 (26 Aug 2020)
 
 ## New Features
