@@ -107,3 +107,33 @@ def _apply_filters(filters, stats):
         ):
             return True
     return False
+
+
+def _columns_in_predicate(filters):
+    return [col for conjunction in filters for (col, op, val) in conjunction]
+
+
+def _predicate_to_query(filters):
+    query = ""
+    vals = {}
+
+    first_conjunction = True
+    for conjunction in filters:
+        if first_conjunction:
+            query += "("
+            first_conjunction = False
+        else:
+            query += " or ("
+        first_predicate = True
+        for col, op, val in conjunction:
+            if first_predicate:
+                query += "("
+                first_predicate = False
+            else:
+                query += " and ("
+            query += col + " " + op + " @" + str(len(vals))
+            vals[str(len(vals))] = val
+            query += ")"
+        query += ")"
+
+    return query, vals

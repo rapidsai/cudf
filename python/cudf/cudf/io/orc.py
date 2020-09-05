@@ -150,20 +150,24 @@ def read_orc_statistics(
 
 
 def _filter_stripes(
-    filters, filepath_or_buffer, stripes=None, skip_rows=None, num_rows=None
+    filters,
+    filepath_or_buffer,
+    stripes=None,
+    skip_rows=None,
+    num_rows=None,
+    statistics=None,
 ):
     # Coerce filters into list of lists of tuples
     if isinstance(filters[0][0], str):
         filters = [filters]
 
-    # Get columns relevant to filtering
-    columns_in_predicate = [
-        col for conjunction in filters for (col, op, val) in conjunction
-    ]
-
     # Read and parse file-level and stripe-level statistics
-    file_statistics, stripes_statistics = read_orc_statistics(
-        filepath_or_buffer, columns_in_predicate
+    file_statistics, stripes_statistics = (
+        read_orc_statistics(
+            filepath_or_buffer, filterutils._columns_in_predicate(filters)
+        )
+        if statistics is None
+        else statistics
     )
 
     # Filter using file-level statistics
@@ -222,8 +226,19 @@ def read_orc(
         ValueError("URL content-encoding decompression is not supported")
 
     if filters is not None:
+        # Read in statistics
+        file_statistics, stripes_statistics = read_orc_statistics(
+            filepath_or_buffer, filterutils._columns_in_predicate(filters)
+        )
+
+        # Filter stripes using statistics
         selected_stripes = _filter_stripes(
-            filters, filepath_or_buffer, stripes, skip_rows, num_rows
+            filters,
+            filepath_or_buffer,
+            stripes,
+            skip_rows,
+            num_rows,
+            statistics=(file_statistics, stripes_statistics),
         )
 
         # Return empty if everything was filtered
@@ -231,6 +246,78 @@ def read_orc(
             return _make_empty_df(filepath_or_buffer, columns)
         else:
             stripes = selected_stripes
+
+        # TODO: Support case where skip_rows, num_rows specified
+        # TODO: Handle case where filtered rows are very far away from each other
+        # TODO: Only take this route when columns_in_predicate is a small enough subset of columns
+        if skip_rows is None and num_rows is None:
+            # Get first and last indices in stripe-level-filtered data
+            columns_in_predicate = filterutils._columns_in_predicate(filters)
+            q, vals = filterutils._predicate_to_query(filters)
+            filtered_row_indices = (
+                DataFrame._from_table(
+                    libcudf.orc.read_orc(
+                        filepath_or_buffer,
+                        columns=columns_in_predicate,
+                        stripes=stripes,
+                        skip_rows=skip_rows,
+                        num_rows=num_rows,
+                        use_index=use_index,
+                        decimals_as_float=decimals_as_float,
+                        force_decimal_scale=force_decimal_scale,
+                        timestamp_type=timestamp_type,
+                    )
+                )
+                .query(q, local_dict=vals)
+                .index
+            )
+            if filtered_row_indices.empty:
+                return _make_empty_df(filepath_or_buffer, columns)
+            first_index = int(filtered_row_indices.take(0))
+            last_index = int(
+                filtered_row_indices.take(filtered_row_indices.size - 1)
+            )
+
+            # Align skip_rows with start of stripe first_index is in and set
+            # num_rows based on number of rows in all - not just stripe-level-
+            # filtered - data
+            num_rows_before_stripe = 0
+            num_filtered_rows_scanned = 0
+            for i, stripe_statistics in enumerate(stripes_statistics):
+                num_rows_in_whole_stripe = next(
+                    iter(stripe_statistics.values())
+                )["number_of_values"]
+                if i in stripes:
+                    # Find skip_rows
+                    num_filtered_rows_before_stripe = num_filtered_rows_scanned
+                    num_filtered_rows_scanned += num_rows_in_whole_stripe
+                    if skip_rows is None:
+                        if (
+                            num_filtered_rows_before_stripe - 1
+                            < first_index
+                            <= num_filtered_rows_scanned - 1
+                        ):
+                            skip_rows = num_rows_before_stripe
+
+                    # Find num_rows
+                    if (
+                        num_filtered_rows_before_stripe - 1
+                        < last_index
+                        <= num_filtered_rows_scanned - 1
+                    ):
+                        num_rows_in_stripe = (
+                            last_index - num_filtered_rows_before_stripe - 1
+                        )
+                        num_rows = (
+                            num_rows_before_stripe
+                            + num_rows_in_stripe
+                            - skip_rows
+                        )
+                num_rows_before_stripe += num_rows_in_whole_stripe
+
+            # In this case, we are using num_rows and skip_rows instead of
+            # stripes
+            stripes = None
 
     if engine == "cudf":
         df = DataFrame._from_table(
