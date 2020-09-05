@@ -19,6 +19,7 @@
  * @brief cuDF-IO CSV reader class implementation
  **/
 
+#include "cudf/io/types.hpp"
 #include "reader_impl.hpp"
 
 #include <algorithm>
@@ -180,9 +181,6 @@ table_with_metadata reader::impl::read(size_t range_offset,
                                        int num_rows,
                                        cudaStream_t stream)
 {
-  std::vector<std::unique_ptr<column>> out_columns;
-  table_metadata metadata;
-
   if (range_offset > 0 || range_size > 0) {
     CUDF_EXPECTS(compression_type_ == "none",
                  "Reading compressed data using `byte range` is unsupported");
@@ -202,7 +200,7 @@ table_with_metadata reader::impl::read(size_t range_offset,
 
   // Return an empty dataframe if no data and no column metadata to process
   if (source_->is_empty() && (args_.names.empty() || args_.dtype.empty())) {
-    return {std::make_unique<table>(std::move(out_columns)), std::move(metadata)};
+    return {std::make_unique<table>(), {}};
   }
 
   // Transfer source data to GPU
@@ -308,7 +306,7 @@ table_with_metadata reader::impl::read(size_t range_offset,
     }
     num_active_cols = args_.use_cols_indexes.size();
 
-    for (const auto name : args_.use_cols_names) {
+    for (auto const &name : args_.use_cols_names) {
       const auto it = std::find(col_names.begin(), col_names.end(), name);
       if (it != col_names.end()) {
         h_column_flags[it - col_names.begin()] = column_parse::enabled;
@@ -323,7 +321,7 @@ table_with_metadata reader::impl::read(size_t range_offset,
       h_column_flags[index] |= column_parse::as_datetime;
     }
 
-    for (const auto name : args_.infer_date_names) {
+    for (auto const &name : args_.infer_date_names) {
       auto it = std::find(col_names.begin(), col_names.end(), name);
       if (it != col_names.end()) {
         h_column_flags[it - col_names.begin()] |= column_parse::as_datetime;
@@ -332,11 +330,11 @@ table_with_metadata reader::impl::read(size_t range_offset,
   }
 
   // Return empty table rather than exception if nothing to load
-  if (num_active_cols == 0) {
-    return {std::make_unique<table>(std::move(out_columns)), std::move(metadata)};
-  }
+  if (num_active_cols == 0) { return {std::make_unique<table>(), {}}; }
 
   std::vector<data_type> column_types = gather_column_types(stream);
+
+  auto metadata = table_metadata{};
 
   // Alloc output; columns' data memory is still expected for empty dataframe
   std::vector<column_buffer> out_buffers;
@@ -358,13 +356,30 @@ table_with_metadata reader::impl::read(size_t range_offset,
     }
   }
 
-  out_columns.reserve(column_types.size());
-  if (num_records != 0) {
-    decode_data(column_types, out_buffers, stream);
+  if (num_records == 0) {
+    auto out_columns = std::vector<std::unique_ptr<cudf::column>>();
 
-    for (size_t i = 0; i < column_types.size(); ++i) {
-      if (column_types[i].id() == type_id::STRING && opts.quotechar != '\0' &&
-          opts.doublequote == true) {
+    out_columns.reserve(column_types.size());
+
+    std::for_each(column_types.begin(), column_types.end(), [&out_columns](data_type const &type) {
+      out_columns.emplace_back(make_empty_column(type));
+    });
+
+    return {std::make_unique<table>(std::move(out_columns)), std::move(metadata)};
+  }
+
+  auto out_columns = std::vector<std::unique_ptr<cudf::column>>();
+  out_columns.reserve(column_types.size());
+  decode_data(column_types, out_buffers, stream);
+
+  int i = 0;
+
+  std::for_each(
+    column_types.begin(),
+    column_types.end(),
+    [opts = this->opts, mr = this->mr_, &i, &out_columns, &out_buffers, stream](
+      data_type const &type) {
+      if (type.id() == type_id::STRING && opts.quotechar != '\0' && opts.doublequote == true) {
         // PANDAS' default behavior of enabling doublequote for two consecutive
         // quotechars in quoted fields results in reduction to a single quotechar
         // TODO: Would be much more efficient to perform this operation in-place
@@ -373,17 +388,14 @@ table_with_metadata reader::impl::read(size_t range_offset,
         const std::string dblquotechar(2, opts.quotechar);
         std::unique_ptr<column> col = make_strings_column(out_buffers[i]._strings, stream);
         out_columns.emplace_back(
-          cudf::strings::replace(col->view(), dblquotechar, quotechar, -1, mr_));
+          cudf::strings::replace(col->view(), dblquotechar, quotechar, -1, mr));
       } else {
-        out_columns.emplace_back(make_column(out_buffers[i], stream, mr_));
+        out_columns.emplace_back(make_column(out_buffers[i], stream, mr));
       }
-    }
-  } else {
-    // Create empty columns
-    for (size_t i = 0; i < column_types.size(); ++i) {
-      out_columns.emplace_back(make_empty_column(column_types[i]));
-    }
-  }
+
+      i++;
+    });
+
   return {std::make_unique<table>(std::move(out_columns)), std::move(metadata)};
 }
 
