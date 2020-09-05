@@ -35,9 +35,8 @@ TEST_F(ByteCastTest, int16Values)
   lists_column_wrapper<uint8_t> const int16_expected(
     {{0x00, 0x00}, {0x64, 0x00}, {0x9c, 0xff}, {0x00, 0x80}, {0xff, 0x7f}});
 
-  auto const output_int16_flipped =
-    cudf::byte_cast(int16_col, cudf::endianess_policy::FLIP_ENDIANESS);
-  auto const output_int16 = cudf::byte_cast(int16_col, cudf::endianess_policy::RETAIN_ENDIANESS);
+  auto const output_int16_flipped = cudf::byte_cast(int16_col, cudf::flip_endianness::YES);
+  auto const output_int16         = cudf::byte_cast(int16_col, cudf::flip_endianness::NO);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_int16_flipped->view(), int16_expected_flipped, true);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_int16->view(), int16_expected, true);
 }
@@ -62,7 +61,7 @@ TEST_F(ByteCastTest, int16ValuesWithNulls)
     3,
     detail::make_null_mask(odd_validity, odd_validity + 5));
 
-  auto const output_int16 = cudf::byte_cast(int16_col, cudf::endianess_policy::FLIP_ENDIANESS);
+  auto const output_int16 = cudf::byte_cast(int16_col, cudf::flip_endianness::YES);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(output_int16->view(), int16_expected->view());
 }
 
@@ -81,9 +80,8 @@ TEST_F(ByteCastTest, int32Values)
                                                       {0x00, 0x00, 0x00, 0x80},
                                                       {0xff, 0xff, 0xff, 0x7f}});
 
-  auto const output_int32_flipped =
-    cudf::byte_cast(int32_col, cudf::endianess_policy::FLIP_ENDIANESS);
-  auto const output_int32 = cudf::byte_cast(int32_col, cudf::endianess_policy::RETAIN_ENDIANESS);
+  auto const output_int32_flipped = cudf::byte_cast(int32_col, cudf::flip_endianness::YES);
+  auto const output_int32         = cudf::byte_cast(int32_col, cudf::flip_endianness::NO);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_int32_flipped->view(), int32_expected_flipped, true);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_int32->view(), int32_expected, true);
 }
@@ -110,7 +108,7 @@ TEST_F(ByteCastTest, int32ValuesWithNulls)
     3,
     detail::make_null_mask(even_validity, even_validity + 5));
 
-  auto const output_int32 = cudf::byte_cast(int32_col, cudf::endianess_policy::FLIP_ENDIANESS);
+  auto const output_int32 = cudf::byte_cast(int32_col, cudf::flip_endianness::YES);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(output_int32->view(), int32_expected->view());
 }
 
@@ -132,9 +130,8 @@ TEST_F(ByteCastTest, int64Values)
      {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80},
      {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f}});
 
-  auto const output_int64_flipped =
-    cudf::byte_cast(int64_col, cudf::endianess_policy::FLIP_ENDIANESS);
-  auto const output_int64 = cudf::byte_cast(int64_col, cudf::endianess_policy::RETAIN_ENDIANESS);
+  auto const output_int64_flipped = cudf::byte_cast(int64_col, cudf::flip_endianness::YES);
+  auto const output_int64         = cudf::byte_cast(int64_col, cudf::flip_endianness::NO);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_int64_flipped->view(), int64_expected_flipped, true);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_int64->view(), int64_expected, true);
 }
@@ -161,7 +158,7 @@ TEST_F(ByteCastTest, int64ValuesWithNulls)
     3,
     detail::make_null_mask(odd_validity, odd_validity + 5));
 
-  auto const output_int64 = cudf::byte_cast(int64_col, cudf::endianess_policy::FLIP_ENDIANESS);
+  auto const output_int64 = cudf::byte_cast(int64_col, cudf::flip_endianness::YES);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(output_int64->view(), int64_expected->view());
 }
 
@@ -191,9 +188,8 @@ TEST_F(ByteCastTest, fp32Values)
                                                      {0x00, 0x00, 0x80, 0x7f},
                                                      {0x00, 0x00, 0x80, 0xff}});
 
-  auto const output_fp32_flipped =
-    cudf::byte_cast(fp32_col, cudf::endianess_policy::FLIP_ENDIANESS);
-  auto const output_fp32 = cudf::byte_cast(fp32_col, cudf::endianess_policy::RETAIN_ENDIANESS);
+  auto const output_fp32_flipped = cudf::byte_cast(fp32_col, cudf::flip_endianness::YES);
+  auto const output_fp32         = cudf::byte_cast(fp32_col, cudf::flip_endianness::NO);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_fp32_flipped->view(), fp32_expected_flipped, true);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_fp32->view(), fp32_expected, true);
 }
@@ -220,7 +216,7 @@ TEST_F(ByteCastTest, fp32ValuesWithNulls)
     3,
     detail::make_null_mask(even_validity, even_validity + 5));
 
-  auto const output_fp32 = cudf::byte_cast(fp32_col, cudf::endianess_policy::FLIP_ENDIANESS);
+  auto const output_fp32 = cudf::byte_cast(fp32_col, cudf::flip_endianness::YES);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(output_fp32->view(), fp32_expected->view());
 }
 
@@ -260,9 +256,8 @@ TEST_F(ByteCastTest, fp64Values)
      {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf0, 0x7f},
      {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf0, 0xff}});
 
-  auto const output_fp64_flipped =
-    cudf::byte_cast(fp64_col, cudf::endianess_policy::FLIP_ENDIANESS);
-  auto const output_fp64 = cudf::byte_cast(fp64_col, cudf::endianess_policy::RETAIN_ENDIANESS);
+  auto const output_fp64_flipped = cudf::byte_cast(fp64_col, cudf::flip_endianness::YES);
+  auto const output_fp64         = cudf::byte_cast(fp64_col, cudf::flip_endianness::NO);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_fp64_flipped->view(), fp64_flipped_expected, true);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_fp64->view(), fp64_expected, true);
 }
@@ -289,7 +284,7 @@ TEST_F(ByteCastTest, fp64ValuesWithNulls)
     3,
     detail::make_null_mask(odd_validity, odd_validity + 5));
 
-  auto const output_fp64 = cudf::byte_cast(fp64_col, cudf::endianess_policy::FLIP_ENDIANESS);
+  auto const output_fp64 = cudf::byte_cast(fp64_col, cudf::flip_endianness::YES);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(output_fp64->view(), fp64_expected->view());
 }
 
@@ -321,7 +316,7 @@ TEST_F(ByteCastTest, StringValues)
       0x40},
      {0x5b, 0x5c, 0x5d, 0x5e, 0x5f, 0x60, 0x7b, 0x7c, 0x7d, 0x7e}});
 
-  auto const output_strings = cudf::byte_cast(strings_col, cudf::endianess_policy::FLIP_ENDIANESS);
+  auto const output_strings = cudf::byte_cast(strings_col, cudf::flip_endianness::YES);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_strings->view(), strings_expected, true);
 }

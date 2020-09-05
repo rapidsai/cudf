@@ -34,7 +34,7 @@ struct ByteListConversion {
    * @brief Function object for converting primitive types and string columns to lists of bytes,
    * mimics Spark's cast to binary type.
    */
-  struct flip_endianness {
+  struct FlipEndianness {
     char* d_chars;
     const char* d_data;
     uint32_t mask;
@@ -48,7 +48,7 @@ struct ByteListConversion {
     typename T,
     typename std::enable_if_t<!std::is_integral<T>::value and !is_floating_point<T>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& input_column,
-                                     endianess_policy configuration,
+                                     flip_endianness configuration,
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream) const
   {
@@ -58,7 +58,7 @@ struct ByteListConversion {
 
   template <typename T, typename std::enable_if_t<is_floating_point<T>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& input_column,
-                                     endianess_policy configuration,
+                                     flip_endianness configuration,
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream) const
   {
@@ -75,12 +75,12 @@ struct ByteListConversion {
     rmm::device_buffer null_mask = copy_bitmask(input_column, stream, mr);
     auto normalized              = normalize_nans_and_zeros(input_column);
 
-    if (configuration == endianess_policy::FLIP_ENDIANESS) {
+    if (configuration == flip_endianness::YES) {
       uint32_t mask = cudf::size_of(input_column.type()) - 1;
       thrust::for_each(rmm::exec_policy(stream)->on(stream),
                        thrust::make_counting_iterator(0),
                        thrust::make_counting_iterator(num_output_elements),
-                       flip_endianness{d_chars, normalized->view().data<char>(), mask});
+                       FlipEndianness{d_chars, normalized->view().data<char>(), mask});
     } else {
       thrust::copy_n(rmm::exec_policy(stream)->on(stream),
                      normalized->view().data<char>(),
@@ -98,7 +98,7 @@ struct ByteListConversion {
 
   template <typename T, typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& input_column,
-                                     endianess_policy configuration,
+                                     flip_endianness configuration,
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream) const
   {
@@ -116,12 +116,12 @@ struct ByteListConversion {
 
     rmm::device_buffer null_mask = copy_bitmask(input_column, stream, mr);
 
-    if (configuration == endianess_policy::FLIP_ENDIANESS) {
+    if (configuration == flip_endianness::YES) {
       uint32_t mask = cudf::size_of(input_column.type()) - 1;
       thrust::for_each(rmm::exec_policy(stream)->on(stream),
                        thrust::make_counting_iterator(0),
                        thrust::make_counting_iterator(num_output_elements),
-                       flip_endianness{d_chars, d_data, mask});
+                       FlipEndianness{d_chars, d_data, mask});
     } else {
       thrust::copy_n(rmm::exec_policy(stream)->on(stream), d_data, num_output_elements, d_chars);
     }
@@ -139,7 +139,7 @@ struct ByteListConversion {
 template <>
 std::unique_ptr<cudf::column> ByteListConversion::operator()<string_view>(
   column_view const& input_column,
-  endianess_policy configuration,
+  flip_endianness configuration,
   rmm::mr::device_memory_resource* mr,
   cudaStream_t stream) const
 {
@@ -163,7 +163,7 @@ std::unique_ptr<cudf::column> ByteListConversion::operator()<string_view>(
 }  // namespace detail
 
 std::unique_ptr<column> byte_cast(column_view const& input_column,
-                                  endianess_policy configuration,
+                                  flip_endianness configuration,
                                   rmm::mr::device_memory_resource* mr,
                                   cudaStream_t stream)
 {

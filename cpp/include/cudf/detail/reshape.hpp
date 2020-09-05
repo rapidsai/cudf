@@ -47,7 +47,7 @@ std::unique_ptr<table> tile(table_view const& input,
  */
 std::unique_ptr<column> byte_cast(
   column_view const& input_column,
-  endianess_policy configuration,
+  flip_endianness configuration,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
   cudaStream_t stream                 = 0);
 
