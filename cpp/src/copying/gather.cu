@@ -24,7 +24,7 @@ struct dispatch_map_type {
     size_type num_destination_rows,
     out_of_bounds_policy bounds,
     negative_index_policy neg_indices,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
     cudaStream_t stream                 = 0)
   {
     if (bounds == out_of_bounds_policy::FAIL) {

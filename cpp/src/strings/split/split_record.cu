@@ -262,7 +262,7 @@ std::unique_ptr<column> split_record(
   strings_column_view const& strings,
   string_scalar const& delimiter      = string_scalar(""),
   size_type maxsplit                  = -1,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");

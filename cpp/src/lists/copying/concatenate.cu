@@ -89,7 +89,7 @@ std::unique_ptr<column> merge_offsets(std::vector<lists_column_view> const& colu
 std::unique_ptr<column> concatenate(
   std::vector<column_view> const& columns,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   std::vector<lists_column_view> lists_columns;
   lists_columns.reserve(columns.size());
