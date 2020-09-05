@@ -22,7 +22,7 @@
 - PR #6024 Expose selecting multiple ORC stripes to read from Python
 - PR #6002 Add Java bindings for md5
 - PR #6067 Added compute codes for aarch64 devices
-- PR #5861 Move `fixed_point::scale` to `data_type`
+- PR #5861 `fixed_point` Column Optimization (store `scale` in `data_type`)
 - PR #6083 Small cleanup
 - PR #6103 Small refactor of `print_differences`
 - PR #6124 Fix gcc-9 compilation errors on tests
