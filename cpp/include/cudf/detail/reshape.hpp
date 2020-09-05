@@ -48,7 +48,7 @@ std::unique_ptr<table> tile(
 std::unique_ptr<column> byte_cast(
   column_view const& input_column,
   flip_endianness configuration,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 }  // namespace cudf
