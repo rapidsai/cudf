@@ -226,6 +226,10 @@ def read_orc(
         ValueError("URL content-encoding decompression is not supported")
 
     if filters is not None:
+        # Coerce filters into list of lists of tuples
+        if isinstance(filters[0][0], str):
+            filters = [filters]
+
         # Read in statistics
         file_statistics, stripes_statistics = read_orc_statistics(
             filepath_or_buffer, filterutils._columns_in_predicate(filters)
