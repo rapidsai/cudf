@@ -42,7 +42,7 @@ def read_orc(path, columns=None, filters=None, storage_options=None, **kwargs):
         combinations of single column predicates. The innermost tuples each
         describe a single column predicate. The list of inner predicates is
         interpreted as a conjunction (AND), forming a more selective and
-        multiple column predicate. Finally, the most outer list combines
+        multiple column predicate. Finally, the outermost list combines
         these filters as a disjunction (OR). Predicates may also be passed
         as a list of tuples. This form is interpreted as a single conjunction.
         To express OR in predicates, one must use the (preferred) notation of
