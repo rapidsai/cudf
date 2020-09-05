@@ -18,7 +18,6 @@ if(NOT thrust_POPULATED)
   # We are not using the thrust CMake targets, so no need to call `add_subdirectory()`.
 endif()
 set(THRUST_INCLUDE_DIR "${thrust_SOURCE_DIR}" PARENT_SCOPE)
-set(CUB_INCLUDE_DIR "${thrust_SOURCE_DIR}/dependencies/cub" PARENT_SCOPE)
 
 ###################################################################################################
 # - jitify ----------------------------------------------------------------------------------------
