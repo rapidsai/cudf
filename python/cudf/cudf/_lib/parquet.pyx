@@ -11,7 +11,11 @@ import json
 from cython.operator import dereference
 import numpy as np
 
-from cudf.utils.dtypes import np_to_pa_dtype, is_categorical_dtype
+from cudf.utils.dtypes import (
+    np_to_pa_dtype,
+    is_categorical_dtype,
+    is_list_dtype
+)
 from libc.stdlib cimport free
 from libc.stdint cimport uint8_t
 from libcpp.memory cimport shared_ptr, unique_ptr, make_unique
@@ -100,6 +104,8 @@ cpdef generate_pandas_metadata(Table table, index):
                 "'category' column dtypes are currently not "
                 + "supported by the gpu accelerated parquet writer"
             )
+        elif is_list_dtype(col):
+            types.append(col.dtype.to_arrow())
         else:
             types.append(np_to_pa_dtype(col.dtype))
 
@@ -128,6 +134,8 @@ cpdef generate_pandas_metadata(Table table, index):
                             "'category' column dtypes are currently not "
                             + "supported by the gpu accelerated parquet writer"
                         )
+                    elif is_list_dtype(col):
+                        types.append(col.dtype.to_arrow())
                     else:
                         types.append(np_to_pa_dtype(idx.dtype))
                     index_levels.append(idx)
