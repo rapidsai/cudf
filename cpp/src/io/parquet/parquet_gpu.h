@@ -203,8 +203,8 @@ struct EncColumnDesc : stats_column_desc {
                          //!< nested columns
 
   size_type const *level_offsets;  //!< Offset array for per-row pre-calculated rep/def level values
-  uint32_t const *rep_values;      //!< Pre-calculated repetition level values
-  uint32_t const *def_values;      //!< Pre-calculated definition level values
+  uint8_t const *rep_values;       //!< Pre-calculated repetition level values
+  uint8_t const *def_values;       //!< Pre-calculated definition level values
 };
 
 #define MAX_PAGE_FRAGMENT_SIZE 5000  //!< Max number of rows in a page fragment

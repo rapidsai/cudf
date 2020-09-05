@@ -76,7 +76,7 @@ column_view get_leaf_col(column_view col)
   column_view curr_col = col;
   while (curr_col.type().id() == type_id::LIST) { curr_col = lists_column_view{curr_col}.child(); }
   return curr_col;
-  }
+}
 
 }  // namespace
 
@@ -150,7 +150,7 @@ __global__ void set_dremel_offsets(column_device_view col, size_type *values_in_
 
 __device__ void store_nested_rep_level(column_device_view const &col,
                                        size_type idx,
-                                       uint32_t *rep_level,
+                                       uint8_t *rep_level,
                                        size_type &cur_idx,
                                        uint32_t cur_rep_level,
                                        uint32_t depth)
@@ -176,9 +176,9 @@ __device__ void store_nested_rep_level(column_device_view const &col,
 
 __device__ void store_nested_def_level(column_device_view const &col,
                                        size_type idx,
-                                       uint32_t *def_level,
+                                       uint8_t *def_level,
                                        size_type &cur_idx,
-                                       uint32_t cur_def_level)
+                                       uint8_t cur_def_level)
 {
   if (col.nullable()) {
     if (col.is_null_nocheck(idx)) {
@@ -211,8 +211,8 @@ __device__ void store_nested_def_level(column_device_view const &col,
 
 __global__ void calculate_levels(column_device_view col,
                                  size_type const *dremel_offsets,
-                                 uint32_t *rep_level,
-                                 uint32_t *def_level)
+                                 uint8_t *rep_level,
+                                 uint8_t *def_level)
 {
   // launched one thread per row
   size_type row = blockIdx.x * blockDim.x + threadIdx.x;
@@ -463,8 +463,8 @@ class parquet_column_view {
   size_type const *const *nesting_offsets() const noexcept { return _offsets_array.data().get(); }
   size_type nesting_levels() const noexcept { return _offsets_array.size(); }
   size_type const *level_offsets() const noexcept { return _dremel_offsets.data().get(); }
-  uint32_t const *repetition_levels() const noexcept { return _rep_level.data().get(); }
-  uint32_t const *definition_levels() const noexcept { return _def_level.data().get(); }
+  uint8_t const *repetition_levels() const noexcept { return _rep_level.data().get(); }
+  uint8_t const *definition_levels() const noexcept { return _def_level.data().get(); }
   uint16_t max_def_level()
   {
     if (_max_def_level > -1) return _max_def_level;
@@ -545,10 +545,13 @@ class parquet_column_view {
 
   // List-related members
   // TODO (dm): convert to uvector
-  rmm::device_vector<size_type const *> _offsets_array;
-  rmm::device_vector<size_type> _dremel_offsets;
-  rmm::device_vector<uint32_t> _rep_level;
-  rmm::device_vector<uint32_t> _def_level;
+  rmm::device_vector<size_type const *> _offsets_array;  ///< Array of pointers to offset columns at
+                                                         ///< each level of nesting O(nesting depth)
+  rmm::device_vector<size_type>
+    _dremel_offsets;  ///< For each row, the absolute offset into the repetition and definition
+                      ///< level vectors. O(num rows)
+  rmm::device_vector<uint8_t> _rep_level;
+  rmm::device_vector<uint8_t> _def_level;
   size_type _max_def_level = -1;
 
   // String-related members

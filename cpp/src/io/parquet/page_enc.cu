@@ -84,6 +84,8 @@ inline __device__ uint32_t uint64_init_hash(uint64_t v)
   return uint32_init_hash(static_cast<uint32_t>(v + (v >> 32)));
 }
 
+#define INIT_FRAG_BLOCK_SZ 512
+
 /**
  * @brief Initializes encoder page fragments
  *
@@ -97,12 +99,13 @@ inline __device__ uint32_t uint64_init_hash(uint64_t v)
  *
  **/
 // blockDim {512,1,1}
-__global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
-                                                            const EncColumnDesc *col_desc,
-                                                            int32_t num_fragments,
-                                                            int32_t num_columns,
-                                                            uint32_t fragment_size,
-                                                            uint32_t max_num_rows)
+__global__ void __launch_bounds__(INIT_FRAG_BLOCK_SZ)
+  gpuInitPageFragments(PageFragment *frag,
+                       const EncColumnDesc *col_desc,
+                       int32_t num_fragments,
+                       int32_t num_columns,
+                       uint32_t fragment_size,
+                       uint32_t max_num_rows)
 {
   __shared__ __align__(16) frag_init_state_s state_g;
 
@@ -114,7 +117,7 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
     reinterpret_cast<uint32_t *>(&s->col)[t] =
       reinterpret_cast<const uint32_t *>(&col_desc[blockIdx.x])[t];
   }
-  for (uint32_t i = 0; i < sizeof(s->map) / sizeof(uint32_t); i += 512) {
+  for (uint32_t i = 0; i < sizeof(s->map) / sizeof(uint32_t); i += INIT_FRAG_BLOCK_SZ) {
     if (i + t < sizeof(s->map) / sizeof(uint32_t)) s->map.u32[i + t] = 0;
   }
   __syncthreads();
@@ -134,6 +137,7 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
     // For list<list<int>>, values between i and i+50 can be calculated by
     // off_11 = off[i], off_12 = off[i+50]
     // off_21 = child.off[off_11], off_22 = child.off[off_12]
+    // etc...
     s->start_value_idx      = start_row;
     size_type end_value_idx = start_row + s->frag.num_rows;
     for (size_type i = 0; i < s->col.nesting_levels; i++) {
@@ -143,11 +147,9 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
     s->frag.num_leaf_values = end_value_idx - s->start_value_idx;
 
     if (s->col.nesting_levels > 0) {
-      // The number of rep/def values can be more than num data values because data values do
-      // not contain nulls but rep/def values have an entry for null/empty. For any row, the
-      // location of these pre-calc level values can be obtained from level_offsets which are
-      // per-row offsets into these values. But they only contain offsets from the top level
-      // of nesting. So List<List<int>> will only contain one level_offsets.
+      // For nested schemas, the number of values in a fragment is not directly related to the
+      // number of encoded data elements or the number of rows.  It is simply the number of
+      // repetition/definition values which together encode validity and nesting information.
       size_type first_level_val_idx = s->col.level_offsets[start_row];
       size_type last_level_val_idx  = s->col.level_offsets[start_row + s->frag.num_rows];
       s->frag.num_values            = last_level_val_idx - first_level_val_idx;
@@ -167,7 +169,7 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
   size_type nvals           = s->frag.num_leaf_values;
   size_type start_value_idx = s->start_value_idx;
 
-  for (uint32_t i = 0; i < nvals; i += 512) {
+  for (uint32_t i = 0; i < nvals; i += INIT_FRAG_BLOCK_SZ) {
     const uint32_t *valid = s->col.valid_map_base;
     uint32_t val_idx      = start_value_idx + i + t;
     uint32_t is_valid     = (i + t < nvals && val_idx < s->col.num_values)
@@ -273,7 +275,7 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
   if (s->col.dict_index) {
     uint32_t *dict_index = s->col.dict_index + start_row;
     uint32_t nnz         = s->frag.non_nulls;
-    for (uint32_t i = 0; i < nnz; i += 512) {
+    for (uint32_t i = 0; i < nnz; i += INIT_FRAG_BLOCK_SZ) {
       uint32_t pos = 0, hash = 0, pos_old, pos_new, sh, colliding_row, val = 0;
       bool collision;
       if (i + t < nnz) {
@@ -306,7 +308,7 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
     // Now that the values are ordered by hash, compare every entry with the first entry in the hash
     // map, the position of the first entry can be inferred from the hash map counts
     uint32_t dupe_data_size = 0;
-    for (uint32_t i = 0; i < nnz; i += 512) {
+    for (uint32_t i = 0; i < nnz; i += INIT_FRAG_BLOCK_SZ) {
       const void *col_data = s->col.column_data_base;
       uint32_t ck_row = 0, ck_row_ref = 0, is_dupe = 0, dupe_mask, dupes_before;
       if (i + t < nnz) {
@@ -572,6 +574,7 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
           page_g.num_values       = values_in_page;
           uint32_t def_level_bits = col_g.level_bits & 0xf;
           uint32_t rep_level_bits = col_g.level_bits >> 4;
+          // Run length = 4, max(rle/bitpack header) = 5, add one byte per 256 values for overhead
           uint32_t def_level_size =
             (def_level_bits)
               ? 4 + 5 + ((def_level_bits * page_g.num_values + 7) >> 3) + (page_g.num_values >> 8)
@@ -668,7 +671,7 @@ inline __device__ void PackLiterals(
   uint8_t *dst, uint32_t v, uint32_t count, uint32_t w, uint32_t t)
 {
   if (t <= (count | 0x1f)) {
-    if (w < 8) {
+    if (w == 1 || w == 2 || w == 4) {
       uint32_t mask = 0;
       if (w == 1) {
         v |= SHFL_XOR(v, 1) << 1;
@@ -684,9 +687,7 @@ inline __device__ void PackLiterals(
         mask = 0x1;
       }
       if (t < count && mask && !(t & mask)) { dst[(t * w) >> 3] = v; }
-
-      // If w is in set{3,5,6,7}, our job is not done yet.
-      if (w == 1 || w == 2 || w == 4) { return; }
+      return;
     } else if (w == 8) {
       if (t < count) { dst[t] = v; }
       return;
@@ -721,7 +722,7 @@ inline __device__ void PackLiterals(
 
     // Atomically write result to scratch
     if (v32[0]) { atomicOr(scratch + ((t * w) >> 5), v32[0]); }
-    if (v32[1]) { atomicOr(scratch + (((t + 1) * w) >> 5), v32[1]); }
+    if (v32[1]) { atomicOr(scratch + ((t * w) >> 5) + 1, v32[1]); }
 
     // Copy scratch data to final destination
     auto available_bytes = (count * w + 7) / 8;
@@ -940,10 +941,10 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
   __syncthreads();
   if (!t) { s->cur = s->page.page_data + s->page.max_hdr_size; }
   __syncthreads();
-  // Encode NULLs
-  // This is just treating definition levels as validity.
+  // Encode Repetition and Definition levels
   if (s->page.page_type != DICTIONARY_PAGE && s->col.level_bits != 0 &&
       s->col.nesting_levels == 0) {
+    // Calculate definition levels from validity
     const uint32_t *valid = s->col.valid_map_base;
     uint32_t def_lvl_bits = s->col.level_bits & 0xf;
     if (def_lvl_bits != 0) {
@@ -981,7 +982,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
       }
     }
   } else if (s->page.page_type != DICTIONARY_PAGE && s->col.nesting_levels > 0) {
-    auto encode_levels = [&](uint32_t const *lvl_val_data, uint32_t nbits) {
+    auto encode_levels = [&](uint8_t const *lvl_val_data, uint32_t nbits) {
       // For list types, the repetition and definition levels are pre-calculated. We just need to
       // encode and write them now.
       if (!t) {
@@ -1552,7 +1553,7 @@ cudaError_t InitPageFragments(PageFragment *frag,
                               cudaStream_t stream)
 {
   dim3 dim_grid(num_columns, num_fragments);  // 1 threadblock per fragment
-  gpuInitPageFragments<<<dim_grid, 512, 0, stream>>>(
+  gpuInitPageFragments<<<dim_grid, INIT_FRAG_BLOCK_SZ, 0, stream>>>(
     frag, col_desc, num_fragments, num_columns, fragment_size, num_rows);
   return cudaSuccess;
 }
