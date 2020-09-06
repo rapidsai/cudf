@@ -34,6 +34,7 @@ def make_datetime_dataframe(include_non_standard=False):
             "18/10/1990",
             "1/1/1970",
             "2016-04-30T01:02:03.000",
+            "2038-01-19 03:14:07",
         ]
     )
     df["col2"] = np.array(
@@ -44,6 +45,7 @@ def make_datetime_dataframe(include_non_standard=False):
             "16/09/2005",
             "2/2/1970",
             "2007-4-30 1:6:40.000PM",
+            "2038-01-19 03:14:08",
         ]
     )
     if include_non_standard:
@@ -56,6 +58,7 @@ def make_datetime_dataframe(include_non_standard=False):
                 "31-01-2000",
                 "1-1-1996",
                 "15-May-2009",
+                "21-Dec-3262",
             ]
         )
     return df

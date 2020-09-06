@@ -151,7 +151,7 @@ struct codepoint_to_utf8_fn {
 // details API
 std::unique_ptr<cudf::column> normalize_spaces(
   cudf::strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   cudf::size_type strings_count = strings.size();

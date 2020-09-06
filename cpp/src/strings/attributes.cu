@@ -82,7 +82,7 @@ std::unique_ptr<column> counts_fn(strings_column_view const& strings,
 
 std::unique_ptr<column> count_characters(
   strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   auto ufn = [] __device__(const string_view& d_str) { return d_str.length(); };
@@ -91,7 +91,7 @@ std::unique_ptr<column> count_characters(
 
 std::unique_ptr<column> count_bytes(
   strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   auto ufn = [] __device__(const string_view& d_str) { return d_str.size_bytes(); };
@@ -130,7 +130,7 @@ namespace detail {
 //
 std::unique_ptr<column> code_points(
   strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   auto strings_column = column_device_view::create(strings.parent(), stream);
