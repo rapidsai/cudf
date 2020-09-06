@@ -5271,8 +5271,8 @@ class DataFrame(Frame, Serializable):
                     val = values[col]
                     result_df[col] = self._data[col].isin(val)
                 else:
-                    result_df[col] = utils.scalar_broadcast_to(
-                        False, len(self)
+                    result_df[col] = column.full(
+                        size=len(self), fill_value=False, dtype="bool"
                     )
 
             result_df.index = self.index
