@@ -2408,8 +2408,8 @@ class Series(Frame, Serializable):
 
         def _return_sentinel_series():
             return Series(
-                utils.scalar_broadcast_to(
-                    na_sentinel, size=len(self), dtype=dtype
+                cudf.core.column.full(
+                    size=len(self), fill_value=na_sentinel, dtype=dtype
                 ),
                 index=self.index,
                 name=None,
