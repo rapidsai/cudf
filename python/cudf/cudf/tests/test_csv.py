@@ -1341,7 +1341,7 @@ def test_csv_writer_file_handle(tmpdir):
     gdf = cudf.from_pandas(df)
 
     gdf_df_fname = tmpdir.join("gdf_df_1.csv")
-    with open(gdf_df_fname, "w", encoding="utf-8") as f:
+    with open(gdf_df_fname, "w") as f:
         gdf.to_csv(path=f, index=False)
     assert os.path.exists(gdf_df_fname)
 
@@ -1355,9 +1355,9 @@ def test_csv_writer_file_append(tmpdir):
     gdf2 = cudf.DataFrame({"a": [4, 5, 6], "b": ["foo", "bar", "baz"]})
 
     gdf_df_fname = tmpdir.join("gdf_df_append.csv")
-    with open(gdf_df_fname, "w", encoding="utf-8") as f:
+    with open(gdf_df_fname, "w") as f:
         gdf1.to_csv(f, index=False)
-    with open(gdf_df_fname, "a", encoding="utf-8") as f:
+    with open(gdf_df_fname, "a") as f:
         gdf2.to_csv(f, header=False, index=False)
 
     result = cudf.read_csv(gdf_df_fname)
