@@ -26,6 +26,7 @@
 - PR #6103 Small refactor of `print_differences`
 - PR #6124 Fix gcc-9 compilation errors on tests
 - PR #6141 Fix typo in custreamz README that was a result of recent changes
+- PR #6169 Replace some loops in cuio csv reader with std funcs
 
 ## Bug Fixes
 
