@@ -53,7 +53,6 @@ void ORC_read(benchmark::State& state)
 
   cudf_io::orc_writer_options args =
     cudf_io::orc_writer_options::builder(cudf_io::sink_info(&out_buffer), view)
-      .metadata(nullptr)
       .compression(compression);
   cudf_io::write_orc(args);
 

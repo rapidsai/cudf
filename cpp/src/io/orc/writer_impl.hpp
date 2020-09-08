@@ -89,7 +89,7 @@ class writer::impl {
   /**
    * @brief Begins the chunked/streamed write process.
    *
-   * @param[in] orc_chunked_state State information that crosses _begin() / write_chunked() / _end()
+   * @param[in] orc_chunked_state Internal state maintained between chunks.
    * boundaries.
    */
   void write_chunked_begin(orc_chunked_state& state);
@@ -98,15 +98,15 @@ class writer::impl {
    * @brief Writes a single subtable as part of a larger ORC file/table write.
    *
    * @param[in] table The table information to be written
-   * @param[in] orc_chunked_state State information that crosses _begin() / write_chunked() / _end()
+   * @param[in] orc_chunked_state Internal state maintained between chunks.
    * boundaries.
    */
-  void write_chunked(table_view const& table, orc_chunked_state& state);
+  void write_chunk(table_view const& table, orc_chunked_state& state);
 
   /**
    * @brief Finishes the chunked/streamed write process.
    *
-   * @param[in] orc_chunked_state State information that crosses _begin() / write_chunked() / _end()
+   * @param[in] orc_chunked_state Internal state maintained between chunks.
    * boundaries.
    */
   void write_chunked_end(orc_chunked_state& state);

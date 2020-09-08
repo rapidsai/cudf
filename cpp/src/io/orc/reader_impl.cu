@@ -600,7 +600,7 @@ reader::impl::impl(std::unique_ptr<datasource> source,
   _use_np_dtypes = options.is_enabled_use_np_dtypes();
 
   // Control decimals conversion (float64 or int64 with optional scale)
-  _decimals_as_float     = options.is_enabled_decimals_as_float();
+  _decimals_as_float64   = options.is_enabled_decimals_as_float64();
   _decimals_as_int_scale = options.get_forced_decimals_scale();
 }
 
@@ -622,7 +622,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   std::vector<data_type> column_types;
   for (const auto &col : _selected_columns) {
     auto col_type = to_type_id(
-      _metadata->ff.types[col], _use_np_dtypes, _timestamp_type.id(), _decimals_as_float);
+      _metadata->ff.types[col], _use_np_dtypes, _timestamp_type.id(), _decimals_as_float64);
     CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
     column_types.emplace_back(col_type);
 
@@ -705,7 +705,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         chunk.num_rows      = stripe_info->numberOfRows;
         chunk.encoding_kind = stripe_footer->columns[_selected_columns[j]].kind;
         chunk.type_kind     = _metadata->ff.types[_selected_columns[j]].kind;
-        if (_decimals_as_float) {
+        if (_decimals_as_float64) {
           chunk.decimal_scale =
             _metadata->ff.types[_selected_columns[j]].scale | ORC_DECIMAL2FLOAT64_SCALE;
         } else if (_decimals_as_int_scale < 0) {

@@ -236,7 +236,7 @@ std::shared_ptr<orc_chunked_state> write_orc_chunked_begin(chunked_orc_writer_op
 void write_orc_chunked(table_view const& table, std::shared_ptr<orc_chunked_state> state)
 {
   CUDF_FUNC_RANGE();
-  state->wp->write_chunked(table, *state);
+  state->wp->write_chunk(table, *state);
 }
 
 /**
