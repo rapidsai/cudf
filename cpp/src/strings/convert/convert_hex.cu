@@ -121,7 +121,7 @@ void dispatch_hex_to_integers_fn::operator()<bool>(column_device_view const&,
 std::unique_ptr<column> hex_to_integers(
   strings_column_view const& strings,
   data_type output_type,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   size_type strings_count = strings.size();

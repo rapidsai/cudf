@@ -353,7 +353,7 @@ table_with_metadata reader::impl::read(cudaStream_t stream)
                                num_records,
                                true,
                                stream,
-                               is_final_allocation ? mr_ : rmm::mr::get_default_resource());
+                               is_final_allocation ? mr_ : rmm::mr::get_current_device_resource());
       metadata.column_names.emplace_back(col_names[col]);
       active_col++;
     }
