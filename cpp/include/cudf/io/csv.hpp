@@ -32,18 +32,16 @@
 #include <unordered_map>
 #include <vector>
 
-//! cuDF interfaces
 namespace cudf {
-//! In-development features
 namespace io {
 
 /**
- *@breif Builder to build options for `read_csv()`
+ *@breif Builder to build options for `read_csv()`.
  */
 class csv_reader_options_builder;
 
 /**
- * @brief Settings to use for `read_csv()`
+ * @brief Settings to use for `read_csv()`.
  *
  * @ingroup io_readers
  */
@@ -53,73 +51,73 @@ class csv_reader_options {
 
   // Read settings
 
-  /// Specify the compression format of the source or infer from file extension
+  // Specify the compression format of the source or infer from file extension
   compression_type _compression = compression_type::AUTO;
-  /// Bytes to skip from the source start
+  // Bytes to skip from the source start
   size_t _byte_range_offset = 0;
-  /// Bytes to read; always reads complete rows
+  // Bytes to read; always reads complete rows
   size_t _byte_range_size = 0;
-  /// Names of all the columns; if empty then names are auto-generated
+  // Names of all the columns; if empty then names are auto-generated
   std::vector<std::string> _names;
-  /// If there is no header or names, prepend this to the column ID as the name
+  // If there is no header or names, prepend this to the column ID as the name
   std::string _prefix;
-  /// Whether to rename duplicate column names
+  // Whether to rename duplicate column names
   bool _mangle_dupe_cols = true;
 
   // Filter settings
 
-  /// Names of columns to read; empty is all columns
+  // Names of columns to read; empty is all columns
   std::vector<std::string> _use_cols_names;
-  /// Indexes of columns to read; empty is all columns
+  // Indexes of columns to read; empty is all columns
   std::vector<int> _use_cols_indexes;
-  /// Rows to read; -1 is all
+  // Rows to read; -1 is all
   size_type _nrows = -1;
-  /// Rows to skip from the start; 0 is none
+  // Rows to skip from the start;
   size_type _skiprows = 0;
-  /// Rows to skip from the end; 0 is none
+  // Rows to skip from the end;
   size_type _skipfooter = 0;
-  /// Header row index
+  // Header row index
   size_type _header = 0;
 
   // Parsing settings
 
-  /// Line terminator
+  // Line terminator
   char _lineterminator = '\n';
-  /// Field delimiter
+  // Field delimiter
   char _delimiter = ',';
-  /// Numeric data thousands seperator; cannot match delimiter
+  // Numeric data thousands separator; cannot match delimiter
   char _thousands = '\0';
-  /// Decimal point character; cannot match delimiter
+  // Decimal point character; cannot match delimiter
   char _decimal = '.';
-  /// Comment line start character
+  // Comment line start character
   char _comment                = '\0';
   bool _windowslinetermination = false;
-  /// Treat whitespace as field delimiter; overrides character delimiter
+  // Treat whitespace as field delimiter; overrides character delimiter
   bool _delim_whitespace = false;
-  /// Skip whitespace after the delimiter
+  // Skip whitespace after the delimiter
   bool _skipinitialspace = false;
-  /// Ignore empty lines or parse line values as invalid
+  // Ignore empty lines or parse line values as invalid
   bool _skip_blank_lines = true;
-  /// Treatment of quoting behavior
+  // Treatment of quoting behavior
   quote_style _quoting = quote_style::MINIMAL;
-  /// Quoting character (if `quoting` is true)
+  // Quoting character (if `quoting` is true)
   char _quotechar = '"';
-  /// Whether a quote inside a value is double-quoted
+  // Whether a quote inside a value is double-quoted
   bool _doublequote = true;
-  /// Names of columns to read as datetime
+  // Names of columns to read as datetime
   std::vector<std::string> _infer_date_names;
-  /// Indexes of columns to read as datetime
+  // Indexes of columns to read as datetime
   std::vector<int> _infer_date_indexes;
 
   // Conversion settings
 
-  /// Per-column types; disables type inference on those columns
+  // Per-column types; disables type inference on those columns
   std::vector<std::string> _dtypes;
-  /// Additional values to recognize as boolean true values
+  // Additional values to recognize as boolean true values
   std::vector<std::string> _true_values{"True", "TRUE", "true"};
-  /// Additional values to recognize as boolean false values
+  // Additional values to recognize as boolean false values
   std::vector<std::string> _false_values{"False", "FALSE", "false"};
-  /// Additional values to recognize as null values
+  // Additional values to recognize as null values
   std::vector<std::string> _na_values{"#N/A",
                                       "#N/A N/A",
                                       "#NA",
@@ -137,211 +135,228 @@ class csv_reader_options {
                                       "nan",
                                       "null"};
 
-  /// Whether to keep the built-in default NA values
+  // Whether to keep the built-in default NA values
   bool _keep_default_na = true;
-  /// Whether to disable null filter; disabling can improve performance
+  // Whether to disable null filter; disabling can improve performance
   bool _na_filter = true;
-  /// Whether to parse dates as DD/MM versus MM/DD
+  // Whether to parse dates as DD/MM versus MM/DD
   bool _dayfirst = false;
-  /// Cast timestamp columns to a specific type
+  // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
 
+  /**
+   * @brief Constructor from source info.
+   *
+   * @param src source information used to read csv file.
+   */
   explicit csv_reader_options(source_info const& src) : _source(src) {}
 
   friend csv_reader_options_builder;
 
  public:
+  /**
+   * @brief Default constructor.
+   *
+   * This has been added since Cython requires a default constructor to create objects on stack.
+   */
   csv_reader_options() = default;
 
   /**
-   * @brief Returns source info
+   * @brief Creates a `csv_reader_options_builder` which will build `csv_reader_options`.
+   *
+   * @param src Source information to read csv file.
+   * @return Builder to build reader options.
    */
-  source_info const& source() const { return _source; }
+  static csv_reader_options_builder builder(source_info const& src);
 
   /**
-   * @brief Returns compression format of the source
+   * @brief Returns source info.
    */
-  compression_type compression() const { return _compression; }
+  source_info const& get_source() const { return _source; }
 
   /**
-   * @brief Returns number of bytes to skip from source start
+   * @brief Returns compression format of the source.
    */
-  size_t byte_range_offset() const { return _byte_range_offset; }
+  compression_type get_compression() const { return _compression; }
 
   /**
-   * @brief Returns number of bytes to read
+   * @brief Returns number of bytes to skip from source start.
    */
-  size_t byte_range_size() const { return _byte_range_size; }
+  size_t get_byte_range_offset() const { return _byte_range_offset; }
 
   /**
-   * @brief Returns names of the column
+   * @brief Returns number of bytes to read.
    */
-  std::vector<std::string> const& names() const { return _names; }
+  size_t get_byte_range_size() const { return _byte_range_size; }
 
   /**
-   * @brief Returns prefix to be used for column ID
+   * @brief Returns names of the columns.
    */
-  std::string prefix() const { return _prefix; }
+  std::vector<std::string> const& get_names() const { return _names; }
 
   /**
-   * @brief Whether to rename duplicate column names
+   * @brief Returns prefix to be used for column ID.
    */
-  bool mangle_dupe_cols() const { return _mangle_dupe_cols; }
+  std::string get_prefix() const { return _prefix; }
 
   /**
-   * @brief Returns names of the columns to be read
+   * @brief Whether to rename duplicate column names.
    */
-  std::vector<std::string> const& use_cols_names() const { return _use_cols_names; }
+  bool is_enabled_mangle_dupe_cols() const { return _mangle_dupe_cols; }
 
   /**
-   * @brief Returns indexes of columns to read
+   * @brief Returns names of the columns to be read.
    */
-  std::vector<int> const& use_cols_indexes() const { return _use_cols_indexes; }
+  std::vector<std::string> const& get_use_cols_names() const { return _use_cols_names; }
 
   /**
-   * @brief Returns number of rows to read
+   * @brief Returns indexes of columns to read.
    */
-  size_type nrows() const { return _nrows; }
+  std::vector<int> const& get_use_cols_indexes() const { return _use_cols_indexes; }
 
   /**
-   * @brief Returns number of rows to skip from start
+   * @brief Returns number of rows to read.
    */
-  size_type skiprows() const { return _skiprows; }
+  size_type get_nrows() const { return _nrows; }
 
   /**
-   * @brief Returns number of rows to skip from end
+   * @brief Returns number of rows to skip from start.
    */
-  size_type skipfooter() const { return _skipfooter; }
+  size_type get_skiprows() const { return _skiprows; }
 
   /**
-   * @brief Returns header row index
+   * @brief Returns number of rows to skip from end.
    */
-  size_type header() const { return _header; }
+  size_type get_skipfooter() const { return _skipfooter; }
 
   /**
-   * @brief Returns line terminator
+   * @brief Returns header row index.
    */
-  char lineterminator() const { return _lineterminator; }
+  size_type get_header() const { return _header; }
 
   /**
-   * @brief Returns field delimiter
+   * @brief Returns line terminator.
    */
-  char delimiter() const { return _delimiter; }
+  char get_lineterminator() const { return _lineterminator; }
 
   /**
-   * @brief Returns numeric data thousands seperator
+   * @brief Returns field delimiter.
    */
-  char thousands() const { return _thousands; }
+  char get_delimiter() const { return _delimiter; }
 
   /**
-   * @brief Returns decimal point character
+   * @brief Returns numeric data thousands separator.
    */
-  char decimal() const { return _decimal; }
+  char get_thousands() const { return _thousands; }
 
   /**
-   * @brief Returns comment line start character
+   * @brief Returns decimal point character.
    */
-  char comment() const { return _comment; }
+  char get_decimal() const { return _decimal; }
 
   /**
-   * @brief Whether to treat `\r\n` as line terminator
+   * @brief Returns comment line start character.
    */
-  bool windowslinetermination() const { return _windowslinetermination; }
+  char get_comment() const { return _comment; }
 
   /**
-   * @brief Whether to treat whitespace as field delimiter
+   * @brief Whether to treat `\r\n` as line terminator.
    */
-  bool delim_whitespace() const { return _delim_whitespace; }
+  bool is_enabled_windowslinetermination() const { return _windowslinetermination; }
 
   /**
-   * @brief Whether to skip whitespace after the delimiter
+   * @brief Whether to treat whitespace as field delimiter.
    */
-  bool skipinitialspace() const { return _skipinitialspace; }
+  bool is_enabled_delim_whitespace() const { return _delim_whitespace; }
 
   /**
-   * @brief Whether to ignore empty lines or parse line values as invalid
+   * @brief Whether to skip whitespace after the delimiter.
    */
-  bool skip_blank_lines() const { return _skip_blank_lines; }
+  bool is_enabled_skipinitialspace() const { return _skipinitialspace; }
 
   /**
-   * @brief Returns quoting style
+   * @brief Whether to ignore empty lines or parse line values as invalid.
    */
-  quote_style quoting() const { return _quoting; }
+  bool is_enabled_skip_blank_lines() const { return _skip_blank_lines; }
 
   /**
-   * @brief Returns quoting character
+   * @brief Returns quoting style.
    */
-  char quotechar() const { return _quotechar; }
+  quote_style get_quoting() const { return _quoting; }
 
   /**
-   * @brief Whether a quote inside a value is double-quoted
+   * @brief Returns quoting character.
    */
-  bool doublequote() const { return _doublequote; }
+  char get_quotechar() const { return _quotechar; }
 
   /**
-   * @brief Returns names of columns to read as datetime
+   * @brief Whether a quote inside a value is double-quoted.
    */
-  std::vector<std::string> const& infer_date_names() const { return _infer_date_names; }
+  bool is_enabled_doublequote() const { return _doublequote; }
 
   /**
-   * @brief Returns indexes of columns to read as datetime
+   * @brief Returns names of columns to read as datetime.
    */
-  std::vector<int> const& infer_date_indexes() const { return _infer_date_indexes; }
+  std::vector<std::string> const& get_infer_date_names() const { return _infer_date_names; }
 
   /**
-   * @brief Returns per-column types
+   * @brief Returns indexes of columns to read as datetime.
    */
-  std::vector<std::string> const& dtypes() const { return _dtypes; }
+  std::vector<int> const& get_infer_date_indexes() const { return _infer_date_indexes; }
 
   /**
-   * @brief Returns additional values to recognize as boolean true values
+   * @brief Returns per-column types.
    */
-  std::vector<std::string> const& true_values() const { return _true_values; }
+  std::vector<std::string> const& get_dtypes() const { return _dtypes; }
 
   /**
-   * @brief Returns additional values to recognize as boolean false values
+   * @brief Returns additional values to recognize as boolean true values.
    */
-  std::vector<std::string> const& false_values() const { return _false_values; }
+  std::vector<std::string> const& get_true_values() const { return _true_values; }
 
   /**
-   * @brief Returns additional values to recognize as null values
+   * @brief Returns additional values to recognize as boolean false values.
    */
-  std::vector<std::string> const& na_values() const { return _na_values; }
+  std::vector<std::string> const& get_false_values() const { return _false_values; }
 
   /**
-   * @brief Whether to keep the built-in default NA values
+   * @brief Returns additional values to recognize as null values.
    */
-  bool keep_default_na() const { return _keep_default_na; }
+  std::vector<std::string> const& get_na_values() const { return _na_values; }
 
   /**
-   * @brief Whether to disable null filter
+   * @brief Whether to keep the built-in default NA values.
    */
-  bool na_filter() const { return _na_filter; }
+  bool is_enabled_keep_default_na() const { return _keep_default_na; }
 
   /**
-   * @brief Whether to parse dates as DD/MM versus MM/DD
+   * @brief Whether to disable null filter.
    */
-  bool dayfirst() const { return _dayfirst; }
+  bool is_enabled_na_filter() const { return _na_filter; }
 
   /**
-   * @brief Returns timestamp_type to which all timestamp columns will be cast
+   * @brief Whether to parse dates as DD/MM versus MM/DD.
    */
-  data_type timestamp_type() const { return _timestamp_type; }
+  bool is_enabled_dayfirst() const { return _dayfirst; }
 
   /**
-   * @brief Set source info
+   * @brief Returns timestamp_type to which all timestamp columns will be cast.
    */
-  void source(source_info src) { _source = src; }
+  data_type get_timestamp_type() const { return _timestamp_type; }
 
   /**
-   * @brief Set compression format of the source
+   * @brief Sets compression format of the source.
+   *
+   * @param comp Compression type.
    */
-  void compression(compression_type comp) { _compression = comp; }
+  void set_compression(compression_type comp) { _compression = comp; }
 
   /**
-   * @brief Set number of bytes to skip from source start
+   * @brief Sets number of bytes to skip from source start.
+   *
+   * @param offset Number of bytes of offset.
    */
-  void byte_range_offset(size_type offset)
+  void set_byte_range_offset(size_type offset)
   {
     if ((offset != 0) and ((_skiprows != 0) or (_skipfooter != 0) or (_nrows != -1))) {
       CUDF_FAIL(
@@ -352,9 +367,11 @@ class csv_reader_options {
   }
 
   /**
-   * @brief Set number of bytes to read
+   * @brief Sets number of bytes to read.
+   *
+   * @param size Number of bytes to read.
    */
-  void byte_range_size(size_type size)
+  void set_byte_range_size(size_type size)
   {
     if ((size != 0) and ((_skiprows != 0) or (_skipfooter != 0) or (_nrows != -1))) {
       CUDF_FAIL(
@@ -365,37 +382,49 @@ class csv_reader_options {
   }
 
   /**
-   * @brief Set names of the column
+   * @brief Sets names of the column.
+   *
+   * @param col_names Vector of column names.
    */
-  void names(std::vector<std::string> col_names) { _names = std::move(col_names); }
+  void set_names(std::vector<std::string> col_names) { _names = std::move(col_names); }
 
   /**
-   * @brief Set prefix to be used for column ID
+   * @brief Sets prefix to be used for column ID.
+   *
+   * @param String used as prefix in for each column name.
    */
-  void prefix(std::string pfx) { _prefix = pfx; }
+  void set_prefix(std::string pfx) { _prefix = pfx; }
 
   /**
-   * @brief Set whether to rename duplicate column names
+   * @brief Sets whether to rename duplicate column names.
+   *
+   * @param val Boolean value to enable/disable.
    */
-  void mangle_dupe_cols(bool val) { _mangle_dupe_cols = val; }
+  void enable_mangle_dupe_cols(bool val) { _mangle_dupe_cols = val; }
 
   /**
-   * @brief Set names of the columns to be read
+   * @brief Sets names of the columns to be read.
+   *
+   * @param col_names Vector of column names that are needed.
    */
-  void use_cols_names(std::vector<std::string> col_names)
+  void set_use_cols_names(std::vector<std::string> col_names)
   {
     _use_cols_names = std::move(col_names);
   }
 
   /**
-   * @brief Set indexes of columns to read
+   * @brief Sets indexes of columns to read.
+   *
+   * @param col_ind Vector of column indices that are needed.
    */
-  void use_cols_indexes(std::vector<int> col_ind) { _use_cols_indexes = std::move(col_ind); }
+  void set_use_cols_indexes(std::vector<int> col_ind) { _use_cols_indexes = std::move(col_ind); }
 
   /**
-   * @brief Set number of rows to read
+   * @brief Sets number of rows to read.
+   *
+   * @param val Number of rows to read.
    */
-  void nrows(size_type val)
+  void set_nrows(size_type val)
   {
     CUDF_EXPECTS((val == 0) or (_nrows == -1), "Cannot use both `_nrows` and `_skipfooter`");
     if ((val != -1) and ((_byte_range_offset != 0) or (_byte_range_size != 0))) {
@@ -407,9 +436,11 @@ class csv_reader_options {
   }
 
   /**
-   * @brief Set number of rows to skip from start
+   * @brief Sets number of rows to skip from start.
+   *
+   * @param val Number of rows to skip.
    */
-  void skiprows(size_type val)
+  void set_skiprows(size_type val)
   {
     if ((val != 0) and ((_byte_range_offset != 0) or (_byte_range_size != 0))) {
       CUDF_FAIL(
@@ -419,9 +450,11 @@ class csv_reader_options {
   }
 
   /**
-   * @brief Set number of rows to skip from end
+   * @brief Sets number of rows to skip from end.
+   *
+   * @param skip Number of rows to skip.
    */
-  void skipfooter(size_type skip)
+  void set_skipfooter(size_type skip)
   {
     CUDF_EXPECTS((skip == 0) or (_nrows == -1), "Cannot use both `_nrows` and `_skipfooter`");
     if ((skip != 0) and ((_byte_range_offset != 0) or (_byte_range_size != 0))) {
@@ -433,108 +466,149 @@ class csv_reader_options {
   }
 
   /**
-   * @brief Set header row index
+   * @brief Sets header row index.
+   *
+   * @param hdr Index where header row is located.
    */
-  void header(size_type hdr) { _header = hdr; }
+  void set_header(size_type hdr) { _header = hdr; }
 
   /**
-   * @brief Set line terminator
+   * @brief Sets line terminator
+   *
+   * @param term A character to indicate line termination.
    */
-  void lineterminator(char term) { _lineterminator = term; }
+  void set_lineterminator(char term) { _lineterminator = term; }
 
   /**
-   * @brief Set field delimiter
+   * @brief Sets field delimiter.
+   *
+   * @param delim A character to indicate delimiter.
    */
-  void delimiter(char delim) { _delimiter = delim; }
+  void set_delimiter(char delim) { _delimiter = delim; }
 
   /**
-   * @brief Set numeric data thousands seperator
+   * @brief Sets numeric data thousands separator.
+   *
+   * @param val A character that separates thousands.
    */
-  void thousands(char val) { _thousands = val; }
+  void set_thousands(char val) { _thousands = val; }
 
   /**
-   * @brief Set decimal point character
+   * @brief Sets decimal point character.
+   *
+   * @param val A character that indicates decimal values.
    */
-  void decimal(char val) { _decimal = val; }
+  void set_decimal(char val) { _decimal = val; }
 
   /**
-   * @brief Set comment line start character
+   * @brief Sets comment line start character.
+   *
+   * @param val A character that indicates comment.
    */
-  void comment(char val) { _comment = val; }
+  void set_comment(char val) { _comment = val; }
 
   /**
-   * @brief Set whether to treat `\r\n` as line terminator
+   * @brief Sets whether to treat `\r\n` as line terminator.
+   *
+   * @param val Boolean value to enable/disable.
    */
-  void windowslinetermination(bool val) { _windowslinetermination = val; }
+  void enable_windowslinetermination(bool val) { _windowslinetermination = val; }
 
   /**
-   * @brief Set whether to treat whitespace as field delimiter
+   * @brief Sets whether to treat whitespace as field delimiter.
+   *
+   * @param val Boolean value to enable/disable.
    */
-  void delim_whitespace(bool val) { _delim_whitespace = val; }
+  void enable_delim_whitespace(bool val) { _delim_whitespace = val; }
 
   /**
-   * @brief Set whether to skip whitespace after the delimiter
+   * @brief Sets whether to skip whitespace after the delimiter.
+   *
+   * @param val Boolean value to enable/disable.
    */
-  void skipinitialspace(bool val) { _skipinitialspace = val; }
+  void enable_skipinitialspace(bool val) { _skipinitialspace = val; }
 
   /**
-   * @brief Set whether to ignore empty lines or parse line values as invalid
+   * @brief Sets whether to ignore empty lines or parse line values as invalid.
+   *
+   * @param val Boolean value to enable/disable.
    */
-  void skip_blank_lines(bool val) { _skip_blank_lines = val; }
+  void enable_skip_blank_lines(bool val) { _skip_blank_lines = val; }
 
   /**
-   * @brief Set quoting style
+   * @brief Sets quoting style.
+   *
+   * @param style Quoting style used.
    */
-  void quoting(quote_style style) { _quoting = style; }
+  void set_quoting(quote_style style) { _quoting = style; }
 
   /**
-   * @brief Set quoting character
+   * @brief Sets quoting character.
+   *
+   * @param ch A character to indicate quoting.
    */
-  void quotechar(char ch) { _quotechar = ch; }
+  void set_quotechar(char ch) { _quotechar = ch; }
 
   /**
-   * @brief Set a quote inside a value is double-quoted
+   * @brief Sets a quote inside a value is double-quoted.
+   *
+   * @param val Boolean value to enable/disable.
    */
-  void doublequote(bool val) { _doublequote = val; }
+  void enable_doublequote(bool val) { _doublequote = val; }
 
   /**
-   * @brief Set names of columns to read as datetime
+   * @brief Sets names of columns to read as datetime.
+   *
+   * @param col_names Vector of column names to infer as datetime.
    */
-  void infer_date_names(std::vector<std::string> col_names)
+  void set_infer_date_names(std::vector<std::string> col_names)
   {
     _infer_date_names = std::move(col_names);
   }
 
   /**
-   * @brief Set indexes of columns to read as datetime
+   * @brief Sets indexes of columns to read as datetime.
+   *
+   * @param col_names Vector of column indices to infer as datetime.
    */
-  void infer_date_indexes(std::vector<int> col_ind) { _infer_date_indexes = std::move(col_ind); }
+  void set_infer_date_indexes(std::vector<int> col_ind)
+  {
+    _infer_date_indexes = std::move(col_ind);
+  }
 
   /**
-   * @brief Set per-column types
+   * @brief Sets per-column types.
+   *
+   * @param types Vector of dtypes in which the column needs to be read.
    */
-  void dtypes(std::vector<std::string> types) { _dtypes = std::move(types); }
+  void set_dtypes(std::vector<std::string> types) { _dtypes = std::move(types); }
 
   /**
-   * @brief Set additional values to recognize as boolean true values
+   * @brief Sets additional values to recognize as boolean true values.
+   *
+   * @param vals Vector of values to be considered to be `true`.
    */
-  void true_values(std::vector<std::string> vals)
+  void set_true_values(std::vector<std::string> vals)
   {
     _true_values.insert(_true_values.end(), vals.begin(), vals.end());
   }
 
   /**
-   * @brief Set additional values to recognize as boolean false values
+   * @brief Sets additional values to recognize as boolean false values.
+   *
+   * @param vals Vector of values to be considered to be `false`.
    */
-  void false_values(std::vector<std::string> vals)
+  void set_false_values(std::vector<std::string> vals)
   {
     _false_values.insert(_false_values.end(), vals.begin(), vals.end());
   }
 
   /**
-   * @brief Set additional values to recognize as null values
+   * @brief Sets additional values to recognize as null values.
+   *
+   * @param vals Vector of values to be considered to be null.
    */
-  void na_values(std::vector<std::string> vals)
+  void set_na_values(std::vector<std::string> vals)
   {
     if ((!vals.empty()) and (!_na_filter)) {
       CUDF_FAIL("Can't set na_values when na_filtering is disabled");
@@ -548,54 +622,61 @@ class csv_reader_options {
   }
 
   /**
-   * @brief Set whether to keep the built-in default NA values
+   * @brief Sets whether to keep the built-in default NA values.
+   *
+   * @param val Boolean value to enable/disable.
    */
-  void keep_default_na(bool val) { _keep_default_na = val; }
+  void enable_keep_default_na(bool val) { _keep_default_na = val; }
 
   /**
-   * @brief Set whether to disable null filter
+   * @brief Sets whether to disable null filter.
+   *
+   * @param val Boolean value to enable/disable.
    */
-  void na_filter(bool val)
+  void enable_na_filter(bool val)
   {
     if (!val) { _na_values.clear(); }
     _na_filter = val;
   }
 
   /**
-   * @brief Set whether to parse dates as DD/MM versus MM/DD
+   * @brief Sets whether to parse dates as DD/MM versus MM/DD.
+   *
+   * @param val Boolean value to enable/disable.
    */
-  void dayfirst(bool val) { _dayfirst = val; }
+  void enable_dayfirst(bool val) { _dayfirst = val; }
 
   /**
-   * @brief Set timestamp_type to which all timestamp columns will be cast
+   * @brief Sets timestamp_type to which all timestamp columns will be cast.
+   *
+   * @param type Dtype to which all timestamp column will be cast.
    */
-  void timestamp_type(data_type type) { _timestamp_type = type; }
-
-  /**
-   * @brief Creates a builder through which all options can be set
-   */
-  static csv_reader_options_builder builder(source_info const& src);
+  void set_timestamp_type(data_type type) { _timestamp_type = type; }
 };
 
 class csv_reader_options_builder {
   csv_reader_options options;
 
  public:
+  /**
+   * @brief Default constructor.
+   *
+   * This has been added since Cython requires a default constructor to create objects on stack.
+   */
   csv_reader_options_builder() = default;
 
+  /**
+   * @brief Constructor from source info.
+   *
+   * @param src The source information used to read csv file.
+   */
   csv_reader_options_builder(source_info const& src) : options(src) {}
 
   /**
-   * @brief Set source info
-   */
-  csv_reader_options_builder& source(source_info src)
-  {
-    options._source = src;
-    return *this;
-  }
-
-  /**
-   * @brief Set compression format of the source
+   * @brief Sets compression format of the source.
+   *
+   * @param comp Compression type.
+   * @return this for chaining.
    */
   csv_reader_options_builder& compression(compression_type comp)
   {
@@ -604,25 +685,34 @@ class csv_reader_options_builder {
   }
 
   /**
-   * @brief Set number of bytes to skip from source start
+   * @brief Sets number of bytes to skip from source start.
+   *
+   * @param offset Number of bytes of offset.
+   * @return this for chaining.
    */
   csv_reader_options_builder& byte_range_offset(size_type offset)
   {
-    options.byte_range_offset(offset);
+    options.set_byte_range_offset(offset);
     return *this;
   }
 
   /**
-   * @brief Set number of bytes to read
+   * @brief Sets number of bytes to read.
+   *
+   * @param size Number of bytes to read.
+   * @return this for chaining.
    */
   csv_reader_options_builder& byte_range_size(size_type size)
   {
-    options.byte_range_size(size);
+    options.set_byte_range_size(size);
     return *this;
   }
 
   /**
-   * @brief Set names of the column
+   * @brief Sets names of the column.
+   *
+   * @param col_names Vector of column names.
+   * @return this for chaining.
    */
   csv_reader_options_builder& names(std::vector<std::string> col_names)
   {
@@ -631,7 +721,10 @@ class csv_reader_options_builder {
   }
 
   /**
-   * @brief Set prefix to be used for column ID
+   * @brief Sets prefix to be used for column ID.
+   *
+   * @param String used as prefix in for each column name.
+   * @return this for chaining.
    */
   csv_reader_options_builder& prefix(std::string pfx)
   {
@@ -640,7 +733,10 @@ class csv_reader_options_builder {
   }
 
   /**
-   * @brief Set whether to rename duplicate column names
+   * @brief Sets whether to rename duplicate column names.
+   *
+   * @param val Boolean value to enable/disable.
+   * @return this for chaining.
    */
   csv_reader_options_builder& mangle_dupe_cols(bool val)
   {
@@ -649,7 +745,10 @@ class csv_reader_options_builder {
   }
 
   /**
-   * @brief Set names of the columns to be read
+   * @brief Sets names of the columns to be read.
+   *
+   * @param col_names Vector of column names that are needed.
+   * @return this for chaining.
    */
   csv_reader_options_builder& use_cols_names(std::vector<std::string> col_names)
   {
@@ -658,7 +757,10 @@ class csv_reader_options_builder {
   }
 
   /**
-   * @brief Set indexes of columns to read
+   * @brief Sets indexes of columns to read.
+   *
+   * @param col_ind Vector of column indices that are needed.
+   * @return this for chaining.
    */
   csv_reader_options_builder& use_cols_indexes(std::vector<int> col_ind)
   {
@@ -667,34 +769,46 @@ class csv_reader_options_builder {
   }
 
   /**
-   * @brief Set number of rows to read
+   * @brief Sets number of rows to read.
+   *
+   * @param val Number of rows to read.
+   * @return this for chaining.
    */
   csv_reader_options_builder& nrows(size_type val)
   {
-    options.nrows(val);
+    options.set_nrows(val);
     return *this;
   }
 
   /**
-   * @brief Set number of rows to skip from start
+   * @brief Sets number of rows to skip from start.
+   *
+   * @param val Number of rows to skip.
+   * @return this for chaining.
    */
   csv_reader_options_builder& skiprows(size_type val)
   {
-    options.skiprows(val);
+    options.set_skiprows(val);
     return *this;
   }
 
   /**
-   * @brief Set number of rows to skip from end
+   * @brief Sets number of rows to skip from end.
+   *
+   * @param skip Number of rows to skip.
+   * @return this for chaining.
    */
   csv_reader_options_builder& skipfooter(size_type skip)
   {
-    options.skipfooter(skip);
+    options.set_skipfooter(skip);
     return *this;
   }
 
   /**
-   * @brief Set header row index
+   * @brief Sets header row index.
+   *
+   * @param hdr Index where header row is located.
+   * @return this for chaining.
    */
   csv_reader_options_builder& header(size_type hdr)
   {
@@ -703,7 +817,10 @@ class csv_reader_options_builder {
   }
 
   /**
-   * @brief Set line terminator
+   * @brief Sets line terminator.
+   *
+   * @param term A character to indicate line termination.
+   * @return this for chaining.
    */
   csv_reader_options_builder& lineterminator(char term)
   {
@@ -712,7 +829,10 @@ class csv_reader_options_builder {
   }
 
   /**
-   * @brief Set field delimiter
+   * @brief Sets field delimiter
+   *
+   * @param delim A character to indicate delimiter.
+   * @return this for chaining.
    */
   csv_reader_options_builder& delimiter(char delim)
   {
@@ -721,7 +841,10 @@ class csv_reader_options_builder {
   }
 
   /**
-   * @brief Set numeric data thousands seperator
+   * @brief Sets numeric data thousands separator.
+   *
+   * @param val A character that separates thousands.
+   * @return this for chaining.
    */
   csv_reader_options_builder& thousands(char val)
   {
@@ -730,7 +853,10 @@ class csv_reader_options_builder {
   }
 
   /**
-   * @brief Set decimal point character
+   * @brief Sets decimal point character.
+   *
+   * @param val A character that indicates decimal values.
+   * @return this for chaining.
    */
   csv_reader_options_builder& decimal(char val)
   {
@@ -739,7 +865,10 @@ class csv_reader_options_builder {
   }
 
   /**
-   * @brief Set comment line start character
+   * @brief Sets comment line start character.
+   *
+   * @param val A character that indicates comment.
+   * @return this for chaining.
    */
   csv_reader_options_builder& comment(char val)
   {
@@ -748,7 +877,10 @@ class csv_reader_options_builder {
   }
 
   /**
-   * @brief Set whether to treat `\r\n` as line terminator
+   * @brief Sets whether to treat `\r\n` as line terminator.
+   *
+   * @param val Boolean value to enable/disable.
+   * @return this for chaining.
    */
   csv_reader_options_builder& windowslinetermination(bool val)
   {
@@ -757,7 +889,10 @@ class csv_reader_options_builder {
   }
 
   /**
-   * @brief Set whether to treat whitespace as field delimiter
+   * @brief Sets whether to treat whitespace as field delimiter.
+   *
+   * @param val Boolean value to enable/disable.
+   * @return this for chaining.
    */
   csv_reader_options_builder& delim_whitespace(bool val)
   {
@@ -766,7 +901,10 @@ class csv_reader_options_builder {
   }
 
   /**
-   * @brief Set whether to skip whitespace after the delimiter
+   * @brief Sets whether to skip whitespace after the delimiter.
+   *
+   * @param val Boolean value to enable/disable.
+   * @return this for chaining.
    */
   csv_reader_options_builder& skipinitialspace(bool val)
   {
@@ -775,7 +913,10 @@ class csv_reader_options_builder {
   }
 
   /**
-   * @brief Set whether to ignore empty lines or parse line values as invalid
+   * @brief Sets whether to ignore empty lines or parse line values as invalid.
+   *
+   * @param val Boolean value to enable/disable.
+   * @return this for chaining.
    */
   csv_reader_options_builder& skip_blank_lines(bool val)
   {
@@ -784,7 +925,10 @@ class csv_reader_options_builder {
   }
 
   /**
-   * @brief Set quoting style
+   * @brief Sets quoting style.
+   *
+   * @param style Quoting style used.
+   * @return this for chaining.
    */
   csv_reader_options_builder& quoting(quote_style style)
   {
@@ -793,7 +937,10 @@ class csv_reader_options_builder {
   }
 
   /**
-   * @brief Set quoting character
+   * @brief Sets quoting character.
+   *
+   * @param ch A character to indicate quoting.
+   * @return this for chaining.
    */
   csv_reader_options_builder& quotechar(char ch)
   {
@@ -802,7 +949,10 @@ class csv_reader_options_builder {
   }
 
   /**
-   * @brief Set a quote inside a value is double-quoted
+   * @brief Sets a quote inside a value is double-quoted.
+   *
+   * @param val Boolean value to enable/disable.
+   * @return this for chaining.
    */
   csv_reader_options_builder& doublequote(bool val)
   {
@@ -811,7 +961,10 @@ class csv_reader_options_builder {
   }
 
   /**
-   * @brief Set names of columns to read as datetime
+   * @brief Sets names of columns to read as datetime.
+   *
+   * @param col_names Vector of column names to infer as datetime.
+   * @return this for chaining.
    */
   csv_reader_options_builder& infer_date_names(std::vector<std::string> col_names)
   {
@@ -820,7 +973,10 @@ class csv_reader_options_builder {
   }
 
   /**
-   * @brief Set indexes of columns to read as datetime
+   * @brief Sets indexes of columns to read as datetime.
+   *
+   * @param col_names Vector of column indices to infer as datetime.
+   * @return this for chaining.
    */
   csv_reader_options_builder& infer_date_indexes(std::vector<int> col_ind)
   {
@@ -829,7 +985,10 @@ class csv_reader_options_builder {
   }
 
   /**
-   * @brief Set per-column types
+   * @brief Sets per-column types.
+   *
+   * @param types Vector of dtypes in which the column needs to be read.
+   * @return this for chaining.
    */
   csv_reader_options_builder& dtypes(std::vector<std::string> types)
   {
@@ -838,7 +997,10 @@ class csv_reader_options_builder {
   }
 
   /**
-   * @brief Set additional values to recognize as boolean true values
+   * @brief Sets additional values to recognize as boolean true values.
+   *
+   * @param vals Vector of values to be considered to be `true`.
+   * @return this for chaining.
    */
   csv_reader_options_builder& true_values(std::vector<std::string> vals)
   {
@@ -847,7 +1009,10 @@ class csv_reader_options_builder {
   }
 
   /**
-   * @brief Set additional values to recognize as boolean false values
+   * @brief Sets additional values to recognize as boolean false values.
+   *
+   * @param vals Vector of values to be considered to be `false`.
+   * @return this for chaining.
    */
   csv_reader_options_builder& false_values(std::vector<std::string> vals)
   {
@@ -856,34 +1021,46 @@ class csv_reader_options_builder {
   }
 
   /**
-   * @brief Set additional values to recognize as null values
+   * @brief Sets additional values to recognize as null values.
+   *
+   * @param vals Vector of values to be considered to be null.
+   * @return this for chaining.
    */
   csv_reader_options_builder& na_values(std::vector<std::string> vals)
   {
-    options.na_values(std::move(vals));
+    options.set_na_values(std::move(vals));
     return *this;
   }
 
   /**
-   * @brief Set whether to keep the built-in default NA values
+   * @brief Sets whether to keep the built-in default NA values.
+   *
+   * @param val Boolean value to enable/disable.
+   * @return this for chaining.
    */
   csv_reader_options_builder& keep_default_na(bool val)
   {
-    options.keep_default_na(val);
+    options.enable_keep_default_na(val);
     return *this;
   }
 
   /**
-   * @brief Set whether to disable null filter
+   * @brief Sets whether to disable null filter.
+   *
+   * @param val Boolean value to enable/disable.
+   * @return this for chaining.
    */
   csv_reader_options_builder& na_filter(bool val)
   {
-    options.na_filter(val);
+    options.enable_na_filter(val);
     return *this;
   }
 
   /**
-   * @brief Set whether to parse dates as DD/MM versus MM/DD
+   * @brief Sets whether to parse dates as DD/MM versus MM/DD.
+   *
+   * @param val Boolean value to enable/disable.
+   * @return this for chaining.
    */
   csv_reader_options_builder& dayfirst(bool val)
   {
@@ -892,7 +1069,10 @@ class csv_reader_options_builder {
   }
 
   /**
-   * @brief Set timestamp_type to which all timestamp columns will be cast
+   * @brief Sets timestamp_type to which all timestamp columns will be cast.
+   *
+   * @param type Dtype to which all timestamp column will be cast.
+   * @return this for chaining.
    */
   csv_reader_options_builder& timestamp_type(data_type type)
   {
@@ -901,18 +1081,20 @@ class csv_reader_options_builder {
   }
 
   /**
-   * @brief move csv_reader_options member once options is built
+   * @brief move csv_reader_options member once it's built.
    */
   operator csv_reader_options &&() { return std::move(options); }
 
   /**
-   * @brief move csv_reader_options member once options is built
+   * @brief move csv_reader_options member once it's built.
+   *
+   * This has been added since Cython does not support overloading of conversion operators.
    */
   csv_reader_options&& build() { return std::move(options); }
 };
 
 /**
- * @brief Reads a CSV dataset into a set of columns
+ * @brief Reads a CSV dataset into a set of columns.
  *
  * @ingroup io_readers
  *
@@ -921,27 +1103,28 @@ class csv_reader_options_builder {
  *  #include <cudf/io/functions.hpp>
  *  ...
  *  std::string filepath = "dataset.csv";
- *  cudf::io::csv_reader_options options{cudf::source_info(filepath)};
+ *  cudf::io::csv_reader_options options =
+ * cudf::io::csv_reader_options::builder(cudf::source_info(filepath));
  *  ...
  *  auto result = cudf::read_csv(options);
  * @endcode
  *
- * @param options Settings for controlling reading behavior
- * @param mr Device memory resource used to allocate device memory of the table in the returned
+ * @param options Settings for controlling reading behavior.
+ * @param mr Device memory resource used to allocate device memory of the table in the returned.
  * table_with_metadata
  *
- * @return The set of columns along with metadata
+ * @return The set of columns along with metadata.
  */
 table_with_metadata read_csv(csv_reader_options const& options,
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- *@breif Builder to build options for `writer_csv()`
+ *@breif Builder to build options for `writer_csv()`.
  */
 class csv_writer_options_builder;
 
 /**
- * @brief Settings to use for `write_csv()`
+ * @brief Settings to use for `write_csv()`.
  *
  * @ingroup io_writers
  */
@@ -960,13 +1143,19 @@ class csv_writer_options {
   std::string _line_terminator = "\n";
   // character to use for separating lines (default "\n")
   char _inter_column_delimiter = ',';
-  // string to use for values !=0 in INT8 types (default 'true')
+  // string to use for values != 0 in INT8 types (default 'true')
   std::string _true_value = std::string{"true"};
-  // string to use for values ==0 in INT8 types (default 'false')
+  // string to use for values == 0 in INT8 types (default 'false')
   std::string _false_value = std::string{"false"};
   // Optional associated metadata
   table_metadata const* _metadata = nullptr;
 
+  /**
+   * @brief Constructor from sink and table.
+   *
+   * @param sink The sink used for writer output.
+   * @param table Table to be written to output.
+   */
   explicit csv_writer_options(sink_info const& sink, table_view const& table)
     : _sink(sink), _table(table)
   {
@@ -975,117 +1164,158 @@ class csv_writer_options {
   friend csv_writer_options_builder;
 
  public:
+  /**
+   * @brief Default constructor.
+   *
+   * This has been added since Cython requires a default constructor to create objects on stack.
+   */
   explicit csv_writer_options() = default;
 
   /**
-   * @brief Returns sink used for writer output
+   * @brief Create builder to create `csv_writer_options`.
+   *
+   * @param sink The sink used for writer output.
+   * @param table Table to be written to output.
+   *
+   * @return Builder to build csv_writer_options.
    */
-  sink_info const& sink(void) const { return _sink; }
+  static csv_writer_options_builder builder(sink_info const& sink, table_view const& table);
 
   /**
-   * @brief Returns table that would be written to ouput
+   * @brief Returns sink used for writer output.
    */
-  table_view const& table(void) const { return _table; }
+  sink_info const& get_sink(void) const { return _sink; }
 
   /**
-   * @brief Returns optional associated metadata
+   * @brief Returns table that would be written to output.
    */
-  table_metadata const* metadata(void) const { return _metadata; }
+  table_view const& get_table(void) const { return _table; }
 
   /**
-   * @brief Returns string to used for null entries
+   * @brief Returns optional associated metadata.
    */
-  std::string na_rep(void) const { return _na_rep; }
+  table_metadata const* get_metadata(void) const { return _metadata; }
 
   /**
-   * @brief Whether to write headers to csv
+   * @brief Returns string to used for null entries.
    */
-  bool include_header(void) const { return _include_header; }
+  std::string get_na_rep(void) const { return _na_rep; }
 
   /**
-   * @brief Returns maximum number of rows to process for each file write
+   * @brief Whether to write headers to csv.
    */
-  int rows_per_chunk(void) const { return _rows_per_chunk; }
+  bool is_enabled_include_header(void) const { return _include_header; }
 
   /**
-   * @brief Returns character used for separating lines
+   * @brief Returns maximum number of rows to process for each file write.
    */
-  std::string line_terminator(void) const { return _line_terminator; }
+  int get_rows_per_chunk(void) const { return _rows_per_chunk; }
 
   /**
-   * @brief Returns character used for separating lines
+   * @brief Returns character used for separating lines.
    */
-  char inter_column_delimiter(void) const { return _inter_column_delimiter; }
+  std::string get_line_terminator(void) const { return _line_terminator; }
 
   /**
-   * @brief Returns string used for values !=0 in INT8 types
+   * @brief Returns character used for separating lines.
    */
-  std::string true_value(void) const { return _true_value; }
+  char get_inter_column_delimiter(void) const { return _inter_column_delimiter; }
 
   /**
-   * @brief Returns string used for values ==0 in INT8 types
+   * @brief Returns string used for values != 0 in INT8 types.
    */
-  std::string false_value(void) const { return _false_value; }
+  std::string get_true_value(void) const { return _true_value; }
+
+  /**
+   * @brief Returns string used for values == 0 in INT8 types.
+   */
+  std::string get_false_value(void) const { return _false_value; }
 
   // Setter
   /**
-   * @brief Sets optional associated metadata
+   * @brief Sets optional associated metadata.
+   *
+   @param metadata Associated metadata.
    */
-  void metadata(table_metadata* metadata) { _metadata = metadata; }
+  void set_metadata(table_metadata* metadata) { _metadata = metadata; }
 
   /**
-   * @brief Sets string to used for null entries
+   * @brief Sets string to used for null entries.
+   *
+   * @param val String to represent null value.
    */
-  void na_rep(std::string val) { _na_rep = val; }
+  void set_na_rep(std::string val) { _na_rep = val; }
 
   /**
-   * @brief Enables/Disables headers being written to csv
+   * @brief Enables/Disables headers being written to csv.
+   *
+   * @param val Boolean value to enable/disable.
    */
-  void include_header(bool val) { _include_header = val; }
+  void enable_include_header(bool val) { _include_header = val; }
 
   /**
-   * @brief Sets maximum number of rows to process for each file write
+   * @brief Sets maximum number of rows to process for each file write.
+   *
+   * @param val Number of rows per chunk.
    */
-  void rows_per_chunk(int val) { _rows_per_chunk = val; }
+  void set_rows_per_chunk(int val) { _rows_per_chunk = val; }
 
   /**
-   * @brief Sets character used for separating lines
+   * @brief Sets character used for separating lines.
+   *
+   * @param term Character to represent line termination.
    */
-  void line_terminator(std::string term) { _line_terminator = term; }
+  void set_line_terminator(std::string term) { _line_terminator = term; }
 
   /**
-   * @brief Sets character used for separating lines
+   * @brief Sets character used for separating lines.
+   *
+   * @param delim Character to indicate delimiting.
    */
-  void inter_column_delimiter(char delim) { _inter_column_delimiter = delim; }
+  void set_inter_column_delimiter(char delim) { _inter_column_delimiter = delim; }
 
   /**
-   * @brief Sets string used for values !=0 in INT8 types
+   * @brief Sets string used for values != 0 in INT8 types.
+   *
+   * @param val String to represent values != 0 in INT8 types.
    */
-  void true_value(std::string val) { _true_value = val; }
+  void set_true_value(std::string val) { _true_value = val; }
 
   /**
-   * @brief Sets string used for values ==0 in INT8 types
+   * @brief Sets string used for values == 0 in INT8 types.
+   *
+   * @param val String to represent values == 0 in INT8 types.
    */
-  void false_value(std::string val) { _false_value = val; }
-
-  /**
-   * @brief Creates a builder through which all options can be set
-   */
-  static csv_writer_options_builder builder(sink_info const& sink, table_view const& table);
+  void set_false_value(std::string val) { _false_value = val; }
 };
 
 class csv_writer_options_builder {
   csv_writer_options options;
 
  public:
+  /**
+   * @brief Default constructor.
+   *
+   * This has been added since Cython requires a default constructor to create objects on stack.
+   */
   explicit csv_writer_options_builder() = default;
+
+  /**
+   * @brief Constructor from sink and table.
+   *
+   * @param sink The sink used for writer output.
+   * @param table Table to be written to output.
+   */
   explicit csv_writer_options_builder(sink_info const& sink, table_view const& table)
     : options{sink, table}
   {
   }
 
   /**
-   * @brief Sets optional associated metadata
+   * @brief Sets optional associated metadata.
+   *
+   * @param metadata Associated metadata.
+   * @return this for chaining.
    */
   csv_writer_options_builder& metadata(table_metadata* metadata)
   {
@@ -1094,7 +1324,10 @@ class csv_writer_options_builder {
   }
 
   /**
-   * @brief Sets optional associated metadata
+   * @brief Sets string to used for null entries.
+   *
+   * @param val String to represent null value.
+   * @return this for chaining.
    */
   csv_writer_options_builder& na_rep(std::string val)
   {
@@ -1103,7 +1336,10 @@ class csv_writer_options_builder {
   };
 
   /**
-   * @brief Enables/Disables headers being written to csv
+   * @brief Enables/Disables headers being written to csv.
+   *
+   * @param val Boolean value to enable/disable.
+   * @return this for chaining.
    */
   csv_writer_options_builder& include_header(bool val)
   {
@@ -1112,7 +1348,10 @@ class csv_writer_options_builder {
   }
 
   /**
-   * @brief Sets maximum number of rows to process for each file write
+   * @brief Sets maximum number of rows to process for each file write.
+   *
+   * @param val Number of rows per chunk.
+   * @return this for chaining.
    */
   csv_writer_options_builder& rows_per_chunk(int val)
   {
@@ -1121,7 +1360,10 @@ class csv_writer_options_builder {
   }
 
   /**
-   * @brief Sets character used for separating lines
+   * @brief Sets character used for separating lines.
+   *
+   * @param term Character to represent line termination.
+   * @return this for chaining.
    */
   csv_writer_options_builder& line_terminator(std::string term)
   {
@@ -1130,7 +1372,10 @@ class csv_writer_options_builder {
   }
 
   /**
-   * @brief Sets character used for separating lines
+   * @brief Sets character used for separating lines.
+   *
+   * @param delim Character to indicate delimiting.
+   * @return this for chaining.
    */
   csv_writer_options_builder& inter_column_delimiter(char delim)
   {
@@ -1139,7 +1384,10 @@ class csv_writer_options_builder {
   }
 
   /**
-   * @brief Sets string used for values !=0 in INT8 types
+   * @brief Sets string used for values != 0 in INT8 types.
+   *
+   * @param val String to represent values != 0 in INT8 types.
+   * @return this for chaining.
    */
   csv_writer_options_builder& true_value(std::string val)
   {
@@ -1148,7 +1396,10 @@ class csv_writer_options_builder {
   }
 
   /**
-   * @brief Sets string used for values ==0 in INT8 types
+   * @brief Sets string used for values == 0 in INT8 types.
+   *
+   * @param val String to represent values == 0 in INT8 types.
+   * @return this for chaining.
    */
   csv_writer_options_builder& false_value(std::string val)
   {
@@ -1157,18 +1408,20 @@ class csv_writer_options_builder {
   }
 
   /**
-   * @brief move csv_writer_options member once options is built
+   * @brief move `csv_writer_options` member once it's built.
    */
   operator csv_writer_options &&() { return std::move(options); }
 
   /**
-   * @brief move csv_parquet_writer_options member once options is built
+   * @brief move `csv_writer_options` member once it's built.
+   *
+   * This has been added since Cython does not support overloading of conversion operators.
    */
   csv_writer_options&& build() { return std::move(options); }
 };
 
 /**
- * @brief Writes a set of columns to CSV format
+ * @brief Writes a set of columns to CSV format.
  *
  * The following code snippet demonstrates how to write columns to a file:
  * @code
@@ -1177,16 +1430,16 @@ class csv_writer_options_builder {
  *  std::string filepath = "dataset.csv";
  *  cudf::io::sink_info sink_info(filepath);
  *
- *  cudf::io::csv_writer_options args{sink_info, table->view(), na, include_header,
- * rows_per_chunk};
+ *  cudf::io::csv_writer_options options = cudf::io::csv_writer_options(sink_info,
+ * table->view()).na_rep(na).include_header(include_header).rows_per_chunk(rows_per_chunk);
  *  ...
- *  cudf::io::write_csv(args);
+ *  cudf::io::write_csv(options);
  * @endcode
  *
- * @param args Settings for controlling writing behavior
- * @param mr Device memory resource to use for device memory allocation
+ * @param options Settings for controlling writing behavior.
+ * @param mr Device memory resource to use for device memory allocation.
  */
-void write_csv(csv_writer_options const& args,
+void write_csv(csv_writer_options const& options,
                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 }  // namespace io
 }  // namespace cudf

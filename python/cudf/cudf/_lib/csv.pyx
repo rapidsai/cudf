@@ -168,47 +168,47 @@ cdef csv_reader_options make_csv_reader_options(
     if names is not None:
         # explicitly mentioned name, so don't check header
         if header is None or header == 'infer':
-            csv_reader_options_c.header(-1)
+            csv_reader_options_c.set_header(-1)
         else:
-            csv_reader_options_c.header(header)
+            csv_reader_options_c.set_header(header)
 
         c_names.reserve(len(names))
         for name in names:
             c_names.push_back(str(name).encode())
-        csv_reader_options_c.names(c_names)
+        csv_reader_options_c.set_names(c_names)
     else:
         if header is None:
-            csv_reader_options_c.header(-1)
+            csv_reader_options_c.set_header(-1)
         elif header == 'infer':
-            csv_reader_options_c.header(0)
+            csv_reader_options_c.set_header(0)
         else:
-            csv_reader_options_c.header(header)
+            csv_reader_options_c.set_header(header)
 
     if prefix is not None:
-        csv_reader_options_c.prefix(prefix.encode())
+        csv_reader_options_c.set_prefix(prefix.encode())
 
     if usecols is not None:
         all_int = all(isinstance(col, int) for col in usecols)
         if all_int:
             c_use_cols_indexes.reserve(len(usecols))
             c_use_cols_indexes = usecols
-            csv_reader_options_c.use_cols_indexes(c_use_cols_indexes)
+            csv_reader_options_c.set_use_cols_indexes(c_use_cols_indexes)
         else:
             c_use_cols_names.reserve(len(usecols))
             for col_name in usecols:
                 c_use_cols_names.push_back(
                     str(col_name).encode()
                 )
-            csv_reader_options_c.use_cols_names(c_use_cols_names)
+            csv_reader_options_c.set_use_cols_names(c_use_cols_names)
 
     if delimiter is not None:
-        csv_reader_options_c.delimiter(ord(delimiter))
+        csv_reader_options_c.set_delimiter(ord(delimiter))
 
     if thousands is not None:
-        csv_reader_options_c.thousands(ord(thousands))
+        csv_reader_options_c.set_thousands(ord(thousands))
 
     if comment is not None:
-        csv_reader_options_c.comment(ord(comment))
+        csv_reader_options_c.set_comment(ord(comment))
 
     if parse_dates is not None:
         if isinstance(parse_dates, abc.Mapping):
@@ -225,8 +225,8 @@ cdef csv_reader_options make_csv_reader_options(
             else:
                 raise NotImplementedError(
                     "`parse_dates`: Nesting is unsupported")
-        csv_reader_options_c.infer_date_names(c_infer_date_names)
-        csv_reader_options_c.infer_date_indexes(c_infer_date_indexes)
+        csv_reader_options_c.set_infer_date_names(c_infer_date_names)
+        csv_reader_options_c.set_infer_date_indexes(c_infer_date_indexes)
 
     if dtype is not None:
         if isinstance(dtype, abc.Mapping):
@@ -242,25 +242,25 @@ cdef csv_reader_options make_csv_reader_options(
         else:
             c_dtypes.push_back(str(dtype).encode())
 
-        csv_reader_options_c.dtypes(c_dtypes)
+        csv_reader_options_c.set_dtypes(c_dtypes)
 
     if true_values is not None:
         c_true_values.reserve(len(true_values))
         for tv in true_values:
             c_true_values.push_back(tv.encode())
-        csv_reader_options_c.true_values(c_true_values)
+        csv_reader_options_c.set_true_values(c_true_values)
 
     if false_values is not None:
         c_false_values.reserve(len(false_values))
         for fv in c_false_values:
             c_false_values.push_back(fv.encode())
-        csv_reader_options_c.false_values(c_false_values)
+        csv_reader_options_c.set_false_values(c_false_values)
 
     if na_values is not None:
         c_na_values.reserve(len(na_values))
         for nv in na_values:
             c_na_values.push_back(nv.encode())
-        csv_reader_options_c.na_values(c_na_values)
+        csv_reader_options_c.set_na_values(c_na_values)
 
     return csv_reader_options_c
 

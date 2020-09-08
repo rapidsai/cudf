@@ -18,135 +18,91 @@ cdef extern from "cudf/io/csv.hpp" \
 
         # Getter
 
-        cudf_io_types.source_info source() except+
+        cudf_io_types.source_info get_source() except+
         # Reader settings
-        cudf_io_types.compression_type compression() except+
-        size_t byte_range_offset() except+
-        size_t byte_range_size() except+
-        vector[string] names() except+
-        string prefix() except+
-        bool mangle_dupe_cols() except+
+        cudf_io_types.compression_type get_compression() except+
+        size_t get_byte_range_offset() except+
+        size_t get_byte_range_size() except+
+        vector[string] get_names() except+
+        string get_prefix() except+
+        bool is_enabled_mangle_dupe_cols() except+
 
         # Filter settings
-        vector[string] use_cols_names() except+
-        vector[int] use_cols_indexes() except+
-        size_type nrows() except+
-        size_type skiprows() except+
-        size_type skipfooter() except+
-        size_type header() except+
+        vector[string] get_use_cols_names() except+
+        vector[int] get_use_cols_indexes() except+
+        size_type get_nrows() except+
+        size_type get_skiprows() except+
+        size_type get_skipfooter() except+
+        size_type get_header() except+
 
         # Parsing settings
-        char lineterminator() except+
-        char delimiter() except+
-        char thousands() except+
-        char decimal() except+
-        char comment() except+
-        bool windowslinetermination() except+
-        bool delim_whitespace() except+
-        bool skipinitialspace() except+
-        bool skip_blank_lines() except+
-        cudf_io_types.quote_style quoting() except+
-        char quotechar() except+
-        bool doublequote() except+
-        vector[string] infer_date_names() except+
-        vector[int] infer_date_indexes() except+
+        char get_lineterminator() except+
+        char get_delimiter() except+
+        char get_thousands() except+
+        char get_decimal() except+
+        char get_comment() except+
+        bool is_enabled_windowslinetermination() except+
+        bool is_enabled_delim_whitespace() except+
+        bool is_enabled_skipinitialspace() except+
+        bool is_enabled_skip_blank_lines() except+
+        cudf_io_types.quote_style get_quoting() except+
+        char get_quotechar() except+
+        bool is_enabled_doublequote() except+
+        vector[string] get_infer_date_names() except+
+        vector[int] get_infer_date_indexes() except+
 
         # Conversion settings
-        vector[string] dtype() except+
-        vector[string] true_values() except+
-        vector[string] false_values() except+
-        vector[string] na_values() except+
-        bool keep_default_na() except+
-        bool na_filter() except+
-        bool dayfirst() except+
-
-        cudf_io_types.source_info source() except+
-        # Reader settings
-        cudf_io_types.compression_type compression() except+
-        size_t byte_range_offset() except+
-        size_t byte_range_size() except+
-        vector[string] names() except+
-        string prefix() except+
-        bool mangle_dupe_cols() except+
-
-        # Filter settings
-        vector[string] use_cols_names() except+
-        vector[int] use_cols_indexes() except+
-        size_type nrows() except+
-        size_type skiprows() except+
-        size_type skipfooter() except+
-        size_type header() except+
-
-        # Parsing settings
-        char lineterminator() except+
-        char delimiter() except+
-        char thousands() except+
-        char decimal() except+
-        char comment() except+
-        bool windowslinetermination() except+
-        bool delim_whitespace() except+
-        bool skipinitialspace() except+
-        bool skip_blank_lines() except+
-        cudf_io_types.quote_style quoting() except+
-        char quotechar() except+
-        bool doublequote() except+
-        vector[string] infer_date_names() except+
-        vector[int] infer_date_indexes() except+
-
-        # Conversion settings
-        vector[string] dtype() except+
-        vector[string] true_values() except+
-        vector[string] false_values() except+
-        vector[string] na_values() except+
-        bool keep_default_na() except+
-        bool na_filter() except+
-        bool dayfirst() except+
-        data_type timestamp_type() except+
+        vector[string] get_dtype() except+
+        vector[string] get_true_values() except+
+        vector[string] get_false_values() except+
+        vector[string] get_na_values() except+
+        bool is_enabled_keep_default_na() except+
+        bool is_enabled_na_filter() except+
+        bool is_enabled_dayfirst() except+
 
         # setter
 
-        void source(cudf_io_types.source_info info) except+
         # Reader settings
-        void compression(cudf_io_types.compression_type comp) except+
-        void byte_range_offset(size_type val) except+
-        void byte_range_size(size_type val) except+
-        void names(vector[string] val) except+
-        void prefix(string pfx) except+
-        void mangle_dupe_cols(bool val) except+
+        void set_compression(cudf_io_types.compression_type comp) except+
+        void set_byte_range_offset(size_type val) except+
+        void set_byte_range_size(size_type val) except+
+        void set_names(vector[string] val) except+
+        void set_prefix(string pfx) except+
+        void set_mangle_dupe_cols(bool val) except+
 
         # Filter settings
-        void use_cols_names(vector[string] col_names) except+
-        void use_cols_indexes(vector[int] col_ind) except+
-        void nrows(size_type n_rows) except+
-        void skiprows(size_type val) except+
-        void skipfooter(size_type val) except+
-        void header(size_type hdr) except+
+        void set_use_cols_names(vector[string] col_names) except+
+        void set_use_cols_indexes(vector[int] col_ind) except+
+        void set_nrows(size_type n_rows) except+
+        void set_skiprows(size_type val) except+
+        void set_skipfooter(size_type val) except+
+        void set_header(size_type hdr) except+
 
         # Parsing settings
-        void lineterminator(char val) except+
-        void delimiter(char val) except+
-        void thousands(char val) except+
-        void decimal(char val) except+
-        void comment(char val) except+
-        void windowslinetermination(bool val) except+
-        void delim_whitespace(bool val) except+
-        void skipinitialspace(bool val) except+
-        void skip_blank_lines(bool val) except+
-        void quoting(cudf_io_types.quote_style style) except+
-        void quotechar(char val) except+
-        void doublequote(bool val) except+
-        void infer_date_names(vector[string]) except+
-        void infer_date_indexes(vector[int]) except+
+        void set_lineterminator(char val) except+
+        void set_delimiter(char val) except+
+        void set_thousands(char val) except+
+        void set_decimal(char val) except+
+        void set_comment(char val) except+
+        void enable_windowslinetermination(bool val) except+
+        void enable_delim_whitespace(bool val) except+
+        void enable_skipinitialspace(bool val) except+
+        void enable_skip_blank_lines(bool val) except+
+        void set_quoting(cudf_io_types.quote_style style) except+
+        void set_quotechar(char val) except+
+        void set_doublequote(bool val) except+
+        void set_infer_date_names(vector[string]) except+
+        void set_infer_date_indexes(vector[int]) except+
 
         # Conversion settings
-        void dtypes(vector[string] types) except+
-        void true_values(vector[string] vals) except+
-        void false_values(vector[string] vals) except+
-        void na_values(vector[string] vals) except+
-        void keep_default_na(bool val) except+
-        void na_filter(bool val) except+
-        void dayfirst(bool val) except+
-        void timestamp_type(data_type type) except+
+        void set_dtypes(vector[string] types) except+
+        void set_true_values(vector[string] vals) except+
+        void set_false_values(vector[string] vals) except+
+        void set_na_values(vector[string] vals) except+
+        void enable_keep_default_na(bool val) except+
+        void enable_na_filter(bool val) except+
+        void enable_dayfirst(bool val) except+
+        void set_timestamp_type(data_type type) except+
 
         @staticmethod
         csv_reader_options_builder builder(
@@ -222,26 +178,26 @@ cdef extern from "cudf/io/csv.hpp" \
     cdef cppclass csv_writer_options:
         csv_writer_options() except+
 
-        cudf_io_types.sink_info sink() except+
-        cudf_table_view.table_view table() except+
-        cudf_io_types.table_metadata metadata() except+
-        string na_rep() except+
-        bool include_header() except+
-        size_type rows_per_chunk() except+
-        string line_terminator() except+
-        char inter_column_delimiter() except+
-        string true_value() except+
-        string false_value() except+
+        cudf_io_types.sink_info get_sink() except+
+        cudf_table_view.table_view get_table() except+
+        cudf_io_types.table_metadata get_metadata() except+
+        string get_na_rep() except+
+        bool is_enabled_include_header() except+
+        size_type get_rows_per_chunk() except+
+        string get_line_terminator() except+
+        char get_inter_column_delimiter() except+
+        string get_true_value() except+
+        string get_false_value() except+
 
         # setter
-        void metadata(cudf_io_types.table_metadata* val) except+
-        void na_rep(string val) except+
-        void include_header(bool val) except+
-        void rows_per_chunk(size_type val) except+
-        void line_terminator(string term) except+
-        void inter_column_delimiter(char delim) except+
-        void true_value(string val) except+
-        void false_value(string val) except+
+        void set_metadata(cudf_io_types.table_metadata* val) except+
+        void set_na_rep(string val) except+
+        void enable_include_header(bool val) except+
+        void set_rows_per_chunk(size_type val) except+
+        void set_line_terminator(string term) except+
+        void set_inter_column_delimiter(char delim) except+
+        void set__true_value(string val) except+
+        void set_false_value(string val) except+
 
         @staticmethod
         csv_writer_options_builder builder(

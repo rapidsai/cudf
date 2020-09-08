@@ -23,9 +23,7 @@
 
 #include <cudf/io/csv.hpp>
 
-//! cuDF interfaces
 namespace cudf {
-//! IO interfaces
 namespace io {
 namespace detail {
 namespace csv {

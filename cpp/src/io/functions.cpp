@@ -128,7 +128,7 @@ table_with_metadata read_csv(csv_reader_options const& options, rmm::mr::device_
   namespace csv = cudf::io::detail::csv;
 
   CUDF_FUNC_RANGE();
-  auto reader = make_reader<csv::reader>(options.source(), options, mr);
+  auto reader = make_reader<csv::reader>(options.get_source(), options, mr);
 
   return reader->read();
 }
@@ -138,9 +138,9 @@ void write_csv(csv_writer_options const& options, rmm::mr::device_memory_resourc
 {
   using namespace cudf::io::detail;
 
-  auto writer = make_writer<csv::writer>(options.sink(), options, mr);
+  auto writer = make_writer<csv::writer>(options.get_sink(), options, mr);
 
-  writer->write(options.table(), options.metadata());
+  writer->write(options.get_table(), options.get_metadata());
 }
 
 namespace detail_orc = cudf::io::detail::orc;
