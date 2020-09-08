@@ -107,3 +107,11 @@ def _apply_filters(filters, stats):
         ):
             return True
     return False
+
+
+def _prepare_filters(filters):
+    # Coerce filters into list of lists of tuples
+    if isinstance(filters[0][0], str):
+        filters = [filters]
+
+    return filters
