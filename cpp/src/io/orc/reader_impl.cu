@@ -49,7 +49,7 @@ namespace {
 constexpr type_id to_type_id(const orc::SchemaType &schema,
                              bool use_np_dtypes,
                              type_id timestamp_type_id,
-                             bool decimals_as_float)
+                             bool decimals_as_float64)
 {
   switch (schema.kind) {
     case orc::BOOLEAN: return type_id::BOOL8;
@@ -73,7 +73,7 @@ constexpr type_id to_type_id(const orc::SchemaType &schema,
       return (use_np_dtypes) ? type_id::TIMESTAMP_MILLISECONDS : type_id::TIMESTAMP_DAYS;
     case orc::DECIMAL:
       // There isn't an arbitrary-precision type in cuDF, so map as float or int
-      return (decimals_as_float) ? type_id::FLOAT64 : type_id::INT64;
+      return (decimals_as_float64) ? type_id::FLOAT64 : type_id::INT64;
     default: break;
   }
 

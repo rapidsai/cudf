@@ -154,7 +154,7 @@ cdef orc_reader_options make_orc_reader_options(
         num_rows(num_rows).
         timestamp_type(data_type(timestamp_type)).
         use_index(use_index).
-        decimals_as_float(decimals_as_float).
+        decimals_as_float64(decimals_as_float).
         forced_decimals_scale(force_decimal_scale).
         build()
     )

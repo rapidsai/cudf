@@ -337,7 +337,7 @@ class orc_reader_options_builder {
    * @param val Boolean value to enable/disable.
    * @return this for chaining.
    */
-  orc_reader_options_builder& decimals_as_float(bool val)
+  orc_reader_options_builder& decimals_as_float64(bool val)
   {
     options._decimals_as_float64 = val;
     return *this;
