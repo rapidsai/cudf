@@ -33,9 +33,7 @@
 #include <string>
 #include <vector>
 
-//! cuDF interfaces
 namespace cudf {
-//! In-development features
 namespace io {
 /**
  * @brief To build options for `read_avro()`.

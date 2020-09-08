@@ -30,9 +30,7 @@ class RandomAccessFile;
 }
 }  // namespace arrow
 
-//! cuDF interfaces
 namespace cudf {
-//! IO interfaces
 namespace io {
 namespace detail {
 namespace json {

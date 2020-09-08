@@ -31,9 +31,7 @@
 #include <string>
 #include <vector>
 
-//! cuDF interfaces
 namespace cudf {
-//! In-development features
 namespace io {
 
 /**
