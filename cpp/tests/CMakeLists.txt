@@ -58,8 +58,7 @@ endfunction(ConfigureTest)
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
-include_directories("${CUB_INCLUDE_DIR}"
-                    "${THRUST_INCLUDE_DIR}"
+include_directories("${THRUST_INCLUDE_DIR}"
                     "${JITIFY_INCLUDE_DIR}"
                     "${LIBCUDACXX_INCLUDE_DIR}")
 
