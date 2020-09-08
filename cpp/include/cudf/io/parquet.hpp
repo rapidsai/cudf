@@ -33,9 +33,7 @@
 #include <string>
 #include <vector>
 
-//! cuDF interfaces
 namespace cudf {
-//! In-development features
 namespace io {
 
 /**
@@ -69,7 +67,7 @@ class parquet_reader_options {
   /**
    * @brief Constructor from source info.
    *
-   * @param src source information used to read parquet file
+   * @param src source information used to read parquet file.
    */
   explicit parquet_reader_options(source_info const& src) : _source(src) {}
 

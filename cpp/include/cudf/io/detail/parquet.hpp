@@ -17,9 +17,7 @@
 
 #include <cudf/io/parquet.hpp>
 
-//! cuDF interfaces
 namespace cudf {
-//! In-development features
 namespace io {
 namespace detail {
 namespace parquet {
