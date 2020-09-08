@@ -64,18 +64,18 @@ std::unique_ptr<column> remove_keys_fn(
     data_type{type_id::UINT32}, keys_view.size(), keys_positions.data());
 
   // copy the non-removed keys ( keys_to_keep_fn(idx)==true )
+  // init to max identify new nulls
   rmm::device_uvector<uint32_t> map_indices(keys_view.size(), stream);
   thrust::fill(execpol->on(stream),
                map_indices.begin(),
                map_indices.end(),
                static_cast<uint32_t>(std::numeric_limits<size_type>::max()));
-  // init -1 to identify new nulls
   std::unique_ptr<column> keys_column = [&] {
     auto table_keys = cudf::detail::copy_if(
                         table_view{{keys_view, keys_positions_view}}, keys_to_keep_fn, mr, stream)
                         ->release();
     keys_positions_view = table_keys[1]->view();
-    // build indices mapper
+    // build indices mapper (using -1 to represent max)
     // Example scatter([0,1,2][0,2,4][-1,-1,-1,-1,-1]) => [0,-1,1,-1,2]
     thrust::scatter(execpol->on(stream),
                     thrust::make_counting_iterator<uint32_t>(0),
