@@ -341,7 +341,7 @@ std::shared_ptr<pq_chunked_state> write_parquet_chunked_begin(
 void write_parquet_chunked(table_view const& table, std::shared_ptr<pq_chunked_state> state)
 {
   CUDF_FUNC_RANGE();
-  state->wp->write_chunked(table, *state);
+  state->wp->write_chunk(table, *state);
 }
 
 /**

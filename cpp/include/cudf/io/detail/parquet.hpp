@@ -111,8 +111,7 @@ class writer {
   /**
    * @brief Begins the chunked/streamed write process.
    *
-   * @param[in] pq_chunked_state State information that crosses _begin() / write_chunked() / _end()
-   * boundaries.
+   * @param[in] pq_chunked_state Internal state maintained between chunks.
    */
   void write_chunked_begin(struct pq_chunked_state& state);
 
@@ -120,16 +119,14 @@ class writer {
    * @brief Writes a single subtable as part of a larger parquet file/table write.
    *
    * @param[in] table The table information to be written
-   * @param[in] pq_chunked_state State information that crosses _begin() / write_chunked() / _end()
-   * boundaries.
+   * @param[in] pq_chunked_state Internal state maintained between chunks.
    */
-  void write_chunked(table_view const& table, struct pq_chunked_state& state);
+  void write_chunk(table_view const& table, struct pq_chunked_state& state);
 
   /**
    * @brief Finishes the chunked/streamed write process.
    *
-   * @param[in] pq_chunked_state State information that crosses _begin() / write_chunked() / _end()
-   * boundaries.
+   * @param[in] pq_chunked_state Internal state maintained between chunks.
    * @param[in] return_filemetadata If true, return the raw file metadata
    * @param[in] column_chunks_file_path Column chunks file path to be set in the raw output metadata
    *

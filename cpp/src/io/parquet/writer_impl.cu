@@ -495,7 +495,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write(
   pq_chunked_state state{metadata, SingleWriteMode::YES, stream};
 
   write_chunked_begin(state);
-  write_chunked(table, state);
+  write_chunk(table, state);
   return write_chunked_end(state, return_filemetadata, column_chunks_file_path);
 }
 
@@ -508,7 +508,7 @@ void writer::impl::write_chunked_begin(pq_chunked_state &state)
   state.current_chunk_offset = sizeof(file_header_s);
 }
 
-void writer::impl::write_chunked(table_view const &table, pq_chunked_state &state)
+void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
 {
   size_type num_columns = table.num_columns();
   size_type num_rows    = 0;
@@ -534,7 +534,7 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
                  "be specified");
   }
 
-  // first call. setup metadata. num_rows will get incremented as write_chunked is
+  // first call. setup metadata. num_rows will get incremented as write_chunk is
   // called multiple times.
   if (state.md.version == 0) {
     state.md.version  = 1;
@@ -559,8 +559,8 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
       state.md.schema[1 + i].type           = col.physical_type();
       state.md.schema[1 + i].converted_type = col.converted_type();
       // because the repetition type is global (in the sense of, not per-rowgroup or per
-      // write_chunked() call) we cannot know up front if the user is going to end up passing tables
-      // with nulls/no nulls in the multiple write_chunked() case.  so we'll do some special
+      // write_chunk() call) we cannot know up front if the user is going to end up passing tables
+      // with nulls/no nulls in the multiple write_chunk() case.  so we'll do some special
       // handling.
       //
       // if the user is explicitly saying "I am only calling this once", fall back to the original
@@ -585,11 +585,11 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
   } else {
     // verify the user isn't passing mismatched tables
     CUDF_EXPECTS(state.md.schema[0].num_children == num_columns,
-                 "Mismatch in table structure between multiple calls to write_chunked");
+                 "Mismatch in table structure between multiple calls to write_chunk");
     for (auto i = 0; i < num_columns; i++) {
       auto &col = parquet_columns[i];
       CUDF_EXPECTS(state.md.schema[1 + i].type == col.physical_type(),
-                   "Mismatch in column types between multiple calls to write_chunked");
+                   "Mismatch in column types between multiple calls to write_chunk");
     }
 
     // increment num rows
@@ -600,7 +600,7 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
   hostdevice_vector<gpu::EncColumnDesc> col_desc(num_columns);
 
   // setup gpu column description.
-  // applicable to only this _write_chunked() call
+  // applicable to only this _write_chunk() call
   for (auto i = 0; i < num_columns; i++) {
     auto &col = parquet_columns[i];
     // GPU column description
@@ -986,9 +986,9 @@ void writer::write_chunked_begin(pq_chunked_state &state)
 }
 
 // Forward to implementation
-void writer::write_chunked(table_view const &table, pq_chunked_state &state)
+void writer::write_chunk(table_view const &table, pq_chunked_state &state)
 {
-  _impl->write_chunked(table, state);
+  _impl->write_chunk(table, state);
 }
 
 // Forward to implementation
