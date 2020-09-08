@@ -7,12 +7,11 @@
 
 from multiprocessing import Pool
 
-import pandas as pd
 import numpy as np
-
+import pandas as pd
 import pyarrow as pa
-import pyarrow.parquet as pq
 from mimesis import Generic
+from pyarrow import parquet as pq
 
 
 class ColumnParameters:
@@ -148,19 +147,24 @@ def generate(
         Format to write
     """
 
+    df = get_dataframe(parameters, use_threads)
+
+    # Write
+    _write(df, path, format)
+
+
+def get_dataframe(parameters, use_threads):
     # Initialize seeds
     if parameters.seed is not None:
         np.random.seed(parameters.seed)
     column_seeds = np.arange(len(parameters.column_parameters))
     np.random.shuffle(column_seeds)
-
     # For each column, use a generic Mimesis producer to create an Iterable
     # for generating data
     for i, column_params in enumerate(parameters.column_parameters):
         column_params.generator = column_params.generator(
             Generic("en", seed=column_seeds[i])
         )
-
     # Get schema for each column
     schema = pa.schema(
         [
@@ -174,7 +178,6 @@ def generate(
             for i, column_params in enumerate(parameters.column_parameters)
         ]
     )
-
     # Initialize column data and which columns should be sorted
     column_data = [None] * len(parameters.column_parameters)
     columns_to_sort = [
@@ -182,7 +185,6 @@ def generate(
         for i, column_params in enumerate(parameters.column_parameters)
         if column_params.is_sorted
     ]
-
     # Generate data
     if not use_threads:
         for i, column_params in enumerate(parameters.column_parameters):
@@ -200,13 +202,59 @@ def generate(
         )
         pool.close()
         pool.join()
-
     # Convert to Pandas DataFrame and sort columns appropriately
     tbl = pa.Table.from_arrays(column_data, schema=schema,)
     if columns_to_sort:
         tbl = tbl.to_pandas()
         tbl = tbl.sort_values(columns_to_sort)
         tbl = pa.Table.from_pandas(tbl, schema)
+    return tbl
 
-    # Write
-    _write(tbl, path, format)
+
+def rand_dataframe(dtypes_meta, rows, seed=0):
+    column_params = []
+    for meta in dtypes_meta:
+        dtype, null_frequency, cardinality = meta
+
+        # TODO: Add other dtypes
+        if dtype == "int64":
+            column_params.append(
+                ColumnParameters(
+                    cardinality=cardinality,
+                    null_frequency=null_frequency,
+                    generator=lambda g: g.random.randints(
+                        rows, -9223372036854775808, 9223372036854775807
+                    ),
+                    is_sorted=False,
+                )
+            )
+        elif dtype == "float64":
+            finfo = np.finfo("float32")
+            column_params.append(
+                ColumnParameters(
+                    cardinality=cardinality,
+                    null_frequency=null_frequency,
+                    generator=lambda g: g.numbers.floats(
+                        start=finfo.min, end=finfo.max - 1, n=rows
+                    ),
+                    is_sorted=False,
+                )
+            )
+        elif dtype == "object":
+            column_params.append(
+                ColumnParameters(
+                    cardinality=cardinality,
+                    null_frequency=null_frequency,
+                    generator=lambda g: [
+                        g.random.randstr() for _ in range(rows)
+                    ],
+                    is_sorted=False,
+                )
+            )
+
+    df = get_dataframe(
+        Parameters(num_rows=rows, column_parameters=column_params, seed=seed,),
+        use_threads=True,
+    )
+
+    return df
