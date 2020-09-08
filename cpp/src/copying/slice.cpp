@@ -33,7 +33,7 @@ std::vector<column_view> slice(column_view const& input,
 
   std::vector<column_view> result{};
 
-  if (indices.size() == 0 or input.size() == 0) { return result; }
+  if (indices.size() == 0) { return result; }
 
   auto null_counts = cudf::detail::segmented_count_unset_bits(input.null_mask(), indices, stream);
 

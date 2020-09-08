@@ -262,11 +262,11 @@ struct SliceCornerCases : public SliceTest<int8_t> {
 TEST_F(SliceCornerCases, EmptyColumn)
 {
   cudf::column col{};
-  std::vector<cudf::size_type> indices{1, 3, 2, 4, 5, 9};
+  std::vector<cudf::size_type> indices{0, 0, 0, 0, 0, 0};
 
   std::vector<cudf::column_view> result = cudf::slice(col.view(), indices);
 
-  unsigned long expected = 0;
+  unsigned long expected = 3;
 
   EXPECT_EQ(expected, result.size());
 }
