@@ -16,9 +16,10 @@
 
 #include "csv_common.h"
 #include "csv_gpu.h"
-
 #include "datetime.cuh"
-#include "thrust/detail/copy.h"
+
+#include <io/utilities/block_utils.cuh>
+#include <io/utilities/parsing_utils.cuh>
 
 #include <cudf/detail/utilities/trie.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
@@ -30,8 +31,8 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <io/utilities/block_utils.cuh>
-#include <io/utilities/parsing_utils.cuh>
+#include <thrust/detail/copy.h>
+
 #include <type_traits>
 
 using namespace ::cudf::io;

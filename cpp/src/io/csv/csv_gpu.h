@@ -16,9 +16,11 @@
 
 #pragma once
 
-#include <rmm/thrust_rmm_allocator.h>
-#include <cudf/types.hpp>
 #include <io/utilities/parsing_utils.cuh>
+
+#include <cudf/types.hpp>
+
+#include <rmm/thrust_rmm_allocator.h>
 
 namespace cudf {
 namespace io {

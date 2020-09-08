@@ -17,22 +17,21 @@
 #include "json_common.h"
 #include "json_gpu.h"
 
-#include <thrust/find.h>
-#include <rmm/device_buffer.hpp>
+#include <io/csv/datetime.cuh>
+#include <io/utilities/parsing_utils.cuh>
 
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/detail/utilities/trie.cuh>
-
+#include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/lists/list_view.cuh>
+#include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <cudf/fixed_point/fixed_point.hpp>
-#include <cudf/lists/list_view.cuh>
-#include <cudf/strings/string_view.cuh>
+#include <rmm/device_buffer.hpp>
 
-#include <io/csv/datetime.cuh>
-#include <io/utilities/parsing_utils.cuh>
+#include <thrust/find.h>
 
 namespace cudf {
 namespace io {

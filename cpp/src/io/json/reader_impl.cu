@@ -21,10 +21,9 @@
 
 #include "reader_impl.hpp"
 
-#include <thrust/optional.h>
-
-#include <rmm/thrust_rmm_allocator.h>
-#include <rmm/device_scalar.hpp>
+#include <io/comp/io_uncomp.h>
+#include <io/utilities/parsing_utils.cuh>
+#include <io/utilities/type_conversion.cuh>
 
 #include <cudf/detail/utilities/trie.cuh>
 #include <cudf/groupby.hpp>
@@ -33,9 +32,10 @@
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <io/comp/io_uncomp.h>
-#include <io/utilities/parsing_utils.cuh>
-#include <io/utilities/type_conversion.cuh>
+#include <rmm/thrust_rmm_allocator.h>
+#include <rmm/device_scalar.hpp>
+
+#include <thrust/optional.h>
 
 namespace cudf {
 namespace io {
