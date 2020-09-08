@@ -157,9 +157,8 @@ def _filter_stripes(
     num_rows=None,
     statistics=None,
 ):
-    # Coerce filters into list of lists of tuples
-    if isinstance(filters[0][0], str):
-        filters = [filters]
+    # Prepare filters
+    filters = filterutils._prepare_filters(filters)
 
     # Read and parse file-level and stripe-level statistics
     file_statistics, stripes_statistics = (
@@ -226,9 +225,8 @@ def read_orc(
         ValueError("URL content-encoding decompression is not supported")
 
     if filters is not None:
-        # Coerce filters into list of lists of tuples
-        if isinstance(filters[0][0], str):
-            filters = [filters]
+        # Prepare filters
+        filters = filterutils._prepare_filters(filters)
 
         # Read in statistics
         file_statistics, stripes_statistics = read_orc_statistics(

@@ -274,7 +274,7 @@ std::vector<std::vector<std::string>> read_orc_statistics(source_info const& src
 table_with_metadata read_orc(orc_reader_options const& options, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto reader = make_reader<detail_orc::reader>(options.source(), options, mr);
+  auto reader = make_reader<detail_orc::reader>(options.get_source(), options, mr);
 
   return reader->read(options);
 }
@@ -283,29 +283,29 @@ table_with_metadata read_orc(orc_reader_options const& options, rmm::mr::device_
 void write_orc(orc_writer_options const& options, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto writer = make_writer<detail_orc::writer>(options.sink(), options, mr);
+  auto writer = make_writer<detail_orc::writer>(options.get_sink(), options, mr);
 
-  writer->write(options.table(), options.metadata());
+  writer->write(options.get_table(), options.get_metadata());
 }
 
 /**
  * @copydoc cudf::io::write_orc_chunked_begin
  *
  **/
-std::shared_ptr<detail_orc::orc_chunked_state> write_orc_chunked_begin(
-  chunked_orc_writer_options const& opts, rmm::mr::device_memory_resource* mr)
+std::shared_ptr<orc_chunked_state> write_orc_chunked_begin(chunked_orc_writer_options const& opts,
+                                                           rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   orc_writer_options options;
-  options.compression(opts.compression());
+  options.set_compression(opts.get_compression());
   options.enable_statistics(opts.enable_statistics());
-  auto state = std::make_shared<detail_orc::orc_chunked_state>();
-  state->wp  = make_writer<detail_orc::writer>(opts.sink(), options, mr);
+  auto state = std::make_shared<orc_chunked_state>();
+  state->wp  = make_writer<detail_orc::writer>(opts.get_sink(), options, mr);
 
   // have to make a copy of the metadata here since we can't really
   // guarantee the lifetime of the incoming pointer
-  if (opts.metadata() != nullptr) {
-    state->user_metadata_with_nullability = *opts.metadata();
+  if (opts.get_metadata() != nullptr) {
+    state->user_metadata_with_nullability = *opts.get_metadata();
     state->user_metadata                  = &state->user_metadata_with_nullability;
   }
   state->stream = 0;
@@ -317,8 +317,7 @@ std::shared_ptr<detail_orc::orc_chunked_state> write_orc_chunked_begin(
  * @copydoc cudf::io::write_orc_chunked
  *
  **/
-void write_orc_chunked(table_view const& table,
-                       std::shared_ptr<detail_orc::orc_chunked_state> state)
+void write_orc_chunked(table_view const& table, std::shared_ptr<orc_chunked_state> state)
 {
   CUDF_FUNC_RANGE();
   state->wp->write_chunked(table, *state);
@@ -328,7 +327,7 @@ void write_orc_chunked(table_view const& table,
  * @copydoc cudf::io::write_orc_chunked_end
  *
  **/
-void write_orc_chunked_end(std::shared_ptr<detail_orc::orc_chunked_state>& state)
+void write_orc_chunked_end(std::shared_ptr<orc_chunked_state>& state)
 {
   CUDF_FUNC_RANGE();
   state->wp->write_chunked_end(*state);

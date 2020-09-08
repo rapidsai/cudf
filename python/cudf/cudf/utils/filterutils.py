@@ -137,3 +137,11 @@ def _predicate_to_query(filters):
         query += ")"
 
     return query, vals
+
+
+def _prepare_filters(filters):
+    # Coerce filters into list of lists of tuples
+    if isinstance(filters[0][0], str):
+        filters = [filters]
+
+    return filters
