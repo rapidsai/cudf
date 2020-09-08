@@ -253,15 +253,9 @@ def test_orc_read_statistics(datadir):
 def test_orc_read_filtered(datadir, engine, predicate, expected_len):
     path = datadir / "TestOrcFile.testStripeLevelStats.orc"
     try:
-        pdf = cudf.read_orc(path, engine=engine)
+        df_filtered = cudf.read_orc(path, engine=engine, filters=predicate)
     except pa.ArrowIOError as e:
         pytest.skip(".orc file is not found: %s" % e)
-
-    # TODO: Remove this if not needed by this test
-    num_rows, stripes, col_names = cudf.io.read_orc_metadata(path)
-
-    # Create filtered dataframe
-    df_filtered = cudf.read_orc(path, engine=engine, filters=predicate)
 
     # Assert # of rows after filtering
     assert len(df_filtered) == expected_len
