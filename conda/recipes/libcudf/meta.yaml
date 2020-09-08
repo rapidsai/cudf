@@ -34,11 +34,9 @@ requirements:
     - flatbuffers
     - boost-cpp >=1.72.0
     - dlpack
-    - spdlog=1.7.0
   run:
     - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
     - dlpack
-    - spdlog=1.7.0
     - arrow-cpp-proc * cuda
     - boost-cpp >=1.72.0
 
