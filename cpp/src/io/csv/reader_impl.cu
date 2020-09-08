@@ -567,21 +567,15 @@ std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream)
     } else {
       d_column_flags_ = h_column_flags_;
 
-      hostdevice_vector<column_parse::stats> column_stats(num_active_cols_);
-      CUDA_TRY(cudaMemsetAsync(column_stats.device_ptr(), 0, column_stats.memory_size(), stream));
-      CUDA_TRY(cudf::io::csv::gpu::DetectColumnTypes(data_.data().get(),
-                                                     row_offsets_.data().get(),
-                                                     num_records_,
-                                                     num_actual_cols_,
-                                                     opts,
-                                                     d_column_flags_.data().get(),
-                                                     column_stats.device_ptr(),
-                                                     stream));
-      CUDA_TRY(cudaMemcpyAsync(column_stats.host_ptr(),
-                               column_stats.device_ptr(),
-                               column_stats.memory_size(),
-                               cudaMemcpyDeviceToHost,
-                               stream));
+      auto column_stats = cudf::io::csv::gpu::DetectColumnTypes(data_.data().get(),
+                                                                row_offsets_.data().get(),
+                                                                num_records_,
+                                                                num_actual_cols_,
+                                                                num_active_cols_,
+                                                                opts,
+                                                                d_column_flags_.data().get(),
+                                                                stream);
+
       CUDA_TRY(cudaStreamSynchronize(stream));
 
       for (int col = 0; col < num_active_cols_; col++) {
