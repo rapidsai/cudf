@@ -841,28 +841,50 @@ void convert_json_to_columns(rmm::device_buffer const &input_data,
 /**
  * @copydoc cudf::io::json::gpu::detect_data_types
  */
-void detect_data_types(ColumnInfo *column_infos,
-                       const char *data,
-                       size_t data_size,
-                       const ParseOptions &options,
-                       col_map_type *col_map,
-                       int num_columns,
-                       const uint64_t *rec_starts,
-                       cudf::size_type num_records,
-                       cudaStream_t stream)
+
+thrust::host_vector<cudf::io::json::ColumnInfo> detect_data_types(const char *data,
+                                                                  size_t data_size,
+                                                                  const ParseOptions &options,
+                                                                  bool do_set_null_count,
+                                                                  col_map_type *col_map,
+                                                                  int num_columns,
+                                                                  const uint64_t *rec_starts,
+                                                                  cudf::size_type num_records,
+                                                                  cudaStream_t stream)
 {
   int block_size;
   int min_grid_size;
   CUDA_TRY(
     cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, detect_data_types_kernel));
 
+  rmm::device_vector<cudf::io::json::ColumnInfo> d_column_infos(num_columns,
+                                                                cudf::io::json::ColumnInfo{});
+
+  if (do_set_null_count) {
+    // Set the null count to the row count (all fields assumes to be null).
+    thrust::for_each(rmm::exec_policy(stream)->on(stream),
+                     d_column_infos.begin(),
+                     d_column_infos.end(),
+                     [num_records] __device__(auto &info) { info.null_count = num_records; });
+  }
+
   // Calculate actual block count to use based on records count
   const int grid_size = (num_records + block_size - 1) / block_size;
 
-  detect_data_types_kernel<<<grid_size, block_size, 0, stream>>>(
-    data, data_size, options, col_map, num_columns, rec_starts, num_records, column_infos);
+  detect_data_types_kernel<<<grid_size, block_size, 0, stream>>>(data,
+                                                                 data_size,
+                                                                 options,
+                                                                 col_map,
+                                                                 num_columns,
+                                                                 rec_starts,
+                                                                 num_records,
+                                                                 d_column_infos.data().get());
 
   CUDA_TRY(cudaGetLastError());
+
+  thrust::host_vector<cudf::io::json::ColumnInfo> h_column_infos = d_column_infos;
+
+  return h_column_infos;
 }
 
 /**

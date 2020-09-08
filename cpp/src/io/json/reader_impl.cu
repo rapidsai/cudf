@@ -453,19 +453,6 @@ void reader::impl::set_column_names(cudaStream_t stream)
 }
 
 /**
- * @brief Set the null count to the row count (all fields assumes to be null).
- */
-void set_null_count(size_type num_rows,
-                    rmm::device_vector<cudf::io::json::ColumnInfo> &infos,
-                    cudaStream_t stream)
-{
-  thrust::for_each(rmm::exec_policy(stream)->on(stream),
-                   infos.begin(),
-                   infos.end(),
-                   [num_rows] __device__(auto &info) { info.null_count = num_rows; });
-}
-
-/**
  * @brief Set the data type array data member
  *
  * If user does not pass the data types, deduces types from the file content
@@ -510,22 +497,19 @@ void reader::impl::set_data_types(cudaStream_t stream)
     CUDF_EXPECTS(rec_starts_.size() != 0, "No data available for data type inference.\n");
     const auto num_columns = metadata.column_names.size();
 
-    rmm::device_vector<cudf::io::json::ColumnInfo> d_column_infos(num_columns,
-                                                                  cudf::io::json::ColumnInfo{});
-    // For object rows, it's not efficient for the kernel to determine which fields are missing in
-    // each row. Set the null count to row count; kernel reduces this value for each valid field.
-    if (key_to_col_idx_map) set_null_count(rec_starts_.size(), d_column_infos, stream);
+    auto do_set_null_count = key_to_col_idx_map != nullptr;
 
-    cudf::io::json::gpu::detect_data_types(d_column_infos.data().get(),
-                                           static_cast<const char *>(data_.data()),
-                                           data_.size(),
-                                           opts_,
-                                           get_column_map_device_ptr(),
-                                           num_columns,
-                                           rec_starts_.data().get(),
-                                           rec_starts_.size(),
-                                           stream);
-    thrust::host_vector<cudf::io::json::ColumnInfo> h_column_infos = d_column_infos;
+    auto h_column_infos =
+      cudf::io::json::gpu::detect_data_types(static_cast<const char *>(data_.data()),
+                                             data_.size(),
+                                             opts_,
+                                             do_set_null_count,
+                                             get_column_map_device_ptr(),
+                                             num_columns,
+                                             rec_starts_.data().get(),
+                                             rec_starts_.size(),
+                                             stream);
+
     for (const auto &cinfo : h_column_infos) {
       if (cinfo.null_count == static_cast<int>(rec_starts_.size())) {
         // Entire column is NULL; allocate the smallest amount of memory
