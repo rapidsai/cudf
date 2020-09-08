@@ -26,6 +26,7 @@
 #include <cudf/io/writers.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+
 #include <rmm/mr/device/default_memory_resource.hpp>
 
 #include <memory>
@@ -38,112 +39,134 @@ namespace cudf {
 //! In-development features
 namespace io {
 /**
- * @brief Builds settings to use for `read_orc()`
+ * @brief Builds settings to use for `read_orc()`.
  *
  * @ingroup io_readers
  */
 class orc_reader_options_builder;
 
 /**
- * @brief Settings to use for `read_orc()`
+ * @brief Settings to use for `read_orc()`.
  *
  * @ingroup io_readers
  */
 class orc_reader_options {
   source_info _source;
 
-  /// Names of column to read; empty is all
+  // Names of column to read; empty is all
   std::vector<std::string> _columns;
 
-  /// List of individual stripes to read (ignored if empty)
+  // List of individual stripes to read (ignored if empty)
   std::vector<size_type> _stripes;
-  /// Rows to skip from the start; -1 is none
+  // Rows to skip from the start;
   size_type _skip_rows = 0;
-  /// Rows to read; -1 is all
+  // Rows to read; -1 is all
   size_type _num_rows = -1;
 
-  /// Whether to use row index to speed-up reading
+  // Whether to use row index to speed-up reading
   bool _use_index = true;
 
-  /// Whether to use numpy-compatible dtypes
+  // Whether to use numpy-compatible dtypes
   bool _use_np_dtypes = true;
-  /// Cast timestamp columns to a specific type
+  // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
 
-  /// Whether to convert decimals to float64
+  // Whether to convert decimals to float64
   bool _decimals_as_float = true;
-  /// For decimals as int, optional forced decimal scale;
-  /// -1 is auto (column scale), >=0: number of fractional digits
+  // For decimals as int, optional forced decimal scale;
+  // -1 is auto (column scale), >=0: number of fractional digits
   size_type _forced_decimals_scale = -1;
 
   friend orc_reader_options_builder;
 
+  /**
+   * @brief Constructor from source info.
+   *
+   * @param src source information used to read orc file.
+   */
   explicit orc_reader_options(source_info const& src) : _source(src) {}
 
  public:
-  explicit orc_reader_options() = default;
+  /**
+   * @brief Default constructor.
+   *
+   * This has been added since Cython requires a default constructor to create objects on stack.
+   */
+  orc_reader_options() = default;
 
   /**
-   * @brief Returns source_info
+   * @brief Creates `orc_reader_options_builder` which will build `orc_reader_options`.
+   *
+   * @param src Source information to read orc file.
+   * @return Builder to build reader options.
    */
-  source_info const& source() const { return _source; }
+  static orc_reader_options_builder builder(source_info const& src);
 
   /**
-   * @brief Returns names of the column to read
+   * @brief Returns source info.
    */
-  std::vector<std::string> const& columns() const { return _columns; }
+  source_info const& get_source() const { return _source; }
 
   /**
-   * @brief Returns list of individual stripes to read
+   * @brief Returns names of the columns to read.
    */
-  std::vector<size_type> const& stripes() const { return _stripes; }
+  std::vector<std::string> const& get_columns() const { return _columns; }
 
   /**
-   * @brief Returns number of rows to skip from the start
+   * @brief Returns list of individual stripes to read.
    */
-  size_type skip_rows() const { return _skip_rows; }
+  std::vector<size_type> const& get_stripes() const { return _stripes; }
 
   /**
-   * @brief Returns number of row to read
+   * @brief Returns number of rows to skip from the start.
    */
-  size_type num_rows() const { return _num_rows; }
+  size_type get_skip_rows() const { return _skip_rows; }
 
   /**
-   * @brief Whether to use row index to speed-up reading
+   * @brief Returns number of row to read.
    */
-  bool use_index() const { return _use_index; }
+  size_type get_num_rows() const { return _num_rows; }
 
   /**
-   * @brief Whether to use numpy-compatible dtypes
+   * @brief Whether to use row index to speed-up reading.
    */
-  bool use_np_dtypes() const { return _use_np_dtypes; }
+  bool is_enabled_use_index() const { return _use_index; }
 
   /**
-   * @brief Returns timestamp type to which timestamp column will be cast
+   * @brief Whether to use numpy-compatible dtypes.
    */
-  data_type timestamp_type() const { return _timestamp_type; }
+  bool is_enabled_use_np_dtypes() const { return _use_np_dtypes; }
 
   /**
-   * @brief Whether to convert decimals to float64
+   * @brief Returns timestamp type to which timestamp column will be cast.
    */
-  bool decimals_as_float() const { return _decimals_as_float; }
+  data_type get_timestamp_type() const { return _timestamp_type; }
 
   /**
-   * @brief Returns whether decimal scale is inferred or forced to have limited fractional digits
+   * @brief Whether to convert decimals to float64.
    */
-  size_type forced_decimals_scale() const { return _forced_decimals_scale; }
+  bool is_enabled_decimals_as_float() const { return _decimals_as_float; }
+
+  /**
+   * @brief Returns whether decimal scale is inferred or forced to have limited fractional digits.
+   */
+  size_type get_forced_decimals_scale() const { return _forced_decimals_scale; }
 
   // Setters
 
   /**
-   * @brief Sets names of the column to read
+   * @brief Sets names of the column to read.
+   *
+   * @param col_names Vector of column names.
    */
-  void columns(std::vector<std::string> col_names) { _columns = std::move(col_names); }
+  void set_columns(std::vector<std::string> col_names) { _columns = std::move(col_names); }
 
   /**
-   * @brief Sets list of individual stripes to read
+   * @brief Sets list of individual stripes to read.
+   *
+   * @param strps Vector of individual stripes.
    */
-  void stripes(std::vector<size_type> strps)
+  void set_stripes(std::vector<size_type> strps)
   {
     CUDF_EXPECTS(strps.empty() or (_skip_rows == 0 and _num_rows == -1),
                  "Can't set both stripes along with skip_rows/num_rows");
@@ -151,64 +174,86 @@ class orc_reader_options {
   }
 
   /**
-   * @brief Sets number of rows to skip from the start
+   * @brief Sets number of rows to skip from the start.
+   *
+   * @param rows Number of rows.
    */
-  void skip_rows(size_type rows)
+  void set_skip_rows(size_type rows)
   {
     CUDF_EXPECTS(rows == 0 or _stripes.empty(), "Can't set both skip_rows along with stripes");
     _skip_rows = rows;
   }
 
   /**
-   * @brief Sets number of row to read
+   * @brief Sets number of row to read.
+   *
+   * @param nrows Number of rows.
    */
-  void num_rows(size_type nrows)
+  void set_num_rows(size_type nrows)
   {
     CUDF_EXPECTS(nrows == -1 or _stripes.empty(), "Can't set both num_rows along with stripes");
     _num_rows = (nrows != 0) ? nrows : -1;
   }
 
   /**
-   * @brief Enable/Disable use of row index to speed-up reading
+   * @brief Enable/Disable use of row index to speed-up reading.
+   *
+   * @param use Boolean value to enable/disable row index use.
    */
-  void use_index(bool use) { _use_index = use; }
+  void set_use_index(bool use) { _use_index = use; }
 
   /**
    * @brief Enable/Disable use of numpy-compatible dtypes
+   *
+   * @param rows Boolean value to enable/disable.
    */
-  void use_np_dtypes(bool use) { _use_np_dtypes = use; }
+  void set_use_np_dtypes(bool use) { _use_np_dtypes = use; }
 
   /**
-   * @brief Returns timestamp type to which timestamp column will be cast
+   * @brief Sets timestamp type to which timestamp column will be cast.
+   *
+   * @param type Type of timestamp.
    */
-  void timestamp_type(data_type type) { _timestamp_type = type; }
+  void set_timestamp_type(data_type type) { _timestamp_type = type; }
 
   /**
-   * @brief Enable/Disable convertion of decimals to float64
+   * @brief Enable/Disable conversion of decimals to float64.
+   *
+   * @param val Boolean value to enable/disable.
    */
-  void decimals_as_float(bool val) { _decimals_as_float = val; }
+  void set_decimals_as_float(bool val) { _decimals_as_float = val; }
 
   /**
-   * @brief Sets whether decimal scale is inferred or forced to have limited fractional digits
+   * @brief Sets whether decimal scale is inferred or forced to have limited fractional digits.
+   *
+   * @param val Length of fractional digits.
    */
-  void forced_decimals_scale(size_type val) { _forced_decimals_scale = val; }
-
-  /**
-   * @brief Creates `orc_reader_options_builder` which is used to update options
-   */
-  static orc_reader_options_builder builder(source_info const& src);
+  void set_forced_decimals_scale(size_type val) { _forced_decimals_scale = val; }
 };
 
 class orc_reader_options_builder {
   orc_reader_options options;
 
  public:
+  /**
+   * @brief Default constructor.
+   *
+   * This has been added since Cython requires a default constructor to create objects on stack.
+   */
   explicit orc_reader_options_builder() = default;
 
+  /**
+   * @brief Constructor from source info.
+   *
+   * @param src The source information used to read orc file.
+   */
   explicit orc_reader_options_builder(source_info const& src) : options{src} {};
 
   /**
-   * @brief Sets names of the column to read
+   * @brief Sets names of the column to read.
+   *
+   * @param col_names Vector of column names.
+   * @return this for chaining.
    */
   orc_reader_options_builder& columns(std::vector<std::string> col_names)
   {
@@ -217,34 +262,46 @@ class orc_reader_options_builder {
   }
 
   /**
-   * @brief Sets list of individual stripes to read
+   * @brief Sets list of individual stripes to read.
+   *
+   * @param strps Vector of individual stripes.
+   * @return this for chaining.
    */
   orc_reader_options_builder& stripes(std::vector<size_type> strps)
   {
-    options.stripes(std::move(strps));
+    options.set_stripes(std::move(strps));
     return *this;
   }
 
   /**
-   * @brief Sets number of rows to skip from the start
+   * @brief Sets number of rows to skip from the start.
+   *
+   * @param rows Number of rows.
+   * @return this for chaining.
    */
   orc_reader_options_builder& skip_rows(size_type rows)
   {
-    options.skip_rows(rows);
+    options.set_skip_rows(rows);
     return *this;
   }
 
   /**
-   * @brief Sets number of row to read
+   * @brief Sets number of row to read.
+   *
+   * @param nrows Number of rows.
+   * @return this for chaining.
    */
   orc_reader_options_builder& num_rows(size_type nrows)
   {
-    options.num_rows(nrows);
+    options.set_num_rows(nrows);
     return *this;
   }
 
   /**
-   * @brief Enable/Disable use of row index to speed-up reading
+   * @brief Enable/Disable use of row index to speed-up reading.
+   *
+   * @param use Boolean value to enable/disable row index use.
+   * @return this for chaining.
    */
   orc_reader_options_builder& use_index(bool use)
   {
@@ -253,7 +310,10 @@ class orc_reader_options_builder {
   }
 
   /**
-   * @brief Enable/Disable use of numpy-compatible dtypes
+   * @brief Enable/Disable use of numpy-compatible dtypes.
+   *
+   * @param rows Boolean value to enable/disable.
+   * @return this for chaining.
    */
   orc_reader_options_builder& use_np_dtypes(bool use)
   {
@@ -262,7 +322,10 @@ class orc_reader_options_builder {
   }
 
   /**
-   * @brief Returns timestamp type to which timestamp column will be cast
+   * @brief Sets timestamp type to which timestamp column will be cast.
+   *
+   * @param type Type of timestamp.
+   * @return this for chaining.
    */
   orc_reader_options_builder& timestamp_type(data_type type)
   {
@@ -271,7 +334,10 @@ class orc_reader_options_builder {
   }
 
   /**
-   * @brief Enable/Disable convertion of decimals to float64
+   * @brief Enable/Disable conversion of decimals to float64.
+   *
+   * @param val Boolean value to enable/disable.
+   * @return this for chaining.
    */
   orc_reader_options_builder& decimals_as_float(bool val)
   {
@@ -280,7 +346,10 @@ class orc_reader_options_builder {
   }
 
   /**
-   * @brief Sets whether decimal scale is inferred or forced to have limited fractional digits
+   * @brief Sets whether decimal scale is inferred or forced to have limited fractional digits.
+   *
+   * @param val Length of fractional digits.
+   * @return this for chaining.
    */
   orc_reader_options_builder& forced_decimals_scale(size_type val)
   {
@@ -289,18 +358,20 @@ class orc_reader_options_builder {
   }
 
   /**
-   * @brief move orc_reader_options member once options is built
+   * @brief move orc_reader_options member once it's built.
    */
   operator orc_reader_options &&() { return std::move(options); }
 
   /**
-   * @brief move orc_reader_options member once options is built
+   * @brief move orc_reader_options member once it's built.
+   *
+   * This has been added since Cython does not support overloading of conversion operators.
    */
   orc_reader_options&& build() { return std::move(options); }
 };
 
 /**
- * @brief Reads an ORC dataset into a set of columns
+ * @brief Reads an ORC dataset into a set of columns.
  *
  * @ingroup io_readers
  *
@@ -314,114 +385,152 @@ class orc_reader_options_builder {
  *  auto result = cudf::read_orc(options);
  * @endcode
  *
- * @param options Settings for controlling reading behavior
+ * @param options Settings for controlling reading behavior.
  * @param mr Device memory resource used to allocate device memory of the table in the returned
- * table_with_metadata
+ * table_with_metadata.
  *
- * @return The set of columns
+ * @return The set of columns.
  */
 table_with_metadata read_orc(orc_reader_options const& options,
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Builds settings to use for `write_orc()`
+ * @brief Builds settings to use for `write_orc()`.
  *
  * @ingroup io_writers
  */
 class orc_writer_options_builder;
 
 /**
- * @brief Settings to use for `write_orc()`
+ * @brief Settings to use for `write_orc()`.
  *
  * @ingroup io_writers
  */
 class orc_writer_options {
-  /// Specify the sink to use for writer output
+  // Specify the sink to use for writer output
   sink_info _sink;
-  /// Specify the compression format to use
+  // Specify the compression format to use
   compression_type _compression = compression_type::AUTO;
-  /// Enable writing column statistics
+  // Enable writing column statistics
   bool _enable_statistics = true;
-  /// Set of columns to output
+  // Set of columns to output
   table_view _table;
-  /// Optional associated metadata
+  // Optional associated metadata
   const table_metadata* _metadata = nullptr;
 
   friend orc_writer_options_builder;
 
+  /**
+   * @brief Constructor from sink and table.
+   *
+   * @param sink The sink used for writer output.
+   * @param table Table to be written to output.
+   */
   explicit orc_writer_options(sink_info const& sink, table_view const& table)
     : _sink(sink), _table(table)
   {
   }
 
  public:
+  /**
+   * @brief Default constructor.
+   *
+   * This has been added since Cython requires a default constructor to create objects on stack.
+   */
   explicit orc_writer_options() = default;
 
   /**
-   * @brief Returns sink info
+   * @brief Create builder to create `orc_writer_options`.
+   *
+   * @param sink The sink used for writer output.
+   * @param table Table to be written to output.
+   *
+   * @return Builder to build `orc_writer_options`.
    */
-  sink_info const& sink() const { return _sink; }
+  static orc_writer_options_builder builder(sink_info const& sink, table_view const& table);
 
   /**
-   * @brief Returns compression type
+   * @brief Returns sink info.
    */
-  compression_type compression() const { return _compression; }
+  sink_info const& get_sink() const { return _sink; }
 
   /**
-   * @brief Whether writing column statistics is enabled/disabled
+   * @brief Returns compression type.
+   */
+  compression_type get_compression() const { return _compression; }
+
+  /**
+   * @brief Whether writing column statistics is enabled/disabled.
    */
   bool enable_statistics() const { return _enable_statistics; }
 
   /**
-   * @brief Returns table to be written to output
+   * @brief Returns table to be written to output.
    */
-  table_view table() const { return _table; }
+  table_view get_table() const { return _table; }
 
   /**
-   * @brief Returns associated metadata
+   * @brief Returns associated metadata.
    */
-  table_metadata const* metadata() const { return _metadata; }
+  table_metadata const* get_metadata() const { return _metadata; }
 
   // Setters
 
   /**
-   * @brief Sets compression type
+   * @brief Sets compression type.
+   *
+   * @param comp Compression type.
    */
-  void compression(compression_type comp) { _compression = comp; }
+  void set_compression(compression_type comp) { _compression = comp; }
 
   /**
-   * @brief Enable/Disable writing column statistics
+   * @brief Enable/Disable writing column statistics.
+   *
+   * @param val Boolean value to enable/disable statistics.
    */
   void enable_statistics(bool val) { _enable_statistics = val; }
 
   /**
-   * @brief Returns table to be written to output
+   * @brief Sets table to be written to output.
+   *
+   * @param tbl Table for the output.
    */
-  void table(table_view tbl) { _table = tbl; }
+  void set_table(table_view tbl) { _table = tbl; }
 
   /**
-   * @brief Returns associated metadata
+   * @brief Sets associated metadata
+   *
+   * @param meta Associated metadata.
    */
-  void metadata(table_metadata* meta) { _metadata = meta; }
-
-  /**
-   * @brief Returns builder to update options
-   */
-  static orc_writer_options_builder builder(sink_info const& sink, table_view const& table);
+  void set_metadata(table_metadata* meta) { _metadata = meta; }
 };
 
 class orc_writer_options_builder {
   orc_writer_options options;
 
  public:
+  /**
+   * @brief Default constructor.
+   *
+   * This has been added since Cython requires a default constructor to create objects on stack.
+   */
   orc_writer_options_builder() = default;
 
+  /**
+   * @brief Constructor from sink and table.
+   *
+   * @param sink The sink used for writer output.
+   * @param table Table to be written to output.
+   */
   orc_writer_options_builder(sink_info const& sink, table_view const& table) : options{sink, table}
   {
   }
 
   /**
-   * @brief Sets compression type
+   * @brief Sets compression type.
+   *
+   * @param compression The compression type to use.
+   * @return this for chaining.
    */
   orc_writer_options_builder& compression(compression_type comp)
   {
@@ -430,7 +539,10 @@ class orc_writer_options_builder {
   }
 
   /**
-   * @brief Enable/Disable writing column statistics
+   * @brief Enable/Disable writing column statistics.
+   *
+   * @param val Boolean value to enable/disable.
+   * @return this for chaining.
    */
   orc_writer_options_builder& enable_statistics(bool val)
   {
@@ -439,7 +551,10 @@ class orc_writer_options_builder {
   }
 
   /**
-   * @brief Returns table to be written to output
+   * @brief Sets table to be written to output.
+   *
+   * @param tbl Table for the output.
+   * @return this for chaining.
    */
   orc_writer_options_builder& table(table_view tbl)
   {
@@ -448,7 +563,10 @@ class orc_writer_options_builder {
   }
 
   /**
-   * @brief Returns associated metadata
+   * @brief Sets associated metadata.
+   *
+   * @param meta Associated metadata.
+   * @return this for chaining.
    */
   orc_writer_options_builder& metadata(table_metadata* meta)
   {
@@ -457,18 +575,20 @@ class orc_writer_options_builder {
   }
 
   /**
-   * @brief move orc_writer_options member once options is built
+   * @brief move orc_writer_options member once it's built.
    */
   operator orc_writer_options &&() { return std::move(options); }
 
   /**
-   * @brief move orc_writer_options member once options is built
+   * @brief move orc_writer_options member once it's built.
+   *
+   * This has been added since Cython does not support overloading of conversion operators.
    */
   orc_writer_options&& build() { return std::move(options); }
 };
 
 /**
- * @brief Writes a set of columns to ORC format
+ * @brief Writes a set of columns to ORC format.
  *
  * @ingroup io_writers
  *
@@ -482,94 +602,127 @@ class orc_writer_options_builder {
  *  cudf::write_orc(options);
  * @endcode
  *
- * @param options Settings for controlling reading behavior
- * @param mr Device memory resource to use for device memory allocation
+ * @param options Settings for controlling reading behavior.
+ * @param mr Device memory resource to use for device memory allocation.
  */
 void write_orc(orc_writer_options const& options,
                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Builds settings to use for `write_orc_chunked()`
+ * @brief Builds settings to use for `write_orc_chunked()`.
  *
  * @ingroup io_writers
  */
 class chunked_orc_writer_options_builder;
 
 /**
- * @brief Settings to use for `write_orc_chunked()`
+ * @brief Settings to use for `write_orc_chunked()`.
  *
  * @ingroup io_writers
  */
 class chunked_orc_writer_options {
-  /// Specify the sink to use for writer output
+  // Specify the sink to use for writer output
   sink_info _sink;
-  /// Specify the compression format to use
+  // Specify the compression format to use
   compression_type _compression = compression_type::AUTO;
-  /// Enable writing column statistics
+  // Enable writing column statistics
   bool _enable_statistics = true;
-  /// Optional associated metadata
+  // Optional associated metadata
   const table_metadata_with_nullability* _metadata = nullptr;
 
   friend chunked_orc_writer_options_builder;
 
+  /**
+   * @brief Constructor from sink and table.
+   *
+   * @param sink The sink used for writer output.
+   */
   chunked_orc_writer_options(sink_info const& sink) : _sink(sink) {}
 
  public:
+  /**
+   * @brief Default constructor.
+   *
+   * This has been added since Cython requires a default constructor to create objects on stack.
+   */
   explicit chunked_orc_writer_options() = default;
 
   /**
-   * @brief Returns sink info
+   * @brief Create builder to create `chunked_orc_writer_options`.
+   *
+   * @param sink The sink used for writer output.
+   *
+   * @return Builder to build chunked_orc_writer_options.
    */
-  sink_info const& sink() const { return _sink; }
+  static chunked_orc_writer_options_builder builder(sink_info const& sink);
 
   /**
-   * @brief Returns compression type
+   * @brief Returns sink info.
    */
-  compression_type compression() const { return _compression; }
+  sink_info const& get_sink() const { return _sink; }
 
   /**
-   * @brief Whether writing column statistics is enabled/disabled
+   * @brief Returns compression type.
+   */
+  compression_type get_compression() const { return _compression; }
+
+  /**
+   * @brief Whether writing column statistics is enabled/disabled.
    */
   bool enable_statistics() const { return _enable_statistics; }
 
   /**
-   * @brief Returns associated metadata
+   * @brief Returns associated metadata.
    */
-  table_metadata_with_nullability const* metadata() const { return _metadata; }
+  table_metadata_with_nullability const* get_metadata() const { return _metadata; }
 
   // Setters
 
   /**
-   * @brief Sets compression type
+   * @brief Sets compression type.
+   *
+   * @param comp The compression type to use.
    */
-  void compression(compression_type comp) { _compression = comp; }
+  void set_compression(compression_type comp) { _compression = comp; }
 
   /**
-   * @brief Enable/Disable writing column statistics
+   * @brief Enable/Disable writing column statistics.
+   *
+   * @param val Boolean value to enable/disable.
    */
   void enable_statistics(bool val) { _enable_statistics = val; }
 
   /**
-   * @brief Returns associated metadata
+   * @brief Sets associated metadata.
+   *
+   * @param meta Associated metadata.
    */
   void metadata(table_metadata_with_nullability* meta) { _metadata = meta; }
-
-  /**
-   * @brief Returns builder to update options
-   */
-  static chunked_orc_writer_options_builder builder(sink_info const& sink);
 };
 
 class chunked_orc_writer_options_builder {
   chunked_orc_writer_options options;
 
  public:
+  /**
+   * @brief Default constructor.
+   *
+   * This has been added since Cython requires a default constructor to create objects on stack.
+   */
   chunked_orc_writer_options_builder() = default;
 
-  chunked_orc_writer_options_builder(sink_info const& sink) : options{sink} {}
+  /**
+   * @brief Constructor from sink and table.
+   *
+   * @param sink The sink used for writer output.
+   */
+  explicit chunked_orc_writer_options_builder(sink_info const& sink) : options{sink} {}
 
   /**
-   * @brief Sets compression type
+   * @brief Sets compression type.
+   *
+   * @param comp The compression type to use.
+   * @return this for chaining.
    */
   chunked_orc_writer_options_builder& compression(compression_type comp)
   {
@@ -578,7 +731,10 @@ class chunked_orc_writer_options_builder {
   }
 
   /**
-   * @brief Enable/Disable writing column statistics
+   * @brief Enable/Disable writing column statistics.
+   *
+   * @param val Boolean value to enable/disable.
+   * @return this for chaining.
    */
   chunked_orc_writer_options_builder& enable_statistics(bool val)
   {
@@ -587,7 +743,10 @@ class chunked_orc_writer_options_builder {
   }
 
   /**
-   * @brief Returns associated metadata
+   * @brief Sets associated metadata.
+   *
+   * @param meta Associated metadata.
+   * @return this for chaining.
    */
   chunked_orc_writer_options_builder& metadata(table_metadata_with_nullability* meta)
   {
@@ -596,24 +755,22 @@ class chunked_orc_writer_options_builder {
   }
 
   /**
-   * @brief move chunked_rc_writer_options member once options is built
+   * @brief move chunked_orc_writer_options member once it's built.
    */
   operator chunked_orc_writer_options &&() { return std::move(options); }
 
   /**
-   * @brief move chunked_rc_writer_options member once options is built
+   * @brief move chunked_orc_writer_options member once it's built.
+   *
+   * This has been added since Cython does not support overloading of conversion operators.
    */
   chunked_orc_writer_options&& build() { return std::move(options); }
 };
 
-namespace detail {
-namespace orc {
 /**
  * @brief Forward declaration of anonymous chunked-writer state struct.
  */
 struct orc_chunked_state;
-}  // namespace orc
-}  // namespace detail
 
 /**
  * @brief Begin the process of writing an ORC file in a chunked/stream form.
@@ -628,7 +785,8 @@ struct orc_chunked_state;
  * @code
  *  ...
  *  std::string filepath = "dataset.orc";
- *  cudf::io::chunked_orc_writer_options options{cudf::sink_info(filepath), table->view()};
+ *  cudf::io::chunked_orc_writer_options options = cudf::io::chunked_orc_writer_options
+ * options::builder(cudf::sink_info(filepath));
  *  ...
  *  auto state = cudf::write_orc_chunked_begin(options);
  *    cudf::write_orc_chunked(table0, state);
@@ -637,14 +795,14 @@ struct orc_chunked_state;
  *  cudf_write_orc_chunked_end(state);
  * @endcode
  *
- * @param[in] options Settings for controlling writing behavior
- * @param[in] mr Device memory resource to use for device memory allocation
+ * @param[in] options Settings for controlling writing behavior.
+ * @param[in] mr Device memory resource to use for device memory allocation.
  *
  * @returns pointer to an anonymous state structure storing information about the chunked write.
  * this pointer must be passed to all subsequent write_orc_chunked() and write_orc_chunked_end()
  *          calls.
  */
-std::shared_ptr<detail::orc::orc_chunked_state> write_orc_chunked_begin(
+std::shared_ptr<orc_chunked_state> write_orc_chunked_begin(
   chunked_orc_writer_options const& options,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
@@ -658,10 +816,9 @@ std::shared_ptr<detail::orc::orc_chunked_state> write_orc_chunked_begin(
  *
  * @param[in] table The table data to be written.
  * @param[in] state Opaque state information about the writer process. Must be the same pointer
- * returned from write_orc_chunked_begin()
+ * returned from write_orc_chunked_begin().
  */
-void write_orc_chunked(table_view const& table,
-                       std::shared_ptr<detail::orc::orc_chunked_state> state);
+void write_orc_chunked(table_view const& table, std::shared_ptr<orc_chunked_state> state);
 
 /**
  * @brief Finish writing a chunked/stream orc file.
@@ -669,9 +826,9 @@ void write_orc_chunked(table_view const& table,
  * @ingroup io_writers
  *
  * @param[in] state Opaque state information about the writer process. Must be the same pointer
- * returned from write_orc_chunked_begin()
+ * returned from write_orc_chunked_begin().
  */
-void write_orc_chunked_end(std::shared_ptr<detail::orc::orc_chunked_state>& state);
+void write_orc_chunked_end(std::shared_ptr<orc_chunked_state>& state);
 
 }  // namespace io
 }  // namespace cudf

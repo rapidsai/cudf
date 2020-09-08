@@ -35,15 +35,13 @@
 
 namespace cudf {
 namespace io {
-namespace detail {
-namespace orc {
 /**
  * @brief Chunked writer state struct. Contains various pieces of information
  *        needed that span the begin() / write() / end() call process.
  */
 struct orc_chunked_state {
   /// The writer to be used
-  std::unique_ptr<writer> wp;
+  std::unique_ptr<detail::orc::writer> wp;
   /// Cuda stream to be used
   cudaStream_t stream;
   /// Overall file metadata.  Filled in during the process and written during write_chunked_end()
@@ -61,7 +59,5 @@ struct orc_chunked_state {
   bool single_write_mode = false;
 };
 
-}  // namespace orc
-}  // namespace detail
 }  // namespace io
 }  // namespace cudf
