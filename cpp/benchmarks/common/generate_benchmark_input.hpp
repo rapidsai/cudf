@@ -106,7 +106,7 @@ template <typename T>
 struct distribution_params<T, typename std::enable_if_t<std::is_same<T, cudf::list_view>::value>> {
   cudf::type_id element_type;
   distribution_params<uint32_t> length_params;
-  cudf::size_type max_nesting_depth;
+  cudf::size_type max_depth;
 };
 
 template <typename T>
@@ -194,10 +194,10 @@ class data_profile {
     return {};
   }
 
-  void set_bool_probability(double p) { bool_probability = p; }
-  void set_null_frequency(double f) { null_frequency = f; }
-  void set_cardinality(cudf::size_type c) { cardinality = c; }
-  void set_avg_run_length(cudf::size_type avg_rl) { avg_run_length = avg_rl; }
+  auto get_bool_probability() const { return bool_probability; }
+  auto get_null_frequency() const { return null_frequency; };
+  auto get_cardinality() const { return cardinality; };
+  auto get_avg_run_length() const { return avg_run_length; };
 
   template <typename T,
             typename Type_enum,
@@ -235,10 +235,13 @@ class data_profile {
     }
   }
 
-  auto get_bool_probability() const { return bool_probability; }
-  auto get_null_frequency() const { return null_frequency; };
-  auto get_cardinality() const { return cardinality; };
-  auto get_avg_run_length() const { return avg_run_length; };
+  void set_bool_probability(double p) { bool_probability = p; }
+  void set_null_frequency(double f) { null_frequency = f; }
+  void set_cardinality(cudf::size_type c) { cardinality = c; }
+  void set_avg_run_length(cudf::size_type avg_rl) { avg_run_length = avg_rl; }
+
+  void set_list_depth(cudf::size_type max_depth) { list_dist_desc.max_depth = max_depth; }
+  void set_list_type(cudf::type_id type) { list_dist_desc.element_type = type; }
 };
 
 struct table_size_bytes {

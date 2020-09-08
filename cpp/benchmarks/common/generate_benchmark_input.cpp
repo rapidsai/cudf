@@ -108,7 +108,7 @@ size_t avg_element_size<cudf::list_view>(data_profile const& profile)
   auto const dist_params       = profile.get_distribution_params<cudf::list_view>();
   auto const single_level_mean = get_distribution_mean(dist_params.length_params);
   auto const element_size      = cudf::size_of(cudf::data_type{dist_params.element_type});
-  return element_size * pow(single_level_mean, dist_params.max_nesting_depth);
+  return element_size * pow(single_level_mean, dist_params.max_depth);
 }
 
 struct avg_element_size_fn {
@@ -439,7 +439,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
 {
   auto const dist_params       = profile.get_distribution_params<cudf::list_view>();
   auto const single_level_mean = get_distribution_mean(dist_params.length_params);
-  auto const num_elements      = num_rows * pow(single_level_mean, dist_params.max_nesting_depth);
+  auto const num_elements      = num_rows * pow(single_level_mean, dist_params.max_depth);
 
   auto child_column = cudf::type_dispatcher(
     cudf::data_type(dist_params.element_type), create_rand_col_fn{}, profile, engine, num_elements);
@@ -447,7 +447,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
     random_value_fn<uint32_t>{profile.get_distribution_params<cudf::list_view>().length_params};
   auto valid_dist = std::bernoulli_distribution{1. - profile.get_null_frequency()};
 
-  for (int lvl = 0; lvl < dist_params.max_nesting_depth; ++lvl) {
+  for (int lvl = 0; lvl < dist_params.max_depth; ++lvl) {
     auto const num_rows = child_column->size() / single_level_mean;
 
     std::vector<int32_t> offsets{0};
