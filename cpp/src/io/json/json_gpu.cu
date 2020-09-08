@@ -16,6 +16,7 @@
 
 #include "json_common.h"
 #include "json_gpu.h"
+#include "thrust/detail/copy.h"
 
 #include <io/csv/datetime.cuh>
 #include <io/utilities/parsing_utils.cuh>
@@ -841,15 +842,15 @@ void convert_json_to_columns(rmm::device_buffer const &input_data,
  * @copydoc cudf::io::json::gpu::detect_data_types
  */
 
-thrust::host_vector<cudf::io::json::ColumnInfo> detect_data_types(const char *data,
-                                                                  size_t data_size,
-                                                                  const ParseOptions &options,
-                                                                  bool do_set_null_count,
-                                                                  col_map_type *col_map,
-                                                                  int num_columns,
-                                                                  const uint64_t *rec_starts,
-                                                                  cudf::size_type num_records,
-                                                                  cudaStream_t stream)
+std::vector<cudf::io::json::ColumnInfo> detect_data_types(const char *data,
+                                                          size_t data_size,
+                                                          const ParseOptions &options,
+                                                          bool do_set_null_count,
+                                                          col_map_type *col_map,
+                                                          int num_columns,
+                                                          const uint64_t *rec_starts,
+                                                          cudf::size_type num_records,
+                                                          cudaStream_t stream)
 {
   int block_size;
   int min_grid_size;
@@ -881,7 +882,10 @@ thrust::host_vector<cudf::io::json::ColumnInfo> detect_data_types(const char *da
 
   CUDA_TRY(cudaGetLastError());
 
-  thrust::host_vector<cudf::io::json::ColumnInfo> h_column_infos = d_column_infos;
+  auto h_column_infos = std::vector<cudf::io::json::ColumnInfo>{};
+  h_column_infos.reserve(num_columns);
+
+  thrust::copy(d_column_infos.begin(), d_column_infos.end(), h_column_infos.begin());
 
   return h_column_infos;
 }

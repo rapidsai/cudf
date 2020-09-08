@@ -75,15 +75,15 @@ void convert_json_to_columns(rmm::device_buffer const &input_data,
  *
  * @returns The count for each column data type
  */
-thrust::host_vector<cudf::io::json::ColumnInfo> detect_data_types(const char *data,
-                                                                  size_t data_size,
-                                                                  const ParseOptions &options,
-                                                                  bool do_set_null_count,
-                                                                  col_map_type *col_map,
-                                                                  int num_columns,
-                                                                  const uint64_t *rec_starts,
-                                                                  cudf::size_type num_records,
-                                                                  cudaStream_t stream = 0);
+std::vector<cudf::io::json::ColumnInfo> detect_data_types(const char *data,
+                                                          size_t data_size,
+                                                          const ParseOptions &options,
+                                                          bool do_set_null_count,
+                                                          col_map_type *col_map,
+                                                          int num_columns,
+                                                          const uint64_t *rec_starts,
+                                                          cudf::size_type num_records,
+                                                          cudaStream_t stream = 0);
 
 /**
  * @brief Collects information about JSON object keys in the file.
