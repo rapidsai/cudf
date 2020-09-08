@@ -1034,8 +1034,7 @@ std::vector<column_parse::stats> detect_column_types(const char *data,
   data_type_detection<<<grid_size, block_size, 0, stream>>>(
     data, options, num_rows, num_actual_columns, flags, row_starts, d_stats.data().get());
 
-  auto h_stats = std::vector<column_parse::stats>();
-  h_stats.reserve(num_active_columns);
+  auto h_stats = std::vector<column_parse::stats>(num_active_columns);
 
   thrust::copy(d_stats.begin(), d_stats.end(), h_stats.begin());
 
