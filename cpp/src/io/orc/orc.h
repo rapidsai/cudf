@@ -173,6 +173,36 @@ class ProtobufReader {
  protected:
   bool InitSchema(FileFooter *);
 
+  template <typename T, typename... Operator>
+  bool function_builder(T *s, size_t maxlen, std::tuple<Operator...> &op);
+  template <typename T>
+  bool function_builder_return(T *s, const uint8_t *end);
+  struct FieldInt32;
+  struct FieldUInt32;
+  struct FieldInt64;
+  struct FieldUInt64;
+  template <typename Enum>
+  struct FieldEnum;
+  struct FieldPackedUInt32;
+  struct FieldString;
+  struct FieldRepeatedString;
+  template <typename Enum>
+  struct FieldRepeatedStructFunctor;
+  template <typename Enum>
+  struct FieldRepeatedStructBlobFunctor;
+
+  template <typename Enum>
+  FieldRepeatedStructFunctor<Enum> FieldRepeatedStruct(int f, std::vector<Enum> &v)
+  {
+    return FieldRepeatedStructFunctor<Enum>(f, v);
+  }
+  template <typename Enum>
+  FieldRepeatedStructBlobFunctor<Enum> FieldRepeatedStructBlob(int f, std::vector<Enum> &v)
+  {
+    return FieldRepeatedStructBlobFunctor<Enum>(f, v);
+  }
+
+
  protected:
   const uint8_t *m_base;
   const uint8_t *m_cur;

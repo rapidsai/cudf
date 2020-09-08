@@ -16,6 +16,7 @@
 
 #include "orc.h"
 #include <string.h>
+#include "orc_builder.hpp"
 
 namespace cudf {
 namespace io {
@@ -33,161 +34,103 @@ void ProtobufReader::skip_struct_field(int t)
   }
 }
 
-#define ORC_BEGIN_STRUCT(st)                              \
-  bool ProtobufReader::read(st *s, size_t maxlen)         \
-  { /*printf(#st "\n");*/                                 \
-    const uint8_t *end = std::min(m_cur + maxlen, m_end); \
-    while (m_cur < end) {                                 \
-      int fld = get_u32();                                \
-      switch (fld) {
-#define ORC_FLD_UINT64(id, m)   \
-  case (id)*8 + PB_TYPE_VARINT: \
-    s->m = get_u64();           \
-    break;
+bool ProtobufReader::read(PostScript *s, size_t maxlen)
+{
+  auto op = std::make_tuple(
+      FieldUInt64(1, s->footerLength),
+      FieldEnum<CompressionKind>(2, s->compression),
+      FieldUInt32(3, s->compressionBlockSize),
+      FieldPackedUInt32(4, s->version),
+      FieldUInt64(5, s->metadataLength),
+      FieldString(8000, s->magic));
+  return function_builder(s, maxlen, op);
+}
 
-#define ORC_FLD_INT64(id, m)    \
-  case (id)*8 + PB_TYPE_VARINT: \
-    s->m = get_i64();           \
-    break;
+bool ProtobufReader::read(FileFooter *s, size_t maxlen)
+{
+  auto op = std::make_tuple(
+      FieldUInt64(1, s->headerLength),
+      FieldUInt64(2, s->contentLength),
+      FieldRepeatedStruct(3, s->stripes),
+      FieldRepeatedStruct(4, s->types),
+      FieldRepeatedStruct(5, s->metadata),
+      FieldUInt64(6, s->numberOfRows),
+      FieldRepeatedStructBlob(7, s->statistics),
+      FieldUInt32(8, s->rowIndexStride));
+  return function_builder(s, maxlen, op);
+}
 
-#define ORC_FLD_UINT32(id, m)   \
-  case (id)*8 + PB_TYPE_VARINT: \
-    s->m = get_u32();           \
-    break;
+bool ProtobufReader::read(StripeInformation *s, size_t maxlen)
+{
+  auto op = std::make_tuple(
+      FieldUInt64(1, s->offset),
+      FieldUInt64(2, s->indexLength),
+      FieldUInt64(3, s->dataLength),
+      FieldUInt32(4, s->footerLength),
+      FieldUInt32(5, s->numberOfRows));
+  return function_builder(s, maxlen, op);
+}
 
-#define ORC_FLD_INT32(id, m)    \
-  case (id)*8 + PB_TYPE_VARINT: \
-    s->m = get_i32();           \
-    break;
+bool ProtobufReader::read(SchemaType *s, size_t maxlen)
+{
+  auto op = std::make_tuple(
+      FieldEnum<TypeKind>(1, s->kind),
+      FieldPackedUInt32(2, s->subtypes),
+      FieldRepeatedString(3, s->fieldNames),
+      FieldUInt32(4, s->maximumLength),
+      FieldUInt32(5, s->precision),
+      FieldUInt32(6, s->scale));
+  return function_builder(s, maxlen, op);
+}
 
-#define ORC_FLD_ENUM(id, m, mt) \
-  case (id)*8 + PB_TYPE_VARINT: \
-    s->m = (mt)get_u32();       \
-    break;
+bool ProtobufReader::read(UserMetadataItem *s, size_t maxlen)
+{
+  auto op = std::make_tuple(
+      FieldString(1, s->name),
+      FieldString(2, s->value));
+  return function_builder(s, maxlen, op);
+}
 
-#define ORC_FLD_PACKED_UINT32(id, m)                     \
-  case (id)*8 + PB_TYPE_FIXEDLEN: {                      \
-    uint32_t len           = get_u32();                  \
-    const uint8_t *fld_end = std::min(m_cur + len, end); \
-    while (m_cur < fld_end) s->m.push_back(get_u32());   \
-    break;                                               \
-  }
+bool ProtobufReader::read(StripeFooter *s, size_t maxlen)
+{
+  auto op = std::make_tuple(
+      FieldRepeatedStruct(1, s->streams),
+      FieldRepeatedStruct(2, s->columns),
+      FieldString(3, s->writerTimezone));
+  return function_builder(s, maxlen, op);
+}
 
-#define ORC_FLD_STRING(id, m)                    \
-  case (id)*8 + PB_TYPE_FIXEDLEN: {              \
-    uint32_t n = get_u32();                      \
-    if (n > (size_t)(end - m_cur)) return false; \
-    s->m.assign((const char *)m_cur, n);         \
-    m_cur += n;                                  \
-    break;                                       \
-  }
+bool ProtobufReader::read(Stream *s, size_t maxlen)
+{
+  auto op = std::make_tuple(
+      FieldEnum<StreamKind>(1, s->kind),
+      FieldUInt32(2, s->column),
+      FieldUInt64(3, s->length));
+  return function_builder(s, maxlen, op);
+}
 
-#define ORC_FLD_REPEATED_STRING(id, m)           \
-  case (id)*8 + PB_TYPE_FIXEDLEN: {              \
-    uint32_t n = get_u32();                      \
-    if (n > (size_t)(end - m_cur)) return false; \
-    s->m.resize(s->m.size() + 1);                \
-    s->m.back().assign((const char *)m_cur, n);  \
-    m_cur += n;                                  \
-    break;                                       \
-  }
+bool ProtobufReader::read(ColumnEncoding *s, size_t maxlen)
+{
+  auto op = std::make_tuple(
+      FieldEnum<ColumnEncodingKind>(1, s->kind),
+      FieldUInt32(2, s->dictionarySize));
+  return function_builder(s, maxlen, op);
+}
 
-#define ORC_FLD_REPEATED_STRUCT(id, m)           \
-  case (id)*8 + PB_TYPE_FIXEDLEN: {              \
-    uint32_t n = get_u32();                      \
-    if (n > (size_t)(end - m_cur)) return false; \
-    s->m.resize(s->m.size() + 1);                \
-    if (!read(&s->m.back(), n)) return false;    \
-    break;                                       \
-  }
+bool ProtobufReader::read(StripeStatistics *s, size_t maxlen)
+{
+  auto op = std::make_tuple(
+      FieldRepeatedStructBlob(1, s->colStats));
+  return function_builder(s, maxlen, op);
+}
 
-#define ORC_FLD_REPEATED_STRUCT_BLOB(id, m)      \
-  case (id)*8 + PB_TYPE_FIXEDLEN: {              \
-    uint32_t n = get_u32();                      \
-    if (n > (size_t)(end - m_cur)) return false; \
-    s->m.resize(s->m.size() + 1);                \
-    s->m.back().assign(m_cur, m_cur + n);        \
-    m_cur += n;                                  \
-    break;                                       \
-  }
+bool ProtobufReader::read(Metadata *s, size_t maxlen)
+{
+  auto op = std::make_tuple(
+      FieldRepeatedStruct(1, s->stripeStats));
+  return function_builder(s, maxlen, op);
+}
 
-#define ORC_END_STRUCT_(postproccond)                                    \
-  default: /*printf("unknown fld %d of type %d\n", fld >> 3, fld & 7);*/ \
-           skip_struct_field(fld & 7);                                   \
-    }                                                                    \
-    }                                                                    \
-    return (postproccond);                                               \
-    }
-
-#define ORC_END_STRUCT() ORC_END_STRUCT_(m_cur <= end)
-#define ORC_END_STRUCT_POSTPROC(fn) ORC_END_STRUCT_(m_cur <= end && fn(s))
-
-ORC_BEGIN_STRUCT(PostScript)
-ORC_FLD_UINT64(1, footerLength)
-ORC_FLD_ENUM(2, compression, CompressionKind)
-ORC_FLD_UINT32(3, compressionBlockSize)
-ORC_FLD_PACKED_UINT32(4, version)
-ORC_FLD_UINT64(5, metadataLength)
-ORC_FLD_STRING(8000, magic)
-ORC_END_STRUCT()
-
-ORC_BEGIN_STRUCT(FileFooter)
-ORC_FLD_UINT64(1, headerLength)
-ORC_FLD_UINT64(2, contentLength)
-ORC_FLD_REPEATED_STRUCT(3, stripes)
-ORC_FLD_REPEATED_STRUCT(4, types)
-ORC_FLD_REPEATED_STRUCT(5, metadata)
-ORC_FLD_UINT64(6, numberOfRows)
-ORC_FLD_REPEATED_STRUCT_BLOB(7, statistics)
-ORC_FLD_UINT32(8, rowIndexStride)
-ORC_END_STRUCT_POSTPROC(InitSchema)
-
-ORC_BEGIN_STRUCT(StripeInformation)
-ORC_FLD_UINT64(1, offset)
-ORC_FLD_UINT64(2, indexLength)
-ORC_FLD_UINT64(3, dataLength)
-ORC_FLD_UINT32(4, footerLength)
-ORC_FLD_UINT32(5, numberOfRows)
-ORC_END_STRUCT()
-
-ORC_BEGIN_STRUCT(SchemaType)
-ORC_FLD_ENUM(1, kind, TypeKind)
-ORC_FLD_PACKED_UINT32(2, subtypes)
-ORC_FLD_REPEATED_STRING(3, fieldNames)
-ORC_FLD_UINT32(4, maximumLength)
-ORC_FLD_UINT32(5, precision)
-ORC_FLD_UINT32(6, scale)
-ORC_END_STRUCT()
-
-ORC_BEGIN_STRUCT(UserMetadataItem)
-ORC_FLD_STRING(1, name)
-ORC_FLD_STRING(2, value)
-ORC_END_STRUCT()
-
-ORC_BEGIN_STRUCT(StripeFooter)
-ORC_FLD_REPEATED_STRUCT(1, streams)
-ORC_FLD_REPEATED_STRUCT(2, columns)
-ORC_FLD_STRING(3, writerTimezone)
-ORC_END_STRUCT()
-
-ORC_BEGIN_STRUCT(Stream)
-ORC_FLD_ENUM(1, kind, StreamKind)
-ORC_FLD_UINT32(2, column)
-ORC_FLD_UINT64(3, length)
-ORC_END_STRUCT()
-
-ORC_BEGIN_STRUCT(ColumnEncoding)
-ORC_FLD_ENUM(1, kind, ColumnEncodingKind)
-ORC_FLD_UINT32(2, dictionarySize)
-ORC_END_STRUCT()
-
-ORC_BEGIN_STRUCT(StripeStatistics)
-ORC_FLD_REPEATED_STRUCT_BLOB(1, colStats)
-ORC_END_STRUCT()
-
-ORC_BEGIN_STRUCT(Metadata)
-ORC_FLD_REPEATED_STRUCT(1, stripeStats)
-ORC_END_STRUCT()
 
 // return the column name
 std::string FileFooter::GetColumnName(uint32_t column_id)
