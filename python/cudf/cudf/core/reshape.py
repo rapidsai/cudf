@@ -246,7 +246,7 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
 
         df.columns = result_columns.unique()
         if ignore_index:
-            df.index = None
+            df.index = cudf.RangeIndex(len(objs[0]))
             return df
         elif not match_index:
             return df.sort_index()
@@ -292,7 +292,8 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
             return cudf.Series()
         elif len(objs) == 1:
             if ignore_index:
-                result = Series._concat(objs, axis=axis, index=None)
+                result = Series._concat(
+                    objs, axis=axis, index=None)
             else:
                 result = objs[0]
             return result
