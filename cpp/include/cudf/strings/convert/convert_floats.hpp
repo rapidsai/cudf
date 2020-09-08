@@ -44,7 +44,7 @@ namespace strings {
 std::unique_ptr<column> to_floats(
   strings_column_view const& strings,
   data_type output_type,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a new strings column converting the float values from the
@@ -64,7 +64,8 @@ std::unique_ptr<column> to_floats(
  * @return New strings column with floats as strings.
  */
 std::unique_ptr<column> from_floats(
-  column_view const& floats, rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  column_view const& floats,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings

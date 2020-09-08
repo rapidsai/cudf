@@ -1111,3 +1111,39 @@ def test_datetime_strftime_not_implemented_formats(date_format):
 
     with pytest.raises(NotImplementedError):
         gsr.dt.strftime(date_format=date_format)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        np.datetime_as_string(
+            np.arange("2002-10-27T04:30", 4 * 60, 60, dtype="M8[m]"),
+            timezone="UTC",
+        ),
+        np.datetime_as_string(
+            np.arange("2002-10-27T04:30", 10 * 60, 1, dtype="M8[m]"),
+            timezone="UTC",
+        ),
+        np.datetime_as_string(
+            np.arange("2002-10-27T04:30", 10 * 60, 1, dtype="M8[ns]"),
+            timezone="UTC",
+        ),
+        np.datetime_as_string(
+            np.arange("2002-10-27T04:30", 10 * 60, 1, dtype="M8[us]"),
+            timezone="UTC",
+        ),
+        np.datetime_as_string(
+            np.arange("2002-10-27T04:30", 4 * 60, 60, dtype="M8[s]"),
+            timezone="UTC",
+        ),
+    ],
+)
+@pytest.mark.parametrize("dtype", DATETIME_TYPES)
+def test_datetime_infer_format(data, dtype):
+    sr = cudf.Series(data)
+    psr = pd.Series(data)
+
+    expected = psr.astype(dtype)
+    actual = sr.astype(dtype)
+
+    assert_eq(expected, actual)

@@ -26,6 +26,7 @@
 - PR #6103 Small refactor of `print_differences`
 - PR #6124 Fix gcc-9 compilation errors on tests
 - PR #6141 Fix typo in custreamz README that was a result of recent changes
+- PR #6146 Added element/validity pair constructors for fixed_width and string wrappers
 - PR #6143 General improvements for java arrow IPC.
 - PR #6152 Change dictionary indices to uint32
 
@@ -34,10 +35,14 @@
 - PR #6073 Fix issue related to `.loc` incase of `DatetimeIndex`
 - PR #6081 Fix issue where fsspec thinks it has a protocol string
 - PR #6100 Fix issue in `Series.factorize` to correctly pick `na_sentinel` value
+- PR #6106 Fix datetime limit in csv due to 32-bit arithmetic
 - PR #6113 Fix to_timestamp to initialize default year to 1970
 - PR #6110 Handle `format` for other input types in `to_datetime`
 - PR #6118 Fix Java build for ORC read args change and update package version
+- PR #6121 Replace calls to get_default_resource with get_current_device_resource
 - PR #6128 Add support for numpy RandomState handling in `sample`
+- PR #6154 Warnings on row-wise op only when non-numeric columns are found.
+- PR #6150 Fix issue related to inferring `datetime64` format with UTC timezone in string data
 
 
 # cuDF 0.15.0 (26 Aug 2020)
@@ -201,12 +206,12 @@
 - PR #5602 Add support for concatenation of `Series` & `DataFrame` in `cudf.concat` when `axis=0`
 - PR #5603 Refactor JIT `parser.cpp`
 - PR #5643 Update `isort` to 5.0.4
-- PR #5648 OO interface for hash join with explicit `build/probe` semantic 
+- PR #5648 OO interface for hash join with explicit `build/probe` semantic
 - PR #5662 Make Java ColumnVector(long nativePointer) constructor public
 - PR #5681 Pin black, flake8 and isort
 - PR #5679 Use `pickle5` to test older Python versions
 - PR #5684 Use `pickle5` in `Serializable` (when available)
-- PR #5419 Support rolling, groupby_rolling for durations 
+- PR #5419 Support rolling, groupby_rolling for durations
 - PR #5687 Change strings::split_record to return a lists column
 - PR #5708 Add support for `dummy_na` in `get_dummies`
 - PR #5709 Update java build to help cu-spacial with java bindings
