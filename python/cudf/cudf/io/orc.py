@@ -152,9 +152,8 @@ def read_orc_statistics(
 def _filter_stripes(
     filters, filepath_or_buffer, stripes=None, skip_rows=None, num_rows=None
 ):
-    # Coerce filters into list of lists of tuples
-    if isinstance(filters[0][0], str):
-        filters = [filters]
+    # Prepare filters
+    filters = filterutils._prepare_filters(filters)
 
     # Get columns relevant to filtering
     columns_in_predicate = [
