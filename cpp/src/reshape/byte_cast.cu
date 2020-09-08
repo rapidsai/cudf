@@ -14,16 +14,13 @@
  * limitations under the License.
  */
 
-#include <algorithm>
-#include <cstdint>
+#include <cudf/detail/reshape.hpp>
 #include <cudf/strings/detail/utilities.hpp>
-#include <memory>
 
 #include "cudf/column/column_device_view.cuh"
 #include "cudf/detail/nvtx/ranges.hpp"
 #include "cudf/replace.hpp"
 #include "cudf/strings/detail/utilities.cuh"
-#include "cudf/types.hpp"
 #include "cudf/utilities/traits.hpp"
 #include "cudf/utilities/type_dispatcher.hpp"
 

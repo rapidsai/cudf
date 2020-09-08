@@ -34,9 +34,13 @@ std::unique_ptr<table> tile(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 }  // namespace detail
 
+/*
+ * Configures if byte casting flips endianness
+ */
+enum class flip_endianness : bool { NO, YES };
+
 /**
- * @brief Converts primitive types and string columns to lists of bytes, mimics Spark's cast to
- * binary type.
+ * @brief Converts a column's elements to lists of bytes
  *
  * @param inpu_column column to be converted to lists of bytes.
  * @param configuration configuration to retain or flip the endianness of a row.
