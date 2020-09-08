@@ -25,8 +25,8 @@
 #include "cudf/utilities/type_dispatcher.hpp"
 
 namespace cudf {
-namespace detail {
-struct ByteListConversion {
+namespace {
+struct byte_list_conversion {
   /**
    * @brief Function object for converting primitive types and string columns to lists of bytes,
    * mimics Spark's cast to binary type.
@@ -41,19 +41,17 @@ struct ByteListConversion {
     }
   };
 
-  template <
-    typename T,
-    typename std::enable_if_t<!std::is_integral<T>::value and !is_floating_point<T>()>* = nullptr>
+  template <typename T,
+            std::enable_if_t<!std::is_integral<T>::value and !is_floating_point<T>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& input_column,
                                      flip_endianness configuration,
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream) const
   {
-    release_assert(false && "MD5 Unsupported non-numeric and non-string column");
-    return NULL;
+    CUDF_FAIL("Unsupported non-numeric and non-string column");
   }
 
-  template <typename T, typename std::enable_if_t<is_floating_point<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<is_floating_point<T>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& input_column,
                                      flip_endianness configuration,
                                      rmm::mr::device_memory_resource* mr,
@@ -93,7 +91,7 @@ struct ByteListConversion {
                              mr);
   }
 
-  template <typename T, typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_integral<T>::value>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& input_column,
                                      flip_endianness configuration,
                                      rmm::mr::device_memory_resource* mr,
@@ -134,7 +132,7 @@ struct ByteListConversion {
 };
 
 template <>
-std::unique_ptr<cudf::column> ByteListConversion::operator()<string_view>(
+std::unique_ptr<cudf::column> byte_list_conversion::operator()<string_view>(
   column_view const& input_column,
   flip_endianness configuration,
   rmm::mr::device_memory_resource* mr,
@@ -156,8 +154,7 @@ std::unique_ptr<cudf::column> ByteListConversion::operator()<string_view>(
                            stream,
                            mr);
 }
-
-}  // namespace detail
+}  // namespace
 
 std::unique_ptr<column> byte_cast(column_view const& input_column,
                                   flip_endianness configuration,
@@ -165,12 +162,8 @@ std::unique_ptr<column> byte_cast(column_view const& input_column,
                                   cudaStream_t stream)
 {
   CUDF_FUNC_RANGE();
-  CUDF_EXPECTS(
-    cudf::is_numeric(input_column.type()) || input_column.type().id() == cudf::type_id::STRING,
-    "numeric type required to convert to big endian byte list");
-
   return type_dispatcher(
-    input_column.type(), detail::ByteListConversion{}, input_column, configuration, mr, stream);
+    input_column.type(), byte_list_conversion{}, input_column, configuration, mr, stream);
 }
 
 }  // namespace cudf
