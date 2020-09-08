@@ -264,6 +264,89 @@ struct ProtobufReader::FieldRepeatedStructBlobFunctor
     }
 };
 
+struct ProtobufWriter::WriterBuild
+{
+  int struct_size;
+  ProtobufWriter *p;
+
+  WriterBuild(ProtobufWriter *pbw) : struct_size(0), p(pbw) {}
+
+  template <typename T>
+  void field_uint(int id, const T &v)
+  {
+    struct_size += p->put_uint(id*8 + PB_TYPE_VARINT);
+    struct_size += p->put_uint(static_cast<uint64_t>(v));
+  }
+
+  template <typename T>
+  void field_packed_uint(int id, const std::vector<T> &v)
+  {
+    size_t cnt = v.size(), sz = 0, lpos;
+    struct_size += p->put_uint(id*8 + PB_TYPE_FIXEDLEN);
+    lpos = p->m_buf->size();
+    p->putb(0);
+    for (size_t i = 0; i < cnt; i++) sz += p->put_uint(v[i]);
+    struct_size += sz + 1;
+    for (; sz > 0x7f; sz >>= 7, struct_size++)
+      p->m_buf->insert(p->m_buf->begin() + (lpos++), static_cast<uint8_t>((sz & 0x7f) | 0x80));
+    (*(p->m_buf))[lpos] = static_cast<uint8_t>(sz);
+  }
+
+  void field_string(int id, const std::string &v)
+  {
+    size_t len = v.length();
+    struct_size += p->put_uint(id*8 + PB_TYPE_FIXEDLEN);
+    struct_size += p->put_uint(len) + len;
+    for (size_t i = 0; i < len; i++) p->putb(v[i]);
+  }
+
+  template <typename T>
+  void field_blob(int id, const std::vector<T> &v)
+  {
+    size_t len = v.size();
+    struct_size += p->put_uint(id*8 + PB_TYPE_FIXEDLEN);
+    struct_size += p->put_uint(len) + len;
+    for (size_t i = 0; i < len; i++) p->putb(v[i]);
+  }
+
+  template <typename T>
+  void field_struct(int id, const T &v)
+  {
+    size_t sz, lpos;
+    struct_size += p->put_uint((id)*8 + PB_TYPE_FIXEDLEN);
+    lpos = p->m_buf->size();
+    p->putb(0);
+    sz = p->write(&v);
+    struct_size += sz + 1;
+    for (; sz > 0x7f; sz >>= 7, struct_size++)
+      p->m_buf->insert(p->m_buf->begin() + (lpos++), static_cast<uint8_t>((sz & 0x7f) | 0x80));
+    (*(p->m_buf))[lpos] = static_cast<uint8_t>(sz);
+  }
+
+  void field_repeated_string(int id, const std::vector<std::string> &v)
+  {
+    //TODO Replace by range based for loop
+    for (size_t k = 0; k < v.size(); k++) field_string(id, v[k]);
+  }
+
+  template <typename T>
+  void field_repeated_struct(int id, const std::vector<T> &v)
+  {
+    //TODO Replace by range based for loop
+    for (size_t k = 0; k < v.size(); k++) field_struct(id, v[k]);
+  }
+
+  template <typename T>
+  void field_repeated_struct_blob(int id, const std::vector<T> &v)
+  {
+    //TODO Replace by range based for loop
+    for (size_t k = 0; k < v.size(); k++) field_blob(id, v[k]);
+  }
+
+  size_t value(void) { return struct_size; }
+
+};
+
 
 }  // namespace orc
 }  // namespace io

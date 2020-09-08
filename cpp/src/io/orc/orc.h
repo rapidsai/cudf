@@ -158,18 +158,17 @@ class ProtobufReader {
   void skip_struct_field(int t);
 
  public:
-#define DECL_ORC_STRUCT(st) bool read(st *, size_t maxlen)
-  DECL_ORC_STRUCT(PostScript);
-  DECL_ORC_STRUCT(FileFooter);
-  DECL_ORC_STRUCT(StripeInformation);
-  DECL_ORC_STRUCT(SchemaType);
-  DECL_ORC_STRUCT(UserMetadataItem);
-  DECL_ORC_STRUCT(StripeFooter);
-  DECL_ORC_STRUCT(Stream);
-  DECL_ORC_STRUCT(ColumnEncoding);
-  DECL_ORC_STRUCT(StripeStatistics);
-  DECL_ORC_STRUCT(Metadata);
-#undef DECL_ORC_STRUCT
+  bool read(PostScript *, size_t maxlen);
+  bool read(FileFooter *, size_t maxlen);
+  bool read(StripeInformation *, size_t maxlen);
+  bool read(SchemaType *, size_t maxlen);
+  bool read(UserMetadataItem *, size_t maxlen);
+  bool read(StripeFooter *, size_t maxlen);
+  bool read(Stream *, size_t maxlen);
+  bool read(ColumnEncoding *, size_t maxlen);
+  bool read(StripeStatistics *, size_t maxlen);
+  bool read(Metadata *, size_t maxlen);
+
  protected:
   bool InitSchema(FileFooter *);
 
@@ -243,20 +242,20 @@ class ProtobufWriter {
                            TypeKind kind);
 
  public:
-#define DECL_PBW_STRUCT(st) size_t write(const st *)
-  DECL_PBW_STRUCT(PostScript);
-  DECL_PBW_STRUCT(FileFooter);
-  DECL_PBW_STRUCT(StripeInformation);
-  DECL_PBW_STRUCT(SchemaType);
-  DECL_PBW_STRUCT(UserMetadataItem);
-  DECL_PBW_STRUCT(StripeFooter);
-  DECL_PBW_STRUCT(Stream);
-  DECL_PBW_STRUCT(ColumnEncoding);
-  DECL_PBW_STRUCT(StripeStatistics);
-  DECL_PBW_STRUCT(Metadata);
-#undef DECL_PBW_STRUCT
+  size_t write(const PostScript *);
+  size_t write(const FileFooter *);
+  size_t write(const StripeInformation *);
+  size_t write(const SchemaType *);
+  size_t write(const UserMetadataItem *);
+  size_t write(const StripeFooter *);
+  size_t write(const Stream *);
+  size_t write(const ColumnEncoding *);
+  size_t write(const StripeStatistics *);
+  size_t write(const Metadata *);
+
  protected:
   std::vector<uint8_t> *m_buf;
+  struct WriterBuild;
 };
 
 /**
