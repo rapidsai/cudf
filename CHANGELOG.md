@@ -42,6 +42,7 @@
 - PR #6128 Add support for numpy RandomState handling in `sample`
 - PR #6154 Warnings on row-wise op only when non-numeric columns are found.
 - PR #6150 Fix issue related to inferring `datetime64` format with UTC timezone in string data
+- PR #6173 Fix normalize_characters offset logic on sliced strings column
 
 
 # cuDF 0.15.0 (26 Aug 2020)
