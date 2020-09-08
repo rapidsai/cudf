@@ -43,11 +43,12 @@ enum class negative_index_policy : bool { ALLOWED, NOT_ALLOWED };
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  * @return cudf::table Result of the gather
  */
-std::unique_ptr<table> gather(table_view const& source_table,
-                              column_view const& gather_map,
-                              out_of_bounds_policy bounds,
-                              negative_index_policy neg_indices,
-                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                              cudaStream_t stream                 = 0);
+std::unique_ptr<table> gather(
+  table_view const& source_table,
+  column_view const& gather_map,
+  out_of_bounds_policy bounds,
+  negative_index_policy neg_indices,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0);
 }  // namespace detail
 }  // namespace cudf
