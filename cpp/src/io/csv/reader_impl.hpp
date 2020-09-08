@@ -24,10 +24,10 @@
 #include "csv.h"
 #include "csv_gpu.h"
 
+#include <cudf/detail/utilities/trie.cuh>
 #include <io/utilities/column_buffer.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 
-#include <cudf/detail/utilities/trie.cuh>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/readers.hpp>
 
@@ -164,22 +164,22 @@ class reader::impl {
   const reader_options args_;
 
   rmm::device_vector<char> data_;
-  rmm::device_vector<uint64_t> row_offsets_;
-  size_t num_records_  = 0;  // Number of rows with actual data
-  int num_active_cols_ = 0;  // Number of columns to read
-  int num_actual_cols_ = 0;  // Number of columns in the dataset
+  rmm::device_vector<uint64_t> row_offsets;
+  size_t num_records  = 0;  // Number of rows with actual data
+  int num_active_cols = 0;  // Number of columns to read
+  int num_actual_cols = 0;  // Number of columns in the dataset
 
   // Parsing options
   ParseOptions opts{};
-  thrust::host_vector<column_parse::flags> h_column_flags_;
-  rmm::device_vector<column_parse::flags> d_column_flags_;
-  rmm::device_vector<SerialTrieNode> d_trueTrie_;
-  rmm::device_vector<SerialTrieNode> d_falseTrie_;
-  rmm::device_vector<SerialTrieNode> d_naTrie_;
+  thrust::host_vector<column_parse::flags> h_column_flags;
+  rmm::device_vector<column_parse::flags> d_column_flags;
+  rmm::device_vector<SerialTrieNode> d_trueTrie;
+  rmm::device_vector<SerialTrieNode> d_falseTrie;
+  rmm::device_vector<SerialTrieNode> d_naTrie;
 
   // Intermediate data
-  std::vector<std::string> col_names_;
-  std::vector<char> header_;
+  std::vector<std::string> col_names;
+  std::vector<char> header;
 };
 
 }  // namespace csv
