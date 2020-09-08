@@ -554,14 +554,14 @@ std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream)
     } else {
       d_column_flags = h_column_flags;
 
-      auto column_stats = cudf::io::csv::gpu::DetectColumnTypes(data_.data().get(),
-                                                                row_offsets.data().get(),
-                                                                num_records,
-                                                                num_actual_cols,
-                                                                num_active_cols,
-                                                                opts,
-                                                                d_column_flags.data().get(),
-                                                                stream);
+      auto column_stats = cudf::io::csv::gpu::detect_column_types(data_.data().get(),
+                                                                  row_offsets.data().get(),
+                                                                  num_records,
+                                                                  num_actual_cols,
+                                                                  num_active_cols,
+                                                                  opts,
+                                                                  d_column_flags.data().get(),
+                                                                  stream);
 
       CUDA_TRY(cudaStreamSynchronize(stream));
 

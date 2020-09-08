@@ -204,14 +204,14 @@ void remove_blank_rows(rmm::device_vector<uint64_t> &row_offsets,
  *
  * @return stats Histogram of each dtypes' occurrence for each column
  **/
-std::vector<column_parse::stats> DetectColumnTypes(const char *data,
-                                                   const uint64_t *row_starts,
-                                                   size_t num_rows,
-                                                   size_t num_actual_columns,
-                                                   size_t num_active_columns,
-                                                   const cudf::io::ParseOptions &options,
-                                                   column_parse::flags *flags,
-                                                   cudaStream_t stream = (cudaStream_t)0);
+std::vector<column_parse::stats> detect_column_types(const char *data,
+                                                     const uint64_t *row_starts,
+                                                     size_t num_rows,
+                                                     size_t num_actual_columns,
+                                                     size_t num_active_columns,
+                                                     const cudf::io::ParseOptions &options,
+                                                     column_parse::flags *flags,
+                                                     cudaStream_t stream = (cudaStream_t)0);
 
 /**
  * @brief Launches kernel for decoding row-column data

@@ -1016,14 +1016,14 @@ void __host__ remove_blank_rows(rmm::device_vector<uint64_t> &row_offsets,
   row_offsets.resize(new_end - row_offsets.begin());
 }
 
-std::vector<column_parse::stats> DetectColumnTypes(const char *data,
-                                                   const uint64_t *row_starts,
-                                                   size_t num_rows,
-                                                   size_t num_actual_columns,
-                                                   size_t num_active_columns,
-                                                   const cudf::io::ParseOptions &options,
-                                                   column_parse::flags *flags,
-                                                   cudaStream_t stream)
+std::vector<column_parse::stats> detect_column_types(const char *data,
+                                                     const uint64_t *row_starts,
+                                                     size_t num_rows,
+                                                     size_t num_actual_columns,
+                                                     size_t num_active_columns,
+                                                     const cudf::io::ParseOptions &options,
+                                                     column_parse::flags *flags,
+                                                     cudaStream_t stream)
 {
   // Calculate actual block count to use based on records count
   const int block_size = csvparse_block_dim;
