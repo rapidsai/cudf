@@ -139,8 +139,8 @@ Java_ai_rapids_cudf_nvcomp_Nvcomp_lz4CompressGetTempSize(JNIEnv *env, jclass,
     nvcompLZ4FormatOpts opts{};
     opts.chunk_size = chunk_size;
     size_t temp_size;
-    auto status = LZ4CompressGetTempSize(reinterpret_cast<void *>(in_ptr), in_size,
-                                         comp_type, &opts, &temp_size);
+    auto status = nvcompLZ4CompressGetTempSize(reinterpret_cast<void *>(in_ptr), in_size,
+                                               comp_type, &opts, &temp_size);
     check_nvcomp_status(env, status);
     return temp_size;
   } CATCH_STD(env, 0);
@@ -158,10 +158,10 @@ Java_ai_rapids_cudf_nvcomp_Nvcomp_lz4CompressGetOutputSize(JNIEnv *env, jclass,
     nvcompLZ4FormatOpts opts{};
     opts.chunk_size = chunk_size;
     size_t out_size;
-    auto status = LZ4CompressGetOutputSize(reinterpret_cast<void *>(in_ptr), in_size,
-                                           comp_type, &opts,
-                                           reinterpret_cast<void *>(temp_ptr), temp_size,
-                                           &out_size, compute_exact);
+    auto status = nvcompLZ4CompressGetOutputSize(reinterpret_cast<void *>(in_ptr), in_size,
+                                                 comp_type, &opts,
+                                                 reinterpret_cast<void *>(temp_ptr), temp_size,
+                                                 &out_size, compute_exact);
     check_nvcomp_status(env, status);
     return out_size;
   } CATCH_STD(env, 0);
@@ -181,11 +181,11 @@ Java_ai_rapids_cudf_nvcomp_Nvcomp_lz4Compress(JNIEnv *env, jclass,
     opts.chunk_size = chunk_size;
     auto stream = reinterpret_cast<cudaStream_t>(jstream);
     size_t compressed_size = out_size;
-    auto status = LZ4CompressAsync(reinterpret_cast<void *>(in_ptr), in_size,
-                                   comp_type, &opts,
-                                   reinterpret_cast<void *>(temp_ptr), temp_size,
-                                   reinterpret_cast<void *>(out_ptr), &compressed_size,
-                                   stream);
+    auto status = nvcompLZ4CompressAsync(reinterpret_cast<void *>(in_ptr), in_size,
+                                         comp_type, &opts,
+                                         reinterpret_cast<void *>(temp_ptr), temp_size,
+                                         reinterpret_cast<void *>(out_ptr), &compressed_size,
+                                         stream);
     check_nvcomp_status(env, status);
     if (cudaStreamSynchronize(stream) != cudaSuccess) {
       JNI_THROW_NEW(env, NVCOMP_CUDA_ERROR_CLASS, "Error synchronizing stream", 0);
@@ -210,11 +210,11 @@ Java_ai_rapids_cudf_nvcomp_Nvcomp_lz4CompressAsync(JNIEnv *env, jclass,
     auto stream = reinterpret_cast<cudaStream_t>(jstream);
     auto compressed_size_ptr = reinterpret_cast<size_t *>(compressed_output_ptr);
     *compressed_size_ptr = out_size;
-    auto status = LZ4CompressAsync(reinterpret_cast<void *>(in_ptr), in_size,
-                                   comp_type, &opts,
-                                   reinterpret_cast<void *>(temp_ptr), temp_size,
-                                   reinterpret_cast<void *>(out_ptr), compressed_size_ptr,
-                                   stream);
+    auto status = nvcompLZ4CompressAsync(reinterpret_cast<void *>(in_ptr), in_size,
+                                         comp_type, &opts,
+                                         reinterpret_cast<void *>(temp_ptr), temp_size,
+                                         reinterpret_cast<void *>(out_ptr), compressed_size_ptr,
+                                         stream);
     check_nvcomp_status(env, status);
   } CATCH_STD(env, );
 }
