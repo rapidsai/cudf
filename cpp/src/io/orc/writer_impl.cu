@@ -957,7 +957,7 @@ void writer::impl::add_uncompressed_block_headers(std::vector<uint8_t> &v)
 writer::impl::impl(std::unique_ptr<data_sink> sink,
                    orc_writer_options const &options,
                    rmm::mr::device_memory_resource *mr)
-  : compression_kind_(to_orc_compression(options.compression())),
+  : compression_kind_(to_orc_compression(options.get_compression())),
     enable_statistics_(options.enable_statistics()),
     out_sink_(std::move(sink)),
     _mr(mr)
