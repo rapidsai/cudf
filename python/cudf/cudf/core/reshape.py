@@ -292,8 +292,7 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
             return cudf.Series()
         elif len(objs) == 1:
             if ignore_index:
-                result = Series._concat(
-                    objs, axis=axis, index=None)
+                result = Series._concat(objs, axis=axis, index=None)
             else:
                 result = objs[0]
             return result
