@@ -209,7 +209,9 @@ def read_parquet(
 
     if filters is not None:
         # Prepare filters
-        filters = filterutils._prepare_filters(filters)
+        filters = filterutils._prepare_filters(
+            filters, max_len_equijoin_to_membership=-1
+        )
 
         # Convert filters to ds.Expression
         filters = pq._filters_to_expression(filters)

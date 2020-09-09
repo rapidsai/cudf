@@ -439,10 +439,11 @@ def test_parquet_read_filtered_complex_predicate(
     assert_eq(len(df_filtered), expected_len)
 
 
-def test_parquet_read_filtered_joins(tmpdir):
+@pytest.mark.parametrize("df_lib", [cudf, pd])
+def test_parquet_read_filtered_joins(tmpdir, df_lib):
     # Generate data
     fname = tmpdir.join("filtered_complex_predicate.parquet")
-    df_small = pd.DataFrame({"x": range(3)})
+    df_small = df_lib.DataFrame({"x": range(3)})
     df = pd.DataFrame(
         {"x": range(10), "y": list("aabbccddee"), "z": reversed(range(10))}
     )

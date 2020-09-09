@@ -1,6 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 from collections import defaultdict
+import cudf
 import datetime
 
 import pandas as pd
@@ -110,7 +111,9 @@ def _apply_filters(filters, stats):
     return False
 
 
-def _compile_joins(conjunction, statistics_cache):
+def _compile_joins(
+    conjunction, statistics_cache, max_len_equijoin_to_membership
+):
     for col, op, val in conjunction:
         if isinstance(val, tuple):
             df, df_col = val
@@ -122,11 +125,21 @@ def _compile_joins(conjunction, statistics_cache):
                 statistics_cache[df_id]["max"] = df[df_col].max().item()
             val_min = statistics_cache[df_id]["min"]
             val_max = statistics_cache[df_id]["max"]
+            val_len = len(df)
 
             # Replace predicate
             if op == "=" or op == "==":
-                yield (col, ">=", val_min)
-                yield (col, "<=", val_max)
+                if val_len <= max_len_equijoin_to_membership:
+                    c = df[df_col].drop_duplicates()
+                    yield (
+                        col,
+                        "in",
+                        c.to_pandas() if isinstance(c, cudf.Series) else c,
+                    )
+                else:
+                    yield (col, ">=", val_min)
+                    yield (col, "<=", val_max)
+
             elif op == ">" or op == ">=":
                 yield (col, op, val_min)
             elif op == "<" or op == "<=":
@@ -141,7 +154,8 @@ def _compile_joins(conjunction, statistics_cache):
             yield (col, op, val)
 
 
-def _prepare_filters(filters):
+# TODO: Tune max_len_equijoin_to_membership with ORC
+def _prepare_filters(filters, max_len_equijoin_to_membership=16_000):
     # Coerce filters into list of lists of tuples
     if isinstance(filters[0][0], str):
         filters = [filters]
@@ -149,7 +163,11 @@ def _prepare_filters(filters):
     # Compile joins
     statistics_cache = defaultdict(dict)
     filters = [
-        list(_compile_joins(conjunction, statistics_cache))
+        list(
+            _compile_joins(
+                conjunction, statistics_cache, max_len_equijoin_to_membership,
+            )
+        )
         for conjunction in filters
     ]
 
