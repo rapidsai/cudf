@@ -77,7 +77,7 @@ TEST_F(HashPartition, ZeroRows)
 {
   fixed_width_column_wrapper<float> floats({});
   fixed_width_column_wrapper<int16_t> integers({});
-  strings_column_wrapper strings({});
+  strings_column_wrapper strings;
   auto input = cudf::table_view({floats, integers, strings});
 
   auto columns_to_hash = std::vector<cudf::size_type>({2});
@@ -208,15 +208,16 @@ void run_fixed_width_test(size_t cols,
                           cudf::size_type num_partitions,
                           bool has_nulls = false)
 {
-  std::vector<fixed_width_column_wrapper<T, int32_t>> columns(cols);
+  std::vector<fixed_width_column_wrapper<T, int32_t>> columns;
+  columns.reserve(cols);
   if (has_nulls) {
-    std::generate(columns.begin(), columns.end(), [rows]() {
+    std::generate_n(std::back_inserter(columns), cols, [rows]() {
       auto iter   = thrust::make_counting_iterator(0);
       auto valids = thrust::make_transform_iterator(iter, [](auto i) { return i % 4 != 0; });
       return fixed_width_column_wrapper<T, int32_t>(iter, iter + rows, valids);
     });
   } else {
-    std::generate(columns.begin(), columns.end(), [rows]() {
+    std::generate_n(std::back_inserter(columns), cols, [rows]() {
       auto iter = thrust::make_counting_iterator(0);
       return fixed_width_column_wrapper<T, int32_t>(iter, iter + rows);
     });

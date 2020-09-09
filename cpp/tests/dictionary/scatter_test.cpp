@@ -54,7 +54,7 @@ TEST_F(DictionaryScatterTest, Scatter)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(strings_target, decoded->view());
 
   // empty target test
-  cudf::test::strings_column_wrapper empty_target{};
+  cudf::test::strings_column_wrapper empty_target;
   auto empty_dictionary = cudf::dictionary::encode(empty_target);
   table_result          = cudf::scatter(cudf::table_view{{empty_dictionary->view()}},
                                empty_map,

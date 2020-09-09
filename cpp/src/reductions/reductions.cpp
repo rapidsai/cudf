@@ -101,7 +101,7 @@ std::unique_ptr<scalar> reduce(
   column_view const &col,
   std::unique_ptr<aggregation> const &agg,
   data_type output_dtype,
-  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   std::unique_ptr<scalar> result = make_default_constructed_scalar(output_dtype);

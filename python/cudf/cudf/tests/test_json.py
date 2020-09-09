@@ -318,3 +318,12 @@ def test_json_null_literal(buffer):
             df["1"]._column.default_na_value(),
         ],
     )
+
+
+def test_json_bad_protocol_string():
+    test_string = '{"field": "s3://path"}'
+
+    expect = pd.DataFrame([{"field": "s3://path"}])
+    got = cudf.read_json(test_string, lines=True)
+
+    assert_eq(expect, got)

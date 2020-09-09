@@ -70,11 +70,12 @@ __device__ inline char* copy_string(char* buffer, const string_view& d_string)
  * @return offsets child column and chars child column for a strings column
  */
 template <typename SizeAndExecuteFunction>
-auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
-                           size_type strings_count,
-                           size_type null_count,
-                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                           cudaStream_t stream                 = 0)
+auto make_strings_children(
+  SizeAndExecuteFunction size_and_exec_fn,
+  size_type strings_count,
+  size_type null_count,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0)
 {
   auto offsets_column = make_numeric_column(
     data_type{type_id::INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);

@@ -34,13 +34,14 @@
 
 namespace cudf_io = cudf::io;
 
-template <typename T>
-using column_wrapper = typename std::conditional<std::is_same<T, cudf::string_view>::value,
-                                                 cudf::test::strings_column_wrapper,
-                                                 cudf::test::fixed_width_column_wrapper<T>>::type;
-using column         = cudf::column;
-using table          = cudf::table;
-using table_view     = cudf::table_view;
+template <typename T, typename SourceElementT = T>
+using column_wrapper =
+  typename std::conditional<std::is_same<T, cudf::string_view>::value,
+                            cudf::test::strings_column_wrapper,
+                            cudf::test::fixed_width_column_wrapper<T, SourceElementT>>::type;
+using column     = cudf::column;
+using table      = cudf::table;
+using table_view = cudf::table_view;
 
 // Global environment for temporary files
 auto const temp_env = static_cast<cudf::test::TempDirTestEnvironment*>(
@@ -224,11 +225,12 @@ TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumnWithNulls)
 TYPED_TEST(ParquetWriterChronoTypeTest, Chronos)
 {
   auto sequence = cudf::test::make_counting_transform_iterator(
-    0, [](auto i) { return TypeParam((std::rand() / 10000) * 1000); });
+    0, [](auto i) { return ((std::rand() / 10000) * 1000); });
   auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   constexpr auto num_rows = 100;
-  column_wrapper<TypeParam> col(sequence, sequence + num_rows, validity);
+  column_wrapper<TypeParam, typename decltype(sequence)::value_type> col(
+    sequence, sequence + num_rows, validity);
 
   std::vector<std::unique_ptr<column>> cols;
   cols.push_back(col.release());
@@ -249,12 +251,13 @@ TYPED_TEST(ParquetWriterChronoTypeTest, Chronos)
 TYPED_TEST(ParquetWriterChronoTypeTest, ChronosWithNulls)
 {
   auto sequence = cudf::test::make_counting_transform_iterator(
-    0, [](auto i) { return TypeParam((std::rand() / 10000) * 1000); });
+    0, [](auto i) { return ((std::rand() / 10000) * 1000); });
   auto validity =
     cudf::test::make_counting_transform_iterator(0, [](auto i) { return (i > 30) && (i < 60); });
 
   constexpr auto num_rows = 100;
-  column_wrapper<TypeParam> col(sequence, sequence + num_rows, validity);
+  column_wrapper<TypeParam, typename decltype(sequence)::value_type> col(
+    sequence, sequence + num_rows, validity);
 
   std::vector<std::unique_ptr<column>> cols;
   cols.push_back(col.release());
@@ -870,20 +873,20 @@ TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize)
   bool mask[] = {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
                  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
 
-  T c1a[] = {5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
-             5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5};
-  T c1b[] = {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-             6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6};
+  T c1a[num_els];
+  std::fill(c1a, c1a + num_els, static_cast<T>(5));
+  T c1b[num_els];
+  std::fill(c1b, c1b + num_els, static_cast<T>(6));
   column_wrapper<T> c1a_w(c1a, c1a + num_els, mask);
   column_wrapper<T> c1b_w(c1b, c1b + num_els, mask);
   cols.push_back(c1a_w.release());
   cols.push_back(c1b_w.release());
   cudf::table tbl1(std::move(cols));
 
-  T c2a[] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,
-             8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8};
-  T c2b[] = {9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9,
-             9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9};
+  T c2a[num_els];
+  std::fill(c2a, c2a + num_els, static_cast<T>(8));
+  T c2b[num_els];
+  std::fill(c2b, c2b + num_els, static_cast<T>(9));
   column_wrapper<T> c2a_w(c2a, c2a + num_els, mask);
   column_wrapper<T> c2b_w(c2b, c2b + num_els, mask);
   cols.push_back(c2a_w.release());
@@ -918,20 +921,20 @@ TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize2)
   bool mask[] = {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
                  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
 
-  T c1a[] = {5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
-             5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5};
-  T c1b[] = {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-             6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6};
+  T c1a[num_els];
+  std::fill(c1a, c1a + num_els, static_cast<T>(5));
+  T c1b[num_els];
+  std::fill(c1b, c1b + num_els, static_cast<T>(6));
   column_wrapper<T> c1a_w(c1a, c1a + num_els, mask);
   column_wrapper<T> c1b_w(c1b, c1b + num_els, mask);
   cols.push_back(c1a_w.release());
   cols.push_back(c1b_w.release());
   cudf::table tbl1(std::move(cols));
 
-  T c2a[] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,
-             8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8};
-  T c2b[] = {9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9,
-             9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9};
+  T c2a[num_els];
+  std::fill(c2a, c2a + num_els, static_cast<T>(8));
+  T c2b[num_els];
+  std::fill(c2b, c2b + num_els, static_cast<T>(9));
   column_wrapper<T> c2a_w(c2a, c2a + num_els, mask);
   column_wrapper<T> c2b_w(c2b, c2b + num_els, mask);
   cols.push_back(c2a_w.release());
@@ -1199,6 +1202,118 @@ TEST_F(ParquetReaderTest, UserBounds)
     // we should get empty columns back
     EXPECT_EQ(result.tbl->view().num_columns(), 4);
     EXPECT_EQ(result.tbl->view().column(0).size(), 0);
+  }
+}
+
+TEST_F(ParquetReaderTest, ReorderedColumns)
+{
+  {
+    auto a = cudf::test::strings_column_wrapper{{"a", "", "c"}, {true, false, true}};
+    auto b = cudf::test::fixed_width_column_wrapper<int>{1, 2, 3};
+
+    cudf::table_view tbl{{a, b}};
+    auto filepath = temp_env->get_temp_filepath("ReorderedColumns.parquet");
+    cudf_io::table_metadata md;
+    md.column_names.push_back("a");
+    md.column_names.push_back("b");
+    cudf_io::write_parquet_args args{cudf_io::sink_info{filepath}, tbl};
+    args.metadata = &md;
+    cudf_io::write_parquet(args);
+
+    // read them out of order
+    cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
+    read_args.columns.push_back("b");
+    read_args.columns.push_back("a");
+    auto result = cudf_io::read_parquet(read_args);
+
+    cudf::test::expect_columns_equal(result.tbl->view().column(0), b);
+    cudf::test::expect_columns_equal(result.tbl->view().column(1), a);
+  }
+
+  {
+    auto a = cudf::test::fixed_width_column_wrapper<int>{1, 2, 3};
+    auto b = cudf::test::strings_column_wrapper{{"a", "", "c"}, {true, false, true}};
+
+    cudf::table_view tbl{{a, b}};
+    auto filepath = temp_env->get_temp_filepath("ReorderedColumns2.parquet");
+    cudf_io::table_metadata md;
+    md.column_names.push_back("a");
+    md.column_names.push_back("b");
+    cudf_io::write_parquet_args args{cudf_io::sink_info{filepath}, tbl};
+    args.metadata = &md;
+    cudf_io::write_parquet(args);
+
+    // read them out of order
+    cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
+    read_args.columns.push_back("b");
+    read_args.columns.push_back("a");
+    auto result = cudf_io::read_parquet(read_args);
+
+    cudf::test::expect_columns_equal(result.tbl->view().column(0), b);
+    cudf::test::expect_columns_equal(result.tbl->view().column(1), a);
+  }
+
+  auto a = cudf::test::fixed_width_column_wrapper<int>{1, 2, 3, 10, 20, 30};
+  auto b = cudf::test::strings_column_wrapper{{"a", "", "c", "cats", "dogs", "owls"},
+                                              {true, false, true, true, false, true}};
+  auto c = cudf::test::fixed_width_column_wrapper<int>{{15, 16, 17, 25, 26, 32},
+                                                       {false, true, true, true, true, false}};
+  auto d = cudf::test::strings_column_wrapper{"ducks", "sheep", "cows", "fish", "birds", "ants"};
+
+  cudf::table_view tbl{{a, b, c, d}};
+  auto filepath = temp_env->get_temp_filepath("ReorderedColumns3.parquet");
+  cudf_io::table_metadata md;
+  md.column_names.push_back("a");
+  md.column_names.push_back("b");
+  md.column_names.push_back("c");
+  md.column_names.push_back("d");
+  cudf_io::write_parquet_args args{cudf_io::sink_info{filepath}, tbl};
+  args.metadata = &md;
+  cudf_io::write_parquet(args);
+
+  {
+    // read them out of order
+    cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
+    read_args.columns.push_back("d");
+    read_args.columns.push_back("a");
+    read_args.columns.push_back("b");
+    read_args.columns.push_back("c");
+    auto result = cudf_io::read_parquet(read_args);
+
+    cudf::test::expect_columns_equal(result.tbl->view().column(0), d);
+    cudf::test::expect_columns_equal(result.tbl->view().column(1), a);
+    cudf::test::expect_columns_equal(result.tbl->view().column(2), b);
+    cudf::test::expect_columns_equal(result.tbl->view().column(3), c);
+  }
+
+  {
+    // read them out of order
+    cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
+    read_args.columns.push_back("c");
+    read_args.columns.push_back("d");
+    read_args.columns.push_back("a");
+    read_args.columns.push_back("b");
+    auto result = cudf_io::read_parquet(read_args);
+
+    cudf::test::expect_columns_equal(result.tbl->view().column(0), c);
+    cudf::test::expect_columns_equal(result.tbl->view().column(1), d);
+    cudf::test::expect_columns_equal(result.tbl->view().column(2), a);
+    cudf::test::expect_columns_equal(result.tbl->view().column(3), b);
+  }
+
+  {
+    // read them out of order
+    cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
+    read_args.columns.push_back("d");
+    read_args.columns.push_back("c");
+    read_args.columns.push_back("b");
+    read_args.columns.push_back("a");
+    auto result = cudf_io::read_parquet(read_args);
+
+    cudf::test::expect_columns_equal(result.tbl->view().column(0), d);
+    cudf::test::expect_columns_equal(result.tbl->view().column(1), c);
+    cudf::test::expect_columns_equal(result.tbl->view().column(2), b);
+    cudf::test::expect_columns_equal(result.tbl->view().column(3), a);
   }
 }
 

@@ -89,16 +89,33 @@ if("${GPU_ARCHS}" STREQUAL "")
 endif()
 
 if("${GPU_ARCHS}" STREQUAL "ALL")
-  set(GPU_ARCHS "60")
-  if((CUDA_VERSION_MAJOR EQUAL 9) OR (CUDA_VERSION_MAJOR GREATER 9))
-    set(GPU_ARCHS "${GPU_ARCHS};70")
+  
+  # Check for embedded vs workstation architectures
+  if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
+    # This is being built for Linux4Tegra or SBSA ARM64
+    set(GPU_ARCHS "62")
+    if((CUDA_VERSION_MAJOR EQUAL 9) OR (CUDA_VERSION_MAJOR GREATER 9))
+      set(GPU_ARCHS "${GPU_ARCHS};72")
+    endif()
+    if((CUDA_VERSION_MAJOR EQUAL 11) OR (CUDA_VERSION_MAJOR GREATER 11))
+      set(GPU_ARCHS "${GPU_ARCHS};75;80")
+    endif()
+
+  else()
+    # This is being built for an x86 or x86_64 architecture
+    set(GPU_ARCHS "60")
+    if((CUDA_VERSION_MAJOR EQUAL 9) OR (CUDA_VERSION_MAJOR GREATER 9))
+      set(GPU_ARCHS "${GPU_ARCHS};70")
+    endif()
+    if((CUDA_VERSION_MAJOR EQUAL 10) OR (CUDA_VERSION_MAJOR GREATER 10))
+      set(GPU_ARCHS "${GPU_ARCHS};75")
+    endif()
+    if((CUDA_VERSION_MAJOR EQUAL 11) OR (CUDA_VERSION_MAJOR GREATER 11))
+      set(GPU_ARCHS "${GPU_ARCHS};80")
+    endif()
+
   endif()
-  if((CUDA_VERSION_MAJOR EQUAL 10) OR (CUDA_VERSION_MAJOR GREATER 10))
-    set(GPU_ARCHS "${GPU_ARCHS};75")
-  endif()
-  if((CUDA_VERSION_MAJOR EQUAL 11) OR (CUDA_VERSION_MAJOR GREATER 11))
-    set(GPU_ARCHS "${GPU_ARCHS};80")
-  endif()
+  
 endif()
 message("GPU_ARCHS = ${GPU_ARCHS}")
 
@@ -359,8 +376,7 @@ message(STATUS "BENCHMARK_LIST set to: ${BENCHMARK_LIST}")
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
-include_directories("${CUB_INCLUDE_DIR}"
-                    "${THRUST_INCLUDE_DIR}"
+include_directories("${THRUST_INCLUDE_DIR}"
                     "${JITIFY_INCLUDE_DIR}"
                     "${LIBCUDACXX_INCLUDE_DIR}")
 
@@ -412,7 +428,7 @@ add_library(cudf
             src/binaryop/jit/code/kernel.cpp
             src/binaryop/jit/code/operation.cpp
             src/binaryop/jit/code/traits.cpp
-            src/interop/from_arrow.cu
+            src/interop/from_arrow.cpp
             src/interop/to_arrow.cpp
             src/interop/dlpack.cpp
             src/jit/type.cpp
@@ -542,6 +558,7 @@ add_library(cudf
             src/strings/copying/concatenate.cu
             src/strings/copying/copying.cu
             src/strings/extract.cu
+            src/strings/filter_chars.cu
             src/strings/find.cu
             src/strings/findall.cu
             src/strings/find_multiple.cu
@@ -611,6 +628,7 @@ add_library(cudf
             src/groupby/sort/group_nth_element.cu
             src/groupby/sort/group_std.cu
             src/groupby/sort/group_quantiles.cu
+            src/groupby/sort/group_collect.cu
             src/aggregation/aggregation.cpp
             src/aggregation/aggregation.cu
             src/aggregation/result_cache.cpp

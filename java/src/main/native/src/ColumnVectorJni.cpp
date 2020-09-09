@@ -22,6 +22,7 @@
 #include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/datetime.hpp>
 #include <cudf/filling.hpp>
+#include <cudf/hashing.hpp>
 #include <cudf/quantiles.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/replace.hpp>
@@ -1185,6 +1186,26 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_normalizeNANsAndZeros(J
     cudf::jni::auto_set_device(env);
     return reinterpret_cast<jlong>(
         cudf::normalize_nans_and_zeros(*reinterpret_cast<column_view *>(input_column)).release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_hash(JNIEnv *env,
+                                                                  jobject j_object,
+                                                                  jlongArray column_handles,
+                                                                  jint hash_function_id) {
+  JNI_NULL_CHECK(env, column_handles, "array of column handles is null", 0);
+
+  try {
+    cudf::jni::native_jpointerArray<cudf::column_view> n_cudf_columns(env, column_handles);
+    std::vector<cudf::column_view> column_views;
+    std::transform(n_cudf_columns.data(), n_cudf_columns.data() + n_cudf_columns.size(),
+                   std::back_inserter(column_views),
+                   [](auto const &p_column) { return *p_column; });
+    cudf::table_view *input_table = new cudf::table_view(column_views);
+
+    std::unique_ptr<cudf::column> result = cudf::hash(*input_table, static_cast<cudf::hash_id>(hash_function_id));
+    return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
 }

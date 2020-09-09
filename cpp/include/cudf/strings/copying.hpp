@@ -51,7 +51,7 @@ std::unique_ptr<cudf::column> copy_slice(
   size_type end                       = -1,
   size_type step                      = 1,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
 }  // namespace strings

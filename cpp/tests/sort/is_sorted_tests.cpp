@@ -147,7 +147,7 @@ descending()
 template <>
 auto empty<cudf::string_view>()
 {
-  return strings_column_wrapper({});
+  return strings_column_wrapper();
 }
 
 template <>

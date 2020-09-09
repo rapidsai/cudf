@@ -136,25 +136,18 @@ struct fixed_width_type_converter {
     std::transform(begin, end, out, [](auto const& e) { return static_cast<ToT>(e); });
   }
 
-#if 0
-  // This is to be used when timestamp disallows construction from tick counts; presently,
-  // this conflicts with the convertible/constructible overload
   // Convert integral values to timestamps
   template <
-    typename FromT                        = From,
-    typename ToT                       = To,
-    typename InputIterator, typename OutputIterator,
+    typename FromT = From,
+    typename ToT   = To,
+    typename InputIterator,
+    typename OutputIterator,
     typename std::enable_if<std::is_integral<FromT>::value && cudf::is_timestamp_t<ToT>::value,
                             void>::type* = nullptr>
-  void operator()(InputIterator begin,
-                  InputIterator end,
-                  OutputIterator out
-                  ) const
+  void operator()(InputIterator begin, InputIterator end, OutputIterator out) const
   {
-      std::transform(
-      begin, end, out, [](auto const& e) { return ToT{typename ToT::duration{e}}; });
+    std::transform(begin, end, out, [](auto const& e) { return ToT{typename ToT::duration{e}}; });
   }
-#endif
 };
 
 /**
@@ -430,6 +423,34 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
     : fixed_width_column_wrapper(begin, end, std::cbegin(validity))
   {
   }
+
+  /**
+   * @brief Construct a nullable column from a list of pairs of fixed-width
+   * elements and validity booleans of each element.
+   *
+   * The validity of each element is determined by the boolean element in the pair
+   * where `true` indicates the element is valid, and `false` indicates the
+   * element is null.
+   *
+   * Example:
+   * @code{.cpp}
+   * // Creates a nullable INT32 column with 4 elements: {1, NULL, 3, NULL}
+   * using p = std::pair<int32_t, bool>;
+   * fixed_width_column_wrapper<int32_t> w( p{1, true}, p{2, false}, p{3, true}, p{4, false} );
+   * @endcode
+   *
+   * @param elements The list of pairs of element and validity booleans
+   */
+  template <typename ElementFrom>
+  fixed_width_column_wrapper(std::initializer_list<std::pair<ElementFrom, bool>> elements)
+  {
+    auto begin =
+      thrust::make_transform_iterator(elements.begin(), [](auto const& e) { return e.first; });
+    auto end = begin + elements.size();
+    auto v =
+      thrust::make_transform_iterator(elements.begin(), [](auto const& e) { return e.second; });
+    wrapped = fixed_width_column_wrapper<ElementTo, ElementFrom>(begin, end, v).release();
+  }
 };
 
 /**
@@ -437,6 +458,11 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
  **/
 class strings_column_wrapper : public detail::column_wrapper {
  public:
+  /**
+   * @brief Default constructor initializes an empty column of strings
+   */
+  strings_column_wrapper() : strings_column_wrapper(std::initializer_list<std::string>{}) {}
+
   /**
    * @brief Construct a non-nullable column of strings from the range
    * `[begin,end)`.
@@ -568,6 +594,36 @@ class strings_column_wrapper : public detail::column_wrapper {
     : strings_column_wrapper(std::cbegin(strings), std::cend(strings), std::cbegin(validity))
   {
   }
+
+  /**
+   * @brief Construct a nullable column from a list of pairs of strings
+   * and validity booleans of each string.
+   *
+   * The validity of each string is determined by the boolean element in the pair
+   * where `true` indicates the string is valid, and `false` indicates the
+   * string is null.
+   *
+   * Example:
+   * @code{.cpp}
+   * // Creates a nullable STRING column with 7 string elements:
+   * // {NULL, "this", NULL, "a", NULL, "of", NULL}
+   * using p = std::pair<std::string, bool>;
+   * strings_column_wrapper s( p{"", false}, p{"this", true}, p{"is", false},
+   *                           p{"a", true}, p{"column", false}, p{"of", true},
+   *                           p{"strings", false} );
+   * @endcode
+   *
+   * @param strings The list of pairs of strings and validity booleans
+   */
+  strings_column_wrapper(std::initializer_list<std::pair<std::string, bool>> strings)
+  {
+    auto begin =
+      thrust::make_transform_iterator(strings.begin(), [](auto const& s) { return s.first; });
+    auto end = begin + strings.size();
+    auto v =
+      thrust::make_transform_iterator(strings.begin(), [](auto const& s) { return s.second; });
+    wrapped = strings_column_wrapper(begin, end, v).release();
+  }
 };
 
 /**
@@ -606,8 +662,8 @@ class strings_column_wrapper : public detail::column_wrapper {
  * @endcode
  *
  */
-template <typename T>
-class lists_column_wrapper : public cudf::test::detail::column_wrapper {
+template <typename T, typename SourceElementT = T>
+class lists_column_wrapper : public detail::column_wrapper {
  public:
   /**
    * @brief Construct a lists column containing a single list of fixed-width
@@ -623,9 +679,10 @@ class lists_column_wrapper : public cudf::test::detail::column_wrapper {
    * @param elements The list of elements
    */
   template <typename Element = T, std::enable_if_t<cudf::is_fixed_width<Element>()>* = nullptr>
-  lists_column_wrapper(std::initializer_list<T> elements) : column_wrapper{}
+  lists_column_wrapper(std::initializer_list<SourceElementT> elements) : column_wrapper{}
   {
-    build_from_non_nested(std::move(cudf::test::fixed_width_column_wrapper<T>(elements).release()));
+    build_from_non_nested(
+      std::move(cudf::test::fixed_width_column_wrapper<T, SourceElementT>(elements).release()));
   }
 
   /**
@@ -648,9 +705,8 @@ class lists_column_wrapper : public cudf::test::detail::column_wrapper {
             std::enable_if_t<cudf::is_fixed_width<Element>()>* = nullptr>
   lists_column_wrapper(InputIterator begin, InputIterator end) : column_wrapper{}
   {
-    build_from_non_nested(std::move(
-      cudf::test::fixed_width_column_wrapper<typename InputIterator::value_type>(begin, end)
-        .release()));
+    build_from_non_nested(
+      std::move(cudf::test::fixed_width_column_wrapper<T, SourceElementT>(begin, end).release()));
   }
 
   /**
@@ -671,10 +727,11 @@ class lists_column_wrapper : public cudf::test::detail::column_wrapper {
   template <typename Element = T,
             typename ValidityIterator,
             std::enable_if_t<cudf::is_fixed_width<Element>()>* = nullptr>
-  lists_column_wrapper(std::initializer_list<T> elements, ValidityIterator v) : column_wrapper{}
+  lists_column_wrapper(std::initializer_list<SourceElementT> elements, ValidityIterator v)
+    : column_wrapper{}
   {
     build_from_non_nested(
-      std::move(cudf::test::fixed_width_column_wrapper<T>(elements, v).release()));
+      std::move(cudf::test::fixed_width_column_wrapper<T, SourceElementT>(elements, v).release()));
   }
 
   /**
@@ -701,8 +758,8 @@ class lists_column_wrapper : public cudf::test::detail::column_wrapper {
   lists_column_wrapper(InputIterator begin, InputIterator end, ValidityIterator v)
     : column_wrapper{}
   {
-    build_from_non_nested(
-      std::move(cudf::test::fixed_width_column_wrapper<T>(begin, end, v).release()));
+    build_from_non_nested(std::move(
+      cudf::test::fixed_width_column_wrapper<T, SourceElementT>(begin, end, v).release()));
   }
 
   /**
@@ -772,7 +829,8 @@ class lists_column_wrapper : public cudf::test::detail::column_wrapper {
    *
    * @param elements The list of elements
    */
-  lists_column_wrapper(std::initializer_list<lists_column_wrapper<T>> elements) : column_wrapper{}
+  lists_column_wrapper(std::initializer_list<lists_column_wrapper<T, SourceElementT>> elements)
+    : column_wrapper{}
   {
     std::vector<bool> valids;
     build_from_nested(elements, valids);
@@ -820,7 +878,8 @@ class lists_column_wrapper : public cudf::test::detail::column_wrapper {
    * @param v The validity iterator
    */
   template <typename ValidityIterator>
-  lists_column_wrapper(std::initializer_list<lists_column_wrapper<T>> elements, ValidityIterator v)
+  lists_column_wrapper(std::initializer_list<lists_column_wrapper<T, SourceElementT>> elements,
+                       ValidityIterator v)
     : column_wrapper{}
   {
     std::vector<bool> validity;
@@ -848,7 +907,7 @@ class lists_column_wrapper : public cudf::test::detail::column_wrapper {
    * @param c Input column to be wrapped
    *
    */
-  void build_from_nested(std::initializer_list<lists_column_wrapper<T>> elements,
+  void build_from_nested(std::initializer_list<lists_column_wrapper<T, SourceElementT>> elements,
                          std::vector<bool> const& v)
   {
     auto valids = cudf::test::make_counting_transform_iterator(
@@ -980,7 +1039,7 @@ class lists_column_wrapper : public cudf::test::detail::column_wrapper {
       CUDF_EXPECTS(col.size() == 0, "Encountered mismatched column!");
 
       auto remainder = empty_like(expected_hierarchy);
-      return std::move(remainder);
+      return remainder;
     }
 
     lists_column_view lcv(col);
@@ -993,7 +1052,7 @@ class lists_column_wrapper : public cudf::test::detail::column_wrapper {
   }
 
   std::pair<std::vector<column_view>, std::vector<std::unique_ptr<column>>> preprocess_columns(
-    std::initializer_list<lists_column_wrapper<T>> const& elements,
+    std::initializer_list<lists_column_wrapper<T, SourceElementT>> const& elements,
     column_view& expected_hierarchy,
     int expected_depth)
   {
