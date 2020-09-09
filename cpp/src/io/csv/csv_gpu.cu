@@ -17,6 +17,7 @@
 #include "csv_common.h"
 #include "csv_gpu.h"
 #include "datetime.cuh"
+#include "thrust/transform.h"
 
 #include <io/utilities/block_utils.cuh>
 #include <io/utilities/parsing_utils.cuh>
@@ -33,6 +34,7 @@
 
 #include <thrust/detail/copy.h>
 
+#include <iterator>
 #include <type_traits>
 
 using namespace ::cudf::io;
@@ -1016,14 +1018,14 @@ void __host__ remove_blank_rows(rmm::device_vector<uint64_t> &row_offsets,
   row_offsets.resize(new_end - row_offsets.begin());
 }
 
-std::vector<column_parse::stats> detect_column_types(const char *data,
-                                                     const uint64_t *row_starts,
-                                                     size_t num_rows,
-                                                     size_t num_actual_columns,
-                                                     size_t num_active_columns,
-                                                     const cudf::io::ParseOptions &options,
-                                                     column_parse::flags *flags,
-                                                     cudaStream_t stream)
+thrust::host_vector<column_parse::stats> detect_column_types(const char *data,
+                                                             const uint64_t *row_starts,
+                                                             size_t num_rows,
+                                                             size_t num_actual_columns,
+                                                             size_t num_active_columns,
+                                                             const cudf::io::ParseOptions &options,
+                                                             column_parse::flags *flags,
+                                                             cudaStream_t stream)
 {
   // Calculate actual block count to use based on records count
   const int block_size = csvparse_block_dim;
@@ -1034,11 +1036,7 @@ std::vector<column_parse::stats> detect_column_types(const char *data,
   data_type_detection<<<grid_size, block_size, 0, stream>>>(
     data, options, num_rows, num_actual_columns, flags, row_starts, d_stats.data().get());
 
-  auto h_stats = std::vector<column_parse::stats>(num_active_columns);
-
-  thrust::copy(d_stats.begin(), d_stats.end(), h_stats.begin());
-
-  return h_stats;
+  return thrust::host_vector<column_parse::stats>(d_stats);
 }
 
 cudaError_t __host__ DecodeRowColumnData(const char *data,
