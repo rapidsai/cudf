@@ -169,7 +169,7 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
   cudf::size_type size = std::distance(begin, end);
   thrust::host_vector<ElementTo> elements;
   elements.reserve(size);
-  fixed_width_type_converter<ElementFrom, ElementTo>{}(begin, end, elements.begin());
+  fixed_width_type_converter<ElementFrom, ElementTo>{}(begin, end, std::back_inserter(elements));
   return rmm::device_buffer{elements.data(), size * sizeof(ElementTo)};
 }
 
