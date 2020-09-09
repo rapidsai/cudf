@@ -69,7 +69,7 @@ std::unique_ptr<column> lower_bound(
   table_view const& values,
   std::vector<order> const& column_order,
   std::vector<null_order> const& null_precedence,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Find largest indices in a sorted table where values should be
@@ -111,7 +111,7 @@ std::unique_ptr<column> upper_bound(
   table_view const& values,
   std::vector<order> const& column_order,
   std::vector<null_order> const& null_precedence,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Find if the `value` is present in the `col`
@@ -136,7 +136,7 @@ std::unique_ptr<column> upper_bound(
  */
 bool contains(column_view const& col,
               scalar const& value,
-              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+              rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief  Returns a new column of type bool identifying for each element of @p haystack column,
@@ -165,7 +165,7 @@ bool contains(column_view const& col,
 std::unique_ptr<column> contains(
   column_view const& haystack,
   column_view const& needles,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace cudf
