@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Arrays;
 import java.util.Optional;
 
 public class NvcompTest {
@@ -35,6 +36,158 @@ public class NvcompTest {
   @Test
   void testLZ4RoundTripAsync() {
     lz4RoundTrip(true);
+  }
+
+  @Test
+  void testBatchedLZ4RoundTripAsync() {
+    final long chunkSize = 64 * 1024;
+    final int maxElements = 1 * 1024 * 1024 + 1;
+    final int numBuffers = 200;
+    long[] data = new long[maxElements];
+    for (int i = 0; i < maxElements; ++i) {
+      data[i] = i;
+    }
+
+    DeviceMemoryBuffer[] originalBuffers = new DeviceMemoryBuffer[numBuffers];
+    DeviceMemoryBuffer[] uncompressedBuffers = new DeviceMemoryBuffer[numBuffers];
+    DeviceMemoryBuffer[] compressedBuffers = new DeviceMemoryBuffer[numBuffers];
+    try {
+      // create the batched buffers to compress
+      for (int i = 0; i < numBuffers; ++i) {
+        originalBuffers[i] = initBatchBuffer(data, i);
+      }
+
+      // compress the buffers
+      long[] inputAddrs = new long[numBuffers];
+      long[] inputSizes = new long[numBuffers];
+      for (int i = 0; i < numBuffers; ++i) {
+        inputAddrs[i] = originalBuffers[i].getAddress();
+        inputSizes[i] = originalBuffers[i].getLength();
+      }
+      long[] outputAddrs = new long[numBuffers];
+      long[] outputSizes = null;
+      long[] compressedSizes = new long[numBuffers];
+      long tempSize = Nvcomp.batchedLZ4CompressGetTempSize(inputAddrs, inputSizes, chunkSize);
+      try (DeviceMemoryBuffer tempBuffer = DeviceMemoryBuffer.allocate(tempSize)) {
+        outputSizes = Nvcomp.batchedLZ4CompressGetOutputSize(inputAddrs, inputSizes, chunkSize,
+                tempBuffer.getAddress(), tempBuffer.getLength());
+        for (int i = 0; i < numBuffers; ++i) {
+          compressedBuffers[i] = DeviceMemoryBuffer.allocate(outputSizes[i]);
+          outputAddrs[i] = compressedBuffers[i].getAddress();
+        }
+        try (HostMemoryBuffer compressedSizesBuffer = HostMemoryBuffer.allocate(8 * numBuffers)) {
+          Nvcomp.batchedLZ4CompressAsync(
+              compressedSizesBuffer.getAddress(),
+              inputAddrs,
+              inputSizes,
+              chunkSize,
+              tempBuffer.getAddress(),
+              tempBuffer.getLength(),
+              outputAddrs,
+              outputSizes,
+              0);
+          Cuda.DEFAULT_STREAM.sync();
+          for (int i = 0; i < numBuffers; ++i) {
+            compressedSizes[i] = compressedSizesBuffer.getLong(i * 8);
+          }
+        }
+      }
+
+      // decompress the buffers
+      for (int i = 0; i < numBuffers; ++i) {
+        inputAddrs[i] = compressedBuffers[i].getAddress();
+      }
+      inputSizes = compressedSizes;
+      long metadata = Nvcomp.batchedLZ4DecompressGetMetadata(inputAddrs, inputSizes, 0);
+      try {
+        outputSizes = Nvcomp.batchedLZ4DecompressGetOutputSize(metadata, numBuffers);
+        for (int i = 0; i < numBuffers; ++i) {
+          uncompressedBuffers[i] = DeviceMemoryBuffer.allocate(outputSizes[i]);
+          outputAddrs[i] = uncompressedBuffers[i].getAddress();
+        }
+        tempSize = Nvcomp.batchedLZ4DecompressGetTempSize(metadata);
+        try (DeviceMemoryBuffer tempBuffer = DeviceMemoryBuffer.allocate(tempSize)) {
+          Nvcomp.batchedLZ4DecompressAsync(
+              inputAddrs,
+              inputSizes,
+              tempBuffer.getAddress(),
+              tempBuffer.getLength(),
+              metadata,
+              outputAddrs,
+              outputSizes,
+              0);
+        }
+      } finally {
+        Nvcomp.batchedLZ4DecompressDestroyMetadata(metadata);
+      }
+
+      // check the decompressed results against the original
+      for (int i = 0; i < numBuffers; ++i) {
+        try (HostMemoryBuffer expected = HostMemoryBuffer.allocate(originalBuffers[i].getLength());
+             HostMemoryBuffer actual = HostMemoryBuffer.allocate(outputSizes[i])) {
+          Assertions.assertTrue(expected.getLength() <= Integer.MAX_VALUE);
+          Assertions.assertTrue(actual.getLength() <= Integer.MAX_VALUE);
+          Assertions.assertEquals(originalBuffers[i].getLength(), uncompressedBuffers[i].getLength(),
+              "uncompressed size mismatch at buffer " + i);
+          expected.copyFromDeviceBuffer(originalBuffers[i]);
+          actual.copyFromDeviceBuffer(uncompressedBuffers[i]);
+          byte[] expectedBytes = new byte[(int) expected.getLength()];
+          expected.getBytes(expectedBytes, 0, 0, expected.getLength());
+          byte[] actualBytes = new byte[(int) actual.getLength()];
+          actual.getBytes(actualBytes, 0, 0, actual.getLength());
+          Assertions.assertArrayEquals(expectedBytes, actualBytes,
+              "mismatch in batch buffer " + i);
+        }
+      }
+    } finally {
+      closeBufferArray(originalBuffers);
+      closeBufferArray(uncompressedBuffers);
+      closeBufferArray(compressedBuffers);
+    }
+  }
+
+  private void closeBuffer(MemoryBuffer buffer) {
+    if (buffer != null) {
+      buffer.close();
+    }
+  }
+
+  private void closeBufferArray(MemoryBuffer[] buffers) {
+    for (MemoryBuffer buffer : buffers) {
+      if (buffer != null) {
+        buffer.close();
+      }
+    }
+  }
+
+  private DeviceMemoryBuffer initBatchBuffer(long[] data, int bufferId) {
+    // grab a subsection of the data based on buffer ID
+    int dataStart = 0;
+    int dataLength = data.length / (bufferId + 1);
+    switch (bufferId % 3) {
+      case 0:
+        // take a portion of the first half
+        dataLength /= 2;
+        break;
+      case 1:
+        // take a portion of the last half
+        dataStart = data.length / 2;
+        dataLength /= 2;
+        break;
+      default:
+        break;
+    }
+    long[] bufferData = Arrays.copyOfRange(data, dataStart, dataStart + dataLength + 1);
+    DeviceMemoryBuffer devBuffer = null;
+    try (HostMemoryBuffer hmb = HostMemoryBuffer.allocate(bufferData.length * 8)) {
+      hmb.setLongs(0, bufferData, 0, bufferData.length);
+      devBuffer = DeviceMemoryBuffer.allocate(hmb.getLength());
+      devBuffer.copyFromHostBuffer(hmb);
+      return devBuffer;
+    } catch (Throwable t) {
+      closeBuffer(devBuffer);
+      throw new RuntimeException(t);
+    }
   }
 
   private void lz4RoundTrip(boolean useAsync) {
@@ -157,15 +310,9 @@ public class NvcompTest {
         Nvcomp.decompressDestroyMetadata(metadata);
       }
     } finally {
-      if (tempBuffer != null) {
-        tempBuffer.close();
-      }
-      if (compressedBuffer != null) {
-        compressedBuffer.close();
-      }
-      if (uncompressedBuffer != null) {
-        uncompressedBuffer.close();
-      }
+      closeBuffer(tempBuffer);
+      closeBuffer(compressedBuffer);
+      closeBuffer(uncompressedBuffer);
     }
   }
 
@@ -304,15 +451,9 @@ public class NvcompTest {
         Nvcomp.decompressDestroyMetadata(metadata);
       }
     } finally {
-      if (tempBuffer != null) {
-        tempBuffer.close();
-      }
-      if (compressedBuffer != null) {
-        compressedBuffer.close();
-      }
-      if (uncompressedBuffer != null) {
-        uncompressedBuffer.close();
-      }
+      closeBuffer(tempBuffer);
+      closeBuffer(compressedBuffer);
+      closeBuffer(uncompressedBuffer);
     }
   }
 }

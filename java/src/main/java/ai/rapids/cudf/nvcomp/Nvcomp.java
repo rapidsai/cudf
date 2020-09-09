@@ -133,7 +133,7 @@ public class Nvcomp {
       boolean computeExactSize);
 
   /**
-   * Perform cascaded compression synchronously using the specified CUDA
+   * Perform LZ4 compression synchronously using the specified CUDA
    * stream.
    * @param inPtr device address of the uncompressed data
    * @param inSize size of the uncompressed data in bytes
@@ -158,12 +158,13 @@ public class Nvcomp {
       long stream);
 
   /**
-   * Perform cascaded compression synchronously using the specified CUDA
+   * Perform LZ4 compression synchronously using the specified CUDA
    * stream.
-   * @param compressedSizeOutputPtr address of a 64-bit integer to update with
-   *                                the resulting compressed size of the data.
-   *                                For the operation to be truly asynchronous
-   *                                this should point to pinned host memory.
+   * @param compressedSizeOutputPtr host address of a 64-bit integer to update
+   *                                with the resulting compressed size of the
+   *                                data. For the operation to be truly
+   *                                asynchronous this should point to pinned
+   *                                host memory.
    * @param inPtr device address of the uncompressed data
    * @param inSize size of the uncompressed data in bytes
    * @param inputType type of uncompressed data
@@ -184,6 +185,124 @@ public class Nvcomp {
       long tempSize,
       long outPtr,
       long outSize,
+      long stream);
+
+  /**
+   * Extracts the metadata from the batch of inputs on the device and
+   * copies them to the host. This synchronizes on the stream.
+   * @param inPtrs device addresses of the compressed buffers in the batch
+   * @param inSizes corresponding byte sizes of the compressed buffers
+   * @param stream CUDA stream to use
+   * @return handle to the batched decompress metadata on the host
+   */
+  public static native long batchedLZ4DecompressGetMetadata(
+      long[] inPtrs,
+      long[] inSizes,
+      long stream);
+
+  /**
+   * Destroys batched metadata and frees the underlying host memory.
+   * @param batchedMetadata handle to the batched decompress metadata
+   */
+  public static native void batchedLZ4DecompressDestroyMetadata(long batchedMetadata);
+
+  /**
+   * Computes the temporary storage size in bytes needed to decompress
+   * the compressed batch.
+   * @param batchedMetadata handle to the batched metadata
+   * @return number of temporary storage bytes needed to decompress the batch
+   */
+  public static native long batchedLZ4DecompressGetTempSize(long batchedMetadata);
+
+  /**
+   * Computes the decompressed size of each chunk in the batch.
+   * @param batchedMetadata handle to the batched metadata
+   * @param numOutputs number of output buffers in the batch
+   * @return Array of corresponding output sizes needed to decompress
+   * each buffer in the batch.
+   */
+  public static native long[] batchedLZ4DecompressGetOutputSize(
+      long batchedMetadata,
+      long numOutputs);
+
+  /**
+   * Asynchronously decompress a batch of compressed data buffers.
+   * @param inPtrs device addresses of the compressed buffers
+   * @param inSizes corresponding byte sizes of the compressed buffers
+   * @param tempPtr device address of the temporary decompression space
+   * @param tempSize size of the temporary decompression space in bytes
+   * @param batchedMetadata handle to the batched metadata
+   * @param outPtrs device addresses of the uncompressed output buffers
+   * @param outSizes corresponding byte sizes of the uncompressed output buffers
+   * @param stream CUDA stream to use
+   */
+  public static native void batchedLZ4DecompressAsync(
+      long[] inPtrs,
+      long[] inSizes,
+      long tempPtr,
+      long tempSize,
+      long batchedMetadata,
+      long[] outPtrs,
+      long[] outSizes,
+      long stream);
+
+  /**
+   * Get the temporary workspace size required to perform compression of entire batch.
+   * @param inPtrs device addresses of the uncompressed buffers
+   * @param inSizes corresponding byte sizes of the uncompressed buffers
+   * @param chunkSize size of an LZ4 chunk in bytes
+   * @return The size of required temporary workspace in bytes to compress the batch.
+   */
+  public static native long batchedLZ4CompressGetTempSize(
+      long[] inPtrs,
+      long[] inSizes,
+      long chunkSize);
+
+  /**
+   * Get the required output sizes of each chunk to perform compression.
+   * @param inPtrs device addresses of the uncompressed buffers
+   * @param inSizes corresponding byte sizes of the uncompressed buffers
+   * @param chunkSize size of an LZ4 chunk in bytes
+   * @param tempPtr device address of the temporary workspace buffer
+   * @param tempSize size of the temporary workspace buffer in bytes
+   * @return array of corresponding sizes in bytes of the output buffers needed
+   * to compress the buffers in the batch.
+   */
+  public static native long[] batchedLZ4CompressGetOutputSize(
+      long[] inPtrs,
+      long[] inSizes,
+      long chunkSize,
+      long tempPtr,
+      long tempSize);
+
+  /**
+   * Asynchronously compress a batch of buffers. Note that
+   * compressedSizesOutPtr must point to pinned memory for this operation
+   * to be asynchronous.
+   * @param compressedSizesOutPtr host address where to write the sizes of the
+   *                              compressed data written to the corresponding
+   *                              output buffers. Must point to a buffer with
+   *                              at least 8 bytes of memory per output buffer
+   *                              in the batch. For asynchronous operation
+   *                              this must point to pinned host memory.
+   * @param inPtrs device addresses of the uncompressed buffers
+   * @param inSizes corresponding byte sizes of the uncompressed buffers
+   * @param chunkSize size of an LZ4 chunk in bytes
+   * @param tempPtr device address of the temporary workspace buffer
+   * @param tempSize size of the temporary workspace buffer in bytes
+   * @param outPtrs device addresses of the output compressed buffers
+   * @param outSizes corresponding sizes in bytes of the output buffers
+   * @param stream CUDA stream to use
+   */
+  public static native void batchedLZ4CompressAsync(
+      long compressedSizesOutPtr,
+      long[] inPtrs,
+      long[] inSizes,
+      long chunkSize,
+      long tempPtr,
+      long tempSize,
+      long[] outPtrs,
+      long[] outSizes,
       long stream);
 
   /**

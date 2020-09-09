@@ -22,7 +22,7 @@ include(ExternalProject)
 
 ExternalProject_Add(nvcomp
     GIT_REPOSITORY  https://github.com/NVIDIA/nvcomp.git
-    GIT_TAG         v1.0.0
+    GIT_TAG         b694e5b72b2a7c4bbadadc425eae42a336d02f3d
     GIT_SHALLOW     true
     SOURCE_DIR      "${NVCOMP_ROOT}/nvcomp"
     BINARY_DIR      "${NVCOMP_ROOT}/build"
