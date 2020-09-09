@@ -283,7 +283,7 @@ uvector_pair data_normalizer::normalize(char const* d_strings,
                     thrust::make_counting_iterator<uint32_t>(num_offsets),
                     d_strings_offsets->begin(),
                     [d_offsets] __device__(auto idx) {
-                      auto offset = d_offsets[0];  // adjust for any offset to the offsets
+                      auto const offset = d_offsets[0];  // adjust for any offset to the offsets
                       return d_offsets[idx] - offset;
                     });
   uint32_t const bytes_count = d_strings_offsets->element(num_strings, stream);
