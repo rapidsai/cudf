@@ -260,44 +260,51 @@ def test_dataframe_basic():
     assert gdf["val"].isnull().all()
 
 
-def test_dataframe_drop_method():
-    df = DataFrame()
-    data = np.asarray(range(10))
-    df["a"] = data
-    df["b"] = data
-    df["c"] = data
+@pytest.mark.parametrize(
+    "pdf",
+    [pd.DataFrame({"a": range(10), "b": range(10, 20), "c": range(1, 11)})],
+)
+@pytest.mark.parametrize(
+    "columns",
+    [
+        # ['a'], ['b'], "a", "b",
+        ["a", "b"]
+    ],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_dataframe_drop_columns(pdf, columns, inplace):
+    gdf = DataFrame.from_pandas(pdf)
+    print(pdf)
+    print(gdf)
+    expected = pdf.drop(columns=columns, errors="ignore", inplace=inplace)
+    actual = gdf.drop(columns=columns, inplace=inplace)
 
-    assert tuple(df.columns) == ("a", "b", "c")
-    assert tuple(df.drop("a").columns) == ("b", "c")
-    assert tuple(df.drop("a", axis=1).columns) == ("b", "c")
-    assert tuple(df.columns) == ("a", "b", "c")
-    assert tuple(df.drop(["a", "b"]).columns) == ("c",)
-    assert tuple(df.drop(["a", "a", "b"]).columns) == ("c",)
-    assert tuple(df.columns) == ("a", "b", "c")
-    assert tuple(df.drop(["a", "b"]).columns) == ("c",)
-    assert tuple(df.columns) == ("a", "b", "c")
-    assert tuple(df.drop(columns=["a", "b"]).columns) == ("c",)
-    assert tuple(df.columns) == ("a", "b", "c")
-    assert tuple(df.drop(columns="a").columns) == ("b", "c")
-    assert tuple(df.columns) == ("a", "b", "c")
-    assert tuple(df.drop(columns=["a"]).columns) == ("b", "c")
-    assert tuple(df.columns) == ("a", "b", "c")
-    assert tuple(df.drop(columns=["a", "b", "c"]).columns) == tuple()
-    assert tuple(df.columns) == ("a", "b", "c")
+    if inplace:
+        expected = pdf
+        actual = gdf
 
-    # Test drop error
-    with pytest.raises(NameError) as raises:
-        df.drop("d")
-    raises.match("column 'd' does not exist")
-    with pytest.raises(NameError) as raises:
-        df.drop(["a", "d", "b"])
-    raises.match("column 'd' does not exist")
-    with pytest.raises(ValueError) as raises:
-        df.drop("a", axis=1, columns="a")
-    raises.match("Cannot specify both")
-    with pytest.raises(ValueError) as raises:
-        df.drop(axis=1)
-    raises.match("Need to specify at least")
+    assert_eq(expected, actual)
+
+
+# def test_dataframe_drop_labels()
+# assert tuple(df.drop("a", axis=1).columns) == ("b", "c")
+# assert tuple(df.drop(["a", "b"]).columns) == ("c",)
+# assert tuple(df.drop(["a", "a", "b"]).columns) == ("c",)
+# assert tuple(df.drop(["a", "b"]).columns) == ("c",)
+
+# # Test drop error
+# with pytest.raises(NameError) as raises:
+#     df.drop("d")
+# raises.match("column 'd' does not exist")
+# with pytest.raises(NameError) as raises:
+#     df.drop(["a", "d", "b"])
+# raises.match("column 'd' does not exist")
+# with pytest.raises(ValueError) as raises:
+#     df.drop("a", axis=1, columns="a")
+# raises.match("Cannot specify both")
+# with pytest.raises(ValueError) as raises:
+#     df.drop(axis=1)
+# raises.match("Need to specify at least")
 
 
 def test_dataframe_column_add_drop_via_setitem():

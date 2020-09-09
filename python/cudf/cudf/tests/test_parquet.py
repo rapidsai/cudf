@@ -5,19 +5,18 @@ import random
 from glob import glob
 from io import BytesIO
 from string import ascii_letters
-from packaging import version
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+from packaging import version
 from pyarrow import parquet as pq
 
 import cudf
 from cudf.io.parquet import ParquetWriter, merge_parquet_filemetadata
+from cudf.tests import dataset_generator as dg
 from cudf.tests.utils import assert_eq
-
-import cudf.tests.dataset_generator as dg
 
 
 @pytest.fixture(scope="module")
@@ -206,7 +205,7 @@ def test_parquet_reader_basic(parquet_file, columns, engine):
         if "col_category" in expect.columns:
             expect = expect.drop(columns=["col_category"])
         if "col_category" in got.columns:
-            got = got.drop("col_category")
+            got = got.drop(columns=["col_category"])
 
     assert_eq(expect, got, check_categorical=False)
 

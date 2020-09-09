@@ -699,7 +699,7 @@ def test_merge_sort(ons, hows):
     # the non-key columns will NOT match pandas ordering
     assert_eq(pd_merge[kwargs["on"]], gd_merge[kwargs["on"]])
     pd_merge = pd_merge.drop(kwargs["on"], axis=1)
-    gd_merge = gd_merge.drop(kwargs["on"])
+    gd_merge = gd_merge.drop(kwargs["on"], axis=1)
     if not pd_merge.empty:
         # check to make sure the non join key columns are the same
         pd_merge = pd_merge.sort_values(list(pd_merge.columns)).reset_index(

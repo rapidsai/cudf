@@ -113,7 +113,7 @@ def test_hdf_writer(tmpdir, pdf, gdf, complib, format):
 
     if format == "fixed":
         pdf = pdf.drop("col_category", axis=1)
-        gdf = gdf.drop("col_category")
+        gdf = gdf.drop("col_category", axis=1)
 
     pdf_df_fname = tmpdir.join("pdf_df.hdf")
     gdf_df_fname = tmpdir.join("gdf_df.hdf")
