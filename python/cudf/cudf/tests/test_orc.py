@@ -262,6 +262,21 @@ def test_orc_read_filtered(datadir, engine, predicate, expected_len):
 
 
 @pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
+def test_orc_read_filtered_joins(datadir, engine):
+    path = datadir / "TestOrcFile.testStripeLevelStats.orc"
+    try:
+        df_small = cudf.read_orc(path, engine=engine, stripes=[0, 1])
+        df_filtered = cudf.read_orc(
+            path, engine=engine, filters=[("int1", "==", (df_small, "int1"),)],
+        )
+    except pa.ArrowIOError as e:
+        pytest.skip(".orc file is not found: %s" % e)
+
+    # Assert # of rows after filtering
+    assert len(df_filtered) == 10_000
+
+
+@pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
 def test_orc_read_stripes(datadir, engine):
     path = datadir / "TestOrcFile.testDate1900.orc"
     try:

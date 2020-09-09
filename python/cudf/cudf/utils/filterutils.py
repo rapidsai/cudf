@@ -1,5 +1,6 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
+from collections import defaultdict
 import datetime
 
 import pandas as pd
@@ -109,9 +110,47 @@ def _apply_filters(filters, stats):
     return False
 
 
+def _compile_joins(conjunction, statistics_cache):
+    for col, op, val in conjunction:
+        if isinstance(val, tuple):
+            df, df_col = val
+            df_id = id(df)
+
+            # Get statistics of value being joined with
+            if df_id not in statistics_cache:
+                statistics_cache[df_id]["min"] = df[df_col].min()
+                statistics_cache[df_id]["max"] = df[df_col].max()
+            val_min = statistics_cache[df_id]["min"]
+            val_max = statistics_cache[df_id]["max"]
+
+            # Replace predicate
+            if op == "=" or op == "==":
+                yield (col, ">=", val_min)
+                yield (col, "<=", val_max)
+            elif op == ">" or op == ">=":
+                yield (col, op, val_min)
+            elif op == "<" or op == "<=":
+                yield (col, op, val_max)
+            else:
+                raise ValueError(
+                    '"{0}" is not a valid operator in join predicates.'.format(
+                        op
+                    )
+                )
+        else:
+            yield (col, op, val)
+
+
 def _prepare_filters(filters):
     # Coerce filters into list of lists of tuples
     if isinstance(filters[0][0], str):
         filters = [filters]
+
+    # Compile joins
+    statistics_cache = defaultdict(dict)
+    filters = [
+        list(_compile_joins(conjunction, statistics_cache))
+        for conjunction in filters
+    ]
 
     return filters
