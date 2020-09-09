@@ -16,7 +16,6 @@
 
 #include "json_common.h"
 #include "json_gpu.h"
-#include "thrust/detail/copy.h"
 
 #include <io/csv/datetime.cuh>
 #include <io/utilities/parsing_utils.cuh>
@@ -32,6 +31,7 @@
 
 #include <rmm/device_buffer.hpp>
 
+#include <thrust/detail/copy.h>
 #include <thrust/find.h>
 
 namespace cudf {

@@ -19,22 +19,22 @@
  * @brief cuDF-IO CSV reader class implementation
  **/
 
-#include "cudf/io/types.hpp"
 #include "reader_impl.hpp"
+
+#include <io/comp/io_uncomp.h>
+#include <io/utilities/parsing_utils.cuh>
+#include <io/utilities/type_conversion.cuh>
+
+#include <cudf/io/types.hpp>
+#include <cudf/strings/replace.hpp>
+#include <cudf/table/table.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <algorithm>
 #include <iostream>
 #include <numeric>
 #include <tuple>
 #include <unordered_map>
-
-#include <cudf/strings/replace.hpp>
-#include <cudf/table/table.hpp>
-#include <cudf/utilities/error.hpp>
-
-#include <io/comp/io_uncomp.h>
-#include <io/utilities/parsing_utils.cuh>
-#include <io/utilities/type_conversion.cuh>
 
 using std::string;
 using std::vector;

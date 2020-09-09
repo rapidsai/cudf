@@ -17,7 +17,6 @@
 #include "csv_common.h"
 #include "csv_gpu.h"
 #include "datetime.cuh"
-#include "thrust/transform.h"
 
 #include <io/utilities/block_utils.cuh>
 #include <io/utilities/parsing_utils.cuh>
@@ -33,6 +32,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <thrust/detail/copy.h>
+#include <thrust/transform.h>
 
 #include <iterator>
 #include <type_traits>
