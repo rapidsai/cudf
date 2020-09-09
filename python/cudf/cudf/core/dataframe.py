@@ -4521,7 +4521,7 @@ class DataFrame(Frame, Serializable):
             else:
                 deep = False
                 if (
-                    "String" in dtype_counts
+                    "string" in dtype_counts
                     or self.index.dtype == cudf.StringDtype()
                 ):
                     size_qualifier = "+"

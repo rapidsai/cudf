@@ -48,9 +48,9 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
     # check empty case
     if len(incol) <= incol.null_count:
         if reduction_op == 'sum' or reduction_op == 'sum_of_squares':
-            return incol.dtype.type(0)
+            return incol.dtype.type(0).value
         if reduction_op == 'product':
-            return incol.dtype.type(1)
+            return incol.dtype.type(1).value
         return np.nan
 
     with nogil:

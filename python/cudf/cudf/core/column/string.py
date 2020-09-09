@@ -4567,7 +4567,7 @@ class StringColumn(column.ColumnBase):
         )
         kwargs.update(dtype=out_dtype)
 
-        if out_dtype.type is np.datetime64:
+        if isinstance(out_dtype, cudf.Datetime):
             if "format" not in kwargs:
                 if len(self) > 0:
                     # infer on host from the first not na element
@@ -4586,7 +4586,7 @@ class StringColumn(column.ColumnBase):
                 raise ValueError("Could not convert `None` value to datetime")
 
             boolean_match = self.binary_operator("eq", "NaT")
-        elif out_dtype.type is np.timedelta64:
+        elif isinstance(out_dtype, cudf.Timedelta):
             if "format" not in kwargs:
                 if len(self) > 0:
                     kwargs.update(format="%D days %H:%M:%S")

@@ -642,11 +642,11 @@ class ColumnBase(Column, Serializable):
             arg = as_column(arg)
             if len(arg) == 0:
                 arg = as_column([], dtype="int32")
-            if pd.api.types.is_integer_dtype(arg.dtype) or isinstance(
+            if cudf.api.types.is_integer_dtype(arg.dtype) or isinstance(
                 arg.dtype, cudf.Integer
             ):
                 return self.take(arg)
-            if pd.api.types.is_bool_dtype(arg.dtype) or isinstance(
+            if cudf.api.types.is_bool_dtype(arg.dtype) or isinstance(
                 arg.dtype, cudf.BooleanDtype
             ):
                 return self.apply_boolean_mask(arg)
@@ -1616,7 +1616,6 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 data=buffer, mask=mask, dtype=arbitrary.dtype
             )
         elif arb_dtype.kind in ("O", "U"):
-
             pa_data = pa.Array.from_pandas(arbitrary)
             data = as_column(pa_data, dtype=cudf.dtype(pa_data.type))
             # There is no cast operation available for pa.Array from int to

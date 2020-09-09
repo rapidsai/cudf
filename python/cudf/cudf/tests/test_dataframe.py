@@ -5576,8 +5576,8 @@ def test_dataframe_info_verbose_mem_usage():
      #   Column  Non-Null Count  Dtype
     ---  ------  --------------  -----
      0   a       3 non-null      Int64
-     1   b       3 non-null      String
-    dtypes: Int64(1), String(1)
+     1   b       3 non-null      string
+    dtypes: Int64(1), string(1)
     memory usage: 56.0+ bytes
     """
     )
@@ -5593,7 +5593,7 @@ def test_dataframe_info_verbose_mem_usage():
     <class 'cudf.core.dataframe.DataFrame'>
     RangeIndex: 3 entries, 0 to 2
     Columns: 2 entries, a to b
-    dtypes: Int64(1), String(1)
+    dtypes: Int64(1), string(1)
     memory usage: 56.0+ bytes
     """
     )
@@ -5616,8 +5616,8 @@ def test_dataframe_info_verbose_mem_usage():
      #   Column  Non-Null Count  Dtype
     ---  ------  --------------  -----
      0   a       3 non-null      Int64
-     1   b       3 non-null      String
-    dtypes: Int64(1), String(1)
+     1   b       3 non-null      string
+    dtypes: Int64(1), string(1)
     memory usage: 91.0 bytes
     """
     )
@@ -5647,9 +5647,9 @@ def test_dataframe_info_verbose_mem_usage():
      #   Column     Non-Null Count  Dtype
     ---  ------     --------------  -----
      0   int_col    5 non-null      Int64
-     1   text_col   5 non-null      String
+     1   text_col   5 non-null      string
      2   float_col  5 non-null      Float64
-    dtypes: Float64(1), Int64(1), String(1)
+    dtypes: Float64(1), Int64(1), string(1)
     memory usage: 130.0 bytes
     """
     )
@@ -5682,9 +5682,9 @@ def test_dataframe_info_null_counts():
      #   Column     Dtype
     ---  ------     -----
      0   int_col    Int64
-     1   text_col   String
+     1   text_col   string
      2   float_col  Float64
-    dtypes: Float64(1), Int64(1), String(1)
+    dtypes: Float64(1), Int64(1), string(1)
     memory usage: 130.0+ bytes
     """
     )
@@ -5732,8 +5732,8 @@ def test_dataframe_info_null_counts():
      #   Column  Dtype
     ---  ------  -----
      0   a       Int64
-     1   b       String
-    dtypes: Int64(1), String(1)
+     1   b       string
+    dtypes: Int64(1), string(1)
     memory usage: 238.0+ bytes
     """
     )
@@ -5754,8 +5754,8 @@ def test_dataframe_info_null_counts():
      #   Column  Non-Null Count  Dtype
     ---  ------  --------------  -----
      0   a       6 non-null      Int64
-     1   b       6 non-null      String
-    dtypes: Int64(1), String(1)
+     1   b       6 non-null      string
+    dtypes: Int64(1), string(1)
     memory usage: 238.0+ bytes
     """
     )

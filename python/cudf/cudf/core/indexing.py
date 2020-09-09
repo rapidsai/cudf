@@ -89,7 +89,7 @@ class _SeriesIlocIndexer(object):
         else:
             value = column.as_column(value)
 
-        if hasattr(value, "dtype") and pd.api.types.is_numeric_dtype(
+        if hasattr(value, "dtype") and cudf.api.types.is_numerical_dtype(
             value.dtype
         ):
             # normalize types if necessary:

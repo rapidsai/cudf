@@ -15,15 +15,15 @@ class Generic(ExtensionDtype, _Dtype):
     pa_type = None
 
     def __eq__(self, other):
-        if isinstance(other, self.__class__):
+        if isinstance(other, type(self)):
             return True
         if isinstance(other, Generic) and not isinstance(
-            other, self.__class__
+            other, type(self)
         ):
             return False
         if (
-            isinstance(other, self.to_pandas.__class__)
-            or other is self.to_pandas.__class__
+            isinstance(other, type(self.to_pandas))
+            or other is type(self.to_pandas)
         ):
             return True
 
@@ -338,12 +338,10 @@ def dtype(obj):
         return cudf.Float64Dtype()
     elif obj is None:
         return None
+    elif obj is np.object:
+        return 
     else:
-
-        raise TypeError
-
-        # raise TypeError(f"Could not find a cuDF dtype matching {obj}")
-
+        raise TypeError(f"Could not find cuDF dtype matching {obj}")
 
 class CategoricalDtype(Generic):
     def __init__(self, categories=None, ordered=None):
@@ -413,7 +411,7 @@ class CategoricalDtype(Generic):
             return other == self.name
         elif other is self:
             return True
-        elif not isinstance(other, self.__class__):
+        elif not isinstance(other, type(self)):
             return False
         elif self.ordered != other.ordered:
             return False

@@ -486,7 +486,7 @@ class Frame(libcudf.table.Table):
         )
 
     def _gather(self, gather_map, keep_index=True):
-        if not pd.api.types.is_integer_dtype(gather_map.dtype):
+        if not cudf.api.types.is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")
         result = self.__class__._from_table(
             libcudf.copying.gather(
@@ -3142,7 +3142,7 @@ def _get_replacement_values(to_replace, replacement, col_name, column):
             if all_nan:
                 replacement = [replacement] * len(to_replace)
             # Do not broadcast numeric dtypes
-            elif pd.api.types.is_numeric_dtype(column.dtype):
+            elif cudf.api.types.is_numerical_dtype(column.dtype):
                 if len(to_replace) > 0:
                     replacement = [replacement]
                 else:

@@ -725,8 +725,8 @@ class Index(Frame, Serializable):
                     )
                     raise TypeError(
                         f"cudf does not support appending an Index of "
-                        f"dtype `{np.dtype('object')}` with an Index "
-                        f"of dtype `{got_dtype}`, please type-cast "
+                        f"dtype `{self.dtype}` with an Index "
+                        f"of dtype `{other.dtype}`, please type-cast "
                         f"either one of them to same dtypes."
                     )
 

@@ -93,6 +93,11 @@ cdef class Scalar:
                 f"{type(value).__name__} to cudf scalar"
             )
 
+    def __eq__(self, other):
+        if isinstance(other, Scalar):
+            other = other.value
+        return self.value == other
+
     @property
     def dtype(self):
         """
@@ -352,6 +357,7 @@ cdef _get_np_scalar_from_timedelta64(unique_ptr[scalar]& s):
 
 
 def as_scalar(val, dtype=None):
+    dtype = cudf.dtype(dtype)
     if isinstance(val, Scalar):
         if (dtype is None or dtype == val.dtype):
             return val

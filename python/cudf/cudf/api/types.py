@@ -6,37 +6,53 @@ import cudf
 
 
 def is_bool_dtype(obj):
+    if hasattr(obj, 'dtype'):
+        obj = obj.dtype
     # todo - pd.api.types.is_bool_dtype should not give false, nor work at all probably
     if hasattr(obj, "dtype"):
         obj = obj.dtype
-    return isinstance(obj, cudf.BooleanDtype) or pd.api.types.is_bool_dtype(
+    return isinstance(obj, cudf.BooleanDtype) or (not isinstance(obj, cudf.Generic) and pd.api.types.is_bool_dtype(
         obj
-    )
+    ))
 
 
 def is_datetime64_dtype(obj):
-    return isinstance(obj, cudf.Datetime) or pd.api.types.is_datetime64_dtype(
+    if hasattr(obj, 'dtype'):
+        obj = obj.dtype
+    return isinstance(obj, cudf.Datetime) or (not isinstance(obj, cudf.Generic) and pd.api.types.is_datetime64_dtype(
         obj
-    )
+    ))
 
 
 def is_timedelta64_dtype(obj):
+    if hasattr(obj, 'dtype'):
+        obj = obj.dtype
     return isinstance(
         obj, cudf.Timedelta
-    ) or pd.api.types.is_timedelta64_dtype(obj)
+    ) or (not isinstance(obj, cudf.Generic) and pd.api.types.is_timedelta64_dtype(obj))
 
 
 def is_string_dtype(obj):
-    return isinstance(obj, cudf.StringDtype) or (
+    if hasattr(obj, 'dtype'):
+        obj = obj.dtype
+    return isinstance(obj, cudf.StringDtype) or (not isinstance(obj, cudf.Generic) and (
         pd.api.types.is_string_dtype(obj) and not is_categorical_dtype(obj)
-    )
+    ))
 
 
 def is_integer_dtype(obj):
-    return isinstance(obj, cudf.Integer) or pd.api.types.is_integer_dtype(obj)
+    if hasattr(obj, 'dtype'):
+        obj = obj.dtype
+    try:
+        return isinstance(obj, cudf.Integer) or (not isinstance(obj, cudf.Generic) and pd.api.types.is_integer_dtype(obj))
+    except:
+        import pdb
+        pdb.set_trace()
 
 
 def is_numerical_dtype(obj):
+    if hasattr(obj, 'dtype'):
+        obj = obj.dtype
     if isinstance(obj, cudf.Generic):
         return isinstance(obj, (cudf.Number, cudf.BooleanDtype))
     if is_categorical_dtype(obj):
@@ -142,3 +158,8 @@ def result_type(*arrays_and_dtypes):
         for d in arrays_and_dtypes
     )
     return cudf.dtype(np.result_type(*arrays_and_dtypes))
+
+def isnan(obj):
+    if isinstance(obj, cudf._lib.scalar.Scalar):
+        obj = obj.value
+    return np.isnan(obj)

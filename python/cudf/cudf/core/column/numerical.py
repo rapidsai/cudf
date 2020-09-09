@@ -1,6 +1,6 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
 import numpy as np
-from pandas.api.types import is_integer_dtype
+from cudf.api.types import is_integer_dtype
 
 import cudf
 from cudf import _lib as libcudf
@@ -175,12 +175,7 @@ class NumericalColumn(column.ColumnBase):
         return libcudf.unary.cast(self, dtype)
 
     def sum(self, dtype=None):
-        try:
             return libcudf.reduce.reduce("sum", self, dtype=dtype)
-        except:
-            import pdb
-
-            pdb.set_trace()
 
     def product(self, dtype=None):
         return libcudf.reduce.reduce("product", self, dtype=dtype)
@@ -236,7 +231,7 @@ class NumericalColumn(column.ColumnBase):
         """
         dkind = self.dtype.kind
         if dkind == "f":
-            return self.dtype.type(np.nan)
+            return self.dtype.type(np.nan).value
         elif dkind == "i":
             return np.iinfo(self.dtype.to_numpy).min
         elif dkind == "u":
@@ -280,7 +275,8 @@ class NumericalColumn(column.ColumnBase):
         """
         Fill null values with *fill_value*
         """
-        if np.isscalar(fill_value):
+
+        if np.isscalar(fill_value) and not isinstance(fill_value, libcudf.scalar.Scalar):
             # castsafely to the same dtype as self
             # TODO - produce a libcudf scalar directly
             fill_value_casted = self.dtype.to_numpy.type(fill_value)
@@ -291,6 +287,8 @@ class NumericalColumn(column.ColumnBase):
                     )
                 )
             fill_value = fill_value_casted
+        elif isinstance(fill_value, libcudf.scalar.Scalar):
+            fill_value = libcudf.scalar.as_scalar(fill_value, dtype=self.dtype)
         else:
             fill_value = column.as_column(fill_value, nan_as_null=False)
             # cast safely to the same dtype as self
@@ -471,7 +469,7 @@ def _normalize_find_and_replace_input(input_column_dtype, col_to_normalize):
             col_to_normalize_casted = input_column_dtype.type(
                 col_to_normalize[0]
             )
-            if not np.isnan(col_to_normalize_casted) and (
+            if not cudf.api.types.isnan(col_to_normalize_casted) and (
                 col_to_normalize_casted != col_to_normalize[0]
             ):
                 raise TypeError(
