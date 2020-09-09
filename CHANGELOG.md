@@ -11,7 +11,7 @@
 
 ## Improvements
 
-- PR #5946  Add cython and python support for libcudf `to_arrow` and `from_arrow`
+- PR #5946 Add cython and python support for libcudf `to_arrow` and `from_arrow`
 - PR #5919 Remove max_strings and max_chars from nvtext::subword_tokenize
 - PR #5956 Add/Update tests for cuStreamz
 - PR #5953 Use stable sort when doing a sort groupby
@@ -30,6 +30,7 @@
 - PR #6141 Fix typo in custreamz README that was a result of recent changes
 - PR #6146 Added element/validity pair constructors for fixed_width and string wrappers
 - PR #6143 General improvements for java arrow IPC.
+- PR #6149 Update to Arrow v1.0.1
 
 ## Bug Fixes
 
