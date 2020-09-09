@@ -31,8 +31,10 @@
 - PR #6146 Added element/validity pair constructors for fixed_width and string wrappers
 - PR #6143 General improvements for java arrow IPC.
 - PR #6099 Add fluent builder apis to `json_reader_options` and `avro_reader_options`
+- PR #6163 Use `Column.full` instead of `scalar_broadcast_to` or `cupy.zeros`
 - PR #6176 Fix cmake warnings for GoogleTest, GoogleBenchmark, and Arrow external projects
 - PR #6149 Update to Arrow v1.0.1
+- PR #6186 Update JNI to look for cub in new location
 
 ## Bug Fixes
 
@@ -48,6 +50,7 @@
 - PR #6172 Fix slice issue with empty column
 - PR #6154 Warnings on row-wise op only when non-numeric columns are found.
 - PR #6150 Fix issue related to inferring `datetime64` format with UTC timezone in string data
+- PR #6159 Fix issue related to empty `Dataframe` with columns input to `DataFrame.appened`
 
 
 # cuDF 0.15.0 (26 Aug 2020)
