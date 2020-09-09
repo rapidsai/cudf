@@ -34,9 +34,7 @@
 #include <unordered_map>
 #include <vector>
 
-//! cuDF interfaces
 namespace cudf {
-//! In-development features
 namespace io {
 /**
  * @brief Builds settings to use for `read_orc()`.
@@ -72,7 +70,7 @@ class orc_reader_options {
   data_type _timestamp_type{type_id::EMPTY};
 
   // Whether to convert decimals to float64
-  bool _decimals_as_float = true;
+  bool _decimals_as_float64 = true;
   // For decimals as int, optional forced decimal scale;
   // -1 is auto (column scale), >=0: number of fractional digits
   size_type _forced_decimals_scale = -1;
@@ -145,7 +143,7 @@ class orc_reader_options {
   /**
    * @brief Whether to convert decimals to float64.
    */
-  bool is_enabled_decimals_as_float() const { return _decimals_as_float; }
+  bool is_enabled_decimals_as_float64() const { return _decimals_as_float64; }
 
   /**
    * @brief Returns whether decimal scale is inferred or forced to have limited fractional digits.
@@ -164,13 +162,13 @@ class orc_reader_options {
   /**
    * @brief Sets list of individual stripes to read.
    *
-   * @param strps Vector of individual stripes.
+   * @param stripes Vector of individual stripes.
    */
-  void set_stripes(std::vector<size_type> strps)
+  void set_stripes(std::vector<size_type> stripes)
   {
-    CUDF_EXPECTS(strps.empty() or (_skip_rows == 0 and _num_rows == -1),
+    CUDF_EXPECTS(stripes.empty() or (_skip_rows == 0 and _num_rows == -1),
                  "Can't set both stripes along with skip_rows/num_rows");
-    _stripes = std::move(strps);
+    _stripes = std::move(stripes);
   }
 
   /**
@@ -200,14 +198,14 @@ class orc_reader_options {
    *
    * @param use Boolean value to enable/disable row index use.
    */
-  void set_use_index(bool use) { _use_index = use; }
+  void enable_use_index(bool use) { _use_index = use; }
 
   /**
    * @brief Enable/Disable use of numpy-compatible dtypes
    *
    * @param rows Boolean value to enable/disable.
    */
-  void set_use_np_dtypes(bool use) { _use_np_dtypes = use; }
+  void enable_use_np_dtypes(bool use) { _use_np_dtypes = use; }
 
   /**
    * @brief Sets timestamp type to which timestamp column will be cast.
@@ -221,7 +219,7 @@ class orc_reader_options {
    *
    * @param val Boolean value to enable/disable.
    */
-  void set_decimals_as_float(bool val) { _decimals_as_float = val; }
+  void set_decimals_as_float64(bool val) { _decimals_as_float64 = val; }
 
   /**
    * @brief Sets whether decimal scale is inferred or forced to have limited fractional digits.
@@ -264,12 +262,12 @@ class orc_reader_options_builder {
   /**
    * @brief Sets list of individual stripes to read.
    *
-   * @param strps Vector of individual stripes.
+   * @param stripes Vector of individual stripes.
    * @return this for chaining.
    */
-  orc_reader_options_builder& stripes(std::vector<size_type> strps)
+  orc_reader_options_builder& stripes(std::vector<size_type> stripes)
   {
-    options.set_stripes(std::move(strps));
+    options.set_stripes(std::move(stripes));
     return *this;
   }
 
@@ -339,9 +337,9 @@ class orc_reader_options_builder {
    * @param val Boolean value to enable/disable.
    * @return this for chaining.
    */
-  orc_reader_options_builder& decimals_as_float(bool val)
+  orc_reader_options_builder& decimals_as_float64(bool val)
   {
-    options._decimals_as_float = val;
+    options._decimals_as_float64 = val;
     return *this;
   }
 

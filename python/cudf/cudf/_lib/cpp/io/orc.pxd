@@ -24,7 +24,7 @@ cdef extern from "cudf/io/orc.hpp" \
         bool is_enabled_use_index() except+
         bool is_enabled_use_np_dtypes() except+
         data_type get_timestamp_type() except+
-        bool is_enableddecimals_as_float() except+
+        bool is_enabled_decimals_as_float64() except+
         int get_forced_decimals_scale() except+
 
         void set_columns(vector[string] col_names) except+
@@ -34,7 +34,7 @@ cdef extern from "cudf/io/orc.hpp" \
         void enable_use_index(bool val) except+
         void enable_use_np_dtypes(bool val) except+
         void set_timestamp_type(data_type type) except+
-        void enable_decimals_as_float(bool val) except+
+        void enable_decimals_as_float64(bool val) except+
         void set_forced_decimals_scale(size_type scale) except+
 
         @staticmethod
@@ -53,7 +53,7 @@ cdef extern from "cudf/io/orc.hpp" \
         orc_reader_options_builder& use_index(bool val) except+
         orc_reader_options_builder& use_np_dtypes(bool val) except+
         orc_reader_options_builder& timestamp_type(data_type type) except+
-        orc_reader_options_builder& decimals_as_float(bool val) except+
+        orc_reader_options_builder& decimals_as_float64(bool val) except+
         orc_reader_options_builder& forced_decimals_scale(
             size_type scale
         ) except+

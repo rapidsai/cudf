@@ -224,21 +224,9 @@ def read_parquet(
         # Load IDs of filtered row groups for each file in dataset
         filtered_rg_ids = defaultdict(list)
         for fragment in dataset.get_fragments(filter=filters):
-            for rg_fragment in fragment.get_row_group_fragments(filters):
-                for rg_id in rg_fragment.row_groups:
-                    filtered_rg_ids[rg_fragment.path].append(rg_id)
-
-        # TODO: Use this with pyarrow 1.0.0
-        # # Load IDs of filtered row groups for each file in dataset
-        # filtered_row_group_ids = {}
-        # for fragment in dataset.get_fragments(filters):
-        #     for row_group_fragment in fragment.split_by_row_group(filters):
-        #         for row_group_info in row_group_fragment.row_groups:
-        #             path = row_group_fragment.path
-        #             if path not in filtered_row_group_ids:
-        #                 filtered_row_group_ids[path] = [row_group_info.id]
-        #             else:
-        #                 filtered_row_group_ids[path].append(row_group_info.id)
+            for rg_fragment in fragment.split_by_row_group(filters):
+                for rg_info in rg_fragment.row_groups:
+                    filtered_rg_ids[rg_fragment.path].append(rg_info.id)
 
         # Initialize row_groups to be selected
         if row_groups is None:

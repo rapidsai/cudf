@@ -46,7 +46,7 @@ def _apply_predicate(op, val, col_stats):
     if op == "=" or op == "==":
         if _apply_filter_not_eq(val, col_stats):
             return False
-        if pd.isnull(val) and col_stats["has_null"]:
+        if pd.isnull(val) and not col_stats["has_null"]:
             return False
         if not _apply_filter_bool_eq(val, col_stats):
             return False
