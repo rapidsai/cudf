@@ -118,8 +118,8 @@ def _compile_joins(conjunction, statistics_cache):
 
             # Get statistics of value being joined with
             if df_id not in statistics_cache:
-                statistics_cache[df_id]["min"] = df[df_col].min()
-                statistics_cache[df_id]["max"] = df[df_col].max()
+                statistics_cache[df_id]["min"] = df[df_col].min().item()
+                statistics_cache[df_id]["max"] = df[df_col].max().item()
             val_min = statistics_cache[df_id]["min"]
             val_max = statistics_cache[df_id]["max"]
 

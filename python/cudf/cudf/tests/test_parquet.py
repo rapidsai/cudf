@@ -439,6 +439,22 @@ def test_parquet_read_filtered_complex_predicate(
     assert_eq(len(df_filtered), expected_len)
 
 
+def test_parquet_read_filtered_joins(tmpdir):
+    # Generate data
+    fname = tmpdir.join("filtered_complex_predicate.parquet")
+    df_small = pd.DataFrame({"x": range(3)})
+    df = pd.DataFrame(
+        {"x": range(10), "y": list("aabbccddee"), "z": reversed(range(10))}
+    )
+    df.to_parquet(fname, row_group_size=2)
+
+    # Check filters
+    df_filtered = cudf.read_parquet(
+        fname, filters=[("x", "==", (df_small, "x"))]
+    )
+    assert_eq(len(df_filtered), 4)
+
+
 @pytest.mark.parametrize("row_group_size", [1, 5, 100])
 def test_parquet_read_row_groups(tmpdir, pdf, row_group_size):
     if "col_category" in pdf.columns:

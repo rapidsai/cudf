@@ -1,5 +1,6 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
+from cudf.utils import filterutils
 import warnings
 from collections import defaultdict
 
@@ -207,6 +208,9 @@ def read_parquet(
         filepaths_or_buffers.append(tmp_source)
 
     if filters is not None:
+        # Prepare filters
+        filters = filterutils._prepare_filters(filters)
+
         # Convert filters to ds.Expression
         filters = pq._filters_to_expression(filters)
 
