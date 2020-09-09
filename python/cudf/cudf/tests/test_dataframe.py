@@ -1022,7 +1022,7 @@ def test_concat_empty_series(ser_1, ser_2):
     got = gd.concat([Series(ser_1), Series(ser_2)])
     expect = pd.concat([ser_1, ser_2])
 
-    assert_eq(got, expect, check_dtype=False)
+    assert_eq(got, expect)
 
 
 def test_concat_with_axis():
