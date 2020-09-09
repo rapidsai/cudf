@@ -11,7 +11,7 @@
 
 ## Improvements
 
-- PR #5946  Add cython and python support for libcudf `to_arrow` and `from_arrow`
+- PR #5946 Add cython and python support for libcudf `to_arrow` and `from_arrow`
 - PR #5919 Remove max_strings and max_chars from nvtext::subword_tokenize
 - PR #5956 Add/Update tests for cuStreamz
 - PR #5953 Use stable sort when doing a sort groupby
@@ -20,15 +20,19 @@
 - PR #6015 Upgrade CUB/Thrust to the latest commit
 - PR #5971 Add cuStreamz README for basic installation and use
 - PR #6024 Expose selecting multiple ORC stripes to read from Python
+- PR #6155 Use the CUB submodule in Thrust instead of fetching CUB separately
 - PR #6002 Add Java bindings for md5
 - PR #6067 Added compute codes for aarch64 devices
 - PR #6083 Small cleanup
+- PR #5984 Support gather() on CUDF struct columns
 - PR #6103 Small refactor of `print_differences`
 - PR #6124 Fix gcc-9 compilation errors on tests
 - PR #6141 Fix typo in custreamz README that was a result of recent changes
 - PR #6146 Added element/validity pair constructors for fixed_width and string wrappers
 - PR #6143 General improvements for java arrow IPC.
 - PR #6152 Change dictionary indices to uint32
+- PR #6176 Fix cmake warnings for GoogleTest, GoogleBenchmark, and Arrow external projects
+- PR #6149 Update to Arrow v1.0.1
 
 ## Bug Fixes
 
