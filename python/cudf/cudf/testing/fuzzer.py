@@ -4,8 +4,6 @@ import logging
 import os
 import sys
 
-from dicttoxml import dicttoxml
-
 from . import parquet
 
 logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
@@ -64,10 +62,15 @@ class Fuzzer(object):
         else:
             crash_path = datetime.datetime.now().__str__() + "_crash.xml"
 
-        xml = dicttoxml(self._data_handler.current_params, attr_type=False)
+        # xml = dicttoxml(self._data_handler.current_params, attr_type=False)
+        import json
 
-        with open(crash_path, "wb") as f:
-            f.write(xml)
+        with open(crash_path, "w") as f:
+            # f.write(self._data_handler.current_params)
+            json.dump(
+                self._data_handler.current_params, f, sort_keys=True, indent=4
+            )
+            # pickle.dump(self._data_handler.current_params, f)
         logging.info(f"Crash params was written to {crash_path}")
 
     def start(self):

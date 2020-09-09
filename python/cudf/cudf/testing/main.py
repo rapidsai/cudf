@@ -32,7 +32,7 @@ class PythonFuzz(object):
         parser.add_argument(
             "--max-input-size",
             type=int,
-            default=100,
+            default=1000,
             help="Max input size in bytes",
         )
         parser.add_argument(

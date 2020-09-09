@@ -43,7 +43,14 @@ class Parquet(object):
         print(num_rows)
         num_cols = self._rand(1000)
         print(num_cols)
-        DTYPES_LIST = ["int64", "float64", "object"]
+        DTYPES_LIST = [
+            "int64",
+            "float64",
+            "object",
+            "datetime64[us]",
+            # "timedelta64[ns]",
+            "category",
+        ]
         dtypes_meta = [
             (
                 random.choice(DTYPES_LIST),
@@ -53,7 +60,7 @@ class Parquet(object):
             for _ in range(num_cols)
         ]
         df = dg.rand_dataframe(dtypes_meta, num_rows).to_pandas()
-        df.to_parquet(self._file_name)  # , row_group_size=64)
+        df.to_parquet(self._file_name)
         print(df.shape)
         self._current_params["dtypes_meta"] = dtypes_meta
         self._current_params["file_name"] = self._file_name

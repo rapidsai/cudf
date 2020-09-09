@@ -5,6 +5,7 @@
 # if you want to generate data where certain phenomena (e.g., cardinality)
 # are exaggurated.
 
+import string
 from multiprocessing import Pool
 
 import numpy as np
@@ -35,6 +36,8 @@ class ColumnParameters:
         more columns marked as sorted, the generated PyArrow Table will be
         converted to a Pandas DataFrame to do the sorting. This may implicitly
         convert numbers to floats in the presence of nulls.
+    dtype : optional
+        a numpy dtype to control the format of the data
     """
 
     def __init__(
@@ -43,11 +46,13 @@ class ColumnParameters:
         null_frequency=0.1,
         generator=lambda g: [g.address.country for _ in range(100)],
         is_sorted=True,
+        dtype=None,
     ):
         self.cardinality = cardinality
         self.null_frequency = null_frequency
         self.generator = generator
         self.is_sorted = is_sorted
+        self.dtype = dtype
 
 
 class Parameters:
@@ -90,6 +95,25 @@ def _generate_column(column_params, num_rows):
             size=column_params.cardinality,
             safe=False,
         )
+
+        if (
+            isinstance(column_params.dtype, str)
+            and column_params.dtype == "category"
+        ):
+            return pa.DictionaryArray.from_arrays(
+                dictionary=vals,
+                indices=np.random.choice(np.arange(len(vals)), size=num_rows),
+                mask=np.random.choice(
+                    [True, False],
+                    size=num_rows,
+                    p=[
+                        column_params.null_frequency,
+                        1 - column_params.null_frequency,
+                    ],
+                )
+                if column_params.null_frequency > 0.0
+                else None,
+            )
 
         # Generate data for current column
         choices = np.random.randint(0, len(vals) - 1, size=num_rows)
@@ -170,14 +194,25 @@ def get_dataframe(parameters, use_threads):
         [
             pa.field(
                 name=str(i),
-                type=pa.from_numpy_dtype(
+                type=pa.dictionary(
+                    index_type=pa.int64(),
+                    value_type=pa.from_numpy_dtype(
+                        type(next(iter(column_params.generator)))
+                    ),
+                )
+                if isinstance(column_params.dtype, str)
+                and column_params.dtype == "category"
+                else pa.from_numpy_dtype(
                     type(next(iter(column_params.generator)))
+                    if column_params.dtype is None
+                    else column_params.dtype
                 ),
                 nullable=column_params.null_frequency > 0,
             )
             for i, column_params in enumerate(parameters.column_parameters)
         ]
     )
+    print(schema)
     # Initialize column data and which columns should be sorted
     column_data = [None] * len(parameters.column_parameters)
     columns_to_sort = [
@@ -246,9 +281,47 @@ def rand_dataframe(dtypes_meta, rows, seed=0):
                     cardinality=cardinality,
                     null_frequency=null_frequency,
                     generator=lambda g: [
-                        g.random.randstr() for _ in range(rows)
+                        g.random.schoice(string.printable, 2000)
+                        for _ in range(rows)
                     ],
                     is_sorted=False,
+                )
+            )
+        elif dtype == "datetime64[us]":
+            column_params.append(
+                ColumnParameters(
+                    cardinality=cardinality,
+                    null_frequency=null_frequency,
+                    generator=lambda g: g.random.randints(
+                        rows, 0, 9223372036854775 - 1
+                    ),
+                    is_sorted=False,
+                    dtype=np.dtype(dtype),
+                )
+            )
+        elif dtype == "timedelta64[ns]":
+            column_params.append(
+                ColumnParameters(
+                    cardinality=cardinality,
+                    null_frequency=null_frequency,
+                    generator=lambda g: g.random.randints(
+                        rows, -9223372036854775807, 9223372036854775807 - 1
+                    ),
+                    is_sorted=False,
+                    dtype=np.dtype(dtype),
+                )
+            )
+        elif dtype == "category":
+            column_params.append(
+                ColumnParameters(
+                    cardinality=cardinality,
+                    null_frequency=null_frequency,
+                    generator=lambda g: [
+                        g.random.randstr(unique=True, length=2000)
+                        for _ in range(cardinality)
+                    ],
+                    is_sorted=False,
+                    dtype="category",
                 )
             )
 
