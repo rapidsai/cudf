@@ -22,8 +22,8 @@ namespace parquet {
 namespace gpu {
 // Spark doesn't support RLE encoding for BOOLEANs
 constexpr int enable_bool_rle = 0;
-constexpr int init_hash_bits = 12;
-constexpr uint32_t rle_bfrsz = (1 << 9);
+constexpr int init_hash_bits  = 12;
+constexpr uint32_t rle_bfrsz  = (1 << 9);
 
 struct frag_init_state_s {
   EncColumnDesc col;
@@ -193,8 +193,7 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
   __syncthreads();
   // Reorder the 16-bit local indices according to the hash values
   if (s->col.dict_index) {
-    static_assert((init_hash_bits == 12),
-        "Hardcoded for init_hash_bits=12");
+    static_assert((init_hash_bits == 12), "Hardcoded for init_hash_bits=12");
     // Cumulative sum of hash map counts
     uint32_t count01 = s->map.u32[t * 4 + 0];
     uint32_t count23 = s->map.u32[t * 4 + 1];
@@ -1145,31 +1144,26 @@ inline __device__ uint8_t *cpw_put_fldh(uint8_t *p, int f, int cur, int t)
   }
 }
 
-struct cpw{
+struct cpw {
   uint8_t *p;
   int cur_fld;
 
-  inline __device__
-  cpw(uint8_t *hdr_start) :
-    p(hdr_start), cur_fld(0) {}
+  inline __device__ cpw(uint8_t *hdr_start) : p(hdr_start), cur_fld(0) {}
 
-  inline __device__
-  void field_struct_begin(int f)
+  inline __device__ void field_struct_begin(int f)
   {
-    p = cpw_put_fldh(p, f, cur_fld, ST_FLD_STRUCT);
+    p       = cpw_put_fldh(p, f, cur_fld, ST_FLD_STRUCT);
     cur_fld = 0;
   }
 
-  inline __device__
-  void field_struct_end(int f)
+  inline __device__ void field_struct_end(int f)
   {
     *p++    = 0;
     cur_fld = f;
   }
 
   template <typename T>
-  inline __device__
-  void field_int32(int f, T v)
+  inline __device__ void field_int32(int f, T v)
   {
     p       = cpw_put_fldh(p, f, cur_fld, ST_FLD_I32);
     p       = cpw_put_int32(p, static_cast<int32_t>(v));
@@ -1177,16 +1171,14 @@ struct cpw{
   }
 
   template <typename T>
-  inline __device__
-  void field_int64(int f, T v)
+  inline __device__ void field_int64(int f, T v)
   {
     p       = cpw_put_fldh(p, f, cur_fld, ST_FLD_I64);
     p       = cpw_put_int64(p, static_cast<int64_t>(v));
     cur_fld = f;
   }
 
-  inline __device__
-  void field_binary(int f, const void *v, uint32_t l)
+  inline __device__ void field_binary(int f, const void *v, uint32_t l)
   {
     p = cpw_put_fldh(p, f, cur_fld, ST_FLD_BINARY);
     p = cpw_put_uint32(p, l);
@@ -1195,21 +1187,15 @@ struct cpw{
     cur_fld = f;
   }
 
-  inline __device__
-  void end(uint8_t **hdr_end, bool termination_flag = true)
+  inline __device__ void end(uint8_t **hdr_end, bool termination_flag = true)
   {
-    if (termination_flag == false)
-    {
-      *p++ = 0;
-    }
+    if (termination_flag == false) { *p++ = 0; }
     *hdr_end = p;
   }
 
-  inline __device__
-  uint8_t* get_ptr(void) { return p; }
+  inline __device__ uint8_t *get_ptr(void) { return p; }
 
-  inline __device__
-  void set_ptr(uint8_t* ptr) { p = ptr; }
+  inline __device__ void set_ptr(uint8_t *ptr) { p = ptr; }
 };
 
 __device__ uint8_t *EncodeStatistics(uint8_t *start,
@@ -1318,13 +1304,15 @@ __global__ void __launch_bounds__(128) gpuEncodePageHeaders(EncPage *pages,
     // pages (actual encoding is identical).
     Encoding encoding;
     if (enable_bool_rle) {
-      encoding =
-        (col_g.physical_type != BOOLEAN)
-        ? (page_type == PageType::DICTIONARY_PAGE || page_g.dict_bits_plus1 != 0) ? Encoding::PLAIN_DICTIONARY : Encoding::PLAIN
-        : Encoding::RLE;
+      encoding = (col_g.physical_type != BOOLEAN)
+                   ? (page_type == PageType::DICTIONARY_PAGE || page_g.dict_bits_plus1 != 0)
+                       ? Encoding::PLAIN_DICTIONARY
+                       : Encoding::PLAIN
+                   : Encoding::RLE;
     } else {
-      encoding =
-        (page_type == PageType::DICTIONARY_PAGE || page_g.dict_bits_plus1 != 0) ? Encoding::PLAIN_DICTIONARY : Encoding::PLAIN;
+      encoding = (page_type == PageType::DICTIONARY_PAGE || page_g.dict_bits_plus1 != 0)
+                   ? Encoding::PLAIN_DICTIONARY
+                   : Encoding::PLAIN;
     }
     c.field_int32(1, page_type);
     c.field_int32(2, uncompressed_page_size);
@@ -1339,7 +1327,8 @@ __global__ void __launch_bounds__(128) gpuEncodePageHeaders(EncPage *pages,
       // Optionally encode page-level statistics
       if (page_stats) {
         c.field_struct_begin(5);
-        c.set_ptr(EncodeStatistics(c.get_ptr(), &page_stats[start_page + blockIdx.x], &col_g, fp_scratch));
+        c.set_ptr(
+          EncodeStatistics(c.get_ptr(), &page_stats[start_page + blockIdx.x], &col_g, fp_scratch));
         c.field_struct_end(5);
       }
       c.field_struct_end(5);

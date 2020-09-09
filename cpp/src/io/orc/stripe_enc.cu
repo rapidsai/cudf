@@ -17,12 +17,11 @@
 #include "orc_common.h"
 #include "orc_gpu.h"
 
-
 namespace cudf {
 namespace io {
 namespace orc {
 namespace gpu {
-constexpr int scratch_bfrsz = 512*4;
+constexpr int scratch_bfrsz = 512 * 4;
 
 // Apache ORC reader does not handle zero-length patch lists for RLEv2 mode2
 // Workaround replaces zero-length patch lists by a dummy zero patch
@@ -504,16 +503,13 @@ static __device__ uint32_t IntegerRLE(
           vmax = (is_signed) ? ((vmin < 0) ? -vmin : vmin) * 2 : vmin;
           bw   = (sizeof(T) > 4) ? (8 - min(CountLeadingBytes64(vmax << bv_scale), 7))
                                : (4 - min(CountLeadingBytes32(vmax << bv_scale), 3));
-          if (zero_pll_war)
-          {
-          // Insert a dummy zero patch
-          pll                                                    = 1;
-          dst[4 + bw + ((literal_run * literal_w + 7) >> 3) + 0] = 0;
-          dst[4 + bw + ((literal_run * literal_w + 7) >> 3) + 1] = 0;
-          }
-          else
-          {
-          pll = 0;
+          if (zero_pll_war) {
+            // Insert a dummy zero patch
+            pll                                                    = 1;
+            dst[4 + bw + ((literal_run * literal_w + 7) >> 3) + 0] = 0;
+            dst[4 + bw + ((literal_run * literal_w + 7) >> 3) + 1] = 0;
+          } else {
+            pll = 0;
           }
           dst[0] = 0x80 +
                    ((literal_w < 8) ? literal_w - 1 : kByteLengthToRLEv2_W[literal_w >> 3]) * 2 +

@@ -83,14 +83,14 @@ namespace io {
 // If bz_outbuff_full is returned and block_start is non-NULL, dstlen will be updated to point to
 // the end of the last valid block, and block_start will contain the offset in bits of the beginning
 // of the block, so it can be passed in to resume decoding later on.
-constexpr int bz_ok = 0;
-constexpr int bz_stream_end = 4;
-constexpr int bz_param_error = -2;
-constexpr int bz_mem_error = -3;
-constexpr int bz_data_error = -4;
+constexpr int bz_ok               = 0;
+constexpr int bz_stream_end       = 4;
+constexpr int bz_param_error      = -2;
+constexpr int bz_mem_error        = -3;
+constexpr int bz_data_error       = -4;
 constexpr int bz_data_error_magic = -5;
-constexpr int bz_unexpected_eof = -7;
-constexpr int bz_outbuff_full = -8;
+constexpr int bz_unexpected_eof   = -7;
+constexpr int bz_outbuff_full     = -8;
 
 int32_t cpu_bz2_uncompress(const uint8_t *input,
                            size_t inlen,

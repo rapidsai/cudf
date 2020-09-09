@@ -84,44 +84,28 @@ bool CompactProtocolReader::skip_struct_field(int t, int depth)
 }
 
 template <int index>
-struct FunctionSwitchImpl
-{
+struct FunctionSwitchImpl {
   template <typename... Operator>
   static inline bool run(
-      CompactProtocolReader* cpr,
-      int *c,
-      int t,
-      const int &fld,
-      std::tuple<Operator...>& ops)
+    CompactProtocolReader *cpr, int *c, int t, const int &fld, std::tuple<Operator...> &ops)
   {
-    if (fld == std::get<index>(ops).field)
-    {
+    if (fld == std::get<index>(ops).field) {
       return std::get<index>(ops)(cpr, c, t);
-    }
-    else
-    {
-      return FunctionSwitchImpl<index-1>::run(cpr, c, t, fld, ops);
+    } else {
+      return FunctionSwitchImpl<index - 1>::run(cpr, c, t, fld, ops);
     }
   }
 };
 
 template <>
-struct FunctionSwitchImpl<0>
-{
+struct FunctionSwitchImpl<0> {
   template <typename... Operator>
   static inline bool run(
-      CompactProtocolReader* cpr,
-      int *c,
-      int t,
-      const int &fld,
-      std::tuple<Operator...>& ops)
+    CompactProtocolReader *cpr, int *c, int t, const int &fld, std::tuple<Operator...> &ops)
   {
-    if (fld == std::get<0>(ops).field)
-    {
+    if (fld == std::get<0>(ops).field) {
       return std::get<0>(ops)(cpr, c, t);
-    }
-    else
-    {
+    } else {
       cpr->skip_struct_field(t);
       return false;
     }
@@ -129,20 +113,17 @@ struct FunctionSwitchImpl<0>
 };
 
 template <typename T, typename... Operator>
-inline bool function_builder(
-    CompactProtocolReader* cpr,
-    T *s,
-    std::tuple<Operator...> &op)
+inline bool function_builder(CompactProtocolReader *cpr, T *s, std::tuple<Operator...> &op)
 {
   constexpr int index = std::tuple_size<std::tuple<Operator...>>::value - 1;
-  int fld = 0;
+  int fld             = 0;
   for (;;) {
     int c, t, f;
     c = cpr->getb();
     if (!c) break;
-    f   = c >> 4;
-    t   = c & 0xf;
-    fld = f ? fld + f : cpr->get_i16();
+    f                  = c >> 4;
+    t                  = c & 0xf;
+    fld                = f ? fld + f : cpr->get_i16();
     bool exit_function = FunctionSwitchImpl<index>::run(cpr, &c, t, fld, op);
     if (exit_function) { return false; }
   }
@@ -151,103 +132,93 @@ inline bool function_builder(
 
 bool CompactProtocolReader::read(FileMetaData *f)
 {
-  auto op = std::make_tuple(
-      ParquetFieldInt32(1, f->version),
-      ParquetFieldStructList(2, f->schema),
-      ParquetFieldInt64(3, f->num_rows),
-      ParquetFieldStructList(4, f->row_groups),
-      ParquetFieldStructList(5, f->key_value_metadata),
-      ParquetFieldString(6, f->created_by));
+  auto op = std::make_tuple(ParquetFieldInt32(1, f->version),
+                            ParquetFieldStructList(2, f->schema),
+                            ParquetFieldInt64(3, f->num_rows),
+                            ParquetFieldStructList(4, f->row_groups),
+                            ParquetFieldStructList(5, f->key_value_metadata),
+                            ParquetFieldString(6, f->created_by));
   return function_builder(this, f, op);
 }
 
 bool CompactProtocolReader::read(SchemaElement *s)
 {
-  auto op = std::make_tuple(
-      ParquetFieldEnum<Type>(1, s->type),
-      ParquetFieldInt32(2, s->type_length),
-      ParquetFieldEnum<FieldRepetitionType>(3, s->repetition_type),
-      ParquetFieldString(4, s->name),
-      ParquetFieldInt32(5, s->num_children),
-      ParquetFieldEnum<ConvertedType>(6, s->converted_type),
-      ParquetFieldInt32(7, s->decimal_scale),
-      ParquetFieldInt32(8, s->decimal_precision));
+  auto op = std::make_tuple(ParquetFieldEnum<Type>(1, s->type),
+                            ParquetFieldInt32(2, s->type_length),
+                            ParquetFieldEnum<FieldRepetitionType>(3, s->repetition_type),
+                            ParquetFieldString(4, s->name),
+                            ParquetFieldInt32(5, s->num_children),
+                            ParquetFieldEnum<ConvertedType>(6, s->converted_type),
+                            ParquetFieldInt32(7, s->decimal_scale),
+                            ParquetFieldInt32(8, s->decimal_precision));
   return function_builder(this, s, op);
 }
 
 bool CompactProtocolReader::read(RowGroup *r)
 {
-  auto op = std::make_tuple(
-      ParquetFieldStructList(1, r->columns),
-      ParquetFieldInt64(2, r->total_byte_size),
-      ParquetFieldInt64(3, r->num_rows));
+  auto op = std::make_tuple(ParquetFieldStructList(1, r->columns),
+                            ParquetFieldInt64(2, r->total_byte_size),
+                            ParquetFieldInt64(3, r->num_rows));
   return function_builder(this, r, op);
 }
 
 bool CompactProtocolReader::read(ColumnChunk *c)
 {
-  auto op = std::make_tuple(
-      ParquetFieldString(1, c->file_path),
-      ParquetFieldInt64(2, c->file_offset),
-      ParquetFieldStruct(3, c->meta_data),
-      ParquetFieldInt64(4, c->offset_index_offset),
-      ParquetFieldInt32(5, c->offset_index_length),
-      ParquetFieldInt64(6, c->column_index_offset),
-      ParquetFieldInt32(7, c->column_index_length));
+  auto op = std::make_tuple(ParquetFieldString(1, c->file_path),
+                            ParquetFieldInt64(2, c->file_offset),
+                            ParquetFieldStruct(3, c->meta_data),
+                            ParquetFieldInt64(4, c->offset_index_offset),
+                            ParquetFieldInt32(5, c->offset_index_length),
+                            ParquetFieldInt64(6, c->column_index_offset),
+                            ParquetFieldInt32(7, c->column_index_length));
   return function_builder(this, c, op);
 }
 
 bool CompactProtocolReader::read(ColumnChunkMetaData *c)
 {
-  auto op = std::make_tuple(
-      ParquetFieldEnum<Type>(1, c->type),
-      ParquetFieldEnumList(2, c->encodings),
-      ParquetFieldStringList(3, c->path_in_schema),
-      ParquetFieldEnum<Compression>(4, c->codec),
-      ParquetFieldInt64(5, c->num_values),
-      ParquetFieldInt64(6, c->total_uncompressed_size),
-      ParquetFieldInt64(7, c->total_compressed_size),
-      ParquetFieldInt64(9, c->data_page_offset),
-      ParquetFieldInt64(10, c->index_page_offset),
-      ParquetFieldInt64(11, c->dictionary_page_offset),
-      ParquetFieldStructBlob(12, c->statistics_blob));
+  auto op = std::make_tuple(ParquetFieldEnum<Type>(1, c->type),
+                            ParquetFieldEnumList(2, c->encodings),
+                            ParquetFieldStringList(3, c->path_in_schema),
+                            ParquetFieldEnum<Compression>(4, c->codec),
+                            ParquetFieldInt64(5, c->num_values),
+                            ParquetFieldInt64(6, c->total_uncompressed_size),
+                            ParquetFieldInt64(7, c->total_compressed_size),
+                            ParquetFieldInt64(9, c->data_page_offset),
+                            ParquetFieldInt64(10, c->index_page_offset),
+                            ParquetFieldInt64(11, c->dictionary_page_offset),
+                            ParquetFieldStructBlob(12, c->statistics_blob));
   return function_builder(this, c, op);
 }
 
 bool CompactProtocolReader::read(PageHeader *p)
 {
-  auto op = std::make_tuple(
-      ParquetFieldEnum<PageType>(1, p->type),
-      ParquetFieldInt32(2, p->uncompressed_page_size),
-      ParquetFieldInt32(3, p->compressed_page_size),
-      ParquetFieldStruct(5, p->data_page_header),
-      ParquetFieldStruct(7, p->dictionary_page_header));
+  auto op = std::make_tuple(ParquetFieldEnum<PageType>(1, p->type),
+                            ParquetFieldInt32(2, p->uncompressed_page_size),
+                            ParquetFieldInt32(3, p->compressed_page_size),
+                            ParquetFieldStruct(5, p->data_page_header),
+                            ParquetFieldStruct(7, p->dictionary_page_header));
   return function_builder(this, p, op);
 }
 
 bool CompactProtocolReader::read(DataPageHeader *d)
 {
-  auto op = std::make_tuple(
-      ParquetFieldInt32(1, d->num_values),
-      ParquetFieldEnum<Encoding>(2, d->encoding),
-      ParquetFieldEnum<Encoding>(3, d->definition_level_encoding),
-      ParquetFieldEnum<Encoding>(4, d->repetition_level_encoding));
+  auto op = std::make_tuple(ParquetFieldInt32(1, d->num_values),
+                            ParquetFieldEnum<Encoding>(2, d->encoding),
+                            ParquetFieldEnum<Encoding>(3, d->definition_level_encoding),
+                            ParquetFieldEnum<Encoding>(4, d->repetition_level_encoding));
   return function_builder(this, d, op);
 }
 
 bool CompactProtocolReader::read(DictionaryPageHeader *d)
 {
-  auto op = std::make_tuple(
-      ParquetFieldInt32(1, d->num_values),
-      ParquetFieldEnum<Encoding>(2, d->encoding));
+  auto op = std::make_tuple(ParquetFieldInt32(1, d->num_values),
+                            ParquetFieldEnum<Encoding>(2, d->encoding));
   return function_builder(this, d, op);
 }
 
 bool CompactProtocolReader::read(KeyValue *k)
 {
-  auto op = std::make_tuple(
-      ParquetFieldString(1, k->key),
-      ParquetFieldString(2, k->value));
+  auto op = std::make_tuple(ParquetFieldString(1, k->key), ParquetFieldString(2, k->value));
   return function_builder(this, k, op);
 }
 
@@ -342,42 +313,38 @@ int CompactProtocolReader::WalkSchema(
  * @Brief Parquet CompactProtocolWriter class
  */
 
-struct CompactProtocolWriter::CPWField
-{
+struct CompactProtocolWriter::CPWField {
   CompactProtocolWriter *cpr;
   size_t struct_start_pos;
   int cur_fld;
-  CPWField(CompactProtocolWriter *cpr_ptr) :
-    cpr(cpr_ptr),
-    struct_start_pos(cpr->m_buf->size()),
-    cur_fld(0) {}
+  CPWField(CompactProtocolWriter *cpr_ptr)
+    : cpr(cpr_ptr), struct_start_pos(cpr->m_buf->size()), cur_fld(0)
+  {
+  }
 
-  inline
-    void field_int(int f, int32_t v)
-    {
-      cpr->put_fldh(f, cur_fld, ST_FLD_I32);
-      cpr->put_int(v);
-      cur_fld = f;
-    }
+  inline void field_int(int f, int32_t v)
+  {
+    cpr->put_fldh(f, cur_fld, ST_FLD_I32);
+    cpr->put_int(v);
+    cur_fld = f;
+  }
 
-  inline
-    void field_int(int f, int64_t v)
-    {
-      cpr->put_fldh(f, cur_fld, ST_FLD_I64);
-      cpr->put_int(v);
-      cur_fld = f;
-    }
+  inline void field_int(int f, int64_t v)
+  {
+    cpr->put_fldh(f, cur_fld, ST_FLD_I64);
+    cpr->put_int(v);
+    cur_fld = f;
+  }
 
   template <typename Enum>
-  inline
-    void field_int_list(int f, const std::vector<Enum> &v)
-    {
-      cpr->put_fldh(f, cur_fld, ST_FLD_LIST);
-      cpr->putb((uint8_t)((std::min(v.size(), (size_t)0xfu) << 4) | ST_FLD_I32));
-      if (v.size() >= 0xf) cpr->put_uint(v.size());
-      for (auto i = 0; i < v.size(); i++) { cpr->put_int(static_cast<int32_t>(v[i])); }
-      cur_fld = f;
-    }
+  inline void field_int_list(int f, const std::vector<Enum> &v)
+  {
+    cpr->put_fldh(f, cur_fld, ST_FLD_LIST);
+    cpr->putb((uint8_t)((std::min(v.size(), (size_t)0xfu) << 4) | ST_FLD_I32));
+    if (v.size() >= 0xf) cpr->put_uint(v.size());
+    for (auto i = 0; i < v.size(); i++) { cpr->put_int(static_cast<int32_t>(v[i])); }
+    cur_fld = f;
+  }
 
   template <typename T>
   inline void field_struct(int f, const T &v)
@@ -403,52 +370,39 @@ struct CompactProtocolWriter::CPWField
     return cpr->m_buf->size() - struct_start_pos;
   }
 
-  inline
-    void field_struct_blob(int f, const std::vector<uint8_t>& v)
-    {
-      cpr->put_fldh(f, cur_fld, ST_FLD_STRUCT);
-      cpr->putb(v.data(), (uint32_t)v.size());
-      cpr->putb(0);
-      cur_fld = f;
-    }
+  inline void field_struct_blob(int f, const std::vector<uint8_t> &v)
+  {
+    cpr->put_fldh(f, cur_fld, ST_FLD_STRUCT);
+    cpr->putb(v.data(), (uint32_t)v.size());
+    cpr->putb(0);
+    cur_fld = f;
+  }
 
-  inline
-    void field_string(int f, const std::string& v)
-    {
-      cpr->put_fldh(f, cur_fld, ST_FLD_BINARY);
-      cpr->put_uint(v.size());
-      //FIXME : replace reinterpret_cast
-      cpr->putb(reinterpret_cast<const uint8_t *>(v.data()),
-          (uint32_t)v.size());
-      cur_fld = f;
-    }
+  inline void field_string(int f, const std::string &v)
+  {
+    cpr->put_fldh(f, cur_fld, ST_FLD_BINARY);
+    cpr->put_uint(v.size());
+    // FIXME : replace reinterpret_cast
+    cpr->putb(reinterpret_cast<const uint8_t *>(v.data()), (uint32_t)v.size());
+    cur_fld = f;
+  }
 
-  inline
-    void field_string_list(int f, const std::vector<std::string>& v)
-    {
-      cpr->put_fldh(f, cur_fld, ST_FLD_LIST);
-      cpr->putb((uint8_t)((std::min(v.size(), (size_t)0xfu) << 4) | ST_FLD_BINARY));
-      if (v.size() >= 0xf) cpr->put_uint(v.size());
-      for (auto i = 0; i < v.size(); i++) {
-        cpr->put_uint(v[i].size());
-        //FIXME : replace reinterpret_cast
-        cpr->putb(reinterpret_cast<const uint8_t *>(v[i].data()), (uint32_t)v[i].size());
-      }
-      cur_fld = f;
+  inline void field_string_list(int f, const std::vector<std::string> &v)
+  {
+    cpr->put_fldh(f, cur_fld, ST_FLD_LIST);
+    cpr->putb((uint8_t)((std::min(v.size(), (size_t)0xfu) << 4) | ST_FLD_BINARY));
+    if (v.size() >= 0xf) cpr->put_uint(v.size());
+    for (auto i = 0; i < v.size(); i++) {
+      cpr->put_uint(v[i].size());
+      // FIXME : replace reinterpret_cast
+      cpr->putb(reinterpret_cast<const uint8_t *>(v[i].data()), (uint32_t)v[i].size());
     }
+    cur_fld = f;
+  }
 
-  inline
-    int get_field(void)
-    {
-      return cur_fld;
-    }
+  inline int get_field(void) { return cur_fld; }
 
-  inline
-    void set_field(const int& field)
-    {
-      cur_fld = field;
-    }
-
+  inline void set_field(const int &field) { cur_fld = field; }
 };
 
 size_t CompactProtocolWriter::write(const FileMetaData *f)

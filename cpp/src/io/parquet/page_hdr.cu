@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
+#include <thrust/tuple.h>
 #include <io/utilities/block_utils.cuh>
 #include "parquet_gpu.hpp"
-#include <thrust/tuple.h>
 
 namespace cudf {
 namespace io {
@@ -122,87 +122,82 @@ __device__ void skip_struct_field(byte_stream_s *bs, int t)
   } while (rep_cnt || struct_depth);
 }
 
-struct ParquetFieldInt32
-{
+struct ParquetFieldInt32 {
   int field;
   int32_t &val;
 
-  __device__
-  ParquetFieldInt32(int f, int32_t &v) : field(f), val(v) {}
+  __device__ ParquetFieldInt32(int f, int32_t &v) : field(f), val(v) {}
 
-  inline __device__ bool
-    operator()(byte_stream_s *bs, int t)
-    {
-      val = get_i32(bs);
-      if (t != ST_FLD_I32) return true;
-      else return false;
-    }
+  inline __device__ bool operator()(byte_stream_s *bs, int t)
+  {
+    val = get_i32(bs);
+    if (t != ST_FLD_I32)
+      return true;
+    else
+      return false;
+  }
 };
 
 template <typename Enum>
-struct ParquetFieldEnum
-{
+struct ParquetFieldEnum {
   int field;
   Enum &val;
 
-  __device__
-  ParquetFieldEnum(int f, Enum &v) : field(f), val(v) {}
+  __device__ ParquetFieldEnum(int f, Enum &v) : field(f), val(v) {}
 
-  inline __device__ bool
-    operator()(byte_stream_s *bs, int t)
-    {
-      val = static_cast<Enum>(get_i32(bs));
-      if (t != ST_FLD_I32) return true;
-      else return false;
-    }
+  inline __device__ bool operator()(byte_stream_s *bs, int t)
+  {
+    val = static_cast<Enum>(get_i32(bs));
+    if (t != ST_FLD_I32)
+      return true;
+    else
+      return false;
+  }
 };
 
 template <typename Operator>
-struct ParquetFieldStruct
-{
+struct ParquetFieldStruct {
   int field;
   Operator op;
 
-  __device__
-  ParquetFieldStruct(int f) : field(f) {}
+  __device__ ParquetFieldStruct(int f) : field(f) {}
 
-  inline __device__ bool
-    operator()(byte_stream_s *bs, int t)
-    {
-      if ((t != ST_FLD_STRUCT) || !op(bs)) return true;
-      else return false;
-    }
+  inline __device__ bool operator()(byte_stream_s *bs, int t)
+  {
+    if ((t != ST_FLD_STRUCT) || !op(bs))
+      return true;
+    else
+      return false;
+  }
 };
 
 template <int index>
-struct FunctionSwitchImpl
-{
+struct FunctionSwitchImpl {
   template <typename... Operator>
-  static inline __device__ bool run(byte_stream_s *bs, int t, const int &fld, thrust::tuple<Operator...>& ops)
+  static inline __device__ bool run(byte_stream_s *bs,
+                                    int t,
+                                    const int &fld,
+                                    thrust::tuple<Operator...> &ops)
   {
-    if (fld == thrust::get<index>(ops).field)
-    {
+    if (fld == thrust::get<index>(ops).field) {
       return thrust::get<index>(ops)(bs, t);
-    }
-    else
-    {
-      return FunctionSwitchImpl<index-1>::run(bs, t, fld, ops);
+    } else {
+      return FunctionSwitchImpl<index - 1>::run(bs, t, fld, ops);
     }
   }
 };
 
 template <>
-struct FunctionSwitchImpl<0>
-{
+struct FunctionSwitchImpl<0> {
   template <typename... Operator>
-  static inline __device__ bool run(byte_stream_s *bs, int t, const int &fld, thrust::tuple<Operator...>& ops)
+  static inline __device__ bool run(byte_stream_s *bs,
+                                    int t,
+                                    const int &fld,
+                                    thrust::tuple<Operator...> &ops)
   {
-    if (fld == thrust::get<0>(ops).field)
-    {
+    if (fld == thrust::get<0>(ops).field) {
       return thrust::get<0>(ops)(bs, t);
-    }
-    else
-    {
+    } else {
       skip_struct_field(bs, t);
       return false;
     }
@@ -213,69 +208,61 @@ template <typename... Operator>
 inline __device__ bool function_builder(thrust::tuple<Operator...> &op, byte_stream_s *bs)
 {
   constexpr int index = thrust::tuple_size<thrust::tuple<Operator...>>::value - 1;
-  int fld = 0;
+  int fld             = 0;
   for (;;) {
     int c, t, f;
     c = getb(bs);
     if (!c) break;
-    f   = c >> 4;
-    t   = c & 0xf;
-    fld = (f) ? fld + f : get_i32(bs);
+    f                  = c >> 4;
+    t                  = c & 0xf;
+    fld                = (f) ? fld + f : get_i32(bs);
     bool exit_function = FunctionSwitchImpl<index>::run(bs, t, fld, op);
     if (exit_function) { return false; }
   }
   return true;
 }
 
-struct gpuParseDataPageHeader
-{
+struct gpuParseDataPageHeader {
   __device__ bool operator()(byte_stream_s *bs)
   {
-    auto op = thrust::make_tuple(
-        ParquetFieldInt32(1, bs->page.num_input_values),
-        ParquetFieldEnum<Encoding>(2, bs->page.encoding),
-        ParquetFieldEnum<Encoding>(3, bs->page.definition_level_encoding),
-        ParquetFieldEnum<Encoding>(4, bs->page.repetition_level_encoding));
+    auto op = thrust::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
+                                 ParquetFieldEnum<Encoding>(2, bs->page.encoding),
+                                 ParquetFieldEnum<Encoding>(3, bs->page.definition_level_encoding),
+                                 ParquetFieldEnum<Encoding>(4, bs->page.repetition_level_encoding));
     return function_builder(op, bs);
   }
 };
 
-struct gpuParseDictionaryPageHeader
-{
+struct gpuParseDictionaryPageHeader {
   __device__ bool operator()(byte_stream_s *bs)
   {
-    auto op = thrust::make_tuple(
-        ParquetFieldInt32(1, bs->page.num_input_values),
-        ParquetFieldEnum<Encoding>(2, bs->page.encoding));
+    auto op = thrust::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
+                                 ParquetFieldEnum<Encoding>(2, bs->page.encoding));
     return function_builder(op, bs);
   }
 };
 
-struct gpuParseDataPageHeaderV2
-{
+struct gpuParseDataPageHeaderV2 {
   __device__ bool operator()(byte_stream_s *bs)
   {
-    auto op = thrust::make_tuple(
-        ParquetFieldInt32(1, bs->page.num_input_values),
-        ParquetFieldInt32(3, bs->page.num_rows),
-        ParquetFieldEnum<Encoding>(4, bs->page.encoding),
-        ParquetFieldEnum<Encoding>(5, bs->page.definition_level_encoding),
-        ParquetFieldEnum<Encoding>(6, bs->page.repetition_level_encoding));
+    auto op = thrust::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
+                                 ParquetFieldInt32(3, bs->page.num_rows),
+                                 ParquetFieldEnum<Encoding>(4, bs->page.encoding),
+                                 ParquetFieldEnum<Encoding>(5, bs->page.definition_level_encoding),
+                                 ParquetFieldEnum<Encoding>(6, bs->page.repetition_level_encoding));
     return function_builder(op, bs);
   }
 };
 
-struct gpuParsePageHeader
-{
+struct gpuParsePageHeader {
   __device__ bool operator()(byte_stream_s *bs)
   {
-    auto op = thrust::make_tuple(
-        ParquetFieldEnum<PageType>(1, bs->page_type),
-        ParquetFieldInt32(2, bs->page.uncompressed_page_size),
-        ParquetFieldInt32(3, bs->page.compressed_page_size),
-        ParquetFieldStruct<gpuParseDataPageHeader>(5),
-        ParquetFieldStruct<gpuParseDictionaryPageHeader>(7),
-        ParquetFieldStruct<gpuParseDataPageHeaderV2>(8));
+    auto op = thrust::make_tuple(ParquetFieldEnum<PageType>(1, bs->page_type),
+                                 ParquetFieldInt32(2, bs->page.uncompressed_page_size),
+                                 ParquetFieldInt32(3, bs->page.compressed_page_size),
+                                 ParquetFieldStruct<gpuParseDataPageHeader>(5),
+                                 ParquetFieldStruct<gpuParseDictionaryPageHeader>(7),
+                                 ParquetFieldStruct<gpuParseDataPageHeaderV2>(8));
     return function_builder(op, bs);
   }
 };

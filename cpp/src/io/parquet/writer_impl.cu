@@ -729,9 +729,11 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
       }
       ck->has_dictionary                                           = dict_enable;
       state.md.row_groups[global_r].columns[i].meta_data.type      = state.md.schema[1 + i].type;
-      state.md.row_groups[global_r].columns[i].meta_data.encodings = {Encoding::PLAIN, Encoding::RLE};
+      state.md.row_groups[global_r].columns[i].meta_data.encodings = {Encoding::PLAIN,
+                                                                      Encoding::RLE};
       if (dict_enable) {
-        state.md.row_groups[global_r].columns[i].meta_data.encodings.push_back(Encoding::PLAIN_DICTIONARY);
+        state.md.row_groups[global_r].columns[i].meta_data.encodings.push_back(
+          Encoding::PLAIN_DICTIONARY);
       }
       state.md.row_groups[global_r].columns[i].meta_data.path_in_schema = {
         state.md.schema[1 + i].name};

@@ -53,8 +53,8 @@ THE SOFTWARE.
 #define CONSTANT static const __device__ __constant__
 
 constexpr int brotli_num_block_len_symbols = 26;
-constexpr int brotli_num_literal_symbols = 256;
-constexpr int brotli_num_command_symbols = 704;
+constexpr int brotli_num_literal_symbols   = 256;
+constexpr int brotli_num_command_symbols   = 704;
 
 CONSTANT uint8_t kReverseBits[1 << 8] = {
   0x00, 0x80, 0x40, 0xC0, 0x20, 0xA0, 0x60, 0xE0, 0x10, 0x90, 0x50, 0xD0, 0x30, 0xB0, 0x70, 0xF0,
@@ -2528,7 +2528,7 @@ CONSTANT uint16_t kMaxHuffmanTableSize[] = {
   256,  402,  436,  468,  500,  534,  566,  598,  630,  662,  694,  726,  758,
   790,  822,  854,  886,  920,  952,  984,  1016, 1048, 1080, 1112, 1144, 1176,
   1208, 1240, 1272, 1304, 1336, 1368, 1400, 1432, 1464, 1496, 1528};
-constexpr int brotli_huffman_max_size_26 = 396;
+constexpr int brotli_huffman_max_size_26  = 396;
 constexpr int brotli_huffman_max_size_258 = 632;
 // Max table size for context map
 constexpr int brotli_huffman_max_size_272 = 646;

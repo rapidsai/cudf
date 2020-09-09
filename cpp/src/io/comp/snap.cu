@@ -24,7 +24,8 @@ constexpr uint32_t hash_bits = 12;
 // TBD: Tentatively limits to 2-byte codes to prevent long copy search followed by long literal
 // encoding
 constexpr uint32_t max_literal_length = 256;
-constexpr uint32_t max_copy_distance = 32768;  // Matches encoder limit as described in snappy format description
+constexpr uint32_t max_copy_distance =
+  32768;  // Matches encoder limit as described in snappy format description
 
 /**
  * @brief snappy compressor state

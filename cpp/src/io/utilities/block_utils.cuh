@@ -39,14 +39,9 @@ inline __device__ T shuffle_xor(T var, uint32_t delta)
   return __shfl_xor_sync(~0, var, delta);
 }
 
-inline __device__ void syncwarp(void)
-{
-  __syncwarp();
-}
+inline __device__ void syncwarp(void) { __syncwarp(); }
 
-inline __device__ uint32_t ballot(int pred) {
-  return __ballot_sync(~0, pred);
-}
+inline __device__ uint32_t ballot(int pred) { return __ballot_sync(~0, pred); }
 
 #else
 
@@ -68,13 +63,9 @@ inline __device__ T shuffle_xor(T var, uint32_t delta)
   return __shfl_xor(var, delta);
 }
 
-inline __device__ void syncwarp(void)
-{
-}
+inline __device__ void syncwarp(void) {}
 
-inline __device__ uint32_t ballot(int pred) {
-  return __ballot(pred);
-}
+inline __device__ uint32_t ballot(int pred) { return __ballot(pred); }
 #endif
 
 #if (__CUDA_ARCH__ >= 700)

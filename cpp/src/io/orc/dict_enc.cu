@@ -28,7 +28,7 @@ namespace io {
 namespace orc {
 namespace gpu {
 constexpr int max_short_dict_entries = 10 * 1024;
-constexpr int init_hash_bits = 12;
+constexpr int init_hash_bits         = 12;
 
 struct dictinit_state_s {
   uint32_t nnz;
@@ -163,8 +163,7 @@ extern "C" __global__ void __launch_bounds__(512, 2)
     __syncthreads();
   }
 
-  static_assert((init_hash_bits == 12),
-      "Hardcoded for init_hash_bits=12");
+  static_assert((init_hash_bits == 12), "Hardcoded for init_hash_bits=12");
 
   // Reorder the 16-bit local indices according to the hash value of the strings
   {

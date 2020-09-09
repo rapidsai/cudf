@@ -68,25 +68,23 @@ inline __device__ uint16_t huffcode(T0 len, T1 sym)
 {
   return (uint16_t)(((sym) << 4) + (len));
 }
-constexpr int8_t brotli_code_length_codes = 18;
+constexpr int8_t brotli_code_length_codes          = 18;
 constexpr uint32_t brotli_num_distance_short_codes = 16;
-constexpr uint32_t brotli_max_allowed_distance = 0x7FFFFFFC;
+constexpr uint32_t brotli_max_allowed_distance     = 0x7FFFFFFC;
 
-inline __device__ uint32_t
-brotli_distance_alphabet_size(
-    uint8_t npostfix,
-    uint32_t ndirect,
-    uint32_t maxnbits)
+inline __device__ uint32_t brotli_distance_alphabet_size(uint8_t npostfix,
+                                                         uint32_t ndirect,
+                                                         uint32_t maxnbits)
 {
-  return brotli_num_distance_short_codes +
-    ndirect + (maxnbits << (npostfix + 1));
+  return brotli_num_distance_short_codes + ndirect + (maxnbits << (npostfix + 1));
 }
 
 #include "brotli_tables.h"
 
 constexpr int numthreads = 256;
 
-inline __device__ uint32_t brev8(uint32_t x) {
+inline __device__ uint32_t brev8(uint32_t x)
+{
   return (__brev(x) >> 24u);  // kReverseBits[x]
 }
 
@@ -117,9 +115,9 @@ struct debrotli_huff_tree_group_s {
 };
 
 // Must be able to at least hold worst-case context maps, tree groups and context modes
-constexpr int local_heap_size = (256 * 64 + 256 * 4 +
-    3 * (sizeof(debrotli_huff_tree_group_s) + 255 * sizeof(uint16_t *)) +
-   256 + 3 * brotli_huffman_max_size_258 * sizeof(uint16_t) +
+constexpr int local_heap_size =
+  (256 * 64 + 256 * 4 + 3 * (sizeof(debrotli_huff_tree_group_s) + 255 * sizeof(uint16_t *)) + 256 +
+   3 * brotli_huffman_max_size_258 * sizeof(uint16_t) +
    3 * brotli_huffman_max_size_26 * sizeof(uint16_t));
 
 /**
@@ -1495,10 +1493,7 @@ static __device__ void DecodeHuffmanTreeGroups(debrotli_state_s *s,
 }
 
 /* typeof(MODE) == ContextType; returns ContextLut */
-__inline__ __device__ int brotli_context_lut(int mode)
-{
-  return (mode << 9);
-}
+__inline__ __device__ int brotli_context_lut(int mode) { return (mode << 9); }
 
 static __device__ int PrepareLiteralDecoding(debrotli_state_s *s, const uint8_t *&context_map_slice)
 {
@@ -1555,19 +1550,16 @@ inline __device__ int ToUpperCase(uint8_t *p)
   return 3;
 }
 
-inline __device__ uint8_t brotli_transform_type(int idx)
+inline __device__ uint8_t brotli_transform_type(int idx) { return kTransformsData[(idx * 3) + 1]; }
+
+inline __device__ const uint8_t *brotli_transform_prefix(int idx)
 {
-  return kTransformsData[(idx*3) + 1];
+  return &kPrefixSuffix[kPrefixSuffixMap[kTransformsData[(idx * 3)]]];
 }
 
-inline __device__ const uint8_t* brotli_transform_prefix(int idx)
+inline __device__ const uint8_t *brotli_transform_suffix(int idx)
 {
-  return &kPrefixSuffix[kPrefixSuffixMap[kTransformsData[(idx*3)]]];
-}
-
-inline __device__ const uint8_t* brotli_transform_suffix(int idx)
-{
-  return &kPrefixSuffix[kPrefixSuffixMap[kTransformsData[(idx*3) + 2]]];
+  return &kPrefixSuffix[kPrefixSuffixMap[kTransformsData[(idx * 3) + 2]]];
 }
 
 static __device__ int TransformDictionaryWord(uint8_t *dst,
@@ -1613,10 +1605,7 @@ static __device__ int TransformDictionaryWord(uint8_t *dst,
 }
 
 /* typeof(LUT) == const uint8_t* */
-__inline__ __device__ int brotli_need_context_lut(int mode)
-{
-  return (mode < (4 << 9));
-}
+__inline__ __device__ int brotli_need_context_lut(int mode) { return (mode < (4 << 9)); }
 
 __inline__ __device__ int brotli_context(int p1, int p2, int lut)
 {

@@ -201,7 +201,6 @@ class ProtobufReader {
     return FieldRepeatedStructBlobFunctor<Enum>(f, v);
   }
 
-
  protected:
   const uint8_t *m_base;
   const uint8_t *m_cur;

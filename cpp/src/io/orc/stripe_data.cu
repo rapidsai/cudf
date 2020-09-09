@@ -19,11 +19,11 @@
 #include "orc_gpu.h"
 
 // Must be able to handle 512x 8-byte values
-constexpr int bytestream_bfrsz = (1 << 13);
+constexpr int bytestream_bfrsz     = (1 << 13);
 constexpr int bytestream_bfrmask32 = (bytestream_bfrsz - 1) >> 2;
 
 // TODO: Should be more efficient with 512 threads per block and circular queue for values
-constexpr int nwarps = 1 << 5;
+constexpr int nwarps   = 1 << 5;
 constexpr int nthreads = 1 << 10;
 // Add some margin to look ahead to future rows in case there are many zeroes
 constexpr int rowdec_bfrsz = nthreads + 128;
@@ -33,15 +33,9 @@ namespace io {
 namespace orc {
 namespace gpu {
 
-inline __device__ uint8_t is_rlev1(uint8_t encoding_mode)
-{
-  return encoding_mode < DIRECT_V2;
-}
+inline __device__ uint8_t is_rlev1(uint8_t encoding_mode) { return encoding_mode < DIRECT_V2; }
 
-inline __device__ uint8_t is_dictionary(uint8_t encoding_mode)
-{
-  return encoding_mode&1;
-}
+inline __device__ uint8_t is_dictionary(uint8_t encoding_mode) { return encoding_mode & 1; }
 
 static __device__ __constant__ int64_t kORCTimeToUTC =
   1420070400;  // Seconds from January 1st, 1970 to January 1st, 2015

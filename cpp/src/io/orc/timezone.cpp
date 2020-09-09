@@ -52,7 +52,7 @@ inline T bswap_64(T val)
 
 constexpr uint32_t tzip_magic = (('T' << 0) | ('Z' << 8) | ('i' << 16) | ('f' << 24));
 
-constexpr int64_t orc_utc_offset = 1420070400; // Seconds from Jan 1st, 1970 to Jan 1st, 2015
+constexpr int64_t orc_utc_offset = 1420070400;  // Seconds from Jan 1st, 1970 to Jan 1st, 2015
 
 #pragma pack(push, 1)
 /**

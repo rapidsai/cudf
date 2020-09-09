@@ -100,7 +100,7 @@ struct PageInfo {
   int32_t chunk_idx;   // column chunk this page belongs to
   int32_t column_idx;  // column index this page belongs to
   uint8_t flags;       // PAGEINFO_FLAGS_XXX
-  Encoding encoding;    // Encoding for data or dictionary page
+  Encoding encoding;   // Encoding for data or dictionary page
   Encoding definition_level_encoding;  // Encoding used for definition levels (data page)
   Encoding repetition_level_encoding;  // Encoding used for repetition levels (data page)
 
@@ -216,7 +216,7 @@ struct EncPage {
   uint8_t *page_data;        //!< Ptr to uncompressed page
   uint8_t *compressed_data;  //!< Ptr to compressed page
   uint16_t num_fragments;    //!< Number of fragments in page
-  PageType page_type;         //!< Page type (0=data, 2=dictionary)
+  PageType page_type;        //!< Page type (0=data, 2=dictionary)
   uint8_t dict_bits_plus1;   //!< 0=plain, nonzero:bits to encoding dictionary indices + 1
   uint32_t chunk_id;         //!< Index in chunk array
   uint32_t hdr_size;         //!< Size of page header

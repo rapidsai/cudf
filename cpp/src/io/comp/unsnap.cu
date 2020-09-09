@@ -20,10 +20,10 @@
 namespace cudf {
 namespace io {
 
-constexpr int32_t batch_size = (1 << 5);
-constexpr int32_t batch_count = (1 << 2);
+constexpr int32_t batch_size    = (1 << 5);
+constexpr int32_t batch_count   = (1 << 2);
 constexpr int32_t prefetch_size = (1 << 9);  // 512B, in 32B chunks
-constexpr bool log_cyclecount = false;
+constexpr bool log_cyclecount   = false;
 
 /**
  * @brief Describes a single LZ77 symbol (single entry in batch)
@@ -60,7 +60,7 @@ struct unsnap_state_s {
   gpu_inflate_input_s in;      ///< input parameters for current block
 };
 
-inline __device__ volatile uint8_t& byte_access(unsnap_state_s *s, uint32_t pos)
+inline __device__ volatile uint8_t &byte_access(unsnap_state_s *s, uint32_t pos)
 {
   return s->q.buf[pos & (prefetch_size - 1)];
 }
@@ -99,9 +99,7 @@ __device__ void snappy_prefetch_bytestream(unsnap_state_s *s, int t)
       }
     }
     blen = shuffle0(blen);
-    if (t < blen) {
-      byte_access(s, pos + t) = base[pos + t];
-    }
+    if (t < blen) { byte_access(s, pos + t) = base[pos + t]; }
     pos += blen;
   } while (blen > 0);
 }
@@ -358,9 +356,10 @@ __device__ void snappy_decode_symbols(unsnap_state_s *s, uint32_t t)
             int32_t ofs   = 0;
             if (t < batch_add) {
               blen = (b0 & 1) ? ((b0 >> 2) & 7) + 4 : ((b0 >> 2) + 1);
-              ofs  = (b0 & 1) ? ((b0 & 0xe0) << 3) | byte_access(s, cur_t + 1)
-                             : (b0 & 2) ? byte_access(s, cur_t + 1) | (byte_access(s, cur_t + 2) << 8)
-                                        : -(int32_t)(cur_t + 1);
+              ofs  = (b0 & 1)
+                      ? ((b0 & 0xe0) << 3) | byte_access(s, cur_t + 1)
+                      : (b0 & 2) ? byte_access(s, cur_t + 1) | (byte_access(s, cur_t + 2) << 8)
+                                 : -(int32_t)(cur_t + 1);
               b[batch_len + t].len    = blen;
               b[batch_len + t].offset = ofs;
               ofs += blen;  // for correct out-of-range detection below
@@ -619,9 +618,7 @@ extern "C" __global__ void __launch_bounds__(128)
     const uint8_t *cur = reinterpret_cast<const uint8_t *>(s->in.srcDevice);
     const uint8_t *end = cur + s->in.srcSize;
     s->error           = 0;
-    if (log_cyclecount) {
-      s->tstart = clock();
-    }
+    if (log_cyclecount) { s->tstart = clock(); }
     if (cur < end) {
       // Read uncompressed size (varint), limited to 32-bit
       uint32_t uncompressed_size = *cur++;

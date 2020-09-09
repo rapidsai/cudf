@@ -123,12 +123,12 @@ constexpr int mtfl_size = 4096;
 
 // Constants for the back end.
 constexpr int bz_max_alpha_size = 258;
-constexpr int bz_max_code_len = 23;
-constexpr int bz_runa = 0;
-constexpr int bz_runb = 1;
-constexpr int bz_n_groups = 6;
-constexpr int bz_g_size = 50;
-constexpr int bz_max_selectors =  (2 + (900000 / bz_g_size));
+constexpr int bz_max_code_len   = 23;
+constexpr int bz_runa           = 0;
+constexpr int bz_runb           = 1;
+constexpr int bz_n_groups       = 6;
+constexpr int bz_g_size         = 50;
+constexpr int bz_max_selectors  = (2 + (900000 / bz_g_size));
 
 typedef struct {
   int32_t minLen;

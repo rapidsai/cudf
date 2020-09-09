@@ -728,7 +728,7 @@ inline __device__ void ctx_merge(uint64_t *ctxtree, packed_rowctx_t *ctxb, uint3
 {
   uint64_t tmp = shuffle_xor(*ctxb, lanemask);
   if (!(t & tmask)) {
-    *ctxb = merge_row_contexts(*ctxb, tmp);
+    *ctxb                              = merge_row_contexts(*ctxb, tmp);
     ctxtree[base + (t >> level_scale)] = *ctxb;
   }
 }
@@ -761,15 +761,15 @@ static inline __device__ void rowctx_merge_transform(uint64_t ctxtree[1024],
   ctxtree[512 + t] = ctxb;
   ctx_merge<1, 0x1, 256, 1>(ctxtree, &ctxb, t);
   ctx_merge<2, 0x3, 128, 2>(ctxtree, &ctxb, t);
-  ctx_merge<4, 0x7, 64,  3>(ctxtree, &ctxb, t);
-  ctx_merge<8, 0xf, 32,  4>(ctxtree, &ctxb, t);
+  ctx_merge<4, 0x7, 64, 3>(ctxtree, &ctxb, t);
+  ctx_merge<8, 0xf, 32, 4>(ctxtree, &ctxb, t);
   __syncthreads();
   if (t < 32) {
     ctxb = ctxtree[32 + t];
     ctx_merge<1, 0x1, 16, 1>(ctxtree, &ctxb, t);
-    ctx_merge<2, 0x3, 8,  2>(ctxtree, &ctxb, t);
-    ctx_merge<4, 0x7, 4,  3>(ctxtree, &ctxb, t);
-    ctx_merge<8, 0xf, 2,  4>(ctxtree, &ctxb, t);
+    ctx_merge<2, 0x3, 8, 2>(ctxtree, &ctxb, t);
+    ctx_merge<4, 0x7, 4, 3>(ctxtree, &ctxb, t);
+    ctx_merge<8, 0xf, 2, 4>(ctxtree, &ctxb, t);
     // Final stage
     uint64_t tmp = shuffle_xor(ctxb, 16);
     if (t == 0) { ctxtree[1] = merge_row_contexts(ctxb, tmp); }
@@ -777,8 +777,8 @@ static inline __device__ void rowctx_merge_transform(uint64_t ctxtree[1024],
 }
 
 template <uint32_t rmask>
-inline __device__ void ctx_unmerge(uint32_t base, uint64_t *ctxtree,
-    uint32_t *ctx, uint32_t *brow4, uint32_t t)
+inline __device__ void ctx_unmerge(
+  uint32_t base, uint64_t *ctxtree, uint32_t *ctx, uint32_t *brow4, uint32_t t)
 {
   rowctx32_t ctxb_left, ctxb_right, ctxb_sum;
   ctxb_sum   = get_row_context(ctxtree[base], *ctx);
@@ -808,15 +808,15 @@ static inline __device__ rowctx32_t rowctx_inverse_merge_transform(uint64_t ctxt
   uint32_t ctx     = ctxtree[0] & 3;  // Starting input context
   rowctx32_t brow4 = 0;               // output row in block *4
 
-  ctx_unmerge<256>(1             , ctxtree, &ctx, &brow4, t);
-  ctx_unmerge<128>(2 + (t >> 8)  , ctxtree, &ctx, &brow4, t);
-  ctx_unmerge<64 >(4 + (t >> 7)  , ctxtree, &ctx, &brow4, t);
-  ctx_unmerge<32 >(8 + (t >> 6)  , ctxtree, &ctx, &brow4, t);
-  ctx_unmerge<16 >(16 + (t >> 5) , ctxtree, &ctx, &brow4, t);
-  ctx_unmerge<8  >(32 + (t >> 4) , ctxtree, &ctx, &brow4, t);
-  ctx_unmerge<4  >(64 + (t >> 3) , ctxtree, &ctx, &brow4, t);
-  ctx_unmerge<2  >(128 + (t >> 2), ctxtree, &ctx, &brow4, t);
-  ctx_unmerge<1  >(256 + (t >> 1), ctxtree, &ctx, &brow4, t);
+  ctx_unmerge<256>(1, ctxtree, &ctx, &brow4, t);
+  ctx_unmerge<128>(2 + (t >> 8), ctxtree, &ctx, &brow4, t);
+  ctx_unmerge<64>(4 + (t >> 7), ctxtree, &ctx, &brow4, t);
+  ctx_unmerge<32>(8 + (t >> 6), ctxtree, &ctx, &brow4, t);
+  ctx_unmerge<16>(16 + (t >> 5), ctxtree, &ctx, &brow4, t);
+  ctx_unmerge<8>(32 + (t >> 4), ctxtree, &ctx, &brow4, t);
+  ctx_unmerge<4>(64 + (t >> 3), ctxtree, &ctx, &brow4, t);
+  ctx_unmerge<2>(128 + (t >> 2), ctxtree, &ctx, &brow4, t);
+  ctx_unmerge<1>(256 + (t >> 1), ctxtree, &ctx, &brow4, t);
 
   return brow4 + ctx;
 }

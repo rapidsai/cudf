@@ -50,11 +50,11 @@ namespace cudf {
 namespace io {
 constexpr int numthreads = 128;
 
-constexpr int maxbits   = 15;                      // maximum bits in a code
-constexpr int maxlcodes = 286;                     // maximum number of literal/length codes
-constexpr int maxdcodes = 30;                      // maximum number of distance codes
-constexpr int maxcodes  = (maxlcodes + maxdcodes); // maximum codes lengths to read
-constexpr int fixlcodes = 288;                     // number of fixed literal/length codes
+constexpr int maxbits   = 15;                       // maximum bits in a code
+constexpr int maxlcodes = 286;                      // maximum number of literal/length codes
+constexpr int maxdcodes = 30;                       // maximum number of distance codes
+constexpr int maxcodes  = (maxlcodes + maxdcodes);  // maximum codes lengths to read
+constexpr int fixlcodes = 288;                      // number of fixed literal/length codes
 
 constexpr int log2lenlut  = 10;
 constexpr int log2distlut = 8;
@@ -77,7 +77,7 @@ struct lut_arr {
 
 /// 4 batches of 32 symbols
 constexpr int batch_count = (1 << 2);
-constexpr int batch_size = (1 << 5);
+constexpr int batch_size  = (1 << 5);
 
 /**
  * @brief Inter-warp communication queue
@@ -103,7 +103,7 @@ struct prefetch_queue_s {
 };
 
 template <typename T>
-inline __device__ uint32_t* prefetch_addr32(volatile prefetch_queue_s& q, T * ptr)
+inline __device__ uint32_t *prefetch_addr32(volatile prefetch_queue_s &q, T *ptr)
 {
   return (uint32_t *)(&q.pref_data[(prefetch_size - 4) & (size_t)(ptr)]);
 }
