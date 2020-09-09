@@ -45,7 +45,7 @@
 - PR #6150 Fix issue related to inferring `datetime64` format with UTC timezone in string data
 - PR #6157 Fix issue related to `Series.concat` to concat a non-empty and empty series.
 - PR #6183 Fix issues related to `Series.acos` for consistent output regardless of dtype 
-
+- PR #6159 Fix issue related to empty `Dataframe` with columns input to `DataFrame.appened`
 
 # cuDF 0.15.0 (26 Aug 2020)
 
