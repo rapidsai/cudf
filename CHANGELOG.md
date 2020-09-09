@@ -57,6 +57,7 @@
 - PR #6159 Fix issue related to empty `Dataframe` with columns input to `DataFrame.appened`
 - PR #6183 Fix issues related to `Series.acos` for consistent output regardless of dtype 
 
+- PR #6183 Fix issues related to `Series.acos` for consistent output regardless of dtype 
 
 
 # cuDF 0.15.0 (26 Aug 2020)
