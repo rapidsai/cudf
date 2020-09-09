@@ -34,7 +34,6 @@
 #include <thrust/detail/copy.h>
 #include <thrust/transform.h>
 
-#include <iterator>
 #include <type_traits>
 
 using namespace ::cudf::io;
