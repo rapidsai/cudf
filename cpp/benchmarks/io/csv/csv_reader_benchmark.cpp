@@ -48,6 +48,7 @@ void CSV_read(benchmark::State& state)
 
   cudf_io::csv_writer_options options =
     cudf_io::csv_writer_options::builder(cudf_io::sink_info(&out_buffer), view)
+      .na_rep("null")
       .include_header(false)
       .rows_per_chunk(1 << 30);
   cudf_io::write_csv(options);

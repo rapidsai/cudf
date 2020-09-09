@@ -1136,7 +1136,7 @@ class csv_writer_options {
   // Set of columns to output
   table_view _table;
   // string to use for null entries
-  std::string _na_rep = "null";
+  std::string _na_rep = "";
   // Indicates whether to write headers to csv
   bool _include_header = true;
   // maximum number of rows to process for each file write

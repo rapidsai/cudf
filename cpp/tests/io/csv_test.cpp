@@ -245,6 +245,7 @@ void write_csv_helper(std::string const& filename,
 
   cudf_io::csv_writer_options writer_options =
     cudf_io::csv_writer_options::builder(cudf_io::sink_info(filename), table)
+      .na_rep("null")
       .include_header(include_header)
       .rows_per_chunk(
         1)  // Note: this gets adjusted to multiple of 8 (per legacy code logic and requirements)

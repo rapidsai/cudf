@@ -48,6 +48,7 @@ void CSV_write(benchmark::State& state)
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     cudf_io::csv_writer_options options =
       cudf_io::csv_writer_options::builder(cudf_io::sink_info(), view)
+        .na_rep("null")
         .include_header(false)
         .rows_per_chunk(1 << 30);
     cudf_io::write_csv(options);
