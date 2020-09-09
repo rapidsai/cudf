@@ -33,6 +33,7 @@
 - PR #6176 Fix cmake warnings for GoogleTest, GoogleBenchmark, and Arrow external projects
 - PR #6149 Update to Arrow v1.0.1
 - PR #6189 Avoid deprecated pyarrow.compat for parquet
+- PR #6186 Update JNI to look for cub in new location
 
 ## Bug Fixes
 
