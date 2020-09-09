@@ -117,7 +117,8 @@ filters : list of tuple, list of lists of tuples default None
     using statistics stored for each row group as Parquet metadata. Row groups
     that do not match the given filter predicate are not read. The
     predicate is expressed in disjunctive normal form (DNF) like
-    `[[('x', '=', 0), ...], ...]`. DNF allows arbitrary boolean logical
+    `[[('id', '=', (df_clients, "id")), ('x', '=', 0), ...], ...]`.
+    DNF allows arbitrary boolean logical
     combinations of single column predicates. The innermost tuples each
     describe a single column predicate. The list of inner predicates is
     interpreted as a conjunction (AND), forming a more selective and
@@ -294,7 +295,8 @@ filters : list of tuple, list of lists of tuples default None
     using statistics stored for each row group as Parquet metadata. Row groups
     that do not match the given filter predicate are not read. The
     predicate is expressed in disjunctive normal form (DNF) like
-    `[[('x', '=', 0), ...], ...]`. DNF allows arbitrary boolean logical
+    `[[('id', '=', (df_clients, "id")), ('x', '=', 0), ...], ...]`.
+    DNF allows arbitrary boolean logical
     combinations of single column predicates. The innermost tuples each
     describe a single column predicate. The list of inner predicates is
     interpreted as a conjunction (AND), forming a more selective and
