@@ -9,7 +9,6 @@ from hypothesis import given, settings, strategies as st
 
 import cudf
 from cudf.core._compat import PANDAS_GE_110
-from cudf.core.series import _fix_nullable_dtype_repr
 from cudf.tests import utils
 from cudf.utils.dtypes import cudf_dtypes_to_pandas_dtypes
 
@@ -48,11 +47,10 @@ def test_null_series(nrows, dtype):
         psrepr = psrepr.replace(
             str(sr._column.default_na_value()) + "\n", "<NA>\n"
         )
-    from cudf.core.series import _fix_nullable_dtype_repr
 
     # todo: this is kind of self-fulfilling since this is what is
     # called inside _repr_ as well
-    psrepr = _fix_nullable_dtype_repr(psrepr)
+    psrepr = utils._fix_nullable_dtype_repr(psrepr)
 
     assert psrepr.split() == sr.__repr__().split()
 
@@ -94,7 +92,7 @@ def test_full_series(nrows, dtype):
     ps = pd.Series(np.random.randint(0, 100, size)).astype(dtype)
     sr = cudf.from_pandas(ps)
     pd.options.display.max_rows = int(nrows)
-    psrepr = _fix_nullable_dtype_repr(ps.__repr__())
+    psrepr = utils._fix_nullable_dtype_repr(ps.__repr__())
     assert psrepr == sr.__repr__()
 
 
@@ -157,7 +155,7 @@ def test_integer_dataframe(x):
 def test_integer_series(x):
     sr = cudf.Series(x)
     ps = pd.Series(x)
-    psrepr = _fix_nullable_dtype_repr(ps.__repr__())
+    psrepr = utils._fix_nullable_dtype_repr(ps.__repr__())
     assert sr.__repr__() == psrepr
 
 
@@ -174,7 +172,7 @@ def test_float_dataframe(x):
 def test_float_series(x):
     sr = cudf.Series(x, nan_as_null=False)
     ps = pd.Series(x)
-    psrepr = _fix_nullable_dtype_repr(ps.__repr__())
+    psrepr = utils._fix_nullable_dtype_repr(ps.__repr__())
     assert sr.__repr__() == psrepr
 
 
@@ -204,7 +202,7 @@ def test_mixed_dataframe(mixed_pdf, mixed_gdf):
 
 def test_mixed_series(mixed_pdf, mixed_gdf):
     for col in mixed_gdf.columns:
-        assert mixed_gdf[col].__repr__() == _fix_nullable_dtype_repr(
+        assert mixed_gdf[col].__repr__() == utils._fix_nullable_dtype_repr(
             mixed_pdf[col].__repr__()
         )
 
@@ -257,7 +255,7 @@ def test_generic_index(length, dtype):
         index=np.random.randint(0, high=100, size=length).astype(dtype),
     )
     gsr = cudf.Series.from_pandas(psr)
-    psrepr = _fix_nullable_dtype_repr(psr.index.__repr__())
+    psrepr = utils._fix_nullable_dtype_repr(psr.index.__repr__())
     assert psrepr == gsr.index.__repr__()
 
 
@@ -581,7 +579,7 @@ def test_series_null_index_repr(sr, pandas_special_case):
         # to be printed as `None` everywhere.
         actual_repr = gsr.__repr__().replace("None", "<NA>")
     assert (
-        _fix_nullable_dtype_repr(expected_repr).split() == actual_repr.split()
+        utils._fix_nullable_dtype_repr(expected_repr).split() == actual_repr.split()
     )
 
 

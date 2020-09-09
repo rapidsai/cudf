@@ -1023,11 +1023,13 @@ class Series(Frame, Serializable):
         else:
             output = preprocess.to_pandas().__repr__()
 
-        output = _fix_nullable_dtype_repr(output)
         lines = output.split("\n")
 
         if isinstance(preprocess._column, cudf.core.column.CategoricalColumn):
             category_memory = lines[-1]
+            to_replace = str(self.dtype.categories.dtype.to_numpy)
+            replacement = str(self.dtype.categories.dtype.name)
+            category_memory = category_memory.replace(to_replace, replacement)
             lines = lines[:-1]
         if len(lines) > 1:
             if lines[-1].startswith("Name: "):
