@@ -134,7 +134,10 @@ class parquet_column_view {
       _data(col.head<uint8_t>() + col.offset() * _type_width),
       _nulls(_leaf_col.nullable() ? _leaf_col.null_mask() : nullptr),
       _converted_type(ConvertedType::UNKNOWN),
-      _ts_scale(0)
+      _ts_scale(0),
+      _dremel_offsets(0, stream),
+      _rep_level(0, stream),
+      _def_level(0, stream)
   {
     switch (_leaf_col.type().id()) {
       case cudf::type_id::INT8:
@@ -320,9 +323,9 @@ class parquet_column_view {
   column_view leaf_col() const noexcept { return _leaf_col; }
   size_type const *const *nesting_offsets() const noexcept { return _offsets_array.data().get(); }
   size_type nesting_levels() const noexcept { return _offsets_array.size(); }
-  size_type const *level_offsets() const noexcept { return _dremel_offsets.data().get(); }
-  uint8_t const *repetition_levels() const noexcept { return _rep_level.data().get(); }
-  uint8_t const *definition_levels() const noexcept { return _def_level.data().get(); }
+  size_type const *level_offsets() const noexcept { return _dremel_offsets.data(); }
+  uint8_t const *repetition_levels() const noexcept { return _rep_level.data(); }
+  uint8_t const *definition_levels() const noexcept { return _def_level.data(); }
   uint16_t max_def_level()
   {
     if (_max_def_level > -1) return _max_def_level;
@@ -405,11 +408,11 @@ class parquet_column_view {
   // TODO (dm): convert to uvector
   rmm::device_vector<size_type const *> _offsets_array;  ///< Array of pointers to offset columns at
                                                          ///< each level of nesting O(nesting depth)
-  rmm::device_vector<size_type>
+  rmm::device_uvector<size_type>
     _dremel_offsets;  ///< For each row, the absolute offset into the repetition and definition
                       ///< level vectors. O(num rows)
-  rmm::device_vector<uint8_t> _rep_level;
-  rmm::device_vector<uint8_t> _def_level;
+  rmm::device_uvector<uint8_t> _rep_level;
+  rmm::device_uvector<uint8_t> _def_level;
   size_type _max_def_level = -1;
 
   // String-related members

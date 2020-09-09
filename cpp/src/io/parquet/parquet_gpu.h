@@ -30,6 +30,7 @@
 #include "parquet_common.h"
 
 #include <rmm/device_scalar.hpp>
+#include <rmm/device_uvector.hpp>
 
 namespace cudf {
 namespace io {
@@ -377,12 +378,12 @@ cudaError_t DecodePageData(hostdevice_vector<PageInfo> &pages,
 std::pair<size_type, size_type> get_leaf_offset(column_device_view col,
                                                 cudaStream_t stream = (cudaStream_t)0);
 
-rmm::device_vector<size_type> get_dremel_offsets(column_device_view col,
-                                                 cudaStream_t stream = (cudaStream_t)0);
+rmm::device_uvector<size_type> get_dremel_offsets(column_device_view col,
+                                                  cudaStream_t stream = (cudaStream_t)0);
 
-std::pair<rmm::device_vector<uint8_t>, rmm::device_vector<uint8_t>> get_levels(
+std::pair<rmm::device_uvector<uint8_t>, rmm::device_uvector<uint8_t>> get_levels(
   column_device_view col,
-  rmm::device_vector<size_type> const &dremel_offsets,
+  rmm::device_uvector<size_type> const &dremel_offsets,
   cudaStream_t stream = (cudaStream_t)0);
 
 /**
