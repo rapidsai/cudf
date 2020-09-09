@@ -104,11 +104,11 @@ cpdef write_orc(Table table,
         metadata_.column_names.push_back(str.encode(col_name))
 
     cdef orc_writer_options c_orc_writer_options = move(
-        orc_writer_options.builder(sink_info_c, table.data_view()).
-        metadata(&metadata_).
-        compression(compression_).
-        enable_statistics(<bool> (True if enable_statistics else False)).
-        build()
+        orc_writer_options.builder(sink_info_c, table.data_view())
+        .metadata(&metadata_)
+        .compression(compression_)
+        .enable_statistics(<bool> (True if enable_statistics else False))
+        .build()
     )
 
     with nogil:
@@ -147,16 +147,16 @@ cdef orc_reader_options make_orc_reader_options(
     cdef orc_reader_options opts
     cdef source_info src = make_source_info([filepath_or_buffer])
     opts = move(
-        orc_reader_options.builder(src).
-        columns(c_column_names).
-        stripes(strps).
-        skip_rows(skip_rows).
-        num_rows(num_rows).
-        timestamp_type(data_type(timestamp_type)).
-        use_index(use_index).
-        decimals_as_float64(decimals_as_float).
-        forced_decimals_scale(force_decimal_scale).
-        build()
+        orc_reader_options.builder(src)
+        .columns(c_column_names)
+        .stripes(strps)
+        .skip_rows(skip_rows)
+        .num_rows(num_rows)
+        .timestamp_type(data_type(timestamp_type))
+        .use_index(use_index)
+        .decimals_as_float64(decimals_as_float)
+        .forced_decimals_scale(force_decimal_scale)
+        .build()
     )
 
     return opts
