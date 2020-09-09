@@ -376,8 +376,7 @@ message(STATUS "BENCHMARK_LIST set to: ${BENCHMARK_LIST}")
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
-include_directories("${CUB_INCLUDE_DIR}"
-                    "${THRUST_INCLUDE_DIR}"
+include_directories("${THRUST_INCLUDE_DIR}"
                     "${JITIFY_INCLUDE_DIR}"
                     "${LIBCUDACXX_INCLUDE_DIR}")
 
@@ -429,7 +428,7 @@ add_library(cudf
             src/binaryop/jit/code/kernel.cpp
             src/binaryop/jit/code/operation.cpp
             src/binaryop/jit/code/traits.cpp
-            src/interop/from_arrow.cu
+            src/interop/from_arrow.cpp
             src/interop/to_arrow.cpp
             src/interop/dlpack.cpp
             src/jit/type.cpp
