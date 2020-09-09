@@ -595,7 +595,7 @@ def get_dummies(
     if len(columns) == 0:
         return df.select_dtypes(exclude=encode_fallback_dtypes)
     else:
-        result_df = df.drop(labels=columns)
+        result_df = df.drop(columns=columns)
         for name in columns:
             if isinstance(df[name]._column, CategoricalColumn):
                 unique = df[name]._column.categories

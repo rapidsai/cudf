@@ -451,6 +451,7 @@ class DataFrame(Frame, Serializable):
 
     @classmethod
     def _from_table(cls, table, index=None):
+        # import pdb;pdb.set_trace()
         if index is None:
             if table._index is not None:
                 index = Index._from_table(table._index)
@@ -2646,7 +2647,7 @@ class DataFrame(Frame, Serializable):
             if len(index) > 1:
                 df = self.copy(deep=False)
                 if drop:
-                    df = df.drop(columns=index)
+                    df = df.drop(columns=index, axis=1)
                 return df.set_index(
                     cudf.MultiIndex.from_frame(self[index], names=index)
                 )
@@ -2783,6 +2784,7 @@ class DataFrame(Frame, Serializable):
         0  1.0  a
         2  3.0  c
         """
+        # import pdb;pdb.set_trace()
         positions = as_column(positions)
         if pd.api.types.is_bool_dtype(positions):
             return self._apply_boolean_mask(positions)
@@ -2898,10 +2900,12 @@ class DataFrame(Frame, Serializable):
     def drop(
         self,
         labels=None,
-        axis=None,
+        axis=0,
+        index=None,
         columns=None,
-        errors="raise",
+        level=None,
         inplace=False,
+        errors="raise",
     ):
         """Drop column(s)
 
@@ -2910,7 +2914,6 @@ class DataFrame(Frame, Serializable):
         labels : str or sequence of strings
             Name of column(s) to be dropped.
         axis : {0 or 'index', 1 or 'columns'}, default 0
-            Only axis=1 is currently supported.
         columns
             array of column names, the same as using labels and axis=1
         errors : {'ignore', 'raise'}, default 'raise'
@@ -2944,21 +2947,30 @@ class DataFrame(Frame, Serializable):
         3    3
         4    4
         """
-        if axis == 0 and labels is not None:
-            raise NotImplementedError("Can only drop columns, not rows")
+
         if errors != "raise":
             raise NotImplementedError("errors= keyword not implemented")
-        if labels is None and columns is None:
-            raise ValueError(
-                "Need to specify at least one of 'labels' or 'columns'"
-            )
-        if labels is not None and columns is not None:
-            raise ValueError("Cannot specify both 'labels' and 'columns'")
 
         if labels is not None:
+            if index is not None or columns is not None:
+                raise ValueError(
+                    "Cannot specify both 'labels' and 'index'/'columns'"
+                )
             target = labels
-        else:
+        elif index is not None:
+            target = index
+            axis = 0
+        elif columns is not None:
             target = columns
+            axis = 1
+        else:
+            raise ValueError(
+                "Need to specify at least one of 'labels', "
+                "'index' or 'columns'"
+            )
+
+        if isinstance(target, (cudf.Series, cudf.Index)):
+            target = target.to_pandas()
 
         columns = (
             [target]
@@ -2969,19 +2981,26 @@ class DataFrame(Frame, Serializable):
             outdf = self
         else:
             outdf = self.copy()
-        for c in columns:
-            outdf._drop_column(c)
-        return outdf
 
-    def drop_column(self, name):
-        """Drop a column by *name*
-        """
-        warnings.warn(
-            "The drop_column method is deprecated. "
-            "Use the drop method instead.",
-            DeprecationWarning,
-        )
-        self._drop_column(name)
+        if axis in (1, "columns"):
+            for c in columns:
+                outdf._drop_column(c)
+        elif axis in (0, "index"):
+            index = cudf.Series(columns)
+            print(index)
+            print(outdf.index)
+            # import pdb;pdb.set_trace()
+            if not index.isin(outdf.index).all():
+                raise KeyError("One or more values not found in axis")
+
+            bool_mask = outdf.index.isin(index)
+            sliced_df = outdf.iloc[~bool_mask]
+
+            outdf._data = sliced_df._data
+            outdf._index = sliced_df._index
+
+        if not inplace:
+            return outdf
 
     def _drop_column(self, name):
         """Drop a column by *name*
