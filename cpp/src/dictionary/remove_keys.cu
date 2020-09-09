@@ -18,7 +18,6 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
-#include <cudf/detail/unary.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
@@ -63,20 +62,20 @@ std::unique_ptr<column> remove_keys_fn(
   column_view keys_positions_view(
     data_type{type_id::UINT32}, keys_view.size(), keys_positions.data());
 
-  // copy the non-removed keys ( keys_to_keep_fn(idx)==true )
-  // init to max identify new nulls
+  // init values to max to identify new nulls
   rmm::device_uvector<uint32_t> map_indices(keys_view.size(), stream);
   thrust::fill(execpol->on(stream),
                map_indices.begin(),
                map_indices.end(),
-               static_cast<uint32_t>(std::numeric_limits<size_type>::max()));
+               static_cast<uint32_t>(max_column_size));
+  // copy the non-removed keys ( keys_to_keep_fn(idx)==true );
   std::unique_ptr<column> keys_column = [&] {
     auto table_keys = cudf::detail::copy_if(
                         table_view{{keys_view, keys_positions_view}}, keys_to_keep_fn, mr, stream)
                         ->release();
     keys_positions_view = table_keys[1]->view();
-    // build indices mapper (using -1 to represent max)
-    // Example scatter([0,1,2][0,2,4][-1,-1,-1,-1,-1]) => [0,-1,1,-1,2]
+    // build indices mapper
+    // Example scatter([0,1,2][0,2,4][max,max,max,max,max]) => [0,max,1,max,2]
     thrust::scatter(execpol->on(stream),
                     thrust::make_counting_iterator<uint32_t>(0),
                     thrust::make_counting_iterator<uint32_t>(keys_positions_view.size()),
@@ -92,7 +91,7 @@ std::unique_ptr<column> remove_keys_fn(
                            0,
                            dictionary_column.offset());
   // create new indices column
-  // Example: gather([4,0,3,1,2,2,2,4,0],[0,-1,1,-1,2]) => [2,0,-1,-1,1,1,1,2,0]
+  // Example: gather([4,0,3,1,2,2,2,4,0],[0,max,1,max,2]) => [2,0,max,max,1,1,1,2,0]
   column_view map_indices_view(data_type{type_id::UINT32}, keys_view.size(), map_indices.data());
   auto table_indices = cudf::detail::gather(table_view{{map_indices_view}},
                                             indices_view,
@@ -112,7 +111,7 @@ std::unique_ptr<column> remove_keys_fn(
     thrust::make_counting_iterator<size_type>(dictionary_column.size()),
     [offset, d_null_mask, d_indices] __device__(size_type idx) {
       if (d_null_mask && !bit_is_set(d_null_mask, idx + offset)) return false;
-      return (d_indices[idx] < std::numeric_limits<size_type>::max());  // new nulls have max values
+      return (d_indices[idx] < max_column_size);  // new nulls have max values
     },
     stream,
     mr);

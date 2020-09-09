@@ -33,7 +33,7 @@ namespace dictionary {
  *
  * @param dictionary The dictionary to search for the key.
  * @param key The value to search for in the dictionary keyset.
- * @return Numeric scalar with index value of the key within the dictionary
+ * @return Numeric scalar index value of the key within the dictionary
  */
 std::unique_ptr<scalar> get_index(
   dictionary_column_view const& dictionary,
