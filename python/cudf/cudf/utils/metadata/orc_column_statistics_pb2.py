@@ -1,3 +1,10 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
+# This file was generated with the following command with libprotoc 3.12.4-
+# protoc -I=python/cudf/cudf/utils/metadata \
+#   --python_out=python/cudf/cudf/utils/metadata \
+#   python/cudf/cudf/utils/metadata/orc_column_statistics.proto
+
 # flake8: noqa
 # fmt: off
 # -*- coding: utf-8 -*-
