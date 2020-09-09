@@ -428,7 +428,7 @@ add_library(cudf
             src/binaryop/jit/code/kernel.cpp
             src/binaryop/jit/code/operation.cpp
             src/binaryop/jit/code/traits.cpp
-            src/interop/from_arrow.cu
+            src/interop/from_arrow.cpp
             src/interop/to_arrow.cpp
             src/interop/dlpack.cpp
             src/jit/type.cpp
