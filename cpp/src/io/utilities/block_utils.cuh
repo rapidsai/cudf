@@ -19,7 +19,6 @@
 
 namespace cudf {
 namespace io {
-#if (__CUDACC_VER_MAJOR__ >= 9)
 
 template <typename T>
 inline __device__ T shuffle0(T var)
@@ -42,31 +41,6 @@ inline __device__ T shuffle_xor(T var, uint32_t delta)
 inline __device__ void syncwarp(void) { __syncwarp(); }
 
 inline __device__ uint32_t ballot(int pred) { return __ballot_sync(~0, pred); }
-
-#else
-
-template <typename T>
-inline __device__ T shuffle0(T var)
-{
-  return __shfl(var, 0);
-}
-
-template <typename T>
-inline __device__ T shuffle(T var, int lane)
-{
-  return __shfl(var, lane);
-}
-
-template <typename T>
-inline __device__ T shuffle_xor(T var, uint32_t delta)
-{
-  return __shfl_xor(var, delta);
-}
-
-inline __device__ void syncwarp(void) {}
-
-inline __device__ uint32_t ballot(int pred) { return __ballot(pred); }
-#endif
 
 #if (__CUDA_ARCH__ >= 700)
 #define NANOSLEEP(d) __nanosleep(d)
