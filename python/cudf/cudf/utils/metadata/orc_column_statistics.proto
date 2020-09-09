@@ -37,7 +37,6 @@ message TimestampStatistics {
   // min,max values saved as milliseconds since epoch
   optional sint64 minimum = 1;
   optional sint64 maximum = 2;
-  // min,max values saved as milliseconds since UNIX epoch
   optional sint64 minimumUtc = 3;
   optional sint64 maximumUtc = 4;
 }
