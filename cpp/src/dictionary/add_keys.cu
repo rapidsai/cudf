@@ -19,7 +19,6 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
 #include <cudf/detail/stream_compaction.hpp>
-#include <cudf/detail/unary.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/dictionary/update_keys.hpp>
 #include <cudf/stream_compaction.hpp>
@@ -92,13 +91,16 @@ std::unique_ptr<column> add_keys(
                                             mr,
                                             stream)
                          ->release();
-  // The output of lower_bound is INT32 so we need to convert to UINT32
-  auto const gather_result = table_indices.front()->view();
-  auto indices_column =
-    cast(column_view{gather_result.type(), gather_result.size(), gather_result.data<int32_t>()},
-         data_type{type_id::UINT32},
-         mr,
-         stream);
+  // The output of lower_bound is INT32 but we need to convert to UINT32.
+  // There are no negative values and uint32 is the same width as int32
+  // so we can create a UINT32 column using the same data.
+  auto const indices_size = static_cast<size_type>(table_indices.front()->size());
+  auto contents           = table_indices.front()->release();
+  auto indices_column     = std::make_unique<column>(data_type{type_id::UINT32},
+                                                 indices_size,
+                                                 std::move(*(contents.data.release())),
+                                                 rmm::device_buffer{0, stream, mr},
+                                                 0);
 
   // create new dictionary column with keys_column and indices_column
   // null mask has not changed

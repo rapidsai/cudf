@@ -26,6 +26,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 
 /**
  * @file types.hpp
@@ -282,6 +283,11 @@ inline bool operator==(data_type const& lhs, data_type const& rhs) { return lhs.
  * @return Size in bytes of an element of the specified `data_type`
  */
 std::size_t size_of(data_type t);
+
+/**
+ * @brief The maximum possible number of elements for a column.
+ */
+constexpr size_type max_column_size{std::numeric_limits<size_type>::max()};
 
 /**
  *  @brief Identifies the hash function to be used
