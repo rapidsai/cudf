@@ -31,11 +31,11 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
         A numpy data type to use for the output, defaults
         to the same type as the input column
     """
-
+    dtype = cudf_dtype(dtype)
     col_dtype = incol.dtype
     if reduction_op in ['sum', 'sum_of_squares', 'product']:
         col_dtype = find_common_type([col_dtype], [np.uint64])
-    col_dtype = cudf_dtype(col_dtype) if dtype is None else cudf_dtype(dtype)
+    col_dtype = col_dtype if dtype is None else dtype
 
     cdef column_view c_incol_view = incol.view()
     cdef unique_ptr[scalar] c_result
