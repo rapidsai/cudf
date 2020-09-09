@@ -110,134 +110,6 @@ __global__ void stringdata_to_nvstrdesc(gpu::nvstrdesc_s *dst,
   }
 }
 
-struct lists_column_row_desc {
-  column_device_view child_col;
-  column_device_view offset_col;
-  size_type start_offset;
-  size_type end_offset;
-
-  CUDA_DEVICE_CALLABLE lists_column_row_desc(column_device_view const &col, size_type idx)
-    : child_col(col.child(lists_column_view::child_column_index)),
-      offset_col(col.child(lists_column_view::offsets_column_index)),
-      start_offset(offset_col.element<size_type>(idx + col.offset())),
-      end_offset(offset_col.element<size_type>(idx + col.offset() + 1))
-  {
-  }
-};
-
-__device__ size_type count_nested(column_device_view const &col, size_type idx)
-{
-  lists_column_row_desc lcr(col, idx);
-
-  // Dremel encoding needs one set of repetition/definition values for null/empty records
-  if (lcr.start_offset == lcr.end_offset) { return 1; }
-  if (lcr.child_col.type().id() != type_id::LIST) { return lcr.end_offset - lcr.start_offset; }
-
-  size_type result = 0;
-  for (size_type i = lcr.start_offset; i < lcr.end_offset; i++) {
-    result += count_nested(lcr.child_col, i);
-  }
-  return result;
-}
-
-__global__ void set_dremel_offsets(column_device_view col, size_type *values_in_row)
-{
-  // launched one thread per row
-  size_type row = blockIdx.x * blockDim.x + threadIdx.x;
-
-  if (row < col.size()) { values_in_row[row] = count_nested(col, row); }
-}
-
-__device__ void store_nested_rep_level(column_device_view const &col,
-                                       size_type idx,
-                                       uint8_t *rep_level,
-                                       size_type &cur_idx,
-                                       uint32_t cur_rep_level,
-                                       uint32_t depth)
-{
-  if (col.type().id() != type_id::LIST) {
-    rep_level[cur_idx++] = cur_rep_level;
-    return;
-  }
-
-  lists_column_row_desc lcr(col, idx);
-
-  if (lcr.start_offset == lcr.end_offset) {
-    rep_level[cur_idx++] = cur_rep_level;
-    return;
-  }
-
-  ++depth;
-  for (size_type i = lcr.start_offset; i < lcr.end_offset; i++) {
-    store_nested_rep_level(lcr.child_col, i, rep_level, cur_idx, cur_rep_level, depth);
-    cur_rep_level = depth;
-  }
-}
-
-__device__ void store_nested_def_level(column_device_view const &col,
-                                       size_type idx,
-                                       uint8_t *def_level,
-                                       size_type &cur_idx,
-                                       uint8_t cur_def_level)
-{
-  if (col.nullable()) {
-    if (col.is_null_nocheck(idx)) {
-      def_level[cur_idx++] = cur_def_level;
-      return;
-    }
-    ++cur_def_level;
-  }
-
-  if (col.type().id() != type_id::LIST) {
-    def_level[cur_idx] = cur_def_level;
-    if (col.nullable() && !col.is_valid_nocheck(idx)) { --def_level[cur_idx]; }
-    ++cur_idx;
-    return;
-  } else {
-    ++cur_def_level;
-  }
-
-  lists_column_row_desc lcr(col, idx);
-
-  if (lcr.start_offset == lcr.end_offset) {
-    def_level[cur_idx++] = cur_def_level - 1;
-    return;
-  }
-
-  for (size_type i = lcr.start_offset; i < lcr.end_offset; i++) {
-    store_nested_def_level(lcr.child_col, i, def_level, cur_idx, cur_def_level);
-  }
-}
-
-__global__ void calculate_levels(column_device_view col,
-                                 size_type const *dremel_offsets,
-                                 uint8_t *rep_level,
-                                 uint8_t *def_level)
-{
-  // launched one thread per row
-  size_type row = blockIdx.x * blockDim.x + threadIdx.x;
-
-  if (row < col.size()) {
-    size_type cur_idx = dremel_offsets[row];
-    store_nested_rep_level(col, row, rep_level, cur_idx, 0, 0);
-    cur_idx = dremel_offsets[row];
-    store_nested_def_level(col, row, def_level, cur_idx, 0);
-  }
-}
-
-__global__ void get_leaf_offset(column_device_view d_col, size_type *offset, size_type *end)
-{
-  column_device_view col_temp = d_col;
-  size_type off_temp          = *offset;
-  size_type end_temp          = *end;
-  while (col_temp.type().id() == type_id::LIST) {
-    off_temp = col_temp.child(lists_column_view::offsets_column_index).element<size_type>(off_temp);
-    end_temp = col_temp.child(lists_column_view::offsets_column_index).element<size_type>(end_temp);
-    col_temp = col_temp.child(lists_column_view::child_column_index);
-  }
-  *offset = off_temp;
-  *end    = end_temp;
-}
 /**
  * @brief Helper class that adds parquet-specific column info
  **/
@@ -384,13 +256,11 @@ class parquet_column_view {
     size_type leaf_col_offset = col.offset();
     _data_count               = col.size();
     if (_list_type) {
-      // Apply offset recursively until we get offset of leaf data
-      rmm::device_scalar<size_type> d_col_offset(leaf_col_offset, stream);
-      rmm::device_scalar<size_type> d_end_offset(leaf_col_offset + _data_count, stream);
       auto d_col = column_device_view::create(col, stream);
-      get_leaf_offset<<<1, 1, 0, stream>>>(*d_col, d_col_offset.data(), d_end_offset.data());
-      leaf_col_offset = d_col_offset.value(stream);
-      _data_count     = d_end_offset.value(stream) - leaf_col_offset;
+
+      // Top level column's offsets are not applied to all children. Get the effective offset and
+      // size of the leaf column
+      std::tie(leaf_col_offset, _data_count) = gpu::get_leaf_offset(*d_col, stream);
 
       _type_width = (is_fixed_width(_leaf_col.type())) ? cudf::size_of(_leaf_col.type()) : 0;
       _data       = (is_fixed_width(_leaf_col.type()))
@@ -408,22 +278,10 @@ class parquet_column_view {
       _offsets_array = offsets_array;
 
       // Calculate row offset into dremel data (repetition/definition values)
-      _dremel_offsets.resize(_row_count + 1);
-      set_dremel_offsets<<<((_row_count - 1) >> 8) + 1, 256, 0, stream>>>(
-        *d_col, _dremel_offsets.data().get());
-
-      thrust::exclusive_scan(rmm::exec_policy(stream)->on(stream),
-                             _dremel_offsets.begin(),
-                             _dremel_offsets.end(),
-                             _dremel_offsets.begin());
+      _dremel_offsets = std::move(gpu::get_dremel_offsets(*d_col, stream));
 
       // Calculate definition and repetition levels
-      size_type flattened_size = _dremel_offsets.back();
-      _rep_level.resize(flattened_size);
-      _def_level.resize(flattened_size);
-      calculate_levels<<<((_row_count - 1) >> 8) + 1, 256, 0, stream>>>(
-        *d_col, _dremel_offsets.data().get(), _rep_level.data().get(), _def_level.data().get());
-      CUDA_TRY(cudaStreamSynchronize(stream));
+      std::tie(_rep_level, _def_level) = gpu::get_levels(*d_col, _dremel_offsets, stream);
     }
     if (_string_type && _data_count > 0) {
       strings_column_view view{_leaf_col};

@@ -42,6 +42,136 @@ struct frag_init_state_s {
 #define RLE_BFRSZ (1 << LOG2_RLE_BFRSZ)
 #define RLE_MAX_LIT_RUN 0xfff8  // Maximum literal run for 2-byte run code
 
+__global__ void get_leaf_offset(column_device_view d_col, size_type *offset, size_type *end)
+{
+  column_device_view col_temp = d_col;
+  size_type off_temp          = *offset;
+  size_type end_temp          = *end;
+  // Apply offset recursively until we get offset of leaf data
+  while (col_temp.type().id() == type_id::LIST) {
+    off_temp = col_temp.child(lists_column_view::offsets_column_index).element<size_type>(off_temp);
+    end_temp = col_temp.child(lists_column_view::offsets_column_index).element<size_type>(end_temp);
+    col_temp = col_temp.child(lists_column_view::child_column_index);
+  }
+  *offset = off_temp;
+  *end    = end_temp;
+}
+
+struct lists_column_row_desc {
+  column_device_view child_col;
+  column_device_view offset_col;
+  size_type start_offset;
+  size_type end_offset;
+
+  CUDA_DEVICE_CALLABLE lists_column_row_desc(column_device_view const &col, size_type idx)
+    : child_col(col.child(lists_column_view::child_column_index)),
+      offset_col(col.child(lists_column_view::offsets_column_index)),
+      start_offset(offset_col.element<size_type>(idx + col.offset())),
+      end_offset(offset_col.element<size_type>(idx + col.offset() + 1))
+  {
+  }
+};
+
+__device__ size_type count_nested(column_device_view const &col, size_type idx)
+{
+  lists_column_row_desc lcr(col, idx);
+
+  // Dremel encoding needs one set of repetition/definition values for null/empty records
+  if (lcr.start_offset == lcr.end_offset) { return 1; }
+  if (lcr.child_col.type().id() != type_id::LIST) { return lcr.end_offset - lcr.start_offset; }
+
+  size_type result = 0;
+  for (size_type i = lcr.start_offset; i < lcr.end_offset; i++) {
+    result += count_nested(lcr.child_col, i);
+  }
+  return result;
+}
+
+__global__ void calculate_dremel_offsets(column_device_view col, size_type *values_in_row)
+{
+  // launched one thread per row
+  size_type row = blockIdx.x * blockDim.x + threadIdx.x;
+
+  if (row < col.size()) { values_in_row[row] = count_nested(col, row); }
+}
+
+__device__ void store_nested_rep_level(column_device_view const &col,
+                                       size_type idx,
+                                       uint8_t *rep_level,
+                                       size_type &cur_idx,
+                                       uint8_t cur_rep_level,
+                                       uint8_t depth)
+{
+  if (col.type().id() != type_id::LIST) {
+    rep_level[cur_idx++] = cur_rep_level;
+    return;
+  }
+
+  lists_column_row_desc lcr(col, idx);
+
+  if (lcr.start_offset == lcr.end_offset) {
+    rep_level[cur_idx++] = cur_rep_level;
+    return;
+  }
+
+  ++depth;
+  for (size_type i = lcr.start_offset; i < lcr.end_offset; i++) {
+    store_nested_rep_level(lcr.child_col, i, rep_level, cur_idx, cur_rep_level, depth);
+    cur_rep_level = depth;
+  }
+}
+
+__device__ void store_nested_def_level(column_device_view const &col,
+                                       size_type idx,
+                                       uint8_t *def_level,
+                                       size_type &cur_idx,
+                                       uint8_t cur_def_level)
+{
+  if (col.nullable()) {
+    if (col.is_null_nocheck(idx)) {
+      def_level[cur_idx++] = cur_def_level;
+      return;
+    }
+    ++cur_def_level;
+  }
+
+  if (col.type().id() != type_id::LIST) {
+    def_level[cur_idx] = cur_def_level;
+    if (col.is_null(idx)) { --def_level[cur_idx]; }
+    ++cur_idx;
+    return;
+  } else {
+    ++cur_def_level;
+  }
+
+  lists_column_row_desc lcr(col, idx);
+
+  if (lcr.start_offset == lcr.end_offset) {
+    def_level[cur_idx++] = cur_def_level - 1;
+    return;
+  }
+
+  for (size_type i = lcr.start_offset; i < lcr.end_offset; i++) {
+    store_nested_def_level(lcr.child_col, i, def_level, cur_idx, cur_def_level);
+  }
+}
+
+__global__ void calculate_levels(column_device_view col,
+                                 size_type const *dremel_offsets,
+                                 uint8_t *rep_level,
+                                 uint8_t *def_level)
+{
+  // launched one thread per row
+  size_type row = blockIdx.x * blockDim.x + threadIdx.x;
+
+  if (row < col.size()) {
+    size_type cur_idx = dremel_offsets[row];
+    store_nested_rep_level(col, row, rep_level, cur_idx, 0, 0);
+    cur_idx = dremel_offsets[row];
+    store_nested_def_level(col, row, def_level, cur_idx, 0);
+  }
+}
+
 struct page_enc_state_s {
   uint8_t *cur;          //!< current output ptr
   uint8_t *rle_out;      //!< current RLE write ptr
@@ -1531,6 +1661,48 @@ __global__ void __launch_bounds__(1024) gpuGatherPages(EncColumnChunk *chunks, c
     chunks[blockIdx.x].compressed_size = (dst - dst_base);
     if (ck_g.has_dictionary) { chunks[blockIdx.x].dictionary_size = ck_g.dictionary_size; }
   }
+}
+
+std::pair<size_type, size_type> get_leaf_offset(column_device_view col, cudaStream_t stream)
+{
+  rmm::device_scalar<size_type> col_offset(col.offset(), stream);
+  rmm::device_scalar<size_type> end_offset(col.offset() + col.size(), stream);
+
+  get_leaf_offset<<<1, 1, 0, stream>>>(col, col_offset.data(), end_offset.data());
+
+  size_type leaf_col_offset = col_offset.value(stream);
+  size_type leaf_data_size  = end_offset.value(stream) - leaf_col_offset;
+
+  return std::make_pair(leaf_col_offset, leaf_data_size);
+}
+
+rmm::device_vector<size_type> get_dremel_offsets(column_device_view col, cudaStream_t stream)
+{
+  rmm::device_vector<size_type> dremel_offsets(col.size() + 1);
+  calculate_dremel_offsets<<<((col.size() - 1) >> 8) + 1, 256, 0, stream>>>(
+    col, dremel_offsets.data().get());
+
+  thrust::exclusive_scan(rmm::exec_policy(stream)->on(stream),
+                         dremel_offsets.begin(),
+                         dremel_offsets.end(),
+                         dremel_offsets.begin());
+  CUDA_TRY(cudaStreamSynchronize(stream));
+
+  return dremel_offsets;
+}
+
+std::pair<rmm::device_vector<uint8_t>, rmm::device_vector<uint8_t>> get_levels(
+  column_device_view col, rmm::device_vector<size_type> const &dremel_offsets, cudaStream_t stream)
+{
+  size_type flattened_size = dremel_offsets.back();
+  rmm::device_vector<uint8_t> rep_level(flattened_size);
+  rmm::device_vector<uint8_t> def_level(flattened_size);
+
+  calculate_levels<<<((col.size() - 1) >> 8) + 1, 256, 0, stream>>>(
+    col, dremel_offsets.data().get(), rep_level.data().get(), def_level.data().get());
+  CUDA_TRY(cudaStreamSynchronize(stream));
+
+  return std::make_pair(std::move(rep_level), std::move(def_level));
 }
 
 /**

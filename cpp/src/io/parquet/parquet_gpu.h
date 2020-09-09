@@ -22,9 +22,14 @@
 #include <io/statistics/column_stats.h>
 #include <io/utilities/hostdevice_vector.hpp>
 
+#include <cudf/column/column_device_view.cuh>
+#include <cudf/lists/lists_column_view.hpp>
+
 #include <cudf/types.hpp>
 #include <vector>
 #include "parquet_common.h"
+
+#include <rmm/device_scalar.hpp>
 
 namespace cudf {
 namespace io {
@@ -368,6 +373,17 @@ cudaError_t DecodePageData(hostdevice_vector<PageInfo> &pages,
                            size_t num_rows,
                            size_t min_row,
                            cudaStream_t stream = (cudaStream_t)0);
+
+std::pair<size_type, size_type> get_leaf_offset(column_device_view col,
+                                                cudaStream_t stream = (cudaStream_t)0);
+
+rmm::device_vector<size_type> get_dremel_offsets(column_device_view col,
+                                                 cudaStream_t stream = (cudaStream_t)0);
+
+std::pair<rmm::device_vector<uint8_t>, rmm::device_vector<uint8_t>> get_levels(
+  column_device_view col,
+  rmm::device_vector<size_type> const &dremel_offsets,
+  cudaStream_t stream = (cudaStream_t)0);
 
 /**
  * @brief Launches kernel for initializing encoder page fragments
