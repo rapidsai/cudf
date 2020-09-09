@@ -21,7 +21,7 @@
 #include <benchmarks/io/cuio_benchmarks_common.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
-#include <cudf/io/functions.hpp>
+#include <cudf/io/csv.hpp>
 
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
 
@@ -46,14 +46,18 @@ void CSV_read(benchmark::State& state)
   auto const tbl  = create_random_table<T>(num_cols, col_bytes, true);
   auto const view = tbl->view();
 
-  cudf_io::write_csv_args args{cudf_io::sink_info(&out_buffer), view, "null", false, 1 << 30};
-  cudf_io::write_csv(args);
+  cudf_io::csv_writer_options options =
+    cudf_io::csv_writer_options::builder(cudf_io::sink_info(&out_buffer), view)
+      .include_header(false)
+      .rows_per_chunk(1 << 30);
+  cudf_io::write_csv(options);
 
-  cudf_io::read_csv_args read_args(cudf_io::source_info(out_buffer.data(), out_buffer.size()));
+  cudf_io::csv_reader_options read_options = cudf_io::csv_reader_options::builder(
+    cudf_io::source_info(out_buffer.data(), out_buffer.size()));
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    cudf_io::read_csv(read_args);
+    cudf_io::read_csv(read_options);
   }
 
   state.SetBytesProcessed(total_bytes * state.iterations());

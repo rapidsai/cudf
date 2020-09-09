@@ -21,7 +21,7 @@
 #include <benchmarks/io/cuio_benchmarks_common.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
-#include <cudf/io/functions.hpp>
+#include <cudf/io/csv.hpp>
 
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
 
@@ -46,8 +46,11 @@ void CSV_write(benchmark::State& state)
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    cudf_io::write_csv_args args{cudf_io::sink_info(), view, "null", false, 1 << 30};
-    cudf_io::write_csv(args);
+    cudf_io::csv_writer_options options =
+      cudf_io::csv_writer_options::builder(cudf_io::sink_info(), view)
+        .include_header(false)
+        .rows_per_chunk(1 << 30);
+    cudf_io::write_csv(options);
   }
 
   state.SetBytesProcessed(total_bytes * state.iterations());

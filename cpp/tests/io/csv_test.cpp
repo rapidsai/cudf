@@ -229,8 +229,6 @@ void write_csv_helper(std::string const& filename,
                       std::vector<std::string> const& names = {})
 {
   // csv_writer_options is non-owning
-  cudf_io::sink_info const sink{filename};
-  std::string const na{"null"};  // why doesn't this have a default?
   cudf_io::table_metadata metadata{};
 
   if (not names.empty()) {
@@ -245,13 +243,12 @@ void write_csv_helper(std::string const& filename,
     });
   }
 
-  int const rows_per_chunk{
-    1};  // Note: this gets adjusted to multiple of 8 (per legacy code logic and requirements)
-  cudf_io::csv_writer_options writer_options = cudf_io::csv_writer_options::builder(sink, table)
-                                                 .na_rep(na)
-                                                 .include_header(include_header)
-                                                 .rows_per_chunk(rows_per_chunk)
-                                                 .metadata(&metadata);
+  cudf_io::csv_writer_options writer_options =
+    cudf_io::csv_writer_options::builder(cudf_io::sink_info(filename), table)
+      .include_header(include_header)
+      .rows_per_chunk(
+        1)  // Note: this gets adjusted to multiple of 8 (per legacy code logic and requirements)
+      .metadata(&metadata);
 
   cudf_io::write_csv(writer_options);
 }
