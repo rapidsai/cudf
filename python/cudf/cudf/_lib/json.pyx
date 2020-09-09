@@ -82,13 +82,13 @@ cpdef read_json(filepath_or_buffer, dtype,
                 c_dtypes.push_back(str(col_dtype).encode())
 
     cdef json_reader_options opts = move(
-        json_reader_options.builder(make_source_info([path_or_data])).
-        dtypes(c_dtypes).
-        compression(c_compression).
-        lines(c_lines).
-        byte_range_offset(c_range_offset).
-        byte_range_size(c_range_size).
-        build()
+        json_reader_options.builder(make_source_info([path_or_data]))
+        .dtypes(c_dtypes)
+        .compression(c_compression)
+        .lines(c_lines)
+        .byte_range_offset(c_range_offset)
+        .byte_range_size(c_range_size)
+        .build()
     )
 
     # Read JSON

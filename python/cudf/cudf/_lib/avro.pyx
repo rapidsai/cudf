@@ -39,11 +39,11 @@ cpdef read_avro(datasource, columns=None, skip_rows=-1, num_rows=-1):
             c_columns.push_back(str(col).encode())
 
     cdef avro_reader_options options = move(
-        avro_reader_options.builder(make_source_info([datasource])).
-        columns(c_columns).
-        skip_rows(<size_type> skip_rows).
-        num_rows(<size_type> num_rows).
-        build()
+        avro_reader_options.builder(make_source_info([datasource]))
+        .columns(c_columns)
+        .skip_rows(<size_type> skip_rows)
+        .num_rows(<size_type> num_rows)
+        .build()
     )
 
     cdef table_with_metadata c_result
