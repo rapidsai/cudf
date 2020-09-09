@@ -33,7 +33,7 @@ elseif(CMAKE_CXX11_ABI)
   list(APPEND ARROW_CMAKE_ARGS " -DARROW_TENSORFLOW=OFF")
 endif(NOT CMAKE_CXX11_ABI)
 
-configure_file("${CMAKE_SOURCE_DIR}/cmake/Templates/Arrow.CMakeLists.txt.cmake"
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/Templates/Arrow.CMakeLists.txt.cmake"
     "${ARROW_ROOT}/CMakeLists.txt")
 
 file(MAKE_DIRECTORY "${ARROW_ROOT}/build")
