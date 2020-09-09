@@ -5290,8 +5290,8 @@ class DataFrame(Frame, Serializable):
                     val = values[col]
                     result_df[col] = self._data[col].isin(val)
                 else:
-                    result_df[col] = utils.scalar_broadcast_to(
-                        False, len(self)
+                    result_df[col] = column.full(
+                        size=len(self), fill_value=False, dtype="bool"
                     )
 
             result_df.index = self.index
@@ -6796,7 +6796,17 @@ class DataFrame(Frame, Serializable):
 
             current_cols = self.columns
             combined_columns = other.index.to_pandas()
-            if not self.empty:
+            if len(current_cols):
+
+                if cudf.utils.dtypes.is_mixed_with_object_dtype(
+                    current_cols, combined_columns
+                ):
+                    raise TypeError(
+                        "cudf does not support mixed types, please type-cast "
+                        "the column index of dataframe and index of series "
+                        "to same dtypes."
+                    )
+
                 combined_columns = current_cols.union(
                     combined_columns, sort=False
                 )
@@ -6819,17 +6829,6 @@ class DataFrame(Frame, Serializable):
             to_concat = [self, *other]
         else:
             to_concat = [self, other]
-        to_concat = [
-            obj for obj in to_concat if isinstance(obj, Frame) and len(obj)
-        ]
-        if len(to_concat) == 0:
-            if ignore_index and len(self) != 0:
-                result = cudf.DataFrame(
-                    data=self._data.copy(), index=RangeIndex(len(self))
-                )
-            else:
-                result = self.copy()
-            return result
 
         return cudf.concat(to_concat, ignore_index=ignore_index, sort=sort)
 
