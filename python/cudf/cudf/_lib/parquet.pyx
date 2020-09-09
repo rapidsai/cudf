@@ -185,15 +185,17 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
 
     cdef parquet_reader_options args
     # Setup parquet reader arguments
-    args = move(parquet_reader_options.builder(source).
-                columns(cpp_columns).
-                row_groups(cpp_row_groups).
-                convert_strings_to_categories(cpp_strings_to_categorical).
-                use_pandas_metadata(cpp_use_pandas_metadata).
-                skip_rows(cpp_skip_rows).
-                num_rows(cpp_num_rows).
-                timestamp_type(cpp_timestamp_type).
-                build())
+    args = move(
+        parquet_reader_options.builder(source).
+        columns(cpp_columns).
+        row_groups(cpp_row_groups).
+        convert_strings_to_categories(cpp_strings_to_categorical).
+        use_pandas_metadata(cpp_use_pandas_metadata).
+        skip_rows(cpp_skip_rows).
+        num_rows(cpp_num_rows).
+        timestamp_type(cpp_timestamp_type).
+        build()
+    )
 
     # Read Parquet
     cdef cudf_io_types.table_with_metadata c_out_table
@@ -214,8 +216,10 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
             index_col = meta['index_columns'][0]
 
     df = cudf.DataFrame._from_table(
-        Table.from_unique_ptr(move(c_out_table.tbl),
-                              column_names=column_names)
+        Table.from_unique_ptr(
+            move(c_out_table.tbl),
+            column_names=column_names
+        )
     )
 
     if df.empty and meta is not None:
