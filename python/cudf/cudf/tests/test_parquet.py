@@ -1121,7 +1121,9 @@ def test_parquet_write_partitioned(tmpdir_factory, cols, filename):
     )
     pdf.to_parquet(pdf_dir, index=False, partition_cols=cols)
     gdf = cudf.from_pandas(pdf)
-    gdf.to_parquet(gdf_dir, index=False, partition_cols=cols, partition_file_name=filename)
+    gdf.to_parquet(
+        gdf_dir, index=False, partition_cols=cols, partition_file_name=filename
+    )
 
     # Use pandas since dataset may be partitioned
     expect = pd.read_parquet(pdf_dir)
