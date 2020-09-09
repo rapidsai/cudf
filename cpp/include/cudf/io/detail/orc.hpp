@@ -23,9 +23,7 @@
 
 #include <cudf/io/orc.hpp>
 
-//! cuDF interfaces
 namespace cudf {
-//! IO interfaces
 namespace io {
 namespace detail {
 namespace orc {
@@ -61,7 +59,7 @@ class reader {
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
   /**
-   * @brief Destructor explicitly-declared to avoid inlined in header
+   * @brief Destructor explicitly declared to avoid inlining in header
    */
   ~reader();
 
@@ -88,7 +86,7 @@ class writer {
   /**
    * @brief Constructor for output to a file.
    *
-   * @param sinkp The data sink to write the data to
+   * @param sink The data sink to write the data to
    * @param options Settings for controlling writing behavior
    * @param mr Device memory resource to use for device memory allocation
    */
@@ -97,7 +95,7 @@ class writer {
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
   /**
-   * @brief Destructor explicitly-declared to avoid inlined in header
+   * @brief Destructor explicitly declared to avoid inlining in header
    */
   ~writer();
 
@@ -115,7 +113,7 @@ class writer {
   /**
    * @brief Begins the chunked/streamed write process.
    *
-   * @param[in] state State information that crosses _begin() / write_chunked() / _end() boundaries.
+   * @param[in] state Internal state maintained between chunks.
    */
   void write_chunked_begin(struct orc_chunked_state& state);
 
@@ -123,14 +121,14 @@ class writer {
    * @brief Writes a single subtable as part of a larger ORC file/table write.
    *
    * @param[in] table The table information to be written
-   * @param[in] state State information that crosses _begin() / write_chunked() / _end() boundaries.
+   * @param[in] state Internal state maintained between chunks.
    */
-  void write_chunked(table_view const& table, struct orc_chunked_state& state);
+  void write_chunk(table_view const& table, struct orc_chunked_state& state);
 
   /**
    * @brief Finishes the chunked/streamed write process.
    *
-   * @param[in] state State information that crosses _begin() / write_chunked() / _end() boundaries.
+   * @param[in] state Internal state maintained between chunks.
    */
   void write_chunked_end(struct orc_chunked_state& state);
 };

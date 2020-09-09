@@ -974,7 +974,7 @@ void writer::impl::write(table_view const &table,
   state.single_write_mode = true;
 
   write_chunked_begin(state);
-  write_chunked(table, state);
+  write_chunk(table, state);
   write_chunked_end(state);
 }
 
@@ -984,7 +984,7 @@ void writer::impl::write_chunked_begin(orc_chunked_state &state)
   out_sink_->host_write(MAGIC, std::strlen(MAGIC));
 }
 
-void writer::impl::write_chunked(table_view const &table, orc_chunked_state &state)
+void writer::impl::write_chunk(table_view const &table, orc_chunked_state &state)
 {
   size_type num_columns = table.num_columns();
   size_type num_rows    = 0;
@@ -1299,10 +1299,10 @@ void writer::impl::write_chunked(table_view const &table, orc_chunked_state &sta
   } else {
     // verify the user isn't passing mismatched tables
     CUDF_EXPECTS(state.ff.types.size() == 1 + orc_columns.size(),
-                 "Mismatch in table structure between multiple calls to write_chunked");
+                 "Mismatch in table structure between multiple calls to write_chunk");
     for (auto i = 0; i < num_columns; i++) {
       CUDF_EXPECTS(state.ff.types[1 + i].kind == orc_columns[i].orc_kind(),
-                   "Mismatch in column types between multiple calls to write_chunked");
+                   "Mismatch in column types between multiple calls to write_chunk");
     }
   }
   state.ff.stripes.insert(state.ff.stripes.end(),
@@ -1371,9 +1371,9 @@ void writer::write(table_view const &table, const table_metadata *metadata, cuda
 void writer::write_chunked_begin(orc_chunked_state &state) { _impl->write_chunked_begin(state); }
 
 // Forward to implementation
-void writer::write_chunked(table_view const &table, orc_chunked_state &state)
+void writer::write_chunk(table_view const &table, orc_chunked_state &state)
 {
-  _impl->write_chunked(table, state);
+  _impl->write_chunk(table, state);
 }
 
 // Forward to implementation
