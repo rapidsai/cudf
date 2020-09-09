@@ -119,7 +119,7 @@ inline T bswap_64(T val)
 
 // Constants for the fast MTF decoder.
 constexpr int mtfa_size = 4096;
-constexpr int mtfl_size = 4096;
+constexpr int mtfl_size = 16;
 
 // Constants for the back end.
 constexpr int bz_max_alpha_size = 258;
