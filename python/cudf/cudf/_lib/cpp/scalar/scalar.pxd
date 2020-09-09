@@ -23,6 +23,7 @@ cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
         numeric_scalar(T value, bool is_valid) except +
         void set_value(T value) except +
         T value() except +
+        T* data() except +
 
     cdef cppclass timestamp_scalar[T](scalar):
         timestamp_scalar() except +
@@ -34,6 +35,8 @@ cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
         int64_t ticks_since_epoch_64 "ticks_since_epoch"() except +
         int32_t ticks_since_epoch_32 "ticks_since_epoch"() except +
         T value() except +
+        T* data() except +
+
 
     cdef cppclass duration_scalar[T](scalar):
         duration_scalar() except +
@@ -44,6 +47,8 @@ cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
         duration_scalar(int32_t value, bool is_valid) except +
         int64_t ticks "count"() except +
         T value() except +
+        T* data() except +
+
 
     cdef cppclass string_scalar(scalar):
         string_scalar() except +
@@ -51,3 +56,4 @@ cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
         string_scalar(string st, bool is_valid) except +
         string_scalar(string_scalar other) except +
         string to_string() except +
+        const char* data() except +

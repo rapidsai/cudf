@@ -15,6 +15,7 @@ from libc.stdint cimport (
 )
 from libcpp.memory cimport unique_ptr
 from libcpp cimport bool
+from libc.stdint cimport uintptr_t
 
 import cudf
 from cudf._lib.types import cudf_to_np_types, duration_unit_map
@@ -42,7 +43,6 @@ from cudf._lib.cpp.scalar.scalar cimport (
     string_scalar
 )
 cimport cudf._lib.cpp.types as libcudf_types
-
 
 cdef class Scalar:
 
@@ -145,6 +145,11 @@ cdef class Scalar:
         cdef Scalar s = Scalar.__new__(Scalar)
         s.c_value = move(ptr)
         return s
+    
+    @property
+    def ptr(self):
+        return _get_ptr_from_scalar_any(self.c_value)
+            
 
 
 cdef _set_string_from_np_string(unique_ptr[scalar]& s, value, bool valid=True):
@@ -365,3 +370,89 @@ def as_scalar(val, dtype=None):
             return Scalar(val.value, dtype)
     else:
         return Scalar(value=val, dtype=dtype)
+
+cdef _get_ptr_from_scalar_any(unique_ptr[scalar]& s):
+    cdef scalar* s_ptr = s.get()
+    if not s_ptr[0].is_valid():
+        return None
+
+    cdef libcudf_types.data_type cdtype = s_ptr[0].type()
+
+    if cdtype.id() == libcudf_types.INT8:
+        return int(
+            <uintptr_t>(<numeric_scalar[int8_t]*>s_ptr)[0].data()
+        )
+    elif cdtype.id() == libcudf_types.INT16:
+        return int(
+            <uintptr_t>(<numeric_scalar[int16_t]*>s_ptr)[0].data()
+        )
+    elif cdtype.id() == libcudf_types.INT32:
+        return int(
+            <uintptr_t>(<numeric_scalar[int32_t]*>s_ptr)[0].data()
+        )
+    elif cdtype.id() == libcudf_types.INT64:
+        return int(
+            <uintptr_t>(<numeric_scalar[int64_t]*>s_ptr)[0].data()
+        )
+    elif cdtype.id() == libcudf_types.UINT8:
+        return int(
+            <uintptr_t>(<numeric_scalar[uint8_t]*>s_ptr)[0].data()
+        )
+    elif cdtype.id() == libcudf_types.UINT16:
+        return int(
+            <uintptr_t>(<numeric_scalar[uint16_t]*>s_ptr)[0].data()
+        )
+    elif cdtype.id() == libcudf_types.UINT32:
+        return int(
+            <uintptr_t>(<numeric_scalar[uint32_t]*>s_ptr)[0].data()
+        )
+    elif cdtype.id() == libcudf_types.UINT64:
+        return int(
+            <uintptr_t>(<numeric_scalar[uint64_t]*>s_ptr)[0].data()
+        )
+    elif cdtype.id() == libcudf_types.FLOAT32:
+        return int(
+            <uintptr_t>(<numeric_scalar[float]*>s_ptr)[0].data()
+        )
+    elif cdtype.id() == libcudf_types.FLOAT64:
+        return int(
+            <uintptr_t>(<numeric_scalar[double]*>s_ptr)[0].data()
+        )
+    elif cdtype.id() == libcudf_types.BOOL8:
+        return int(
+            <uintptr_t>(<numeric_scalar[bool]*>s_ptr)[0].data()
+        )
+    elif cdtype.id() == libcudf_types.TIMESTAMP_NANOSECONDS:
+        return int(
+            <uintptr_t>(<timestamp_scalar[timestamp_ns]*>s_ptr)[0].data()
+        ) 
+    elif cdtype.id() == libcudf_types.TIMESTAMP_MICROSECONDS:
+        return int(
+            <uintptr_t>(<timestamp_scalar[timestamp_us]*>s_ptr)[0].data()
+        )
+    elif cdtype.id() == libcudf_types.TIMESTAMP_MILLISECONDS:
+        return int(
+            <uintptr_t>(<timestamp_scalar[timestamp_ms]*>s_ptr)[0].data()
+        )
+    elif cdtype.id() == libcudf_types.TIMESTAMP_SECONDS:
+        return int(
+            <uintptr_t>(<timestamp_scalar[timestamp_s]*>s_ptr)[0].data()
+        )
+    elif cdtype.id() == libcudf_types.DURATION_NANOSECONDS:
+        return int(
+            <uintptr_t>(<duration_scalar[duration_ns]*>s_ptr)[0].data()
+        ) 
+    elif cdtype.id() == libcudf_types.DURATION_MICROSECONDS:
+        return int(
+            <uintptr_t>(<duration_scalar[duration_us]*>s_ptr)[0].data()
+        )
+    elif cdtype.id() == libcudf_types.DURATION_MILLISECONDS:
+        return int(
+            <uintptr_t>(<duration_scalar[duration_ms]*>s_ptr)[0].data()
+        )
+    elif cdtype.id() == libcudf_types.DURATION_SECONDS:
+        return int(
+            <uintptr_t>(<duration_scalar[duration_s]*>s_ptr)[0].data()
+        )  
+    else:
+        raise ValueError('Could not get pointer from cudf::scalar')

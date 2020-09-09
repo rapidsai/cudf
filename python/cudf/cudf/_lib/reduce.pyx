@@ -48,9 +48,9 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
     # check empty case
     if len(incol) <= incol.null_count:
         if reduction_op == 'sum' or reduction_op == 'sum_of_squares':
-            return incol.dtype.type(0).value
+            return incol.dtype.type(0)
         if reduction_op == 'product':
-            return incol.dtype.type(1).value
+            return incol.dtype.type(1)
         return np.nan
 
     with nogil:
@@ -61,7 +61,7 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
         ))
 
     py_result = Scalar.from_unique_ptr(move(c_result))
-    return py_result.value
+    return py_result
 
 
 def scan(scan_op, Column incol, inclusive, **kwargs):

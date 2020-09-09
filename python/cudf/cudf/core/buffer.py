@@ -6,7 +6,7 @@ import numpy as np
 
 import rmm
 from rmm import DeviceBuffer
-
+import cudf
 from cudf.core.abc import Serializable
 
 
@@ -17,9 +17,10 @@ class Buffer(Serializable):
 
         Parameters
         ----------
-        data : Buffer, array_like, int
-            An array-like object or integer representing a
-            device or host pointer to pre-allocated memory.
+        data : Buffer, array_like, int, Scalar
+            An array-like object, integer, or `Scalar`
+            representing a device or host pointer to
+            pre-allocated memory.
         size : int, optional
             Size of memory allocation. Required if a pointer
             is passed for `data`.
@@ -45,6 +46,10 @@ class Buffer(Serializable):
             self.ptr = data
             self.size = size
             self._owner = owner
+        elif isinstance(data, cudf._lib.scalar.Scalar):
+            self.ptr = data.ptr
+            self.size = data.dtype.itemsize
+            self._owner = data
         elif data is None:
             self.ptr = 0
             self.size = 0

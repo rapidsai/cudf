@@ -4,6 +4,7 @@ from libcpp.memory cimport unique_ptr
 from libcpp cimport bool
 
 from cudf._lib.cpp.scalar.scalar cimport scalar
+from libc.stdint cimport uintptr_t
 
 
 cdef class Scalar:
