@@ -44,27 +44,11 @@ auto pinned_alloc = [](size_t count) {
 };
 
 /**
- * @file generate_benchmark_input.hpp
- * @brief Contains functions that generate columns filled with random data.
- *
- * Also includes utilies that generate random tables.
- *
- * The distribution of random data is meant to simulate real-world data. For example, numerical
- * values are generated using a normal distribution with a zero mean. Therefore, different column
- * types are filled using different distributions. The distributions are documented in the
- * functions where they are used.
- *
- * Currently, the data generation is done on the CPU and the data is then copied to the device
- * memory.
+ * @brief Mersenne Twister pseudo-random engine.
  */
+auto deterministic_engine(unsigned seed) { return std::mt19937{seed}; }
 
-/**
- * @brief Mersenne Twister engine with static seed.
- *
- * Produces the same random sequence on each run.
- */
-auto deterministic_engine(unsigned seed = 13377331) { return std::mt19937{seed}; }
-
+// Utilities to determine the mean size of an element, given the data profile
 template <typename T>
 std::enable_if_t<cudf::is_fixed_width<T>(), size_t> avg_element_size(data_profile const& profile)
 {
@@ -77,6 +61,9 @@ std::enable_if_t<!cudf::is_fixed_width<T>(), size_t> avg_element_size(data_profi
   CUDF_FAIL("not implemented!");
 }
 
+/**
+ *  Computes the mean value for a distribution of given type and value bounds.
+ */
 template <typename T>
 T get_distribution_mean(distribution_params<T> const& dist)
 {
@@ -123,6 +110,12 @@ size_t avg_element_bytes(data_profile const& profile, cudf::type_id tid)
 {
   return cudf::type_dispatcher(cudf::data_type(tid), avg_element_size_fn{}, profile);
 }
+
+/**
+ * @brief Functor that computes a random column element with the given data profile.
+ *
+ * The implementation is SFINAED for diffent type groups. Currently only used for fixed-width types.
+ */
 template <typename T, typename Enable = void>
 struct random_value_fn;
 
@@ -139,14 +132,7 @@ constexpr int64_t to_nanoseconds(int64_t t)
 }
 
 /**
- * @brief Creates an random timestamp
- *
- * Generates 'recent' timestamps. All timstamps are earlier that June 2020. The period between the
- * timestamps and June 2020 has a geometric distribution. Most timestamps are within a few years
- * before 2020.
- *
- * @return The random timestamp
- * @tparam T Timestamp type
+ * @brief Creates an random timestamp/duration value
  */
 template <typename T>
 struct random_value_fn<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
@@ -187,9 +173,12 @@ struct random_value_fn<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
 template <typename T>
 struct random_value_fn<T, typename std::enable_if_t<cudf::is_fixed_point<T>()>> {
   random_value_fn(distribution_params<T> const&) {}
-  T operator()(std::mt19937& engine) { return T{}; }
+  T operator()(std::mt19937& engine) { CUDF_FAIL("Not implemented"); }
 };
 
+/**
+ * @brief NEXT
+ */
 template <typename T>
 struct random_value_fn<
   T,
@@ -207,6 +196,7 @@ struct random_value_fn<
 
   T operator()(std::mt19937& engine)
   {
+    // Clamp the generated random value to the specified range
     return std::max(std::min(dist(engine), upper_bound), lower_bound);
   }
 };
