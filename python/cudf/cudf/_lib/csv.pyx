@@ -143,26 +143,26 @@ cdef csv_reader_options make_csv_reader_options(
         c_quoting = quote_style.QUOTE_MINIMAL
 
     cdef csv_reader_options csv_reader_options_c = move(
-        csv_reader_options.builder(c_source_info).
-        compression(c_compression).
-        mangle_dupe_cols(mangle_dupe_cols).
-        byte_range_offset(c_byte_range_offset).
-        byte_range_size(c_byte_range_size).
-        nrows(c_nrows).
-        skiprows(skiprows).
-        skipfooter(skipfooter).
-        quoting(c_quoting).
-        lineterminator(ord(lineterminator)).
-        quotechar(ord(quotechar)).
-        decimal(ord(decimal)).
-        delim_whitespace(delim_whitespace).
-        skipinitialspace(skipinitialspace).
-        skip_blank_lines(skip_blank_lines).
-        doublequote(doublequote).
-        keep_default_na(keep_default_na).
-        na_filter(na_filter).
-        dayfirst(dayfirst).
-        build()
+        csv_reader_options.builder(c_source_info)
+        .compression(c_compression)
+        .mangle_dupe_cols(mangle_dupe_cols)
+        .byte_range_offset(c_byte_range_offset)
+        .byte_range_size(c_byte_range_size)
+        .nrows(c_nrows)
+        .skiprows(skiprows)
+        .skipfooter(skipfooter)
+        .quoting(c_quoting)
+        .lineterminator(ord(lineterminator))
+        .quotechar(ord(quotechar))
+        .decimal(ord(decimal))
+        .delim_whitespace(delim_whitespace)
+        .skipinitialspace(skipinitialspace)
+        .skip_blank_lines(skip_blank_lines)
+        .doublequote(doublequote)
+        .keep_default_na(keep_default_na)
+        .na_filter(na_filter)
+        .dayfirst(dayfirst)
+        .build()
     )
 
     if names is not None:
@@ -432,16 +432,16 @@ cpdef write_csv(
             metadata_.column_names.push_back(str(col_name).encode())
 
     cdef csv_writer_options options = move(
-        csv_writer_options.builder(sink_info_c, input_table_view).
-        metadata(&metadata_).
-        na_rep(na_c).
-        include_header(include_header_c).
-        rows_per_chunk(rows_per_chunk_c).
-        line_terminator(line_term_c).
-        inter_column_delimiter(delim_c).
-        true_value(true_value_c).
-        false_value(false_value_c).
-        build()
+        csv_writer_options.builder(sink_info_c, input_table_view)
+        .metadata(&metadata_)
+        .na_rep(na_c)
+        .include_header(include_header_c)
+        .rows_per_chunk(rows_per_chunk_c)
+        .line_terminator(line_term_c)
+        .inter_column_delimiter(delim_c)
+        .true_value(true_value_c)
+        .false_value(false_value_c)
+        .build()
     )
 
     with nogil:
