@@ -49,7 +49,7 @@ std::unique_ptr<column> transform(
   std::string const& unary_udf,
   data_type output_type,
   bool is_ptx,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Creates a null_mask from `input` by converting `NaN` to null and
@@ -63,7 +63,8 @@ std::unique_ptr<column> transform(
  * null count obtained by replacing `NaN` in `input` with null.
  **/
 std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
-  column_view const& input, rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  column_view const& input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Creates a bitmask from a column of boolean elements.
@@ -81,7 +82,8 @@ std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
  * `false` represent `invalid`/`0`.
  **/
 std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
-  column_view const& input, rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  column_view const& input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Encode the rows of the given table as integers
@@ -108,8 +110,8 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
  * and a column of integer indices representing the encoded rows.
  */
 std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>> encode(
-  cudf::table_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  cudf::tableview const& input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Creates a boolean column from given bitmask.
@@ -136,7 +138,7 @@ std::unique_ptr<column> mask_to_bools(
   bitmask_type const* bitmask,
   size_type begin_bit,
   size_type end_bit,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace cudf

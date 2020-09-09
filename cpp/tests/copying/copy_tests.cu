@@ -115,7 +115,7 @@ std::unique_ptr<cudf::column> tiny_grid_launch(cudf::column_view const& lhs,
                                lhs,
                                rhs,
                                filter,
-                               rmm::mr::get_default_resource(),
+                               rmm::mr::get_current_device_resource(),
                                (cudaStream_t)0);
 }
 

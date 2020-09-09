@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,38 +13,34 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #pragma once
 
-#include <cudf/filling.hpp>
-#include <cudf/types.hpp>
+#include <cudf/column/column_view.hpp>
+#include <cudf/concatenate.hpp>
+#include <cudf/table/table_view.hpp>
 
-#include <memory>
+#include <vector>
 
 namespace cudf {
+//! Inner interfaces and implementations
 namespace detail {
-
 /**
- * @copydoc cudf::fill_in_place
+ * @copydoc cudf::concatenate(std::vector<column_view> const&,rmm::mr::device_memory_resource*)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-void fill_in_place(mutable_column_view& destination,
-                   size_type begin,
-                   size_type end,
-                   scalar const& value,
-                   cudaStream_t stream = 0);
+std::unique_ptr<column> concatenate(
+  std::vector<column_view> const& columns_to_concat,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
- * @copydoc cudf::fill
+ * @copydoc cudf::concatenate(std::vector<table_view> const&,rmm::mr::device_memory_resource*)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> fill(
-  column_view const& input,
-  size_type begin,
-  size_type end,
-  scalar const& value,
+std::unique_ptr<table> concatenate(
+  std::vector<table_view> const& tables_to_concat,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 

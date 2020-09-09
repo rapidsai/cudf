@@ -80,7 +80,7 @@ class reader {
    */
   explicit reader(std::vector<std::string> const &filepaths,
                   reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+                  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Constructor from an array of datasources
@@ -91,7 +91,7 @@ class reader {
    */
   explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                   reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+                  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header
@@ -171,7 +171,7 @@ class reader {
    */
   explicit reader(std::vector<std::string> const &filepaths,
                   reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+                  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Constructor from an array of datasources
@@ -182,7 +182,7 @@ class reader {
    */
   explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                   reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+                  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header
@@ -319,7 +319,7 @@ class reader {
    */
   explicit reader(std::vector<std::string> const &filepaths,
                   reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+                  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Constructor from an array of datasources
@@ -330,7 +330,7 @@ class reader {
    */
   explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                   reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+                  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header
@@ -436,7 +436,7 @@ class reader {
    */
   explicit reader(std::vector<std::string> const &filepaths,
                   reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+                  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Constructor from an array of datasources
@@ -447,7 +447,7 @@ class reader {
    */
   explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                   reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+                  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header
@@ -540,7 +540,7 @@ class reader {
    */
   explicit reader(std::vector<std::string> const &filepaths,
                   reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+                  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Constructor from an array of datasources
@@ -551,7 +551,7 @@ class reader {
    */
   explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                   reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+                  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header
