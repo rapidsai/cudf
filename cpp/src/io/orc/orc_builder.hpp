@@ -325,22 +325,19 @@ struct ProtobufWriter::WriterBuild
 
   void field_repeated_string(int id, const std::vector<std::string> &v)
   {
-    //TODO Replace by range based for loop
-    for (size_t k = 0; k < v.size(); k++) field_string(id, v[k]);
+    for (const auto &elem : v) field_string(id, elem);
   }
 
   template <typename T>
   void field_repeated_struct(int id, const std::vector<T> &v)
   {
-    //TODO Replace by range based for loop
-    for (size_t k = 0; k < v.size(); k++) field_struct(id, v[k]);
+    for (const auto &elem : v) field_struct(id, elem);
   }
 
   template <typename T>
   void field_repeated_struct_blob(int id, const std::vector<T> &v)
   {
-    //TODO Replace by range based for loop
-    for (size_t k = 0; k < v.size(); k++) field_blob(id, v[k]);
+    for (const auto &elem : v) field_blob(id, elem);
   }
 
   size_t value(void) { return struct_size; }

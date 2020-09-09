@@ -50,9 +50,9 @@ inline T bswap_64(T val)
 
 #endif
 
-#define TZIF_MAGIC (('T' << 0) | ('Z' << 8) | ('i' << 16) | ('f' << 24))
+constexpr uint32_t tzip_magic = (('T' << 0) | ('Z' << 8) | ('i' << 16) | ('f' << 24));
 
-#define ORC_UTC_OFFSET 1420070400  // Seconds from Jan 1st, 1970 to Jan 1st, 2015
+constexpr int64_t orc_utc_offset = 1420070400; // Seconds from Jan 1st, 1970 to Jan 1st, 2015
 
 #pragma pack(push, 1)
 /**
@@ -370,7 +370,7 @@ bool BuildTimezoneTransitionTable(std::vector<int64_t> &table, const std::string
     dst_transition_s dst_start = {0}, dst_end = {0};
     fin.seekg(0);
     fin.read(reinterpret_cast<char *>(&tzh), sizeof(tzh));
-    if (fin.fail() || tzh.magic != TZIF_MAGIC) { return false; }
+    if (fin.fail() || tzh.magic != tzip_magic) { return false; }
     // Convert fields to little endian
     tzh.isutccnt = bswap_32(tzh.isutccnt);
     tzh.isstdcnt = bswap_32(tzh.isstdcnt);
@@ -385,7 +385,7 @@ bool BuildTimezoneTransitionTable(std::vector<int64_t> &table, const std::string
       if (ofs64 + sizeof(tzh) < file_size) {
         fin.seekg(ofs64, ios_base::cur);
         hdr64 = true;
-        if (fin.fail() || tzh.magic != TZIF_MAGIC) { return false; }
+        if (fin.fail() || tzh.magic != tzip_magic) { return false; }
         fin.read(reinterpret_cast<char *>(&tzh), sizeof(tzh));
         // Convert fields to little endian
         tzh.isutccnt = bswap_32(tzh.isutccnt);
@@ -501,7 +501,7 @@ bool BuildTimezoneTransitionTable(std::vector<int64_t> &table, const std::string
       future_time += (365 + IsLeapYear(year)) * 24 * 60 * 60;
     }
     // Add gmt offset
-    table[0] = GetGmtOffset(table, ORC_UTC_OFFSET);
+    table[0] = GetGmtOffset(table, orc_utc_offset);
   } else {
     // printf("Failed to open \"%s\"\n", tz_filename.c_str());
     return false;

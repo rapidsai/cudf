@@ -17,15 +17,16 @@
 #include "orc_common.h"
 #include "orc_gpu.h"
 
-// Apache ORC reader does not handle zero-length patch lists for RLEv2 mode2
-// Workaround replaces zero-length patch lists by a dummy zero patch
-#define ZERO_PLL_WAR 1
 
 namespace cudf {
 namespace io {
 namespace orc {
 namespace gpu {
 constexpr int scratch_bfrsz = 512*4;
+
+// Apache ORC reader does not handle zero-length patch lists for RLEv2 mode2
+// Workaround replaces zero-length patch lists by a dummy zero patch
+constexpr int zero_pll_war = 1;
 
 static __device__ __constant__ int64_t kORCTimeToUTC =
   1420070400;  // Seconds from January 1st, 1970 to January 1st, 2015
@@ -503,14 +504,17 @@ static __device__ uint32_t IntegerRLE(
           vmax = (is_signed) ? ((vmin < 0) ? -vmin : vmin) * 2 : vmin;
           bw   = (sizeof(T) > 4) ? (8 - min(CountLeadingBytes64(vmax << bv_scale), 7))
                                : (4 - min(CountLeadingBytes32(vmax << bv_scale), 3));
-#if ZERO_PLL_WAR
+          if (zero_pll_war)
+          {
           // Insert a dummy zero patch
           pll                                                    = 1;
           dst[4 + bw + ((literal_run * literal_w + 7) >> 3) + 0] = 0;
           dst[4 + bw + ((literal_run * literal_w + 7) >> 3) + 1] = 0;
-#else
+          }
+          else
+          {
           pll = 0;
-#endif
+          }
           dst[0] = 0x80 +
                    ((literal_w < 8) ? literal_w - 1 : kByteLengthToRLEv2_W[literal_w >> 3]) * 2 +
                    ((literal_run - 1) >> 8);
