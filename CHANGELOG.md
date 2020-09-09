@@ -32,6 +32,7 @@
 - PR #6143 General improvements for java arrow IPC.
 - PR #6176 Fix cmake warnings for GoogleTest, GoogleBenchmark, and Arrow external projects
 - PR #6149 Update to Arrow v1.0.1
+- PR #6189 Avoid deprecated pyarrow.compat for parquet
 
 ## Bug Fixes
 
