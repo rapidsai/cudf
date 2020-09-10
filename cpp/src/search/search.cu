@@ -139,10 +139,7 @@ std::unique_ptr<column> search_ordered(table_view const& t,
 
 struct contains_scalar_dispatch {
   template <typename Element>
-  bool operator()(column_view const& col,
-                  scalar const& value,
-                  cudaStream_t stream,
-                  rmm::mr::device_memory_resource* mr)
+  bool operator()(column_view const& col, scalar const& value, cudaStream_t stream)
   {
     CUDF_EXPECTS(col.type() == value.type(), "scalar and column types must match");
 
@@ -171,8 +168,7 @@ struct contains_scalar_dispatch {
 template <>
 bool contains_scalar_dispatch::operator()<cudf::list_view>(column_view const& col,
                                                            scalar const& value,
-                                                           cudaStream_t stream,
-                                                           rmm::mr::device_memory_resource* mr)
+                                                           cudaStream_t stream)
 {
   CUDF_FAIL("list_view type not supported yet");
 }
@@ -180,8 +176,7 @@ bool contains_scalar_dispatch::operator()<cudf::list_view>(column_view const& co
 template <>
 bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const& col,
                                                              scalar const& value,
-                                                             cudaStream_t stream,
-                                                             rmm::mr::device_memory_resource* mr)
+                                                             cudaStream_t stream)
 {
   CUDF_FAIL("struct_view type not supported yet");
 }
@@ -189,35 +184,31 @@ bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const& 
 template <>
 bool contains_scalar_dispatch::operator()<cudf::dictionary32>(column_view const& col,
                                                               scalar const& value,
-                                                              cudaStream_t stream,
-                                                              rmm::mr::device_memory_resource* mr)
+                                                              cudaStream_t stream)
 {
   auto dict_col = cudf::dictionary_column_view(col);
   // first, find the value in the dictionary's key set
-  auto index = cudf::dictionary::detail::get_index(dict_col, value, mr, stream);
+  auto index = cudf::dictionary::detail::get_index(
+    dict_col, value, rmm::mr::get_current_device_resource(), stream);
   // if found, check the index is actually in the indices column
   return index->is_valid() ? cudf::type_dispatcher(dict_col.indices().type(),
                                                    contains_scalar_dispatch{},
                                                    dict_col.indices(),
                                                    *index,
-                                                   stream,
-                                                   mr)
+                                                   stream)
                            : false;
 }
 
 }  // namespace
 
 namespace detail {
-bool contains(column_view const& col,
-              scalar const& value,
-              rmm::mr::device_memory_resource* mr,
-              cudaStream_t stream)
+bool contains(column_view const& col, scalar const& value, cudaStream_t stream)
 {
   if (col.size() == 0) { return false; }
 
   if (not value.is_valid()) { return col.has_nulls(); }
 
-  return cudf::type_dispatcher(col.type(), contains_scalar_dispatch{}, col, value, stream, mr);
+  return cudf::type_dispatcher(col.type(), contains_scalar_dispatch{}, col, value, stream);
 }
 
 struct multi_contains_dispatch {
@@ -378,10 +369,10 @@ std::unique_ptr<column> upper_bound(table_view const& t,
   return detail::upper_bound(t, values, column_order, null_precedence, mr);
 }
 
-bool contains(column_view const& col, scalar const& value, rmm::mr::device_memory_resource* mr)
+bool contains(column_view const& col, scalar const& value)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains(col, value, mr);
+  return detail::contains(col, value);
 }
 
 std::unique_ptr<column> contains(column_view const& haystack,
