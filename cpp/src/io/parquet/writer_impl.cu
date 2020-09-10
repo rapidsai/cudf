@@ -776,7 +776,7 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
     desc->ts_scale         = col.ts_scale();
     // TODO (dm): Enable dictionary for list after refactor
     if (col.physical_type() != BOOLEAN && col.physical_type() != UNDEFINED_TYPE && !col.is_list()) {
-      col.alloc_dictionary(col.data_count(), state.stream);
+      col.alloc_dictionary(col.data_count());
       desc->dict_index = col.get_dict_index();
       desc->dict_data  = col.get_dict_data();
     }
