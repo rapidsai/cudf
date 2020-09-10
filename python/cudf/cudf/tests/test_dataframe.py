@@ -6106,6 +6106,7 @@ def test_series_keys(ps):
     [
         pd.DataFrame(),
         pd.DataFrame(index=[10, 20, 30]),
+        pd.DataFrame({"first_col": [], "second_col": [], "third_col": []}),
         pd.DataFrame([[1, 2], [3, 4]], columns=list("AB")),
         pd.DataFrame([[1, 2], [3, 4]], columns=list("AB"), index=[10, 20]),
         pd.DataFrame([[1, 2], [3, 4]], columns=list("AB"), index=[7, 8]),
@@ -6145,6 +6146,7 @@ def test_series_keys(ps):
         pd.DataFrame({"l": [10]}),
         pd.DataFrame({"l": [10]}, index=[200]),
         pd.DataFrame([]),
+        pd.DataFrame({"first_col": [], "second_col": [], "third_col": []}),
         pd.DataFrame([], index=[100]),
         pd.DataFrame(
             {
@@ -6186,6 +6188,7 @@ def test_dataframe_append_dataframe(df, other, sort, ignore_index):
     [
         pd.DataFrame(),
         pd.DataFrame(index=[10, 20, 30]),
+        pd.DataFrame({12: [], 22: []}),
         pd.DataFrame([[1, 2], [3, 4]], columns=[10, 20]),
         pd.DataFrame([[1, 2], [3, 4]], columns=[0, 1], index=[10, 20]),
         pd.DataFrame([[1, 2], [3, 4]], columns=[1, 0], index=[7, 8]),
@@ -6241,11 +6244,27 @@ def test_dataframe_append_series_dict(df, other, sort):
         )
 
 
+def test_dataframe_append_series_mixed_index():
+    df = gd.DataFrame({"first": [], "d": []})
+    sr = gd.Series([1, 2, 3, 4])
+
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            "cudf does not support mixed types, please type-cast "
+            "the column index of dataframe and index of series "
+            "to same dtypes."
+        ),
+    ):
+        df.append(sr, ignore_index=True)
+
+
 @pytest.mark.parametrize(
     "df",
     [
         pd.DataFrame(),
         pd.DataFrame(index=[10, 20, 30]),
+        pd.DataFrame({"first_col": [], "second_col": [], "third_col": []}),
         pd.DataFrame([[1, 2], [3, 4]], columns=list("AB")),
         pd.DataFrame([[1, 2], [3, 4]], columns=list("AB"), index=[10, 20]),
         pd.DataFrame([[1, 2], [3, 4]], columns=list("AB"), index=[7, 8]),
@@ -6296,6 +6315,11 @@ def test_dataframe_append_series_dict(df, other, sort):
         ],
         [pd.DataFrame([]), pd.DataFrame([], index=[100])],
         [
+            pd.DataFrame([]),
+            pd.DataFrame([], index=[100]),
+            pd.DataFrame({"first_col": [], "second_col": [], "third_col": []}),
+        ],
+        [
             pd.DataFrame(
                 {
                     "a": [315.3324, 3243.32432, 3232.332, -100.32],
@@ -6334,6 +6358,23 @@ def test_dataframe_append_series_dict(df, other, sort):
                 },
                 index=[0, 100, 200, 300],
             ),
+        ],
+        [
+            pd.DataFrame(
+                {
+                    "a": [315.3324, 3243.32432, 3232.332, -100.32],
+                    "z": [0.3223, 0.32, 0.0000232, 0.32224],
+                },
+                index=[0, 100, 200, 300],
+            ),
+            pd.DataFrame(
+                {
+                    "a": [315.3324, 3243.32432, 3232.332, -100.32],
+                    "z": [0.3223, 0.32, 0.0000232, 0.32224],
+                },
+                index=[0, 100, 200, 300],
+            ),
+            pd.DataFrame({"first_col": [], "second_col": [], "third_col": []}),
         ],
     ],
 )
@@ -6385,6 +6426,7 @@ def test_dataframe_append_dataframe_lists(df, other, sort, ignore_index):
             {"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]},
             index=[100, 200, 300, 400, 500, 0],
         ),
+        pd.DataFrame({"first_col": [], "second_col": [], "third_col": []}),
     ],
 )
 @pytest.mark.parametrize(

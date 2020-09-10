@@ -69,7 +69,7 @@ def _get_non_empty_data(s):
             if len(s._column.categories)
             else [UNKNOWN_CATEGORIES]
         )
-        codes = cp.zeros(2, dtype="int32")
+        codes = column.full(size=2, fill_value=0, dtype="int32")
         ordered = s._column.ordered
         data = column.build_categorical_column(
             categories=categories, codes=codes, ordered=ordered
