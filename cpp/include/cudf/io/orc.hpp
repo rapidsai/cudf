@@ -167,7 +167,7 @@ class orc_reader_options {
   void set_stripes(std::vector<size_type> stripes)
   {
     CUDF_EXPECTS(stripes.empty() or (_skip_rows == 0), "Can't set stripes along with skip_rows");
-    CUDF_EXPECTS(stripes.empty() or (_num_rows == -1),  "Can't set stripes along with num_rows");
+    CUDF_EXPECTS(stripes.empty() or (_num_rows == -1), "Can't set stripes along with num_rows");
     _stripes = std::move(stripes);
   }
 
