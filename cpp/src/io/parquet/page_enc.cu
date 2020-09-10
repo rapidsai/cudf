@@ -114,10 +114,13 @@ __device__ void store_nested_rep_level(column_device_view const &col,
     return;
   }
 
-  ++depth;
   for (size_type i = lcr.start_offset; i < lcr.end_offset; i++) {
-    store_nested_rep_level(lcr.child_col, i, rep_level, cur_idx, cur_rep_level, depth);
-    cur_rep_level = depth;
+    store_nested_rep_level(lcr.child_col,
+                           i,
+                           rep_level,
+                           cur_idx,
+                           (i == lcr.start_offset) ? cur_rep_level : depth + 1,
+                           depth + 1);
   }
 }
 
