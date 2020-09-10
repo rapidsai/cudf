@@ -1918,12 +1918,12 @@ def full(size, fill_value, dtype=None):
 
     Returns
     -------
-    column
+    Column
 
     Examples
     --------
     >>> import cudf
-    >>> col = cudf.core.column.full(5, 7, dtype='int8')
+    >>> col = cudf.core.column.full(size=5, fill_value=7, dtype='int8')
     >>> col
     <cudf.core.column.numerical.NumericalColumn object at 0x7fa0912e8b90>
     >>> cudf.Series(col)
