@@ -51,18 +51,18 @@ class json_reader_options_builder;
  *
  * Parameters in PANDAS that are unavailable or in cudf:
  *
- * | Name | Description |
- * | ---- | ----------- |
- * | `orient`             | currently fixed-format |
- * | `typ`                | data is always returned as a cudf::table |
+ * | Name                 | Description                                      |
+ * | -------------------- | ------------------------------------------------ |
+ * | `orient`             | currently fixed-format                           |
+ * | `typ`                | data is always returned as a cudf::table         |
  * | `convert_axes`       | use column functions for axes operations instead |
- * | `convert_dates`      | dates are detected automatically |
- * | `keep_default_dates` | dates are detected automatically |
- * | `numpy`              | data is always returned as a cudf::table |
- * | `precise_float`      | there is only one converter |
- * | `date_unit`          | only millisecond units are supported |
- * | `encoding`           | only ASCII-encoded data is supported |
- * | `chunksize`          | use `byte_range_xxx` for chunking instead |
+ * | `convert_dates`      | dates are detected automatically                 |
+ * | `keep_default_dates` | dates are detected automatically                 |
+ * | `numpy`              | data is always returned as a cudf::table         |
+ * | `precise_float`      | there is only one converter                      |
+ * | `date_unit`          | only millisecond units are supported             |
+ * | `encoding`           | only ASCII-encoded data is supported             |
+ * | `chunksize`          | use `byte_range_xxx` for chunking instead        |
  *
  */
 class json_reader_options {
