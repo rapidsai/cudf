@@ -1,5 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
+
 import functools
+from typing import Any, Dict
 
 from numba import cuda
 
@@ -331,7 +333,7 @@ def chunk_wise_kernel(nrows, chunks, {args}):
     return kernel
 
 
-_cache = dict()  # WeakKeyDictionary()
+_cache = dict()  # type: Dict[Any, Any]
 
 
 @functools.wraps(_make_row_wise_kernel)

@@ -1695,7 +1695,7 @@ class RangeIndex(Index):
         # shift to index
         return begin - self._start, end - self._start
 
-    @copy_docstring(_to_frame)
+    @copy_docstring(_to_frame)  # type: ignore
     def to_frame(self, index=True, name=None):
         return _to_frame(self, index, name)
 
@@ -1912,7 +1912,7 @@ class GenericIndex(Index):
         else:
             return res
 
-    @copy_docstring(_to_frame)
+    @copy_docstring(_to_frame)  # type: ignore
     def to_frame(self, index=True, name=None):
         return _to_frame(self, index, name)
 
@@ -2622,7 +2622,7 @@ class StringIndex(GenericIndex):
             + ")"
         )
 
-    @copy_docstring(StringMethods.__init__)
+    @copy_docstring(StringMethods.__init__)  # type: ignore
     @property
     def str(self):
         return StringMethods(column=self._values, parent=self)

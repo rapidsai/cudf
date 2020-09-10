@@ -2280,7 +2280,7 @@ class DataFrame(Frame, Serializable):
         for k in self:
             yield (k, self[k])
 
-    @property
+    @property  # type: ignore
     @annotate("DATAFRAME_LOC", color="blue", domain="cudf_python")
     def loc(self):
         """
@@ -2450,14 +2450,14 @@ class DataFrame(Frame, Serializable):
         """
         return self.loc
 
-    @property
+    @property  # type: ignore
     @annotate("DATAFRAME_COLUMNS_GETTER", color="yellow", domain="cudf_python")
     def columns(self):
         """Returns a tuple of columns
         """
         return self._data.to_pandas_index()
 
-    @columns.setter
+    @columns.setter  # type: ignore
     @annotate("DATAFRAME_COLUMNS_SETTER", color="yellow", domain="cudf_python")
     def columns(self, columns):
         if isinstance(columns, (cudf.MultiIndex, cudf.Index)):
@@ -3812,7 +3812,6 @@ class DataFrame(Frame, Serializable):
         )
         return df
 
-    @copy_docstring(DataFrameGroupBy.__init__)
     def groupby(
         self,
         by=None,
@@ -3862,7 +3861,6 @@ class DataFrame(Frame, Serializable):
             sort=sort,
         )
 
-    @copy_docstring(Rolling)
     def rolling(
         self, window, min_periods=None, center=False, axis=0, win_type=None
     ):

@@ -1,5 +1,6 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 import itertools
+from typing import no_type_check
 
 import numpy as np
 import pandas as pd
@@ -1069,6 +1070,7 @@ def test_drop_unsupported_multi_agg():
     )
 
 
+@no_type_check
 @pytest.mark.parametrize(
     "agg",
     (
@@ -1080,7 +1082,7 @@ def test_drop_unsupported_multi_agg():
             {"b": "nunique", "c": "mean"},
         ]
     ),
-)
+)  # type: ignore
 def test_groupby_agg_combinations(agg):
     pdf = pd.DataFrame(
         {

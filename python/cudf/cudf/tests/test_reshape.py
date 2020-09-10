@@ -70,7 +70,7 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
 @pytest.mark.parametrize("num_rows", [1, 2, 1000])
 @pytest.mark.parametrize(
     "dtype",
-    list(NUMERIC_TYPES + DATETIME_TYPES)
+    [pytest.param(list(NUMERIC_TYPES + DATETIME_TYPES))]
     + [pytest.param("str", marks=pytest.mark.xfail())],
 )
 @pytest.mark.parametrize("nulls", ["none", "some"])

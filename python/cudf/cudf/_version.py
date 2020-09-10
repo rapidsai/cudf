@@ -14,6 +14,7 @@ import os
 import re
 import subprocess
 import sys
+from typing import Any, Callable, Dict
 
 
 def get_keywords():
@@ -51,8 +52,8 @@ class NotThisMethod(Exception):
     """Exception raised if a method is not valid for the current scenario."""
 
 
-LONG_VERSION_PY = {}
-HANDLERS = {}
+LONG_VERSION_PY = {}  # type: Dict[Any, Any]
+HANDLERS = {}  # type: Dict[str, Dict[str, Callable]]
 
 
 def register_vcs_handler(vcs, method):  # decorator

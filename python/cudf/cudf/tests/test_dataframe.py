@@ -5,6 +5,7 @@ import operator
 import random
 import re
 import textwrap
+from typing import no_type_check
 
 import cupy
 import numpy as np
@@ -4251,6 +4252,7 @@ def test_df_astype_to_categorical_ordered(ordered):
     )
 
 
+@no_type_check
 @pytest.mark.parametrize(
     "dtype,args",
     [(dtype, {}) for dtype in ALL_TYPES]

@@ -1,7 +1,7 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 import numpy as np
 
-from . import (
+from . import (  # type: ignore
     avro,
     binaryop,
     concat,
@@ -10,14 +10,17 @@ from . import (
     datetime,
     filling,
     gpuarrow,
+    groupby,
     hash,
     interop,
     join,
+    json,
     merge,
     null_mask,
     nvtext,
     nvtx,
     orc,
+    parquet,
     partitioning,
     quantiles,
     reduce,
@@ -27,6 +30,7 @@ from . import (
     search,
     sort,
     stream_compaction,
+    string_casting,
     strings,
     table,
     transpose,
