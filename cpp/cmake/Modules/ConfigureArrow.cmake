@@ -9,7 +9,6 @@ set(ARROW_CMAKE_ARGS " -DARROW_WITH_LZ4=OFF"
     " -DARROW_BUILD_SHARED=OFF"
     " -DARROW_BOOST_USE_SHARED=OFF"
     " -DARROW_BUILD_TESTS=OFF"
-    " -DARROW_TEST_LINKAGE=OFF"
     " -DARROW_TEST_MEMCHECK=OFF"
     " -DARROW_BUILD_BENCHMARKS=OFF"
     " -DARROW_IPC=ON"
@@ -33,7 +32,7 @@ elseif(CMAKE_CXX11_ABI)
   list(APPEND ARROW_CMAKE_ARGS " -DARROW_TENSORFLOW=OFF")
 endif(NOT CMAKE_CXX11_ABI)
 
-configure_file("${CMAKE_SOURCE_DIR}/cmake/Templates/Arrow.CMakeLists.txt.cmake"
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/Templates/Arrow.CMakeLists.txt.cmake"
     "${ARROW_ROOT}/CMakeLists.txt")
 
 file(MAKE_DIRECTORY "${ARROW_ROOT}/build")

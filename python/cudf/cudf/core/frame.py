@@ -1049,14 +1049,6 @@ class Frame(libcudf.table.Table):
 
         return self.where(cond=~cond, other=other, inplace=inplace)
 
-    def _split(self, splits, keep_index=True):
-        result = libcudf.copying.table_split(
-            self, splits, keep_index=keep_index
-        )
-
-        result = [self.__class__._from_table(tbl) for tbl in result]
-        return result
-
     def _partition(self, scatter_map, npartitions, keep_index=True):
 
         output_table, output_offsets = libcudf.partitioning.partition(
@@ -2696,7 +2688,13 @@ class Frame(libcudf.table.Table):
                     1.5707963267948966,  1.266103672779499],
                     dtype='float64')
         """
-        return self._unaryop("acos")
+        #print(dir(self))
+        
+        data = self._unaryop("acos")
+        newdata = data.to_pandas()
+        data_columns = newdata.where(0 > newdata, np.nan)
+        finaldata = zip(self._column_names, data_columns)
+        return Frame(finaldata, self.index)
 
     def atan(self):
         """
@@ -3127,6 +3125,18 @@ class Frame(libcudf.table.Table):
         return libcudf.sort.is_sorted(
             self, ascending=ascending, null_position=null_position
         )
+
+    def _split(self, splits, keep_index=True):
+        result = libcudf.copying.table_split(
+            self, splits, keep_index=keep_index
+        )
+        result = [self.__class__._from_table(tbl) for tbl in result]
+        return result
+
+    def _encode(self):
+        keys, indices = libcudf.transform.table_encode(self)
+        keys = self.__class__._from_table(keys)
+        return keys, indices
 
 
 def _get_replacement_values(to_replace, replacement, col_name, column):

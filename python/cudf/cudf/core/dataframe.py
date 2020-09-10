@@ -26,7 +26,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib.null_mask import MaskState, create_null_mask
 from cudf._lib.nvtx import annotate
-from cudf.core import column
+from cudf.core import column, reshape
 from cudf.core.abc import Serializable
 from cudf.core.column import as_column, column_empty
 from cudf.core.column_accessor import ColumnAccessor
@@ -5271,8 +5271,8 @@ class DataFrame(Frame, Serializable):
                     val = values[col]
                     result_df[col] = self._data[col].isin(val)
                 else:
-                    result_df[col] = utils.scalar_broadcast_to(
-                        False, len(self)
+                    result_df[col] = column.full(
+                        size=len(self), fill_value=False, dtype="bool"
                     )
 
             result_df.index = self.index
@@ -5344,10 +5344,6 @@ class DataFrame(Frame, Serializable):
     def _prepare_for_rowwise_op(self):
         """Prepare a DataFrame for CuPy-based row-wise operations.
         """
-        warnings.warn(
-            "Row-wise operations currently only support int, float, "
-            "and bool dtypes."
-        )
 
         if any([col.nullable for col in self._columns]):
             msg = (
@@ -5359,6 +5355,12 @@ class DataFrame(Frame, Serializable):
 
         filtered = self.select_dtypes(include=[np.number, np.bool])
         common_dtype = np.find_common_type(filtered.dtypes, [])
+        if filtered._num_columns < self._num_columns:
+            msg = (
+                "Row-wise operations currently only support int, float "
+                "and bool dtypes. Non numeric columns are ignored."
+            )
+            warnings.warn(msg)
         coerced = filtered.astype(common_dtype)
         return coerced
 
@@ -6775,7 +6777,17 @@ class DataFrame(Frame, Serializable):
 
             current_cols = self.columns
             combined_columns = other.index.to_pandas()
-            if not self.empty:
+            if len(current_cols):
+
+                if cudf.utils.dtypes.is_mixed_with_object_dtype(
+                    current_cols, combined_columns
+                ):
+                    raise TypeError(
+                        "cudf does not support mixed types, please type-cast "
+                        "the column index of dataframe and index of series "
+                        "to same dtypes."
+                    )
+
                 combined_columns = current_cols.union(
                     combined_columns, sort=False
                 )
@@ -6798,19 +6810,21 @@ class DataFrame(Frame, Serializable):
             to_concat = [self, *other]
         else:
             to_concat = [self, other]
-        to_concat = [
-            obj for obj in to_concat if isinstance(obj, Frame) and len(obj)
-        ]
-        if len(to_concat) == 0:
-            if ignore_index and len(self) != 0:
-                result = cudf.DataFrame(
-                    data=self._data.copy(), index=RangeIndex(len(self))
-                )
-            else:
-                result = self.copy()
-            return result
 
         return cudf.concat(to_concat, ignore_index=ignore_index, sort=sort)
+
+    @copy_docstring(reshape.pivot)
+    def pivot(self, index, columns, values=None):
+
+        return cudf.core.reshape.pivot(
+            self, index=index, columns=columns, values=values
+        )
+
+    @copy_docstring(reshape.unstack)
+    def unstack(self, level=-1, fill_value=None):
+        return cudf.core.reshape.unstack(
+            self, level=level, fill_value=fill_value
+        )
 
 
 def from_pandas(obj, nan_as_null=None):
