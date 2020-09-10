@@ -849,9 +849,7 @@ inline __device__ void PackLiterals(
   if (t < 64) { scratch[t] = 0; }
   __syncthreads();
 
-  bool thread_active = (t <= count);
-
-  if (thread_active) {
+  if (t <= count) {
     uint64_t v64 = v;
     v64 <<= (t * w) & 0x1f;
 
@@ -865,14 +863,12 @@ inline __device__ void PackLiterals(
   }
   __syncthreads();
 
-  if (thread_active) {
-    // Copy scratch data to final destination
-    auto available_bytes = (count * w + 7) / 8;
+  // Copy scratch data to final destination
+  auto available_bytes = (count * w + 7) / 8;
 
-    auto scratch_bytes = reinterpret_cast<char *>(&scratch[0]);
-    if (t < available_bytes) { dst[t] = scratch_bytes[t]; }
-    if (t + 128 < available_bytes) { dst[t + 128] = scratch_bytes[t + 128]; }
-  }
+  auto scratch_bytes = reinterpret_cast<char *>(&scratch[0]);
+  if (t < available_bytes) { dst[t] = scratch_bytes[t]; }
+  if (t + 128 < available_bytes) { dst[t + 128] = scratch_bytes[t + 128]; }
   __syncthreads();
 }
 
