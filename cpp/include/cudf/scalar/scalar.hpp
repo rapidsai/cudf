@@ -101,7 +101,7 @@ class scalar {
   scalar(data_type type,
          bool is_valid                       = false,
          cudaStream_t stream                 = 0,
-         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+         rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
     : _type(type), _is_valid(is_valid, stream, mr)
   {
   }
@@ -171,7 +171,7 @@ class fixed_width_scalar : public scalar {
   fixed_width_scalar(T value,
                      bool is_valid                       = true,
                      cudaStream_t stream                 = 0,
-                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+                     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
     : scalar(data_type(type_to_id<T>()), is_valid, stream, mr), _data(value, stream, mr)
   {
   }
@@ -187,7 +187,7 @@ class fixed_width_scalar : public scalar {
   fixed_width_scalar(rmm::device_scalar<T>&& data,
                      bool is_valid                       = true,
                      cudaStream_t stream                 = 0,
-                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+                     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
     : scalar(data_type(type_to_id<T>()), is_valid, stream, mr),
       _data{std::forward<rmm::device_scalar<T>>(data)}
   {
@@ -226,7 +226,7 @@ class numeric_scalar : public detail::fixed_width_scalar<T> {
   numeric_scalar(T value,
                  bool is_valid                       = true,
                  cudaStream_t stream                 = 0,
-                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
     : detail::fixed_width_scalar<T>(value, is_valid, stream, mr)
   {
   }
@@ -242,7 +242,7 @@ class numeric_scalar : public detail::fixed_width_scalar<T> {
   numeric_scalar(rmm::device_scalar<T>&& data,
                  bool is_valid                       = true,
                  cudaStream_t stream                 = 0,
-                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
     : detail::fixed_width_scalar<T>(std::forward<rmm::device_scalar<T>>(data), is_valid, stream, mr)
   {
   }
@@ -278,7 +278,7 @@ class fixed_point_scalar : public detail::fixed_width_scalar<T> {
   fixed_point_scalar(T value,
                      bool is_valid                       = true,
                      cudaStream_t stream                 = 0,
-                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+                     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
     : detail::fixed_width_scalar<T>(value, is_valid, stream, mr)
   {
   }
@@ -294,7 +294,7 @@ class fixed_point_scalar : public detail::fixed_width_scalar<T> {
   fixed_point_scalar(rmm::device_scalar<T>&& data,
                      bool is_valid                       = true,
                      cudaStream_t stream                 = 0,
-                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+                     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
     : detail::fixed_width_scalar<T>(std::forward<rmm::device_scalar<T>>(data), is_valid, stream, mr)
   {
   }
@@ -327,7 +327,7 @@ class string_scalar : public scalar {
   string_scalar(std::string const& string,
                 bool is_valid                       = true,
                 cudaStream_t stream                 = 0,
-                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
     : scalar(data_type(type_id::STRING), is_valid), _data(string.data(), string.size(), stream, mr)
   {
   }
@@ -344,7 +344,7 @@ class string_scalar : public scalar {
   string_scalar(value_type const& source,
                 bool is_valid                       = true,
                 cudaStream_t stream                 = 0,
-                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
     : scalar(data_type(type_id::STRING), is_valid),
       _data(source.data(), source.size_bytes(), stream, mr)
   {
@@ -362,7 +362,7 @@ class string_scalar : public scalar {
   string_scalar(rmm::device_scalar<value_type>& data,
                 bool is_valid                       = true,
                 cudaStream_t stream                 = 0,
-                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
     : string_scalar(data.value(stream), is_valid, stream, mr)
   {
   }
@@ -431,7 +431,7 @@ class chrono_scalar : public detail::fixed_width_scalar<T> {
   chrono_scalar(T value,
                 bool is_valid                       = true,
                 cudaStream_t stream                 = 0,
-                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
     : detail::fixed_width_scalar<T>(value, is_valid, stream, mr)
   {
   }
@@ -447,7 +447,7 @@ class chrono_scalar : public detail::fixed_width_scalar<T> {
   chrono_scalar(rmm::device_scalar<T>&& data,
                 bool is_valid                       = true,
                 cudaStream_t stream                 = 0,
-                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
     : detail::fixed_width_scalar<T>(std::forward<rmm::device_scalar<T>>(data), is_valid, stream, mr)
   {
   }
@@ -474,7 +474,7 @@ struct timestamp_scalar : chrono_scalar<T> {
   timestamp_scalar(Duration2 const& value,
                    bool is_valid,
                    cudaStream_t stream                 = 0,
-                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+                   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
     : chrono_scalar<T>(T{typename T::duration{value}}, is_valid, stream, mr)
   {
   }
@@ -503,7 +503,7 @@ struct duration_scalar : chrono_scalar<T> {
   duration_scalar(typename T::rep value,
                   bool is_valid,
                   cudaStream_t stream                 = 0,
-                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
     : chrono_scalar<T>(T{value}, is_valid, stream, mr)
   {
   }

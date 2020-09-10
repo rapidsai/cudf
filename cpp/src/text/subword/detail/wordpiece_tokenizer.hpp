@@ -18,10 +18,6 @@
 
 #include <text/subword/detail/data_normalizer.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
-#include <rmm/device_uvector.hpp>
-#include <vector>
-
 namespace nvtext {
 
 struct hashed_vocabulary;
@@ -30,6 +26,20 @@ namespace detail {
 
 /**
  * @brief This splits words into tokens contained in the model vocabulary file.
+ *
+ * The tokenizer first normalizes the character bytes, identifies the words in
+ * each string, and then converts each word in to a integer token-id per the
+ * provided vocabulary hash table.
+ *
+ * The `tokenize()` function produces two device vectors `uvector_pair`.
+ * The first is the token-ids for each word identified in the input strings.
+ * The second is the offsets to identify which ids go with each string.
+ *
+ * Temporary buffers are created equal to 3 uint32 values plus 1 byte per input byte.
+ * Also the normalize step allocates an additional 16x bytes per input byte but 8x
+ * of this memory is reused by the `tokenize()` function.
+ * This means 13x + 8x = 21x the number bytes of the input strings buffer must be
+ * available to call the `tokenize()` function in this class.
  */
 class wordpiece_tokenizer {
  public:
@@ -37,12 +47,6 @@ class wordpiece_tokenizer {
    * @brief Creates a full tokenizer that cleans the text and splits it into tokens.
    *
    * @param vocab_table The preprocessed hashed vocabulary data.
-   * @param max_num_strings Maximum number of input strings for instantiating the tokenizer.
-   *        Used to allocate temporary working memory on the GPU.
-   *        If the input contains a larger number of strings, behavior is undefined.
-   * @param max_num_chars Maximum number of characters for instantiating the tokenizer.
-   *        Used to allocate temporary working memory on the GPU.
-   *        If the input contains a larger number of characters, behavior is undefined.
    * @param max_rows_final_tensor Maximum number of rows in tensor_token-ids expected by tokenizer.
    *        Used to allocate temporary working memory on the GPU.
    *        If the output contains a larger number of rows, behavior is undefined.
@@ -61,8 +65,6 @@ class wordpiece_tokenizer {
    *        specified in the `vocab_file`.
    */
   wordpiece_tokenizer(hashed_vocabulary const& vocab_table,
-                      uint32_t max_num_strings,
-                      uint32_t max_num_chars,
                       uint32_t max_rows_final_tensor,
                       uint32_t max_sequence_length,
                       uint32_t stride,
@@ -83,44 +85,29 @@ class wordpiece_tokenizer {
    * @param stream CUDA stream used for device memory operations and kernel launches.
    * @return Pointer to token-ids and token-id offsets
    */
-  std::pair<uint32_t*, uint32_t*> tokenize(char const* d_strings,
-                                           uint32_t const* d_offsets,
-                                           uint32_t num_strings,
-                                           cudaStream_t stream);
+  uvector_pair tokenize(char const* d_strings,
+                        uint32_t const* d_offsets,
+                        uint32_t num_strings,
+                        cudaStream_t stream);
 
  private:
   /**
-   * @brief Splits code points run through the normalizer into tokens.
+   * @brief Splits the code points from the normalizer into tokens.
    *
-   * @param cps_and_length[in,out] A gpu pointer to the codepoints.
-   *        The data is modified to contain the token ids of each
-   *        space separated sequence of code points.
-   * @param offsets_and_length[in,out] A gpu pointer to the string offsets.
-   *        This is always `num strings + 1`.
-   *        The data is modified to contain string lengths in terms
-   *        of token ids instead of code points.
+   * @param cps_and_offsets[in,out] The output code points and offsets
+   *        from the normalizer.
+   *        The data is modified to contain the token ids and token counts
+   *        per string.
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  void tokenize(ptr_length_pair& cp_and_length,
-                ptr_length_pair& offsets_and_length,
-                cudaStream_t stream);
+  void tokenize(uvector_pair& cps_and_offsets, cudaStream_t stream);
 
+  hashed_vocabulary const& vocab_table;
   data_normalizer normalizer;  // removes punctuation, accents, etc
   uint32_t const max_sequence_length;
   uint32_t const stride;
   bool const do_truncate;
   uint32_t const max_word_length;
-
-  // hash table parameters
-  hashed_vocabulary const& vocab_table;
-
-  // working memory for tokenizing
-  rmm::device_uvector<uint32_t> device_token_ids;
-  rmm::device_uvector<uint32_t> device_word_indices;
-  rmm::device_uvector<uint8_t> device_tokens_per_word;
-  rmm::device_uvector<uint32_t> device_num_selected;
-  rmm::device_uvector<size_t> cub_temp_storage;
-  size_t max_cub_storage_bytes;
 };
 
 }  // namespace detail

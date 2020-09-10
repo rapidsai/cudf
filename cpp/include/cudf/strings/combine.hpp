@@ -66,7 +66,7 @@ std::unique_ptr<column> concatenate(
   table_view const& strings_columns,
   string_scalar const& separator      = string_scalar(""),
   string_scalar const& narep          = string_scalar("", false),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Concatenates all strings in the column into one new string delimited
@@ -96,7 +96,7 @@ std::unique_ptr<column> join_strings(
   strings_column_view const& strings,
   string_scalar const& separator      = string_scalar(""),
   string_scalar const& narep          = string_scalar("", false),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Concatenates a list of strings columns using separators for each row
@@ -154,7 +154,7 @@ std::unique_ptr<column> concatenate(
   strings_column_view const& separators,
   string_scalar const& separator_narep = string_scalar("", false),
   string_scalar const& col_narep       = string_scalar("", false),
-  rmm::mr::device_memory_resource* mr  = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings

@@ -95,7 +95,7 @@ struct dispatch_compute_indices {
 std::unique_ptr<column> set_keys(
   dictionary_column_view const& dictionary_column,
   column_view const& new_keys,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   CUDF_EXPECTS(!new_keys.has_nulls(), "keys parameter must not have nulls");

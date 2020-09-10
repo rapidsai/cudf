@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,175 +44,6 @@ namespace cudf {
 //! IO interfaces
 namespace io {
 namespace detail {
-namespace avro {
-/**
- * @brief Options for the Avro reader.
- */
-struct reader_options {
-  std::vector<std::string> columns;
-
-  reader_options()                       = default;
-  reader_options(reader_options const &) = default;
-
-  /**
-   * @brief Constructor to populate reader options.
-   *
-   * @param columns Set of columns to read; empty for all columns
-   */
-  reader_options(std::vector<std::string> columns) : columns(std::move(columns)) {}
-};
-
-/**
- * @brief Class to read Avro dataset data into columns.
- */
-class reader {
- private:
-  class impl;
-  std::unique_ptr<impl> _impl;
-
- public:
-  /**
-   * @brief Constructor from an array of file paths
-   *
-   * @param filepaths Paths to the files containing the input dataset
-   * @param options Settings for controlling reading behavior
-   * @param mr Device memory resource to use for device memory allocation
-   */
-  explicit reader(std::vector<std::string> const &filepaths,
-                  reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
-
-  /**
-   * @brief Constructor from an array of datasources
-   *
-   * @param sources Input `datasource` objects to read the dataset from
-   * @param options Settings for controlling reading behavior
-   * @param mr Device memory resource to use for device memory allocation
-   */
-  explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
-                  reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
-
-  /**
-   * @brief Destructor explicitly-declared to avoid inlined in header
-   */
-  ~reader();
-
-  /**
-   * @brief Reads the entire dataset.
-   *
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   *
-   * @return The set of columns along with table metadata
-   */
-  table_with_metadata read_all(cudaStream_t stream = 0);
-
-  /**
-   * @brief Reads and returns a range of rows.
-   *
-   * @param skip_rows Number of rows to skip from the start
-   * @param num_rows Number of rows to read; use `0` for all remaining data
-   * @param metadata Optional location to return table metadata
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   *
-   * @return The set of columns along with table metadata
-   */
-  table_with_metadata read_rows(size_type skip_rows, size_type num_rows, cudaStream_t stream = 0);
-};
-
-}  // namespace avro
-
-namespace json {
-/**
- * @brief Options for the JSON reader.
- */
-struct reader_options {
-  bool lines = false;
-  /// Specify the compression format of the source or infer from file extension
-  compression_type compression = compression_type::AUTO;
-  /// Per-column types; disables type inference on those columns
-  std::vector<std::string> dtype;
-  bool dayfirst = false;
-
-  reader_options()                       = default;
-  reader_options(reader_options const &) = default;
-
-  /**---------------------------------------------------------------------------*
-   * @brief Constructor to populate reader options.
-   *
-   * @param[in] lines Restrict to `JSON Lines` format rather than full JSON
-   * @param[in] compression Compression type: "none", "infer", "gzip", "zip"
-   * @param[in] dtype Ordered list of data types; deduced from dataset if empty
-   *---------------------------------------------------------------------------**/
-  reader_options(bool lines,
-                 compression_type compression,
-                 std::vector<std::string> dtype,
-                 bool dayfirst)
-    : lines(lines), compression(compression), dtype(std::move(dtype)), dayfirst(dayfirst)
-  {
-  }
-};
-
-/**
- * @brief Class to read JSON dataset data into columns.
- */
-class reader {
- private:
-  class impl;
-  std::unique_ptr<impl> _impl;
-
- public:
-  /**
-   * @brief Constructor from an array of file paths
-   *
-   * @param filepaths Paths to the files containing the input dataset
-   * @param options Settings for controlling reading behavior
-   * @param mr Device memory resource to use for device memory allocation
-   */
-  explicit reader(std::vector<std::string> const &filepaths,
-                  reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
-
-  /**
-   * @brief Constructor from an array of datasources
-   *
-   * @param sources Input `datasource` objects to read the dataset from
-   * @param options Settings for controlling reading behavior
-   * @param mr Device memory resource to use for device memory allocation
-   */
-  explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
-                  reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
-
-  /**
-   * @brief Destructor explicitly-declared to avoid inlined in header
-   */
-  ~reader();
-
-  /*
-   * @brief Reads and returns the entire data set.
-   *
-   * @return cudf::table object that contains the array of cudf::column.
-   */
-  table_with_metadata read_all(cudaStream_t stream = 0);
-
-  /*
-   * @brief Reads and returns all the rows within a byte range.
-   *
-   * The returned data includes the row that straddles the end of the range.
-   * In other words, a row is included as long as the row begins within the byte
-   * range.
-   *
-   * @param[in] offset Byte offset from the start
-   * @param[in] size Number of bytes from the offset; set to 0 for all remaining
-   *
-   * @return cudf::table object that contains the array of cudf::column
-   */
-  table_with_metadata read_byte_range(size_t offset, size_t size, cudaStream_t stream = 0);
-};
-
-}  // namespace json
-
 namespace csv {
 /**
  * @brief Options for the CSV reader.
@@ -319,7 +150,7 @@ class reader {
    */
   explicit reader(std::vector<std::string> const &filepaths,
                   reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+                  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Constructor from an array of datasources
@@ -330,7 +161,7 @@ class reader {
    */
   explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                   reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+                  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header
@@ -436,7 +267,7 @@ class reader {
    */
   explicit reader(std::vector<std::string> const &filepaths,
                   reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+                  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Constructor from an array of datasources
@@ -447,7 +278,7 @@ class reader {
    */
   explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                   reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+                  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header
@@ -464,32 +295,16 @@ class reader {
   table_with_metadata read_all(cudaStream_t stream = 0);
 
   /**
-   * @brief Reads and returns a specific stripe.
-   *
-   * @param stripe Index of the stripe
-   * @param stripe_count Number of stripes to read
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   *
-   * @return The set of columns along with table metadata
-   *
-   * @throw cudf::logic_error if stripe index is out of range
-   */
-  table_with_metadata read_stripe(size_type stripe,
-                                  size_type stripe_count = 1,
-                                  cudaStream_t stream    = 0);
-
-  /**
    * @brief Reads and returns specific stripes.
    *
-   * @param stripe_list Indices of the stripes to read
+   * @param stripes Indices of the stripes to read
    * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    *
    * @throw cudf::logic_error if stripe index is out of range
    */
-  table_with_metadata read_stripes(const std::vector<size_type> &stripe_list,
-                                   cudaStream_t stream = 0);
+  table_with_metadata read_stripes(const std::vector<size_type> &stripes, cudaStream_t stream = 0);
 
   /**
    * @brief Reads and returns a range of rows.
@@ -504,112 +319,6 @@ class reader {
 };
 
 }  // namespace orc
-
-namespace parquet {
-/**
- * @brief Options for the Parquet reader.
- */
-struct reader_options {
-  std::vector<std::string> columns;
-  bool strings_to_categorical = false;
-  bool use_pandas_metadata    = false;
-  data_type timestamp_type{type_id::EMPTY};
-
-  reader_options()                       = default;
-  reader_options(reader_options const &) = default;
-
-  /**
-   * @brief Constructor to populate reader options.
-   *
-   * @param columns Set of columns to read; empty for all columns
-   * @param strings_to_categorical Whether to return strings as category
-   * @param use_pandas_metadata Whether to always load PANDAS index columns
-   * @param timestamp_type Cast timestamp columns to a specific type
-   */
-  reader_options(std::vector<std::string> columns,
-                 bool strings_to_categorical,
-                 bool use_pandas_metadata,
-                 data_type timestamp_type)
-    : columns(std::move(columns)),
-      strings_to_categorical(strings_to_categorical),
-      use_pandas_metadata(use_pandas_metadata),
-      timestamp_type(timestamp_type)
-  {
-  }
-};
-
-/**
- * @brief Class to read Parquet dataset data into columns.
- */
-class reader {
- private:
-  class impl;
-  std::unique_ptr<impl> _impl;
-
- public:
-  /**
-   * @brief Constructor from an array of file paths
-   *
-   * @param filepaths Paths to the files containing the input dataset
-   * @param options Settings for controlling reading behavior
-   * @param mr Device memory resource to use for device memory allocation
-   */
-  explicit reader(std::vector<std::string> const &filepaths,
-                  reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
-
-  /**
-   * @brief Constructor from an array of datasources
-   *
-   * @param sources Input `datasource` objects to read the dataset from
-   * @param options Settings for controlling reading behavior
-   * @param mr Device memory resource to use for device memory allocation
-   */
-  explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
-                  reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
-
-  /**
-   * @brief Destructor explicitly-declared to avoid inlined in header
-   */
-  ~reader();
-
-  /**
-   * @brief Reads the entire dataset.
-   *
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   *
-   * @return The set of columns along with table metadata
-   */
-  table_with_metadata read_all(cudaStream_t stream = 0);
-
-  /**
-   * @brief Reads specific row groups.
-   *
-   * @param row_group_list Indices of the row groups
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   *
-   * @return The set of columns along with table metadata
-   *
-   * @throw cudf::logic_error if row group index is out of range
-   */
-  table_with_metadata read_row_groups(std::vector<std::vector<size_type>> const &row_group_list,
-                                      cudaStream_t stream = 0);
-
-  /**
-   * @brief Reads a range of rows.
-   *
-   * @param skip_rows Number of rows to skip from the start
-   * @param num_rows Number of rows to read; use `0` for all remaining data
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   *
-   * @return The set of columns along with table metadata
-   */
-  table_with_metadata read_rows(size_type skip_rows, size_type num_rows, cudaStream_t stream = 0);
-};
-
-}  // namespace parquet
-
 }  // namespace detail
 }  // namespace io
 }  // namespace cudf

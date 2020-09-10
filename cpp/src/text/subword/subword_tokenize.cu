@@ -25,9 +25,6 @@
 
 #include <thrust/for_each.h>
 #include <thrust/transform_scan.h>
-#include <fstream>
-#include <iostream>
-#include <vector>
 
 namespace nvtext {
 namespace detail {
@@ -113,7 +110,7 @@ __global__ void kernel_compute_tensor_metadata(
       metadata[metadata_idx + 1] = (max_sequence_length - stride) / 2;
     if (last_row_of_tensor) {
       if (n_tokens_tensor < max_sequence_length)
-        metadata[metadata_idx + 2] = n_tokens_tensor - 1;
+        metadata[metadata_idx + 2] = (n_tokens_tensor > 0) ? (n_tokens_tensor - 1) : 0;
       else {
         if (!do_truncate)
           metadata[metadata_idx + 2] =
@@ -135,8 +132,6 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   uint32_t stride,
                                   bool do_lower_case,
                                   bool do_truncate,
-                                  uint32_t max_num_strings,
-                                  uint32_t max_num_chars,
                                   uint32_t max_rows_tensor,
                                   cudaStream_t stream,
                                   rmm::mr::device_memory_resource* mr)
@@ -159,20 +154,13 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
   auto const d_chars   = strings.chars().data<char>() + offset;
 
   // Create tokenizer
-  wordpiece_tokenizer tokenizer(vocab_table,
-                                max_num_strings,
-                                max_num_chars,
-                                max_rows_tensor,
-                                max_sequence_length,
-                                stride,
-                                do_truncate,
-                                do_lower_case,
-                                stream);
+  wordpiece_tokenizer tokenizer(
+    vocab_table, max_rows_tensor, max_sequence_length, stride, do_truncate, do_lower_case, stream);
   // Run tokenizer
   auto const tokens = tokenizer.tokenize(d_chars, d_offsets, strings_count, stream);
   // assign output components
-  uint32_t const* device_token_ids = tokens.first;
-  uint32_t const* device_offsets   = tokens.second;
+  uint32_t const* device_token_ids = tokens.first->data();
+  uint32_t const* device_offsets   = tokens.second->data();
 
   // Format output from tokenizer
   // Each string can create 1 or more tensor entries.
@@ -264,21 +252,17 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   uint32_t stride,
                                   bool do_lower_case,
                                   bool do_truncate,
-                                  uint32_t max_num_strings,
-                                  uint32_t max_num_chars,
                                   uint32_t max_rows_tensor,
                                   rmm::mr::device_memory_resource* mr)
 {
-  CUDF_FUNC_RANGE();
   hashed_vocabulary vocab_table = load_vocabulary_file(filename_hashed_vocabulary, mr);
+  CUDF_FUNC_RANGE();
   return detail::subword_tokenize(strings,
                                   vocab_table,
                                   max_sequence_length,
                                   stride,
                                   do_lower_case,
                                   do_truncate,
-                                  max_num_strings,
-                                  max_num_chars,
                                   max_rows_tensor,
                                   0,
                                   mr);
@@ -290,8 +274,6 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   uint32_t stride,
                                   bool do_lower_case,
                                   bool do_truncate,
-                                  uint32_t max_num_strings,
-                                  uint32_t max_num_chars,
                                   uint32_t max_rows_tensor,
                                   rmm::mr::device_memory_resource* mr)
 {
@@ -302,8 +284,6 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   stride,
                                   do_lower_case,
                                   do_truncate,
-                                  max_num_strings,
-                                  max_num_chars,
                                   max_rows_tensor,
                                   0,
                                   mr);

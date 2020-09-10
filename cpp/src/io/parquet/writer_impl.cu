@@ -582,26 +582,27 @@ void writer::impl::encode_pages(hostdevice_vector<gpu::EncColumnChunk> &chunks,
 }
 
 writer::impl::impl(std::unique_ptr<data_sink> sink,
-                   writer_options const &options,
+                   parquet_writer_options const &options,
                    rmm::mr::device_memory_resource *mr)
   : _mr(mr),
-    compression_(to_parquet_compression(options.compression)),
-    stats_granularity_(options.stats_granularity),
+    compression_(to_parquet_compression(options.get_compression())),
+    stats_granularity_(options.get_stats_level()),
     out_sink_(std::move(sink))
 {
 }
 
-std::unique_ptr<std::vector<uint8_t>> writer::impl::write(table_view const &table,
-                                                          const table_metadata *metadata,
-                                                          bool return_filemetadata,
-                                                          const std::string &metadata_out_file_path,
-                                                          cudaStream_t stream)
+std::unique_ptr<std::vector<uint8_t>> writer::impl::write(
+  table_view const &table,
+  const table_metadata *metadata,
+  bool return_filemetadata,
+  const std::string &column_chunks_file_path,
+  cudaStream_t stream)
 {
   pq_chunked_state state{metadata, SingleWriteMode::YES, stream};
 
   write_chunked_begin(state);
-  write_chunked(table, state);
-  return write_chunked_end(state, return_filemetadata, metadata_out_file_path);
+  write_chunk(table, state);
+  return write_chunked_end(state, return_filemetadata, column_chunks_file_path);
 }
 
 void writer::impl::write_chunked_begin(pq_chunked_state &state)
@@ -613,7 +614,7 @@ void writer::impl::write_chunked_begin(pq_chunked_state &state)
   state.current_chunk_offset = sizeof(file_header_s);
 }
 
-void writer::impl::write_chunked(table_view const &table, pq_chunked_state &state)
+void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
 {
   size_type num_columns = table.num_columns();
   size_type num_rows    = 0;
@@ -639,7 +640,7 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
                  "be specified");
   }
 
-  // first call. setup metadata. num_rows will get incremented as write_chunked is
+  // first call. setup metadata. num_rows will get incremented as write_chunk is
   // called multiple times.
   // Calculate the sum of depths of all list columns
   size_type const list_col_depths = std::accumulate(
@@ -716,9 +717,9 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
         col_schema.type           = col.physical_type();
         col_schema.converted_type = col.converted_type();
         // because the repetition type is global (in the sense of, not per-rowgroup or per
-        // write_chunked() call) we cannot know up front if the user is going to end up passing
-        // tables with nulls/no nulls in the multiple write_chunked() case.  so we'll do some
-        // special handling.
+        // write_chunk() call) we cannot know up front if the user is going to end up passing tables
+        // with nulls/no nulls in the multiple write_chunk() case.  so we'll do some special
+        // handling.
         //
         // if the user is explicitly saying "I am only calling this once", fall back to the original
         // behavior and assume the columns in this one table tell us everything we need to know.
@@ -749,11 +750,11 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
     // TODO (dm): Now needs to compare children of columns in case of list when we support chunked
     // write for it
     CUDF_EXPECTS(state.md.schema[0].num_children == num_columns,
-                 "Mismatch in table structure between multiple calls to write_chunked");
+                 "Mismatch in table structure between multiple calls to write_chunk");
     for (auto i = 0; i < num_columns; i++) {
       auto &col = parquet_columns[i];
       CUDF_EXPECTS(state.md.schema[1 + i].type == col.physical_type(),
-                   "Mismatch in column types between multiple calls to write_chunked");
+                   "Mismatch in column types between multiple calls to write_chunk");
     }
 
     // increment num rows
@@ -764,7 +765,7 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
   hostdevice_vector<gpu::EncColumnDesc> col_desc(num_columns);
 
   // setup gpu column description.
-  // applicable to only this _write_chunked() call
+  // applicable to only this _write_chunk() call
   for (auto i = 0; i < num_columns; i++) {
     auto &col = parquet_columns[i];
     // GPU column description
@@ -1115,7 +1116,7 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
 }
 
 std::unique_ptr<std::vector<uint8_t>> writer::impl::write_chunked_end(
-  pq_chunked_state &state, bool return_filemetadata, const std::string &metadata_out_file_path)
+  pq_chunked_state &state, bool return_filemetadata, const std::string &column_chunks_file_path)
 {
   CompactProtocolWriter cpw(&buffer_);
   file_ender_s fendr;
@@ -1134,7 +1135,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write_chunked_end(
                    reinterpret_cast<const uint8_t *>(&fhdr),
                    reinterpret_cast<const uint8_t *>(&fhdr) + sizeof(fhdr));
     for (auto &rowgroup : state.md.row_groups) {
-      for (auto &col : rowgroup.columns) { col.file_path = metadata_out_file_path; }
+      for (auto &col : rowgroup.columns) { col.file_path = column_chunks_file_path; }
     }
     fendr.footer_len = static_cast<uint32_t>(cpw.write(&state.md));
     buffer_.insert(buffer_.end(),
@@ -1148,7 +1149,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write_chunked_end(
 
 // Forward to implementation
 writer::writer(std::unique_ptr<data_sink> sink,
-               writer_options const &options,
+               parquet_writer_options const &options,
                rmm::mr::device_memory_resource *mr)
   : _impl(std::make_unique<impl>(std::move(sink), options, mr))
 {
@@ -1158,13 +1159,13 @@ writer::writer(std::unique_ptr<data_sink> sink,
 writer::~writer() = default;
 
 // Forward to implementation
-std::unique_ptr<std::vector<uint8_t>> writer::write_all(table_view const &table,
-                                                        const table_metadata *metadata,
-                                                        bool return_filemetadata,
-                                                        const std::string metadata_out_file_path,
-                                                        cudaStream_t stream)
+std::unique_ptr<std::vector<uint8_t>> writer::write(table_view const &table,
+                                                    const table_metadata *metadata,
+                                                    bool return_filemetadata,
+                                                    const std::string column_chunks_file_path,
+                                                    cudaStream_t stream)
 {
-  return _impl->write(table, metadata, return_filemetadata, metadata_out_file_path, stream);
+  return _impl->write(table, metadata, return_filemetadata, column_chunks_file_path, stream);
 }
 
 // Forward to implementation
@@ -1174,16 +1175,16 @@ void writer::write_chunked_begin(pq_chunked_state &state)
 }
 
 // Forward to implementation
-void writer::write_chunked(table_view const &table, pq_chunked_state &state)
+void writer::write_chunk(table_view const &table, pq_chunked_state &state)
 {
-  _impl->write_chunked(table, state);
+  _impl->write_chunk(table, state);
 }
 
 // Forward to implementation
 std::unique_ptr<std::vector<uint8_t>> writer::write_chunked_end(
-  pq_chunked_state &state, bool return_filemetadata, const std::string &metadata_out_file_path)
+  pq_chunked_state &state, bool return_filemetadata, const std::string &column_chunks_file_path)
 {
-  return _impl->write_chunked_end(state, return_filemetadata, metadata_out_file_path);
+  return _impl->write_chunked_end(state, return_filemetadata, column_chunks_file_path);
 }
 
 std::unique_ptr<std::vector<uint8_t>> writer::merge_rowgroup_metadata(

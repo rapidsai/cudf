@@ -5,6 +5,7 @@ import random
 from glob import glob
 from io import BytesIO
 from string import ascii_letters
+from packaging import version
 
 import numpy as np
 import pandas as pd
@@ -15,6 +16,8 @@ from pyarrow import parquet as pq
 import cudf
 from cudf.io.parquet import ParquetWriter, merge_parquet_filemetadata
 from cudf.tests.utils import assert_eq
+
+import cudf.tests.dataset_generator as dg
 
 
 @pytest.fixture(scope="module")
@@ -123,6 +126,11 @@ def parquet_file(request, tmp_path_factory, pdf):
     fname = tmp_path_factory.mktemp("parquet") / "test.parquet"
     pdf.to_parquet(fname, engine="pyarrow", compression=request.param)
     return fname
+
+
+@pytest.fixture(scope="module")
+def rdg_seed():
+    return int(os.environ.get("TEST_CUDF_RDG_SEED", "42"))
 
 
 def make_pdf(nrows, ncolumns=1, nvalids=0, dtype=np.int64):
@@ -314,6 +322,119 @@ def test_parquet_read_metadata(tmpdir, pdf):
     assert row_groups == num_row_groups(num_rows, row_group_size)
     for a, b in zip(col_names, pdf.columns):
         assert a == b
+
+
+def test_parquet_read_filtered(tmpdir, rdg_seed):
+    # Generate data
+    fname = tmpdir.join("filtered.parquet")
+    dg.generate(
+        fname,
+        dg.Parameters(
+            num_rows=2048,
+            column_parameters=[
+                dg.ColumnParameters(
+                    cardinality=40,
+                    null_frequency=0.05,
+                    generator=lambda g: [g.address.city() for _ in range(40)],
+                    is_sorted=False,
+                ),
+                dg.ColumnParameters(
+                    40,
+                    0.2,
+                    lambda g: [g.person.age() for _ in range(40)],
+                    True,
+                ),
+            ],
+            seed=rdg_seed,
+        ),
+        format={"name": "parquet", "row_group_size": 64},
+    )
+
+    # Get dataframes to compare
+    df = cudf.read_parquet(fname)
+    df_filtered = cudf.read_parquet(fname, filters=[("1", ">", 60)])
+    # PyArrow's read_table function does row-group-level filtering in addition
+    # to applying given filters once the table has been read into memory.
+    # Because of this, we aren't using PyArrow as a reference for testing our
+    # row-group selection method since the only way to only select row groups
+    # with PyArrow is with the method we use and intend to test.
+    tbl_filtered = pq.read_table(
+        fname, filters=[("1", ">", 60)], use_legacy_dataset=False
+    )
+
+    assert_eq(cudf.io.read_parquet_metadata(fname)[1], 2048 / 64)
+    print(len(df_filtered))
+    print(len(tbl_filtered))
+    assert len(df_filtered) < len(df)
+    assert len(tbl_filtered) <= len(df_filtered)
+
+
+def test_parquet_read_filtered_everything(tmpdir):
+    # Generate data
+    fname = tmpdir.join("filtered_everything.parquet")
+    df = pd.DataFrame({"x": range(10), "y": list("aabbccddee")})
+    df.to_parquet(fname, row_group_size=2)
+
+    # Check filter
+    df_filtered = cudf.read_parquet(fname, filters=[("x", "==", 12)])
+    assert_eq(len(df_filtered), 0)
+    assert_eq(df_filtered["x"].dtype, "int64")
+    assert_eq(df_filtered["y"].dtype, "object")
+
+
+def test_parquet_read_filtered_multiple_files(tmpdir):
+    # Generate data
+    fname_0 = tmpdir.join("filtered_multiple_files_0.parquet")
+    df = pd.DataFrame({"x": range(10), "y": list("aabbccddee")})
+    df.to_parquet(fname_0, row_group_size=2)
+    fname_1 = tmpdir.join("filtered_multiple_files_1.parquet")
+    df = pd.DataFrame({"x": range(10), "y": list("aaccccddee")})
+    df.to_parquet(fname_1, row_group_size=2)
+    fname_2 = tmpdir.join("filtered_multiple_files_2.parquet")
+    df = pd.DataFrame(
+        {"x": [0, 1, 9, 9, 4, 5, 6, 7, 8, 9], "y": list("aabbzzddee")}
+    )
+    df.to_parquet(fname_2, row_group_size=2)
+
+    # Check filter
+    filtered_df = cudf.read_parquet(
+        [fname_0, fname_1, fname_2], filters=[("x", "==", 2)]
+    )
+    assert_eq(
+        filtered_df, cudf.DataFrame({"x": [2, 3, 2, 3], "y": list("bbcc")})
+    )
+
+
+@pytest.mark.skipif(
+    version.parse(pa.__version__) < version.parse("1.0.1"),
+    reason="pyarrow 1.0.0 needed for various operators and operand types",
+)
+@pytest.mark.parametrize(
+    "predicate,expected_len",
+    [
+        ([[("x", "==", 0)], [("z", "==", 0)]], 4),
+        ([("x", "==", 0), ("z", "==", 0)], 0),
+        ([("x", "==", 0), ("z", "!=", 0)], 2),
+        ([("x", "==", 0), ("z", "==", 0)], 0),
+        ([("y", "==", "c"), ("x", ">", 8)], 0),
+        ([("y", "==", "c"), ("x", ">=", 5)], 2),
+        ([[("y", "==", "c")], [("x", "<", 3)]], 6),
+    ],
+)
+def test_parquet_read_filtered_complex_predicate(
+    tmpdir, predicate, expected_len
+):
+    # Generate data
+    fname = tmpdir.join("filtered_complex_predicate.parquet")
+    df = pd.DataFrame(
+        {"x": range(10), "y": list("aabbccddee"), "z": reversed(range(10))}
+    )
+    df.to_parquet(fname, row_group_size=2)
+
+    # Check filters
+    df_filtered = cudf.read_parquet(fname, filters=predicate)
+    assert_eq(cudf.io.read_parquet_metadata(fname)[1], 10 / 2)
+    assert_eq(len(df_filtered), expected_len)
 
 
 @pytest.mark.parametrize("row_group_size", [1, 5, 100])
@@ -516,6 +637,68 @@ def test_parquet_reader_multiple_files(tmpdir, src):
     got = cudf.read_parquet([src1, src2])
 
     assert_eq(expect, got)
+
+
+def test_parquet_reader_reordered_columns(tmpdir):
+    src = pd.DataFrame(
+        {"name": ["cow", None, "duck", "fish", None], "id": [0, 1, 2, 3, 4]}
+    )
+    fname = tmpdir.join("test_parquet_reader_reordered_columns.parquet")
+    src.to_parquet(fname)
+    assert os.path.exists(fname)
+    expect = pd.DataFrame(
+        {"id": [0, 1, 2, 3, 4], "name": ["cow", None, "duck", "fish", None]}
+    )
+    got = cudf.read_parquet(fname, columns=["id", "name"])
+    assert_eq(expect, got, check_dtype=False)
+
+
+def test_parquet_reader_reordered_columns_mixed(tmpdir):
+    src = pd.DataFrame(
+        {
+            "name": ["cow", None, "duck", "fish", None],
+            "list0": [
+                [[1, 2], [3, 4]],
+                None,
+                [[5, 6], None],
+                [[1]],
+                [[5], [6, None, 8]],
+            ],
+            "id": [0, 1, 2, 3, 4],
+            "list1": [
+                [[1, 2], [3, 4]],
+                [[0, 0]],
+                [[5, 6], [10, 12]],
+                [[1]],
+                [[5], [6, 8]],
+            ],
+        }
+    )
+    fname = tmpdir.join("test_parquet_reader_reordered_columns.parquet")
+    src.to_parquet(fname)
+    assert os.path.exists(fname)
+    expect = pd.DataFrame(
+        {
+            "list1": [
+                [[1, 2], [3, 4]],
+                [[0, 0]],
+                [[5, 6], [10, 12]],
+                [[1]],
+                [[5], [6, 8]],
+            ],
+            "id": [0, 1, 2, 3, 4],
+            "list0": [
+                [[1, 2], [3, 4]],
+                None,
+                [[5, 6], None],
+                [[1]],
+                [[5], [6, None, 8]],
+            ],
+            "name": ["cow", None, "duck", "fish", None],
+        }
+    )
+    got = cudf.read_parquet(fname, columns=["list1", "id", "list0", "name"])
+    assert_eq(expect, got, check_dtype=False)
 
 
 def test_parquet_reader_list_basic(tmpdir):
@@ -921,8 +1104,9 @@ def test_parquet_writer_bytes_io(simple_gdf):
     assert_eq(cudf.read_parquet(output), cudf.concat([simple_gdf, simple_gdf]))
 
 
+@pytest.mark.parametrize("filename", ["myfile.parquet", None])
 @pytest.mark.parametrize("cols", [["b"], ["c", "b"]])
-def test_parquet_write_partitioned(tmpdir_factory, cols):
+def test_parquet_write_partitioned(tmpdir_factory, cols, filename):
     # Checks that write_to_dataset is wrapping to_parquet
     # as expected
     gdf_dir = str(tmpdir_factory.mktemp("gdf_dir"))
@@ -937,12 +1121,20 @@ def test_parquet_write_partitioned(tmpdir_factory, cols):
     )
     pdf.to_parquet(pdf_dir, index=False, partition_cols=cols)
     gdf = cudf.from_pandas(pdf)
-    gdf.to_parquet(gdf_dir, index=False, partition_cols=cols)
+    gdf.to_parquet(
+        gdf_dir, index=False, partition_cols=cols, partition_file_name=filename
+    )
 
     # Use pandas since dataset may be partitioned
     expect = pd.read_parquet(pdf_dir)
     got = pd.read_parquet(gdf_dir)
     assert_eq(expect, got)
+
+    # If filename is specified, check that it is correct
+    if filename:
+        for _, _, files in os.walk(gdf_dir):
+            for fn in files:
+                assert fn == filename
 
 
 @pytest.mark.parametrize("cols", [None, ["b"]])

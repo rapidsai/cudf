@@ -28,8 +28,7 @@ def read_orc(
     filepath_or_buffer,
     engine="cudf",
     columns=None,
-    stripe=None,
-    stripe_count=None,
+    stripes=None,
     skip_rows=None,
     num_rows=None,
     use_index=True,
@@ -53,8 +52,7 @@ def read_orc(
             libcudf.orc.read_orc(
                 filepath_or_buffer,
                 columns,
-                stripe,
-                stripe_count,
+                stripes,
                 skip_rows,
                 num_rows,
                 use_index,
@@ -64,12 +62,20 @@ def read_orc(
             )
         )
     else:
-        warnings.warn("Using CPU via PyArrow to read ORC dataset.")
-        orc_file = orc.ORCFile(filepath_or_buffer)
-        if stripe is not None:
+
+        def read_orc_stripe(orc_file, stripe, columns):
             pa_table = orc_file.read_stripe(stripe, columns)
             if isinstance(pa_table, pa.RecordBatch):
                 pa_table = pa.Table.from_batches([pa_table])
+            return pa_table
+
+        warnings.warn("Using CPU via PyArrow to read ORC dataset.")
+        orc_file = orc.ORCFile(filepath_or_buffer)
+        if stripes is not None and len(stripes) > 0:
+            pa_tables = [
+                read_orc_stripe(orc_file, i, columns) for i in stripes
+            ]
+            pa_table = pa.concat_tables(pa_tables)
         else:
             pa_table = orc_file.read(columns=columns)
         df = cudf.DataFrame.from_arrow(pa_table)

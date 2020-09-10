@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <iostream>
 #include "types.hpp"
 
 #include <cudf/io/writers.hpp>
@@ -36,126 +37,6 @@
 namespace cudf {
 //! In-development features
 namespace io {
-
-/**
- * @brief Settings to use for `read_avro()`
- *
- * @ingroup io_readers
- */
-struct read_avro_args {
-  source_info source;
-
-  /// Names of column to read; empty is all
-  std::vector<std::string> columns;
-
-  /// Rows to skip from the start; -1 is none
-  size_type skip_rows = -1;
-  /// Rows to read; -1 is all
-  size_type num_rows = -1;
-
-  read_avro_args() = default;
-
-  explicit read_avro_args(source_info const& src) : source(src) {}
-};
-
-/**
- * @brief Reads an Avro dataset into a set of columns
- *
- * @ingroup io_readers
- *
- * The following code snippet demonstrates how to read a dataset from a file:
- * @code
- *  ...
- *  std::string filepath = "dataset.avro";
- *  cudf::read_avro_args args{cudf::source_info(filepath)};
- *  ...
- *  auto result = cudf::read_avro(args);
- * @endcode
- *
- * @param args Settings for controlling reading behavior
- * @param mr Device memory resource used to allocate device memory of the table in the returned
- * table_with_metadata
- *
- * @return The set of columns along with metadata
- */
-table_with_metadata read_avro(
-  read_avro_args const& args,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
-/**
- * @brief Input arguments to the `read_json` interface
- *
- * @ingroup io_readers
- *
- * Available parameters and are closely patterned after PANDAS' `read_json` API.
- * Not all parameters are unsupported. If the matching PANDAS' parameter
- * has a default value of `None`, then a default value of `-1` or `0` may be
- * used as the equivalent.
- *
- * Parameters in PANDAS that are unavailable or in cudf:
- *
- * | Name | Description |
- * | ---- | ----------- |
- * | `orient`             | currently fixed-format |
- * | `typ`                | data is always returned as a cudf::table |
- * | `convert_axes`       | use column functions for axes operations instead |
- * | `convert_dates`      | dates are detected automatically |
- * | `keep_default_dates` | dates are detected automatically |
- * | `numpy`              | data is always returned as a cudf::table |
- * | `precise_float`      | there is only one converter |
- * | `date_unit`          | only millisecond units are supported |
- * | `encoding`           | only ASCII-encoded data is supported |
- * | `chunksize`          | use `byte_range_xxx` for chunking instead |
- *
- */
-struct read_json_args {
-  source_info source;
-
-  ///< Data types of the column; empty to infer dtypes
-  std::vector<std::string> dtype;
-  /// Specify the compression format of the source or infer from file extension
-  compression_type compression = compression_type::AUTO;
-
-  ///< Read the file as a json object per line
-  bool lines = false;
-
-  ///< Bytes to skip from the start
-  size_t byte_range_offset = 0;
-  ///< Bytes to read; always reads complete rows
-  size_t byte_range_size = 0;
-
-  /// Whether to parse dates as DD/MM versus MM/DD
-  bool dayfirst = false;
-
-  read_json_args() = default;
-
-  explicit read_json_args(const source_info& src) : source(src) {}
-};
-
-/**
- * @brief Reads a JSON dataset into a set of columns
- *
- * @ingroup io_readers
- *
- * The following code snippet demonstrates how to read a dataset from a file:
- * @code
- *  ...
- *  std::string filepath = "dataset.json";
- *  cudf::read_json_args args{cudf::source_info(filepath)};
- *  ...
- *  auto result = cudf::read_json(args);
- * @endcode
- *
- * @param args Settings for controlling reading behavior
- * @param mr Device memory resource used to allocate device memory of the table in the returned
- * table_with_metadata
- *
- * @return The set of columns along with metadata
- */
-table_with_metadata read_json(
-  read_json_args const& args,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
 /**
  * @brief Settings to use for `read_csv()`
  *
@@ -269,8 +150,9 @@ struct read_csv_args {
  *
  * @return The set of columns along with metadata
  */
-table_with_metadata read_csv(read_csv_args const& args,
-                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+table_with_metadata read_csv(
+  read_csv_args const& args,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Settings to use for `write_csv()`
@@ -339,7 +221,7 @@ struct write_csv_args : detail::csv::writer_options {
  * @param mr Device memory resource to use for device memory allocation
  */
 void write_csv(write_csv_args const& args,
-               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+               rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Settings to use for `read_orc()`
@@ -352,12 +234,8 @@ struct read_orc_args {
   /// Names of column to read; empty is all
   std::vector<std::string> columns;
 
-  /// Stripe to read; -1 is all
-  size_type stripe = -1;
-  /// Number of stripes to read starting from `stripe`; default is one if stripe >= 0
-  size_type stripe_count = -1;
   /// List of individual stripes to read (ignored if empty)
-  std::vector<size_type> stripe_list;
+  std::vector<size_type> stripes;
   /// Rows to skip from the start; -1 is none
   size_type skip_rows = -1;
   /// Rows to read; -1 is all
@@ -402,60 +280,9 @@ struct read_orc_args {
  *
  * @return The set of columns
  */
-table_with_metadata read_orc(read_orc_args const& args,
-                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
-/**
- * @brief Settings to use for `read_parquet()`
- */
-struct read_parquet_args {
-  source_info source;
-
-  /// Names of column to read; empty is all
-  std::vector<std::string> columns;
-
-  /// List of individual row groups to read (ignored if empty)
-  std::vector<std::vector<size_type>> row_groups;
-  /// Rows to skip from the start; -1 is none
-  size_type skip_rows = -1;
-  /// Rows to read; -1 is all
-  size_type num_rows = -1;
-
-  /// Whether to store string data as categorical type
-  bool strings_to_categorical = false;
-  /// Whether to use PANDAS metadata to load columns
-  bool use_pandas_metadata = true;
-  /// Cast timestamp columns to a specific type
-  data_type timestamp_type{type_id::EMPTY};
-
-  explicit read_parquet_args() = default;
-
-  explicit read_parquet_args(source_info const& src) : source(src) {}
-};
-
-/**
- * @brief Reads a Parquet dataset into a set of columns
- *
- * @ingroup io_readers
- *
- * The following code snippet demonstrates how to read a dataset from a file:
- * @code
- *  ...
- *  std::string filepath = "dataset.parquet";
- *  cudf::read_parquet_args args{cudf::source_info(filepath)};
- *  ...
- *  auto result = cudf::read_parquet(args);
- * @endcode
- *
- * @param args Settings for controlling reading behavior
- * @param mr Device memory resource used to allocate device memory of the table in the returned
- * table_with_metadata
- *
- * @return The set of columns along with metadata
- */
-table_with_metadata read_parquet(
-  read_parquet_args const& args,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+table_with_metadata read_orc(
+  read_orc_args const& args,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Settings to use for `write_orc()`
@@ -508,7 +335,7 @@ struct write_orc_args {
  * @param mr Device memory resource to use for device memory allocation
  */
 void write_orc(write_orc_args const& args,
-               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+               rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Settings to use for `write_orc_chunked()`
@@ -574,7 +401,7 @@ struct orc_chunked_state;
  */
 std::shared_ptr<detail::orc::orc_chunked_state> write_orc_chunked_begin(
   write_orc_chunked_args const& args,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Write a single table as a subtable of a larger logical orc file/table.
@@ -600,181 +427,5 @@ void write_orc_chunked(table_view const& table,
  * returned from write_orc_chunked_begin()
  */
 void write_orc_chunked_end(std::shared_ptr<detail::orc::orc_chunked_state>& state);
-
-/**
- * @brief Settings to use for `write_parquet()`
- *
- * @ingroup io_writers
- */
-struct write_parquet_args {
-  /// Specify the sink to use for writer output
-  sink_info sink;
-  /// Specify the compression format to use
-  compression_type compression = compression_type::AUTO;
-  /// Specify the level of statistics in the output file
-  statistics_freq stats_level = statistics_freq::STATISTICS_ROWGROUP;
-  /// Set of columns to output
-  table_view table;
-  /// Optional associated metadata
-  const table_metadata* metadata;
-  /// Optionally return the raw parquet file metadata output
-  bool return_filemetadata = false;
-  /// Column chunks file path to be set in the raw output metadata
-  std::string metadata_out_file_path;
-
-  write_parquet_args() = default;
-
-  explicit write_parquet_args(sink_info const& sink_,
-                              table_view const& table_,
-                              const table_metadata* metadata_ = nullptr,
-                              compression_type compression_   = compression_type::AUTO,
-                              statistics_freq stats_lvl_ = statistics_freq::STATISTICS_ROWGROUP)
-    : sink(sink_),
-      compression(compression_),
-      stats_level(stats_lvl_),
-      table(table_),
-      metadata(metadata_)
-  {
-  }
-};
-
-/**
- * @brief Writes a set of columns to parquet format
- *
- * @ingroup io_writers
- *
- * The following code snippet demonstrates how to write columns to a file:
- * @code
- *  ...
- *  std::string filepath = "dataset.parquet";
- *  cudf::io::write_parquet_args args{cudf::sink_info(filepath), table->view()};
- *  ...
- *  cudf::write_parquet(args);
- * @endcode
- *
- * @param args Settings for controlling writing behavior
- * @param mr Device memory resource to use for device memory allocation
- *
- * @return A blob that contains the file metadata (parquet FileMetadata thrift message) if
- *         requested in write_parquet_args (empty blob otherwise)
- */
-std::unique_ptr<std::vector<uint8_t>> write_parquet(
-  write_parquet_args const& args,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
-/**
- * @brief Merges multiple raw metadata blobs that were previously created by write_parquet
- * into a single metadata blob
- *
- * @ingroup io_writers
- *
- * @param[in] metadata_list List of input file metadata
- * @return A parquet-compatible blob that contains the data for all rowgroups in the list
- */
-std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
-  const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list);
-
-/**
- * @brief Settings to use for `write_parquet_chunked()`
- *
- * @ingroup io_writers
- */
-struct write_parquet_chunked_args {
-  /// Specify the sink to use for writer output
-  sink_info sink;
-  /// Specify the compression format to use
-  compression_type compression = compression_type::AUTO;
-  /// Specify the level of statistics in the output file
-  statistics_freq stats_level = statistics_freq::STATISTICS_ROWGROUP;
-  /// Optional associated metadata.
-  const table_metadata_with_nullability* metadata;
-
-  write_parquet_chunked_args() = default;
-
-  explicit write_parquet_chunked_args(
-    sink_info const& sink_,
-    const table_metadata_with_nullability* metadata_ = nullptr,
-    compression_type compression_                    = compression_type::AUTO,
-    statistics_freq stats_lvl_                       = statistics_freq::STATISTICS_ROWGROUP)
-    : sink(sink_), compression(compression_), stats_level(stats_lvl_), metadata(metadata_)
-  {
-  }
-};
-
-namespace detail {
-namespace parquet {
-/**
- * @brief Forward declaration of anonymous chunked-writer state struct.
- */
-struct pq_chunked_state;
-};  // namespace parquet
-};  // namespace detail
-
-/**
- * @brief Begin the process of writing a parquet file in a chunked/stream form.
- *
- * @ingroup io_writers
- *
- * The intent of the write_parquet_chunked_ path is to allow writing of an
- * arbitrarily large / arbitrary number of rows to a parquet file in multiple passes.
- *
- * The following code snippet demonstrates how to write a single parquet file containing
- * one logical table by writing a series of individual cudf::tables.
- * @code
- *  ...
- *  std::string filepath = "dataset.parquet";
- *  cudf::io::write_parquet_chunked_args args{cudf::sink_info(filepath),
- *                                                          table->view()};
- *  ...
- *  auto state = cudf::write_parquet_chunked_begin(args);
- *    cudf::write_parquet_chunked(table0, state);
- *    cudf::write_parquet_chunked(table1, state);
- *    ...
- *  cudf_write_parquet_chunked_end(state);
- * @endcode
- *
- * @param[in] args Settings for controlling writing behavior
- * @param[in] mr Device memory resource to use for device memory allocation
- *
- * @returns pointer to an anonymous state structure storing information about the chunked write.
- * this pointer must be passed to all subsequent write_parquet_chunked() and
- * write_parquet_chunked_end() calls.
- */
-std::shared_ptr<detail::parquet::pq_chunked_state> write_parquet_chunked_begin(
-  write_parquet_chunked_args const& args,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-/**
- * @brief Write a single table as a subtable of a larger logical parquet file/table.
- *
- * @ingroup io_writers
- *
- * All tables passed into multiple calls of this function must contain the same # of columns and
- * have columns of the same type.
- *
- * @param[in] table The table data to be written.
- * @param[in] state Opaque state information about the writer process. Must be the same pointer
- * returned from write_parquet_chunked_begin()
- */
-void write_parquet_chunked(table_view const& table,
-                           std::shared_ptr<detail::parquet::pq_chunked_state> state);
-
-/**
- * @brief Finish writing a chunked/stream parquet file.
- *
- * @ingroup io_writers
- *
- * @param[in] state Opaque state information about the writer process. Must be the same pointer
- * returned from write_parquet_chunked_begin()
- * @param[in] return_filemetadata If true, return the raw file metadata
- * @param[in] metadata_out_file_path Column chunks file path to be set in the raw output metadata
- *
- * @return A blob that contains the file metadata (parquet FileMetadata thrift message) if
- *         requested in write_parquet_args (empty blob otherwise)
- */
-std::unique_ptr<std::vector<uint8_t>> write_parquet_chunked_end(
-  std::shared_ptr<detail::parquet::pq_chunked_state>& state,
-  bool return_filemetadata                  = false,
-  const std::string& metadata_out_file_path = "");
-
 }  // namespace io
 }  // namespace cudf

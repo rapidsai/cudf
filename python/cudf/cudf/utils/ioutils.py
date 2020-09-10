@@ -112,6 +112,20 @@ engine : {{ 'cudf', 'pyarrow' }}, default 'cudf'
     Parser engine to use.
 columns : list, default None
     If not None, only these columns will be read.
+filters : list of tuple, list of lists of tuples default None
+    If not None, specifies a filter predicate used to filter out row groups
+    using statistics stored for each row group as Parquet metadata. Row groups
+    that do not match the given filter predicate are not read. The
+    predicate is expressed in disjunctive normal form (DNF) like
+    `[[('x', '=', 0), ...], ...]`. DNF allows arbitrary boolean logical
+    combinations of single column predicates. The innermost tuples each
+    describe a single column predicate. The list of inner predicates is
+    interpreted as a conjunction (AND), forming a more selective and
+    multiple column predicate. Finally, the most outer list combines
+    these filters as a disjunction (OR). Predicates may also be passed
+    as a list of tuples. This form is interpreted as a single conjunction.
+    To express OR in predicates, one must use the (preferred) notation of
+    list of lists of tuples.
 row_groups : int, or list, or a list of lists default None
     If not None, specifies, for each input file, which row groups to read.
     If reading multiple inputs, a list of lists should be passed, one list
@@ -172,6 +186,11 @@ index : bool, default None
 partition_cols : list, optional, default None
     Column names by which to partition the dataset
     Columns are partitioned in the order they are given
+partition_file_name : str, optional, default None
+    File name to use for partitioned datasets. Different partitions
+    will be written to different directories, but all files will
+    have this name.  If nothing is specified, a random uuid4 hex string
+    will be used for each file.
 
 See Also
 --------
@@ -247,8 +266,9 @@ engine : {{ 'cudf', 'pyarrow' }}, default 'cudf'
     Parser engine to use.
 columns : list, default None
     If not None, only these columns will be read from the file.
-stripe: int, default None
-    If not None, only the stripe with the specified index will be read.
+stripes: list, default None
+    If not None, only these stripe will be read from the file. Stripes are
+    concatenated with index ignored.
 skip_rows : int, default None
     If not None, the number of rows to skip from the start of the file.
 num_rows : int, default None
@@ -962,9 +982,16 @@ def get_filepath_or_buffer(
         # fsspec does not expanduser so handle here
         path_or_data = os.path.expanduser(path_or_data)
 
-        fs, _, paths = fsspec.get_fs_token_paths(
-            path_or_data, mode=mode, storage_options=storage_options
-        )
+        try:
+            fs, _, paths = fsspec.get_fs_token_paths(
+                path_or_data, mode=mode, storage_options=storage_options
+            )
+        except ValueError as e:
+            if str(e).startswith("Protocol not known"):
+                return path_or_data, compression
+            else:
+                raise e
+
         if len(paths) == 0:
             raise IOError(f"{path_or_data} could not be resolved to any files")
         elif len(paths) > 1:

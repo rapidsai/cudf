@@ -38,10 +38,12 @@ std::shared_ptr<arrow::Buffer> fetch_data_buffer(column_view input_view,
                                                  cudaStream_t stream)
 {
   const int64_t data_size_in_bytes = sizeof(T) * input_view.size();
-  std::shared_ptr<arrow::Buffer> data_buffer;
 
-  CUDF_EXPECTS(arrow::AllocateBuffer(ar_mr, data_size_in_bytes, &data_buffer).ok(),
-               "Failed to allocate Arrow buffer for data");
+  auto result = arrow::AllocateBuffer(data_size_in_bytes, ar_mr);
+  CUDF_EXPECTS(result.ok(), "Failed to allocate Arrow buffer for data");
+
+  std::shared_ptr<arrow::Buffer> data_buffer = std::move(result.ValueOrDie());
+
   CUDA_TRY(cudaMemcpyAsync(data_buffer->mutable_data(),
                            input_view.data<T>(),
                            data_size_in_bytes,
@@ -59,12 +61,11 @@ std::shared_ptr<arrow::Buffer> fetch_mask_buffer(column_view input_view,
                                                  cudaStream_t stream)
 {
   const int64_t mask_size_in_bytes = cudf::bitmask_allocation_size_bytes(input_view.size());
-  std::shared_ptr<arrow::Buffer> mask_buffer;
 
   if (input_view.has_nulls()) {
-    CUDF_EXPECTS(
-      arrow::AllocateBitmap(ar_mr, static_cast<int64_t>(input_view.size()), &mask_buffer).ok(),
-      "Failed to allocate Arrow buffer for mask");
+    auto result = arrow::AllocateBitmap(static_cast<int64_t>(input_view.size()), ar_mr);
+    CUDF_EXPECTS(result.ok(), "Failed to allocate Arrow buffer for mask");
+    std::shared_ptr<arrow::Buffer> mask_buffer = std::move(result.ValueOrDie());
     CUDA_TRY(cudaMemcpyAsync(
       mask_buffer->mutable_data(),
       (input_view.offset() > 0) ? cudf::copy_bitmask(input_view).data() : input_view.null_mask(),
@@ -126,13 +127,13 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<bool>(column_view in
                                                                   arrow::MemoryPool* ar_mr,
                                                                   cudaStream_t stream)
 {
-  auto bitmask = bools_to_mask(input, rmm::mr::get_default_resource(), stream);
+  auto bitmask = bools_to_mask(input, rmm::mr::get_current_device_resource(), stream);
 
-  std::shared_ptr<arrow::Buffer> data_buffer;
+  auto result = arrow::AllocateBuffer(static_cast<int64_t>(bitmask.first->size()), ar_mr);
+  CUDF_EXPECTS(result.ok(), "Failed to allocate Arrow buffer for data");
 
-  CUDF_EXPECTS(
-    arrow::AllocateBuffer(ar_mr, static_cast<int64_t>(bitmask.first->size()), &data_buffer).ok(),
-    "Failed to allocate Arrow buffer for data");
+  std::shared_ptr<arrow::Buffer> data_buffer = std::move(result.ValueOrDie());
+
   CUDA_TRY(cudaMemcpyAsync(data_buffer->mutable_data(),
                            bitmask.first->data(),
                            bitmask.first->size(),
@@ -158,15 +159,17 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::string_view>(
   column_view input_view = (tmp_column != nullptr) ? tmp_column->view() : input;
   auto child_arrays      = fetch_child_array(input_view, ar_mr, stream);
   if (child_arrays.size() == 0) {
-    std::shared_ptr<arrow::Buffer> tmp_offset_buffer;
-    // Empty string will have only one value in offset of 4 bytes
-    CUDF_EXPECTS(arrow::AllocateBuffer(ar_mr, 4, &tmp_offset_buffer).ok(),
-                 "Failed to allocate buffer");
-    tmp_offset_buffer->mutable_data()[0] = 0;
+    arrow::Result<std::unique_ptr<arrow::Buffer>> result;
 
-    std::shared_ptr<arrow::Buffer> tmp_data_buffer;
-    CUDF_EXPECTS(arrow::AllocateBuffer(ar_mr, 0, &tmp_data_buffer).ok(),
-                 "Failed to allocate buffer");
+    // Empty string will have only one value in offset of 4 bytes
+    result = arrow::AllocateBuffer(4, ar_mr);
+    CUDF_EXPECTS(result.ok(), "Failed to allocate buffer");
+    std::shared_ptr<arrow::Buffer> tmp_offset_buffer = std::move(result.ValueOrDie());
+    tmp_offset_buffer->mutable_data()[0]             = 0;
+
+    result = arrow::AllocateBuffer(0, ar_mr);
+    CUDF_EXPECTS(result.ok(), "Failed to allocate buffer");
+    std::shared_ptr<arrow::Buffer> tmp_data_buffer = std::move(result.ValueOrDie());
 
     return std::make_shared<arrow::StringArray>(0, tmp_offset_buffer, tmp_data_buffer);
   }
