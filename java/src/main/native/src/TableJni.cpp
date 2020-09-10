@@ -24,6 +24,7 @@
 #include <cudf/interop.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/functions.hpp>
+#include <cudf/io/parquet.hpp>
 #include <cudf/join.hpp>
 #include <cudf/merge.hpp>
 #include <cudf/partitioning.hpp>
@@ -191,7 +192,7 @@ public:
   std::unique_ptr<jni_writer_data_sink> sink;
 };
 
-typedef jni_table_writer_handle<cudf::io::detail::parquet::pq_chunked_state>
+typedef jni_table_writer_handle<cudf::io::pq_chunked_state>
     native_parquet_writer_handle;
 typedef jni_table_writer_handle<cudf::io::detail::orc::orc_chunked_state> native_orc_writer_handle;
 
@@ -899,16 +900,13 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(
       source.reset(new cudf::io::source_info(filename.get()));
     }
 
-    cudf::io::read_parquet_args read_arg(*source);
-
-    read_arg.columns = n_filter_col_names.as_cpp_vector();
-
-    read_arg.skip_rows = -1;
-    read_arg.num_rows = -1;
-    read_arg.strings_to_categorical = false;
-    read_arg.timestamp_type = cudf::data_type(static_cast<cudf::type_id>(unit));
-
-    cudf::io::table_with_metadata result = cudf::io::read_parquet(read_arg);
+    cudf::io::parquet_reader_options opts =
+      cudf::io::parquet_reader_options::builder(*source)
+        .columns(n_filter_col_names.as_cpp_vector())
+        .convert_strings_to_categories(false)
+        .timestamp_type(cudf::data_type(static_cast<cudf::type_id>(unit)))
+        .build();
+    cudf::io::table_with_metadata result = cudf::io::read_parquet(opts);
     return cudf::jni::convert_table_for_return(env, result.tbl);
   }
   CATCH_STD(env, NULL);
@@ -943,11 +941,13 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
     std::unique_ptr<cudf::jni::jni_writer_data_sink> data_sink(
         new cudf::jni::jni_writer_data_sink(env, consumer));
     sink_info sink{data_sink.get()};
-    compression_type compression{static_cast<compression_type>(j_compression)};
-    statistics_freq stats{static_cast<statistics_freq>(j_stats_freq)};
-
-    write_parquet_chunked_args args(sink, &metadata, compression, stats);
-    std::shared_ptr<detail::parquet::pq_chunked_state> state = write_parquet_chunked_begin(args);
+    chunked_parquet_writer_options opts =
+      chunked_parquet_writer_options::builder(sink)
+        .nullable_metadata(&metadata)
+        .compression(static_cast<compression_type>(j_compression))
+        .stats_level(static_cast<statistics_freq>(j_stats_freq))
+        .build();
+    std::shared_ptr<pq_chunked_state> state = write_parquet_chunked_begin(opts);
     cudf::jni::native_parquet_writer_handle *ret =
         new cudf::jni::native_parquet_writer_handle(state, data_sink);
     return reinterpret_cast<jlong>(ret);
@@ -983,11 +983,13 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetFileBegin(
     }
 
     sink_info sink{output_path.get()};
-    compression_type compression{static_cast<compression_type>(j_compression)};
-    statistics_freq stats{static_cast<statistics_freq>(j_stats_freq)};
-
-    write_parquet_chunked_args args(sink, &metadata, compression, stats);
-    std::shared_ptr<detail::parquet::pq_chunked_state> state = write_parquet_chunked_begin(args);
+    chunked_parquet_writer_options opts =
+      chunked_parquet_writer_options::builder(sink)
+        .nullable_metadata(&metadata)
+        .compression(static_cast<compression_type>(j_compression))
+        .stats_level(static_cast<statistics_freq>(j_stats_freq))
+        .build();
+    std::shared_ptr<pq_chunked_state> state = write_parquet_chunked_begin(opts);
     cudf::jni::native_parquet_writer_handle *ret =
         new cudf::jni::native_parquet_writer_handle(state);
     return reinterpret_cast<jlong>(ret);
