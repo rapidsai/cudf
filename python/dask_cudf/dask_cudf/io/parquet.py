@@ -102,6 +102,10 @@ class CudfEngine(ArrowEngine):
         **kwargs,
     ):
         preserve_index = False
+        if set(index_cols).issubset(set(df.columns)):
+            df.index = df[index_cols].copy(deep=False)
+            df.drop(columns=index_cols, inplace=True)
+            preserve_index = True
         if partition_on:
             md = write_to_dataset(
                 df,
@@ -114,9 +118,6 @@ class CudfEngine(ArrowEngine):
                 **kwargs,
             )
         else:
-            if set(index_cols).issubset(set(df.columns)):
-                df.index = df[index_cols].copy(deep=False)
-                df.drop(columns=index_cols, inplace=True)
             with fs.open(fs.sep.join([path, filename]), mode="wb") as out_file:
                 if not isinstance(out_file, IOBase):
                     out_file = BufferedWriter(out_file)
