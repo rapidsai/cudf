@@ -115,8 +115,8 @@ find_path(THRUST_INCLUDE "thrust"
           "$ENV{CONDA_PREFIX}/include")
 
 find_path(CUB_INCLUDE "cub"
-    HINTS "$ENV{CUDF_ROOT}/_deps/cub-src"
-          "${CUDF_CPP_BUILD_DIR}/_deps/cub-src"
+    HINTS "$ENV{CUDF_ROOT}/_deps/thrust-src"
+          "${CUDF_CPP_BUILD_DIR}/_deps/thrust-src"
           "$ENV{CONDA_PREFIX}/include")
 
 find_path(LIBCUDACXX_INCLUDE "simt"

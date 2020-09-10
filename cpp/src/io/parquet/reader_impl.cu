@@ -503,7 +503,7 @@ class aggregate_metadata {
    *
    * @return List of column names
    */
-  auto select_columns(std::vector<std::string> use_names, bool include_index) const
+  auto select_columns(std::vector<std::string> const &use_names, bool include_index) const
   {
     std::vector<std::pair<int, std::string>> selection;
     if (use_names.empty()) {
@@ -511,8 +511,9 @@ class aggregate_metadata {
       for (const auto &name : column_names) { selection.emplace_back(selection.size(), name); }
     } else {
       // Load subset of columns; include PANDAS index unless excluded
-      if (include_index) { add_pandas_index_names(use_names); }
-      for (const auto &use_name : use_names) {
+      std::vector<std::string> local_use_names = use_names;
+      if (include_index) { add_pandas_index_names(local_use_names); }
+      for (const auto &use_name : local_use_names) {
         for (size_t i = 0; i < column_names.size(); ++i) {
           if (column_names[i] == use_name) {
             selection.emplace_back(i, column_names[i]);
@@ -988,7 +989,7 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
 }
 
 reader::impl::impl(std::vector<std::unique_ptr<datasource>> &&sources,
-                   reader_options const &options,
+                   parquet_reader_options const &options,
                    rmm::mr::device_memory_resource *mr)
   : _sources(std::move(sources)), _mr(mr)
 {
@@ -996,13 +997,16 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>> &&sources,
   _metadata = std::make_unique<aggregate_metadata>(_sources);
 
   // Select only columns required by the options
-  _selected_columns = _metadata->select_columns(options.columns, options.use_pandas_metadata);
+  _selected_columns =
+    _metadata->select_columns(options.get_columns(), options.is_enabled_use_pandas_metadata());
 
   // Override output timestamp resolution if requested
-  if (options.timestamp_type.id() != type_id::EMPTY) { _timestamp_type = options.timestamp_type; }
+  if (options.get_timestamp_type().id() != type_id::EMPTY) {
+    _timestamp_type = options.get_timestamp_type();
+  }
 
   // Strings may be returned as either string or categorical columns
-  _strings_to_categorical = options.strings_to_categorical;
+  _strings_to_categorical = options.is_enabled_convert_strings_to_categories();
 }
 
 table_with_metadata reader::impl::read(size_type skip_rows,
@@ -1246,7 +1250,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
 // Forward to implementation
 reader::reader(std::vector<std::string> const &filepaths,
-               reader_options const &options,
+               parquet_reader_options const &options,
                rmm::mr::device_memory_resource *mr)
   : _impl(std::make_unique<impl>(datasource::create(filepaths), options, mr))
 {
@@ -1254,7 +1258,7 @@ reader::reader(std::vector<std::string> const &filepaths,
 
 // Forward to implementation
 reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
-               reader_options const &options,
+               parquet_reader_options const &options,
                rmm::mr::device_memory_resource *mr)
   : _impl(std::make_unique<impl>(std::move(sources), options, mr))
 {
@@ -1264,19 +1268,10 @@ reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
 reader::~reader() = default;
 
 // Forward to implementation
-table_with_metadata reader::read_all(cudaStream_t stream) { return _impl->read(0, -1, {}, stream); }
-
-// Forward to implementation
-table_with_metadata reader::read_row_groups(std::vector<std::vector<size_type>> const &row_groups,
-                                            cudaStream_t stream)
+table_with_metadata reader::read(parquet_reader_options const &options, cudaStream_t stream)
 {
-  return _impl->read(0, -1, row_groups, stream);
-}
-
-// Forward to implementation
-table_with_metadata reader::read_rows(size_type skip_rows, size_type num_rows, cudaStream_t stream)
-{
-  return _impl->read(skip_rows, (num_rows != 0) ? num_rows : -1, {}, stream);
+  return _impl->read(
+    options.get_skip_rows(), options.get_num_rows(), options.get_row_groups(), stream);
 }
 
 }  // namespace parquet
