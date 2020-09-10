@@ -248,6 +248,12 @@ def test_roundtrip_from_dask_partitioned(tmpdir, parts, daskcudf, metadata):
         gdf_read.compute(scheduler=dask.get),
     )
 
+    # Check that we don't have uuid4 file names
+    for _, _, files in os.walk(tmpdir):
+        for fn in files:
+            if not fn.startswith("_"):
+                assert "part" in fn
+
 
 @pytest.mark.parametrize("metadata", [True, False])
 @pytest.mark.parametrize("chunksize", [None, 1024, 4096, "1MiB"])
