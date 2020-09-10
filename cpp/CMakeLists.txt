@@ -376,8 +376,7 @@ message(STATUS "BENCHMARK_LIST set to: ${BENCHMARK_LIST}")
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
-include_directories("${CUB_INCLUDE_DIR}"
-                    "${THRUST_INCLUDE_DIR}"
+include_directories("${THRUST_INCLUDE_DIR}"
                     "${JITIFY_INCLUDE_DIR}"
                     "${LIBCUDACXX_INCLUDE_DIR}")
 
@@ -429,7 +428,7 @@ add_library(cudf
             src/binaryop/jit/code/kernel.cpp
             src/binaryop/jit/code/operation.cpp
             src/binaryop/jit/code/traits.cpp
-            src/interop/from_arrow.cu
+            src/interop/from_arrow.cpp
             src/interop/to_arrow.cpp
             src/interop/dlpack.cpp
             src/jit/type.cpp
@@ -441,7 +440,7 @@ add_library(cudf
             src/transform/nans_to_nulls.cu
             src/transform/bools_to_mask.cu
             src/transform/mask_to_bools.cu
-            src/transform/encode.cpp
+            src/transform/encode.cu
             src/stream_compaction/apply_boolean_mask.cu
             src/stream_compaction/drop_nulls.cu
             src/stream_compaction/drop_nans.cu
@@ -559,6 +558,7 @@ add_library(cudf
             src/strings/copying/concatenate.cu
             src/strings/copying/copying.cu
             src/strings/extract.cu
+            src/strings/filter_chars.cu
             src/strings/find.cu
             src/strings/findall.cu
             src/strings/find_multiple.cu
@@ -628,6 +628,7 @@ add_library(cudf
             src/groupby/sort/group_nth_element.cu
             src/groupby/sort/group_std.cu
             src/groupby/sort/group_quantiles.cu
+            src/groupby/sort/group_collect.cu
             src/aggregation/aggregation.cpp
             src/aggregation/aggregation.cu
             src/aggregation/result_cache.cpp

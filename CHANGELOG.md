@@ -2,32 +2,59 @@
 
 ## New Features
 
+- PR #5779 Add DataFrame.pivot() and DataFrame.unstack()
+- PR #5975 Add strings `filter_characters` API
+- PR #5843 Add `filters` parameter to Python `read_parquet` function for filtering row groups
 - PR #5974 Use libcudf instead of cupy for `arange` or column creation from a scalar.
 - PR #6076 Add durations type support for csv writer, reader
+- PR #5874 Add `COLLECT` groupby aggregation
 - PR #6119 Add support for `dayofweek` property in `DateTimeIndex` and `DatetimeProperties`
+- PR #6125 Add support for `Series.mode` and `DataFrame.mode`
 
 ## Improvements
 
-- PR #5946  Add cython and python support for libcudf `to_arrow` and `from_arrow`
+- PR #5946 Add cython and python support for libcudf `to_arrow` and `from_arrow`
 - PR #5919 Remove max_strings and max_chars from nvtext::subword_tokenize
 - PR #5956 Add/Update tests for cuStreamz
 - PR #5953 Use stable sort when doing a sort groupby
 - PR #5973 Link to the Code of Conduct in CONTRIBUTING.md
 - PR #5917 Just use `None` for `strides` in `Buffer`
+- PR #6015 Upgrade CUB/Thrust to the latest commit
 - PR #5971 Add cuStreamz README for basic installation and use
 - PR #6024 Expose selecting multiple ORC stripes to read from Python
+- PR #6155 Use the CUB submodule in Thrust instead of fetching CUB separately
 - PR #6002 Add Java bindings for md5
 - PR #6067 Added compute codes for aarch64 devices
 - PR #6083 Small cleanup
+- PR #5984 Support gather() on CUDF struct columns
 - PR #6103 Small refactor of `print_differences`
+- PR #6124 Fix gcc-9 compilation errors on tests
+- PR #6141 Fix typo in custreamz README that was a result of recent changes
+- PR #6146 Added element/validity pair constructors for fixed_width and string wrappers
+- PR #6143 General improvements for java arrow IPC.
+- PR #6163 Use `Column.full` instead of `scalar_broadcast_to` or `cupy.zeros`
+- PR #6176 Fix cmake warnings for GoogleTest, GoogleBenchmark, and Arrow external projects
+- PR #6149 Update to Arrow v1.0.1
+- PR #6184 Add cuda 11 dev environment.yml
+- PR #6186 Update JNI to look for cub in new location
 
 ## Bug Fixes
 
 - PR #6073 Fix issue related to `.loc` incase of `DatetimeIndex`
 - PR #6081 Fix issue where fsspec thinks it has a protocol string
 - PR #6100 Fix issue in `Series.factorize` to correctly pick `na_sentinel` value
+- PR #6106 Fix datetime limit in csv due to 32-bit arithmetic
+- PR #6113 Fix to_timestamp to initialize default year to 1970
 - PR #6110 Handle `format` for other input types in `to_datetime`
 - PR #6118 Fix Java build for ORC read args change and update package version
+- PR #6121 Replace calls to get_default_resource with get_current_device_resource
+- PR #6128 Add support for numpy RandomState handling in `sample`
+- PR #6172 Fix slice issue with empty column
+- PR #6154 Warnings on row-wise op only when non-numeric columns are found.
+- PR #6150 Fix issue related to inferring `datetime64` format with UTC timezone in string data
+- PR #6182 Fix cmake build of arrow
+- PR #6173 Fix normalize_characters offset logic on sliced strings column
+- PR #6159 Fix issue related to empty `Dataframe` with columns input to `DataFrame.appened`
 
 
 # cuDF 0.15.0 (26 Aug 2020)
@@ -191,12 +218,12 @@
 - PR #5602 Add support for concatenation of `Series` & `DataFrame` in `cudf.concat` when `axis=0`
 - PR #5603 Refactor JIT `parser.cpp`
 - PR #5643 Update `isort` to 5.0.4
-- PR #5648 OO interface for hash join with explicit `build/probe` semantic 
+- PR #5648 OO interface for hash join with explicit `build/probe` semantic
 - PR #5662 Make Java ColumnVector(long nativePointer) constructor public
 - PR #5681 Pin black, flake8 and isort
 - PR #5679 Use `pickle5` to test older Python versions
 - PR #5684 Use `pickle5` in `Serializable` (when available)
-- PR #5419 Support rolling, groupby_rolling for durations 
+- PR #5419 Support rolling, groupby_rolling for durations
 - PR #5687 Change strings::split_record to return a lists column
 - PR #5708 Add support for `dummy_na` in `get_dummies`
 - PR #5709 Update java build to help cu-spacial with java bindings

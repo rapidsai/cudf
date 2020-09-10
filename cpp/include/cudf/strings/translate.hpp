@@ -16,7 +16,10 @@
 #pragma once
 
 #include <cudf/column/column.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+
+#include <vector>
 
 namespace cudf {
 namespace strings {
@@ -48,6 +51,48 @@ namespace strings {
 std::unique_ptr<column> translate(
   strings_column_view const& strings,
   std::vector<std::pair<char_utf8, char_utf8>> const& chars_table,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Removes or keeps the specified character ranges in cudf::strings::filter_characters
+ */
+enum class filter_type : bool { KEEP, REMOVE };
+
+/**
+ * @brief Removes ranges of characters from each string in a strings column.
+ *
+ * This can also be used to keep only the specified character ranges
+ * and remove all others from each string.
+ *
+ * @code{.pseudo}
+ * Example:
+ * s = ["aeiou", "AEIOU", "0123456789", "bcdOPQ5"]
+ * f = [{'M','Z'}, {'a','l'}, {'4','6'}]
+ * r1 = filter_characters(s, f)
+ * r1 is now ["aei", "OU", "456", "bcdOPQ5"]
+ * r2 = filter_characters(s, f, REMOVE)
+ * r2 is now ["ou", "AEI", "0123789", ""]
+ * r3 = filter_characters(s, f, KEEP, "*")
+ * r3 is now ["aei**", "***OU", "****456***", "bcdOPQ5"]
+ * @endcode
+ *
+ * Null string entries result in null entries in the output column.
+ *
+ * @throw cudf::logic_error if `replacement` is invalid
+ *
+ * @param strings Strings instance for this operation.
+ * @param characters_to_filter Table of character ranges to filter on.
+ * @param keep_characters If true, the `characters_to_filter` are retained and all other characters
+ * are removed.
+ * @param replacement Optional replacement string for each character removed.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return New column with filtered strings.
+ */
+std::unique_ptr<column> filter_characters(
+  strings_column_view const& strings,
+  std::vector<std::pair<cudf::char_utf8, cudf::char_utf8>> characters_to_filter,
+  filter_type keep_characters         = filter_type::KEEP,
+  string_scalar const& replacement    = string_scalar(""),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** @} */  // end of doxygen group
