@@ -1174,20 +1174,27 @@ TEST_F(CsvReaderTest, DurationsWithWriter)
 {
   auto filepath = temp_env->get_temp_dir() + "DurationsWithWriter.csv";
 
-  constexpr long max_value_d = std::numeric_limits<cudf::duration_D::rep>::max();
-  constexpr long min_value_d = std::numeric_limits<cudf::duration_D::rep>::min();
-  constexpr long max_value_s = std::numeric_limits<cudf::duration_s::rep>::max();
-  constexpr long min_value_s = std::numeric_limits<cudf::duration_s::rep>::min();
+  constexpr long max_value_d  = std::numeric_limits<cudf::duration_D::rep>::max();
+  constexpr long min_value_d  = std::numeric_limits<cudf::duration_D::rep>::min();
+  constexpr long max_value_ns = std::numeric_limits<cudf::duration_s::rep>::max();
+  constexpr long min_value_ns = std::numeric_limits<cudf::duration_s::rep>::min();
   column_wrapper<cudf::duration_D, cudf::duration_D::rep> durations_D{
     {-86400L, -3600L, -2L, -1L, 0L, 1L, 2L, min_value_d, max_value_d}};
-  column_wrapper<cudf::duration_s, int64_t> durations_s{
-    {-86400L, -3600L, -2L, -1L, 0L, 1L, 2L, min_value_s, max_value_s}};
+  column_wrapper<cudf::duration_s, int64_t> durations_s{{-86400L,
+                                                         -3600L,
+                                                         -2L,
+                                                         -1L,
+                                                         0L,
+                                                         1L,
+                                                         2L,
+                                                         min_value_ns / 1000000000 + 1,
+                                                         max_value_ns / 1000000000}};
   column_wrapper<cudf::duration_ms, int64_t> durations_ms{
-    {-86400L, -3600L, -2L, -1L, 0L, 1L, 2L, min_value_s, max_value_s}};
+    {-86400L, -3600L, -2L, -1L, 0L, 1L, 2L, min_value_ns / 1000000 + 1, max_value_ns / 1000000}};
   column_wrapper<cudf::duration_us, int64_t> durations_us{
-    {-86400L, -3600L, -2L, -1L, 0L, 1L, 2L, min_value_s, max_value_s}};
+    {-86400L, -3600L, -2L, -1L, 0L, 1L, 2L, min_value_ns / 1000 + 1, max_value_ns / 1000}};
   column_wrapper<cudf::duration_ns, int64_t> durations_ns{
-    {-86400L, -3600L, -2L, -1L, 0L, 1L, 2L, min_value_s, max_value_s}};
+    {-86400L, -3600L, -2L, -1L, 0L, 1L, 2L, min_value_ns, max_value_ns}};
 
   cudf::table_view input_table(std::vector<cudf::column_view>{
     durations_D, durations_s, durations_ms, durations_us, durations_ns});
@@ -1197,11 +1204,11 @@ TEST_F(CsvReaderTest, DurationsWithWriter)
 
   cudf_io::read_csv_args in_args{cudf_io::source_info{filepath}};
   in_args.names = names;
-  in_args.dtype = {"str"};
-  auto result   = cudf_io::read_csv(in_args);
+  in_args.dtype = {
+    "timedelta[D]", "timedelta64[s]", "timedelta64[ms]", "timedelta64[us]", "timedelta64[ns]"};
+  auto result = cudf_io::read_csv(in_args);
 
   const auto result_table = result.tbl->view();
-  for (auto c : result_table) cudf::test::print(c);
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(input_table, result_table);
 }
 

@@ -328,7 +328,7 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
 
   inline __device__ char* nanosecond(char* ptr, duration_component const* timeparts)
   {
-    auto value = duration_ns(T(timeparts->subsecond)).count();
+    auto value = timeparts->subsecond;
     *ptr       = '.';
     for (int idx = 9; idx > 0; idx--) {
       *(ptr + idx) = '0' + std::abs(value % 10);
@@ -348,6 +348,8 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
       nanoseconds += simt::std::chrono::hours(24);
       dissect_duration(nanoseconds, &pandas_timeparts);
       pandas_timeparts.day = timeparts->day - (pandas_timeparts.day == 0);
+    } else {
+      pandas_timeparts.subsecond = duration_ns(T(timeparts->subsecond)).count();
     }
     if (timeparts->is_negative) *ptr++ = '-';
     ptr    = day(ptr, &pandas_timeparts);
