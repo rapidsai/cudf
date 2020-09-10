@@ -119,11 +119,11 @@ cdef size_type get_size_t_arg(arg, name) except*:
     if name == "skip_rows":
         arg = 0 if arg is None else arg
         if not isinstance(arg, int) or arg < 0:
-            raise TypeError("{} must be an int >= 0".format(name))
+            raise TypeError(f"{name} must be an int >= 0")
     else:
         arg = -1 if arg is None else arg
         if not isinstance(arg, int) or arg < -1:
-            raise TypeError("{} must be an int >= -1".format(name))
+            raise TypeError(f"{name} must be an int >= -1")
     return <size_type> arg
 
 
