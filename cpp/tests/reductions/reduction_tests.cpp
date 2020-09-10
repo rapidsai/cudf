@@ -139,6 +139,14 @@ TYPED_TEST(MinMaxReductionTest, MinMax)
   this->reduction_test(col, expected_min_result, result_error, cudf::make_min_aggregation());
   this->reduction_test(col, expected_max_result, result_error, cudf::make_max_aggregation());
 
+  auto res = cudf::minmax(col).get();
+  
+  using ScalarType                     = cudf::scalar_type_t<T>;
+  auto min_result                      = static_cast<ScalarType *>(&res->min_val);
+  auto max_result                      = static_cast<ScalarType *>(&res->max_val);
+  EXPECT_EQ(min_result->value(), expected_min_result);
+  EXPECT_EQ(max_result->value(), expected_max_result);
+
   // test with nulls
   cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
   cudf::size_type valid_count =
@@ -154,6 +162,14 @@ TYPED_TEST(MinMaxReductionTest, MinMax)
     col_nulls, expected_min_null_result, result_error, cudf::make_min_aggregation());
   this->reduction_test(
     col_nulls, expected_max_null_result, result_error, cudf::make_max_aggregation());
+
+  auto null_res = cudf::minmax(col_nulls).get();
+  
+  using ScalarType                     = cudf::scalar_type_t<T>;
+  auto min_null_result                 = static_cast<ScalarType *>(&null_res->min_val);
+  auto max_null_result                 = static_cast<ScalarType *>(&null_res->max_val);
+  EXPECT_EQ(min_null_result->value(), expected_min_result);
+  EXPECT_EQ(max_null_result->value(), expected_max_result);
 }
 
 template <typename T>

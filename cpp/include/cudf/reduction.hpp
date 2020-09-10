@@ -88,4 +88,29 @@ std::unique_ptr<column> scan(
   rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
+
+/**
+ * @brief stores the minimum and maximum
+ * values that have been encountered so far
+ *
+ */
+struct minmax_pair
+{
+  scalar min_val;
+  scalar max_val;
+
+  minmax_pair(scalar min_val_, scalar max_val_) : min_val(min_val_), max_val(max_val_) {}
+};
+
+/**
+ * @brief computes the minimum and maximum of a pass in column view.
+ *
+ * @tparam T type of the return values
+ * @param input column on which to compute min/max
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return unique pointer to a minmax_pair with result
+ */
+std::unique_ptr<minmax_pair> minmax(const column_view &input,
+                                     rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
+
 }  // namespace cudf
