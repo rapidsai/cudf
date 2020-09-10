@@ -32,18 +32,6 @@
 #include <vector>
 
 /**
- * @brief Helper for pinned host memory
- **/
-template <typename T>
-using pinned_buffer = std::unique_ptr<T[], decltype(&cudaFreeHost)>;
-template <typename T>
-auto pinned_alloc = [](size_t count) {
-  T* ptr = nullptr;
-  CUDA_TRY(cudaMallocHost(&ptr, count * sizeof(T)));
-  return ptr;
-};
-
-/**
  * @brief Mersenne Twister pseudo-random engine.
  */
 auto deterministic_engine(unsigned seed) { return std::mt19937{seed}; }
@@ -114,7 +102,7 @@ size_t avg_element_bytes(data_profile const& profile, cudf::type_id tid)
 /**
  * @brief Functor that computes a random column element with the given data profile.
  *
- * The implementation is SFINAED for diffent type groups. Currently only used for fixed-width types.
+ * The implementation is SFINAEd for diffent type groups. Currently only used for fixed-width types.
  */
 template <typename T, typename Enable = void>
 struct random_value_fn;
@@ -146,10 +134,11 @@ struct random_value_fn<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
     std::pair<int64_t, int64_t> const range_s  = {
       range_ns.first / to_nanoseconds<cudf::timestamp_s>(1),
       range_ns.second / to_nanoseconds<cudf::timestamp_s>(1)};
-    if (range_ns.first != range_ns.second)
+    // Don't need a random seconds generator for sub-second intervals
+    if (range_s.first != range_s.second)
       seconds_gen = make_distribution<int64_t>(params.id, range_s.first, range_s.second);
     else
-      seconds_gen = [=](std::mt19937&) { return range_ns.second; };
+      seconds_gen = [=](std::mt19937&) { return range_s.second; };
 
     auto const range_size_ns = range_ns.second - range_ns.first;
     // Don't need nanoseconds for days or seconds
@@ -162,7 +151,6 @@ struct random_value_fn<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
 
   T operator()(std::mt19937& engine)
   {
-    // Subtract the seconds from the 2020 timestamp to generate a reccent timestamp
     auto const timestamp_ns =
       to_nanoseconds<cudf::timestamp_s>(seconds_gen(engine)) + nanoseconds_gen(engine);
     // Return value in the type's precision
@@ -170,6 +158,9 @@ struct random_value_fn<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
   }
 };
 
+/**
+ * @brief Creates an random fixed_point value. Not implemented yet.
+ */
 template <typename T>
 struct random_value_fn<T, typename std::enable_if_t<cudf::is_fixed_point<T>()>> {
   random_value_fn(distribution_params<T> const&) {}
@@ -177,7 +168,7 @@ struct random_value_fn<T, typename std::enable_if_t<cudf::is_fixed_point<T>()>> 
 };
 
 /**
- * @brief NEXT
+ * @brief Creates an random numeric value with the given distribution.
  */
 template <typename T>
 struct random_value_fn<
@@ -203,18 +194,17 @@ struct random_value_fn<
 
 /**
  * @brief Creates an boolean value with given probability of returning `true`.
- *
- * @return The random boolean value
  */
 template <typename T>
 struct random_value_fn<T, typename std::enable_if_t<std::is_same<T, bool>::value>> {
   std::bernoulli_distribution b_dist;
 
-  random_value_fn(distribution_params<T> const& desc) : b_dist{desc.probability_true} {}
-  T operator()(std::mt19937& engine) { return b_dist(engine); }
+  random_value_fn(distribution_params<bool> const& desc) : b_dist{desc.probability_true} {}
+  bool operator()(std::mt19937& engine) { return b_dist(engine); }
 };
 
-size_t constexpr bitmask_bits = sizeof(cudf::bitmask_type) * 8;
+constexpr size_t bitmask_bits = sizeof(cudf::bitmask_type) * 8;
+
 size_t null_mask_size(cudf::size_type num_rows)
 {
   return (num_rows + bitmask_bits - 1) / bitmask_bits;
@@ -231,8 +221,11 @@ void reset_null_mask_bit(std::vector<cudf::bitmask_type>& null_mask_data, cudf::
 }
 
 template <typename T>
-void set_element_at(
-  T value, bool valid, T* values, std::vector<cudf::bitmask_type>& null_mask, cudf::size_type idx)
+void set_element_at(T value,
+                    bool valid,
+                    std::vector<T>& values,
+                    std::vector<cudf::bitmask_type>& null_mask,
+                    cudf::size_type idx)
 {
   if (valid) {
     values[idx] = value;
@@ -241,14 +234,26 @@ void set_element_at(
   }
 }
 
+// identity mapping, except for bools
+template <typename T, typename Enable = void>
+struct stored_as {
+  using type = T;
+};
+
+// Use `int8_t` for bools because that's how they're stored in columns
+template <typename T>
+struct stored_as<T, typename std::enable_if_t<std::is_same<T, bool>::value>> {
+  using type = int8_t;
+};
+
 /**
- * @brief Creates a column with random content of the given type
+ * @brief Creates a column with random content of type @ref T.
  *
- * The templated implementation is used for all fixed width types. String columns are generated
- * using the specialization implemented below.
+ * @param profile Parameters for the random generator
+ * @param engine Pseudo-random engine
+ * @param num_rows Size of the output column
  *
- * @param[in] TODO
- *
+ * @tparam T Data type of the output column
  * @return Column filled with random data
  */
 template <typename T>
@@ -256,30 +261,35 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
                                                    std::mt19937& engine,
                                                    cudf::size_type num_rows)
 {
+  // Working around vector<bool> and storing bools as int8_t
+  using stored_Type = typename stored_as<T>::type;
+
   auto valid_dist = std::bernoulli_distribution{1. - profile.get_null_frequency()};
   auto value_dist = random_value_fn<T>{profile.get_distribution_params<T>()};
 
   auto const cardinality = std::min(num_rows, profile.get_cardinality());
-  pinned_buffer<T> samples{pinned_alloc<T>(cardinality), cudaFreeHost};
+  std::vector<stored_Type> samples(cardinality);
   std::vector<cudf::bitmask_type> samples_null_mask(null_mask_size(cardinality), ~0);
   for (cudf::size_type si = 0; si < cardinality; ++si) {
-    set_element_at(value_dist(engine), valid_dist(engine), samples.get(), samples_null_mask, si);
+    set_element_at(
+      (stored_Type)value_dist(engine), valid_dist(engine), samples, samples_null_mask, si);
   }
 
+  // Distribution for picking elements from the array of samples
   std::uniform_int_distribution<cudf::size_type> sample_dist{0, cardinality - 1};
   auto const avg_run_len = profile.get_avg_run_length();
   std::gamma_distribution<float> run_len_dist(4.f, avg_run_len / 4.f);
-  pinned_buffer<T> data{pinned_alloc<T>(num_rows), cudaFreeHost};
+  std::vector<stored_Type> data(num_rows);
   std::vector<cudf::bitmask_type> null_mask(null_mask_size(num_rows), ~0);
 
   for (cudf::size_type row = 0; row < num_rows; ++row) {
     if (cardinality == 0) {
-      set_element_at(value_dist(engine), valid_dist(engine), data.get(), null_mask, row);
+      set_element_at((stored_Type)value_dist(engine), valid_dist(engine), data, null_mask, row);
     } else {
       auto const sample_idx = sample_dist(engine);
       set_element_at(samples[sample_idx],
                      get_null_mask_bit(samples_null_mask, sample_idx),
-                     data.get(),
+                     data,
                      null_mask,
                      row);
     }
@@ -287,8 +297,7 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
     if (avg_run_len > 1) {
       int const run_len = std::min<int>(num_rows - row, std::round(run_len_dist(engine)));
       for (int offset = 1; offset < run_len; ++offset) {
-        set_element_at(
-          data[row], get_null_mask_bit(null_mask, row), data.get(), null_mask, row + offset);
+        set_element_at(data[row], get_null_mask_bit(null_mask, row), data, null_mask, row + offset);
       }
       row += std::max(run_len - 1, 0);
     }
@@ -297,16 +306,19 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
   return std::make_unique<cudf::column>(
     cudf::data_type{cudf::type_to_id<T>()},
     num_rows,
-    rmm::device_buffer(data.get(), num_rows * sizeof(T), cudaStream_t(0)),
+    rmm::device_buffer(data.data(), num_rows * sizeof(stored_Type), cudaStream_t(0)),
     rmm::device_buffer(
       null_mask.data(), null_mask.size() * sizeof(cudf::bitmask_type), cudaStream_t(0)));
 }
 
-struct string_col_data {
+/**
+ * @brief Class that holds string column data in host memory.
+ */
+struct string_column_data {
   std::vector<char> chars;
   std::vector<int32_t> offsets;
   std::vector<cudf::bitmask_type> null_mask;
-  explicit string_col_data(cudf::size_type rows, cudf::size_type size)
+  explicit string_column_data(cudf::size_type rows, cudf::size_type size)
   {
     offsets.reserve(rows + 1);
     offsets.push_back(0);
@@ -315,11 +327,15 @@ struct string_col_data {
   }
 };
 
-// Assumes that the null mask is initialized with all bits valid
+/**
+ * @brief Copy a string from one host-side "column" to another.
+ *
+ * Assumes that the destination null mask is initialized with all bits valid.
+ */
 void copy_string(cudf::size_type src_idx,
-                 string_col_data const& src,
+                 string_column_data const& src,
                  cudf::size_type dst_idx,
-                 string_col_data& dst)
+                 string_column_data& dst)
 {
   if (!get_null_mask_bit(src.null_mask, src_idx)) reset_null_mask_bit(dst.null_mask, dst_idx);
   auto const str_len = src.offsets[src_idx + 1] - src.offsets[src_idx];
@@ -331,8 +347,13 @@ void copy_string(cudf::size_type src_idx,
   dst.offsets.push_back(dst.chars.size());
 }
 
+/**
+ * @brief Generate a random string at the end of the host-side "column".
+ *
+ * Assumes that the destination null mask is initialized with all bits valid.
+ */
 template <typename Char_gen>
-void append_string(Char_gen& char_gen, bool valid, uint32_t length, string_col_data& column_data)
+void append_string(Char_gen& char_gen, bool valid, uint32_t length, string_column_data& column_data)
 {
   auto const idx = column_data.offsets.size() - 1;
   column_data.offsets.push_back(column_data.offsets.back() + length);
@@ -345,14 +366,13 @@ void append_string(Char_gen& char_gen, bool valid, uint32_t length, string_col_d
 }
 
 /**
- * @brief Creates a string column with random content
+ * @brief Creates a string column with random content.
  *
- * Due to random generation of the length of the columns elements, the resulting column will
- * have a slightly different size from @ref col_bytes.
+ * @param profile Parameters for the random generator
+ * @param engine Pseudo-random engine
+ * @param num_rows Size of the output column
  *
- * @param[in] TODO
- *
- * @return Column filled with random data
+ * @return Column filled with random strings
  */
 template <>
 std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(data_profile const& profile,
@@ -368,7 +388,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(data_profi
 
   auto const avg_string_len = avg_element_size<cudf::string_view>(profile);
   auto const cardinality    = std::min(profile.get_cardinality(), num_rows);
-  string_col_data samples(cardinality, cardinality * avg_string_len);
+  string_column_data samples(cardinality, cardinality * avg_string_len);
   for (cudf::size_type si = 0; si < cardinality; ++si) {
     append_string(char_dist, valid_dist(engine), len_dist(engine), samples);
   }
@@ -376,7 +396,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(data_profi
   auto const avg_run_len = profile.get_avg_run_length();
   std::gamma_distribution<float> run_len_dist(4.f, avg_run_len / 4.f);
 
-  string_col_data out_col(num_rows, num_rows * avg_string_len);
+  string_column_data out_col(num_rows, num_rows * avg_string_len);
   std::uniform_int_distribution<cudf::size_type> sample_dist{0, cardinality - 1};
   for (cudf::size_type row = 0; row < num_rows; ++row) {
     if (cardinality == 0) {
@@ -411,6 +431,9 @@ std::unique_ptr<cudf::column> create_random_column<cudf::struct_view>(data_profi
   CUDF_FAIL("not implemented yet");
 }
 
+/**
+ * @brief Functor to dispatch create_random_column calls.
+ */
 struct create_rand_col_fn {
  public:
   template <typename T>
@@ -422,6 +445,18 @@ struct create_rand_col_fn {
   }
 };
 
+/**
+ * @brief Creates a list column with random content.
+ *
+ * The data profile determines the list length distribution, number of nested level, and the data
+ * type of the bottom level.
+ *
+ * @param profile Parameters for the random generator
+ * @param engine Pseudo-random engine
+ * @param num_rows Size of the output column
+ *
+ * @return Column filled with random lists
+ */
 template <>
 std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile const& profile,
                                                                     std::mt19937& engine,
@@ -468,6 +503,16 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
 
 using columns_vector = std::vector<std::unique_ptr<cudf::column>>;
 
+/**
+ * @brief Creates a vector of columns with random content.
+ *
+ * @param profile Parameters for the random generator
+ * @param dtype_ids vector of data type ids, one for each output column
+ * @param engine Pseudo-random engine
+ * @param num_rows Size of the output columns
+ *
+ * @return Column filled with random lists
+ */
 columns_vector create_random_columns(data_profile const& profile,
                                      std::vector<cudf::type_id> dtype_ids,
                                      std::mt19937 engine,
@@ -482,6 +527,10 @@ columns_vector create_random_columns(data_profile const& profile,
   return output_columns;
 }
 
+/**
+ * @brief Repeats the input data types in round-robin order to fill a vector of @ref num_cols
+ * elements.
+ */
 std::vector<cudf::type_id> repeat_dtypes(std::vector<cudf::type_id> const& dtype_ids,
                                          cudf::size_type num_cols)
 {
