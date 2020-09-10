@@ -2,6 +2,7 @@
 import numbers
 import pickle
 import warnings
+from collections import OrderedDict
 from collections.abc import Sequence
 
 import cupy
@@ -647,7 +648,7 @@ class MultiIndex(Index):
             return tuples, slice(None)
 
     def __len__(self):
-        return len(next(iter(self._data.columns)))
+        return self._data.nrows
 
     def equals(self, other):
         if self is other:
@@ -908,6 +909,134 @@ class MultiIndex(Index):
         pdi = pd.MultiIndex.from_product(arrays, names=names)
         result = cls.from_pandas(pdi)
         return result
+
+    def _poplevels(self, level):
+        """
+        Remove and return the specified levels from self.
+
+        Parameters
+        ----------
+        level : level name or index, list
+            One or more levels to remove
+
+        Returns
+        -------
+        Index composed of the removed levels. If only a single level
+        is removed, a flat index is returned. If no levels are specified
+        (empty list), None is returned.
+        """
+        if not pd.api.types.is_list_like(level):
+            level = (level,)
+
+        ilevels = sorted([self._level_index_from_level(lev) for lev in level])
+
+        if not ilevels:
+            return None
+
+        popped_data = OrderedDict({})
+        popped_names = []
+        names = list(self.names)
+
+        # build the popped data and names
+        for i in ilevels:
+            n = self._data.names[i]
+            popped_data[n] = self._data[n]
+            popped_names.append(self.names[i])
+
+        # pop the levels out from self
+        # this must be done iterating backwards
+        for i in reversed(ilevels):
+            n = self._data.names[i]
+            names.pop(i)
+            popped_data[n] = self._data.pop(n)
+
+        # construct the popped result
+        popped = cudf.core.index.Index._from_table(
+            cudf.core.frame.Frame(popped_data)
+        )
+        popped.names = popped_names
+
+        # update self
+        self.names = names
+        self._compute_levels_and_codes()
+
+        return popped
+
+    def droplevel(self, level=-1):
+        """
+        Removes the specified levels from the MultiIndex.
+
+        Parameters
+        ----------
+        level : level name or index, list-like
+            Integer, name or list of such, specifying one or more
+            levels to drop from the MultiIndex
+
+        Returns
+        -------
+        A MultiIndex or Index object, depending on the number of remaining
+        levels.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx = cudf.MultiIndex.from_frame(
+        ...     cudf.DataFrame(
+        ...         {
+        ...             "first": ["a", "a", "a", "b", "b", "b"],
+        ...             "second": [1, 1, 2, 2, 3, 3],
+        ...             "third": [0, 1, 2, 0, 1, 2],
+        ...         }
+        ...     )
+        ... )
+
+        Dropping level by index:
+
+        >>> idx.droplevel(0)
+        MultiIndex(levels=[0    1
+        1    2
+        2    3
+        dtype: int64, 0    0
+        1    1
+        2    2
+        dtype: int64],
+        codes=   second  third
+        0       0      0
+        1       0      1
+        2       1      2
+        3       1      0
+        4       2      1
+        5       2      2)
+
+        Dropping level by name:
+
+        >>> idx.droplevel("first")
+        MultiIndex(levels=[0    1
+        1    2
+        2    3
+        dtype: int64, 0    0
+        1    1
+        2    2
+        dtype: int64],
+        codes=   second  third
+        0       0      0
+        1       0      1
+        2       1      2
+        3       1      0
+        4       2      1
+        5       2      2)
+
+        Dropping multiple levels:
+
+        >>> idx.droplevel(["first", "second"])
+        Int64Index([0, 1, 2, 0, 1, 2], dtype='int64', name='third')
+        """
+        mi = self.copy(deep=False)
+        mi._poplevels(level)
+        if mi.nlevels == 1:
+            return mi.get_level_values(mi.names[0])
+        else:
+            return mi
 
     def to_pandas(self, **kwargs):
         if hasattr(self, "_source_data"):
@@ -1215,3 +1344,24 @@ class MultiIndex(Index):
                 return cudf_func(*args, **kwargs)
         else:
             return NotImplemented
+
+    def _level_index_from_level(self, level):
+        """
+        Return level index from given level name or index
+        """
+        try:
+            return self.names.index(level)
+        except ValueError:
+            if not pd.api.types.is_integer(level):
+                raise KeyError(f"Level {level} not found") from None
+            if level < 0:
+                level += self.nlevels
+            if level >= self.nlevels:
+                raise IndexError(
+                    f"Level {level} out of bounds. "
+                    f"Index has {self.nlevels} levels."
+                ) from None
+            return level
+
+    def _level_name_from_level(self, level):
+        return self.names[self._level_index_from_level(level)]

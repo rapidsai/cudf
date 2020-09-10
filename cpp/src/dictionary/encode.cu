@@ -42,9 +42,18 @@ std::unique_ptr<column> encode(column_view const& input_column,
   CUDF_EXPECTS(input_column.type().id() != type_id::DICTIONARY32,
                "cannot encode a dictionary from a dictionary");
 
-  auto codified       = cudf::detail::encode(input_column, mr, stream);
-  auto keys_column    = std::move(codified.first);
+  auto codified       = cudf::detail::encode(cudf::table_view({input_column}), mr, stream);
+  auto keys_table     = std::move(codified.first);
   auto indices_column = std::move(codified.second);
+  auto keys_column    = std::move(keys_table->release().front());
+
+  if (keys_column->has_nulls()) {
+    keys_column = std::make_unique<column>(
+      slice(keys_column->view(), std::vector<size_type>{0, keys_column->size() - 1}).front(),
+      stream,
+      mr);
+    keys_column->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);  // remove the null-mask
+  }
 
   // the encode() returns INT32 for indices
   if (indices_column->type().id() != indices_type.id())
