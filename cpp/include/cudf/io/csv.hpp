@@ -74,9 +74,9 @@ class csv_reader_options {
   std::vector<int> _use_cols_indexes;
   // Rows to read; -1 is all
   size_type _nrows = -1;
-  // Rows to skip from the start;
+  // Rows to skip from the start
   size_type _skiprows = 0;
-  // Rows to skip from the end;
+  // Rows to skip from the end
   size_type _skipfooter = 0;
   // Header row index
   size_type _header = 0;
@@ -426,15 +426,15 @@ class csv_reader_options {
    *
    * @param val Number of rows to read.
    */
-  void set_nrows(size_type val)
+  void set_nrows(size_type nrows)
   {
-    CUDF_EXPECTS((val == 0) or (_nrows == -1), "Cannot use both `_nrows` and `_skipfooter`");
-    if ((val != -1) and ((_byte_range_offset != 0) or (_byte_range_size != 0))) {
+    CUDF_EXPECTS((nrows == 0) or (_skipfooter == 0), "Cannot use both `nrows` and `skipfooter`");
+    if ((nrows != -1) and ((_byte_range_offset != 0) or (_byte_range_size != 0))) {
       CUDF_FAIL(
         "nrows can't be a non negative value if range offset and/or range size has been set");
     }
 
-    _nrows = val;
+    _nrows = nrows;
   }
 
   /**
@@ -442,13 +442,13 @@ class csv_reader_options {
    *
    * @param val Number of rows to skip.
    */
-  void set_skiprows(size_type val)
+  void set_skiprows(size_type skip)
   {
-    if ((val != 0) and ((_byte_range_offset != 0) or (_byte_range_size != 0))) {
+    if ((skip != 0) and ((_byte_range_offset != 0) or (_byte_range_size != 0))) {
       CUDF_FAIL(
         "skiprows can't be a non zero value if range offset and/or range size has been set");
     }
-    _skiprows = val;
+    _skiprows = skip;
   }
 
   /**
@@ -458,7 +458,7 @@ class csv_reader_options {
    */
   void set_skipfooter(size_type skip)
   {
-    CUDF_EXPECTS((skip == 0) or (_nrows == -1), "Cannot use both `_nrows` and `_skipfooter`");
+    CUDF_EXPECTS((skip == 0) or (_nrows == -1), "Cannot use both `nrows` and `skipfooter`");
     if ((skip != 0) and ((_byte_range_offset != 0) or (_byte_range_size != 0))) {
       CUDF_FAIL(
         "skipfooter can't be a non zero value if range offset and/or range size has been set");
@@ -776,9 +776,9 @@ class csv_reader_options_builder {
    * @param val Number of rows to read.
    * @return this for chaining.
    */
-  csv_reader_options_builder& nrows(size_type val)
+  csv_reader_options_builder& nrows(size_type rows)
   {
-    options.set_nrows(val);
+    options.set_nrows(rows);
     return *this;
   }
 
@@ -788,9 +788,9 @@ class csv_reader_options_builder {
    * @param val Number of rows to skip.
    * @return this for chaining.
    */
-  csv_reader_options_builder& skiprows(size_type val)
+  csv_reader_options_builder& skiprows(size_type skip)
   {
-    options.set_skiprows(val);
+    options.set_skiprows(skip);
     return *this;
   }
 

@@ -228,7 +228,7 @@ void write_csv_helper(std::string const& filename,
                       bool include_header,
                       std::vector<std::string> const& names = {})
 {
-  // csv_writer_options is non-owning
+  // csv_writer_options only keeps a pointer to metadata (non-owning)
   cudf_io::table_metadata metadata{};
 
   if (not names.empty()) {
@@ -245,7 +245,6 @@ void write_csv_helper(std::string const& filename,
 
   cudf_io::csv_writer_options writer_options =
     cudf_io::csv_writer_options::builder(cudf_io::sink_info(filename), table)
-      .na_rep("null")
       .include_header(include_header)
       .rows_per_chunk(
         1)  // Note: this gets adjusted to multiple of 8 (per legacy code logic and requirements)
@@ -692,7 +691,6 @@ TEST_F(CsvReaderTest, SkiprowsNrows)
       .dtypes({"int32"})
       .header(1)
       .skiprows(2)
-      .skipfooter(0)
       .nrows(2);
   auto result = cudf_io::read_csv(in_opts);
 
@@ -882,17 +880,197 @@ TEST_F(CsvReaderTest, SkipRowsXorSkipFooter)
 {
   std::string buffer = "1,2,3";
 
-  cudf_io::csv_reader_options skiprows_args =
+  cudf_io::csv_reader_options skiprows_options =
     cudf_io::csv_reader_options::builder(cudf_io::source_info{buffer.c_str(), buffer.size()})
       .header(-1)
-      .skiprows(0);
-  EXPECT_NO_THROW(cudf_io::read_csv(skiprows_args));
+      .skiprows(1);
+  EXPECT_NO_THROW(cudf_io::read_csv(skiprows_options));
 
-  cudf_io::csv_reader_options skipfooter_args =
+  cudf_io::csv_reader_options skipfooter_options =
     cudf_io::csv_reader_options::builder(cudf_io::source_info{buffer.c_str(), buffer.size()})
       .header(-1)
-      .skipfooter(0);
-  EXPECT_NO_THROW(cudf_io::read_csv(skipfooter_args));
+      .skipfooter(1);
+  EXPECT_NO_THROW(cudf_io::read_csv(skipfooter_options));
+}
+
+TEST_F(CsvReaderTest, nullHanlding)
+{
+  const auto filepath = temp_env->get_temp_dir() + "NullValues.csv";
+  {
+    std::ofstream outfile(filepath, std::ofstream::out);
+    outfile << "NULL\nnull\nn/a\nNull\nNA\nnan";
+  }
+
+  // Test disabling na_filter
+  {
+    cudf_io::csv_reader_options in_opts =
+      cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath})
+        .na_filter(false)
+        .dtypes({"str"})
+        .header(-1);
+    const auto result = cudf_io::read_csv(in_opts);
+    const auto view   = result.tbl->view();
+    auto expect = cudf::test::strings_column_wrapper({"NULL", "null", "n/a", "Null", "NA", "nan"});
+
+    expect_columns_equal(expect, view.column(0));
+  }
+
+  // Test enabling na_filter
+  {
+    cudf_io::csv_reader_options in_opts =
+      cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath})
+        .dtypes({"str"})
+        .header(-1);
+    const auto result = cudf_io::read_csv(in_opts);
+    const auto view   = result.tbl->view();
+    auto expect = cudf::test::strings_column_wrapper({"NULL", "null", "n/a", "Null", "NA", "nan"},
+                                                     {false, false, false, true, false, false});
+
+    expect_columns_equal(expect, view.column(0));
+  }
+
+  // Setting na_values with default values
+  {
+    cudf_io::csv_reader_options in_opts =
+      cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath})
+        .na_values({"Null"})
+        .dtypes({"str"})
+        .header(-1);
+    const auto result = cudf_io::read_csv(in_opts);
+    const auto view   = result.tbl->view();
+    auto expect = cudf::test::strings_column_wrapper({"NULL", "null", "n/a", "Null", "NA", "nan"},
+                                                     {false, false, false, false, false, false});
+
+    expect_columns_equal(expect, view.column(0));
+  }
+
+  // Setting na_values without default values
+  {
+    cudf_io::csv_reader_options in_opts =
+      cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath})
+        .keep_default_na(false)
+        .na_values({"Null"})
+        .dtypes({"str"})
+        .header(-1);
+    const auto result = cudf_io::read_csv(in_opts);
+    const auto view   = result.tbl->view();
+    auto expect = cudf::test::strings_column_wrapper({"NULL", "null", "n/a", "Null", "NA", "nan"},
+                                                     {true, true, true, false, true, true});
+
+    expect_columns_equal(expect, view.column(0));
+  }
+}
+
+TEST_F(CsvReaderTest, FailCases)
+{
+  std::string buffer = "1,2,3";
+  {
+    EXPECT_THROW(
+      cudf_io::csv_reader_options::builder(cudf_io::source_info{buffer.c_str(), buffer.size()})
+        .byte_range_offset(4)
+        .skiprows(1),
+      cudf::logic_error);
+  }
+  {
+    EXPECT_THROW(
+      cudf_io::csv_reader_options::builder(cudf_io::source_info{buffer.c_str(), buffer.size()})
+        .byte_range_offset(4)
+        .skipfooter(1),
+      cudf::logic_error);
+  }
+
+  {
+    EXPECT_THROW(
+      cudf_io::csv_reader_options::builder(cudf_io::source_info{buffer.c_str(), buffer.size()})
+        .byte_range_offset(4)
+        .nrows(1),
+      cudf::logic_error);
+  }
+  {
+    EXPECT_THROW(
+      cudf_io::csv_reader_options::builder(cudf_io::source_info{buffer.c_str(), buffer.size()})
+        .byte_range_size(4)
+        .skiprows(1),
+      cudf::logic_error);
+  }
+  {
+    EXPECT_THROW(
+      cudf_io::csv_reader_options::builder(cudf_io::source_info{buffer.c_str(), buffer.size()})
+        .byte_range_size(4)
+        .skipfooter(1),
+      cudf::logic_error);
+  }
+  {
+    EXPECT_THROW(
+      cudf_io::csv_reader_options::builder(cudf_io::source_info{buffer.c_str(), buffer.size()})
+        .byte_range_size(4)
+        .nrows(1),
+      cudf::logic_error);
+  }
+  {
+    EXPECT_THROW(
+      cudf_io::csv_reader_options::builder(cudf_io::source_info{buffer.c_str(), buffer.size()})
+        .skiprows(1)
+        .byte_range_offset(4),
+      cudf::logic_error);
+  }
+  {
+    EXPECT_THROW(
+      cudf_io::csv_reader_options::builder(cudf_io::source_info{buffer.c_str(), buffer.size()})
+        .skipfooter(1)
+        .byte_range_offset(4),
+      cudf::logic_error);
+  }
+  {
+    EXPECT_THROW(
+      cudf_io::csv_reader_options::builder(cudf_io::source_info{buffer.c_str(), buffer.size()})
+        .nrows(1)
+        .byte_range_offset(4),
+      cudf::logic_error);
+  }
+  {
+    EXPECT_THROW(
+      cudf_io::csv_reader_options::builder(cudf_io::source_info{buffer.c_str(), buffer.size()})
+        .skiprows(1)
+        .byte_range_size(4),
+      cudf::logic_error);
+  }
+  {
+    EXPECT_THROW(
+      cudf_io::csv_reader_options::builder(cudf_io::source_info{buffer.c_str(), buffer.size()})
+        .skipfooter(1)
+        .byte_range_size(4),
+      cudf::logic_error);
+  }
+  {
+    EXPECT_THROW(
+      cudf_io::csv_reader_options::builder(cudf_io::source_info{buffer.c_str(), buffer.size()})
+        .nrows(1)
+        .byte_range_size(4),
+      cudf::logic_error);
+  }
+  {
+    EXPECT_THROW(
+      cudf_io::csv_reader_options::builder(cudf_io::source_info{buffer.c_str(), buffer.size()})
+        .nrows(1)
+        .skipfooter(1),
+      cudf::logic_error);
+    ;
+  }
+  {
+    EXPECT_THROW(
+      cudf_io::csv_reader_options::builder(cudf_io::source_info{buffer.c_str(), buffer.size()})
+        .skipfooter(1)
+        .nrows(1),
+      cudf::logic_error);
+  }
+  {
+    EXPECT_THROW(
+      cudf_io::csv_reader_options::builder(cudf_io::source_info{buffer.c_str(), buffer.size()})
+        .na_filter(false)
+        .na_values({"Null"}),
+      cudf::logic_error);
+  }
 }
 
 TEST_F(CsvReaderTest, HexTest)
