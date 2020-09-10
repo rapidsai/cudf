@@ -73,11 +73,7 @@ author = "NVIDIA"
 # built documents.
 #
 # The short X.Y version.
-<<<<<<< HEAD
 version = '0.16'
-=======
-version = '0.14'
->>>>>>> origin/master
 # The full version, including alpha/beta/rc tags.
 release = "0.15.0"
 
