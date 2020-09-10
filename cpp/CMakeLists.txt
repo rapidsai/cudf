@@ -428,7 +428,7 @@ add_library(cudf
             src/binaryop/jit/code/kernel.cpp
             src/binaryop/jit/code/operation.cpp
             src/binaryop/jit/code/traits.cpp
-            src/interop/from_arrow.cu
+            src/interop/from_arrow.cpp
             src/interop/to_arrow.cpp
             src/interop/dlpack.cpp
             src/jit/type.cpp
@@ -440,7 +440,7 @@ add_library(cudf
             src/transform/nans_to_nulls.cu
             src/transform/bools_to_mask.cu
             src/transform/mask_to_bools.cu
-            src/transform/encode.cpp
+            src/transform/encode.cu
             src/stream_compaction/apply_boolean_mask.cu
             src/stream_compaction/drop_nulls.cu
             src/stream_compaction/drop_nans.cu
