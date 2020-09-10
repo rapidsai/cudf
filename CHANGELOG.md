@@ -59,6 +59,7 @@
 - PR #6182 Fix cmake build of arrow
 - PR #6173 Fix normalize_characters offset logic on sliced strings column
 - PR #6159 Fix issue related to empty `Dataframe` with columns input to `DataFrame.appened`
+- PR #6199 Fix index preservation for dask_cudf parquet
 
 
 # cuDF 0.15.0 (26 Aug 2020)
