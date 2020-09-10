@@ -384,6 +384,7 @@ __inline__ __device__ int64_t parseDateTimeFormat(const char *data,
   return answer;
 }
 
+// parse integer and update the start position
 template <typename T>
 __inline__ __device__ T parseInteger(const char *data, long &start, long end)
 {
@@ -441,21 +442,23 @@ parseTimeDeltaFormat(const char *data, long start, long end, bool dayfirst)
   if (std::is_same<T, cudf::duration_D>::value) return value;
   while (data[moving_pos] == ' ') moving_pos++;
   // if (moving_pos >= end) return value;  // %value
+  // " days [+]"
   const bool days_seperator = is_present(data, moving_pos, end, "days", 4);
   while (data[moving_pos] == ' ') moving_pos++;
   moving_pos += (data[moving_pos] == '+');
-  // " days [+]"
   if (days_seperator) {
     days = value;
     hour = parseInteger<int>(data, moving_pos, end);
   } else {
     hour = value;
   }
+
   //:%M:%S
   if (data[moving_pos] == sep) { minute = parseInteger<int>(data, ++moving_pos, end); }
   if (data[moving_pos] == sep) { second = parseInteger<int>(data, ++moving_pos, end); }
   if (std::is_same<T, cudf::duration_s>::value)
     return (((days * 24L + hour) * 60L + minute) * 60L + second);
+
   //.n
   if (data[moving_pos] == '.') {
     auto start_subsecond              = moving_pos + 1;
@@ -465,7 +468,6 @@ parseTimeDeltaFormat(const char *data, long start, long end, bool dayfirst)
       1L, 10L, 100L, 1000L, 10000L, 100000L, 1000000L, 10000000L, 100000000L, 1000000000L};
     nanosecond *= powers_of_ten[9 - num_digits];
   }
-  // extractTime(data, sep_pos + 1, end, &hour, &minute, &second, &millisecond);
   constexpr int64_t multiplier =
     (std::is_same<T, cudf::duration_ms>::value
        ? 1000L
