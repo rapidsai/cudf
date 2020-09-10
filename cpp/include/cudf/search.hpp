@@ -130,13 +130,10 @@ std::unique_ptr<column> upper_bound(
  *
  * @param col      A column object
  * @param value    A scalar value to search for in `col`
- * @param mr       Device memory resource to use for device memory allocation
  *
  * @return bool    If `value` is found in `column` true, else false.
  */
-bool contains(column_view const& col,
-              scalar const& value,
-              rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+bool contains(column_view const& col, scalar const& value);
 
 /**
  * @brief  Returns a new column of type bool identifying for each element of @p haystack column,
