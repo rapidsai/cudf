@@ -1082,7 +1082,7 @@ def test_drop_unsupported_multi_agg():
             {"b": "nunique", "c": "mean"},
         ]
     ),
-)  # type: ignore
+)
 def test_groupby_agg_combinations(agg):
     pdf = pd.DataFrame(
         {
