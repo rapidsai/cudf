@@ -20,7 +20,7 @@
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
-#include <cudf/io/functions.hpp>
+#include <cudf/io/parquet.hpp>
 
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
 
@@ -49,15 +49,17 @@ void PQ_read(benchmark::State& state)
 
   std::vector<char> out_buffer;
   out_buffer.reserve(data_size);
-  cudf_io::write_parquet_args write_args{
-    cudf_io::sink_info(&out_buffer), view, nullptr, compression};
-  cudf_io::write_parquet(write_args);
+  cudf_io::parquet_writer_options write_opts =
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info(&out_buffer), view)
+      .compression(compression);
+  cudf_io::write_parquet(write_opts);
 
-  cudf_io::read_parquet_args read_args{cudf_io::source_info(out_buffer.data(), out_buffer.size())};
+  cudf_io::parquet_reader_options read_opts = cudf_io::parquet_reader_options::builder(
+    cudf_io::source_info(out_buffer.data(), out_buffer.size()));
 
   for (auto _ : state) {
     cuda_event_timer const raii(state, true);  // flush_l2_cache = true, stream = 0
-    cudf_io::read_parquet(read_args);
+    cudf_io::read_parquet(read_opts);
   }
 
   state.SetBytesProcessed(data_size * state.iterations());

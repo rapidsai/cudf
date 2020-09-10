@@ -47,9 +47,6 @@ class wordpiece_tokenizer {
    * @brief Creates a full tokenizer that cleans the text and splits it into tokens.
    *
    * @param vocab_table The preprocessed hashed vocabulary data.
-   * @param num_chars Maximum number of characters for instantiating the tokenizer.
-   *        Used to allocate temporary working memory on the GPU.
-   *        If the input contains a larger number of characters, behavior is undefined.
    * @param max_rows_final_tensor Maximum number of rows in tensor_token-ids expected by tokenizer.
    *        Used to allocate temporary working memory on the GPU.
    *        If the output contains a larger number of rows, behavior is undefined.
@@ -68,7 +65,6 @@ class wordpiece_tokenizer {
    *        specified in the `vocab_file`.
    */
   wordpiece_tokenizer(hashed_vocabulary const& vocab_table,
-                      uint32_t num_chars,
                       uint32_t max_rows_final_tensor,
                       uint32_t max_sequence_length,
                       uint32_t stride,
