@@ -33,6 +33,12 @@ namespace cudf {
 namespace dictionary {
 namespace detail {
 namespace {
+
+/**
+ * @brief The maximum possible number of elements for a column.
+ */
+constexpr size_type max_column_size{std::numeric_limits<size_type>::max()};
+
 /**
  * @brief Return a new dictionary by removing identified keys from the provided dictionary.
  *
