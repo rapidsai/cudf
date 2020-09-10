@@ -41,11 +41,18 @@ std::unique_ptr<column> encode(column_view const& input_column,
   CUDF_EXPECTS(input_column.type().id() != type_id::DICTIONARY32,
                "cannot encode a dictionary from a dictionary");
 
-  // this returns a column with no null entries
-  // - it appears to ignore the null entries in the input and tries to place the value regardless
-  auto codified       = cudf::detail::encode(input_column, mr, stream);
-  auto keys_column    = std::move(codified.first);
+  auto codified       = cudf::detail::encode(cudf::table_view({input_column}), mr, stream);
+  auto keys_table     = std::move(codified.first);
   auto indices_column = std::move(codified.second);
+  auto keys_column    = std::move(keys_table->release().front());
+
+  if (keys_column->has_nulls()) {
+    keys_column = std::make_unique<column>(
+      slice(keys_column->view(), std::vector<size_type>{0, keys_column->size() - 1}).front(),
+      stream,
+      mr);
+    keys_column->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);  // remove the null-mask
+  }
 
   // we should probably copy/cast to type_id::INT32 type if different
   CUDF_EXPECTS(indices_column->type() == indices_type, "expecting type_id::INT32 indices type");

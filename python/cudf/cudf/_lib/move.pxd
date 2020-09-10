@@ -85,3 +85,9 @@ cdef extern from "<utility>" namespace "std" nogil:
     cdef parquet_reader_options move(parquet_reader_options)
     cdef parquet_writer_options move(parquet_writer_options)
     cdef chunked_parquet_writer_options move(chunked_parquet_writer_options)
+    cdef pair[unique_ptr[column], unique_ptr[column]] move(
+        pair[unique_ptr[column], unique_ptr[column]]
+    )
+    cdef pair[unique_ptr[table], unique_ptr[column]] move(
+        pair[unique_ptr[table], unique_ptr[column]]
+    )
