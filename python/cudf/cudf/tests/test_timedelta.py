@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import assert_eq, _fix_nullable_dtype_repr
 from cudf.utils import dtypes as dtypeutils
 
 _TIMEDELTA_DATA = [
@@ -1154,8 +1154,6 @@ def test_timedelta_invalid_ops():
 
 
 def test_timedelta_datetime_cast_invalid():
-    from cudf.core.series import _fix_nullable_dtype_repr
-
     sr = cudf.Series([1, 2, 3], dtype="timedelta64[ns]")
     psr = sr.to_pandas()
 

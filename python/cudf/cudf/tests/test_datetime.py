@@ -13,6 +13,7 @@ import cudf
 from cudf.core import DataFrame, Series
 from cudf.core.index import DatetimeIndex
 from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
+from cudf.tests.utils import _fix_nullable_dtype_repr
 
 
 def data1():
@@ -639,8 +640,6 @@ def test_cudf_to_datetime(data, dayfirst, infer_datetime_format):
     ],
 )
 def test_to_datetime_errors(data):
-    from cudf.core.series import _fix_nullable_dtype_repr
-
     pd_data = data
     if isinstance(pd_data, (pd.Series, pd.DataFrame, pd.Index)):
         gd_data = cudf.from_pandas(pd_data)
