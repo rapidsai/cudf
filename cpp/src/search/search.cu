@@ -15,22 +15,20 @@
  */
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/search.hpp>
+#include <cudf/dictionary/detail/search.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/search.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 
-#include <cudf/detail/iterator.cuh>
-#include <cudf/detail/search.hpp>
-#include <hash/unordered_multiset.cuh>
-
 #include <rmm/thrust_rmm_allocator.h>
-#include <cudf/strings/detail/utilities.hpp>
-
 #include <thrust/binary_search.h>
-#include <thrust/logical.h>
+#include <hash/unordered_multiset.cuh>
 
 namespace cudf {
 namespace {
@@ -147,6 +145,8 @@ struct contains_scalar_dispatch {
                   cudaStream_t stream,
                   rmm::mr::device_memory_resource* mr)
   {
+    CUDF_EXPECTS(col.type() == value.type(), "scalar and column types must match");
+
     using ScalarType = cudf::scalar_type_t<Element>;
     auto d_col       = column_device_view::create(col, stream);
     auto s           = static_cast<const ScalarType*>(&value);
@@ -170,15 +170,6 @@ struct contains_scalar_dispatch {
 };
 
 template <>
-bool contains_scalar_dispatch::operator()<cudf::dictionary32>(column_view const& col,
-                                                              scalar const& value,
-                                                              cudaStream_t stream,
-                                                              rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FAIL("dictionary type not supported yet");
-}
-
-template <>
 bool contains_scalar_dispatch::operator()<cudf::list_view>(column_view const& col,
                                                            scalar const& value,
                                                            cudaStream_t stream,
@@ -196,6 +187,25 @@ bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const& 
   CUDF_FAIL("struct_view type not supported yet");
 }
 
+template <>
+bool contains_scalar_dispatch::operator()<cudf::dictionary32>(column_view const& col,
+                                                              scalar const& value,
+                                                              cudaStream_t stream,
+                                                              rmm::mr::device_memory_resource* mr)
+{
+  auto dict_col = cudf::dictionary_column_view(col);
+  // first, find the value in the dictionary's key set
+  auto index = cudf::dictionary::detail::get_index(dict_col, value, mr, stream);
+  // if found, check the index is actually in the indices column
+  return index->is_valid() ? cudf::type_dispatcher(dict_col.indices().type(),
+                                                   contains_scalar_dispatch{},
+                                                   dict_col.indices(),
+                                                   *index,
+                                                   stream,
+                                                   mr)
+                           : false;
+}
+
 }  // namespace
 
 namespace detail {
@@ -204,8 +214,6 @@ bool contains(column_view const& col,
               rmm::mr::device_memory_resource* mr,
               cudaStream_t stream)
 {
-  CUDF_EXPECTS(col.type() == value.type(), "DTYPE mismatch");
-
   if (col.size() == 0) { return false; }
 
   if (not value.is_valid()) { return col.has_nulls(); }
