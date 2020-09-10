@@ -2707,7 +2707,7 @@ def as_index(arbitrary, **kwargs):
         return arbitrary
     elif isinstance(arbitrary, Index):
         idx = arbitrary.copy(deep=False)
-        idx.rename(**kwargs, inplace=True)
+        idx.rename(kwargs.get("name"), inplace=True)
         return idx
     elif isinstance(arbitrary, NumericalColumn):
         try:

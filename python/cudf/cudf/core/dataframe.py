@@ -26,7 +26,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib.null_mask import MaskState, create_null_mask
 from cudf._lib.nvtx import annotate
-from cudf.core import column
+from cudf.core import column, reshape
 from cudf.core.abc import Serializable
 from cudf.core.column import as_column, column_empty
 from cudf.core.column_accessor import ColumnAccessor
@@ -6812,6 +6812,19 @@ class DataFrame(Frame, Serializable):
             to_concat = [self, other]
 
         return cudf.concat(to_concat, ignore_index=ignore_index, sort=sort)
+
+    @copy_docstring(reshape.pivot)
+    def pivot(self, index, columns, values=None):
+
+        return cudf.core.reshape.pivot(
+            self, index=index, columns=columns, values=values
+        )
+
+    @copy_docstring(reshape.unstack)
+    def unstack(self, level=-1, fill_value=None):
+        return cudf.core.reshape.unstack(
+            self, level=level, fill_value=fill_value
+        )
 
 
 def from_pandas(obj, nan_as_null=None):
