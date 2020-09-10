@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
  */
 
 /**
- * @file functions.hpp
+ * @file orc.hpp
  * @brief cuDF-IO freeform API
  */
 
@@ -798,7 +798,7 @@ struct orc_chunked_state;
  *
  * @returns pointer to an anonymous state structure storing information about the chunked write.
  * this pointer must be passed to all subsequent write_orc_chunked() and write_orc_chunked_end()
- *          calls.
+ * calls.
  */
 std::shared_ptr<orc_chunked_state> write_orc_chunked_begin(
   chunked_orc_writer_options const& options,
