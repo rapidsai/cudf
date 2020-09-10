@@ -464,28 +464,29 @@ TEST_F(ParquetWriterTest, ListColumn)
   // []
   // [4, 5]
   // NULL
-  cudf::test::lists_column_wrapper<int32_t> col0{{{1, 2, 3}, {}, {4, 5}, {}}, valids2};
+  lcw col0{{{1, 2, 3}, {}, {4, 5}, {}}, valids2};
 
   // [[1, 2, 3], [], [4, 5], [], [0, 6, 0]]
   // [[7, 8]]
   // []
   // [[]]
-  cudf::test::lists_column_wrapper<int32_t> col1{
-    {{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, {{7, 8}}, lcw{}, lcw{lcw{}}};
+  lcw col1{{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, {{7, 8}}, lcw{}, lcw{lcw{}}};
 
   // [[1, 2, 3], [], [4, 5], NULL, [0, 6, 0]]
   // [[7, 8]]
   // []
   // [[]]
-  cudf::test::lists_column_wrapper<int32_t> col2{
-    {{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, valids2}, {{7, 8}}, lcw{}, lcw{lcw{}}};
+  lcw col2{{{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, valids2}, {{7, 8}}, lcw{}, lcw{lcw{}}};
 
   // [[1, 2, 3], [], [4, 5], NULL, [NULL, 6, NULL]]
   // [[7, 8]]
   // []
   // [[]]
-  cudf::test::lists_column_wrapper<int32_t> col3{
-    {{{1, 2, 3}, {}, {4, 5}, {}, {{0, 6, 0}, valids}}, valids2}, {{7, 8}}, lcw{}, lcw{lcw{}}};
+  using dlcw = cudf::test::lists_column_wrapper<double>;
+  dlcw col3{{{{1., 2., 3.}, {}, {4., 5.}, {}, {{0., 6., 0.}, valids}}, valids2},
+            {{7., 8.}},
+            dlcw{},
+            dlcw{dlcw{}}};
 
   // TODO: uint16_t lists are not read properly in parquet reader
   // [[1, 2, 3], [], [4, 5], NULL, [0, 6, 0]]
@@ -501,7 +502,7 @@ TEST_F(ParquetWriterTest, ListColumn)
   // [[7, 8]]
   // []
   // NULL
-  cudf::test::lists_column_wrapper<int32_t> col5{
+  lcw col5{
     {{{{1, 2, 3}, {}, {4, 5}, {}, {{0, 6, 0}, valids}}, valids2}, {{7, 8}}, lcw{}, lcw{lcw{}}},
     valids2};
 
@@ -512,18 +513,31 @@ TEST_F(ParquetWriterTest, ListColumn)
     strlcw{},
     strlcw{strlcw{}}};
 
+  // [[[NULL,2,NULL,4]], [[NULL,6,NULL], [8,9]]]
+  // [NULL, [[13],[14,15,16]],  NULL]
+  // [NULL, [], NULL, [[]]]
+  // NULL
+  lcw col7{{
+             {{{{1, 2, 3, 4}, valids}}, {{{5, 6, 7}, valids}, {8, 9}}},
+             {{{{10, 11}, {12}}, {{13}, {14, 15, 16}}, {{17, 18}}}, valids},
+             {{lcw{lcw{}}, lcw{}, lcw{}, lcw{lcw{}}}, valids},
+             lcw{lcw{lcw{}}},
+           },
+           valids2};
+
   cudf_io::table_metadata expected_metadata;
   expected_metadata.column_names.emplace_back("col_list_int_0");
   expected_metadata.column_names.emplace_back("col_list_list_int_1");
   expected_metadata.column_names.emplace_back("col_list_list_int_nullable_2");
-  expected_metadata.column_names.emplace_back("col_list_list_nullable_int_nullable_3");
+  expected_metadata.column_names.emplace_back("col_list_list_nullable_double_nullable_3");
   // expected_metadata.column_names.emplace_back("col_list_list_uint16_4");
   expected_metadata.column_names.emplace_back("col_list_nullable_list_nullable_int_nullable_5");
   expected_metadata.column_names.emplace_back("col_list_list_string_6");
+  expected_metadata.column_names.emplace_back("col_list_list_list_7");
 
-  table_view expected({col0, col1, col2, col3, /* col4, */ col5, col6});
+  table_view expected({col0, col1, col2, col3, /* col4, */ col5, col6, col7});
 
-  auto filepath = temp_env->get_temp_filepath("ListColumn.parquet");
+  auto filepath = ("ListColumn.parquet");
   cudf_io::write_parquet_args out_args{cudf_io::sink_info{filepath}, expected, &expected_metadata};
   out_args.compression = cudf::io::compression_type::NONE;
   cudf_io::write_parquet(out_args);
