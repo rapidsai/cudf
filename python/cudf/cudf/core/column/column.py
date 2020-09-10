@@ -1165,6 +1165,54 @@ class ColumnBase(Column, Serializable):
     def max(self, dtype=None):
         return libcudf.reduce.reduce("max", self, dtype=dtype)
 
+    def scatter_to_table(
+        self, row_indices, column_indices, names, nrows=None, ncols=None
+    ):
+        """
+        Scatters values from the column into a table.
+
+        Parameters
+        ----------
+        row_indices
+            A column of the same size as `self` specifying the
+            row index to scatter each value to
+        column_indices
+            A column of the same size as `self` specifying the
+            column index to scatter each value to
+        names
+            The column names of the resulting table
+
+        Returns
+        -------
+        """
+        if nrows is None:
+            nrows = 0
+            if len(row_indices) > 0:
+                nrows = int(row_indices.max() + 1)
+
+        if ncols is None:
+            ncols = 0
+            if len(column_indices) > 0:
+                ncols = int(column_indices.max() + 1)
+
+        if nrows * ncols == 0:
+            return cudf.core.frame.Frame({})
+
+        scatter_map = column_indices.binary_operator(
+            "mul", np.int32(nrows)
+        ).binary_operator("add", row_indices)
+        target = cudf.core.frame.Frame(
+            {None: column_empty_like(self, masked=True, newsize=nrows * ncols)}
+        )
+        target._data[None][scatter_map] = self
+        result_frames = target._split(range(nrows, nrows * ncols, nrows))
+        return cudf.core.frame.Frame(
+            {
+                name: next(iter(f._columns))
+                for name, f in zip(names, result_frames)
+            }
+        )
+
 
 def column_empty_like(column, dtype=None, masked=False, newsize=None):
     """Allocate a new column like the given *column*
