@@ -7,10 +7,16 @@ import cudf
 import collections.abc as abc
 import io
 import os
-from cudf._lib.cpp.io.functions cimport (
+
+from libcpp cimport bool
+from libcpp.string cimport string
+from libcpp.vector cimport vector
+
+from cudf._lib.cpp.io.json cimport (
     read_json as libcudf_read_json,
-    read_json_args
+    json_reader_options
 )
+from cudf._lib.cpp.types cimport size_type
 from cudf._lib.io.utils cimport make_source_info
 from cudf._lib.move cimport move
 from cudf._lib.table cimport Table
@@ -40,42 +46,56 @@ cpdef read_json(filepath_or_buffer, dtype,
         path_or_data = path_or_data.encode()
 
     # Setup arguments
-    cdef read_json_args args = read_json_args(make_source_info([path_or_data]))
+    cdef vector[string] c_dtypes
+    cdef cudf_io_types.compression_type c_compression
+    # Determine byte read offsets if applicable
+    cdef size_type c_range_offset = (
+        byte_range[0] if byte_range is not None else 0
+    )
+    cdef size_type c_range_size = (
+        byte_range[1] if byte_range is not None else 0
+    )
+    cdef bool c_lines = lines
 
-    args.lines = lines
     if compression is not None:
         if compression == 'gzip':
-            args.compression = cudf_io_types.compression_type.GZIP
+            c_compression = cudf_io_types.compression_type.GZIP
         elif compression == 'bz2':
-            args.compression = cudf_io_types.compression_type.BZIP2
+            c_compression = cudf_io_types.compression_type.BZIP2
         else:
-            args.compression = cudf_io_types.compression_type.AUTO
+            c_compression = cudf_io_types.compression_type.AUTO
     else:
-        args.compression = cudf_io_types.compression_type.NONE
+        c_compression = cudf_io_types.compression_type.NONE
 
     if dtype is False:
         raise ValueError("False value is unsupported for `dtype`")
     elif dtype is not True:
         if isinstance(dtype, abc.Mapping):
+            c_dtypes.reserve(len(dtype))
             for k, v in dtype.items():
-                args.dtype.push_back(str(str(k) + ":" + str(v)).encode())
+                c_dtypes.push_back(str(str(k) + ":" + str(v)).encode())
         elif not isinstance(dtype, abc.Iterable):
             raise TypeError("`dtype` must be 'list like' or 'dict'")
         else:
+            c_dtypes.reserve(len(dtype))
             for col_dtype in dtype:
-                args.dtype.push_back(str(col_dtype).encode())
+                c_dtypes.push_back(str(col_dtype).encode())
 
-    # Determine byte read offsets if applicable
-    cdef size_t c_range_offset = byte_range[0] if byte_range is not None else 0
-    cdef size_t c_range_size = byte_range[1] if byte_range is not None else 0
-    args.byte_range_offset = c_range_offset
-    args.byte_range_size = c_range_size
+    cdef json_reader_options opts = move(
+        json_reader_options.builder(make_source_info([path_or_data]))
+        .dtypes(c_dtypes)
+        .compression(c_compression)
+        .lines(c_lines)
+        .byte_range_offset(c_range_offset)
+        .byte_range_size(c_range_size)
+        .build()
+    )
 
     # Read JSON
     cdef cudf_io_types.table_with_metadata c_out_table
 
     with nogil:
-        c_out_table = move(libcudf_read_json(args))
+        c_out_table = move(libcudf_read_json(opts))
 
     column_names = [x.decode() for x in c_out_table.metadata.column_names]
     return Table.from_unique_ptr(move(c_out_table.tbl),
