@@ -19,14 +19,13 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
 #include <cudf/dictionary/detail/search.hpp>
+#include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/search.hpp>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <thrust/binary_search.h>
 #include <hash/unordered_multiset.cuh>
 
@@ -277,16 +276,6 @@ struct multi_contains_dispatch {
 };
 
 template <>
-std::unique_ptr<column> multi_contains_dispatch::operator()<dictionary32>(
-  column_view const& haystack,
-  column_view const& needles,
-  rmm::mr::device_memory_resource* mr,
-  cudaStream_t stream)
-{
-  CUDF_FAIL("dictionary type not supported");
-}
-
-template <>
 std::unique_ptr<column> multi_contains_dispatch::operator()<list_view>(
   column_view const& haystack,
   column_view const& needles,
@@ -304,6 +293,34 @@ std::unique_ptr<column> multi_contains_dispatch::operator()<struct_view>(
   cudaStream_t stream)
 {
   CUDF_FAIL("struct_view type not supported");
+}
+
+template <>
+std::unique_ptr<column> multi_contains_dispatch::operator()<dictionary32>(
+  column_view const& haystack_in,
+  column_view const& needles_in,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
+{
+  dictionary_column_view const haystack(haystack_in);
+  dictionary_column_view const needles(needles_in);
+  // first combine keys so both dictionaries have the same set
+  auto haystack_matched = dictionary::detail::add_keys(
+    haystack, needles.keys(), rmm::mr::get_current_device_resource(), stream);
+  auto const haystack_view = dictionary_column_view(haystack_matched->view());
+  auto needles_matched     = dictionary::detail::set_keys(
+    needles, haystack_view.keys(), rmm::mr::get_current_device_resource(), stream);
+  auto const needles_view = dictionary_column_view(needles_matched->view());
+
+  // now just use the indices for the contains
+  column_view const haystack_indices = haystack_view.get_indices_annotated();
+  column_view const needles_indices  = needles_view.get_indices_annotated();
+  return cudf::type_dispatcher(haystack_indices.type(),
+                               multi_contains_dispatch{},
+                               haystack_indices,
+                               needles_indices,
+                               mr,
+                               stream);
 }
 
 std::unique_ptr<column> contains(column_view const& haystack,
