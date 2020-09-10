@@ -37,6 +37,7 @@
 - PR #6149 Update to Arrow v1.0.1
 - PR #6184 Add cuda 11 dev environment.yml
 - PR #6186 Update JNI to look for cub in new location
+- PR #6195 Update JNI to use parquet options builder
 
 ## Bug Fixes
 
