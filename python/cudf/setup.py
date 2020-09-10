@@ -85,7 +85,7 @@ setup(
         "Programming Language :: Python :: 3.7",
     ],
     # Include the separately-compiled shared library
-    setup_requires=["cython"],
+    setup_requires=["cython", "protobuf"],
     ext_modules=cythonize(
         extensions,
         nthreads=nthreads,
