@@ -149,7 +149,12 @@ cdef class Scalar:
     @property
     def ptr(self):
         return _get_ptr_from_scalar_any(self.c_value)
-            
+
+    def __int__(self):
+        return int(self.value)
+
+    def __float__(self):
+        return float(self.value)
 
 
 cdef _set_string_from_np_string(unique_ptr[scalar]& s, value, bool valid=True):
