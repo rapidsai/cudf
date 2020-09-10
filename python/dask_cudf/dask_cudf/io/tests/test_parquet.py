@@ -75,8 +75,19 @@ def test_roundtrip_from_dask_cudf(tmpdir, write_meta):
     gddf = dask_cudf.from_dask_dataframe(ddf)
     gddf.to_parquet(tmpdir, write_metadata_file=write_meta)
 
-    gddf2 = dask_cudf.read_parquet(tmpdir, index="index")
+    gddf2 = dask_cudf.read_parquet(tmpdir)
     dd.assert_eq(gddf, gddf2, check_divisions=write_meta)
+
+
+def test_roundtrip_none_rangeindex(tmpdir):
+    fn = str(tmpdir.join("test.parquet"))
+    gdf = cudf.DataFrame(
+        {"id": [0, 1, 2, 3], "val": [None, None, 0, 1]},
+        index=pd.RangeIndex(start=5, stop=9),
+    )
+    dask_cudf.from_cudf(gdf, npartitions=2).to_parquet(fn)
+    ddf2 = dask_cudf.read_parquet(fn)
+    dd.assert_eq(gdf, ddf2, check_index=True)
 
 
 def test_roundtrip_from_pandas(tmpdir):
