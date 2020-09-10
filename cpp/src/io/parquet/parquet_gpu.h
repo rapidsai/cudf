@@ -375,12 +375,38 @@ cudaError_t DecodePageData(hostdevice_vector<PageInfo> &pages,
                            size_t min_row,
                            cudaStream_t stream = (cudaStream_t)0);
 
+/**
+ * @brief Get the offset and size of data in the leaf column from a LIST type column with offset
+ *
+ * @param col Column of LIST type
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
 std::pair<size_type, size_type> get_leaf_offset(column_device_view col,
                                                 cudaStream_t stream = (cudaStream_t)0);
 
+/**
+ * @brief Get the dremel offsets for a LIST column
+ *
+ * Calculates the per row offsets into the repetition and definition level arrays for a column.
+ * Example:
+ * ```
+ * col            = {{1, 2, 3}, { }, {5, 6}}
+ * dremel_offsets = { 0,         3,  4,    6}
+ * ```
+ *
+ * @param col Column of LIST type
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
 rmm::device_uvector<size_type> get_dremel_offsets(column_device_view col,
                                                   cudaStream_t stream = (cudaStream_t)0);
 
+/**
+ * @brief Get the repetition and definition levels for a LIST column
+ *
+ * @param col Column of LIST type
+ * @param dremel_offsets Pre-calculated per-row offsets into the repetition/definition level arrays
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
 std::pair<rmm::device_uvector<uint8_t>, rmm::device_uvector<uint8_t>> get_levels(
   column_device_view col,
   rmm::device_uvector<size_type> const &dremel_offsets,

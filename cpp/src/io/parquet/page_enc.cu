@@ -1678,6 +1678,7 @@ __global__ void __launch_bounds__(1024) gpuGatherPages(EncColumnChunk *chunks, c
 
 std::pair<size_type, size_type> get_leaf_offset(column_device_view col, cudaStream_t stream)
 {
+  CUDF_EXPECTS(col.type().id() == type_id::LIST, "Can only get leaf offset for LIST type column");
   rmm::device_scalar<size_type> col_offset(col.offset(), stream);
   rmm::device_scalar<size_type> end_offset(col.offset() + col.size(), stream);
 
@@ -1691,6 +1692,8 @@ std::pair<size_type, size_type> get_leaf_offset(column_device_view col, cudaStre
 
 rmm::device_uvector<size_type> get_dremel_offsets(column_device_view col, cudaStream_t stream)
 {
+  CUDF_EXPECTS(col.type().id() == type_id::LIST, "Can only get dremel offset for LIST type column");
+
   rmm::device_uvector<size_type> dremel_offsets(col.size() + 1, stream);
   calculate_dremel_offsets<<<((col.size() - 1) >> 8) + 1, 256, 0, stream>>>(col,
                                                                             dremel_offsets.data());
@@ -1707,6 +1710,9 @@ rmm::device_uvector<size_type> get_dremel_offsets(column_device_view col, cudaSt
 std::pair<rmm::device_uvector<uint8_t>, rmm::device_uvector<uint8_t>> get_levels(
   column_device_view col, rmm::device_uvector<size_type> const &dremel_offsets, cudaStream_t stream)
 {
+  CUDF_EXPECTS(col.type().id() == type_id::LIST,
+               "Can only get rep/def levels for LIST type column");
+
   size_type flattened_size;
   CUDA_TRY(cudaMemcpy(&flattened_size,
                       dremel_offsets.data() + col.size(),
@@ -1716,8 +1722,12 @@ std::pair<rmm::device_uvector<uint8_t>, rmm::device_uvector<uint8_t>> get_levels
   rmm::device_uvector<uint8_t> rep_level(flattened_size, stream);
   rmm::device_uvector<uint8_t> def_level(flattened_size, stream);
 
+  size_t existing_stack_limit;
+  CUDA_TRY(cudaDeviceGetLimit(&existing_stack_limit, cudaLimitStackSize));
+  CUDA_TRY(cudaDeviceSetLimit(cudaLimitStackSize, 4096));
   calculate_levels<<<((col.size() - 1) >> 8) + 1, 256, 0, stream>>>(
     col, dremel_offsets.data(), rep_level.data(), def_level.data());
+  CUDA_TRY(cudaDeviceSetLimit(cudaLimitStackSize, existing_stack_limit));
   CUDA_TRY(cudaStreamSynchronize(stream));
 
   return std::make_pair(std::move(rep_level), std::move(def_level));
