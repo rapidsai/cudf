@@ -836,13 +836,22 @@ inline __device__ void PackLiterals(
       }
       return;
     }
+  }
 
-    // Scratch space to temporarily write to. Needed because we will use atomics to write 32 bit
-    // words but the destination mem may not be a multiple of 4 bytes.
-    // TODO (dm): This assumes blockdim = 128 and max bits per value = 16. Reduce magic numbers.
-    __shared__ uint32_t scratch[64];
-    if (t < 64) { scratch[t] = 0; }
+  // If width is among those handled above then return from the threads that didn't participate in
+  // writing. Otherwise, the extra threads will hit the __syncthreads() ahead and deadlock.
+  if (w == 1 || w == 2 || w == 4 || w == 8 || w == 12 || w == 16) return;
 
+  // Scratch space to temporarily write to. Needed because we will use atomics to write 32 bit words
+  // but the destination mem may not be a multiple of 4 bytes.
+  // TODO (dm): This assumes blockdim = 128 and max bits per value = 16. Reduce magic numbers.
+  __shared__ uint32_t scratch[64];
+  if (t < 64) { scratch[t] = 0; }
+  __syncthreads();
+
+  bool thread_active = (t <= count);
+
+  if (thread_active) {
     uint64_t v64 = v;
     v64 <<= (t * w) & 0x1f;
 
@@ -853,7 +862,10 @@ inline __device__ void PackLiterals(
     // Atomically write result to scratch
     if (v32[0]) { atomicOr(scratch + ((t * w) >> 5), v32[0]); }
     if (v32[1]) { atomicOr(scratch + ((t * w) >> 5) + 1, v32[1]); }
+  }
+  __syncthreads();
 
+  if (thread_active) {
     // Copy scratch data to final destination
     auto available_bytes = (count * w + 7) / 8;
 
@@ -861,6 +873,7 @@ inline __device__ void PackLiterals(
     if (t < available_bytes) { dst[t] = scratch_bytes[t]; }
     if (t + 128 < available_bytes) { dst[t + 128] = scratch_bytes[t + 128]; }
   }
+  __syncthreads();
 }
 
 /**
