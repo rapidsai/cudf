@@ -1,10 +1,10 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
-from distutils.spawn import find_executable
 import os
 import shutil
 import subprocess
 import sys
 import sysconfig
+from distutils.spawn import find_executable
 from distutils.sysconfig import get_python_lib
 
 import numpy as np
@@ -123,4 +123,19 @@ for source in ["cudf/utils/metadata/orc_column_statistics.proto"]:
         os.path.getmtime(source) > os.path.getmtime(output)
     ):
         sys.stderr.write("compiling " + source + "\n")
+        with open(output, "a") as src:
+            src.write("# flake8: noqa" + os.linesep)
+            src.write("# fmt: off" + os.linesep)
         subprocess.check_call([protoc, "--python_out=.", source])
+        with open(output, "r+") as src:
+            new_src_content = (
+                "# flake8: noqa"
+                + os.linesep
+                + "# fmt: off"
+                + os.linesep
+                + src.read()
+                + "# fmt: on"
+                + os.linesep
+            )
+            src.seek(0)
+            src.write(new_src_content)
