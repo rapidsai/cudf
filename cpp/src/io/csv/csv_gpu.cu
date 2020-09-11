@@ -17,6 +17,9 @@
 #include "csv_common.h"
 #include "csv_gpu.h"
 #include "datetime.cuh"
+#include "rmm/thrust_rmm_allocator.h"
+#include "thrust/count.h"
+#include "thrust/for_each.h"
 
 #include <io/utilities/block_utils.cuh>
 #include <io/utilities/parsing_utils.cuh>
@@ -547,6 +550,12 @@ struct decode_op {
   }
 };
 
+struct column_builder {
+  cudf::data_type type;
+  void *data;
+  cudf::bitmask_type *null_mask;
+};
+
 /**
  * @brief CUDA kernel that parses and converts CSV data into cuDF column data.
  *
@@ -570,9 +579,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
                       size_t num_columns,
                       const column_parse::flags *flags,
                       const uint64_t *recStart,
-                      cudf::data_type *dtype,
-                      void **data,
-                      cudf::bitmask_type **valid)
+                      column_builder *builders)
 {
   // thread IDs range per block, so also need the block id
   long rec_id =
@@ -586,9 +593,9 @@ __global__ void __launch_bounds__(csvparse_block_dim)
   long start = recStart[rec_id];
   long stop  = recStart[rec_id + 1];
 
-  long pos       = start;
-  int col        = 0;
-  int actual_col = 0;
+  long pos         = start;
+  int col          = 0;
+  auto col_builder = builders;
 
   while (col < num_columns) {
     if (start > stop) break;
@@ -601,14 +608,14 @@ __global__ void __launch_bounds__(csvparse_block_dim)
 
       // Modify start & end to ignore whitespace and quotechars
       long tempPos = pos - 1;
-      if (!is_na && dtype[actual_col].id() != cudf::type_id::STRING) {
+      if (!is_na && col_builder->type.id() != cudf::type_id::STRING) {
         trim_field_start_end(raw_csv, &start, &tempPos, opts.quotechar);
       }
 
       if (!is_na && start <= (tempPos)) {  // Empty fields are not legal values
 
         // Type dispatcher does not handle STRING
-        if (dtype[actual_col].id() == cudf::type_id::STRING) {
+        if (col_builder->type.id() == cudf::type_id::STRING) {
           long end = pos;
           if (opts.keepquotes == false) {
             if ((raw_csv[start] == opts.quotechar) && (raw_csv[end - 1] == opts.quotechar)) {
@@ -616,29 +623,31 @@ __global__ void __launch_bounds__(csvparse_block_dim)
               end--;
             }
           }
-          auto str_list          = static_cast<std::pair<const char *, size_t> *>(data[actual_col]);
-          str_list[rec_id].first = raw_csv + start;
+          // auto str_list = static_cast<std::pair<const char *, size_t> *>(data[actual_col]);
+          auto str_list = static_cast<std::pair<const char *, size_t> *>(col_builder->data);
+          str_list[rec_id].first  = raw_csv + start;
           str_list[rec_id].second = end - start;
         } else {
-          if (cudf::type_dispatcher(dtype[actual_col],
+          if (cudf::type_dispatcher(col_builder->type,
                                     decode_op{},
                                     raw_csv,
-                                    data[actual_col],
+                                    col_builder->data,
                                     rec_id,
                                     start,
                                     tempPos,
                                     opts,
                                     flags[col])) {
             // set the valid bitmap - all bits were set to 0 to start
-            set_bit(valid[actual_col], rec_id);
+            set_bit(col_builder->null_mask, rec_id);
           }
         }
-      } else if (dtype[actual_col].id() == cudf::type_id::STRING) {
-        auto str_list           = static_cast<std::pair<const char *, size_t> *>(data[actual_col]);
+      } else if (col_builder->type.id() == cudf::type_id::STRING) {
+        // auto str_list = static_cast<std::pair<const char *, size_t> *>(data[actual_col]);
+        auto str_list           = static_cast<std::pair<const char *, size_t> *>(col_builder->data);
         str_list[rec_id].first  = nullptr;
         str_list[rec_id].second = 0;
       }
-      actual_col++;
+      col_builder++;
     }
     pos++;
     start = pos;
@@ -1038,6 +1047,14 @@ thrust::host_vector<column_parse::stats> detect_column_types(const char *data,
   return thrust::host_vector<column_parse::stats>(d_stats);
 }
 
+struct boop_functor {
+  column_builder *builders;
+  cudf::data_type *dtypes;
+  void **columns;
+  cudf::bitmask_type **valids;
+  void __device__ operator()(size_t i) { builders[i] = {dtypes[i], columns[i], valids[i]}; }
+};
+
 cudaError_t __host__ DecodeRowColumnData(const char *data,
                                          const uint64_t *row_starts,
                                          size_t num_rows,
@@ -1053,8 +1070,21 @@ cudaError_t __host__ DecodeRowColumnData(const char *data,
   const int block_size = csvparse_block_dim;
   const int grid_size  = (num_rows + block_size - 1) / block_size;
 
+  rmm::device_vector<column_builder> d_builders(num_columns);
+
+  auto num_enabled_columns = thrust::count_if(
+    rmm::exec_policy(stream)->on(stream),
+    flags,
+    flags + num_columns,
+    [] __device__(column_parse::flags flag) { return flag & column_parse::enabled; });
+
+  thrust::for_each(rmm::exec_policy(stream)->on(stream),
+                   thrust::make_counting_iterator<size_t>(0),
+                   thrust::make_counting_iterator<size_t>(num_enabled_columns),
+                   boop_functor{d_builders.data().get(), dtypes, columns, valids});
+
   convert_csv_to_cudf<<<grid_size, block_size, 0, stream>>>(
-    data, options, num_rows, num_columns, flags, row_starts, dtypes, columns, valids);
+    data, options, num_rows, num_columns, flags, row_starts, d_builders.data().get());
 
   return cudaSuccess;
 }
