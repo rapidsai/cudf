@@ -85,7 +85,6 @@ struct format_compiler {
       {'I', 2},   // HH
       {'M', 2},   // MM
       {'S', -1},  // 2 to 13 SS[.mmm][uuu][nnn] (uuu,nnn are not in std::format)
-      {'s', 12},  // 12 SS.mmmuuunnn (not in std::format)
       {'p', 2},   // AM/PM
       {'R', 5},   // 5 HH:MM
       {'T', 8},   // 8 HH:MM:SS"
@@ -399,10 +398,6 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
         case 'f':  // sub-second
           ptr = subsecond(ptr, timeparts);
           break;
-        case 's':  // second.nanosecond
-          ptr = second(ptr, timeparts);
-          ptr = nanosecond(ptr, timeparts);
-          break;
         case 'p': ptr = am_or_pm(ptr, timeparts); break;
         case 'R':  // HH:MM 24-hour
           ptr    = hour_24(ptr, timeparts);
@@ -625,7 +620,6 @@ struct parse_duration {
           timeparts->minute = parse_minute(ptr, item_length);
           break;
         case 'S':  // [-]SS[.mmm][uuu][nnn]
-        case 's':
           timeparts->second = parse_second(ptr, item_length);
           if (*(ptr + item_length) == '.') {
             item_length++;

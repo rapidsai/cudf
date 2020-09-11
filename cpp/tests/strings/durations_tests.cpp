@@ -792,9 +792,4 @@ TEST_F(StringsDurationsTest, PandasDurationSeconds)
   cudf::test::print(*results);
   cudf::test::print(expected);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-
-  // auto new_durations = cudf::strings::to_durations(cudf::strings_column_view(expected),
-  //                                                 cudf::data_type(cudf::type_to_id<T>()),
-  //                                                 "%D days %H:%M:%S");
-  // CUDF_TEST_EXPECT_COLUMNS_EQUAL(*new_durations, durations);
 }
