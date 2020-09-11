@@ -2692,7 +2692,6 @@ class Frame(libcudf.table.Table):
         data = data._unaryop("acos")
         newdata = data.mask(data < 0)
         return newdata
-        
 
     def atan(self):
         """
