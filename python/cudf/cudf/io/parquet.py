@@ -173,6 +173,7 @@ def read_parquet(
     engine="cudf",
     columns=None,
     filters=None,
+    joins=None,
     row_groups=None,
     skip_rows=None,
     num_rows=None,
@@ -209,24 +210,66 @@ def read_parquet(
 
     if filters is not None:
         # Prepare filters
-        filters = filterutils._prepare_filters(
-            filters, max_len_equijoin_to_membership=-1
-        )
+        filters = filterutils._prepare_filters(filters)
 
         # Convert filters to ds.Expression
         filters = pq._filters_to_expression(filters)
 
+    if filters is not None or joins is not None:
         # Initialize ds.FilesystemDataset
         dataset = ds.dataset(
             filepaths_or_buffers, format="parquet", partitioning="hive"
         )
 
+        # Get columns to get statistics for
+        columns_in_joins = {col for (col, _, _) in joins} if joins else set()
+
         # Load IDs of filtered row groups for each file in dataset
         filtered_rg_ids = defaultdict(list)
+        cols_minimums = defaultdict(list)
+        cols_maximums = defaultdict(list)
         for fragment in dataset.get_fragments(filter=filters):
             for rg_fragment in fragment.split_by_row_group(filters):
                 for rg_info in rg_fragment.row_groups:
+                    # Remove from columns_in_joins if we don't have
+                    # its stats for current stripe
+                    columns_in_joins = {
+                        col
+                        for col in columns_in_joins
+                        if rg_info.statistics is not None
+                    }
+
+                    # Store statistics and filtered row group
+                    for col in columns_in_joins:
+                        cols_minimums[col].append(
+                            rg_info.statistics[col]["min"]
+                        )
+                        cols_maximums[col].append(
+                            rg_info.statistics[col]["max"]
+                        )
                     filtered_rg_ids[rg_fragment.path].append(rg_info.id)
+
+        # Filter using joins
+        if joins is not None:
+            for col, op, other in joins:
+                if col in columns_in_joins:
+                    # Get mask of which stripes had min-max ranges that passed
+                    ranges_mask = filterutils._filter_with_joins(
+                        cudf.Series(cols_minimums[col]),
+                        cudf.Series(cols_maximums[col]),
+                        op,
+                        other,
+                    )
+
+                    # Select row groups
+                    i = 0
+                    new_filtered_rg_ids = defaultdict(list)
+                    for path in dataset.files:
+                        for rg_id in filtered_rg_ids[path]:
+                            if ranges_mask[i]:
+                                new_filtered_rg_ids[path].append(rg_id)
+                            i += 1
+                    filtered_rg_ids = new_filtered_rg_ids
 
         # Initialize row_groups to be selected
         if row_groups is None:

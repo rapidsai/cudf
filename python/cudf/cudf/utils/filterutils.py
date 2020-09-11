@@ -4,6 +4,7 @@ from collections import defaultdict
 
 from numba import cuda
 import numpy as np
+import cupy
 import cudf
 import datetime
 
@@ -114,134 +115,16 @@ def _apply_filters(filters, stats):
     return False
 
 
-# def _compile_joins(filters):
-#     new_filters = []
-#     for conjunction in filters:
-#         new_conjunction = []
-#         for col, op, val in conjunction:
-#             if isinstance(val, tuple):
-#                 df, df_col = val
-#                 df_id = id(df)
-
-#                 # Get statistics of value being joined with
-#                 if df_id not in statistics_cache:
-#                     statistics_cache[df_id]["min"] = df[df_col].min().item()
-#                     statistics_cache[df_id]["max"] = df[df_col].max().item()
-#                 val_min = statistics_cache[df_id]["min"]
-#                 val_max = statistics_cache[df_id]["max"]
-#                 val_len = len(df)
-
-#                 # Replace predicate
-#                 if op == "=" or op == "==":
-#                     if val_len <= max_len_equijoin_to_membership:
-#                         c = df[df_col].drop_duplicates()
-#                         new_conjunction.append((
-#                             col,
-#                             "in",
-#                             c.to_pandas() if isinstance(c, cudf.Series) else c,
-#                         ))
-#                     else:
-#                         new_conjunction.append((col, ">=", val_min))
-#                         new_conjunction.append((col, "<=", val_max))
-#                 elif op == "!=":
-#                     if val_len <= max_len_equijoin_to_membership:
-#                         c = df[df_col].drop_duplicates()
-#                         yield (
-#                             col,
-#                             "not in",
-#                             c.to_pandas() if isinstance(c, cudf.Series) else c,
-#                         )
-#                     else:
-#                         yield (col, ">=", val_min)
-#                         yield (col, "<=", val_max)
-#                 elif op == ">" or op == ">=":
-#                     new_conjunction.append((col, op, val_min))
-#                 elif op == "<" or op == "<=":
-#                     new_conjunction.append((col, op, val_max))
-#                 else:
-#                     raise ValueError(
-#                         '"{0}" is not a valid operator in join predicates.'.format(
-#                             op
-#                         )
-#                     )
-#             else:
-#                 new_conjunction.append((col, op, val))
-#         new_filters.append(new_conjunction)
-#     return new_filters
-
-
-# def _compile_joins(
-#     conjunction, statistics_cache, max_len_equijoin_to_membership
-# ):
-#     for col, op, val in conjunction:
-#         if isinstance(val, tuple):
-#             df, df_col = val
-#             df_id = id(df)
-
-#             # Get statistics of value being joined with
-#             if df_id not in statistics_cache:
-#                 statistics_cache[df_id]["min"] = df[df_col].min().item()
-#                 statistics_cache[df_id]["max"] = df[df_col].max().item()
-#             val_min = statistics_cache[df_id]["min"]
-#             val_max = statistics_cache[df_id]["max"]
-#             val_len = len(df)
-
-#             # Replace predicate
-#             if op == "=" or op == "==":
-#                 if val_len <= max_len_equijoin_to_membership:
-#                     c = df[df_col].drop_duplicates()
-#                     yield (
-#                         col,
-#                         "in",
-#                         c.to_pandas() if isinstance(c, cudf.Series) else c,
-#                     )
-#                 else:
-#                     yield (col, ">=", val_min)
-#                     yield (col, "<=", val_max)
-
-#             elif op == ">" or op == ">=":
-#                 yield (col, op, val_min)
-#             elif op == "<" or op == "<=":
-#                 yield (col, op, val_max)
-#             else:
-#                 raise ValueError(
-#                     '"{0}" is not a valid operator in join predicates.'.format(
-#                         op
-#                     )
-#                 )
-#         else:
-#             yield (col, op, val)
-
-
-# TODO: Tune max_len_equijoin_to_membership with ORC
-def _prepare_filters(filters, max_len_equijoin_to_membership=16_000):
-    if filters is None:
-        return None
-
-    # Coerce filters into list of lists of tuples
-    if isinstance(filters[0][0], str):
-        filters = [filters]
-
-    # # Compile joins
-    # filters = _compile_joins(filters)
-    # statistics_cache = defaultdict(dict)
-    # filters = [
-    #     list(
-    #         _compile_joins(
-    #             conjunction, statistics_cache, max_len_equijoin_to_membership,
-    #         )
-    #     )
-    #     for conjunction in filters
-    # ]
-
-    return filters
-
-
 @cuda.jit
-def _apply_operator(ranges, op, other, range_value_pairs):
+def _apply_operator(minimums, maximums, op, other, range_value_pairs):
+    # Load range and value
     range_idx, other_idx = cuda.grid(2)
-    minimum, maximum = ranges[range_idx]
+    minimum = minimums[range_idx]
+    maximum = maximums[range_idx]
     val = other[other_idx]
+    # TODO: Download blocks of other into shared memory
+
+    # Compute range-value pair
     range_value_pairs[range_idx][other_idx] = not (
         (op == 0 and (minimum > val or maximum < val))
         or (op == 1 and (val == minimum == maximum))
@@ -252,7 +135,9 @@ def _apply_operator(ranges, op, other, range_value_pairs):
     )
 
 
-def _filter_with_joins(ranges, op, other):
+def _filter_with_joins(minimums, maximums, op, other):
+    assert len(minimums) == len(maximums)
+
     # Convert operator
     if op == "=" or op == "==":
         op = 0
@@ -271,20 +156,31 @@ def _filter_with_joins(ranges, op, other):
             '"{0}" is not a valid operator in join predicates.'.format(op)
         )
 
-    # Initialize range_value_pairs
-    range_value_pairs = cuda.device_array(
-        [len(ranges), len(other)], dtype=np.bool
+    # Initialize range-value pairs
+    range_value_pairs = cupy.ndarray(
+        [len(minimums), len(other)], dtype=np.bool
     )
 
-    # Launch kernel to compute range_value_pairs
+    # Launch kernel to compute range-value pairs
     threadsperblock = 32
     blockspergrid = (
-        (len(ranges) + (threadsperblock - 1)) // threadsperblock,
+        (len(minimums) + (threadsperblock - 1)) // threadsperblock,
         (len(other) + (threadsperblock - 1)) // threadsperblock,
     )
     _apply_operator[blockspergrid, (threadsperblock, threadsperblock)](
-        ranges, op, other, range_value_pairs
+        minimums, maximums, op, other, range_value_pairs
     )
 
     # Return result of boolean reduction for each range
-    return any(range_value_pairs, 1)
+    return cupy.any(range_value_pairs, 1)
+
+
+def _prepare_filters(filters):
+    if filters is None:
+        return None
+
+    # Coerce filters into list of lists of tuples
+    if isinstance(filters[0][0], str):
+        filters = [filters]
+
+    return filters

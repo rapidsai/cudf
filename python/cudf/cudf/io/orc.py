@@ -1,7 +1,9 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
+from collections import defaultdict
 import warnings
 import datetime
+import numpy as np
 
 import pyarrow as pa
 from pyarrow import orc as orc
@@ -164,9 +166,9 @@ def _filter_stripes(
     columns_in_predicate = (
         {col for conjunction in filters for (col, op, val) in conjunction}
         if filters
-        else {}
+        else set()
     )
-    columns_in_joins = {col for (col, _, _) in joins} if joins else {}
+    columns_in_joins = {col for (col, _, _) in joins} if joins else set()
     columns = columns_in_predicate.union(columns_in_joins)
 
     # Read and parse file-level and stripe-level statistics
@@ -179,7 +181,7 @@ def _filter_stripes(
         return []
 
     # Filter using stripe-level statistics
-    selected_stripes = []
+    selected_stripes = set()
     if filters:
         num_rows_scanned = 0
         for i, stripe_statistics in enumerate(stripes_statistics):
@@ -200,15 +202,44 @@ def _filter_stripes(
             ):
                 continue
             if filterutils._apply_filters(filters, stripe_statistics):
-                selected_stripes.append(i)
+                selected_stripes.add(i)
 
     # Filter using joins
     if joins:
-        for col, op, other in joins:
-            res = filterutils._filter_with_joins
-            selected_stripes = [selected_stripes[i] for i in ]
+        # Get min-max ranges for each stripe for each column
+        cols_minimums = defaultdict(list)
+        cols_maximums = defaultdict(list)
+        for stripe_statistics in stripes_statistics:
+            # Remove columns if we don't have its stats for current stripe
+            columns_in_joins = {
+                col
+                for col in columns_in_joins
+                if "minimum" in stripe_statistics[col]
+                and "maximum" in stripe_statistics[col]
+            }
 
-    return selected_stripes
+            # Store range
+            for col in columns_in_joins:
+                cols_minimums[col].append(stripe_statistics[col]["minimum"])
+                cols_maximums[col].append(stripe_statistics[col]["maximum"])
+
+        # Filter selected stripes using each join
+        for col, op, other in joins:
+            if col in columns_in_joins:
+                # Get mask of which stripes had min-max ranges that passed
+                ranges_mask = filterutils._filter_with_joins(
+                    cudf.Series(cols_minimums[col]),
+                    cudf.Series(cols_maximums[col]),
+                    op,
+                    other,
+                )
+
+                # Add to selected stripes
+                for i, is_selected in enumerate(ranges_mask):
+                    if is_selected and (stripes is None or i in stripes):
+                        selected_stripes.add(i)
+
+    return sorted(selected_stripes)
 
 
 @ioutils.doc_read_orc()

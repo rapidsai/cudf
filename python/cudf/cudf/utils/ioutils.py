@@ -117,7 +117,7 @@ filters : list of tuple, list of lists of tuples default None
     using statistics stored for each row group as Parquet metadata. Row groups
     that do not match the given filter predicate are not read. The
     predicate is expressed in disjunctive normal form (DNF) like
-    `[[('id', '=', (df_clients, "id")), ('x', '=', 0), ...], ...]`.
+    `[[('x', '=', 0), ...], ...]`.
     DNF allows arbitrary boolean logical
     combinations of single column predicates. The innermost tuples each
     describe a single column predicate. The list of inner predicates is
@@ -127,6 +127,14 @@ filters : list of tuple, list of lists of tuples default None
     as a list of tuples. This form is interpreted as a single conjunction.
     To express OR in predicates, one must use the (preferred) notation of
     list of lists of tuples.
+joins : list of tuples default None
+    
+joins : list of tuple default None
+    If not None, specifies joins to filter out row groups using statistics
+    stored for each row group as Parquet metadata. Joins are specified by
+    tuples of column of data being loaded, operator, and cudf.Series that the
+    column is being joined with. An example of this is
+    `('id', '==', df_clients["id"])`.
 row_groups : int, or list, or a list of lists default None
     If not None, specifies, for each input file, which row groups to read.
     If reading multiple inputs, a list of lists should be passed, one list
@@ -291,11 +299,11 @@ engine : {{ 'cudf', 'pyarrow' }}, default 'cudf'
 columns : list, default None
     If not None, only these columns will be read from the file.
 filters : list of tuple, list of lists of tuples default None
-    If not None, specifies a filter predicate used to filter out row groups
-    using statistics stored for each row group as Parquet metadata. Row groups
+    If not None, specifies a filter predicate used to filter out stripes
+    using statistics stored for each stripe as ORC metadata. Stripes
     that do not match the given filter predicate are not read. The
     predicate is expressed in disjunctive normal form (DNF) like
-    `[[('id', '=', (df_clients, "id")), ('x', '=', 0), ...], ...]`.
+    `[[('x', '=', 0), ...], ...]`.
     DNF allows arbitrary boolean logical
     combinations of single column predicates. The innermost tuples each
     describe a single column predicate. The list of inner predicates is
@@ -305,6 +313,12 @@ filters : list of tuple, list of lists of tuples default None
     as a list of tuples. This form is interpreted as a single conjunction.
     To express OR in predicates, one must use the (preferred) notation of
     list of lists of tuples.
+joins : list of tuple default None
+    If not None, specifies joins to filter out stripes using statistics
+    stored for each stripe as ORC metadata. Joins are specified by tuples
+    of column of data being loaded, operator, and cudf.Series that the
+    column is being joined with. An example of this is
+    `('id', '==', df_clients["id"])`.
 stripes: list, default None
     If not None, only these stripe will be read from the file. Stripes are
     concatenated with index ignored.
