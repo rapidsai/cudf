@@ -1,6 +1,9 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
+from distutils.spawn import find_executable
 import os
 import shutil
+import subprocess
+import sys
 import sysconfig
 from distutils.sysconfig import get_python_lib
 
@@ -101,3 +104,23 @@ setup(
     install_requires=install_requires,
     zip_safe=False,
 )
+
+
+protoc = None
+if "PROTOC" in os.environ and os.path.exists(os.environ["PROTOC"]):
+    protoc = os.environ["PROTOC"]
+else:
+    protoc = find_executable("protoc")
+if protoc is None:
+    sys.stderr.write("protoc not found")
+    sys.exit(1)
+
+
+for source in ["cudf/utils/metadata/orc_column_statistics.proto"]:
+    output = source.replace(".proto", "_pb2.py")
+
+    if not os.path.exists(output) or (
+        os.path.getmtime(source) > os.path.getmtime(output)
+    ):
+        sys.stderr.write("compiling " + source + "\n")
+        subprocess.check_call([protoc, "--python_out=.", source])
