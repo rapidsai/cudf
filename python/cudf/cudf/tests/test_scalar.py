@@ -7,7 +7,7 @@ import pytest
 
 from cudf._lib.scalar import Scalar
 from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, TIMEDELTA_TYPES
-
+import operator
 
 @pytest.mark.parametrize(
     "value",
@@ -144,3 +144,62 @@ def test_date_duration_scalars(value):
 
     np.testing.assert_equal(actual, expected)
     assert s.is_valid() is True
+
+@pytest.mark.parametrize('pairs', [
+    (1, 1),
+    (1, 1.5),
+    (-1.5, 1),
+    (1, 'a'),
+    ('a', 'b'),
+    (1.5, 'a'),
+    (1, False),
+    (False, True),
+    (1.5, False),
+    (True, 1.5),
+    ('a', False),
+])
+@pytest.mark.parametrize('dtype_l', [
+    np.dtype('uint8'),
+    np.dtype('uint16'),
+    np.dtype('uint32'),
+    np.dtype('uint64'),
+    np.dtype('int8'),
+    np.dtype('int16'),
+    np.dtype('int32'),
+    np.dtype('int64'),
+    np.dtype('float32'),
+    np.dtype('float64'),
+    np.dtype('bool'),
+    np.dtype('object')
+])
+@pytest.mark.parametrize('dtype_r', [
+    np.dtype('uint8'),
+    np.dtype('uint16'),
+    np.dtype('uint32'),
+    np.dtype('uint64'),
+    np.dtype('int8'),
+    np.dtype('int16'),
+    np.dtype('int32'),
+    np.dtype('int64'),
+    np.dtype('float32'),
+    np.dtype('float64'),
+    np.dtype('bool'),
+    np.dtype('object')
+])
+@pytest.mark.parametrize('op', [
+    operator.add,
+    operator.sub,
+    operator.mul,
+])
+def test_scalar_binops_value(pairs, dtype_l, dtype_r, op):
+    l, r = pairs
+    host_value_l = dtype_l.type(l)
+    host_value_r = dtype_r.type(r)
+
+    gpu_value_l = Scalar(l)
+    gpu_value_r = Scalar(r)
+
+    expect = op(host_value_l, host_value_r)
+    got = op(gpu_value_l, gpu_value_r)
+
+    assert expect == got.value

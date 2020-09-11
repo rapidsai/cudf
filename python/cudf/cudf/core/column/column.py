@@ -1616,8 +1616,6 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 data=buffer, mask=mask, dtype=arbitrary.dtype
             )
         elif arb_dtype.kind in ("O", "U"):
-            import pdb
-            pdb.set_trace()
             pa_data = pa.Array.from_pandas(arbitrary)
             data = as_column(pa_data, dtype=cudf.dtype(pa_data.type))
             # There is no cast operation available for pa.Array from int to
@@ -1672,9 +1670,9 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         mask = bools_to_mask(as_column(mask).unary_operator("not"))
 
         data = data.set_mask(mask)
-    elif isinstance(arbitrary, cudf._lib.scalar.Scalar):
-        buffer = Buffer(arbitrary)
-        data = as_column(buffer, dtype=arbitrary.dtype)
+    #elif isinstance(arbitrary, cudf._lib.scalar.Scalar):
+    #    buffer = Buffer(arbitrary)
+    #    data = as_column(buffer, dtype=arbitrary.dtype)
     else:
         try:
             data = as_column(
