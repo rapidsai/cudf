@@ -32,6 +32,7 @@
 - PR #6141 Fix typo in custreamz README that was a result of recent changes
 - PR #6146 Added element/validity pair constructors for fixed_width and string wrappers
 - PR #6143 General improvements for java arrow IPC.
+- PR #6152 Change dictionary indices to uint32
 - PR #6099 Add fluent builder apis to `json_reader_options` and `avro_reader_options`
 - PR #6163 Use `Column.full` instead of `scalar_broadcast_to` or `cupy.zeros`
 - PR #6176 Fix cmake warnings for GoogleTest, GoogleBenchmark, and Arrow external projects
@@ -42,6 +43,7 @@
 - PR #6194 Remove unnecessary memory-resource parameter in `cudf::contains` API
 - PR #6195 Update JNI to use parquet options builder
 - PR #6190 Avoid reading full csv files for metadata in dask_cudf
+- PR #6197 Remove librmm dependency for libcudf
 
 ## Bug Fixes
 
