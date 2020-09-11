@@ -171,12 +171,13 @@ std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf:
     target_matched->view(), value, rmm::mr::get_current_device_resource(), stream);
   // now call fill using just the indices column and the new index
   out_of_place_fill_range_dispatch filler{*index_of_value, target_indices};
-  auto new_indices       = filler.template operator()<int32_t>(begin, end, mr, stream);
-  auto const output_size = new_indices->size();        // record these
-  auto const null_count  = new_indices->null_count();  // before the release()
-  auto contents          = new_indices->release();
+  auto new_indices        = filler.template operator()<uint32_t>(begin, end, mr, stream);
+  auto const indices_type = new_indices->type();
+  auto const output_size  = new_indices->size();        // record these
+  auto const null_count   = new_indices->null_count();  // before the release()
+  auto contents           = new_indices->release();
   // create the new indices column from the result
-  auto indices_column = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT32},
+  auto indices_column = std::make_unique<cudf::column>(indices_type,
                                                        static_cast<cudf::size_type>(output_size),
                                                        std::move(*(contents.data.release())),
                                                        rmm::device_buffer{0, stream, mr},
