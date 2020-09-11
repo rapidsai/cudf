@@ -170,7 +170,7 @@ def test_date_duration_scalars(value):
     np.dtype('float32'),
     np.dtype('float64'),
     np.dtype('bool'),
-    np.dtype('object')
+    np.dtype('str')
 ])
 @pytest.mark.parametrize('dtype_r', [
     np.dtype('uint8'),
@@ -184,7 +184,7 @@ def test_date_duration_scalars(value):
     np.dtype('float32'),
     np.dtype('float64'),
     np.dtype('bool'),
-    np.dtype('object')
+    np.dtype('str')
 ])
 @pytest.mark.parametrize('op', [
     operator.add,
@@ -193,13 +193,73 @@ def test_date_duration_scalars(value):
 ])
 def test_scalar_binops_value(pairs, dtype_l, dtype_r, op):
     l, r = pairs
-    host_value_l = dtype_l.type(l)
-    host_value_r = dtype_r.type(r)
+    import re
+    try:
+        host_value_l = dtype_l.type(l)
+    except ValueError as e:
+        with pytest.raises(ValueError, match=re.escape(str(e))):
+            gpu_value_l = Scalar(l, dtype=dtype_l)
+        return
+    try:
+        host_value_r = dtype_r.type(r)
+    except ValueError as e:
+        with pytest.raises(ValueError, match=re.escape(str(e))):
+            gpu_value_r = Scalar(r, dtype=dtype_r)
+        return
 
-    gpu_value_l = Scalar(l)
-    gpu_value_r = Scalar(r)
-
-    expect = op(host_value_l, host_value_r)
+    gpu_value_l = Scalar(l, dtype=dtype_l)
+    gpu_value_r = Scalar(r, dtype=dtype_r)
+    try:
+        expect = op(host_value_l, host_value_r)
+    except np.core._exceptions.UFuncTypeError:
+        with pytest.raises(TypeError):
+            got = op(gpu_value_l, gpu_value_r)
+        return
     got = op(gpu_value_l, gpu_value_r)
-
     assert expect == got.value
+
+
+@pytest.mark.parametrize('dtype_l', [
+    np.dtype('uint8'),
+    np.dtype('uint16'),
+    np.dtype('uint32'),
+    np.dtype('uint64'),
+    np.dtype('int8'),
+    np.dtype('int16'),
+    np.dtype('int32'),
+    np.dtype('int64'),
+    np.dtype('float32'),
+    np.dtype('float64'),
+])
+@pytest.mark.parametrize('dtype_r', [
+    np.dtype('uint8'),
+    np.dtype('uint16'),
+    np.dtype('uint32'),
+    np.dtype('uint64'),
+    np.dtype('int8'),
+    np.dtype('int16'),
+    np.dtype('int32'),
+    np.dtype('int64'),
+    np.dtype('float32'),
+    np.dtype('float64'),
+])
+@pytest.mark.parametrize('op', [
+    operator.add,
+    operator.sub,
+    operator.mul,
+])
+@pytest.mark.parametrize('l_valid', [True, False])
+@pytest.mark.parametrize('r_valid', [True, False])
+def test_scalar_binops_dtype_and_validity(dtype_l, dtype_r, l_valid, r_valid, op):
+    l_value = 0 if l_valid else None
+    r_value = 0 if r_valid else None
+
+    expect_dtype = op(dtype_l.type(0), dtype_r.type(0)).dtype
+
+    scalar_l = Scalar(l_value, dtype=dtype_l)
+    scalar_r = Scalar(r_value, dtype=dtype_r)
+
+    got = op(scalar_l, scalar_r)
+
+    assert got.dtype == expect_dtype
+    assert got.is_valid() == (l_valid and r_valid)

@@ -197,7 +197,7 @@ cdef class Scalar:
 
         valid = self.is_valid() and (isinstance(other, np.generic) or other.is_valid())
         if not valid:
-            return cudf.Scalar(None, dtype=out_dtype)
+            return Scalar(None, dtype=out_dtype)
         else:
             result = self._dispatch_scalar_binop(other, op)
             return Scalar(result, dtype=out_dtype)
