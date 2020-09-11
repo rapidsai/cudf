@@ -607,10 +607,11 @@ def test_multiindex_equals():
     ],
 )
 @pytest.mark.parametrize(
-    "levels", [[["2000-01-01", "2000-01-02", "2000-01-03"], ["A", "B", "C"]]]
+    "levels",
+    [[["2000-01-01", "2000-01-02", "2000-01-03"], ["A", "B", "C"]], None],
 )
 @pytest.mark.parametrize(
-    "codes", [[[0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0]]]
+    "codes", [[[0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0]], None]
 )
 @pytest.mark.parametrize("names", [["X", "Y"]])
 def test_multiindex_copy_sem(data, levels, codes, names):
