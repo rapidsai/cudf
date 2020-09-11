@@ -144,7 +144,7 @@ __inline__ __device__ cudf::timestamp_D decode_value(const char *data,
                                                      uint64_t end,
                                                      ParseOptions const &opts)
 {
-  return cudf::timestamp_D{cudf::duration_D{parseDateFormat(data, start, end, opts.dayfirst)}};
+  return cudf::timestamp_D{cudf::duration_D{parseDateFormat(data + start, data + end, opts.dayfirst)}};
 }
 
 /**
@@ -163,7 +163,7 @@ __inline__ __device__ cudf::timestamp_s decode_value(const char *data,
                                                      uint64_t end,
                                                      ParseOptions const &opts)
 {
-  auto milli = parseDateTimeFormat(data, start, end, opts.dayfirst);
+  auto milli = parseDateTimeFormat(data + start, data + end, opts.dayfirst);
   return cudf::timestamp_s{cudf::duration_s{milli / 1000}};
 }
 
@@ -183,7 +183,7 @@ __inline__ __device__ cudf::timestamp_ms decode_value(const char *data,
                                                       uint64_t end,
                                                       ParseOptions const &opts)
 {
-  auto milli = parseDateTimeFormat(data, start, end, opts.dayfirst);
+  auto milli = parseDateTimeFormat(data + start, data + end, opts.dayfirst);
   return cudf::timestamp_ms{cudf::duration_ms{milli}};
 }
 
@@ -203,7 +203,7 @@ __inline__ __device__ cudf::timestamp_us decode_value(const char *data,
                                                       uint64_t end,
                                                       ParseOptions const &opts)
 {
-  auto milli = parseDateTimeFormat(data, start, end, opts.dayfirst);
+  auto milli = parseDateTimeFormat(data + start, data + end, opts.dayfirst);
   return cudf::timestamp_us{cudf::duration_us{milli * 1000}};
 }
 
@@ -223,7 +223,7 @@ __inline__ __device__ cudf::timestamp_ns decode_value(const char *data,
                                                       uint64_t end,
                                                       ParseOptions const &opts)
 {
-  auto milli = parseDateTimeFormat(data, start, end, opts.dayfirst);
+  auto milli = parseDateTimeFormat(data + start, data + end, opts.dayfirst);
   return cudf::timestamp_ns{cudf::duration_ns{milli * 1000000}};
 }
 
@@ -389,7 +389,7 @@ __inline__ __device__ bool is_whitespace(char ch) { return ch == '\t' || ch == '
 __inline__ __device__ std::pair<char const *, char const *> trim_whitespaces_quotes(
   char const *begin, char const *end, char quotechar = '\0')
 {
-  auto not_whitespace = [] __device__(auto c) { return !is_whitespace(c); };
+  auto not_whitespace = [] __device__(char c) { return !is_whitespace(c); };
 
   begin = thrust::find_if(thrust::seq, begin, end, not_whitespace);
   end   = thrust::find_if(thrust::seq,
