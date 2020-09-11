@@ -2691,10 +2691,9 @@ class Frame(libcudf.table.Table):
         #print(dir(self))
         
         data = self._unaryop("acos")
-        newdata = data.to_pandas()
-        data_columns = newdata.where(0 > newdata, np.nan)
-        finaldata = zip(self._column_names, data_columns)
-        return Frame(finaldata, self.index)
+        newdata = data.mask(data < 0)
+        return newdata
+        
 
     def atan(self):
         """
