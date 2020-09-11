@@ -105,10 +105,9 @@ __device__ std::pair<char const *, char const *> get_next_key(char const *begin,
  * @return The parsed numeric value
  */
 template <typename T, int base>
-__inline__ __device__ T
-decode_value(const char *data, uint64_t start, uint64_t end, ParseOptions const &opts)
+__inline__ __device__ T decode_value(char const *begin, char const *end, ParseOptions const &opts)
 {
-  return cudf::io::gpu::parse_numeric<T, base>(data, start, end, opts);
+  return cudf::io::gpu::parse_numeric<T, base>(begin, end, opts);
 }
 
 /**
@@ -122,10 +121,9 @@ decode_value(const char *data, uint64_t start, uint64_t end, ParseOptions const 
  * @return The parsed numeric value
  */
 template <typename T>
-__inline__ __device__ T
-decode_value(const char *data, uint64_t start, uint64_t end, ParseOptions const &opts)
+__inline__ __device__ T decode_value(char const *begin, char const *end, ParseOptions const &opts)
 {
-  return cudf::io::gpu::parse_numeric<T>(data + start, data + end, opts);
+  return cudf::io::gpu::parse_numeric<T>(begin, end, opts);
 }
 
 /**
@@ -139,12 +137,11 @@ decode_value(const char *data, uint64_t start, uint64_t end, ParseOptions const 
  * @return The parsed timestamp_D
  */
 template <>
-__inline__ __device__ cudf::timestamp_D decode_value(const char *data,
-                                                     uint64_t start,
-                                                     uint64_t end,
+__inline__ __device__ cudf::timestamp_D decode_value(char const *begin,
+                                                     char const *end,
                                                      ParseOptions const &opts)
 {
-  return cudf::timestamp_D{cudf::duration_D{parseDateFormat(data + start, data + end, opts.dayfirst)}};
+  return cudf::timestamp_D{cudf::duration_D{parseDateFormat(begin, end, opts.dayfirst)}};
 }
 
 /**
@@ -158,12 +155,11 @@ __inline__ __device__ cudf::timestamp_D decode_value(const char *data,
  * @return The parsed timestamp_s
  */
 template <>
-__inline__ __device__ cudf::timestamp_s decode_value(const char *data,
-                                                     uint64_t start,
-                                                     uint64_t end,
+__inline__ __device__ cudf::timestamp_s decode_value(char const *begin,
+                                                     char const *end,
                                                      ParseOptions const &opts)
 {
-  auto milli = parseDateTimeFormat(data + start, data + end, opts.dayfirst);
+  auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
   return cudf::timestamp_s{cudf::duration_s{milli / 1000}};
 }
 
@@ -178,12 +174,11 @@ __inline__ __device__ cudf::timestamp_s decode_value(const char *data,
  * @return The parsed timestamp_ms
  */
 template <>
-__inline__ __device__ cudf::timestamp_ms decode_value(const char *data,
-                                                      uint64_t start,
-                                                      uint64_t end,
+__inline__ __device__ cudf::timestamp_ms decode_value(char const *begin,
+                                                      char const *end,
                                                       ParseOptions const &opts)
 {
-  auto milli = parseDateTimeFormat(data + start, data + end, opts.dayfirst);
+  auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
   return cudf::timestamp_ms{cudf::duration_ms{milli}};
 }
 
@@ -198,12 +193,11 @@ __inline__ __device__ cudf::timestamp_ms decode_value(const char *data,
  * @return The parsed timestamp_us
  */
 template <>
-__inline__ __device__ cudf::timestamp_us decode_value(const char *data,
-                                                      uint64_t start,
-                                                      uint64_t end,
+__inline__ __device__ cudf::timestamp_us decode_value(char const *begin,
+                                                      char const *end,
                                                       ParseOptions const &opts)
 {
-  auto milli = parseDateTimeFormat(data + start, data + end, opts.dayfirst);
+  auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
   return cudf::timestamp_us{cudf::duration_us{milli * 1000}};
 }
 
@@ -218,24 +212,23 @@ __inline__ __device__ cudf::timestamp_us decode_value(const char *data,
  * @return The parsed timestamp_ns
  */
 template <>
-__inline__ __device__ cudf::timestamp_ns decode_value(const char *data,
-                                                      uint64_t start,
-                                                      uint64_t end,
+__inline__ __device__ cudf::timestamp_ns decode_value(char const *begin,
+                                                      char const *end,
                                                       ParseOptions const &opts)
 {
-  auto milli = parseDateTimeFormat(data + start, data + end, opts.dayfirst);
+  auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
   return cudf::timestamp_ns{cudf::duration_ns{milli * 1000000}};
 }
 
 // The purpose of this is merely to allow compilation ONLY
 // TODO : make this work for json
 #ifndef DURATION_DECODE_VALUE
-#define DURATION_DECODE_VALUE(Type)                                           \
-  template <>                                                                 \
-  __inline__ __device__ Type decode_value(                                    \
-    const char *data, uint64_t start, uint64_t end, ParseOptions const &opts) \
-  {                                                                           \
-    return Type{};                                                            \
+#define DURATION_DECODE_VALUE(Type)                                                 \
+  template <>                                                                       \
+  __inline__ __device__ Type decode_value(                                          \
+    char const *begin, char const *end, ParseOptions const &opts) \
+  {                                                                                 \
+    return Type{};                                                                  \
   }
 #endif
 DURATION_DECODE_VALUE(duration_D)
@@ -246,53 +239,47 @@ DURATION_DECODE_VALUE(duration_ns)
 
 // The purpose of these is merely to allow compilation ONLY
 template <>
-__inline__ __device__ cudf::string_view decode_value(const char *data,
-                                                     uint64_t start,
-                                                     uint64_t end,
+__inline__ __device__ cudf::string_view decode_value(char const *begin,
+                                                     char const *end,
                                                      ParseOptions const &opts)
 {
   return cudf::string_view{};
 }
 
 template <>
-__inline__ __device__ cudf::dictionary32 decode_value(const char *data,
-                                                      uint64_t start,
-                                                      uint64_t end,
+__inline__ __device__ cudf::dictionary32 decode_value(char const *begin,
+                                                      char const *end,
                                                       ParseOptions const &opts)
 {
   return cudf::dictionary32{};
 }
 
 template <>
-__inline__ __device__ cudf::list_view decode_value(const char *data,
-                                                   uint64_t start,
-                                                   uint64_t end,
+__inline__ __device__ cudf::list_view decode_value(char const *begin,
+                                                   char const *end,
                                                    ParseOptions const &opts)
 {
   return cudf::list_view{};
 }
 template <>
-__inline__ __device__ cudf::struct_view decode_value(const char *data,
-                                                     uint64_t start,
-                                                     uint64_t end,
+__inline__ __device__ cudf::struct_view decode_value(char const *begin,
+                                                     char const *end,
                                                      ParseOptions const &opts)
 {
   return cudf::struct_view{};
 }
 
 template <>
-__inline__ __device__ numeric::decimal32 decode_value(const char *data,
-                                                      uint64_t start,
-                                                      uint64_t end,
+__inline__ __device__ numeric::decimal32 decode_value(char const *begin,
+                                                      char const *end,
                                                       ParseOptions const &opts)
 {
   return numeric::decimal32{};
 }
 
 template <>
-__inline__ __device__ numeric::decimal64 decode_value(const char *data,
-                                                      uint64_t start,
-                                                      uint64_t end,
+__inline__ __device__ numeric::decimal64 decode_value(char const *begin,
+                                                      char const *end,
                                                       ParseOptions const &opts)
 {
   return numeric::decimal64{};
@@ -327,8 +314,7 @@ struct ConvertFunctor {
       } else if (serializedTrieContains(opts.falseValuesTrie, begin, field_len)) {
         return 0;
       } else {
-        // TODO: refactor decode_value to use pointers too
-        return decode_value<T>(begin, 0, field_len - 1, opts);
+        return decode_value<T>(begin, end, opts);
       }
     }();
 
@@ -344,7 +330,7 @@ struct ConvertFunctor {
     char const *begin, char const *end, void *out_buffer, size_t row, ParseOptions const &opts)
   {
     auto &value{static_cast<T *>(out_buffer)[row]};
-    value = decode_value<T>(begin, 0, end - begin - 1, opts);
+    value = decode_value<T>(begin, end, opts);
     return !std::isnan(value);
   }
 
@@ -361,8 +347,7 @@ struct ConvertFunctor {
                                                       cudf::size_type row,
                                                       const ParseOptions &opts)
   {
-    T &value{static_cast<T *>(output_column)[row]};
-    value = decode_value<T>(begin, 0, end - begin - 1, opts);
+    static_cast<T *>(output_column)[row] = decode_value<T>(begin, end, opts);
 
     return true;
   }
