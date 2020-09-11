@@ -17,11 +17,11 @@
 #include <cudf/partitioning.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/table_utilities.hpp>
-#include <tests/utilities/type_lists.hpp>
+#include <cudf/utilities/test/base_fixture.hpp>
+#include <cudf/utilities/test/column_utilities.hpp>
+#include <cudf/utilities/test/column_wrapper.hpp>
+#include <cudf/utilities/test/table_utilities.hpp>
+#include <cudf/utilities/test/type_lists.hpp>
 
 using cudf::test::fixed_width_column_wrapper;
 using cudf::test::strings_column_wrapper;

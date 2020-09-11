@@ -18,8 +18,8 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <nvtext/subword_tokenize.hpp>
 
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
+#include <cudf/utilities/test/column_utilities.hpp>
+#include <cudf/utilities/test/column_wrapper.hpp>
 
 #include <fstream>
 #include <iostream>

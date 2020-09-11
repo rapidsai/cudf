@@ -19,9 +19,9 @@
 
 #pragma once
 
+#include <cudf/utilities/test/base_fixture.hpp>
+#include <cudf/utilities/test/column_wrapper.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_wrapper.hpp>
 
 namespace cudf {
 namespace test {

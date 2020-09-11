@@ -15,7 +15,7 @@
  */
 
 #include <io/comp/gpuinflate.h>
-#include <tests/utilities/base_fixture.hpp>
+#include <cudf/utilities/test/base_fixture.hpp>
 
 #include <vector>
 

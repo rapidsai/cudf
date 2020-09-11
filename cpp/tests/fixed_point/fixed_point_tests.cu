@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/type_lists.hpp>
+#include <cudf/utilities/test/base_fixture.hpp>
+#include <cudf/utilities/test/type_lists.hpp>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>

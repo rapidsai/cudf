@@ -19,13 +19,13 @@
 
 #include <tests/binaryop/assert-binops.h>
 #include <tests/binaryop/binop-fixture.hpp>
-#include <tests/utilities/type_lists.hpp>
 
 #include <cudf/binaryop.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
-#include "cudf/types.hpp"
-#include "cudf/utilities/type_dispatcher.hpp"
-#include "tests/utilities/column_utilities.hpp"
+#include <cudf/types.hpp>
+#include <cudf/utilities/test/column_utilities.hpp>
+#include <cudf/utilities/test/type_lists.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 namespace cudf {
 namespace test {

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <tests/utilities/column_wrapper.hpp>
+#include <cudf/utilities/test/column_wrapper.hpp>
 
 #include <cudf/search.hpp>
 #include <cudf/sorting.hpp>
@@ -26,7 +26,7 @@
 
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
-#include <tests/utilities/base_fixture.hpp>
+#include <cudf/utilities/test/base_fixture.hpp>
 
 class Search : public cudf::benchmark {
 };

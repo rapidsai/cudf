@@ -17,9 +17,9 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/null_mask.hpp>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
+#include <cudf/utilities/test/base_fixture.hpp>
+#include <cudf/utilities/test/column_utilities.hpp>
+#include <cudf/utilities/test/column_wrapper.hpp>
 
 struct DictionaryFactoriesTest : public cudf::test::BaseFixture {
 };

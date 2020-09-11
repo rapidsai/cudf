@@ -16,9 +16,9 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/replace.hpp>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
+#include <cudf/utilities/test/base_fixture.hpp>
+#include <cudf/utilities/test/column_utilities.hpp>
+#include <cudf/utilities/test/column_wrapper.hpp>
 
 // This is the main test fixture
 struct ReplaceTest : public cudf::test::BaseFixture {

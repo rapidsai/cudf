@@ -1,5 +1,5 @@
-#include "column_utilities.hpp"
-#include "table_utilities.hpp"
+#include <cudf/utilities/test/column_utilities.hpp>
+#include <cudf/utilities/test/table_utilities.hpp>
 
 #include <gmock/gmock.h>
 

@@ -16,11 +16,11 @@
 
 #include <cudf/lists/lists_column_view.hpp>
 
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/cudf_gtest.hpp>
-#include <tests/utilities/type_lists.hpp>
+#include <cudf/utilities/test/base_fixture.hpp>
+#include <cudf/utilities/test/column_utilities.hpp>
+#include <cudf/utilities/test/column_wrapper.hpp>
+#include <cudf/utilities/test/cudf_gtest.hpp>
+#include <cudf/utilities/test/type_lists.hpp>
 #include "cudf/column/column_factories.hpp"
 #include "cudf/types.hpp"
 #include "rmm/device_buffer.hpp"

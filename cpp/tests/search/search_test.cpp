@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/type_lists.hpp>
+#include <cudf/utilities/test/base_fixture.hpp>
+#include <cudf/utilities/test/column_utilities.hpp>
+#include <cudf/utilities/test/column_wrapper.hpp>
+#include <cudf/utilities/test/type_lists.hpp>
 
 #include <cudf/fixed_point/fixed_point.hpp>
 #include "cudf/search.hpp"

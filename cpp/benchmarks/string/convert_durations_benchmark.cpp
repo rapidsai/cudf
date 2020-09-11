@@ -19,10 +19,10 @@
 #include <cudf/strings/convert/convert_durations.hpp>
 #include <cudf/types.hpp>
 
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/cudf_gtest.hpp>
+#include <cudf/utilities/test/base_fixture.hpp>
+#include <cudf/utilities/test/column_utilities.hpp>
+#include <cudf/utilities/test/column_wrapper.hpp>
+#include <cudf/utilities/test/cudf_gtest.hpp>
 
 #include <algorithm>
 #include <random>

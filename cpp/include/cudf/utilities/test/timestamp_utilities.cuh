@@ -16,8 +16,8 @@
 
 #pragma once
 
+#include <cudf/utilities/test/column_wrapper.hpp>
 #include <cudf/wrappers/timestamps.hpp>
-#include <tests/utilities/column_wrapper.hpp>
 
 #include <thrust/device_vector.h>
 #include <thrust/logical.h>

@@ -15,11 +15,11 @@
  */
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/test/base_fixture.hpp>
+#include <cudf/utilities/test/cudf_gtest.hpp>
+#include <cudf/utilities/test/type_list_utilities.hpp>
+#include <cudf/utilities/test/type_lists.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/cudf_gtest.hpp>
-#include <tests/utilities/type_list_utilities.hpp>
-#include <tests/utilities/type_lists.hpp>
 
 #include <thrust/device_vector.h>
 

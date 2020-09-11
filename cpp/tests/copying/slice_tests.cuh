@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
+#include <cudf/utilities/test/column_utilities.hpp>
+#include <cudf/utilities/test/column_wrapper.hpp>
 
 template <typename T, typename InputIterator>
 cudf::test::fixed_width_column_wrapper<T> create_fixed_columns(cudf::size_type start,
