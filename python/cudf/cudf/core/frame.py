@@ -2688,7 +2688,7 @@ class Frame(libcudf.table.Table):
                     1.5707963267948966,  1.266103672779499],
                     dtype='float64')
         """
-        data = self.astype('float64')
+        data = self.astype("float64")
         data = data._unaryop("acos")
         newdata = data.mask(data < 0)
         return newdata
