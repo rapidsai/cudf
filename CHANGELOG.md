@@ -67,7 +67,7 @@
 - PR #6159 Fix issue related to empty `Dataframe` with columns input to `DataFrame.appened`
 - PR #6199 Fix index preservation for dask_cudf parquet
 - PR #6207 Remove shared libs from Java sources jar
-
+- PR #6217 Fixed missing bounds checking when storing validity in parquet reader
 
 # cuDF 0.15.0 (26 Aug 2020)
 
