@@ -112,41 +112,35 @@ class column_wrapper {
 template <typename From, typename To>
 struct fixed_width_type_converter {
   // Are the types same - simply copy elements from [begin, end) to out
-  template <typename FromT = From,
-            typename ToT   = To,
-            typename InputIterator,
-            typename OutputIterator,
+  template <typename FromT                                                        = From,
+            typename ToT                                                          = To,
             typename std::enable_if<std::is_same<FromT, ToT>::value, void>::type* = nullptr>
-  void operator()(InputIterator begin, InputIterator end, OutputIterator out) const
+  ToT operator()(FromT element) const
   {
-    std::copy(begin, end, out);
+    return element;
   }
 
   // Are the types convertible or can target be constructed from source?
-  template <typename FromT = From,
-            typename ToT   = To,
-            typename InputIterator,
-            typename OutputIterator,
+  template <typename FromT                       = From,
+            typename ToT                         = To,
             typename std::enable_if<!std::is_same<FromT, ToT>::value &&
                                       (cudf::is_convertible<FromT, ToT>::value ||
                                        std::is_constructible<ToT, FromT>::value),
                                     void>::type* = nullptr>
-  void operator()(InputIterator begin, InputIterator end, OutputIterator out) const
+  ToT operator()(FromT element) const
   {
-    std::transform(begin, end, out, [](auto const& e) { return static_cast<ToT>(e); });
+    return static_cast<ToT>(element);
   }
 
   // Convert integral values to timestamps
   template <
-    typename FromT = From,
-    typename ToT   = To,
-    typename InputIterator,
-    typename OutputIterator,
+    typename FromT                       = From,
+    typename ToT                         = To,
     typename std::enable_if<std::is_integral<FromT>::value && cudf::is_timestamp_t<ToT>::value,
                             void>::type* = nullptr>
-  void operator()(InputIterator begin, InputIterator end, OutputIterator out) const
+  ToT operator()(FromT element) const
   {
-    std::transform(begin, end, out, [](auto const& e) { return ToT{typename ToT::duration{e}}; });
+    return ToT{typename ToT::duration{element}};
   }
 };
 
@@ -166,10 +160,10 @@ template <typename ElementTo, typename ElementFrom, typename InputIterator>
 rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 {
   static_assert(cudf::is_fixed_width<ElementTo>(), "Unexpected non-fixed width type.");
-  cudf::size_type size = std::distance(begin, end);
-  thrust::host_vector<ElementTo> elements;
-  elements.reserve(size);
-  fixed_width_type_converter<ElementFrom, ElementTo>{}(begin, end, elements.begin());
+  auto transformer     = fixed_width_type_converter<ElementFrom, ElementTo>{};
+  auto transform_begin = thrust::make_transform_iterator(begin, transformer);
+  auto const size      = std::distance(begin, end);
+  auto const elements  = thrust::host_vector<ElementTo>(transform_begin, transform_begin + size);
   return rmm::device_buffer{elements.data(), size * sizeof(ElementTo)};
 }
 
