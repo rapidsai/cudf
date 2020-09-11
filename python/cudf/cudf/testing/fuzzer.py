@@ -4,8 +4,6 @@ import logging
 import os
 import sys
 
-from . import parquet
-
 logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
 logging.getLogger().setLevel(logging.INFO)
 logging.basicConfig(
@@ -26,6 +24,7 @@ class Fuzzer(object):
     def __init__(
         self,
         target,
+        data_handler_class,
         dirs=None,
         exact_artifact_path=None,
         timeout=120,
@@ -39,7 +38,7 @@ class Fuzzer(object):
         self._crash_dir = exact_artifact_path
         self._timeout = timeout
         self._regression = regression
-        self._data_handler = parquet.Parquet(
+        self._data_handler = data_handler_class(
             dirs=self._dirs, max_rows=max_input_size
         )
         self._total_executions = 0
