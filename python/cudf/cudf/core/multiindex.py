@@ -87,9 +87,9 @@ class MultiIndex(Index):
 
         if copy:
             if isinstance(codes, cudf.DataFrame):
-                codes = codes.copy()
+                codes = codes.copy(deep=True)
             if len(levels) > 0 and isinstance(levels[0], cudf.Series):
-                levels = [level.copy() for level in levels]
+                levels = [level.copy(deep=True) for level in levels]
 
         out._name = None
 
@@ -238,14 +238,99 @@ class MultiIndex(Index):
                     "than maximum level size at this position"
                 )
 
-    def copy(self, deep=True):
-        mi = MultiIndex(source_data=self._source_data.copy(deep))
+    def copy(
+        self,
+        names=None,
+        dtype=None,
+        levels=None,
+        codes=None,
+        deep=False,
+        name=None,
+    ):
+        """Returns copy of MultiIndex object.
+
+        Returns a copy of `MultiIndex`. The `levels` and `codes` value can be
+        set to the provided parameters. When they are provided, the returned
+        MultiIndex is always newly constructed.
+
+        Parameters
+        ----------
+        names : sequence of objects, optional (default None)
+            Names for each of the index levels.
+        dtype : object, optional (default None)
+            MultiIndex dtype, only supports None or object type
+        levels : sequence of arrays, optional (default None)
+            The unique labels for each level. Original values used if None.
+        codes : sequence of arrays, optional (default None)
+            Integers for each level designating which label at each location.
+            Original values used if None.
+        deep : Bool (default False)
+            If True, `._data`, `._levels`, `._codes` will be copied. Ignored if
+            `levels` or `codes` are specified.
+        name : object, optional (defulat None)
+            To keep consistent with `Index.copy`, should not be used.
+
+        Returns
+        -------
+        Copy of MultiIndex Instance
+
+        Examples
+        --------
+        >>> df = cudf.DataFrame({'Close': [3400.00, 226.58, 3401.80, 228.91]})
+        >>> idx1 = cudf.MultiIndex(
+        ... levels=[['2020-08-27', '2020-08-28'], ['AMZN', 'MSFT']],
+        ... codes=[[0, 0, 1, 1], [0, 1, 0, 1]],
+        ... names=['Date', 'Symbol'])
+        >>> idx2 = idx1.copy(
+        ... levels=[['day1', 'day2'], ['com1', 'com2']],
+        ... codes=[[0, 0, 1, 1], [0, 1, 0, 1]],
+        ... names=['col1', 'col2'])
+
+        >>> df.index = idx1
+        >>> df
+                             Close
+        Date       Symbol
+        2020-08-27 AMZN    3400.00
+                   MSFT     226.58
+        2020-08-28 AMZN    3401.80
+                   MSFT     228.91
+
+        >>> df.index = idx2
+        >>> df
+                     Close
+        col1 col2
+        day1 com1  3400.00
+             com2   226.58
+        day2 com1  3401.80
+             com2   228.91
+
+        """
+
+        dtype = object if dtype is None else dtype
+        if not pd.core.dtypes.common.is_object_dtype(dtype):
+            raise TypeError("Dtype for MultiIndex only supports object type.")
+
+        # ._data needs to be rebuilt
+        if levels is not None or codes is not None:
+            if self._levels is None or self._codes is None:
+                self._compute_levels_and_codes()
+            levels = self._levels if levels is None else levels
+            codes = self._codes if codes is None else codes
+            names = self.names if names is None else names
+
+            mi = MultiIndex(levels=levels, codes=codes, names=names, copy=deep)
+            return mi
+
+        mi = MultiIndex(source_data=self._source_data.copy(deep=deep))
         if self._levels is not None:
             mi._levels = [s.copy(deep) for s in self._levels]
         if self._codes is not None:
             mi._codes = self._codes.copy(deep)
-        if self.names is not None:
+        if names is not None:
+            mi.names = names
+        elif self.names is not None:
             mi.names = self.names.copy()
+
         return mi
 
     def deepcopy(self):

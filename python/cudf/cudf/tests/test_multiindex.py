@@ -566,32 +566,175 @@ def test_multiindex_equals():
     assert_eq(mi1.equals(mi2), False)
 
 
-def test_multiindex_copy():
-    # mi made from groupby
-    # make a copy with .copy
-    gdf = cudf.DataFrame(
-        {"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5], "z": [0, 1, 0, 1, 0]}
-    )
-    mi1 = gdf.groupby(["x", "y"]).mean().index
-    mi2 = mi1.copy(deep=False)
-    assert_eq(mi1, mi2)
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "Date": [
+                "2020-08-27",
+                "2020-08-28",
+                "2020-08-31",
+                "2020-08-27",
+                "2020-08-28",
+                "2020-08-31",
+                "2020-08-27",
+                "2020-08-28",
+                "2020-08-31",
+            ],
+            "Close": [
+                3400.00,
+                3401.80,
+                3450.96,
+                226.58,
+                228.91,
+                225.53,
+                505.13,
+                525.91,
+                534.98,
+            ],
+            "Symbol": [
+                "AMZN",
+                "AMZN",
+                "AMZN",
+                "MSFT",
+                "MSFT",
+                "MSFT",
+                "NVDA",
+                "NVDA",
+                "NVDA",
+            ],
+        }
+    ],
+)
+@pytest.mark.parametrize(
+    "levels",
+    [[["2000-01-01", "2000-01-02", "2000-01-03"], ["A", "B", "C"]], None],
+)
+@pytest.mark.parametrize(
+    "codes", [[[0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0]], None]
+)
+@pytest.mark.parametrize("names", [["X", "Y"]])
+def test_multiindex_copy_sem(data, levels, codes, names):
+    """Test semantic equality for MultiIndex.copy
+    """
+    gdf = cudf.DataFrame(data)
+    pdf = gdf.to_pandas()
 
-    mi2 = mi1.copy(deep=True)
-    assert_eq(mi1, mi2)
+    gdf = gdf.groupby(["Date", "Symbol"]).mean()
+    pdf = pdf.groupby(["Date", "Symbol"]).mean()
 
-    # mi made manually
-    # make a copy with .copy
-    # is it equal?
-    mi1 = cudf.MultiIndex(
-        levels=[[1, 3, 4, 5], [1, 2, 5]],
-        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
-        names=["x", "y"],
-    )
-    mi2 = mi1.copy(deep=False)
-    assert_eq(mi1, mi2)
+    gmi = gdf.index
+    gmi_copy = gmi.copy(levels=levels, codes=codes, names=names)
 
-    mi2 = mi1.copy(deep=True)
-    assert_eq(mi1, mi2)
+    pmi = pdf.index
+    pmi_copy = pmi.copy(levels=levels, codes=codes, names=names)
+
+    for glv, plv in zip(gmi_copy.levels, pmi_copy.levels):
+        assert all(glv.values_host == plv.values)
+    for (_, gval), pval in zip(gmi.codes._data._data.items(), pmi.codes):
+        assert all(gval.values_host == pval.astype(np.int64))
+    assert_eq(gmi_copy.names, pmi_copy.names)
+
+    # Test same behavior when used on DataFrame
+    gdf.index = gmi_copy
+    pdf.index = pmi_copy
+    assert gdf.__repr__() == pdf.__repr__()
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "Date": [
+                "2020-08-27",
+                "2020-08-28",
+                "2020-08-31",
+                "2020-08-27",
+                "2020-08-28",
+                "2020-08-31",
+                "2020-08-27",
+                "2020-08-28",
+                "2020-08-31",
+            ],
+            "Close": [
+                3400.00,
+                3401.80,
+                3450.96,
+                226.58,
+                228.91,
+                225.53,
+                505.13,
+                525.91,
+                534.98,
+            ],
+            "Symbol": [
+                "AMZN",
+                "AMZN",
+                "AMZN",
+                "MSFT",
+                "MSFT",
+                "MSFT",
+                "NVDA",
+                "NVDA",
+                "NVDA",
+            ],
+        },
+        cudf.MultiIndex(
+            levels=[[1001, 1002], [2001, 2002]],
+            codes=[[1, 1, 0, 0], [0, 1, 0, 1]],
+            names=["col1", "col2"],
+        ),
+    ],
+)
+@pytest.mark.parametrize("deep", [True, False])
+def test_multiindex_copy_deep(data, deep):
+    """Test memory idendity for deep copy
+        Case1: Constructed from GroupBy, StringColumns
+        Case2: Constrcuted from MultiIndex, NumericColumns
+    """
+    same_ref = not deep
+
+    if isinstance(data, dict):
+        from functools import reduce
+        import operator
+
+        gdf = cudf.DataFrame(data)
+        mi1 = gdf.groupby(["Date", "Symbol"]).mean().index
+        mi2 = mi1.copy(deep=deep)
+
+        lchildren = [col.children for _, col in mi1._data.items()]
+        rchildren = [col.children for _, col in mi2._data.items()]
+
+        # Flatten
+        lchildren = reduce(operator.add, lchildren)
+        rchildren = reduce(operator.add, rchildren)
+
+        lptrs = [child.base_data.ptr for child in lchildren]
+        rptrs = [child.base_data.ptr for child in rchildren]
+
+        assert all([(x == y) is same_ref for x, y in zip(lptrs, rptrs)])
+
+    elif isinstance(data, cudf.MultiIndex):
+        mi1 = data
+        mi2 = mi1.copy(deep=deep)
+
+        # Assert ._levels idendity
+        lptrs = [lv._data._data[None].base_data.ptr for lv in mi1._levels]
+        rptrs = [lv._data._data[None].base_data.ptr for lv in mi2._levels]
+
+        assert all([(x == y) is same_ref for x, y in zip(lptrs, rptrs)])
+
+        # Assert ._codes idendity
+        lptrs = [c.base_data.ptr for _, c in mi1._codes._data.items()]
+        rptrs = [c.base_data.ptr for _, c in mi2._codes._data.items()]
+
+        assert all([(x == y) is same_ref for x, y in zip(lptrs, rptrs)])
+
+        # Assert ._data idendity
+        lptrs = [d.base_data.ptr for _, d in mi1._data.items()]
+        rptrs = [d.base_data.ptr for _, d in mi2._data.items()]
+
+        assert all([(x == y) is same_ref for x, y in zip(lptrs, rptrs)])
 
 
 @pytest.mark.parametrize(
