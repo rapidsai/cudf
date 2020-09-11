@@ -2625,7 +2625,7 @@ class StringIndex(GenericIndex):
     name: A string
     """
 
-    def __new__(cls, values, copy=True, **kwargs):
+    def __new__(cls, values, copy=False, **kwargs):
         out = Frame.__new__(cls)
         kwargs = _setdefault_name(values, **kwargs)
         if isinstance(values, StringColumn):
