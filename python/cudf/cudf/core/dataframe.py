@@ -451,7 +451,6 @@ class DataFrame(Frame, Serializable):
 
     @classmethod
     def _from_table(cls, table, index=None):
-        # import pdb;pdb.set_trace()
         if index is None:
             if table._index is not None:
                 index = Index._from_table(table._index)
@@ -2784,7 +2783,6 @@ class DataFrame(Frame, Serializable):
         0  1.0  a
         2  3.0  c
         """
-        # import pdb;pdb.set_trace()
         positions = as_column(positions)
         if pd.api.types.is_bool_dtype(positions):
             return self._apply_boolean_mask(positions)

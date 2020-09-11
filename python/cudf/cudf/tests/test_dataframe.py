@@ -346,6 +346,71 @@ def test_dataframe_drop_index(pdf, index, inplace):
 @pytest.mark.parametrize(
     "pdf",
     [
+        pd.DataFrame(
+            {"a": range(10), "b": range(10, 20), "d": ["a", "v"] * 5},
+            index=pd.MultiIndex(
+                levels=[
+                    ["lama", "cow", "falcon"],
+                    ["speed", "weight", "length"],
+                ],
+                codes=[
+                    [0, 0, 0, 1, 1, 1, 2, 2, 2, 1],
+                    [0, 1, 2, 0, 1, 2, 0, 1, 2, 1],
+                ],
+            ),
+        )
+    ],
+)
+@pytest.mark.parametrize(
+    "index,level",
+    [
+        ("cow", 0),
+        ("lama", 0),
+        ("falcon", 0),
+        ("speed", 1),
+        ("weight", 1),
+        ("length", 1),
+        pytest.param(
+            "cow",
+            None,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/36293"
+            ),
+        ),
+        pytest.param(
+            "lama",
+            None,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/36293"
+            ),
+        ),
+        pytest.param(
+            "falcon",
+            None,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/36293"
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_dataframe_drop_multiindex(pdf, index, level, inplace):
+    pdf = pdf.copy()
+    gdf = DataFrame.from_pandas(pdf)
+
+    expected = pdf.drop(index=index, inplace=inplace, level=level)
+    actual = gdf.drop(index=index, inplace=inplace, level=level)
+
+    if inplace:
+        expected = pdf
+        actual = gdf
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "pdf",
+    [
         pd.DataFrame({"a": range(10), "b": range(10, 20), "c": range(1, 11)}),
         pd.DataFrame(
             {"a": range(10), "b": range(10, 20), "d": ["a", "v"] * 5}
