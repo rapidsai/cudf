@@ -18,32 +18,33 @@
 
 #include <benchmarks/common/generate_benchmark_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/io/cuio_benchmarks_common.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/io/parquet.hpp>
 
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
 
-constexpr int64_t data_size = 512 << 20;  // 512 MB
+constexpr size_t data_size         = 512 << 20;
+constexpr cudf::size_type num_cols = 64;
 
 namespace cudf_io = cudf::io;
 
-template <typename T>
 class ParquetWrite : public cudf::benchmark {
 };
 
-template <typename T>
 void PQ_write(benchmark::State& state)
 {
-  int64_t const total_bytes      = state.range(0);
-  cudf::size_type const num_cols = state.range(1);
+  auto const data_types             = get_type_or_group(state.range(0));
+  cudf::size_type const cardinality = state.range(1);
+  cudf::size_type const run_length  = state.range(2);
   cudf_io::compression_type const compression =
-    state.range(2) ? cudf_io::compression_type::SNAPPY : cudf_io::compression_type::NONE;
+    state.range(3) ? cudf_io::compression_type::SNAPPY : cudf_io::compression_type::NONE;
 
-  int64_t const col_bytes = total_bytes / num_cols;
-
-  auto const tbl  = create_random_table<T>(num_cols, col_bytes, true);
+  data_profile table_data_profile;
+  table_data_profile.set_cardinality(cardinality);
+  table_data_profile.set_avg_run_length(run_length);
+  auto const tbl =
+    create_random_table(data_types, num_cols, table_size_bytes{data_size}, table_data_profile);
   auto const view = tbl->view();
 
   for (auto _ : state) {
@@ -53,16 +54,26 @@ void PQ_write(benchmark::State& state)
     cudf_io::write_parquet(opts);
   }
 
-  state.SetBytesProcessed(total_bytes * state.iterations());
+  state.SetBytesProcessed(data_size * state.iterations());
 }
 
-#define PARQ_WR_BENCHMARK_DEFINE(name, datatype, compression) \
-  BENCHMARK_TEMPLATE_DEFINE_F(ParquetWrite, name, datatype)   \
-  (::benchmark::State & state) { PQ_write<datatype>(state); } \
-  BENCHMARK_REGISTER_F(ParquetWrite, name)                    \
-    ->Args({data_size, 64, compression})                      \
-    ->Unit(benchmark::kMillisecond)                           \
+// TODO: replace with ArgsProduct once available
+#define PARQ_WR_BENCHMARK_DEFINE(name, type_or_group) \
+  BENCHMARK_DEFINE_F(ParquetWrite, name)              \
+  (::benchmark::State & state) { PQ_write(state); }   \
+  BENCHMARK_REGISTER_F(ParquetWrite, name)            \
+    ->Args({int32_t(type_or_group), 0, 1, false})     \
+    ->Args({int32_t(type_or_group), 0, 1, true})      \
+    ->Args({int32_t(type_or_group), 0, 32, false})    \
+    ->Args({int32_t(type_or_group), 0, 32, true})     \
+    ->Args({int32_t(type_or_group), 1000, 1, false})  \
+    ->Args({int32_t(type_or_group), 1000, 1, true})   \
+    ->Args({int32_t(type_or_group), 1000, 32, false}) \
+    ->Args({int32_t(type_or_group), 1000, 32, true})  \
+    ->Unit(benchmark::kMillisecond)                   \
     ->UseManualTime();
 
-CUIO_BENCH_ALL_TYPES(PARQ_WR_BENCHMARK_DEFINE, UNCOMPRESSED)
-CUIO_BENCH_ALL_TYPES(PARQ_WR_BENCHMARK_DEFINE, USE_SNAPPY)
+PARQ_WR_BENCHMARK_DEFINE(integral, type_group_id::INTEGRAL);
+PARQ_WR_BENCHMARK_DEFINE(floats, type_group_id::FLOATING_POINT);
+PARQ_WR_BENCHMARK_DEFINE(timestamps, type_group_id::TIMESTAMP);
+PARQ_WR_BENCHMARK_DEFINE(string, cudf::type_id::STRING);

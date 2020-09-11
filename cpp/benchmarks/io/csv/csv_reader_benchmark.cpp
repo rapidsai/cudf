@@ -18,34 +18,29 @@
 
 #include <benchmarks/common/generate_benchmark_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/io/cuio_benchmarks_common.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/io/functions.hpp>
 
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
 
-constexpr int64_t data_size = 256 << 20;  // 256 MB
+constexpr size_t data_size         = 256 << 20;
+constexpr cudf::size_type num_cols = 64;
 
 namespace cudf_io = cudf::io;
 
-template <typename T>
 class CsvRead : public cudf::benchmark {
 };
 
-template <typename T>
 void CSV_read(benchmark::State& state)
 {
-  int64_t const total_bytes      = state.range(0);
-  cudf::size_type const num_cols = state.range(1);
+  auto const data_types = get_type_or_group(state.range(0));
 
-  int64_t const col_bytes = total_bytes / num_cols;
-  std::vector<char> out_buffer;
-  out_buffer.reserve(total_bytes);
-
-  auto const tbl  = create_random_table<T>(num_cols, col_bytes, true);
+  auto const tbl  = create_random_table(data_types, num_cols, table_size_bytes{data_size});
   auto const view = tbl->view();
 
+  std::vector<char> out_buffer;
+  out_buffer.reserve(data_size);
   cudf_io::write_csv_args args{cudf_io::sink_info(&out_buffer), view, "null", false, 1 << 30};
   cudf_io::write_csv(args);
 
@@ -56,16 +51,19 @@ void CSV_read(benchmark::State& state)
     cudf_io::read_csv(read_args);
   }
 
-  state.SetBytesProcessed(total_bytes * state.iterations());
+  state.SetBytesProcessed(data_size * state.iterations());
 }
 
-#define CSV_RD_BENCHMARK_DEFINE(name, datatype, compression)  \
-  BENCHMARK_TEMPLATE_DEFINE_F(CsvRead, name, datatype)        \
-  (::benchmark::State & state) { CSV_read<datatype>(state); } \
-  BENCHMARK_REGISTER_F(CsvRead, name)                         \
-    ->Args({data_size, 64})                                   \
-    ->Unit(benchmark::kMillisecond)                           \
+// TODO: vary reader options instead of data profile here
+#define CSV_RD_BENCHMARK_DEFINE(name, datatype)     \
+  BENCHMARK_DEFINE_F(CsvRead, name)                 \
+  (::benchmark::State & state) { CSV_read(state); } \
+  BENCHMARK_REGISTER_F(CsvRead, name)               \
+    ->Args({int32_t(datatype)})                     \
+    ->Unit(benchmark::kMillisecond)                 \
     ->UseManualTime();
 
-// no compression support; compression parameter unused
-CUIO_BENCH_ALL_TYPES(CSV_RD_BENCHMARK_DEFINE, UNCOMPRESSED)
+CSV_RD_BENCHMARK_DEFINE(integral, type_group_id::INTEGRAL);
+CSV_RD_BENCHMARK_DEFINE(floats, type_group_id::FLOATING_POINT);
+CSV_RD_BENCHMARK_DEFINE(timestamps, type_group_id::TIMESTAMP);
+CSV_RD_BENCHMARK_DEFINE(string, cudf::type_id::STRING);

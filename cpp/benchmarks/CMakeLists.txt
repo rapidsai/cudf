@@ -192,7 +192,8 @@ ConfigureBench(NULLMASK_BENCH "${NULLMASK_BENCH_SRC}")
 # - parquet writer chunks benchmark -----------------------------------------------------------------------------
 
 set(PARQUET_WRITER_CHUNKS_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/io/parquet/parquet_writer_chunks_benchmark.cpp")
+  "${CMAKE_CURRENT_SOURCE_DIR}/io/parquet/parquet_writer_chunks_benchmark.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/common/generate_benchmark_input.cpp")
 
 ConfigureBench(PARQUET_WRITER_CHUNKS_BENCH "${PARQUET_WRITER_CHUNKS_BENCH_SRC}")
 
@@ -200,7 +201,8 @@ ConfigureBench(PARQUET_WRITER_CHUNKS_BENCH "${PARQUET_WRITER_CHUNKS_BENCH_SRC}")
 # - parquet reader benchmark ----------------------------------------------------------------------
 
 set(PARQUET_READER_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/io/parquet/parquet_reader_benchmark.cpp")
+  "${CMAKE_CURRENT_SOURCE_DIR}/io/parquet/parquet_reader_benchmark.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/common/generate_benchmark_input.cpp")
 
 ConfigureBench(PARQUET_READER_BENCH "${PARQUET_READER_BENCH_SRC}")
 
@@ -208,7 +210,8 @@ ConfigureBench(PARQUET_READER_BENCH "${PARQUET_READER_BENCH_SRC}")
 # - orc reader benchmark --------------------------------------------------------------------------
 
 set(ORC_READER_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/io/orc/orc_reader_benchmark.cpp")
+  "${CMAKE_CURRENT_SOURCE_DIR}/io/orc/orc_reader_benchmark.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/common/generate_benchmark_input.cpp")
 
 ConfigureBench(ORC_READER_BENCH "${ORC_READER_BENCH_SRC}")
 
@@ -216,7 +219,8 @@ ConfigureBench(ORC_READER_BENCH "${ORC_READER_BENCH_SRC}")
 # - csv reader benchmark --------------------------------------------------------------------------
 
 set(CSV_READER_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/io/csv/csv_reader_benchmark.cpp")
+  "${CMAKE_CURRENT_SOURCE_DIR}/io/csv/csv_reader_benchmark.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/common/generate_benchmark_input.cpp")
 
 ConfigureBench(CSV_READER_BENCH "${CSV_READER_BENCH_SRC}")
 
@@ -224,7 +228,8 @@ ConfigureBench(CSV_READER_BENCH "${CSV_READER_BENCH_SRC}")
 # - parquet writer benchmark -----------------------------------------------------------------------------
 
 set(PARQUET_WRITER_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/io/parquet/parquet_writer_benchmark.cpp")
+  "${CMAKE_CURRENT_SOURCE_DIR}/io/parquet/parquet_writer_benchmark.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/common/generate_benchmark_input.cpp")
 
 ConfigureBench(PARQUET_WRITER_BENCH "${PARQUET_WRITER_BENCH_SRC}")
 
@@ -232,7 +237,8 @@ ConfigureBench(PARQUET_WRITER_BENCH "${PARQUET_WRITER_BENCH_SRC}")
 # - orc writer benchmark -----------------------------------------------------------------------------
 
 set(ORC_WRITER_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/io/orc/orc_writer_benchmark.cpp")
+  "${CMAKE_CURRENT_SOURCE_DIR}/io/orc/orc_writer_benchmark.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/common/generate_benchmark_input.cpp")
 
 ConfigureBench(ORC_WRITER_BENCH "${ORC_WRITER_BENCH_SRC}")
 
@@ -240,7 +246,8 @@ ConfigureBench(ORC_WRITER_BENCH "${ORC_WRITER_BENCH_SRC}")
 # - csv writer benchmark -----------------------------------------------------------------------------
 
 set(CSV_WRITER_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/io/csv/csv_writer_benchmark.cpp")
+  "${CMAKE_CURRENT_SOURCE_DIR}/io/csv/csv_writer_benchmark.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/common/generate_benchmark_input.cpp")
 
 ConfigureBench(CSV_WRITER_BENCH "${CSV_WRITER_BENCH_SRC}")
 
