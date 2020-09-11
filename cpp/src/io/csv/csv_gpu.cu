@@ -24,6 +24,9 @@
 #include <io/utilities/block_utils.cuh>
 #include <io/utilities/parsing_utils.cuh>
 
+#include <io/utilities/block_utils.cuh>
+#include <io/utilities/parsing_utils.cuh>
+
 #include <cudf/detail/utilities/trie.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/lists/list_view.cuh>

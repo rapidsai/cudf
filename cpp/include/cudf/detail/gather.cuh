@@ -196,70 +196,6 @@ struct column_gatherer_impl<string_view, MapItType> {
 };
 
 /**
- * @brief Column gather specialization for dictionary column type.
- */
-template <typename MapItType>
-struct column_gatherer_impl<dictionary32, MapItType> {
-  /**
-   * @brief Type-dispatched function to gather from one column to another based
-   * on a `gather_map`.
-   *
-   * @param source_column View into the column to gather from
-   * @param gather_map_begin Beginning of iterator range of integral values representing the gather
-   * map
-   * @param gather_map_end End of iterator range of integral values representing the gather map
-   * @param nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   * @param mr Device memory resource used to allocate the returned column's device memory
-   * @return New dictionary column with gathered rows.
-   */
-  std::unique_ptr<column> operator()(column_view const& source_column,
-                                     MapItType gather_map_begin,
-                                     MapItType gather_map_end,
-                                     bool nullify_out_of_bounds,
-                                     cudaStream_t stream,
-                                     rmm::mr::device_memory_resource* mr)
-  {
-    dictionary_column_view dictionary(source_column);
-    auto output_count = std::distance(gather_map_begin, gather_map_end);
-    if (output_count == 0) return make_empty_column(data_type{type_id::DICTIONARY32});
-    // The gather could cause some keys to be abandoned -- no indices point to them.
-    // In this case, we could do further work to remove the abandoned keys and
-    // reshuffle the indices values.
-    // We decided we will copy the keys for gather since the keys column should
-    // be relatively smallish.
-    // Also, there are scenarios where the keys are common with other dictionaries
-    // and the original intention was to share the keys here.
-    auto keys_copy = std::make_unique<column>(dictionary.keys(), stream, mr);
-    // create view of the indices column combined with the null mask
-    // in order to call gather on it
-    column_view indices(data_type{type_id::INT32},
-                        dictionary.size(),
-                        dictionary.indices().data<int32_t>(),
-                        dictionary.null_mask(),
-                        dictionary.null_count(),
-                        dictionary.offset());
-    column_gatherer_impl<int32_t, MapItType> index_gatherer;
-    auto new_indices =
-      index_gatherer(indices, gather_map_begin, gather_map_end, nullify_out_of_bounds, stream, mr);
-    // dissect the column's contents
-    auto null_count = new_indices->null_count();  // get this before it goes away
-    auto contents   = new_indices->release();     // new_indices will now be empty
-    // build the output indices column from the contents' data component
-    auto indices_column = std::make_unique<column>(data_type{type_id::INT32},
-                                                   static_cast<size_type>(output_count),
-                                                   std::move(*(contents.data.release())),
-                                                   rmm::device_buffer{0, stream, mr},
-                                                   0);  // set null count to 0
-    // finally, build the dictionary with the null_mask component and the keys and indices
-    return make_dictionary_column(std::move(keys_copy),
-                                  std::move(indices_column),
-                                  std::move(*(contents.null_mask.release())),
-                                  null_count);
-  }
-};
-
-/**
  * @brief Column gather specialization for list_view column type.
  *
  * @tparam MapItRoot Iterator type to access the incoming root column.
@@ -391,6 +327,71 @@ struct column_gatherer {
 
     return gatherer(
       source_column, gather_map_begin, gather_map_end, nullify_out_of_bounds, stream, mr);
+  }
+};
+
+/**
+ * @brief Column gather specialization for dictionary column type.
+ */
+template <typename MapItType>
+struct column_gatherer_impl<dictionary32, MapItType> {
+  /**
+   * @brief Type-dispatched function to gather from one column to another based
+   * on a `gather_map`.
+   *
+   * @param source_column View into the column to gather from
+   * @param gather_map_begin Beginning of iterator range of integral values representing the gather
+   * map
+   * @param gather_map_end End of iterator range of integral values representing the gather map
+   * @param nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds
+   * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param mr Device memory resource used to allocate the returned column's device memory
+   * @return New dictionary column with gathered rows.
+   */
+  std::unique_ptr<column> operator()(column_view const& source_column,
+                                     MapItType gather_map_begin,
+                                     MapItType gather_map_end,
+                                     bool nullify_out_of_bounds,
+                                     cudaStream_t stream,
+                                     rmm::mr::device_memory_resource* mr)
+  {
+    dictionary_column_view dictionary(source_column);
+    auto output_count = std::distance(gather_map_begin, gather_map_end);
+    if (output_count == 0) return make_empty_column(data_type{type_id::DICTIONARY32});
+    // The gather could cause some keys to be abandoned -- no indices point to them.
+    // In this case, we could do further work to remove the abandoned keys and
+    // reshuffle the indices values.
+    // We decided we will copy the keys for gather since the keys column should
+    // be relatively smallish.
+    // Also, there are scenarios where the keys are common with other dictionaries
+    // and the original intention was to share the keys here.
+    auto keys_copy = std::make_unique<column>(dictionary.keys(), stream, mr);
+    // create view of the indices column combined with the null mask
+    // in order to call gather on it
+    column_view indices = dictionary.get_indices_annotated();
+    // now perform gather on just the indices
+    auto new_indices = type_dispatcher(indices.type(),
+                                       column_gatherer{},
+                                       indices,
+                                       gather_map_begin,
+                                       gather_map_end,
+                                       nullify_out_of_bounds,
+                                       stream,
+                                       mr);
+    // dissect the column's contents
+    auto null_count = new_indices->null_count();  // get this before calling release()
+    auto contents   = new_indices->release();     // new_indices will now be empty
+    // build the output indices column from the contents' data component
+    auto indices_column = std::make_unique<column>(indices.type(),
+                                                   static_cast<size_type>(output_count),
+                                                   std::move(*(contents.data.release())),
+                                                   rmm::device_buffer{0, stream, mr},
+                                                   0);  // set null count to 0
+    // finally, build the dictionary with the null_mask component and the keys and indices
+    return make_dictionary_column(std::move(keys_copy),
+                                  std::move(indices_column),
+                                  std::move(*(contents.null_mask.release())),
+                                  null_count);
   }
 };
 
