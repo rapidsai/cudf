@@ -16,8 +16,10 @@
 
 #include "csv_common.h"
 #include "csv_gpu.h"
-
 #include "datetime.cuh"
+
+#include <io/utilities/block_utils.cuh>
+#include <io/utilities/parsing_utils.cuh>
 
 #include <cudf/detail/utilities/trie.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
@@ -29,8 +31,9 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <io/utilities/block_utils.cuh>
-#include <io/utilities/parsing_utils.cuh>
+#include <thrust/detail/copy.h>
+#include <thrust/transform.h>
+
 #include <type_traits>
 
 using namespace ::cudf::io;
@@ -1014,23 +1017,25 @@ void __host__ remove_blank_rows(rmm::device_vector<uint64_t> &row_offsets,
   row_offsets.resize(new_end - row_offsets.begin());
 }
 
-cudaError_t __host__ DetectColumnTypes(const char *data,
-                                       const uint64_t *row_starts,
-                                       size_t num_rows,
-                                       size_t num_columns,
-                                       const ParseOptions &options,
-                                       column_parse::flags *flags,
-                                       column_parse::stats *stats,
-                                       cudaStream_t stream)
+thrust::host_vector<column_parse::stats> detect_column_types(const char *data,
+                                                             const uint64_t *row_starts,
+                                                             size_t num_rows,
+                                                             size_t num_actual_columns,
+                                                             size_t num_active_columns,
+                                                             const cudf::io::ParseOptions &options,
+                                                             column_parse::flags *flags,
+                                                             cudaStream_t stream)
 {
   // Calculate actual block count to use based on records count
   const int block_size = csvparse_block_dim;
   const int grid_size  = (num_rows + block_size - 1) / block_size;
 
-  data_type_detection<<<grid_size, block_size, 0, stream>>>(
-    data, options, num_rows, num_columns, flags, row_starts, stats);
+  auto d_stats = rmm::device_vector<column_parse::stats>(num_active_columns);
 
-  return cudaSuccess;
+  data_type_detection<<<grid_size, block_size, 0, stream>>>(
+    data, options, num_rows, num_actual_columns, flags, row_starts, d_stats.data().get());
+
+  return thrust::host_vector<column_parse::stats>(d_stats);
 }
 
 cudaError_t __host__ DecodeRowColumnData(const char *data,
