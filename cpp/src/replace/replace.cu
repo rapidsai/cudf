@@ -307,29 +307,22 @@ struct replace_kernel_forwarder {
     rmm::device_scalar<cudf::size_type> valid_counter(0, stream);
     cudf::size_type* valid_count = valid_counter.data();
 
-    auto replace = replace_kernel<col_type, true, true>;
-    if (input_col.has_nulls()) {
-      if (replacement_values.has_nulls()) {
-        replace = replace_kernel<col_type, true, true>;
-      } else {
-        replace = replace_kernel<col_type, true, false>;
-      }
-    } else {
-      if (replacement_values.has_nulls()) {
-        replace = replace_kernel<col_type, false, true>;
-      } else {
-        replace = replace_kernel<col_type, false, false>;
-      }
-    }
+    auto replace = [&] {
+      if (input_col.has_nulls())
+        return replacement_values.has_nulls() ? replace_kernel<col_type, true, true>
+                                              : replace_kernel<col_type, true, false>;
+      else
+        return replacement_values.has_nulls() ? replace_kernel<col_type, false, true>
+                                              : replace_kernel<col_type, false, false>;
+    }();
 
-    std::unique_ptr<cudf::column> output;
-    if (input_col.has_nulls() || replacement_values.has_nulls()) {
-      output = cudf::detail::allocate_like(
-        input_col, input_col.size(), cudf::mask_allocation_policy::ALWAYS, mr, stream);
-    } else {
-      output = cudf::detail::allocate_like(
-        input_col, input_col.size(), cudf::mask_allocation_policy::NEVER, mr, stream);
-    }
+    auto output = [&] {
+      auto const mask_allocation_policy = input_col.has_nulls() || replacement_values.has_nulls()
+                                            ? cudf::mask_allocation_policy::ALWAYS
+                                            : cudf::mask_allocation_policy::NEVER;
+      return cudf::detail::allocate_like(
+        input_col, input_col.size(), mask_allocation_policy, mr, stream);
+    }();
 
     cudf::mutable_column_view outputView = output->mutable_view();
 
