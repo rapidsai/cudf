@@ -3063,7 +3063,7 @@ class DataFrame(Frame, Serializable):
             for c in columns:
                 try:
                     df._drop_column(c)
-                except NameError as e:
+                except KeyError as e:
                     if errors == "ignore":
                         pass
                     else:
@@ -3112,7 +3112,7 @@ class DataFrame(Frame, Serializable):
         """Drop a column by *name*
         """
         if name not in self._data:
-            raise NameError("column {!r} does not exist".format(name))
+            raise KeyError("column {!r} does not exist".format(name))
         del self._data[name]
 
     def drop_duplicates(

@@ -437,10 +437,10 @@ def test_dataframe_drop_labels_axis_1(pdf, labels, inplace):
 
 def test_dataframe_drop_error():
     df = gd.DataFrame({"a": [1], "b": [2], "c": [3]})
-    with pytest.raises(NameError, match="column 'd' does not exist"):
+    with pytest.raises(KeyError, match="column 'd' does not exist"):
         df.drop(columns="d")
 
-    with pytest.raises(NameError, match="column 'd' does not exist"):
+    with pytest.raises(KeyError, match="column 'd' does not exist"):
         df.drop(columns=["a", "d", "b"])
 
     with pytest.raises(ValueError, match="Cannot specify both"):
@@ -451,6 +451,53 @@ def test_dataframe_drop_error():
 
     with pytest.raises(KeyError, match="One or more values not found in axis"):
         df.drop([2, 0])
+
+
+def test_dataframe_drop_raises():
+    df = gd.DataFrame(
+        {"a": [1, 2, 3], "c": [10, 20, 30]}, index=["x", "y", "z"]
+    )
+    pdf = df.to_pandas()
+    try:
+        pdf.drop("p")
+    except Exception as e:
+        with pytest.raises(
+            type(e), match="One or more values not found in axis"
+        ):
+            df.drop("p")
+    else:
+        raise AssertionError("Expected pdf.drop to fail")
+
+    expect = pdf.drop("p", errors="ignore")
+    actual = df.drop("p", errors="ignore")
+
+    assert_eq(actual, expect)
+
+    try:
+        pdf.drop(columns="p")
+    except Exception as e:
+        with pytest.raises(type(e), match="column 'p' does not exist"):
+            df.drop(columns="p")
+    else:
+        raise AssertionError("Expected pdf.drop to fail")
+
+    expect = pdf.drop(columns="p", errors="ignore")
+    actual = df.drop(columns="p", errors="ignore")
+
+    assert_eq(actual, expect)
+
+    try:
+        pdf.drop(labels="p", axis=1)
+    except Exception as e:
+        with pytest.raises(type(e), match="column 'p' does not exist"):
+            df.drop(labels="p", axis=1)
+    else:
+        raise AssertionError("Expected pdf.drop to fail")
+
+    expect = pdf.drop(labels="p", axis=1, errors="ignore")
+    actual = df.drop(labels="p", axis=1, errors="ignore")
+
+    assert_eq(actual, expect)
 
 
 def test_dataframe_column_add_drop_via_setitem():
