@@ -150,47 +150,63 @@ def read_orc_statistics(
 
 
 def _filter_stripes(
-    filters, filepath_or_buffer, stripes=None, skip_rows=None, num_rows=None
+    filters,
+    joins,
+    filepath_or_buffer,
+    stripes=None,
+    skip_rows=None,
+    num_rows=None,
 ):
     # Prepare filters
     filters = filterutils._prepare_filters(filters)
 
     # Get columns relevant to filtering
-    columns_in_predicate = [
-        col for conjunction in filters for (col, op, val) in conjunction
-    ]
+    columns_in_predicate = (
+        {col for conjunction in filters for (col, op, val) in conjunction}
+        if filters
+        else {}
+    )
+    columns_in_joins = {col for (col, _, _) in joins} if joins else {}
+    columns = columns_in_predicate.union(columns_in_joins)
 
     # Read and parse file-level and stripe-level statistics
     file_statistics, stripes_statistics = read_orc_statistics(
-        filepath_or_buffer, columns_in_predicate
+        filepath_or_buffer, columns
     )
 
     # Filter using file-level statistics
-    if not filterutils._apply_filters(filters, file_statistics):
+    if filters and not filterutils._apply_filters(filters, file_statistics):
         return []
 
     # Filter using stripe-level statistics
     selected_stripes = []
-    num_rows_scanned = 0
-    for i, stripe_statistics in enumerate(stripes_statistics):
-        num_rows_before_stripe = num_rows_scanned
-        num_rows_scanned += next(iter(stripe_statistics.values()))[
-            "number_of_values"
-        ]
-        if stripes is not None and i not in stripes:
-            continue
-        if skip_rows is not None and num_rows_scanned <= skip_rows:
-            continue
-        else:
-            skip_rows = 0
-        if (
-            skip_rows is not None
-            and num_rows is not None
-            and num_rows_before_stripe >= skip_rows + num_rows
-        ):
-            continue
-        if filterutils._apply_filters(filters, stripe_statistics):
-            selected_stripes.append(i)
+    if filters:
+        num_rows_scanned = 0
+        for i, stripe_statistics in enumerate(stripes_statistics):
+            num_rows_before_stripe = num_rows_scanned
+            num_rows_scanned += next(iter(stripe_statistics.values()))[
+                "number_of_values"
+            ]
+            if stripes is not None and i not in stripes:
+                continue
+            if skip_rows is not None and num_rows_scanned <= skip_rows:
+                continue
+            else:
+                skip_rows = 0
+            if (
+                skip_rows is not None
+                and num_rows is not None
+                and num_rows_before_stripe >= skip_rows + num_rows
+            ):
+                continue
+            if filterutils._apply_filters(filters, stripe_statistics):
+                selected_stripes.append(i)
+
+    # Filter using joins
+    if joins:
+        for col, op, other in joins:
+            res = filterutils._filter_with_joins
+            selected_stripes = [selected_stripes[i] for i in ]
 
     return selected_stripes
 
@@ -201,6 +217,7 @@ def read_orc(
     engine="cudf",
     columns=None,
     filters=None,
+    joins=None,
     stripes=None,
     skip_rows=None,
     num_rows=None,
@@ -220,9 +237,9 @@ def read_orc(
     if compression is not None:
         ValueError("URL content-encoding decompression is not supported")
 
-    if filters is not None:
+    if filters is not None or joins is not None:
         selected_stripes = _filter_stripes(
-            filters, filepath_or_buffer, stripes, skip_rows, num_rows
+            filters, joins, filepath_or_buffer, stripes, skip_rows, num_rows
         )
 
         # Return empty if everything was filtered
