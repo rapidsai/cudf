@@ -39,7 +39,8 @@ TEST_F(DictionarySearchTest, StringsColumn)
   cudf::string_scalar key("ccc");
   auto result = cudf::dictionary::get_index(cudf::dictionary_column_view(dictionary->view()), key);
   EXPECT_TRUE(result->is_valid());
-  EXPECT_EQ(3, result->value());
+  auto n_result = dynamic_cast<cudf::numeric_scalar<uint32_t>*>(result.get());
+  EXPECT_EQ(3, n_result->value());
 
   cudf::string_scalar no_key("zzz");
   result = cudf::dictionary::get_index(cudf::dictionary_column_view(dictionary->view()), no_key);
@@ -54,7 +55,8 @@ TEST_F(DictionarySearchTest, WithNulls)
   cudf::numeric_scalar<int64_t> key(4);
   auto result = cudf::dictionary::get_index(cudf::dictionary_column_view(dictionary->view()), key);
   EXPECT_TRUE(result->is_valid());
-  EXPECT_EQ(0, result->value());
+  auto n_result = dynamic_cast<cudf::numeric_scalar<uint32_t>*>(result.get());
+  EXPECT_EQ(0, n_result->value());
 
   cudf::numeric_scalar<int64_t> no_key(9);
   result = cudf::dictionary::get_index(cudf::dictionary_column_view(dictionary->view()), no_key);
