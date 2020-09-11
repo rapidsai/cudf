@@ -31,6 +31,7 @@
 - PR #6146 Added element/validity pair constructors for fixed_width and string wrappers
 - PR #6143 General improvements for java arrow IPC.
 - PR #6149 Update to Arrow v1.0.1
+- PR #6201 Expose libcudf test utilities headers for external project use.
 
 ## Bug Fixes
 
