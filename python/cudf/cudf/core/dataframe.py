@@ -3011,7 +3011,7 @@ class DataFrame(Frame, Serializable):
                weight    1.0    0.8
                length    0.3    0.2
         >>> df.drop(index='cow', columns='small')
-                        big
+                         big
         lama   speed    45.0
                weight  200.0
                length    1.5
@@ -3019,7 +3019,7 @@ class DataFrame(Frame, Serializable):
                weight    1.0
                length    0.3
         >>> df.drop(index='length', level=1)
-                        big  small
+                         big  small
         lama   speed    45.0   30.0
                weight  200.0  100.0
         cow    speed    30.0   20.0
@@ -3027,9 +3027,6 @@ class DataFrame(Frame, Serializable):
         falcon speed   320.0  250.0
                weight    1.0    0.8
         """
-
-        if errors != "raise":
-            raise NotImplementedError("errors= keyword not implemented")
 
         if labels is not None:
             if index is not None or columns is not None:
@@ -3062,9 +3059,18 @@ class DataFrame(Frame, Serializable):
         else:
             outdf = self.copy()
 
+        def _drop_columns(df, columns, errors):
+            for c in columns:
+                try:
+                    df._drop_column(c)
+                except NameError as e:
+                    if errors == "ignore":
+                        pass
+                    else:
+                        raise e
+
         if axis in (1, "columns"):
-            for c in target:
-                outdf._drop_column(c)
+            _drop_columns(outdf, target, errors)
         elif axis in (0, "index"):
             index = cudf.Series(target)
             if isinstance(self._index, cudf.MultiIndex):
@@ -3072,13 +3078,13 @@ class DataFrame(Frame, Serializable):
                     level = 0
 
                 levels_index = outdf.index.get_level_values(level)
-                if not index.isin(levels_index).all():
+                if errors == "raise" and not index.isin(levels_index).all():
                     raise KeyError("One or more values not found in axis")
 
                 sliced_df = outdf.take(~levels_index.isin(target))
                 sliced_df._index.names = self._index.names
             else:
-                if not index.isin(outdf.index).all():
+                if errors == "raise" and not index.isin(outdf.index).all():
                     raise KeyError("One or more values not found in axis")
 
                 bool_mask = outdf.index.isin(index)
@@ -3094,8 +3100,7 @@ class DataFrame(Frame, Serializable):
                     else list(set(columns))
                 )
 
-                for c in columns:
-                    sliced_df._drop_column(c)
+                _drop_columns(sliced_df, columns, errors)
 
             outdf._data = sliced_df._data
             outdf._index = sliced_df._index
