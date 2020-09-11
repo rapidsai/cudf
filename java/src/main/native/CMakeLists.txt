@@ -152,6 +152,12 @@ endif (CUDF_INCLUDE AND CUDF_LIBRARY)
 ###################################################################################################
 # - RMM -------------------------------------------------------------------------------------------
 
+if(NOT SPDLOG_ACTIVE_LEVEL)
+  set(SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_OFF)
+endif(NOT SPDLOG_ACTIVE_LEVEL)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSPDLOG_ACTIVE_LEVEL=${SPDLOG_ACTIVE_LEVEL}")
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DSPDLOG_ACTIVE_LEVEL=${SPDLOG_ACTIVE_LEVEL}")
+
 find_path(RMM_INCLUDE "rmm"
           HINTS "$ENV{RMM_ROOT}/include"
                 "$ENV{RMM_HOME}/include"
