@@ -65,6 +65,7 @@
 - PR #6173 Fix normalize_characters offset logic on sliced strings column
 - PR #6159 Fix issue related to empty `Dataframe` with columns input to `DataFrame.appened`
 - PR #6199 Fix index preservation for dask_cudf parquet
+- PR #6207 Remove shared libs from Java sources jar
 
 
 # cuDF 0.15.0 (26 Aug 2020)
