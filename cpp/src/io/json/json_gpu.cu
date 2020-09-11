@@ -70,8 +70,8 @@ __device__ std::pair<char const *, char const *> limit_range_to_brackets(char co
  *
  * Assumes that begin is not in the middle of a field.
  *
- * @param[in] begin Pointer to the first character in the parsing range
- * @param[in] end pointer to the first character after the parsing range
+ * @param[in] begin Beginning of the character string
+ * @param[in] end End of the character string
  * @param[in] quotechar The character used to denote quotes
  *
  * @return Begin and end iterators of the key name; (`end`, `end`) if a key is not found
@@ -97,10 +97,9 @@ __device__ std::pair<char const *, char const *> get_next_key(char const *begin,
  * @brief Decodes a numeric value base on templated cudf type T with specified
  * base.
  *
- * @param data The character string for parse
- * @param start The index within data to start parsing from
- * @param end The end index within data to end parsing
- * @param opts The global parsing behavior options
+ * @param[in] begin Beginning of the character string
+ * @param[in] end End of the character string
+ * @param[in] opts The global parsing behavior options
  *
  * @return The parsed numeric value
  */
@@ -113,10 +112,9 @@ __inline__ __device__ T decode_value(char const *begin, char const *end, ParseOp
 /**
  * @brief Decodes a numeric value base on templated cudf type T
  *
- * @param data The character string for parse
- * @param start The index within data to start parsing from
- * @param end The end index within data to end parsing
- * @param opts The global parsing behavior options
+ * @param[in] begin Beginning of the character string
+ * @param[in] end End of the character string
+ * @param[in] opts The global parsing behavior options
  *
  * @return The parsed numeric value
  */
@@ -129,10 +127,9 @@ __inline__ __device__ T decode_value(char const *begin, char const *end, ParseOp
 /**
  * @brief Decodes a timestamp_D
  *
- * @param data The character string for parse
- * @param start The index within data to start parsing from
- * @param end The end index within data to end parsing
- * @param opts The global parsing behavior options
+ * @param[in] begin Beginning of the character string
+ * @param[in] end End of the character string
+ * @param[in] opts The global parsing behavior options
  *
  * @return The parsed timestamp_D
  */
@@ -147,10 +144,9 @@ __inline__ __device__ cudf::timestamp_D decode_value(char const *begin,
 /**
  * @brief Decodes a timestamp_s
  *
- * @param data The character string for parse
- * @param start The index within data to start parsing from
- * @param end The end index within data to end parsing
- * @param opts The global parsing behavior options
+ * @param[in] begin Beginning of the character string
+ * @param[in] end End of the character string
+ * @param[in] opts The global parsing behavior options
  *
  * @return The parsed timestamp_s
  */
@@ -166,10 +162,9 @@ __inline__ __device__ cudf::timestamp_s decode_value(char const *begin,
 /**
  * @brief Decodes a timestamp_ms
  *
- * @param data The character string for parse
- * @param start The index within data to start parsing from
- * @param end The end index within data to end parsing
- * @param opts The global parsing behavior options
+ * @param[in] begin Beginning of the character string
+ * @param[in] end End of the character string
+ * @param[in] opts The global parsing behavior options
  *
  * @return The parsed timestamp_ms
  */
@@ -185,10 +180,9 @@ __inline__ __device__ cudf::timestamp_ms decode_value(char const *begin,
 /**
  * @brief Decodes a timestamp_us
  *
- * @param data The character string for parse
- * @param start The index within data to start parsing from
- * @param end The end index within data to end parsing
- * @param opts The global parsing behavior options
+ * @param[in] begin Beginning of the character string
+ * @param[in] end End of the character string
+ * @param[in] opts The global parsing behavior options
  *
  * @return The parsed timestamp_us
  */
@@ -204,10 +198,9 @@ __inline__ __device__ cudf::timestamp_us decode_value(char const *begin,
 /**
  * @brief Decodes a timestamp_ns
  *
- * @param data The character string for parse
- * @param start The index within data to start parsing from
- * @param end The end index within data to end parsing
- * @param opts The global parsing behavior options
+ * @param[in] begin Beginning of the character string
+ * @param[in] end End of the character string
+ * @param[in] opts The global parsing behavior options
  *
  * @return The parsed timestamp_ns
  */
@@ -223,12 +216,12 @@ __inline__ __device__ cudf::timestamp_ns decode_value(char const *begin,
 // The purpose of this is merely to allow compilation ONLY
 // TODO : make this work for json
 #ifndef DURATION_DECODE_VALUE
-#define DURATION_DECODE_VALUE(Type)                                                 \
-  template <>                                                                       \
-  __inline__ __device__ Type decode_value(                                          \
+#define DURATION_DECODE_VALUE(Type)                               \
+  template <>                                                     \
+  __inline__ __device__ Type decode_value(                        \
     char const *begin, char const *end, ParseOptions const &opts) \
-  {                                                                                 \
-    return Type{};                                                                  \
+  {                                                               \
+    return Type{};                                                \
   }
 #endif
 DURATION_DECODE_VALUE(duration_D)
@@ -304,20 +297,24 @@ struct ConvertFunctor {
                                                       cudf::size_type row,
                                                       const ParseOptions &opts)
   {
-    T &value{static_cast<T *>(output_column)[row]};
-
     // Check for user-specified true/false values first, where the output is
     // replaced with 1/0 respectively
-    value = [&, field_len = end - begin]() -> T {
-      if (serializedTrieContains(opts.trueValuesTrie, begin, field_len)) {
-        return 1;
-      } else if (serializedTrieContains(opts.falseValuesTrie, begin, field_len)) {
-        return 0;
-      } else {
-        return decode_value<T>(begin, end, opts);
-      }
-    }();
 
+    T &output = static_cast<T *>(output_column)[row];
+
+    auto field_len = end - begin;
+
+    if (serializedTrieContains(opts.trueValuesTrie, begin, field_len)) {
+      output = 1;
+      return true;
+    }
+
+    if (serializedTrieContains(opts.falseValuesTrie, begin, field_len)) {
+      output = 0;
+      return true;
+    }
+
+    output = decode_value<T>(begin, end, opts);
     return true;
   }
 
@@ -347,7 +344,8 @@ struct ConvertFunctor {
                                                       cudf::size_type row,
                                                       const ParseOptions &opts)
   {
-    static_cast<T *>(output_column)[row] = decode_value<T>(begin, end, opts);
+    T &value{static_cast<T *>(output_column)[row]};
+    value = decode_value<T>(begin, end, opts);
 
     return true;
   }
@@ -365,8 +363,8 @@ __inline__ __device__ bool is_whitespace(char ch) { return ch == '\t' || ch == '
 /**
  * @brief Adjusts the range to ignore starting/trailing whitespace and quotation characters.
  *
- * @param[in] begin Pointer to the first character in the parsing range
- * @param[in] end pointer to the first character after the parsing range
+ * @param[in] begin Beginning of the character string
+ * @param[in] end End of the character string
  * @param[in] quotechar The character used to denote quotes; '\0' if none
  *
  * @return Trimmed range
@@ -445,8 +443,8 @@ struct field_descriptor {
 /**
  * @brief Parse the first field in the given range and return its descriptor.
  *
- * @param[in] begin Pointer to the first character in the parsing range
- * @param[in] end pointer to the first character after the parsing range
+ * @param[in] begin Beginning of the character string
+ * @param[in] end End of the character string
  * @param[in] opts The global parsing behavior options
  * @param[in] field_idx Index of the current field in the input row
  * @param[in] col_map Pointer to the (column name hash -> solumn index) map in device memory.
