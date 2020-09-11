@@ -26,6 +26,7 @@
 - PR #6051 Add builder API for cuIO `parquet_writer_options` and `parquet_reader_options`
 - PR #6067 Added compute codes for aarch64 devices
 - PR #6083 Small cleanup
+- PR #6092 Add `name` and `dtype` field to `Index.copy`
 - PR #5984 Support gather() on CUDF struct columns
 - PR #6103 Small refactor of `print_differences`
 - PR #6124 Fix gcc-9 compilation errors on tests
