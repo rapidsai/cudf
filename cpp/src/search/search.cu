@@ -15,22 +15,17 @@
  */
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/search.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/search.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 
-#include <cudf/detail/iterator.cuh>
-#include <cudf/detail/search.hpp>
-#include <hash/unordered_multiset.cuh>
-
-#include <rmm/thrust_rmm_allocator.h>
-#include <cudf/strings/detail/utilities.hpp>
-
 #include <thrust/binary_search.h>
-#include <thrust/logical.h>
+#include <hash/unordered_multiset.cuh>
 
 namespace cudf {
 namespace {
@@ -142,10 +137,7 @@ std::unique_ptr<column> search_ordered(table_view const& t,
 
 struct contains_scalar_dispatch {
   template <typename Element>
-  bool operator()(column_view const& col,
-                  scalar const& value,
-                  cudaStream_t stream,
-                  rmm::mr::device_memory_resource* mr)
+  bool operator()(column_view const& col, scalar const& value, cudaStream_t stream)
   {
     using ScalarType = cudf::scalar_type_t<Element>;
     auto d_col       = column_device_view::create(col, stream);
@@ -172,8 +164,7 @@ struct contains_scalar_dispatch {
 template <>
 bool contains_scalar_dispatch::operator()<cudf::dictionary32>(column_view const& col,
                                                               scalar const& value,
-                                                              cudaStream_t stream,
-                                                              rmm::mr::device_memory_resource* mr)
+                                                              cudaStream_t stream)
 {
   CUDF_FAIL("dictionary type not supported yet");
 }
@@ -181,8 +172,7 @@ bool contains_scalar_dispatch::operator()<cudf::dictionary32>(column_view const&
 template <>
 bool contains_scalar_dispatch::operator()<cudf::list_view>(column_view const& col,
                                                            scalar const& value,
-                                                           cudaStream_t stream,
-                                                           rmm::mr::device_memory_resource* mr)
+                                                           cudaStream_t stream)
 {
   CUDF_FAIL("list_view type not supported yet");
 }
@@ -190,8 +180,7 @@ bool contains_scalar_dispatch::operator()<cudf::list_view>(column_view const& co
 template <>
 bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const& col,
                                                              scalar const& value,
-                                                             cudaStream_t stream,
-                                                             rmm::mr::device_memory_resource* mr)
+                                                             cudaStream_t stream)
 {
   CUDF_FAIL("struct_view type not supported yet");
 }
@@ -199,10 +188,7 @@ bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const& 
 }  // namespace
 
 namespace detail {
-bool contains(column_view const& col,
-              scalar const& value,
-              rmm::mr::device_memory_resource* mr,
-              cudaStream_t stream)
+bool contains(column_view const& col, scalar const& value, cudaStream_t stream)
 {
   CUDF_EXPECTS(col.type() == value.type(), "DTYPE mismatch");
 
@@ -210,7 +196,7 @@ bool contains(column_view const& col,
 
   if (not value.is_valid()) { return col.has_nulls(); }
 
-  return cudf::type_dispatcher(col.type(), contains_scalar_dispatch{}, col, value, stream, mr);
+  return cudf::type_dispatcher(col.type(), contains_scalar_dispatch{}, col, value, stream);
 }
 
 struct multi_contains_dispatch {
@@ -353,10 +339,10 @@ std::unique_ptr<column> upper_bound(table_view const& t,
   return detail::upper_bound(t, values, column_order, null_precedence, mr);
 }
 
-bool contains(column_view const& col, scalar const& value, rmm::mr::device_memory_resource* mr)
+bool contains(column_view const& col, scalar const& value)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains(col, value, mr);
+  return detail::contains(col, value);
 }
 
 std::unique_ptr<column> contains(column_view const& haystack,
