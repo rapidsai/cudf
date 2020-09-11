@@ -119,7 +119,7 @@ __device__ void GenerateDictionaryIndices(dict_state_s *s, uint32_t t)
       (is_valid &&
        dict_idx ==
          row);  // Any value that doesn't have bit31 set should have dict_idx=row at this point
-    uint32_t umask = BALLOT(is_unique);
+    uint32_t umask = ballot(is_unique);
     uint32_t pos   = num_dict_entries + __popc(umask & ((1 << (t & 0x1f)) - 1));
     if (!(t & 0x1f)) { s->scratch_red[t >> 5] = __popc(umask); }
     num_dict_entries += __syncthreads_count(is_unique);

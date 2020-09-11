@@ -138,7 +138,7 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
     uint32_t is_valid     = (i + t < nrows && row < s->col.num_rows)
                           ? (valid) ? (valid[row >> 5] >> (row & 0x1f)) & 1 : 1
                           : 0;
-    uint32_t valid_warp = BALLOT(is_valid);
+    uint32_t valid_warp = ballot(is_valid);
     uint32_t len, nz_pos, hash;
     if (is_valid) {
       len = dtype_len;
@@ -173,7 +173,7 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
     __syncthreads();
     if (t < 32) {
       uint32_t warp_pos  = WarpReducePos16((t < 16) ? s->scratch_red[t] : 0, t);
-      uint32_t non_nulls = SHFL(warp_pos, 0xf);
+      uint32_t non_nulls = shuffle(warp_pos, 0xf);
       len                = WarpReduceSum16((t < 16) ? s->scratch_red[t + 16] : 0);
       if (t < 16) { s->scratch_red[t] = warp_pos; }
       if (!t) {
@@ -308,7 +308,7 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
           }
         }
       }
-      dupe_mask    = BALLOT(is_dupe);
+      dupe_mask    = ballot(is_dupe);
       dupes_before = s->total_dupes + __popc(dupe_mask & ((2 << (t & 0x1f)) - 1));
       if (!(t & 0x1f)) { s->scratch_red[t >> 5] = __popc(dupe_mask); }
       __syncthreads();
@@ -434,7 +434,7 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
         page_offset += page_g.max_hdr_size + page_g.max_data_size;
         comp_page_offset += page_g.max_hdr_size + GetMaxCompressedBfrSize(page_g.max_data_size);
       }
-      SYNCWARP();
+      __syncwarp();
       if (pages && t < sizeof(EncPage) / sizeof(uint32_t)) {
         reinterpret_cast<uint32_t *>(&pages[ck_g.first_page])[t] =
           reinterpret_cast<uint32_t *>(&page_g)[t];
@@ -445,10 +445,10 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
       }
       num_pages = 1;
     }
-    SYNCWARP();
+    __syncwarp();
     do {
       uint32_t fragment_data_size, max_page_size, minmax_len = 0;
-      SYNCWARP();
+      __syncwarp();
       if (num_rows < ck_g.num_rows) {
         if (t < sizeof(PageFragment) / sizeof(uint32_t)) {
           reinterpret_cast<uint32_t *>(&frag_g)[t] =
@@ -462,7 +462,7 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
         frag_g.fragment_data_size = 0;
         frag_g.num_rows           = 0;
       }
-      SYNCWARP();
+      __syncwarp();
       if (ck_g.has_dictionary && fragments_in_chunk < ck_g.num_dict_fragments) {
         fragment_data_size =
           frag_g.num_rows * 2;  // Assume worst-case of 2-bytes per dictionary index
@@ -531,7 +531,7 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
           cur_row += rows_in_page;
           ck_max_stats_len = max(ck_max_stats_len, max_stats_len);
         }
-        SYNCWARP();
+        __syncwarp();
         if (pages && t < sizeof(EncPage) / sizeof(uint32_t)) {
           reinterpret_cast<uint32_t *>(&pages[ck_g.first_page + num_pages])[t] =
             reinterpret_cast<uint32_t *>(&page_g)[t];
@@ -553,7 +553,7 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
       num_rows += frag_g.num_rows;
       fragments_in_chunk++;
     } while (frag_g.num_rows != 0);
-    SYNCWARP();
+    __syncwarp();
     if (!t) {
       if (ck_g.ck_stat_size == 0 && ck_g.stats) {
         uint32_t ck_stat_size = 48 + 2 * ck_max_stats_len;
@@ -609,23 +609,23 @@ inline __device__ void PackLiterals(
     if (w < 8) {
       uint32_t mask;
       if (w <= 1) {
-        v |= SHFL_XOR(v, 1) << 1;
-        v |= SHFL_XOR(v, 2) << 2;
-        v |= SHFL_XOR(v, 4) << 4;
+        v |= shuffle_xor(v, 1) << 1;
+        v |= shuffle_xor(v, 2) << 2;
+        v |= shuffle_xor(v, 4) << 4;
         mask = 0x7;
       } else if (w <= 2) {
-        v |= SHFL_XOR(v, 1) << 2;
-        v |= SHFL_XOR(v, 2) << 4;
+        v |= shuffle_xor(v, 1) << 2;
+        v |= shuffle_xor(v, 2) << 4;
         mask = 0x3;
       } else {  // w=4
-        v |= SHFL_XOR(v, 1) << 4;
+        v |= shuffle_xor(v, 1) << 4;
         mask = 0x1;
       }
       if (t < count && !(t & mask)) { dst[(t * w) >> 3] = v; }
     } else if (w < 12) {  // w=8
       if (t < count) { dst[t] = v; }
     } else if (w < 16) {  // w=12
-      v |= SHFL_XOR(v, 1) << 12;
+      v |= shuffle_xor(v, 1) << 12;
       if (t < count && !(t & 1)) {
         dst[(t >> 1) * 3 + 0] = v;
         dst[(t >> 1) * 3 + 1] = v >> 8;
@@ -657,12 +657,12 @@ static __device__ void RleEncode(
     uint32_t pos = rle_pos + t;
     if (rle_run > 0 && !(rle_run & 1)) {
       // Currently in a long repeat run
-      uint32_t mask = BALLOT(pos < numvals && s->vals[pos & (RLE_BFRSZ - 1)] == s->run_val);
+      uint32_t mask = ballot(pos < numvals && s->vals[pos & (RLE_BFRSZ - 1)] == s->run_val);
       uint32_t rle_rpt_count, max_rpt_count;
       if (!(t & 0x1f)) { s->rpt_map[t >> 5] = mask; }
       __syncthreads();
       if (t < 32) {
-        uint32_t c32 = BALLOT(t >= 4 || s->rpt_map[t] != 0xffffffffu);
+        uint32_t c32 = ballot(t >= 4 || s->rpt_map[t] != 0xffffffffu);
         if (!t) {
           uint32_t last_idx = __ffs(c32) - 1;
           s->rle_rpt_count =
@@ -688,7 +688,7 @@ static __device__ void RleEncode(
       // New run or in a literal run
       uint32_t v0      = s->vals[pos & (RLE_BFRSZ - 1)];
       uint32_t v1      = s->vals[(pos + 1) & (RLE_BFRSZ - 1)];
-      uint32_t mask    = BALLOT(pos + 1 < numvals && v0 == v1);
+      uint32_t mask    = ballot(pos + 1 < numvals && v0 == v1);
       uint32_t maxvals = min(numvals - rle_pos, 128);
       uint32_t rle_lit_count, rle_rpt_count;
       if (!(t & 0x1f)) { s->rpt_map[t >> 5] = mask; }
@@ -700,7 +700,7 @@ static __device__ void RleEncode(
         uint32_t m0          = (idx8 < 4) ? s->rpt_map[idx8] : 0;
         uint32_t m1          = (idx8 < 3) ? s->rpt_map[idx8 + 1] : 0;
         uint32_t needed_mask = kRleRunMask[nbits - 1];
-        mask                 = BALLOT((__funnelshift_r(m0, m1, pos8) & needed_mask) == needed_mask);
+        mask                 = ballot((__funnelshift_r(m0, m1, pos8) & needed_mask) == needed_mask);
         if (!t) {
           uint32_t rle_run_start = (mask != 0) ? min((__ffs(mask) - 1) * 8, maxvals) : maxvals;
           uint32_t rpt_len       = 0;
@@ -800,9 +800,9 @@ static __device__ void PlainBoolEncode(page_enc_state_s *s,
     uint32_t n      = min(numvals - rle_pos, 128);
     uint32_t nbytes = (n + ((flush) ? 7 : 0)) >> 3;
     if (!nbytes) { break; }
-    v |= SHFL_XOR(v, 1) << 1;
-    v |= SHFL_XOR(v, 2) << 2;
-    v |= SHFL_XOR(v, 4) << 4;
+    v |= shuffle_xor(v, 1) << 1;
+    v |= shuffle_xor(v, 2) << 2;
+    v |= shuffle_xor(v, 4) << 4;
     if (t < n && !(t & 7)) { dst[t >> 3] = v; }
     rle_pos = min(rle_pos + nbytes * 8, numvals);
     dst += nbytes;
@@ -878,7 +878,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
           uint32_t rle_bytes = (uint32_t)(rle_out - cur) - 4;
           cur[t]             = rle_bytes >> (t * 8);
         }
-        SYNCWARP();
+        __syncwarp();
         if (t == 0) { s->cur = rle_out; }
       }
     }
@@ -919,7 +919,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
                    ? (valid) ? (valid[row >> 5] >> (row & 0x1f)) & 1 : 1
                    : 0;
     }
-    warp_valids = BALLOT(is_valid);
+    warp_valids = ballot(is_valid);
     cur_row += nrows;
     if (dict_bits >= 0) {
       // Dictionary encoding

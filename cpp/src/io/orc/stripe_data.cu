@@ -793,11 +793,11 @@ static __device__ uint32_t Integer_RLEv2(
         }
       }
     }
-    base = SHFL0(base);
-    mode = SHFL0(mode);
-    pos  = SHFL0(pos);
-    n    = SHFL0(n);
-    w    = SHFL0(w);
+    base = shuffle0(base);
+    mode = shuffle0(mode);
+    pos  = shuffle0(pos);
+    n    = shuffle0(n);
+    w    = shuffle0(w);
     for (uint32_t i = tr; i < n; i += 32) {
       if (sizeof(T) <= 4) {
         if (mode == 0) {
@@ -841,7 +841,7 @@ static __device__ uint32_t Integer_RLEv2(
         }
       }
     }
-    SYNCWARP();
+    __syncwarp();
     // Patch values
     if (mode == 2) {
       uint32_t pw_byte3 = rle->m2_pw_byte3[r];
@@ -861,17 +861,17 @@ static __device__ uint32_t Integer_RLEv2(
         patch <<= w;
         patch_pos = (uint32_t)(patch_pos64 >> pw);
         for (uint32_t k = 1; k < pll; k <<= 1) {
-          uint32_t tmp = SHFL(patch_pos, (tr & ~k) | (k - 1));
+          uint32_t tmp = shuffle(patch_pos, (tr & ~k) | (k - 1));
           patch_pos += (tr & k) ? tmp : 0;
         }
         if (tr < pll && patch_pos < n) { vals[base + patch_pos] += patch; }
       }
     }
-    SYNCWARP();
+    __syncwarp();
     if (mode == 3) {
       T baseval;
       for (uint32_t i = 1; i < n; i <<= 1) {
-        SYNCWARP();
+        __syncwarp();
         for (uint32_t j = tr; j < n; j += 32) {
           if (j & i) vals[base + j] += vals[base + ((j & ~i) | (i - 1))];
         }
@@ -1206,11 +1206,11 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
           if (i + 32 > skippedrows) { bits &= (1 << (skippedrows - i)) - 1; }
           skip_count += __popc(bits);
         }
-        skip_count += SHFL_XOR(skip_count, 1);
-        skip_count += SHFL_XOR(skip_count, 2);
-        skip_count += SHFL_XOR(skip_count, 4);
-        skip_count += SHFL_XOR(skip_count, 8);
-        skip_count += SHFL_XOR(skip_count, 16);
+        skip_count += shuffle_xor(skip_count, 1);
+        skip_count += shuffle_xor(skip_count, 2);
+        skip_count += shuffle_xor(skip_count, 4);
+        skip_count += shuffle_xor(skip_count, 8);
+        skip_count += shuffle_xor(skip_count, 16);
         if (t == 0) { s->chunk.skip_count += skip_count; }
       }
       __syncthreads();
@@ -1219,20 +1219,20 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
     }
     __syncthreads();
     // Sum up the valid counts and infer null_count
-    null_count += SHFL_XOR(null_count, 1);
-    null_count += SHFL_XOR(null_count, 2);
-    null_count += SHFL_XOR(null_count, 4);
-    null_count += SHFL_XOR(null_count, 8);
-    null_count += SHFL_XOR(null_count, 16);
+    null_count += shuffle_xor(null_count, 1);
+    null_count += shuffle_xor(null_count, 2);
+    null_count += shuffle_xor(null_count, 4);
+    null_count += shuffle_xor(null_count, 8);
+    null_count += shuffle_xor(null_count, 16);
     if (!(t & 0x1f)) { s->top.nulls.null_count[t >> 5] = null_count; }
     __syncthreads();
     if (t < 32) {
       null_count = (t < NWARPS) ? s->top.nulls.null_count[t] : 0;
-      null_count += SHFL_XOR(null_count, 1);
-      null_count += SHFL_XOR(null_count, 2);
-      null_count += SHFL_XOR(null_count, 4);
-      null_count += SHFL_XOR(null_count, 8);
-      null_count += SHFL_XOR(null_count, 16);
+      null_count += shuffle_xor(null_count, 1);
+      null_count += shuffle_xor(null_count, 2);
+      null_count += shuffle_xor(null_count, 4);
+      null_count += shuffle_xor(null_count, 8);
+      null_count += shuffle_xor(null_count, 16);
       if (t == 0) {
         chunks[chunk_id].null_count = null_count;
         chunks[chunk_id].skip_count = s->chunk.skip_count;
@@ -1340,21 +1340,21 @@ static __device__ void DecodeRowPositions(orcdec_state_s *s, size_t first_row, i
       // TBD: Brute-forcing this, there might be a more efficient way to find the thread with the
       // last row
       last_row = (nz_count == s->u.rowdec.nz_count) ? row_plus1 : 0;
-      last_row = max(last_row, SHFL_XOR(last_row, 1));
-      last_row = max(last_row, SHFL_XOR(last_row, 2));
-      last_row = max(last_row, SHFL_XOR(last_row, 4));
-      last_row = max(last_row, SHFL_XOR(last_row, 8));
-      last_row = max(last_row, SHFL_XOR(last_row, 16));
+      last_row = max(last_row, shuffle_xor(last_row, 1));
+      last_row = max(last_row, shuffle_xor(last_row, 2));
+      last_row = max(last_row, shuffle_xor(last_row, 4));
+      last_row = max(last_row, shuffle_xor(last_row, 8));
+      last_row = max(last_row, shuffle_xor(last_row, 16));
       if (!(t & 0x1f)) { *(volatile uint32_t *)&s->u.rowdec.last_row[t >> 5] = last_row; }
       nz_pos = (valid) ? nz_count : 0;
       __syncthreads();
       if (t < 32) {
         last_row = (t < NWARPS) ? *(volatile uint32_t *)&s->u.rowdec.last_row[t] : 0;
-        last_row = max(last_row, SHFL_XOR(last_row, 1));
-        last_row = max(last_row, SHFL_XOR(last_row, 2));
-        last_row = max(last_row, SHFL_XOR(last_row, 4));
-        last_row = max(last_row, SHFL_XOR(last_row, 8));
-        last_row = max(last_row, SHFL_XOR(last_row, 16));
+        last_row = max(last_row, shuffle_xor(last_row, 1));
+        last_row = max(last_row, shuffle_xor(last_row, 2));
+        last_row = max(last_row, shuffle_xor(last_row, 4));
+        last_row = max(last_row, shuffle_xor(last_row, 8));
+        last_row = max(last_row, shuffle_xor(last_row, 16));
         if (t == 0) { s->top.data.nrows = last_row; }
       }
       if (valid && nz_pos - 1 < s->u.rowdec.nz_count) { s->u.rowdec.row[nz_pos - 1] = row_plus1; }

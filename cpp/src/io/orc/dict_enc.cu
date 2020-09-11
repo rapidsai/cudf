@@ -83,7 +83,7 @@ static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s, int t)
     }
     __syncthreads();
     is_valid = (i + t < s->chunk.num_rows) ? (s->scratch_red[t >> 5] >> (t & 0x1f)) & 1 : 0;
-    nz_map   = BALLOT(is_valid);
+    nz_map   = ballot(is_valid);
     nz_pos   = s->nnz + __popc(nz_map & (0x7fffffffu >> (0x1fu - ((uint32_t)t & 0x1f))));
     if (!(t & 0x1f)) { s->scratch_red[16 + (t >> 5)] = __popc(nz_map); }
     __syncthreads();
@@ -263,7 +263,7 @@ extern "C" __global__ void __launch_bounds__(512, 2)
         dict_char_count += (is_dupe) ? 0 : len1;
       }
     }
-    dupe_mask    = BALLOT(is_dupe);
+    dupe_mask    = ballot(is_dupe);
     dupes_before = s->total_dupes + __popc(dupe_mask & ((2 << (t & 0x1f)) - 1));
     if (!(t & 0x1f)) { s->scratch_red[t >> 5] = __popc(dupe_mask); }
     __syncthreads();
@@ -410,7 +410,7 @@ extern "C" __global__ void __launch_bounds__(1024)
       is_dupe       = nvstr_is_equal(cur_ptr, cur_len, str_data[prev].ptr, str_data[prev].count);
     }
     dict_char_count += (is_dupe) ? 0 : cur_len;
-    dupe_mask    = BALLOT(is_dupe);
+    dupe_mask    = ballot(is_dupe);
     dupes_before = s->total_dupes + __popc(dupe_mask & ((2 << (t & 0x1f)) - 1));
     if (!(t & 0x1f)) { s->scratch_red[t >> 5] = __popc(dupe_mask); }
     __syncthreads();

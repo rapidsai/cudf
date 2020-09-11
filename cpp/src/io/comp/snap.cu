@@ -161,7 +161,7 @@ static inline __device__ uint32_t HashMatchAny(uint32_t v, uint32_t t)
   uint32_t err_map = 0;
   for (uint32_t i = 0; i < HASH_BITS; i++, v >>= 1) {
     uint32_t b       = v & 1;
-    uint32_t match_b = BALLOT(b);
+    uint32_t match_b = ballot(b);
     err_map |= match_b ^ -(int32_t)b;
   }
   return ~err_map;
@@ -195,7 +195,7 @@ static __device__ uint32_t FindFourByteMatch(snap_state_s *s,
     uint32_t hash             = (valid4) ? snap_hash(data32) : 0;
     uint32_t local_match      = HashMatchAny(hash, t);
     uint32_t local_match_lane = 31 - __clz(local_match & ((1 << t) - 1));
-    uint32_t local_match_data = SHFL(data32, min(local_match_lane, t));
+    uint32_t local_match_data = shuffle(data32, min(local_match_lane, t));
     uint32_t offset, match;
     if (valid4) {
       if (local_match_lane < t && local_match_data == data32) {
@@ -212,7 +212,7 @@ static __device__ uint32_t FindFourByteMatch(snap_state_s *s,
       local_match = 0;
       offset      = pos + t;
     }
-    match_mask = BALLOT(match);
+    match_mask = ballot(match);
     if (match_mask != 0) {
       literal_cnt = __ffs(match_mask) - 1;
       if (t == literal_cnt) {
@@ -236,9 +236,9 @@ static __device__ uint32_t Match60(const uint8_t *src1,
                                    uint32_t len,
                                    uint32_t t)
 {
-  uint32_t mismatch = BALLOT(t >= len || src1[t] != src2[t]);
+  uint32_t mismatch = ballot(t >= len || src1[t] != src2[t]);
   if (mismatch == 0) {
-    mismatch = BALLOT(32 + t >= len || src1[32 + t] != src2[32 + t]);
+    mismatch = ballot(32 + t >= len || src1[32 + t] != src2[32 + t]);
     return 31 + __ffs(mismatch);  // mismatch cannot be zero here if len <= 63
   } else {
     return __ffs(mismatch) - 1;
@@ -309,7 +309,7 @@ extern "C" __global__ void __launch_bounds__(128)
         if (t == 0) { dst = StoreCopy(dst, end, copy_len, distance); }
         pos += copy_len;
       }
-      SYNCWARP();
+      __syncwarp();
       if (t == 0) { s->dst = dst; }
     } else {
       pos += literal_len + copy_len;

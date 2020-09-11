@@ -751,7 +751,7 @@ static inline __device__ void rowctx_merge_transform(uint64_t ctxtree[1024],
   uint64_t tmp;
 
 #define CTX_MERGE(lanemask, tmask, base, level_scale)                       \
-  tmp = SHFL_XOR(ctxb, lanemask);                                           \
+  tmp = shuffle_xor(ctxb, lanemask);                                        \
   if (!(t & (tmask))) {                                                     \
     ctxb                                   = merge_row_contexts(ctxb, tmp); \
     ctxtree[(base) + (t >> (level_scale))] = ctxb;                          \
@@ -770,7 +770,7 @@ static inline __device__ void rowctx_merge_transform(uint64_t ctxtree[1024],
     CTX_MERGE(4, 0x7, 4, 3);
     CTX_MERGE(8, 0xf, 2, 4);
     // Final stage
-    tmp = SHFL_XOR(ctxb, 16);
+    tmp = shuffle_xor(ctxb, 16);
     if (t == 0) { ctxtree[1] = merge_row_contexts(ctxb, tmp); }
   }
 #undef CTX_MERGE

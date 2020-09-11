@@ -263,9 +263,9 @@ __device__ void gpuDecodeStream(
         sym_len = (int32_t)(cur - cur_def);
         __threadfence_block();
       }
-      sym_len   = SHFL0(sym_len);
-      level_val = SHFL0(level_val);
-      level_run = SHFL0(level_run);
+      sym_len   = shuffle0(sym_len);
+      level_val = shuffle0(level_val);
+      level_run = shuffle0(level_run);
       cur_def += sym_len;
     }
     if (s->error) { break; }
@@ -369,9 +369,9 @@ __device__ int gpuDecodeDictionaryIndices(volatile page_state_s *s, int target_p
       is_literal    = run & 1;
       __threadfence_block();
     }
-    SYNCWARP();
-    is_literal = SHFL0(is_literal);
-    batch_len  = SHFL0(batch_len);
+    __syncwarp();
+    is_literal = shuffle0(is_literal);
+    batch_len  = shuffle0(batch_len);
     if (t < batch_len) {
       int dict_idx = s->dict_val;
       if (is_literal) {
@@ -444,9 +444,9 @@ __device__ int gpuDecodeRleBooleans(volatile page_state_s *s, int target_pos, in
       is_literal    = run & 1;
       __threadfence_block();
     }
-    SYNCWARP();
-    is_literal = SHFL0(is_literal);
-    batch_len  = SHFL0(batch_len);
+    __syncwarp();
+    is_literal = shuffle0(is_literal);
+    batch_len  = shuffle0(batch_len);
     if (t < batch_len) {
       int dict_idx;
       if (is_literal) {
@@ -1234,7 +1234,7 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
     // track (page-relative) row index for the thread so we can compare against input bounds
     // keep track of overall # of rows we've read.
     int is_new_row               = start_depth == 0 ? 1 : 0;
-    uint32_t warp_row_count_mask = BALLOT(is_new_row);
+    uint32_t warp_row_count_mask = ballot(is_new_row);
     int32_t thread_row_index =
       input_row_count + ((__popc(warp_row_count_mask & ((1 << t) - 1)) + is_new_row) - 1);
     input_row_count += __popc(warp_row_count_mask);
@@ -1246,13 +1246,13 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
 
     // compute warp and thread value counts
     uint32_t warp_count_mask =
-      BALLOT((0 >= start_depth && 0 <= end_depth) && in_row_bounds ? 1 : 0);
+      ballot((0 >= start_depth && 0 <= end_depth) && in_row_bounds ? 1 : 0);
     warp_value_count = __popc(warp_count_mask);
     // Note : ((1 << t) - 1) implies "for all threads before me"
     thread_value_count = __popc(warp_count_mask & ((1 << t) - 1));
 
     // always walk from 0 to max_depth even if our start and end depths are different.
-    // otherwise we'd have thread/warp synchronization issues on the BALLOT() and WarpReduce()
+    // otherwise we'd have thread/warp synchronization issues on the ballot() and WarpReduce()
     // calls.
     uint32_t next_thread_value_count, next_warp_value_count;
     for (int s_idx = 0; s_idx <= max_depth; s_idx++) {
@@ -1269,7 +1269,7 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
       // for flat schemas, a simple ballot_sync gives us the correct count and bit positions because
       // every value in the input matches to a value in the output
       if (max_depth == 0) {
-        warp_valid_mask = BALLOT(is_valid);
+        warp_valid_mask = ballot(is_valid);
       }
       // for nested schemas, it's more complicated.  This warp will visit 32 incoming values,
       // however not all of them will necessarily represent a value at this nesting level. so the
@@ -1295,7 +1295,7 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
       // next nesting level
       if (s_idx < max_depth) {
         uint32_t next_warp_count_mask =
-          BALLOT((s_idx + 1 >= start_depth && s_idx + 1 <= end_depth && in_row_bounds) ? 1 : 0);
+          ballot((s_idx + 1 >= start_depth && s_idx + 1 <= end_depth && in_row_bounds) ? 1 : 0);
         next_warp_value_count   = __popc(next_warp_count_mask);
         next_thread_value_count = __popc(next_warp_count_mask & ((1 << t) - 1));
 
@@ -1321,7 +1321,7 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
     }
 
     input_value_count += min(32, (target_input_value_count - input_value_count));
-    SYNCWARP();
+    __syncwarp();
   }
 
   // update
@@ -1359,7 +1359,7 @@ __device__ void gpuDecodeLevels(page_state_s *s, int32_t target_leaf_count, int 
     // only need to decode repetition levels in the case of a nested schema
     if (max_depth > 0) { gpuDecodeStream(s->rep, s, cur_leaf_count, t, level_type::REPETITION); }
     gpuDecodeStream(s->def, s, cur_leaf_count, t, level_type::DEFINITION);
-    SYNCWARP();
+    __syncwarp();
 
     // because the rep and def streams are encoded seperately, we cannot request an exact
     // # of values to be decoded at once. we can only process the lowest # of decoded rep/def
@@ -1371,7 +1371,7 @@ __device__ void gpuDecodeLevels(page_state_s *s, int32_t target_leaf_count, int 
     // process what we got back
     gpuUpdateValidityOffsetsAndRowIndices(actual_leaf_count, s, t);
     cur_leaf_count = actual_leaf_count + batch_size;
-    SYNCWARP();
+    __syncwarp();
   }
 }
 
@@ -1417,9 +1417,9 @@ static __device__ void gpuUpdatePageSizes(page_state_s *s,
 
     // count rows and leaf values
     int is_new_row                = start_depth == 0 ? 1 : 0;
-    uint32_t warp_row_count_mask  = BALLOT(is_new_row);
+    uint32_t warp_row_count_mask  = ballot(is_new_row);
     int is_new_leaf               = (d >= s->page.nesting[max_depth].max_def_level) ? 1 : 0;
-    uint32_t warp_leaf_count_mask = BALLOT(is_new_leaf);
+    uint32_t warp_leaf_count_mask = ballot(is_new_leaf);
 
     // is this thread within row bounds? on the first pass we don't know the bounds, so we will be
     // computing the full size of the column.  on the second pass, we will know our actual row
@@ -1434,7 +1434,7 @@ static __device__ void gpuUpdatePageSizes(page_state_s *s,
                         ? 1
                         : 0;
 
-      uint32_t row_bounds_mask  = BALLOT(in_row_bounds);
+      uint32_t row_bounds_mask  = ballot(in_row_bounds);
       int first_thread_in_range = __ffs(row_bounds_mask) - 1;
 
       // if we've found the beginning of the first row, mark down the position
@@ -1451,7 +1451,7 @@ static __device__ void gpuUpdatePageSizes(page_state_s *s,
     // increment counts across all nesting depths
     for (int s_idx = 0; s_idx <= max_depth; s_idx++) {
       int in_bounds       = (s_idx >= start_depth && s_idx <= end_depth && in_row_bounds) ? 1 : 0;
-      uint32_t count_mask = BALLOT(in_bounds);
+      uint32_t count_mask = ballot(in_bounds);
       if (!t) { s->page.nesting[s_idx].size += __popc(count_mask); }
     }
 
@@ -1536,7 +1536,7 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
       // least up to the target, but may decode a few more.
       gpuDecodeStream(s->rep, s, target_input_count, t, level_type::REPETITION);
       gpuDecodeStream(s->def, s, target_input_count, t, level_type::DEFINITION);
-      SYNCWARP();
+      __syncwarp();
 
       // we may have decoded different amounts from each stream, so only process what we've been
       int actual_input_count =
@@ -1545,7 +1545,7 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
       // process what we got back
       gpuUpdatePageSizes(s, actual_input_count, t, trim_pass);
       target_input_count = actual_input_count + batch_size;
-      SYNCWARP();
+      __syncwarp();
     }
   }
   // update # rows in the actual page
