@@ -18,6 +18,7 @@
 #include <cudf/strings/detail/utilities.hpp>
 
 #include "cudf/column/column_device_view.cuh"
+#include "cudf/copying.hpp"
 #include "cudf/detail/nvtx/ranges.hpp"
 #include "cudf/replace.hpp"
 #include "cudf/strings/detail/utilities.cuh"
@@ -41,6 +42,46 @@ struct byte_list_conversion {
     }
   };
 
+  template <typename T>
+  std::unique_ptr<column> process(column_view const& input_column,
+                                  flip_endianness configuration,
+                                  rmm::mr::device_memory_resource* mr,
+                                  cudaStream_t stream) const
+  {
+    size_type num_output_elements = input_column.size() * cudf::size_of(input_column.type());
+
+    auto begin          = thrust::make_constant_iterator(cudf::size_of(input_column.type()));
+    auto offsets_column = cudf::strings::detail::make_offsets_child_column(
+      begin, begin + input_column.size(), mr, stream);
+
+    auto byte_column = make_numeric_column(
+      data_type{type_id::UINT8}, num_output_elements, mask_state::UNALLOCATED, stream, mr);
+    auto d_chars = reinterpret_cast<char*>(byte_column->mutable_view().data<T>());
+
+    rmm::device_buffer null_mask = copy_bitmask(input_column, stream, mr);
+
+    if (configuration == flip_endianness::YES) {
+      uint32_t mask = cudf::size_of(input_column.type()) - 1;
+      thrust::for_each(
+        rmm::exec_policy(stream)->on(stream),
+        thrust::make_counting_iterator(0),
+        thrust::make_counting_iterator(num_output_elements),
+        FlipEndianness{d_chars, reinterpret_cast<const char*>(input_column.data<T>()), mask});
+    } else {
+      thrust::copy_n(rmm::exec_policy(stream)->on(stream),
+                     reinterpret_cast<const char*>(input_column.data<T>()),
+                     num_output_elements,
+                     d_chars);
+    }
+    return make_lists_column(input_column.size(),
+                             std::move(offsets_column),
+                             std::move(byte_column),
+                             input_column.null_count(),
+                             std::move(null_mask),
+                             stream,
+                             mr);
+  }
+
   template <typename T,
             std::enable_if_t<!std::is_integral<T>::value and !is_floating_point<T>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& input_column,
@@ -57,38 +98,8 @@ struct byte_list_conversion {
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream) const
   {
-    size_type num_output_elements = input_column.size() * cudf::size_of(input_column.type());
-
-    auto begin          = thrust::make_constant_iterator(cudf::size_of(input_column.type()));
-    auto offsets_column = cudf::strings::detail::make_offsets_child_column(
-      begin, begin + input_column.size(), mr, stream);
-
-    auto byte_column = make_numeric_column(
-      data_type{type_id::UINT8}, num_output_elements, mask_state::UNALLOCATED, stream, mr);
-    auto d_chars = byte_column->mutable_view().data<char>();
-
-    rmm::device_buffer null_mask = copy_bitmask(input_column, stream, mr);
-    auto normalized              = normalize_nans_and_zeros(input_column);
-
-    if (configuration == flip_endianness::YES) {
-      uint32_t mask = cudf::size_of(input_column.type()) - 1;
-      thrust::for_each(rmm::exec_policy(stream)->on(stream),
-                       thrust::make_counting_iterator(0),
-                       thrust::make_counting_iterator(num_output_elements),
-                       FlipEndianness{d_chars, normalized->view().data<char>(), mask});
-    } else {
-      thrust::copy_n(rmm::exec_policy(stream)->on(stream),
-                     normalized->view().data<char>(),
-                     num_output_elements,
-                     d_chars);
-    }
-    return make_lists_column(input_column.size(),
-                             std::move(offsets_column),
-                             std::move(byte_column),
-                             input_column.null_count(),
-                             std::move(null_mask),
-                             stream,
-                             mr);
+    auto normalized = normalize_nans_and_zeros(input_column);
+    return process<T>(normalized->view(), configuration, mr, stream);
   }
 
   template <typename T, std::enable_if_t<std::is_integral<T>::value>* = nullptr>
@@ -97,37 +108,7 @@ struct byte_list_conversion {
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream) const
   {
-    size_type num_output_elements = input_column.size() * cudf::size_of(input_column.type());
-
-    auto begin          = thrust::make_constant_iterator(cudf::size_of(input_column.type()));
-    auto offsets_column = cudf::strings::detail::make_offsets_child_column(
-      begin, begin + input_column.size(), mr, stream);
-
-    auto byte_column = make_numeric_column(
-      data_type{type_id::UINT8}, num_output_elements, mask_state::UNALLOCATED, stream, mr);
-    auto bytes_view = byte_column->mutable_view();
-    auto d_chars    = bytes_view.data<char>();
-    auto d_data     = input_column.data<char>();
-
-    rmm::device_buffer null_mask = copy_bitmask(input_column, stream, mr);
-
-    if (configuration == flip_endianness::YES) {
-      uint32_t mask = cudf::size_of(input_column.type()) - 1;
-      thrust::for_each(rmm::exec_policy(stream)->on(stream),
-                       thrust::make_counting_iterator(0),
-                       thrust::make_counting_iterator(num_output_elements),
-                       FlipEndianness{d_chars, d_data, mask});
-    } else {
-      thrust::copy_n(rmm::exec_policy(stream)->on(stream), d_data, num_output_elements, d_chars);
-    }
-
-    return make_lists_column(input_column.size(),
-                             std::move(offsets_column),
-                             std::move(byte_column),
-                             input_column.null_count(),
-                             std::move(null_mask),
-                             stream,
-                             mr);
+    return process<T>(input_column, configuration, mr, stream);
   }
 };
 
@@ -140,19 +121,17 @@ std::unique_ptr<cudf::column> byte_list_conversion::operator()<string_view>(
 {
   strings_column_view input_strings(input_column);
   auto strings_count = input_strings.size();
-  if (strings_count == 0) return cudf::strings::detail::make_empty_strings_column(mr, stream);
+  if (strings_count == 0) return cudf::empty_like(input_column);
 
-  auto chars_column            = std::make_unique<column>(input_strings.chars(), stream, mr);
-  auto offsets_column          = std::make_unique<column>(input_strings.offsets(), stream, mr);
-  rmm::device_buffer null_mask = copy_bitmask(input_column, stream, mr);
-
-  return make_lists_column(input_column.size(),
-                           std::move(offsets_column),
-                           std::move(chars_column),
-                           input_column.null_count(),
-                           std::move(null_mask),
-                           stream,
-                           mr);
+  auto contents = std::make_unique<column>(input_column, stream, mr)->release();
+  return make_lists_column(
+    input_column.size(),
+    std::move(contents.children[cudf::strings_column_view::offsets_column_index]),
+    std::move(contents.children[cudf::strings_column_view::chars_column_index]),
+    input_column.null_count(),
+    copy_bitmask(input_column, stream, mr),  // no need for null_mask var
+    stream,
+    mr);
 }
 }  // namespace
 

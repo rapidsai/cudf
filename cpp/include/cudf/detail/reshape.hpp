@@ -42,10 +42,10 @@ enum class flip_endianness : bool { NO, YES };
 /**
  * @brief Converts a column's elements to lists of bytes
  *
- * @param inpu_column column to be converted to lists of bytes.
- * @param configuration configuration to retain or flip the endianness of a row.
+ * @param input_column column to be converted to lists of bytes.
+ * @param configuration configuration retain or flip the endianness of a row.
  * @param mr Device memory resource used to allocate the returned column's device memory.
- * @param  stream CUDA stream to launch kernels within
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  *
  * @return The column containing the lists of bytes.
  */
