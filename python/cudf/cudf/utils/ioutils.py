@@ -127,8 +127,6 @@ filters : list of tuple, list of lists of tuples default None
     as a list of tuples. This form is interpreted as a single conjunction.
     To express OR in predicates, one must use the (preferred) notation of
     list of lists of tuples.
-joins : list of tuples default None
-    
 joins : list of tuple default None
     If not None, specifies joins to filter out row groups using statistics
     stored for each row group as Parquet metadata. Joins are specified by

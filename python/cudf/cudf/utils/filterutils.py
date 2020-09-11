@@ -1,11 +1,9 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from collections import defaultdict
 
 from numba import cuda
 import numpy as np
 import cupy
-import cudf
 import datetime
 
 import pandas as pd

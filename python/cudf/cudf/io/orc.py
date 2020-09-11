@@ -3,7 +3,6 @@
 from collections import defaultdict
 import warnings
 import datetime
-import numpy as np
 
 import pyarrow as pa
 from pyarrow import orc as orc
