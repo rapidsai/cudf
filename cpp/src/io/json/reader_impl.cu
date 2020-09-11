@@ -61,13 +61,10 @@ constexpr size_t calculate_max_row_size(int num_columns = 0) noexcept
   constexpr size_t max_row_bytes = 16 * 1024;  // 16KB
   constexpr size_t column_bytes  = 64;
   constexpr size_t base_padding  = 1024;  // 1KB
-  if (num_columns == 0) {
-    // Use flat size if the number of columns is not known
-    return max_row_bytes;
-  } else {
-    // Expand the size based on the number of columns, if available
-    return base_padding + num_columns * column_bytes;
-  }
+  return num_columns == 0
+           ? max_row_bytes  // Use flat size if the # of columns is not known
+           : base_padding +
+               num_columns * column_bytes;  // Expand size based on the # of columns, if available
 }
 
 }  // anonymous namespace
