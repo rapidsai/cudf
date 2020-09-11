@@ -1310,7 +1310,9 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
 
       // increment count of valid values, count of total values, and validity mask
       if (!t) {
-        if (pni->valid_map != nullptr) { store_validity(pni, warp_valid_mask, warp_value_count); }
+        if (pni->valid_map != nullptr && in_row_bounds) {
+          store_validity(pni, warp_valid_mask, warp_value_count);
+        }
         pni->valid_count += warp_valid_count;
         pni->value_count += warp_value_count;
       }
