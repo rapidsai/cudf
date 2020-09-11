@@ -22,12 +22,13 @@
  * This helper function takes a string and a search range to return the location
  * of the first instance of the specified character.
  *
- * @param[in] begin Pointer to beginning of range
- * @param[in] end Pointer to end of range
+ * @param[in] begin Beginning of the character string
+ * @param[in] end End of the character string
  * @param[in] c Character to find
  *
  * @return index into the string, or -1 if the character is not found
  */
+#include "thrust/reduce.h"
 __inline__ __device__ char const* findFirstOccurrence(char const* begin, char const* end, char c)
 {
   while (begin < end and *begin != c) { begin++; }
@@ -41,9 +42,8 @@ __inline__ __device__ char const* findFirstOccurrence(char const* begin, char co
  * This helper function is only intended to handle positive integers. The input
  * character string is expected to be well-formed.
  *
- * @param[in] data The character string for parse
- * @param[in] start The index within data to start parsing from
- * @param[in] end The end index within data to end parsing
+ * @param[in] begin Beginning of the character string
+ * @param[in] end End of the character string
  *
  * @return The parsed and converted value
  */
@@ -52,13 +52,11 @@ __inline__ __device__ T convertStrToInteger(char const* begin, char const* end)
 {
   T value = 0;
 
-  auto index = begin;
-  while (index <= end) {
-    if (*index >= '0' && *index <= '9') {
+  for (;begin <= end; ++begin) {
+    if (*begin >= '0' && *begin <= '9') {
       value *= 10;
-      value += *index - '0';
+      value += *begin - '0';
     }
-    ++index;
   }
 
   return value;
@@ -164,9 +162,8 @@ __inline__ __device__ constexpr int64_t secondsSinceEpoch(
 /**
  * @brief Extract the Day, Month, and Year from a string
  *
- * @param[in] data Pointer to data block
- * @param[in] begin String index within data block
- * @param[in] end Ending index within data block
+ * @param[in] begin Beginning of the character string
+ * @param[in] end End of the character string
  * @param[in] dayfirst Flag indicating that first field is the day
  * @param[out] year
  * @param[out] month
@@ -247,9 +244,8 @@ __inline__ __device__ bool extractDate(
  * or triple (in the case of milliseconds) digits. 12-hr and 24-hr time format
  * is detected via the absence or presence of AM/PM characters at the end.
  *
- * @param[in] data The character string time to parse
- * @param[in] start The start index of the character stream
- * @param[in] end The end index of the character stream
+ * @param[in] begin Beginning of the character string
+ * @param[in] end End of the character string
  * @param[out] hour The hour value
  * @param[out] minute The minute value
  * @param[out] second The second value (0 if not present)
@@ -299,8 +295,8 @@ __inline__ __device__ void extractTime(
  * This function takes a string and produces a date32 representation
  * Acceptable formats are a combination of MM/YYYY and MM/DD/YYYY
  *
- * @param[in] begin Pointer to beginning of range
- * @param[in] end Pointer to end of range
+ * @param[in] begin Beginning of the character string
+ * @param[in] end End of the character string
  * @param[in] dayfirst Flag to indicate that day is the first field - DD/MM/YYYY
  *
  * @return returns the number of days since epoch
@@ -324,9 +320,8 @@ __inline__ __device__ int32_t parseDateFormat(char const* begin, char const* end
  * This function takes a string and produces a date32 representation
  * Acceptable formats are a combination of MM/YYYY and MM/DD/YYYY
  *
- * @param[in] data The character stream to parse
- * @param[in] start The start index of the character stream
- * @param[in] end The end index of the character stream
+ * @param[in] begin Beginning of the character string
+ * @param[in] end End of the character string
  * @param[in] dayfirst Flag to indicate day/month or month/day order
  *
  * @return Milliseconds since epoch

@@ -49,9 +49,9 @@ namespace gpu {
  * Also iterates over (one or more) delimiter characters after the field.
  * Function applies to formats with field delimiters and line terminators.
  *
- * @param begin Pointer to the first character in the parsing range
- * @param end pointer to the first character after the parsing range
- * @param opts A set of parsing options
+ * @param[in] begin Beginning of the character string
+ * @param[in] end End of the character string
+ * @param[in] opts A set of parsing options
  *
  * @return Pointer to the last character in the field, including the
  *  delimiter(s) following the field data
@@ -131,11 +131,10 @@ __device__ __forceinline__ uint8_t decode_digit(char c, bool* valid_flag)
 /**
  * @brief Parses a character string and returns its numeric value.
  *
- * @param data The character string for parse
- * @param start The index within data to start parsing from
- * @param end The end index within data to end parsing
- * @param opts The global parsing behavior options
- * @param base Base (radix) to use for conversion
+ * @param[in] begin Beginning of the character string
+ * @param[in] end End of the character string
+ * @param[in] opts The global parsing behavior options
+ * @tparam base Base (radix) to use for conversion
  *
  * @return The parsed and converted value
  */

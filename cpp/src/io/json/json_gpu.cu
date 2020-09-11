@@ -740,6 +740,9 @@ struct key_value_range {
 
 /**
  * @brief Parse the next field in key:value format and return ranges of its parts.
+ *
+ * @param[in] begin Beginning of the character string
+ * @param[in] end End of the character string
  */
 __device__ key_value_range get_next_key_value_range(char const *begin,
                                                     char const *end,
