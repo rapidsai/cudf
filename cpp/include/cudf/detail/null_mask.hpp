@@ -56,6 +56,15 @@ rmm::device_buffer bitmask_and(std::vector<bitmask_type const *> const &masks,
                                rmm::mr::device_memory_resource *mr);
 
 /**
+ * @copydoc cudf::bitmask_and
+ *
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ */
+rmm::device_buffer bitmask_and(table_view const &view,
+                               rmm::mr::device_memory_resource *mr,
+                               cudaStream_t stream = 0);
+
+/**
  * @brief Performs a bitwise AND of the specified bitmasks,
  *        and writes in place to destination
  *
