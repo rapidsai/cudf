@@ -526,6 +526,23 @@ def test_concat_empty_dataframes(df, other, ignore_index):
             expected, actual, check_index_type=False if gdf.empty else True
         )
 
+@pytest.mark.parametrize("ignore_index", [True, False])
+@pytest.mark.parametrize("axis", [0, "index"])
+@pytest.mark.parametrize(
+    "data",
+    [
+        (["a", "b", "c"], ["XX", "YY", "ZZ"]),
+    ],
+)
+def test_concat_empty_series(ignore_index, data, axis):
+    s1 = gd.Series()
+    s2 = gd.Series(data[0])
+    ps1 = s1.to_pandas()
+    ps2 = s2.to_pandas()
+    got = gd.concat([s1, s2], axis=axis, ignore_index=ignore_index)
+    expect = pd.concat([ps1, ps2], axis=axis, ignore_index=ignore_index)
+
+    assert_eq(got, expect)
 
 @pytest.mark.parametrize(
     "df1,df2",
