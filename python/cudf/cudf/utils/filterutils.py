@@ -123,14 +123,15 @@ def _apply_operator(minimums, maximums, op, other, range_value_pairs):
     # TODO: Download blocks of other into shared memory
 
     # Compute range-value pair
-    range_value_pairs[range_idx][other_idx] = not (
-        (op == 0 and (minimum > val or maximum < val))
-        or (op == 1 and (val == minimum == maximum))
-        or (op == 2 and (minimum >= val))
-        or (op == 3 and (minimum > val))
-        or (op == 4 and (maximum < val))
-        or (op == 5 and (maximum <= val))
-    )
+    if range_idx < minimums.size and other_idx < other.size:
+        range_value_pairs[range_idx][other_idx] = not (
+            (op == 0 and (minimum > val or maximum < val))
+            or (op == 1 and (val == minimum == maximum))
+            or (op == 2 and (minimum >= val))
+            or (op == 3 and (minimum > val))
+            or (op == 4 and (maximum < val))
+            or (op == 5 and (maximum <= val))
+        )
 
 
 def _filter_with_joins(minimums, maximums, op, other):

@@ -74,6 +74,18 @@ def test_read_orc_filtered(tmpdir, engine, predicate, expected_len):
     dd.assert_eq(len(df), expected_len)
 
 
+def test_read_orc_filtered_joins(tmpdir):
+    df_small = dask_cudf.read_orc(
+        sample_orc,
+        filters=[("date", "==", datetime(1900, 12, 25, tzinfo=timezone.utc))],
+    )
+    df = dask_cudf.read_orc(
+        sample_orc, joins=[("date", "==", df_small["date"].compute())]
+    )
+
+    dd.assert_eq(len(df), len(df_small))
+
+
 @pytest.mark.parametrize("compute", [True, False])
 @pytest.mark.parametrize("compression", [None, "snappy"])
 @pytest.mark.parametrize(

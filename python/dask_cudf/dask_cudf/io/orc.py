@@ -21,7 +21,14 @@ def _read_orc_stripe(fs, path, stripe, columns, kwargs={}):
     return df_stripe
 
 
-def read_orc(path, columns=None, filters=None, storage_options=None, **kwargs):
+def read_orc(
+    path,
+    columns=None,
+    filters=None,
+    joins=None,
+    storage_options=None,
+    **kwargs,
+):
     """Read cudf dataframe from ORC file(s).
 
     Note that this function is mostly borrowed from upstream Dask.
@@ -47,6 +54,12 @@ def read_orc(path, columns=None, filters=None, storage_options=None, **kwargs):
         as a list of tuples. This form is interpreted as a single conjunction.
         To express OR in predicates, one must use the (preferred) notation of
         list of lists of tuples.
+    joins : list of tuple default None
+        If not None, specifies joins to filter out stripes using statistics
+        stored for each stripe as ORC metadata. Joins are specified by tuples
+        of column of data being loaded, operator, and cudf.Series that the
+        column is being joined with. An example of this is
+        `('id', '==', df_clients["id"])`.
     storage_options: None or dict
         Further parameters to pass to the bytes backend.
 
@@ -90,8 +103,8 @@ def read_orc(path, columns=None, filters=None, storage_options=None, **kwargs):
     for path, n in zip(paths, nstripes_per_file):
         for stripe in (
             range(n)
-            if filters is None
-            else cudf.io.orc._filter_stripes(filters, path)
+            if filters is None and joins is None
+            else cudf.io.orc._filter_stripes(filters, joins, path)
         ):
             dsk[(name, N)] = (
                 _read_orc_stripe,
