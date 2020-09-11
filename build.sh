@@ -149,7 +149,6 @@ if buildAll || hasArg libcudf; then
     mkdir -p ${LIB_BUILD_DIR}
     cd ${LIB_BUILD_DIR}
     cmake -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
-          -DCMAKE_CXX11_ABI=ON \
           ${GPU_ARCH} \
           -DUSE_NVTX=${BUILD_NVTX} \
           -DBUILD_BENCHMARKS=${BUILD_BENCHMARKS} \
