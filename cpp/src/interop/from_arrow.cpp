@@ -16,7 +16,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/detail/concatenate.cuh>
+#include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/interop.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -241,22 +241,21 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::dictionary32>(
   rmm::mr::device_memory_resource* mr,
   cudaStream_t stream)
 {
-  auto dict_array     = static_cast<arrow::DictionaryArray const*>(&array);
-  auto ind_type       = arrow_to_cudf_type(*(dict_array->indices()->type()));
-  auto indices_column = get_column(*(dict_array->indices()), ind_type, false, mr, stream);
-  // If index type is not of type int32_t, then cast it to int32_t
-  if (indices_column->type().id() != type_id::INT32)
-    indices_column =
-      cudf::detail::cast(indices_column->view(), data_type(type_id::INT32), mr, stream);
-
+  auto dict_array  = static_cast<arrow::DictionaryArray const*>(&array);
   auto dict_type   = arrow_to_cudf_type(*(dict_array->dictionary()->type()));
   auto keys_column = get_column(*(dict_array->dictionary()), dict_type, true, mr, stream);
+  auto ind_type    = arrow_to_cudf_type(*(dict_array->indices()->type()));
+
+  auto indices_column = get_column(*(dict_array->indices()), ind_type, false, mr, stream);
+  // If index type is not of type uint32_t, then cast it to uint32_t
+  auto const dict_indices_type = data_type{type_id::UINT32};
+  if (indices_column->type().id() != dict_indices_type.id())
+    indices_column = cudf::detail::cast(indices_column->view(), dict_indices_type, mr, stream);
 
   // Child columns shouldn't have masks and we need the mask in main column
   auto column_contents = indices_column->release();
-  indices_column       = std::make_unique<column>(data_type(type_id::INT32),
-                                            static_cast<size_type>(array.length()),
-                                            std::move(*(column_contents.data)));
+  indices_column       = std::make_unique<column>(
+    dict_indices_type, static_cast<size_type>(array.length()), std::move(*(column_contents.data)));
 
   return make_dictionary_column(std::move(keys_column),
                                 std::move(indices_column),
