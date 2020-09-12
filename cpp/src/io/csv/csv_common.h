@@ -16,6 +16,9 @@
 
 #pragma once
 
+#include <cudf/types.hpp>
+#include "cudf/utilities/type_dispatcher.hpp"
+
 class SerialTrieNode;
 
 namespace cudf {
@@ -34,6 +37,13 @@ enum : uint8_t {
   as_datetime    = 16,  ///< decode as date and/or time
 };
 using flags = uint8_t;
+
+struct column_builder {
+  cudf::data_type type;
+  void *data;
+  cudf::bitmask_type *null_mask;
+  flags flags;
+};
 
 /**
  * @brief Per-column histogram struct containing detected occurrences of each dtype

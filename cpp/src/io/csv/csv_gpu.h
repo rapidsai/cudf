@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <io/csv/csv_common.h>
 #include <io/utilities/parsing_utils.cuh>
 
 #include <cudf/types.hpp>
@@ -235,10 +236,7 @@ cudaError_t decode_row_column_data(const char *data,
                                    size_t num_rows,
                                    size_t num_columns,
                                    const cudf::io::ParseOptions &options,
-                                   const column_parse::flags *flags,
-                                   cudf::data_type *dtypes,
-                                   void **columns,
-                                   cudf::bitmask_type **valids,
+                                   column_parse::column_builder *builders,
                                    cudaStream_t stream = (cudaStream_t)0);
 
 }  // namespace gpu

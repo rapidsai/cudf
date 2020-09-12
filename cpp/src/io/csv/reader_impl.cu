@@ -19,6 +19,8 @@
  * @brief cuDF-IO CSV reader class implementation
  **/
 
+#include "io/csv/csv_common.h"
+#include "io/csv/csv_gpu.h"
 #include "reader_impl.hpp"
 
 #include <io/comp/io_uncomp.h>
@@ -660,28 +662,24 @@ void reader::impl::decode_data(const std::vector<data_type> &column_types,
                                std::vector<column_buffer> &out_buffers,
                                cudaStream_t stream)
 {
-  thrust::host_vector<void *> h_data(num_active_cols);
-  thrust::host_vector<bitmask_type *> h_valid(num_active_cols);
+  auto h_builders = thrust::host_vector<column_parse::column_builder>(num_actual_cols);
 
-  for (int i = 0; i < num_active_cols; ++i) {
-    h_data[i]  = out_buffers[i].data();
-    h_valid[i] = out_buffers[i].null_mask();
+  for (int i = 0, a = 0; i < num_actual_cols; ++i) {
+    if (h_column_flags[i] & column_parse::enabled) {
+      h_builders[i] = column_parse::column_builder{
+        column_types[a], out_buffers[a].data(), out_buffers[a].null_mask(), h_column_flags[i]};
+      a++;
+    }
   }
 
-  rmm::device_vector<data_type> d_dtypes(column_types);
-  rmm::device_vector<void *> d_data          = h_data;
-  rmm::device_vector<bitmask_type *> d_valid = h_valid;
-  d_column_flags                             = h_column_flags;
+  rmm::device_vector<column_parse::column_builder> d_builders = h_builders;
 
   CUDA_TRY(cudf::io::csv::gpu::decode_row_column_data(data_.data().get(),
                                                       row_offsets.data().get(),
                                                       num_records,
                                                       num_actual_cols,
                                                       opts,
-                                                      d_column_flags.data().get(),
-                                                      d_dtypes.data().get(),
-                                                      d_data.data().get(),
-                                                      d_valid.data().get(),
+                                                      d_builders.data().get(),
                                                       stream));
   CUDA_TRY(cudaStreamSynchronize(stream));
 
