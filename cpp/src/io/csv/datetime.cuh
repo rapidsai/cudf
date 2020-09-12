@@ -52,7 +52,7 @@ __inline__ __device__ T convertStrToInteger(char const* begin, char const* end)
 {
   T value = 0;
 
-  for (;begin <= end; ++begin) {
+  for (; begin <= end; ++begin) {
     if (*begin >= '0' && *begin <= '9') {
       value *= 10;
       value += *begin - '0';

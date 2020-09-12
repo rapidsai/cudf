@@ -139,8 +139,7 @@ __device__ __forceinline__ uint8_t decode_digit(char c, bool* valid_flag)
  * @return The parsed and converted value
  */
 template <typename T, int base = 10>
-__inline__ __device__ T
-parse_numeric(const char* begin, const char* end, ParseOptions const& opts)
+__inline__ __device__ T parse_numeric(const char* begin, const char* end, ParseOptions const& opts)
 {
   T value{};
   bool all_digits_valid = true;
@@ -153,9 +152,7 @@ parse_numeric(const char* begin, const char* end, ParseOptions const& opts)
   }
 
   // Skip over the "0x" prefix for hex notation
-  if (base == 16 && begin + 2 <= end && *begin == '0' && *(begin + 1) == 'x') {
-    begin += 2;
-  }
+  if (base == 16 && begin + 2 <= end && *begin == '0' && *(begin + 1) == 'x') { begin += 2; }
 
   // Handle the whole part of the number
   auto index = begin;

@@ -294,30 +294,28 @@ __global__ void __launch_bounds__(csvparse_block_dim)
 }
 
 template <typename T, int base>
-__inline__ __device__ T
-decode_value(char const* begin, char const* end, ParseOptions const &opts)
+__inline__ __device__ T decode_value(char const *begin, char const *end, ParseOptions const &opts)
 {
   return cudf::io::gpu::parse_numeric<T, base>(begin, end, opts);
 }
 
 template <typename T>
-__inline__ __device__ T
-decode_value(char const* begin, char const* end, ParseOptions const &opts)
+__inline__ __device__ T decode_value(char const *begin, char const *end, ParseOptions const &opts)
 {
   return cudf::io::gpu::parse_numeric<T>(begin, end, opts);
 }
 
 template <>
-__inline__ __device__ cudf::timestamp_D decode_value(char const* begin,
-                                                     char const* end,
+__inline__ __device__ cudf::timestamp_D decode_value(char const *begin,
+                                                     char const *end,
                                                      ParseOptions const &opts)
 {
   return timestamp_D{cudf::duration_D{parseDateFormat(begin, end, opts.dayfirst)}};
 }
 
 template <>
-__inline__ __device__ cudf::timestamp_s decode_value(char const* begin,
-                                                     char const* end,
+__inline__ __device__ cudf::timestamp_s decode_value(char const *begin,
+                                                     char const *end,
                                                      ParseOptions const &opts)
 {
   auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
@@ -325,8 +323,8 @@ __inline__ __device__ cudf::timestamp_s decode_value(char const* begin,
 }
 
 template <>
-__inline__ __device__ cudf::timestamp_ms decode_value(char const* begin,
-                                                      char const* end,
+__inline__ __device__ cudf::timestamp_ms decode_value(char const *begin,
+                                                      char const *end,
                                                       ParseOptions const &opts)
 {
   auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
@@ -334,8 +332,8 @@ __inline__ __device__ cudf::timestamp_ms decode_value(char const* begin,
 }
 
 template <>
-__inline__ __device__ cudf::timestamp_us decode_value(char const* begin,
-                                                      char const* end,
+__inline__ __device__ cudf::timestamp_us decode_value(char const *begin,
+                                                      char const *end,
                                                       ParseOptions const &opts)
 {
   auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
@@ -343,8 +341,8 @@ __inline__ __device__ cudf::timestamp_us decode_value(char const* begin,
 }
 
 template <>
-__inline__ __device__ cudf::timestamp_ns decode_value(char const* begin,
-                                                      char const* end,
+__inline__ __device__ cudf::timestamp_ns decode_value(char const *begin,
+                                                      char const *end,
                                                       ParseOptions const &opts)
 {
   auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
@@ -354,12 +352,12 @@ __inline__ __device__ cudf::timestamp_ns decode_value(char const* begin,
 // The purpose of this is merely to allow compilation ONLY
 // TODO : make this work for json
 #ifndef DURATION_DECODE_VALUE
-#define DURATION_DECODE_VALUE(Type)                                   \
-  template <>                                                         \
-  __inline__ __device__ Type decode_value(                            \
-    const char * begin, const char * end, ParseOptions const &opts) \
-  {                                                                   \
-    return Type{};                                                    \
+#define DURATION_DECODE_VALUE(Type)                               \
+  template <>                                                     \
+  __inline__ __device__ Type decode_value(                        \
+    const char *begin, const char *end, ParseOptions const &opts) \
+  {                                                               \
+    return Type{};                                                \
   }
 #endif
 DURATION_DECODE_VALUE(duration_D)
@@ -371,8 +369,8 @@ DURATION_DECODE_VALUE(duration_ns)
 // The purpose of this is merely to allow compilation ONLY
 // TODO : make this work for csv
 template <>
-__inline__ __device__ cudf::string_view decode_value(char const* begin,
-                                                     char const* end,
+__inline__ __device__ cudf::string_view decode_value(char const *begin,
+                                                     char const *end,
                                                      ParseOptions const &opts)
 {
   return cudf::string_view{};
@@ -380,8 +378,8 @@ __inline__ __device__ cudf::string_view decode_value(char const* begin,
 
 // The purpose of this is merely to allow compilation ONLY
 template <>
-__inline__ __device__ cudf::dictionary32 decode_value(char const* begin,
-                                                      char const* end,
+__inline__ __device__ cudf::dictionary32 decode_value(char const *begin,
+                                                      char const *end,
                                                       ParseOptions const &opts)
 {
   return cudf::dictionary32{};
@@ -390,8 +388,8 @@ __inline__ __device__ cudf::dictionary32 decode_value(char const* begin,
 // The purpose of this is merely to allow compilation ONLY
 // TODO : make this work for csv
 template <>
-__inline__ __device__ cudf::list_view decode_value(char const* begin,
-                                                   char const* end,
+__inline__ __device__ cudf::list_view decode_value(char const *begin,
+                                                   char const *end,
                                                    ParseOptions const &opts)
 {
   return cudf::list_view{};
@@ -400,8 +398,8 @@ __inline__ __device__ cudf::list_view decode_value(char const* begin,
 // The purpose of this is merely to allow compilation ONLY
 // TODO : make this work for csv
 template <>
-__inline__ __device__ numeric::decimal32 decode_value(char const* begin,
-                                                      char const* end,
+__inline__ __device__ numeric::decimal32 decode_value(char const *begin,
+                                                      char const *end,
                                                       ParseOptions const &opts)
 {
   return numeric::decimal32{};
@@ -410,8 +408,8 @@ __inline__ __device__ numeric::decimal32 decode_value(char const* begin,
 // The purpose of this is merely to allow compilation ONLY
 // TODO : make this work for csv
 template <>
-__inline__ __device__ numeric::decimal64 decode_value(char const* begin,
-                                                      char const* end,
+__inline__ __device__ numeric::decimal64 decode_value(char const *begin,
+                                                      char const *end,
                                                       ParseOptions const &opts)
 {
   return numeric::decimal64{};
@@ -420,8 +418,8 @@ __inline__ __device__ numeric::decimal64 decode_value(char const* begin,
 // The purpose of this is merely to allow compilation ONLY
 // TODO : make this work for csv
 template <>
-__inline__ __device__ cudf::struct_view decode_value(char const* begin,
-                                                     char const* end,
+__inline__ __device__ cudf::struct_view decode_value(char const *begin,
+                                                     char const *end,
                                                      ParseOptions const &opts)
 {
   return cudf::struct_view{};
@@ -443,8 +441,8 @@ struct decode_op {
               * = nullptr>
   __host__ __device__ __forceinline__ bool operator()(void *out_buffer,
                                                       size_t row,
-                                                      char const* begin,
-                                                      char const* end,
+                                                      char const *begin,
+                                                      char const *end,
                                                       ParseOptions const &opts,
                                                       column_parse::flags flags)
   {
@@ -473,8 +471,8 @@ struct decode_op {
   template <typename T, typename std::enable_if_t<std::is_same<T, bool>::value> * = nullptr>
   __host__ __device__ __forceinline__ bool operator()(void *out_buffer,
                                                       size_t row,
-                                                      char const* begin,
-                                                      char const* end,
+                                                      char const *begin,
+                                                      char const *end,
                                                       ParseOptions const &opts,
                                                       column_parse::flags flags)
   {
@@ -500,8 +498,8 @@ struct decode_op {
   template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value> * = nullptr>
   __host__ __device__ __forceinline__ bool operator()(void *out_buffer,
                                                       size_t row,
-                                                      char const* begin,
-                                                      char const* end,
+                                                      char const *begin,
+                                                      char const *end,
                                                       ParseOptions const &opts,
                                                       column_parse::flags flags)
   {
@@ -519,8 +517,8 @@ struct decode_op {
                                       !std::is_floating_point<T>::value> * = nullptr>
   __host__ __device__ __forceinline__ bool operator()(void *out_buffer,
                                                       size_t row,
-                                                      char const* begin,
-                                                      char const* end,
+                                                      char const *begin,
+                                                      char const *end,
                                                       ParseOptions const &opts,
                                                       column_parse::flags flags)
   {
