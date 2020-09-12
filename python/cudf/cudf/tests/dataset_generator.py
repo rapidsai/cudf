@@ -3,7 +3,7 @@
 # This module is for generating "synthetic" datasets. It was originally
 # designed for testing filtered reading. Generally, it should be useful
 # if you want to generate data where certain phenomena (e.g., cardinality)
-# are exaggurated.
+# are exaggerated.
 
 import string
 from multiprocessing import Pool
@@ -251,67 +251,7 @@ def rand_dataframe(dtypes_meta, rows, seed=0):
     for meta in dtypes_meta:
         dtype, null_frequency, cardinality = meta
 
-        # TODO: Add other dtypes
-        if dtype == "int64":
-            column_params.append(
-                ColumnParameters(
-                    cardinality=cardinality,
-                    null_frequency=null_frequency,
-                    generator=lambda g: g.random.randints(
-                        rows, -9223372036854775808, 9223372036854775807
-                    ),
-                    is_sorted=False,
-                )
-            )
-        elif dtype == "float64":
-            finfo = np.finfo("float32")
-            column_params.append(
-                ColumnParameters(
-                    cardinality=cardinality,
-                    null_frequency=null_frequency,
-                    generator=lambda g: g.numbers.floats(
-                        start=finfo.min, end=finfo.max - 1, n=rows
-                    ),
-                    is_sorted=False,
-                )
-            )
-        elif dtype == "object":
-            column_params.append(
-                ColumnParameters(
-                    cardinality=cardinality,
-                    null_frequency=null_frequency,
-                    generator=lambda g: [
-                        g.random.schoice(string.printable, 2000)
-                        for _ in range(rows)
-                    ],
-                    is_sorted=False,
-                )
-            )
-        elif dtype == "datetime64[us]":
-            column_params.append(
-                ColumnParameters(
-                    cardinality=cardinality,
-                    null_frequency=null_frequency,
-                    generator=lambda g: g.random.randints(
-                        rows, 0, 9223372036854775 - 1
-                    ),
-                    is_sorted=False,
-                    dtype=np.dtype(dtype),
-                )
-            )
-        elif dtype == "timedelta64[ns]":
-            column_params.append(
-                ColumnParameters(
-                    cardinality=cardinality,
-                    null_frequency=null_frequency,
-                    generator=lambda g: g.random.randints(
-                        rows, -9223372036854775807, 9223372036854775807 - 1
-                    ),
-                    is_sorted=False,
-                    dtype=np.dtype(dtype),
-                )
-            )
-        elif dtype == "category":
+        if dtype == "category":
             column_params.append(
                 ColumnParameters(
                     cardinality=cardinality,
@@ -324,6 +264,82 @@ def rand_dataframe(dtypes_meta, rows, seed=0):
                     dtype="category",
                 )
             )
+        else:
+            dtype = np.dtype(dtype)
+            if dtype.kind in ("i", "u"):
+                iinfo = np.iinfo(dtype)
+                column_params.append(
+                    ColumnParameters(
+                        cardinality=cardinality,
+                        null_frequency=null_frequency,
+                        generator=lambda g: g.random.randints(
+                            rows, iinfo.min, iinfo.max
+                        ),
+                        is_sorted=False,
+                    )
+                )
+            elif dtype.kind == "f":
+                finfo = np.finfo(dtype)
+                column_params.append(
+                    ColumnParameters(
+                        cardinality=cardinality,
+                        null_frequency=null_frequency,
+                        generator=lambda g: g.numbers.floats(
+                            start=finfo.min, end=finfo.max - 1, n=rows
+                        ),
+                        is_sorted=False,
+                    )
+                )
+            elif dtype.kind in ("U", "O"):
+                column_params.append(
+                    ColumnParameters(
+                        cardinality=cardinality,
+                        null_frequency=null_frequency,
+                        generator=lambda g: [
+                            g.random.schoice(string.printable, 2000)
+                            for _ in range(rows)
+                        ],
+                        is_sorted=False,
+                    )
+                )
+            elif dtype.kind == "M":
+                column_params.append(
+                    ColumnParameters(
+                        cardinality=cardinality,
+                        null_frequency=null_frequency,
+                        generator=lambda g: g.random.randints(
+                            rows, 0, 9223372036854775 - 1
+                        ),
+                        is_sorted=False,
+                        dtype=np.dtype(dtype),
+                    )
+                )
+            elif dtype.kind == "m":
+                column_params.append(
+                    ColumnParameters(
+                        cardinality=cardinality,
+                        null_frequency=null_frequency,
+                        generator=lambda g: g.random.randints(
+                            rows, -9223372036854775807, 9223372036854775807 - 1
+                        ),
+                        is_sorted=False,
+                        dtype=np.dtype(dtype),
+                    )
+                )
+            elif dtype.kind == "b":
+                column_params.append(
+                    ColumnParameters(
+                        cardinality=cardinality,
+                        null_frequency=null_frequency,
+                        generator=lambda g: [
+                            g.development.boolean() for _ in range(rows)
+                        ],
+                        is_sorted=False,
+                        dtype=np.dtype(dtype),
+                    )
+                )
+            else:
+                raise TypeError(f"Unsupported dtype: {dtype}")
 
     df = get_dataframe(
         Parameters(num_rows=rows, column_parameters=column_params, seed=seed,),
