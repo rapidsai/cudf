@@ -4556,7 +4556,7 @@ class DataFrame(Frame, Serializable):
             ``[.25, .5, .75]``, which returns the 25th, 50th,
             and 75th percentiles.
 
-        include: 'all', list-like of dtypes or None(default), optional
+        include : 'all', list-like of dtypes or None(default), optional
             A list of data types to include in the result.
             Ignored for ``Series``. Here are the options:
 
