@@ -338,30 +338,46 @@ table_with_metadata reader::impl::read(size_t range_offset,
 
   auto metadata = table_metadata{};
 
+  auto h_builders = thrust::host_vector<column_parse::column_builder>(num_actual_cols);
+
+  for (int i = 0; i < num_actual_cols; ++i) {  //
+    h_builders[i].flags = h_column_flags[i];
+  }
+
+  for (int i = 0, a = 0; i < num_actual_cols; ++i) {
+    if (h_builders[i].flags & column_parse::enabled) {
+      if (column_types[a].id() == type_id::EMPTY) {
+        h_builders[i].type = data_type{type_id::STRING};
+      } else {
+        h_builders[i].type = column_types[a];
+      }
+      a++;
+    }
+  }
+
   // Alloc output; columns' data memory is still expected for empty dataframe
   std::vector<column_buffer> out_buffers;
   out_buffers.reserve(column_types.size());
-  for (int col = 0, active_col = 0; col < num_actual_cols; ++col) {
+  for (int col = 0; col < num_actual_cols; ++col) {
     if (h_column_flags[col] & column_parse::enabled) {
-      // Replace EMPTY dtype with STRING
-      if (column_types[active_col].id() == type_id::EMPTY) {
-        column_types[active_col] = data_type{type_id::STRING};
-      }
-      const bool is_final_allocation = column_types[active_col].id() != type_id::STRING;
-      out_buffers.emplace_back(column_types[active_col],
-                               num_records,
-                               true,
-                               stream,
-                               is_final_allocation ? mr_ : rmm::mr::get_current_device_resource());
+      auto const is_final_allocation = h_builders[col].type.id() != type_id::STRING;
+      auto const allocator = is_final_allocation ? mr_ : rmm::mr::get_current_device_resource();
+      auto buffer = column_buffer(h_builders[col].type, num_records, true, stream, allocator);
+
+      h_builders[col].data      = buffer.data();
+      h_builders[col].null_mask = buffer.null_mask();
+
       metadata.column_names.emplace_back(col_names[col]);
-      active_col++;
+      out_buffers.emplace_back(std::move(buffer));
     }
   }
 
   auto out_columns = std::vector<std::unique_ptr<cudf::column>>();
   out_columns.reserve(column_types.size());
   if (num_records != 0) {
-    decode_data(column_types, out_buffers, stream);
+    decode_data(h_builders, stream);
+
+    for (int i = 0; i < num_active_cols; ++i) { out_buffers[i].null_count() = UNKNOWN_NULL_COUNT; }
 
     for (size_t i = 0; i < column_types.size(); ++i) {
       if (column_types[i].id() == type_id::STRING && opts.quotechar != '\0' &&
@@ -658,21 +674,10 @@ std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream)
   return dtypes;
 }
 
-void reader::impl::decode_data(const std::vector<data_type> &column_types,
-                               std::vector<column_buffer> &out_buffers,
+void reader::impl::decode_data(thrust::host_vector<column_parse::column_builder> &builders,
                                cudaStream_t stream)
 {
-  auto h_builders = thrust::host_vector<column_parse::column_builder>(num_actual_cols);
-
-  for (int i = 0, a = 0; i < num_actual_cols; ++i) {
-    if (h_column_flags[i] & column_parse::enabled) {
-      h_builders[i] = column_parse::column_builder{
-        column_types[a], out_buffers[a].data(), out_buffers[a].null_mask(), h_column_flags[i]};
-      a++;
-    }
-  }
-
-  rmm::device_vector<column_parse::column_builder> d_builders = h_builders;
+  rmm::device_vector<column_parse::column_builder> d_builders = builders;
 
   CUDA_TRY(cudf::io::csv::gpu::decode_row_column_data(data_.data().get(),
                                                       row_offsets.data().get(),
@@ -682,8 +687,6 @@ void reader::impl::decode_data(const std::vector<data_type> &column_types,
                                                       d_builders.data().get(),
                                                       stream));
   CUDA_TRY(cudaStreamSynchronize(stream));
-
-  for (int i = 0; i < num_active_cols; ++i) { out_buffers[i].null_count() = UNKNOWN_NULL_COUNT; }
 }
 
 reader::impl::impl(std::unique_ptr<datasource> source,

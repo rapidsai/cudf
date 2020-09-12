@@ -23,6 +23,7 @@
 
 #include "csv.h"
 #include "csv_gpu.h"
+#include "io/csv/csv_common.h"
 
 #include <cudf/detail/utilities/trie.cuh>
 #include <io/utilities/column_buffer.hpp>
@@ -152,8 +153,7 @@ class reader::impl {
    * @param out_buffers Output columns' device buffers
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  void decode_data(std::vector<data_type> const &column_types,
-                   std::vector<column_buffer> &out_buffers,
+  void decode_data(thrust::host_vector<column_parse::column_builder> &builders,
                    cudaStream_t stream);
 
  private:
