@@ -1037,16 +1037,16 @@ struct boop_functor {
   void __device__ operator()(size_t i) { builders[i] = {dtypes[i], columns[i], valids[i]}; }
 };
 
-cudaError_t __host__ DecodeRowColumnData(const char *data,
-                                         const uint64_t *row_starts,
-                                         size_t num_rows,
-                                         size_t num_columns,
-                                         const ParseOptions &options,
-                                         const column_parse::flags *flags,
-                                         cudf::data_type *dtypes,
-                                         void **columns,
-                                         cudf::bitmask_type **valids,
-                                         cudaStream_t stream)
+cudaError_t __host__ decode_row_column_data(const char *data,
+                                            const uint64_t *row_starts,
+                                            size_t num_rows,
+                                            size_t num_columns,
+                                            const ParseOptions &options,
+                                            const column_parse::flags *flags,
+                                            cudf::data_type *dtypes,
+                                            void **columns,
+                                            cudf::bitmask_type **valids,
+                                            cudaStream_t stream)
 {
   // Calculate actual block count to use based on records count
   const int block_size = csvparse_block_dim;

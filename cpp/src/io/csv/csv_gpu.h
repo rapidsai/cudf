@@ -230,16 +230,16 @@ thrust::host_vector<column_parse::stats> detect_column_types(const char *data,
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t DecodeRowColumnData(const char *data,
-                                const uint64_t *row_starts,
-                                size_t num_rows,
-                                size_t num_columns,
-                                const cudf::io::ParseOptions &options,
-                                const column_parse::flags *flags,
-                                cudf::data_type *dtypes,
-                                void **columns,
-                                cudf::bitmask_type **valids,
-                                cudaStream_t stream = (cudaStream_t)0);
+cudaError_t decode_row_column_data(const char *data,
+                                   const uint64_t *row_starts,
+                                   size_t num_rows,
+                                   size_t num_columns,
+                                   const cudf::io::ParseOptions &options,
+                                   const column_parse::flags *flags,
+                                   cudf::data_type *dtypes,
+                                   void **columns,
+                                   cudf::bitmask_type **valids,
+                                   cudaStream_t stream = (cudaStream_t)0);
 
 }  // namespace gpu
 }  // namespace csv

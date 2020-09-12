@@ -673,16 +673,16 @@ void reader::impl::decode_data(const std::vector<data_type> &column_types,
   rmm::device_vector<bitmask_type *> d_valid = h_valid;
   d_column_flags                             = h_column_flags;
 
-  CUDA_TRY(cudf::io::csv::gpu::DecodeRowColumnData(data_.data().get(),
-                                                   row_offsets.data().get(),
-                                                   num_records,
-                                                   num_actual_cols,
-                                                   opts,
-                                                   d_column_flags.data().get(),
-                                                   d_dtypes.data().get(),
-                                                   d_data.data().get(),
-                                                   d_valid.data().get(),
-                                                   stream));
+  CUDA_TRY(cudf::io::csv::gpu::decode_row_column_data(data_.data().get(),
+                                                      row_offsets.data().get(),
+                                                      num_records,
+                                                      num_actual_cols,
+                                                      opts,
+                                                      d_column_flags.data().get(),
+                                                      d_dtypes.data().get(),
+                                                      d_data.data().get(),
+                                                      d_valid.data().get(),
+                                                      stream));
   CUDA_TRY(cudaStreamSynchronize(stream));
 
   for (int i = 0; i < num_active_cols; ++i) { out_buffers[i].null_count() = UNKNOWN_NULL_COUNT; }
