@@ -18,6 +18,8 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/interop.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/unary.hpp>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/interop.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/table/table_view.hpp>
@@ -183,28 +185,6 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::string_view>(
 }
 
 template <>
-std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::dictionary32>(
-  column_view input, cudf::type_id id, arrow::MemoryPool* ar_mr, cudaStream_t stream)
-{
-  std::unique_ptr<column> tmp_column = nullptr;
-  if ((input.offset() != 0) or (input.child(0).size() != input.size())) {
-    tmp_column = std::make_unique<cudf::column>(input);
-  }
-
-  column_view input_view = (tmp_column != nullptr) ? tmp_column->view() : input;
-  auto child_arrays      = fetch_child_array(input_view, ar_mr, stream);
-
-  auto indices    = to_arrow_array(type_id::INT32,
-                                static_cast<int64_t>(input_view.size()),
-                                child_arrays[0]->data()->buffers[1],
-                                fetch_mask_buffer(input_view, ar_mr, stream),
-                                static_cast<int64_t>(input_view.null_count()));
-  auto dictionary = child_arrays[1];
-  return std::make_shared<arrow::DictionaryArray>(
-    arrow::dictionary(indices->type(), dictionary->type()), indices, dictionary);
-}
-
-template <>
 std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::list_view>(
   column_view input, cudf::type_id id, arrow::MemoryPool* ar_mr, cudaStream_t stream)
 {
@@ -228,6 +208,26 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::list_view>(
                                             data,
                                             fetch_mask_buffer(input_view, ar_mr, stream),
                                             static_cast<int64_t>(input_view.null_count()));
+}
+
+template <>
+std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::dictionary32>(
+  column_view input, cudf::type_id id, arrow::MemoryPool* ar_mr, cudaStream_t stream)
+{
+  // Arrow dictionary requires indices to be signed integer
+  std::unique_ptr<column> dict_indices =
+    cast(cudf::dictionary_column_view(input).get_indices_annotated(),
+         cudf::data_type{type_id::INT32},
+         rmm::mr::get_default_resource(),
+         stream);
+  auto indices = dispatch_to_arrow{}.operator()<int32_t>(
+    dict_indices->view(), dict_indices->type().id(), ar_mr, stream);
+  auto dict_keys  = cudf::dictionary_column_view(input).keys();
+  auto dictionary = type_dispatcher(
+    dict_keys.type(), dispatch_to_arrow{}, dict_keys, dict_keys.type().id(), ar_mr, stream);
+
+  return std::make_shared<arrow::DictionaryArray>(
+    arrow::dictionary(indices->type(), dictionary->type()), indices, dictionary);
 }
 
 }  // namespace

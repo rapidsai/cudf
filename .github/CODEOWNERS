@@ -15,7 +15,7 @@ java/              @rapidsai/cudf-java-codeowners
 
 #build/ops code owners
 .github/           @rapidsai/ops-codeowners 
-ci/                @rapidsai/ops-codeowners
+/ci/                @rapidsai/ops-codeowners
 conda/             @rapidsai/ops-codeowners
 **/Dockerfile      @rapidsai/ops-codeowners
 **/.dockerignore   @rapidsai/ops-codeowners
