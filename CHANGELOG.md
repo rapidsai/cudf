@@ -46,6 +46,7 @@
 - PR #6195 Update JNI to use parquet options builder
 - PR #6190 Avoid reading full csv files for metadata in dask_cudf
 - PR #6197 Remove librmm dependency for libcudf
+- PR #6218 increase visiblity/consistency for cuio reader writer private member variable names.
 
 ## Bug Fixes
 
