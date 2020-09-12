@@ -51,15 +51,18 @@ class Fuzzer(object):
 
         logging.info(f"Run-Time elapsed (hh:mm:ss.ms) {total_time_taken}")
 
-    def write_crash(self):
-
+    def write_crash(self, error):
+        error_file_name = datetime.datetime.now().__str__()
         if self._crash_dir:
             crash_path = os.path.join(
-                self._crash_dir,
-                datetime.datetime.now().__str__() + "_crash.xml",
+                self._crash_dir, error_file_name + "_crash.xml",
+            )
+            crash_log_path = os.path.join(
+                self._crash_dir, error_file_name + "_crash.log",
             )
         else:
-            crash_path = datetime.datetime.now().__str__() + "_crash.xml"
+            crash_path = error_file_name + "_crash.xml"
+            crash_log_path = error_file_name + "_crash.log"
 
         # xml = dicttoxml(self._data_handler.current_params, attr_type=False)
         import json
@@ -72,6 +75,10 @@ class Fuzzer(object):
             # pickle.dump(self._data_handler.current_params, f)
         logging.info(f"Crash params was written to {crash_path}")
 
+        with open(crash_log_path, "w") as f:
+            f.write(str(error))
+        logging.info(f"Crash exception was written to {crash_log_path}")
+
     def start(self):
 
         while True:
@@ -82,7 +89,7 @@ class Fuzzer(object):
                 self._target(file_name)
             except Exception as e:
                 logging.exception(e)
-                self.write_crash()
+                self.write_crash(e)
             self.log_stats()
             if self.runs != -1 and self._total_executions >= self.runs:
                 logging.info(f"Completed {self.runs}, stopping now.")
