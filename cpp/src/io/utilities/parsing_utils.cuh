@@ -49,9 +49,9 @@ namespace gpu {
  * Also iterates over (one or more) delimiter characters after the field.
  * Function applies to formats with field delimiters and line terminators.
  *
- * @param begin Pointer to the first character in the parsing range
- * @param end pointer to the first character after the parsing range
- * @param opts A set of parsing options
+ * @param[in] begin Beginning of the character string
+ * @param[in] end End of the character string
+ * @param[in] opts A set of parsing options
  *
  * @return Pointer to the last character in the field, including the
  *  delimiter(s) following the field data
@@ -131,43 +131,39 @@ __device__ __forceinline__ uint8_t decode_digit(char c, bool* valid_flag)
 /**
  * @brief Parses a character string and returns its numeric value.
  *
- * @param data The character string for parse
- * @param start The index within data to start parsing from
- * @param end The end index within data to end parsing
- * @param opts The global parsing behavior options
- * @param base Base (radix) to use for conversion
+ * @param[in] begin Beginning of the character string
+ * @param[in] end End of the character string
+ * @param[in] opts The global parsing behavior options
+ * @tparam base Base (radix) to use for conversion
  *
  * @return The parsed and converted value
  */
 template <typename T, int base = 10>
-__inline__ __device__ T
-parse_numeric(const char* data, long start, long end, ParseOptions const& opts)
+__inline__ __device__ T parse_numeric(const char* begin, const char* end, ParseOptions const& opts)
 {
   T value{};
   bool all_digits_valid = true;
 
   // Handle negative values if necessary
   int32_t sign = 1;
-  if (data[start] == '-') {
+  if (*begin == '-') {
     sign = -1;
-    start++;
+    begin++;
   }
 
   // Skip over the "0x" prefix for hex notation
-  if (base == 16 && start + 2 <= end && data[start] == '0' && data[start + 1] == 'x') {
-    start += 2;
-  }
+  if (base == 16 && begin + 2 <= end && *begin == '0' && *(begin + 1) == 'x') { begin += 2; }
 
   // Handle the whole part of the number
-  long index = start;
+  auto index = begin;
   while (index <= end) {
-    if (data[index] == opts.decimal) {
+    if (*index == opts.decimal) {
       ++index;
       break;
-    } else if (base == 10 && (data[index] == 'e' || data[index] == 'E')) {
+    } else if (base == 10 && (*index == 'e' || *index == 'E')) {
       break;
-    } else if (data[index] != opts.thousands && data[index] != '+') {
-      value = (value * base) + decode_digit<T>(data[index], &all_digits_valid);
+    } else if (*index != opts.thousands && *index != '+') {
+      value = (value * base) + decode_digit<T>(*index, &all_digits_valid);
     }
     ++index;
   }
@@ -176,23 +172,23 @@ parse_numeric(const char* data, long start, long end, ParseOptions const& opts)
     // Handle fractional part of the number if necessary
     double divisor = 1;
     while (index <= end) {
-      if (data[index] == 'e' || data[index] == 'E') {
+      if (*index == 'e' || *index == 'E') {
         ++index;
         break;
-      } else if (data[index] != opts.thousands && data[index] != '+') {
+      } else if (*index != opts.thousands && *index != '+') {
         divisor /= base;
-        value += decode_digit<T>(data[index], &all_digits_valid) * divisor;
+        value += decode_digit<T>(*index, &all_digits_valid) * divisor;
       }
       ++index;
     }
 
     // Handle exponential part of the number if necessary
     if (index <= end) {
-      const int32_t exponent_sign = data[index] == '-' ? -1 : 1;
-      if (data[index] == '-' || data[index] == '+') { ++index; }
+      const int32_t exponent_sign = *index == '-' ? -1 : 1;
+      if (*index == '-' || *index == '+') { ++index; }
       int32_t exponent = 0;
       while (index <= end) {
-        exponent = (exponent * 10) + decode_digit<T>(data[index++], &all_digits_valid);
+        exponent = (exponent * 10) + decode_digit<T>(*(index++), &all_digits_valid);
       }
       if (exponent != 0) { value *= exp10(double(exponent * exponent_sign)); }
     }
