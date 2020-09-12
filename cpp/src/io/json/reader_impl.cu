@@ -437,8 +437,8 @@ void reader::impl::set_column_names(cudaStream_t stream)
   // If the first opening bracket is '{', assume object format
   if (first_curly_bracket < first_square_bracket) {
     // use keys as column names if input rows are objects
-    auto keys_desc        = get_json_object_keys_hashes(stream);
-    metadata.column_names = keys_desc.first;
+    auto keys_desc         = get_json_object_keys_hashes(stream);
+    metadata_.column_names = keys_desc.first;
     set_column_map(std::move(keys_desc.second));
   } else {
     int cols_found = 0;
@@ -450,7 +450,7 @@ void reader::impl::set_column_names(cudaStream_t stream)
       }
       // Check if end of a column/row
       else if (pos == first_row.size() - 1 || (!quotation && first_row[pos] == opts_.delimiter)) {
-        metadata.column_names.emplace_back(std::to_string(cols_found++));
+        metadata_.column_names.emplace_back(std::to_string(cols_found++));
       }
     }
   }
@@ -467,7 +467,7 @@ void reader::impl::set_data_types(cudaStream_t stream)
 {
   auto const dtype = options_.get_dtypes();
   if (!dtype.empty()) {
-    CUDF_EXPECTS(dtype.size() == metadata.column_names.size(),
+    CUDF_EXPECTS(dtype.size() == metadata_.column_names.size(),
                  "Need to specify the type of each column.\n");
     // Assume that the dtype is in dictionary format only if all elements contain a colon
     const bool is_dict = std::all_of(dtype.begin(), dtype.end(), [](const std::string &s) {
@@ -486,7 +486,7 @@ void reader::impl::set_data_types(cudaStream_t stream)
 
       // Using the map here allows O(n log n) complexity
       for (size_t col = 0; col < dtype.size(); ++col) {
-        dtypes_.push_back(col_type_map[metadata.column_names[col]]);
+        dtypes_.push_back(col_type_map[metadata_.column_names[col]]);
         // dtypes_extra_info_.push_back(col_type_info_map[column_names_[col]]);
       }
     } else {
@@ -499,9 +499,9 @@ void reader::impl::set_data_types(cudaStream_t stream)
     }
   } else {
     CUDF_EXPECTS(rec_starts_.size() != 0, "No data available for data type inference.\n");
-    const auto num_columns = metadata.column_names.size();
+    const auto num_columns = metadata_.column_names.size();
 
-    auto do_set_null_count = key_to_col_idx_map != nullptr;
+    auto do_set_null_count = key_to_col_idx_map_ != nullptr;
 
     auto h_column_infos =
       cudf::io::json::gpu::detect_data_types(static_cast<const char *>(data_.data()),
@@ -593,7 +593,7 @@ table_with_metadata reader::impl::convert_data_to_table(cudaStream_t stream)
 
   CUDF_EXPECTS(!out_columns.empty(), "Error converting json input into gdf columns.\n");
 
-  return table_with_metadata{std::make_unique<table>(std::move(out_columns)), metadata};
+  return table_with_metadata{std::make_unique<table>(std::move(out_columns)), metadata_};
 }
 
 reader::impl::impl(std::unique_ptr<datasource> source,
@@ -604,14 +604,14 @@ reader::impl::impl(std::unique_ptr<datasource> source,
 {
   CUDF_EXPECTS(options_.is_enabled_lines(), "Only JSON Lines format is currently supported.\n");
 
-  d_true_trie_         = createSerializedTrie({"true"});
-  opts_.trueValuesTrie = d_true_trie_.data().get();
+  d_trie_true_         = createSerializedTrie({"true"});
+  opts_.trueValuesTrie = d_trie_true_.data().get();
 
-  d_false_trie_         = createSerializedTrie({"false"});
-  opts_.falseValuesTrie = d_false_trie_.data().get();
+  d_trie_false_         = createSerializedTrie({"false"});
+  opts_.falseValuesTrie = d_trie_false_.data().get();
 
-  d_na_trie_         = createSerializedTrie({"null"});
-  opts_.naValuesTrie = d_na_trie_.data().get();
+  d_trie_na_         = createSerializedTrie({"null"});
+  opts_.naValuesTrie = d_trie_na_.data().get();
 
   opts_.dayfirst = options.is_enabled_dayfirst();
 }
@@ -644,7 +644,7 @@ table_with_metadata reader::impl::read(json_reader_options const &options, cudaS
   CUDF_EXPECTS(data_.size() != 0, "Error uploading input data to the GPU.\n");
 
   set_column_names(stream);
-  CUDF_EXPECTS(!metadata.column_names.empty(), "Error determining column names.\n");
+  CUDF_EXPECTS(!metadata_.column_names.empty(), "Error determining column names.\n");
 
   set_data_types(stream);
   CUDF_EXPECTS(!dtypes_.empty(), "Error in data type detection.\n");
