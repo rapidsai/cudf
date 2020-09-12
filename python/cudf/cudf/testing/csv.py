@@ -44,17 +44,10 @@ class CSVReader(object):
         print(num_rows)
         num_cols = self._rand(1000)
         print(num_cols)
-        DTYPES_LIST = [
-            "int64",
-            "float64",
-            "object",
-            "datetime64[us]",
-            # "timedelta64[ns]",
-            "category",
-        ]
+        dtypes_list = cudf.utils.dtypes.ALL_TYPES
         dtypes_meta = [
             (
-                random.choice(DTYPES_LIST),
+                random.choice(dtypes_list),
                 random.uniform(0, 1),
                 self._rand(self._max_rows),
             )
@@ -111,17 +104,10 @@ class CSVWriter(object):
         print(num_rows)
         num_cols = self._rand(1000)
         print(num_cols)
-        DTYPES_LIST = [
-            "int64",
-            "float64",
-            "object",
-            "datetime64[us]",
-            # "timedelta64[ns]",
-            # "category",
-        ]
+        dtypes_list = cudf.utils.dtypes.ALL_TYPES
         dtypes_meta = [
             (
-                random.choice(DTYPES_LIST),
+                random.choice(dtypes_list),
                 random.uniform(0, 1),
                 self._rand(self._max_rows),
             )
