@@ -183,20 +183,18 @@ class DatetimeColumn(column.ColumnBase):
         """
         return np.datetime64("nat", self.time_unit)
 
-    def mean(self, dtype=np.float64):
+    def mean(self, skipna=None, dtype=np.float64):
         return pd.Timestamp(
-            self.as_numerical.mean(dtype=dtype), unit=self.time_unit
+            self.as_numerical.mean(skipna=skipna, dtype=dtype),
+            unit=self.time_unit,
         )
-
-    def median(self, dtype=np.float64):
-        raise TypeError(f"cannot perform median with type {self.dtype}")
 
     def quantile(self, q, interpolation, exact):
         result = self.as_numerical.quantile(
             q=q, interpolation=interpolation, exact=exact
         )
         if isinstance(q, Number):
-            return [pd.Timestamp(result[0], unit=self.time_unit)]
+            return pd.Timestamp(result, unit=self.time_unit)
 
         result = result.binary_operator(
             "mul", as_scalar(_numpy_to_pandas_conversion[self.time_unit])

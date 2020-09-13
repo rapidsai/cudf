@@ -344,11 +344,9 @@ class TimeDeltaColumn(column.ColumnBase):
                 unit=self.time_unit,
             )
 
-    def std(self, ddof=1, dtype=np.float64):
+    def std(self, skipna=None, ddof=1, dtype=np.float64):
         return pd.Timedelta(
-            libcudf.reduce.reduce(
-                "std", self.as_numerical, dtype=dtype, ddof=ddof
-            ),
+            self.as_numerical.std(skipna=skipna, ddof=ddof, dtype=dtype),
             unit=self.time_unit,
         )
 

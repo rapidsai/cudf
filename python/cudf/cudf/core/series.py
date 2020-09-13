@@ -3945,7 +3945,10 @@ class Series(Frame, Serializable):
                     self.mean().to_numpy().astype("datetime64[ns]"),
                     self.min().astype("datetime64[ns]"),
                 ]
-                + self.quantile(percentiles).to_array(fillna="pandas").tolist()
+                + self.quantile(percentiles)
+                .astype("datetime64[ns]")
+                .to_array(fillna="pandas")
+                .tolist()
                 + [self.max().astype("datetime64[ns]")]
             )
 
