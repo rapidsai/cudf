@@ -31,13 +31,12 @@ from cudf.core.column.categorical import (
 from cudf.core.column.lists import ListMethods
 from cudf.core.column.string import StringMethods
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.dataframe import DataFrame
 from cudf.core.frame import Frame
 from cudf.core.groupby.groupby import SeriesGroupBy
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.core.window import Rolling
-from cudf.utils import cudautils, ioutils, utils
+from cudf.utils import cudautils, docutils, ioutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     can_convert_to_column,
@@ -3835,7 +3834,7 @@ class Series(Frame, Serializable):
 
         return Series(result, index=index, name=self.name)
 
-    @copy_docstring(DataFrame.describe)
+    @docutils.doc_describe()
     def describe(
         self,
         percentiles=None,
@@ -3843,6 +3842,8 @@ class Series(Frame, Serializable):
         exclude=None,
         datetime_is_numeric=False,
     ):
+        """{docstring}"""
+
         def _prepare_percentiles(percentiles):
             percentiles = list(percentiles)
 
