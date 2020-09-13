@@ -4830,12 +4830,15 @@ class DataFrame(Frame, Serializable):
         if len(describe_series) == 1:
             return describe_series[0].to_frame()
         else:
-            names = []
             ldesc_indexes = sorted((x.index for x in describe_series), key=len)
-            for idxnames in ldesc_indexes:
-                for name in idxnames.to_pandas():
-                    if name not in names:
-                        names.append(name)
+            names = OrderedDict.fromkeys(
+                [
+                    name
+                    for idxnames in ldesc_indexes
+                    for name in idxnames.to_pandas()
+                ],
+                None,
+            )
 
             return cudf.concat(
                 [
