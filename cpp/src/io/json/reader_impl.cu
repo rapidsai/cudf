@@ -470,7 +470,7 @@ void reader::impl::set_data_types(cudaStream_t stream)
     // Assume that the dtype is in dictionary format only if all elements contain a colon
     const bool is_dict =
       std::all_of(std::cbegin(dtype), std::cend(dtype), [](const std::string &s) {
-        return std::find(s.begin(), s.end(), ':') != s.end();
+        return std::find(std::cbegin(s), std::cend(s), ':') != std::cend(s);
       });
 
     // When C++17, use std::string_view and CTAD
