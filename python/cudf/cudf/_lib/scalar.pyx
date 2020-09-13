@@ -180,6 +180,18 @@ cdef class Scalar:
     def __xor__(self, other):
         return self._scalar_binop(other, '__or__')
 
+    def __gt__(self, other):
+        return self._scalar_binop(other, '__gt__').value
+    
+    def __lt__(self, other):
+        return self._scalar_binop(other, '__gt__').value
+
+    def __ge__(self, other):
+        return self._scalar_binop(other, '__ge__').value
+
+    def __le__(self, other):
+        return self._scalar_binop(other, '__le__').value
+
     def _binop_result_dtype_or_error(self, other):
 
         if (self.dtype.kind == 'O' and other.dtype.kind != 'O') or (self.dtype.kind != 'O' and other.dtype.kind == 'O'):
@@ -193,8 +205,11 @@ cdef class Scalar:
 
     def _scalar_binop(self, other, op):
         other = to_cudf_compatible_scalar(other)
-        out_dtype = self._binop_result_dtype_or_error(other)
 
+        if op in  ['__eq__', '__lt__', '__gt__', '__le__', '__ge__']:
+            out_dtype = cudf.BooleanDtype()
+        else: 
+            out_dtype = self._binop_result_dtype_or_error(other)
         valid = self.is_valid() and (isinstance(other, np.generic) or other.is_valid())
         if not valid:
             return Scalar(None, dtype=out_dtype)
