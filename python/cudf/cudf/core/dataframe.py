@@ -4823,14 +4823,16 @@ class DataFrame(Frame, Serializable):
             if data_to_describe.empty:
                 raise ValueError("No data of included types.")
 
-        describe_series = [
+        describe_series_list = [
             data_to_describe[col].describe(percentiles=percentiles)
             for col in data_to_describe.columns
         ]
-        if len(describe_series) == 1:
-            return describe_series[0].to_frame()
+        if len(describe_series_list) == 1:
+            return describe_series_list[0].to_frame()
         else:
-            ldesc_indexes = sorted((x.index for x in describe_series), key=len)
+            ldesc_indexes = sorted(
+                (x.index for x in describe_series_list), key=len
+            )
             names = OrderedDict.fromkeys(
                 [
                     name
@@ -4843,7 +4845,7 @@ class DataFrame(Frame, Serializable):
             return cudf.concat(
                 [
                     series.reindex(names, copy=False)
-                    for series in describe_series
+                    for series in describe_series_list
                 ],
                 axis=1,
                 sort=False,
