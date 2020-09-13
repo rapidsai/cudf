@@ -7,6 +7,8 @@ import cupy
 import datetime
 
 import pandas as pd
+import cudf
+import dask.dataframe as dd
 
 
 def _apply_filter_bool_eq(val, col_stats):
@@ -134,6 +136,26 @@ def _apply_operator(minimums, maximums, op, other, range_value_pairs):
         )
 
 
+def _launch_filter_with_joins(other, minimums, maximums, op):
+    # Initialize range-value pairs
+    range_value_pairs = cupy.ndarray(
+        [len(minimums), len(other)], dtype=np.bool
+    )
+
+    # Launch kernel to compute range-value pairs
+    threadsperblock = 32
+    blockspergrid = (
+        (len(minimums) + (threadsperblock - 1)) // threadsperblock,
+        (len(other) + (threadsperblock - 1)) // threadsperblock,
+    )
+    _apply_operator[blockspergrid, (threadsperblock, threadsperblock)](
+        minimums, maximums, op, other, range_value_pairs
+    )
+
+    # Return result of boolean reduction for each range
+    return cupy.any(range_value_pairs, 1)
+
+
 def _filter_with_joins(minimums, maximums, op, other):
     assert len(minimums) == len(maximums)
 
@@ -155,23 +177,16 @@ def _filter_with_joins(minimums, maximums, op, other):
             '"{0}" is not a valid operator in join predicates.'.format(op)
         )
 
-    # Initialize range-value pairs
-    range_value_pairs = cupy.ndarray(
-        [len(minimums), len(other)], dtype=np.bool
-    )
-
-    # Launch kernel to compute range-value pairs
-    threadsperblock = 32
-    blockspergrid = (
-        (len(minimums) + (threadsperblock - 1)) // threadsperblock,
-        (len(other) + (threadsperblock - 1)) // threadsperblock,
-    )
-    _apply_operator[blockspergrid, (threadsperblock, threadsperblock)](
-        minimums, maximums, op, other, range_value_pairs
-    )
-
-    # Return result of boolean reduction for each range
-    return cupy.any(range_value_pairs, 1)
+    if isinstance(other, cudf.Series):
+        return _launch_filter_with_joins(other, minimums, maximums, op)
+    elif isinstance(other, dd.core.Series):
+        return other.map_partitions(_launch_filter_with_joins, minimums=minimums, maximums=maximums, op=op, meta=pd.Series(dtype=np.ndarray)).any(1)
+    else:
+        raise ValueError(
+            'Joins must be with a cuDF or Dask cuDF series, not {0}.'.format(
+                type(op)
+            )
+        )
 
 
 def _prepare_filters(filters):
