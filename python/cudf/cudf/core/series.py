@@ -3864,7 +3864,7 @@ class Series(Frame, Serializable):
         def _format_stats_values(stats_data):
             return list(map(lambda x: round(x, 6), stats_data))
 
-        def describe_numeric(self):
+        def _describe_numeric(self):
             # mimicking pandas
             index = (
                 ["count", "mean", "std", "min"]
@@ -3882,7 +3882,7 @@ class Series(Frame, Serializable):
                 data=data, index=index, nan_as_null=False, name=self.name,
             )
 
-        def describe_timedelta(self):
+        def _describe_timedelta(self):
             # mimicking pandas
             index = (
                 ["count", "mean", "std", "min"]
@@ -3912,7 +3912,7 @@ class Series(Frame, Serializable):
                 name=self.name,
             )
 
-        def describe_categorical(self):
+        def _describe_categorical(self):
             # blocked by StringColumn/DatetimeColumn support for
             # value_counts/unique
             index = ["count", "unique", "top", "freq"]
@@ -3935,7 +3935,7 @@ class Series(Frame, Serializable):
                 name=self.name,
             )
 
-        def describe_timestamp(self):
+        def _describe_timestamp(self):
 
             index = (
                 ["count", "mean", "min"]
@@ -3971,15 +3971,15 @@ class Series(Frame, Serializable):
             percentiles = np.array([0.25, 0.5, 0.75])
 
         if pd.api.types.is_bool_dtype(self.dtype):
-            return describe_categorical(self)
+            return _describe_categorical(self)
         elif isinstance(self._column, cudf.core.column.NumericalColumn):
-            return describe_numeric(self)
+            return _describe_numeric(self)
         elif isinstance(self._column, cudf.core.column.TimeDeltaColumn):
-            return describe_timedelta(self)
+            return _describe_timedelta(self)
         elif isinstance(self._column, cudf.core.column.DatetimeColumn):
-            return describe_timestamp(self)
+            return _describe_timestamp(self)
         else:
-            return describe_categorical(self)
+            return _describe_categorical(self)
 
     def digitize(self, bins, right=False):
         """Return the indices of the bins to which each value in series belongs.
