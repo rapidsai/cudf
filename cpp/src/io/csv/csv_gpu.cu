@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
-#include <io/utilities/block_utils.cuh>
-#include <io/utilities/parsing_utils.cuh>
 #include "csv_common.h"
 #include "csv_gpu.h"
 #include "datetime.cuh"
+
+#include <io/utilities/block_utils.cuh>
+#include <io/utilities/parsing_utils.cuh>
 
 #include <cudf/detail/utilities/trie.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
