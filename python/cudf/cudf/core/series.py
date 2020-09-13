@@ -3891,15 +3891,18 @@ class Series(Frame, Serializable):
             )
 
             data = (
-                [self.mean().to_numpy(), self.std().to_numpy(), self.min()]
-                + self.quantile(percentiles).to_array(fillna="pandas").tolist()
-                + [self.max()]
+                [
+                    str(self.count()),
+                    str(self.mean()),
+                    str(self.std()),
+                    str(pd.Timedelta(self.min())),
+                ]
+                + self.quantile(percentiles)
+                .astype("str")
+                .to_array(fillna="pandas")
+                .tolist()
+                + [str(pd.Timedelta(self.max()))]
             )
-            data = column.as_column(data, dtype=self.dtype)
-
-            data = [self.count()] + data.astype("str").to_array(
-                fillna="pandas"
-            ).tolist()
 
             return Series(
                 data=data,
@@ -3942,21 +3945,16 @@ class Series(Frame, Serializable):
 
             data = (
                 [
-                    self.mean().to_numpy().astype("datetime64[ns]"),
-                    self.min().astype("datetime64[ns]"),
+                    str(self.count()),
+                    str(self.mean().to_numpy().astype("datetime64[ns]")),
+                    str(pd.Timestamp(self.min().astype("datetime64[ns]"))),
                 ]
                 + self.quantile(percentiles)
-                .astype("datetime64[ns]")
+                .astype("str")
                 .to_array(fillna="pandas")
                 .tolist()
-                + [self.max().astype("datetime64[ns]")]
+                + [str(pd.Timestamp((self.max()).astype("datetime64[ns]")))]
             )
-
-            data = column.as_column(data, dtype="datetime64[ns]")
-
-            data = [self.count()] + data.astype("str").to_array(
-                fillna="pandas"
-            ).tolist()
 
             return Series(
                 data=data,

@@ -376,6 +376,7 @@ def test_series_describe_numeric(dtype):
     assert_eq(expected, actual)
 
 
+@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/6219")
 @pytest.mark.parametrize("dtype", DATETIME_TYPES)
 def test_series_describe_datetime(dtype):
     gs = cudf.Series([0, 1, 2, 3, 1, 2, 3], dtype=dtype)
@@ -395,9 +396,8 @@ def test_series_describe_datetime(dtype):
 
     # Assert rest of the element apart from
     # the first index('count')
-
-    expected = gdf_results.tail(-1).astype(dtype)
-    actual = pdf_results.tail(-1).astype(dtype)
+    actual = gdf_results.tail(-1).astype("datetime64[ns]")
+    expected = pdf_results.tail(-1).astype("str").astype("datetime64[ns]")
 
     assert_eq(expected, actual)
 

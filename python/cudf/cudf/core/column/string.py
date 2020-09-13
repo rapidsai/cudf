@@ -4574,6 +4574,7 @@ class StringColumn(column.ColumnBase):
                     else:
                         fmt = datetime.infer_format(self[self.notna()][0])
                         kwargs.update(format=fmt)
+                        print("FORMAT", fmt)
 
             # Check for None strings
             if len(self) > 0 and self.binary_operator("eq", "None").any():
