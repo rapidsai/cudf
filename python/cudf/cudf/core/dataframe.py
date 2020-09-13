@@ -4827,16 +4827,16 @@ class DataFrame(Frame, Serializable):
             data_to_describe[col].describe(percentiles=percentiles)
             for col in data_to_describe.columns
         ]
-        names = []
-        ldesc_indexes = sorted((x.index for x in describe_series), key=len)
-        for idxnames in ldesc_indexes:
-            for name in idxnames.to_pandas():
-                if name not in names:
-                    names.append(name)
-
         if len(describe_series) == 1:
             return describe_series[0].to_frame()
         else:
+            names = []
+            ldesc_indexes = sorted((x.index for x in describe_series), key=len)
+            for idxnames in ldesc_indexes:
+                for name in idxnames.to_pandas():
+                    if name not in names:
+                        names.append(name)
+
             return cudf.concat(
                 [
                     series.reindex(names, copy=False)
