@@ -193,6 +193,8 @@ std::map<std::string, int64_t> kafka_consumer::get_watermark_offset(std::string 
     if (err == RdKafka::ErrorCode::ERR__PARTITION_EOF) {
       results.insert(std::pair<std::string, int64_t>("low", low));
       results.insert(std::pair<std::string, int64_t>("high", high));
+    } else {
+      CUDF_FAIL("Error retrieving Kafka watermark offset from broker");
     }
   } else {
     results.insert(std::pair<std::string, int64_t>("low", low));
