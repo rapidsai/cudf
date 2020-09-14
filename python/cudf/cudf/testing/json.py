@@ -1,9 +1,16 @@
 import json
+import logging
 import os
 import random
 
 import cudf
 from cudf.tests import dataset_generator as dg
+
+logging.basicConfig(
+    format="%(asctime)s %(levelname)-8s %(message)s",
+    level=logging.INFO,
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 
 
 class JSONReader(object):
@@ -55,16 +62,18 @@ class JSONReader(object):
 
         df = dg.rand_dataframe(dtypes_meta, num_rows, seed).to_pandas()
         df.to_json(file_name)
-        print(df.shape)
+        logging.info(f"Shape of DataFrame generated: {df.shape}")
 
         return file_name
 
     def generate_rand_meta(self):
         self._current_params = {}
         num_rows = self._rand(self._max_rows)
-        print(num_rows)
         num_cols = self._rand(1000)
-        print(num_cols)
+        logging.info(
+            f"Generating DataFrame with rows: {num_rows} "
+            f"and columns: {num_cols}"
+        )
         dtypes_list = list(cudf.utils.dtypes.ALL_TYPES)
         dtypes_meta = [
             (
@@ -128,16 +137,18 @@ class JSONWriter(object):
         df = cudf.DataFrame.from_arrow(
             dg.rand_dataframe(dtypes_meta, num_rows, seed)
         )
-        print(df.shape)
+        logging.info(f"Shape of DataFrame generated: {df.shape}")
 
         return df
 
     def generate_rand_meta(self):
         self._current_params = {}
         num_rows = self._rand(self._max_rows)
-        print(num_rows)
         num_cols = self._rand(1000)
-        print(num_cols)
+        logging.info(
+            f"Generating DataFrame with rows: {num_rows} "
+            f"and columns: {num_cols}"
+        )
         dtypes_list = list(cudf.utils.dtypes.ALL_TYPES)
         dtypes_meta = [
             (

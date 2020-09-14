@@ -311,7 +311,7 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
                         cardinality=cardinality,
                         null_frequency=null_frequency,
                         generator=lambda g: g.random.randints(
-                            rows, 0, 9223372036854775 - 1
+                            rows, 0, 2147483647 - 1
                         ),
                         is_sorted=False,
                         dtype=np.dtype(dtype),
@@ -323,7 +323,7 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
                         cardinality=cardinality,
                         null_frequency=null_frequency,
                         generator=lambda g: g.random.randints(
-                            rows, -9223372036854775807, 9223372036854775807 - 1
+                            rows, -2147483648, 2147483647 - 1
                         ),
                         is_sorted=False,
                         dtype=np.dtype(dtype),

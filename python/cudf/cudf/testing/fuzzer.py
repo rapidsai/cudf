@@ -3,15 +3,13 @@ import functools
 import json
 import logging
 import os
-import sys
 
-logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
-logging.getLogger().setLevel(logging.INFO)
 logging.basicConfig(
     format="%(asctime)s %(levelname)-8s %(message)s",
     level=logging.INFO,
     datefmt="%Y-%m-%d %H:%M:%S",
 )
+
 
 try:
     lru_cache = functools.lru_cache
