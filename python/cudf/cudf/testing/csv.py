@@ -1,5 +1,7 @@
+import json
 import os
 import random
+import sys
 
 import cudf
 from cudf.tests import dataset_generator as dg
@@ -10,35 +12,56 @@ class CSVReader(object):
         self._inputs = []
         self._file_name = file_name
         self._max_rows = max_rows
-        self._dirs = dirs if dirs else []
+
         for i, path in enumerate(dirs):
             if i == 0 and not os.path.exists(path):
-                os.mkdir(path)
+                raise FileNotFoundError(f"No {path} exists")
 
             if os.path.isfile(path):
-                self._add_file(path)
+                self._load_params(path)
             else:
                 for i in os.listdir(path):
-                    fname = os.path.join(path, i)
-                    if os.path.isfile(fname):
-                        self._add_file(fname)
-        self._seed_run_finished = not self._inputs
-        self._seed_idx = 0
-        self._save_csv = dirs and os.path.isdir(dirs[0])
+                    file_name = os.path.join(path, i)
+                    if os.path.isfile(file_name):
+                        self._load_params(file_name)
+        self._regression = True if self._inputs else False
+        self._idx = 0
         self._current_params = {}
 
-    def _add_file(self, path):
-        self._inputs.append(path)
-
-    @property
-    def length(self):
-        return len(self._inputs)
+    def _load_params(self, path):
+        with open(path, "r") as f:
+            params = json.load(f)
+        self._inputs.append(params)
 
     @staticmethod
     def _rand(n):
         return random.randrange(1, n)
 
     def generate_input(self):
+        if self._regression:
+            param = self._inputs[self._idx]
+            dtypes_meta = param["dtypes_meta"]
+            num_rows = param["num_rows"]
+            file_name = param["file_name"]
+            seed = param["seed"]
+            self._idx += 1
+        else:
+            dtypes_meta, num_rows = self.generate_rand_meta()
+            file_name = self._file_name
+            self._current_params["dtypes_meta"] = dtypes_meta
+            self._current_params["file_name"] = self._file_name
+            self._current_params["seed"] = random.randint(
+                -sys.maxsize - 1, sys.maxsize
+            )
+            self._current_params["num_rows"] = num_rows
+
+        df = dg.rand_dataframe(dtypes_meta, num_rows, seed).to_pandas()
+        df.to_csv(file_name)
+        print(df.shape)
+
+        return file_name
+
+    def generate_rand_meta(self):
         self._current_params = {}
         num_rows = self._rand(self._max_rows)
         print(num_rows)
@@ -53,12 +76,7 @@ class CSVReader(object):
             )
             for _ in range(num_cols)
         ]
-        df = dg.rand_dataframe(dtypes_meta, num_rows).to_pandas()
-        df.to_csv(self._file_name)
-        print(df.shape)
-        self._current_params["dtypes_meta"] = dtypes_meta
-        self._current_params["file_name"] = self._file_name
-        return self._file_name
+        return dtypes_meta, num_rows
 
     @property
     def current_params(self):
@@ -70,35 +88,54 @@ class CSVWriter(object):
         self._inputs = []
         self._file_name = file_name
         self._max_rows = max_rows
-        self._dirs = dirs if dirs else []
+
         for i, path in enumerate(dirs):
             if i == 0 and not os.path.exists(path):
-                os.mkdir(path)
+                raise FileNotFoundError(f"No {path} exists")
 
             if os.path.isfile(path):
-                self._add_file(path)
+                self._load_params(path)
             else:
                 for i in os.listdir(path):
-                    fname = os.path.join(path, i)
-                    if os.path.isfile(fname):
-                        self._add_file(fname)
-        self._seed_run_finished = not self._inputs
-        self._seed_idx = 0
-        self._save_csv = dirs and os.path.isdir(dirs[0])
+                    file_name = os.path.join(path, i)
+                    if os.path.isfile(file_name):
+                        self._load_params(file_name)
+        self._regression = True if self._inputs else False
+        self._idx = 0
         self._current_params = {}
 
-    def _add_file(self, path):
-        self._inputs.append(path)
-
-    @property
-    def length(self):
-        return len(self._inputs)
+    def _load_params(self, path):
+        with open(path, "r") as f:
+            params = json.load(f)
+        self._inputs.append(params)
 
     @staticmethod
     def _rand(n):
         return random.randrange(1, n)
 
     def generate_input(self):
+        if self._regression:
+            param = self._inputs[self._idx]
+            dtypes_meta = param["dtypes_meta"]
+            num_rows = param["num_rows"]
+            seed = param["seed"]
+            self._idx += 1
+        else:
+            dtypes_meta, num_rows = self.generate_rand_meta()
+            self._current_params["dtypes_meta"] = dtypes_meta
+            self._current_params["seed"] = random.randint(
+                -sys.maxsize - 1, sys.maxsize
+            )
+            self._current_params["num_rows"] = num_rows
+
+        df = cudf.DataFrame.from_arrow(
+            dg.rand_dataframe(dtypes_meta, num_rows, seed)
+        )
+        print(df.shape)
+
+        return df
+
+    def generate_rand_meta(self):
         self._current_params = {}
         num_rows = self._rand(self._max_rows)
         print(num_rows)
@@ -113,14 +150,7 @@ class CSVWriter(object):
             )
             for _ in range(num_cols)
         ]
-        df = cudf.DataFrame.from_arrow(
-            dg.rand_dataframe(dtypes_meta, num_rows)
-        )
-
-        print(df.shape)
-        self._current_params["dtypes_meta"] = dtypes_meta
-
-        return df
+        return dtypes_meta, num_rows
 
     @property
     def current_params(self):
