@@ -25,7 +25,7 @@ class CategoricalDtype(ExtensionDtype):
             return cudf.core.index.as_index(
                 cudf.core.column.column_empty(0, dtype="object", masked=False)
             )
-        return cudf.core.index.as_index(self._categories)
+        return cudf.core.index.as_index(self._categories, copy=False)
 
     @property
     def type(self):
