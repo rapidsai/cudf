@@ -14,14 +14,9 @@
  * limitations under the License.
  */
 
-/**
- * @file csv.hpp
- * @brief cuDF-IO freeform API
- */
-
 #pragma once
 
-#include "types.hpp"
+#include <cudf/io/types.hpp>
 
 #include <cudf/io/writers.hpp>
 #include <cudf/table/table_view.hpp>

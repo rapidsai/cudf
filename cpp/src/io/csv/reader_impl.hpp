@@ -14,11 +14,6 @@
  * limitations under the License.
  */
 
-/**
- * @file reader_impl.hpp
- * @brief cuDF-IO CSV reader class implementation header
- */
-
 #pragma once
 
 #include "csv.h"

@@ -14,11 +14,6 @@
  * limitations under the License.
  */
 
-/**
- * @file csv.hpp
- * @brief cuDF-IO reader classes API
- */
-
 #pragma once
 
 #include <cudf/io/csv.hpp>

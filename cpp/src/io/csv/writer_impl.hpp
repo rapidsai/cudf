@@ -14,11 +14,6 @@
  * limitations under the License.
  */
 
-/**
- * @file writer_impl.hpp
- * @brief cuDF-IO CSV writer class implementation header
- */
-
 #pragma once
 
 #include "csv.h"
