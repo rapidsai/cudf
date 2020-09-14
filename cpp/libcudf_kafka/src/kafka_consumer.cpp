@@ -155,8 +155,7 @@ int64_t kafka_consumer::get_committed_offset(std::string const &topic, int parti
   return offset > 0 ? offset : 0;
 }
 
-const std::map<std::string, std::vector<int32_t>> kafka_consumer::list_topics(
-  std::string topic_name)
+const std::map<std::string, std::vector<int32_t>> kafka_consumer::list_topics()
 {
   RdKafka::Metadata *md;
   std::map<std::string, std::vector<int32_t>> topic_parts;

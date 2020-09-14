@@ -33,24 +33,13 @@ class CudfKafkaClient:
 
         self.kafka_meta_client = KafkaDatasource(self.kafka_confs)
 
-    def list_topics(self, topic_name):
+    def list_topics(self):
 
         """
-        Base object for any client that wants to interact with a Kafka broker.
-        This object creates the underlying KafkaDatasource connection which
-        is used to read data from Kafka and create cudf Dataframes.
-        This class should not be directly instantiated.
-
-        Parameters
-        ----------
-        kafka_configs : dict,
-            Dict of Key/Value pairs of librdkafka
-            configuration values. Full list of valid configuration
-            options can be found at
-            https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
+        List the topics associated with the underlying Kafka Broker connection.
         """
 
-        return self.kafka_meta_client.list_topics(topic_name.encode())
+        return self.kafka_meta_client.list_topics()
 
     def unsubscribe(self):
 
