@@ -74,6 +74,14 @@ std::unique_ptr<column> decode(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
+/**
+ * @brief Return minimal integer type for the given number of elements.
+ *
+ * @param keys_size Number of elements in the keys
+ * @return Minimal type that can hold `keys_size` values
+ */
+data_type get_indices_type_for_size(size_type keys_size);
+
 }  // namespace detail
 }  // namespace dictionary
 }  // namespace cudf
