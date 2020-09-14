@@ -9,6 +9,7 @@
 - PR #5874 Add `COLLECT` groupby aggregation
 - PR #6119 Add support for `dayofweek` property in `DateTimeIndex` and `DatetimeProperties`
 - PR #6125 Add support for `Series.mode` and `DataFrame.mode`
+- PR #6220 Add `list_topics()` to supply list of underlying Kafka connection topics
 
 ## Improvements
 
