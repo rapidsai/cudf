@@ -2628,7 +2628,7 @@ class DataFrame(Frame, Serializable):
 
         return DataFrame(cols, idx)
 
-    def set_index(self, index, drop=True):
+    def set_index(self, index, drop=True, inplace=False):
         """Return a new DataFrame with a new index
 
         Parameters
@@ -2641,29 +2641,29 @@ class DataFrame(Frame, Serializable):
         drop : boolean
             whether to drop corresponding column for str index argument
         """
+        df = self.copy(deep=False) if not inplace else self
+        
         # When index is a list of column names
         if isinstance(index, list):
             if len(index) > 1:
-                df = self.copy(deep=False)
                 if drop:
                     df = df.drop(columns=index)
                 return df.set_index(
-                    cudf.MultiIndex.from_frame(self[index], names=index)
+                    index=cudf.MultiIndex.from_frame(self[index], names=index),
+                    inplace=inplace
                 )
             index = index[0]  # List contains single item
 
         # When index is a column name
         if isinstance(index, str):
-            df = self.copy(deep=False)
             if drop:
                 df._drop_column(index)
-            return df.set_index(self[index])
+            return df.set_index(index=self[index], inplace=inplace)
         # Otherwise
         else:
             index = index if isinstance(index, Index) else as_index(index)
-            df = self.copy(deep=False)
             df.index = index
-            return df
+            return df if not inplace else None
 
     def reset_index(
         self, level=None, drop=False, inplace=False, col_level=0, col_fill=""
