@@ -174,8 +174,7 @@ $ cd build                                                                # ente
 
 # CMake options:
 # -DCMAKE_INSTALL_PREFIX set to the install path for your libraries or $CONDA_PREFIX if you're using Anaconda, i.e. -DCMAKE_INSTALL_PREFIX=/install/path or -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX
-# -DCMAKE_CXX11_ABI set to ON or OFF depending on the ABI version you want, defaults to ON. When turned ON, ABI compability for C++11 is used. When OFF, pre-C++11 ABI compability is used.
-$ cmake .. -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DCMAKE_CXX11_ABI=ON      # configure cmake ...
+$ cmake .. -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX                           # configure cmake ...
 $ make -j                                                                 # compile the libraries librmm.so, libcudf.so ... '-j' will start a parallel job using the number of physical cores available on your system
 $ make install                                                            # install the libraries librmm.so, libcudf.so to the CMAKE_INSTALL_PREFIX
 ```
@@ -234,9 +233,6 @@ $ ./build.sh libcudf -g                # compile and install libcudf for debug
 $ PARALLEL_LEVEL=4 ./build.sh libcudf  # compile and install libcudf limiting parallel build jobs to 4 (make -j4)
 $ ./build.sh libcudf -n                # compile libcudf but do not install
 ```
-
-- The `build.sh` script can be customized to support other features:
-  - **ABI version:** The cmake `-DCMAKE_CXX11_ABI` option can be set to ON or OFF depending on the ABI version you want, defaults to ON. When turned ON, ABI compability for C++11 is used. When OFF, pre-C++11 ABI compability is used.
 
 Done! You are ready to develop for the cuDF OSS project.
 
