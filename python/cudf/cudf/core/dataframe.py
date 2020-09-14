@@ -33,6 +33,7 @@ from cudf.core.frame import Frame
 from cudf.core.groupby.groupby import DataFrameGroupBy
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
+from cudf.core.series import Series
 from cudf.core.window import Rolling
 from cudf.utils import applyutils, docutils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
@@ -211,7 +212,7 @@ class DataFrame(Frame, Serializable):
             else:
                 self._index = as_index(index)
             if columns is not None:
-                if isinstance(columns, (cudf.Series, cudf.Index)):
+                if isinstance(columns, (Series, cudf.Index)):
                     columns = columns.to_pandas()
 
                 self._data = ColumnAccessor(
@@ -260,7 +261,7 @@ class DataFrame(Frame, Serializable):
                     self._data = new_df._data
                     self._index = new_df._index
                     self.columns = new_df.columns
-                elif len(data) > 0 and isinstance(data[0], cudf.Series):
+                elif len(data) > 0 and isinstance(data[0], Series):
                     self._init_from_series_list(
                         data=data, columns=columns, index=index
                     )
@@ -464,9 +465,9 @@ class DataFrame(Frame, Serializable):
         data = data.copy()
 
         input_series = [
-            cudf.Series(val)
+            Series(val)
             for val in data.values()
-            if isinstance(val, (pd.Series, cudf.Series))
+            if isinstance(val, (pd.Series, Series))
         ]
 
         if input_series:
@@ -483,7 +484,7 @@ class DataFrame(Frame, Serializable):
                 index = aligned_input_series[0].index
 
             for name, val in data.items():
-                if isinstance(val, (pd.Series, cudf.Series)):
+                if isinstance(val, (pd.Series, Series)):
                     data[name] = aligned_input_series.pop(0)
 
         return data, index
@@ -494,7 +495,7 @@ class DataFrame(Frame, Serializable):
 
     @property
     def _constructor_sliced(self):
-        return cudf.Series
+        return Series
 
     @property
     def _constructor_expanddim(self):
@@ -648,7 +649,7 @@ class DataFrame(Frame, Serializable):
                 cupy.ndarray,
                 np.ndarray,
                 pd.Series,
-                cudf.Series,
+                Series,
                 Index,
                 pd.Index,
             ),
@@ -699,7 +700,7 @@ class DataFrame(Frame, Serializable):
             else:
                 if arg in self._data:
                     if len(self) == 0:
-                        if isinstance(value, (pd.Series, cudf.Series)):
+                        if isinstance(value, (pd.Series, Series)):
                             self._index = as_index(value.index)
                         elif len(value) > 0:
                             self._index = RangeIndex(start=0, stop=len(value))
@@ -717,8 +718,8 @@ class DataFrame(Frame, Serializable):
 
                         self._data = new_data
                         return
-                    elif isinstance(value, (pd.Series, cudf.Series)):
-                        value = cudf.Series(value)._align_to_index(
+                    elif isinstance(value, (pd.Series, Series)):
+                        value = Series(value)._align_to_index(
                             self._index,
                             how="right",
                             sort=False,
@@ -735,7 +736,7 @@ class DataFrame(Frame, Serializable):
                     self.insert(len(self._data), arg, value)
 
         elif isinstance(
-            arg, (list, np.ndarray, pd.Series, cudf.Series, Index, pd.Index)
+            arg, (list, np.ndarray, pd.Series, Series, Index, pd.Index)
         ):
             mask = arg
             if isinstance(mask, list):
@@ -842,7 +843,7 @@ class DataFrame(Frame, Serializable):
             ind.append("Index")
             ind = cudf.Index(ind, dtype="str")
             sizes.append(self.index.memory_usage(deep=deep))
-        return cudf.Series(sizes, index=ind)
+        return Series(sizes, index=ind)
 
     def __len__(self):
         """
@@ -862,7 +863,7 @@ class DataFrame(Frame, Serializable):
     def __array_function__(self, func, types, args, kwargs):
 
         cudf_df_module = DataFrame
-        cudf_series_module = cudf.Series
+        cudf_series_module = Series
 
         for submodule in func.__module__.split(".")[1:]:
             # point cudf to the correct submodule
@@ -1308,7 +1309,7 @@ class DataFrame(Frame, Serializable):
 
             def fallback(col, fn):
                 if fill_value is None:
-                    return cudf.Series.from_masked_array(
+                    return Series.from_masked_array(
                         data=column_empty(max_num_rows, dtype="float64"),
                         mask=create_null_mask(
                             max_num_rows, state=MaskState.ALL_NULL
@@ -1325,7 +1326,7 @@ class DataFrame(Frame, Serializable):
             for col in rhs._data:
                 if col not in lhs._data:
                     result[col] = fallback(rhs[col], _reverse_op(fn))
-        elif isinstance(other, cudf.Series):
+        elif isinstance(other, Series):
             other_cols = other.to_pandas().to_dict()
             other_cols_keys = list(other_cols.keys())
             result_cols = list(self.columns)
@@ -1340,7 +1341,7 @@ class DataFrame(Frame, Serializable):
                 else:
                     if col not in df_cols:
                         r_opr = other_cols[col]
-                        l_opr = cudf.Series(
+                        l_opr = Series(
                             column_empty(
                                 len(self), masked=True, dtype=other.dtype
                             )
@@ -2465,7 +2466,7 @@ class DataFrame(Frame, Serializable):
         is_multiindex = isinstance(columns, pd.MultiIndex)
 
         if isinstance(
-            columns, (cudf.Series, cudf.Index, cudf.core.column.ColumnBase)
+            columns, (Series, cudf.Index, cudf.core.column.ColumnBase)
         ):
             columns = pd.Index(columns.to_array(), tupleize_cols=is_multiindex)
         elif not isinstance(columns, pd.Index):
@@ -2618,7 +2619,7 @@ class DataFrame(Frame, Serializable):
                 cols[name] = df._data[name].copy(deep=copy)
             else:
                 dtype = dtypes.get(name, np.float64)
-                col = original_cols.get(name, cudf.Series(dtype=dtype)._column)
+                col = original_cols.get(name, Series(dtype=dtype)._column)
                 col = column.column_empty_like(
                     col, dtype=dtype, masked=True, newsize=length
                 )
@@ -2847,7 +2848,7 @@ class DataFrame(Frame, Serializable):
             value = utils.scalar_broadcast_to(value, len(self))
 
         if len(self) == 0:
-            if isinstance(value, (pd.Series, cudf.Series)):
+            if isinstance(value, (pd.Series, Series)):
                 self._index = as_index(value.index)
             elif len(value) > 0:
                 self._index = RangeIndex(start=0, stop=len(value))
@@ -2860,8 +2861,8 @@ class DataFrame(Frame, Serializable):
                             newsize=len(value),
                         )
                 self._data = new_data
-        elif isinstance(value, (pd.Series, cudf.Series)):
-            value = cudf.Series(value)._align_to_index(
+        elif isinstance(value, (pd.Series, Series)):
+            value = Series(value)._align_to_index(
                 self._index, how="right", sort=False
             )
 
@@ -2889,7 +2890,7 @@ class DataFrame(Frame, Serializable):
             raise NameError("duplicated column name {!r}".format(name))
 
         if isinstance(data, GeneratorType):
-            data = cudf.Series(data)
+            data = Series(data)
 
         self.insert(len(self._data.names), name, data)
 
@@ -4119,7 +4120,7 @@ class DataFrame(Frame, Serializable):
             cols = [self[k]._column for k in columns]
             table_to_hash = Frame(data=OrderedColumnDict(zip(columns, cols)))
 
-        return cudf.Series(table_to_hash._hash()).values
+        return Series(table_to_hash._hash()).values
 
     def partition_by_hash(self, columns, nparts, keep_index=True):
         """Partition the dataframe by the hashed value of data in *columns*.
@@ -5166,7 +5167,7 @@ class DataFrame(Frame, Serializable):
 
         if q_is_number:
             result = result.transpose()
-            return cudf.Series(
+            return Series(
                 data=result._columns[0], index=result.index, name=q[0]
             )
         else:
@@ -5209,7 +5210,7 @@ class DataFrame(Frame, Serializable):
 
             result_df.index = self.index
             return result_df
-        elif isinstance(values, cudf.Series):
+        elif isinstance(values, Series):
             values = values.reindex(self.index)
 
             result = DataFrame()
@@ -5870,7 +5871,7 @@ class DataFrame(Frame, Serializable):
             return df
 
         df = cudf.concat(mode_results, axis=1)
-        if isinstance(df, cudf.Series):
+        if isinstance(df, Series):
             df = df.to_frame()
 
         df.columns = data_df.columns
@@ -6186,13 +6187,13 @@ class DataFrame(Frame, Serializable):
                 for col in self._data.names
             ]
 
-            if isinstance(result[0], cudf.Series):
+            if isinstance(result[0], Series):
                 support_result = result
                 result = DataFrame(index=support_result[0].index)
                 for idx, col in enumerate(self._data.names):
                     result[col] = support_result[idx]
             else:
-                result = cudf.Series(result)
+                result = Series(result)
                 result = result.set_index(self._data.names)
             return result
 
@@ -6234,7 +6235,7 @@ class DataFrame(Frame, Serializable):
             result = getattr(arr, method)(axis=1, **kwargs)
 
             if len(result.shape) == 1:
-                return cudf.Series(result, index=self.index)
+                return Series(result, index=self.index)
             else:
                 result_df = DataFrame.from_gpu_matrix(result).set_index(
                     self.index
@@ -6504,7 +6505,7 @@ class DataFrame(Frame, Serializable):
 
         data_col = libcudf.reshape.interleave_columns(homogenized)
 
-        result = cudf.Series(data=data_col, index=new_index)
+        result = Series(data=data_col, index=new_index)
         if dropna:
             return result.dropna()
         else:
@@ -6700,7 +6701,7 @@ class DataFrame(Frame, Serializable):
                 [self, other], ignore_index=ignore_index, sort=sort
             )
             return result
-        elif isinstance(other, cudf.Series):
+        elif isinstance(other, Series):
             if other.name is None and not ignore_index:
                 raise TypeError(
                     "Can only append a Series if ignore_index=True "
@@ -6868,7 +6869,7 @@ def from_pandas(obj, nan_as_null=None):
     if isinstance(obj, pd.DataFrame):
         return DataFrame.from_pandas(obj, nan_as_null=nan_as_null)
     elif isinstance(obj, pd.Series):
-        return cudf.Series.from_pandas(obj, nan_as_null=nan_as_null)
+        return Series.from_pandas(obj, nan_as_null=nan_as_null)
     elif isinstance(obj, pd.MultiIndex):
         return cudf.MultiIndex.from_pandas(obj, nan_as_null=nan_as_null)
     elif isinstance(obj, pd.RangeIndex):
