@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from cudf._lib.scalar import Scalar
+from cudf import Scalar
 from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, TIMEDELTA_TYPES
 import operator
 
@@ -190,28 +190,34 @@ def test_date_duration_scalars(value):
     operator.add,
     operator.sub,
     operator.mul,
+    operator.truediv
 ])
 def test_scalar_binops_value(pairs, dtype_l, dtype_r, op):
-    l, r = pairs
+    lval, rval = pairs
+    if (isinstance(lval, str) and dtype_l != np.dtype('str')) or (isinstance(rval, str) and dtype_r != np.dtype('str')):
+        pytest.skip("Invalid scalar/dtype combination")
+
+
+
     import re
     try:
-        host_value_l = dtype_l.type(l)
+        host_value_l = dtype_l.type(lval)
     except ValueError as e:
         with pytest.raises(ValueError, match=re.escape(str(e))):
-            gpu_value_l = Scalar(l, dtype=dtype_l)
+            gpu_value_l = Scalar(lval, dtype=dtype_l)
         return
     try:
-        host_value_r = dtype_r.type(r)
+        host_value_r = dtype_r.type(rval)
     except ValueError as e:
         with pytest.raises(ValueError, match=re.escape(str(e))):
-            gpu_value_r = Scalar(r, dtype=dtype_r)
+            gpu_value_r = Scalar(rval, dtype=dtype_r)
         return
 
-    gpu_value_l = Scalar(l, dtype=dtype_l)
-    gpu_value_r = Scalar(r, dtype=dtype_r)
+    gpu_value_l = Scalar(lval, dtype=dtype_l)
+    gpu_value_r = Scalar(rval, dtype=dtype_r)
     try:
         expect = op(host_value_l, host_value_r)
-    except np.core._exceptions.UFuncTypeError:
+    except TypeError:
         with pytest.raises(TypeError):
             got = op(gpu_value_l, gpu_value_r)
         return
