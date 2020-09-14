@@ -74,17 +74,17 @@ def scalar_broadcast_to(scalar, size, dtype=None):
     if isinstance(scalar, pd.Categorical):
         return scalar_broadcast_to(scalar.categories[0], size).astype(dtype)
 
-    scalar = to_cudf_compatible_scalar(scalar, dtype=dtype)
+    scalar = cudf.Scalar(to_cudf_compatible_scalar(scalar, dtype=dtype))
     dtype = scalar.dtype
 
-    if np.dtype(dtype).kind in ("O", "U"):
+    if dtype.kind in ("O", "U"):
         gather_map = column.full(size, 0, dtype="int32")
         scalar_str_col = column.as_column([scalar], dtype="str")
         return scalar_str_col[gather_map]
     else:
         out_col = column.column_empty(size, dtype=dtype)
         if out_col.size != 0:
-            out_col.data_array_view[:] = scalar
+            out_col.data_array_view[:] = scalar.value
         return out_col
 
 

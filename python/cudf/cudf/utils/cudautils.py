@@ -207,7 +207,7 @@ def find_last(arr, val, mask=None, compare="eq"):
     found_col = found_col.find_and_replace([arr.size], [None], True)
 
     max_index = found_col.max()
-    return -1 if max_index is None or np.isnan(max_index) else max_index
+    return -1 if max_index is None or cudf.api.types.isnan(max_index) else max_index
 
 
 @cuda.jit
