@@ -42,14 +42,26 @@ class Scalar(libcudf.scalar.Scalar):
     def __add__(self, other):
         return self._scalar_binop(other, "__add__")
 
+    def __radd__(self, other):
+        return self._scalar_binop(other, '__radd__')
+
     def __sub__(self, other):
         return self._scalar_binop(other, "__sub__")
+
+    def __rsub__(self, other):
+        return self._scalar_binop(other, "__rsub__")
 
     def __mul__(self, other):
         return self._scalar_binop(other, "__mul__")
 
+    def __rmul__(self, other):
+        return self._scalar_binop(other, "__rmul__")
+
     def __truediv__(self, other):
         return self._scalar_binop(other, "__truediv__")
+
+    def __rtruediv__(self, other):
+        return self._scalar_binop(other, "__rtruediv__")
 
     def __mod__(self, other):
         return self._scalar_binop(other, "__mod__")
@@ -77,6 +89,9 @@ class Scalar(libcudf.scalar.Scalar):
 
     def __eq__(self, other):
         return self._scalar_binop(other, '__eq__').value
+
+    def __abs__(self):
+        return self._scalar_unaop('__abs__')
 
     def _binop_result_dtype_or_error(self, other, op):
 
@@ -112,3 +127,6 @@ class Scalar(libcudf.scalar.Scalar):
         if isinstance(other, Scalar):
             other = other.value
         return getattr(self.value, op)(other)
+
+    def _scalar_unaop(self, op):
+        return Scalar(getattr(self.value, op)())

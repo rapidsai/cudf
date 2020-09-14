@@ -81,7 +81,7 @@ def test_sum_of_squares(dtype, nelem):
 
     if np.dtype(dtype).kind in {"u", "i"}:
         if 0 <= expect <= np.iinfo(dtype).max:
-            np.testing.assert_array_almost_equal(expect, got)
+            np.testing.assert_array_almost_equal(expect, got.value)
         else:
             print("overflow, passing")
     else:
@@ -130,7 +130,7 @@ def test_sum_masked(nelem):
     expect = data[res_mask].sum()
 
     significant = 4 if dtype == np.float32 else 6
-    np.testing.assert_approx_equal(expect, got, significant=significant)
+    np.testing.assert_approx_equal(expect, got.value, significant=significant)
 
 
 def test_sum_boolean():
