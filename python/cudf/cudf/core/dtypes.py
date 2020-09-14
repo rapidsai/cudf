@@ -80,28 +80,19 @@ class Number(Generic):
 
 
 class Integer(Number):
-    def __init__(self):
-        self._raise_construction_error()
-
+    pass
 
 class SignedInteger(Integer):
-    def __init__(self):
-        self._raise_construction_error()
-
+    pass
 
 class UnsignedInteger(Integer):
-    def __init__(self):
-        self._raise_construction_error()
-
+    pass
 
 class Inexact(Number):
-    def __init__(self):
-        self._raise_construction_error()
-
+    pass
 
 class Floating(Inexact):
-    def __init__(self):
-        self._raise_construction_error()
+    pass
 
     @property
     def kind(self):
