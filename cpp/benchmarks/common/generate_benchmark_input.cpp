@@ -19,6 +19,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/table/table.hpp>
+#include <cudf/utilities/bit.hpp>
 
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
@@ -35,19 +36,6 @@
  * @brief Mersenne Twister pseudo-random engine.
  */
 auto deterministic_engine(unsigned seed) { return std::mt19937{seed}; }
-
-// Utilities to determine the mean size of an element, given the data profile
-template <typename T>
-std::enable_if_t<cudf::is_fixed_width<T>(), size_t> avg_element_size(data_profile const& profile)
-{
-  return sizeof(T);
-}
-
-template <typename T>
-std::enable_if_t<!cudf::is_fixed_width<T>(), size_t> avg_element_size(data_profile const& profile)
-{
-  CUDF_FAIL("not implemented!");
-}
 
 /**
  *  Computes the mean value for a distribution of given type and value bounds.
@@ -68,6 +56,19 @@ T get_distribution_mean(distribution_params<T> const& dist)
     else
       return dist.lower_bound - (1. / p);
   }
+}
+
+// Utilities to determine the mean size of an element, given the data profile
+template <typename T>
+std::enable_if_t<cudf::is_fixed_width<T>(), size_t> avg_element_size(data_profile const& profile)
+{
+  return sizeof(T);
+}
+
+template <typename T>
+std::enable_if_t<!cudf::is_fixed_width<T>(), size_t> avg_element_size(data_profile const& profile)
+{
+  CUDF_FAIL("not implemented!");
 }
 
 template <>
@@ -203,23 +204,11 @@ struct random_value_fn<T, typename std::enable_if_t<std::is_same<T, bool>::value
   bool operator()(std::mt19937& engine) { return b_dist(engine); }
 };
 
-constexpr size_t bitmask_bits = sizeof(cudf::bitmask_type) * 8;
-
 size_t null_mask_size(cudf::size_type num_rows)
 {
+  constexpr size_t bitmask_bits = cudf::detail::size_in_bits<cudf::bitmask_type>();
   return (num_rows + bitmask_bits - 1) / bitmask_bits;
 }
-
-bool get_null_mask_bit(std::vector<cudf::bitmask_type> const& null_mask_data, cudf::size_type row)
-{
-  return null_mask_data[row / bitmask_bits] & (cudf::bitmask_type(1) << row % bitmask_bits);
-}
-
-void reset_null_mask_bit(std::vector<cudf::bitmask_type>& null_mask_data, cudf::size_type row)
-{
-  null_mask_data[row / bitmask_bits] &= ~(cudf::bitmask_type(1) << row % bitmask_bits);
-}
-
 template <typename T>
 void set_element_at(T value,
                     bool valid,
@@ -230,7 +219,7 @@ void set_element_at(T value,
   if (valid) {
     values[idx] = value;
   } else {
-    reset_null_mask_bit(null_mask, idx);
+    cudf::clear_bit_unsafe(null_mask.data(), idx);
   }
 }
 
@@ -288,7 +277,7 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
     } else {
       auto const sample_idx = sample_dist(engine);
       set_element_at(samples[sample_idx],
-                     get_null_mask_bit(samples_null_mask, sample_idx),
+                     cudf::bit_is_set(samples_null_mask.data(), sample_idx),
                      data,
                      null_mask,
                      row);
@@ -297,7 +286,8 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
     if (avg_run_len > 1) {
       int const run_len = std::min<int>(num_rows - row, std::round(run_len_dist(engine)));
       for (int offset = 1; offset < run_len; ++offset) {
-        set_element_at(data[row], get_null_mask_bit(null_mask, row), data, null_mask, row + offset);
+        set_element_at(
+          data[row], cudf::bit_is_set(null_mask.data(), row), data, null_mask, row + offset);
       }
       row += std::max(run_len - 1, 0);
     }
@@ -337,10 +327,11 @@ void copy_string(cudf::size_type src_idx,
                  cudf::size_type dst_idx,
                  string_column_data& dst)
 {
-  if (!get_null_mask_bit(src.null_mask, src_idx)) reset_null_mask_bit(dst.null_mask, dst_idx);
+  if (!cudf::bit_is_set(src.null_mask.data(), src_idx))
+    cudf::clear_bit_unsafe(dst.null_mask.data(), dst_idx);
   auto const str_len = src.offsets[src_idx + 1] - src.offsets[src_idx];
   dst.chars.resize(dst.chars.size() + str_len);
-  if (get_null_mask_bit(src.null_mask, src_idx)) {
+  if (cudf::bit_is_set(src.null_mask.data(), src_idx)) {
     std::copy_n(
       src.chars.begin() + src.offsets[src_idx], str_len, dst.chars.begin() + dst.offsets.back());
   }
@@ -362,7 +353,7 @@ void append_string(Char_gen& char_gen, bool valid, uint32_t length, string_colum
                   [&]() { return char_gen(); });
 
   // TODO: use empty string for invalid fields?
-  if (!valid) { reset_null_mask_bit(column_data.null_mask, idx); }
+  if (!valid) { cudf::clear_bit_unsafe(column_data.null_mask.data(), idx); }
 }
 
 /**
@@ -480,7 +471,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
     std::vector<cudf::bitmask_type> null_mask(null_mask_size(num_rows), ~0);
     for (int row = 1; row < num_rows + 1; ++row) {
       offsets.push_back(std::min<int32_t>(child_column->size(), offsets.back() + len_dist(engine)));
-      if (!valid_dist(engine)) reset_null_mask_bit(null_mask, row);
+      if (!valid_dist(engine)) cudf::clear_bit_unsafe(null_mask.data(), row);
     }
     offsets.back() = child_column->size();  // Always include all elements
 
