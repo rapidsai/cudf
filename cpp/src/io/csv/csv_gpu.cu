@@ -358,12 +358,12 @@ __inline__ __device__ cudf::timestamp_ns decode_value(const char *data,
 }
 
 #ifndef DURATION_DECODE_VALUE
-#define DURATION_DECODE_VALUE(Type)                                           \
-  template <>                                                                 \
-  __inline__ __device__ Type decode_value(                                    \
-    const char *data, long start, long end, ParseOptions const &opts)         \
-  {                                                                           \
-    return Type{parseTimeDeltaFormat<Type>(data, start, end, opts.dayfirst)}; \
+#define DURATION_DECODE_VALUE(Type)                                   \
+  template <>                                                         \
+  __inline__ __device__ Type decode_value(                            \
+    const char *data, long start, long end, ParseOptions const &opts) \
+  {                                                                   \
+    return Type{parseTimeDeltaFormat<Type>(data, start, end)};        \
   }
 #endif
 DURATION_DECODE_VALUE(duration_D)

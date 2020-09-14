@@ -333,8 +333,7 @@ struct column_to_strings_fn {
   std::enable_if_t<cudf::is_duration<column_type>(), std::unique_ptr<column>> operator()(
     column_view const& column) const
   {
-    auto conv_col_ptr = cudf::strings::from_durations(column, std::string{"%P"});
-    return conv_col_ptr;
+    return cudf::strings::from_durations(column, std::string{"%P"});
   }
 
   // unsupported type of column:
