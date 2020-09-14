@@ -74,7 +74,9 @@ class CSVReader(object):
             f"Generating DataFrame with rows: {num_rows} "
             f"and columns: {num_cols}"
         )
-        dtypes_list = list(cudf.utils.dtypes.ALL_TYPES)
+        dtypes_list = list(
+            cudf.utils.dtypes.ALL_TYPES - cudf.utils.dtypes.TIMEDELTA_TYPES
+        )
         dtypes_meta = [
             (
                 random.choice(dtypes_list),
@@ -149,7 +151,9 @@ class CSVWriter(object):
             f"Generating DataFrame with rows: {num_rows} "
             f"and columns: {num_cols}"
         )
-        dtypes_list = list(cudf.utils.dtypes.ALL_TYPES)
+        dtypes_list = list(
+            cudf.utils.dtypes.ALL_TYPES - cudf.utils.dtypes.TIMEDELTA_TYPES
+        )
         dtypes_meta = [
             (
                 random.choice(dtypes_list),
