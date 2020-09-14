@@ -69,6 +69,7 @@
 - PR #6199 Fix index preservation for dask_cudf parquet
 - PR #6207 Remove shared libs from Java sources jar
 - PR #6212 Update codeowners file
+- PR #6226 Add in some JNI checks for null handles
 
 
 # cuDF 0.15.0 (26 Aug 2020)
