@@ -1,6 +1,6 @@
 import argparse
 
-from . import fuzzer
+from cudf.testing import fuzzer
 
 
 class PythonFuzz(object):
@@ -70,4 +70,4 @@ def pythonfuzz(function=None, data_handle=None):
 
 
 if __name__ == "__main__":
-    PythonFuzz()
+    PythonFuzz(None)

@@ -50,6 +50,7 @@ class ParquetReader(object):
             num_rows = param["num_rows"]
             file_name = param["file_name"]
             seed = param["seed"]
+            random.seed(seed)
             self._idx += 1
         else:
             dtypes_meta, num_rows = self.generate_rand_meta()
@@ -129,11 +130,13 @@ class ParquetWriter(object):
             dtypes_meta = param["dtypes_meta"]
             num_rows = param["num_rows"]
             seed = param["seed"]
+            random.seed(seed)
             self._idx += 1
         else:
+            seed = random.randint(0, 2 ** 32 - 1)
+            random.seed(seed)
             dtypes_meta, num_rows = self.generate_rand_meta()
             self._current_params["dtypes_meta"] = dtypes_meta
-            seed = random.randint(0, 2 ** 32 - 1)
             self._current_params["seed"] = seed
             self._current_params["num_rows"] = num_rows
 

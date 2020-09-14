@@ -288,7 +288,10 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
                         cardinality=cardinality,
                         null_frequency=null_frequency,
                         generator=lambda g: g.numbers.floats(
-                            start=finfo.min, end=finfo.max - 1, n=rows
+                            start=finfo.min + 1,
+                            end=finfo.max - 1,
+                            n=rows,
+                            precision=finfo.precision,
                         ),
                         is_sorted=False,
                     )
