@@ -14,11 +14,6 @@
  * limitations under the License.
  */
 
-/**
- * @file orc.hpp
- * @brief cuDF-IO reader classes API
- */
-
 #pragma once
 
 #include <cudf/io/orc.hpp>
