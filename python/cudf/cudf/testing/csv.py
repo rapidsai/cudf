@@ -116,10 +116,10 @@ class CSVWriter(object):
         df = cudf.DataFrame.from_arrow(
             dg.rand_dataframe(dtypes_meta, num_rows)
         )
-        # df.to_parquet(self._file_name)
+
         print(df.shape)
         self._current_params["dtypes_meta"] = dtypes_meta
-        # self._current_params["file_name"] = self._file_name
+
         return df
 
     @property

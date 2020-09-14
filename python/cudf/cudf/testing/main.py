@@ -45,16 +45,14 @@ class PythonFuzz(object):
         )
 
         args = parser.parse_args()
-        print(args)
         f = fuzzer.Fuzzer(
-            self.function,
-            self.data_handler_class,
-            args.dirs,
-            args.exact_artifact_path,
-            120,
-            args.regression,
-            args.max_input_size,
-            args.runs,
+            target=self.function,
+            data_handler_class=self.data_handler_class,
+            dirs=args.dirs,
+            exact_artifact_path=args.exact_artifact_path,
+            regression=args.regression,
+            max_input_size=args.max_input_size,
+            runs=args.runs,
         )
         f.start()
 

@@ -1,5 +1,6 @@
 import datetime
 import functools
+import json
 import logging
 import os
 import sys
@@ -27,7 +28,6 @@ class Fuzzer(object):
         data_handler_class,
         dirs=None,
         exact_artifact_path=None,
-        timeout=120,
         regression=False,
         max_input_size=4096,
         runs=-1,
@@ -36,12 +36,11 @@ class Fuzzer(object):
         self._target = target
         self._dirs = [] if dirs is None else dirs
         self._crash_dir = exact_artifact_path
-        self._timeout = timeout
-        self._regression = regression
         self._data_handler = data_handler_class(
             dirs=self._dirs, max_rows=max_input_size
         )
         self._total_executions = 0
+        self._regression = regression
         self._start_time = None
         self.runs = runs
 
@@ -64,15 +63,11 @@ class Fuzzer(object):
             crash_path = error_file_name + "_crash.xml"
             crash_log_path = error_file_name + "_crash.log"
 
-        # xml = dicttoxml(self._data_handler.current_params, attr_type=False)
-        import json
-
         with open(crash_path, "w") as f:
-            # f.write(self._data_handler.current_params)
             json.dump(
                 self._data_handler.current_params, f, sort_keys=True, indent=4
             )
-            # pickle.dump(self._data_handler.current_params, f)
+
         logging.info(f"Crash params was written to {crash_path}")
 
         with open(crash_log_path, "w") as f:

@@ -44,9 +44,10 @@ class ParquetReader(object):
         print(num_rows)
         num_cols = self._rand(1000)
         print(num_cols)
-        dtypes_list = cudf.utils.dtypes.ALL_TYPES - set(
-            ["category", "timedelta64[ns]"]
-        )
+        dtypes_list = cudf.utils.dtypes.ALL_TYPES - {
+            "category",
+            "timedelta64[ns]",
+        }
         dtypes_meta = [
             (
                 random.choice(dtypes_list),
@@ -106,9 +107,10 @@ class ParquetWriter(object):
         print(num_rows)
         num_cols = self._rand(1000)
         print(num_cols)
-        dtypes_list = cudf.utils.dtypes.ALL_TYPES - set(
-            ["category", "timedelta64[ns]"]
-        )
+        dtypes_list = cudf.utils.dtypes.ALL_TYPES - {
+            "category",
+            "timedelta64[ns]",
+        }
         dtypes_meta = [
             (
                 random.choice(dtypes_list),

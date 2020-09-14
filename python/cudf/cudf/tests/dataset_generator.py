@@ -5,7 +5,9 @@
 # if you want to generate data where certain phenomena (e.g., cardinality)
 # are exaggerated.
 
+import random
 import string
+import sys
 from multiprocessing import Pool
 
 import numpy as np
@@ -212,7 +214,7 @@ def get_dataframe(parameters, use_threads):
             for i, column_params in enumerate(parameters.column_parameters)
         ]
     )
-    print(schema)
+
     # Initialize column data and which columns should be sorted
     column_data = [None] * len(parameters.column_parameters)
     columns_to_sort = [
@@ -246,7 +248,11 @@ def get_dataframe(parameters, use_threads):
     return tbl
 
 
-def rand_dataframe(dtypes_meta, rows, seed=0):
+def rand_dataframe(
+    dtypes_meta, rows, seed=random.randint(-sys.maxsize - 1, sys.maxsize)
+):
+    random.seed(seed)
+
     column_params = []
     for meta in dtypes_meta:
         dtype, null_frequency, cardinality = meta
