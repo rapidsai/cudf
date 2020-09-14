@@ -1,7 +1,6 @@
 import json
 import os
 import random
-import sys
 
 import cudf
 from cudf.tests import dataset_generator as dg
@@ -50,9 +49,8 @@ class CSVReader(object):
             file_name = self._file_name
             self._current_params["dtypes_meta"] = dtypes_meta
             self._current_params["file_name"] = self._file_name
-            self._current_params["seed"] = random.randint(
-                -sys.maxsize - 1, sys.maxsize
-            )
+            seed = random.randint(0, 2 ** 32 - 1)
+            self._current_params["seed"] = seed
             self._current_params["num_rows"] = num_rows
 
         df = dg.rand_dataframe(dtypes_meta, num_rows, seed).to_pandas()
@@ -67,7 +65,7 @@ class CSVReader(object):
         print(num_rows)
         num_cols = self._rand(1000)
         print(num_cols)
-        dtypes_list = cudf.utils.dtypes.ALL_TYPES
+        dtypes_list = list(cudf.utils.dtypes.ALL_TYPES)
         dtypes_meta = [
             (
                 random.choice(dtypes_list),
@@ -123,9 +121,8 @@ class CSVWriter(object):
         else:
             dtypes_meta, num_rows = self.generate_rand_meta()
             self._current_params["dtypes_meta"] = dtypes_meta
-            self._current_params["seed"] = random.randint(
-                -sys.maxsize - 1, sys.maxsize
-            )
+            seed = random.randint(0, 2 ** 32 - 1)
+            self._current_params["seed"] = seed
             self._current_params["num_rows"] = num_rows
 
         df = cudf.DataFrame.from_arrow(
@@ -141,7 +138,7 @@ class CSVWriter(object):
         print(num_rows)
         num_cols = self._rand(1000)
         print(num_cols)
-        dtypes_list = cudf.utils.dtypes.ALL_TYPES
+        dtypes_list = list(cudf.utils.dtypes.ALL_TYPES)
         dtypes_meta = [
             (
                 random.choice(dtypes_list),

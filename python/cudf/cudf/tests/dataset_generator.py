@@ -7,7 +7,6 @@
 
 import random
 import string
-import sys
 from multiprocessing import Pool
 
 import numpy as np
@@ -248,9 +247,7 @@ def get_dataframe(parameters, use_threads):
     return tbl
 
 
-def rand_dataframe(
-    dtypes_meta, rows, seed=random.randint(-sys.maxsize - 1, sys.maxsize)
-):
+def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
     random.seed(seed)
 
     column_params = []
