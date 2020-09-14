@@ -158,4 +158,4 @@ ENV/
 dask-worker-space/
 
 # protobuf
-*.prot
+**/*_pb*
