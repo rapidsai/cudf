@@ -9,6 +9,7 @@ import datetime
 import pandas as pd
 import cudf
 import dask.dataframe as dd
+import dask.array as da
 
 
 def _apply_filter_bool_eq(val, col_stats):
@@ -177,10 +178,11 @@ def _filter_with_joins(minimums, maximums, op, other):
             '"{0}" is not a valid operator in join predicates.'.format(op)
         )
 
+    # TODO: Handle dd.core.Series so that Dask dataframes don't have to be
+    # .compute()ed (which involves downloading all partitions to client) and
+    # can instead be used in place for filtering out stripes
     if isinstance(other, cudf.Series):
         return _launch_filter_with_joins(other, minimums, maximums, op)
-    elif isinstance(other, dd.core.Series):
-        return other.map_partitions(_launch_filter_with_joins, minimums=minimums, maximums=maximums, op=op, meta=pd.Series(dtype=np.ndarray)).any(1)
     else:
         raise ValueError(
             'Joins must be with a cuDF or Dask cuDF series, not {0}.'.format(

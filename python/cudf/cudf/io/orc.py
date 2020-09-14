@@ -3,6 +3,7 @@
 from collections import defaultdict
 import warnings
 import datetime
+import numpy as np
 
 import pyarrow as pa
 from pyarrow import orc as orc
@@ -227,8 +228,8 @@ def _filter_stripes(
             if col in columns_in_joins:
                 # Get mask of which stripes had min-max ranges that passed
                 ranges_mask = filterutils._filter_with_joins(
-                    cudf.Series(cols_minimums[col]),
-                    cudf.Series(cols_maximums[col]),
+                    np.array(cols_minimums[col]),
+                    np.array(cols_maximums[col]),
                     op,
                     other,
                 )
