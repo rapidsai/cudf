@@ -186,6 +186,11 @@ index : bool, default None
 partition_cols : list, optional, default None
     Column names by which to partition the dataset
     Columns are partitioned in the order they are given
+partition_file_name : str, optional, default None
+    File name to use for partitioned datasets. Different partitions
+    will be written to different directories, but all files will
+    have this name.  If nothing is specified, a random uuid4 hex string
+    will be used for each file.
 
 See Also
 --------
