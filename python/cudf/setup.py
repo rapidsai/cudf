@@ -66,7 +66,6 @@ class build_ext_and_proto(build_ext):
             if not os.path.exists(output) or (
                 os.path.getmtime(source) > os.path.getmtime(output)
             ):
-                sys.stderr.write("compiling " + source + "\n")
                 with open(output, "a") as src:
                     src.write("# flake8: noqa" + os.linesep)
                     src.write("# fmt: off" + os.linesep)
