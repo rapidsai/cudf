@@ -165,7 +165,7 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
     }
     nz_pos =
       s->frag.non_nulls + __popc(valid_warp & (0x7fffffffu >> (0x1fu - ((uint32_t)t & 0x1f))));
-    len = WarpReduceSum32(len);
+    len = WarpReduceSum(len);
     if (!(t & 0x1f)) {
       s->scratch_red[(t >> 5) + 0]  = __popc(valid_warp);
       s->scratch_red[(t >> 5) + 16] = len;
@@ -174,7 +174,7 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
     if (t < 32) {
       uint32_t warp_pos  = WarpReducePos16((t < 16) ? s->scratch_red[t] : 0, t);
       uint32_t non_nulls = shuffle(warp_pos, 0xf);
-      len                = WarpReduceSum16((t < 16) ? s->scratch_red[t + 16] : 0);
+      len                = HalfWarpReduceSum((t < 16) ? s->scratch_red[t + 16] : 0);
       if (t < 16) { s->scratch_red[t] = warp_pos; }
       if (!t) {
         s->frag.non_nulls = s->frag.non_nulls + non_nulls;
@@ -329,11 +329,11 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
       }
     }
     __syncthreads();
-    dupe_data_size = WarpReduceSum32(dupe_data_size);
+    dupe_data_size = WarpReduceSum(dupe_data_size);
     if (!(t & 0x1f)) { s->scratch_red[t >> 5] = dupe_data_size; }
     __syncthreads();
     if (t < 32) {
-      dupe_data_size = WarpReduceSum16((t < 16) ? s->scratch_red[t] : 0);
+      dupe_data_size = HalfWarpReduceSum((t < 16) ? s->scratch_red[t] : 0);
       if (!t) {
         s->frag.dict_data_size = s->frag.fragment_data_size - dupe_data_size;
         s->frag.num_dict_vals  = s->frag.non_nulls - s->total_dupes;
@@ -1088,8 +1088,8 @@ __global__ void __launch_bounds__(128) gpuDecideCompression(EncColumnChunk *chun
         if (comp_out[comp_idx].status != 0) { atomicAdd(&error_count, 1); }
       }
     }
-    uncompressed_data_size = WarpReduceSum32(uncompressed_data_size);
-    compressed_data_size   = WarpReduceSum32(compressed_data_size);
+    uncompressed_data_size = WarpReduceSum(uncompressed_data_size);
+    compressed_data_size   = WarpReduceSum(compressed_data_size);
   }
   __syncthreads();
   if (t == 0) {

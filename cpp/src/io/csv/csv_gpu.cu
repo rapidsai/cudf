@@ -962,12 +962,12 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
       rowmap >>= pos;
     }
     // Return the number of rows out of range
-    rows_out_of_range = WarpReduceSum16(rows_out_of_range);
+    rows_out_of_range = HalfWarpReduceSum(rows_out_of_range);
     __syncthreads();
     if (!(t & 0xf)) { ctxtree[t >> 4] = rows_out_of_range; }
     __syncthreads();
     if (t < 32) {
-      rows_out_of_range = WarpReduceSum32(static_cast<uint32_t>(ctxtree[t]));
+      rows_out_of_range = WarpReduceSum(static_cast<uint32_t>(ctxtree[t]));
       if (t == 0) { row_ctx[blockIdx.x] = rows_out_of_range; }
     }
   } else {

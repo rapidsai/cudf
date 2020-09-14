@@ -252,11 +252,11 @@ __global__ void __launch_bounds__(1024, 1)
         }
       }
       // Count the non-duplicate entries
-      frag_dict_size = WarpReduceSum32((is_valid && !is_dupe) ? len : 0);
+      frag_dict_size = WarpReduceSum((is_valid && !is_dupe) ? len : 0);
       if (!(t & 0x1f)) { s->scratch_red[t >> 5] = frag_dict_size; }
       new_dict_entries = __syncthreads_count(is_valid && !is_dupe);
       if (t < 32) {
-        frag_dict_size = WarpReduceSum32(s->scratch_red[t]);
+        frag_dict_size = WarpReduceSum(s->scratch_red[t]);
         if (t == 0) {
           s->frag_dict_size += frag_dict_size;
           s->num_dict_entries += new_dict_entries;

@@ -149,11 +149,11 @@ extern "C" __global__ void __launch_bounds__(512, 2)
       len    = ck_data[ck_row].count;
       hash   = nvstr_init_hash(ptr, len);
     }
-    len                    = WarpReduceSum16(len);
+    len                    = HalfWarpReduceSum(len);
     s->scratch_red[t >> 4] = len;
     __syncthreads();
     if (t < 32) {
-      len = WarpReduceSum32(s->scratch_red[t]);
+      len = WarpReduceSum(s->scratch_red[t]);
       if (t == 0) s->chunk.string_char_count += len;
     }
     if (i + t < nnz) {
@@ -283,10 +283,10 @@ extern "C" __global__ void __launch_bounds__(512, 2)
       }
     }
   }
-  dict_char_count = WarpReduceSum32(dict_char_count);
+  dict_char_count = WarpReduceSum(dict_char_count);
   if (!(t & 0x1f)) { s->scratch_red[t >> 5] = dict_char_count; }
   __syncthreads();
-  if (t < 32) { dict_char_count = WarpReduceSum16((t < 16) ? s->scratch_red[t] : 0); }
+  if (t < 32) { dict_char_count = HalfWarpReduceSum((t < 16) ? s->scratch_red[t] : 0); }
   if (!t) {
     chunks[group_id * num_columns + col_id].num_strings       = nnz;
     chunks[group_id * num_columns + col_id].string_char_count = s->chunk.string_char_count;
@@ -428,10 +428,10 @@ extern "C" __global__ void __launch_bounds__(1024)
     }
     __syncthreads();
   }
-  dict_char_count = WarpReduceSum32(dict_char_count);
+  dict_char_count = WarpReduceSum(dict_char_count);
   if (!(t & 0x1f)) { s->scratch_red[t >> 5] = dict_char_count; }
   __syncthreads();
-  if (t < 32) { dict_char_count = WarpReduceSum32(s->scratch_red[t]); }
+  if (t < 32) { dict_char_count = WarpReduceSum(s->scratch_red[t]); }
   if (t == 0) {
     stripes[stripe_id * num_columns + col_id].num_strings     = num_strings - s->total_dupes;
     stripes[stripe_id * num_columns + col_id].dict_char_count = dict_char_count;

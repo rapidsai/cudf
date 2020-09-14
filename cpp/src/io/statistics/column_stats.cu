@@ -266,7 +266,7 @@ void __device__ gatherIntColumnStats(stats_state_s *s, statistics_dtype dtype, u
   }
   vmin = WarpReduceMinInt(vmin);
   vmax = WarpReduceMaxInt(vmax);
-  vsum = WarpReduceSum32(vsum);
+  vsum = WarpReduceSum(vsum);
   if (!(t & 0x1f)) {
     s->warp_min[t >> 5].i_val = vmin;
     s->warp_max[t >> 5].i_val = vmax;
@@ -283,7 +283,7 @@ void __device__ gatherIntColumnStats(stats_state_s *s, statistics_dtype dtype, u
     vmax = WarpReduceMaxInt(s->warp_max[t & 0x1f].i_val);
     if (!(t & 0x1f)) { s->ck.max_value.i_val = vmax; }
   } else if (t < 32 * 3) {
-    vsum = WarpReduceSum32(s->warp_sum[t & 0x1f].i_val);
+    vsum = WarpReduceSum(s->warp_sum[t & 0x1f].i_val);
     if (!(t & 0x1f)) {
       s->ck.sum.i_val = vsum;
       // TODO: For now, don't set the sum flag with 64-bit values so we don't have to check for
@@ -409,7 +409,7 @@ void __device__ gatherStringColumnStats(stats_state_s *s, uint32_t t)
   }
   minval  = WarpReduceMinString(smin, lmin);
   maxval  = WarpReduceMaxString(smax, lmax);
-  len_sum = WarpReduceSum32(len_sum);
+  len_sum = WarpReduceSum(len_sum);
   if (!(t & 0x1f)) {
     s->warp_min[t >> 5].str_val.ptr    = minval.ptr;
     s->warp_min[t >> 5].str_val.length = minval.length;
@@ -433,7 +433,7 @@ void __device__ gatherStringColumnStats(stats_state_s *s, uint32_t t)
       s->ck.max_value.str_val.length = maxval.length;
     }
   } else if (t < 32 * 3) {
-    len_sum = WarpReduceSum32(s->warp_sum[t & 0x1f].str_val.length);
+    len_sum = WarpReduceSum(s->warp_sum[t & 0x1f].str_val.length);
     if (!(t & 0x1f)) {
       s->ck.sum.i_val = len_sum;
       s->ck.has_sum   = has_minmax;
@@ -516,11 +516,11 @@ void __device__ mergeIntColumnStats(merge_state_s *s,
     non_nulls += ck->non_nulls;
     null_count += ck->null_count;
   }
-  non_nulls  = WarpReduceSum32(non_nulls);
-  null_count = WarpReduceSum32(null_count);
+  non_nulls  = WarpReduceSum(non_nulls);
+  null_count = WarpReduceSum(null_count);
   vmin       = WarpReduceMinInt(vmin);
   vmax       = WarpReduceMaxInt(vmax);
-  vsum       = WarpReduceSum32(vsum);
+  vsum       = WarpReduceSum(vsum);
   if (!(t & 0x1f)) {
     s->warp_non_nulls[t >> 5] = non_nulls;
     s->warp_nulls[t >> 5]     = null_count;
@@ -539,7 +539,7 @@ void __device__ mergeIntColumnStats(merge_state_s *s,
     vmax = WarpReduceMaxInt(s->warp_max[t & 0x1f].i_val);
     if (!(t & 0x1f)) { s->ck.max_value.i_val = vmax; }
   } else if (t < 32 * 3) {
-    vsum = WarpReduceSum32(s->warp_sum[t & 0x1f].i_val);
+    vsum = WarpReduceSum(s->warp_sum[t & 0x1f].i_val);
     if (!(t & 0x1f)) {
       s->ck.sum.i_val = vsum;
       // TODO: For now, don't set the sum flag with 64-bit values so we don't have to check for
@@ -547,10 +547,10 @@ void __device__ mergeIntColumnStats(merge_state_s *s,
       s->ck.has_sum = (dtype <= dtype_int32 && has_minmax);
     }
   } else if (t < 32 * 4) {
-    non_nulls = WarpReduceSum32(s->warp_non_nulls[t & 0x1f]);
+    non_nulls = WarpReduceSum(s->warp_non_nulls[t & 0x1f]);
     if (!(t & 0x1f)) { s->ck.non_nulls = non_nulls; }
   } else if (t < 32 * 5) {
-    null_count = WarpReduceSum32(s->warp_nulls[t & 0x1f]);
+    null_count = WarpReduceSum(s->warp_nulls[t & 0x1f]);
     if (!(t & 0x1f)) { s->ck.null_count = null_count; }
   }
 }
@@ -587,8 +587,8 @@ void __device__ mergeFloatColumnStats(merge_state_s *s,
     non_nulls += ck->non_nulls;
     null_count += ck->null_count;
   }
-  non_nulls  = WarpReduceSum32(non_nulls);
-  null_count = WarpReduceSum32(null_count);
+  non_nulls  = WarpReduceSum(non_nulls);
+  null_count = WarpReduceSum(null_count);
   vmin       = WarpReduceMinFloat(vmin);
   vmax       = WarpReduceMaxFloat(vmax);
   vsum       = WarpReduceSumFloat(vsum);
@@ -616,10 +616,10 @@ void __device__ mergeFloatColumnStats(merge_state_s *s,
       s->ck.has_sum    = (has_minmax);  // Implies sum is valid as well
     }
   } else if (t < 32 * 4) {
-    non_nulls = WarpReduceSum32(s->warp_non_nulls[t & 0x1f]);
+    non_nulls = WarpReduceSum(s->warp_non_nulls[t & 0x1f]);
     if (!(t & 0x1f)) { s->ck.non_nulls = non_nulls; }
   } else if (t < 32 * 5) {
-    null_count = WarpReduceSum32(s->warp_nulls[t & 0x1f]);
+    null_count = WarpReduceSum(s->warp_nulls[t & 0x1f]);
     if (!(t & 0x1f)) { s->ck.null_count = null_count; }
   }
 }
@@ -667,11 +667,11 @@ void __device__ mergeStringColumnStats(merge_state_s *s,
     non_nulls += ck->non_nulls;
     null_count += ck->null_count;
   }
-  non_nulls  = WarpReduceSum32(non_nulls);
-  null_count = WarpReduceSum32(null_count);
+  non_nulls  = WarpReduceSum(non_nulls);
+  null_count = WarpReduceSum(null_count);
   minval     = WarpReduceMinString(smin, lmin);
   maxval     = WarpReduceMaxString(smax, lmax);
-  len_sum    = WarpReduceSum32(len_sum);
+  len_sum    = WarpReduceSum(len_sum);
   if (!(t & 0x1f)) {
     s->warp_non_nulls[t >> 5]          = non_nulls;
     s->warp_nulls[t >> 5]              = null_count;
@@ -697,16 +697,16 @@ void __device__ mergeStringColumnStats(merge_state_s *s,
       s->ck.max_value.str_val.length = maxval.length;
     }
   } else if (t < 32 * 3) {
-    len_sum = WarpReduceSum32(s->warp_sum[t & 0x1f].str_val.length);
+    len_sum = WarpReduceSum(s->warp_sum[t & 0x1f].str_val.length);
     if (!(t & 0x1f)) {
       s->ck.sum.i_val = len_sum;
       s->ck.has_sum   = has_minmax;
     }
   } else if (t < 32 * 4) {
-    non_nulls = WarpReduceSum32(s->warp_non_nulls[t & 0x1f]);
+    non_nulls = WarpReduceSum(s->warp_non_nulls[t & 0x1f]);
     if (!(t & 0x1f)) { s->ck.non_nulls = non_nulls; }
   } else if (t < 32 * 5) {
-    null_count = WarpReduceSum32(s->warp_nulls[t & 0x1f]);
+    null_count = WarpReduceSum(s->warp_nulls[t & 0x1f]);
     if (!(t & 0x1f)) { s->ck.null_count = null_count; }
   }
 }

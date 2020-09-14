@@ -507,7 +507,7 @@ __device__ void snappy_process_symbols(unsnap_state_s *s, int t)
       do {
         uint32_t bofs       = WarpReducePos32(blen_t, t);
         uint32_t stop_mask  = ballot((uint32_t)dist_t < bofs);
-        uint32_t start_mask = WarpReduceSum32((bofs < 32 && t < batch_len) ? 1 << bofs : 0);
+        uint32_t start_mask = WarpReduceSum((bofs < 32 && t < batch_len) ? 1 << bofs : 0);
         n = min(min((uint32_t)__popc(start_mask), (uint32_t)(__ffs(stop_mask) - 1u)),
                 (uint32_t)batch_len);
         if (n != 0) {
