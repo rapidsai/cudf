@@ -1,5 +1,21 @@
 #!/bin/bash
 
+#
+# Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
 set -e
 gcc --version
 
@@ -31,7 +47,7 @@ git clone --recurse-submodules https://github.com/rapidsai/dlpack.git -b cudf
 mkdir -p /rapids/rmm/build
 cd /rapids/rmm/build
 echo "RMM SHA: `git rev-parse HEAD`"
-cmake .. -DCMAKE_CXX11_ABI=OFF -DCMAKE_INSTALL_PREFIX=$INSTALL_PREFIX -DBUILD_TESTS=$BUILD_CPP_TESTS
+cmake .. -DCMAKE_INSTALL_PREFIX=$INSTALL_PREFIX -DBUILD_TESTS=$BUILD_CPP_TESTS
 make -j$PARALLEL_LEVEL install
 
 # Install spdlog headers from RMM build
@@ -40,14 +56,14 @@ make -j$PARALLEL_LEVEL install
 mkdir -p /rapids/dlpack/build
 cd /rapids/dlpack/build
 echo "DLPACK SHA: `git rev-parse HEAD`"
-cmake .. -DCMAKE_CXX11_ABI=OFF -DCMAKE_INSTALL_PREFIX=$INSTALL_PREFIX -DBUILD_TESTS=$BUILD_CPP_TESTS
+cmake .. -DCMAKE_INSTALL_PREFIX=$INSTALL_PREFIX -DBUILD_TESTS=$BUILD_CPP_TESTS
 make -j$PARALLEL_LEVEL install
 
 ###### Build libcudf ######
 rm -rf $WORKSPACE/cpp/build
 mkdir -p $WORKSPACE/cpp/build
 cd $WORKSPACE/cpp/build
-cmake .. -DCMAKE_CXX11_ABI=OFF -DUSE_NVTX=OFF -DARROW_STATIC_LIB=ON -DBoost_USE_STATIC_LIBS=ON -DBUILD_TESTS=$SKIP_CPP_TESTS -DPER_THREAD_DEFAULT_STREAM=$ENABLE_PTDS
+cmake .. -DUSE_NVTX=OFF -DARROW_STATIC_LIB=ON -DBoost_USE_STATIC_LIBS=ON -DBUILD_TESTS=$SKIP_CPP_TESTS -DPER_THREAD_DEFAULT_STREAM=$ENABLE_PTDS
 make -j$PARALLEL_LEVEL
 make install DESTDIR=$INSTALL_PREFIX
 
