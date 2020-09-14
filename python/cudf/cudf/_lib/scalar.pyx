@@ -357,6 +357,8 @@ cdef _get_np_scalar_from_timedelta64(unique_ptr[scalar]& s):
 
 def as_scalar(val, dtype=None):
     dtype = cudf.dtype(dtype)
+    if isinstance(val, cudf.Scalar):
+        return as_scalar(val._data, dtype=dtype)
     if isinstance(val, Scalar):
         if (dtype is None or dtype == val.dtype):
             return val
