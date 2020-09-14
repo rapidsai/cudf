@@ -14,10 +14,17 @@ logging.basicConfig(
 
 
 class ParquetReader(object):
-    def __init__(self, file_name="temp_parquet", dirs=None, max_rows=4096):
+    def __init__(
+        self,
+        file_name="temp_parquet",
+        dirs=None,
+        max_rows=4096,
+        max_columns=1000,
+    ):
         self._inputs = []
         self._file_name = file_name
         self._max_rows = max_rows
+        self._max_columns = max_columns
 
         for i, path in enumerate(dirs):
             if i == 0 and not os.path.exists(path):
@@ -53,13 +60,14 @@ class ParquetReader(object):
             random.seed(seed)
             self._idx += 1
         else:
-            dtypes_meta, num_rows = self.generate_rand_meta()
+            dtypes_meta, num_rows, num_cols = self.generate_rand_meta()
             file_name = self._file_name
             self._current_params["dtypes_meta"] = dtypes_meta
             self._current_params["file_name"] = self._file_name
             seed = random.randint(0, 2 ** 32 - 1)
             self._current_params["seed"] = seed
             self._current_params["num_rows"] = num_rows
+            self._current_params["num_cols"] = num_cols
 
         df = dg.rand_dataframe(dtypes_meta, num_rows, seed).to_pandas()
         df.to_parquet(file_name)
@@ -70,7 +78,7 @@ class ParquetReader(object):
     def generate_rand_meta(self):
         self._current_params = {}
         num_rows = self._rand(self._max_rows)
-        num_cols = self._rand(1000)
+        num_cols = self._rand(self._max_columns)
         logging.info(
             f"Generating DataFrame with rows: {num_rows} "
             f"and columns: {num_cols}"
@@ -87,7 +95,7 @@ class ParquetReader(object):
             )
             for _ in range(num_cols)
         ]
-        return dtypes_meta, num_rows
+        return dtypes_meta, num_rows, num_cols
 
     @property
     def current_params(self):
@@ -95,10 +103,17 @@ class ParquetReader(object):
 
 
 class ParquetWriter(object):
-    def __init__(self, file_name="temp_parquet", dirs=None, max_rows=4096):
+    def __init__(
+        self,
+        file_name="temp_parquet",
+        dirs=None,
+        max_rows=4096,
+        max_columns=1000,
+    ):
         self._inputs = []
         self._file_name = file_name
         self._max_rows = max_rows
+        self._max_columns = max_columns
 
         for i, path in enumerate(dirs):
             if i == 0 and not os.path.exists(path):
@@ -135,10 +150,11 @@ class ParquetWriter(object):
         else:
             seed = random.randint(0, 2 ** 32 - 1)
             random.seed(seed)
-            dtypes_meta, num_rows = self.generate_rand_meta()
+            dtypes_meta, num_rows, num_cols = self.generate_rand_meta()
             self._current_params["dtypes_meta"] = dtypes_meta
             self._current_params["seed"] = seed
             self._current_params["num_rows"] = num_rows
+            self._current_params["num_columns"] = num_cols
 
         df = cudf.DataFrame.from_arrow(
             dg.rand_dataframe(dtypes_meta, num_rows, seed)
@@ -150,7 +166,7 @@ class ParquetWriter(object):
     def generate_rand_meta(self):
         self._current_params = {}
         num_rows = self._rand(self._max_rows)
-        num_cols = self._rand(1000)
+        num_cols = self._rand(self._max_columns)
         logging.info(
             f"Generating DataFrame with rows: {num_rows} "
             f"and columns: {num_cols}"
@@ -167,7 +183,7 @@ class ParquetWriter(object):
             )
             for _ in range(num_cols)
         ]
-        return dtypes_meta, num_rows
+        return dtypes_meta, num_rows, num_cols
 
     @property
     def current_params(self):
