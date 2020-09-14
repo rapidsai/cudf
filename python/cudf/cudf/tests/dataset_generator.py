@@ -254,7 +254,7 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
     for meta in dtypes_meta:
         dtype, null_frequency, cardinality = meta
 
-        if dtype == "category":
+        if isinstance(dtype, str) and dtype == "category":
             column_params.append(
                 ColumnParameters(
                     cardinality=cardinality,
