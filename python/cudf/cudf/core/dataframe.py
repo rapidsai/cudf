@@ -6261,6 +6261,10 @@ class DataFrame(Frame, Serializable):
                 result = DataFrame(index=support_result[0].index)
                 for idx, col in enumerate(self._data.names):
                     result[col] = support_result[idx]
+            elif isinstance(result[0], cudf._lib.scalar.Scalar):
+                result = _gpu_scalars_to_column(result)
+                result = cudf.Series(result)
+                result = result.set_index(self._data.names)
             else:
                 result = Series(result)
                 result = result.set_index(self._data.names)
@@ -7067,3 +7071,16 @@ def _get_union_of_series_names(series_list):
         names_list = [*range(len(series_list))]
 
     return names_list
+
+
+def _gpu_scalars_to_column(list_of_scalars):
+    '''
+    Convert a list of cuDF scalars into a contiguous column
+    '''
+    ind = range(len(list_of_scalars))
+    cols_dict = {
+        k: v for k, v in zip(ind, [as_column(i) for i in list_of_scalars])
+    }
+
+    tbl = DataFrame(cols_dict)
+    return (tbl.T)[0]._column
