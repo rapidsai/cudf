@@ -47,6 +47,7 @@
 - PR #6190 Avoid reading full csv files for metadata in dask_cudf
 - PR #6197 Remove librmm dependency for libcudf
 - PR #6209 Remove CXX11 ABI handling from CMake
+- PR #6223 Remove CXX11 ABI flag from JNI build
 
 ## Bug Fixes
 
