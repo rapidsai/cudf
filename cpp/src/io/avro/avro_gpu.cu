@@ -294,7 +294,7 @@ extern "C" __global__ void __launch_bounds__(NWARPS * 32, 2)
                             num_dictionary_entries);
     }
     if (nrows <= 1) {
-      cur = start + shuffle0(static_cast<uint32_t>(cur - start));
+      cur = start + shuffle(static_cast<uint32_t>(cur - start));
     } else {
       cur = start + nrows * min_row_size;
     }

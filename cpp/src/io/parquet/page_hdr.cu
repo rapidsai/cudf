@@ -269,14 +269,14 @@ extern "C" __global__ void __launch_bounds__(128)
           bs->cur = bs->end;
         }
       }
-      index_out = shuffle0(index_out);
+      index_out = shuffle(index_out);
       if (index_out >= 0 && index_out < max_num_pages) {
         // NOTE: Assumes that sizeof(PageInfo) <= 128
         if (t < sizeof(PageInfo) / sizeof(uint32_t)) {
           ((uint32_t *)(page_info + index_out))[t] = ((const uint32_t *)&bs->page)[t];
         }
       }
-      num_values = shuffle0(num_values);
+      num_values = shuffle(num_values);
       __syncwarp();
     }
     if (t == 0) {

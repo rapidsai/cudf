@@ -776,7 +776,7 @@ __device__ void process_symbols(inflate_state_s *s, int t)
     } else {
       batch_len = 0;
     }
-    batch_len = shuffle0(batch_len);
+    batch_len = shuffle(batch_len);
     if (batch_len < 0) { break; }
 
     symt     = (t < batch_len) ? b[t] : 256;
@@ -941,10 +941,10 @@ __device__ void prefetch_warp(volatile inflate_state_s *s, int t)
 {
   const uint8_t *cur_p = s->pref.cur_p;
   const uint8_t *end   = s->end;
-  while (shuffle0((t == 0) ? s->pref.run : 0)) {
+  while (shuffle((t == 0) ? s->pref.run : 0)) {
     int32_t cur_lo = (int32_t)(size_t)cur_p;
     int do_pref =
-      shuffle0((t == 0) ? (cur_lo - *(volatile int32_t *)&s->cur < PREFETCH_SIZE - 32 * 4 - 4) : 0);
+      shuffle((t == 0) ? (cur_lo - *(volatile int32_t *)&s->cur < PREFETCH_SIZE - 32 * 4 - 4) : 0);
     if (do_pref) {
       const uint8_t *p             = cur_p + 4 * t;
       *PREFETCH_ADDR32(s->pref, p) = (p < end) ? *(const uint32_t *)p : 0;
