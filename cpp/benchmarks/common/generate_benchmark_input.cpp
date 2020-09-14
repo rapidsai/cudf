@@ -56,7 +56,7 @@ template <typename T>
 T get_distribution_mean(distribution_params<T> const& dist)
 {
   if (dist.id == distribution_id::NORMAL || dist.id == distribution_id::UNIFORM) {
-    return dist.lower_bound / 2. + dist.upper_bound / 2.;
+    return (dist.lower_bound / 2.) + (dist.upper_bound / 2.);
   }
   if (dist.id == distribution_id::GEOMETRIC) {
     auto const range_size = dist.lower_bound < dist.upper_bound
@@ -64,9 +64,9 @@ T get_distribution_mean(distribution_params<T> const& dist)
                               : dist.lower_bound - dist.upper_bound;
     auto const p = geometric_dist_p(range_size);
     if (dist.lower_bound < dist.upper_bound)
-      return dist.lower_bound + 1. / p;
+      return dist.lower_bound + (1. / p);
     else
-      return dist.lower_bound - 1. / p;
+      return dist.lower_bound - (1. / p);
   }
 }
 
@@ -116,7 +116,7 @@ template <typename T>
 constexpr int64_t to_nanoseconds(int64_t t)
 {
   using ratio = std::ratio_divide<typename T::period, typename cudf::timestamp_ns::period>;
-  return t * ratio::num / ratio::den;
+  return t * (ratio::num / ratio::den);
 }
 
 /**
