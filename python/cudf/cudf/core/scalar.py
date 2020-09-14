@@ -90,6 +90,9 @@ class Scalar(libcudf.scalar.Scalar):
     def __eq__(self, other):
         return self._scalar_binop(other, '__eq__').value
 
+    def __ne__(self, other):
+        return self._scalar_binop(other, "__ne__").value
+
     def __abs__(self):
         return self._scalar_unaop('__abs__')
 
@@ -110,7 +113,7 @@ class Scalar(libcudf.scalar.Scalar):
     def _scalar_binop(self, other, op):
         other = to_cudf_compatible_scalar(other)
 
-        if op in ["__eq__", "__lt__", "__gt__", "__le__", "__ge__"]:
+        if op in ["__eq__", "__ne__", "__lt__", "__gt__", "__le__", "__ge__"]:
             out_dtype = BooleanDtype()
         else:
             out_dtype = self._binop_result_dtype_or_error(other, op)

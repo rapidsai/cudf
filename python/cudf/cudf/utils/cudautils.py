@@ -186,7 +186,7 @@ def find_first(arr, val, mask=None, compare="eq"):
     found_col = found_col.find_and_replace([arr.size], [None], True)
 
     min_index = found_col.min()
-    return -1 if min_index is None or np.isnan(min_index) else min_index
+    return -1 if min_index is None or cudf.api.types.isnan(min_index) else min_index
 
 
 def find_last(arr, val, mask=None, compare="eq"):

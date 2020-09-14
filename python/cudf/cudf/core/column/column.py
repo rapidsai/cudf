@@ -600,7 +600,7 @@ class ColumnBase(Column, Serializable):
 
     def __getitem__(self, arg):
 
-        if isinstance(arg, Number):
+        if isinstance(arg, (Number, cudf.Scalar)):
             arg = int(arg)
             return self.element_indexing(arg)
         elif isinstance(arg, slice):

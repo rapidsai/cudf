@@ -268,7 +268,7 @@ class CUDFType(object):
         self.parent_dtype = parent_dtype
 
     def __call__(self, arg):
-        return cudf._lib.scalar.Scalar(arg, dtype=self.parent_dtype)
+        return cudf.Scalar(arg, dtype=self.parent_dtype)
 
 
 def cudf_dtype_from_string(obj):
