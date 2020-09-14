@@ -371,6 +371,35 @@ TEST_F(OrcWriterTest, MultiColumnWithNulls)
   EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
 
+TEST_F(OrcWriterTest, ReadZeroRows)
+{
+  auto sequence = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+
+  constexpr auto num_rows = 10;
+  column_wrapper<int64_t, typename decltype(sequence)::value_type> col(
+    sequence, sequence + num_rows, validity);
+
+  std::vector<std::unique_ptr<column>> cols;
+  cols.push_back(col.release());
+  auto expected = std::make_unique<table>(std::move(cols));
+  EXPECT_EQ(1, expected->num_columns());
+
+  auto filepath = temp_env->get_temp_filepath("OrcSingleColumn.orc");
+  cudf_io::orc_writer_options out_opts =
+    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, expected->view());
+  cudf_io::write_orc(out_opts);
+
+  cudf_io::orc_reader_options in_opts =
+    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath})
+      .use_index(false)
+      .num_rows(0);
+  auto result = cudf_io::read_orc(in_opts);
+
+  EXPECT_EQ(0, result.tbl->num_rows());
+  EXPECT_EQ(1, result.tbl->num_columns());
+}
+
 TEST_F(OrcWriterTest, Strings)
 {
   std::vector<const char*> strings{

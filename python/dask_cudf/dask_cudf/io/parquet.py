@@ -106,6 +106,7 @@ class CudfEngine(ArrowEngine):
             md = write_to_dataset(
                 df,
                 path,
+                filename=filename,
                 partition_cols=partition_on,
                 fs=fs,
                 preserve_index=preserve_index,
