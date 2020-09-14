@@ -185,7 +185,7 @@ def _filter_with_joins(minimums, maximums, op, other):
         return _launch_filter_with_joins(other, minimums, maximums, op)
     else:
         raise ValueError(
-            'Joins must be with a cuDF or Dask cuDF series, not {0}.'.format(
+            "Joins must be with a cuDF or Dask cuDF series, not {0}.".format(
                 type(op)
             )
         )
