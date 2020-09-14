@@ -45,8 +45,8 @@ class Fuzzer(object):
         self.runs = runs
 
     def log_stats(self):
-        endTime = datetime.datetime.now()
-        total_time_taken = endTime - self._start_time
+        end_time = datetime.datetime.now()
+        total_time_taken = end_time - self._start_time
 
         logging.info(f"Run-Time elapsed (hh:mm:ss.ms) {total_time_taken}")
 
