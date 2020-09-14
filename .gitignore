@@ -158,4 +158,4 @@ ENV/
 dask-worker-space/
 
 # protobuf
-**/*_pb*
+**/*_pb2.py
