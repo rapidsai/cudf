@@ -2642,28 +2642,27 @@ class DataFrame(Frame, Serializable):
             whether to drop corresponding column for str index argument
         """
         df = self.copy(deep=False) if not inplace else self
-        
+
         # When index is a list of column names
         if isinstance(index, list):
-            if len(index) > 1:
-                if drop:
-                    df = df.drop(columns=index)
+            if len(index) == 1:
+                return df.set_index(index=index[0], drop=drop, inplace=inplace)
+            else:
                 return df.set_index(
                     index=cudf.MultiIndex.from_frame(self[index], names=index),
-                    inplace=inplace
+                    inplace=inplace,
                 )
-            index = index[0]  # List contains single item
 
         # When index is a column name
         if isinstance(index, str):
-            if drop:
-                df._drop_column(index)
             return df.set_index(index=self[index], inplace=inplace)
-        # Otherwise
-        else:
-            index = index if isinstance(index, Index) else as_index(index)
-            df.index = index
-            return df if not inplace else None
+
+        # Genearl Case
+        if drop:
+            df.drop(columns=drop)
+        index = index if isinstance(index, Index) else as_index(index)
+        df.index = index
+        return df if not inplace else None
 
     def reset_index(
         self, level=None, drop=False, inplace=False, col_level=0, col_fill=""
