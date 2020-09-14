@@ -15,6 +15,7 @@ from libcpp.memory cimport unique_ptr
 import numpy as np
 from cudf.core.dtypes import dtype as cudf_dtype
 from cudf.api.types import find_common_type
+from cudf.core.scalar import Scalar as PyScalar
 
 
 def reduce(reduction_op, Column incol, dtype=None, **kwargs):
@@ -60,8 +61,8 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
             c_out_dtype
         ))
 
-    py_result = Scalar.from_unique_ptr(move(c_result))
-    return py_result
+    cy_result = Scalar.from_unique_ptr(move(c_result))
+    return PyScalar(cy_result)
 
 
 def scan(scan_op, Column incol, inclusive, **kwargs):

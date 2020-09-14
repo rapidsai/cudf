@@ -93,11 +93,6 @@ cdef class Scalar:
                 f"{type(value).__name__} to cudf scalar"
             )
 
-    def __eq__(self, other):
-        if isinstance(other, Scalar):
-            other = other.value
-        return self.value == other
-
     @property
     def dtype(self):
         """
@@ -150,77 +145,6 @@ cdef class Scalar:
     def ptr(self):
         return _get_ptr_from_scalar_any(self.c_value)
 
-    def __int__(self):
-        return int(self.value)
-
-    def __float__(self):
-        return float(self.value)
-
-    def __add__(self, other):
-        return self._scalar_binop(other, '__add__')
-
-    def __sub__(self, other):
-        return self._scalar_binop(other, '__sub__')
-
-    def __mul__(self, other):
-        return self._scalar_binop(other, '__mul__')
-
-    def __div__(self, other):
-        return self._scalar_binop(other, '__div__')
-
-    def __mod__(self, other):
-        return self._scalar_binop(other, '__mod__')
-
-    def __divmod__(self, other):
-        return self._scalar_binop(other, '__divmod__')
-
-    def __and__(self, other):
-        return self._scalar_binop(other, '__and__')
-
-    def __xor__(self, other):
-        return self._scalar_binop(other, '__or__')
-
-    def __gt__(self, other):
-        return self._scalar_binop(other, '__gt__').value
-    
-    def __lt__(self, other):
-        return self._scalar_binop(other, '__gt__').value
-
-    def __ge__(self, other):
-        return self._scalar_binop(other, '__ge__').value
-
-    def __le__(self, other):
-        return self._scalar_binop(other, '__le__').value
-
-    def _binop_result_dtype_or_error(self, other):
-
-        if (self.dtype.kind == 'O' and other.dtype.kind != 'O') or (self.dtype.kind != 'O' and other.dtype.kind == 'O'):
-            wrong_dtype = self.dtype if self.dtype.kind != 'O' else other.dtype
-            raise TypeError(f"Can only concatenate string (not {wrong_dtype}) to string")
-
-
-        return cudf.api.types.find_common_type([
-            self.dtype, other.dtype
-        ])
-
-    def _scalar_binop(self, other, op):
-        other = to_cudf_compatible_scalar(other)
-
-        if op in  ['__eq__', '__lt__', '__gt__', '__le__', '__ge__']:
-            out_dtype = cudf.BooleanDtype()
-        else: 
-            out_dtype = self._binop_result_dtype_or_error(other)
-        valid = self.is_valid() and (isinstance(other, np.generic) or other.is_valid())
-        if not valid:
-            return Scalar(None, dtype=out_dtype)
-        else:
-            result = self._dispatch_scalar_binop(other, op)
-            return Scalar(result, dtype=out_dtype)
-
-    def _dispatch_scalar_binop(self, other, op):
-        if isinstance(other, Scalar):
-            other = other.value
-        return getattr(self.value, op)(other)
 
 cdef _set_string_from_np_string(unique_ptr[scalar]& s, value, bool valid=True):
     value = value if valid else ""

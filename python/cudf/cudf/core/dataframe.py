@@ -6261,7 +6261,7 @@ class DataFrame(Frame, Serializable):
                 result = DataFrame(index=support_result[0].index)
                 for idx, col in enumerate(self._data.names):
                     result[col] = support_result[idx]
-            elif isinstance(result[0], cudf._lib.scalar.Scalar):
+            elif isinstance(result[0], cudf.Scalar):
                 result = _gpu_scalars_to_column(result)
                 result = cudf.Series(result)
                 result = result.set_index(self._data.names)

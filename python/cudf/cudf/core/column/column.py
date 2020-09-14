@@ -1670,7 +1670,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         mask = bools_to_mask(as_column(mask).unary_operator("not"))
 
         data = data.set_mask(mask)
-    elif isinstance(arbitrary, cudf._lib.scalar.Scalar):
+    elif isinstance(arbitrary, cudf.Scalar):
         buffer = Buffer(arbitrary)
         data = as_column(buffer, dtype=arbitrary.dtype)
     else:

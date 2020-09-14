@@ -93,6 +93,10 @@ def assert_eq(left, right, **kwargs):
         else:
             assert np.array_equal(left, right)
     else:
+        if isinstance(left, cudf._lib.scalar.Scalar):
+            left = left.value
+        if isinstance(right, cudf._lib.scalar.Scalar):
+            right = right.value
         if left == right:
             return True
         else:
