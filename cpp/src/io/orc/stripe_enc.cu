@@ -402,16 +402,11 @@ static __device__ uint32_t IntegerRLE(
       } else {
         intrle_minmax(vmax, vmin);
       }
-      vmin = min(vmin, (T)shuffle_xor(vmin, 1));
-      vmin = min(vmin, (T)shuffle_xor(vmin, 2));
-      vmin = min(vmin, (T)shuffle_xor(vmin, 4));
-      vmin = min(vmin, (T)shuffle_xor(vmin, 8));
-      vmin = min(vmin, (T)shuffle_xor(vmin, 16));
-      vmax = max(vmax, (T)shuffle_xor(vmax, 1));
-      vmax = max(vmax, (T)shuffle_xor(vmax, 2));
-      vmax = max(vmax, (T)shuffle_xor(vmax, 4));
-      vmax = max(vmax, (T)shuffle_xor(vmax, 8));
-      vmax = max(vmax, (T)shuffle_xor(vmax, 16));
+#pragma unroll 5
+      for (int i = 1; i <= 16; i *= 2) {
+        vmin = min(vmin, (T)shuffle_xor(vmin, i));
+        vmax = max(vmax, (T)shuffle_xor(vmax, i));
+      }
       if (!(t & 0x1f)) {
         s->u.intrle.scratch.u64[(t >> 5) * 2 + 0] = vmin;
         s->u.intrle.scratch.u64[(t >> 5) * 2 + 1] = vmax;
@@ -420,14 +415,11 @@ static __device__ uint32_t IntegerRLE(
       if (t < 32) {
         vmin = (T)s->u.intrle.scratch.u64[(t & 0xf) * 2 + 0];
         vmax = (T)s->u.intrle.scratch.u64[(t & 0xf) * 2 + 1];
-        vmin = min(vmin, (T)shuffle_xor(vmin, 1));
-        vmin = min(vmin, (T)shuffle_xor(vmin, 2));
-        vmin = min(vmin, (T)shuffle_xor(vmin, 4));
-        vmin = min(vmin, (T)shuffle_xor(vmin, 8));
-        vmax = max(vmax, (T)shuffle_xor(vmax, 1));
-        vmax = max(vmax, (T)shuffle_xor(vmax, 2));
-        vmax = max(vmax, (T)shuffle_xor(vmax, 4));
-        vmax = max(vmax, (T)shuffle_xor(vmax, 8));
+#pragma unroll 4
+        for (int i = 1; i <= 8; i *= 2) {
+          vmin = min(vmin, (T)shuffle_xor(vmin, i));
+          vmax = max(vmax, (T)shuffle_xor(vmax, i));
+        }
         if (t == 0) {
           uint32_t mode1_w, mode2_w;
           T vrange_mode1, vrange_mode2;

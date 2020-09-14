@@ -50,16 +50,13 @@ struct merge_state_s {
  **/
 inline __device__ int64_t WarpReduceMinInt(int64_t vmin)
 {
-  int64_t v = shuffle_xor(vmin, 1);
-  vmin      = min(vmin, v);
-  v         = shuffle_xor(vmin, 2);
-  vmin      = min(vmin, v);
-  v         = shuffle_xor(vmin, 4);
-  vmin      = min(vmin, v);
-  v         = shuffle_xor(vmin, 8);
-  vmin      = min(vmin, v);
-  v         = shuffle_xor(vmin, 16);
-  return min(vmin, v);
+  int64_t v;
+#pragma unroll 5
+  for (int i = 1; i <= 16; i *= 2) {
+    v    = shuffle_xor(vmin, i);
+    vmin = min(vmin, v);
+  }
+  return vmin;
 }
 
 /*
@@ -67,16 +64,13 @@ inline __device__ int64_t WarpReduceMinInt(int64_t vmin)
  */
 inline __device__ int64_t WarpReduceMaxInt(int64_t vmax)
 {
-  int64_t v = shuffle_xor(vmax, 1);
-  vmax      = max(vmax, v);
-  v         = shuffle_xor(vmax, 2);
-  vmax      = max(vmax, v);
-  v         = shuffle_xor(vmax, 4);
-  vmax      = max(vmax, v);
-  v         = shuffle_xor(vmax, 8);
-  vmax      = max(vmax, v);
-  v         = shuffle_xor(vmax, 16);
-  return max(vmax, v);
+  int64_t v;
+#pragma unroll 5
+  for (int i = 1; i <= 16; i *= 2) {
+    v    = shuffle_xor(vmax, i);
+    vmax = max(vmax, v);
+  }
+  return vmax;
 }
 
 /**
@@ -84,16 +78,13 @@ inline __device__ int64_t WarpReduceMaxInt(int64_t vmax)
  **/
 inline __device__ double WarpReduceMinFloat(double vmin)
 {
-  double v = shuffle_xor(vmin, 1);
-  vmin     = fmin(vmin, v);
-  v        = shuffle_xor(vmin, 2);
-  vmin     = fmin(vmin, v);
-  v        = shuffle_xor(vmin, 4);
-  vmin     = fmin(vmin, v);
-  v        = shuffle_xor(vmin, 8);
-  vmin     = fmin(vmin, v);
-  v        = shuffle_xor(vmin, 16);
-  return fmin(vmin, v);
+  double v;
+#pragma unroll 5
+  for (int i = 1; i <= 16; i *= 2) {
+    v    = shuffle_xor(vmin, i);
+    vmin = fmin(vmin, v);
+  }
+  return vmin;
 }
 
 /**
@@ -101,16 +92,13 @@ inline __device__ double WarpReduceMinFloat(double vmin)
  **/
 inline __device__ double WarpReduceMaxFloat(double vmax)
 {
-  double v = shuffle_xor(vmax, 1);
-  vmax     = fmax(vmax, v);
-  v        = shuffle_xor(vmax, 2);
-  vmax     = fmax(vmax, v);
-  v        = shuffle_xor(vmax, 4);
-  vmax     = fmax(vmax, v);
-  v        = shuffle_xor(vmax, 8);
-  vmax     = fmax(vmax, v);
-  v        = shuffle_xor(vmax, 16);
-  return fmax(vmax, v);
+  double v;
+#pragma unroll 5
+  for (int i = 1; i <= 16; i *= 2) {
+    v    = shuffle_xor(vmax, i);
+    vmax = fmax(vmax, v);
+  }
+  return vmax;
 }
 
 /**
@@ -118,16 +106,12 @@ inline __device__ double WarpReduceMaxFloat(double vmax)
  **/
 inline __device__ double WarpReduceSumFloat(double vsum)
 {
-  double v = shuffle_xor(vsum, 1);
-  if (!isnan(v)) vsum += v;
-  v = shuffle_xor(vsum, 2);
-  if (!isnan(v)) vsum += v;
-  v = shuffle_xor(vsum, 4);
-  if (!isnan(v)) vsum += v;
-  v = shuffle_xor(vsum, 8);
-  if (!isnan(v)) vsum += v;
-  v = shuffle_xor(vsum, 16);
-  if (!isnan(v)) vsum += v;
+  double v;
+#pragma unroll 5
+  for (int i = 1; i <= 16; i *= 2) {
+    v = shuffle_xor(vsum, i);
+    if (!isnan(v)) vsum += v;
+  }
   return vsum;
 }
 
@@ -136,36 +120,16 @@ inline __device__ double WarpReduceSumFloat(double vsum)
  **/
 inline __device__ string_stats WarpReduceMinString(const char *smin, uint32_t lmin)
 {
-  uint32_t len = shuffle_xor(lmin, 1);
-  const char *ptr =
-    reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(smin), 1));
-  if (!smin || (ptr && nvstr_is_lesser(ptr, len, smin, lmin))) {
-    smin = ptr;
-    lmin = len;
-  }
-  len = shuffle_xor(lmin, 2);
-  ptr = reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(smin), 2));
-  if (!smin || (ptr && nvstr_is_lesser(ptr, len, smin, lmin))) {
-    smin = ptr;
-    lmin = len;
-  }
-  len = shuffle_xor(lmin, 4);
-  ptr = reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(smin), 4));
-  if (!smin || (ptr && nvstr_is_lesser(ptr, len, smin, lmin))) {
-    smin = ptr;
-    lmin = len;
-  }
-  len = shuffle_xor(lmin, 8);
-  ptr = reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(smin), 8));
-  if (!smin || (ptr && nvstr_is_lesser(ptr, len, smin, lmin))) {
-    smin = ptr;
-    lmin = len;
-  }
-  len = shuffle_xor(lmin, 16);
-  ptr = reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(smin), 16));
-  if (!smin || (ptr && nvstr_is_lesser(ptr, len, smin, lmin))) {
-    smin = ptr;
-    lmin = len;
+  uint32_t len;
+  const char *ptr;
+#pragma unroll 5
+  for (int i = 1; i <= 16; i *= 2) {
+    len = shuffle_xor(lmin, i);
+    ptr = reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(smin), i));
+    if (!smin || (ptr && nvstr_is_lesser(ptr, len, smin, lmin))) {
+      smin = ptr;
+      lmin = len;
+    }
   }
   return {smin, lmin};
 }
@@ -175,36 +139,16 @@ inline __device__ string_stats WarpReduceMinString(const char *smin, uint32_t lm
  **/
 inline __device__ string_stats WarpReduceMaxString(const char *smax, uint32_t lmax)
 {
-  uint32_t len = shuffle_xor(lmax, 1);
-  const char *ptr =
-    reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(smax), 1));
-  if (!smax || (ptr && nvstr_is_greater(ptr, len, smax, lmax))) {
-    smax = ptr;
-    lmax = len;
-  }
-  len = shuffle_xor(lmax, 2);
-  ptr = reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(smax), 2));
-  if (!smax || (ptr && nvstr_is_greater(ptr, len, smax, lmax))) {
-    smax = ptr;
-    lmax = len;
-  }
-  len = shuffle_xor(lmax, 4);
-  ptr = reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(smax), 4));
-  if (!smax || (ptr && nvstr_is_greater(ptr, len, smax, lmax))) {
-    smax = ptr;
-    lmax = len;
-  }
-  len = shuffle_xor(lmax, 8);
-  ptr = reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(smax), 8));
-  if (!smax || (ptr && nvstr_is_greater(ptr, len, smax, lmax))) {
-    smax = ptr;
-    lmax = len;
-  }
-  len = shuffle_xor(lmax, 16);
-  ptr = reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(smax), 16));
-  if (!smax || (ptr && nvstr_is_greater(ptr, len, smax, lmax))) {
-    smax = ptr;
-    lmax = len;
+  uint32_t len;
+  const char *ptr;
+#pragma unroll 5
+  for (int i = 1; i <= 16; i *= 2) {
+    len = shuffle_xor(lmax, i);
+    ptr = reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(smax), i));
+    if (!smax || (ptr && nvstr_is_greater(ptr, len, smax, lmax))) {
+      smax = ptr;
+      lmax = len;
+    }
   }
   return {smax, lmax};
 }

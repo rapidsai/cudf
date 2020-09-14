@@ -59,10 +59,10 @@ inline __device__ T WarpReduceSum(T acc)
 template <typename T>
 inline __device__ T WarpReduceOr(T acc)
 {
-  acc |= shuffle_xor(acc,  1);
-  acc |= shuffle_xor(acc,  2);
-  acc |= shuffle_xor(acc,  4);
-  acc |= shuffle_xor(acc,  8);
+  acc |= shuffle_xor(acc, 1);
+  acc |= shuffle_xor(acc, 2);
+  acc |= shuffle_xor(acc, 4);
+  acc |= shuffle_xor(acc, 8);
   return acc | shuffle_xor(acc, 16);
 }
 
