@@ -3,10 +3,10 @@
 from cudf.utils import filterutils
 import warnings
 from collections import defaultdict
+from uuid import uuid4
 
 from fsspec.core import get_fs_token_paths
 from pyarrow import parquet as pq
-from pyarrow.compat import guid
 from pyarrow import dataset as ds
 
 import cudf
@@ -45,6 +45,7 @@ def _ensure_filesystem(passed_filesystem, path):
 def write_to_dataset(
     df,
     root_path,
+    filename=None,
     partition_cols=None,
     fs=None,
     preserve_index=False,
@@ -59,16 +60,19 @@ def write_to_dataset(
 
         root_dir/
             group=value1
-                <uuid>.parquet
+                <filename>.parquet
             ...
             group=valueN
-                <uuid>.parquet
+                <filename>.parquet
 
     Parameters
     ----------
     df : cudf.DataFrame
     root_path : string,
         The root directory of the dataset
+    filename : string, default None
+        The file name to use (within each partition directory). If None,
+        a random uuid4 hex string will be used for each file name.
     fs : FileSystem, default None
         If nothing passed, paths assumed to be found in the local on-disk
         filesystem
@@ -113,8 +117,8 @@ def write_to_dataset(
             )
             prefix = fs.sep.join([root_path, subdir])
             fs.mkdirs(prefix, exist_ok=True)
-            outfile = guid() + ".parquet"
-            full_path = fs.sep.join([prefix, outfile])
+            filename = filename or uuid4().hex + ".parquet"
+            full_path = fs.sep.join([prefix, filename])
             write_df = sub_df.copy(deep=False)
             write_df.drop(columns=partition_cols, inplace=True)
             with fs.open(full_path, mode="wb") as fil:
@@ -124,7 +128,7 @@ def write_to_dataset(
                         write_df.to_parquet(
                             fil,
                             index=preserve_index,
-                            metadata_file_path=fs.sep.join([subdir, outfile]),
+                            metadata_file_path=fs.sep.join([subdir, filename]),
                             **kwargs,
                         )
                     )
@@ -132,14 +136,14 @@ def write_to_dataset(
                     write_df.to_parquet(fil, index=preserve_index, **kwargs)
 
     else:
-        outfile = guid() + ".parquet"
-        full_path = fs.sep.join([root_path, outfile])
+        filename = filename or uuid4().hex + ".parquet"
+        full_path = fs.sep.join([root_path, filename])
         if return_metadata:
             metadata.append(
                 df.to_parquet(
                     full_path,
                     index=preserve_index,
-                    metadata_file_path=outfile,
+                    metadata_file_path=filename,
                     **kwargs,
                 )
             )
@@ -311,6 +315,7 @@ def to_parquet(
     compression="snappy",
     index=None,
     partition_cols=None,
+    partition_file_name=None,
     statistics="ROWGROUP",
     metadata_file_path=None,
     *args,
@@ -322,8 +327,9 @@ def to_parquet(
         if partition_cols:
             write_to_dataset(
                 df,
-                root_path=path,
+                filename=partition_file_name,
                 partition_cols=partition_cols,
+                root_path=path,
                 preserve_index=index,
                 **kwargs,
             )
@@ -369,10 +375,15 @@ def to_parquet(
         if index is None:
             index = True
 
+        # Convert partition_file_name to a call back
+        if partition_file_name:
+            partition_file_name = lambda x: partition_file_name  # noqa: E731
+
         pa_table = df.to_arrow(preserve_index=index)
         return pq.write_to_dataset(
             pa_table,
             root_path=path,
+            partition_filename_cb=partition_file_name,
             partition_cols=partition_cols,
             *args,
             **kwargs,
