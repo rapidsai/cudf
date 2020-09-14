@@ -16,7 +16,9 @@
 
 #include "cudf_kafka/kafka_consumer.hpp"
 #include <librdkafka/rdkafkacpp.h>
+#include <sys/types.h>
 #include <chrono>
+#include <iterator>
 #include <memory>
 
 namespace cudf {
@@ -153,6 +155,27 @@ int64_t kafka_consumer::get_committed_offset(std::string const &topic, int parti
   return offset > 0 ? offset : 0;
 }
 
+const std::map<std::string, std::vector<int32_t>> kafka_consumer::list_topics(
+  std::string topic_name)
+{
+  RdKafka::Metadata *md;
+  std::map<std::string, std::vector<int32_t>> topic_parts;
+
+  CUDF_EXPECTS(RdKafka::ERR_NO_ERROR == consumer->metadata(true, nullptr, &md, default_timeout),
+               "Failed to list_topics in Kafka broker");
+
+  const RdKafka::Metadata::TopicMetadataVector *mdv = md->topics();
+
+  for (auto &topic : *mdv) {
+    std::vector<int32_t> t_parts;
+    for (auto &partition : *(topic->partitions())) { t_parts.push_back(partition->id()); }
+    topic_parts[topic->topic()] = t_parts;
+  }
+
+  delete md, mdv;
+  return topic_parts;
+}
+
 std::map<std::string, int64_t> kafka_consumer::get_watermark_offset(std::string const &topic,
                                                                     int partition,
                                                                     int timeout,
@@ -173,8 +196,6 @@ std::map<std::string, int64_t> kafka_consumer::get_watermark_offset(std::string 
     if (err == RdKafka::ErrorCode::ERR__PARTITION_EOF) {
       results.insert(std::pair<std::string, int64_t>("low", low));
       results.insert(std::pair<std::string, int64_t>("high", high));
-    } else {
-      CUDF_FAIL("Error retrieving Kafka watermark offset from broker");
     }
   } else {
     results.insert(std::pair<std::string, int64_t>("low", low));
