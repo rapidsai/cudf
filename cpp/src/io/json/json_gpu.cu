@@ -216,12 +216,12 @@ __inline__ __device__ cudf::timestamp_ns decode_value(const char *begin,
 // The purpose of this is merely to allow compilation ONLY
 // TODO : make this work for json
 #ifndef DURATION_DECODE_VALUE
-#define DURATION_DECODE_VALUE(Type)                              \
-  template <>                                                    \
-  __inline__ __device__ Type decode_value(                       \
-    const char *data, const char *end, ParseOptions const &opts) \
-  {                                                              \
-    return Type{};                                               \
+#define DURATION_DECODE_VALUE(Type)                               \
+  template <>                                                     \
+  __inline__ __device__ Type decode_value(                        \
+    const char *begin, const char *end, ParseOptions const &opts) \
+  {                                                               \
+    return Type{};                                                \
   }
 #endif
 DURATION_DECODE_VALUE(duration_D)
@@ -301,7 +301,7 @@ struct ConvertFunctor {
 
     // Check for user-specified true/false values first, where the output is
     // replaced with 1/0 respectively
-    value = [&, end, begin]() -> T {
+    value = [&opts, end, begin]() -> T {
       if (serializedTrieContains(opts.trueValuesTrie, begin, end - begin)) {
         return 1;
       } else if (serializedTrieContains(opts.falseValuesTrie, begin, end - begin)) {

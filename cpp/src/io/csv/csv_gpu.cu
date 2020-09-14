@@ -59,8 +59,9 @@ __device__ __inline__ bool is_whitespace(char c) { return c == '\t' || c == ' ';
  * @brief Scans a character stream within a range, and adjusts the start and end
  * indices of the range to ignore whitespace and quotation characters.
  *
- * @param[in] begin Beginning of the character string
- * @param[in] end End of the character string
+ * @param data The character stream to scan
+ * @param start The start index to adjust
+ * @param end The end index to adjust
  * @param quotechar The character used to denote quotes
  *
  * @return Adjusted or unchanged start_idx and end_idx
