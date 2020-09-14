@@ -26,6 +26,7 @@
 - PR #6051 Add builder API for cuIO `parquet_writer_options` and `parquet_reader_options`
 - PR #6067 Added compute codes for aarch64 devices
 - PR #6083 Small cleanup
+- PR #6092 Add `name` and `dtype` field to `Index.copy`
 - PR #5984 Support gather() on CUDF struct columns
 - PR #6103 Small refactor of `print_differences`
 - PR #6124 Fix gcc-9 compilation errors on tests
@@ -62,11 +63,14 @@
 - PR #6154 Warnings on row-wise op only when non-numeric columns are found.
 - PR #6150 Fix issue related to inferring `datetime64` format with UTC timezone in string data
 - PR #6157 Fix issue related to `Series.concat` to concat a non-empty and empty series.
+- PR #6179 `make_elements` copies to `iterator` without adjusting `size`
 - PR #6182 Fix cmake build of arrow
 - PR #6173 Fix normalize_characters offset logic on sliced strings column
 - PR #6159 Fix issue related to empty `Dataframe` with columns input to `DataFrame.appened`
 - PR #6183 Fix issues related to `Series.acos` for consistent output regardless of dtype 
 - PR #6199 Fix index preservation for dask_cudf parquet
+- PR #6207 Remove shared libs from Java sources jar
+- PR #6212 Update codeowners file
 
 
 # cuDF 0.15.0 (26 Aug 2020)
