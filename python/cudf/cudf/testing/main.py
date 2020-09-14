@@ -31,7 +31,13 @@ class PythonFuzz(object):
             "regression or reproduction",
         )
         parser.add_argument(
-            "--max-input-size",
+            "--max-rows-size",
+            type=int,
+            default=4096,
+            help="Max input size in bytes",
+        )
+        parser.add_argument(
+            "--max-cols-size",
             type=int,
             default=1000,
             help="Max input size in bytes",
@@ -51,7 +57,8 @@ class PythonFuzz(object):
             dirs=args.dirs,
             exact_artifact_path=args.exact_artifact_path,
             regression=args.regression,
-            max_input_size=args.max_input_size,
+            max_rows_size=args.max_rows_size,
+            max_cols_size=args.max_cols_size,
             runs=args.runs,
         )
         f.start()
