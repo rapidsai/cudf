@@ -688,6 +688,25 @@ __device__ inline string_view const column_device_view::element<string_view>(
 }
 
 /**
+ * @brief Dispatch funtor for resolving the indices value for dictionary element.
+ */
+struct index_element_fn {
+  template <typename IndexType, std::enable_if_t<is_index_type<IndexType>()>* = nullptr>
+  __device__ size_type operator()(column_device_view const& input, size_type index)
+  {
+    return static_cast<size_type>(input.element<IndexType>(index));
+  }
+  template <typename IndexType,
+            typename... Args,
+            std::enable_if_t<not is_index_type<IndexType>()>* = nullptr>
+  __device__ size_type operator()(Args&&... args)
+  {
+    release_assert(false and "indices must be an integral type");
+    return 0;
+  }
+};
+
+/**
  * @brief Returns `dictionary32` element at the specified index for a
  * dictionary column.
  *
@@ -716,7 +735,8 @@ __device__ inline dictionary32 const column_device_view::element<dictionary32>(
   size_type element_index) const noexcept
 {
   size_type index = element_index + offset();  // account for this view's _offset
-  return dictionary32{d_children[0].element<int32_t>(index)};
+  auto indices    = d_children[0];
+  return dictionary32{type_dispatcher(indices.type(), index_element_fn{}, indices, index)};
 }
 
 namespace detail {
