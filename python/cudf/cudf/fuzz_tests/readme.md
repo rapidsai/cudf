@@ -5,7 +5,7 @@ This directory contains all the Fuzz tests for cudf library.
 
 ## Steps to write a fuzz test
 
-1. Add a Data Handler class which actually generates the necessary random data according to your requirements. This class should be added in `cudf/cudf/testing/`. A sample data handler class is: `CSVWriter`: <URL>TODO</URL>
+1. Add a Data Handler class which actually generates the necessary random data according to your requirements. This class should be added in `cudf/cudf/testing/`. A sample data handler class is: `CSVWriter`: https://github.com/rapidsai/cudf/blob/branch-0.16/python/cudf/cudf/testing/csv.py
 2. The above created Data Handler will have to be passed to the Fuzzer worker which continuously runs the fuzz tests. For this the method which has to be fuzz-tested should have the decorator by passing the Data Handler like:
   
 ```python
