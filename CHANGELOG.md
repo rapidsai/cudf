@@ -48,6 +48,7 @@
 - PR #6197 Remove librmm dependency for libcudf
 - PR #6209 Remove CXX11 ABI handling from CMake
 - PR #6223 Remove CXX11 ABI flag from JNI build
+- PR #6114 Implement Fuzz tests for cuIO
 
 ## Bug Fixes
 
