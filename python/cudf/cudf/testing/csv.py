@@ -1,7 +1,9 @@
+import copy
 import json
 import logging
 import os
 import random
+import sys
 
 import cudf
 from cudf.tests import dataset_generator as dg
@@ -30,12 +32,14 @@ class CSVReader(object):
             if i == 0 and not os.path.exists(path):
                 raise FileNotFoundError(f"No {path} exists")
 
-            if os.path.isfile(path):
+            if os.path.isfile(path) and path.endswith("_crash.json"):
                 self._load_params(path)
             else:
                 for i in os.listdir(path):
                     file_name = os.path.join(path, i)
-                    if os.path.isfile(file_name):
+                    if os.path.isfile(file_name) and file_name.endswith(
+                        "_crash.json"
+                    ):
                         self._load_params(file_name)
         self._regression = True if self._inputs else False
         self._idx = 0
@@ -52,13 +56,20 @@ class CSVReader(object):
 
     def generate_input(self):
         if self._regression:
+            if self._idx >= len(self._inputs):
+                logging.info(
+                    "Reached the end of all crash.json files to run..Exiting.."
+                )
+                sys.exit(0)
             param = self._inputs[self._idx]
             dtypes_meta = param["dtypes_meta"]
             num_rows = param["num_rows"]
             file_name = param["file_name"]
+            num_cols = param["num_columns"]
             seed = param["seed"]
             random.seed(seed)
             self._idx += 1
+            self._current_params = copy.copy(param)
         else:
             seed = random.randint(0, 2 ** 32 - 1)
             random.seed(seed)
@@ -69,7 +80,10 @@ class CSVReader(object):
             self._current_params["seed"] = seed
             self._current_params["num_rows"] = num_rows
             self._current_params["num_columns"] = num_cols
-
+        logging.info(
+            f"Generating DataFrame with rows: {num_rows} "
+            f"and columns: {num_cols}"
+        )
         df = dg.rand_dataframe(dtypes_meta, num_rows, seed).to_pandas()
         df.to_csv(file_name)
         logging.info(f"Shape of DataFrame generated: {df.shape}")
@@ -80,10 +94,7 @@ class CSVReader(object):
         self._current_params = {}
         num_rows = self._rand(self._max_rows)
         num_cols = self._rand(self._max_columns)
-        logging.info(
-            f"Generating DataFrame with rows: {num_rows} "
-            f"and columns: {num_cols}"
-        )
+
         dtypes_list = list(
             cudf.utils.dtypes.ALL_TYPES
             - cudf.utils.dtypes.TIMEDELTA_TYPES
@@ -121,12 +132,14 @@ class CSVWriter(object):
             if i == 0 and not os.path.exists(path):
                 raise FileNotFoundError(f"No {path} exists")
 
-            if os.path.isfile(path):
+            if os.path.isfile(path) and path.endswith("_crash.json"):
                 self._load_params(path)
             else:
                 for i in os.listdir(path):
                     file_name = os.path.join(path, i)
-                    if os.path.isfile(file_name):
+                    if os.path.isfile(file_name) and file_name.endswith(
+                        "_crash.json"
+                    ):
                         self._load_params(file_name)
         self._regression = True if self._inputs else False
         self._idx = 0
@@ -143,12 +156,19 @@ class CSVWriter(object):
 
     def generate_input(self):
         if self._regression:
+            if self._idx >= len(self._inputs):
+                logging.info(
+                    "Reached the end of all crash.json files to run..Exiting.."
+                )
+                sys.exit(0)
             param = self._inputs[self._idx]
             dtypes_meta = param["dtypes_meta"]
             num_rows = param["num_rows"]
+            num_cols = param["num_columns"]
             seed = param["seed"]
             random.seed(seed)
             self._idx += 1
+            self._current_params = copy.copy(param)
         else:
             seed = random.randint(0, 2 ** 32 - 1)
             random.seed(seed)
@@ -157,7 +177,10 @@ class CSVWriter(object):
             self._current_params["seed"] = seed
             self._current_params["num_rows"] = num_rows
             self._current_params["num_columns"] = num_cols
-
+        logging.info(
+            f"Generating DataFrame with rows: {num_rows} "
+            f"and columns: {num_cols}"
+        )
         df = cudf.DataFrame.from_arrow(
             dg.rand_dataframe(dtypes_meta, num_rows, seed)
         )
@@ -169,10 +192,7 @@ class CSVWriter(object):
         self._current_params = {}
         num_rows = self._rand(self._max_rows)
         num_cols = self._rand(self._max_columns)
-        logging.info(
-            f"Generating DataFrame with rows: {num_rows} "
-            f"and columns: {num_cols}"
-        )
+
         dtypes_list = list(
             cudf.utils.dtypes.ALL_TYPES
             - cudf.utils.dtypes.TIMEDELTA_TYPES

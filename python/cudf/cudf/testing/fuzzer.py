@@ -25,7 +25,7 @@ class Fuzzer(object):
         target,
         data_handler_class,
         dirs=None,
-        exact_artifact_path=None,
+        crash_reports_dir=None,
         regression=False,
         max_rows_size=4096,
         max_cols_size=1000,
@@ -34,7 +34,7 @@ class Fuzzer(object):
 
         self._target = target
         self._dirs = [] if dirs is None else dirs
-        self._crash_dir = exact_artifact_path
+        self._crash_dir = crash_reports_dir
         self._data_handler = data_handler_class(
             dirs=self._dirs, max_rows=max_rows_size, max_columns=max_cols_size
         )
