@@ -2628,7 +2628,7 @@ class DataFrame(Frame, Serializable):
 
         return DataFrame(cols, idx)
 
-    def set_index(self, index, drop=True, inplace=False, append=False):
+    def set_index(self, index, drop=True, inplace=False):
         """Return a new DataFrame with a new index
 
         Parameters
@@ -2662,7 +2662,11 @@ class DataFrame(Frame, Serializable):
         # Genearl Case
         if drop:
             df.drop(columns=index)
-        index = index if isinstance(index, [Index, cudf.MultiIndex]) else as_index(index)
+        index = (
+            index
+            if isinstance(index, [Index, cudf.MultiIndex])
+            else as_index(index)
+        )
         df.index = index
         return df if not inplace else None
 
