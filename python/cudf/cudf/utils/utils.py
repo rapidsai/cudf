@@ -79,7 +79,7 @@ def scalar_broadcast_to(scalar, size, dtype=None):
 
     if dtype.kind in ("O", "U"):
         gather_map = column.full(size, 0, dtype="int32")
-        scalar_str_col = column.as_column([scalar], dtype="str")
+        scalar_str_col = column.as_column([scalar.value], dtype="str")
         return scalar_str_col[gather_map]
     else:
         out_col = column.column_empty(size, dtype=dtype)

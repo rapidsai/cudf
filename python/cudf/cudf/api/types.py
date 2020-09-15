@@ -142,13 +142,15 @@ def find_common_type(array_types=[], scalar_types=[]):
     return cudf.dtype(np.find_common_type(array_types, scalar_types))
 
 
-def can_cast(dtype_l, dtype_r):
-    if isinstance(dtype_l, cudf.Generic):
-        dtype_l = dtype_l.to_numpy
-    if isinstance(dtype_r, cudf.Generic):
-        dtype_r = dtype_r.to_numpy
+def can_cast(from_, to, casting='safe'):
+    if isinstance(from_, cudf.Generic):
+        from_ = from_.to_numpy
+    elif isinstance(from_, cudf.Scalar):
+        from_ = from_.value
+    if isinstance(to, cudf.Generic):
+        to = to.to_numpy
 
-    return np.can_cast(dtype_l, dtype_r)
+    return np.can_cast(from_, to, casting=casting)
 
 
 def result_type(*arrays_and_dtypes):
@@ -163,3 +165,22 @@ def isnan(obj):
     if isinstance(obj, cudf._lib.scalar.Scalar):
         obj = obj.value
     return np.isnan(obj)
+
+def min_scalar_type(a):
+    if isinstance(a, cudf.Scalar):
+        a = a.value
+    result = np.min_scalar_type(a)
+    if result == np.dtype('float16'):
+        return cudf.Float32Dtype()
+    return cudf.dtype(result)
+
+def promote_types(type1, type2):
+    if isinstance(type1, cudf.Generic):
+        type1 = type1.to_numpy
+    if isinstance(type2, cudf.Generic):
+        type2 = type2.to_numpy
+
+    result = np.promote_types(type1, type2)
+    if result == np.dtype('float16'):
+        return cudf.Float32Dtype()
+    return cudf.dtype(result)

@@ -204,7 +204,7 @@ def _scatter_scalar(scalars, Column scatter_map,
     cdef bool c_bounds_check = bounds_check
     cdef Scalar slr
     for val, col in zip(scalars, target_table._columns):
-        slr = as_scalar(val, col.dtype.to_numpy)
+        slr = as_scalar(val, col.dtype)
         source_scalars.push_back(move(slr.c_value))
     cdef column_view scatter_map_view = scatter_map.view()
     cdef table_view target_table_view = target_table.data_view()

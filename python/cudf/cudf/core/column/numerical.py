@@ -51,15 +51,17 @@ class NumericalColumn(column.ColumnBase):
         # Handles improper item types
         # Fails if item is of type None, so the handler.
         try:
-            if np.can_cast(item, self.data_array_view.dtype):
-                item = self.data_array_view.dtype.type(item)
+            if cudf.api.types.can_cast(item, self.dtype):
+                if isinstance(item, cudf.Scalar):
+                    item = item.value
+                item = cudf.Scalar(item, dtype=self.dtype)
             else:
                 return False
         except (TypeError, ValueError):
             return False
         # TODO: Use `scalar`-based `contains` wrapper
         return libcudf.search.contains(
-            self, column.as_column([item], dtype=self.dtype)
+            self, column.as_column(item, dtype=self.dtype)
         ).any()
 
     def unary_operator(self, unaryop):
@@ -105,16 +107,16 @@ class NumericalColumn(column.ColumnBase):
     def normalize_binop_value(self, other):
         if other is None:
             return other
-        other_dtype = np.min_scalar_type(other)
+        other_dtype = cudf.api.types.min_scalar_type(other)
         if other_dtype.kind in {"b", "i", "u", "f"}:
-            other_dtype = np.promote_types(self.dtype.to_numpy, other_dtype)
+            other_dtype = cudf.api.types.promote_types(self.dtype, other_dtype)
             if other_dtype == np.dtype("float16"):
                 other = np.dtype("float32").type(other)
                 other_dtype = other.dtype
             if self.dtype.kind == "b":
                 other_dtype = min_signed_type(other)
-            if np.isscalar(other):
-                other = np.dtype(other_dtype).type(other)
+            if np.isscalar(other) or isinstance(other, cudf.Scalar):
+                other = cudf.Scalar(other, dtype=other_dtype)
                 return other
             else:
                 ary = utils.scalar_broadcast_to(
@@ -169,9 +171,8 @@ class NumericalColumn(column.ColumnBase):
         if dtype == self.dtype:
             return self
         if dtype is None:
-            import pdb
-
-            pdb.set_trace()
+            # dtype = None can cause segfault here
+            raise TypeError('libcudf.unary.cast requires a dtype')
         return libcudf.unary.cast(self, dtype)
 
     def sum(self, dtype=None):
@@ -455,6 +456,7 @@ def _safe_cast_to_int(col, dtype):
 
 
 def _normalize_find_and_replace_input(input_column_dtype, col_to_normalize):
+
     normalized_column = column.as_column(
         col_to_normalize,
         dtype=input_column_dtype if len(col_to_normalize) <= 0 else None,

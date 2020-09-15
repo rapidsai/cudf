@@ -75,6 +75,9 @@ class Scalar(libcudf.scalar.Scalar):
     def __xor__(self, other):
         return self._scalar_binop(other, "__or__")
 
+    def __pow__(self, other):
+        return self._scalar_binop(other, "__pow__")
+
     def __gt__(self, other):
         return self._scalar_binop(other, "__gt__").value
 

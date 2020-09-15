@@ -330,25 +330,25 @@ def min_column_type(x, expected_type):
     If the column is not a subtype of `np.signedinteger` or `np.floating`
     returns the same dtype as the dtype of `x` without modification
     """
+
+    expected_type = cudf.dtype(expected_type)
     if not isinstance(x, cudf.core.column.NumericalColumn):
         raise TypeError("Argument x must be of type column.NumericalColumn")
     if x.valid_count == 0:
         return x.dtype
-    x_np_dtype = x.dtype.to_numpy
-    expected_type = cudf.dtype(expected_type).to_numpy
 
-    if np.issubdtype(x_np_dtype, np.floating):
-        max_bound_dtype = np.min_scalar_type(x.max())
-        min_bound_dtype = np.min_scalar_type(x.min())
+    if isinstance(x.dtype, cudf.Floating):
+        max_bound_dtype = np.min_scalar_type(x.max().value)
+        min_bound_dtype = np.min_scalar_type(x.min().value)
         result_type = np.promote_types(max_bound_dtype, min_bound_dtype)
         if result_type == np.dtype("float16"):
             # cuDF does not support float16 dtype
             result_type = np.dtype("float32")
         return cudf.dtype(result_type)
 
-    if np.issubdtype(expected_type, np.integer):
-        max_bound_dtype = np.min_scalar_type(x.max())
-        min_bound_dtype = np.min_scalar_type(x.min())
+    if isinstance(expected_type, cudf.Integer):
+        max_bound_dtype = np.min_scalar_type(x.max().value)
+        min_bound_dtype = np.min_scalar_type(x.min().value)
         result = np.promote_types(max_bound_dtype, min_bound_dtype)
         return cudf.dtype(result)
 
