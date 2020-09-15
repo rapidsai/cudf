@@ -213,7 +213,7 @@ struct column_scalar_scatterer_impl<dictionary32, MapIterator> {
       dict_view, *source, rmm::mr::get_current_device_resource(), stream);
     std::unique_ptr<scalar> idx_scalar(scalar_index.release());
     // now we can just scatter on just the indices
-    column_scalar_scatterer_impl<int32_t, MapIterator> functor{};
+    column_scalar_scatterer_impl<uint32_t, MapIterator> functor{};
     auto new_indices = functor(
       idx_scalar, scatter_iter, scatter_rows, dict_view.get_indices_annotated(), mr, stream);
     // build the dictionary indices column from the result
