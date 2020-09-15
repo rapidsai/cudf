@@ -34,3 +34,11 @@ To run a basic csv write test in `write_csv.py`:
 ```bash
 python write_csv.py csv_writer_test
 ```
+
+## Tips to run specific crash file/files
+
+Using the `pythonfuzz` decorator pass in `regression=True` with `dirs` having list of directories 
+```python
+@pythonfuzz(data_handle=CSVWriter, regression=True, dir=["/cudf/python/cudf/cudf/fuzz_tests"])
+```
+
