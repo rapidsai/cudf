@@ -7079,7 +7079,7 @@ def _gpu_scalars_to_column(list_of_scalars):
     '''
     ind = range(len(list_of_scalars))
     cols_dict = {
-        k: v for k, v in zip(ind, [as_column(i) for i in list_of_scalars])
+        k: v for k, v in zip(ind, [as_column(cudf.Scalar(i)) for i in list_of_scalars])
     }
 
     tbl = DataFrame(cols_dict)

@@ -99,6 +99,9 @@ class Scalar(libcudf.scalar.Scalar):
     def __abs__(self):
         return self._scalar_unaop('__abs__')
 
+    def __round__(self, n):
+        return self._scalar_binop(n, '__round__')
+
     def _binop_result_dtype_or_error(self, other, op):
 
         if (self.dtype.kind == "O" and other.dtype.kind != "O") or (
