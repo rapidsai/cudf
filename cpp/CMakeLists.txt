@@ -52,16 +52,6 @@ if(CMAKE_COMPILER_IS_GNUCXX)
 
     # Suppress parentheses warning which causes gmock to fail
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -Wno-parentheses")
-
-    option(CMAKE_CXX11_ABI "Enable the GLIBCXX11 ABI" ON)
-    if(CMAKE_CXX11_ABI)
-        message(STATUS "CUDF: Enabling the GLIBCXX11 ABI")
-    else()
-        message(STATUS "CUDF: Disabling the GLIBCXX11 ABI")
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_GLIBCXX_USE_CXX11_ABI=0")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_GLIBCXX_USE_CXX11_ABI=0")
-        set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -D_GLIBCXX_USE_CXX11_ABI=0")
-    endif(CMAKE_CXX11_ABI)
 endif(CMAKE_COMPILER_IS_GNUCXX)
 
 if(CMAKE_CUDA_COMPILER_VERSION)
@@ -772,6 +762,22 @@ if(HT_DEFAULT_ALLOCATOR)
     message(STATUS "Using default allocator for hash tables")
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DHT_DEFAULT_ALLOCATOR")
 endif(HT_DEFAULT_ALLOCATOR)
+
+# Set a default logging level if none was specified
+set(DEFAULT_LOGGING_LEVEL INFO)
+
+if(NOT LOGGING_LEVEL)
+    message(STATUS "Setting logging level to '${DEFAULT_LOGGING_LEVEL}' since none specified.")
+    set(LOGGING_LEVEL "${DEFAULT_LOGGING_LEVEL}" CACHE
+      STRING "Choose the logging level." FORCE)
+    # Set the possible values of build type for cmake-gui
+    set_property(CACHE LOGGING_LEVEL PROPERTY STRINGS
+        "TRACE" "DEBUG" "INFO" "WARN" "ERROR" "CRITICAL" "OFF")
+else()
+    message(STATUS "Setting logging level to '${LOGGING_LEVEL}'")
+endif(NOT LOGGING_LEVEL)
+
+target_compile_definitions(cudf PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${LOGGING_LEVEL})
 
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
