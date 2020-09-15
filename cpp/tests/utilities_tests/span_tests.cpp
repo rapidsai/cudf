@@ -45,89 +45,82 @@ void expect_match(std::string expected, span<T> input)
   return expect_match(expected.begin(), expected.size(), input);
 }
 
-template <typename T>
+std::string const hello_wold_message = "hello world";
+std::vector<char> create_hello_world_message()
+{
+  return std::vector<char>(hello_wold_message.begin(), hello_wold_message.end());
+}
+
 class SpanTest : public cudf::test::BaseFixture {
- public:
-  SpanTest() : _hello_world("hello world") {}
-
-  std::vector<char> hello_world()
-  {
-    return std::vector<char>(_hello_world.begin(), _hello_world.end());
-  }
-
- private:
-  std::string const _hello_world;
 };
 
-TYPED_TEST_CASE(SpanTest, cudf::test::FloatingPointTypes);
-
-TYPED_TEST(SpanTest, CanCreateFullSubspan)
+TEST(SpanTest, CanCreateFullSubspan)
 {
-  auto message            = this->hello_world();
+  auto message            = create_hello_world_message();
   auto const message_span = span<char>(message.data(), message.size());
 
   expect_equivolent(message_span, message_span.subspan(0, message_span.size()));
 }
 
-TYPED_TEST(SpanTest, CanTakeFirst)
+TEST(SpanTest, CanTakeFirst)
 {
-  auto message            = this->hello_world();
+  auto message            = create_hello_world_message();
   auto const message_span = span<char>(message.data(), message.size());
 
   expect_match("hello", message_span.first(5));
 }
 
-TYPED_TEST(SpanTest, CanTakeLast)
+TEST(SpanTest, CanTakeLast)
 {
-  auto message            = this->hello_world();
+  auto message            = create_hello_world_message();
   auto const message_span = span<char>(message.data(), message.size());
 
   expect_match("world", message_span.last(5));
 }
 
-TYPED_TEST(SpanTest, CanTakeSubspanFull)
+TEST(SpanTest, CanTakeSubspanFull)
 {
-  auto message            = this->hello_world();
+  auto message            = create_hello_world_message();
   auto const message_span = span<char>(message.data(), message.size());
 
   expect_match("hello world", message_span.subspan(0, 11));
 }
 
-TYPED_TEST(SpanTest, CanTakeSubspanPartial)
+TEST(SpanTest, CanTakeSubspanPartial)
 {
-  auto message            = this->hello_world();
+  auto message            = create_hello_world_message();
   auto const message_span = span<char>(message.data(), message.size());
 
   expect_match("lo w", message_span.subspan(3, 4));
 }
 
-TYPED_TEST(SpanTest, CanGetFront)
+TEST(SpanTest, CanGetFront)
 {
-  auto message            = this->hello_world();
+  auto message            = create_hello_world_message();
   auto const message_span = span<char>(message.data(), message.size());
 
   EXPECT_EQ('h', message_span.front());
 }
 
-TYPED_TEST(SpanTest, CanGetBack)
+TEST(SpanTest, CanGetBack)
 {
-  auto message            = this->hello_world();
+  auto message            = create_hello_world_message();
   auto const message_span = span<char>(message.data(), message.size());
 
   EXPECT_EQ('d', message_span.back());
 }
 
-TYPED_TEST(SpanTest, CanGetData)
+TEST(SpanTest, CanGetData)
 {
-  auto message            = this->hello_world();
+  auto message            = create_hello_world_message();
   auto const message_span = span<char>(message.data(), message.size());
 
   EXPECT_EQ(message.data(), message_span.data());
 }
 
-TYPED_TEST(SpanTest, CanDetermineEmptiness)
+TEST(SpanTest, CanDetermineEmptiness)
 {
-  auto message            = this->hello_world();
+  auto message            = create_hello_world_message();
   auto const message_span = span<char>(message.data(), message.size());
   auto const empty_span   = span<char>();
 
@@ -135,9 +128,9 @@ TYPED_TEST(SpanTest, CanDetermineEmptiness)
   EXPECT_TRUE(empty_span.empty());
 }
 
-TYPED_TEST(SpanTest, CanGetSize)
+TEST(SpanTest, CanGetSize)
 {
-  auto message            = this->hello_world();
+  auto message            = create_hello_world_message();
   auto const message_span = span<char>(message.data(), message.size());
   auto const empty_span   = span<char>();
 
@@ -145,7 +138,7 @@ TYPED_TEST(SpanTest, CanGetSize)
   EXPECT_EQ(0, empty_span.size());
 }
 
-TYPED_TEST(SpanTest, CanGetSizeBytes)
+TEST(SpanTest, CanGetSizeBytes)
 {
   auto doubles            = std::vector<double>({6, 3, 2});
   auto const doubles_span = span<double>(doubles.data(), doubles.size());
@@ -155,9 +148,9 @@ TYPED_TEST(SpanTest, CanGetSizeBytes)
   EXPECT_EQ(0, empty_span.size_bytes());
 }
 
-TYPED_TEST(SpanTest, CanCopySpan)
+TEST(SpanTest, CanCopySpan)
 {
-  auto message = this->hello_world();
+  auto message = create_hello_world_message();
   span<char> message_span_copy;
 
   {
@@ -170,17 +163,17 @@ TYPED_TEST(SpanTest, CanCopySpan)
   EXPECT_EQ(message.size(), message_span_copy.size());
 }
 
-TYPED_TEST(SpanTest, CanSubscriptRead)
+TEST(SpanTest, CanSubscriptRead)
 {
-  auto message            = this->hello_world();
+  auto message            = create_hello_world_message();
   auto const message_span = span<char>(message.data(), message.size());
 
   EXPECT_EQ('o', message_span[4]);
 }
 
-TYPED_TEST(SpanTest, CanSubscriptWrite)
+TEST(SpanTest, CanSubscriptWrite)
 {
-  auto message            = this->hello_world();
+  auto message            = create_hello_world_message();
   auto const message_span = span<char>(message.data(), message.size());
 
   message_span[4] = 'x';
