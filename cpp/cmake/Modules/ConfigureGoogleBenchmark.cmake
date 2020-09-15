@@ -4,16 +4,6 @@ set(GBENCH_CMAKE_ARGS " -DCMAKE_BUILD_TYPE=Release")
                      #" -Dgtest_build_samples=ON" 
                      #" -DCMAKE_VERBOSE_MAKEFILE=ON")
 
-if(NOT CMAKE_CXX11_ABI)
-    message(STATUS "GBENCH: Disabling the GLIBCXX11 ABI")
-    list(APPEND GBENCH_CMAKE_ARGS " -DCMAKE_C_FLAGS=-D_GLIBCXX_USE_CXX11_ABI=0")
-    list(APPEND GBENCH_CMAKE_ARGS " -DCMAKE_CXX_FLAGS=-D_GLIBCXX_USE_CXX11_ABI=0")
-elseif(CMAKE_CXX11_ABI)
-    message(STATUS "GBENCH: Enabling the GLIBCXX11 ABI")
-    list(APPEND GBENCH_CMAKE_ARGS " -DCMAKE_C_FLAGS=-D_GLIBCXX_USE_CXX11_ABI=1")
-    list(APPEND GBENCH_CMAKE_ARGS " -DCMAKE_CXX_FLAGS=-D_GLIBCXX_USE_CXX11_ABI=1")
-endif(NOT CMAKE_CXX11_ABI)
-
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/Templates/GoogleBenchmark.CMakeLists.txt.cmake"
                "${GBENCH_ROOT}/CMakeLists.txt")
 
