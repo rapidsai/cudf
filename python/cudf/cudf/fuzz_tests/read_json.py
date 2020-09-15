@@ -1,3 +1,5 @@
+import sys
+
 import pandas as pd
 
 import cudf
@@ -15,4 +17,13 @@ def json_reader_test(file_name):
 
 
 if __name__ == "__main__":
-    json_reader_test()
+    if len(sys.argv) != 2:
+        print("Usage is python file_name.py function_name")
+
+    function_name_to_run = sys.argv[1]
+    try:
+        globals()[function_name_to_run]()
+    except KeyError:
+        print(
+            f"Provided function name({function_name_to_run}) does not exist."
+        )

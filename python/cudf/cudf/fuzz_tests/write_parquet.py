@@ -1,3 +1,5 @@
+import sys
+
 import pandas as pd
 
 import cudf
@@ -26,4 +28,13 @@ def parquet_writer_test(gdf):
 
 
 if __name__ == "__main__":
-    parquet_writer_test()
+    if len(sys.argv) != 2:
+        print("Usage is python file_name.py function_name")
+
+    function_name_to_run = sys.argv[1]
+    try:
+        globals()[function_name_to_run]()
+    except KeyError:
+        print(
+            f"Provided function name({function_name_to_run}) does not exist."
+        )
