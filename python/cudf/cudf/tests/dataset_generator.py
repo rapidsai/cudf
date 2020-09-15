@@ -248,6 +248,29 @@ def get_dataframe(parameters, use_threads):
 
 
 def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
+    """
+    Generates a random table.
+
+    Parameters
+    ----------
+    dtypes_meta : List of dict
+        Specifies list of dtype meta data. dtype meta data should
+        be a dictionary of the form example:
+            {"dtype": "int64", "null_frequency": 0.4, "cardinality": 10}
+        `"str"` dtype can contain an extra key `max_string_length` to
+        control the maximum size of the strings being generated in each row.
+        If not specified, it will default to 1000.
+    rows : int
+        Specifies the number of rows to be generated.
+    seed : int
+        Specifies the `seed` value to be utilized by all downstream
+        random data generation APIs.
+
+    Returns
+    -------
+    PyArrow Table
+        A Table with columns of corresponding dtypes mentioned in `dtypes_meta`
+    """
     # Apply seed
     random.seed(seed)
     np.random.seed(seed)
@@ -255,7 +278,9 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
 
     column_params = []
     for meta in dtypes_meta:
-        dtype, null_frequency, cardinality = meta
+        dtype = meta["dtype"]
+        null_frequency = meta["null_frequency"]
+        cardinality = meta["cardinality"]
 
         if dtype == "category":
             column_params.append(
@@ -303,7 +328,10 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
                         cardinality=cardinality,
                         null_frequency=null_frequency,
                         generator=lambda g: [
-                            g.random.schoice(string.printable, 2000)
+                            g.random.schoice(
+                                string.printable,
+                                meta.get("max_string_length", 1000),
+                            )
                             for _ in range(rows)
                         ],
                         is_sorted=False,

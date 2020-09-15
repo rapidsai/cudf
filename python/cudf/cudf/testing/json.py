@@ -96,14 +96,21 @@ class JSONReader(object):
         num_cols = self._rand(self._max_columns)
 
         dtypes_list = list(cudf.utils.dtypes.ALL_TYPES)
-        dtypes_meta = [
-            (
-                random.choice(dtypes_list),
-                random.uniform(0, 1),
-                self._rand(self._max_rows),
-            )
-            for _ in range(num_cols)
-        ]
+        dtypes_meta = []
+        for _ in range(num_cols):
+            dtype = random.choice(dtypes_list)
+            null_frequency = random.uniform(0, 1)
+            cardinality = self._rand(self._max_rows)
+            meta = dict()
+            if dtype == "str":
+                # We want to operate near the limits of string column
+                # Hence creating a string column of size almost
+                # equal to 2 Billion bytes(sizeof(int))
+                meta["max_string_length"] = 2000000000 / num_rows
+            meta["dtype"] = dtype
+            meta["null_frequency"] = null_frequency
+            meta["cardinality"] = cardinality
+            dtypes_meta.append(meta)
         return dtypes_meta, num_rows, num_cols
 
     @property
@@ -190,14 +197,21 @@ class JSONWriter(object):
         num_cols = self._rand(self._max_columns)
 
         dtypes_list = list(cudf.utils.dtypes.ALL_TYPES)
-        dtypes_meta = [
-            (
-                random.choice(dtypes_list),
-                random.uniform(0, 1),
-                self._rand(self._max_rows),
-            )
-            for _ in range(num_cols)
-        ]
+        dtypes_meta = []
+        for _ in range(num_cols):
+            dtype = random.choice(dtypes_list)
+            null_frequency = random.uniform(0, 1)
+            cardinality = self._rand(self._max_rows)
+            meta = dict()
+            if dtype == "str":
+                # We want to operate near the limits of string column
+                # Hence creating a string column of size almost
+                # equal to 2 Billion bytes(sizeof(int))
+                meta["max_string_length"] = 2000000000 / num_rows
+            meta["dtype"] = dtype
+            meta["null_frequency"] = null_frequency
+            meta["cardinality"] = cardinality
+            dtypes_meta.append(meta)
         return dtypes_meta, num_rows, num_cols
 
     @property
