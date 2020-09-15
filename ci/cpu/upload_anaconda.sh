@@ -11,11 +11,9 @@ export LIBCUDF_KAFKA_FILE=`conda build conda/recipes/libcudf_kafka --output`
 export CUDF_KAFKA_FILE=`conda build conda/recipes/cudf_kafka --python=$PYTHON --output`
 export CUSTREAMZ_FILE=`conda build conda/recipes/custreamz --python=$PYTHON --output`
 
-SOURCE_BRANCH=master
 CUDA_REL=${CUDA_VERSION%.*}
 
-# Restrict uploads to master branch
-if [ ${GIT_BRANCH} != ${SOURCE_BRANCH} ]; then
+if [ ${BUILD_MODE} != "branch" ]; then
   echo "Skipping upload"
   return 0
 fi

@@ -133,7 +133,8 @@ struct ColumnChunkDesc {
                                      int8_t converted_type_,
                                      int8_t decimal_scale_,
                                      int32_t ts_clock_rate_,
-                                     int32_t col_index_)
+                                     int32_t dst_col_index_,
+                                     int32_t src_col_index_)
     : compressed_data(compressed_data_),
       compressed_size(compressed_size_),
       num_values(num_values_),
@@ -153,7 +154,8 @@ struct ColumnChunkDesc {
       converted_type(converted_type_),
       decimal_scale(decimal_scale_),
       ts_clock_rate(ts_clock_rate_),
-      col_index(col_index_)
+      dst_col_index(dst_col_index_),
+      src_col_index(src_col_index_)
   {
   }
 
@@ -180,7 +182,8 @@ struct ColumnChunkDesc {
   int8_t decimal_scale;                       // decimal scale pow(10, -decimal_scale)
   int32_t ts_clock_rate;  // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
 
-  int32_t col_index;  // my output column index
+  int32_t dst_col_index;  // my output column index
+  int32_t src_col_index;  // my source (order in the file) column index
 };
 
 /**

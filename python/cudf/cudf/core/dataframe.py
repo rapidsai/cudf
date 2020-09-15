@@ -26,7 +26,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib.null_mask import MaskState, create_null_mask
 from cudf._lib.nvtx import annotate
-from cudf.core import column
+from cudf.core import column, reshape
 from cudf.core.abc import Serializable
 from cudf.core.column import as_column, column_empty
 from cudf.core.column_accessor import ColumnAccessor
@@ -4766,75 +4766,10 @@ class DataFrame(Frame, Serializable):
 
         return result
 
-    def to_arrow(self, preserve_index=True):
-        """
-        Convert to a PyArrow Table.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> a = ('a', [0, 1, 2])
-        >>> b = ('b', [-3, 2, 0])
-        >>> df = cudf.DataFrame([a, b])
-        >>> df.to_arrow()
-        pyarrow.Table
-        None: int64
-        a: int64
-        b: int64
-        """
-        arrays = []
-        names = []
-        types = []
-        index_names = []
-        index_columns = []
-        index_descriptors = []
-
-        for name, col in self._data.items():
-            names.append(name)
-            arrow_col = col.to_arrow()
-            arrays.append(arrow_col)
-            types.append(arrow_col.type)
-
-        index_name = pa.pandas_compat._index_level_name(self.index, 0, names)
-        index_columns.append(self.index)
-
-        # It would be better if we didn't convert this if we didn't have to,
-        # but we first need better tooling for cudf --> pyarrow type
-        # conversions
-        if preserve_index:
-            if isinstance(self.index, cudf.core.index.RangeIndex):
-                descr = {
-                    "kind": "range",
-                    "name": self.index.name,
-                    "start": self.index._start,
-                    "stop": self.index._stop,
-                    "step": 1,
-                }
-            else:
-                index_arrow = self.index.to_arrow()
-                descr = index_name
-                types.append(index_arrow.type)
-                arrays.append(index_arrow)
-                names.append(index_name)
-                index_names.append(index_name)
-            index_descriptors.append(descr)
-
-        # We may want to add additional metadata to this in the future, but
-        # for now lets just piggyback off of what's done for Pandas
-        metadata = pa.pandas_compat.construct_metadata(
-            self,
-            names,
-            index_columns,
-            index_descriptors,
-            preserve_index,
-            types,
-        )
-
-        return pa.Table.from_arrays(arrays, names=names, metadata=metadata)
-
     @classmethod
     def from_arrow(cls, table):
-        """Convert from a PyArrow Table.
+        """
+        Convert from PyArrow Table to DataFrame.
 
         Parameters
         ----------
@@ -4845,69 +4780,120 @@ class DataFrame(Frame, Serializable):
         ------
         TypeError for invalid input type.
 
+        Returns
+        -------
+        cudf DataFrame
+
         Notes
         -----
-
         -   Does not support automatically setting index column(s) similar
             to how ``to_pandas`` works for PyArrow Tables.
 
         Examples
         --------
-        >>> import pyarrow as pa
         >>> import cudf
-        >>> data = [pa.array([1, 2, 3]), pa.array([4, 5, 6])]
-        >>> batch = pa.RecordBatch.from_arrays(data, ['f0', 'f1'])
-        >>> table = pa.Table.from_batches([batch])
-        >>> cudf.DataFrame.from_arrow(table)
-            f0  f1
-        0   1   4
-        1   2   5
-        2   3   6
+        >>> import pyarrow as pa
+        >>> data = pa.table({"a":[1, 2, 3], "b":[4, 5, 6]})
+        >>> cudf.DataFrame.from_arrow(data)
+           a  b
+        0  1  4
+        1  2  5
+        2  3  6
         """
-
-        if not isinstance(table, pa.Table):
-            raise TypeError("not a pyarrow.Table")
-
         index_col = None
-        dtypes = None
-        if isinstance(table.schema.pandas_metadata, dict):
-            metadata = table.schema.pandas_metadata
-            index_col = metadata["index_columns"]
-            dtypes = {
-                col["field_name"]: col["pandas_type"]
-                for col in metadata["columns"]
-                if "field_name" in col
-            }
+        if isinstance(table, pa.Table) and isinstance(
+            table.schema.pandas_metadata, dict
+        ):
+            index_col = table.schema.pandas_metadata["index_columns"]
 
-        df = cls()
-        for name, col in zip(table.schema.names, table.columns):
-            if dtypes:
-                dtype = dtypes[name]
-                if dtype == "categorical":
-                    dtype = "category"
-                elif dtype == "date":
-                    dtype = "datetime64[ms]"
-            else:
-                dtype = None
+        out = super().from_arrow(table)
 
-            df[name] = column.as_column(col, dtype=dtype)
         if index_col:
             if isinstance(index_col[0], dict):
-                assert index_col[0]["kind"] == "range"
-                df = df.set_index(
-                    RangeIndex(
+                out = out.set_index(
+                    cudf.RangeIndex(
                         index_col[0]["start"],
                         index_col[0]["stop"],
                         name=index_col[0]["name"],
                     )
                 )
             else:
-                df = df.set_index(index_col[0])
-                new_index_name = pa.pandas_compat._backwards_compatible_index_name(  # noqa: E501
-                    df.index.name, df.index.name
-                )
-                df.index.name = new_index_name
-        return df
+                out = out.set_index(index_col[0])
+
+        return out
+
+    def to_arrow(self, preserve_index=True):
+        """
+        Convert to a PyArrow Table.
+
+        Parameters
+        ----------
+        preserve_index : bool, default True
+            whether index column and its meta data needs to be saved or not
+
+        Returns
+        -------
+        PyArrow Table
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame(
+        ...     {"a":[1, 2, 3], "b":[4, 5, 6]}, index=[1, 2, 3])
+        >>> df.to_arrow()
+        pyarrow.Table
+        a: int64
+        b: int64
+        index: int64
+        >>> df.to_arrow(preserve_index=False)
+        pyarrow.Table
+        a: int64
+        b: int64
+        """
+
+        data = self.copy(deep=False)
+        index_descr = []
+        if preserve_index:
+            if isinstance(self.index, cudf.RangeIndex):
+                descr = {
+                    "kind": "range",
+                    "name": self.index.name,
+                    "start": self.index._start,
+                    "stop": self.index._stop,
+                    "step": 1,
+                }
+            else:
+                if isinstance(self.index, cudf.MultiIndex):
+                    gen_names = tuple(
+                        f"level_{i}"
+                        for i, _ in enumerate(self.index._data.names)
+                    )
+                else:
+                    gen_names = (
+                        self.index.names
+                        if self.index.name is not None
+                        else ("index",)
+                    )
+                for gen_name, col_name in zip(
+                    gen_names, self.index._data.names
+                ):
+                    data.insert(
+                        data.shape[1], gen_name, self.index._data[col_name]
+                    )
+                descr = gen_names[0]
+            index_descr.append(descr)
+
+        out = super(DataFrame, data).to_arrow()
+        metadata = pa.pandas_compat.construct_metadata(
+            self,
+            out.schema.names,
+            [self.index],
+            index_descr,
+            preserve_index,
+            types=out.schema.types,
+        )
+
+        return out.replace_schema_metadata(metadata)
 
     def to_records(self, index=True):
         """Convert to a numpy recarray
@@ -5285,8 +5271,8 @@ class DataFrame(Frame, Serializable):
                     val = values[col]
                     result_df[col] = self._data[col].isin(val)
                 else:
-                    result_df[col] = utils.scalar_broadcast_to(
-                        False, len(self)
+                    result_df[col] = column.full(
+                        size=len(self), fill_value=False, dtype="bool"
                     )
 
             result_df.index = self.index
@@ -5358,10 +5344,6 @@ class DataFrame(Frame, Serializable):
     def _prepare_for_rowwise_op(self):
         """Prepare a DataFrame for CuPy-based row-wise operations.
         """
-        warnings.warn(
-            "Row-wise operations currently only support int, float, "
-            "and bool dtypes."
-        )
 
         if any([col.nullable for col in self._columns]):
             msg = (
@@ -5373,6 +5355,12 @@ class DataFrame(Frame, Serializable):
 
         filtered = self.select_dtypes(include=[np.number, np.bool])
         common_dtype = np.find_common_type(filtered.dtypes, [])
+        if filtered._num_columns < self._num_columns:
+            msg = (
+                "Row-wise operations currently only support int, float "
+                "and bool dtypes. Non numeric columns are ignored."
+            )
+            warnings.warn(msg)
         coerced = filtered.astype(common_dtype)
         return coerced
 
@@ -5856,6 +5844,106 @@ class DataFrame(Frame, Serializable):
             numeric_only=numeric_only,
             **kwargs,
         )
+
+    def mode(self, axis=0, numeric_only=False, dropna=True):
+        """
+        Get the mode(s) of each element along the selected axis.
+
+        The mode of a set of values is the value that appears most often.
+        It can be multiple values.
+
+        Parameters
+        ----------
+        axis : {0 or 'index', 1 or 'columns'}, default 0
+            The axis to iterate over while searching for the mode:
+
+            - 0 or 'index' : get mode of each column
+            - 1 or 'columns' : get mode of each row.
+        numeric_only : bool, default False
+            If True, only apply to numeric columns.
+        dropna : bool, default True
+            Don't consider counts of NA/NaN/NaT.
+
+        Returns
+        -------
+        DataFrame
+            The modes of each column or row.
+
+        See Also
+        --------
+        cudf.core.series.Series.mode : Return the highest frequency value
+            in a Series.
+        cudf.core.series.Series.value_counts : Return the counts of values
+            in a Series.
+
+        Notes
+        -----
+        ``axis`` parameter is currently not supported.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({
+        ...     "species": ["bird", "mammal", "arthropod", "bird"],
+        ...     "legs": [2, 4, 8, 2],
+        ...     "wings": [2.0, None, 0.0, None]
+        ... })
+        >>> df
+             species  legs wings
+        0       bird     2   2.0
+        1     mammal     4  <NA>
+        2  arthropod     8   0.0
+        3       bird     2  <NA>
+
+        By default, missing values are not considered, and the mode of wings
+        are both 0 and 2. The second row of species and legs contains ``NA``,
+        because they have only one mode, but the DataFrame has two rows.
+
+        >>> df.mode()
+          species  legs  wings
+        0    bird     2    0.0
+        1    <NA>  <NA>    2.0
+
+        Setting ``dropna=False``, ``NA`` values are considered and they can be
+        the mode (like for wings).
+
+        >>> df.mode(dropna=False)
+          species  legs wings
+        0    bird     2  <NA>
+
+        Setting ``numeric_only=True``, only the mode of numeric columns is
+        computed, and columns of other types are ignored.
+
+        >>> df.mode(numeric_only=True)
+           legs  wings
+        0     2    0.0
+        1  <NA>    2.0
+        """
+        if axis not in (0, "index"):
+            raise NotImplementedError("Only axis=0 is currently supported")
+
+        if numeric_only:
+            data_df = self.select_dtypes(
+                include=[np.number], exclude=["datetime64", "timedelta64"]
+            )
+        else:
+            data_df = self
+
+        mode_results = [
+            data_df[col].mode(dropna=dropna) for col in data_df._data
+        ]
+
+        if len(mode_results) == 0:
+            df = DataFrame(index=self.index)
+            return df
+
+        df = cudf.concat(mode_results, axis=1)
+        if isinstance(df, cudf.Series):
+            df = df.to_frame()
+
+        df.columns = data_df.columns
+
+        return df
 
     def std(
         self,
@@ -6689,7 +6777,17 @@ class DataFrame(Frame, Serializable):
 
             current_cols = self.columns
             combined_columns = other.index.to_pandas()
-            if not self.empty:
+            if len(current_cols):
+
+                if cudf.utils.dtypes.is_mixed_with_object_dtype(
+                    current_cols, combined_columns
+                ):
+                    raise TypeError(
+                        "cudf does not support mixed types, please type-cast "
+                        "the column index of dataframe and index of series "
+                        "to same dtypes."
+                    )
+
                 combined_columns = current_cols.union(
                     combined_columns, sort=False
                 )
@@ -6712,19 +6810,21 @@ class DataFrame(Frame, Serializable):
             to_concat = [self, *other]
         else:
             to_concat = [self, other]
-        to_concat = [
-            obj for obj in to_concat if isinstance(obj, Frame) and len(obj)
-        ]
-        if len(to_concat) == 0:
-            if ignore_index and len(self) != 0:
-                result = cudf.DataFrame(
-                    data=self._data.copy(), index=RangeIndex(len(self))
-                )
-            else:
-                result = self.copy()
-            return result
 
         return cudf.concat(to_concat, ignore_index=ignore_index, sort=sort)
+
+    @copy_docstring(reshape.pivot)
+    def pivot(self, index, columns, values=None):
+
+        return cudf.core.reshape.pivot(
+            self, index=index, columns=columns, values=values
+        )
+
+    @copy_docstring(reshape.unstack)
+    def unstack(self, level=-1, fill_value=None):
+        return cudf.core.reshape.unstack(
+            self, level=level, fill_value=fill_value
+        )
 
 
 def from_pandas(obj, nan_as_null=None):

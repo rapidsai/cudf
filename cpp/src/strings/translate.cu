@@ -73,7 +73,7 @@ struct translate_fn {
 std::unique_ptr<column> translate(
   strings_column_view const& strings,
   std::vector<std::pair<char_utf8, char_utf8>> const& chars_table,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   size_type strings_count = strings.size();

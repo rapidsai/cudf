@@ -15,8 +15,13 @@
  */
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/utilities/error.hpp>
 #include <nvtext/detail/load_hash_file.hpp>
+#include <text/subword/detail/codepoint_metadata.ah>
+#include <text/subword/detail/data_normalizer.hpp>
+#include <text/subword/detail/tokenizer_utils.cuh>
 
 #include <stdint.h>
 #include <algorithm>
@@ -26,6 +31,84 @@
 
 namespace nvtext {
 namespace detail {
+
+/**
+ * @brief Retrieve the code point metadata table.
+ *
+ * Build the code point metadata table in device memory
+ * using the vector pieces from codepoint_metadata.ah
+ */
+const codepoint_metadata_type* get_codepoint_metadata(cudaStream_t stream)
+{
+  static cudf::strings::detail::thread_safe_per_context_cache<codepoint_metadata_type>
+    g_codepoint_metadata;
+  return g_codepoint_metadata.find_or_initialize([stream](void) {
+    codepoint_metadata_type* table =
+      static_cast<codepoint_metadata_type*>(rmm::mr::get_current_device_resource()->allocate(
+        codepoint_metadata_size * sizeof(codepoint_metadata_type), stream));
+    thrust::fill(rmm::exec_policy(stream)->on(stream),
+                 table + cp_section1_end,
+                 table + codepoint_metadata_size,
+                 codepoint_metadata_default_value);
+    CUDA_TRY(cudaMemcpyAsync(table,
+                             codepoint_metadata,
+                             cp_section1_end * sizeof(codepoint_metadata[0]),  // 1st section
+                             cudaMemcpyHostToDevice,
+                             stream));
+    CUDA_TRY(cudaMemcpyAsync(
+      table + cp_section2_begin,
+      cp_metadata_917505_917999,
+      (cp_section2_end - cp_section2_begin + 1) * sizeof(codepoint_metadata[0]),  // 2nd section
+      cudaMemcpyHostToDevice,
+      stream));
+    return table;
+  });
+}
+
+/**
+ * @brief Retrieve the aux code point data table.
+ *
+ * Build the aux code point data table in device memory
+ * using the vector pieces from codepoint_metadata.ah
+ */
+const aux_codepoint_data_type* get_aux_codepoint_data(cudaStream_t stream)
+{
+  static cudf::strings::detail::thread_safe_per_context_cache<aux_codepoint_data_type>
+    g_aux_codepoint_data;
+  return g_aux_codepoint_data.find_or_initialize([stream](void) {
+    aux_codepoint_data_type* table =
+      static_cast<aux_codepoint_data_type*>(rmm::mr::get_current_device_resource()->allocate(
+        aux_codepoint_data_size * sizeof(aux_codepoint_data_type), stream));
+    thrust::fill(rmm::exec_policy(stream)->on(stream),
+                 table + aux_section1_end,
+                 table + aux_codepoint_data_size,
+                 aux_codepoint_default_value);
+    CUDA_TRY(cudaMemcpyAsync(table,
+                             aux_codepoint_data,
+                             aux_section1_end * sizeof(aux_codepoint_data[0]),  // 1st section
+                             cudaMemcpyHostToDevice,
+                             stream));
+    CUDA_TRY(cudaMemcpyAsync(
+      table + aux_section2_begin,
+      aux_cp_data_44032_55203,
+      (aux_section2_end - aux_section2_begin + 1) * sizeof(aux_codepoint_data[0]),  // 2nd section
+      cudaMemcpyHostToDevice,
+      stream));
+    CUDA_TRY(cudaMemcpyAsync(
+      table + aux_section3_begin,
+      aux_cp_data_70475_71099,
+      (aux_section3_end - aux_section3_begin + 1) * sizeof(aux_codepoint_data[0]),  // 3rd section
+      cudaMemcpyHostToDevice,
+      stream));
+    CUDA_TRY(cudaMemcpyAsync(
+      table + aux_section4_begin,
+      aux_cp_data_119134_119232,
+      (aux_section4_end - aux_section4_begin + 1) * sizeof(aux_codepoint_data[0]),  // 4th section
+      cudaMemcpyHostToDevice,
+      stream));
+    return table;
+  });
+}
 
 /**
  * @brief Loads a text file representing the hashed vocabulary into hashed_vocabulary struct.
@@ -135,6 +218,11 @@ hashed_vocabulary load_vocabulary_file(std::string const& filename_hashed_vocabu
                            cudaMemcpyHostToDevice,
                            stream));
 
+  // this just initializes some constant tables into device memory
+  // to help speed up the runtime
+  detail::get_codepoint_metadata(stream);
+  detail::get_aux_codepoint_data(stream);
+
   return result;
 }
 
@@ -143,6 +231,7 @@ hashed_vocabulary load_vocabulary_file(std::string const& filename_hashed_vocabu
 hashed_vocabulary load_vocabulary_file(std::string const& filename_hashed_vocabulary,
                                        rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::load_vocabulary_file(filename_hashed_vocabulary, 0, mr);
 }
 

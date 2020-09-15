@@ -262,13 +262,18 @@ struct SliceCornerCases : public SliceTest<int8_t> {
 TEST_F(SliceCornerCases, EmptyColumn)
 {
   cudf::column col{};
-  std::vector<cudf::size_type> indices{1, 3, 2, 4, 5, 9};
+  std::vector<cudf::size_type> indices{0, 0, 0, 0, 0, 0};
 
   std::vector<cudf::column_view> result = cudf::slice(col.view(), indices);
 
-  unsigned long expected = 0;
+  unsigned long expected = 3;
 
   EXPECT_EQ(expected, result.size());
+
+  auto type_match_count = std::count_if(result.cbegin(), result.cend(), [](auto const& col) {
+    return col.type().id() == cudf::type_id::EMPTY;
+  });
+  EXPECT_EQ(type_match_count, expected);
 }
 
 TEST_F(SliceCornerCases, EmptyIndices)
@@ -402,7 +407,7 @@ TEST_F(SliceTableCornerCases, EmptyTable)
   cudf::table src_table{};
   std::vector<cudf::table_view> result = cudf::slice(src_table.view(), indices);
 
-  unsigned long expected = 0;
+  unsigned long expected = 3;
 
   EXPECT_EQ(expected, result.size());
 }

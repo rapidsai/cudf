@@ -7,6 +7,7 @@ import re
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 
 import cudf
@@ -25,6 +26,7 @@ from cudf.tests.utils import (
     OTHER_TYPES,
     SIGNED_INTEGER_TYPES,
     UNSIGNED_TYPES,
+    SIGNED_TYPES,
     assert_eq,
 )
 
@@ -273,21 +275,155 @@ def test_set_index_as_property():
     assert_eq(head.index, idx[:5])
 
 
+@pytest.mark.parametrize("name", ["x"])
+@pytest.mark.parametrize("dtype", SIGNED_INTEGER_TYPES)
+def test_index_copy_range(name, dtype, deep=True):
+    idx = cudf.core.index.RangeIndex(1, 5)
+    idx_copy = idx.copy(name=name, deep=deep, dtype=dtype)
+
+    idx.name = name
+    assert_eq(idx, idx_copy)
+
+
+@pytest.mark.parametrize("name", ["x"])
+@pytest.mark.parametrize("dtype,", ["datetime64[ns]", "int64"])
+def test_index_copy_datetime(name, dtype, deep=True):
+    cidx = cudf.DatetimeIndex(["2001", "2002", "2003"])
+    pidx = cidx.to_pandas()
+
+    pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
+    cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
+
+    # By default, cudf.DatetimeIndex uses [ms] as base unit, pandas uses [ns]
+    if dtype == "int64":
+        cidx_copy = cidx_copy * 1000000
+    assert_eq(pidx_copy, cidx_copy)
+
+
+@pytest.mark.parametrize("name", ["x"])
+@pytest.mark.parametrize("dtype", ["category", "object"])
+def test_index_copy_string(name, dtype, deep=True):
+    cidx = cudf.core.index.StringIndex(["a", "b", "c"])
+    pidx = cidx.to_pandas()
+
+    pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
+    cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
+
+    assert_eq(pidx_copy, cidx_copy)
+
+
+@pytest.mark.parametrize("name", ["x"])
+@pytest.mark.parametrize(
+    "dtype",
+    NUMERIC_TYPES + ["datetime64[ns]", "timedelta64[ns]"] + OTHER_TYPES,
+)
+def test_index_copy_integer(name, dtype, deep=True):
+    """Test for NumericIndex Copy Casts
+    """
+    cidx = cudf.Int64Index([1, 2, 3])
+    pidx = cidx.to_pandas()
+
+    pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
+    cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
+
+    assert_eq(pidx_copy, cidx_copy)
+
+
+@pytest.mark.parametrize("name", ["x"])
+@pytest.mark.parametrize("dtype", SIGNED_TYPES)
+def test_index_copy_float(name, dtype, deep=True):
+    """Test for NumericIndex Copy Casts
+    """
+    cidx = cudf.Float64Index([1.0, 2.0, 3.0])
+    pidx = cidx.to_pandas()
+
+    pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
+    cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
+
+    assert_eq(pidx_copy, cidx_copy)
+
+
+@pytest.mark.parametrize("name", ["x"])
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["category"])
+def test_index_copy_category(name, dtype, deep=True):
+    cidx = cudf.core.index.CategoricalIndex([1, 2, 3])
+    pidx = cidx.to_pandas()
+
+    pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
+    cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
+
+    assert_eq(pidx_copy, cidx_copy)
+
+
+@pytest.mark.parametrize("deep", [True, False])
 @pytest.mark.parametrize(
     "idx",
     [
-        cudf.core.index.RangeIndex(1, 5),
-        cudf.core.index.DatetimeIndex(["2001", "2003", "2003"]),
+        cudf.DatetimeIndex(["2001", "2002", "2003"]),
         cudf.core.index.StringIndex(["a", "b", "c"]),
-        cudf.core.index.Int64Index([1, 2, 3]),
-        cudf.core.index.CategoricalIndex(["a", "b", "c"]),
+        cudf.Int64Index([1, 2, 3]),
+        cudf.Float64Index([1.0, 2.0, 3.0]),
+        cudf.CategoricalIndex([1, 2, 3]),
+        cudf.CategoricalIndex(["a", "b", "c"]),
     ],
 )
-@pytest.mark.parametrize("deep", [True, False])
-def test_index_copy(idx, deep):
+def test_index_copy_deep(idx, deep):
+    """Test if deep copy creates a new instance for device data.
+    The general criterion is to compare `Buffer.ptr` between two data objects.
+    Specifically for:
+        - CategoricalIndex, this applies to both `.codes` and `.categories`
+        - StringIndex, to every element in `._base_children`
+        - Others, to `.base_data`
+    No test is defined for RangeIndex.
+    """
     idx_copy = idx.copy(deep=deep)
-    assert_eq(idx, idx_copy)
-    assert type(idx) == type(idx_copy)
+    same_ref = not deep
+    if isinstance(idx, cudf.CategoricalIndex):
+        assert (
+            idx._values.codes.base_data.ptr
+            == idx_copy._values.codes.base_data.ptr
+        ) == same_ref
+        if isinstance(
+            idx._values.categories, cudf.core.column.string.StringColumn
+        ):
+            children = idx._values.categories._base_children
+            copy_children = idx_copy._values.categories._base_children
+            assert all(
+                [
+                    (
+                        children[i].base_data.ptr
+                        == copy_children[i].base_data.ptr
+                    )
+                    == same_ref
+                    for i in range(len(children))
+                ]
+            )
+        elif isinstance(
+            idx._values.categories, cudf.core.column.numerical.NumericalColumn
+        ):
+            assert (
+                idx._values.categories.base_data.ptr
+                == idx_copy._values.categories.base_data.ptr
+            ) == same_ref
+    elif isinstance(idx, cudf.core.index.StringIndex):
+        children = idx._values._base_children
+        copy_children = idx_copy._values._base_children
+        assert all(
+            [
+                (
+                    (
+                        children[i].base_data.ptr
+                        == copy_children[i].base_data.ptr
+                    )
+                    == same_ref
+                )
+                for i in range(len(children))
+            ]
+        )
+    else:
+        assert (
+            idx._values.base_data.ptr == idx_copy._values.base_data.ptr
+        ) == same_ref
 
 
 @pytest.mark.parametrize("idx", [[1, None, 3, None, 5]])
@@ -1417,3 +1553,78 @@ def test_index_fillna(data, fill_value):
     gdi = cudf.Index(data)
 
     assert_eq(pdi.fillna(fill_value), gdi.fillna(fill_value))
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3, 1, None, None],
+        [None, None, 3.2, 1, None, None],
+        [None, "a", "3.2", "z", None, None],
+        pd.Series(["a", "b", None], dtype="category"),
+        np.array([1, 2, 3, None], dtype="datetime64[s]"),
+    ],
+)
+def test_index_to_arrow(data):
+    pdi = pd.Index(data)
+    gdi = cudf.Index(data)
+
+    expected_arrow_array = pa.Array.from_pandas(pdi)
+    got_arrow_array = gdi.to_arrow()
+
+    assert_eq(expected_arrow_array, got_arrow_array)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [None, None, 3.2, 1, None, None],
+        [None, "a", "3.2", "z", None, None],
+        pd.Series(["a", "b", None], dtype="category"),
+        np.array([1, 2, 3, None], dtype="datetime64[s]"),
+    ],
+)
+def test_index_from_arrow(data):
+    pdi = pd.Index(data)
+
+    arrow_array = pa.Array.from_pandas(pdi)
+    expected_index = pd.Index(arrow_array.to_pandas())
+    gdi = cudf.Index.from_arrow(arrow_array)
+
+    assert_eq(expected_index, gdi)
+
+
+def test_multiindex_to_arrow():
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 2, 1, 2, 3],
+            "b": [1.0, 2.0, 3.0, 4.0, 5.0],
+            "c": np.array([1, 2, 3, None, 5], dtype="datetime64[s]"),
+            "d": ["a", "b", "c", "d", "e"],
+        }
+    )
+    pdf["a"] = pdf["a"].astype("category")
+    df = cudf.from_pandas(pdf)
+    gdi = cudf.Index(df)
+
+    expected = pa.Table.from_pandas(pdf)
+    got = gdi.to_arrow()
+
+    assert_eq(expected, got)
+
+
+def test_multiindex_from_arrow():
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 2, 1, 2, 3],
+            "b": [1.0, 2.0, 3.0, 4.0, 5.0],
+            "c": np.array([1, 2, 3, None, 5], dtype="datetime64[s]"),
+            "d": ["a", "b", "c", "d", "e"],
+        }
+    )
+    pdf["a"] = pdf["a"].astype("category")
+    ptb = pa.Table.from_pandas(pdf)
+    gdi = cudf.MultiIndex.from_arrow(ptb)
+    pdi = pd.MultiIndex.from_frame(pdf)
+
+    assert_eq(pdi, gdi)

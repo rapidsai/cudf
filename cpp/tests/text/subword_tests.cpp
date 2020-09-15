@@ -28,8 +28,6 @@
 #include <iostream>
 #include <vector>
 
-#define MAX_NUM_SENTENCES 101
-#define MAX_NUM_CHARS 150000
 #define MAX_ROWS_TENSOR 300
 
 // Global environment for temporary files
@@ -62,7 +60,7 @@ void create_hashed_vocab(std::string const& hash_file)
 
 TEST(TextSubwordTest, Tokenize)
 {
-  uint32_t nrows = MAX_NUM_SENTENCES - 1;
+  uint32_t nrows = 100;
   std::vector<const char*> h_strings(nrows, "This is a test. A test this is.");
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
   std::string hash_file = temp_env->get_temp_filepath("hashed_vocab.txt");
@@ -77,8 +75,6 @@ TEST(TextSubwordTest, Tokenize)
                                          stride,
                                          true,   // do_lower_case
                                          false,  // do_truncate
-                                         MAX_NUM_SENTENCES,
-                                         MAX_NUM_CHARS,
                                          MAX_ROWS_TENSOR);
 
   EXPECT_EQ(nrows, result.nrows_tensor);
@@ -131,8 +127,6 @@ TEST(TextSubwordTest, TokenizeMultiRow)
                                          stride,
                                          true,   // do_lower_case
                                          false,  // do_truncate
-                                         MAX_NUM_SENTENCES,
-                                         MAX_NUM_CHARS,
                                          MAX_ROWS_TENSOR);
 
   EXPECT_EQ(3, result.nrows_tensor);
@@ -159,8 +153,6 @@ TEST(TextSubwordTest, ParameterErrors)
                                         13,    // stride <= max_sequence_length
                                         true,  // do_lower_case
                                         true,  // do_truncate
-                                        MAX_NUM_SENTENCES,
-                                        MAX_NUM_CHARS,
                                         MAX_ROWS_TENSOR),
                cudf::logic_error);
 
@@ -170,15 +162,13 @@ TEST(TextSubwordTest, ParameterErrors)
                                         5,
                                         true,  // do_lower_case
                                         true,  // do_truncate
-                                        MAX_NUM_SENTENCES,
-                                        MAX_NUM_CHARS,
                                         858993459),
                cudf::logic_error);
 }
 
 TEST(TextSubwordTest, EmptyStrings)
 {
-  cudf::test::strings_column_wrapper strings({});
+  cudf::test::strings_column_wrapper strings;
   std::string hash_file = temp_env->get_temp_filepath("hashed_vocab.txt");
   create_hashed_vocab(hash_file);
   auto result = nvtext::subword_tokenize(cudf::strings_column_view{strings},
@@ -187,8 +177,6 @@ TEST(TextSubwordTest, EmptyStrings)
                                          16,
                                          true,   // do_lower_case
                                          false,  // do_truncate
-                                         MAX_NUM_SENTENCES,
-                                         MAX_NUM_CHARS,
                                          MAX_ROWS_TENSOR);
   EXPECT_EQ(0, result.nrows_tensor);
   EXPECT_EQ(0, result.tensor_token_ids->size());
@@ -207,8 +195,6 @@ TEST(TextSubwordTest, AllNullStrings)
                                          16,
                                          true,   // do_lower_case
                                          false,  // do_truncate
-                                         MAX_NUM_SENTENCES,
-                                         MAX_NUM_CHARS,
                                          MAX_ROWS_TENSOR);
   EXPECT_EQ(0, result.nrows_tensor);
   EXPECT_EQ(0, result.tensor_token_ids->size());
@@ -230,8 +216,6 @@ TEST(TextSubwordTest, TokenizeFromVocabStruct)
                                          6,
                                          true,  // do_lower_case
                                          true,  // do_truncate
-                                         MAX_NUM_SENTENCES,
-                                         MAX_NUM_CHARS,
                                          MAX_ROWS_TENSOR);
 
   EXPECT_EQ(2, result.nrows_tensor);

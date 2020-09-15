@@ -1,15 +1,10 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
+import itertools
+
 import numpy as np
 import pandas as pd
 
 import cudf
-from cudf.core import DataFrame, Index, Series
-from cudf.core.column import (
-    CategoricalColumn,
-    as_column,
-    build_categorical_column,
-)
-from cudf.utils.dtypes import is_categorical_dtype, is_list_like
 
 _axis_map = {0: 0, 1: 1, "index": 0, "columns": 1}
 
@@ -55,7 +50,7 @@ def _align_objs(objs, how="outer"):
 def _normalize_series_and_dataframe(objs, axis):
     sr_name = 0
     for idx, o in enumerate(objs):
-        if isinstance(o, Series):
+        if isinstance(o, cudf.Series):
             if axis == 1:
                 name = o.name
                 if name is None:
@@ -196,16 +191,16 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     for o in objs:
         if isinstance(o, cudf.MultiIndex):
             typs.add(cudf.MultiIndex)
-        if issubclass(type(o), Index):
+        if issubclass(type(o), cudf.Index):
             typs.add(type(o))
-        elif isinstance(o, DataFrame):
-            typs.add(DataFrame)
-        elif isinstance(o, Series):
-            typs.add(Series)
+        elif isinstance(o, cudf.DataFrame):
+            typs.add(cudf.DataFrame)
+        elif isinstance(o, cudf.Series):
+            typs.add(cudf.Series)
         else:
             raise ValueError(f"cannot concatenate object of type {type(o)}")
 
-    allowed_typs = {Series, DataFrame}
+    allowed_typs = {cudf.Series, cudf.DataFrame}
 
     param_axis = _axis_map.get(axis, None)
     if param_axis is None:
@@ -221,7 +216,7 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     if axis == 1:
 
         assert typs.issubset(allowed_typs)
-        df = DataFrame()
+        df = cudf.DataFrame()
         _normalize_series_and_dataframe(objs, axis=axis)
 
         objs, match_index = _align_objs(objs)
@@ -260,14 +255,14 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
             # This block of code will run when `objs` has
             # both Series & DataFrame kind of inputs.
             _normalize_series_and_dataframe(objs, axis=axis)
-            typ = DataFrame
+            typ = cudf.DataFrame
         else:
             raise ValueError(
                 "`concat` cannot concatenate objects of "
                 "types: %r." % sorted([t.__name__ for t in typs])
             )
 
-    if typ is DataFrame:
+    if typ is cudf.DataFrame:
         objs = [obj for obj in objs if obj.shape != (0, 0)]
         if len(objs) == 0:
             # If objs is empty, that indicates all of
@@ -283,17 +278,17 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
                 result = objs[0].copy()
             return result
         else:
-            return DataFrame._concat(
+            return cudf.DataFrame._concat(
                 objs, axis=axis, ignore_index=ignore_index, sort=sort
             )
-    elif typ is Series:
-        return Series._concat(
+    elif typ is cudf.Series:
+        return cudf.Series._concat(
             objs, axis=axis, index=None if ignore_index else True
         )
     elif typ is cudf.MultiIndex:
         return cudf.MultiIndex._concat(objs)
-    elif issubclass(typ, Index):
-        return Index._concat(objs)
+    elif issubclass(typ, cudf.Index):
+        return cudf.Index._concat(objs)
     else:
         raise ValueError(f"cannot concatenate object of type {typ}")
 
@@ -406,7 +401,7 @@ def melt(
 
     # Error for unimplemented support for datatype
     dtypes = [frame[col].dtype for col in id_vars + value_vars]
-    if any(is_categorical_dtype(t) for t in dtypes):
+    if any(cudf.utils.dtypes.is_categorical_dtype(t) for t in dtypes):
         raise NotImplementedError(
             "Categorical columns are not yet " "supported for function"
         )
@@ -435,9 +430,9 @@ def melt(
     def _tile(A, reps):
         series_list = [A] * reps
         if reps > 0:
-            return Series._concat(objs=series_list, index=None)
+            return cudf.Series._concat(objs=series_list, index=None)
         else:
-            return Series([], dtype=A.dtype)
+            return cudf.Series([], dtype=A.dtype)
 
     # Step 1: tile id_vars
     mdata = collections.OrderedDict()
@@ -447,16 +442,20 @@ def melt(
     # Step 2: add variable
     var_cols = []
     for i, var in enumerate(value_vars):
-        var_cols.append(Series(cudf.core.column.full(N, i, dtype=np.int8)))
-    temp = Series._concat(objs=var_cols, index=None)
+        var_cols.append(
+            cudf.Series(cudf.core.column.full(N, i, dtype=np.int8))
+        )
+    temp = cudf.Series._concat(objs=var_cols, index=None)
 
     if not var_name:
         var_name = "variable"
 
-    mdata[var_name] = Series(
-        build_categorical_column(
+    mdata[var_name] = cudf.Series(
+        cudf.core.column.build_categorical_column(
             categories=value_vars,
-            codes=as_column(temp._column.base_data, dtype=temp._column.dtype),
+            codes=cudf.core.column.as_column(
+                temp._column.base_data, dtype=temp._column.dtype
+            ),
             mask=temp._column.base_mask,
             size=temp._column.size,
             offset=temp._column.offset,
@@ -465,11 +464,11 @@ def melt(
     )
 
     # Step 3: add values
-    mdata[value_name] = Series._concat(
+    mdata[value_name] = cudf.Series._concat(
         objs=[frame[val] for val in value_vars], index=None
     )
 
-    return DataFrame(mdata)
+    return cudf.DataFrame(mdata)
 
 
 def get_dummies(
@@ -564,7 +563,7 @@ def get_dummies(
             "length of the columns being encoded ({len_required})."
         )
 
-        if is_list_like(obj):
+        if cudf.utils.dtypes.is_list_like(obj):
             if len(obj) != len(columns):
                 err_msg = err_msg.format(
                     name=name, len_obj=len(obj), len_required=len(columns)
@@ -597,7 +596,9 @@ def get_dummies(
     else:
         result_df = df.drop(labels=columns)
         for name in columns:
-            if isinstance(df[name]._column, CategoricalColumn):
+            if isinstance(
+                df[name]._column, cudf.core.column.CategoricalColumn
+            ):
                 unique = df[name]._column.categories
             else:
                 unique = df[name].unique()
@@ -680,4 +681,220 @@ def merge_sorted(
         )
     )
     result._copy_categories(objs[0])
+    return result
+
+
+def _pivot(df, index, columns):
+    """
+    Reorganize the values of the DataFrame according to the given
+    index and columns.
+
+    Parameters
+    ----------
+    df : DataFrame
+    index : cudf.core.index.Index
+        Index labels of the result
+    columns : cudf.core.index.Index
+        Column labels of the result
+    """
+    columns_labels, columns_idx = columns._encode()
+    index_labels, index_idx = index._encode()
+    column_labels = columns_labels.to_pandas().to_flat_index()
+
+    # the result of pivot always has a multicolumn
+    result = cudf.core.column_accessor.ColumnAccessor(
+        multiindex=True, level_names=(None,) + columns._data.names
+    )
+
+    def as_tuple(x):
+        return x if isinstance(x, tuple) else (x,)
+
+    for v in df:
+        names = [as_tuple(v) + as_tuple(name) for name in column_labels]
+        col = df._data[v]
+        result.update(
+            cudf.DataFrame._from_table(
+                col.scatter_to_table(
+                    index_idx,
+                    columns_idx,
+                    names,
+                    nrows=len(index_labels),
+                    ncols=len(names),
+                )
+            )._data
+        )
+
+    return cudf.DataFrame(
+        result, index=cudf.Index(index_labels, name=index.name)
+    )
+
+
+def pivot(data, index=None, columns=None, values=None):
+    """
+    Return reshaped DataFrame organized by the given index and column values.
+
+    Reshape data (produce a "pivot" table) based on column values. Uses
+    unique values from specified `index` / `columns` to form axes of the
+    resulting DataFrame.
+
+    Parameters
+    ----------
+    index : column name, optional
+        Column used to construct the index of the result.
+    columns : column name, optional
+        Column used to construct the columns of the result.
+    values : column name or list of column names, optional
+        Column(s) whose values are rearranged to produce the result.
+        If not specified, all remaining columns of the DataFrame
+        are used.
+
+    Returns
+    -------
+    DataFrame
+
+    Examples
+    --------
+    >>> a = cudf.DataFrame()
+    >>> a['a'] = [1, 1, 2, 2],
+    >>> a['b'] = ['a', 'b', 'a', 'b']
+    >>> a['c'] = [1, 2, 3, 4]
+    >>> a.pivot(index='a', columns='b')
+       c
+    b  a  b
+    a
+    1  1  2
+    2  3  4
+
+    Pivot with missing values in result:
+
+    >>> a = cudf.DataFrame()
+    >>> a['a'] = [1, 1, 2]
+    >>> a['b'] = [1, 2, 3]
+    >>> a['c'] = ['one', 'two', 'three']
+    >>> a.pivot(index='a', columns='b')
+              c
+        b     1     2      3
+        a
+        1   one   two   <NA>
+        2  <NA>  <NA>  three
+
+    """
+    df = data
+    if values is None:
+        values = df._columns_view(
+            col for col in df._column_names if col not in (index, columns)
+        )
+    else:
+        values = df._columns_view(values)
+    if index is None:
+        index = df.index
+    else:
+        index = cudf.core.index.Index(df.loc[:, index])
+    columns = cudf.Index(df.loc[:, columns])
+
+    # Create a DataFrame composed of columns from both
+    # columns and index
+    columns_index = {}
+    columns_index = {
+        i: col
+        for i, col in enumerate(
+            itertools.chain(index._data.columns, columns._data.columns)
+        )
+    }
+    columns_index = cudf.DataFrame(columns_index)
+
+    # Check that each row is unique:
+    if len(columns_index) != len(columns_index.drop_duplicates()):
+        raise ValueError("Duplicate index-column pairs found. Cannot reshape.")
+
+    return _pivot(values, index, columns)
+
+
+def unstack(df, level, fill_value=None):
+    """
+    Pivot one or more levels of the (necessarily hierarchical) index labels.
+
+    Pivots the specified levels of the index labels of df to the innermost
+    levels of the columns labels of the result.
+
+    Parameters
+    ----------
+    df : DataFrame
+    level : level name or index, list-like
+        Integer, name or list of such, specifying one or more
+        levels of the index to pivot
+    fill_value
+        Non-functional argument provided for compatibility with Pandas.
+
+    Returns
+    -------
+    DataFrame with specified index levels pivoted to column levels
+
+    Examples
+    --------
+    >>> df['a'] = [1, 1, 1, 2, 2]
+    >>> df['b'] = [1, 2, 3, 1, 2]
+    >>> df['c'] = [5, 6, 7, 8, 9]
+    >>> df['d'] = ['a', 'b', 'a', 'd', 'e']
+    >>> df = df.set_index(['a', 'b', 'd'])
+    >>> df
+           c
+    a b d
+    1 1 a  5
+      2 b  6
+      3 a  7
+    2 1 d  8
+      2 e  9
+
+    Unstacking level 'a':
+
+    >>> df.unstack('a')
+            c
+    a       1     2
+    b d
+    1 a     5  <NA>
+      d  <NA>     8
+    2 b     6  <NA>
+      e  <NA>     9
+    3 a     7  <NA>
+
+    Unstacking level 'd' :
+
+    >>> df.unstack('d')
+            c
+    d       a     b     d     e
+    a b
+    1 1     5  <NA>  <NA>  <NA>
+      2  <NA>     6  <NA>  <NA>
+      3     7  <NA>  <NA>  <NA>
+    2 1  <NA>  <NA>     8  <NA>
+      2  <NA>  <NA>  <NA>     9
+
+    Unstacking multiple levels:
+
+    >>> df.unstack(['b', 'd'])
+          c
+    b     1           2           3
+    d     a     d     b     e     a
+    a
+    1     5  <NA>     6  <NA>     7
+    2  <NA>     8  <NA>     9  <NA>
+    """
+    if fill_value is not None:
+        raise NotImplementedError("fill_value is not supported.")
+    if pd.api.types.is_list_like(level):
+        if not level:
+            return df
+    df = df.copy(deep=False)
+    if not isinstance(df.index, cudf.MultiIndex):
+        raise NotImplementedError(
+            "Calling unstack() on a DataFrame without a MultiIndex "
+            "is not supported"
+        )
+    else:
+        columns = df.index._poplevels(level)
+        index = df.index
+    result = _pivot(df, index, columns)
+    if result.index.nlevels == 1:
+        result.index = result.index.get_level_values(result.index.names[0])
     return result

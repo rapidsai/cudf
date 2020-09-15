@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
@@ -217,8 +218,8 @@ using StringTypes = cudf::test::Types<string_view>;
  *
  * Example:
  * ```
- * // Invokes all typed fixture tests for all string types in libcudf
- * TYPED_TEST_CASE(MyTypedFixture, cudf::test::StringTypes);
+ * // Invokes all typed fixture tests for all list types in libcudf
+ * TYPED_TEST_CASE(MyTypedFixture, cudf::test::ListTypes);
  * ```
  */
 using ListTypes = cudf::test::Types<list_view>;

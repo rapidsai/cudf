@@ -70,7 +70,7 @@ struct extract_fn {
 std::unique_ptr<table> extract(
   strings_column_view const& strings,
   std::string const& pattern,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   auto strings_count  = strings.size();

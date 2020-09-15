@@ -2,22 +2,81 @@
 
 ## New Features
 
+- PR #5779 Add DataFrame.pivot() and DataFrame.unstack()
+- PR #5975 Add strings `filter_characters` API
+- PR #5843 Add `filters` parameter to Python `read_parquet` function for filtering row groups
 - PR #5974 Use libcudf instead of cupy for `arange` or column creation from a scalar.
 - PR #5494 Add Abstract Syntax Tree (AST) evaluator.
+- PR #5874 Add `COLLECT` groupby aggregation
+- PR #6119 Add support for `dayofweek` property in `DateTimeIndex` and `DatetimeProperties`
+- PR #6125 Add support for `Series.mode` and `DataFrame.mode`
 
 ## Improvements
 
+- PR #5946 Add cython and python support for libcudf `to_arrow` and `from_arrow`
+- PR #5919 Remove max_strings and max_chars from nvtext::subword_tokenize
 - PR #5956 Add/Update tests for cuStreamz
 - PR #5953 Use stable sort when doing a sort groupby
 - PR #5973 Link to the Code of Conduct in CONTRIBUTING.md
 - PR #5917 Just use `None` for `strides` in `Buffer`
+- PR #6015 Upgrade CUB/Thrust to the latest commit
 - PR #5971 Add cuStreamz README for basic installation and use
+- PR #6024 Expose selecting multiple ORC stripes to read from Python
+- PR #6155 Use the CUB submodule in Thrust instead of fetching CUB separately
 - PR #6002 Add Java bindings for md5
+- PR #6051 Add builder API for cuIO `parquet_writer_options` and `parquet_reader_options`
+- PR #6067 Added compute codes for aarch64 devices
+- PR #6083 Small cleanup
+- PR #6092 Add `name` and `dtype` field to `Index.copy`
+- PR #5984 Support gather() on CUDF struct columns
+- PR #6103 Small refactor of `print_differences`
+- PR #6124 Fix gcc-9 compilation errors on tests
+- PR #6141 Fix typo in custreamz README that was a result of recent changes
+- PR #6162 Reduce output parameters in cuio csv and json reader internals
+- PR #6146 Added element/validity pair constructors for fixed_width and string wrappers
+- PR #6143 General improvements for java arrow IPC.
+- PR #6152 Change dictionary indices to uint32
+- PR #6099 Add fluent builder apis to `json_reader_options` and `avro_reader_options`
+- PR #6163 Use `Column.full` instead of `scalar_broadcast_to` or `cupy.zeros`
+- PR #6176 Fix cmake warnings for GoogleTest, GoogleBenchmark, and Arrow external projects
+- PR #6149 Update to Arrow v1.0.1
+- PR #6189 Avoid deprecated pyarrow.compat for parquet
+- PR #6184 Add cuda 11 dev environment.yml
+- PR #6186 Update JNI to look for cub in new location
+- PR #6194 Remove unnecessary memory-resource parameter in `cudf::contains` API
+- PR #6195 Update JNI to use parquet options builder
+- PR #6190 Avoid reading full csv files for metadata in dask_cudf
+- PR #6197 Remove librmm dependency for libcudf
+- PR #6214 Small clean up to use more algorithms
+- PR #6209 Remove CXX11 ABI handling from CMake
+- PR #6223 Remove CXX11 ABI flag from JNI build
 
 ## Bug Fixes
 
+- PR #6073 Fix issue related to `.loc` incase of `DatetimeIndex`
+- PR #6081 Fix issue where fsspec thinks it has a protocol string
+- PR #6100 Fix issue in `Series.factorize` to correctly pick `na_sentinel` value
+- PR #6106 Fix datetime limit in csv due to 32-bit arithmetic
+- PR #6113 Fix to_timestamp to initialize default year to 1970
+- PR #6110 Handle `format` for other input types in `to_datetime`
+- PR #6118 Fix Java build for ORC read args change and update package version
+- PR #6121 Replace calls to get_default_resource with get_current_device_resource
+- PR #6128 Add support for numpy RandomState handling in `sample`
+- PR #6137 Fix issue where `np.nan` is being return instead of `NAT` for datetime/duration types
+- PR #6172 Fix slice issue with empty column
+- PR #6154 Warnings on row-wise op only when non-numeric columns are found.
+- PR #6150 Fix issue related to inferring `datetime64` format with UTC timezone in string data
+- PR #6179 `make_elements` copies to `iterator` without adjusting `size`
+- PR #6182 Fix cmake build of arrow
+- PR #6173 Fix normalize_characters offset logic on sliced strings column
+- PR #6159 Fix issue related to empty `Dataframe` with columns input to `DataFrame.appened`
+- PR #6199 Fix index preservation for dask_cudf parquet
+- PR #6207 Remove shared libs from Java sources jar
+- PR #6212 Update codeowners file
+- PR #6226 Add in some JNI checks for null handles
 
-# cuDF 0.15.0 (Date TBD)
+
+# cuDF 0.15.0 (26 Aug 2020)
 
 ## New Features
 
@@ -30,6 +89,7 @@
 - PR #5327 Add `cudf::cross_join` feature
 - PR #5204 Concatenate strings columns using row separator as strings column
 - PR #5342 Add support for `StringMethods.__getitem__`
+- PR #5358 Add zero-copy `column_view` cast for compatible types
 - PR #3504 Add External Kafka Datasource
 - PR #5356 Use `size_type` instead of `scalar` in `cudf::repeat`.
 - PR #5397 Add internal implementation of nested loop equijoins.
@@ -177,12 +237,12 @@
 - PR #5602 Add support for concatenation of `Series` & `DataFrame` in `cudf.concat` when `axis=0`
 - PR #5603 Refactor JIT `parser.cpp`
 - PR #5643 Update `isort` to 5.0.4
-- PR #5648 OO interface for hash join with explicit `build/probe` semantic 
+- PR #5648 OO interface for hash join with explicit `build/probe` semantic
 - PR #5662 Make Java ColumnVector(long nativePointer) constructor public
 - PR #5681 Pin black, flake8 and isort
 - PR #5679 Use `pickle5` to test older Python versions
 - PR #5684 Use `pickle5` in `Serializable` (when available)
-- PR #5419 Support rolling, groupby_rolling for durations 
+- PR #5419 Support rolling, groupby_rolling for durations
 - PR #5687 Change strings::split_record to return a lists column
 - PR #5708 Add support for `dummy_na` in `get_dummies`
 - PR #5709 Update java build to help cu-spacial with java bindings
@@ -231,6 +291,7 @@
 - PR #5970 Map data to pandas through arrow, always
 - PR #6012 Remove `cudf._cuda` and replace usages with `rmm._cuda`
 - PR #6045 Parametrize parquet_reader_list tests
+- PR #6053 Import traits.hpp for cudftestutils consumers
 
 ## Bug Fixes
 
@@ -343,6 +404,8 @@
 - PR #6003 Fix concurrent JSON reads crash
 - PR #6032 Change black version to 19.10b0 in .pre-commit-config.yaml
 - PR #6041 Fix Java memory resource handler to rethrow original exception object
+- PR #6057 Fix issue in parquet reader with reading columns out of file-order
+- PR #6098 Patch Thrust to workaround CUDA_CUB_RET_IF_FAIL macro clearing CUDA errors
 
 
 # cuDF 0.14.0 (03 Jun 2020)

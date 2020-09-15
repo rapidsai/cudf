@@ -174,8 +174,7 @@ $ cd build                                                                # ente
 
 # CMake options:
 # -DCMAKE_INSTALL_PREFIX set to the install path for your libraries or $CONDA_PREFIX if you're using Anaconda, i.e. -DCMAKE_INSTALL_PREFIX=/install/path or -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX
-# -DCMAKE_CXX11_ABI set to ON or OFF depending on the ABI version you want, defaults to ON. When turned ON, ABI compability for C++11 is used. When OFF, pre-C++11 ABI compability is used.
-$ cmake .. -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DCMAKE_CXX11_ABI=ON      # configure cmake ...
+$ cmake .. -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX                           # configure cmake ...
 $ make -j                                                                 # compile the libraries librmm.so, libcudf.so ... '-j' will start a parallel job using the number of physical cores available on your system
 $ make install                                                            # install the libraries librmm.so, libcudf.so to the CMAKE_INSTALL_PREFIX
 ```
@@ -235,9 +234,6 @@ $ PARALLEL_LEVEL=4 ./build.sh libcudf  # compile and install libcudf limiting pa
 $ ./build.sh libcudf -n                # compile libcudf but do not install
 ```
 
-- The `build.sh` script can be customized to support other features:
-  - **ABI version:** The cmake `-DCMAKE_CXX11_ABI` option can be set to ON or OFF depending on the ABI version you want, defaults to ON. When turned ON, ABI compability for C++11 is used. When OFF, pre-C++11 ABI compability is used.
-
 Done! You are ready to develop for the cuDF OSS project.
 
 ## Debugging cuDF
@@ -280,7 +276,7 @@ For detailed information on usage of this script, see [here](ci/local/README.md)
 
 ## Automated Build in Docker Container
 
-A Dockerfile is provided with a preconfigured conda environment for building and installing cuDF from source based off of the master branch.
+A Dockerfile is provided with a preconfigured conda environment for building and installing cuDF from source based off of the main branch.
 
 ### Prerequisites
 
@@ -317,11 +313,11 @@ flag. Below is a list of the available arguments and their purpose:
 | `LINUX_VERSION` | ubuntu16.04 | ubuntu18.04 | set Ubuntu version |
 | `CC` & `CXX` | 5 | 7 | set gcc/g++ version; **NOTE:** gcc7 requires Ubuntu 18.04 |
 | `CUDF_REPO` | This repo | Forks of cuDF | set git URL to use for `git clone` |
-| `CUDF_BRANCH` | master | Any branch name | set git branch to checkout of `CUDF_REPO` |
+| `CUDF_BRANCH` | main | Any branch name | set git branch to checkout of `CUDF_REPO` |
 | `NUMBA_VERSION` | newest | >=0.40.0 | set numba version |
 | `NUMPY_VERSION` | newest | >=1.14.3 | set numpy version |
 | `PANDAS_VERSION` | newest | >=0.23.4 | set pandas version |
-| `PYARROW_VERSION` | 0.17.1 | Not supported | set pyarrow version |
+| `PYARROW_VERSION` | 1.0.1 | Not supported | set pyarrow version |
 | `CMAKE_VERSION` | newest | >=3.14 | set cmake version |
 | `CYTHON_VERSION` | 0.29 | Not supported | set Cython version |
 | `PYTHON_VERSION` | 3.6 | 3.7 | set python version |

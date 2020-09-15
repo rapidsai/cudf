@@ -71,7 +71,7 @@ std::unique_ptr<column> to_timestamps(
   strings_column_view const& strings,
   data_type timestamp_type,
   std::string const& format,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a new strings column converting a timestamp column into
@@ -120,7 +120,7 @@ std::unique_ptr<column> to_timestamps(
 std::unique_ptr<column> from_timestamps(
   column_view const& timestamps,
   std::string const& format           = "%Y-%m-%dT%H:%M:%SZ",
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings

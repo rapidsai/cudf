@@ -54,7 +54,7 @@ std::unique_ptr<column> quantile(
   interpolation interp                = interpolation::LINEAR,
   column_view const& ordered_indices  = {},
   bool exact                          = true,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns the rows of the input corresponding to the requested quantiles.
@@ -91,7 +91,7 @@ std::unique_ptr<table> quantiles(
   cudf::sorted is_input_sorted                   = sorted::NO,
   std::vector<order> const& column_order         = {},
   std::vector<null_order> const& null_precedence = {},
-  rmm::mr::device_memory_resource* mr            = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace cudf

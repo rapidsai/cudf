@@ -44,13 +44,8 @@ def test_fillna():
     _, schema, darr = read_data()
     gar = GpuArrowReader(schema, darr)
     masked_col = gar[8]
-    assert masked_col.null_count
-    sr = Series.from_masked_array(
-        data=masked_col.data,
-        mask=masked_col.null,
-        null_count=masked_col.null_count,
-    )
-    dense = sr.fillna(123)
+    sr = Series(data=masked_col.data)
+    dense = sr.nans_to_nulls().fillna(123)
     np.testing.assert_equal(123, dense.to_array())
     assert len(dense) == len(sr)
     assert dense.null_count == 0

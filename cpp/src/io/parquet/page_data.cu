@@ -1788,8 +1788,9 @@ cudaError_t PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
         key_input,
         key_input + pages.size(),
         page_input,
-        start_offset_output_iterator{
-          pages.device_ptr(), static_cast<int>(chunks[idx].col_index), static_cast<int>(l_idx)});
+        start_offset_output_iterator{pages.device_ptr(),
+                                     static_cast<int>(chunks[idx].dst_col_index),
+                                     static_cast<int>(l_idx)});
     }
   }
 

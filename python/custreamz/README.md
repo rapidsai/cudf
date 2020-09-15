@@ -22,21 +22,20 @@ kafka_configs = {
 consumer = kafka.Consumer(kafka_configs)
 
 # Read 10,000 messages from `custreamz_tips` topic in CSV format.
-gdf = consumer.read_gdf(consumer,
-                        topic="custreamz_tips",
+tips_df = consumer.read_gdf(topic="custreamz_tips",
                         partition=0,
                         start=0,
                         end=10000,
                         message_format="CSV")
 
-print(gdf.head())
+print(tips_df.head())
 tips_df['tip_percentage'] = tips_df['tip'] / tips_df['total_bill'] * 100
 
 # display average tip by dining party size
 print(tips_df.groupby('size').tip_percentage.mean())
 ```
 
-A "hello world" of using cuStreamz with python streamz can be found [here](https://github.com/rapidsai-community/notebooks-contrib/blob/master/getting_started_notebooks/basics/hello_streamz.ipynb)
+A "hello world" of using cuStreamz with python streamz can be found [here](https://github.com/rapidsai-community/notebooks-contrib/blob/main/getting_started_notebooks/basics/hello_streamz.ipynb)
 
 A more detailed example of [parsing haproxy logs](https://github.com/rapidsai-community/notebooks-contrib/blob/branch-0.14/intermediate_notebooks/examples/custreamz/parsing_haproxy_logs.ipynb) is also available.
 

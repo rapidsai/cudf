@@ -54,7 +54,7 @@ std::unique_ptr<column> scatter(
   SourceIterator end,
   MapIterator scatter_map,
   strings_column_view const& target,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   auto strings_count = target.size();

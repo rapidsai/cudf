@@ -270,7 +270,27 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
                 column.datetime._numpy_to_pandas_conversion[unit]
             )
             col = col.binary_operator(binop="mul", rhs=factor)
-        col = col.as_datetime_column(dtype="datetime64[ns]")
+
+        if format is not None:
+            # Converting to int because,
+            # pandas actually creates a datetime column
+            # out of float values and then creates an
+            # int column out of it to parse against `format`.
+            # Instead we directly cast to int and perform
+            # parsing against `format`.
+            col = (
+                col.astype("int")
+                .astype("str")
+                .as_datetime_column(
+                    dtype="datetime64[us]"
+                    if "%f" in format
+                    else "datetime64[s]",
+                    format=format,
+                )
+            )
+        else:
+            col = col.as_datetime_column(dtype="datetime64[ns]")
+
     if col.dtype.kind in ("i"):
         if unit in ("D", "h", "m"):
             factor = as_scalar(
@@ -279,7 +299,13 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
             )
             col = col.binary_operator(binop="mul", rhs=factor)
 
-        col = col.as_datetime_column(dtype=_unit_dtype_map[unit])
+        if format is not None:
+            col = col.astype("str").as_datetime_column(
+                dtype=_unit_dtype_map[unit], format=format
+            )
+        else:
+            col = col.as_datetime_column(dtype=_unit_dtype_map[unit])
+
     elif col.dtype.kind in ("O"):
         if unit not in (None, "ns"):
             try:

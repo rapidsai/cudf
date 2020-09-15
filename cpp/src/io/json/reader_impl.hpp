@@ -31,7 +31,8 @@
 #include <io/utilities/column_buffer.hpp>
 
 #include <cudf/io/datasource.hpp>
-#include <cudf/io/readers.hpp>
+#include <cudf/io/detail/json.hpp>
+#include <cudf/io/json.hpp>
 
 namespace cudf {
 namespace io {
@@ -49,7 +50,7 @@ using col_map_ptr_type = std::unique_ptr<col_map_type, std::function<void(col_ma
 class reader::impl {
  public:
  private:
-  const reader_options args_{};
+  const json_reader_options options_{};
 
   rmm::mr::device_memory_resource *mr_ = nullptr;
 
@@ -176,19 +177,18 @@ class reader::impl {
    */
   explicit impl(std::unique_ptr<datasource> source,
                 std::string filepath,
-                reader_options const &args,
+                json_reader_options const &options,
                 rmm::mr::device_memory_resource *mr);
 
   /**
    * @brief Read an entire set or a subset of data from the source
    *
-   * @param[in] range_offset Number of bytes offset from the start
-   * @param[in] range_size Bytes to read; use `0` for all remaining data
+   * @param[in] options Settings for controlling reading behavior
    * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return Table and its metadata
    */
-  table_with_metadata read(size_t range_offset, size_t range_size, cudaStream_t stream);
+  table_with_metadata read(json_reader_options const &options, cudaStream_t stream);
 };
 
 }  // namespace json

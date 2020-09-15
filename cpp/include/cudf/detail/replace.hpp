@@ -32,7 +32,7 @@ namespace detail {
 std::unique_ptr<column> replace_nulls(
   column_view const& input,
   cudf::column_view const& replacement,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 /**
@@ -44,7 +44,7 @@ std::unique_ptr<column> replace_nulls(
 std::unique_ptr<column> replace_nulls(
   column_view const& input,
   scalar const& replacement,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 /**
@@ -57,7 +57,7 @@ std::unique_ptr<column> replace_nans(
   column_view const& input,
   column_view const& replacement,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @copydoc cudf::replace_nans(column_view const&, scalar const&,
@@ -69,7 +69,7 @@ std::unique_ptr<column> replace_nans(
   column_view const& input,
   scalar const& replacement,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @copydoc cudf::find_and_replace_all
@@ -80,7 +80,7 @@ std::unique_ptr<column> find_and_replace_all(
   column_view const& input_col,
   column_view const& values_to_replace,
   column_view const& replacement_values,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 }  // namespace detail
 }  // namespace cudf

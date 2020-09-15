@@ -77,7 +77,7 @@ std::unique_ptr<cudf::column> is_letter(
   cudf::strings_column_view const& strings,
   letter_type ltype,
   cudf::size_type character_index,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns boolean column indicating if character at `indices[i]` of `strings[i]`
@@ -128,7 +128,7 @@ std::unique_ptr<cudf::column> is_letter(
   cudf::strings_column_view const& strings,
   letter_type ltype,
   cudf::column_view const& indices,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns the Porter Stemmer measurements of a strings column.
@@ -160,7 +160,7 @@ std::unique_ptr<cudf::column> is_letter(
  */
 std::unique_ptr<cudf::column> porter_stemmer_measure(
   cudf::strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace nvtext

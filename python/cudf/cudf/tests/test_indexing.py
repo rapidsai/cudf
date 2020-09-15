@@ -362,6 +362,22 @@ def test_series_loc_numerical():
     assert_eq(ps.loc[[5, 8, 9]], gs.loc[cupy.array([5, 8, 9])])
 
 
+def test_series_loc_float_index():
+    ps = pd.Series([1, 2, 3, 4, 5], index=[5.43, 6.34, 7.34, 8.0, 9.1])
+    gs = Series.from_pandas(ps)
+
+    assert_eq(ps.loc[5.43], gs.loc[5.43])
+    assert_eq(ps.loc[8], gs.loc[8])
+    assert_eq(ps.loc[6.1:8], gs.loc[6.1:8])
+    assert_eq(ps.loc[:7.1], gs.loc[:7.1])
+    assert_eq(ps.loc[6.345:], gs.loc[6.345:])
+    assert_eq(ps.loc[::2], gs.loc[::2])
+    assert_eq(
+        ps.loc[[True, False, True, False, True]],
+        gs.loc[[True, False, True, False, True]],
+    )
+
+
 def test_series_loc_string():
     ps = pd.Series(
         [1, 2, 3, 4, 5], index=["one", "two", "three", "four", "five"]
@@ -411,11 +427,12 @@ def test_series_loc_datetime():
     assert_eq(ps.loc["2001-01-02":], gs.loc["2001-01-02":], **kwargs)
     assert_eq(ps.loc[:"2001-01-04"], gs.loc[:"2001-01-04"], **kwargs)
     assert_eq(ps.loc[::2], gs.loc[::2], **kwargs)
-    #
-    # assert_eq(ps.loc[['2001-01-01', '2001-01-04', '2001-01-05']],
-    #           gs.loc[['2001-01-01', '2001-01-04', '2001-01-05']])
-    # looks like a bug in Pandas doesn't let us check for the above,
-    # so instead:
+
+    assert_eq(
+        ps.loc[["2001-01-01", "2001-01-04", "2001-01-05"]],
+        gs.loc[["2001-01-01", "2001-01-04", "2001-01-05"]],
+    )
+
     assert_eq(
         ps.loc[
             [
@@ -436,6 +453,12 @@ def test_series_loc_datetime():
         ps.loc[[True, False, True, False, True]],
         gs.loc[[True, False, True, False, True]],
         **kwargs,
+    )
+
+    just_less_than_max = ps.index.max() - pd.Timedelta("5m")
+
+    assert_eq(
+        ps.loc[:just_less_than_max], gs.loc[:just_less_than_max], **kwargs
     )
 
 

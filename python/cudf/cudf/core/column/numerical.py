@@ -1,11 +1,14 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
+
+from numbers import Number
+
 import numpy as np
-import pyarrow as pa
 from pandas.api.types import is_integer_dtype
 
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.nvtx import annotate
+from cudf._lib.quantiles import quantile as cpp_quantile
 from cudf._lib.scalar import Scalar
 from cudf.core.buffer import Buffer
 from cudf.core.column import as_column, build_column, column, string
@@ -13,10 +16,8 @@ from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import (
     min_column_type,
     min_signed_type,
-    np_to_pa_dtype,
     numeric_normalize_types,
 )
-from cudf.utils.utils import buffers_from_pyarrow
 
 
 class NumericalColumn(column.ColumnBase):
@@ -168,54 +169,177 @@ class NumericalColumn(column.ColumnBase):
             return self
         return libcudf.unary.cast(self, dtype)
 
-    @classmethod
-    def from_arrow(cls, array, dtype=None):
-        if dtype is None:
-            dtype = np.dtype(array.type.to_pandas_dtype())
-
-        pa_size, pa_offset, pamask, padata, _ = buffers_from_pyarrow(array)
-        return NumericalColumn(
-            data=padata,
-            mask=pamask,
-            dtype=dtype,
-            size=pa_size,
-            offset=pa_offset,
+    def sum(self, skipna=None, dtype=None, min_count=0):
+        result_col = self._process_for_reduction(
+            skipna=skipna, min_count=min_count
         )
-
-    def to_arrow(self):
-        mask = None
-        if self.nullable:
-            mask = pa.py_buffer(self.mask_array_view.copy_to_host())
-        data = pa.py_buffer(self.data_array_view.copy_to_host())
-        pa_dtype = np_to_pa_dtype(self.dtype)
-        out = pa.Array.from_buffers(
-            type=pa_dtype,
-            length=len(self),
-            buffers=[mask, data],
-            null_count=self.null_count,
-        )
-        if self.dtype == np.bool:
-            return out.cast(pa.bool_())
+        if isinstance(result_col, cudf.core.column.ColumnBase):
+            return libcudf.reduce.reduce("sum", result_col, dtype=dtype)
         else:
-            return out
+            return result_col
 
-    def sum(self, dtype=None):
-        return libcudf.reduce.reduce("sum", self, dtype=dtype)
+    def product(self, skipna=None, dtype=None, min_count=0):
+        result_col = self._process_for_reduction(
+            skipna=skipna, min_count=min_count
+        )
+        if isinstance(result_col, cudf.core.column.ColumnBase):
+            return libcudf.reduce.reduce("product", result_col, dtype=dtype)
+        else:
+            return result_col
 
-    def product(self, dtype=None):
-        return libcudf.reduce.reduce("product", self, dtype=dtype)
+    def mean(self, skipna=None, dtype=np.float64):
+        result_col = self._process_for_reduction(skipna=skipna)
+        if isinstance(result_col, cudf.core.column.ColumnBase):
+            return libcudf.reduce.reduce("mean", result_col, dtype=dtype)
+        else:
+            return result_col
 
-    def mean(self, dtype=np.float64):
-        return libcudf.reduce.reduce("mean", self, dtype=dtype)
+    def var(self, skipna=None, ddof=1, dtype=np.float64):
+        result = self._process_for_reduction(skipna=skipna)
+        if isinstance(result, cudf.core.column.ColumnBase):
+            return libcudf.reduce.reduce("var", result, dtype=dtype, ddof=ddof)
+        else:
+            return result
 
-    def var(self, ddof=1, dtype=np.float64):
-        return libcudf.reduce.reduce("var", self, dtype=dtype, ddof=ddof)
-
-    def std(self, ddof=1, dtype=np.float64):
-        return libcudf.reduce.reduce("std", self, dtype=dtype, ddof=ddof)
+    def std(self, skipna=None, ddof=1, dtype=np.float64):
+        result_col = self._process_for_reduction(skipna=skipna)
+        if isinstance(result_col, cudf.core.column.ColumnBase):
+            return libcudf.reduce.reduce(
+                "std", result_col, dtype=dtype, ddof=ddof
+            )
+        else:
+            return result_col
 
     def sum_of_squares(self, dtype=None):
         return libcudf.reduce.reduce("sum_of_squares", self, dtype=dtype)
+
+    def kurtosis(self, skipna=None):
+        skipna = True if skipna is None else skipna
+
+        if len(self) == 0 or (not skipna and self.has_nulls):
+            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+
+        self = self.nans_to_nulls().dropna()
+
+        if len(self) < 4:
+            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+
+        n = len(self)
+        miu = self.mean()
+        m4_numerator = (
+            self.binary_operator("sub", miu).binary_operator(
+                "pow", self.normalize_binop_value(4)
+            )
+        ).sum()
+        V = self.var()
+
+        if V == 0:
+            return 0
+
+        term_one_section_one = (n * (n + 1)) / ((n - 1) * (n - 2) * (n - 3))
+        term_one_section_two = m4_numerator / (V ** 2)
+        term_two = ((n - 1) ** 2) / ((n - 2) * (n - 3))
+        kurt = term_one_section_one * term_one_section_two - 3 * term_two
+        return kurt
+
+    def skew(self, skipna=None):
+        skipna = True if skipna is None else skipna
+
+        if len(self) == 0 or (not skipna and self.has_nulls):
+            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+
+        self = self.nans_to_nulls().dropna()
+
+        if len(self) < 3:
+            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+
+        n = len(self)
+        miu = self.mean()
+        m3 = (
+            (
+                self.binary_operator("sub", miu).binary_operator(
+                    "pow", self.normalize_binop_value(3)
+                )
+            ).sum()
+        ) / n
+        m2 = self.var(ddof=0)
+
+        if m2 == 0:
+            return 0
+
+        unbiased_coef = ((n * (n - 1)) ** 0.5) / (n - 2)
+        skew = unbiased_coef * m3 / (m2 ** (3 / 2))
+        return skew
+
+    def quantile(self, q, interpolation, exact):
+        if isinstance(q, Number) or cudf.utils.dtypes.is_list_like(q):
+            np_array_q = np.asarray(q)
+            if np.logical_or(np_array_q < 0, np_array_q > 1).any():
+                raise ValueError(
+                    "percentiles should all be in the interval [0, 1]"
+                )
+        # Beyond this point, q either being scalar or list-like
+        # will only have values in range [0, 1]
+        result = self._numeric_quantile(q, interpolation, exact)
+        if isinstance(q, Number):
+            result = result[0]
+            return (
+                cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+                if result is None
+                else result
+            )
+        return result
+
+    def median(self, skipna=None):
+        skipna = True if skipna is None else skipna
+
+        if not skipna and self.has_nulls:
+            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+
+        # enforce linear in case the default ever changes
+        return self.quantile(0.5, interpolation="linear", exact=True)
+
+    def _numeric_quantile(self, q, interpolation, exact):
+        is_number = isinstance(q, Number)
+
+        if is_number:
+            quant = [float(q)]
+        elif isinstance(q, list) or isinstance(q, np.ndarray):
+            quant = q
+        else:
+            msg = "`q` must be either a single element, list or numpy array"
+            raise TypeError(msg)
+
+        # get sorted indices and exclude nulls
+        sorted_indices = self.as_frame()._get_sorted_inds(True, "first")
+        sorted_indices = sorted_indices[self.null_count :]
+
+        return cpp_quantile(self, quant, interpolation, sorted_indices, exact)
+
+    def cov(self, other):
+        if (
+            len(self) == 0
+            or len(other) == 0
+            or (len(self) == 1 and len(other) == 1)
+        ):
+            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+
+        result = self.binary_operator("sub", self.mean()).binary_operator(
+            "mul", other.binary_operator("sub", other.mean())
+        )
+        cov_sample = result.sum() / (len(self) - 1)
+        return cov_sample
+
+    def corr(self, other):
+        if len(self) == 0 or len(other) == 0:
+            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+
+        cov = self.cov(other)
+        lhs_std, rhs_std = self.std(), other.std()
+
+        if not cov or lhs_std == 0 or rhs_std == 0:
+            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+        return cov / lhs_std / rhs_std
 
     def round(self, decimals=0):
         if decimals < 0:

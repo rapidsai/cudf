@@ -13,10 +13,10 @@ dependencies:
   - cmake>=3.14
   - cmake_setuptools>=0.1.3
   - python>=3.6,<3.8
-  - numba>=0.49.0
+  - numba>=0.49,!=0.51.0
   - numpy
   - pandas>=1.0,<1.2.0dev0
-  - pyarrow=0.17.1
+  - pyarrow=1.0.1
   - fastavro>=0.22.9
   - notebook>=0.5.0
   - cython>=0.29,<0.30
@@ -41,7 +41,7 @@ dependencies:
   - distributed>=2.22.0
   - streamz
   - dlpack
-  - arrow-cpp=0.17.1
+  - arrow-cpp=1.0.1
   - arrow-cpp-proc * cuda
   - boost-cpp>=1.72.0
   - double-conversion
@@ -50,6 +50,8 @@ dependencies:
   - hypothesis
   - sphinx-markdown-tables
   - sphinx-copybutton
+  - mimesis
+  - packaging
   - pip:
       - git+https://github.com/dask/dask.git
       - git+https://github.com/dask/distributed.git

@@ -1220,3 +1220,28 @@ def test_timedelta_contains(data, dtype, scalar):
     actual = scalar in psr
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("op", ["max", "min"])
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
+        [1, 2, 3, 100],
+        [10, None, 100, None, None],
+        [None, None, None],
+        [1231],
+    ],
+)
+@pytest.mark.parametrize("dtype", dtypeutils.TIMEDELTA_TYPES)
+def test_timedelta_reductions(data, op, dtype):
+    sr = cudf.Series(data, dtype=dtype)
+    psr = sr.to_pandas()
+
+    actual = getattr(sr, op)()
+    expected = getattr(psr, op)()
+
+    if np.isnat(expected.to_numpy()) and np.isnat(actual):
+        assert True
+    else:
+        assert_eq(expected.to_numpy(), actual)

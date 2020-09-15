@@ -78,7 +78,7 @@ std::unique_ptr<cudf::column> generate_ngrams(
   cudf::strings_column_view const& strings,
   cudf::size_type ngrams               = 2,
   cudf::string_scalar const& separator = cudf::string_scalar{"_"},
-  rmm::mr::device_memory_resource* mr  = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                  = 0)
 {
   CUDF_EXPECTS(separator.is_valid(), "Parameter separator must be valid");

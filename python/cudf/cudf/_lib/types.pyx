@@ -20,6 +20,7 @@ cimport cudf._lib.cpp.types as libcudf_types
 
 
 class TypeId(IntEnum):
+    EMPTY = <underlying_type_t_type_id> libcudf_types.type_id.EMPTY
     INT8 = <underlying_type_t_type_id> libcudf_types.type_id.INT8
     INT16 = <underlying_type_t_type_id> libcudf_types.type_id.INT16
     INT32 = <underlying_type_t_type_id> libcudf_types.type_id.INT32
@@ -30,6 +31,9 @@ class TypeId(IntEnum):
     UINT64 = <underlying_type_t_type_id> libcudf_types.type_id.UINT64
     FLOAT32 = <underlying_type_t_type_id> libcudf_types.type_id.FLOAT32
     FLOAT64 = <underlying_type_t_type_id> libcudf_types.type_id.FLOAT64
+    TIMESTAMP_DAYS = (
+        <underlying_type_t_type_id> libcudf_types.type_id.TIMESTAMP_DAYS
+    )
     TIMESTAMP_SECONDS = (
         <underlying_type_t_type_id> libcudf_types.type_id.TIMESTAMP_SECONDS
     )
@@ -170,6 +174,8 @@ cdef dtype_from_lists_column_view(column_view cv):
 
     if child.type().id() == libcudf_types.type_id.LIST:
         return ListDtype(dtype_from_lists_column_view(child))
+    elif child.type().id() == libcudf_types.type_id.EMPTY:
+        return ListDtype(np.dtype("int8"))
     else:
         return ListDtype(
             cudf_to_np_types[<underlying_type_t_type_id> child.type().id()]

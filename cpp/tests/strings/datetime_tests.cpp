@@ -303,3 +303,20 @@ TEST_F(StringsDatetimeTest, Errors)
     1530705600};
   EXPECT_THROW(cudf::strings::from_timestamps(timestamps, ""), cudf::logic_error);
 }
+
+TEST_F(StringsDatetimeTest, ToTimestampSingleSpecifier)
+{
+  cudf::test::strings_column_wrapper strings{"12", "10", "09", "05"};
+  auto strings_view = cudf::strings_column_view(strings);
+  auto results      = cudf::strings::to_timestamps(
+    strings_view, cudf::data_type{cudf::type_id::TIMESTAMP_DAYS}, "%d");
+  cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> expected_days{
+    11, 9, 8, 4};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_days);
+
+  results = cudf::strings::to_timestamps(
+    strings_view, cudf::data_type{cudf::type_id::TIMESTAMP_DAYS}, "%m");
+  cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> expected_months{
+    334, 273, 243, 120};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_months);
+}

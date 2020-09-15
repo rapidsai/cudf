@@ -3,7 +3,6 @@ import pickle
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 
 import cudf
 from cudf import _lib as libcudf
@@ -869,26 +868,6 @@ class CategoricalColumn(column.ColumnBase):
     def cat(self, parent=None):
         return CategoricalAccessor(self, parent=parent)
 
-    @classmethod
-    def from_arrow(cls, array):
-        codes_dtype = min_unsigned_type(len(array.indices))
-        codes = column.as_column(array.indices).astype(codes_dtype)
-        if isinstance(array.dictionary, pa.NullArray):
-            categories = column.as_column([], dtype="object")
-        else:
-            categories = column.as_column(array.dictionary)
-
-        dtype = CategoricalDtype(
-            categories=categories, ordered=array.type.ordered
-        )
-        return CategoricalColumn(
-            dtype=dtype,
-            mask=codes.base_mask,
-            children=(codes,),
-            size=codes.size,
-            offset=codes.offset,
-        )
-
     def unary_operator(self, unaryop):
         raise TypeError(
             f"Series of dtype `category` cannot perform the operation: "
@@ -957,15 +936,6 @@ class CategoricalColumn(column.ColumnBase):
             codes, categories=categories, ordered=self.ordered
         )
         return pd.Series(data, index=index)
-
-    def to_arrow(self):
-        signed_codes_dtypes = min_signed_type(len(self.categories))
-        return pa.DictionaryArray.from_arrays(
-            from_pandas=True,
-            ordered=self.ordered,
-            indices=self.as_numerical.astype(signed_codes_dtypes).to_arrow(),
-            dictionary=self.categories.to_arrow(),
-        )
 
     @property
     def values_host(self):
@@ -1196,9 +1166,10 @@ class CategoricalColumn(column.ColumnBase):
     def copy(self, deep=True):
         if deep:
             copied_col = libcudf.copying.copy_column(self)
+            copied_cat = libcudf.copying.copy_column(self.dtype._categories)
 
             return column.build_categorical_column(
-                categories=self.dtype.categories,
+                categories=copied_cat,
                 codes=column.as_column(
                     copied_col.base_data, dtype=copied_col.dtype
                 ),
