@@ -14,14 +14,15 @@
  * limitations under the License.
  */
 
-#include <cstddef>
-#include <cstring>
-#include <string>
+#include <cudf/utilities/span.hpp>
+
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/cudf_gtest.hpp>
 #include <tests/utilities/type_lists.hpp>
 
-#include <cudf/utilities/span.hpp>
+#include <cstddef>
+#include <cstring>
+#include <string>
 
 using cudf::detail::span;
 
