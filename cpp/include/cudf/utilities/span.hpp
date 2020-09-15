@@ -18,7 +18,6 @@
 
 #include <cstddef>
 #include <limits>
-#include <memory>
 #include <type_traits>
 
 namespace cudf {
@@ -51,11 +50,11 @@ class span {
   constexpr span& operator=(const span& other) noexcept = default;
 
   // not noexcept due to undefined behavior when size = 0
-  constexpr reference front() const { return _data; }
+  constexpr reference front() const { return _data[0]; }
   // not noexcept due to undefined behavior when size = 0
-  constexpr reference back() const { return _data + _size; }
+  constexpr reference back() const { return _data[_size - 1]; }
   // not noexcept due to undefined behavior when idx < 0 || idx >= size
-  constexpr reference operator[](size_type idx) const { return _data + idx; }
+  constexpr reference operator[](size_type idx) const { return _data[idx]; }
 
   constexpr iterator begin() const noexcept { return _data; }
   constexpr iterator end() const noexcept { return _data + _size; }
@@ -81,8 +80,8 @@ class span {
   }
 
  private:
-  pointer const _data;
-  size_type const _size;
+  pointer _data;
+  size_type _size;
 };  // namespace detail
 }  // namespace detail
 }  // namespace cudf
