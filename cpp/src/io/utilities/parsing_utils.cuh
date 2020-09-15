@@ -128,6 +128,35 @@ __device__ __forceinline__ uint8_t decode_digit(char c, bool* valid_flag)
   return 0;
 }
 
+// Converts character to lowercase.
+__inline__ __device__ char to_lower(char const c)
+{
+  return c >= 'A' && c <= 'Z' ? c + ('a' - 'A') : c;
+}
+
+/**
+ * @brief Check if string is infinity, case insensitive with/without sign
+ * Valid infinity strings are inf, +inf, -inf, infinity, +infinity, -infinity
+ * String comparison is case insensitive.
+ *
+ * @param data The character string for parse
+ * @param start The index within data to start parsing from
+ * @param end The end index within data to end parsing
+ * @return true if string is valid infinity, else false.
+ */
+__inline__ __device__ bool is_infinity(const char* data, long start, long end)
+{
+  if (data[start] == '-' || data[start] == '+') start++;
+  char const* cinf = "infinity";
+  long index       = start;
+  while (index <= end) {
+    if (*cinf != to_lower(data[index])) break;
+    index++;
+    cinf++;
+  }
+  return ((index == start + 3 || index == start + 8) && index > end);
+}
+
 /**
  * @brief Parses a character string and returns its numeric value.
  *
