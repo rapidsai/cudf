@@ -2157,6 +2157,7 @@ class Frame(libcudf.table.Table):
                     ordered=other_col.ordered,
                     size=col.size,
                     offset=col.offset,
+                    null_count=col.null_count,
                 )
         if include_index:
             # include_index will still behave as False

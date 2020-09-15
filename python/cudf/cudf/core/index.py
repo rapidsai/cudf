@@ -2701,14 +2701,14 @@ def as_index(arbitrary, **kwargs):
         - DatetimeIndex for Datetime input.
         - GenericIndex for all other inputs.
     """
-
     kwargs = _setdefault_name(arbitrary, **kwargs)
     if isinstance(arbitrary, cudf.MultiIndex):
         return arbitrary
     elif isinstance(arbitrary, Index):
+        if arbitrary.name == kwargs["name"]:
+            return arbitrary
         idx = arbitrary.copy(deep=False)
-        idx.rename(kwargs.get("name"), inplace=True)
-        return idx
+        return idx.rename(kwargs["name"], inplace=True)
     elif isinstance(arbitrary, NumericalColumn):
         try:
             return _dtype_to_index[arbitrary.dtype.type](arbitrary, **kwargs)
