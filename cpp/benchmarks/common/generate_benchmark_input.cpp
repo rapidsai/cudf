@@ -214,6 +214,13 @@ void set_element_at(T value,
   }
 }
 
+auto create_run_length_dist(cudf::size_type avg_run_len)
+{
+  // Distribution with low probability of generating 0-1 even with a low `avg_run_len` value
+  static constexpr float alpha = 4.f;
+  return std::gamma_distribution<float>{alpha, avg_run_len / alpha};
+}
+
 // identity mapping, except for bools
 template <typename T, typename Enable = void>
 struct stored_as {
@@ -258,7 +265,7 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
   // Distribution for picking elements from the array of samples
   std::uniform_int_distribution<cudf::size_type> sample_dist{0, cardinality - 1};
   auto const avg_run_len = profile.get_avg_run_length();
-  std::gamma_distribution<float> run_len_dist(4.f, avg_run_len / 4.f);
+  auto run_len_dist      = create_run_length_dist(avg_run_len);
   std::vector<stored_Type> data(num_rows);
   std::vector<cudf::bitmask_type> null_mask(null_mask_size(num_rows), ~0);
 
@@ -376,7 +383,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(data_profi
   }
 
   auto const avg_run_len = profile.get_avg_run_length();
-  std::gamma_distribution<float> run_len_dist(4.f, avg_run_len / 4.f);
+  auto run_len_dist      = create_run_length_dist(avg_run_len);
 
   string_column_data out_col(num_rows, num_rows * avg_string_len);
   std::uniform_int_distribution<cudf::size_type> sample_dist{0, cardinality - 1};
