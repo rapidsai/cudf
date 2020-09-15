@@ -50,6 +50,7 @@
 - PR #6209 Remove CXX11 ABI handling from CMake
 - PR #6223 Remove CXX11 ABI flag from JNI build
 - PR #6114 Implement Fuzz tests for cuIO
+- PR #6215 Add cmake command-line setting for spdlog logging level
 
 ## Bug Fixes
 
