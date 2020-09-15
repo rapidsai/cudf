@@ -2627,7 +2627,7 @@ class DataFrame(Frame, Serializable):
 
         return DataFrame(cols, idx)
 
-    def set_index(self, index, drop=True, inplace=False):
+    def set_index(self, index, drop=True, append=False, inplace=False):
         """Return a new DataFrame with a new index
 
         Parameters
@@ -2638,9 +2638,13 @@ class DataFrame(Frame, Serializable):
             str : name of column to be used as series
             list of str : name of columns to be converted to a MultiIndex
         drop : boolean
-            whether to drop corresponding column for str index argument
+            Whether to drop corresponding column for str index argument
+        append : boolean
+            Append current to new index to form a multiindex
         inplace : boolean
-
+            Modify the DataFrame in place (do not create a new object)
+        verify_integrity : boolean
+            Check for duplicates in the new index
         """
         df = self.copy(deep=False) if not inplace else self
 
@@ -2649,18 +2653,34 @@ class DataFrame(Frame, Serializable):
             if len(index) == 1:
                 return df.set_index(index=index[0], drop=drop, inplace=inplace)
             else:
+                idf = self[index]
+                names = index
+                if append:
+                    if isinstance(self.index, Index):
+                        idf.insert(loc=0, name=self.index.name, value=self.index._values)
+                        names = [self.index.name] + names
+                    elif isinstance(self.index, cudf.MultiIndex):
+                        idf = merge(self.index._data, idf) #TODO: figure out the parameters for this op
+                        names = self.index.names + names
                 return df.set_index(
-                    index=cudf.MultiIndex.from_frame(self[index], names=index),
+                    index=cudf.MultiIndex.from_frame(idf, names=names),
                     inplace=inplace,
+                    drop=drop
                 )
 
         # When index is a column name
         if isinstance(index, str):
-            return df.set_index(index=self[index], inplace=inplace)
+            idf = self[index]
+            names = [index]
+            if append:
+                idf.insert(loc=0, name=self.index.name, value=self.index._values)
+                idf = cudf.MultiIndex.from_frame(idf, names=[self.index.name]+names)
+            return df.set_index(index=idf, inplace=inplace, drop=drop)
 
-        # Genearl Case
+        # General Case
         if drop:
             df.drop(columns=index)
+            
         index = (
             index
             if isinstance(index, [Index, cudf.MultiIndex])
