@@ -231,6 +231,23 @@ def read_orc(
         else:
             stripes = selected_stripes
 
+    if filters is not None:
+        query_string, local_dict = filterutils._filters_to_query(filters)
+        index = read_orc(
+            filepath_or_buffer,
+            engine=engine,
+            columns=columns,
+            filters=None,
+            stripes=stripes,
+            skip_rows=skip_rows,
+            num_rows=num_rows,
+            use_index=use_index,
+            decimals_as_float=decimals_as_float,
+            force_decimal_scale=force_decimal_scale,
+            timestamp_type=timestamp_type,
+            **kwargs,
+        )
+
     if engine == "cudf":
         df = DataFrame._from_table(
             libcudf.orc.read_orc(
