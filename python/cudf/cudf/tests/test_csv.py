@@ -128,6 +128,46 @@ def make_all_numeric_dataframe():
     )
 
 
+def make_all_numeric_extremes_dataframe():
+    # integers 0,+1,-1,min,max
+    # float 0.0, -0.0,+1,-1,min,max, nan, esp, espneg, tiny, [-ve values]
+    df, gdf_dtypes, pdf_dtypes = make_all_numeric_dataframe()
+    df = pd.DataFrame()
+
+    for gdf_dtype in gdf_dtypes:
+        np_type = pdf_dtypes[gdf_dtype]
+        if np.issubdtype(np_type, np.integer):
+            itype = np.iinfo(np_type)
+            extremes = [0, +1, -1, itype.min, itype.max]
+            df[gdf_dtype] = np.array(extremes * 4, dtype=np_type)[:20]
+        else:
+            ftype = np.finfo(np_type)
+            extremes = [
+                0.0,
+                -0.0,
+                +1,
+                -1,
+                np.nan,
+                -np.nan,
+                # ftype.min, # can't enable because of truncation issue #6235
+                # ftype.max, # can't enable because of truncation issue #6235
+                np_type(np.inf),
+                -np_type(np.inf),
+                ftype.eps,
+                ftype.epsneg,
+                ftype.tiny,
+                -ftype.eps,
+                -ftype.epsneg,
+                -ftype.tiny,
+            ]
+            df[gdf_dtype] = np.array(extremes * 4, dtype=np_type)[:20]
+    return (
+        df,
+        gdf_dtypes,
+        pdf_dtypes,
+    )
+
+
 @pytest.fixture
 def path_or_buf(tmpdir):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_path_or_buf.csv")
@@ -266,6 +306,22 @@ def test_csv_reader_dtype_dict(use_names):
     # Save with the column header if not explicitly specifying a list of names
     df, gdf_dtypes, pdf_dtypes = make_all_numeric_dataframe()
     buffer = df.to_csv(index=False, header=(not use_names))
+
+    gdf_names = list(gdf_dtypes.keys()) if use_names else None
+    pdf_names = list(pdf_dtypes.keys()) if use_names else None
+
+    gdf = read_csv(StringIO(buffer), dtype=gdf_dtypes, names=gdf_names)
+    pdf = pd.read_csv(StringIO(buffer), dtype=pdf_dtypes, names=pdf_names)
+
+    assert_eq(gdf, pdf)
+
+
+@pytest.mark.parametrize("use_names", [True])
+def test_csv_reader_dtype_extremes(use_names):
+    # Save with the column header if not explicitly specifying a list of names
+    df, gdf_dtypes, pdf_dtypes = make_all_numeric_extremes_dataframe()
+    buffer = df.to_csv(index=False, header=(not use_names))
+    print(buffer)
 
     gdf_names = list(gdf_dtypes.keys()) if use_names else None
     pdf_names = list(pdf_dtypes.keys()) if use_names else None
