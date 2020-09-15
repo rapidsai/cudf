@@ -9,6 +9,7 @@ import random
 import string
 from multiprocessing import Pool
 
+import mimesis
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -182,13 +183,12 @@ def get_dataframe(parameters, use_threads):
     # Initialize seeds
     if parameters.seed is not None:
         np.random.seed(parameters.seed)
-    column_seeds = np.arange(len(parameters.column_parameters))
-    np.random.shuffle(column_seeds)
+
     # For each column, use a generic Mimesis producer to create an Iterable
     # for generating data
     for i, column_params in enumerate(parameters.column_parameters):
         column_params.generator = column_params.generator(
-            Generic("en", seed=column_seeds[i])
+            Generic("en", seed=parameters.seed)
         )
     # Get schema for each column
     schema = pa.schema(
@@ -248,7 +248,10 @@ def get_dataframe(parameters, use_threads):
 
 
 def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
+    # Apply seed
     random.seed(seed)
+    np.random.seed(seed)
+    mimesis.random.random.seed(seed)
 
     column_params = []
     for meta in dtypes_meta:
