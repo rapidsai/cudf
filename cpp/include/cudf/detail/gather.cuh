@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/release_assert.cuh>
 #include <cudf/detail/valid_if.cuh>
@@ -98,8 +99,53 @@ struct gather_bitmask_functor {
 };
 
 /**
- * @brief Function object for gathering a type-erased
- * column. To be used with column_gatherer to provide specialization to handle
+ * @brief Function for calling gather using iterators.
+ *
+ * Used by column_gatherer_impl definitions below.
+ *
+ * @tparam InputIterator Type for gather source data
+ * @tparam OutputIterator Type for gather results
+ * @tparam MapIterator Iterator type for the gather map
+ *
+ * @param source_itr Source data up to `source_size`
+ * @param source_size Maximum index value for source data
+ * @param target_itr Output iterator for gather result
+ * @param gather_map_begin Start of the gather map
+ * @param gather_map_end End of the gather map
+ * @param nullify_out_of_bounds True if map values are checked against `source_size`
+ * @param stream CUDA stream used for kernel launches.
+ */
+template <typename InputItr, typename OutputItr, typename MapIterator>
+void gather_helper(InputItr source_itr,
+                   size_type source_size,
+                   OutputItr target_itr,
+                   MapIterator gather_map_begin,
+                   MapIterator gather_map_end,
+                   bool nullify_out_of_bounds,
+                   cudaStream_t stream)
+{
+  using map_type = typename std::iterator_traits<MapIterator>::value_type;
+  if (nullify_out_of_bounds) {
+    thrust::gather_if(rmm::exec_policy(stream)->on(stream),
+                      gather_map_begin,
+                      gather_map_end,
+                      gather_map_begin,
+                      source_itr,
+                      target_itr,
+                      bounds_checker<map_type>{0, source_size});
+  } else {
+    thrust::gather(rmm::exec_policy(stream)->on(stream),
+                   gather_map_begin,
+                   gather_map_end,
+                   source_itr,
+                   target_itr);
+  }
+}
+
+/**
+ * @brief Function object for gathering a type-erased column.
+ *
+ * To be used with column_gatherer to provide specialization to handle
  * fixed-width, string and other types.
  *
  * @tparam Element Dispatched type for the column being gathered
@@ -132,26 +178,14 @@ struct column_gatherer_impl {
     cudf::mask_allocation_policy policy = cudf::mask_allocation_policy::NEVER;
     std::unique_ptr<column> destination_column =
       cudf::detail::allocate_like(source_column, num_destination_rows, policy, mr, stream);
-    Element const* source_data{source_column.data<Element>()};
-    Element* destination_data{destination_column->mutable_view().data<Element>()};
 
-    using map_type = typename std::iterator_traits<MapIterator>::value_type;
-
-    if (nullify_out_of_bounds) {
-      thrust::gather_if(rmm::exec_policy(stream)->on(stream),
-                        gather_map_begin,
-                        gather_map_end,
-                        gather_map_begin,
-                        source_data,
-                        destination_data,
-                        bounds_checker<map_type>{0, source_column.size()});
-    } else {
-      thrust::gather(rmm::exec_policy(stream)->on(stream),
-                     gather_map_begin,
-                     gather_map_end,
-                     source_data,
-                     destination_data);
-    }
+    gather_helper(source_column.data<Element>(),
+                  source_column.size(),
+                  destination_column->mutable_view().data<Element>(),
+                  gather_map_begin,
+                  gather_map_end,
+                  nullify_out_of_bounds,
+                  stream);
 
     return destination_column;
   }
@@ -366,23 +400,24 @@ struct column_gatherer_impl<dictionary32, MapItType> {
     // Also, there are scenarios where the keys are common with other dictionaries
     // and the original intention was to share the keys here.
     auto keys_copy = std::make_unique<column>(dictionary.keys(), stream, mr);
-    // create view of the indices column combined with the null mask
-    // in order to call gather on it
+    // Perform gather on just the indices
     column_view indices = dictionary.get_indices_annotated();
-    // now perform gather on just the indices
-    auto new_indices = type_dispatcher(indices.type(),
-                                       column_gatherer{},
-                                       indices,
-                                       gather_map_begin,
-                                       gather_map_end,
-                                       nullify_out_of_bounds,
-                                       stream,
-                                       mr);
+    auto new_indices    = cudf::detail::allocate_like(
+      indices, output_count, cudf::mask_allocation_policy::NEVER, mr, stream);
+    gather_helper(
+      cudf::detail::indexalator_factory::create_input_iterator(indices),
+      indices.size(),
+      cudf::detail::indexalator_factory::create_output_iterator(new_indices->mutable_view()),
+      gather_map_begin,
+      gather_map_end,
+      nullify_out_of_bounds,
+      stream);
     // dissect the column's contents
-    auto null_count = new_indices->null_count();  // get this before calling release()
-    auto contents   = new_indices->release();     // new_indices will now be empty
+    auto indices_type = new_indices->type();
+    auto null_count   = new_indices->null_count();  // get this before calling release()
+    auto contents     = new_indices->release();     // new_indices will now be empty
     // build the output indices column from the contents' data component
-    auto indices_column = std::make_unique<column>(indices.type(),
+    auto indices_column = std::make_unique<column>(indices_type,
                                                    static_cast<size_type>(output_count),
                                                    std::move(*(contents.data.release())),
                                                    rmm::device_buffer{0, stream, mr},

@@ -238,7 +238,7 @@ struct input_indexalator : base_indexalator<input_indexalator> {
   friend struct indexalator_factory;
   friend struct base_indexalator<input_indexalator>;  // for CTRP
 
-  using reference = size_type const&;  // this keeps STL and thrust happy
+  using reference = size_type const;  // this keeps STL and thrust happy
 
   input_indexalator()                         = default;
   input_indexalator(input_indexalator const&) = default;
