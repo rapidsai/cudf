@@ -524,8 +524,8 @@ class Series(Frame, Serializable):
         """
         result = self._copy_construct()
         if deep:
-            result._column = self._column.copy(deep)
-            result.index = self.index.copy(deep)
+            result._column = self._column.copy(deep=deep)
+            result.index = self.index.copy(deep=deep)
         return result
 
     def __copy__(self, deep=True):
