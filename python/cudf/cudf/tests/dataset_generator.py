@@ -299,7 +299,7 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
                         cardinality=cardinality,
                         null_frequency=null_frequency,
                         generator=lambda g: [
-                            g.random.schoice(string.printable, 2000)
+                            g.random.schoice(string.printable, 4)
                             for _ in range(rows)
                         ],
                         is_sorted=False,
