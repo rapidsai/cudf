@@ -25,11 +25,11 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/bit.hpp>
-#include <cudf/utilities/test/column_utilities.hpp>
-#include <cudf/utilities/test/column_wrapper.hpp>
-#include <cudf/utilities/test/cudf_gtest.hpp>
-#include <cudf/utilities/test/detail/column_utilities.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/detail/column_utilities.hpp>
 
 #include <jit/type.h>
 

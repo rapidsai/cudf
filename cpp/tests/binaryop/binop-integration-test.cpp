@@ -23,9 +23,9 @@
 #include <cudf/binaryop.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/test/column_utilities.hpp>
-#include <cudf/utilities/test/type_lists.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/type_lists.hpp>
 
 namespace cudf {
 namespace test {

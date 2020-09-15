@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-#include <cudf/utilities/test/scalar_utilities.hpp>
+#include <cudf_test/scalar_utilities.hpp>
 
 #include <jit/type.h>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
-#include <cudf/utilities/test/cudf_gtest.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf_test/cudf_gtest.hpp>
 #include <sstream>
 #include <type_traits>
 #include "gtest/gtest.h"

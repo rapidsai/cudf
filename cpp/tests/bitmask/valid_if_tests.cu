@@ -15,10 +15,10 @@
  */
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/types.hpp>
-#include <cudf/utilities/test/base_fixture.hpp>
-#include <cudf/utilities/test/column_utilities.hpp>
-#include <cudf/utilities/test/column_wrapper.hpp>
-#include <cudf/utilities/test/cudf_gtest.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
 
 struct ValidIfTest : public cudf::test::BaseFixture {
 };

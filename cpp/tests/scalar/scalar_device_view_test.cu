@@ -17,11 +17,11 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/types.hpp>
-#include <cudf/utilities/test/base_fixture.hpp>
-#include <cudf/utilities/test/cudf_gtest.hpp>
-#include <cudf/utilities/test/type_list_utilities.hpp>
-#include <cudf/utilities/test/type_lists.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/type_list_utilities.hpp>
+#include <cudf_test/type_lists.hpp>
 
 #include <thrust/sequence.h>
 #include <random>

@@ -22,9 +22,9 @@
 #include <numeric>
 #include <random>
 
-#include <cudf/utilities/test/base_fixture.hpp>
-#include <cudf/utilities/test/column_wrapper.hpp>
-#include <cudf/utilities/test/type_lists.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/type_lists.hpp>
 
 #include <thrust/equal.h>
 #include <thrust/functional.h>

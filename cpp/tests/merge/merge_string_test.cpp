@@ -17,16 +17,16 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/test/base_fixture.hpp>
+#include <cudf_test/base_fixture.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/merge.hpp>
-#include <cudf/utilities/test/column_utilities.hpp>
-#include <cudf/utilities/test/column_wrapper.hpp>
-#include <cudf/utilities/test/cudf_gtest.hpp>
-#include <cudf/utilities/test/type_lists.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/type_lists.hpp>
 
 #include <algorithm>
 #include <cassert>

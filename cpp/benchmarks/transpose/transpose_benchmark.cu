@@ -19,7 +19,7 @@
 #include <benchmarks/synchronization/synchronization.hpp>
 #include <cudf/transpose.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/test/column_wrapper.hpp>
+#include <cudf_test/column_wrapper.hpp>
 #include <memory>
 
 using cudf::test::fixed_width_column_wrapper;

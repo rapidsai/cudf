@@ -15,13 +15,13 @@
  */
 
 #include <cudf/copying.hpp>
-#include <cudf/utilities/test/base_fixture.hpp>
-#include <cudf/utilities/test/cudf_gtest.hpp>
-#include <cudf/utilities/test/table_utilities.hpp>
-#include <cudf/utilities/test/type_lists.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/table_utilities.hpp>
+#include <cudf_test/type_lists.hpp>
 
-#include <cudf/utilities/test/column_utilities.hpp>
-#include <cudf/utilities/test/column_wrapper.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/sorting.hpp>

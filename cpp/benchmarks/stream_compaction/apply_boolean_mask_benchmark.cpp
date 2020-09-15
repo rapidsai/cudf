@@ -19,7 +19,7 @@
 
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table.hpp>
-#include <cudf/utilities/test/column_wrapper.hpp>
+#include <cudf_test/column_wrapper.hpp>
 
 #include <benchmark/benchmark.h>
 #include <chrono>

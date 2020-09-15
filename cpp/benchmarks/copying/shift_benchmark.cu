@@ -9,7 +9,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/utilities/test/column_wrapper.hpp>
+#include <cudf_test/column_wrapper.hpp>
 #include <memory>
 
 template <typename T, typename ScalarType = cudf::scalar_type_t<T>>

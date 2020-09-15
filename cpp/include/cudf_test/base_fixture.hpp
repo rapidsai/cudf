@@ -17,9 +17,9 @@
 #pragma once
 
 #include <cudf/utilities/error.hpp>
-#include <cudf/utilities/test/cudf_gtest.hpp>
-#include <cudf/utilities/test/cxxopts.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/cxxopts.hpp>
 
 #include <rmm/mr/device/binning_memory_resource.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>

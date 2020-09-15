@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include <cudf/utilities/test/base_fixture.hpp>
-#include <cudf/utilities/test/type_lists.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/type_lists.hpp>
 
 #include <gtest/gtest.h>
 

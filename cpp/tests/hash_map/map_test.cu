@@ -15,7 +15,7 @@
  */
 
 #include <cudf/types.hpp>
-#include <cudf/utilities/test/base_fixture.hpp>
+#include <cudf_test/base_fixture.hpp>
 #include <hash/concurrent_unordered_map.cuh>
 
 #include <gtest/gtest.h>

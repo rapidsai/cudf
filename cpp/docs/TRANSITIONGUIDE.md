@@ -506,7 +506,7 @@ For example `is_numeric<T>()` can be used to specialize for any numeric type.
 
 Unit tests in libcudf are written using [Google Test](https://github.com/google/googletest/blob/master/googletest/docs/primer.md).
 
-**Important:** Instead of including `gtest/gtest.h` directly, use `#include <cudf/utilities/test/cudf_gtest.hpp>`.
+**Important:** Instead of including `gtest/gtest.h` directly, use `#include <cudf_test/cudf_gtest.hpp>`.
 
 ## Directory and File Naming
 
@@ -559,7 +559,7 @@ To ensure consistency, several sets of common type lists are provided in `includ
 For example, `NumericTypes` gives a type list of all numeric types, or `FixedWidthTypes` gives a list of all fixed-width element types, and `AllTypes` provides a list of every element type libcudf supports.
 Example:
 ```c++
-#include <cudf/utilities/test/type_lists.hpp>
+#include <cudf_test/type_lists.hpp>
 
 // All tests using TypeTestFixture will be invoked once for each numeric type
 TYPED_TEST_CASE(TypedTestFixture, cudf::test::NumericTypes);

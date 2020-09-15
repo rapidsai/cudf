@@ -16,9 +16,9 @@
 
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/test/base_fixture.hpp>
-#include <cudf/utilities/test/type_lists.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/type_lists.hpp>
 
 class ScalarFactoryTest : public cudf::test::BaseFixture {
   cudaStream_t _stream{0};

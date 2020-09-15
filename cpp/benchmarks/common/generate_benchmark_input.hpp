@@ -3,8 +3,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/table/table.hpp>
 
-#include <cudf/utilities/test/column_utilities.hpp>
-#include <cudf/utilities/test/column_wrapper.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
 
 #include <memory>
 #include <random>

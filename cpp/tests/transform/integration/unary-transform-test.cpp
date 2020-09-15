@@ -18,9 +18,9 @@
  */
 
 #include <cudf/transform.hpp>
-#include <cudf/utilities/test/base_fixture.hpp>
-#include <cudf/utilities/test/column_wrapper.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_wrapper.hpp>
 #include "assert-unary.h"
 
 #include <cctype>

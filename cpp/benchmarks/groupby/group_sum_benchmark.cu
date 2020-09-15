@@ -19,7 +19,7 @@
 #include <cudf/groupby.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
-#include <cudf/utilities/test/column_wrapper.hpp>
+#include <cudf_test/column_wrapper.hpp>
 #include <fixture/benchmark_fixture.hpp>
 #include <synchronization/synchronization.hpp>
 

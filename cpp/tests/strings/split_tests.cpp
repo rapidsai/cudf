@@ -22,10 +22,10 @@
 #include <cudf/table/table.hpp>
 
 #include <tests/strings/utilities.h>
-#include <cudf/utilities/test/base_fixture.hpp>
-#include <cudf/utilities/test/column_utilities.hpp>
-#include <cudf/utilities/test/column_wrapper.hpp>
-#include <cudf/utilities/test/table_utilities.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/table_utilities.hpp>
 
 #include <vector>
 

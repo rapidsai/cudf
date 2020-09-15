@@ -18,8 +18,8 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf/utilities/test/base_fixture.hpp>
-#include <cudf/utilities/test/column_wrapper.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_wrapper.hpp>
 #include "./utilities.h"
 
 #include <thrust/execution_policy.h>

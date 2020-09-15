@@ -16,7 +16,7 @@
 
 #include <benchmark/benchmark.h>
 
-#include <cudf/utilities/test/column_wrapper.hpp>
+#include <cudf_test/column_wrapper.hpp>
 #include <random>
 
 #include "../fixture/benchmark_fixture.hpp"

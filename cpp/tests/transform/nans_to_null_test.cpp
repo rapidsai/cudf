@@ -18,10 +18,10 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/test/base_fixture.hpp>
-#include <cudf/utilities/test/column_utilities.hpp>
-#include <cudf/utilities/test/column_wrapper.hpp>
-#include <cudf/utilities/test/type_lists.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/type_lists.hpp>
 
 template <typename T>
 struct NaNsToNullTest : public cudf::test::BaseFixture {
