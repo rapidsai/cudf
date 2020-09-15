@@ -5,7 +5,7 @@ class PythonFuzz(object):
     def __init__(self, func, data_handle=None, **kwargs):
         self.function = func
         self.data_handler_class = data_handle
-        f = fuzzer.Fuzzer(
+        self.fuzz_worker = fuzzer.Fuzzer(
             target=self.function,
             data_handler_class=self.data_handler_class,
             dirs=kwargs.get("dir", None),
@@ -15,7 +15,9 @@ class PythonFuzz(object):
             max_cols_size=kwargs.get("max_cols_size", 1000),
             runs=kwargs.get("runs", -1),
         )
-        f.start()
+
+    def __call__(self, *args, **kwargs):
+        self.fuzz_worker.start()
 
 
 # wrap PythonFuzz to allow for deferred calling
