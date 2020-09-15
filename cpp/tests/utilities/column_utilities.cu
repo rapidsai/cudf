@@ -606,9 +606,9 @@ struct column_view_printer {
     cudf::dictionary_column_view dictionary(col);
     if (col.size() == 0) return;
     std::vector<std::string> keys    = to_strings(dictionary.keys());
-    std::vector<std::string> indices = to_strings({cudf::data_type{cudf::type_id::INT32},
+    std::vector<std::string> indices = to_strings({dictionary.indices().type(),
                                                    dictionary.size(),
-                                                   dictionary.indices().head<int32_t>(),
+                                                   dictionary.indices().head(),
                                                    dictionary.null_mask(),
                                                    dictionary.null_count(),
                                                    dictionary.offset()});

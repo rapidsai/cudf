@@ -128,7 +128,7 @@ TYPED_TEST_CASE(DictionaryGetValueTest, FixedWidthTypesWithoutFixedPoint);
 TYPED_TEST(DictionaryGetValueTest, BasicGet)
 {
   fixed_width_column_wrapper<TypeParam, int32_t> keys({6, 7, 8, 9});
-  fixed_width_column_wrapper<int32_t> indices{0, 0, 1, 2, 1, 3, 3, 2};
+  fixed_width_column_wrapper<uint32_t> indices{0, 0, 1, 2, 1, 3, 3, 2};
   auto col = make_dictionary_column(keys, indices);
 
   auto s = get_element(*col, 2);
@@ -143,7 +143,7 @@ TYPED_TEST(DictionaryGetValueTest, BasicGet)
 TYPED_TEST(DictionaryGetValueTest, GetFromNullable)
 {
   fixed_width_column_wrapper<TypeParam, int32_t> keys({6, 7, 8, 9});
-  fixed_width_column_wrapper<int32_t> indices({0, 0, 1, 2, 1, 3, 3, 2}, {0, 1, 0, 1, 1, 1, 0, 0});
+  fixed_width_column_wrapper<uint32_t> indices({0, 0, 1, 2, 1, 3, 3, 2}, {0, 1, 0, 1, 1, 1, 0, 0});
   auto col = make_dictionary_column(keys, indices);
 
   auto s = get_element(*col, 3);
@@ -158,7 +158,7 @@ TYPED_TEST(DictionaryGetValueTest, GetFromNullable)
 TYPED_TEST(DictionaryGetValueTest, GetNull)
 {
   fixed_width_column_wrapper<TypeParam, int32_t> keys({6, 7, 8, 9});
-  fixed_width_column_wrapper<int32_t> indices({0, 0, 1, 2, 1, 3, 3, 2}, {0, 1, 0, 1, 1, 1, 0, 0});
+  fixed_width_column_wrapper<uint32_t> indices({0, 0, 1, 2, 1, 3, 3, 2}, {0, 1, 0, 1, 1, 1, 0, 0});
   auto col = make_dictionary_column(keys, indices);
 
   auto s = get_element(*col, 2);
