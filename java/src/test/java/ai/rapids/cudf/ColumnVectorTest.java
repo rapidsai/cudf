@@ -1910,40 +1910,28 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testCastStringToByteList() {
-    List<Integer> list1 = Arrays.asList(0, 1, 2, 3);
-    List<Integer> list2 = Arrays.asList(6, 2, 4, 5);
-    List<Integer> list3 = Arrays.asList(0, 7, 3, 4, 2);
+    // List<Byte> list1 = Arrays.asList((byte)0x54, (byte)0x68, (byte)0xc3, (byte)0xa9, (byte)0xc3);
+    List<Byte> list1 = Arrays.asList((byte)0x54, (byte)0x68, (byte)0xc3, (byte)0xa9, (byte)0x73, (byte)0xc3, (byte)0xa9);
+    List<Byte> list2 = null;
+    List<Byte> list3 = Arrays.asList((byte)0x0d, (byte)0xed, (byte)0x9c, (byte)0xa0, (byte)0xc3, (byte)0xa9, (byte)0xed, (byte)0x9c, (byte)0xa1);
+    List<Byte> list4 = Arrays.asList((byte)0x41, (byte)0x52, (byte)0xc3, (byte)0xa9);
+    List<Byte> list5 = Arrays.asList((byte)0x5c, (byte)0x54, (byte)0x48, (byte)0x45, (byte)0x09, (byte)0x38, (byte)0xed, (byte)0x9c, (byte)0xa0);
+    List<Byte> list6 = Arrays.asList((byte)0x74, (byte)0xc3, (byte)0xa9, (byte)0x73, (byte)0x74, (byte)0x20, (byte)0x73, (byte)0x74, (byte)0x72, (byte)0x69, (byte)0x6e, (byte)0x67, (byte)0x73);
+    List<Byte> list7 = Arrays.asList();
+    List<Byte> list8 = Arrays.asList((byte)0xc3, (byte)0xa9, (byte)0xc3, (byte)0xa9);
 
-    try(ColumnVector cv = ColumnVector.fromStrings();
-        ColumnVector expected_strings = cv.asByteList()) {
-
-        List<Integer> ret1 = expected.getList(0);
-        List<Integer> ret2 = expected.getList(1);
-        List<Integer> ret3 = expected.getList(2);
-        assertEquals(list1, ret1, "Lists don't match");
-        assertEquals(list2, ret2, "Lists don't match");
-        assertEquals(list3, ret3, "Lists don't match");
-    }
-  }
-
-  @Test
-  void testCastIntegerToByteList() {
-    List<Byte> list1 = Arrays.asList(0x00, 0x00, 0x00, 0x00);
-    List<Byte> list2 = Arrays.asList(0x00, 0x00, 0x00, 0x64);
-    List<Byte> list3 = Arrays.asList(0xff, 0xff, 0xff, 0x9c);
-    List<Byte> list4 = Arrays.asList(0x00, 0x00, 0x00, 0x00);//null?
-    List<Byte> list5 = Arrays.asList(0x80, 0x00, 0x00, 0x00);
-    List<Byte> list6 = Arrays.asList(0x7f, 0xff, 0xff, 0xff);
-
-    try(ColumnVector cv = ColumnVector.fromBoxedIntegers(0, 100, -100, null, Integer.MIN_VALUE, Integer.MAX_VALUE);
-        ColumnVector expected = cv.asByteList(true)) {
-        List<Integer> ret1 = expected.getList(0);
-        List<Integer> ret2 = expected.getList(1);
-        List<Integer> ret3 = expected.getList(2);
-        List<Integer> ret4 = expected.getList(3);
-        List<Integer> ret5 = expected.getList(4);
-        List<Integer> ret6 = expected.getList(5);
-        List<Integer> ret7 = expected.getList(6);
+    try(ColumnVector cv = ColumnVector.fromStrings("Thésé", null, "\r\ud720é\ud721", "ARé",
+    "\\THE\t8\ud720", "tést strings", "", "éé");
+        ColumnVector res = cv.asByteList(true);
+        HostColumnVector host_res = res.copyToHost()) {
+        List<Byte> ret1 = host_res.getList(0);
+        List<Byte> ret2 = host_res.getList(1);
+        List<Byte> ret3 = host_res.getList(2);
+        List<Byte> ret4 = host_res.getList(3);
+        List<Byte> ret5 = host_res.getList(4);
+        List<Byte> ret6 = host_res.getList(5);
+        List<Byte> ret7 = host_res.getList(6);
+        List<Byte> ret8 = host_res.getList(7);
         assertEquals(list1, ret1, "Lists don't match");
         assertEquals(list2, ret2, "Lists don't match");
         assertEquals(list3, ret3, "Lists don't match");
@@ -1951,39 +1939,64 @@ public class ColumnVectorTest extends CudfTestBase {
         assertEquals(list5, ret5, "Lists don't match");
         assertEquals(list6, ret6, "Lists don't match");
         assertEquals(list7, ret7, "Lists don't match");
+        assertEquals(list8, ret8, "Lists don't match");
+    }
+  }
+
+  @Test
+  void testCastIntegerToByteList() {
+    List<Byte> list1 = Arrays.asList((byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00);
+    List<Byte> list2 = Arrays.asList((byte)0x00, (byte)0x00, (byte)0x00, (byte)0x64);
+    List<Byte> list3 = Arrays.asList((byte)0xff, (byte)0xff, (byte)0xff, (byte)0x9c);
+    List<Byte> list5 = Arrays.asList((byte)0x80, (byte)0x00, (byte)0x00, (byte)0x00);
+    List<Byte> list6 = Arrays.asList((byte)0x7f, (byte)0xff, (byte)0xff, (byte)0xff);
+
+    try(ColumnVector cv = ColumnVector.fromBoxedInts(0, 100, -100, null, Integer.MIN_VALUE, Integer.MAX_VALUE);
+        ColumnVector res = cv.asByteList(true);
+        HostColumnVector host_res = res.copyToHost()) {
+        List<Byte> ret1 = host_res.getList(0);
+        List<Byte> ret2 = host_res.getList(1);
+        List<Byte> ret3 = host_res.getList(2);
+        boolean ret4 = host_res.isNull(3);
+        List<Byte> ret5 = host_res.getList(4);
+        List<Byte> ret6 = host_res.getList(5);
+        assertEquals(list1, ret1, "Lists don't match");
+        assertEquals(list2, ret2, "Lists don't match");
+        assertEquals(list3, ret3, "Lists don't match");
+        assertTrue(ret4, "Lists don't match");
+        assertEquals(list5, ret5, "Lists don't match");
+        assertEquals(list6, ret6, "Lists don't match");
     }
   }
   
   @Test
   void testCastFloatToByteList() {
-    List<Byte> list1 = Arrays.asList(0x00, 0x00, 0x00, 0x00);
-    List<Byte> list2 = Arrays.asList(0x00, 0x00, 0xc8, 0x42);
-    List<Byte> list3 = Arrays.asList(0x00, 0x00, 0xc8, 0xc2);
-    List<Byte> list4 = Arrays.asList(0x00, 0x00, 0x00, 0x00);//null?
-    List<Byte> list5 = Arrays.asList(0x00, 0x00, 0xc0, 0x7f);
-    List<Byte> list6 = Arrays.asList(0xff, 0xff, 0x7f, 0x7f);
-    List<Byte> list7 = Arrays.asList(0x00, 0x00, 0x80, 0xff);
+    List<Byte> list1 = Arrays.asList((byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00);
+    List<Byte> list2 = Arrays.asList((byte)0x00, (byte)0x00, (byte)0xc8, (byte)0x42);
+    List<Byte> list3 = Arrays.asList((byte)0x00, (byte)0x00, (byte)0xc8, (byte)0xc2);
+    List<Byte> list5 = Arrays.asList((byte)0x00, (byte)0x00, (byte)0xc0, (byte)0x7f);
+    List<Byte> list6 = Arrays.asList((byte)0xff, (byte)0xff, (byte)0x7f, (byte)0x7f);
+    List<Byte> list7 = Arrays.asList((byte)0x00, (byte)0x00, (byte)0x80, (byte)0xff);
 
     try(ColumnVector cv = ColumnVector.fromBoxedFloats((float)0.0, (float)100.0, (float)-100.0, null, -Float.NaN, Float.MAX_VALUE, Float.NEGATIVE_INFINITY);
-        ColumnVector expected = cv.asByteList(false)) {
-          List<Integer> ret1 = expected.getList(0);
-          List<Integer> ret2 = expected.getList(1);
-          List<Integer> ret3 = expected.getList(2);
-          List<Integer> ret4 = expected.getList(3);
-          List<Integer> ret5 = expected.getList(4);
-          List<Integer> ret6 = expected.getList(5);
-          List<Integer> ret7 = expected.getList(6);
+        ColumnVector res = cv.asByteList(false);
+        HostColumnVector host_res = res.copyToHost()) {
+          List<Byte> ret1 = host_res.getList(0);
+          List<Byte> ret2 = host_res.getList(1);
+          List<Byte> ret3 = host_res.getList(2);
+          boolean ret4 = host_res.isNull(3);
+          List<Byte> ret5 = host_res.getList(4);
+          List<Byte> ret6 = host_res.getList(5);
+          List<Byte> ret7 = host_res.getList(6);
           assertEquals(list1, ret1, "Lists don't match");
           assertEquals(list2, ret2, "Lists don't match");
           assertEquals(list3, ret3, "Lists don't match");
-          assertEquals(list4, ret4, "Lists don't match");
+          assertTrue(ret4, "Lists don't match");
           assertEquals(list5, ret5, "Lists don't match");
           assertEquals(list6, ret6, "Lists don't match");
           assertEquals(list7, ret7, "Lists don't match");
       }
-
   }
-  
 
   @Test
   void testContainsScalar() {
