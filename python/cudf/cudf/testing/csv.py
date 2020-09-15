@@ -96,9 +96,7 @@ class CSVReader(object):
         num_cols = self._rand(self._max_columns)
 
         dtypes_list = list(
-            cudf.utils.dtypes.ALL_TYPES
-            - cudf.utils.dtypes.TIMEDELTA_TYPES
-            - {"float64"}
+            cudf.utils.dtypes.ALL_TYPES - cudf.utils.dtypes.TIMEDELTA_TYPES
         )
         dtypes_meta = [
             (
@@ -194,9 +192,7 @@ class CSVWriter(object):
         num_cols = self._rand(self._max_columns)
 
         dtypes_list = list(
-            cudf.utils.dtypes.ALL_TYPES
-            - cudf.utils.dtypes.TIMEDELTA_TYPES
-            - {"float64"}
+            cudf.utils.dtypes.ALL_TYPES - cudf.utils.dtypes.TIMEDELTA_TYPES
         )
         dtypes_meta = [
             (

@@ -287,12 +287,10 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
                     ColumnParameters(
                         cardinality=cardinality,
                         null_frequency=null_frequency,
-                        generator=lambda g: g.numbers.floats(
-                            start=finfo.min + 1,
-                            end=finfo.max - 1,
-                            n=rows,
-                            precision=finfo.precision,
-                        ),
+                        generator=lambda g: np.random.uniform(
+                            low=finfo.min / 2, high=finfo.max / 2, size=rows,
+                        )
+                        * 2,
                         is_sorted=False,
                     )
                 )
