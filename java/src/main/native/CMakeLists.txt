@@ -240,7 +240,7 @@ if(PER_THREAD_DEFAULT_STREAM)
 endif(PER_THREAD_DEFAULT_STREAM)
 
 # Set a default logging level if none was specified
-set(DEFAULT_LOGGING_LEVEL OFF)
+set(DEFAULT_LOGGING_LEVEL INFO)
 
 if(NOT LOGGING_LEVEL)
     message(STATUS "Setting logging level to '${DEFAULT_LOGGING_LEVEL}' since none specified.")
