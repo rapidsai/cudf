@@ -46,6 +46,9 @@
 - PR #6195 Update JNI to use parquet options builder
 - PR #6190 Avoid reading full csv files for metadata in dask_cudf
 - PR #6197 Remove librmm dependency for libcudf
+- PR #6214 Small clean up to use more algorithms
+- PR #6209 Remove CXX11 ABI handling from CMake
+- PR #6223 Remove CXX11 ABI flag from JNI build
 
 ## Bug Fixes
 
@@ -63,12 +66,15 @@
 - PR #6154 Warnings on row-wise op only when non-numeric columns are found.
 - PR #6150 Fix issue related to inferring `datetime64` format with UTC timezone in string data
 - PR #6157 Fix issue related to `Series.concat` to concat a non-empty and empty series.
+- PR #6179 `make_elements` copies to `iterator` without adjusting `size`
 - PR #6182 Fix cmake build of arrow
 - PR #6173 Fix normalize_characters offset logic on sliced strings column
 - PR #6159 Fix issue related to empty `Dataframe` with columns input to `DataFrame.appened`
 - PR #6183 Fix issues related to `Series.acos` for consistent output regardless of dtype 
 - PR #6199 Fix index preservation for dask_cudf parquet
 - PR #6207 Remove shared libs from Java sources jar
+- PR #6212 Update codeowners file
+- PR #6226 Add in some JNI checks for null handles
 
 
 # cuDF 0.15.0 (26 Aug 2020)
