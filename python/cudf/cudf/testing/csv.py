@@ -73,7 +73,7 @@ class CSVReader(object):
         else:
             seed = random.randint(0, 2 ** 32 - 1)
             random.seed(seed)
-            dtypes_meta, num_rows, num_cols = self.generate_rand_meta()
+            dtypes_meta, num_rows, num_cols = _generate_rand_meta(self)
             file_name = self._file_name
             self._current_params["dtypes_meta"] = dtypes_meta
             self._current_params["file_name"] = self._file_name
@@ -89,32 +89,6 @@ class CSVReader(object):
         logging.info(f"Shape of DataFrame generated: {df.shape}")
 
         return file_name
-
-    def generate_rand_meta(self):
-        self._current_params = {}
-        num_rows = self._rand(self._max_rows)
-        num_cols = self._rand(self._max_columns)
-
-        dtypes_list = list(
-            cudf.utils.dtypes.ALL_TYPES - cudf.utils.dtypes.TIMEDELTA_TYPES
-        )
-        dtypes_meta = []
-
-        for _ in range(num_cols):
-            dtype = random.choice(dtypes_list)
-            null_frequency = random.uniform(0, 1)
-            cardinality = self._rand(self._max_rows)
-            meta = dict()
-            if dtype == "str":
-                # We want to operate near the limits of string column
-                # Hence creating a string column of size almost
-                # equal to 2 Billion bytes(sizeof(int))
-                meta["max_string_length"] = 2000000000 / num_rows
-            meta["dtype"] = dtype
-            meta["null_frequency"] = null_frequency
-            meta["cardinality"] = cardinality
-            dtypes_meta.append(meta)
-        return dtypes_meta, num_rows, num_cols
 
     @property
     def current_params(self):
@@ -178,7 +152,7 @@ class CSVWriter(object):
         else:
             seed = random.randint(0, 2 ** 32 - 1)
             random.seed(seed)
-            dtypes_meta, num_rows, num_cols = self.generate_rand_meta()
+            dtypes_meta, num_rows, num_cols = _generate_rand_meta(self)
             self._current_params["dtypes_meta"] = dtypes_meta
             self._current_params["seed"] = seed
             self._current_params["num_rows"] = num_rows
@@ -194,32 +168,33 @@ class CSVWriter(object):
 
         return df
 
-    def generate_rand_meta(self):
-        self._current_params = {}
-        num_rows = self._rand(self._max_rows)
-        num_cols = self._rand(self._max_columns)
-
-        dtypes_list = list(
-            cudf.utils.dtypes.ALL_TYPES - cudf.utils.dtypes.TIMEDELTA_TYPES
-        )
-        dtypes_meta = []
-
-        for _ in range(num_cols):
-            dtype = random.choice(dtypes_list)
-            null_frequency = random.uniform(0, 1)
-            cardinality = self._rand(self._max_rows)
-            meta = dict()
-            if dtype == "str":
-                # We want to operate near the limits of string column
-                # Hence creating a string column of size almost
-                # equal to 2 Billion bytes(sizeof(int))
-                meta["max_string_length"] = 2000000000 / num_rows
-            meta["dtype"] = dtype
-            meta["null_frequency"] = null_frequency
-            meta["cardinality"] = cardinality
-            dtypes_meta.append(meta)
-        return dtypes_meta, num_rows, num_cols
-
     @property
     def current_params(self):
         return self._current_params
+
+
+def _generate_rand_meta(obj):
+    obj._current_params = {}
+    num_rows = obj._rand(obj._max_rows)
+    num_cols = obj._rand(obj._max_columns)
+
+    dtypes_list = list(
+        cudf.utils.dtypes.ALL_TYPES - cudf.utils.dtypes.TIMEDELTA_TYPES
+    )
+    dtypes_meta = []
+
+    for _ in range(num_cols):
+        dtype = random.choice(dtypes_list)
+        null_frequency = random.uniform(0, 1)
+        cardinality = obj._rand(obj._max_rows)
+        meta = dict()
+        if dtype == "str":
+            # We want to operate near the limits of string column
+            # Hence creating a string column of size almost
+            # equal to 2 Billion bytes(sizeof(int))
+            meta["max_string_length"] = 2000000000 / num_rows
+        meta["dtype"] = dtype
+        meta["null_frequency"] = null_frequency
+        meta["cardinality"] = cardinality
+        dtypes_meta.append(meta)
+    return dtypes_meta, num_rows, num_cols
