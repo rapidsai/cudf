@@ -8,8 +8,6 @@ import datetime
 
 import pandas as pd
 import cudf
-import dask.dataframe as dd
-import dask.array as da
 
 
 def _apply_filter_bool_eq(val, col_stats):
