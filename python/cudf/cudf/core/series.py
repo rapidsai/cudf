@@ -4029,7 +4029,9 @@ class Series(Frame, Serializable):
                 + [self.max()]
             )
             data = _format_stats_values(data)
-
+            for i, d in enumerate(data):
+                if isinstance(d, cudf.Scalar):
+                    data[i] = d.value
             return Series(
                 data=data, index=names, nan_as_null=False, name=self.name,
             )

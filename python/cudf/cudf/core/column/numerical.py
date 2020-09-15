@@ -82,13 +82,13 @@ class NumericalColumn(column.ColumnBase):
         if reflect:
             tmp = self
         if isinstance(rhs, (NumericalColumn, Scalar)) or np.isscalar(rhs):
-            out_dtype = np.result_type(
-                cudf.dtype(self.dtype).to_numpy, cudf.dtype(rhs.dtype).to_numpy
+            out_dtype = cudf.api.types.result_type(
+                self.dtype, rhs.dtype
             )
             out_dtype = cudf.dtype(out_dtype)
             if binop in ["mod", "floordiv"]:
                 if (cudf.dtype(tmp.dtype) in int_dtypes) and (
-                    (np.isscalar(tmp) and (0 == tmp))
+                    (cudf.api.types.isscalar(tmp) and (0 == tmp))
                     or ((isinstance(tmp, NumericalColumn)) and (0.0 in tmp))
                 ):
                     out_dtype = cudf.Float64Dtype()

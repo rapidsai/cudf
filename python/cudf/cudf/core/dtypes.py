@@ -22,8 +22,8 @@ class Generic(ExtensionDtype, _Dtype):
         ):
             return False
         if (
-            isinstance(other, type(self.to_pandas))
-            or other is type(self.to_pandas)
+            isinstance(other, self.to_pandas.type)
+            or other is self.to_pandas
         ):
             return True
 
