@@ -458,6 +458,42 @@ class Frame(libcudf.table.Table):
 
         return out
 
+    def equals(self, other, **kwargs):
+        """
+        Determine if two Index objects contain the same elements.
+
+        Parameters
+        ----------
+        other : Index
+
+        Returns
+        -------
+        out: bool
+            True if “other” is an Index and it has the same elements
+            as calling index; False otherwise.
+        """
+        if self is other:
+            return True
+
+        if kwargs.get("check_type", True):
+            if type(self) is not type(other):
+                return False
+
+        # check data:
+        for self_col, other_col in zip(
+            self._data.values(), other._data.values()
+        ):
+            if not self_col.equals(other_col):
+                return False
+
+        # check index:
+        if self._index is None:
+            return other._index is None
+        else:
+            if other._index is None:
+                return False
+            return self._index.equals(other._index)
+
     def _get_columns_by_label(self, labels, downcast=False):
         """
         Returns columns of the Frame specified by `labels`

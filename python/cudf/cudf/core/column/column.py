@@ -166,12 +166,6 @@ class ColumnBase(Column, Serializable):
             return True
         if other is None or len(self) != len(other):
             return False
-        if len(self) == 1:
-            val = self[0] == other[0]
-            # when self is multiindex we need to checkall
-            if isinstance(val, np.ndarray):
-                return val.all()
-            return bool(val)
         return self.binary_operator("eq", other).min()
 
     def all(self):
