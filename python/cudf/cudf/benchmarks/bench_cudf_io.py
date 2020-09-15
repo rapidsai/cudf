@@ -7,6 +7,8 @@ import cudf
 import numpy as np
 import pandavro as pav
 
+# list and dict dtype are needs to be supported once
+# random DataFrame generator is capable of handling it.
 common_dtypes_meta = [
     [np.dtype("bool"), 0.0, 250],
     [np.dtype("int16"), 0.2, 480],
