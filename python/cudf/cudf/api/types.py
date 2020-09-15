@@ -184,3 +184,6 @@ def promote_types(type1, type2):
     if result == np.dtype('float16'):
         return cudf.Float32Dtype()
     return cudf.dtype(result)
+
+def isscalar(element):
+    return isinstance(element, cudf._lib.scalar.Scalar) or np.isscalar(element)
