@@ -2708,7 +2708,8 @@ def as_index(arbitrary, **kwargs):
         if arbitrary.name == kwargs["name"]:
             return arbitrary
         idx = arbitrary.copy(deep=False)
-        return idx.rename(kwargs["name"], inplace=True)
+        idx.rename(kwargs["name"], inplace=True)
+        return idx
     elif isinstance(arbitrary, NumericalColumn):
         try:
             return _dtype_to_index[arbitrary.dtype.type](arbitrary, **kwargs)
