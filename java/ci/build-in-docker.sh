@@ -68,7 +68,7 @@ make -j$PARALLEL_LEVEL
 make install DESTDIR=$INSTALL_PREFIX
 
 ###### Build cudf jar ######
-BUILD_ARG="-Dmaven.repo.local=$WORKSPACE/.m2 -DskipTests=$SKIP_JAVA_TESTS -PabiOff -DPER_THREAD_DEFAULT_STREAM=$ENABLE_PTDS"
+BUILD_ARG="-Dmaven.repo.local=$WORKSPACE/.m2 -DskipTests=$SKIP_JAVA_TESTS -DPER_THREAD_DEFAULT_STREAM=$ENABLE_PTDS"
 if [ "$SIGN_FILE" == true ]; then
     # Build javadoc and sources only when SIGN_FILE is true
     BUILD_ARG="$BUILD_ARG -Prelease"
