@@ -3,7 +3,6 @@ from __future__ import division, print_function
 
 import inspect
 import itertools
-import logging
 import numbers
 import pickle
 import sys
@@ -36,7 +35,7 @@ from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.core.series import Series
 from cudf.core.window import Rolling
-from cudf.utils import applyutils, ioutils, queryutils, utils
+from cudf.utils import applyutils, docutils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     cudf_dtype_from_pydata_dtype,
@@ -213,7 +212,7 @@ class DataFrame(Frame, Serializable):
             else:
                 self._index = as_index(index)
             if columns is not None:
-                if isinstance(columns, (cudf.Series, cudf.Index)):
+                if isinstance(columns, (Series, cudf.Index)):
                     columns = columns.to_pandas()
 
                 self._data = ColumnAccessor(
@@ -262,7 +261,7 @@ class DataFrame(Frame, Serializable):
                     self._data = new_df._data
                     self._index = new_df._index
                     self.columns = new_df.columns
-                elif len(data) > 0 and isinstance(data[0], cudf.Series):
+                elif len(data) > 0 and isinstance(data[0], Series):
                     self._init_from_series_list(
                         data=data, columns=columns, index=index
                     )
@@ -466,9 +465,9 @@ class DataFrame(Frame, Serializable):
         data = data.copy()
 
         input_series = [
-            cudf.Series(val)
+            Series(val)
             for val in data.values()
-            if isinstance(val, (pd.Series, cudf.Series))
+            if isinstance(val, (pd.Series, Series))
         ]
 
         if input_series:
@@ -485,7 +484,7 @@ class DataFrame(Frame, Serializable):
                 index = aligned_input_series[0].index
 
             for name, val in data.items():
-                if isinstance(val, (pd.Series, cudf.Series)):
+                if isinstance(val, (pd.Series, Series)):
                     data[name] = aligned_input_series.pop(0)
 
         return data, index
@@ -2467,7 +2466,7 @@ class DataFrame(Frame, Serializable):
         is_multiindex = isinstance(columns, pd.MultiIndex)
 
         if isinstance(
-            columns, (cudf.Series, cudf.Index, cudf.core.column.ColumnBase)
+            columns, (Series, cudf.Index, cudf.core.column.ColumnBase)
         ):
             columns = pd.Index(columns.to_array(), tupleize_cols=is_multiindex)
         elif not isinstance(columns, pd.Index):
@@ -4536,130 +4535,64 @@ class DataFrame(Frame, Serializable):
 
         cudf.utils.ioutils.buffer_write_lines(buf, lines)
 
-    def describe(self, percentiles=None, include=None, exclude=None):
-        """Compute summary statistics of a DataFrame's columns. For numeric
-        data, the output includes the minimum, maximum, mean, median,
-        standard deviation, and various quantiles. For object data, the output
-        includes the count, number of unique values, the most common value, and
-        the number of occurrences of the most common value.
-
-        Parameters
-        ----------
-        percentiles : list-like, optional
-            The percentiles used to generate the output summary statistics.
-            If None, the default percentiles used are the 25th, 50th and 75th.
-            Values should be within the interval [0, 1].
-
-        include: str, list-like, optional
-            The dtypes to be included in the output summary statistics. Columns
-            of dtypes not included in this list will not be part of the output.
-            If include='all', all dtypes are included. Default of None includes
-            all numeric columns.
-
-        exclude: str, list-like, optional
-            The dtypes to be excluded from the output summary statistics.
-            Columns of dtypes included in this list will not be part of the
-            output. Default of None excludes no columns.
-
-        Returns
-        -------
-        output_frame : DataFrame
-            Summary statistics of relevant columns in the original dataframe.
-
-        Examples
-        --------
-        Describing a ``Series`` containing numeric values.
-
-        >>> import cudf
-        >>> s = cudf.Series([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-        >>> print(s.describe())
-           stats   values
-        0  count     10.0
-        1   mean      5.5
-        2    std  3.02765
-        3    min      1.0
-        4    25%      2.5
-        5    50%      5.5
-        6    75%      7.5
-        7    max     10.0
-
-        Describing a ``DataFrame``. By default all numeric fields
-        are returned.
-
-        >>> gdf = cudf.DataFrame()
-        >>> gdf['a'] = [1,2,3]
-        >>> gdf['b'] = [1.0, 2.0, 3.0]
-        >>> gdf['c'] = ['x', 'y', 'z']
-        >>> gdf['d'] = [1.0, 2.0, 3.0]
-        >>> gdf['d'] = gdf['d'].astype('float32')
-        >>> print(gdf.describe())
-           stats    a    b    d
-        0  count  3.0  3.0  3.0
-        1   mean  2.0  2.0  2.0
-        2    std  1.0  1.0  1.0
-        3    min  1.0  1.0  1.0
-        4    25%  1.5  1.5  1.5
-        5    50%  1.5  1.5  1.5
-        6    75%  2.5  2.5  2.5
-        7    max  3.0  3.0  3.0
-
-        Using the ``include`` keyword to describe only specific dtypes.
-
-        >>> gdf = cudf.DataFrame()
-        >>> gdf['a'] = [1,2,3]
-        >>> gdf['b'] = [1.0, 2.0, 3.0]
-        >>> gdf['c'] = ['x', 'y', 'z']
-        >>> print(gdf.describe(include='int'))
-           stats    a
-        0  count  3.0
-        1   mean  2.0
-        2    std  1.0
-        3    min  1.0
-        4    25%  1.5
-        5    50%  1.5
-        6    75%  2.5
-        7    max  3.0
-        """
-
-        def _create_output_frame(data, percentiles=None):
-            # hack because we don't support strings in indexes
-            return DataFrame(
-                {
-                    col: data[col].describe(percentiles=percentiles)
-                    for col in data.columns
-                },
-                index=Series(column.column_empty(0, dtype="int32"))
-                .describe(percentiles=percentiles)
-                .index,
-            )
+    @docutils.doc_describe()
+    def describe(
+        self,
+        percentiles=None,
+        include=None,
+        exclude=None,
+        datetime_is_numeric=False,
+    ):
+        """{docstring}"""
 
         if not include and not exclude:
-            numeric_data = self.select_dtypes(np.number)
-            output_frame = _create_output_frame(numeric_data, percentiles)
+            default_include = [np.number]
+            if datetime_is_numeric:
+                default_include.append("datetime")
+            data_to_describe = self.select_dtypes(include=default_include)
+            if len(data_to_describe.columns) == 0:
+                data_to_describe = self
 
         elif include == "all":
-            if exclude:
-                raise ValueError("Cannot exclude when include='all'.")
+            if exclude is not None:
+                raise ValueError("exclude must be None when include is 'all'")
 
-            included_data = self.select_dtypes(np.number)
-            output_frame = _create_output_frame(included_data, percentiles)
-            logging.warning(
-                "Describe does not yet include StringColumns or "
-                "DatetimeColumns."
-            )
-
+            data_to_describe = self
         else:
-            if not include:
-                include = np.number
-
-            included_data = self.select_dtypes(
+            data_to_describe = self.select_dtypes(
                 include=include, exclude=exclude
             )
-            if included_data.empty:
-                raise ValueError("No data of included types.")
-            output_frame = _create_output_frame(included_data, percentiles)
 
-        return output_frame
+            if data_to_describe.empty:
+                raise ValueError("No data of included types.")
+
+        describe_series_list = [
+            data_to_describe[col].describe(percentiles=percentiles)
+            for col in data_to_describe.columns
+        ]
+        if len(describe_series_list) == 1:
+            return describe_series_list[0].to_frame()
+        else:
+            ldesc_indexes = sorted(
+                (x.index for x in describe_series_list), key=len
+            )
+            names = OrderedDict.fromkeys(
+                [
+                    name
+                    for idxnames in ldesc_indexes
+                    for name in idxnames.to_pandas()
+                ],
+                None,
+            )
+
+            return cudf.concat(
+                [
+                    series.reindex(names, copy=False)
+                    for series in describe_series_list
+                ],
+                axis=1,
+                sort=False,
+            )
 
     def to_pandas(self, **kwargs):
         """
@@ -5943,7 +5876,7 @@ class DataFrame(Frame, Serializable):
             return df
 
         df = cudf.concat(mode_results, axis=1)
-        if isinstance(df, cudf.Series):
+        if isinstance(df, Series):
             df = df.to_frame()
 
         df.columns = data_df.columns
@@ -6773,7 +6706,7 @@ class DataFrame(Frame, Serializable):
                 [self, other], ignore_index=ignore_index, sort=sort
             )
             return result
-        elif isinstance(other, cudf.Series):
+        elif isinstance(other, Series):
             if other.name is None and not ignore_index:
                 raise TypeError(
                     "Can only append a Series if ignore_index=True "
