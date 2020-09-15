@@ -53,9 +53,12 @@ enum class type_group_id : int32_t {
  * @brief Identifies a probability distribution type.
  */
 enum class distribution_id : int8_t {
-  UNIFORM,
-  NORMAL,
-  GEOMETRIC,
+  UNIFORM,    ///< Uniform sampling between the given bounds. Provides the best coverage of the
+              ///< overall value range. Real data rarely has this distribution.
+  NORMAL,     ///< Gaussian sampling - most samples are close to the middle of the range. Good for
+              ///< simulating real-world numeric data.
+  GEOMETRIC,  ///< Geometric sampling - highest chance to sample close to the lower bound. Good for
+              ///< simulating real data with asymmetric distribution (unsigned values, timestamps).
 };
 
 // Default distribution types for each type
@@ -82,16 +85,6 @@ distribution_id default_distribution_id()
 }
 
 /**
- * @brief Converts a number of days into the time unit of the templated type.
- */
-template <typename T>
-constexpr int64_t from_days(int64_t t)
-{
-  using ratio = std::ratio_divide<typename cudf::timestamp_D::period, typename T::period>;
-  return t * ratio::num / ratio::den;
-}
-
-/**
  * @brief Default range for the timestamp types: 1970 - 2020.
  *
  * The 2020 timestamp is used as a lower bound to bias the geometric distribution to recent
@@ -100,8 +93,9 @@ constexpr int64_t from_days(int64_t t)
 template <typename T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
 std::pair<int64_t, int64_t> default_range()
 {
-  static constexpr int64_t year = from_days<T>(365l);
-  return {50 * year, 0};
+  using simt::std::chrono::duration_cast;
+  auto const year = duration_cast<typename T::duration>(cudf::duration_D{365l});
+  return {50 * year.count(), 0};
 }
 
 /**
@@ -112,8 +106,9 @@ std::pair<int64_t, int64_t> default_range()
 template <typename T, std::enable_if_t<cudf::is_duration<T>()>* = nullptr>
 std::pair<int64_t, int64_t> default_range()
 {
-  static constexpr int64_t year = from_days<T>(365l);
-  return {0, 2 * year};
+  using simt::std::chrono::duration_cast;
+  auto const year = duration_cast<typename T::duration>(cudf::duration_D{365l});
+  return {0, 2 * year.count()};
 }
 
 template <typename T, std::enable_if_t<cudf::is_numeric<T>()>* = nullptr>

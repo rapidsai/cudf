@@ -109,18 +109,6 @@ template <typename T, typename Enable = void>
 struct random_value_fn;
 
 /**
- * @brief nanosecond count in the unit of @ref T.
- *
- * @tparam T Timestamp type
- */
-template <typename T>
-constexpr int64_t to_nanoseconds(int64_t t)
-{
-  using ratio = std::ratio_divide<typename T::period, typename cudf::timestamp_ns::period>;
-  return t * (ratio::num / ratio::den);
-}
-
-/**
  * @brief Creates an random timestamp/duration value
  */
 template <typename T>
@@ -130,32 +118,35 @@ struct random_value_fn<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
 
   random_value_fn(distribution_params<T> params)
   {
-    std::pair<int64_t, int64_t> const range_ns = {to_nanoseconds<T>(params.lower_bound),
-                                                  to_nanoseconds<T>(params.upper_bound)};
-    std::pair<int64_t, int64_t> const range_s  = {
-      range_ns.first / to_nanoseconds<cudf::timestamp_s>(1),
-      range_ns.second / to_nanoseconds<cudf::timestamp_s>(1)};
-    // Don't need a random seconds generator for sub-second intervals
-    if (range_s.first != range_s.second)
-      seconds_gen = make_distribution<int64_t>(params.id, range_s.first, range_s.second);
-    else
-      seconds_gen = [=](std::mt19937&) { return range_s.second; };
+    using simt::std::chrono::duration_cast;
 
-    auto const range_size_ns = range_ns.second - range_ns.first;
-    // Don't need nanoseconds for days or seconds
-    if (to_nanoseconds<T>(1) < 1000000000)
-      nanoseconds_gen = make_distribution<int64_t>(
-        distribution_id::UNIFORM, std::min(range_size_ns, 0l), std::max(range_size_ns, 0l));
-    else
-      nanoseconds_gen = [](std::mt19937&) { return 0; };
+    std::pair<cudf::duration_s, cudf::duration_s> const range_s = {
+      duration_cast<simt::std::chrono::seconds>(typename T::duration{params.lower_bound}),
+      duration_cast<simt::std::chrono::seconds>(typename T::duration{params.upper_bound})};
+    if (range_s.first != range_s.second) {
+      seconds_gen =
+        make_distribution<int64_t>(params.id, range_s.first.count(), range_s.second.count());
+
+      nanoseconds_gen = make_distribution<int64_t>(distribution_id::UNIFORM, 0l, 1000000000l);
+    } else {
+      // Don't need a random seconds generator for sub-second intervals
+      seconds_gen = [=](std::mt19937&) { return range_s.second.count(); };
+
+      std::pair<cudf::duration_ns, cudf::duration_ns> const range_ns = {
+        duration_cast<cudf::duration_ns>(typename T::duration{params.lower_bound}),
+        duration_cast<cudf::duration_ns>(typename T::duration{params.upper_bound})};
+      nanoseconds_gen = make_distribution<int64_t>(distribution_id::UNIFORM,
+                                                   std::min(range_ns.first.count(), 0l),
+                                                   std::max(range_ns.second.count(), 0l));
+    }
   }
 
   T operator()(std::mt19937& engine)
   {
     auto const timestamp_ns =
-      to_nanoseconds<cudf::timestamp_s>(seconds_gen(engine)) + nanoseconds_gen(engine);
+      cudf::duration_s{seconds_gen(engine)} + cudf::duration_ns{nanoseconds_gen(engine)};
     // Return value in the type's precision
-    return T(typename T::duration{timestamp_ns / to_nanoseconds<T>(1)});
+    return T(simt::std::chrono::duration_cast<typename T::duration>(timestamp_ns));
   }
 };
 
@@ -457,39 +448,43 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
   auto const single_level_mean = get_distribution_mean(dist_params.length_params);
   auto const num_elements      = num_rows * pow(single_level_mean, dist_params.max_depth);
 
-  auto child_column = cudf::type_dispatcher(
+  auto leaf_column = cudf::type_dispatcher(
     cudf::data_type(dist_params.element_type), create_rand_col_fn{}, profile, engine, num_elements);
   auto len_dist =
     random_value_fn<uint32_t>{profile.get_distribution_params<cudf::list_view>().length_params};
   auto valid_dist = std::bernoulli_distribution{1. - profile.get_null_frequency()};
 
+  // Generate the list column bottom-up
+  auto list_column = std::move(leaf_column);
   for (int lvl = 0; lvl < dist_params.max_depth; ++lvl) {
-    auto const num_rows = child_column->size() / single_level_mean;
+    // Generating the next level - offsets point into the current list column
+    auto current_child_column = std::move(list_column);
+    auto const num_rows       = current_child_column->size() / single_level_mean;
 
     std::vector<int32_t> offsets{0};
     offsets.reserve(num_rows + 1);
     std::vector<cudf::bitmask_type> null_mask(null_mask_size(num_rows), ~0);
     for (int row = 1; row < num_rows + 1; ++row) {
-      offsets.push_back(std::min<int32_t>(child_column->size(), offsets.back() + len_dist(engine)));
+      offsets.push_back(
+        std::min<int32_t>(current_child_column->size(), offsets.back() + len_dist(engine)));
       if (!valid_dist(engine)) cudf::clear_bit_unsafe(null_mask.data(), row);
     }
-    offsets.back() = child_column->size();  // Always include all elements
+    offsets.back() = current_child_column->size();  // Always include all elements
 
     auto offsets_column = std::make_unique<cudf::column>(
       cudf::data_type{cudf::type_id::INT32},
       offsets.size(),
       rmm::device_buffer(offsets.data(), offsets.size() * sizeof(int32_t), cudaStream_t(0)));
 
-    auto list_column = cudf::make_lists_column(
+    list_column = cudf::make_lists_column(
       num_rows,
       std::move(offsets_column),
-      std::move(child_column),
+      std::move(current_child_column),
       cudf::UNKNOWN_NULL_COUNT,
       rmm::device_buffer(
         null_mask.data(), null_mask.size() * sizeof(cudf::bitmask_type), cudaStream_t(0)));
-    child_column = std::move(list_column);
   }
-  return child_column;
+  return list_column;  // return the top-level column
 }
 
 using columns_vector = std::vector<std::unique_ptr<cudf::column>>;
