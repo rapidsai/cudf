@@ -2628,7 +2628,7 @@ class DataFrame(Frame, Serializable):
 
         return DataFrame(cols, idx)
 
-    def set_index(self, index, drop=True, inplace=False):
+    def set_index(self, index, drop=True, inplace=False, append=False):
         """Return a new DataFrame with a new index
 
         Parameters
@@ -2640,6 +2640,8 @@ class DataFrame(Frame, Serializable):
             list of str : name of columns to be converted to a MultiIndex
         drop : boolean
             whether to drop corresponding column for str index argument
+        inplace : boolean
+
         """
         df = self.copy(deep=False) if not inplace else self
 
@@ -2659,8 +2661,8 @@ class DataFrame(Frame, Serializable):
 
         # Genearl Case
         if drop:
-            df.drop(columns=drop)
-        index = index if isinstance(index, Index) else as_index(index)
+            df.drop(columns=index)
+        index = index if isinstance(index, [Index, cudf.MultiIndex]) else as_index(index)
         df.index = index
         return df if not inplace else None
 
