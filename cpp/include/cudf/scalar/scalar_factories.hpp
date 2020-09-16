@@ -126,10 +126,11 @@ std::unique_ptr<scalar> make_default_constructed_scalar(data_type type);
 template <typename T>
 std::unique_ptr<scalar> make_fixed_width_scalar(
   T value,
+  bool valid = true,
   cudaStream_t stream                 = 0,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  return std::make_unique<scalar_type_t<T>>(value, true, stream, mr);
+  return std::make_unique<scalar_type_t<T>>(value, valid, stream, mr);
 }
 
 /** @} */  // end of group

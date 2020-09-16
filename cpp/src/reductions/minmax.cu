@@ -112,13 +112,6 @@ struct minmax_functor {
                    std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>>>
   operator()(const cudf::column_view &col, rmm::mr::device_memory_resource *mr, cudaStream_t stream)
   {
-    // setup arguments
-    minmax_with_null_binary_op<T> null_binary_op;
-    minmax_no_null_binary_op<T> no_null_binary_op;
-
-    // initialize reduction with invalid values
-    minmax_pair<T> init;
-
     auto device_col = column_device_view::create(col, stream);
 
     // compute minimum and maximum values
@@ -130,8 +123,8 @@ struct minmax_functor {
         [d_col = *device_col] __device__(size_type index) -> minmax_pair<T> {
           return minmax_pair<T>(d_col.element<T>(index), d_col.is_valid(index));
         },
-        init,
-        null_binary_op);
+        minmax_pair<T>{},
+        minmax_with_null_binary_op<T>{});
     } else {
       result = thrust::transform_reduce(
         thrust::make_counting_iterator<size_type>(0),
@@ -139,16 +132,13 @@ struct minmax_functor {
         [d_col = *device_col] __device__(size_type index) -> minmax_pair<T> {
           return minmax_pair<T>(d_col.element<T>(index), d_col.is_valid(index));
         },
-        init,
-        no_null_binary_op);
+        minmax_pair<T>{},
+        minmax_no_null_binary_op<T>{});
     }
-    std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> ret;
 
-    ret.first = make_fixed_width_scalar<T>(result.min_val, stream, mr);
-    ret.first->set_valid(result.min_valid);
-    ret.second = make_fixed_width_scalar<T>(result.max_val, stream, mr);
-    ret.second->set_valid(result.max_valid);
-    return ret;
+    std::unique_ptr<scalar> min = make_fixed_width_scalar<T>(result.min_val, result.min_valid, stream, mr);
+    std::unique_ptr<scalar> max = make_fixed_width_scalar<T>(result.max_val, result.max_valid, stream, mr);
+    return {std::move(min), std::move(max)};
   }
 
   template <typename T,
