@@ -62,6 +62,11 @@ namespace io {
 namespace detail {
 namespace csv {
 
+std::unique_ptr<column> pandas_format_durations(
+  column_view const& durations,
+  cudaStream_t stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 namespace {  // anonym.
 // helpers:
 
@@ -333,7 +338,7 @@ struct column_to_strings_fn {
   std::enable_if_t<cudf::is_duration<column_type>(), std::unique_ptr<column>> operator()(
     column_view const& column) const
   {
-    return cudf::strings::from_durations(column, std::string{"%P"});
+    return cudf::io::detail::csv::pandas_format_durations(column, stream_);
   }
 
   // unsupported type of column:

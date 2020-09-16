@@ -470,8 +470,6 @@ struct dispatch_from_durations_fn {
       offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream);
     auto offsets_view  = offsets_column->view();
     auto d_new_offsets = offsets_view.template data<int32_t>();
-    rmm::device_vector<int32_t> ofst(offsets_transformer_itr,
-                                     offsets_transformer_itr + strings_count);
 
     // build chars column
     auto const chars_bytes =
