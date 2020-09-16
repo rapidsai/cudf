@@ -90,27 +90,17 @@ std::unique_ptr<column> scan(
 /** @} */  // end of group
 
 /**
- * @brief stores the minimum and maximum
- * values that have been encountered so far
+ * @brief Determines the minimum and maximum values of a column.
  *
- */
-struct minmax_pair
-{
-  scalar min_val;
-  scalar max_val;
-
-  minmax_pair(scalar min_val_, scalar max_val_) : min_val(min_val_), max_val(max_val_) {}
-};
-
-/**
- * @brief computes the minimum and maximum of a pass in column view.
+ * Supports nullable and non-nullable columns.
  *
- * @tparam T type of the return values
- * @param input column on which to compute min/max
- * @param mr Device memory resource used to allocate the returned scalar's device memory
- * @return unique pointer to a minmax_pair with result
+ * @param col column to compute minmax
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return A std::pair of scalars with the first scalar being the minimum value
+ *         and the second scalar being the maximum value of the input column.
  */
-std::unique_ptr<minmax_pair> minmax(const column_view &input,
-                                     rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
+std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax(
+  const column_view &col,
+  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
 }  // namespace cudf

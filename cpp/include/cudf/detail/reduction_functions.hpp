@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -76,23 +76,6 @@ std::unique_ptr<scalar> max(
   data_type const output_dtype,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
-/**
- * @brief Computes minimum and maximum of elements in input column
- *
- * If all elements in input column are null, output scalars in pair are null.
- *
- * @throw cudf::logic_error if input column type is convertible to `output_dtype`
- *
- * @param col input column to compute maximum.
- * @param output_dtype data type of return type and typecast elements of input column
- * @param mr Device memory resource used to allocate the returned scalar's device memory
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @return Maximum element as scalar of type `output_dtype`.
- */
-std::pair<scalar, scalar> minmax(column_view const& col,
-                            data_type const output_dtype,
-                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                            cudaStream_t stream                 = 0);
 /**
  * @brief Computes any of elements in input column is true when typecasted to bool
  *
