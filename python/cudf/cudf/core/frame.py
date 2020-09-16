@@ -2174,13 +2174,15 @@ class Frame(libcudf.table.Table):
                 # When other._index is a CategoricalIndex, there is
                 # possibility that corresposing self._index be GenericIndex
                 # with codes. So to update even the class signature, we
-                # have to call as_index.
+                # have to reconstruct self._index:
                 if isinstance(
                     other._index, cudf.core.index.CategoricalIndex
                 ) and not isinstance(
                     self._index, cudf.core.index.CategoricalIndex
                 ):
-                    self._index = cudf.core.index.as_index(self._index)
+                    self._index = cudf.core.index.Index._from_table(
+                        self._index
+                    )
         return self
 
     def _unaryop(self, op):
