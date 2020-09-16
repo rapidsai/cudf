@@ -149,8 +149,8 @@ def make_all_numeric_extremes_dataframe():
                 -1,
                 np.nan,
                 -np.nan,
-                # ftype.min, # can't enable because of truncation issue #6235
-                # ftype.max, # can't enable because of truncation issue #6235
+                # ftype.min, # TODO enable after fixing truncation issue #6235
+                # ftype.max, # TODO enable after fixing truncation issue #6235
                 np_type(np.inf),
                 -np_type(np.inf),
                 ftype.eps,
