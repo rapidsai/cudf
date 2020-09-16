@@ -400,7 +400,7 @@ public final class HostColumnVector implements AutoCloseable {
     DeviceMemoryBuffer valid = null;
     DeviceMemoryBuffer offsets = null;
     try {
-      if (type != DType.LIST && type != DType.STRUCT) {
+      if (!type.isNestedType()) {
         HostMemoryBuffer hdata = this.offHeap.data;
         if (hdata != null) {
           long dataLen = rows * type.sizeInBytes;
@@ -1357,7 +1357,7 @@ public final class HostColumnVector implements AutoCloseable {
 
     // List<StructData> when struct
     private <T> ColumnBuilder append(List<T> inputList) {
-      assert type == DType.LIST || type == DType.STRUCT;
+      assert type.isNestedType();
       if (type == DType.STRUCT) {
         assert !inputList.isEmpty();
         //TODO: assumption

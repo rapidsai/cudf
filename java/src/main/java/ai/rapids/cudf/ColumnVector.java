@@ -57,7 +57,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     public ColumnViewAccess<BaseDeviceMemoryBuffer> getChildColumnViewAccess(int childIndex) {
       int numChildren = getNumChildren();
       assert childIndex < numChildren : "children index should be less than " + numChildren;
-      if (getDataType() != DType.LIST && getDataType() != DType.STRUCT) {
+      if (!getDataType().isNestedType()) {
         return null;
       }
       long childColumnView = getChildCvPointer(viewHandle, childIndex);
@@ -182,8 +182,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   public ColumnVector(DType type, long rows, Optional<Long> nullCount,
                       DeviceMemoryBuffer dataBuffer, DeviceMemoryBuffer validityBuffer,
                       DeviceMemoryBuffer offsetBuffer, List<NestedColumnVector> nestedColumnVectors) {
-    if (type != DType.STRING && type != DType.LIST && type != DType.STRUCT) {
-      assert offsetBuffer == null : "offsets are only supported for STRING, LISTS, STRUCTS";
+    if (type != DType.STRING && type != DType.LIST) {
+      assert offsetBuffer == null : "offsets are only supported for STRING, LISTS";
     }
     List<DeviceMemoryBuffer> toClose = new ArrayList<>();
     long[] childHandles = new long[nestedColumnVectors.size()];
@@ -468,7 +468,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
         // We don't have a good way to tell if it is cached on the device or recalculate it on
         // the host for now, so take the hit here.
         getNullCount();
-        if (type != DType.LIST && type != DType.STRUCT) {
+        if (!type.isNestedType()) {
           if (valid != null) {
             hostValidityBuffer = HostMemoryBuffer.allocate(valid.getLength());
             hostValidityBuffer.copyFromDeviceBuffer(valid);
