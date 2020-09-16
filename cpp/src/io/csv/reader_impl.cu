@@ -21,19 +21,20 @@
 
 #include "reader_impl.hpp"
 
+#include <io/comp/io_uncomp.h>
+#include <io/utilities/parsing_utils.cuh>
+#include <io/utilities/type_conversion.cuh>
+
+#include <cudf/io/types.hpp>
+#include <cudf/strings/replace.hpp>
+#include <cudf/table/table.hpp>
+#include <cudf/utilities/error.hpp>
+
 #include <algorithm>
 #include <iostream>
 #include <numeric>
 #include <tuple>
 #include <unordered_map>
-
-#include <cudf/strings/replace.hpp>
-#include <cudf/table/table.hpp>
-#include <cudf/utilities/error.hpp>
-
-#include <io/comp/io_uncomp.h>
-#include <io/utilities/parsing_utils.cuh>
-#include <io/utilities/type_conversion.cuh>
 
 using std::string;
 using std::vector;
@@ -180,9 +181,6 @@ table_with_metadata reader::impl::read(size_t range_offset,
                                        int num_rows,
                                        cudaStream_t stream)
 {
-  std::vector<std::unique_ptr<column>> out_columns;
-  table_metadata metadata;
-
   if (range_offset > 0 || range_size > 0) {
     CUDF_EXPECTS(compression_type_ == "none",
                  "Reading compressed data using `byte range` is unsupported");
@@ -202,7 +200,7 @@ table_with_metadata reader::impl::read(size_t range_offset,
 
   // Return an empty dataframe if no data and no column metadata to process
   if (source_->is_empty() && (args_.names.empty() || args_.dtype.empty())) {
-    return {std::make_unique<table>(std::move(out_columns)), std::move(metadata)};
+    return {std::make_unique<table>(), {}};
   }
 
   // Transfer source data to GPU
@@ -308,7 +306,7 @@ table_with_metadata reader::impl::read(size_t range_offset,
     }
     num_active_cols = args_.use_cols_indexes.size();
 
-    for (const auto name : args_.use_cols_names) {
+    for (auto const &name : args_.use_cols_names) {
       const auto it = std::find(col_names.begin(), col_names.end(), name);
       if (it != col_names.end()) {
         h_column_flags[it - col_names.begin()] = column_parse::enabled;
@@ -323,7 +321,7 @@ table_with_metadata reader::impl::read(size_t range_offset,
       h_column_flags[index] |= column_parse::as_datetime;
     }
 
-    for (const auto name : args_.infer_date_names) {
+    for (auto const &name : args_.infer_date_names) {
       auto it = std::find(col_names.begin(), col_names.end(), name);
       if (it != col_names.end()) {
         h_column_flags[it - col_names.begin()] |= column_parse::as_datetime;
@@ -332,11 +330,11 @@ table_with_metadata reader::impl::read(size_t range_offset,
   }
 
   // Return empty table rather than exception if nothing to load
-  if (num_active_cols == 0) {
-    return {std::make_unique<table>(std::move(out_columns)), std::move(metadata)};
-  }
+  if (num_active_cols == 0) { return {std::make_unique<table>(), {}}; }
 
   std::vector<data_type> column_types = gather_column_types(stream);
+
+  auto metadata = table_metadata{};
 
   // Alloc output; columns' data memory is still expected for empty dataframe
   std::vector<column_buffer> out_buffers;
@@ -358,6 +356,7 @@ table_with_metadata reader::impl::read(size_t range_offset,
     }
   }
 
+  auto out_columns = std::vector<std::unique_ptr<cudf::column>>();
   out_columns.reserve(column_types.size());
   if (num_records != 0) {
     decode_data(column_types, out_buffers, stream);
@@ -555,21 +554,15 @@ std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream)
     } else {
       d_column_flags = h_column_flags;
 
-      hostdevice_vector<column_parse::stats> column_stats(num_active_cols);
-      CUDA_TRY(cudaMemsetAsync(column_stats.device_ptr(), 0, column_stats.memory_size(), stream));
-      CUDA_TRY(cudf::io::csv::gpu::DetectColumnTypes(data_.data().get(),
-                                                     row_offsets.data().get(),
-                                                     num_records,
-                                                     num_actual_cols,
-                                                     opts,
-                                                     d_column_flags.data().get(),
-                                                     column_stats.device_ptr(),
-                                                     stream));
-      CUDA_TRY(cudaMemcpyAsync(column_stats.host_ptr(),
-                               column_stats.device_ptr(),
-                               column_stats.memory_size(),
-                               cudaMemcpyDeviceToHost,
-                               stream));
+      auto column_stats = cudf::io::csv::gpu::detect_column_types(data_.data().get(),
+                                                                  row_offsets.data().get(),
+                                                                  num_records,
+                                                                  num_actual_cols,
+                                                                  num_active_cols,
+                                                                  opts,
+                                                                  d_column_flags.data().get(),
+                                                                  stream);
+
       CUDA_TRY(cudaStreamSynchronize(stream));
 
       for (int col = 0; col < num_active_cols; col++) {
@@ -699,7 +692,7 @@ reader::impl::impl(std::unique_ptr<datasource> source,
                    std::string filepath,
                    reader_options const &options,
                    rmm::mr::device_memory_resource *mr)
-  : source_(std::move(source)), mr_(mr), filepath_(filepath), args_(options)
+  : mr_(mr), source_(std::move(source)), filepath_(filepath), args_(options)
 {
   num_actual_cols = args_.names.size();
   num_active_cols = args_.names.size();

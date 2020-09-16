@@ -1,6 +1,7 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
 import datetime as dt
 import re
+from numbers import Number
 
 import numpy as np
 import pandas as pd
@@ -181,6 +182,25 @@ class DatetimeColumn(column.ColumnBase):
         """Returns the default NA value for this column
         """
         return np.datetime64("nat", self.time_unit)
+
+    def mean(self, skipna=None, dtype=np.float64):
+        return pd.Timestamp(
+            self.as_numerical.mean(skipna=skipna, dtype=dtype),
+            unit=self.time_unit,
+        )
+
+    def quantile(self, q, interpolation, exact):
+        result = self.as_numerical.quantile(
+            q=q, interpolation=interpolation, exact=exact
+        )
+        if isinstance(q, Number):
+            return pd.Timestamp(result, unit=self.time_unit)
+
+        result = result.binary_operator(
+            "mul", as_scalar(_numpy_to_pandas_conversion[self.time_unit])
+        )
+
+        return result.astype("datetime64[ns]")
 
     def binary_operator(self, op, rhs, reflect=False):
         lhs, rhs = self, rhs
