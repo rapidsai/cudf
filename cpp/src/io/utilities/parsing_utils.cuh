@@ -176,7 +176,7 @@ parse_numeric(const char* data, long start, long end, ParseOptions const& opts)
   bool all_digits_valid = true;
 
   // Handle negative values if necessary
-  int32_t sign = 1 - 2 * (data[start] == '-');
+  int32_t sign = 1 - (2 * (data[start] == '-'));
   if (data[start] == '-' || data[start] == '+') start++;
 
   // Handle infinity
