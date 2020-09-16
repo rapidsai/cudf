@@ -40,6 +40,7 @@
 - PR #6163 Use `Column.full` instead of `scalar_broadcast_to` or `cupy.zeros`
 - PR #6176 Fix cmake warnings for GoogleTest, GoogleBenchmark, and Arrow external projects
 - PR #6149 Update to Arrow v1.0.1
+- PR #6174 Data profile support in random data generator; Expand cuIO benchmarks
 - PR #6189 Avoid deprecated pyarrow.compat for parquet
 - PR #6184 Add cuda 11 dev environment.yml
 - PR #6186 Update JNI to look for cub in new location
@@ -52,6 +53,7 @@
 - PR #6223 Remove CXX11 ABI flag from JNI build
 - PR #6114 Implement Fuzz tests for cuIO
 - PR #6215 Add cmake command-line setting for spdlog logging level
+- PR #6204 Add dockerfile and script to build cuDF jar
 
 ## Bug Fixes
 
