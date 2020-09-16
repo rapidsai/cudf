@@ -88,7 +88,7 @@ struct format_compiler {
       {'p', 2},   // AM/PM
       {'R', 5},   // 5 HH:MM
       {'T', 8},   // 8 HH:MM:SS"
-      {'r', 11}  // HH:MM:SS AM/PM
+      {'r', 11}   // HH:MM:SS AM/PM
     };
     std::vector<format_item> items;
     const char* str = format.c_str();
