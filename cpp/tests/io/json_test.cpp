@@ -325,7 +325,8 @@ TEST_F(JsonReaderTest, Durations)
   auto filepath = temp_env->get_temp_dir() + "Durations.json";
   {
     std::ofstream outfile(filepath, std::ofstream::out);
-    outfile << "[-2]\n[-1]\n[0]\n[1]\n[2]\n";
+    outfile << "[-2]\n[-1]\n[0]\n";
+    outfile << "[1 days]\n[0 days 23:01:00]\n[0 days 00:00:00.000000123]\n";
     outfile << "[-2147483648]\n[2147483647]\n";
   }
 
@@ -341,9 +342,17 @@ TEST_F(JsonReaderTest, Durations)
 
   auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
-                                 wrapper<cudf::duration_ns, cudf::duration_ns::rep>{
-                                   {-2L, -1L, 0L, 1L, 2L, -2147483648L, 2147483647L}, validity});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    result.tbl->get_column(0),
+    wrapper<cudf::duration_ns, cudf::duration_ns::rep>{{-2L,
+                                                        -1L,
+                                                        0L,
+                                                        1L * 60 * 60 * 24 * 1000000000L,
+                                                        (23 * 60 + 1) * 60 * 1000000000L,
+                                                        123L,
+                                                        -2147483648L,
+                                                        2147483647L},
+                                                       validity});
 }
 
 TEST_F(JsonReaderTest, JsonLinesDtypeInference)

@@ -410,7 +410,7 @@ __inline__ __device__ T parse_integer(const char *data, long &start, long end)
 __inline__ __device__ bool is_present(
   const char *data, long &start, long end, const char *needle, int len)
 {
-  if (end - start < len) return false;
+  if (start + len - 1 > end) return false;
   for (auto i = 0; i < len; i++) {
     if (data[start + i] != needle[i]) return false;
   }
@@ -427,8 +427,8 @@ template <typename T>
 __inline__ __device__ int64_t parseTimeDeltaFormat(const char *data, long start, long end)
 {
   // %d days [+]%H:%M:%S.n => %d days, %d days [+]%H:%M:%S,  %H:%M:%S.n, %H:%M:%S, %value.
-  int days;
-  int8_t hour, minute, second;
+  int days{0};
+  int8_t hour{0}, minute{0}, second{0};
   int nanosecond     = 0;
   constexpr char sep = ':';
 
