@@ -184,7 +184,7 @@ def to_datetime(
                         column.datetime._numpy_to_pandas_conversion[u]
                         / (
                             column.datetime._numpy_to_pandas_conversion["s"]
-                            if np.datetime_data(col.dtype.to_numpy)[0] == "s"
+                            if np.datetime_data(col.dtype.numpy_dtype)[0] == "s"
                             else 1
                         )
                     )

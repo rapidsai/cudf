@@ -117,7 +117,7 @@ def get_numeric_type_info(dtype):
 def numeric_normalize_types(*args):
     """Cast all args to a common type using numpy promotion logic
     """
-    dtype = np.result_type(*[a.dtype.to_numpy for a in args])
+    dtype = np.result_type(*[a.dtype.numpy_dtype for a in args])
     return [a.astype(dtype) for a in args]
 
 def is_datetime_dtype(obj):
@@ -203,7 +203,7 @@ def to_cudf_compatible_scalar(val, dtype=None):
 
     if dtype is not None:
         if isinstance(dtype, cudf.Generic):
-            dtype = dtype.to_numpy
+            dtype = dtype.numpy_dtype
         val = val.astype(dtype)
 
     if val.dtype.type is np.datetime64:
@@ -358,7 +358,7 @@ def min_column_type(x, expected_type):
 def check_cast_unsupported_dtype(dtype):
 
     if isinstance(dtype, cudf.Generic):
-        return dtype.to_numpy
+        return dtype.numpy_dtype
 
     if is_categorical_dtype(dtype):
         return dtype

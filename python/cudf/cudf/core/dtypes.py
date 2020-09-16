@@ -9,6 +9,8 @@ from pandas.api.extensions import ExtensionDtype
 
 import cudf
 from cudf._lib.types import _Dtype
+#from cudf.utils.utils import cached_property
+
 
 
 class Generic(ExtensionDtype, _Dtype):
@@ -41,11 +43,11 @@ class Generic(ExtensionDtype, _Dtype):
         return self.to_numpy.num
 
     @property
-    def to_numpy(self):
+    def numpy_dtype(self):
         return np.dtype(self.pa_type.to_pandas_dtype())
 
     @property
-    def to_pandas(self):
+    def pandas_dtype(self):
         return pd.api.types.pandas_dtype(self.name)
 
     @property

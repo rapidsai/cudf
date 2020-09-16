@@ -97,7 +97,7 @@ def transform(Column input, op):
     cdef type_id c_tid
     cdef data_type c_dtype
 
-    nb_type = numpy_support.from_dtype(input.dtype.to_numpy)
+    nb_type = numpy_support.from_dtype(input.dtype.numpy_dtype)
     nb_signature = (nb_type,)
     compiled_op = cudautils.compile_udf(op, nb_signature)
     c_str = compiled_op[0].encode('UTF-8')

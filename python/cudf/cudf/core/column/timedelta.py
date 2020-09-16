@@ -94,11 +94,11 @@ class TimeDeltaColumn(column.ColumnBase):
                     if isinstance(rhs, Scalar):
                         rhs = np.timedelta64(rhs.value)
 
-                    rhs = rhs.astype(common_dtype.to_numpy).astype("float64")
+                    rhs = rhs.astype(common_dtype.numpy_dtype).astype("float64")
                 else:
                     rhs = as_scalar(None, "float64")
             else:
-                rhs = rhs.astype(common_dtype.to_numpy).astype("float64")
+                rhs = rhs.astype(common_dtype.numpy_dtype).astype("float64")
 
             out_dtype = cudf.Int64Dtype()
         elif rhs.dtype.kind in ("f", "i", "u"):
@@ -163,7 +163,7 @@ class TimeDeltaColumn(column.ColumnBase):
                     if isinstance(rhs, Scalar):
                         rhs = np.timedelta64(rhs.value)
 
-                    rhs = rhs.astype(common_dtype.to_numpy).astype("float64")
+                    rhs = rhs.astype(common_dtype.numpy_dtype).astype("float64")
                 else:
                     rhs = as_scalar(None, "float64")
             else:
@@ -226,7 +226,7 @@ class TimeDeltaColumn(column.ColumnBase):
                 other = other.astype("timedelta64[s]")
             else:
                 common_dtype = determine_out_dtype(self.dtype, other.dtype)
-                other = other.astype(common_dtype.to_numpy)
+                other = other.astype(common_dtype.numpy_dtype)
             return as_scalar(other)
         elif np.isscalar(other):
             return as_scalar(other)
@@ -258,7 +258,7 @@ class TimeDeltaColumn(column.ColumnBase):
         if is_scalar(fill_value):
             if isinstance(fill_value, np.timedelta64):
                 dtype = determine_out_dtype(self.dtype, fill_value.dtype)
-                fill_value = fill_value.astype(dtype.to_numpy)
+                fill_value = fill_value.astype(dtype.numpy_dtype)
                 col = col.astype(dtype)
             elif not isinstance(fill_value, Scalar):
                 fill_value = np.timedelta64(fill_value)

@@ -97,7 +97,7 @@ class _SeriesIlocIndexer(object):
                 to_dtype = cudf.api.types.result_type(
                     value.dtype, self._sr._column.dtype
                 )
-                value = value.astype(to_dtype.to_numpy)
+                value = value.astype(to_dtype.numpy_dtype)
                 self._sr._column._mimic_inplace(
                     self._sr._column.astype(to_dtype), inplace=True
                 )
@@ -452,7 +452,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
 
 def _normalize_dtypes(df):
     if len(df.columns) > 0:
-        dtypes = [d.to_numpy for d in df.dtypes.values.tolist()]
+        dtypes = [d.numpy_dtype for d in df.dtypes.values.tolist()]
         normalized_dtype = cudf.dtype(np.result_type(*dtypes))
         for name, col in df._data.items():
             df[name] = col.astype(normalized_dtype)

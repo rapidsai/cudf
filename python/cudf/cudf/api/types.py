@@ -133,10 +133,10 @@ def is_list_dtype(obj):
 
 def find_common_type(array_types=[], scalar_types=[]):
     array_types = [
-        d.to_numpy if isinstance(d, cudf.Generic) else d for d in array_types
+        d.numpy_dtype if isinstance(d, cudf.Generic) else d for d in array_types
     ]
     scalar_types = [
-        d.to_numpy if isinstance(d, cudf.Generic) else d for d in scalar_types
+        d.numpy_dtype if isinstance(d, cudf.Generic) else d for d in scalar_types
     ]
 
     return cudf.dtype(np.find_common_type(array_types, scalar_types))
@@ -144,11 +144,11 @@ def find_common_type(array_types=[], scalar_types=[]):
 
 def can_cast(from_, to, casting='safe'):
     if isinstance(from_, cudf.Generic):
-        from_ = from_.to_numpy
+        from_ = from_.numpy_dtype
     elif isinstance(from_, cudf.Scalar):
         from_ = from_.value
     if isinstance(to, cudf.Generic):
-        to = to.to_numpy
+        to = to.numpy_dtype
 
     return np.can_cast(from_, to, casting=casting)
 
@@ -156,7 +156,7 @@ def can_cast(from_, to, casting='safe'):
 def result_type(*arrays_and_dtypes):
 
     arrays_and_dtypes = (
-        d.to_numpy if isinstance(d, cudf.Generic) else d
+        d.numpy_dtype if isinstance(d, cudf.Generic) else d
         for d in arrays_and_dtypes
     )
     return cudf.dtype(np.result_type(*arrays_and_dtypes))
@@ -176,9 +176,9 @@ def min_scalar_type(a):
 
 def promote_types(type1, type2):
     if isinstance(type1, cudf.Generic):
-        type1 = type1.to_numpy
+        type1 = type1.numpy_dtype
     if isinstance(type2, cudf.Generic):
-        type2 = type2.to_numpy
+        type2 = type2.numpy_dtype
 
     result = np.promote_types(type1, type2)
     if result == np.dtype('float16'):

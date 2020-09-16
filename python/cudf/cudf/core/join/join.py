@@ -398,7 +398,7 @@ class Merge(object):
                 if dtype_l.kind == dtype_r.kind:
                     # both ints or both floats
                     libcudf_join_type = cudf.dtype(
-                        max(dtype_l.to_numpy, dtype_r.to_numpy)
+                        max(dtype_l.numpy_dtype, dtype_r.numpy_dtype)
                     )
                 else:
                     libcudf_join_type = cudf.api.types.find_common_type(
@@ -408,7 +408,7 @@ class Merge(object):
                 dtype_r, cudf.Datetime
             ):
                 libcudf_join_type = cudf.dtype(
-                    max(dtype_l.to_numpy, dtype_r.to_numpy)
+                    max(dtype_l.numpy_dtype, dtype_r.numpy_dtype)
                 )
         if libcudf_join_type is None:
             # todo: test this

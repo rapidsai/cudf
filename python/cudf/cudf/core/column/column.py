@@ -98,7 +98,7 @@ class ColumnBase(Column, Serializable):
         result = cuda.devicearray.DeviceNDArray(
             shape=(result.nbytes // dtype.itemsize,),
             strides=(dtype.itemsize,),
-            dtype=dtype.to_numpy,
+            dtype=dtype.numpy_dtype,
             gpu_data=result.gpu_data,
         )
         return result
@@ -149,7 +149,7 @@ class ColumnBase(Column, Serializable):
         Return a CuPy representation of the Column.
         """
         if len(self) == 0:
-            return cupy.asarray([], dtype=self.dtype.to_numpy)
+            return cupy.asarray([], dtype=self.dtype.numpy_dtype)
 
         if self.has_nulls:
             raise ValueError("Column must have no nulls.")
@@ -1098,7 +1098,7 @@ class ColumnBase(Column, Serializable):
         output = {
             "shape": (len(self),),
             "strides": (self.dtype.itemsize,),
-            "typestr": self.dtype.to_numpy.str,
+            "typestr": self.dtype.numpy_dtype.str,
             "data": (self.data_ptr, False),
             "version": 1,
         }
@@ -1573,7 +1573,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             arbitrary = np.ascontiguousarray(arbitrary)
 
         if dtype is not None:
-            arbitrary = arbitrary.astype(dtype.to_numpy)
+            arbitrary = arbitrary.astype(dtype.numpy_dtype)
 
         if arb_dtype.kind == "M":
 
@@ -1728,7 +1728,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                     data = as_column(sr, nan_as_null=nan_as_null)
                 else:
                     native_dtype = (
-                        dtype.to_numpy if dtype is not None else None
+                        dtype.numpy_dtype if dtype is not None else None
                     )
                     if dtype is None and pd.api.types.infer_dtype(
                         arbitrary

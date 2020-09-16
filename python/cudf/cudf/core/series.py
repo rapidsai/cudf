@@ -1027,7 +1027,7 @@ class Series(Frame, Serializable):
 
         if isinstance(preprocess._column, cudf.core.column.CategoricalColumn):
             category_memory = lines[-1]
-            to_replace = str(self.dtype.categories.dtype.to_numpy)
+            to_replace = str(self.dtype.categories.dtype.numpy_dtype)
             replacement = str(self.dtype.categories.dtype.name)
             category_memory = category_memory.replace(to_replace, replacement)
             lines = lines[:-1]

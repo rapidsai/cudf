@@ -234,9 +234,9 @@ class NumericalColumn(column.ColumnBase):
         if dkind == "f":
             return self.dtype.type(np.nan).value
         elif dkind == "i":
-            return np.iinfo(self.dtype.to_numpy).min
+            return np.iinfo(self.dtype.numpy_dtype).min
         elif dkind == "u":
-            return np.iinfo(self.dtype.to_numpy).max
+            return np.iinfo(self.dtype.numpy_dtype).max
         elif dkind == "b":
             return self.dtype.type(False)
         else:
@@ -280,7 +280,7 @@ class NumericalColumn(column.ColumnBase):
         if np.isscalar(fill_value) and not isinstance(fill_value, libcudf.scalar.Scalar):
             # castsafely to the same dtype as self
             # TODO - produce a libcudf scalar directly
-            fill_value_casted = self.dtype.to_numpy.type(fill_value)
+            fill_value_casted = self.dtype.numpy_dtype.type(fill_value)
             if not np.isnan(fill_value) and (fill_value_casted != fill_value):
                 raise TypeError(
                     "Cannot safely cast non-equivalent {} to {}".format(
@@ -360,14 +360,14 @@ class NumericalColumn(column.ColumnBase):
         """
         if self.dtype.kind == to_dtype.kind:
             # todo: implement >, < for cudf.Dtype
-            if self.dtype.to_numpy <= to_dtype.to_numpy:
+            if self.dtype.numpy_dtype <= to_dtype.numpy_dtype:
                 return True
             else:
                 # Kinds are the same but to_dtype is smaller
                 if isinstance(to_dtype, cudf.Floating):
-                    info = np.finfo(to_dtype.to_numpy)
+                    info = np.finfo(to_dtype.numpy_dtype)
                 elif isinstance(to_dtype, cudf.Integer):
-                    info = np.iinfo(to_dtype.to_numpy)
+                    info = np.iinfo(to_dtype.numpy_dtype)
                 min_, max_ = info.min, info.max
 
                 if (self.min() > min_) and (self.max() < max_):
@@ -377,7 +377,7 @@ class NumericalColumn(column.ColumnBase):
 
         # want to cast int to float
         elif to_dtype.kind == "f" and self.dtype.kind in {"i", "u"}:
-            info = np.finfo(to_dtype.to_numpy)
+            info = np.finfo(to_dtype.numpy_dtype)
             biggest_exact_int = 2 ** (info.nmant + 1)
             if (self.min() >= -biggest_exact_int) and (
                 self.max() <= biggest_exact_int
@@ -396,7 +396,7 @@ class NumericalColumn(column.ColumnBase):
 
         # want to cast float to int:
         elif to_dtype.kind in {"i", "u"} and self.dtype.kind == "f":
-            info = np.iinfo(to_dtype.to_numpy)
+            info = np.iinfo(to_dtype.numpy_dtype)
             min_, max_ = info.min, info.max
             # best we can do is hope to catch it here and avoid compare
             if (self.min() >= min_) and (self.max() <= max_):

@@ -156,7 +156,7 @@ def test_orc_reader_trailing_nulls(datadir):
     # PANDAS uses NaN to represent invalid data, which forces float dtype
     # For comparison, we can replace NaN with 0 and cast to the cuDF dtype
     for col in expect.columns:
-        expect[col] = expect[col].astype(got[col].dtype.to_numpy)
+        expect[col] = expect[col].astype(got[col].dtype.numpy_dtype)
 
     assert_eq(expect, got, check_categorical=False)
 

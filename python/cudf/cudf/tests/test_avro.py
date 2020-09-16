@@ -65,7 +65,7 @@ def test_avro_reader_basic(datadir, inputfile, columns, engine):
     # FASTAVRO produces int64 columns from avro int32 dtype, so convert
     # it back to int32 here
     for col in expect.columns:
-        expect[col] = expect[col].astype(got[col].dtype.to_numpy)
+        expect[col] = expect[col].astype(got[col].dtype.numpy_dtype)
 
     # fastavro appears to return columns in reverse order
     # (actual order may depend on pandas/python version)

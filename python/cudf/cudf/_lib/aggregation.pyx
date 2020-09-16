@@ -243,7 +243,7 @@ cdef class _AggregationFactory:
         cdef string cpp_str
 
         # Handling UDF type
-        nb_type = numpy_support.from_dtype(kwargs['dtype'].to_numpy)
+        nb_type = numpy_support.from_dtype(kwargs['dtype'].numpy_dtype)
         type_signature = (nb_type[:],)
         compiled_op = cudautils.compile_udf(op, type_signature)
         output_np_dtype = cudf_dtype(np.dtype(compiled_op[1]))

@@ -350,7 +350,7 @@ def time_col_replace_nulls(input_col):
             Buffer(
                 np.array(
                     [input_col.default_na_value()],
-                    dtype=input_col.dtype.to_numpy,
+                    dtype=input_col.dtype.numpy_dtype,
                 ).view("|u1")
             ),
             dtype=input_col.dtype,

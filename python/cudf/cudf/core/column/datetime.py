@@ -123,7 +123,7 @@ class DatetimeColumn(column.ColumnBase):
             if np.isnat(other):
                 return as_scalar(val=None, dtype=self.dtype)
 
-            other = other.astype(self.dtype.to_numpy)
+            other = other.astype(self.dtype.numpy_dtype)
             return as_scalar(other)
         elif isinstance(other, np.timedelta64):
             other_time_unit = cudf.utils.dtypes.get_time_unit(other)
@@ -265,8 +265,8 @@ class DatetimeColumn(column.ColumnBase):
         to_dtype = cudf.dtype(to_dtype)
         if isinstance(to_dtype, cudf.Datetime):
 
-            to_res, _ = np.datetime_data(to_dtype.to_numpy)
-            self_res, _ = np.datetime_data(self.dtype.to_numpy)
+            to_res, _ = np.datetime_data(to_dtype.numpy_dtype)
+            self_res, _ = np.datetime_data(self.dtype.numpy_dtype)
 
             max_int = np.iinfo(np.dtype("int64")).max
 

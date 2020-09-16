@@ -3189,7 +3189,7 @@ class DataFrame(Frame, Serializable):
                     "hint: use .fillna() to replace null values"
                 )
                 raise ValueError(errmsg.format(k))
-        cupy_dtype = dtype.to_numpy
+        cupy_dtype = dtype.numpy_dtype
         if np.issubdtype(cupy_dtype, np.datetime64):
             cupy_dtype = np.dtype("int64")
 
@@ -4909,9 +4909,9 @@ class DataFrame(Frame, Serializable):
         -------
         numpy recarray
         """
-        members = [("index", self.index.dtype.to_numpy)] if index else []
+        members = [("index", self.index.dtype.numpy_dtype)] if index else []
         members += [
-            (col, self[col].dtype.to_numpy) for col in self._data.names
+            (col, self[col].dtype.numpy_dtype) for col in self._data.names
         ]
         dtype = np.dtype(members)
         ret = np.recarray(len(self), dtype=dtype)
