@@ -200,8 +200,6 @@ def cudf_dtype_from_pydata_dtype(dtype):
         return cudf.core.dtypes.CategoricalDtype
     elif dtype in cudf._lib.types.np_to_cudf_types:
         return dtype.type
-    elif np.issubdtype(dtype, np.datetime64):
-        dtype = np.datetime64
 
     return infer_dtype_from_object(dtype)
 
