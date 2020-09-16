@@ -351,7 +351,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         return super().shuffle(*args, shuffle="tasks", **kwargs)
 
     def groupby_agg(
-        ddf,
+        self,
         gb_cols: list,
         agg_list: list,
         split_out=8,
@@ -367,17 +367,17 @@ class DataFrame(_Frame, dd.core.DataFrame):
 
         dsk = {}
         sep = "____"
-        token = tokenize(ddf, gb_cols, agg_list)
+        token = tokenize(self, gb_cols, agg_list)
         level_1_name = "level_1-" + token
         split_name = "groupby_split-" + token
         level_2_name = "level_2-" + token
         gb_agg_name = "groupby_agg-" + token
-        for p in range(ddf.npartitions):
+        for p in range(self.npartitions):
             # Perform groupby aggregation on each partition.
             # Split each result into `split_out` chunks (by hashing `gb_cols`)
             dsk[(level_1_name, p)] = (
                 _top_level_groupby,
-                (ddf._name, p),
+                (self._name, p),
                 gb_cols,
                 agg_list,
                 split_out,
@@ -394,7 +394,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         for s in range(split_out):
             dsk[(level_2_name, s)] = (
                 _mid_level_groupby,
-                [(split_name, p, s) for p in range(ddf.npartitions)],
+                [(split_name, p, s) for p in range(self.npartitions)],
                 gb_cols,
                 agg_list,
                 split_out,
@@ -416,9 +416,9 @@ class DataFrame(_Frame, dd.core.DataFrame):
         split_out = 1  # Temporary (until `split_out` fully supported)
 
         divisions = [None] * (split_out + 1)
-        _meta = ddf._meta.groupby(gb_cols).agg(agg_list)
+        _meta = self._meta.groupby(gb_cols).agg(agg_list)
         graph = HighLevelGraph.from_collections(
-            gb_agg_name, dsk, dependencies=[ddf]
+            gb_agg_name, dsk, dependencies=[self]
         )
         return new_dd_object(graph, gb_agg_name, _meta, divisions)
 
