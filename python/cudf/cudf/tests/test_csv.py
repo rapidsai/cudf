@@ -321,7 +321,6 @@ def test_csv_reader_dtype_extremes(use_names):
     # Save with the column header if not explicitly specifying a list of names
     df, gdf_dtypes, pdf_dtypes = make_all_numeric_extremes_dataframe()
     buffer = df.to_csv(index=False, header=(not use_names))
-    print(buffer)
 
     gdf_names = list(gdf_dtypes.keys()) if use_names else None
     pdf_names = list(pdf_dtypes.keys()) if use_names else None
