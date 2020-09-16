@@ -2646,26 +2646,36 @@ class DataFrame(Frame, Serializable):
         verify_integrity : boolean
             Check for duplicates in the new index
         """
-        df = self.copy(deep=False) if not inplace else self
+
+        def _merge_index_frame(idf, names):
+            if isinstance(idf, Series):
+                idf = cudf.DataFrame(idf._data)
+
+            if isinstance(self.index, cudf.MultiIndex):
+                print(self.index._source_data)
+                print(idf)
+                idf = self.index._source_data.join(idf, how="left")
+                # idf = idf.join(DataFrame(self.index._data), how="left")
+                names = self.index.names + names
+            elif isinstance(self.index, Index):
+                idf.insert(loc=0, name=self.index.name, value=self.index._values)
+                names = [self.index.name] + names
+            return idf, names
 
         # When index is a list of column names
         if isinstance(index, list):
             if len(index) == 1:
-                return df.set_index(index=index[0], drop=drop, inplace=inplace)
+                return self.set_index(index=index[0], drop=drop, inplace=inplace)
             else:
                 idf = self[index]
                 names = index
                 if append:
-                    if isinstance(self.index, Index):
-                        idf.insert(loc=0, name=self.index.name, value=self.index._values)
-                        names = [self.index.name] + names
-                    elif isinstance(self.index, cudf.MultiIndex):
-                        idf = merge(self.index._data, idf) #TODO: figure out the parameters for this op
-                        names = self.index.names + names
-                return df.set_index(
+                    idf, names = _merge_index_frame(idf, names)
+                return self.set_index(
                     index=cudf.MultiIndex.from_frame(idf, names=names),
                     inplace=inplace,
-                    drop=drop
+                    drop=drop,
+                    append=append,
                 )
 
         # When index is a column name
@@ -2673,19 +2683,27 @@ class DataFrame(Frame, Serializable):
             idf = self[index]
             names = [index]
             if append:
-                idf.insert(loc=0, name=self.index.name, value=self.index._values)
-                idf = cudf.MultiIndex.from_frame(idf, names=[self.index.name]+names)
-            return df.set_index(index=idf, inplace=inplace, drop=drop)
+                idf, names = _merge_index_frame(idf, names)
+                index = cudf.MultiIndex.from_frame(idf, names=names)
+            else:
+                index = as_index(idf)
+            return self.set_index(index=index, inplace=inplace, drop=drop, append=append)
 
         # General Case
-        if drop:
-            df.drop(columns=index)
-            
+        df = self if inplace else self.copy(deep=False)
+
         index = (
             index
-            if isinstance(index, [Index, cudf.MultiIndex])
+            if isinstance(index, Index)
             else as_index(index)
         )
+
+        if drop:
+            col = index.names if isinstance(index, cudf.MultiIndex) else [index.name]
+            old_idx_ncol = len(self.index.names) if isinstance(self.index, cudf.MultiIndex) else 1
+            col = col[old_idx_ncol:] if append else col # dont include old index column during drop
+            df.drop(columns=col, inplace=True)
+
         df.index = index
         return df if not inplace else None
 
