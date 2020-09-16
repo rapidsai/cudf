@@ -1,6 +1,7 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
 import warnings
 from distutils.version import LooseVersion
+from operator import getitem
 
 import numpy as np
 import pandas as pd
@@ -12,7 +13,13 @@ from dask.base import normalize_token, tokenize
 from dask.compatibility import apply
 from dask.context import _globals
 from dask.core import flatten
-from dask.dataframe.core import Scalar, handle_out, map_partitions
+from dask.dataframe.core import (
+    Scalar,
+    _concat,
+    handle_out,
+    map_partitions,
+    new_dd_object,
+)
 from dask.dataframe.utils import raise_on_meta_error
 from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import cull, fuse
@@ -342,6 +349,174 @@ class DataFrame(_Frame, dd.core.DataFrame):
         if shuffle_arg and shuffle_arg != "tasks":
             raise ValueError("dask_cudf does not support disk-based shuffle.")
         return super().shuffle(*args, shuffle="tasks", **kwargs)
+
+    def groupby_agg(
+        ddf,
+        gb_cols: list,
+        agg_list: list,
+        split_out=8,
+        dropna=True,
+        out_to_host=False,
+    ):
+
+        _supported = {"count", "mean", "sum", "min", "max"}
+        if not set(agg_list).issubset(_supported):
+            raise ValueError(
+                f"Supported aggs include {_supported} for groupby_agg API."
+            )
+
+        dsk = {}
+        sep = "____"
+        token = tokenize(ddf, gb_cols, agg_list)
+        level_1_name = "level_1-" + token
+        split_name = "groupby_split-" + token
+        level_2_name = "level_2-" + token
+        gb_agg_name = "groupby_agg-" + token
+        for p in range(ddf.npartitions):
+            # Perform groupby aggregation on each partition.
+            # Split each result into `split_out` chunks (by hashing `gb_cols`)
+            dsk[(level_1_name, p)] = (
+                _top_level_groupby,
+                (ddf._name, p),
+                gb_cols,
+                agg_list,
+                split_out,
+                dropna,
+                out_to_host,
+                sep,
+            )
+            # Pick out each chunk using `getitem`
+            for s in range(split_out):
+                dsk[(split_name, p, s)] = (getitem, (level_1_name, p), s)
+
+        # For each split, aggregate result for all partitions.
+        # TODO: Use tree reduction here
+        for s in range(split_out):
+            dsk[(level_2_name, s)] = (
+                _mid_level_groupby,
+                [(split_name, p, s) for p in range(ddf.npartitions)],
+                gb_cols,
+                agg_list,
+                split_out,
+                dropna,
+                out_to_host,
+                sep,
+            )
+
+        # Combine splits into single output partition.
+        #  TODO: Support multiple (`split_out`) output partitions
+        dsk[(gb_agg_name, 0)] = (
+            _finalize_gb_agg,
+            [(level_2_name, s) for s in range(split_out)],
+            gb_cols,
+            agg_list,
+            out_to_host,
+            sep,
+        )
+        split_out = 1  # Temporary (until `split_out` fully supported)
+
+        divisions = [None] * (split_out + 1)
+        _meta = ddf._meta.groupby(gb_cols).agg(agg_list)
+        graph = HighLevelGraph.from_collections(
+            gb_agg_name, dsk, dependencies=[ddf]
+        )
+        return new_dd_object(graph, gb_agg_name, _meta, divisions)
+
+
+def _make_name(*args, sep="_"):
+    _args = (arg for arg in args if arg != "")
+    return sep.join(_args)
+
+
+def _top_level_groupby(
+    df, gb_cols, agg_list, split_out, dropna, out_to_host, sep
+):
+    _agg_list = set()
+    for agg in agg_list:
+        if agg == "mean":
+            _agg_list.add("count")
+            _agg_list.add("sum")
+        else:
+            _agg_list.add(agg)
+    _agg_list = list(_agg_list)
+
+    gb = df.groupby(gb_cols, dropna=dropna, as_index=False).agg(_agg_list)
+    gb.columns = [_make_name(*name, sep=sep) for name in gb.columns]
+    output = {}
+    for j, split in enumerate(
+        gb.partition_by_hash(gb_cols, split_out, keep_index=False)
+    ):
+        if out_to_host:
+            output[j] = split.to_pandas()
+        else:
+            output[j] = split
+    del gb
+    return output
+
+
+def _mid_level_groupby(
+    dfs, gb_cols, agg_list, split_out, dropna, out_to_host, sep
+):
+    df = _concat(dfs, ignore_index=True)
+    if out_to_host:
+        df.reset_index(drop=True, inplace=True)
+        df = cudf.from_pandas(df)
+    agg_dict = {}
+    for col in df.columns:
+        if col in gb_cols:
+            continue
+        agg = col.split(sep)[-1]
+        if agg in ("count", "sum"):
+            agg_dict[col] = ["sum"]
+        elif agg in ("min", "max"):
+            agg_dict[col] = [agg]
+        else:
+            raise ValueError(f"Unexpected aggregation: {agg}")
+
+    gb = df.groupby(gb_cols, dropna=dropna, as_index=False).agg(agg_dict)
+
+    # Don't include the last aggregation in the column names
+    gb.columns = [_make_name(*name[:-1], sep=sep) for name in gb.columns]
+    return gb
+
+
+def _finalize_gb_agg(dfs, gb_cols, agg_list, out_to_host, sep):
+    gb = _concat(dfs, ignore_index=True)
+    if out_to_host:
+        gb.reset_index(drop=True, inplace=True)
+        gb = cudf.from_pandas(gb)
+
+    # Deal with "mean"
+    if "mean" in agg_list:
+        for col in gb.columns:
+            if col in gb_cols:
+                continue
+            name = col.split(sep)
+            # import pdb; pdb.set_trace()
+            if name[-1] == "sum":
+                mean_name = _make_name(*(name[:-1] + ["mean"]), sep=sep)
+                count_name = _make_name(*(name[:-1] + ["count"]), sep=sep)
+                sum_name = _make_name(*name, sep=sep)
+                gb[mean_name] = gb[sum_name] / gb[count_name]
+                if "sum" not in agg_list:
+                    gb.drop(columns=[sum_name], inplace=True)
+                if "count" not in agg_list:
+                    gb.drop(columns=[count_name], inplace=True)
+
+    # Unflatten column names
+    col_array = []
+    agg_array = []
+    for col in gb.columns:
+        if col in gb_cols:
+            col_array.append(col)
+            agg_array.append("")
+        else:
+            name, agg = col.split(sep)
+            col_array.append(name)
+            agg_array.append(agg)
+    gb.columns = pd.MultiIndex.from_arrays([col_array, agg_array])
+
+    return gb
 
 
 def sum_of_squares(x):
