@@ -24,6 +24,7 @@
 - PR #6024 Expose selecting multiple ORC stripes to read from Python
 - PR #6155 Use the CUB submodule in Thrust instead of fetching CUB separately
 - PR #6002 Add Java bindings for md5
+- PR #6060 Add support for all types in `Series.describe` and `DataFrame.describe`
 - PR #6051 Add builder API for cuIO `parquet_writer_options` and `parquet_reader_options`
 - PR #6067 Added compute codes for aarch64 devices
 - PR #6083 Small cleanup
@@ -47,6 +48,11 @@
 - PR #6195 Update JNI to use parquet options builder
 - PR #6190 Avoid reading full csv files for metadata in dask_cudf
 - PR #6197 Remove librmm dependency for libcudf
+- PR #6214 Small clean up to use more algorithms
+- PR #6209 Remove CXX11 ABI handling from CMake
+- PR #6223 Remove CXX11 ABI flag from JNI build
+- PR #6114 Implement Fuzz tests for cuIO
+- PR #6215 Add cmake command-line setting for spdlog logging level
 
 ## Bug Fixes
 
@@ -70,6 +76,8 @@
 - PR #6199 Fix index preservation for dask_cudf parquet
 - PR #6207 Remove shared libs from Java sources jar
 - PR #6212 Update codeowners file
+- PR #6157 Fix issue related to `Series.concat` to concat a non-empty and empty series.
+- PR #6226 Add in some JNI checks for null handles
 
 
 # cuDF 0.15.0 (26 Aug 2020)

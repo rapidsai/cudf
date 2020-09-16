@@ -7,7 +7,12 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import (
+    DATETIME_TYPES,
+    NUMERIC_TYPES,
+    TIMEDELTA_TYPES,
+    assert_eq,
+)
 
 
 @pytest.mark.parametrize(
@@ -359,6 +364,74 @@ def test_series_size(data):
     gsr = cudf.Series(data)
 
     assert_eq(psr.size, gsr.size)
+
+
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES)
+def test_series_describe_numeric(dtype):
+    ps = pd.Series([0, 1, 2, 3, 1, 2, 3], dtype=dtype)
+    gs = cudf.from_pandas(ps)
+    actual = gs.describe()
+    expected = ps.describe()
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/6219")
+@pytest.mark.parametrize("dtype", DATETIME_TYPES)
+def test_series_describe_datetime(dtype):
+    gs = cudf.Series([0, 1, 2, 3, 1, 2, 3], dtype=dtype)
+    ps = gs.to_pandas()
+
+    pdf_results = ps.describe(datetime_is_numeric=True)
+    gdf_results = gs.describe()
+
+    # Assert count
+    p_count = pdf_results["count"]
+    g_count = gdf_results["count"]
+
+    assert_eq(int(g_count), p_count)
+
+    # Assert Index
+    assert_eq(gdf_results.index, pdf_results.index)
+
+    # Assert rest of the element apart from
+    # the first index('count')
+    actual = gdf_results.tail(-1).astype("datetime64[ns]")
+    expected = pdf_results.tail(-1).astype("str").astype("datetime64[ns]")
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("dtype", TIMEDELTA_TYPES)
+def test_series_describe_timedelta(dtype):
+    ps = pd.Series([0, 1, 2, 3, 1, 2, 3], dtype=dtype)
+    gs = cudf.from_pandas(ps)
+
+    expected = ps.describe()
+    actual = gs.describe()
+
+    assert_eq(actual, expected.astype("str"))
+
+
+@pytest.mark.parametrize(
+    "ps",
+    [
+        pd.Series(["a", "b", "c", "d", "e", "a"]),
+        pd.Series([True, False, True, True, False]),
+        pd.Series([], dtype="str"),
+        pd.Series(["a", "b", "c", "a"], dtype="category"),
+    ],
+)
+def test_series_describe_other_types(ps):
+    gs = cudf.from_pandas(ps)
+
+    expected = ps.describe()
+    actual = gs.describe()
+
+    if len(ps) == 0:
+        assert_eq(expected.fillna("a").astype("str"), actual.fillna("a"))
+    else:
+        assert_eq(expected.astype("str"), actual)
 
 
 @pytest.mark.parametrize(

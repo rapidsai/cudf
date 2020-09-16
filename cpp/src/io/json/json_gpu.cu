@@ -882,8 +882,7 @@ std::vector<cudf::io::json::ColumnInfo> detect_data_types(const char *data,
 
   CUDA_TRY(cudaGetLastError());
 
-  auto h_column_infos = std::vector<cudf::io::json::ColumnInfo>{};
-  h_column_infos.resize(num_columns);
+  auto h_column_infos = std::vector<cudf::io::json::ColumnInfo>(num_columns);
 
   thrust::copy(d_column_infos.begin(), d_column_infos.end(), h_column_infos.begin());
 
