@@ -554,10 +554,13 @@ struct decode_op {
 __global__ void __launch_bounds__(csvparse_block_dim)
   convert_csv_to_cudf(const char *raw_csv,
                       const ParseOptions opts,
-                      size_t num_records,
-                      size_t num_columns,
-                      const uint64_t *recStart,
-                      column_parse::column_builder *builders)
+                      // todo: replace with device_span
+                      size_t record_count,
+                      const uint64_t *record_offsets,
+                      // todo: replace with device_span
+                      size_t column_count,
+                      column_parse::column_builder *columns)
+
 {
   // thread IDs range per block, so also need the block id
   long rec_id =
@@ -566,33 +569,33 @@ __global__ void __launch_bounds__(csvparse_block_dim)
 
   // we can have more threads than data, make sure we are not past the end of
   // the data
-  if (rec_id >= num_records) return;
+  if (rec_id >= record_count) return;
 
-  long start = recStart[rec_id];
-  long stop  = recStart[rec_id + 1];
+  long start = record_offsets[rec_id];
+  long stop  = record_offsets[rec_id + 1];
 
   long pos = start;
   int col  = 0;
 
-  while (col < num_columns) {
+  while (col < column_count) {
     if (start > stop) break;
 
     pos = cudf::io::gpu::seek_field_end(raw_csv + pos, raw_csv + stop, opts) - raw_csv;
 
-    if (builders[col].flags & column_parse::enabled) {
+    if (columns[col].flags & column_parse::enabled) {
       // check if the entire field is a NaN string - consistent with pandas
       const bool is_na = serializedTrieContains(opts.naValuesTrie, raw_csv + start, pos - start);
 
       // Modify start & end to ignore whitespace and quotechars
       long tempPos = pos - 1;
-      if (!is_na && builders[col].type.id() != cudf::type_id::STRING) {
+      if (!is_na && columns[col].type.id() != cudf::type_id::STRING) {
         trim_field_start_end(raw_csv, &start, &tempPos, opts.quotechar);
       }
 
       if (!is_na && start <= (tempPos)) {  // Empty fields are not legal values
 
         // Type dispatcher does not handle STRING
-        if (builders[col].type.id() == cudf::type_id::STRING) {
+        if (columns[col].type.id() == cudf::type_id::STRING) {
           long end = pos;
           if (opts.keepquotes == false) {
             if ((raw_csv[start] == opts.quotechar) && (raw_csv[end - 1] == opts.quotechar)) {
@@ -600,25 +603,25 @@ __global__ void __launch_bounds__(csvparse_block_dim)
               end--;
             }
           }
-          auto str_list = static_cast<std::pair<const char *, size_t> *>(builders[col].data);
+          auto str_list = static_cast<std::pair<const char *, size_t> *>(columns[col].data);
           str_list[rec_id].first  = raw_csv + start;
           str_list[rec_id].second = end - start;
         } else {
-          if (cudf::type_dispatcher(builders[col].type,
+          if (cudf::type_dispatcher(columns[col].type,
                                     decode_op{},
-                                    builders[col].data,
+                                    columns[col].data,
                                     rec_id,
                                     raw_csv + start,
                                     raw_csv + tempPos,
                                     opts,
-                                    builders[col].flags)) {
+                                    columns[col].flags)) {
             // set the valid bitmap - all bits were set to 0 to start
-            set_bit(builders[col].null_mask, rec_id);
+            set_bit(columns[col].null_mask, rec_id);
           }
         }
-      } else if (builders[col].type.id() == cudf::type_id::STRING) {
-        auto str_list          = static_cast<std::pair<const char *, size_t> *>(builders[col].data);
-        str_list[rec_id].first = nullptr;
+      } else if (columns[col].type.id() == cudf::type_id::STRING) {
+        auto str_list           = static_cast<std::pair<const char *, size_t> *>(columns[col].data);
+        str_list[rec_id].first  = nullptr;
         str_list[rec_id].second = 0;
       }
     }
@@ -1028,22 +1031,22 @@ struct boop_functor {
   void __device__ operator()(size_t i) { builders[i] = {dtypes[i], columns[i], valids[i]}; }
 };
 
-cudaError_t __host__ decode_row_column_data(const char *data,
-                                            const uint64_t *row_starts,
-                                            size_t num_rows,
-                                            size_t num_columns,
-                                            const ParseOptions &options,
-                                            column_parse::column_builder *builders,
-                                            cudaStream_t stream)
+void __host__ decode_row_column_data(const char *data,
+                                     const ParseOptions &options,
+                                     // todo: replace with device_span
+                                     size_t row_count,
+                                     const uint64_t *row_offsets,
+                                     // todo: replace with device_span
+                                     size_t column_count,
+                                     column_parse::column_builder *columns,
+                                     cudaStream_t stream)
 {
   // Calculate actual block count to use based on records count
   const int block_size = csvparse_block_dim;
-  const int grid_size  = (num_rows + block_size - 1) / block_size;
+  const int grid_size  = (row_count + block_size - 1) / block_size;
 
   convert_csv_to_cudf<<<grid_size, block_size, 0, stream>>>(
-    data, options, num_rows, num_columns, row_starts, builders);
-
-  return cudaSuccess;
+    data, options, row_count, row_offsets, column_count, columns);
 }
 
 uint32_t __host__ gather_row_offsets(uint64_t *row_ctx,

@@ -679,13 +679,15 @@ void reader::impl::decode_data(thrust::host_vector<column_parse::column_builder>
 {
   rmm::device_vector<column_parse::column_builder> d_builders = builders;
 
-  CUDA_TRY(cudf::io::csv::gpu::decode_row_column_data(data_.data().get(),
-                                                      row_offsets.data().get(),
-                                                      num_records,
-                                                      num_actual_cols,
-                                                      opts,
-                                                      d_builders.data().get(),
-                                                      stream));
+  cudf::io::csv::gpu::decode_row_column_data(data_.data().get(),
+                                             opts,
+                                             // todo: replace with device_span
+                                             num_records,
+                                             row_offsets.data().get(),
+                                             // todo: replace with device_span
+                                             num_actual_cols,
+                                             d_builders.data().get(),
+                                             stream);
   CUDA_TRY(cudaStreamSynchronize(stream));
 }
 

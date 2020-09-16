@@ -218,26 +218,20 @@ thrust::host_vector<column_parse::stats> detect_column_types(const char *data,
  * @brief Launches kernel for decoding row-column data
  *
  * @param[in] data The row-column data
- * @param[in] row_starts List of row data start positions (offsets)
- * @param[in] num_rows Number of rows
- * @param[in] num_columns Number of columns
  * @param[in] options Options that control individual field data conversion
- * @param[in] flags Flags that control individual column parsing
- * @param[in] dtypes List of dtype corresponding to each column
- * @param[out] columns Device memory output of column data
- * @param[out] valids Device memory output of column valids bitmap data
- * @param[out] num_valid Number of valid fields in each column
+ * @param[in] row_count Number of rows
+ * @param[in] row_offsets List of row data start positions
+ * @param[in] column_count Number of columns
+ * @param[out] columns column flags, data, null_mask, etc.
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t decode_row_column_data(const char *data,
-                                   const uint64_t *row_starts,
-                                   size_t num_rows,
-                                   size_t num_columns,
-                                   const cudf::io::ParseOptions &options,
-                                   column_parse::column_builder *builders,
-                                   cudaStream_t stream = (cudaStream_t)0);
+void decode_row_column_data(const char *data,
+                            const ParseOptions &options,
+                            size_t row_count,
+                            const uint64_t *row_offsets,
+                            size_t column_count,
+                            column_parse::column_builder *columns,
+                            cudaStream_t stream = 0);
 
 }  // namespace gpu
 }  // namespace csv
