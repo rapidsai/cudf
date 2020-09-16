@@ -21,11 +21,11 @@
 #include <tests/utilities/type_lists.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/device_buffer.hpp>
 
 #include <cstddef>
 #include <cstring>
 #include <string>
-#include "rmm/device_buffer.hpp"
 
 using cudf::detail::device_span;
 using cudf::detail::host_span;
