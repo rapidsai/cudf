@@ -29,9 +29,9 @@ class Generic(ExtensionDtype, _Dtype):
         ):
             return True
 
-        if self.to_numpy == other:
+        if self.numpy_dtype == other:
             return True
-        if isinstance(other, str) and str(self.to_numpy) == other:
+        if isinstance(other, str) and str(self.numpy_dtype) == other:
             return True
         return False
 
@@ -40,7 +40,7 @@ class Generic(ExtensionDtype, _Dtype):
 
     @property
     def num(self):
-        return self.to_numpy.num
+        return self.numpy_dtype.num
 
     @property
     def numpy_dtype(self):
@@ -52,7 +52,7 @@ class Generic(ExtensionDtype, _Dtype):
 
     @property
     def itemsize(self):
-        return self.to_numpy.itemsize
+        return self.numpy_dtype.itemsize
 
     @property
     def type(self):
@@ -108,7 +108,7 @@ class Flexible(Generic):
 
 class Datetime(Generic):
     @property
-    def to_numpy(self):
+    def numpy_dtype(self):
         return {v: k for k, v in _cudf_dtype_from_numpy.items()}[self]
 
     @property
@@ -119,7 +119,7 @@ class Datetime(Generic):
 
 class Timedelta(Generic):
     @property
-    def to_numpy(self):
+    def numpy_dtype(self):
         return {v: k for k, v in _cudf_dtype_from_numpy.items()}[self]
 
     @property
