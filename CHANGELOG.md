@@ -71,7 +71,7 @@
 - PR #6179 `make_elements` copies to `iterator` without adjusting `size`
 - PR #6182 Fix cmake build of arrow
 - PR #6173 Fix normalize_characters offset logic on sliced strings column
-- PR #6159 Fix issue related to empty `Dataframe` with columns input to `DataFrame.appened` 
+- PR #6159 Fix issue related to empty `Dataframe` with columns input to `DataFrame.appened`
 - PR #6199 Fix index preservation for dask_cudf parquet
 - PR #6207 Remove shared libs from Java sources jar
 - PR #6212 Update codeowners file
