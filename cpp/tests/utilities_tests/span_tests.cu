@@ -24,8 +24,9 @@
 
 #include <cstddef>
 #include <cstring>
-#include <rmm/device_buffer.hpp>
 #include <string>
+
+#include <rmm/device_buffer.hpp>
 
 using cudf::detail::device_span;
 using cudf::detail::host_span;
