@@ -23,7 +23,6 @@
 #include <cstddef>
 #include <cstring>
 #include <string>
-#include "rmm/thrust_rmm_allocator.h"
 
 using cudf::detail::device_span;
 using cudf::detail::host_span;
