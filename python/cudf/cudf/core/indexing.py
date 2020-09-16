@@ -89,7 +89,7 @@ class _SeriesIlocIndexer(object):
         else:
             value = column.as_column(value)
 
-        if hasattr(value, "dtype") and cudf.api.types.is_numerical_dtype(
+        if hasattr(value, "dtype") and cudf.api.types.is_numeric_dtype(
             value.dtype
         ):
             # normalize types if necessary:
@@ -214,7 +214,7 @@ class _DataFrameIndexer(object):
                     return True
             dtypes = df.dtypes.values.tolist()
             all_numeric = all(
-                [cudf.api.types.is_numerical_dtype(t) for t in dtypes]
+                [cudf.api.types.is_numeric_dtype(t) for t in dtypes]
             )
             if all_numeric:
                 return True

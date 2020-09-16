@@ -13,7 +13,7 @@ from pandas.api.types import is_dict_like, is_dtype_equal
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.nvtx import annotate
-from cudf.api.types import is_categorical_dtype, is_numerical_dtype
+from cudf.api.types import is_categorical_dtype, is_numeric_dtype
 from cudf.core.column import as_column, build_categorical_column
 from cudf.utils import utils
 from cudf.utils.dtypes import (
@@ -276,7 +276,7 @@ class Frame(libcudf.table.Table):
                 # default to the first non-null dtype
                 dtypes[idx] = cols[0].dtype
                 # If all the non-null dtypes are int/float, find a common dtype
-                if all(is_numerical_dtype(col.dtype) for col in cols):
+                if all(is_numeric_dtype(col.dtype) for col in cols):
                     dtypes[idx] = cudf.api.types.find_common_type(
                         [col.dtype for col in cols], []
                     )
@@ -3142,7 +3142,7 @@ def _get_replacement_values(to_replace, replacement, col_name, column):
             if all_nan:
                 replacement = [replacement] * len(to_replace)
             # Do not broadcast numeric dtypes
-            elif cudf.api.types.is_numerical_dtype(column.dtype):
+            elif cudf.api.types.is_numeric_dtype(column.dtype):
                 if len(to_replace) > 0:
                     replacement = [replacement]
                 else:

@@ -24,8 +24,8 @@ class Generic(ExtensionDtype, _Dtype):
         ):
             return False
         if (
-            isinstance(other, self.to_pandas.type)
-            or other is self.to_pandas
+            isinstance(other, self.pandas_dtype.type)
+            or other is self.pandas_dtype
         ):
             return True
 
@@ -60,7 +60,7 @@ class Generic(ExtensionDtype, _Dtype):
 
     @property
     def kind(self):
-        return self.to_pandas.kind
+        return self.pandas_dtype.kind
 
     @property
     def name(self):
@@ -112,7 +112,7 @@ class Datetime(Generic):
         return {v: k for k, v in _cudf_dtype_from_numpy.items()}[self]
 
     @property
-    def to_pandas(self):
+    def pandas_dtype(self):
         # pandas only supports nanos
         return np.dtype("datetime64[ns]")
 
@@ -123,7 +123,7 @@ class Timedelta(Generic):
         return {v: k for k, v in _cudf_dtype_from_numpy.items()}[self]
 
     @property
-    def to_pandas(self):
+    def pandas_dtype(self):
         # pandas only supports nanos
         return np.dtype("timedelta64[ns]")
 
@@ -347,6 +347,10 @@ class CategoricalDtype(Generic):
 
     def __repr__(self):
         return self.to_pandas().__repr__()
+
+    @property
+    def pandas_dtype(self):
+        return self.to_pandas()
 
     def __hash__(self):
         return hash(self.__repr__())

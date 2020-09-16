@@ -15,7 +15,6 @@ from libc.stdint cimport (
 )
 from libcpp.memory cimport unique_ptr
 from libcpp cimport bool
-from libc.stdint cimport uintptr_t
 
 import cudf
 from cudf._lib.types import cudf_to_np_types, duration_unit_map
@@ -109,7 +108,7 @@ cdef class Scalar:
         """
         if cudf.api.types.is_string_dtype(self.dtype):
             return _get_py_string_from_string(self.c_value)
-        elif cudf.api.types.is_numerical_dtype(self.dtype):
+        elif cudf.api.types.is_numeric_dtype(self.dtype):
             return _get_np_scalar_from_numeric(self.c_value)
         elif cudf.api.types.is_datetime64_dtype(self.dtype):
             return _get_np_scalar_from_timestamp64(self.c_value)
