@@ -3045,60 +3045,39 @@ class DataFrame(Frame, Serializable):
                 "'index' or 'columns'"
             )
 
-        if isinstance(target, (cudf.Series, cudf.Index)):
-            target = target.to_pandas()
-
-        target = (
-            [target]
-            if isinstance(target, (str, numbers.Number))
-            else list(set(target))
-        )
         if inplace:
             outdf = self
         else:
             outdf = self.copy()
 
-        def _drop_columns(df, columns, errors):
-            for c in columns:
-                try:
-                    df._drop_column(c)
-                except KeyError as e:
-                    if errors == "ignore":
-                        pass
-                    else:
-                        raise e
-
         if axis in (1, "columns"):
+            target = _get_host_unique(target)
+
             _drop_columns(outdf, target, errors)
         elif axis in (0, "index"):
-            index = cudf.Series(target)
+            if not isinstance(target, (cudf.Series, cudf.Index)):
+                target = column.as_column(target)
+
             if isinstance(self._index, cudf.MultiIndex):
                 if level is None:
                     level = 0
 
                 levels_index = outdf.index.get_level_values(level)
-                if errors == "raise" and not index.isin(levels_index).all():
+                if errors == "raise" and not target.isin(levels_index).all():
                     raise KeyError("One or more values not found in axis")
 
                 sliced_df = outdf.take(~levels_index.isin(target))
                 sliced_df._index.names = self._index.names
             else:
-                if errors == "raise" and not index.isin(outdf.index).all():
+                if errors == "raise" and not target.isin(outdf.index).all():
                     raise KeyError("One or more values not found in axis")
 
-                bool_mask = outdf.index.isin(index)
-                sliced_df = outdf.iloc[~bool_mask]
-
-            if columns is not None:
-                if isinstance(columns, (cudf.Series, cudf.Index)):
-                    columns = columns.to_pandas()
-
-                columns = (
-                    [columns]
-                    if isinstance(columns, (str, numbers.Number))
-                    else list(set(columns))
+                sliced_df = outdf.join(
+                    cudf.DataFrame(index=target), how="leftanti"
                 )
 
+            if columns is not None:
+                columns = _get_host_unique(columns)
                 _drop_columns(sliced_df, columns, errors)
 
             outdf._data = sliced_df._data
@@ -7136,3 +7115,25 @@ def _get_union_of_series_names(series_list):
         names_list = [*range(len(series_list))]
 
     return names_list
+
+
+def _drop_columns(df, columns, errors):
+    for c in columns:
+        try:
+            df._drop_column(c)
+        except KeyError as e:
+            if errors == "ignore":
+                pass
+            else:
+                raise e
+
+
+def _get_host_unique(array):
+    if isinstance(
+        array, (cudf.Series, cudf.Index, cudf.core.column.ColumnBase)
+    ):
+        return array.unique.to_pandas()
+    elif isinstance(array, (str, numbers.Number)):
+        return [array]
+    else:
+        return set(array)
