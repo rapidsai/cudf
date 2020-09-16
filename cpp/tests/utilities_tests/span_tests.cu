@@ -24,6 +24,7 @@
 
 #include <cstddef>
 #include <cstring>
+#include <rmm/device_buffer.hpp>
 #include <string>
 
 using cudf::detail::device_span;
@@ -183,6 +184,27 @@ TEST(SpanTest, CanSubscriptWrite)
   message_span[4] = 'x';
 
   EXPECT_EQ('x', message_span[4]);
+}
+
+TEST(SpanTest, CanConstructFromHostContainers)
+{
+  std::vector<int> std_vector       = {7};
+  thrust::host_vector<int> h_vector = std_vector;
+
+  (void)host_span<int>(std_vector);
+  (void)host_span<int>(h_vector);
+}
+
+TEST(SpanTest, CanConstructFromDeviceContainers)
+{
+  std::vector<int> std_vector                = {7};
+  thrust::device_vector<int> thrust_d_vector = std_vector;
+  rmm::device_vector<int> d_vector           = std_vector;
+  rmm::device_buffer d_buffer                = rmm::device_buffer(1);
+
+  (void)device_span<int>(d_vector);
+  (void)device_span<int>(d_buffer);
+  (void)device_span<int>(thrust_d_vector);
 }
 
 __global__ void simple_device_kernel(device_span<bool> result) { result[0] = true; }

@@ -16,6 +16,12 @@
 
 #pragma once
 
+#include <rmm/thrust_rmm_allocator.h>
+#include <rmm/device_buffer.hpp>
+#include <rmm/device_uvector.hpp>
+
+#include <thrust/device_vector.h>
+
 #include <cstddef>
 #include <limits>
 #include <type_traits>
@@ -87,12 +93,40 @@ template <typename T, std::size_t Extent = dynamic_extent>
 struct host_span : public span_base<T, Extent, host_span<T, Extent>> {
   using base = cudf::detail::span_base<T, Extent, host_span<T, Extent>>;
   using base::base;
+
+  template <typename Container>
+  static bool constexpr is_supported_container()
+  {
+    return std::is_same<std::vector<T>, Container>() ||
+           std::is_same<thrust::host_vector<T>, Container>();
+  }
+
+  // hacky way of implementing span::span(R&&) for ranges;
+  template <typename Container, std::enable_if_t<is_supported_container<Container>()>* = nullptr>
+  explicit host_span(Container source) : base(source.data(), source.end())
+  {
+  }
 };
 
 template <typename T, std::size_t Extent = dynamic_extent>
 struct device_span : public span_base<T, Extent, device_span<T, Extent>> {
   using base = cudf::detail::span_base<T, Extent, device_span<T, Extent>>;
   using base::base;
+
+  template <typename Container>
+  static bool constexpr is_supported_container()
+  {
+    return std::is_same<thrust::device_vector<T>, Container>() ||
+           std::is_same<rmm::device_buffer, Container>() ||
+           std::is_same<rmm::device_vector<T>, Container>() ||
+           std::is_same<rmm::device_uvector<T>, Container>();
+  }
+
+  // hacky way of implementing span::span(R&&) for ranges;
+  template <typename Container, std::enable_if_t<is_supported_container<Container>()>* = nullptr>
+  explicit device_span(Container source) : base(source.data(), source.end())
+  {
+  }
 };
 
 }  // namespace detail
