@@ -15,13 +15,13 @@
  */
 // The translation unit for reduction `minmax`
 
+#include <thrust/transform_reduce.h>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/reduction.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <type_traits>
-#include <thrust/transform_reduce.h>
 
 namespace cudf {
 namespace detail {
@@ -136,8 +136,10 @@ struct minmax_functor {
         minmax_no_null_binary_op<T>{});
     }
 
-    std::unique_ptr<scalar> min = make_fixed_width_scalar<T>(result.min_val, result.min_valid, stream, mr);
-    std::unique_ptr<scalar> max = make_fixed_width_scalar<T>(result.max_val, result.max_valid, stream, mr);
+    std::unique_ptr<scalar> min =
+      make_fixed_width_scalar<T>(result.min_val, result.min_valid, stream, mr);
+    std::unique_ptr<scalar> max =
+      make_fixed_width_scalar<T>(result.max_val, result.max_valid, stream, mr);
     return {std::move(min), std::move(max)};
   }
 

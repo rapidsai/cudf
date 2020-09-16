@@ -94,7 +94,7 @@ struct ReductionTest : public cudf::test::BaseFixture {
                       bool succeeded_condition,
                       std::unique_ptr<aggregation> const &agg,
                       cudf::data_type output_dtype = cudf::data_type{},
-                      bool expected_null = false)
+                      bool expected_null           = false)
   {
     if (cudf::data_type{} == output_dtype) output_dtype = underlying_column.type();
 
@@ -103,9 +103,7 @@ struct ReductionTest : public cudf::test::BaseFixture {
       using ScalarType                     = cudf::scalar_type_t<T_out>;
       auto result1                         = static_cast<ScalarType *>(result.get());
       EXPECT_EQ(expected_null, !result1->is_valid());
-      if (result1->is_valid()) {
-        EXPECT_EQ(expected_value, result1->value());
-      }
+      if (result1->is_valid()) { EXPECT_EQ(expected_value, result1->value()); }
     };
 
     if (succeeded_condition) {
@@ -178,22 +176,32 @@ TYPED_TEST(MinMaxReductionTest, MinMax)
 
   // test with some nulls
   cudf::test::fixed_width_column_wrapper<T> col_all_nulls = construct_null_column(v, all_null);
-  cudf::size_type all_null_valid_count = 0;
+  cudf::size_type all_null_valid_count                    = 0;
 
   auto all_null_r_min = replace_nulls(v, all_null, std::numeric_limits<T>::max());
   auto all_null_r_max = replace_nulls(v, all_null, std::numeric_limits<T>::lowest());
 
-  T expected_min_all_null_result = *(std::min_element(all_null_r_min.begin(), all_null_r_min.end()));
-  T expected_max_all_null_result = *(std::max_element(all_null_r_max.begin(), all_null_r_max.end()));
+  T expected_min_all_null_result =
+    *(std::min_element(all_null_r_min.begin(), all_null_r_min.end()));
+  T expected_max_all_null_result =
+    *(std::max_element(all_null_r_max.begin(), all_null_r_max.end()));
 
-  this->reduction_test(
-    col_all_nulls, expected_min_all_null_result, result_error, cudf::make_min_aggregation(), cudf::data_type{}, true);
-  this->reduction_test(
-    col_all_nulls, expected_max_all_null_result, result_error, cudf::make_max_aggregation(), cudf::data_type{}, true);
+  this->reduction_test(col_all_nulls,
+                       expected_min_all_null_result,
+                       result_error,
+                       cudf::make_min_aggregation(),
+                       cudf::data_type{},
+                       true);
+  this->reduction_test(col_all_nulls,
+                       expected_max_all_null_result,
+                       result_error,
+                       cudf::make_max_aggregation(),
+                       cudf::data_type{},
+                       true);
 
   auto all_null_res = cudf::minmax(col_all_nulls);
 
-  using ScalarType     = cudf::scalar_type_t<T>;
+  using ScalarType         = cudf::scalar_type_t<T>;
   auto min_all_null_result = static_cast<ScalarType *>(all_null_res.first.get());
   auto max_all_null_result = static_cast<ScalarType *>(all_null_res.second.get());
   EXPECT_EQ(min_all_null_result->is_valid(), false);
