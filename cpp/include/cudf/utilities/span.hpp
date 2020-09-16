@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ constexpr size_t dynamic_extent = std::numeric_limits<std::size_t>::max();
  * @brief C++20 std::span with reduced feature set.
  */
 template <typename T, size_t Extent, typename Derived>
-class span {
+class span_base {
   static_assert(Extent == dynamic_extent, "Only dynamic extent is supported");
 
  public:
@@ -43,11 +43,11 @@ class span {
   using reference       = T&;
   using const_reference = T const&;
 
-  constexpr span() noexcept : _data(nullptr), _size(0) {}
-  constexpr span(pointer data, size_type size) : _data(data), _size(size) {}
-  // constexpr span(pointer begin, pointer end) : _data(begin), _size(end - begin) {}
-  constexpr span(const span& other) noexcept = default;
-  constexpr span& operator=(const span& other) noexcept = default;
+  constexpr span_base() noexcept : _data(nullptr), _size(0) {}
+  constexpr span_base(pointer data, size_type size) : _data(data), _size(size) {}
+  // constexpr span_base(pointer begin, pointer end) : _data(begin), _size(end - begin) {}
+  constexpr span_base(const span_base& other) noexcept = default;
+  constexpr span_base& operator=(const span_base& other) noexcept = default;
 
   // not noexcept due to undefined behavior when size = 0
   constexpr reference front() const { return _data[0]; }
@@ -82,49 +82,24 @@ class span {
 };
 
 template <typename T, size_t Extent = dynamic_extent>
-struct host_span : public span<T, Extent, host_span<T, Extent>> {
-  constexpr host_span() noexcept : span<T, Extent, host_span<T, Extent>>() {}
-  constexpr host_span(typename span<T, Extent, host_span<T, Extent>>::pointer data,
-                      typename span<T, Extent, host_span<T, Extent>>::size_type size)
-    : span<T, Extent, host_span<T, Extent>>(data, size)
+struct host_span : public span_base<T, Extent, host_span<T, Extent>> {
+  typedef typename cudf::detail::span_base<T, Extent, host_span<T, Extent>> base;
+  constexpr host_span() noexcept : base() {}
+  constexpr host_span(typename base::pointer data, typename base::size_type size) : base(data, size)
   {
   }
-  // constexpr host_span(pointer begin, pointer end) : _data(begin), _size(end - begin) {}
-  constexpr host_span(const host_span& other) noexcept
-    : span<T, Extent, host_span<T, Extent>>(other)
-  {
-  }
+  constexpr host_span(host_span const& other) noexcept : base(other) {}
 };
 
 template <typename T, size_t Extent = dynamic_extent>
-struct device_span : public span<T, Extent, host_span<T, Extent>> {
-  constexpr device_span() noexcept : span<T, Extent, device_span<T, Extent>>() {}
-  constexpr device_span(typename span<T, Extent, device_span<T, Extent>>::pointer data,
-                        typename span<T, Extent, device_span<T, Extent>>::size_type size)
-    : span<T, Extent, device_span<T, Extent>>(data, size)
+struct device_span : public span_base<T, Extent, device_span<T, Extent>> {
+  typedef typename cudf::detail::span_base<T, Extent, device_span<T, Extent>> base;
+  constexpr device_span() noexcept : base() {}
+  constexpr device_span(typename base::pointer data, typename base::size_type size)
+    : base(data, size)
   {
   }
-  // constexpr device_span(pointer begin, pointer end) : _data(begin), _size(end - begin) {}
-  constexpr device_span(const device_span& other) noexcept
-    : span<T, Extent, device_span<T, Extent>>(other)
-  {
-  }
-};
-
-template <typename T, typename Derived>
-class base {
-  base() : _data(nullptr) {}
-
- private:
-  T* _data;
-};
-
-template <typename T>
-class derived_a : public base<T, derived_a<T>> {
-};
-
-template <typename T>
-class derived_b : public base<T, derived_b<T>> {
+  constexpr device_span(const device_span& other) noexcept : base(other) {}
 };
 
 }  // namespace detail
