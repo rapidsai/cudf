@@ -83,23 +83,14 @@ class span_base {
 
 template <typename T, size_t Extent = dynamic_extent>
 struct host_span : public span_base<T, Extent, host_span<T, Extent>> {
-  typedef typename cudf::detail::span_base<T, Extent, host_span<T, Extent>> base;
-  constexpr host_span() noexcept : base() {}
-  constexpr host_span(typename base::pointer data, typename base::size_type size) : base(data, size)
-  {
-  }
-  constexpr host_span(host_span const& other) noexcept : base(other) {}
+  using base = cudf::detail::span_base<T, Extent, host_span<T, Extent>>;
+  using base::base;
 };
 
 template <typename T, size_t Extent = dynamic_extent>
 struct device_span : public span_base<T, Extent, device_span<T, Extent>> {
-  typedef typename cudf::detail::span_base<T, Extent, device_span<T, Extent>> base;
-  constexpr device_span() noexcept : base() {}
-  constexpr device_span(typename base::pointer data, typename base::size_type size)
-    : base(data, size)
-  {
-  }
-  constexpr device_span(const device_span& other) noexcept : base(other) {}
+  using base = cudf::detail::span_base<T, Extent, device_span<T, Extent>>;
+  using base::base;
 };
 
 }  // namespace detail
