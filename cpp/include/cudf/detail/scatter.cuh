@@ -159,9 +159,9 @@ struct column_scatterer_impl<dictionary32, MapIterator> {
     auto const source_view = dictionary_column_view(source_matched->view());
 
     // now build the new indices by doing a scatter on just the matched indices
-    auto source_itr  = indexalator_factory::create_input_iterator(source_view.indices());
+    auto source_itr  = indexalator_factory::make_input_iterator(source_view.indices());
     auto new_indices = std::make_unique<column>(target_view.get_indices_annotated(), stream, mr);
-    auto target_itr  = indexalator_factory::create_output_iterator(new_indices->mutable_view());
+    auto target_itr  = indexalator_factory::make_output_iterator(new_indices->mutable_view());
     thrust::scatter(rmm::exec_policy(stream)->on(stream),
                     source_itr,
                     source_itr + std::distance(scatter_map_begin, scatter_map_end),

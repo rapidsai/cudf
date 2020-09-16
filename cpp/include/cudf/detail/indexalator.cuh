@@ -436,7 +436,7 @@ struct indexalator_factory {
   /**
    * @brief Create an input indexalator instance from an indices column.
    */
-  static input_indexalator create_input_iterator(column_view const& indices)
+  static input_indexalator make_input_iterator(column_view const& indices)
   {
     return type_dispatcher(indices.type(), input_indexalator_fn{}, indices);
   }
@@ -444,7 +444,7 @@ struct indexalator_factory {
   /**
    * @brief Create an output indexalator instance from an indices column.
    */
-  static output_indexalator create_output_iterator(mutable_column_view const& indices)
+  static output_indexalator make_output_iterator(mutable_column_view const& indices)
   {
     return type_dispatcher(indices.type(), output_indexalator_fn{}, indices);
   }

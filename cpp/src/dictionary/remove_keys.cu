@@ -65,7 +65,7 @@ std::unique_ptr<column> remove_keys_fn(
   auto map_indices =
     make_fixed_width_column(indices_type, keys_view.size(), mask_state::UNALLOCATED, stream);
   auto map_itr =
-    cudf::detail::indexalator_factory::create_output_iterator(map_indices->mutable_view());
+    cudf::detail::indexalator_factory::make_output_iterator(map_indices->mutable_view());
   // init to max to identify new nulls
   thrust::fill(execpol->on(stream),
                map_itr,
@@ -78,8 +78,7 @@ std::unique_ptr<column> remove_keys_fn(
     auto keys_positions = [&] {
       auto positions = make_fixed_width_column(
         indices_type, keys_view.size(), cudf::mask_state::UNALLOCATED, stream);
-      auto itr =
-        cudf::detail::indexalator_factory::create_output_iterator(positions->mutable_view());
+      auto itr = cudf::detail::indexalator_factory::make_output_iterator(positions->mutable_view());
       thrust::sequence(execpol->on(stream), itr, itr + keys_view.size());
       return std::move(positions);
     }();
@@ -89,9 +88,9 @@ std::unique_ptr<column> remove_keys_fn(
         table_view{{keys_view, keys_positions->view()}}, keys_to_keep_fn, mr, stream)
         ->release();
     auto const filtered_view = table_keys[1]->view();
-    auto filtered_itr = cudf::detail::indexalator_factory::create_input_iterator(filtered_view);
+    auto filtered_itr = cudf::detail::indexalator_factory::make_input_iterator(filtered_view);
     auto positions_itr =
-      cudf::detail::indexalator_factory::create_input_iterator(keys_positions->view());
+      cudf::detail::indexalator_factory::make_input_iterator(keys_positions->view());
     // build indices mapper
     // Example scatter([0,1,2][0,2,4][max,max,max,max,max]) => [0,max,1,max,2]
     thrust::scatter(execpol->on(stream),
@@ -123,9 +122,8 @@ std::unique_ptr<column> remove_keys_fn(
   // compute new nulls -- merge the existing nulls with the newly created ones (value<0)
   auto const offset = dictionary_column.offset();
   auto d_null_mask  = dictionary_column.null_mask();
-  auto indices_itr =
-    cudf::detail::indexalator_factory::create_input_iterator(indices_column->view());
-  auto new_nulls = cudf::detail::valid_if(
+  auto indices_itr = cudf::detail::indexalator_factory::make_input_iterator(indices_column->view());
+  auto new_nulls   = cudf::detail::valid_if(
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(dictionary_column.size()),
     [offset, d_null_mask, indices_itr, max_size] __device__(size_type idx) {

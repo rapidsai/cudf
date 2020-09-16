@@ -68,7 +68,7 @@ struct dispatch_compute_indices {
                                       stream,
                                       mr);
     auto result_itr =
-      cudf::detail::indexalator_factory::create_output_iterator(result->mutable_view());
+      cudf::detail::indexalator_factory::make_output_iterator(result->mutable_view());
     thrust::lower_bound(rmm::exec_policy(stream)->on(stream),
                         new_keys_view->begin<Element>(),
                         new_keys_view->end<Element>(),
@@ -120,7 +120,7 @@ std::unique_ptr<column> set_keys(
   auto d_matches = matches->view().data<bool>();
   // auto d_indices   = dictionary_column.indices().data<uint32_t>();
   auto indices_itr =
-    cudf::detail::indexalator_factory::create_input_iterator(dictionary_column.indices());
+    cudf::detail::indexalator_factory::make_input_iterator(dictionary_column.indices());
   auto d_null_mask = dictionary_column.null_mask();
   auto new_nulls   = cudf::detail::valid_if(
     thrust::make_counting_iterator<size_type>(dictionary_column.offset()),

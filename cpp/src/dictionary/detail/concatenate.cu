@@ -137,7 +137,7 @@ struct dispatch_compute_indices {
     auto indices_view  = column_device_view::create(all_indices, stream);
     auto d_all_indices = *indices_view;
 
-    auto indices_itr = cudf::detail::indexalator_factory::create_input_iterator(all_indices);
+    auto indices_itr = cudf::detail::indexalator_factory::make_input_iterator(all_indices);
     // map the concatenated indices to the concatenated keys
     auto all_itr = thrust::make_permutation_iterator(
       keys_view->begin<Element>(),
@@ -153,7 +153,7 @@ struct dispatch_compute_indices {
     auto result = make_numeric_column(
       all_indices.type(), all_indices.size(), mask_state::UNALLOCATED, stream, mr);
     auto result_itr =
-      cudf::detail::indexalator_factory::create_output_iterator(result->mutable_view());
+      cudf::detail::indexalator_factory::make_output_iterator(result->mutable_view());
     // new indices values are computed by matching the concatenated keys to the new key set
     thrust::lower_bound(rmm::exec_policy(stream)->on(stream),
                         new_keys_view->begin<Element>(),
