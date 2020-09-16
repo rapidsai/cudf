@@ -116,10 +116,10 @@ std::vector<std::string> setColumnNames(std::vector<char> const &header,
                                         int header_row,
                                         std::string prefix)
 {
-  std::vector<std::string> col_names_;
+  std::vector<std::string> col_names;
 
   // If there is only a single character then it would be the terminator
-  if (header.size() <= 1) { return col_names_; }
+  if (header.size() <= 1) { return col_names; }
 
   std::vector<char> first_row = header;
   int num_cols                = 0;
@@ -149,7 +149,7 @@ std::vector<std::string> setColumnNames(std::vector<char> const &header,
         }
 
         const string new_col_name(first_row.data() + prev, col_name_len);
-        col_names_.push_back(removeQuotes(new_col_name, opts.quotechar));
+        col_names.push_back(removeQuotes(new_col_name, opts.quotechar));
 
         // Stop parsing when we hit the line terminator; relevant when there is
         // a blank line following the header. In this case, first_row includes
@@ -158,7 +158,7 @@ std::vector<std::string> setColumnNames(std::vector<char> const &header,
         if (!quotation && first_row[pos] == opts.terminator) { break; }
       } else {
         // This is the first data row, add the automatically generated name
-        col_names_.push_back(prefix + std::to_string(num_cols));
+        col_names.push_back(prefix + std::to_string(num_cols));
       }
       num_cols++;
 
@@ -171,7 +171,7 @@ std::vector<std::string> setColumnNames(std::vector<char> const &header,
     }
   }
 
-  return col_names_;
+  return col_names;
 }
 
 table_with_metadata reader::impl::read(size_t range_offset,
