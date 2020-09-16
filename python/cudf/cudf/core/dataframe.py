@@ -2627,7 +2627,64 @@ class DataFrame(Frame, Serializable):
 
         return DataFrame(cols, idx)
 
-    def set_index(self, index, drop=True, append=False, inplace=False, verify_integrity=False):
+    def _set_index(
+        self,
+        index,
+        drop=True,
+        append=False,
+        inplace=False,
+        verify_integrity=False,
+    ):
+        """Helper for `.set_index`
+
+        Parameters
+        ----------
+        index : Index
+            The new index to set.
+        drop : boolean
+            Whether to drop corresponding column for str index argument
+        append : boolean
+            Append current to new index to form a multiindex
+        inplace : boolean
+            Modify the DataFrame in place (do not create a new object)
+        verify_integrity : boolean
+            Check for duplicates in the new index
+        """
+        assert isinstance(index, Index)
+
+        df = self if inplace else self.copy(deep=False)
+
+        if verify_integrity and not index.is_unique:
+            # TODO: indicate duplicate keys
+            raise ValueError("Index is not unique.\n {}".format(index))
+
+        if drop:
+            col = (
+                index.names
+                if isinstance(index, cudf.MultiIndex)
+                else [index.name]
+            )
+            old_idx_ncol = (
+                len(self.index.names)
+                if isinstance(self.index, cudf.MultiIndex)
+                else 1
+            )
+            col = (
+                col[old_idx_ncol:] if append else col
+            )  # dont include old index column during drop
+            df.drop(columns=col, inplace=True)
+
+        df.index = index
+        return df if not inplace else None
+
+    def set_index(
+        self,
+        index,
+        drop=True,
+        append=False,
+        inplace=False,
+        verify_integrity=False,
+    ):
         """Return a new DataFrame with a new index
 
         Parameters
@@ -2645,6 +2702,52 @@ class DataFrame(Frame, Serializable):
             Modify the DataFrame in place (do not create a new object)
         verify_integrity : boolean
             Check for duplicates in the new index
+
+        Examples
+        --------
+        Set existing column as index
+        >>> df = cudf.DataFrame({"a": [1,2,3,4,5],
+        ... "b":["a", "b", "c", "d","e"],
+        ... "c":[1.0, 2.0, 3.0, 4.0, 5.0]})
+
+        >>> df.set_index(["a", "b"])
+               c
+        a b
+        1 a  1.0
+        2 b  2.0
+        3 c  3.0
+        4 d  4.0
+        5 e  5.0
+
+        Set new Index instance as index
+        >>> df.set_index(cudf.RangeIndex(10, 15))
+            a  b    c
+        10  1  a  1.0
+        11  2  b  2.0
+        12  3  c  3.0
+        13  4  d  4.0
+        14  5  e  5.0
+
+        Setting `append=True` will combine current index with the column
+        >>> df.set_index("a", append=True)
+             b    c
+          a
+        0 1  a  1.0
+        1 2  b  2.0
+        2 3  c  3.0
+        3 4  d  4.0
+        4 5  e  5.0
+
+        `inplace` operation:
+        >>> df.set_index("a", inplace=True)
+        >>> df
+           b    c
+        a
+        1  a  1.0
+        2  b  2.0
+        3  c  3.0
+        4  d  4.0
+        5  e  5.0
         """
 
         def _merge_index_frame(idf, names):
@@ -2652,26 +2755,47 @@ class DataFrame(Frame, Serializable):
                 idf = cudf.DataFrame(idf._data)
 
             if isinstance(self.index, cudf.MultiIndex):
-                print(self.index._source_data)
-                print(idf)
+                left = self.index._source_data.copy(deep=False)
+                right = idf
+
+                # Preprocess for join
+                left.columns = list(range(len(left.columns)))
+                right.columns = list(
+                    range(
+                        len(left.columns),
+                        len(left.columns) + len(right.columns),
+                    )
+                )
+
                 idf = self.index._source_data.join(idf, how="left")
-                # idf = idf.join(DataFrame(self.index._data), how="left")
                 names = self.index.names + names
             elif isinstance(self.index, Index):
-                idf.insert(loc=0, name=self.index.name, value=self.index._values)
+                idf.columns = list(range(1, 1 + len(idf.columns)))
+                idf.insert(loc=0, name=0, value=self.index._values)
                 names = [self.index.name] + names
             return idf, names
 
         # When index is a list of column names
         if isinstance(index, list):
+            if not all([isinstance(x, str) for x in index]):
+                # TODO: add support for heterogenous index list
+                raise NotImplementedError(
+                    "Heterogenous index list is not supported."
+                )
+
             if len(index) == 1:
-                return self.set_index(index=index[0], drop=drop, inplace=inplace, verify_integrity=verify_integrity)
+                return self.set_index(
+                    index=index[0],
+                    drop=drop,
+                    inplace=inplace,
+                    verify_integrity=verify_integrity,
+                )
             else:
                 idf = self[index]
                 names = index
                 if append:
                     idf, names = _merge_index_frame(idf, names)
-                return self.set_index(
+                return self._set_index(
                     index=cudf.MultiIndex.from_frame(idf, names=names),
                     inplace=inplace,
                     drop=drop,
@@ -2688,29 +2812,32 @@ class DataFrame(Frame, Serializable):
                 index = cudf.MultiIndex.from_frame(idf, names=names)
             else:
                 index = as_index(idf)
-            return self.set_index(index=index, inplace=inplace, drop=drop, append=append, verify_integrity=verify_integrity)
+            return self._set_index(
+                index=index,
+                inplace=inplace,
+                drop=drop,
+                append=append,
+                verify_integrity=verify_integrity,
+            )
 
-        # General Case
-        df = self if inplace else self.copy(deep=False)
-
-        index = (
-            index
-            if isinstance(index, Index)
-            else as_index(index)
+        # When index is a new `Index` or `Series-convertible`
+        # Will not drop columns
+        index = index if isinstance(index, Index) else as_index(index)
+        idf = DataFrame(index._data)
+        names = (
+            index.names if isinstance(index, cudf.MultiIndex) else [index.name]
         )
+        if append:
+            idf, names = _merge_index_frame(idf, names)
+            index = cudf.MultiIndex.from_frame(idf, names=names)
 
-        if verify_integrity and not index.is_unique:
-            # TODO: indicate duplicate keys
-            raise ValueError("Index is not unique.\n {}".format(index))
-
-        if drop:
-            col = index.names if isinstance(index, cudf.MultiIndex) else [index.name]
-            old_idx_ncol = len(self.index.names) if isinstance(self.index, cudf.MultiIndex) else 1
-            col = col[old_idx_ncol:] if append else col # dont include old index column during drop
-            df.drop(columns=col, inplace=True)
-
-        df.index = index
-        return df if not inplace else None
+        return self._set_index(
+            index=index,
+            inplace=inplace,
+            drop=False,
+            append=append,
+            verify_integrity=verify_integrity,
+        )
 
     def reset_index(
         self, level=None, drop=False, inplace=False, col_level=0, col_fill=""
@@ -4743,6 +4870,7 @@ class DataFrame(Frame, Serializable):
             index = cudf.from_pandas(dataframe.index, nan_as_null=nan_as_null)
         else:
             index = dataframe.index
+        print(index)
         result = df.set_index(index)
 
         return result

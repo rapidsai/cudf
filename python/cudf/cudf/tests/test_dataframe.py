@@ -2090,10 +2090,53 @@ def test_reset_index_inplace(pdf, gdf, drop):
     assert_eq(pdf, gdf)
 
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "a": [1, 2, 3, 4, 5],
+            "b": ["a", "b", "c", "d", "e"],
+            "c": [1.0, 2.0, 3.0, 4.0, 5.0],
+        }
+    ],
+)
+@pytest.mark.parametrize(
+    "index",
+    ["a", ["a", "b"], pd.CategoricalIndex(["I", "II", "III", "IV", "V"])],
+)
 @pytest.mark.parametrize("drop", [True, False])
-def test_set_index(pdf, gdf, drop):
-    for col in pdf.columns:
-        assert_eq(pdf.set_index(col, drop=drop), gdf.set_index(col, drop=drop))
+@pytest.mark.parametrize("append", [True, False])
+def test_set_index(data, index, drop, append):
+    gdf = gd.DataFrame(data)
+    pdf = gdf.to_pandas()
+
+    assert_eq(
+        pdf.set_index(index, drop=drop, append=append),
+        gdf.set_index(index, drop=drop, append=append),
+    )
+
+    # Inplace test
+    pdf.set_index(index, inplace=True, drop=drop, append=append)
+    gdf.set_index(index, inplace=True, drop=drop, append=append)
+    assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "a": [1, 1, 2, 2, 5],
+            "b": ["a", "b", "c", "d", "e"],
+            "c": [1.0, 2.0, 3.0, 4.0, 5.0],
+        }
+    ],
+)
+@pytest.mark.parametrize("index", ["a", pd.Index([1, 1, 2, 2, 3])])
+@pytest.mark.parametrize("verify_integrity", [True])
+@pytest.mark.xfail
+def test_set_index_verify_integrity(data, index, verify_integrity):
+    gdf = gd.DataFrame(data)
+    gdf.set_index(index, verify_integrity=verify_integrity)
 
 
 @pytest.mark.parametrize("drop", [True, False])
