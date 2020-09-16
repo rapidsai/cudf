@@ -1,6 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 import datetime
+import functools
 
 import pandas as pd
 
@@ -109,6 +110,7 @@ def _apply_filters(filters, stats):
     return False
 
 
+@functools.lru_cache(maxsize=8)
 def _prepare_filters(filters):
     # Coerce filters into list of lists of tuples
     if isinstance(filters[0][0], str):
