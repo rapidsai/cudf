@@ -2985,7 +2985,7 @@ public class ColumnVectorTest extends CudfTestBase {
       assertEquals(data2, retData2.dataRecord);
       assertEquals(data3, retData3.dataRecord);
       assertEquals(data4, retData4);
-      assertStructColumnsAreEqual(expected,columnVector, type);
+      assertStructColumnsAreEqual(expected, columnVector, type);
     }
   }
 }

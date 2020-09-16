@@ -126,6 +126,13 @@ public enum DType {
     return DURATION_TYPE.contains(this);
   }
 
+  /**
+   * Returns true for nested types
+   */
+  public boolean isNestedType() {
+    return NESTED_TYPE.contains(this);
+  }
+
   public int getNativeId() {
     return nativeId;
   }
@@ -187,5 +194,10 @@ public enum DType {
       DType.UINT32,
       DType.DURATION_DAYS,
       DType.TIMESTAMP_DAYS
+  );
+
+  private static final EnumSet<DType> NESTED_TYPE = EnumSet.of(
+      DType.LIST,
+      DType.STRUCT
   );
 }

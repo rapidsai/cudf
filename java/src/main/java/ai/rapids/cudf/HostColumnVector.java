@@ -198,7 +198,7 @@ public final class HostColumnVector implements AutoCloseable {
     }
   }
 
-  final OffHeapState offHeap;
+  private final OffHeapState offHeap;
   private final DType type;
   private long rows;
   private Optional<Long> nullCount = Optional.empty();
@@ -462,21 +462,13 @@ public final class HostColumnVector implements AutoCloseable {
     assert rowIndex < rows;
     assert type == DType.STRUCT;
     List<Object> retList = new ArrayList<>();
-    int start = offHeap.offsets.getInt(rowIndex * DType.INT32.getSizeInBytes());
-    int end = offHeap.offsets.getInt((rowIndex + 1) * DType.INT32.getSizeInBytes());
     // check if null or empty
-    if (start == end) {
-      System.out.println("MAYBE RETURNING NULL");
-      if (isNull(rowIndex)) {
-        System.out.println("RETURNING NULL");
-        return null;
-      }
+    if (isNull(rowIndex)) {
+      return null;
     }
     int numChildren = mainType.getNumChildren();
-    for(int j = start; j < end; j++) {
-      for (int k = 0; k < numChildren; k++) {
-        retList.add(children.get(k).getElement(j));
-      }
+    for (int k = 0; k < numChildren; k++) {
+      retList.add(children.get(k).getElement((int) rowIndex));
     }
     return new ColumnBuilder.StructData(retList);
   }
@@ -1374,11 +1366,9 @@ public final class HostColumnVector implements AutoCloseable {
           StructData structData = (StructData) inputList.get(i);
           if (structData.dataRecord == null) {
             setNullAt(currentIndex);
-            updateIndexAndOffsets(currentIndex + 1, currentIndex);
           }
           for (int j = 0; j < structData.getNumFields(); j++) {
             ColumnBuilder childBuilder = childBuilders.get(j);
-            updateIndexAndOffsets(childBuilder.getCurrentIndex() + 1, childBuilder.getCurrentIndex() + 1);
             appendChildOrNull(childBuilder, structData.dataRecord.get(j));
           }
           currentIndex++;

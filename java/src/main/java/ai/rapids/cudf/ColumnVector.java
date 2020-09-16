@@ -57,7 +57,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     public ColumnViewAccess<BaseDeviceMemoryBuffer> getChildColumnViewAccess(int childIndex) {
       int numChildren = getNumChildren();
       assert childIndex < numChildren : "children index should be less than " + numChildren;
-      if (getDataType() != DType.LIST) {
+      if (getDataType() != DType.LIST && getDataType() != DType.STRUCT) {
         return null;
       }
       long childColumnView = getChildCvPointer(viewHandle, childIndex);
@@ -107,7 +107,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
     @Override
     public int getNumChildren() {
-      if (getDataType() != DType.LIST /* or structs */) {
+      if (!getDataType().isNestedType()) {
         return 0;
       }
       return offHeap.getNumChildren(viewHandle);
@@ -2996,7 +2996,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
   @Override
   public ColumnViewAccess getChildColumnViewAccess(int childIndex) {
-    if (getDataType() != DType.LIST && getDataType() != DType.STRUCT) {
+    if (!type.isNestedType()) {
       return null;
     }
     long childColumnView = getChildCvPointer(getNativeView(), childIndex);
@@ -3006,7 +3006,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
   @Override
   public BaseDeviceMemoryBuffer getDataBuffer() {
-    if (isNestedType()) {
+    if (!type.isNestedType()) {
       throw new IllegalStateException(" Lists and Structs at top level have no data");
     }
     return offHeap.getData();
@@ -3035,14 +3035,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
   @Override
   public int getNumChildren() {
-    if (getDataType() != DType.LIST && getDataType() != DType.STRUCT) {
+    if (!type.isNestedType()) {
       return 0;
     }
     return offHeap.getNumChildren(getNativeView());
-  }
-
-  private boolean isNestedType() {
-    return type == DType.LIST || type == DType.STRUCT;
   }
 
   /**
@@ -3483,7 +3479,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
             // least one byte or it will not be interpreted correctly.
             dataLen = 1;
           }
-        } else if (type == DType.LIST || type == DType.STRUCT) {
+        } else if (type.isNestedType()) {
           dataLen = dataBuffer.length;
         }
         data = DeviceMemoryBuffer.allocate(dataLen);
