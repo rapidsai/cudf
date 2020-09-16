@@ -3066,6 +3066,7 @@ class DataFrame(Frame, Serializable):
                 if errors == "raise" and not target.isin(levels_index).all():
                     raise KeyError("One or more values not found in axis")
 
+                # TODO : Could use anti-join as a future optimization
                 sliced_df = outdf.take(~levels_index.isin(target))
                 sliced_df._index.names = self._index.names
             else:
