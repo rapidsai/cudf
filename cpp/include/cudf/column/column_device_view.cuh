@@ -688,7 +688,9 @@ __device__ inline string_view const column_device_view::element<string_view>(
 }
 
 /**
- * @brief Dispatch funtor for resolving the indices value for dictionary element.
+ * @brief Dispatch functor for resolving the indices value for dictionary element.
+ *
+ * The basic dictionary elements are the indices which can be any index type.
  */
 struct index_element_fn {
   template <typename IndexType, std::enable_if_t<is_index_type<IndexType>()>* = nullptr>
