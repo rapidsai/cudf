@@ -94,18 +94,8 @@ struct host_span : public span_base<T, Extent, host_span<T, Extent>> {
   using base = cudf::detail::span_base<T, Extent, host_span<T, Extent>>;
   using base::base;
 
-  template <typename Container>
-  static bool constexpr is_supported_container()
-  {
-    return std::is_same<std::vector<T>, Container>() ||
-           std::is_same<thrust::host_vector<T>, Container>();
-  }
-
-  // hacky way of implementing span::span(R&&) for ranges;
-  template <typename Container, std::enable_if_t<is_supported_container<Container>()>* = nullptr>
-  explicit host_span(Container source) : base(source.data(), source.end())
-  {
-  }
+  explicit host_span(std::vector<T> in) : base(in.data(), in.size()) {}
+  explicit host_span(thrust::host_vector<T> in) : base(in.data(), in.size()) {}
 };
 
 template <typename T, std::size_t Extent = dynamic_extent>
@@ -113,20 +103,10 @@ struct device_span : public span_base<T, Extent, device_span<T, Extent>> {
   using base = cudf::detail::span_base<T, Extent, device_span<T, Extent>>;
   using base::base;
 
-  template <typename Container>
-  static bool constexpr is_supported_container()
-  {
-    return std::is_same<thrust::device_vector<T>, Container>() ||
-           std::is_same<rmm::device_buffer, Container>() ||
-           std::is_same<rmm::device_vector<T>, Container>() ||
-           std::is_same<rmm::device_uvector<T>, Container>();
-  }
-
-  // hacky way of implementing span::span(R&&) for ranges;
-  template <typename Container, std::enable_if_t<is_supported_container<Container>()>* = nullptr>
-  explicit device_span(Container source) : base(source.data(), source.end())
-  {
-  }
+  explicit device_span(thrust::device_vector<T> in) : base(in.data().get(), in.size()) {}
+  explicit device_span(rmm::device_buffer in) : base(static_cast<T*>(in.data()), in.size()) {}
+  explicit device_span(rmm::device_vector<T> in) : base(in.data().get(), in.size()) {}
+  explicit device_span(rmm::device_uvector<T> in) : base(in.data(), in.size()) {}
 };
 
 }  // namespace detail

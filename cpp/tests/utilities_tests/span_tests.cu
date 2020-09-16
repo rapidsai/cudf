@@ -25,8 +25,7 @@
 #include <cstddef>
 #include <cstring>
 #include <string>
-
-#include <rmm/device_buffer.hpp>
+#include "rmm/device_buffer.hpp"
 
 using cudf::detail::device_span;
 using cudf::detail::host_span;
@@ -198,10 +197,9 @@ TEST(SpanTest, CanConstructFromHostContainers)
 
 TEST(SpanTest, CanConstructFromDeviceContainers)
 {
-  std::vector<int> std_vector                = {7};
-  thrust::device_vector<int> thrust_d_vector = std_vector;
-  rmm::device_vector<int> d_vector           = std_vector;
+  rmm::device_vector<int> d_vector           = std::vector<int>({7});
   rmm::device_buffer d_buffer                = rmm::device_buffer(1);
+  thrust::device_vector<int> thrust_d_vector = std::vector<int>({7});
 
   (void)device_span<int>(d_vector);
   (void)device_span<int>(d_buffer);
