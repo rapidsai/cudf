@@ -218,12 +218,13 @@ struct ScanDispatcher {
   }
 };
 
-std::unique_ptr<column> scan(const column_view& input,
-                             std::unique_ptr<aggregation> const& agg,
-                             scan_type inclusive,
-                             null_policy null_handling,
-                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                             cudaStream_t stream                 = 0)
+std::unique_ptr<column> scan(
+  const column_view& input,
+  std::unique_ptr<aggregation> const& agg,
+  scan_type inclusive,
+  null_policy null_handling,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0)
 {
   CUDF_EXPECTS(is_numeric(input.type()) || is_compound(input.type()),
                "Unexpected non-numeric or non-string type.");

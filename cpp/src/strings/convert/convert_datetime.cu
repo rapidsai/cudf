@@ -198,9 +198,10 @@ struct parse_datetime {
     auto ptr    = d_string.data();
     auto length = d_string.size_bytes();
     for (size_t idx = 0; idx < items_count; ++idx) {
-      auto item = d_format_items[idx];
-      if (length < item.length) return 1;
-      if (item.item_type == format_char_type::literal) {  // static character we'll just skip;
+      auto item   = d_format_items[idx];
+      item.length = static_cast<int8_t>(std::min(static_cast<size_type>(item.length), length));
+      if (item.item_type == format_char_type::literal) {
+        // static character we'll just skip;
         // consume item.length bytes from string
         ptr += item.length;
         length -= item.length;
@@ -305,7 +306,7 @@ struct parse_datetime {
     string_view d_str = d_strings.element<string_view>(idx);
     if (d_str.empty()) return epoch_time;
     //
-    int32_t timeparts[TP_ARRAYSIZE] = {0, 1, 1};                // month and day are 1-based
+    int32_t timeparts[TP_ARRAYSIZE] = {1970, 1, 1};             // month and day are 1-based
     if (parse_into_parts(d_str, timeparts)) return epoch_time;  // unexpected parse case
     //
     return T{T::duration(timestamp_from_parts(timeparts, units))};

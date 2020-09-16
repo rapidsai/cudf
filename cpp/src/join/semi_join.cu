@@ -78,7 +78,7 @@ std::unique_ptr<cudf::table> left_semi_anti_join(
   std::vector<cudf::size_type> const& right_on,
   std::vector<cudf::size_type> const& return_columns,
   null_equality compare_nulls,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   CUDF_EXPECTS(0 != left.num_columns(), "Left table is empty");

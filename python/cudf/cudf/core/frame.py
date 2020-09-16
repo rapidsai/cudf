@@ -1049,14 +1049,6 @@ class Frame(libcudf.table.Table):
 
         return self.where(cond=~cond, other=other, inplace=inplace)
 
-    def _split(self, splits, keep_index=True):
-        result = libcudf.copying.table_split(
-            self, splits, keep_index=keep_index
-        )
-
-        result = [self.__class__._from_table(tbl) for tbl in result]
-        return result
-
     def _partition(self, scatter_map, npartitions, keep_index=True):
 
         output_table, output_offsets = libcudf.partitioning.partition(
@@ -1684,9 +1676,10 @@ class Frame(libcudf.table.Table):
             replace == True is not yet supported for axis = 1/"columns"
         weights : str or ndarray-like, optional
             Only supported for axis=1/"columns"
-        random_state : int or None, default None
+        random_state : int, numpy RandomState or None, default None
             Seed for the random number generator (if int), or None.
             If None, a random seed will be chosen.
+            if RandomState, seed will be extracted from current state.
         axis : {0 or ‘index’, 1 or ‘columns’, None}, default None
             Axis to sample. Accepts axis number or name.
             Default is stat axis for given data type
@@ -1761,11 +1754,15 @@ class Frame(libcudf.table.Table):
                     "weights is not yet supported for axis=0/index"
                 )
 
-            seed = (
-                np.random.randint(np.iinfo(np.int64).max, dtype=np.int64)
-                if random_state is None
-                else np.int64(random_state)
-            )
+            if random_state is None:
+                seed = np.random.randint(
+                    np.iinfo(np.int64).max, dtype=np.int64
+                )
+            elif isinstance(random_state, np.random.mtrand.RandomState):
+                _, keys, pos, _, _ = random_state.get_state()
+                seed = 0 if pos >= len(keys) else pos
+            else:
+                seed = np.int64(random_state)
 
             result = self._from_table(
                 libcudf.copying.sample(
@@ -3122,6 +3119,18 @@ class Frame(libcudf.table.Table):
         return libcudf.sort.is_sorted(
             self, ascending=ascending, null_position=null_position
         )
+
+    def _split(self, splits, keep_index=True):
+        result = libcudf.copying.table_split(
+            self, splits, keep_index=keep_index
+        )
+        result = [self.__class__._from_table(tbl) for tbl in result]
+        return result
+
+    def _encode(self):
+        keys, indices = libcudf.transform.table_encode(self)
+        keys = self.__class__._from_table(keys)
+        return keys, indices
 
 
 def _get_replacement_values(to_replace, replacement, col_name, column):

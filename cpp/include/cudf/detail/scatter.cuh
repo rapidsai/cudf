@@ -116,6 +116,21 @@ struct column_scatterer_impl<string_view, MapIterator> {
 };
 
 template <typename MapIterator>
+struct column_scatterer {
+  template <typename Element>
+  std::unique_ptr<column> operator()(column_view const& source,
+                                     MapIterator scatter_map_begin,
+                                     MapIterator scatter_map_end,
+                                     column_view const& target,
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream) const
+  {
+    column_scatterer_impl<Element, MapIterator> scatterer{};
+    return scatterer(source, scatter_map_begin, scatter_map_end, target, mr, stream);
+  }
+};
+
+template <typename MapIterator>
 struct column_scatterer_impl<dictionary32, MapIterator> {
   std::unique_ptr<column> operator()(column_view const& source_in,
                                      MapIterator scatter_map_begin,
@@ -139,19 +154,28 @@ struct column_scatterer_impl<dictionary32, MapIterator> {
     auto target_matched    = dictionary::detail::add_keys(target, source.keys(), mr, stream);
     auto const target_view = dictionary_column_view(target_matched->view());
     auto source_matched    = dictionary::detail::set_keys(
-      source, target_view.keys(), rmm::mr::get_default_resource(), stream);
+      source, target_view.keys(), rmm::mr::get_current_device_resource(), stream);
     auto const source_view = dictionary_column_view(source_matched->view());
 
     // now build the new indices by doing a scatter on just the matched indices
     column_view const source_indices = source_view.get_indices_annotated();
     column_view const target_indices = target_view.get_indices_annotated();
-    column_scatterer_impl<int32_t, MapIterator> index_scatterer;
-    auto new_indices = index_scatterer(
-      source_indices, scatter_map_begin, scatter_map_end, target_indices, mr, stream);
-    auto const output_size = new_indices->size();        // record these
-    auto const null_count  = new_indices->null_count();  // before the release
-    auto contents          = new_indices->release();
-    auto indices_column    = std::make_unique<column>(data_type{type_id::INT32},
+
+    auto new_indices = type_dispatcher(source_indices.type(),
+                                       column_scatterer<MapIterator>{},
+                                       source_indices,
+                                       scatter_map_begin,
+                                       scatter_map_end,
+                                       target_indices,
+                                       mr,
+                                       stream);
+
+    // record some data before calling release()
+    auto const indices_type = new_indices->type();
+    auto const output_size  = new_indices->size();
+    auto const null_count   = new_indices->null_count();
+    auto contents           = new_indices->release();
+    auto indices_column     = std::make_unique<column>(indices_type,
                                                    static_cast<size_type>(output_size),
                                                    std::move(*(contents.data.release())),
                                                    rmm::device_buffer{0, stream, mr},
@@ -165,21 +189,6 @@ struct column_scatterer_impl<dictionary32, MapIterator> {
                                   std::move(indices_column),
                                   std::move(*(contents.null_mask.release())),
                                   null_count);
-  }
-};
-
-template <typename MapIterator>
-struct column_scatterer {
-  template <typename Element>
-  std::unique_ptr<column> operator()(column_view const& source,
-                                     MapIterator scatter_map_begin,
-                                     MapIterator scatter_map_end,
-                                     column_view const& target,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) const
-  {
-    column_scatterer_impl<Element, MapIterator> scatterer{};
-    return scatterer(source, scatter_map_begin, scatter_map_end, target, mr, stream);
   }
 };
 
@@ -224,7 +233,7 @@ std::unique_ptr<table> scatter(
   MapIterator scatter_map_end,
   table_view const& target,
   bool check_bounds                   = false,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   CUDF_FUNC_RANGE();

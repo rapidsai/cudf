@@ -112,41 +112,35 @@ class column_wrapper {
 template <typename From, typename To>
 struct fixed_width_type_converter {
   // Are the types same - simply copy elements from [begin, end) to out
-  template <typename FromT = From,
-            typename ToT   = To,
-            typename InputIterator,
-            typename OutputIterator,
+  template <typename FromT                                                        = From,
+            typename ToT                                                          = To,
             typename std::enable_if<std::is_same<FromT, ToT>::value, void>::type* = nullptr>
-  void operator()(InputIterator begin, InputIterator end, OutputIterator out) const
+  ToT operator()(FromT element) const
   {
-    std::copy(begin, end, out);
+    return element;
   }
 
   // Are the types convertible or can target be constructed from source?
-  template <typename FromT = From,
-            typename ToT   = To,
-            typename InputIterator,
-            typename OutputIterator,
+  template <typename FromT                       = From,
+            typename ToT                         = To,
             typename std::enable_if<!std::is_same<FromT, ToT>::value &&
                                       (cudf::is_convertible<FromT, ToT>::value ||
                                        std::is_constructible<ToT, FromT>::value),
                                     void>::type* = nullptr>
-  void operator()(InputIterator begin, InputIterator end, OutputIterator out) const
+  ToT operator()(FromT element) const
   {
-    std::transform(begin, end, out, [](auto const& e) { return static_cast<ToT>(e); });
+    return static_cast<ToT>(element);
   }
 
   // Convert integral values to timestamps
   template <
-    typename FromT = From,
-    typename ToT   = To,
-    typename InputIterator,
-    typename OutputIterator,
+    typename FromT                       = From,
+    typename ToT                         = To,
     typename std::enable_if<std::is_integral<FromT>::value && cudf::is_timestamp_t<ToT>::value,
                             void>::type* = nullptr>
-  void operator()(InputIterator begin, InputIterator end, OutputIterator out) const
+  ToT operator()(FromT element) const
   {
-    std::transform(begin, end, out, [](auto const& e) { return ToT{typename ToT::duration{e}}; });
+    return ToT{typename ToT::duration{element}};
   }
 };
 
@@ -166,10 +160,10 @@ template <typename ElementTo, typename ElementFrom, typename InputIterator>
 rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 {
   static_assert(cudf::is_fixed_width<ElementTo>(), "Unexpected non-fixed width type.");
-  cudf::size_type size = std::distance(begin, end);
-  thrust::host_vector<ElementTo> elements;
-  elements.reserve(size);
-  fixed_width_type_converter<ElementFrom, ElementTo>{}(begin, end, elements.begin());
+  auto transformer     = fixed_width_type_converter<ElementFrom, ElementTo>{};
+  auto transform_begin = thrust::make_transform_iterator(begin, transformer);
+  auto const size      = std::distance(begin, end);
+  auto const elements  = thrust::host_vector<ElementTo>(transform_begin, transform_begin + size);
   return rmm::device_buffer{elements.data(), size * sizeof(ElementTo)};
 }
 
@@ -423,6 +417,34 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
     : fixed_width_column_wrapper(begin, end, std::cbegin(validity))
   {
   }
+
+  /**
+   * @brief Construct a nullable column from a list of pairs of fixed-width
+   * elements and validity booleans of each element.
+   *
+   * The validity of each element is determined by the boolean element in the pair
+   * where `true` indicates the element is valid, and `false` indicates the
+   * element is null.
+   *
+   * Example:
+   * @code{.cpp}
+   * // Creates a nullable INT32 column with 4 elements: {1, NULL, 3, NULL}
+   * using p = std::pair<int32_t, bool>;
+   * fixed_width_column_wrapper<int32_t> w( p{1, true}, p{2, false}, p{3, true}, p{4, false} );
+   * @endcode
+   *
+   * @param elements The list of pairs of element and validity booleans
+   */
+  template <typename ElementFrom>
+  fixed_width_column_wrapper(std::initializer_list<std::pair<ElementFrom, bool>> elements)
+  {
+    auto begin =
+      thrust::make_transform_iterator(elements.begin(), [](auto const& e) { return e.first; });
+    auto end = begin + elements.size();
+    auto v =
+      thrust::make_transform_iterator(elements.begin(), [](auto const& e) { return e.second; });
+    wrapped = fixed_width_column_wrapper<ElementTo, ElementFrom>(begin, end, v).release();
+  }
 };
 
 /**
@@ -430,6 +452,11 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
  **/
 class strings_column_wrapper : public detail::column_wrapper {
  public:
+  /**
+   * @brief Default constructor initializes an empty column of strings
+   */
+  strings_column_wrapper() : strings_column_wrapper(std::initializer_list<std::string>{}) {}
+
   /**
    * @brief Construct a non-nullable column of strings from the range
    * `[begin,end)`.
@@ -560,6 +587,36 @@ class strings_column_wrapper : public detail::column_wrapper {
                          std::initializer_list<bool> validity)
     : strings_column_wrapper(std::cbegin(strings), std::cend(strings), std::cbegin(validity))
   {
+  }
+
+  /**
+   * @brief Construct a nullable column from a list of pairs of strings
+   * and validity booleans of each string.
+   *
+   * The validity of each string is determined by the boolean element in the pair
+   * where `true` indicates the string is valid, and `false` indicates the
+   * string is null.
+   *
+   * Example:
+   * @code{.cpp}
+   * // Creates a nullable STRING column with 7 string elements:
+   * // {NULL, "this", NULL, "a", NULL, "of", NULL}
+   * using p = std::pair<std::string, bool>;
+   * strings_column_wrapper s( p{"", false}, p{"this", true}, p{"is", false},
+   *                           p{"a", true}, p{"column", false}, p{"of", true},
+   *                           p{"strings", false} );
+   * @endcode
+   *
+   * @param strings The list of pairs of strings and validity booleans
+   */
+  strings_column_wrapper(std::initializer_list<std::pair<std::string, bool>> strings)
+  {
+    auto begin =
+      thrust::make_transform_iterator(strings.begin(), [](auto const& s) { return s.first; });
+    auto end = begin + strings.size();
+    auto v =
+      thrust::make_transform_iterator(strings.begin(), [](auto const& s) { return s.second; });
+    wrapped = strings_column_wrapper(begin, end, v).release();
   }
 };
 
@@ -976,7 +1033,7 @@ class lists_column_wrapper : public detail::column_wrapper {
       CUDF_EXPECTS(col.size() == 0, "Encountered mismatched column!");
 
       auto remainder = empty_like(expected_hierarchy);
-      return std::move(remainder);
+      return remainder;
     }
 
     lists_column_view lcv(col);

@@ -168,7 +168,7 @@ TEST(TextSubwordTest, ParameterErrors)
 
 TEST(TextSubwordTest, EmptyStrings)
 {
-  cudf::test::strings_column_wrapper strings({});
+  cudf::test::strings_column_wrapper strings;
   std::string hash_file = temp_env->get_temp_filepath("hashed_vocab.txt");
   create_hashed_vocab(hash_file);
   auto result = nvtext::subword_tokenize(cudf::strings_column_view{strings},

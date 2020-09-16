@@ -353,11 +353,26 @@ public final class Table implements AutoCloseable {
                                                       HostBufferConsumer consumer);
 
   /**
+   * Convert a cudf table to an arrow table handle.
+   * @param handle the handle to the writer.
+   * @param tableHandle the table to convert
+   */
+  private static native long convertCudfToArrowTable(long handle,
+                                                     long tableHandle);
+
+  /**
    * Write out a table to an open handle.
    * @param handle the handle to the writer.
-   * @param table the table to write out.
+   * @param arrowHandle the arrow table to write out.
+   * @param maxChunkSize the maximum number of rows that could
+   *                     be written out in a single chunk.  Generally this setting will be
+   *                     followed unless for some reason the arrow table is not a single group.
+   *                     This can happen when reading arrow data, but not when converting from
+   *                     cudf.
    */
-  private static native void writeArrowIPCChunk(long handle, long table);
+  private static native void writeArrowIPCArrowChunk(long handle,
+                                                     long arrowHandle,
+                                                     long maxChunkSize);
 
   /**
    * Finish writing out Arrow IPC.
@@ -382,9 +397,22 @@ public final class Table implements AutoCloseable {
   /**
    * Read the next chunk/table of data.
    * @param handle the handle that is holding the data.
-   * @return the pointers to the columns for the table, or null if the data is done being read.
+   * @param rowTarget the number of rows to read.
+   * @return a pointer to an arrow table handle.
    */
-  private static native long[] readArrowIPCChunk(long handle);
+  private static native long readArrowIPCChunkToArrowTable(long handle, int rowTarget);
+
+  /**
+   * Close the arrow table handle returned by readArrowIPCChunkToArrowTable or
+   * convertCudfToArrowTable
+   */
+  private static native void closeArrowTable(long arrowHandle);
+
+  /**
+   * Convert an arrow table handle as returned by readArrowIPCChunkToArrowTable to
+   * cudf table handles.
+   */
+  private static native long[] convertArrowTableToCudf(long arrowHandle);
 
   /**
    * Finish reading the data.  We are done.
@@ -894,21 +922,29 @@ public final class Table implements AutoCloseable {
   }
 
   private static class ArrowIPCTableWriter implements TableWriter {
+    private final ArrowIPCWriterOptions.DoneOnGpu callback;
     private long handle;
-    HostBufferConsumer consumer;
+    private HostBufferConsumer consumer;
+    private long maxChunkSize;
 
-    private ArrowIPCTableWriter(ArrowIPCWriterOptions options, File outputFile) {
+    private ArrowIPCTableWriter(ArrowIPCWriterOptions options,
+                                File outputFile) {
+      this.callback = options.getCallback();
       this.consumer = null;
+      this.maxChunkSize = options.getMaxChunkSize();
       this.handle = writeArrowIPCFileBegin(
               options.getColumnNames(),
               outputFile.getAbsolutePath());
     }
 
-    private ArrowIPCTableWriter(ArrowIPCWriterOptions options, HostBufferConsumer consumer) {
+    private ArrowIPCTableWriter(ArrowIPCWriterOptions options,
+                                HostBufferConsumer consumer) {
+      this.callback = options.getCallback();
+      this.consumer = consumer;
+      this.maxChunkSize = options.getMaxChunkSize();
       this.handle = writeArrowIPCBufferBegin(
               options.getColumnNames(),
               consumer);
-      this.consumer = consumer;
     }
 
     @Override
@@ -916,7 +952,13 @@ public final class Table implements AutoCloseable {
       if (handle == 0) {
         throw new IllegalStateException("Writer was already closed");
       }
-      writeArrowIPCChunk(handle, table.nativeHandle);
+      long arrowHandle = convertCudfToArrowTable(handle, table.nativeHandle);
+      try {
+        callback.doneWithTheGpu(table);
+        writeArrowIPCArrowChunk(handle, arrowHandle, maxChunkSize);
+      } finally {
+        closeArrowTable(arrowHandle);
+      }
     }
 
     @Override
@@ -964,11 +1006,21 @@ public final class Table implements AutoCloseable {
     }
 
     // Called From JNI
-    public long readInto(long dstAddress, long maxAmount) {
-      long realMaxAmount = Math.min(maxAmount, buffer.length);
-      long amountRead = provider.readInto(buffer, realMaxAmount);
-      buffer.copyToMemory(dstAddress, amountRead);
-      return amountRead;
+    public long readInto(long dstAddress, long amount) {
+      long totalRead = 0;
+      long amountLeft = amount;
+      while (amountLeft > 0) {
+        long amountToCopy = Math.min(amountLeft, buffer.length);
+        long amountRead = provider.readInto(buffer, amountToCopy);
+        buffer.copyToMemory(totalRead + dstAddress, amountRead);
+        amountLeft -= amountRead;
+        totalRead += amountRead;
+        if (amountRead < amountToCopy) {
+          // EOF
+          amountLeft = 0;
+        }
+      }
+      return totalRead;
     }
 
     @Override
@@ -986,27 +1038,41 @@ public final class Table implements AutoCloseable {
   }
 
   private static class ArrowIPCStreamedTableReader implements StreamedTableReader {
+    private final ArrowIPCOptions.NeedGpu callback;
     private long handle;
     private ArrowReaderWrapper provider;
 
-    private ArrowIPCStreamedTableReader(File inputFile) {
+    private ArrowIPCStreamedTableReader(ArrowIPCOptions options, File inputFile) {
       this.provider = null;
       this.handle = readArrowIPCFileBegin(
               inputFile.getAbsolutePath());
+      this.callback = options.getCallback();
     }
 
-    private ArrowIPCStreamedTableReader(HostBufferProvider provider) {
+    private ArrowIPCStreamedTableReader(ArrowIPCOptions options, HostBufferProvider provider) {
       this.provider = new ArrowReaderWrapper(provider);
       this.handle = readArrowIPCBufferBegin(this.provider);
+      this.callback = options.getCallback();
     }
 
     @Override
     public Table getNextIfAvailable() throws CudfException {
-      long[] columns = readArrowIPCChunk(handle);
-      if (columns == null) {
-        return null;
+      // In this case rowTarget is the minimum number of rows to read.
+      return getNextIfAvailable(1);
+    }
+
+    @Override
+    public Table getNextIfAvailable(int rowTarget) throws CudfException {
+      long arrowTableHandle = readArrowIPCChunkToArrowTable(handle, rowTarget);
+      try {
+        if (arrowTableHandle == 0) {
+          return null;
+        }
+        callback.needTheGpu();
+        return new Table(convertArrowTableToCudf(arrowTableHandle));
+      } finally {
+        closeArrowTable(arrowTableHandle);
       }
-      return new Table(columns);
     }
 
     @Override
@@ -1024,11 +1090,32 @@ public final class Table implements AutoCloseable {
 
   /**
    * Get a reader that will return tables.
+   * @param options options for reading.
+   * @param inputFile the file to read the Arrow IPC formatted data from
+   * @return a reader.
+   */
+  public static StreamedTableReader readArrowIPCChunked(ArrowIPCOptions options, File inputFile) {
+    return new ArrowIPCStreamedTableReader(options, inputFile);
+  }
+
+  /**
+   * Get a reader that will return tables.
    * @param inputFile the file to read the Arrow IPC formatted data from
    * @return a reader.
    */
   public static StreamedTableReader readArrowIPCChunked(File inputFile) {
-    return new ArrowIPCStreamedTableReader(inputFile);
+    return readArrowIPCChunked(ArrowIPCOptions.DEFAULT, inputFile);
+  }
+
+  /**
+   * Get a reader that will return tables.
+   * @param options options for reading.
+   * @param provider what will provide the data being read.
+   * @return a reader.
+   */
+  public static StreamedTableReader readArrowIPCChunked(ArrowIPCOptions options,
+                                                        HostBufferProvider provider) {
+    return new ArrowIPCStreamedTableReader(options, provider);
   }
 
   /**
@@ -1037,7 +1124,7 @@ public final class Table implements AutoCloseable {
    * @return a reader.
    */
   public static StreamedTableReader readArrowIPCChunked(HostBufferProvider provider) {
-    return new ArrowIPCStreamedTableReader(provider);
+    return readArrowIPCChunked(ArrowIPCOptions.DEFAULT, provider);
   }
 
   /**

@@ -263,7 +263,7 @@ std::unique_ptr<column> gather_list_nested(
   lists_column_view const& list,
   gather_data& gd,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Gather a leaf column from a hierarchy of list columns.
@@ -282,7 +282,7 @@ std::unique_ptr<column> gather_list_leaf(
   column_view const& column,
   gather_data const& gd,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
 }  // namespace lists

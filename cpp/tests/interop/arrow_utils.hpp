@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <arrow/util/bitmap_builders.h>
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/interop.hpp>
@@ -42,7 +44,7 @@ get_arrow_array(std::vector<T> const& data, std::vector<uint8_t> const& mask = {
   CUDF_EXPECTS(buff_builder.Finish(&data_buffer).ok(), "Failed to allocate buffer");
 
   std::shared_ptr<arrow::Buffer> mask_buffer =
-    mask.size() > 0 ? arrow::BitUtil::BytesToBits(mask).ValueOrDie() : nullptr;
+    mask.size() > 0 ? arrow::internal::BytesToBits(mask).ValueOrDie() : nullptr;
 
   return cudf::detail::to_arrow_array(cudf::type_to_id<T>(), data.size(), data_buffer, mask_buffer);
 }
@@ -65,7 +67,8 @@ std::enable_if_t<std::is_same<T, bool>::value, std::shared_ptr<arrow::Array>> ge
   std::shared_ptr<arrow::BooleanArray> boolean_array;
   arrow::BooleanBuilder boolean_builder;
 
-  boolean_builder.AppendValues(data, mask);
+  CUDF_EXPECTS(boolean_builder.AppendValues(data, mask).ok(),
+               "Failed to append values to boolean builder");
   CUDF_EXPECTS(boolean_builder.Finish(&boolean_array).ok(), "Failed to create arrow boolean array");
 
   return boolean_array;
@@ -88,7 +91,8 @@ get_arrow_array(std::vector<std::string> const& data, std::vector<uint8_t> const
   std::shared_ptr<arrow::StringArray> string_array;
   arrow::StringBuilder string_builder;
 
-  string_builder.AppendValues(data, mask.data());
+  CUDF_EXPECTS(string_builder.AppendValues(data, mask.data()).ok(),
+               "Failed to append values to string builder");
   CUDF_EXPECTS(string_builder.Finish(&string_array).ok(), "Failed to create arrow string array");
 
   return string_array;
@@ -140,7 +144,8 @@ std::shared_ptr<arrow::Array> get_arrow_list_array(std::initializer_list<T> data
   auto data_array = get_arrow_array<T>(data);
   std::shared_ptr<arrow::Buffer> offset_buffer;
   arrow::BufferBuilder buff_builder;
-  buff_builder.Append(ofst.data(), sizeof(int32_t) * ofst.size());
+  CUDF_EXPECTS(buff_builder.Append(ofst.data(), sizeof(int32_t) * ofst.size()).ok(),
+               "Failed to append values to buffer builder");
   CUDF_EXPECTS(buff_builder.Finish(&offset_buffer).ok(), "Failed to allocate buffer");
 
   return std::make_shared<arrow::ListArray>(
@@ -148,7 +153,7 @@ std::shared_ptr<arrow::Array> get_arrow_list_array(std::initializer_list<T> data
     offsets.size() - 1,
     offset_buffer,
     data_array,
-    mask.size() == 0 ? nullptr : arrow::BitUtil::BytesToBits(mask).ValueOrDie());
+    mask.size() == 0 ? nullptr : arrow::internal::BytesToBits(mask).ValueOrDie());
 }
 
 std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_tables(

@@ -23,7 +23,50 @@ package ai.rapids.cudf;
  */
 public class ArrowIPCWriterOptions extends WriterOptions {
 
+  public interface DoneOnGpu {
+    /**
+     * A callback to indicate that the table is off of the GPU
+     * and may be closed, even if all of the data is not yet written.
+     * @param table the table that can be closed.
+     */
+    void doneWithTheGpu(Table table);
+  }
+
+  private final long size;
+  private final DoneOnGpu callback;
+
+  private ArrowIPCWriterOptions(Builder builder) {
+    super(builder);
+    this.size = builder.size;
+    this.callback = builder.callback;
+  }
+
+  public long getMaxChunkSize() {
+    return size;
+  }
+
+  public DoneOnGpu getCallback() {
+    return callback;
+  }
+
   public static class Builder extends WriterBuilder<Builder> {
+    private long size = -1;
+    private DoneOnGpu callback = (ignored) -> {};
+
+    public Builder withMaxChunkSize(long size) {
+      this.size = size;
+      return this;
+    }
+
+    public Builder withCallback(DoneOnGpu callback) {
+      if (callback == null) {
+        this.callback = (ignored) -> {};
+      } else {
+        this.callback = callback;
+      }
+      return this;
+    }
+
     public ArrowIPCWriterOptions build() {
       return new ArrowIPCWriterOptions(this);
     }
@@ -33,9 +76,5 @@ public class ArrowIPCWriterOptions extends WriterOptions {
 
   public static Builder builder() {
     return new Builder();
-  }
-
-  private ArrowIPCWriterOptions(Builder builder) {
-    super(builder);
   }
 }

@@ -161,7 +161,7 @@ __inline__ __device__ constexpr int64_t secondsSinceEpoch(
   int year, int month, int day, int hour, int minute, int second)
 {
   // Leverage the function to find the days since epoch
-  const auto days = daysSinceEpoch(year, month, day);
+  const int64_t days = daysSinceEpoch(year, month, day);
 
   // Return sum total seconds from each time portion
   return (days * 24 * 60 * 60) + (hour * 60 * 60) + (minute * 60) + second;
