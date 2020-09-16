@@ -303,8 +303,11 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
                     ColumnParameters(
                         cardinality=cardinality,
                         null_frequency=null_frequency,
-                        generator=lambda g: g.random.randints(
-                            rows, iinfo.min, iinfo.max
+                        generator=lambda g: np.random.randint(
+                            low=iinfo.min,
+                            high=iinfo.max,
+                            size=rows,
+                            dtype=dtype,
                         ),
                         is_sorted=False,
                     )
@@ -342,8 +345,11 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
                     ColumnParameters(
                         cardinality=cardinality,
                         null_frequency=null_frequency,
-                        generator=lambda g: g.random.randints(
-                            rows, 0, 2147483647 - 1
+                        generator=lambda g: np.random.randint(
+                            low=0,
+                            high=2147483647 - 1,
+                            size=rows,
+                            dtype="int64",
                         ),
                         is_sorted=False,
                         dtype=np.dtype(dtype),
@@ -354,8 +360,11 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
                     ColumnParameters(
                         cardinality=cardinality,
                         null_frequency=null_frequency,
-                        generator=lambda g: g.random.randints(
-                            rows, -2147483648, 2147483647 - 1
+                        generator=lambda g: np.random.randint(
+                            low=-2147483648,
+                            high=2147483647 - 1,
+                            size=rows,
+                            dtype="int64",
                         ),
                         is_sorted=False,
                         dtype=np.dtype(dtype),
@@ -366,9 +375,9 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
                     ColumnParameters(
                         cardinality=cardinality,
                         null_frequency=null_frequency,
-                        generator=lambda g: [
-                            g.development.boolean() for _ in range(rows)
-                        ],
+                        generator=lambda g: np.random.choice(
+                            a=[False, True], size=rows
+                        ),
                         is_sorted=False,
                         dtype=np.dtype(dtype),
                     )
