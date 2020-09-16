@@ -20,6 +20,8 @@
 #include <tests/utilities/cudf_gtest.hpp>
 #include <tests/utilities/type_lists.hpp>
 
+#include <rmm/thrust_rmm_allocator.h>
+
 #include <cstddef>
 #include <cstring>
 #include <string>
