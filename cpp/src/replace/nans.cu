@@ -222,7 +222,7 @@ void normalize_nans_and_zeros(mutable_column_view in_out, cudaStream_t stream = 
 
 }  // namespace detail
 
-/*
+/**
  * @brief Makes all NaNs and zeroes positive.
  *
  * Converts floating point values from @p input using the following rules:
@@ -249,7 +249,7 @@ std::unique_ptr<column> normalize_nans_and_zeros(column_view const& input,
   return out;
 }
 
-/*
+/**
  * @brief Makes all Nans and zeroes positive.
  *
  * Converts floating point values from @p in_out using the following rules:
