@@ -2627,7 +2627,7 @@ class DataFrame(Frame, Serializable):
 
         return DataFrame(cols, idx)
 
-    def set_index(self, index, drop=True, append=False, inplace=False):
+    def set_index(self, index, drop=True, append=False, inplace=False, verify_integrity=False):
         """Return a new DataFrame with a new index
 
         Parameters
@@ -2665,7 +2665,7 @@ class DataFrame(Frame, Serializable):
         # When index is a list of column names
         if isinstance(index, list):
             if len(index) == 1:
-                return self.set_index(index=index[0], drop=drop, inplace=inplace)
+                return self.set_index(index=index[0], drop=drop, inplace=inplace, verify_integrity=verify_integrity)
             else:
                 idf = self[index]
                 names = index
@@ -2676,6 +2676,7 @@ class DataFrame(Frame, Serializable):
                     inplace=inplace,
                     drop=drop,
                     append=append,
+                    verify_integrity=verify_integrity,
                 )
 
         # When index is a column name
@@ -2687,7 +2688,7 @@ class DataFrame(Frame, Serializable):
                 index = cudf.MultiIndex.from_frame(idf, names=names)
             else:
                 index = as_index(idf)
-            return self.set_index(index=index, inplace=inplace, drop=drop, append=append)
+            return self.set_index(index=index, inplace=inplace, drop=drop, append=append, verify_integrity=verify_integrity)
 
         # General Case
         df = self if inplace else self.copy(deep=False)
@@ -2697,6 +2698,10 @@ class DataFrame(Frame, Serializable):
             if isinstance(index, Index)
             else as_index(index)
         )
+
+        if verify_integrity and not index.is_unique:
+            # TODO: indicate duplicate keys
+            raise ValueError("Index is not unique.\n {}".format(index))
 
         if drop:
             col = index.names if isinstance(index, cudf.MultiIndex) else [index.name]
