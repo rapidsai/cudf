@@ -405,9 +405,9 @@ struct column_gatherer_impl<dictionary32, MapItType> {
     auto new_indices    = cudf::detail::allocate_like(
       indices, output_count, cudf::mask_allocation_policy::NEVER, mr, stream);
     gather_helper(
-      cudf::detail::indexalator_factory::create_input_iterator(indices),
+      cudf::detail::indexalator_factory::make_input_iterator(indices),
       indices.size(),
-      cudf::detail::indexalator_factory::create_output_iterator(new_indices->mutable_view()),
+      cudf::detail::indexalator_factory::make_output_iterator(new_indices->mutable_view()),
       gather_map_begin,
       gather_map_end,
       nullify_out_of_bounds,
