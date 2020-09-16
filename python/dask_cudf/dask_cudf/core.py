@@ -354,6 +354,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         self,
         gb_cols: list,
         agg_list: list,
+        split_every=8,
         split_out=8,
         dropna=True,
         out_to_host=False,
@@ -391,6 +392,9 @@ class DataFrame(_Frame, dd.core.DataFrame):
 
         # For each split, aggregate result for all partitions.
         # TODO: Use tree reduction here
+
+        # tree_height =
+
         for s in range(split_out):
             dsk[(level_2_name, s)] = (
                 _mid_level_groupby,
@@ -403,20 +407,18 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 sep,
             )
 
-        # Combine splits into single output partition.
-        #  TODO: Support multiple (`split_out`) output partitions
-        dsk[(gb_agg_name, 0)] = (
-            _finalize_gb_agg,
-            [(level_2_name, s) for s in range(split_out)],
-            gb_cols,
-            agg_list,
-            out_to_host,
-            sep,
-        )
-        split_out = 1  # Temporary (until `split_out` fully supported)
+        # Final output partitions
+        for s in range(split_out):
+            dsk[(gb_agg_name, s)] = (
+                _finalize_gb_agg,
+                (level_2_name, s),
+                gb_cols,
+                agg_list,
+                sep,
+            )
 
         divisions = [None] * (split_out + 1)
-        _meta = self._meta.groupby(gb_cols).agg(agg_list)
+        _meta = self._meta.groupby(gb_cols, as_index=False).agg(agg_list)
         graph = HighLevelGraph.from_collections(
             gb_agg_name, dsk, dependencies=[self]
         )
@@ -480,11 +482,7 @@ def _mid_level_groupby(
     return gb
 
 
-def _finalize_gb_agg(dfs, gb_cols, agg_list, out_to_host, sep):
-    gb = _concat(dfs, ignore_index=True)
-    if out_to_host:
-        gb.reset_index(drop=True, inplace=True)
-        gb = cudf.from_pandas(gb)
+def _finalize_gb_agg(gb, gb_cols, agg_list, sep):
 
     # Deal with "mean"
     if "mean" in agg_list:
