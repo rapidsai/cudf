@@ -23,7 +23,9 @@
 #include <cstddef>
 #include <cstring>
 #include <string>
+#include "rmm/thrust_rmm_allocator.h"
 
+using cudf::detail::device_span;
 using cudf::detail::host_span;
 
 template <typename T>
@@ -135,8 +137,8 @@ TEST(SpanTest, CanGetSize)
   auto const message_span = host_span<char>(message.data(), message.size());
   auto const empty_span   = host_span<char>();
 
-  EXPECT_EQ(11, message_span.size());
-  EXPECT_EQ(0, empty_span.size());
+  EXPECT_EQ(static_cast<size_t>(11), message_span.size());
+  EXPECT_EQ(static_cast<size_t>(0), empty_span.size());
 }
 
 TEST(SpanTest, CanGetSizeBytes)
@@ -145,8 +147,8 @@ TEST(SpanTest, CanGetSizeBytes)
   auto const doubles_span = host_span<double>(doubles.data(), doubles.size());
   auto const empty_span   = host_span<double>();
 
-  EXPECT_EQ(24, doubles_span.size_bytes());
-  EXPECT_EQ(0, empty_span.size_bytes());
+  EXPECT_EQ(static_cast<size_t>(24), doubles_span.size_bytes());
+  EXPECT_EQ(static_cast<size_t>(0), empty_span.size_bytes());
 }
 
 TEST(SpanTest, CanCopySpan)
@@ -180,6 +182,23 @@ TEST(SpanTest, CanSubscriptWrite)
   message_span[4] = 'x';
 
   EXPECT_EQ('x', message_span[4]);
+}
+
+__global__ void simple_device_kernel(device_span<bool> result) { result[0] = true; }
+
+TEST(SpanTest, CanUseDeviceSpan)
+{
+  rmm::device_vector<bool> d_message = std::vector<bool>({false});
+
+  auto d_span = device_span<bool>(d_message.data().get(), d_message.size());
+
+  simple_device_kernel<<<1, 1>>>(d_span);
+
+  cudaDeviceSynchronize();
+
+  thrust::host_vector<bool> h_message = d_message;
+
+  ASSERT_TRUE(h_message[0]);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
