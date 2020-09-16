@@ -23,12 +23,12 @@
 namespace cudf {
 namespace detail {
 
-constexpr size_t dynamic_extent = std::numeric_limits<std::size_t>::max();
+constexpr std::size_t dynamic_extent = std::numeric_limits<std::size_t>::max();
 
 /**
  * @brief C++20 std::span with reduced feature set.
  */
-template <typename T, size_t Extent, typename Derived>
+template <typename T, std::size_t Extent, typename Derived>
 class span_base {
   static_assert(Extent == dynamic_extent, "Only dynamic extent is supported");
 
@@ -42,6 +42,8 @@ class span_base {
   using const_pointer   = T const*;
   using reference       = T&;
   using const_reference = T const&;
+
+  static constexpr std::size_t extent = Extent;
 
   constexpr span_base() noexcept : _data(nullptr), _size(0) {}
   constexpr span_base(pointer data, size_type size) : _data(data), _size(size) {}
@@ -81,13 +83,13 @@ class span_base {
   size_type _size;
 };
 
-template <typename T, size_t Extent = dynamic_extent>
+template <typename T, std::size_t Extent = dynamic_extent>
 struct host_span : public span_base<T, Extent, host_span<T, Extent>> {
   using base = cudf::detail::span_base<T, Extent, host_span<T, Extent>>;
   using base::base;
 };
 
-template <typename T, size_t Extent = dynamic_extent>
+template <typename T, std::size_t Extent = dynamic_extent>
 struct device_span : public span_base<T, Extent, device_span<T, Extent>> {
   using base = cudf::detail::span_base<T, Extent, device_span<T, Extent>>;
   using base::base;
