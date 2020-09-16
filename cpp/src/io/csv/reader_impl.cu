@@ -336,24 +336,20 @@ table_with_metadata reader::impl::read(size_t range_offset,
 
   std::vector<data_type> column_types = gather_column_types(stream);
 
-  auto metadata = table_metadata{};
-
   auto h_builders = thrust::host_vector<column_parse::column_builder>(num_actual_cols);
 
-  for (int i = 0; i < num_actual_cols; ++i) {  //
+  for (int i = 0, a = 0; i < num_actual_cols; ++i, ++a) {
     h_builders[i].flags = h_column_flags[i];
-  }
-
-  for (int i = 0, a = 0; i < num_actual_cols; ++i) {
     if (h_builders[i].flags & column_parse::enabled) {
       if (column_types[a].id() == type_id::EMPTY) {
         h_builders[i].type = data_type{type_id::STRING};
       } else {
         h_builders[i].type = column_types[a];
       }
-      a++;
     }
   }
+
+  auto metadata = table_metadata{};
 
   // Alloc output; columns' data memory is still expected for empty dataframe
   std::vector<column_buffer> out_buffers;

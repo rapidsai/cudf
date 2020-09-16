@@ -17,9 +17,6 @@
 #include "csv_common.h"
 #include "csv_gpu.h"
 #include "datetime.cuh"
-#include "rmm/thrust_rmm_allocator.h"
-#include "thrust/count.h"
-#include "thrust/for_each.h"
 
 #include <io/utilities/block_utils.cuh>
 #include <io/utilities/parsing_utils.cuh>
@@ -36,6 +33,8 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
+#include <rmm/thrust_rmm_allocator.h>
 
 #include <thrust/detail/copy.h>
 #include <thrust/transform.h>

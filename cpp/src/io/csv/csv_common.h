@@ -17,7 +17,6 @@
 #pragma once
 
 #include <cudf/types.hpp>
-#include "cudf/utilities/type_dispatcher.hpp"
 
 class SerialTrieNode;
 
@@ -38,6 +37,12 @@ enum : uint8_t {
 };
 using flags = uint8_t;
 
+/**
+ * @brief used as an out param for steps in the csv read/decode process
+ *
+ * @note: this class should be removed in favor of return types for each step in the csv read/decode
+ * process
+ */
 struct column_builder {
   cudf::data_type type;
   void *data;
