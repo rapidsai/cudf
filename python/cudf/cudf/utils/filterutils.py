@@ -8,6 +8,7 @@ import datetime
 
 import pandas as pd
 import cudf
+import dask.dataframe as dd
 
 
 def _apply_filter_bool_eq(val, col_stats):
@@ -181,20 +182,161 @@ def _filter_with_joins(minimums, maximums, op, other):
     # can instead be used in place for filtering out stripes
     if isinstance(other, cudf.Series):
         return _launch_filter_with_joins(other, minimums, maximums, op)
-    else:
-        raise ValueError(
-            "Joins must be with a cuDF or Dask cuDF series, not {0}.".format(
-                type(op)
-            )
+    elif isinstance(other, dd.core.Series):
+        return _launch_filter_with_joins(
+            other.compute(), minimums, maximums, op
         )
 
 
-def _prepare_filters(filters):
-    if filters is None:
-        return None
+def _convert_datetime64_to_datetime(obj):
+    if isinstance(obj, np.datetime64):
+        return pd.to_datetime(obj).tz_localize("UTC")
+    else:
+        return obj
 
-    # Coerce filters into list of lists of tuples
-    if isinstance(filters[0][0], str):
-        filters = [filters]
+
+def _get_min(min_cache, val):
+    if val in min_cache:
+        return min_cache[id(val)]
+    else:
+        min_cache[id(val)] = _convert_datetime64_to_datetime(val.min())
+        return min_cache[id(val)]
+
+
+def _get_max(max_cache, val):
+    if val in max_cache:
+        return max_cache[id(val)]
+    else:
+        max_cache[id(val)] = _convert_datetime64_to_datetime(val.max())
+        return max_cache[id(val)]
+
+
+def _get_half_ranges(half_ranges_cache, val):
+    # Check cache
+    if id(val) in half_ranges_cache:
+        return half_ranges_cache[id(val)]
+
+    # Get position of larges change in value
+    try:
+        val_diff = val.diff()
+        largest_jump_pos = val[val_diff == val_diff.max()].index[0]
+    except (AssertionError, NotImplementedError):
+        largest_jump_pos = len(val) // 2
+
+    # Get ranges of each half of value
+    first_half = val.loc[:largest_jump_pos].iloc[:-1]
+    first_half_range = (
+        _convert_datetime64_to_datetime(first_half.min()),
+        _convert_datetime64_to_datetime(first_half.max()),
+    )
+    second_half = val.loc[largest_jump_pos:]
+    second_half_range = (
+        _convert_datetime64_to_datetime(second_half.min()),
+        _convert_datetime64_to_datetime(second_half.max()),
+    )
+
+    half_ranges_cache[id(val)] = (first_half_range, second_half_range)
+    return half_ranges_cache[id(val)]
+
+
+def _load_to_local_arrow_array(loaded_values_cache, val):
+    if id(val) in loaded_values_cache:
+        return loaded_values_cache[id(val)]
+
+    if isinstance(val, cudf.Series):
+        loaded_values_cache[id(val)] = val.to_arrow()
+        return val.to_arrow()
+    elif isinstance(val, dd.core.Series):
+        loaded_values_cache[id(val)] = val.compute().to_arrow()
+        return val.compute().to_arrow()
+    else:
+        raise ValueError(
+            "Expected cuDF or Dask cuDF series, not {0}.".format(type(val))
+        )
+
+
+def _apply_joins(filters, joins):
+    # Caches
+    half_ranges_cache = {}
+    min_cache = {}
+    max_cache = {}
+    loaded_values_cache = {}
+
+    # Modify filters for each join
+    for col, op, val in joins:
+        if op == "=" or op == "==":
+            if len(val) < 128:
+                val = _load_to_local_arrow_array(loaded_values_cache, val)
+                for conjunction in filters:
+                    conjunction.append((col, "in", val))
+            else:
+                fhr, shr = _get_half_ranges(half_ranges_cache, val)
+                new_filters = []
+                for conjunction in filters:
+                    new_filters.append(
+                        conjunction
+                        + [(col, ">=", fhr[0]), (col, "<=", fhr[1])]
+                    )
+                    new_filters.append(
+                        conjunction
+                        + [(col, ">=", shr[0]), (col, "<=", shr[1])]
+                    )
+                filters = new_filters
+        elif op == "!=":
+            if len(val) < 128:
+                val = _load_to_local_arrow_array(loaded_values_cache, val)
+                for conjunction in filters:
+                    conjunction.append((col, "not in", val))
+            else:
+                first_half_range, second_half_range = _get_half_ranges(val)
+                if (
+                    first_half_range[0] == first_half_range[1]
+                    and second_half_range[0] == second_half_range[1]
+                ):
+                    if first_half_range[0] != second_half_range[0]:
+                        for conjunction in filters:
+                            conjunction.append(
+                                (
+                                    col,
+                                    "not in",
+                                    [
+                                        first_half_range[0],
+                                        second_half_range[0],
+                                    ],
+                                )
+                            )
+                    else:
+                        for conjunction in filters:
+                            conjunction.append(
+                                (col, "!=", first_half_range[0])
+                            )
+        elif op == ">" or op == ">=":
+            for conjunction in filters:
+                conjunction.append((col, op, _get_min(min_cache, val)))
+        elif op == "<" or op == "<=":
+            for conjunction in filters:
+                conjunction.append((col, op, _get_max(max_cache, val)))
+        else:
+            raise ValueError(
+                '"{0}" is not a valid operator in join predicates.'.format(op)
+            )
+
+    return filters
+
+
+def _prepare_filters(filters, joins):
+    if filters is None:
+        if joins is None:
+            return None
+        else:
+            filters = [[]]
+    else:
+        # Coerce filters into list of lists of tuples
+        if isinstance(filters[0][0], str):
+            filters = [filters]
+
+    # Add predicates to filters given joins
+    if joins is not None:
+        filters = _apply_joins(filters, joins)
 
     return filters

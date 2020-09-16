@@ -9,6 +9,7 @@ from dask.dataframe.io.parquet.arrow import ArrowEngine
 import cudf
 from cudf.core.column import as_column, build_categorical_column
 from cudf.io import write_to_dataset
+from cudf.utils.filterutils import _prepare_filters
 
 
 class CudfEngine(ArrowEngine):
@@ -150,6 +151,8 @@ class CudfEngine(ArrowEngine):
 def read_parquet(
     path,
     columns=None,
+    filters=None,
+    joins=None,
     split_row_groups=None,
     row_groups_per_part=None,
     **kwargs,
@@ -182,9 +185,12 @@ def read_parquet(
         if split_row_groups is None:
             split_row_groups = row_groups_per_part
 
+    filters = _prepare_filters(filters, joins)
+
     return dd.read_parquet(
         path,
         columns=columns,
+        filters=filters,
         split_row_groups=split_row_groups,
         engine=CudfEngine,
         **kwargs,

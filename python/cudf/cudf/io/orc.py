@@ -3,7 +3,6 @@
 from collections import defaultdict
 import warnings
 import datetime
-import numpy as np
 
 import pyarrow as pa
 from pyarrow import orc as orc
@@ -160,7 +159,7 @@ def _filter_stripes(
     num_rows=None,
 ):
     # Prepare filters
-    filters = filterutils._prepare_filters(filters)
+    filters = filterutils._prepare_filters(filters, joins)
 
     # Get columns relevant to filtering
     columns_in_predicate = (
@@ -181,7 +180,7 @@ def _filter_stripes(
         return []
 
     # Filter using stripe-level statistics
-    selected_stripes = set()
+    selected_stripes_from_filters = set()
     if filters:
         num_rows_scanned = 0
         for i, stripe_statistics in enumerate(stripes_statistics):
@@ -202,10 +201,13 @@ def _filter_stripes(
             ):
                 continue
             if filterutils._apply_filters(filters, stripe_statistics):
-                selected_stripes.add(i)
+                selected_stripes_from_filters.add(i)
 
     # Filter using joins
+    selected_stripes_from_joins = selected_stripes_from_filters
     if joins:
+        selected_stripes_from_joins = set()
+
         # Get min-max ranges for each stripe for each column
         cols_minimums = defaultdict(list)
         cols_maximums = defaultdict(list)
@@ -228,8 +230,8 @@ def _filter_stripes(
             if col in columns_in_joins:
                 # Get mask of which stripes had min-max ranges that passed
                 ranges_mask = filterutils._filter_with_joins(
-                    np.array(cols_minimums[col]),
-                    np.array(cols_maximums[col]),
+                    cudf.Series(cols_minimums[col]),
+                    cudf.Series(cols_maximums[col]),
                     op,
                     other,
                 )
@@ -237,9 +239,11 @@ def _filter_stripes(
                 # Add to selected stripes
                 for i, is_selected in enumerate(ranges_mask):
                     if is_selected and (stripes is None or i in stripes):
-                        selected_stripes.add(i)
+                        selected_stripes_from_joins.add(i)
 
-    return sorted(selected_stripes)
+    return sorted(
+        selected_stripes_from_filters.intersection(selected_stripes_from_joins)
+    )
 
 
 @ioutils.doc_read_orc()
