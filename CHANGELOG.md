@@ -52,6 +52,7 @@
 - PR #6209 Remove CXX11 ABI handling from CMake
 - PR #6223 Remove CXX11 ABI flag from JNI build
 - PR #6215 Add cmake command-line setting for spdlog logging level
+- PR #6204 Add dockerfile and script to build cuDF jar
 
 ## Bug Fixes
 
