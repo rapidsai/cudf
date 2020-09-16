@@ -88,8 +88,7 @@ struct format_compiler {
       {'p', 2},   // AM/PM
       {'R', 5},   // 5 HH:MM
       {'T', 8},   // 8 HH:MM:SS"
-      {'r', 11},  // HH:MM:SS AM/PM
-      {'P', -1}   // pandas timedelta format [-]%d days [+]HH:MM:SS.mmmuuunnn (not in std::format)
+      {'r', 11}  // HH:MM:SS AM/PM
     };
     std::vector<format_item> items;
     const char* str = format.c_str();
@@ -194,14 +193,6 @@ struct duration_to_string_size_fn {
                  return 0;
                }());
         break;
-      case 'P': {
-        // adjust for pandas format
-        auto day = timeparts->day - (timeparts->is_negative &&
-                                     (timeparts->hour != 0 || timeparts->minute != 0 ||
-                                      timeparts->second != 0 || timeparts->subsecond != 0));
-        // [-] %d days [+]HH:MM:SS.mmmuuunnn
-        return count_digits(day) + 6 + timeparts->is_negative + 18;
-      } break;
       default: return 2;
     }
   }
@@ -325,48 +316,6 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
     return ptr + digits + 1;
   }
 
-  inline __device__ char* nanosecond(char* ptr, duration_component const* timeparts)
-  {
-    auto value = timeparts->subsecond;
-    *ptr       = '.';
-    for (int idx = 9; idx > 0; idx--) {
-      *(ptr + idx) = '0' + std::abs(value % 10);
-      value /= 10;
-    }
-    return ptr + 10;
-  }
-
-  inline __device__ char* pandas_format(char* ptr, duration_component const* timeparts)
-  {
-    // adjust for pandas format
-    duration_component pandas_timeparts = *timeparts;
-    if (timeparts->is_negative) {
-      duration_ns nanoseconds = simt::std::chrono::hours(timeparts->hour) +
-                                simt::std::chrono::minutes(timeparts->minute) +
-                                duration_s(timeparts->second) + T(timeparts->subsecond);
-      nanoseconds += simt::std::chrono::hours(24);
-      dissect_duration(nanoseconds, &pandas_timeparts);
-      pandas_timeparts.day = timeparts->day - (pandas_timeparts.day == 0);
-    } else {
-      pandas_timeparts.subsecond = duration_ns(T(timeparts->subsecond)).count();
-    }
-    if (timeparts->is_negative) *ptr++ = '-';
-    ptr    = day(ptr, &pandas_timeparts);
-    *ptr++ = ' ';
-    *ptr++ = 'd';
-    *ptr++ = 'a';
-    *ptr++ = 'y';
-    *ptr++ = 's';
-    *ptr++ = ' ';
-    if (timeparts->is_negative) *ptr++ = '+';
-    ptr    = hour_24(ptr, &pandas_timeparts);
-    *ptr++ = ':';
-    ptr    = minute(ptr, &pandas_timeparts);
-    *ptr++ = ':';
-    ptr    = second(ptr, &pandas_timeparts);
-    return nanosecond(ptr, &pandas_timeparts);
-  }
-
   __device__ char* format_from_parts(duration_component const* timeparts, char* ptr)
   {
     for (size_t idx = 0; idx < items_count; ++idx) {
@@ -420,7 +369,6 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
           *ptr++ = ' ';
           ptr    = am_or_pm(ptr, timeparts);
           break;
-        case 'P': ptr = pandas_format(ptr, timeparts); break;
         default:  // ignore everything else
           break;
       }
