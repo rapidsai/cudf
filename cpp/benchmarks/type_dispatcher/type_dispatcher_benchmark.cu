@@ -55,7 +55,6 @@ struct Functor<Float, ft, typename std::enable_if_t<std::is_floating_point<Float
       }
       return x;
     }
-    return x;
   }
 };
 
