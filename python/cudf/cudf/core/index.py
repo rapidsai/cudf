@@ -1941,7 +1941,7 @@ class GenericIndex(Index):
         if last is not None:
             end = col.find_last_value(last, closest=True)
             end += 1
-        return begin, end
+        return begin.value, end.value
 
     @property
     def is_unique(self):

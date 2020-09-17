@@ -265,8 +265,6 @@ class CUDFType(object):
 
 
 def cudf_dtype_from_string(obj):
-    if obj == "category":
-        return CategoricalDtype()
     try:
         np_dtype = np.dtype(obj)
         return cudf_dtype_from_numpy(np_dtype)
@@ -579,6 +577,7 @@ _cudf_dtype_from_string = {
     "Float32": Float32Dtype,
     "Float64": Float64Dtype,
     "Boolean": BooleanDtype,
+    "string": StringDtype,
     "String": StringDtype,
     "Datetime64NS": Datetime64NSDtype,
     "Datetime64US": Datetime64USDtype,
@@ -588,6 +587,7 @@ _cudf_dtype_from_string = {
     "Timedelta64US": Timedelta64USDtype,
     "Timedelta64MS": Timedelta64MSDtype,
     "Timedelta64S": Timedelta64SDtype,
+    'category': CategoricalDtype
 }
 
 _cudf_dtype_from_pandas = {

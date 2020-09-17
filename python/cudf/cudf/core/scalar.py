@@ -9,7 +9,8 @@ class Scalar(libcudf.scalar.Scalar):
     def __init__(self, value, dtype=None):
         if isinstance(value, libcudf.scalar.Scalar):
             if dtype and not value.dtype == dtype:
-                raise TypeError
+                # TODO should be doable on the device
+                value = libcudf.scalar.Scalar(value.value, dtype=dtype)
             self._data = value
         else:
             self._data = libcudf.scalar.Scalar(value, dtype=dtype)
