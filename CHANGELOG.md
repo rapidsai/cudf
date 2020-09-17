@@ -49,10 +49,12 @@
 - PR #6190 Avoid reading full csv files for metadata in dask_cudf
 - PR #6197 Remove librmm dependency for libcudf
 - PR #6230 Support any unsigned int type for dictionary indices
+- PR #6202 Add additional parameter support to `DataFrame.drop`
 - PR #6214 Small clean up to use more algorithms
 - PR #6209 Remove CXX11 ABI handling from CMake
 - PR #6223 Remove CXX11 ABI flag from JNI build
 - PR #6215 Add cmake command-line setting for spdlog logging level
+- PR #6240 Don't shallow copy index in as_index() unless necessary
 - PR #6204 Add dockerfile and script to build cuDF jar
 
 ## Bug Fixes
@@ -76,6 +78,7 @@
 - PR #6159 Fix issue related to empty `Dataframe` with columns input to `DataFrame.appened`
 - PR #6199 Fix index preservation for dask_cudf parquet
 - PR #6207 Remove shared libs from Java sources jar
+- PR #6217 Fixed missing bounds checking when storing validity in parquet reader
 - PR #6212 Update codeowners file
 - PR #6157 Fix issue related to `Series.concat` to concat a non-empty and empty series.
 - PR #6226 Add in some JNI checks for null handles
