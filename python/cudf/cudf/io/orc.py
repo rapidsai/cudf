@@ -232,12 +232,17 @@ def read_orc(
             stripes = selected_stripes
 
     if filters is not None:
+        filters = filterutils._prepare_filters(filters)
         query_string, local_dict = filterutils._filters_to_query(filters)
-        index = read_orc(
+        columns_in_predicate = [
+            col for conjunction in filters for (col, op, val) in conjunction
+        ]
+        filter_columns = read_orc(
             filepath_or_buffer,
             engine=engine,
-            columns=columns,
+            columns=columns_in_predicate,
             filters=None,
+            joins=None,
             stripes=stripes,
             skip_rows=skip_rows,
             num_rows=num_rows,
@@ -247,6 +252,40 @@ def read_orc(
             timestamp_type=timestamp_type,
             **kwargs,
         )
+        index = filter_columns.query(query_string, local_dict=local_dict).index
+
+        original_num_rows = len(filter_columns)
+        new_skip_rows = None
+        new_num_rows = None
+        new_row_range_num_rows = 0
+        new_stripes = []
+        new_stripes_num_rows = 0
+
+        if skip_rows is not None or num_rows is not None:
+            pass
+        elif stripes is not None:
+            pass
+        else:
+            pass
+
+        min_num_rows = min(
+            original_num_rows, new_row_range_num_rows, new_stripes_num_rows
+        )
+        if new_row_range_num_rows == min_num_rows:
+            skip_rows = new_skip_rows
+            num_rows = new_num_rows
+            stripes = None
+        elif new_stripes_num_rows == min_num_rows:
+            skip_rows = None
+            num_rows = None
+            stripes = new_stripes
+
+        if columns is None:
+            
+        if not isinstance(columns[0], list):
+            pass
+        for columns_batch in columns:
+
 
     if engine == "cudf":
         df = DataFrame._from_table(
