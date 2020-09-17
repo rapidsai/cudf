@@ -183,7 +183,7 @@ test:
     - test -f $PREFIX/include/cudf_test/cxxopts.hpp
     - test -f $PREFIX/include/cudf_test/scalar_utilities.hpp
     - test -f $PREFIX/include/cudf_test/table_utilities.hpp
-    - test -f $PREFIX/include/cudf_test/timestamp_utilities.hpp
+    - test -f $PREFIX/include/cudf_test/timestamp_utilities.cuh
     - test -f $PREFIX/include/cudf_test/type_list_utilities.hpp
     - test -f $PREFIX/include/cudf_test/type_lists.hpp
 
