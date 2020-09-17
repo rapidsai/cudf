@@ -1627,6 +1627,12 @@ class RangeIndex(Index):
     def __eq__(self, other):
         return super(type(self), self).__eq__(other)
 
+    def equals(self, other):
+        if isinstance(other, RangeIndex):
+            if (self._start, self._stop) == (other._start, other._stop):
+                return True
+        return super().equals(other)
+
     def serialize(self):
         header = {}
         header["index_column"] = {}
