@@ -19,7 +19,8 @@
 #include <cudf/types.hpp>
 #include <strings/convert/utilities.cuh>
 #include <strings/utilities.cuh>
-#include "cudf/strings/detail/utilities.hpp"
+#include <cudf/column/column_factories.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 
 namespace cudf {
 namespace io {
@@ -222,7 +223,7 @@ std::unique_ptr<column> pandas_format_durations(column_view const& durations,
                                                 rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = durations.size();
-  if (strings_count == 0) return strings::detail::make_empty_strings_column(mr, stream);
+  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
 
   return type_dispatcher(durations.type(), dispatch_from_durations_fn{}, durations, mr, stream);
 }
