@@ -2690,9 +2690,9 @@ class Frame(libcudf.table.Table):
         """
         if self.iloc[0].dtype.kind in ("i", "u"):
             data = self.astype("float64")
-            data = data._unaryop("acos")
         else:
-            data = self._unaryop("acos")
+            data = self
+        data = data._unaryop("acos")
         newdata = data.mask(data < 0)
         return newdata
 
