@@ -2650,7 +2650,8 @@ class DataFrame(Frame, Serializable):
         verify_integrity : boolean
             Check for duplicates in the new index
         """
-        assert isinstance(index, Index)
+        if not isinstance(index, Index):
+            raise ValueError("Parameter index should be type `Index`.")
 
         df = self if inplace else self.copy(deep=False)
 
