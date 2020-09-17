@@ -83,6 +83,7 @@
 - PR #6157 Fix issue related to `Series.concat` to concat a non-empty and empty series.
 - PR #6226 Add in some JNI checks for null handles
 - PR #6251 Replace remaining calls to RMM `get_default_resource`
+- PR #XXXX Pin libcudf conda recipe to boost 1.72.0
 
 
 # cuDF 0.15.0 (26 Aug 2020)
