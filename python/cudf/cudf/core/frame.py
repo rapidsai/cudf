@@ -533,6 +533,8 @@ class Frame(libcudf.table.Table):
             )
         )
         result._copy_categories(self)
+        if keep_index and self._index is not None:
+            result._index.names = self._index.names
         return result
 
     def _hash(self, initial_hash_values=None):
