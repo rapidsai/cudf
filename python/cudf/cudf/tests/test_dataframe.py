@@ -2313,7 +2313,7 @@ def test_set_index(data, index, drop, append, inplace):
 
     expected = pdf.set_index(index, inplace=inplace, drop=drop, append=append)
     actual = gdf.set_index(index, inplace=inplace, drop=drop, append=append)
-    
+
     if inplace:
         expected = pdf
         actual = gdf
