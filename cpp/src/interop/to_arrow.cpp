@@ -218,7 +218,7 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::dictionary32>(
   std::unique_ptr<column> dict_indices =
     cast(cudf::dictionary_column_view(input).get_indices_annotated(),
          cudf::data_type{type_id::INT32},
-         rmm::mr::get_default_resource(),
+         rmm::mr::get_current_device_resource(),
          stream);
   auto indices = dispatch_to_arrow{}.operator()<int32_t>(
     dict_indices->view(), dict_indices->type().id(), ar_mr, stream);

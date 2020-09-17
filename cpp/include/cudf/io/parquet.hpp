@@ -339,7 +339,7 @@ class parquet_reader_options_builder {
  */
 table_with_metadata read_parquet(
   parquet_reader_options const& options,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Class to build `parquet_writer_options`.
@@ -600,7 +600,7 @@ class parquet_writer_options_builder {
 
 std::unique_ptr<std::vector<uint8_t>> write_parquet(
   parquet_writer_options const& options,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Merges multiple raw metadata blobs that were previously created by write_parquet
@@ -813,7 +813,7 @@ struct pq_chunked_state;
  */
 std::shared_ptr<pq_chunked_state> write_parquet_chunked_begin(
   chunked_parquet_writer_options const& options,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Write a single table as a subtable of a larger logical parquet file/table.

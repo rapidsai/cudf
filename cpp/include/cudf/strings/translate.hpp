@@ -93,7 +93,7 @@ std::unique_ptr<column> filter_characters(
   std::vector<std::pair<cudf::char_utf8, cudf::char_utf8>> characters_to_filter,
   filter_type keep_characters         = filter_type::KEEP,
   string_scalar const& replacement    = string_scalar(""),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings

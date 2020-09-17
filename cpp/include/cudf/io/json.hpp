@@ -312,7 +312,7 @@ class json_reader_options_builder {
  */
 table_with_metadata read_json(
   json_reader_options const& options,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace io
 }  // namespace cudf
