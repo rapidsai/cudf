@@ -2635,11 +2635,11 @@ def test_select_dtype_datetime():
     assert_eq(gdf[["timestamp"]], gdf.select_dtypes("datetime64"))
     assert_eq(gdf[["timestamp"]], gdf.select_dtypes(np.dtype("datetime64")))
     assert_eq(gdf[["timestamp"]], gdf.select_dtypes(include="datetime64"))
-    assert_eq(gdf[["timestamp"]], gdf.select_dtypes("datetime64[ms]"))
+    assert_eq(gdf[["timestamp"]], gdf.select_dtypes("datetime64[ns]"))
     assert_eq(
-        gdf[["timestamp"]], gdf.select_dtypes(np.dtype("datetime64[ms]"))
+        gdf[["timestamp"]], gdf.select_dtypes(np.dtype("datetime64[ns]"))
     )
-    assert_eq(gdf[["timestamp"]], gdf.select_dtypes(include="datetime64[ms]"))
+    assert_eq(gdf[["timestamp"]], gdf.select_dtypes(include="datetime64[ns]"))
 
 
 def test_array_ufunc():

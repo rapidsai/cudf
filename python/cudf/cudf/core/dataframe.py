@@ -40,7 +40,6 @@ from cudf.core.window import Rolling
 from cudf.utils import applyutils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
-    cudf_dtype_from_pydata_dtype,
     is_list_like,
     is_scalar,
     numeric_normalize_types,
@@ -6406,8 +6405,12 @@ class DataFrame(Frame, Serializable):
                 "at least one of include or exclude must be nonempty"
             )
 
+        def cudf_dtype_type(d):
+            res = cudf.dtype(d)
+            return type(res) if isinstance(res, cudf.Generic) else res
+
         include, exclude = map(
-            lambda x: frozenset(map(cudf_dtype_from_pydata_dtype, x)),
+            lambda x: frozenset(map(cudf_dtype_type, x)),
             selection,
         )
 
@@ -6419,28 +6422,27 @@ class DataFrame(Frame, Serializable):
                 )
             )
         # include all subtypes
-
         include_subtypes = set()
-        for dtype in (d.__class__ for d in self.dtypes):
+        for dtype in (type(d) for d in self.dtypes):
             for i_dtype in include:
                 # category handling
                 if is_categorical_dtype(i_dtype):
                     include_subtypes.add(i_dtype)
-                elif issubclass(dtype, i_dtype):
+                elif isinstance(dtype, i_dtype) or issubclass(dtype, i_dtype):
                     include_subtypes.add(dtype)
 
         # exclude all subtypes
         exclude_subtypes = set()
-        for dtype in (d.__class__ for d in self.dtypes):
+        for dtype in (type(d) for d in self.dtypes):
             for e_dtype in exclude:
                 # category handling
                 if is_categorical_dtype(e_dtype):
                     exclude_subtypes.add(e_dtype)
-                elif issubclass(dtype, e_dtype):
+                elif isinstance(dtype, e_dtype) or issubclass(dtype, e_dtype):
                     exclude_subtypes.add(dtype)
 
         include_all = set(
-            [cudf_dtype_from_pydata_dtype(d) for d in self.dtypes]
+            [cudf_dtype_type(d) for d in self.dtypes]
         )
         if include:
             inclusion = include_all & include_subtypes

@@ -266,13 +266,15 @@ class CUDFType(object):
 
 def cudf_dtype_from_string(obj):
     if obj == "category":
-        return obj
+        return CategoricalDtype()
     try:
         np_dtype = np.dtype(obj)
         return cudf_dtype_from_numpy(np_dtype)
     except TypeError:
         result = _cudf_dtype_from_string.get(obj, None)
         if not result:
+            import pdb
+            pdb.set_trace()
             raise TypeError(f"Could not find a cuDF dtype matching {obj}")
         return result
 
@@ -282,9 +284,9 @@ def cudf_dtype_from_numpy(obj):
         return StringDtype()
     elif obj is np.number:
         return cudf.Number
-    elif obj is np.datetime64:
+    elif obj in {np.datetime64, np.dtype('datetime64')}:
         return cudf.Datetime
-    elif obj is np.timedelta64:
+    elif obj in {np.timedelta64, np.dtype('timedelta64')}:
         return cudf.Timedelta
     dtype = np.dtype(obj)
     if dtype.type is np.str_:
@@ -310,7 +312,10 @@ def dtype(obj):
     if isinstance(obj, Generic):
         return obj
     elif type(obj) is type and issubclass(obj, Generic):
-        return obj()
+        if obj in cant_construct_dtypes:
+            return obj
+        else:
+            return obj()
     elif isinstance(obj, np.dtype) or (
         isinstance(obj, type) and issubclass(obj, (np.generic, np.dtype))
     ):
@@ -597,3 +602,5 @@ _cudf_dtype_from_pandas = {
     pd.StringDtype(): StringDtype(),
     pd.BooleanDtype(): BooleanDtype(),
 }
+
+cant_construct_dtypes = {Number, Integer, UnsignedInteger, Floating, Inexact, Timedelta}

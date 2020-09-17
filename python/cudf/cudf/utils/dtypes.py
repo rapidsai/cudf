@@ -127,30 +127,6 @@ def is_datetime_dtype(obj):
         return False
     return "M8" in obj.str
 
-
-def cudf_dtype_from_pydata_dtype(dtype):
-    """ Given a numpy or pandas dtype, converts it into the equivalent cuDF
-        Python dtype.
-    """
-    if isinstance(dtype, cudf.Generic):
-        return dtype.__class__
-    if inspect.isclass(dtype):
-        if issubclass(dtype, cudf.Generic):
-            return dtype
-    if is_categorical_dtype(dtype):
-        return cudf.core.dtypes.CategoricalDtype
-    elif dtype in cudf._lib.types.np_to_cudf_types:
-        return dtype.type
-    elif np.issubdtype(dtype, np.datetime64):
-        dtype = np.datetime64
-
-    result = cudf.dtype(infer_dtype_from_object(dtype))
-    if isinstance(result, cudf.Generic):
-        return result.__class__
-    elif inspect.isclass(result):
-        return result
-
-
 def is_scalar(val):
     return (
         val is None
