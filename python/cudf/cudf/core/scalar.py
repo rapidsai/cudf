@@ -114,7 +114,7 @@ class Scalar(libcudf.scalar.Scalar):
         if (self.dtype.kind == "O" or other.dtype.kind == "O") and op != "__add__":
             raise TypeError(f"{op} is not supported for string type scalars")
 
-        return find_common_type([self.dtype, other.dtype])
+        return find_common_type([self.dtype, other.dtype], [])
 
     def _scalar_binop(self, other, op):
         other = to_cudf_compatible_scalar(other)
