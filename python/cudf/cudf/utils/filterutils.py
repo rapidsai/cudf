@@ -112,7 +112,6 @@ def _apply_filters(filters, stats):
     return False
 
 
-@functools.lru_cache(maxsize=8)
 def _prepare_filters_with_cache(filters):
     # Coerce filters into list of lists of tuples
     if isinstance(filters[0][0], str):
