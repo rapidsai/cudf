@@ -90,7 +90,7 @@ class reader::impl {
    * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    */
-  void read_column_chunks(std::vector<rmm::device_buffer> &page_data,
+  void read_column_chunks(std::vector<std::unique_ptr<datasource::buffer>> &page_data,
                           hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
                           size_t begin_chunk,
                           size_t end_chunk,

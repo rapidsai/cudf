@@ -159,7 +159,7 @@ struct ColumnChunkDesc {
   {
   }
 
-  uint8_t *compressed_data;                        // pointer to compressed column chunk data
+  uint8_t const *compressed_data;                  // pointer to compressed column chunk data
   size_t compressed_size;                          // total compressed data size for this chunk
   size_t num_values;                               // total number of values in this column
   size_t start_row;                                // starting row of this chunk

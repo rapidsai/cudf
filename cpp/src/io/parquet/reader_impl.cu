@@ -531,7 +531,7 @@ class aggregate_metadata {
  * @copydoc cudf::io::detail::parquet::read_column_chunks
  */
 void reader::impl::read_column_chunks(
-  std::vector<rmm::device_buffer> &page_data,
+  std::vector<std::unique_ptr<datasource::buffer>> &page_data,
   hostdevice_vector<gpu::ColumnChunkDesc> &chunks,  // TODO const?
   size_t begin_chunk,
   size_t end_chunk,
@@ -559,9 +559,15 @@ void reader::impl::read_column_chunks(
       next_chunk++;
     }
     if (io_size != 0) {
-      auto buffer         = _sources[chunk_source_map[chunk]]->host_read(io_offset, io_size);
-      page_data[chunk]    = rmm::device_buffer(buffer->data(), buffer->size(), stream);
-      uint8_t *d_compdata = reinterpret_cast<uint8_t *>(page_data[chunk].data());
+      auto &source = _sources[chunk_source_map[chunk]];
+      if (!source->supports_device_read()) {
+        auto const buffer = source->host_read(io_offset, io_size);
+        page_data[chunk] =
+          datasource::buffer::create(rmm::device_buffer(buffer->data(), buffer->size(), stream));
+      } else {
+        page_data[chunk] = source->device_read(io_offset, io_size);
+      }
+      uint8_t const *d_compdata = page_data[chunk]->data();
       do {
         chunks[chunk].compressed_data = d_compdata;
         d_compdata += chunks[chunk].compressed_size;
@@ -1042,7 +1048,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     std::vector<size_type> chunk_source_map(num_chunks);
 
     // Tracker for eventually deallocating compressed and uncompressed data
-    std::vector<rmm::device_buffer> page_data(num_chunks);
+    std::vector<std::unique_ptr<datasource::buffer>> page_data(num_chunks);
 
     // Keep track of column chunk file offsets
     std::vector<size_t> column_chunk_offsets(num_chunks);
@@ -1147,10 +1153,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         decomp_page_data = decompress_page_data(chunks, pages, stream);
         // Free compressed data
         for (size_t c = 0; c < chunks.size(); c++) {
-          if (chunks[c].codec != parquet::Compression::UNCOMPRESSED && page_data[c].size() != 0) {
-            page_data[c].resize(0);
-            page_data[c].shrink_to_fit();
-          }
+          if (chunks[c].codec != parquet::Compression::UNCOMPRESSED) { page_data[c].reset(); }
         }
       }
 

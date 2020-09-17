@@ -56,6 +56,9 @@ class datasource {
      * @brief Base class destructor
      */
     virtual ~buffer() {}
+
+    template <typename Container>
+    static std::unique_ptr<buffer> create(Container&& data_owner);
   };
 
   /**
@@ -211,7 +214,36 @@ class datasource {
     uint8_t* const _data;
     size_t const _size;
   };
+
+  template <typename Container>
+  class owning_buffer : public buffer {
+   public:
+    owning_buffer(Container&& data_owner)
+      : _owner(std::move(data_owner)), _data_ptr(_owner.data()), _size(_owner.size())
+    {
+    }
+    // to create a view into an existing owning buffer
+    owning_buffer(Container&& data_owner, const uint8_t* data_ptr, size_t size)
+      : _owner(std::move(data_owner)), _data_ptr(data_ptr), _size(size)
+    {
+    }
+
+    size_t size() const override { return _size; }
+
+    const uint8_t* data() const override { return static_cast<uint8_t const*>(_data_ptr); }
+
+   private:
+    Container _data;
+    void const* const _data_ptr;
+    size_t const _size;
+  };
 };
+
+template <typename Container>
+std::unique_ptr<datasource::buffer> datasource::buffer::create(Container&& data_owner)
+{
+  return std::make_unique<owning_buffer<Container>>(std::move(data_owner));
+}
 
 /**
  * @brief Implementation class for reading from an Apache Arrow file. The file
