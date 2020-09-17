@@ -10,7 +10,9 @@ from dask.base import tokenize
 from dask.dataframe.core import (
     DataFrame as DaskDataFrame,
     _concat,
+    hash_shard,
     new_dd_object,
+    split_out_on_cols,
 )
 from dask.dataframe.groupby import DataFrameGroupBy
 from dask.highlevelgraph import HighLevelGraph
@@ -202,11 +204,22 @@ def _groupby_partition_agg(
         _agg_dict
     )
     gb.columns = [_make_name(*name, sep=sep) for name in gb.columns]
-    output = {}
-    for j, split in enumerate(
-        gb.partition_by_hash(gb_cols, split_out, keep_index=False)
-    ):
-        output[j] = split
+
+    if hasattr(gb, "partition_by_hash"):
+        # For cudf, we can use `partition_by_hash` method
+        output = {}
+        for j, split in enumerate(
+            gb.partition_by_hash(gb_cols, split_out, keep_index=False)
+        ):
+            output[j] = split
+    else:
+        # Dask-Dataframe (Pandas) support
+        output = hash_shard(
+            gb,
+            split_out,
+            split_out_setup=split_out_on_cols,
+            split_out_setup_kwargs={"cols": gb_cols},
+        )
     del gb
     return output
 
