@@ -22,8 +22,8 @@
 
 namespace {
 
-constexpr char const *NVCOMP_ERROR_CLASS = "com/nvidia/nvcomp/NvcompException";
-constexpr char const *NVCOMP_CUDA_ERROR_CLASS = "com/nvidia/nvcomp/NvcompCudaException";
+constexpr char const *NVCOMP_ERROR_CLASS = "ai/rapids/cudf/nvcomp/NvcompException";
+constexpr char const *NVCOMP_CUDA_ERROR_CLASS = "ai/rapids/cudf/nvcomp/NvcompCudaException";
 constexpr char const *ILLEGAL_ARG_CLASS = "java/lang/IllegalArgumentException";
 constexpr char const *UNSUPPORTED_CLASS = "java/lang/UnsupportedOperationException";
 
