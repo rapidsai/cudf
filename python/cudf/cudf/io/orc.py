@@ -1,5 +1,7 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
+from cudf.core import column
+import functools
 import warnings
 import datetime
 
@@ -102,7 +104,8 @@ def read_orc_metadata(path):
 
 
 @ioutils.doc_read_orc_statistics()
-def read_orc_statistics(
+@functools.lru_cache(maxsize=8)
+def read_orc_statistics_with_cache(
     filepath_or_buffer, columns=None, **kwargs,
 ):
     """{docstring}"""
@@ -147,6 +150,16 @@ def read_orc_statistics(
         stripes_statistics.append(stripe_statistics)
 
     return file_statistics, stripes_statistics
+
+
+def read_orc_statistics(
+    filepath_or_buffer, columns=None, **kwargs,
+):
+    return read_orc_statistics_with_cache(
+        filepath_or_buffer,
+        tuple(columns) if columns is not None else None,
+        **kwargs,
+    )
 
 
 def _filter_stripes(
@@ -231,13 +244,35 @@ def read_orc(
         else:
             stripes = selected_stripes
 
-    if filters is not None:
+    if filters is not None and (skip_rows is None or num_rows is None):
+        # Read file, stripe statistics
+        file_statistics, stripes_statistics = read_orc_statistics(
+            filepath_or_buffer
+        )
+
+        # Get start, end indices of each stripe
+        start_index = 0
+        end_index = 0
+        start_indices = []
+        end_indices = []
+        stripes_number_of_values = {}
+        for i in sorted(stripes):
+            number_of_values = next(iter(stripes_statistics[i].values()))[
+                "number_of_values"
+            ]
+            stripes_number_of_values[i] = number_of_values
+            end_index += number_of_values - 1
+            start_indices.append(start_index)
+            end_indices.append(end_index)
+            start_index += number_of_values
+
+        # Filter on filter columns
         filters = filterutils._prepare_filters(filters)
         query_string, local_dict = filterutils._filters_to_query(filters)
         columns_in_predicate = [
             col for conjunction in filters for (col, op, val) in conjunction
         ]
-        filter_columns = read_orc(
+        df = read_orc(
             filepath_or_buffer,
             engine=engine,
             columns=columns_in_predicate,
@@ -252,22 +287,36 @@ def read_orc(
             timestamp_type=timestamp_type,
             **kwargs,
         )
-        index = filter_columns.query(query_string, local_dict=local_dict).index
+        original_num_rows = len(df)
+        df = df.query(query_string, local_dict=local_dict)
+        index = df.index
+        index_min = index[0].item()
+        index_max = index[-1].item()
 
-        original_num_rows = len(filter_columns)
-        new_skip_rows = None
-        new_num_rows = None
-        new_row_range_num_rows = 0
+        # Determine filtered row range
+        new_skip_rows = max(
+            [
+                start_index if start_index <= index_min else 0
+                for start_index in start_indices
+            ]
+        )
+        new_num_rows = index_max - new_skip_rows + 1
+        new_row_range_num_rows = new_num_rows
+
+        # Determine filtered stripes
         new_stripes = []
         new_stripes_num_rows = 0
+        if stripes is None:
+            stripes = range(len(stripes_statistics))
+        new_stripes_indices = filterutils._apply_filtered_index(
+            index, start_indices, end_indices
+        )
+        new_stripes = [stripes[i] for i in new_stripes_indices]
+        for i in new_stripes_indices:
+            new_stripes_num_rows += end_indices[i] - start_indices[i] + 1
 
-        if skip_rows is not None or num_rows is not None:
-            pass
-        elif stripes is not None:
-            pass
-        else:
-            pass
-
+        # Select either row range or stripes based on # of rows of each
+        # Then, update index
         min_num_rows = min(
             original_num_rows, new_row_range_num_rows, new_stripes_num_rows
         )
@@ -275,17 +324,78 @@ def read_orc(
             skip_rows = new_skip_rows
             num_rows = new_num_rows
             stripes = None
+            index -= skip_rows
         elif new_stripes_num_rows == min_num_rows:
             skip_rows = None
             num_rows = None
+
+            # Compute index offsets for each stripe in filtered selection
+            stripes_removed = [i for i in stripes if i not in new_stripes]
+            stripe_offsets = [0 for _ in new_stripes]
+            for i, stripe in enumerate(new_stripes):
+                for stripe_removed in stripes_removed:
+                    if stripe_removed < stripe:
+                        stripe_offsets[i] -= stripes_number_of_values[
+                            stripe_removed
+                        ]
+
+            # Gather start and end indices for filtered selection of stripes
+            new_start_indices = [start_indices[i] for i in new_stripes_indices]
+            new_end_indices = [end_indices[i] for i in new_stripes_indices]
+
+            # Apply offsets and update stripes
+            index = filterutils._launch_offset_index_ranges(
+                index, stripe_offsets, new_start_indices, new_end_indices
+            )
             stripes = new_stripes
 
+        # Prepare columns
         if columns is None:
-            
-        if not isinstance(columns[0], list):
-            pass
-        for columns_batch in columns:
+            # TODO: Do something more robust to check for empty type
+            # once reading ORC schema is implemented
+            columns = [
+                [
+                    col
+                    for col in file_statistics.keys()
+                    if "sum" in file_statistics[col]
+                    or "count" in file_statistics[col]
+                    or "minimum" in file_statistics[col]
+                    or "minimumUtc" in file_statistics[col]
+                ]
+            ]
+        elif not isinstance(columns[0], list):
+            columns = [columns]
 
+        # Read in payload columns iteratively
+        for column_batch in columns:
+            column_batch = [
+                col for col in column_batch if col not in columns_in_predicate
+            ]
+            print(column_batch)
+            print(stripes)
+            print(skip_rows)
+            print(num_rows)
+            if len(column_batch) > 0:
+                df_to_concat = read_orc(
+                    filepath_or_buffer,
+                    engine=engine,
+                    columns=column_batch,
+                    filters=None,
+                    joins=None,
+                    stripes=stripes,
+                    skip_rows=skip_rows,
+                    num_rows=num_rows,
+                    use_index=use_index,
+                    decimals_as_float=decimals_as_float,
+                    force_decimal_scale=force_decimal_scale,
+                    timestamp_type=timestamp_type,
+                    **kwargs,
+                )
+                df_to_concat = df_to_concat.take(index)
+                df = cudf.concat([df, df_to_concat], axis=1)
+
+        df.reset_index(inplace=True)
+        return df
 
     if engine == "cudf":
         df = DataFrame._from_table(

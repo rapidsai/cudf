@@ -12,11 +12,11 @@ from dask.dataframe.io.utils import _get_pyarrow_dtypes
 import cudf
 
 
-def _read_orc_stripe(fs, path, stripe, columns, kwargs={}):
+def _read_orc_stripe(fs, path, stripe, columns, filters, kwargs={}):
     """Pull out specific columns from specific stripe"""
     with fs.open(path, "rb") as f:
         df_stripe = cudf.read_orc(
-            f, stripes=[stripe], columns=columns, **kwargs
+            f, stripes=[stripe], columns=columns, filters=filters, **kwargs
         )
     return df_stripe
 
@@ -99,6 +99,7 @@ def read_orc(path, columns=None, filters=None, storage_options=None, **kwargs):
                 path,
                 stripe,
                 columns,
+                filters,
                 kwargs,
             )
             N += 1

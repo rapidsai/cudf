@@ -2,6 +2,8 @@
 
 import datetime
 import functools
+import cupy
+from numba import cuda
 
 import pandas as pd
 
@@ -111,12 +113,18 @@ def _apply_filters(filters, stats):
 
 
 @functools.lru_cache(maxsize=8)
-def _prepare_filters(filters):
+def _prepare_filters_with_cache(filters):
     # Coerce filters into list of lists of tuples
     if isinstance(filters[0][0], str):
         filters = [filters]
 
     return filters
+
+
+def _prepare_filters(filters):
+    return _prepare_filters_with_cache(
+        tuple([tuple(conjunction) for conjunction in filters])
+    )
 
 
 def _filters_to_query(filters):
@@ -138,9 +146,60 @@ def _filters_to_query(filters):
             if i > 0:
                 query_string += " and "
             query_string += "("
-            query_string += "@" + col + " " + op + " var" + str(i)
+            # TODO: Add backticks around column name when cuDF query
+            # function supports them
+            query_string += col + " " + op + " @var" + str(i)
             query_string += ")"
             local_dict["var" + str(i)] = val
         query_string += ")"
 
     return query_string, local_dict
+
+
+@cuda.jit
+def _index_in_range(index, start_indices, end_indices, idx_in_range):
+    i = cuda.grid(1)
+    if i < index.size:
+        idx = index[i]
+        for j, (start_index, end_index) in enumerate(
+            zip(start_indices, end_indices)
+        ):
+            idx_in_range[i][j] = idx >= start_index and idx <= end_index
+
+
+def _apply_filtered_index(index, start_indices, end_indices):
+    """Filter index ranges given index already filtered"""
+    idx_in_range = cupy.ones((len(index), len(start_indices)), dtype=bool)
+    _index_in_range.forall(len(index))(
+        cupy.asarray(index.gpu_values),
+        cupy.array(start_indices),
+        cupy.array(end_indices),
+        idx_in_range,
+    )
+    return cupy.asnumpy(cupy.any(idx_in_range, axis=0).nonzero()[0]).tolist()
+
+
+@cuda.jit
+def _offset_index_ranges(
+    index, index_range_offsets, start_indices, end_indices
+):
+    i = cuda.grid(1)
+    if i < index.size:
+        idx = index[i]
+        for j, (start_index, end_index) in enumerate(
+            zip(start_indices, end_indices)
+        ):
+            if idx >= start_index and idx <= end_index:
+                index[i] += index_range_offsets[j]
+
+
+def _launch_offset_index_ranges(
+    index, index_range_offsets, start_indices, end_indices
+):
+    _offset_index_ranges.forall(len(index))(
+        cupy.asarray(index.gpu_values),
+        cupy.array(index_range_offsets),
+        cupy.array(start_indices),
+        cupy.array(end_indices),
+    )
+    return index
