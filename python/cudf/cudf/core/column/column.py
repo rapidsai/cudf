@@ -1409,7 +1409,8 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
     * pandas.Categorical objects
     """
 
-    dtype = cudf.dtype(dtype)
+    if dtype and dtype is not 'category':
+        dtype = cudf.dtype(dtype) 
 
     if isinstance(arbitrary, ColumnBase):
         if dtype is not None:
@@ -1510,6 +1511,8 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             data = as_column(
                 cupy.asarray(arbitrary), nan_as_null=nan_as_null, dtype=dtype
             )
+        elif dtype is 'category':
+            return as_column(pd.Series(arbitrary, dtype=dtype))
         else:
             data = as_column(
                 pa.array(arbitrary, from_pandas=nan_as_null),
