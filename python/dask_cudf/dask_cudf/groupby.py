@@ -6,51 +6,51 @@ import numpy as np
 import pandas as pd
 
 from dask.base import tokenize
-from dask.dataframe.core import _concat, new_dd_object
+from dask.dataframe.core import (
+    DataFrame as DaskDataFrame,
+    _concat,
+    new_dd_object,
+)
+from dask.dataframe.groupby import DataFrameGroupBy
 from dask.highlevelgraph import HighLevelGraph
 
 import cudf
 
-# from dask.dataframe.groupby import DataFrameGroupBy
-# class CudfDataFrameGroupBy(DataFrameGroupBy):
 
-#     def aggregate(
-#         self,
-#         arg,
-#         split_every=None,
-#         split_out=1,
-#         dropna=True,
-#         out_to_host=False,
-#         sep="___",
-#         sort=False,
-#     ):
-#         if arg == "size":
-#             return self.size()
+class CudfDataFrameGroupBy(DataFrameGroupBy):
+    def aggregate(
+        self, arg, split_every=None, split_out=1, out_to_host=False, sep="___",
+    ):
+        if arg == "size":
+            return self.size()
 
-#         if isinstance(self.obj, DataFrame) and isinstance(arg, list):
-#             _supported = {"count", "mean", "std", "var", "sum", "min", "max"}
-#             if set(arg).issubset(_supported):
-#                 index = self.index
-#                 return groupby_agg(
-#                     self,
-#                     index,
-#                     arg,
-#                     split_every=split_every,
-#                     split_out=split_out,
-#                     dropna=dropna,
-#                     out_to_host=out_to_host,
-#                     sep=sep,
-#                     sort=sort,
-#                 )
+        _supported = {"count", "mean", "std", "var", "sum", "min", "max"}
+        if (
+            isinstance(self.obj, DaskDataFrame)
+            and isinstance(self.index, (str, list))
+            and _is_supported(arg, _supported)
+        ):
+            return groupby_agg(
+                self.obj,
+                self.index,
+                arg,
+                split_every=split_every,
+                split_out=split_out,
+                dropna=self.dropna,
+                out_to_host=out_to_host,
+                sep=sep,
+                sort=self.sort,
+            )
 
-#         return super().aggregate(
-#             arg, split_every=split_every, split_out=split_out)
+        return super().aggregate(
+            arg, split_every=split_every, split_out=split_out
+        )
 
 
 def groupby_agg(
     ddf,
-    gb_cols: list,
-    agg_list: list,
+    gb_cols,
+    aggs,
     split_every=None,
     split_out=None,
     dropna=True,
@@ -64,17 +64,30 @@ def groupby_agg(
     split_every = split_every or 8
     split_out = split_out or 1
 
+    # Standardize `gb_cols` and `columns` lists
+    if isinstance(gb_cols, str):
+        gb_cols = [gb_cols]
     columns = [c for c in ddf.columns if c not in gb_cols]
+    if isinstance(aggs, dict):
+        for col in aggs:
+            if col in gb_cols:
+                columns.append(col)
 
-    # Only support basic aggs and mean
+    # Assert that aggregations are supported
     _supported = {"count", "mean", "std", "var", "sum", "min", "max"}
-    if not set(agg_list).issubset(_supported):
+    if not _is_supported(aggs, _supported):
         raise ValueError(
-            f"Supported aggs include {_supported} for groupby_agg API."
+            f"Supported aggs include {_supported} for groupby_agg API. "
+            f"Aggregations must be specified with dict or list syntax."
         )
 
+    # Always convert aggs to dict for consistency
+    if isinstance(aggs, list):
+        aggs = {col: aggs for col in columns}
+
+    # Begin graph construction
     dsk = {}
-    token = tokenize(ddf, gb_cols, agg_list)
+    token = tokenize(ddf, gb_cols, aggs)
     partition_agg_name = "groupby_partition_agg-" + token
     tree_reduce_name = "groupby_tree_reduce-" + token
     gb_agg_name = "groupby_agg-" + token
@@ -85,7 +98,7 @@ def groupby_agg(
             _groupby_partition_agg,
             (ddf._name, p),
             gb_cols,
-            agg_list,
+            aggs,
             columns,
             split_out,
             dropna,
@@ -124,7 +137,6 @@ def groupby_agg(
                     _tree_node_agg,
                     node_list,
                     gb_cols,
-                    agg_list,
                     split_out,
                     dropna,
                     out_to_host,
@@ -138,17 +150,28 @@ def groupby_agg(
             _finalize_gb_agg,
             (tree_reduce_name, 0, s, height - 1),
             gb_cols,
-            agg_list,
+            aggs,
             columns,
             sep,
         )
 
     divisions = [None] * (split_out + 1)
-    _meta = ddf._meta.groupby(gb_cols, as_index=False).agg(agg_list)
+    _meta = ddf._meta.groupby(gb_cols, as_index=False).agg(aggs)
     graph = HighLevelGraph.from_collections(
         gb_agg_name, dsk, dependencies=[ddf]
     )
     return new_dd_object(graph, gb_agg_name, _meta, divisions)
+
+
+def _is_supported(arg, supported: set):
+    if isinstance(arg, (list, dict)):
+        if isinstance(arg, dict):
+            _global_set = set.union(*arg.values())
+        else:
+            _global_set = set(arg)
+
+        return bool(_global_set.issubset(supported))
+    return False
 
 
 def _make_name(*args, sep="_"):
@@ -157,21 +180,22 @@ def _make_name(*args, sep="_"):
 
 
 def _groupby_partition_agg(
-    df, gb_cols, agg_list, columns, split_out, dropna, out_to_host, sort, sep
+    df, gb_cols, aggs, columns, split_out, dropna, out_to_host, sort, sep
 ):
-    _agg_list = set()
-    for agg in agg_list:
-        if agg in ("mean", "std", "var"):
-            _agg_list.add("count")
-            _agg_list.add("sum")
-        else:
-            _agg_list.add(agg)
-    _agg_dict = {col: list(_agg_list) for col in columns}
-
-    if set(agg_list).intersection({"std", "var"}):
-        for c in columns:
-            pow2_name = _make_name(c, "pow2", sep=sep)
-            df[pow2_name] = df[c].pow(2)
+    # Modify dict for initial (partition-wise) aggregations
+    _agg_dict = {}
+    for col, agg_list in aggs.items():
+        _agg_dict[col] = set()
+        for agg in agg_list:
+            if agg in ("mean", "std", "var"):
+                _agg_dict[col].add("count")
+                _agg_dict[col].add("sum")
+            else:
+                _agg_dict[col].add(agg)
+        _agg_dict[col] = list(_agg_dict[col])
+        if set(agg_list).intersection({"std", "var"}):
+            pow2_name = _make_name(col, "pow2", sep=sep)
+            df[pow2_name] = df[col].pow(2)
             _agg_dict[pow2_name] = ["sum"]
 
     gb = df.groupby(gb_cols, dropna=dropna, as_index=False, sort=sort).agg(
@@ -190,9 +214,7 @@ def _groupby_partition_agg(
     return output
 
 
-def _tree_node_agg(
-    dfs, gb_cols, agg_list, split_out, dropna, out_to_host, sort, sep
-):
+def _tree_node_agg(dfs, gb_cols, split_out, dropna, out_to_host, sort, sep):
     df = _concat(dfs, ignore_index=True)
     if out_to_host:
         df.reset_index(drop=True, inplace=True)
@@ -218,12 +240,13 @@ def _tree_node_agg(
     return gb
 
 
-def _finalize_gb_agg(gb, gb_cols, agg_list, columns, sep):
+def _finalize_gb_agg(gb, gb_cols, aggs, columns, sep):
 
     # Deal with higher-order aggregations
-    agg_set = set(agg_list)
-    if agg_set.intersection({"mean", "std", "var"}):
-        for col in columns:
+    for col in columns:
+        agg_list = aggs.get(col, [])
+        agg_set = set(agg_list)
+        if agg_set.intersection({"mean", "std", "var"}):
             count_name = _make_name(col, "count", sep=sep)
             sum_name = _make_name(col, "sum", sep=sep)
             if agg_set.intersection({"std", "var"}):
