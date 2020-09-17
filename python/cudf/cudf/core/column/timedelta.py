@@ -344,6 +344,12 @@ class TimeDeltaColumn(column.ColumnBase):
                 unit=self.time_unit,
             )
 
+    def std(self, skipna=None, ddof=1, dtype=np.float64):
+        return pd.Timedelta(
+            self.as_numerical.std(skipna=skipna, ddof=ddof, dtype=dtype),
+            unit=self.time_unit,
+        )
+
     def components(self, index=None):
         """
         Return a Dataframe of the components of the Timedeltas.
