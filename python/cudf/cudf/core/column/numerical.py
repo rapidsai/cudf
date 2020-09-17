@@ -166,7 +166,6 @@ class NumericalColumn(column.ColumnBase):
         )
 
     def as_numerical_column(self, dtype, **kwargs):
-        # dtype = np.dtype(dtype)
         # expect a cudf dtype always here
         if dtype == self.dtype:
             return self
