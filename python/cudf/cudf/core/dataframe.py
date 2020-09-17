@@ -2709,7 +2709,6 @@ class DataFrame(Frame, Serializable):
         >>> df = cudf.DataFrame({"a": [1,2,3,4,5],
         ... "b":["a", "b", "c", "d","e"],
         ... "c":[1.0, 2.0, 3.0, 4.0, 5.0]})
-
         >>> df.set_index(["a", "b"])
                c
         a b
@@ -4870,7 +4869,6 @@ class DataFrame(Frame, Serializable):
             index = cudf.from_pandas(dataframe.index, nan_as_null=nan_as_null)
         else:
             index = dataframe.index
-        print(index)
         result = df.set_index(index)
 
         return result

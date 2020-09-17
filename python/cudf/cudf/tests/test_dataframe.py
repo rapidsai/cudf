@@ -2106,19 +2106,18 @@ def test_reset_index_inplace(pdf, gdf, drop):
 )
 @pytest.mark.parametrize("drop", [True, False])
 @pytest.mark.parametrize("append", [True, False])
-def test_set_index(data, index, drop, append):
+@pytest.mark.parametrize("inplace", [True, False])
+def test_set_index(data, index, drop, append, inplace):
     gdf = gd.DataFrame(data)
     pdf = gdf.to_pandas()
 
-    assert_eq(
-        pdf.set_index(index, drop=drop, append=append),
-        gdf.set_index(index, drop=drop, append=append),
-    )
-
-    # Inplace test
-    pdf.set_index(index, inplace=True, drop=drop, append=append)
-    gdf.set_index(index, inplace=True, drop=drop, append=append)
-    assert_eq(pdf, gdf)
+    expected = pdf.set_index(index, inplace=inplace, drop=drop, append=append)
+    actual = gdf.set_index(index, inplace=inplace, drop=drop, append=append)
+    
+    if inplace:
+        expected = pdf
+        actual = gdf
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize(
