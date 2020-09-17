@@ -48,12 +48,13 @@ struct compute_pad_output_length_fn {
 }  // namespace
 
 //
-std::unique_ptr<column> pad(strings_column_view const& strings,
-                            size_type width,
-                            pad_side side                       = pad_side::RIGHT,
-                            std::string const& fill_char        = " ",
-                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                            cudaStream_t stream                 = 0)
+std::unique_ptr<column> pad(
+  strings_column_view const& strings,
+  size_type width,
+  pad_side side                       = pad_side::RIGHT,
+  std::string const& fill_char        = " ",
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0)
 {
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_empty_strings_column(mr, stream);
@@ -141,10 +142,11 @@ std::unique_ptr<column> pad(strings_column_view const& strings,
 // more optimized since it does not need to calculate the size of the fillchar and can
 // directly write it to the output buffer without extra logic for multi-byte UTF-8 chars.
 //
-std::unique_ptr<column> zfill(strings_column_view const& strings,
-                              size_type width,
-                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                              cudaStream_t stream                 = 0)
+std::unique_ptr<column> zfill(
+  strings_column_view const& strings,
+  size_type width,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0)
 {
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_empty_strings_column(mr, stream);

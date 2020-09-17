@@ -93,7 +93,7 @@ TEST_F(TextTokenizeTest, TokenizeErrorTest)
   cudf::strings_column_view strings_view(strings);
 
   {
-    cudf::test::strings_column_wrapper delimiters{};  // empty delimiters
+    cudf::test::strings_column_wrapper delimiters;  // empty delimiters
     cudf::strings_column_view delimiters_view(delimiters);
     EXPECT_THROW(nvtext::tokenize(strings_view, delimiters_view), cudf::logic_error);
     EXPECT_THROW(nvtext::count_tokens(strings_view, delimiters_view), cudf::logic_error);

@@ -50,8 +50,8 @@ namespace detail {
  */
 std::unique_ptr<column> encode(
   column_view const& column,
-  data_type indices_type              = data_type{type_id::INT32},
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  data_type indices_type              = data_type{type_id::UINT32},
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 /**
@@ -71,7 +71,7 @@ std::unique_ptr<column> encode(
  */
 std::unique_ptr<column> decode(
   dictionary_column_view const& dictionary_column,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 }  // namespace detail

@@ -130,7 +130,7 @@ column_view sort_groupby_helper::key_sort_order(cudaStream_t stream)
       _keys,
       {},
       std::vector<null_order>(_keys.num_columns(), null_order::AFTER),
-      rmm::mr::get_default_resource(),
+      rmm::mr::get_current_device_resource(),
       stream);
   } else {  // Pandas style
     // Temporarily prepend the keys table with a column that indicates the
@@ -143,7 +143,7 @@ column_view sort_groupby_helper::key_sort_order(cudaStream_t stream)
       augmented_keys,
       {},
       std::vector<null_order>(_keys.num_columns() + 1, null_order::AFTER),
-      rmm::mr::get_default_resource(),
+      rmm::mr::get_current_device_resource(),
       stream);
 
     // All rows with one or more null values are at the end of the resulting sorted order.
@@ -227,7 +227,7 @@ column_view sort_groupby_helper::unsorted_keys_labels(cudaStream_t stream)
                           scatter_map,
                           table_view({temp_labels->view()}),
                           false,
-                          rmm::mr::get_default_resource(),
+                          rmm::mr::get_current_device_resource(),
                           stream);
 
   _unsorted_keys_labels = std::move(t_unsorted_keys_labels->release()[0]);
@@ -239,7 +239,7 @@ column_view sort_groupby_helper::keys_bitmask_column(cudaStream_t stream)
 {
   if (_keys_bitmask_column) return _keys_bitmask_column->view();
 
-  auto row_bitmask = bitmask_and(_keys, rmm::mr::get_default_resource(), stream);
+  auto row_bitmask = bitmask_and(_keys, rmm::mr::get_current_device_resource(), stream);
 
   _keys_bitmask_column = make_numeric_column(data_type(type_id::INT8),
                                              _keys.num_rows(),

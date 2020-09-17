@@ -149,7 +149,7 @@ struct dispatch_compute_indices {
     auto new_keys_view = column_device_view::create(new_keys, stream);
     // create the indices output column
     auto result = make_numeric_column(
-      data_type{type_id::INT32}, all_indices.size(), mask_state::UNALLOCATED, stream, mr);
+      all_indices.type(), all_indices.size(), mask_state::UNALLOCATED, stream, mr);
     auto d_result = result->mutable_view().data<int32_t>();
     // new indices values are computed by matching the concatenated keys to the new key set
     thrust::lower_bound(rmm::exec_policy(stream)->on(stream),
@@ -198,7 +198,8 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
     CUDF_EXPECTS(keys.type() == keys_type, "key types of all dictionary columns must match");
     return keys;
   });
-  auto all_keys = cudf::detail::concatenate(keys_views, rmm::mr::get_default_resource(), stream);
+  auto all_keys =
+    cudf::detail::concatenate(keys_views, rmm::mr::get_current_device_resource(), stream);
 
   // sort keys and remove duplicates;
   // this becomes the keys child for the output dictionary column
@@ -215,7 +216,7 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
   std::vector<column_view> indices_views(columns.size());
   std::transform(columns.begin(), columns.end(), indices_views.begin(), [](auto cv) {
     auto dict_view = dictionary_column_view(cv);
-    if (dict_view.size() == 0) return column_view{data_type{type_id::INT32}, 0, nullptr};
+    if (dict_view.size() == 0) return column_view{data_type{type_id::UINT32}, 0, nullptr};
     return dict_view.get_indices_annotated();  // nicely includes validity mask and view offset
   });
   auto all_indices        = cudf::detail::concatenate(indices_views, mr, stream);

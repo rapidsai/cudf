@@ -34,6 +34,7 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
             ARGMIN 'cudf::aggregation::ARGMIN'
             NUNIQUE 'cudf::aggregation::NUNIQUE'
             NTH_ELEMENT 'cudf::aggregation::NTH_ELEMENT'
+            COLLECT 'cudf::aggregation::COLLECT'
             PTX 'cudf::aggregation::PTX'
             CUDA 'cudf::aggregation::CUDA'
         Kind kind
@@ -81,6 +82,8 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
     cdef unique_ptr[aggregation] make_nth_element_aggregation(
         size_type n
     ) except +
+
+    cdef unique_ptr[aggregation] make_collect_aggregation() except +
 
     cdef unique_ptr[aggregation] make_udf_aggregation(
         udf_type type,

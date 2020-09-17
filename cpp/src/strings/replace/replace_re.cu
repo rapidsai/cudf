@@ -105,7 +105,7 @@ std::unique_ptr<column> replace_re(
   std::string const& pattern,
   string_scalar const& repl           = string_scalar(""),
   size_type maxrepl                   = -1,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   auto strings_count = strings.size();

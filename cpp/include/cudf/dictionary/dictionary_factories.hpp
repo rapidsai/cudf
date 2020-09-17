@@ -57,7 +57,7 @@ namespace cudf {
 std::unique_ptr<column> make_dictionary_column(
   column_view const& keys_column,
   column_view const& indices_column,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 /**

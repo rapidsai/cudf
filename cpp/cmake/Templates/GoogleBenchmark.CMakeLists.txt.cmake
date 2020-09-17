@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.12)
+project(cudf-GoogleBenchmark)
 
 include(ExternalProject)
 
@@ -10,10 +11,3 @@ ExternalProject_Add(GoogleBenchmark
                     INSTALL_DIR       "${GBENCH_ROOT}/install"
                     CMAKE_ARGS        ${GBENCH_CMAKE_ARGS} -DBENCHMARK_ENABLE_TESTING=OFF -DCMAKE_INSTALL_PREFIX=${GBENCH_ROOT}/install)
                     # The flag BENCHMARK_ENABLE_TESTING=OFF prevents Google Benchmark from asking for Google Test.
-
-
-
-
-
-
-

@@ -666,8 +666,8 @@ TEST_F(OrcChunkedWriterTest, ReadStripes)
   cudf_io::write_orc_chunked_end(state);
 
   cudf_io::read_orc_args read_args{cudf_io::source_info{filepath}};
-  read_args.stripe_list = {1, 0, 1};
-  auto result           = cudf_io::read_orc(read_args);
+  read_args.stripes = {1, 0, 1};
+  auto result       = cudf_io::read_orc(read_args);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
 }
@@ -684,9 +684,9 @@ TEST_F(OrcChunkedWriterTest, ReadStripesError)
   cudf_io::write_orc_chunked_end(state);
 
   cudf_io::read_orc_args read_args{cudf_io::source_info{filepath}};
-  read_args.stripe_list = {0, 1};
+  read_args.stripes = {0, 1};
   EXPECT_THROW(cudf_io::read_orc(read_args), cudf::logic_error);
-  read_args.stripe_list = {-1};
+  read_args.stripes = {-1};
   EXPECT_THROW(cudf_io::read_orc(read_args), cudf::logic_error);
 }
 
@@ -703,20 +703,20 @@ TYPED_TEST(OrcChunkedWriterNumericTypeTest, UnalignedSize)
   bool mask[] = {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
                  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
 
-  T c1a[] = {5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
-             5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5};
-  T c1b[] = {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-             6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6};
+  T c1a[num_els];
+  std::fill(c1a, c1a + num_els, static_cast<T>(5));
+  T c1b[num_els];
+  std::fill(c1b, c1b + num_els, static_cast<T>(6));
   column_wrapper<T> c1a_w(c1a, c1a + num_els, mask);
   column_wrapper<T> c1b_w(c1b, c1b + num_els, mask);
   cols.push_back(c1a_w.release());
   cols.push_back(c1b_w.release());
   cudf::table tbl1(std::move(cols));
 
-  T c2a[] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,
-             8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8};
-  T c2b[] = {9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9,
-             9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9};
+  T c2a[num_els];
+  std::fill(c2a, c2a + num_els, static_cast<T>(8));
+  T c2b[num_els];
+  std::fill(c2b, c2b + num_els, static_cast<T>(9));
   column_wrapper<T> c2a_w(c2a, c2a + num_els, mask);
   column_wrapper<T> c2b_w(c2b, c2b + num_els, mask);
   cols.push_back(c2a_w.release());
@@ -751,20 +751,20 @@ TYPED_TEST(OrcChunkedWriterNumericTypeTest, UnalignedSize2)
   bool mask[] = {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
                  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
 
-  T c1a[] = {5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
-             5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5};
-  T c1b[] = {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-             6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6};
+  T c1a[num_els];
+  std::fill(c1a, c1a + num_els, static_cast<T>(5));
+  T c1b[num_els];
+  std::fill(c1b, c1b + num_els, static_cast<T>(6));
   column_wrapper<T> c1a_w(c1a, c1a + num_els, mask);
   column_wrapper<T> c1b_w(c1b, c1b + num_els, mask);
   cols.push_back(c1a_w.release());
   cols.push_back(c1b_w.release());
   cudf::table tbl1(std::move(cols));
 
-  T c2a[] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,
-             8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8};
-  T c2b[] = {9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9,
-             9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9};
+  T c2a[num_els];
+  std::fill(c2a, c2a + num_els, static_cast<T>(8));
+  T c2b[num_els];
+  std::fill(c2b, c2b + num_els, static_cast<T>(9));
   column_wrapper<T> c2a_w(c2a, c2a + num_els, mask);
   column_wrapper<T> c2b_w(c2b, c2b + num_els, mask);
   cols.push_back(c2a_w.release());

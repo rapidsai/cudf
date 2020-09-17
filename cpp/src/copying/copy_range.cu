@@ -94,7 +94,7 @@ struct out_of_place_copy_range_dispatch {
     cudf::size_type source_begin,
     cudf::size_type source_end,
     cudf::size_type target_begin,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
     cudaStream_t stream                 = 0)
   {
     auto p_ret = std::make_unique<cudf::column>(target, stream, mr);

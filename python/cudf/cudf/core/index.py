@@ -1563,11 +1563,35 @@ class RangeIndex(Index):
         else:
             return False
 
-    def copy(self, deep=True):
+    def copy(self, name=None, deep=False, dtype=None, names=None):
         """
         Make a copy of this object.
+
+        Parameters
+        ----------
+        name : object optional (default: None), name of index
+        deep : Bool (default: False)
+            Ignored for RangeIndex
+        dtype : numpy dtype optional (default: None)
+            Target dtype for underlying range data
+        names : list-like optional (default: False)
+            Kept compatibility with MultiIndex. Should not be used.
+
+        Returns
+        -------
+        New RangeIndex instance with same range, casted to new dtype
         """
-        return RangeIndex(start=self._start, stop=self._stop, name=self.name)
+
+        dtype = self.dtype if dtype is None else dtype
+
+        if not np.issubdtype(dtype, np.signedinteger):
+            raise ValueError(f"Expected Signed Integer Type, Got {dtype}")
+
+        name = self.name if name is None else name
+
+        _idx_new = RangeIndex(start=self._start, stop=self._stop, name=name)
+
+        return _idx_new
 
     def __repr__(self):
         return (
@@ -1823,22 +1847,36 @@ class GenericIndex(Index):
     def _values(self):
         return next(iter(self._data.columns))
 
-    def copy(self, deep=True):
+    def copy(self, name=None, deep=False, dtype=None, names=None):
         """
         Make a copy of this object.
 
         Parameters
         ----------
+        name : object, default None
+            Name of index, use original name when None
         deep : bool, default True
             Make a deep copy of the data.
-            With ``deep=False`` the is not copied.
+            With ``deep=False`` the original data is used
+        dtype : numpy dtype, default None
+            Target datatype to cast into, use original dtype when None
+        names : list-like, default False
+            Kept compatibility with MultiIndex. Should not be used.
 
         Returns
         -------
-        copy : Index
+        New index instance, casted to new dtype
         """
-        result = as_index(self._values.copy(deep=deep))
-        result.name = self.name
+
+        dtype = self.dtype if dtype is None else dtype
+        name = self.name if name is None else name
+
+        if isinstance(self, (StringIndex, CategoricalIndex)):
+            result = as_index(self._values.astype(dtype), name=name, copy=deep)
+        else:
+            result = as_index(
+                self._values.copy(deep=deep).astype(dtype), name=name
+            )
         return result
 
     def __sizeof__(self):
@@ -2131,37 +2169,165 @@ class DatetimeIndex(GenericIndex):
 
     @property
     def year(self):
-        return self.get_dt_field("year")
+        """
+        The year of the datetime.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pandas as pd
+        >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
+        ...             periods=3, freq="Y"))
+        >>> datetime_index
+        DatetimeIndex(['2000-12-31', '2001-12-31', '2002-12-31'], dtype='datetime64[ns]')
+        >>> datetime_index.year
+        Int16Index([2000, 2001, 2002], dtype='int16')
+        """  # noqa: E501
+        return self._get_dt_field("year")
 
     @property
     def month(self):
-        return self.get_dt_field("month")
+        """
+        The month as January=1, December=12.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pandas as pd
+        >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
+        ...             periods=3, freq="M"))
+        >>> datetime_index
+        DatetimeIndex(['2000-01-31', '2000-02-29', '2000-03-31'], dtype='datetime64[ns]')
+        >>> datetime_index.month
+        Int16Index([1, 2, 3], dtype='int16')
+        """  # noqa: E501
+        return self._get_dt_field("month")
 
     @property
     def day(self):
-        return self.get_dt_field("day")
+        """
+        The day of the datetime.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
+        ...             periods=3, freq="D"))
+        >>> datetime_index
+        DatetimeIndex(['2000-01-01', '2000-01-02', '2000-01-03'], dtype='datetime64[ns]')
+        >>> datetime_index.day
+        Int16Index([1, 2, 3], dtype='int16')
+        """  # noqa: E501
+        return self._get_dt_field("day")
 
     @property
     def hour(self):
-        return self.get_dt_field("hour")
+        """
+        The hours of the datetime.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
+        ...             periods=3, freq="h"))
+        >>> datetime_index
+        DatetimeIndex(['2000-01-01 00:00:00', '2000-01-01 01:00:00',
+                    '2000-01-01 02:00:00'],
+                    dtype='datetime64[ns]')
+        >>> datetime_index.hour
+        Int16Index([0, 1, 2], dtype='int16')
+        """
+        return self._get_dt_field("hour")
 
     @property
     def minute(self):
-        return self.get_dt_field("minute")
+        """
+        The minutes of the datetime.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
+        ...             periods=3, freq="T"))
+        >>> datetime_index
+        DatetimeIndex(['2000-01-01 00:00:00', '2000-01-01 00:01:00',
+                    '2000-01-01 00:02:00'],
+                    dtype='datetime64[ns]')
+        >>> datetime_index.minute
+        Int16Index([0, 1, 2], dtype='int16')
+        """
+        return self._get_dt_field("minute")
 
     @property
     def second(self):
-        return self.get_dt_field("second")
+        """
+        The seconds of the datetime.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
+        ...             periods=3, freq="s"))
+        >>> datetime_index
+        DatetimeIndex(['2000-01-01 00:00:00', '2000-01-01 00:00:01',
+                    '2000-01-01 00:00:02'],
+                    dtype='datetime64[ns]')
+        >>> datetime_index.second
+        Int16Index([0, 1, 2], dtype='int16')
+        """
+        return self._get_dt_field("second")
 
     @property
     def weekday(self):
-        return self.get_dt_field("weekday")
+        """
+        The day of the week with Monday=0, Sunday=6.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_index = cudf.Index(pd.date_range("2016-12-31",
+        ...     "2017-01-08", freq="D"))
+        >>> datetime_index
+        DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
+                    '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
+                    '2017-01-08'],
+                    dtype='datetime64[ns]')
+        >>> datetime_index.weekday
+        Int16Index([5, 6, 0, 1, 2, 3, 4, 5, 6], dtype='int16')
+        """
+        return self._get_dt_field("weekday")
+
+    @property
+    def dayofweek(self):
+        """
+        The day of the week with Monday=0, Sunday=6.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_index = cudf.Index(pd.date_range("2016-12-31",
+        ...     "2017-01-08", freq="D"))
+        >>> datetime_index
+        DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
+                    '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
+                    '2017-01-08'],
+                    dtype='datetime64[ns]')
+        >>> datetime_index.dayofweek
+        Int16Index([5, 6, 0, 1, 2, 3, 4, 5, 6], dtype='int16')
+        """
+        return self._get_dt_field("weekday")
 
     def to_pandas(self):
         nanos = self._values.astype("datetime64[ns]")
         return pd.DatetimeIndex(nanos.to_pandas(), name=self.name)
 
-    def get_dt_field(self, field):
+    def _get_dt_field(self, field):
         out_column = self._values.get_dt_field(field)
         # column.column_empty_like always returns a Column object
         # but we need a NumericalColumn for GenericIndex..
@@ -2364,7 +2530,7 @@ class CategoricalIndex(GenericIndex):
                 )
 
         if copy:
-            data = column.as_column(data, dtype=dtype).copy()
+            data = column.as_column(data, dtype=dtype).copy(deep=True)
         out = Frame.__new__(cls)
         kwargs = _setdefault_name(data, name=name)
         if isinstance(data, CategoricalColumn):
@@ -2459,13 +2625,13 @@ class StringIndex(GenericIndex):
     name: A string
     """
 
-    def __new__(cls, values, **kwargs):
+    def __new__(cls, values, copy=False, **kwargs):
         out = Frame.__new__(cls)
         kwargs = _setdefault_name(values, **kwargs)
         if isinstance(values, StringColumn):
-            values = values.copy()
+            values = values.copy(deep=copy)
         elif isinstance(values, StringIndex):
-            values = values._values.copy()
+            values = values._values.copy(deep=copy)
         else:
             values = column.as_column(values, dtype="str")
             if not pd.api.types.is_string_dtype(values.dtype):
@@ -2535,13 +2701,14 @@ def as_index(arbitrary, **kwargs):
         - DatetimeIndex for Datetime input.
         - GenericIndex for all other inputs.
     """
-
     kwargs = _setdefault_name(arbitrary, **kwargs)
     if isinstance(arbitrary, cudf.MultiIndex):
         return arbitrary
     elif isinstance(arbitrary, Index):
+        if arbitrary.name == kwargs["name"]:
+            return arbitrary
         idx = arbitrary.copy(deep=False)
-        idx.rename(**kwargs, inplace=True)
+        idx.rename(kwargs["name"], inplace=True)
         return idx
     elif isinstance(arbitrary, NumericalColumn):
         try:

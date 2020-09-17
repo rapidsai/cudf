@@ -25,14 +25,12 @@ build:
 
 requirements:
   build:
-    - cmake >=3.14.0
+    - cmake >=3.17.0
   host:
     - librmm {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
-    - arrow-cpp 0.17.1.*
+    - arrow-cpp 1.0.1.*
     - arrow-cpp-proc * cuda
-    - double-conversion
-    - rapidjson
     - flatbuffers
     - boost-cpp >=1.72.0
     - dlpack
@@ -40,6 +38,7 @@ requirements:
     - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
     - dlpack
     - arrow-cpp-proc * cuda
+    - {{ pin_compatible('boost-cpp', max_pin='x.x.x') }}
 
 test:
   commands:
@@ -56,6 +55,7 @@ test:
     - test -f $PREFIX/include/cudf/detail/aggregation/aggregation.hpp
     - test -f $PREFIX/include/cudf/detail/aggregation/result_cache.hpp
     - test -f $PREFIX/include/cudf/detail/binaryop.hpp
+    - test -f $PREFIX/include/cudf/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/detail/copy.hpp
     - test -f $PREFIX/include/cudf/detail/fill.hpp
     - test -f $PREFIX/include/cudf/detail/gather.hpp
@@ -94,9 +94,15 @@ test:
     - test -f $PREFIX/include/cudf/groupby.hpp
     - test -f $PREFIX/include/cudf/hashing.hpp
     - test -f $PREFIX/include/cudf/interop.hpp
+    - test -f $PREFIX/include/cudf/io/avro.hpp
+    - test -f $PREFIX/include/cudf/io/detail/parquet.hpp
     - test -f $PREFIX/include/cudf/io/data_sink.hpp
+    - test -f $PREFIX/include/cudf/io/detail/avro.hpp
+    - test -f $PREFIX/include/cudf/io/detail/json.hpp
     - test -f $PREFIX/include/cudf/io/datasource.hpp
     - test -f $PREFIX/include/cudf/io/functions.hpp
+    - test -f $PREFIX/include/cudf/io/json.hpp
+    - test -f $PREFIX/include/cudf/io/parquet.hpp
     - test -f $PREFIX/include/cudf/io/readers.hpp
     - test -f $PREFIX/include/cudf/io/types.hpp
     - test -f $PREFIX/include/cudf/io/writers.hpp

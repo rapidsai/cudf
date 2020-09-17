@@ -27,10 +27,10 @@ namespace detail {
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<numeric_scalar<int32_t>> get_index(
+std::unique_ptr<scalar> get_index(
   dictionary_column_view const& dictionary,
   scalar const& key,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 }  // namespace detail

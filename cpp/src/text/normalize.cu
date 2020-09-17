@@ -151,7 +151,7 @@ struct codepoint_to_utf8_fn {
 // details API
 std::unique_ptr<cudf::column> normalize_spaces(
   cudf::strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   cudf::size_type strings_count = strings.size();
@@ -205,7 +205,7 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
   if (strings_count == 0) return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
 
   // create the normalizer and call it
-  data_normalizer normalizer(strings.chars_size(), stream, do_lower_case);
+  data_normalizer normalizer(stream, do_lower_case);
   auto result = [&strings, &normalizer, stream] {
     auto const offsets   = strings.offsets();
     auto const d_offsets = offsets.data<uint32_t>() + strings.offset();
