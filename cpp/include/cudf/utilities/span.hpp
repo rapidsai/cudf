@@ -72,8 +72,18 @@ class span_base {
   constexpr size_type size_bytes() const noexcept { return sizeof(T) * _size; }
   constexpr bool empty() const noexcept { return _size == 0; }
 
+  /**
+   * @brief Obtains a subspan consisting of the first N elements of the sequence
+   *
+   * @param count Number of elements from the beginning of this span to put in the subspan.
+   */
   constexpr Derived first(size_type count) const noexcept { return Derived(_data, count); }
 
+  /**
+   * @brief Obtains a subspan consisting of the last N elements of the sequence
+   *
+   * @param count Number of elements from the end of this span to put in the subspan
+   */
   constexpr Derived last(size_type count) const noexcept
   {
     return Derived(_data + _size - count, count);
