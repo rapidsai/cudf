@@ -1,8 +1,6 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
-import math
 import warnings
 from distutils.version import LooseVersion
-from operator import getitem
 
 import numpy as np
 import pandas as pd
@@ -14,12 +12,7 @@ from dask.base import normalize_token, tokenize
 from dask.compatibility import apply
 from dask.context import _globals
 from dask.core import flatten
-from dask.dataframe.core import (
-    Scalar,
-    handle_out,
-    map_partitions,
-    new_dd_object,
-)
+from dask.dataframe.core import Scalar, handle_out, map_partitions
 from dask.dataframe.utils import raise_on_meta_error
 from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import cull, fuse
@@ -28,7 +21,7 @@ from dask.utils import M, OperatorMethodMixin, derived_from, funcname
 import cudf
 from cudf import _lib as libcudf
 
-from dask_cudf import groupby, sorting
+from dask_cudf import sorting
 
 DASK_VERSION = LooseVersion(dask.__version__)
 
@@ -349,109 +342,6 @@ class DataFrame(_Frame, dd.core.DataFrame):
         if shuffle_arg and shuffle_arg != "tasks":
             raise ValueError("dask_cudf does not support disk-based shuffle.")
         return super().shuffle(*args, shuffle="tasks", **kwargs)
-
-    def groupby_agg(
-        self,
-        gb_cols: list,
-        agg_list: list,
-        split_every=8,
-        split_out=None,
-        dropna=True,
-        out_to_host=False,
-        sep="___",
-        sort=False,
-    ):
-        # Deal with default split_out and split_every params
-        if split_every is False:
-            split_every = self.npartitions
-        split_every = split_every or 8
-        split_out = split_out or 1
-
-        columns = [c for c in self.columns if c not in gb_cols]
-
-        # Only support basic aggs and mean
-        _supported = {"count", "mean", "std", "var", "sum", "min", "max"}
-        if not set(agg_list).issubset(_supported):
-            raise ValueError(
-                f"Supported aggs include {_supported} for groupby_agg API."
-            )
-
-        dsk = {}
-        token = tokenize(self, gb_cols, agg_list)
-        partition_agg_name = "groupby_partition_agg-" + token
-        tree_reduce_name = "groupby_tree_reduce-" + token
-        gb_agg_name = "groupby_agg-" + token
-        for p in range(self.npartitions):
-            # Perform groupby aggregation on each partition.
-            # Split each result into `split_out` chunks (by hashing `gb_cols`)
-            dsk[(partition_agg_name, p)] = (
-                groupby._groupby_partition_agg,
-                (self._name, p),
-                gb_cols,
-                agg_list,
-                columns,
-                split_out,
-                dropna,
-                out_to_host,
-                sort,
-                sep,
-            )
-            # Pick out each chunk using `getitem`
-            for s in range(split_out):
-                dsk[(tree_reduce_name, p, s, 0)] = (
-                    getitem,
-                    (partition_agg_name, p),
-                    s,
-                )
-
-        # Build reduction tree
-        parts = self.npartitions
-        widths = [parts]
-        while parts > 1:
-            parts = math.ceil(parts / split_every)
-            widths.append(parts)
-        height = len(widths)
-        for s in range(split_out):
-            for depth in range(1, height):
-                for group in range(widths[depth]):
-
-                    p_max = widths[depth - 1]
-                    lstart = split_every * group
-                    lstop = min(lstart + split_every, p_max)
-                    node_list = [
-                        (tree_reduce_name, p, s, depth - 1)
-                        for p in range(lstart, lstop)
-                    ]
-
-                    dsk[(tree_reduce_name, group, s, depth)] = (
-                        groupby._tree_node_agg,
-                        node_list,
-                        gb_cols,
-                        agg_list,
-                        split_out,
-                        dropna,
-                        out_to_host,
-                        sort,
-                        sep,
-                    )
-
-        # Final output partitions
-        for s in range(split_out):
-            dsk[(gb_agg_name, s)] = (
-                groupby._finalize_gb_agg,
-                (tree_reduce_name, 0, s, height - 1),
-                gb_cols,
-                agg_list,
-                columns,
-                sep,
-            )
-
-        divisions = [None] * (split_out + 1)
-        _meta = self._meta.groupby(gb_cols, as_index=False).agg(agg_list)
-        graph = HighLevelGraph.from_collections(
-            gb_agg_name, dsk, dependencies=[self]
-        )
-        return new_dd_object(graph, gb_agg_name, _meta, divisions)
 
 
 def sum_of_squares(x):
