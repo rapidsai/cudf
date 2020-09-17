@@ -196,7 +196,7 @@ class Index(Frame, Serializable):
         elif isinstance(other, CategoricalIndex):
             self = self.astype(other.dtype)
         try:
-            return super(Index, self).equals(other, check_type=False)
+            return super(Index, self).equals(other, check_types=False)
         except TypeError:
             return False
 

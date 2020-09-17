@@ -460,22 +460,38 @@ class Frame(libcudf.table.Table):
 
     def equals(self, other, **kwargs):
         """
-        Determine if two Index objects contain the same elements.
+        Test whether two objects contain the same elements.
+        This function allows two Series or DataFrames to be compared against
+        each other to see if they have the same shape and elements. NaNs in
+        the same location are considered equal. The column headers do not
+        need to have the same type.
 
         Parameters
         ----------
-        other : Index
+        other : Series or DataFrame
+            The other Series or DataFrame to be compared with the first.
 
         Returns
         -------
-        out: bool
-            True if “other” is an Index and it has the same elements
-            as calling index; False otherwise.
+        bool
+            True if all elements are the same in both objects, False
+            otherwise.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([1, 2, 3])
+        >>> other = cudf.Series([1, 2, 3])
+        >>> s.equals(other)
+        True
+        >>> different = cudf.Series([1.5, 2, 3])
+        >>> s.equals(different)
+        False
         """
         if self is other:
             return True
 
-        if kwargs.get("check_type", True):
+        if kwargs.get("check_types", True):
             if type(self) is not type(other):
                 return False
 
