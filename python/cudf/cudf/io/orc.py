@@ -163,10 +163,15 @@ def read_orc_statistics(
 
 
 def _filter_stripes(
-    filters, filepath_or_buffer, stripes=None, skip_rows=None, num_rows=None
+    filters,
+    filepath_or_buffer,
+    stripes=None,
+    skip_rows=None,
+    num_rows=None,
+    already_prepared=False,
 ):
-    # Prepare filters
-    filters = filterutils._prepare_filters(filters)
+    if not already_prepared:
+        filters = filterutils._prepare_filters(filters)
 
     # Get columns relevant to filtering
     columns_in_predicate = [
@@ -234,8 +239,14 @@ def read_orc(
         ValueError("URL content-encoding decompression is not supported")
 
     if filters is not None:
+        filters = filterutils._prepare_filters(filters)
         selected_stripes = _filter_stripes(
-            filters, filepath_or_buffer, stripes, skip_rows, num_rows
+            filters,
+            filepath_or_buffer,
+            stripes,
+            skip_rows,
+            num_rows,
+            already_prepared=True,
         )
 
         # Return empty if everything was filtered
@@ -267,7 +278,6 @@ def read_orc(
             start_index += number_of_values
 
         # Filter on filter columns
-        filters = filterutils._prepare_filters(filters)
         query_string, local_dict = filterutils._filters_to_query(filters)
         columns_in_predicate = [
             col for conjunction in filters for (col, op, val) in conjunction
@@ -371,10 +381,6 @@ def read_orc(
             column_batch = [
                 col for col in column_batch if col not in columns_in_predicate
             ]
-            print(column_batch)
-            print(stripes)
-            print(skip_rows)
-            print(num_rows)
             if len(column_batch) > 0:
                 df_to_concat = read_orc(
                     filepath_or_buffer,
