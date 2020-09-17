@@ -2988,4 +2988,51 @@ public class ColumnVectorTest extends CudfTestBase {
       assertStructColumnsAreEqual(expected, columnVector, type);
     }
   }
+
+  @Test
+  void testStructChildValidity() {
+    HostColumnVector.ColumnBuilder.StructType type = new HostColumnVector.ColumnBuilder.StructType(true, 4);
+    type.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 4, DType.INT32));
+    type.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 4, DType.INT64));
+    List data1 = Arrays.asList(1, 2L);
+    List data2 = Arrays.asList(4, 5L);
+    List data3 = null;
+    List data4 = Arrays.asList(8, null);
+    HostColumnVector.ColumnBuilder.StructData structData1 = new HostColumnVector.ColumnBuilder.StructData(data1);
+    HostColumnVector.ColumnBuilder.StructData structData2 = new HostColumnVector.ColumnBuilder.StructData(data2);
+    HostColumnVector.ColumnBuilder.StructData structData3 = new HostColumnVector.ColumnBuilder.StructData(data3);
+    HostColumnVector.ColumnBuilder.StructData structData4 = new HostColumnVector.ColumnBuilder.StructData(data4);
+    try (HostColumnVector hcv = HostColumnVector.fromStructs(type, Arrays.asList(structData1, structData2, structData3, structData4));
+         ColumnVector columnVector = hcv.copyToDevice();
+         HostColumnVector hcv1 = columnVector.copyToHost();
+         ColumnVector expected = hcv1.copyToDevice()) {
+      assertFalse(hcv.isNull(0));
+      assertFalse(hcv.isNull(1));
+      assertTrue(hcv.isNull(2));
+      assertFalse(hcv.isNull(3));
+      HostColumnVector.NestedHostColumnVector intChildCol = hcv.children.get(0);
+      HostColumnVector.NestedHostColumnVector longChildCol = hcv.children.get(1);
+      assertFalse(intChildCol.isNull(0));
+      assertFalse(intChildCol.isNull(1));
+      assertTrue(intChildCol.isNull(2));
+      assertFalse(intChildCol.isNull(3));
+      assertFalse(longChildCol.isNull(0));
+      assertFalse(longChildCol.isNull(1));
+      assertTrue(longChildCol.isNull(2));
+      assertTrue(longChildCol.isNull(3));
+
+      intChildCol = hcv1.children.get(0);
+      longChildCol = hcv1.children.get(1);
+
+      assertFalse(intChildCol.isNull(0));
+      assertFalse(intChildCol.isNull(1));
+      assertTrue(intChildCol.isNull(2));
+      assertFalse(intChildCol.isNull(3));
+      assertFalse(longChildCol.isNull(0));
+      assertFalse(longChildCol.isNull(1));
+      assertTrue(longChildCol.isNull(2));
+      assertTrue(longChildCol.isNull(3));
+      assertStructColumnsAreEqual(expected, columnVector, type);
+    }
+  }
 }

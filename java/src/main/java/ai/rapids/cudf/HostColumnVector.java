@@ -618,7 +618,7 @@ public final class HostColumnVector implements AutoCloseable {
   }
 
   /**
-   * Get the ending byte offset for the nested type or string at index.
+   * Get the ending byte offset for the string at index.
    */
   long getEndStringOffset(long index) {
     assert type == DType.STRING;
@@ -1223,25 +1223,6 @@ public final class HostColumnVector implements AutoCloseable {
   }
 
   /**
-   * WARNING: Debug only method to print a passed in buffer
-   */
-  public static void printBuffer(HostMemoryBuffer buffer) {
-    if (buffer == null) {
-      return;
-    }
-    byte[] offsetbytes = new byte[(int)buffer.length];
-    System.out.println("BUFFER length =" + offsetbytes.length);
-    buffer.getBytes(offsetbytes, 0, 0, buffer.length);
-    for (int i = 0; i < offsetbytes.length; i++) {
-      System.out.print(offsetbytes[i]);
-      if (i%4 == 0) {
-        System.out.print(" ");
-      }
-    }
-    System.out.println();
-  }
-
-  /**
    * Build
    */
 
@@ -1318,7 +1299,7 @@ public final class HostColumnVector implements AutoCloseable {
         offsets = HostMemoryBuffer.allocate(INIT_OFFSET_SIZE);
         offsets.setInt(0, 0);
       } else {
-        if (offsets.length <= (currentIndex) * OFFSET_SIZE + OFFSET_SIZE) {
+        if (offsets.length <= currentIndex * OFFSET_SIZE + OFFSET_SIZE) {
           HostMemoryBuffer newOffset = HostMemoryBuffer.allocate(offsets.length * 2);
           try {
             newOffset.copyFromHostBuffer(0, offsets, 0, offsets.length);
@@ -1361,6 +1342,10 @@ public final class HostColumnVector implements AutoCloseable {
       if (type == DType.STRUCT) {
         if (structData.dataRecord == null) {
           setNullAt(currentIndex);
+          // structs propagate nulls to children and even further down if needed
+          for (ColumnBuilder childBuilder : childBuilders) {
+            appendChildOrNull(childBuilder, structData);
+          }
           currentIndex++;
           return this;
         }
@@ -1393,7 +1378,7 @@ public final class HostColumnVector implements AutoCloseable {
     }
 
     private void appendChildOrNull(ColumnBuilder childBuilder, Object listElement) {
-      if (listElement == null) {
+      if (listElement == null || (listElement instanceof StructData && ((StructData) listElement).dataRecord == null)) {
         childBuilder.appendNull();
       } else if (listElement instanceof Integer) {
         childBuilder.append((Integer) listElement);
@@ -1401,8 +1386,6 @@ public final class HostColumnVector implements AutoCloseable {
         childBuilder.append((String) listElement);
       }  else if (listElement instanceof Double) {
         childBuilder.append((Double) listElement);
-      } else if (listElement instanceof List) {
-        childBuilder.append((List) listElement);
       } else if (listElement instanceof Float) {
         childBuilder.append((Float) listElement);
       } else if (listElement instanceof Boolean) {
@@ -1413,6 +1396,10 @@ public final class HostColumnVector implements AutoCloseable {
         childBuilder.append((Byte) listElement);
       } else if (listElement instanceof Short) {
         childBuilder.append((Short) listElement);
+      } else if (listElement instanceof List) {
+        childBuilder.append((List) listElement);
+      } else if (listElement instanceof StructData) {
+        childBuilder.append((StructData) listElement);
       }
     }
 

@@ -3395,8 +3395,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
         mainDataDevBuff.copyFromHostBuffer(data, 0, dataLen);
       }
       if (mainColOffsets != null) {
-        mainOffsetsDevBuff = DeviceMemoryBuffer.allocate(mainColOffsets.length);
-        mainOffsetsDevBuff.copyFromHostBuffer(mainColOffsets, 0, mainColOffsets.length);
+        // The offset buffer has (no. of rows + 1) entries, where each entry is INT32.sizeInBytes
+        long offsetsLen = OFFSET_SIZE * (mainColRows + 1);
+        mainOffsetsDevBuff = DeviceMemoryBuffer.allocate(offsetsLen);
+        mainOffsetsDevBuff.copyFromHostBuffer(mainColOffsets, 0, offsetsLen);
       }
       return new ColumnVector(mainColType, mainColRows, nullCount, mainDataDevBuff,
         mainValidDevBuff, mainOffsetsDevBuff, devChildren);

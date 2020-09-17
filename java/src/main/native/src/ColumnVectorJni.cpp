@@ -1250,17 +1250,16 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeCudfColumnView(
     } else if (n_type == cudf::type_id::LIST) {
       JNI_NULL_CHECK(env, j_offset, "offset is null", 0);
       cudf::jni::native_jpointerArray<cudf::column_view> children(env, j_children);
-      cudf::column_view *child_view = reinterpret_cast<cudf::column_view *>(children[0]);
+      JNI_ARG_CHECK(env, (children.size() != 0), "LIST children size is 0", 0);
       cudf::size_type *offsets = reinterpret_cast<cudf::size_type *>(j_offset);
       cudf::column_view offsets_column(cudf::data_type{cudf::type_id::INT32}, size + 1, offsets);
       ret.reset(new cudf::column_view(cudf::data_type{cudf::type_id::LIST}, size, nullptr, valid,
-                                                 j_null_count, 0, {offsets_column, *child_view}));
+        j_null_count, 0, {offsets_column, *children[0]}));
    } else if (n_type == cudf::type_id::STRUCT) {
      cudf::jni::native_jpointerArray<cudf::column_view> children(env, j_children);
      std::vector<column_view> children_vector(children.size());
      for (int i = 0; i < children.size(); i++) {
-       cudf::column_view *child_view = reinterpret_cast<cudf::column_view *>(children[i]);
-       children_vector[i] = *child_view;
+       children_vector[i] = *children[i];
      }
      ret.reset(new cudf::column_view(cudf::data_type{cudf::type_id::STRUCT}, size, nullptr, valid,
        j_null_count, 0, children_vector));
