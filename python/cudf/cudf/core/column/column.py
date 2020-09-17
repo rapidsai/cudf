@@ -1004,10 +1004,10 @@ class ColumnBase(Column, Serializable):
         return cpp_distinct_count(self, ignore_nulls=dropna)
 
     def astype(self, dtype, **kwargs):
-        dtype = cudf.dtype(dtype)
         if is_categorical_dtype(dtype):
             return self.as_categorical_column(dtype, **kwargs)
-        elif isinstance(dtype, cudf.Datetime):
+        dtype = cudf.dtype(dtype)
+        if isinstance(dtype, cudf.Datetime):
             return self.as_datetime_column(dtype, **kwargs)
         elif isinstance(dtype, cudf.StringDtype):
             return self.as_string_column(dtype, **kwargs)
@@ -1496,6 +1496,8 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             arbitrary.array, pd.core.arrays.masked.BaseMaskedArray
         ):
             return as_column(arbitrary.array)
+        elif dtype is 'category':
+            return as_column(pd.Series(arbitrary, dtype=dtype))
         if is_categorical_dtype(arbitrary):
             data = as_column(pa.array(arbitrary, from_pandas=True))
         elif arbitrary.dtype == np.bool:
@@ -1511,8 +1513,6 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             data = as_column(
                 cupy.asarray(arbitrary), nan_as_null=nan_as_null, dtype=dtype
             )
-        elif dtype is 'category':
-            return as_column(pd.Series(arbitrary, dtype=dtype))
         else:
             data = as_column(
                 pa.array(arbitrary, from_pandas=nan_as_null),
