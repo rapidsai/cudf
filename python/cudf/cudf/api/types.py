@@ -212,12 +212,7 @@ def is_integer_dtype(obj):
     """
     if hasattr(obj, 'dtype'):
         obj = obj.dtype
-    try:
-        return isinstance(obj, cudf.Integer) or (not isinstance(obj, cudf.Generic) and pd.api.types.is_integer_dtype(obj))
-    except:
-        import pdb
-        pdb.set_trace()
-
+    return isinstance(obj, cudf.Integer) or (not isinstance(obj, cudf.Generic) and pd.api.types.is_integer_dtype(obj))
 
 def is_numeric_dtype(obj):
     """
@@ -328,7 +323,7 @@ def is_categorical_dtype(obj):
 
 def is_list_dtype(obj):
     return (
-        type(obj) is cudf.core.dtypes.ListDtype
+        isinstance(obj, cudf.core.dtypes.ListDtype)
         or obj is cudf.core.dtypes.ListDtype
         or type(obj) is cudf.core.column.ListColumn
         or obj is cudf.core.column.ListColumn
