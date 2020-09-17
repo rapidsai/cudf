@@ -2698,7 +2698,7 @@ class Frame(libcudf.table.Table):
         else:
             data = self
         data = data._unaryop("acos")
-        newdata = data.mask(data < 0)
+        newdata = data.mask((data < 0) | (data > np.pi + 1))
         return newdata
 
     def atan(self):
