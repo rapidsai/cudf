@@ -17,6 +17,7 @@
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/convert/convert_durations.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/unary.hpp>
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
@@ -319,4 +320,22 @@ TEST_F(StringsDatetimeTest, ToTimestampSingleSpecifier)
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> expected_months{
     334, 273, 243, 120};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_months);
+}
+
+TEST_F(StringsDatetimeTest, ToTimestampVariableFractions)
+{
+  cudf::test::strings_column_wrapper strings{
+    "01:02:03.000001000", "01:02:03.000001", "01:02:03.1", "01:02:03.01"};
+  auto strings_view = cudf::strings_column_view(strings);
+  auto results      = cudf::strings::to_timestamps(
+    strings_view, cudf::data_type{cudf::type_id::TIMESTAMP_NANOSECONDS}, "%H:%M:%S.%9f");
+  auto durations =
+    cudf::cast(results->view(), cudf::data_type{cudf::type_id::DURATION_NANOSECONDS});
+
+  cudf::test::fixed_width_column_wrapper<cudf::duration_ns> expected{
+    cudf::duration_ns{3723000001000},
+    cudf::duration_ns{3723000001000},
+    cudf::duration_ns{3723100000000},
+    cudf::duration_ns{3723010000000}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*durations, expected);
 }
