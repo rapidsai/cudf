@@ -1292,8 +1292,8 @@ __global__ void __launch_bounds__(block_size)
 template <int block_size>
 static __device__ void DecodeRowPositions(orcdec_state_s *s, size_t first_row, int t)
 {
-  using warp_reduce      = cub::WarpReduce<uint32_t>;
-  __shared__ typename warp_reduce::TempStorage temp_storage[block_size/32];
+  using warp_reduce = cub::WarpReduce<uint32_t>;
+  __shared__ typename warp_reduce::TempStorage temp_storage[block_size / 32];
   if (t == 0) {
     if (s->chunk.skip_count != 0) {
       s->u.rowdec.nz_count = min(min(s->chunk.skip_count, s->top.data.max_vals), NTHREADS);
@@ -1334,13 +1334,13 @@ static __device__ void DecodeRowPositions(orcdec_state_s *s, size_t first_row, i
       // TBD: Brute-forcing this, there might be a more efficient way to find the thread with the
       // last row
       last_row = (nz_count == s->u.rowdec.nz_count) ? row_plus1 : 0;
-      last_row = warp_reduce(temp_storage[threadIdx.x/32]).Reduce(last_row, cub::Max());
+      last_row = warp_reduce(temp_storage[threadIdx.x / 32]).Reduce(last_row, cub::Max());
       if (!(t & 0x1f)) { *(volatile uint32_t *)&s->u.rowdec.last_row[t >> 5] = last_row; }
       nz_pos = (valid) ? nz_count : 0;
       __syncthreads();
       if (t < 32) {
         last_row = (t < NWARPS) ? *(volatile uint32_t *)&s->u.rowdec.last_row[t] : 0;
-        last_row = warp_reduce(temp_storage[threadIdx.x/32]).Reduce(last_row, cub::Max());
+        last_row = warp_reduce(temp_storage[threadIdx.x / 32]).Reduce(last_row, cub::Max());
         if (t == 0) { s->top.data.nrows = last_row; }
       }
       if (valid && nz_pos - 1 < s->u.rowdec.nz_count) { s->u.rowdec.row[nz_pos - 1] = row_plus1; }
@@ -1876,15 +1876,15 @@ cudaError_t __host__ DecodeOrcColumnData(ColumnDesc *chunks,
   dim3 dim_grid((num_rowgroups > 0) ? num_columns : num_chunks,
                 (num_rowgroups > 0) ? num_rowgroups : 1);
   gpuDecodeOrcColumnData<NTHREADS><<<dim_grid, dim_block, 0, stream>>>(chunks,
-                                                             global_dictionary,
-                                                             tz_table,
-                                                             row_groups,
-                                                             max_num_rows,
-                                                             first_row,
-                                                             num_columns,
-                                                             (uint32_t)(tz_len >> 1),
-                                                             num_rowgroups,
-                                                             rowidx_stride);
+                                                                       global_dictionary,
+                                                                       tz_table,
+                                                                       row_groups,
+                                                                       max_num_rows,
+                                                                       first_row,
+                                                                       num_columns,
+                                                                       (uint32_t)(tz_len >> 1),
+                                                                       num_rowgroups,
+                                                                       rowidx_stride);
   return cudaSuccess;
 }
 
