@@ -366,9 +366,10 @@ class DataFrame(_Frame, dd.core.DataFrame):
         split_every = split_every or 8
         split_out = split_out or 1
 
+        columns = [c for c in self.columns if c not in gb_cols]
+
         # Only support basic aggs and mean
-        # TODO: Support "std" and "var"
-        _supported = {"count", "mean", "sum", "min", "max"}
+        _supported = {"count", "mean", "std", "var", "sum", "min", "max"}
         if not set(agg_list).issubset(_supported):
             raise ValueError(
                 f"Supported aggs include {_supported} for groupby_agg API."
@@ -387,6 +388,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 (self._name, p),
                 gb_cols,
                 agg_list,
+                columns,
                 split_out,
                 dropna,
                 out_to_host,
@@ -437,6 +439,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 (tree_reduce_name, 0, s, height - 1),
                 gb_cols,
                 agg_list,
+                columns,
                 sep,
             )
 

@@ -1,5 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+import numpy as np
 import pandas as pd
 
 from dask.dataframe.core import _concat
@@ -13,18 +14,24 @@ def _make_name(*args, sep="_"):
 
 
 def _groupby_partition_agg(
-    df, gb_cols, agg_list, split_out, dropna, out_to_host, sep
+    df, gb_cols, agg_list, columns, split_out, dropna, out_to_host, sep
 ):
     _agg_list = set()
     for agg in agg_list:
-        if agg == "mean":
+        if agg in ("mean", "std", "var"):
             _agg_list.add("count")
             _agg_list.add("sum")
         else:
             _agg_list.add(agg)
-    _agg_list = list(_agg_list)
+    _agg_dict = {col: list(_agg_list) for col in columns}
 
-    gb = df.groupby(gb_cols, dropna=dropna, as_index=False).agg(_agg_list)
+    if set(agg_list).intersection({"std", "var"}):
+        for c in columns:
+            pow2_name = _make_name(c, "pow2", sep=sep)
+            df[pow2_name] = df[c].pow(2)
+            _agg_dict[pow2_name] = ["sum"]
+
+    gb = df.groupby(gb_cols, dropna=dropna, as_index=False).agg(_agg_dict)
     gb.columns = [_make_name(*name, sep=sep) for name in gb.columns]
     output = {}
     for j, split in enumerate(
@@ -64,24 +71,39 @@ def _tree_node_agg(
     return gb
 
 
-def _finalize_gb_agg(gb, gb_cols, agg_list, sep):
+def _finalize_gb_agg(gb, gb_cols, agg_list, columns, sep):
 
-    # Deal with "mean"
-    if "mean" in agg_list:
-        for col in gb.columns:
-            if col in gb_cols:
-                continue
-            name = col.split(sep)
-            # import pdb; pdb.set_trace()
-            if name[-1] == "sum":
-                mean_name = _make_name(*(name[:-1] + ["mean"]), sep=sep)
-                count_name = _make_name(*(name[:-1] + ["count"]), sep=sep)
-                sum_name = _make_name(*name, sep=sep)
+    # Deal with higher-order aggregations
+    agg_set = set(agg_list)
+    if agg_set.intersection({"mean", "std", "var"}):
+        for col in columns:
+            count_name = _make_name(col, "count", sep=sep)
+            sum_name = _make_name(col, "sum", sep=sep)
+            if agg_set.intersection({"std", "var"}):
+                n = gb[count_name]
+                x = gb[sum_name]
+                pow2_sum_name = _make_name(col, "pow2", "sum", sep=sep)
+                x2 = gb[pow2_sum_name]
+                result = x2 - x ** 2 / n
+                ddof = 1
+                div = n - ddof
+                div[div < 1] = 1
+                result /= div
+                result[(n - ddof) == 0] = np.nan
+                if "var" in agg_list:
+                    name_var = _make_name(col, "var", sep=sep)
+                    gb[name_var] = result
+                if "std" in agg_list:
+                    name_std = _make_name(col, "std", sep=sep)
+                    gb[name_std] = np.sqrt(result)
+                gb.drop(columns=[pow2_sum_name], inplace=True)
+            if "mean" in agg_list:
+                mean_name = _make_name(col, "mean", sep=sep)
                 gb[mean_name] = gb[sum_name] / gb[count_name]
-                if "sum" not in agg_list:
-                    gb.drop(columns=[sum_name], inplace=True)
-                if "count" not in agg_list:
-                    gb.drop(columns=[count_name], inplace=True)
+            if "sum" not in agg_list:
+                gb.drop(columns=[sum_name], inplace=True)
+            if "count" not in agg_list:
+                gb.drop(columns=[count_name], inplace=True)
 
     # Unflatten column names
     col_array = []
