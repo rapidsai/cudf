@@ -830,7 +830,7 @@ public final class HostColumnVector implements AutoCloseable {
   }
 
   public static HostColumnVector fromStructs(ColumnBuilder.DataType dataType,
-                                                List<ColumnBuilder.StructData>... values) {
+                                                List<ColumnBuilder.StructData> values) {
     ColumnBuilder cb = new ColumnBuilder(dataType);
     cb.appendStructValues(values);
     return cb.build();
@@ -1225,7 +1225,7 @@ public final class HostColumnVector implements AutoCloseable {
   /**
    * WARNING: Debug only method to print a passed in buffer
    */
-  static void printBuffer(HostMemoryBuffer buffer) {
+  public static void printBuffer(HostMemoryBuffer buffer) {
     if (buffer == null) {
       return;
     }
@@ -1305,10 +1305,10 @@ public final class HostColumnVector implements AutoCloseable {
       return this;
     }
 
-    public ColumnBuilder appendStructValues(List<StructData>... inputLists) {
-      for (List<StructData> inputList : inputLists) {
+    public ColumnBuilder appendStructValues(List<StructData> inputList) {
+      for (StructData structInput : inputList) {
         // one row
-        append(inputList);
+        append(structInput);
       }
       return this;
     }
@@ -1355,45 +1355,41 @@ public final class HostColumnVector implements AutoCloseable {
       return this;
     }
 
-    // List<StructData> when struct
-    private <T> ColumnBuilder append(List<T> inputList) {
+    //For structs
+    private ColumnBuilder append(StructData structData) {
       assert type.isNestedType();
       if (type == DType.STRUCT) {
-        assert !inputList.isEmpty();
-        //TODO: assumption
-        int numChildren = inputList.size();
-        for (int i = 0; i < numChildren; i++) {
-          StructData structData = (StructData) inputList.get(i);
-          if (structData.dataRecord == null) {
-            setNullAt(currentIndex);
-          }
-          for (int j = 0; j < structData.getNumFields(); j++) {
-            ColumnBuilder childBuilder = childBuilders.get(j);
-            appendChildOrNull(childBuilder, structData.dataRecord.get(j));
-          }
-          currentIndex++;
-        }
-      } else {
-        // We know lists have only 1 children
-        ColumnBuilder childBuilder = childBuilders.get(0);
-        if (inputList == null) {
-          initValidBuffer();
+        if (structData.dataRecord == null) {
           setNullAt(currentIndex);
-        } else {
-          for (Object listElement : inputList) {
-            appendChildOrNull(childBuilder, listElement);
-          }
+          currentIndex++;
+          return this;
+        }
+        for (int i = 0; i < structData.getNumFields(); i++) {
+          ColumnBuilder childBuilder = childBuilders.get(i);
+          appendChildOrNull(childBuilder, structData.dataRecord.get(i));
         }
         currentIndex++;
-        initAndResizeOffsetBuffer(currentIndex);
-        offsets.setInt(currentIndex * OFFSET_SIZE, childBuilder.getCurrentIndex());
       }
       return this;
     }
 
-    private void updateIndexAndOffsets(int offsetIndex, int currentIndex) {
-      initAndResizeOffsetBuffer(offsetIndex);
-      offsets.setInt(offsetIndex * OFFSET_SIZE, currentIndex);
+    // For lists
+    private <T> ColumnBuilder append(List<T> inputList) {
+      assert type.isNestedType();
+      // We know lists have only 1 children
+      ColumnBuilder childBuilder = childBuilders.get(0);
+      if (inputList == null) {
+        initValidBuffer();
+        setNullAt(currentIndex);
+      } else {
+        for (Object listElement : inputList) {
+          appendChildOrNull(childBuilder, listElement);
+        }
+      }
+      currentIndex++;
+      initAndResizeOffsetBuffer(currentIndex);
+      offsets.setInt(currentIndex * OFFSET_SIZE, childBuilder.getCurrentIndex());
+      return this;
     }
 
     private void appendChildOrNull(ColumnBuilder childBuilder, Object listElement) {

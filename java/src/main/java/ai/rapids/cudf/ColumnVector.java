@@ -168,7 +168,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       assert offsetBuffer == null : "offsets are only supported for STRING";
     }
 
-    long[] children = new long[] {0l};
+    long[] children = new long[] {};
     offHeap = new OffHeapState(type, (int) rows, nullCount, dataBuffer, validityBuffer, offsetBuffer, null, children);
     MemoryCleaner.register(this, offHeap);
     this.rows = rows;
@@ -3423,12 +3423,14 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     }
 
     private long getViewHandle() {
-      long[] childrenColViews = new long[] {0L};
+      long[] childrenColViews;
       if (children != null) {
         childrenColViews = new long[children.size()];
         for (int i = 0; i < children.size(); i++) {
           childrenColViews[i] = children.get(i).getViewHandle();
         }
+      } else {
+        childrenColViews = new long[] {};
       }
       long dataAddr = data == null ? 0 : data.address;
       long dataLen = data == null ? 0 : data.length;
@@ -3547,7 +3549,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * Please use with caution and expect it to change in the future.
    */
   public static ColumnVector fromStructs(HostColumnVector.ColumnBuilder.DataType dataType,
-                                            List<HostColumnVector.ColumnBuilder.StructData>... lists) {
+                                            List<HostColumnVector.ColumnBuilder.StructData> lists) {
     try (HostColumnVector host = HostColumnVector.fromStructs(dataType, lists)) {
       return host.copyToDevice();
     }

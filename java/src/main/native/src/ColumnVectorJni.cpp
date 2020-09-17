@@ -1249,18 +1249,17 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeCudfColumnView(
                                       j_null_count, 0, {offsets_column, data_column}));
     } else if (n_type == cudf::type_id::LIST) {
       JNI_NULL_CHECK(env, j_offset, "offset is null", 0);
-      jlong *childs = env->GetLongArrayElements(j_children, 0);
-      cudf::column_view *child_view = reinterpret_cast<cudf::column_view *>(childs[0]);
+      cudf::jni::native_jpointerArray<cudf::column_view> children(env, j_children);
+      cudf::column_view *child_view = reinterpret_cast<cudf::column_view *>(children[0]);
       cudf::size_type *offsets = reinterpret_cast<cudf::size_type *>(j_offset);
       cudf::column_view offsets_column(cudf::data_type{cudf::type_id::INT32}, size + 1, offsets);
       ret.reset(new cudf::column_view(cudf::data_type{cudf::type_id::LIST}, size, nullptr, valid,
                                                  j_null_count, 0, {offsets_column, *child_view}));
    } else if (n_type == cudf::type_id::STRUCT) {
-     cudf::jni::native_jpointerArray<long> children(env, j_children);
-     jlong *childs = env->GetLongArrayElements(j_children, 0);
+     cudf::jni::native_jpointerArray<cudf::column_view> children(env, j_children);
      std::vector<column_view> children_vector(children.size());
      for (int i = 0; i < children.size(); i++) {
-       cudf::column_view *child_view = reinterpret_cast<cudf::column_view *>(childs[i]);
+       cudf::column_view *child_view = reinterpret_cast<cudf::column_view *>(children[i]);
        children_vector[i] = *child_view;
      }
      ret.reset(new cudf::column_view(cudf::data_type{cudf::type_id::STRUCT}, size, nullptr, valid,
@@ -1339,7 +1338,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_getNativeDataPoint
         ret[0] = 0;
         ret[1] = 0;
       }
-    } else if(column->type().id() == cudf::type_id::LIST) {
+    } else if(column->type().id() == cudf::type_id::LIST || column->type().id() == cudf::type_id::STRUCT) {
       ret[0] = 0;
       ret[1] = 0;
     } else {
