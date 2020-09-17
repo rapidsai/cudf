@@ -872,8 +872,8 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
   using warp_reduce      = typename cub::WarpReduce<uint32_t>;
   using half_warp_reduce = typename cub::WarpReduce<uint32_t, 16>;
   __shared__ union {
-    typename cub::WarpReduce<uint32_t>::TempStorage full[rowofs_block_dim / 32];
-    typename cub::WarpReduce<uint32_t, 16>::TempStorage half[rowofs_block_dim / 32];
+    typename warp_reduce::TempStorage full[rowofs_block_dim / 32];
+    typename half_warp_reduce::TempStorage half[rowofs_block_dim / 32];
   } temp_storage;
 
   const char *end = start + (min(parse_pos + chunk_size, data_size) - start_offset);
