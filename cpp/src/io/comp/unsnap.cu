@@ -477,7 +477,8 @@ __device__ void snappy_decode_symbols(unsnap_state_s *s, uint32_t t)
  * NOTE: No error checks at this stage (WARP0 responsible for not sending offsets and lengths that
  *would result in out-of-bounds accesses)
  **/
-__device__ void snappy_process_symbols(unsnap_state_s *s, int t)
+template <typename Storage>
+__device__ void snappy_process_symbols(unsnap_state_s *s, int t, Storage &storage)
 {
   const uint8_t *literal_base = s->base;
   uint8_t *out                = reinterpret_cast<uint8_t *>(s->in.dstDevice);
@@ -505,9 +506,12 @@ __device__ void snappy_process_symbols(unsnap_state_s *s, int t)
     if (shuffle(min((uint32_t)dist_t, (uint32_t)shuffle_xor(dist_t, 1))) > 8) {
       uint32_t n;
       do {
-        uint32_t bofs       = WarpReducePos32(blen_t, t);
-        uint32_t stop_mask  = ballot((uint32_t)dist_t < bofs);
-        uint32_t start_mask = WarpReduceSum((bofs < 32 && t < batch_len) ? 1 << bofs : 0);
+        uint32_t bofs      = WarpReducePos32(blen_t, t);
+        uint32_t stop_mask = ballot((uint32_t)dist_t < bofs);
+        uint32_t start_mask =
+          cub::WarpReduce<uint32_t>(storage).Sum((bofs < 32 && t < batch_len) ? 1 << bofs : 0);
+        start_mask = shuffle(start_mask);
+
         n = min(min((uint32_t)__popc(start_mask), (uint32_t)(__ffs(stop_mask) - 1u)),
                 (uint32_t)batch_len);
         if (n != 0) {
@@ -604,6 +608,7 @@ extern "C" __global__ void __launch_bounds__(128)
   unsnap_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs)
 {
   __shared__ __align__(16) unsnap_state_s state_g;
+  __shared__ cub::WarpReduce<uint32_t>::TempStorage temp_storage;
 
   int t             = threadIdx.x;
   unsnap_state_s *s = &state_g;
@@ -672,7 +677,7 @@ extern "C" __global__ void __launch_bounds__(128)
       snappy_prefetch_bytestream(s, t & 0x1f);
     } else if (t < 96) {
       // WARP2: LZ77
-      snappy_process_symbols(s, t & 0x1f);
+      snappy_process_symbols(s, t & 0x1f, temp_storage);
     }
     __syncthreads();
   }

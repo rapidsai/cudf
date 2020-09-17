@@ -92,14 +92,21 @@ inline __device__ uint32_t uint64_init_hash(uint64_t v)
  *
  **/
 // blockDim {512,1,1}
-__global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
-                                                            const EncColumnDesc *col_desc,
-                                                            int32_t num_fragments,
-                                                            int32_t num_columns,
-                                                            uint32_t fragment_size,
-                                                            uint32_t max_num_rows)
+template <int block_size>
+__global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment *frag,
+                                                                   const EncColumnDesc *col_desc,
+                                                                   int32_t num_fragments,
+                                                                   int32_t num_columns,
+                                                                   uint32_t fragment_size,
+                                                                   uint32_t max_num_rows)
 {
   __shared__ __align__(16) frag_init_state_s state_g;
+  using warp_reduce      = cub::WarpReduce<uint32_t>;
+  using half_warp_reduce = cub::WarpReduce<uint32_t, 16>;
+  __shared__ union {
+    typename warp_reduce::TempStorage full_warp[block_size / 32];
+    typename half_warp_reduce::TempStorage half_warp;
+  } temp_storage;
 
   frag_init_state_s *const s = &state_g;
   uint32_t t                 = threadIdx.x;
@@ -165,7 +172,7 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
     }
     nz_pos =
       s->frag.non_nulls + __popc(valid_warp & (0x7fffffffu >> (0x1fu - ((uint32_t)t & 0x1f))));
-    len = WarpReduceSum(len);
+    len = warp_reduce(temp_storage.full_warp[threadIdx.x / 32]).Sum(len);
     if (!(t & 0x1f)) {
       s->scratch_red[(t >> 5) + 0]  = __popc(valid_warp);
       s->scratch_red[(t >> 5) + 16] = len;
@@ -174,7 +181,7 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
     if (t < 32) {
       uint32_t warp_pos  = WarpReducePos16((t < 16) ? s->scratch_red[t] : 0, t);
       uint32_t non_nulls = shuffle(warp_pos, 0xf);
-      len                = HalfWarpReduceSum((t < 16) ? s->scratch_red[t + 16] : 0);
+      len = half_warp_reduce(temp_storage.half_warp).Sum((t < 16) ? s->scratch_red[t + 16] : 0);
       if (t < 16) { s->scratch_red[t] = warp_pos; }
       if (!t) {
         s->frag.non_nulls = s->frag.non_nulls + non_nulls;
@@ -329,11 +336,12 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
       }
     }
     __syncthreads();
-    dupe_data_size = WarpReduceSum(dupe_data_size);
+    dupe_data_size = warp_reduce(temp_storage.full_warp[threadIdx.x / 32]).Sum(dupe_data_size);
     if (!(t & 0x1f)) { s->scratch_red[t >> 5] = dupe_data_size; }
     __syncthreads();
     if (t < 32) {
-      dupe_data_size = HalfWarpReduceSum((t < 16) ? s->scratch_red[t] : 0);
+      dupe_data_size =
+        half_warp_reduce(temp_storage.half_warp).Sum((t < 16) ? s->scratch_red[t] : 0);
       if (!t) {
         s->frag.dict_data_size = s->frag.fragment_data_size - dupe_data_size;
         s->frag.num_dict_vals  = s->frag.non_nulls - s->total_dupes;
@@ -1064,6 +1072,8 @@ __global__ void __launch_bounds__(128) gpuDecideCompression(EncColumnChunk *chun
 {
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(4) unsigned int error_count;
+  using warp_reduce = cub::WarpReduce<int>;
+  __shared__ typename warp_reduce::TempStorage temp_storage[2];
 
   uint32_t t                      = threadIdx.x;
   uint32_t uncompressed_data_size = 0;
@@ -1088,8 +1098,8 @@ __global__ void __launch_bounds__(128) gpuDecideCompression(EncColumnChunk *chun
         if (comp_out[comp_idx].status != 0) { atomicAdd(&error_count, 1); }
       }
     }
-    uncompressed_data_size = WarpReduceSum(uncompressed_data_size);
-    compressed_data_size   = WarpReduceSum(compressed_data_size);
+    uncompressed_data_size = warp_reduce(temp_storage[0]).Sum(uncompressed_data_size);
+    compressed_data_size   = warp_reduce(temp_storage[1]).Sum(compressed_data_size);
   }
   __syncthreads();
   if (t == 0) {
@@ -1412,7 +1422,7 @@ cudaError_t InitPageFragments(PageFragment *frag,
                               cudaStream_t stream)
 {
   dim3 dim_grid(num_columns, num_fragments);  // 1 threadblock per fragment
-  gpuInitPageFragments<<<dim_grid, 512, 0, stream>>>(
+  gpuInitPageFragments<512><<<dim_grid, 512, 0, stream>>>(
     frag, col_desc, num_fragments, num_columns, fragment_size, num_rows);
   return cudaSuccess;
 }

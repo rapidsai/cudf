@@ -352,6 +352,12 @@ template <StreamIndexType cid, class T, bool is_signed, uint32_t inmask>
 static __device__ uint32_t IntegerRLE(
   orcenc_state_s *s, const T *inbuf, uint32_t inpos, uint32_t numvals, uint32_t flush, int t)
 {
+  using warp_reduce      = cub::WarpReduce<T>;
+  using half_warp_reduce = cub::WarpReduce<T, 16>;
+  __shared__ union {
+    typename warp_reduce::TempStorage full[2];
+    typename half_warp_reduce::TempStorage half[2];
+  } temp_storage;
   uint8_t *dst     = s->chunk.streams[cid] + s->strm_pos[cid];
   uint32_t out_cnt = 0;
 
@@ -402,11 +408,8 @@ static __device__ uint32_t IntegerRLE(
       } else {
         intrle_minmax(vmax, vmin);
       }
-#pragma unroll 5
-      for (int i = 1; i <= 16; i *= 2) {
-        vmin = min(vmin, (T)shuffle_xor(vmin, i));
-        vmax = max(vmax, (T)shuffle_xor(vmax, i));
-      }
+      vmin = warp_reduce(temp_storage.full[0]).Reduce(vmin, cub::Min());
+      vmax = warp_reduce(temp_storage.full[1]).Reduce(vmax, cub::Max());
       if (!(t & 0x1f)) {
         s->u.intrle.scratch.u64[(t >> 5) * 2 + 0] = vmin;
         s->u.intrle.scratch.u64[(t >> 5) * 2 + 1] = vmax;
@@ -415,11 +418,8 @@ static __device__ uint32_t IntegerRLE(
       if (t < 32) {
         vmin = (T)s->u.intrle.scratch.u64[(t & 0xf) * 2 + 0];
         vmax = (T)s->u.intrle.scratch.u64[(t & 0xf) * 2 + 1];
-#pragma unroll 4
-        for (int i = 1; i <= 8; i *= 2) {
-          vmin = min(vmin, (T)shuffle_xor(vmin, i));
-          vmax = max(vmax, (T)shuffle_xor(vmax, i));
-        }
+        vmin = half_warp_reduce(temp_storage.half[0]).Reduce(vmin, cub::Min());
+        vmax = half_warp_reduce(temp_storage.half[1]).Reduce(vmax, cub::Max());
         if (t == 0) {
           uint32_t mode1_w, mode2_w;
           T vrange_mode1, vrange_mode2;

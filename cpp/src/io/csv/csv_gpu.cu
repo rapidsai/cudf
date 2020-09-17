@@ -869,6 +869,12 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
                                                                            int commentchar)
 {
   __shared__ __align__(8) uint64_t ctxtree[rowofs_block_dim * 2];
+  using warp_reduce      = typename cub::WarpReduce<uint32_t>;
+  using half_warp_reduce = typename cub::WarpReduce<uint32_t, 16>;
+  __shared__ union {
+    typename cub::WarpReduce<uint32_t>::TempStorage full[rowofs_block_dim / 32];
+    typename cub::WarpReduce<uint32_t, 16>::TempStorage half[rowofs_block_dim / 32];
+  } temp_storage;
 
   const char *end = start + (min(parse_pos + chunk_size, data_size) - start_offset);
   uint32_t t      = threadIdx.x;
@@ -962,12 +968,14 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
       rowmap >>= pos;
     }
     // Return the number of rows out of range
-    rows_out_of_range = HalfWarpReduceSum(rows_out_of_range);
+    rows_out_of_range =
+      half_warp_reduce(temp_storage.half[threadIdx.x / 32]).Sum(rows_out_of_range);
     __syncthreads();
     if (!(t & 0xf)) { ctxtree[t >> 4] = rows_out_of_range; }
     __syncthreads();
     if (t < 32) {
-      rows_out_of_range = WarpReduceSum(static_cast<uint32_t>(ctxtree[t]));
+      rows_out_of_range =
+        warp_reduce(temp_storage.full[threadIdx.x / 32]).Sum(static_cast<uint32_t>(ctxtree[t]));
       if (t == 0) { row_ctx[blockIdx.x] = rows_out_of_range; }
     }
   } else {

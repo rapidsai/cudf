@@ -16,6 +16,7 @@
 
 #pragma once
 #include <stdint.h>
+#include <cub/cub.cuh>
 
 namespace cudf {
 namespace io {
@@ -41,30 +42,6 @@ inline __device__ uint32_t ballot(int pred) { return __ballot_sync(~0, pred); }
 #endif
 
 // Warp reduction helpers
-template <typename T>
-inline __device__ T HalfWarpReduceSum(T acc)
-{
-  acc += shuffle_xor(acc, 1);
-  acc += shuffle_xor(acc, 2);
-  acc += shuffle_xor(acc, 4);
-  return acc + shuffle_xor(acc, 8);
-}
-template <typename T>
-inline __device__ T WarpReduceSum(T acc)
-{
-  acc = HalfWarpReduceSum(acc);
-  return acc + shuffle_xor(acc, 16);
-}
-
-template <typename T>
-inline __device__ T WarpReduceOr(T acc)
-{
-  acc |= shuffle_xor(acc, 1);
-  acc |= shuffle_xor(acc, 2);
-  acc |= shuffle_xor(acc, 4);
-  acc |= shuffle_xor(acc, 8);
-  return acc | shuffle_xor(acc, 16);
-}
 
 template <typename T>
 inline __device__ T WarpReducePos2(T pos, uint32_t t)

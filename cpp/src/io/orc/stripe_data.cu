@@ -1102,7 +1102,8 @@ static __device__ int Decode_Decimals(orc_bytestream_s *bs,
  *
  **/
 // blockDim {NTHREADS,1,1}
-extern "C" __global__ void __launch_bounds__(NTHREADS)
+template <int block_size>
+__global__ void __launch_bounds__(block_size)
   gpuDecodeNullsAndStringDictionaries(ColumnDesc *chunks,
                                       DictionaryEntry *global_dictionary,
                                       uint32_t num_columns,
@@ -1111,6 +1112,8 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
                                       size_t first_row)
 {
   __shared__ __align__(16) orcdec_state_s state_g;
+  using warp_reduce = cub::WarpReduce<uint32_t>;
+  typename warp_reduce::TempStorage temp_storage[block_size / 32];
 
   orcdec_state_s *const s = &state_g;
   bool is_nulldec         = (blockIdx.y >= num_stripes);
@@ -1206,11 +1209,7 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
           if (i + 32 > skippedrows) { bits &= (1 << (skippedrows - i)) - 1; }
           skip_count += __popc(bits);
         }
-        #pragma unroll 5
-        for (int width = 1; width <= 16; width *= 2)
-        {
-          skip_count += shuffle_xor(skip_count, width);
-        }
+        skip_count = warp_reduce(temp_storage[threadIdx.x / 32]).Sum(skip_count);
         if (t == 0) { s->chunk.skip_count += skip_count; }
       }
       __syncthreads();
@@ -1219,20 +1218,12 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
     }
     __syncthreads();
     // Sum up the valid counts and infer null_count
-    #pragma unroll 5
-    for (int width = 1; width <= 16; width *= 2)
-    {
-      null_count += shuffle_xor(null_count, width);
-    }
+    null_count = warp_reduce(temp_storage[threadIdx.x / 32]).Sum(null_count);
     if (!(t & 0x1f)) { s->top.nulls.null_count[t >> 5] = null_count; }
     __syncthreads();
     if (t < 32) {
       null_count = (t < NWARPS) ? s->top.nulls.null_count[t] : 0;
-      #pragma unroll 5
-      for (int width = 1; width <= 16; width *= 2)
-      {
-        null_count += shuffle_xor(null_count, width);
-      }
+      null_count = warp_reduce(temp_storage[threadIdx.x / 32]).Sum(null_count);
       if (t == 0) {
         chunks[chunk_id].null_count = null_count;
         chunks[chunk_id].skip_count = s->chunk.skip_count;
@@ -1340,8 +1331,7 @@ static __device__ void DecodeRowPositions(orcdec_state_s *s, size_t first_row, i
       // TBD: Brute-forcing this, there might be a more efficient way to find the thread with the
       // last row
       last_row = (nz_count == s->u.rowdec.nz_count) ? row_plus1 : 0;
-      for (int width = 1; width <= 16; width *= 2)
-      {
+      for (int width = 1; width <= 16; width *= 2) {
         last_row = max(last_row, shuffle_xor(last_row, width));
       }
       if (!(t & 0x1f)) { *(volatile uint32_t *)&s->u.rowdec.last_row[t >> 5] = last_row; }
@@ -1349,8 +1339,7 @@ static __device__ void DecodeRowPositions(orcdec_state_s *s, size_t first_row, i
       __syncthreads();
       if (t < 32) {
         last_row = (t < NWARPS) ? *(volatile uint32_t *)&s->u.rowdec.last_row[t] : 0;
-        for (int width = 1; width <= 16; width *= 2)
-        {
+        for (int width = 1; width <= 16; width *= 2) {
           last_row = max(last_row, shuffle_xor(last_row, width));
         }
         if (t == 0) { s->top.data.nrows = last_row; }
@@ -1846,7 +1835,7 @@ cudaError_t __host__ DecodeNullsAndStringDictionaries(ColumnDesc *chunks,
 {
   dim3 dim_block(NTHREADS, 1);
   dim3 dim_grid(num_columns, num_stripes * 2);  // 1024 threads per chunk
-  gpuDecodeNullsAndStringDictionaries<<<dim_grid, dim_block, 0, stream>>>(
+  gpuDecodeNullsAndStringDictionaries<NTHREADS><<<dim_grid, dim_block, 0, stream>>>(
     chunks, global_dictionary, num_columns, num_stripes, max_num_rows, first_row);
   return cudaSuccess;
 }

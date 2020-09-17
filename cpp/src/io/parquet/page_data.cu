@@ -81,6 +81,14 @@ struct page_state_s {
   int32_t row_index_lower_bound;              // lower bound of row indices we should process
 };
 
+struct BitWiseOR {
+  template <typename T>
+  __device__ __forceinline__ T operator()(const T &a, const T &b) const
+  {
+    return a | b;
+  }
+};
+
 /**
  * @brief Computes a 32-bit hash when given a byte stream and range.
  *
@@ -1199,6 +1207,8 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
                                                              page_state_s *s,
                                                              int t)
 {
+  using warp_reduce = cub::WarpReduce<uint32_t>;
+  __shared__ typename warp_reduce::TempStorage temp_storage;
   // max nesting depth of the column
   int max_depth = s->col.max_level[level_type::REPETITION];
   // how many (input) values we've processed in the page so far
@@ -1277,7 +1287,9 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
       // for thread t's bit is cur_value_count. for cuda 11 we could use __reduce_or_sync(), but
       // until then we have to do a warp reduce.
       else {
-        warp_valid_mask = WarpReduceOr(is_valid << thread_value_count);
+        BitWiseOR bitwise_or;
+        warp_valid_mask =
+          warp_reduce(temp_storage).Reduce(is_valid << thread_value_count, bitwise_or);
       }
       thread_valid_count = __popc(warp_valid_mask & ((1 << thread_value_count) - 1));
       warp_valid_count   = __popc(warp_valid_mask);
