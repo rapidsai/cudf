@@ -5,6 +5,7 @@
 # if you want to generate data where certain phenomena (e.g., cardinality)
 # are exaggerated.
 
+import copy
 import random
 import string
 from multiprocessing import Pool
@@ -92,16 +93,16 @@ def _generate_column(column_params, num_rows):
     if column_params.cardinality is not None:
         # Construct set of values to sample from where
         # set size = cardinality
-        vals = pa.array(
-            column_params.generator,
-            size=column_params.cardinality,
-            safe=False,
-        )
 
         if (
             isinstance(column_params.dtype, str)
             and column_params.dtype == "category"
         ):
+            vals = pa.array(
+                column_params.generator,
+                size=column_params.cardinality,
+                safe=False,
+            )
             return pa.DictionaryArray.from_arrays(
                 dictionary=vals,
                 indices=np.random.choice(np.arange(len(vals)), size=num_rows),
@@ -117,10 +118,17 @@ def _generate_column(column_params, num_rows):
                 else None,
             )
 
+        vals = pa.array(
+            column_params.generator,
+            size=column_params.cardinality,
+            safe=False,
+            type=pa.from_numpy_dtype(column_params.dtype)
+            if column_params.dtype is not None
+            else None,
+        )
         # Generate data for current column
-        choices = np.random.randint(0, len(vals) - 1, size=num_rows)
         return pa.array(
-            [vals[choices[i]].as_py() for i in range(num_rows)],
+            np.random.choice(vals, size=num_rows),
             mask=np.random.choice(
                 [True, False],
                 size=num_rows,
@@ -133,6 +141,9 @@ def _generate_column(column_params, num_rows):
             else None,
             size=num_rows,
             safe=False,
+            type=pa.from_numpy_dtype(column_params.dtype)
+            if column_params.dtype is not None
+            else None,
         )
 
     else:
@@ -187,9 +198,13 @@ def get_dataframe(parameters, use_threads):
     # For each column, use a generic Mimesis producer to create an Iterable
     # for generating data
     for i, column_params in enumerate(parameters.column_parameters):
-        column_params.generator = column_params.generator(
-            Generic("en", seed=parameters.seed)
-        )
+        if column_params.dtype is None:
+            column_params.generator = column_params.generator(
+                Generic("en", seed=parameters.seed)
+            )
+        else:
+            column_params.generator = column_params.generator()
+
     # Get schema for each column
     schema = pa.schema(
         [
@@ -278,17 +293,17 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
 
     column_params = []
     for meta in dtypes_meta:
-        dtype = meta["dtype"]
-        null_frequency = meta["null_frequency"]
-        cardinality = meta["cardinality"]
+        dtype = copy.deepcopy(meta["dtype"])
+        null_frequency = copy.deepcopy(meta["null_frequency"])
+        cardinality = copy.deepcopy(meta["cardinality"])
 
         if dtype == "category":
             column_params.append(
                 ColumnParameters(
                     cardinality=cardinality,
                     null_frequency=null_frequency,
-                    generator=lambda g: [
-                        g.random.randstr(unique=True, length=2000)
+                    generator=lambda cardinality=cardinality: [
+                        mimesis.random.random.randstr(unique=True, length=2000)
                         for _ in range(cardinality)
                     ],
                     is_sorted=False,
@@ -298,31 +313,25 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
         else:
             dtype = np.dtype(dtype)
             if dtype.kind in ("i", "u"):
-                iinfo = np.iinfo(dtype)
                 column_params.append(
                     ColumnParameters(
                         cardinality=cardinality,
                         null_frequency=null_frequency,
-                        generator=lambda g: np.random.randint(
-                            low=iinfo.min,
-                            high=iinfo.max,
-                            size=rows,
-                            dtype=dtype,
-                        ),
+                        generator=int_generator(dtype=dtype, size=cardinality),
                         is_sorted=False,
+                        dtype=dtype,
                     )
                 )
             elif dtype.kind == "f":
-                finfo = np.finfo(dtype)
                 column_params.append(
                     ColumnParameters(
                         cardinality=cardinality,
                         null_frequency=null_frequency,
-                        generator=lambda g: np.random.uniform(
-                            low=finfo.min / 2, high=finfo.max / 2, size=rows,
-                        )
-                        * 2,
+                        generator=float_generator(
+                            dtype=dtype, size=cardinality
+                        ),
                         is_sorted=False,
+                        dtype=dtype,
                     )
                 )
             elif dtype.kind in ("U", "O"):
@@ -330,14 +339,15 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
                     ColumnParameters(
                         cardinality=cardinality,
                         null_frequency=null_frequency,
-                        generator=lambda g: [
-                            g.random.schoice(
+                        generator=lambda cardinality=cardinality: [
+                            mimesis.random.random.schoice(
                                 string.printable,
                                 meta.get("max_string_length", 1000),
                             )
-                            for _ in range(rows)
+                            for _ in range(cardinality)
                         ],
                         is_sorted=False,
+                        dtype=dtype,
                     )
                 )
             elif dtype.kind == "M":
@@ -345,12 +355,7 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
                     ColumnParameters(
                         cardinality=cardinality,
                         null_frequency=null_frequency,
-                        generator=lambda g: np.random.randint(
-                            low=0,
-                            high=2147483647 - 1,
-                            size=rows,
-                            dtype="int64",
-                        ),
+                        generator=datetime_generator(size=cardinality),
                         is_sorted=False,
                         dtype=np.dtype(dtype),
                     )
@@ -360,12 +365,7 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
                     ColumnParameters(
                         cardinality=cardinality,
                         null_frequency=null_frequency,
-                        generator=lambda g: np.random.randint(
-                            low=-2147483648,
-                            high=2147483647 - 1,
-                            size=rows,
-                            dtype="int64",
-                        ),
+                        generator=timedelta_generator(size=cardinality),
                         is_sorted=False,
                         dtype=np.dtype(dtype),
                     )
@@ -375,9 +375,7 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
                     ColumnParameters(
                         cardinality=cardinality,
                         null_frequency=null_frequency,
-                        generator=lambda g: np.random.choice(
-                            a=[False, True], size=rows
-                        ),
+                        generator=boolean_generator(cardinality),
                         is_sorted=False,
                         dtype=np.dtype(dtype),
                     )
@@ -391,3 +389,34 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
     )
 
     return df
+
+
+def int_generator(dtype, size):
+    iinfo = np.iinfo(dtype)
+    return lambda: np.random.randint(
+        low=iinfo.min, high=iinfo.max, size=size, dtype=dtype,
+    )
+
+
+def float_generator(dtype, size):
+    finfo = np.finfo(dtype)
+    return (
+        lambda: np.random.uniform(
+            low=finfo.min / 2, high=finfo.max / 2, size=size,
+        )
+        * 2
+    )
+
+
+def datetime_generator(size):
+    return lambda: np.random.randint(low=0, high=2147483647 - 1, size=size,)
+
+
+def timedelta_generator(size):
+    return lambda: np.random.randint(
+        low=-2147483648, high=2147483647 - 1, size=size
+    )
+
+
+def boolean_generator(size):
+    return lambda: np.random.choice(a=[False, True], size=size)
