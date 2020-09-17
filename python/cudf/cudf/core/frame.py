@@ -2694,7 +2694,8 @@ class Frame(libcudf.table.Table):
                     dtype='float64')
         """
         if self.iloc[0].dtype.kind in ("i", "u"):
-            data = self.astype("float64")
+            data_type = cudf.utils.dtypes.min_column_type(self.astype('float')._column, None)
+            data = self.astype(data_type)
         else:
             data = self
         data = data._unaryop("acos")
