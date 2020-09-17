@@ -2734,13 +2734,3 @@ def _setdefault_name(values, **kwargs):
         else:
             kwargs.update({"name": values.name})
     return kwargs
-
-
-def _check_basic_index_equality(left, right):
-    if left is right:
-        return True
-    elif not isinstance(right, Index):
-        return False
-    elif len(left) != len(right):
-        return False
-    return None
