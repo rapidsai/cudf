@@ -81,6 +81,7 @@
 - PR #6212 Update codeowners file
 - PR #6157 Fix issue related to `Series.concat` to concat a non-empty and empty series.
 - PR #6226 Add in some JNI checks for null handles
+- PR #6253 Replace more calls to get_default_resource with get_current_device_resource
 
 
 # cuDF 0.15.0 (26 Aug 2020)
