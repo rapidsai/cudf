@@ -139,18 +139,17 @@ __inline__ __device__ char to_lower(char const c)
  * Valid infinity strings are inf, +inf, -inf, infinity, +infinity, -infinity
  * String comparison is case insensitive.
  *
- * @param data The character string for parse
- * @param start The index within data to start parsing from
- * @param end The end index within data to end parsing
+ * @param start The pointer to character array to start parsing from
+ * @param end The pointer to character array to end parsing
  * @return true if string is valid infinity, else false.
  */
-__inline__ __device__ bool is_infinity(const char* data, long start, long end)
+__inline__ __device__ bool is_infinity(char const* start, char const* end)
 {
-  if (data[start] == '-' || data[start] == '+') start++;
+  if (*start == '-' || *start == '+') start++;
   char const* cinf = "infinity";
-  long index       = start;
+  auto index       = start;
   while (index <= end) {
-    if (*cinf != to_lower(data[index])) break;
+    if (*cinf != to_lower(*index)) break;
     index++;
     cinf++;
   }
@@ -176,11 +175,11 @@ parse_numeric(const char* data, long start, long end, ParseOptions const& opts)
   bool all_digits_valid = true;
 
   // Handle negative values if necessary
-  int32_t sign = 1 - (2 * (data[start] == '-'));
+  int32_t sign = (data[start] == '-') ? -1 : 1;
   if (data[start] == '-' || data[start] == '+') start++;
 
   // Handle infinity
-  if (std::is_floating_point<T>::value && is_infinity(data, start, end)) {
+  if (std::is_floating_point<T>::value && is_infinity(data + start, data + end)) {
     return sign * std::numeric_limits<T>::infinity();
   }
 
