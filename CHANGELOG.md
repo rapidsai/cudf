@@ -9,6 +9,7 @@
 - PR #5874 Add `COLLECT` groupby aggregation
 - PR #6119 Add support for `dayofweek` property in `DateTimeIndex` and `DatetimeProperties`
 - PR #6125 Add support for `Series.mode` and `DataFrame.mode`
+- PR #6261 Add support for LEAD/LAG window functions for fixed-width types
 
 ## Improvements
 

@@ -275,5 +275,133 @@ std::unique_ptr<column> rolling_window(
   std::unique_ptr<aggregation> const& agg,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/**
+ * @brief  Applies an offset-based window function (like LEAD/LAG) on specified column.
+ *
+ * Offset-based window functions include LEAD and LAG:
+ *   1. LEAD(N): Returns the row from the input column, at the specified offset past the
+ *      current row. If the offset crosses the grouping boundary or column boundary for
+ *      a given row, a "default" value is returned if available. The "default" value is
+ *      null, by default.
+ *   2. LAG(N): returns the row from the input column at the specified offset preceding
+ *      the current row. If the offset crosses the grouping boundary or column boundary for
+ *      a given row, a "default" value is returned if available. The "default" value is
+ *      null, by default.
+ *
+ * E.g. Consider an input column with the following values and grouping:
+ *      [10, 11, 12, 13,   20, 21, 22, 23]
+ *      <------G1----->   <------G2------>
+ *
+ * LEAD(input_col, 1) yields:
+ *      [11, 12, 13, null,  21, 22, 23, null]
+ *
+ * LAG(input_col, 2) yields:
+ *      [null, null, 11, 12, null, null, 21, 22]
+ *
+ * LEAD(input_col, 1, 99) (where 99 indicates the default) yields:
+ *      [11, 12, 13, 99,  21, 22, 23, 99]
+ *
+ * @param[in] group_keys The (pre-sorted) grouping columns
+ * @param[in] input The input column (to be aggregated)
+ * @param[in] aggr The aggregation (e.g. LEAD/LAG) to be applied
+ * @param[in] row_offset The offset from which input row is to be returned
+ * @param[in] default_outputs A column of default outputs, to be returned
+ *                            if the offset out of bounds. Must have as many rows
+ *                            as the input column, or be empty.
+ *
+ * @returns  A nullable output column containing the results of the window operation.
+ */
+std::unique_ptr<column> offset_rolling_window(
+  table_view const& group_keys,
+  column_view const& input,
+  std::unique_ptr<aggregation> const& aggr,
+  size_type row_offset,
+  column_view const& default_outputs,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief  Applies an offset-based window function (like LEAD/LAG) on specified column.
+ *
+ * Offset-based window functions include LEAD and LAG:
+ *   1. LEAD(N): Returns the row from the input column, at the specified offset past the
+ *      current row. If the offset crosses the grouping boundary or column boundary for
+ *      a given row, a "default" value is returned if available. The "default" value is
+ *      null, by default.
+ *   2. LAG(N): returns the row from the input column at the specified offset preceding
+ *      the current row. If the offset crosses the grouping boundary or column boundary for
+ *      a given row, a "default" value is returned if available. The "default" value is
+ *      null, by default.
+ *
+ * E.g. Consider an input column with the following values and grouping:
+ *      [10, 11, 12, 13,   20, 21, 22, 23]
+ *      <------G1----->   <------G2------>
+ *
+ * LEAD(input_col, 1) yields:
+ *      [11, 12, 13, null,  21, 22, 23, null]
+ *
+ * LAG(input_col, 2) yields:
+ *      [null, null, 11, 12, null, null, 21, 22]
+ *
+ * LEAD(input_col, 1, 99) (where 99 indicates the default) yields:
+ *      [11, 12, 13, 99,  21, 22, 23, 99]
+ *
+ * @param[in] group_keys The (pre-sorted) grouping columns
+ * @param[in] input The input column (to be aggregated)
+ * @param[in] aggr The aggregation (e.g. LEAD/LAG) to be applied
+ * @param[in] row_offset The offset from which input row is to be returned
+ * @param[in] default_output A scalar default, to be returned if the offset out of bounds.
+ *                           Must have as many rows as the input column, or be empty.
+ *
+ * @returns  A nullable output column containing the results of the window operation.
+ */
+std::unique_ptr<column> offset_rolling_window(
+  table_view const& group_keys,
+  column_view const& input,
+  std::unique_ptr<aggregation> const& aggr,
+  size_type row_offset,
+  scalar const& default_output,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief  Applies an offset-based window function (like LEAD/LAG) on specified column.
+ *
+ * Offset-based window functions include LEAD and LAG:
+ *   1. LEAD(N): Returns the row from the input column, at the specified offset past the
+ *      current row. If the offset crosses the grouping boundary or column boundary for
+ *      a given row, a "default" value is returned if available. The "default" value is
+ *      null, by default.
+ *   2. LAG(N): returns the row from the input column at the specified offset preceding
+ *      the current row. If the offset crosses the grouping boundary or column boundary for
+ *      a given row, a "default" value is returned if available. The "default" value is
+ *      null, by default.
+ *
+ * E.g. Consider an input column with the following values and grouping:
+ *      [10, 11, 12, 13,   20, 21, 22, 23]
+ *      <------G1----->   <------G2------>
+ *
+ * LEAD(input_col, 1) yields:
+ *      [11, 12, 13, null,  21, 22, 23, null]
+ *
+ * LAG(input_col, 2) yields:
+ *      [null, null, 11, 12, null, null, 21, 22]
+ *
+ * LEAD(input_col, 1, 99) (where 99 indicates the default) yields:
+ *      [11, 12, 13, 99,  21, 22, 23, 99]
+ *
+ * @param[in] group_keys The (pre-sorted) grouping columns
+ * @param[in] input The input column (to be aggregated)
+ * @param[in] aggr The aggregation (e.g. LEAD/LAG) to be applied
+ * @param[in] row_offset The offset from which input row is to be returned
+ *
+ * @returns  A nullable output column containing the results of the window operation.
+ *           For rows for which the offset is out of bounds, nulls are returned.
+ */
+std::unique_ptr<column> offset_rolling_window(
+  table_view const& group_keys,
+  column_view const& input,
+  std::unique_ptr<aggregation> const& aggr,
+  size_type row_offset,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 /** @} */  // end of group
 }  // namespace cudf

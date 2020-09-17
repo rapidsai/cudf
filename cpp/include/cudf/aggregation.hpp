@@ -70,6 +70,8 @@ class aggregation {
     NTH_ELEMENT,     ///< get the nth element
     ROW_NUMBER,      ///< get row-number of element
     COLLECT,         ///< collect values into a list
+    LEAD,            ///< window function, accesses row at specified offset following current row
+    LAG,             ///< window function, accesses row at specified offset preceding current row
     PTX,             ///< PTX UDF based reduction
     CUDA             ///< CUDA UDf based reduction
   };
