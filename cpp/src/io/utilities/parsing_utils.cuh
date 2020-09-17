@@ -176,12 +176,12 @@ parse_numeric(const char* data, long start, long end, ParseOptions const& opts)
 
   // Handle negative values if necessary
   int32_t sign = (data[start] == '-') ? -1 : 1;
-  if (data[start] == '-' || data[start] == '+') start++;
 
   // Handle infinity
   if (std::is_floating_point<T>::value && is_infinity(data + start, data + end)) {
     return sign * std::numeric_limits<T>::infinity();
   }
+  if (data[start] == '-' || data[start] == '+') start++;
 
   // Skip over the "0x" prefix for hex notation
   if (base == 16 && start + 2 <= end && data[start] == '0' && data[start + 1] == 'x') {
