@@ -55,6 +55,7 @@
 - PR #6215 Add cmake command-line setting for spdlog logging level
 - PR #6240 Don't shallow copy index in as_index() unless necessary
 - PR #6204 Add dockerfile and script to build cuDF jar
+- PR #6243 Move `equals()` logic to `Frame`
 
 ## Bug Fixes
 
