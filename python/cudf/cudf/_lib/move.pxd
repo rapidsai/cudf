@@ -20,6 +20,8 @@ from cudf._lib.cpp.groupby cimport (
 )
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.io.csv cimport csv_reader_options, csv_writer_options
+from cudf._lib.cpp.io.avro cimport avro_reader_options
+from cudf._lib.cpp.io.json cimport json_reader_options
 from pyarrow.includes.libarrow cimport CMessageReader
 from cudf._lib.cpp.io.parquet cimport (
     parquet_reader_options,
@@ -85,6 +87,8 @@ cdef extern from "<utility>" namespace "std" nogil:
     )
     cdef csv_reader_options move(csv_reader_options)
     cdef csv_writer_options move(csv_writer_options)
+    cdef avro_reader_options move(avro_reader_options)
+    cdef json_reader_options move(json_reader_options)
     cdef parquet_reader_options move(parquet_reader_options)
     cdef parquet_writer_options move(parquet_writer_options)
     cdef chunked_parquet_writer_options move(chunked_parquet_writer_options)

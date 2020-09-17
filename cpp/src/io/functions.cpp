@@ -15,10 +15,14 @@
  */
 
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/io/avro.hpp>
 #include <cudf/io/csv.hpp>
+#include <cudf/io/detail/avro.hpp>
 #include <cudf/io/detail/csv.hpp>
+#include <cudf/io/detail/json.hpp>
 #include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/functions.hpp>
+#include <cudf/io/json.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/readers.hpp>
 #include <cudf/io/writers.hpp>
@@ -41,6 +45,18 @@ csv_writer_options_builder csv_writer_options::builder(sink_info const& sink,
                                                        table_view const& table)
 {
   return csv_writer_options_builder{sink, table};
+}
+
+// Returns builder for avro_reader_options
+avro_reader_options_builder avro_reader_options::builder(source_info const& src)
+{
+  return avro_reader_options_builder(src);
+}
+
+// Returns builder for json_reader_options
+json_reader_options_builder json_reader_options::builder(source_info const& src)
+{
+  return json_reader_options_builder(src);
 }
 
 // Returns builder for parquet_reader_options
@@ -114,35 +130,23 @@ std::unique_ptr<writer> make_writer(sink_info const& sink,
 }  // namespace
 
 // Freeform API wraps the detail reader class API
-table_with_metadata read_avro(read_avro_args const& args, rmm::mr::device_memory_resource* mr)
+table_with_metadata read_avro(avro_reader_options const& opts, rmm::mr::device_memory_resource* mr)
 {
   namespace avro = cudf::io::detail::avro;
 
   CUDF_FUNC_RANGE();
-  avro::reader_options options{args.columns};
-  auto reader = make_reader<avro::reader>(args.source, options, mr);
-
-  if (args.skip_rows != -1 || args.num_rows != -1) {
-    return reader->read_rows(args.skip_rows, args.num_rows);
-  } else {
-    return reader->read_all();
-  }
+  auto reader = make_reader<avro::reader>(opts.get_source(), opts, mr);
+  return reader->read(opts);
 }
 
 // Freeform API wraps the detail reader class API
-table_with_metadata read_json(read_json_args const& args, rmm::mr::device_memory_resource* mr)
+table_with_metadata read_json(json_reader_options const& opts, rmm::mr::device_memory_resource* mr)
 {
   namespace json = cudf::io::detail::json;
 
   CUDF_FUNC_RANGE();
-  json::reader_options options{args.lines, args.compression, args.dtype, args.dayfirst};
-  auto reader = make_reader<json::reader>(args.source, options, mr);
-
-  if (args.byte_range_offset != 0 || args.byte_range_size != 0) {
-    return reader->read_byte_range(args.byte_range_offset, args.byte_range_size);
-  } else {
-    return reader->read_all();
-  }
+  auto reader = make_reader<json::reader>(opts.get_source(), opts, mr);
+  return reader->read(opts);
 }
 
 // Freeform API wraps the detail reader class API

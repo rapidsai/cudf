@@ -1563,11 +1563,35 @@ class RangeIndex(Index):
         else:
             return False
 
-    def copy(self, deep=True):
+    def copy(self, name=None, deep=False, dtype=None, names=None):
         """
         Make a copy of this object.
+
+        Parameters
+        ----------
+        name : object optional (default: None), name of index
+        deep : Bool (default: False)
+            Ignored for RangeIndex
+        dtype : numpy dtype optional (default: None)
+            Target dtype for underlying range data
+        names : list-like optional (default: False)
+            Kept compatibility with MultiIndex. Should not be used.
+
+        Returns
+        -------
+        New RangeIndex instance with same range, casted to new dtype
         """
-        return RangeIndex(start=self._start, stop=self._stop, name=self.name)
+
+        dtype = self.dtype if dtype is None else dtype
+
+        if not np.issubdtype(dtype, np.signedinteger):
+            raise ValueError(f"Expected Signed Integer Type, Got {dtype}")
+
+        name = self.name if name is None else name
+
+        _idx_new = RangeIndex(start=self._start, stop=self._stop, name=name)
+
+        return _idx_new
 
     def __repr__(self):
         return (
@@ -1823,22 +1847,36 @@ class GenericIndex(Index):
     def _values(self):
         return next(iter(self._data.columns))
 
-    def copy(self, deep=True):
+    def copy(self, name=None, deep=False, dtype=None, names=None):
         """
         Make a copy of this object.
 
         Parameters
         ----------
+        name : object, default None
+            Name of index, use original name when None
         deep : bool, default True
             Make a deep copy of the data.
-            With ``deep=False`` the is not copied.
+            With ``deep=False`` the original data is used
+        dtype : numpy dtype, default None
+            Target datatype to cast into, use original dtype when None
+        names : list-like, default False
+            Kept compatibility with MultiIndex. Should not be used.
 
         Returns
         -------
-        copy : Index
+        New index instance, casted to new dtype
         """
-        result = as_index(self._values.copy(deep=deep))
-        result.name = self.name
+
+        dtype = self.dtype if dtype is None else dtype
+        name = self.name if name is None else name
+
+        if isinstance(self, (StringIndex, CategoricalIndex)):
+            result = as_index(self._values.astype(dtype), name=name, copy=deep)
+        else:
+            result = as_index(
+                self._values.copy(deep=deep).astype(dtype), name=name
+            )
         return result
 
     def __sizeof__(self):
@@ -2492,7 +2530,7 @@ class CategoricalIndex(GenericIndex):
                 )
 
         if copy:
-            data = column.as_column(data, dtype=dtype).copy()
+            data = column.as_column(data, dtype=dtype).copy(deep=True)
         out = Frame.__new__(cls)
         kwargs = _setdefault_name(data, name=name)
         if isinstance(data, CategoricalColumn):
@@ -2587,13 +2625,13 @@ class StringIndex(GenericIndex):
     name: A string
     """
 
-    def __new__(cls, values, **kwargs):
+    def __new__(cls, values, copy=False, **kwargs):
         out = Frame.__new__(cls)
         kwargs = _setdefault_name(values, **kwargs)
         if isinstance(values, StringColumn):
-            values = values.copy()
+            values = values.copy(deep=copy)
         elif isinstance(values, StringIndex):
-            values = values._values.copy()
+            values = values._values.copy(deep=copy)
         else:
             values = column.as_column(values, dtype="str")
             if not pd.api.types.is_string_dtype(values.dtype):
@@ -2663,13 +2701,14 @@ def as_index(arbitrary, **kwargs):
         - DatetimeIndex for Datetime input.
         - GenericIndex for all other inputs.
     """
-
     kwargs = _setdefault_name(arbitrary, **kwargs)
     if isinstance(arbitrary, cudf.MultiIndex):
         return arbitrary
     elif isinstance(arbitrary, Index):
+        if arbitrary.name == kwargs["name"]:
+            return arbitrary
         idx = arbitrary.copy(deep=False)
-        idx.rename(kwargs.get("name"), inplace=True)
+        idx.rename(kwargs["name"], inplace=True)
         return idx
     elif isinstance(arbitrary, NumericalColumn):
         try:
