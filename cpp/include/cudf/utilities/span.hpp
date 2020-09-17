@@ -54,8 +54,8 @@ class span_base {
   constexpr span_base() noexcept : _data(nullptr), _size(0) {}
   constexpr span_base(pointer data, size_type size) : _data(data), _size(size) {}
   // constexpr span_base(pointer begin, pointer end) : _data(begin), _size(end - begin) {}
-  constexpr span_base(const span_base& other) noexcept = default;
-  constexpr span_base& operator=(const span_base& other) noexcept = default;
+  constexpr span_base(span_base const& other) noexcept = default;
+  constexpr span_base& operator=(span_base const& other) noexcept = default;
 
   // not noexcept due to undefined behavior when size = 0
   constexpr reference front() const { return _data[0]; }
@@ -104,6 +104,7 @@ struct host_span : public span_base<T, Extent, host_span<T, Extent>> {
   using base = cudf::detail::span_base<T, Extent, host_span<T, Extent>>;
   using base::base;
 
+  constexpr host_span() noexcept : base() {}
   explicit host_span(std::vector<T> in) : base(in.data(), in.size()) {}
   explicit host_span(thrust::host_vector<T> in) : base(in.data(), in.size()) {}
 };
@@ -113,6 +114,7 @@ struct device_span : public span_base<T, Extent, device_span<T, Extent>> {
   using base = cudf::detail::span_base<T, Extent, device_span<T, Extent>>;
   using base::base;
 
+  constexpr device_span() noexcept : base() {}
   explicit device_span(thrust::device_vector<T> in) : base(in.data().get(), in.size()) {}
   explicit device_span(rmm::device_buffer in) : base(static_cast<T*>(in.data()), in.size()) {}
   explicit device_span(rmm::device_vector<T> in) : base(in.data().get(), in.size()) {}
