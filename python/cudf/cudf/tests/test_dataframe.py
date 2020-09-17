@@ -259,44 +259,244 @@ def test_dataframe_basic():
     assert gdf["val"].isnull().all()
 
 
-def test_dataframe_drop_method():
-    df = gd.DataFrame()
-    data = np.asarray(range(10))
-    df["a"] = data
-    df["b"] = data
-    df["c"] = data
+@pytest.mark.parametrize(
+    "pdf",
+    [
+        pd.DataFrame({"a": range(10), "b": range(10, 20), "c": range(1, 11)}),
+        pd.DataFrame(
+            {"a": range(10), "b": range(10, 20), "d": ["a", "v"] * 5}
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "columns", [["a"], ["b"], "a", "b", ["a", "b"]],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_dataframe_drop_columns(pdf, columns, inplace):
+    pdf = pdf.copy()
+    gdf = gd.from_pandas(pdf)
 
-    assert tuple(df.columns) == ("a", "b", "c")
-    assert tuple(df.drop("a").columns) == ("b", "c")
-    assert tuple(df.drop("a", axis=1).columns) == ("b", "c")
-    assert tuple(df.columns) == ("a", "b", "c")
-    assert tuple(df.drop(["a", "b"]).columns) == ("c",)
-    assert tuple(df.drop(["a", "a", "b"]).columns) == ("c",)
-    assert tuple(df.columns) == ("a", "b", "c")
-    assert tuple(df.drop(["a", "b"]).columns) == ("c",)
-    assert tuple(df.columns) == ("a", "b", "c")
-    assert tuple(df.drop(columns=["a", "b"]).columns) == ("c",)
-    assert tuple(df.columns) == ("a", "b", "c")
-    assert tuple(df.drop(columns="a").columns) == ("b", "c")
-    assert tuple(df.columns) == ("a", "b", "c")
-    assert tuple(df.drop(columns=["a"]).columns) == ("b", "c")
-    assert tuple(df.columns) == ("a", "b", "c")
-    assert tuple(df.drop(columns=["a", "b", "c"]).columns) == tuple()
-    assert tuple(df.columns) == ("a", "b", "c")
+    expected = pdf.drop(columns=columns, inplace=inplace)
+    actual = gdf.drop(columns=columns, inplace=inplace)
 
-    # Test drop error
-    with pytest.raises(NameError) as raises:
-        df.drop("d")
-    raises.match("column 'd' does not exist")
-    with pytest.raises(NameError) as raises:
-        df.drop(["a", "d", "b"])
-    raises.match("column 'd' does not exist")
-    with pytest.raises(ValueError) as raises:
+    if inplace:
+        expected = pdf
+        actual = gdf
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "pdf",
+    [
+        pd.DataFrame({"a": range(10), "b": range(10, 20), "c": range(1, 11)}),
+        pd.DataFrame(
+            {"a": range(10), "b": range(10, 20), "d": ["a", "v"] * 5}
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "labels",
+    [[1], [0], 1, 5, [5, 9], pd.Index([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_dataframe_drop_labels_axis_0(pdf, labels, inplace):
+    pdf = pdf.copy()
+    gdf = gd.from_pandas(pdf)
+
+    expected = pdf.drop(labels=labels, axis=0, inplace=inplace)
+    actual = gdf.drop(labels=labels, axis=0, inplace=inplace)
+
+    if inplace:
+        expected = pdf
+        actual = gdf
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "pdf",
+    [
+        pd.DataFrame({"a": range(10), "b": range(10, 20), "c": range(1, 11)}),
+        pd.DataFrame(
+            {"a": range(10), "b": range(10, 20), "d": ["a", "v"] * 5}
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "index",
+    [[1], [0], 1, 5, [5, 9], pd.Index([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_dataframe_drop_index(pdf, index, inplace):
+    pdf = pdf.copy()
+    gdf = gd.from_pandas(pdf)
+
+    expected = pdf.drop(index=index, inplace=inplace)
+    actual = gdf.drop(index=index, inplace=inplace)
+
+    if inplace:
+        expected = pdf
+        actual = gdf
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "pdf",
+    [
+        pd.DataFrame(
+            {"a": range(10), "b": range(10, 20), "d": ["a", "v"] * 5},
+            index=pd.MultiIndex(
+                levels=[
+                    ["lama", "cow", "falcon"],
+                    ["speed", "weight", "length"],
+                ],
+                codes=[
+                    [0, 0, 0, 1, 1, 1, 2, 2, 2, 1],
+                    [0, 1, 2, 0, 1, 2, 0, 1, 2, 1],
+                ],
+            ),
+        )
+    ],
+)
+@pytest.mark.parametrize(
+    "index,level",
+    [
+        ("cow", 0),
+        ("lama", 0),
+        ("falcon", 0),
+        ("speed", 1),
+        ("weight", 1),
+        ("length", 1),
+        pytest.param(
+            "cow",
+            None,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/36293"
+            ),
+        ),
+        pytest.param(
+            "lama",
+            None,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/36293"
+            ),
+        ),
+        pytest.param(
+            "falcon",
+            None,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/36293"
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_dataframe_drop_multiindex(pdf, index, level, inplace):
+    pdf = pdf.copy()
+    gdf = gd.from_pandas(pdf)
+
+    expected = pdf.drop(index=index, inplace=inplace, level=level)
+    actual = gdf.drop(index=index, inplace=inplace, level=level)
+
+    if inplace:
+        expected = pdf
+        actual = gdf
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "pdf",
+    [
+        pd.DataFrame({"a": range(10), "b": range(10, 20), "c": range(1, 11)}),
+        pd.DataFrame(
+            {"a": range(10), "b": range(10, 20), "d": ["a", "v"] * 5}
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "labels", [["a"], ["b"], "a", "b", ["a", "b"]],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_dataframe_drop_labels_axis_1(pdf, labels, inplace):
+    pdf = pdf.copy()
+    gdf = gd.from_pandas(pdf)
+
+    expected = pdf.drop(labels=labels, axis=1, inplace=inplace)
+    actual = gdf.drop(labels=labels, axis=1, inplace=inplace)
+
+    if inplace:
+        expected = pdf
+        actual = gdf
+
+    assert_eq(expected, actual)
+
+
+def test_dataframe_drop_error():
+    df = gd.DataFrame({"a": [1], "b": [2], "c": [3]})
+    with pytest.raises(KeyError, match="column 'd' does not exist"):
+        df.drop(columns="d")
+
+    with pytest.raises(KeyError, match="column 'd' does not exist"):
+        df.drop(columns=["a", "d", "b"])
+
+    with pytest.raises(ValueError, match="Cannot specify both"):
         df.drop("a", axis=1, columns="a")
-    raises.match("Cannot specify both")
-    with pytest.raises(ValueError) as raises:
+
+    with pytest.raises(ValueError, match="Need to specify at least"):
         df.drop(axis=1)
-    raises.match("Need to specify at least")
+
+    with pytest.raises(KeyError, match="One or more values not found in axis"):
+        df.drop([2, 0])
+
+
+def test_dataframe_drop_raises():
+    df = gd.DataFrame(
+        {"a": [1, 2, 3], "c": [10, 20, 30]}, index=["x", "y", "z"]
+    )
+    pdf = df.to_pandas()
+    try:
+        pdf.drop("p")
+    except Exception as e:
+        with pytest.raises(
+            type(e), match="One or more values not found in axis"
+        ):
+            df.drop("p")
+    else:
+        raise AssertionError("Expected pdf.drop to fail")
+
+    expect = pdf.drop("p", errors="ignore")
+    actual = df.drop("p", errors="ignore")
+
+    assert_eq(actual, expect)
+
+    try:
+        pdf.drop(columns="p")
+    except Exception as e:
+        with pytest.raises(type(e), match="column 'p' does not exist"):
+            df.drop(columns="p")
+    else:
+        raise AssertionError("Expected pdf.drop to fail")
+
+    expect = pdf.drop(columns="p", errors="ignore")
+    actual = df.drop(columns="p", errors="ignore")
+
+    assert_eq(actual, expect)
+
+    try:
+        pdf.drop(labels="p", axis=1)
+    except Exception as e:
+        with pytest.raises(type(e), match="column 'p' does not exist"):
+            df.drop(labels="p", axis=1)
+    else:
+        raise AssertionError("Expected pdf.drop to fail")
+
+    expect = pdf.drop(labels="p", axis=1, errors="ignore")
+    actual = df.drop(labels="p", axis=1, errors="ignore")
+
+    assert_eq(actual, expect)
 
 
 def test_dataframe_column_add_drop_via_setitem():
