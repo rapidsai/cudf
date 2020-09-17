@@ -359,6 +359,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         dropna=True,
         out_to_host=False,
         sep="___",
+        sort=False,
     ):
         # Deal with default split_out and split_every params
         if split_every is False:
@@ -392,6 +393,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 split_out,
                 dropna,
                 out_to_host,
+                sort,
                 sep,
             )
             # Pick out each chunk using `getitem`
@@ -429,6 +431,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
                         split_out,
                         dropna,
                         out_to_host,
+                        sort,
                         sep,
                     )
 

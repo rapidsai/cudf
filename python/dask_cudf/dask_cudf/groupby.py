@@ -14,7 +14,7 @@ def _make_name(*args, sep="_"):
 
 
 def _groupby_partition_agg(
-    df, gb_cols, agg_list, columns, split_out, dropna, out_to_host, sep
+    df, gb_cols, agg_list, columns, split_out, dropna, out_to_host, sort, sep
 ):
     _agg_list = set()
     for agg in agg_list:
@@ -31,7 +31,9 @@ def _groupby_partition_agg(
             df[pow2_name] = df[c].pow(2)
             _agg_dict[pow2_name] = ["sum"]
 
-    gb = df.groupby(gb_cols, dropna=dropna, as_index=False).agg(_agg_dict)
+    gb = df.groupby(gb_cols, dropna=dropna, as_index=False, sort=sort).agg(
+        _agg_dict
+    )
     gb.columns = [_make_name(*name, sep=sep) for name in gb.columns]
     output = {}
     for j, split in enumerate(
@@ -46,7 +48,7 @@ def _groupby_partition_agg(
 
 
 def _tree_node_agg(
-    dfs, gb_cols, agg_list, split_out, dropna, out_to_host, sep
+    dfs, gb_cols, agg_list, split_out, dropna, out_to_host, sort, sep
 ):
     df = _concat(dfs, ignore_index=True)
     if out_to_host:
@@ -64,7 +66,9 @@ def _tree_node_agg(
         else:
             raise ValueError(f"Unexpected aggregation: {agg}")
 
-    gb = df.groupby(gb_cols, dropna=dropna, as_index=False).agg(agg_dict)
+    gb = df.groupby(gb_cols, dropna=dropna, as_index=False, sort=sort).agg(
+        agg_dict
+    )
 
     # Don't include the last aggregation in the column names
     gb.columns = [_make_name(*name[:-1], sep=sep) for name in gb.columns]
