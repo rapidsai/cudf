@@ -384,8 +384,9 @@ class orc_reader_options_builder {
  *
  * @return The set of columns.
  */
-table_with_metadata read_orc(orc_reader_options const& options,
-                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+table_with_metadata read_orc(
+  orc_reader_options const& options,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Builds settings to use for `write_orc()`.
@@ -599,7 +600,7 @@ class orc_writer_options_builder {
  * @param mr Device memory resource to use for device memory allocation.
  */
 void write_orc(orc_writer_options const& options,
-               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+               rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Builds settings to use for `write_orc_chunked()`.
@@ -797,7 +798,7 @@ struct orc_chunked_state;
  */
 std::shared_ptr<orc_chunked_state> write_orc_chunked_begin(
   chunked_orc_writer_options const& options,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Write a single table as a subtable of a larger logical orc file/table.
