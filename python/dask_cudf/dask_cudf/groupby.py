@@ -1,4 +1,5 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
+import itertools
 import math
 from operator import getitem
 
@@ -14,12 +15,10 @@ from dask.dataframe.core import (
 from dask.dataframe.groupby import DataFrameGroupBy
 from dask.highlevelgraph import HighLevelGraph
 
-import cudf
-
 
 class CudfDataFrameGroupBy(DataFrameGroupBy):
     def aggregate(
-        self, arg, split_every=None, split_out=1, out_to_host=False, sep="___",
+        self, arg, split_every=None, split_out=1, sep="___", as_index=True,
     ):
         if arg == "size":
             return self.size()
@@ -37,9 +36,9 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
                 split_every=split_every,
                 split_out=split_out,
                 dropna=self.dropna,
-                out_to_host=out_to_host,
                 sep=sep,
                 sort=self.sort,
+                as_index=as_index,
             )
 
         return super().aggregate(
@@ -54,9 +53,9 @@ def groupby_agg(
     split_every=None,
     split_out=None,
     dropna=True,
-    out_to_host=False,
     sep="___",
     sort=False,
+    as_index=True,
 ):
     # Deal with default split_out and split_every params
     if split_every is False:
@@ -70,6 +69,8 @@ def groupby_agg(
     columns = [c for c in ddf.columns if c not in gb_cols]
     if isinstance(aggs, dict):
         for col in aggs:
+            if isinstance(aggs[col], str):
+                aggs[col] = [aggs[col]]
             if col in gb_cols:
                 columns.append(col)
 
@@ -102,7 +103,6 @@ def groupby_agg(
             columns,
             split_out,
             dropna,
-            out_to_host,
             sort,
             sep,
         )
@@ -139,7 +139,6 @@ def groupby_agg(
                     gb_cols,
                     split_out,
                     dropna,
-                    out_to_host,
                     sort,
                     sep,
                 )
@@ -152,11 +151,12 @@ def groupby_agg(
             gb_cols,
             aggs,
             columns,
+            as_index,
             sep,
         )
 
     divisions = [None] * (split_out + 1)
-    _meta = ddf._meta.groupby(gb_cols, as_index=False).agg(aggs)
+    _meta = ddf._meta.groupby(gb_cols, as_index=as_index).agg(aggs)
     graph = HighLevelGraph.from_collections(
         gb_agg_name, dsk, dependencies=[ddf]
     )
@@ -166,7 +166,7 @@ def groupby_agg(
 def _is_supported(arg, supported: set):
     if isinstance(arg, (list, dict)):
         if isinstance(arg, dict):
-            _global_set = set.union(*arg.values())
+            _global_set = set(itertools.chain(*list(arg.values())))
         else:
             _global_set = set(arg)
 
@@ -180,7 +180,7 @@ def _make_name(*args, sep="_"):
 
 
 def _groupby_partition_agg(
-    df, gb_cols, aggs, columns, split_out, dropna, out_to_host, sort, sep
+    df, gb_cols, aggs, columns, split_out, dropna, sort, sep
 ):
     # Modify dict for initial (partition-wise) aggregations
     _agg_dict = {}
@@ -206,19 +206,13 @@ def _groupby_partition_agg(
     for j, split in enumerate(
         gb.partition_by_hash(gb_cols, split_out, keep_index=False)
     ):
-        if out_to_host:
-            output[j] = split.to_pandas()
-        else:
-            output[j] = split
+        output[j] = split
     del gb
     return output
 
 
-def _tree_node_agg(dfs, gb_cols, split_out, dropna, out_to_host, sort, sep):
+def _tree_node_agg(dfs, gb_cols, split_out, dropna, sort, sep):
     df = _concat(dfs, ignore_index=True)
-    if out_to_host:
-        df.reset_index(drop=True, inplace=True)
-        df = cudf.from_pandas(df)
     agg_dict = {}
     for col in df.columns:
         if col in gb_cols:
@@ -240,7 +234,7 @@ def _tree_node_agg(dfs, gb_cols, split_out, dropna, out_to_host, sort, sep):
     return gb
 
 
-def _finalize_gb_agg(gb, gb_cols, aggs, columns, sep):
+def _finalize_gb_agg(gb, gb_cols, aggs, columns, as_index, sep):
 
     # Deal with higher-order aggregations
     for col in columns:
@@ -274,6 +268,10 @@ def _finalize_gb_agg(gb, gb_cols, aggs, columns, sep):
                 gb.drop(columns=[sum_name], inplace=True)
             if "count" not in agg_list:
                 gb.drop(columns=[count_name], inplace=True)
+
+    # Set index (use `inplace` when supported)
+    if as_index:
+        gb = gb.set_index(gb_cols)
 
     # Unflatten column names
     col_array = []
