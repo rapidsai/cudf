@@ -452,6 +452,14 @@ set(GROUPED_ROLLING_TEST_SRC
 ConfigureTest(GROUPED_ROLLING_TEST "${GROUPED_ROLLING_TEST_SRC}")
 
 ###################################################################################################
+# - lead/lag rolling tests ---------------------------------------------------------------------------------
+
+set(LEAD_LAG_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/lead_lag/lead_lag_test.cpp")
+
+ConfigureTest(LEAD_LAG_TEST "${LEAD_LAG_TEST_SRC}")
+
+###################################################################################################
 # - filling test ----------------------------------------------------------------------------------
 
 set(FILLING_TEST_SRC
