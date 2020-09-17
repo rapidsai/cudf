@@ -28,7 +28,6 @@
 
 #include <cudf/strings/convert/convert_booleans.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
-#include <cudf/strings/convert/convert_durations.hpp>
 #include <cudf/strings/convert/convert_floats.hpp>
 #include <cudf/strings/convert/convert_integers.hpp>
 
@@ -61,11 +60,6 @@ namespace cudf {
 namespace io {
 namespace detail {
 namespace csv {
-
-std::unique_ptr<column> pandas_format_durations(
-  column_view const& durations,
-  cudaStream_t stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 namespace {  // anonym.
 // helpers:
