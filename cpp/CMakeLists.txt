@@ -281,6 +281,27 @@ else()
 endif(Boost_FOUND)
 
 ###################################################################################################
+# - find cufile -----------------------------------------------------------------------------------
+
+find_path(CUFILE_INCLUDE "cufile.h"
+    HINTS "${GDS_ROOT}/lib"
+          "/usr/local/gds/lib")
+
+find_library(CUFILE_LIBRARY "libcufile.so"
+    HINTS "${GDS_ROOT}/lib"
+          "/usr/local/gds/lib")
+
+message(STATUS "CUFILE: CUFILE_LIBRARY set to ${CUFILE_LIBRARY}")
+message(STATUS "CUFILE: CUFILE_INCLUDE set to ${CUFILE_INCLUDE}")
+
+add_library(cufile SHARED IMPORTED ${CUFILE_LIBRARY})
+if (CUFILE_INCLUDE AND CUFILE_LIBRARY)
+    set_target_properties(cufile PROPERTIES IMPORTED_LOCATION ${CUFILE_LIBRARY})
+else()
+    message(FATAL_ERROR "cufile not found, please pass the GDS install directory using -DGDS_ROOT")
+endif (CUFILE_INCLUDE AND CUFILE_LIBRARY)
+
+###################################################################################################
 # - RMM -------------------------------------------------------------------------------------------
 
 find_path(RMM_INCLUDE "rmm"
@@ -373,7 +394,8 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${ZLIB_INCLUDE_DIRS}"
                     "${Boost_INCLUDE_DIRS}"
                     "${RMM_INCLUDE}"
-                    "${DLPACK_INCLUDE}")
+                    "${DLPACK_INCLUDE}"
+                    "${CUFILE_INCLUDE}")
 
 if(CONDA_INCLUDE_DIRS)
     include_directories("${CONDA_INCLUDE_DIRS}")
@@ -385,7 +407,8 @@ endif(CONDA_INCLUDE_DIRS)
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
                  "${CMAKE_BINARY_DIR}/lib"
                  "${CMAKE_BINARY_DIR}"
-                 "${GTEST_LIBRARY_DIR}")
+                 "${GTEST_LIBRARY_DIR}"
+                 "${CUFILE_LIBRARY}")
 
 if(CONDA_LINK_DIRS)
     link_directories("${CONDA_LINK_DIRS}")
