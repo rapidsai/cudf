@@ -225,6 +225,8 @@ __global__ void __launch_bounds__(csvparse_block_dim)
       } else if (serializedTrieContains(opts.trueValuesTrie, raw_csv + start, field_len) ||
                  serializedTrieContains(opts.falseValuesTrie, raw_csv + start, field_len)) {
         atomicAdd(&d_columnData[actual_col].countBool, 1);
+      } else if (cudf::io::gpu::is_infinity(raw_csv + start, raw_csv + tempPos)) {
+        atomicAdd(&d_columnData[actual_col].countFloat, 1);
       } else {
         long countNumber   = 0;
         long countDecimal  = 0;
@@ -357,15 +359,13 @@ __inline__ __device__ cudf::timestamp_ns decode_value(const char *data,
   return timestamp_ns{cudf::duration_ns{milli * 1000000}};
 }
 
-// The purpose of this is merely to allow compilation ONLY
-// TODO : make this work for json
 #ifndef DURATION_DECODE_VALUE
 #define DURATION_DECODE_VALUE(Type)                                   \
   template <>                                                         \
   __inline__ __device__ Type decode_value(                            \
     const char *data, long start, long end, ParseOptions const &opts) \
   {                                                                   \
-    return Type{};                                                    \
+    return Type{parseTimeDeltaFormat<Type>(data, start, end)};        \
   }
 #endif
 DURATION_DECODE_VALUE(duration_D)

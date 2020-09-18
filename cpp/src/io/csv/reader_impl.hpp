@@ -164,22 +164,22 @@ class reader::impl {
   const reader_options args_;
 
   rmm::device_vector<char> data_;
-  rmm::device_vector<uint64_t> row_offsets;
-  size_t num_records  = 0;  // Number of rows with actual data
-  int num_active_cols = 0;  // Number of columns to read
-  int num_actual_cols = 0;  // Number of columns in the dataset
+  rmm::device_vector<uint64_t> row_offsets_;
+  size_t num_records_  = 0;  // Number of rows with actual data
+  int num_active_cols_ = 0;  // Number of columns to read
+  int num_actual_cols_ = 0;  // Number of columns in the dataset
 
   // Parsing options
   ParseOptions opts{};
-  thrust::host_vector<column_parse::flags> h_column_flags;
-  rmm::device_vector<column_parse::flags> d_column_flags;
-  rmm::device_vector<SerialTrieNode> d_trueTrie;
-  rmm::device_vector<SerialTrieNode> d_falseTrie;
-  rmm::device_vector<SerialTrieNode> d_naTrie;
+  thrust::host_vector<column_parse::flags> h_column_flags_;
+  rmm::device_vector<column_parse::flags> d_column_flags_;
+  rmm::device_vector<SerialTrieNode> d_trie_true_;
+  rmm::device_vector<SerialTrieNode> d_trie_false_;
+  rmm::device_vector<SerialTrieNode> d_trie_na_;
 
   // Intermediate data
-  std::vector<std::string> col_names;
-  std::vector<char> header;
+  std::vector<std::string> col_names_;
+  std::vector<char> header_;
 };
 
 }  // namespace csv
