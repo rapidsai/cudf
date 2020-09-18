@@ -225,6 +225,8 @@ __global__ void __launch_bounds__(csvparse_block_dim)
       } else if (serializedTrieContains(opts.trueValuesTrie, raw_csv + start, field_len) ||
                  serializedTrieContains(opts.falseValuesTrie, raw_csv + start, field_len)) {
         atomicAdd(&d_columnData[actual_col].countBool, 1);
+      } else if (cudf::io::gpu::is_infinity(raw_csv + start, raw_csv + tempPos)) {
+        atomicAdd(&d_columnData[actual_col].countFloat, 1);
       } else {
         long countNumber   = 0;
         long countDecimal  = 0;

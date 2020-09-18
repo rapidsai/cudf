@@ -105,7 +105,9 @@ def _generate_column(column_params, num_rows):
             )
             return pa.DictionaryArray.from_arrays(
                 dictionary=vals,
-                indices=np.random.choice(np.arange(len(vals)), size=num_rows),
+                indices=np.random.randint(
+                    low=0, high=len(vals), size=num_rows
+                ),
                 mask=np.random.choice(
                     [True, False],
                     size=num_rows,
@@ -382,6 +384,9 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
                 )
             else:
                 raise TypeError(f"Unsupported dtype: {dtype}")
+            # TODO: Add List column support once
+            # https://github.com/rapidsai/cudf/pull/6075
+            # is merged.
 
     df = get_dataframe(
         Parameters(num_rows=rows, column_parameters=column_params, seed=seed,),
