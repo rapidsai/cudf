@@ -82,6 +82,7 @@
 - PR #6212 Update codeowners file
 - PR #6157 Fix issue related to `Series.concat` to concat a non-empty and empty series.
 - PR #6226 Add in some JNI checks for null handles
+- PR #6234 Add float infinity parsing in csv reader
 - PR #6251 Replace remaining calls to RMM `get_default_resource`
 - PR #6258 Pin libcudf conda recipe to boost 1.72.0
 
