@@ -6,6 +6,7 @@
 - PR #5975 Add strings `filter_characters` API
 - PR #5843 Add `filters` parameter to Python `read_parquet` function for filtering row groups
 - PR #5974 Use libcudf instead of cupy for `arange` or column creation from a scalar.
+- PR #6076 Add durations type support for csv writer, reader
 - PR #5874 Add `COLLECT` groupby aggregation
 - PR #6119 Add support for `dayofweek` property in `DateTimeIndex` and `DatetimeProperties`
 - PR #6125 Add support for `Series.mode` and `DataFrame.mode`
@@ -59,6 +60,7 @@
 - PR #6204 Add dockerfile and script to build cuDF jar
 - PR #6245 Split up replace.cu into multiple source files
 - PR #6218 increase visiblity/consistency for cuio reader writer private member variable names.
+- PR #6265 Update JNI to use ORC options builder
 
 ## Bug Fixes
 
@@ -89,6 +91,7 @@
 - PR #6251 Replace remaining calls to RMM `get_default_resource`
 - PR #6259 Fix compilation error with GCC 8
 - PR #6258 Pin libcudf conda recipe to boost 1.72.0
+- PR #6264 Remove include statement for missing rmm/mr/device/default_memory_resource.hpp file
 
 
 # cuDF 0.15.0 (26 Aug 2020)
