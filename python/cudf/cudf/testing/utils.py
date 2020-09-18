@@ -1,3 +1,5 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 import random
 
 
@@ -18,7 +20,7 @@ def _generate_rand_meta(obj, dtypes_list):
             # Hence creating a string column of size almost
             # equal to 2 Billion bytes(sizeof(int))
             meta["max_string_length"] = random.randrange(
-                0, 2000000000 / num_rows
+                0, int(2000000000 / num_rows)
             )
         meta["dtype"] = dtype
         meta["null_frequency"] = null_frequency

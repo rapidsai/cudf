@@ -1,3 +1,5 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 import sys
 
 import pandas as pd
@@ -24,15 +26,15 @@ def json_writer_test(gdf):
 
     pdf = gdf.to_pandas()
 
-    pdf.to_json(pd_file_name)
-    gdf.to_json(gd_file_name)
+    pdf.to_json(pd_file_name, lines=True, orient="records")
+    gdf.to_json(gd_file_name, lines=True, orient="records")
 
-    actual = cudf.read_json(gd_file_name)
-    expected = pd.read_json(pd_file_name)
+    actual = cudf.read_json(gd_file_name, lines=True, orient="records")
+    expected = pd.read_json(pd_file_name, lines=True, orient="records")
     assert_eq(actual, expected)
 
-    actual = cudf.read_json(pd_file_name)
-    expected = pd.read_json(gd_file_name)
+    actual = cudf.read_json(pd_file_name, lines=True, orient="records")
+    expected = pd.read_json(gd_file_name, lines=True, orient="records")
     assert_eq(actual, expected)
 
 
