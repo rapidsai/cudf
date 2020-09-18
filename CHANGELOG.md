@@ -33,6 +33,7 @@
 - PR #5984 Support gather() on CUDF struct columns
 - PR #6103 Small refactor of `print_differences`
 - PR #6124 Fix gcc-9 compilation errors on tests
+- PR #6122 Add builder API for cuIO `csv_writer_options` and `csv_reader_options`
 - PR #6141 Fix typo in custreamz README that was a result of recent changes
 - PR #6162 Reduce output parameters in cuio csv and json reader internals
 - PR #6146 Added element/validity pair constructors for fixed_width and string wrappers
