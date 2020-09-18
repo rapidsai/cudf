@@ -56,6 +56,7 @@
 - PR #6240 Don't shallow copy index in as_index() unless necessary
 - PR #6204 Add dockerfile and script to build cuDF jar
 - PR #6245 Split up replace.cu into multiple source files
+- PR #6218 increase visiblity/consistency for cuio reader writer private member variable names.
 
 ## Bug Fixes
 
