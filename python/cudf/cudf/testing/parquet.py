@@ -7,6 +7,8 @@ import os
 import random
 import sys
 
+import pyarrow as pa
+
 import cudf
 from cudf.testing.utils import _generate_rand_meta
 from cudf.tests import dataset_generator as dg
@@ -76,7 +78,8 @@ class ParquetReader(object):
         else:
             dtypes_list = list(
                 cudf.utils.dtypes.ALL_TYPES
-                - {"category", "timedelta64[ns]", "datetime64[ns]"}
+                - {"category", "datetime64[ns]"}
+                - cudf.utils.dtypes.TIMEDELTA_TYPES
             )
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
                 self, dtypes_list
@@ -92,9 +95,9 @@ class ParquetReader(object):
             f"Generating DataFrame with rows: {num_rows} "
             f"and columns: {num_cols}"
         )
-        df = dg.rand_dataframe(dtypes_meta, num_rows, seed).to_pandas()
-        df.to_parquet(file_name)
-        logging.info(f"Shape of DataFrame generated: {df.shape}")
+        table = dg.rand_dataframe(dtypes_meta, num_rows, seed)
+        pa.parquet.write_table(table, file_name)
+        logging.info(f"Shape of DataFrame generated: {table.shape}")
 
         return file_name
 
