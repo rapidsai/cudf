@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#include "cudf/detail/reshape.hpp"
-
+#include <cudf/reshape.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/type_lists.hpp>
@@ -230,7 +229,7 @@ TEST_F(ByteCastTest, fp32ValuesWithNulls)
     5,
     std::move(fixed_width_column_wrapper<cudf::size_type>{0, 4, 8, 12, 16, 20}.release()),
     std::move(fp32_data.release()),
-    3,
+    2,
     detail::make_null_mask(even_validity, even_validity + 5));
 
   auto const output_fp32 = cudf::byte_cast(fp32_col, cudf::flip_endianness::YES);
