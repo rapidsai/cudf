@@ -476,11 +476,11 @@ TEST_F(ParquetWriterTest, ListColumn)
 
   using lcw = cudf::test::lists_column_wrapper<int32_t>;
 
-  // [1, 2, 3]
+  // [NULL, 2, NULL]
   // []
   // [4, 5]
   // NULL
-  lcw col0{{{1, 2, 3}, {}, {4, 5}, {}}, valids2};
+  lcw col0{{{{1, 2, 3}, valids}, {}, {4, 5}, {}}, valids2};
 
   // [[1, 2, 3], [], [4, 5], [], [0, 6, 0]]
   // [[7, 8]]
