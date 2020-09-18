@@ -99,7 +99,7 @@ std::unique_ptr<column> scan(
  *         and the second scalar being the maximum value of the input column.
  */
 std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax(
-  const column_view &col,
+  column_view const& col,
   rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
 }  // namespace cudf
