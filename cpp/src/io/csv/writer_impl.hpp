@@ -114,6 +114,11 @@ class writer::impl {
   writer_options const options_;
 };
 
+std::unique_ptr<column> pandas_format_durations(
+  column_view const& durations,
+  cudaStream_t stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 }  // namespace csv
 }  // namespace detail
 }  // namespace io

@@ -3,17 +3,19 @@
 from libcpp cimport bool, int
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
+from libcpp.vector cimport vector
 from cudf._lib.cpp.column.column cimport column
 
-from cudf._lib.cpp.io.functions cimport (
-    read_orc_args,
-    write_orc_args,
+from cudf._lib.cpp.io.orc cimport (
+    orc_reader_options,
     read_orc as libcudf_read_orc,
-    write_orc as libcudf_write_orc
+    orc_writer_options,
+    write_orc as libcudf_write_orc,
 )
 from cudf._lib.cpp.io.types cimport (
     compression_type,
     sink_info,
+    source_info,
     table_metadata,
     table_with_metadata,
     data_sink,
@@ -41,7 +43,7 @@ cpdef read_orc(filepath_or_buffer, columns=None, stripes=None,
     --------
     cudf.io.orc.read_orc
     """
-    cdef read_orc_args c_read_orc_args = make_read_orc_args(
+    cdef orc_reader_options c_orc_reader_options = make_orc_reader_options(
         filepath_or_buffer,
         columns or [],
         stripes or [],
@@ -64,7 +66,7 @@ cpdef read_orc(filepath_or_buffer, columns=None, stripes=None,
     cdef table_with_metadata c_result
 
     with nogil:
-        c_result = move(libcudf_read_orc(c_read_orc_args))
+        c_result = move(libcudf_read_orc(c_orc_reader_options))
 
     names = [name.decode() for name in c_result.metadata.column_names]
 
@@ -101,43 +103,60 @@ cpdef write_orc(Table table,
     for col_name in table._column_names:
         metadata_.column_names.push_back(str.encode(col_name))
 
-    cdef write_orc_args c_write_orc_args = write_orc_args(
-        sink_info_c,
-        table.data_view(), &metadata_, compression_,
-        <bool> (True if enable_statistics else False)
+    cdef orc_writer_options c_orc_writer_options = move(
+        orc_writer_options.builder(sink_info_c, table.data_view())
+        .metadata(&metadata_)
+        .compression(compression_)
+        .enable_statistics(<bool> (True if enable_statistics else False))
+        .build()
     )
 
     with nogil:
-        libcudf_write_orc(c_write_orc_args)
+        libcudf_write_orc(c_orc_writer_options)
 
 
 cdef size_type get_size_t_arg(arg, name) except*:
-    arg = -1 if arg is None else arg
-    if not isinstance(arg, int) or arg < -1:
-        raise TypeError("{} must be an int >= -1".format(name))
+    if name == "skip_rows":
+        arg = 0 if arg is None else arg
+        if not isinstance(arg, int) or arg < 0:
+            raise TypeError(f"{name} must be an int >= 0")
+    else:
+        arg = -1 if arg is None else arg
+        if not isinstance(arg, int) or arg < -1:
+            raise TypeError(f"{name} must be an int >= -1")
     return <size_type> arg
 
 
-cdef read_orc_args make_read_orc_args(filepath_or_buffer,
-                                      column_names,
-                                      stripes,
-                                      size_type skip_rows,
-                                      size_type num_rows,
-                                      type_id timestamp_type,
-                                      bool use_index,
-                                      bool decimals_as_float,
-                                      size_type force_decimal_scale) except*:
-    cdef read_orc_args args = read_orc_args(
-        make_source_info([filepath_or_buffer])
-    )
-    args.stripes = stripes
-    args.skip_rows = skip_rows
-    args.num_rows = num_rows
-    args.timestamp_type = data_type(timestamp_type)
-    args.use_index = <bool> use_index
-    args.decimals_as_float = <bool> decimals_as_float
-    args.forced_decimals_scale = <int> force_decimal_scale
-    args.columns.reserve(len(column_names))
+cdef orc_reader_options make_orc_reader_options(
+    filepath_or_buffer,
+    column_names,
+    stripes,
+    size_type skip_rows,
+    size_type num_rows,
+    type_id timestamp_type,
+    bool use_index,
+    bool decimals_as_float,
+    size_type force_decimal_scale
+) except*:
+
+    cdef vector[string] c_column_names
+    cdef vector[size_type] strps = stripes
+    c_column_names.reserve(len(column_names))
     for col in column_names:
-        args.columns.push_back(str(col).encode())
-    return args
+        c_column_names.push_back(str(col).encode())
+    cdef orc_reader_options opts
+    cdef source_info src = make_source_info([filepath_or_buffer])
+    opts = move(
+        orc_reader_options.builder(src)
+        .columns(c_column_names)
+        .stripes(strps)
+        .skip_rows(skip_rows)
+        .num_rows(num_rows)
+        .timestamp_type(data_type(timestamp_type))
+        .use_index(use_index)
+        .decimals_as_float64(decimals_as_float)
+        .forced_decimals_scale(force_decimal_scale)
+        .build()
+    )
+
+    return opts
