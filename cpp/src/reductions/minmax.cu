@@ -93,26 +93,23 @@ struct minmax_functor {
     auto device_col = column_device_view::create(col, stream);
 
     // compute minimum and maximum values
-    minmax_pair<T> result;
-    if (col.nullable()) {
-      result = thrust::transform_reduce(
-        thrust::make_counting_iterator<size_type>(0),
-        thrust::make_counting_iterator<size_type>(col.size()),
-        [d_col = *device_col] __device__(size_type index) -> minmax_pair<T> {
+    minmax_pair<T> const result = [&](){
+    auto begin = thrust::make_counting_iterator<size_type>(0);
+    auto end = begin + col.size();
+    auto op = [d_col = *device_col] __device__(size_type index) -> minmax_pair<T> {
           return minmax_pair<T>(d_col.element<T>(index), d_col.is_valid(index));
-        },
+        };
+     
+    if (col.nullable()) {
+      return thrust::transform_reduce(begin, end,
+        op,
         minmax_pair<T>{},
         minmax_binary_op<T, true>{});
     } else {
-      result = thrust::transform_reduce(
-        thrust::make_counting_iterator<size_type>(0),
-        thrust::make_counting_iterator<size_type>(col.size()),
-        [d_col = *device_col] __device__(size_type index) -> minmax_pair<T> {
-          return minmax_pair<T>(d_col.element<T>(index), d_col.is_valid(index));
-        },
+      return thrust::transform_reduce(begin, end, op       
         minmax_pair<T>{},
         minmax_binary_op<T, false>{});
-    }
+    }();
 
     std::unique_ptr<scalar> min =
       make_fixed_width_scalar<T>(result.min_val, result.min_valid, stream, mr);
