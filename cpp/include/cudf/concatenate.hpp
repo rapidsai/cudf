@@ -25,6 +25,7 @@ namespace cudf {
 /**
  * @addtogroup copy_concatenate
  * @{
+ * @file
  */
 
 /**

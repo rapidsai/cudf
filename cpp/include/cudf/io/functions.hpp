@@ -14,11 +14,6 @@
  * limitations under the License.
  */
 
-/**
- * @file functions.hpp
- * @brief cuDF-IO freeform API
- */
-
 #pragma once
 
 #include <iostream>
@@ -33,14 +28,16 @@
 #include <unordered_map>
 #include <vector>
 
-//! cuDF interfaces
 namespace cudf {
-//! In-development features
 namespace io {
 /**
+ * @addtogroup io_readers
+ * @{
+ * @file
+ */
+
+/**
  * @brief Settings to use for `read_csv()`
- *
- * @ingroup io_readers
  */
 struct read_csv_args {
   source_info source;
@@ -132,8 +129,6 @@ struct read_csv_args {
 /**
  * @brief Reads a CSV dataset into a set of columns
  *
- * @ingroup io_readers
- *
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
  *  #include <cudf/io/functions.hpp>
@@ -154,10 +149,15 @@ table_with_metadata read_csv(
   read_csv_args const& args,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/** @} */  // end of group
+/**
+ * @addtogroup io_writers
+ * @{
+ * @file
+ */
+
 /**
  * @brief Settings to use for `write_csv()`
- *
- * @ingroup io_writers
  */
 struct write_csv_args : detail::csv::writer_options {
   write_csv_args(sink_info const& snk,
@@ -222,5 +222,7 @@ struct write_csv_args : detail::csv::writer_options {
  */
 void write_csv(write_csv_args const& args,
                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/** @} */  // end of group
 }  // namespace io
 }  // namespace cudf

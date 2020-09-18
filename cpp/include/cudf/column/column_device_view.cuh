@@ -239,6 +239,8 @@ struct mutable_value_accessor;
 /**
  * @brief An immutable, non-owning view of device data as a column of elements
  * that is trivially copyable and usable in CUDA device code.
+ *
+ * @ingroup column_classes
  */
 class alignas(16) column_device_view : public detail::column_device_view_base {
  public:
@@ -430,6 +432,8 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
 /**
  * @brief A mutable, non-owning view of device data as a column of elements
  * that is trivially copyable and usable in CUDA device code.
+ *
+ * @ingroup column_classes
  */
 class alignas(16) mutable_column_device_view : public detail::column_device_view_base {
  public:

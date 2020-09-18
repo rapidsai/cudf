@@ -24,6 +24,7 @@ namespace cudf {
 /**
  * @addtogroup reorder_partition
  * @{
+ * @file
  */
 
 /**

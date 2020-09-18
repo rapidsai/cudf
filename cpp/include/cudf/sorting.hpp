@@ -39,6 +39,7 @@ enum class rank_method {
 /**
  * @addtogroup column_sort
  * @{
+ * @file
  */
 
 /**

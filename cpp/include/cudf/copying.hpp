@@ -29,6 +29,7 @@ namespace cudf {
 /**
  * @addtogroup column_copy
  * @{
+ * @file
  */
 
 /**

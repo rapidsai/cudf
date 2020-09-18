@@ -24,6 +24,7 @@ namespace cudf {
 /**
  * @addtogroup aggregation_rolling
  * @{
+ * @file
  */
 
 /**

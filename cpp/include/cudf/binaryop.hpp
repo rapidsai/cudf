@@ -26,6 +26,7 @@ namespace cudf {
 /**
  * @addtogroup transformation_binaryops
  * @{
+ * @file
  */
 
 /**

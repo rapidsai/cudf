@@ -24,6 +24,7 @@ namespace strings {
 /**
  * @addtogroup strings_split
  * @{
+ * @file
  */
 
 /**

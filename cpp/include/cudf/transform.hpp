@@ -24,6 +24,7 @@ namespace cudf {
 /**
  * @addtogroup transformation_transform
  * @{
+ * @file
  */
 
 /**

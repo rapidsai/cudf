@@ -18,6 +18,10 @@
 #include <cudf/types.hpp>
 #include <vector>
 
+/**
+ * @file
+ */
+
 namespace cudf {
 namespace detail {
 /**

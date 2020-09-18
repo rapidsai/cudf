@@ -26,6 +26,7 @@ namespace cudf {
 /**
  * @addtogroup column_nullmask
  * @{
+ * @file
  */
 
 /**

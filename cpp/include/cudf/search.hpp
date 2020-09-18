@@ -27,6 +27,7 @@ namespace cudf {
 /**
  * @addtogroup column_search
  * @{
+ * @file
  */
 
 /**

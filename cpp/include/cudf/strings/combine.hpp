@@ -25,6 +25,7 @@ namespace strings {
 /**
  * @addtogroup strings_combine
  * @{
+ * @file
  */
 
 /**

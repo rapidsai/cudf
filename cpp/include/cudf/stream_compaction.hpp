@@ -25,6 +25,7 @@ namespace cudf {
 /**
  * @addtogroup reorder_compact
  * @{
+ * @file
  */
 
 /**

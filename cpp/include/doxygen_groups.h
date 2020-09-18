@@ -47,10 +47,25 @@
  *   @{
  *     @defgroup copy_concatenate Concatenating
  *     @defgroup copy_gather Gathering
+ *     @{
+ *        @file cudf/copying.hpp
+ *     @}
  *     @defgroup copy_scatter Scattering
+ *     @{
+ *        @file cudf/copying.hpp
+ *     @}
  *     @defgroup copy_slice Slicing
+ *     @{
+ *        @file cudf/copying.hpp
+ *     @}
  *     @defgroup copy_split Splitting
+ *     @{
+ *        @file cudf/copying.hpp
+ *     @}
  *     @defgroup copy_shift Shifting
+ *     @{
+ *        @file cudf/copying.hpp
+ *     @}
  *   @}
  *   @defgroup column_nullmask Bitmask Operations
  *   @defgroup column_sort Sorting

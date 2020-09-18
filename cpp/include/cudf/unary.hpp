@@ -23,6 +23,7 @@ namespace cudf {
 /**
  * @addtogroup transformation_unaryops
  * @{
+ * @file
  */
 
 enum class unary_op : int32_t {
