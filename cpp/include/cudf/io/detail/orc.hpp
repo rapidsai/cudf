@@ -14,20 +14,16 @@
  * limitations under the License.
  */
 
-/**
- * @file parquet.hpp
- */
-
 #pragma once
 
-#include <cudf/io/parquet.hpp>
+#include <cudf/io/orc.hpp>
 
 namespace cudf {
 namespace io {
 namespace detail {
-namespace parquet {
+namespace orc {
 /**
- * @brief Class to read Parquet dataset data into columns.
+ * @brief Class to read ORC dataset data into columns.
  */
 class reader {
  private:
@@ -43,7 +39,7 @@ class reader {
    * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::vector<std::string> const& filepaths,
-                  parquet_reader_options const& options,
+                  orc_reader_options const& options,
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -54,27 +50,27 @@ class reader {
    * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
-                  parquet_reader_options const& options,
+                  orc_reader_options const& options,
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
-   * @brief Destructor explicitly-declared to avoid inlined in header
+   * @brief Destructor explicitly declared to avoid inlining in header
    */
   ~reader();
 
   /**
-   * @brief Reads the dataset as per given options.
+   * @brief Reads the entire dataset.
    *
    * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    */
-  table_with_metadata read(parquet_reader_options const& options, cudaStream_t stream = 0);
+  table_with_metadata read(orc_reader_options const& options, cudaStream_t stream = 0);
 };
 
 /**
- * @brief Class to write parquet dataset data into columns.
+ * @brief Class to write ORC dataset data into columns.
  */
 class writer {
  private:
@@ -90,69 +86,48 @@ class writer {
    * @param mr Device memory resource to use for device memory allocation
    */
   explicit writer(std::unique_ptr<cudf::io::data_sink> sink,
-                  parquet_writer_options const& options,
+                  orc_writer_options const& options,
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
-   * @brief Destructor explicitly-declared to avoid inlined in header
+   * @brief Destructor explicitly declared to avoid inlining in header
    */
   ~writer();
 
   /**
-   * @brief Writes the dataset as per options provided.
+   * @brief Writes the entire dataset.
    *
    * @param table Set of columns to output
    * @param metadata Table metadata and column names
-   * @param return_filemetadata If true, return the raw file metadata
-   * @param column_chunks_file_path Column chunks file path to be set in the raw output metadata
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  std::unique_ptr<std::vector<uint8_t>> write(table_view const& table,
-                                              const table_metadata* metadata            = nullptr,
-                                              bool return_filemetadata                  = false,
-                                              const std::string column_chunks_file_path = "",
-                                              cudaStream_t stream                       = 0);
+  void write(table_view const& table,
+             const table_metadata* metadata = nullptr,
+             cudaStream_t stream            = 0);
 
   /**
    * @brief Begins the chunked/streamed write process.
    *
-   * @param[in] pq_chunked_state Internal state maintained between chunks.
+   * @param[in] state Internal state maintained between chunks.
    */
-  void write_chunked_begin(struct pq_chunked_state& state);
+  void write_chunked_begin(struct orc_chunked_state& state);
 
   /**
-   * @brief Writes a single subtable as part of a larger parquet file/table write.
+   * @brief Writes a single subtable as part of a larger ORC file/table write.
    *
    * @param[in] table The table information to be written
-   * @param[in] pq_chunked_state Internal state maintained between chunks.
+   * @param[in] state Internal state maintained between chunks.
    */
-  void write_chunk(table_view const& table, struct pq_chunked_state& state);
+  void write_chunk(table_view const& table, struct orc_chunked_state& state);
 
   /**
    * @brief Finishes the chunked/streamed write process.
    *
-   * @param[in] pq_chunked_state Internal state maintained between chunks.
-   * @param[in] return_filemetadata If true, return the raw file metadata
-   * @param[in] column_chunks_file_path Column chunks file path to be set in the raw output metadata
-   *
-   * @return A parquet-compatible blob that contains the data for all rowgroups in the list
+   * @param[in] state Internal state maintained between chunks.
    */
-  std::unique_ptr<std::vector<uint8_t>> write_chunked_end(
-    struct pq_chunked_state& state,
-    bool return_filemetadata                   = false,
-    const std::string& column_chunks_file_path = "");
-
-  /**
-   * @brief Merges multiple metadata blobs returned by write_all into a single metadata blob
-   *
-   * @param[in] metadata_list List of input file metadata
-   * @return A parquet-compatible blob that contains the data for all rowgroups in the list
-   */
-  static std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
-    const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list);
+  void write_chunked_end(struct orc_chunked_state& state);
 };
-
-};  // namespace parquet
-};  // namespace detail
-};  // namespace io
-};  // namespace cudf
+}  // namespace orc
+}  // namespace detail
+}  // namespace io
+}  // namespace cudf

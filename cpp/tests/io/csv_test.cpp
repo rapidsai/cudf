@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <limits>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
@@ -23,7 +24,6 @@
 
 #include <cudf/io/csv.hpp>
 #include <cudf/io/datasource.hpp>
-#include <cudf/io/functions.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
@@ -1374,6 +1374,52 @@ TEST_F(CsvReaderTest, UserImplementedSource)
   expect_column_data_equal(int8_values, view.column(0));
   expect_column_data_equal(int16_values, view.column(1));
   expect_column_data_equal(int32_values, view.column(2));
+}
+
+TEST_F(CsvReaderTest, DurationsWithWriter)
+{
+  auto filepath = temp_env->get_temp_dir() + "DurationsWithWriter.csv";
+
+  constexpr long max_value_d  = std::numeric_limits<cudf::duration_D::rep>::max();
+  constexpr long min_value_d  = std::numeric_limits<cudf::duration_D::rep>::min();
+  constexpr long max_value_ns = std::numeric_limits<cudf::duration_s::rep>::max();
+  constexpr long min_value_ns = std::numeric_limits<cudf::duration_s::rep>::min();
+  column_wrapper<cudf::duration_D, cudf::duration_D::rep> durations_D{
+    {-86400L, -3600L, -2L, -1L, 0L, 1L, 2L, min_value_d, max_value_d}};
+  column_wrapper<cudf::duration_s, int64_t> durations_s{{-86400L,
+                                                         -3600L,
+                                                         -2L,
+                                                         -1L,
+                                                         0L,
+                                                         1L,
+                                                         2L,
+                                                         min_value_ns / 1000000000 + 1,
+                                                         max_value_ns / 1000000000}};
+  column_wrapper<cudf::duration_ms, int64_t> durations_ms{
+    {-86400L, -3600L, -2L, -1L, 0L, 1L, 2L, min_value_ns / 1000000 + 1, max_value_ns / 1000000}};
+  column_wrapper<cudf::duration_us, int64_t> durations_us{
+    {-86400L, -3600L, -2L, -1L, 0L, 1L, 2L, min_value_ns / 1000 + 1, max_value_ns / 1000}};
+  column_wrapper<cudf::duration_ns, int64_t> durations_ns{
+    {-86400L, -3600L, -2L, -1L, 0L, 1L, 2L, min_value_ns, max_value_ns}};
+
+  cudf::table_view input_table(std::vector<cudf::column_view>{
+    durations_D, durations_s, durations_ms, durations_us, durations_ns});
+  std::vector<std::string> names{"D", "s", "ms", "us", "ns"};
+
+  write_csv_helper(filepath, input_table, true, names);
+
+  cudf_io::csv_reader_options in_opts =
+    cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath})
+      .names(names)
+      .dtypes({"timedelta[D]",
+               "timedelta64[s]",
+               "timedelta64[ms]",
+               "timedelta64[us]",
+               "timedelta64[ns]"});
+  auto result = cudf_io::read_csv(in_opts);
+
+  const auto result_table = result.tbl->view();
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(input_table, result_table);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

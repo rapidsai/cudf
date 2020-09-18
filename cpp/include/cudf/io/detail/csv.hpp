@@ -40,7 +40,7 @@ class reader {
    */
   explicit reader(std::vector<std::string> const &filepaths,
                   csv_reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+                  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Constructor from an array of datasources
@@ -51,7 +51,7 @@ class reader {
    */
   explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                   csv_reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+                  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header
@@ -86,9 +86,9 @@ class writer {
   writer(std::unique_ptr<cudf::io::data_sink> sinkp,
          csv_writer_options const &options,
          rmm::mr::device_memory_resource *mr =
-           rmm::mr::get_default_resource());  // cannot provide definition here (because _impl is
-                                              // incomplete, hence unique_ptr has not enough
-                                              // sizeof() info)
+           rmm::mr::get_current_device_resource());  // cannot provide definition here (because
+                                                     // _impl is incomplete, hence unique_ptr has
+                                                     // not enough sizeof() info)
 
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header

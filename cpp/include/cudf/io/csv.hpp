@@ -18,11 +18,9 @@
 
 #include <cudf/io/types.hpp>
 
-#include <cudf/io/writers.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-
-#include <rmm/mr/device/default_memory_resource.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <memory>
 #include <string>
@@ -1097,8 +1095,6 @@ class csv_reader_options_builder {
  *
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
- *  #include <cudf/io/functions.hpp>
- *  ...
  *  std::string filepath = "dataset.csv";
  *  cudf::io::csv_reader_options options =
  * cudf::io::csv_reader_options::builder(cudf::source_info(filepath));
@@ -1112,8 +1108,9 @@ class csv_reader_options_builder {
  *
  * @return The set of columns along with metadata.
  */
-table_with_metadata read_csv(csv_reader_options const& options,
-                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+table_with_metadata read_csv(
+  csv_reader_options const& options,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  *@breif Builder to build options for `writer_csv()`.
@@ -1422,8 +1419,6 @@ class csv_writer_options_builder {
  *
  * The following code snippet demonstrates how to write columns to a file:
  * @code
- *  #include <cudf/io/functions.hpp>
- *  ...
  *  std::string filepath = "dataset.csv";
  *  cudf::io::sink_info sink_info(filepath);
  *
@@ -1437,6 +1432,6 @@ class csv_writer_options_builder {
  * @param mr Device memory resource to use for device memory allocation.
  */
 void write_csv(csv_writer_options const& options,
-               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+               rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 }  // namespace io
 }  // namespace cudf
