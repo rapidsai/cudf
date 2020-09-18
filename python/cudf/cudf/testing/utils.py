@@ -31,7 +31,7 @@ def _generate_rand_meta(obj, dtypes_list):
 
 def run_test(funcs, args):
     if len(args) != 2:
-        print("Usage is python file_name.py function_name")
+        ValueError("Usage is python file_name.py function_name")
 
     function_name_to_run = args[1]
     try:
