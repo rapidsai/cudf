@@ -35,6 +35,7 @@
 - PR #6162 Reduce output parameters in cuio csv and json reader internals
 - PR #6146 Added element/validity pair constructors for fixed_width and string wrappers
 - PR #6143 General improvements for java arrow IPC.
+- PR #6138 Add builder API for cuIO `orc_writer_options` and `orc_reader_options`
 - PR #6152 Change dictionary indices to uint32
 - PR #6099 Add fluent builder apis to `json_reader_options` and `avro_reader_options`
 - PR #6163 Use `Column.full` instead of `scalar_broadcast_to` or `cupy.zeros`
