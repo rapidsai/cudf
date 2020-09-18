@@ -431,6 +431,7 @@ add_library(cudf
             src/quantiles/quantile.cu
             src/quantiles/quantiles.cu
             src/reductions/reductions.cpp
+            src/reductions/nth_element.cu
             src/reductions/min.cu
             src/reductions/max.cu
             src/reductions/any.cu

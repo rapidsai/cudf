@@ -216,5 +216,32 @@ std::unique_ptr<scalar> standard_deviation(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
+/**
+ * @brief Returns nth element in input column
+ *
+ * A negative value `n` is interpreted as `n+valid_count`, where `valid_count` is the number of
+ * valid elements in the input column.
+ *
+ * If all elements in input column are null, output scalar is null.
+ *
+ * @warning This function is expensive (invokes a kernel launch). So, it is not
+ * recommended to be used in performance sensitive code or inside a loop.
+ *
+ * @throw cudf::logic_error if n falls outside the range `[-valid_count, valid_count)`
+ *
+ * @param col input column to get nth element from.
+ * @param n index of element to get
+ * @param null_handling Indicates if null values will be counted while indexing.
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @return nth element as scalar
+ */
+std::unique_ptr<scalar> nth_element(
+  column_view const& col,
+  size_type n,
+  null_policy null_handling,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0);
+
 }  // namespace reduction
 }  // namespace cudf
