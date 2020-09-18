@@ -282,15 +282,17 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_ifElseSS(JNIEnv *env, j
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_reduce(JNIEnv *env, jclass,
-                                                                jlong j_col_view, jint agg_type,
+                                                                jlong j_col_view,
+                                                                jlong j_agg,
                                                                 jint j_dtype) {
   JNI_NULL_CHECK(env, j_col_view, "column view is null", 0);
+  JNI_NULL_CHECK(env, j_agg, "aggregation is null", 0);
   try {
     cudf::jni::auto_set_device(env);
     auto col = reinterpret_cast<cudf::column_view *>(j_col_view);
-    auto agg = cudf::jni::map_jni_aggregation(agg_type);
+    auto agg = reinterpret_cast<std::unique_ptr<cudf::aggregation> *>(j_agg);
     cudf::data_type out_dtype{static_cast<cudf::type_id>(j_dtype)};
-    std::unique_ptr<cudf::scalar> result = cudf::reduce(*col, agg, out_dtype);
+    std::unique_ptr<cudf::scalar> result = cudf::reduce(*col, *agg, out_dtype);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
@@ -316,23 +318,25 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_quantile(JNIEnv *env, j
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_rollingWindow(
-    JNIEnv *env, jclass clazz, jlong input_col, jint min_periods, jint agg_type, jint preceding,
+    JNIEnv *env, jclass clazz, jlong input_col, jint min_periods, jlong agg_ptr, jint preceding,
     jint following, jlong preceding_col, jlong following_col) {
 
   JNI_NULL_CHECK(env, input_col, "native handle is null", 0);
+  JNI_NULL_CHECK(env, agg_ptr, "aggregation handle is null", 0);
   try {
     cudf::jni::auto_set_device(env);
     cudf::column_view *n_input_col = reinterpret_cast<cudf::column_view *>(input_col);
     cudf::column_view *n_preceding_col = reinterpret_cast<cudf::column_view *>(preceding_col);
     cudf::column_view *n_following_col = reinterpret_cast<cudf::column_view *>(following_col);
-    auto agg = cudf::jni::map_jni_aggregation(agg_type);
+    std::unique_ptr<cudf::aggregation> * agg =
+        reinterpret_cast<std::unique_ptr<cudf::aggregation> *>(agg_ptr);
 
     std::unique_ptr<cudf::column> ret;
     if (n_preceding_col != nullptr && n_following_col != nullptr) {
       ret =
-          cudf::rolling_window(*n_input_col, *n_preceding_col, *n_following_col, min_periods, agg);
+          cudf::rolling_window(*n_input_col, *n_preceding_col, *n_following_col, min_periods, *agg);
     } else {
-      ret = cudf::rolling_window(*n_input_col, preceding, following, min_periods, agg);
+      ret = cudf::rolling_window(*n_input_col, preceding, following, min_periods, *agg);
     }
     return reinterpret_cast<jlong>(ret.release());
   }

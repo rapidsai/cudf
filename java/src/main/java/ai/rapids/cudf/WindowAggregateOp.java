@@ -27,17 +27,17 @@ package ai.rapids.cudf;
  */
 public class WindowAggregateOp implements Comparable<WindowAggregateOp> {
 
-  private AggregateOp   aggregateOp;
+  private Aggregation.Kind kind;
   private WindowOptions windowOptions;
 
-  public WindowAggregateOp(AggregateOp aggregateOp, WindowOptions windowOptions) {
-    this.aggregateOp = aggregateOp;
+  public WindowAggregateOp(Aggregation.Kind kind, WindowOptions windowOptions) {
+    this.kind = kind;
     this.windowOptions = windowOptions;
     assertIsValid();
   }
 
-  public AggregateOp getAggregateOp() {
-    return aggregateOp;
+  public Aggregation.Kind getAggregateOp() {
+    return kind;
   }
 
   public WindowOptions getWindowOptions() {
@@ -50,7 +50,7 @@ public class WindowAggregateOp implements Comparable<WindowAggregateOp> {
    * @throws UnsupportedOperationException if windowOptions specifies a ColumnVector for precedingCol/followingCol
    */
   private void assertIsValid() {
-    if (aggregateOp == null) {
+    if (kind == null) {
       throw new IllegalArgumentException("Aggregation-operation cannot be null!");
     }
 
@@ -65,7 +65,7 @@ public class WindowAggregateOp implements Comparable<WindowAggregateOp> {
 
   @Override
   public int compareTo(WindowAggregateOp rhs) {
-    int compareAggOps = this.aggregateOp.compareTo(rhs.aggregateOp);
+    int compareAggOps = this.kind.compareTo(rhs.kind);
     if (compareAggOps != 0) {
       return compareAggOps;
     }

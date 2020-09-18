@@ -650,7 +650,7 @@ public final class HostColumnVector implements AutoCloseable {
    * Get the value at index.
    */
   public final double getDouble(long index) {
-    assert type == DType.FLOAT64;
+    assert type == DType.FLOAT64 : type + " is not a supported double type.";
     assertsForGet(index);
     return offHeap.data.getDouble(index * type.sizeInBytes);
   }

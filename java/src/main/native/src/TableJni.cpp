@@ -569,56 +569,10 @@ jlongArray convert_table_for_return(JNIEnv *env, std::unique_ptr<cudf::table> &t
   return convert_table_for_return(env, table_result, extra);
 }
 
-std::unique_ptr<cudf::aggregation> map_jni_aggregation(jint op) {
-  // These numbers come from AggregateOp.java and must stay in sync
-  switch (op) {
-    case 0: // SUM
-      return cudf::make_sum_aggregation();
-    case 1: // MIN
-      return cudf::make_min_aggregation();
-    case 2: // MAX
-      return cudf::make_max_aggregation();
-    case 3: // COUNT_VALID
-      return cudf::make_count_aggregation(null_policy::EXCLUDE);
-    case 4: // COUNT_ALL
-      return cudf::make_count_aggregation(null_policy::INCLUDE);
-    case 5: // MEAN
-      return cudf::make_mean_aggregation();
-    case 6: // MEDIAN
-      return cudf::make_median_aggregation();
-    case 8: // ARGMAX
-      return cudf::make_argmax_aggregation();
-    case 9: // ARGMIN
-      return cudf::make_argmin_aggregation();
-    case 10: // PRODUCT
-      return cudf::make_product_aggregation();
-    case 11: // SUMOFSQUARES
-      return cudf::make_sum_of_squares_aggregation();
-    case 12: // VAR
-      return cudf::make_variance_aggregation();
-    case 13: // STD
-      return cudf::make_std_aggregation();
-    case 14: // ANY
-      return cudf::make_any_aggregation();
-    case 15: // ALL
-      return cudf::make_all_aggregation();
-    case 16: // FIRST_INCLUDE_NULLS
-      return cudf::make_nth_element_aggregation(0, null_policy::INCLUDE);
-    case 17: // FIRST_EXCLUDE_NULLS
-      return cudf::make_nth_element_aggregation(0, null_policy::EXCLUDE);
-    case 18: // LAST_INCLUDE_NULLS
-      return cudf::make_nth_element_aggregation(-1, null_policy::INCLUDE);
-    case 19: // LAST_EXCLUDE_NULLS
-      return cudf::make_nth_element_aggregation(-1, null_policy::EXCLUDE);
-    case 20: // ROW_NUMBER
-      return cudf::make_row_number_aggregation();
-    default: throw std::logic_error("Unsupported Aggregation Operation");
-  }
-}
-
 namespace {
 // Check that window parameters are valid.
-bool valid_window_parameters(native_jintArray const &values, native_jintArray const &ops,
+bool valid_window_parameters(native_jintArray const &values,
+                             native_jpointerArray<std::unique_ptr<cudf::aggregation>> const &ops,
                              native_jintArray const &min_periods, native_jintArray const &preceding,
                              native_jintArray const &following) {
   return values.size() == ops.size() && values.size() == min_periods.size() &&
@@ -627,7 +581,8 @@ bool valid_window_parameters(native_jintArray const &values, native_jintArray co
 
 // Check that time-range window parameters are valid.
 bool valid_window_parameters(native_jintArray const &values, native_jintArray const &timestamps,
-                             native_jintArray const &ops, native_jintArray const &min_periods,
+                             native_jpointerArray<std::unique_ptr<cudf::aggregation>> const &ops,
+                             native_jintArray const &min_periods,
                              native_jintArray const &preceding, native_jintArray const &following) {
   return values.size() == timestamps.size() &&
          valid_window_parameters(values, ops, min_periods, preceding, following);
@@ -1667,18 +1622,19 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_roundRobinPartition(
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_groupByAggregate(
     JNIEnv *env, jclass clazz, jlong input_table, jintArray keys,
-    jintArray aggregate_column_indices, jintArray agg_types, jboolean ignore_null_keys) {
+    jintArray aggregate_column_indices, jlongArray agg_instances, jboolean ignore_null_keys) {
   JNI_NULL_CHECK(env, input_table, "input table is null", NULL);
   JNI_NULL_CHECK(env, keys, "input keys are null", NULL);
   JNI_NULL_CHECK(env, aggregate_column_indices, "input aggregate_column_indices are null", NULL);
-  JNI_NULL_CHECK(env, agg_types, "agg_types are null", NULL);
+  JNI_NULL_CHECK(env, agg_instances, "agg_instances are null", NULL);
 
   try {
     cudf::jni::auto_set_device(env);
     cudf::table_view *n_input_table = reinterpret_cast<cudf::table_view *>(input_table);
     cudf::jni::native_jintArray n_keys(env, keys);
     cudf::jni::native_jintArray n_values(env, aggregate_column_indices);
-    cudf::jni::native_jintArray n_ops(env, agg_types);
+    cudf::jni::native_jpointerArray<std::unique_ptr<cudf::aggregation>> 
+        n_agg_instances(env, agg_instances);
     std::vector<cudf::column_view> n_keys_cols;
     n_keys_cols.reserve(n_keys.size());
     for (int i = 0; i < n_keys.size(); i++) {
@@ -1698,10 +1654,10 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_groupByAggregate(
       cudf::groupby::aggregation_request req;
       int col_index = n_values[i];
       if (col_index == previous_index) {
-        requests.back().aggregations.push_back(cudf::jni::map_jni_aggregation(n_ops[i]));
+        requests.back().aggregations.push_back((*n_agg_instances[i])->clone());
       } else {
         req.values = n_input_table->column(col_index);
-        req.aggregations.push_back(cudf::jni::map_jni_aggregation(n_ops[i]));
+        req.aggregations.push_back((*n_agg_instances[i])->clone());
         requests.push_back(std::move(req));
       }
       previous_index = col_index;
@@ -1848,13 +1804,13 @@ JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_Table_contiguousSplit(JNIEnv 
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rollingWindowAggregate(
     JNIEnv *env, jclass clazz, jlong j_input_table, jintArray j_keys,
-    jintArray j_aggregate_column_indices, jintArray j_agg_types, jintArray j_min_periods,
+    jintArray j_aggregate_column_indices, jlongArray j_agg_instances, jintArray j_min_periods,
     jintArray j_preceding, jintArray j_following, jboolean ignore_null_keys) {
 
   JNI_NULL_CHECK(env, j_input_table, "input table is null", NULL);
   JNI_NULL_CHECK(env, j_keys, "input keys are null", NULL);
   JNI_NULL_CHECK(env, j_aggregate_column_indices, "input aggregate_column_indices are null", NULL);
-  JNI_NULL_CHECK(env, j_agg_types, "agg_types are null", NULL);
+  JNI_NULL_CHECK(env, j_agg_instances, "agg_instances are null", NULL);
 
   try {
     cudf::jni::auto_set_device(env);
@@ -1865,12 +1821,13 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rollingWindowAggregate(
     cudf::table_view *input_table{reinterpret_cast<cudf::table_view *>(j_input_table)};
     cudf::jni::native_jintArray keys{env, j_keys};
     cudf::jni::native_jintArray values{env, j_aggregate_column_indices};
-    cudf::jni::native_jintArray ops{env, j_agg_types};
+    cudf::jni::native_jpointerArray<std::unique_ptr<cudf::aggregation>> 
+        agg_instances(env, j_agg_instances);
     cudf::jni::native_jintArray min_periods{env, j_min_periods};
     cudf::jni::native_jintArray preceding{env, j_preceding};
     cudf::jni::native_jintArray following{env, j_following};
 
-    if (not valid_window_parameters(values, ops, min_periods, preceding, following)) {
+    if (not valid_window_parameters(values, agg_instances, min_periods, preceding, following)) {
       JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
                     "Number of aggregation columns must match number of agg ops, and window-specs",
                     nullptr);
@@ -1885,7 +1842,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rollingWindowAggregate(
       int agg_column_index = values[i];
       result_columns.emplace_back(std::move(cudf::grouped_rolling_window(
           groupby_keys, input_table->column(agg_column_index), preceding[i], following[i],
-          min_periods[i], cudf::jni::map_jni_aggregation(ops[i]))));
+          min_periods[i], (*agg_instances[i])->clone())));
     }
 
     auto result_table = std::make_unique<cudf::table>(std::move(result_columns));
@@ -1897,7 +1854,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rollingWindowAggregate(
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_timeRangeRollingWindowAggregate(
     JNIEnv *env, jclass clazz, jlong j_input_table, jintArray j_keys,
     jintArray j_timestamp_column_indices, jbooleanArray j_is_timestamp_ascending,
-    jintArray j_aggregate_column_indices, jintArray j_agg_types, jintArray j_min_periods,
+    jintArray j_aggregate_column_indices, jlongArray j_agg_instances, jintArray j_min_periods,
     jintArray j_preceding, jintArray j_following, jboolean ignore_null_keys) {
 
   JNI_NULL_CHECK(env, j_input_table, "input table is null", NULL);
@@ -1905,7 +1862,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_timeRangeRollingWindowAgg
   JNI_NULL_CHECK(env, j_timestamp_column_indices, "input timestamp_column_indices are null", NULL);
   JNI_NULL_CHECK(env, j_is_timestamp_ascending, "input timestamp_ascending is null", NULL);
   JNI_NULL_CHECK(env, j_aggregate_column_indices, "input aggregate_column_indices are null", NULL);
-  JNI_NULL_CHECK(env, j_agg_types, "agg_types are null", NULL);
+  JNI_NULL_CHECK(env, j_agg_instances, "agg_instances are null", NULL);
 
   try {
     cudf::jni::auto_set_device(env);
@@ -1918,12 +1875,13 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_timeRangeRollingWindowAgg
     cudf::jni::native_jintArray timestamps{env, j_timestamp_column_indices};
     cudf::jni::native_jbooleanArray timestamp_ascending{env, j_is_timestamp_ascending};
     cudf::jni::native_jintArray values{env, j_aggregate_column_indices};
-    cudf::jni::native_jintArray ops{env, j_agg_types};
+    cudf::jni::native_jpointerArray<std::unique_ptr<cudf::aggregation>> 
+        agg_instances(env, j_agg_instances);
     cudf::jni::native_jintArray min_periods{env, j_min_periods};
     cudf::jni::native_jintArray preceding{env, j_preceding};
     cudf::jni::native_jintArray following{env, j_following};
 
-    if (not valid_window_parameters(values, ops, min_periods, preceding, following)) {
+    if (not valid_window_parameters(values, agg_instances, min_periods, preceding, following)) {
       JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
                     "Number of aggregation columns must match number of agg ops, and window-specs",
                     nullptr);
@@ -1940,7 +1898,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_timeRangeRollingWindowAgg
           groupby_keys, input_table->column(timestamps[i]),
           timestamp_ascending[i] ? cudf::order::ASCENDING : cudf::order::DESCENDING,
           input_table->column(agg_column_index), preceding[i], following[i], min_periods[i],
-          cudf::jni::map_jni_aggregation(ops[i]))));
+          (*agg_instances[i])->clone())));
     }
 
     auto result_table = std::make_unique<cudf::table>(std::move(result_columns));
