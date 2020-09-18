@@ -384,6 +384,9 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
                 )
             else:
                 raise TypeError(f"Unsupported dtype: {dtype}")
+            # TODO: Add List column support once
+            # https://github.com/rapidsai/cudf/pull/6075
+            # is merged.
 
     df = get_dataframe(
         Parameters(num_rows=rows, column_parameters=column_params, seed=seed,),
