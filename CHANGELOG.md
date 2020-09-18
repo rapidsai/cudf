@@ -84,6 +84,7 @@
 - PR #6226 Add in some JNI checks for null handles
 - PR #6251 Replace remaining calls to RMM `get_default_resource`
 - PR #6259 Fix compilation error with GCC 8
+- PR #6258 Pin libcudf conda recipe to boost 1.72.0
 
 
 # cuDF 0.15.0 (26 Aug 2020)
