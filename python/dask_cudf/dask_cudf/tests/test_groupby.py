@@ -281,9 +281,13 @@ def test_groupby_multiindex_reset_index(npartitions):
     pddf = dd.from_pandas(df.to_pandas(), npartitions=npartitions)
     gr = ddf.groupby(["a", "c"]).agg({"b": ["count"]}).reset_index()
     pr = pddf.groupby(["a", "c"]).agg({"b": ["count"]}).reset_index()
+
+    # CuDF uses "int32" for count. Pandas uses "int64"
+    gr_out = gr.compute().sort_values(by=["a", "c"]).reset_index(drop=True)
+    gr_out[("b", "count")] = gr_out[("b", "count")].astype("int64")
+
     dd.assert_eq(
-        gr.compute().sort_values(by=["a", "c"]).reset_index(drop=True),
-        pr.compute().sort_values(by=["a", "c"]).reset_index(drop=True),
+        gr_out, pr.compute().sort_values(by=["a", "c"]).reset_index(drop=True),
     )
 
 

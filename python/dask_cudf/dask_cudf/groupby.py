@@ -51,7 +51,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
 def groupby_agg(
     ddf,
     gb_cols,
-    aggs,
+    aggs_in,
     split_every=None,
     split_out=None,
     dropna=True,
@@ -66,6 +66,7 @@ def groupby_agg(
     split_out = split_out or 1
 
     # Standardize `gb_cols` and `columns` lists
+    aggs = aggs_in.copy()
     if isinstance(gb_cols, str):
         gb_cols = [gb_cols]
     columns = [c for c in ddf.columns if c not in gb_cols]
@@ -146,6 +147,7 @@ def groupby_agg(
                 )
 
     # Final output partitions
+    _meta = ddf._meta.groupby(gb_cols, as_index=as_index).agg(aggs)
     for s in range(split_out):
         dsk[(gb_agg_name, s)] = (
             _finalize_gb_agg,
@@ -153,12 +155,12 @@ def groupby_agg(
             gb_cols,
             aggs,
             columns,
+            _meta.columns,
             as_index,
             sep,
         )
 
     divisions = [None] * (split_out + 1)
-    _meta = ddf._meta.groupby(gb_cols, as_index=as_index).agg(aggs)
     graph = HighLevelGraph.from_collections(
         gb_agg_name, dsk, dependencies=[ddf]
     )
@@ -247,7 +249,7 @@ def _tree_node_agg(dfs, gb_cols, split_out, dropna, sort, sep):
     return gb
 
 
-def _finalize_gb_agg(gb, gb_cols, aggs, columns, as_index, sep):
+def _finalize_gb_agg(gb, gb_cols, aggs, columns, final_columns, as_index, sep):
 
     # Deal with higher-order aggregations
     for col in columns:
@@ -299,4 +301,4 @@ def _finalize_gb_agg(gb, gb_cols, aggs, columns, as_index, sep):
             agg_array.append(agg)
     gb.columns = pd.MultiIndex.from_arrays([col_array, agg_array])
 
-    return gb
+    return gb[final_columns]
