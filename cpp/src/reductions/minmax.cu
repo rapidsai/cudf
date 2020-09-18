@@ -78,6 +78,14 @@ struct minmax_binary_op
   }
 };
 
+template <typename T>
+struct minmax_iterfunctor {
+  column_device_view d_col;
+  __device__ minmax_pair<T> operator()(size_type index)
+  {
+    return minmax_pair<T>(d_col.element<T>(index), d_col.is_valid(index));
+  };
+};
 /**
  * @brief functor that calls thrust::transform_reduce to produce a std::pair
  * of scalars that represent the minimum and maximum values of the input data
@@ -94,18 +102,23 @@ struct minmax_functor {
 
     // compute minimum and maximum values
     minmax_pair<T> const result = [&]() -> minmax_pair<T> {
-      auto begin = thrust::make_counting_iterator<size_type>(0);
-      auto end   = begin + col.size();
-      auto op    = [d_col = *device_col] __device__(size_type index) -> minmax_pair<T> {
-        return minmax_pair<T>(d_col.element<T>(index), d_col.is_valid(index));
-      };
+      auto op = minmax_iterfunctor<T>{*device_col};
+      auto begin =
+        thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), op);
+      auto end = begin + col.size();
 
       if (col.nullable()) {
-        return thrust::transform_reduce(
-          begin, end, op, minmax_pair<T>{}, minmax_binary_op<T, true>{});
+        return thrust::reduce(rmm::exec_policy(stream)->on(stream),
+                              begin,
+                              end,
+                              minmax_pair<T>{},
+                              minmax_binary_op<T, true>{});
       } else {
-        return thrust::transform_reduce(
-          begin, end, op, minmax_pair<T>{}, minmax_binary_op<T, false>{});
+        return thrust::reduce(rmm::exec_policy(stream)->on(stream),
+                              begin,
+                              end,
+                              minmax_pair<T>{},
+                              minmax_binary_op<T, false>{});
       }
     }();
 
