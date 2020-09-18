@@ -357,7 +357,9 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
                     ColumnParameters(
                         cardinality=cardinality,
                         null_frequency=null_frequency,
-                        generator=datetime_generator(size=cardinality),
+                        generator=datetime_generator(
+                            dtype=dtype, size=cardinality
+                        ),
                         is_sorted=False,
                         dtype=np.dtype(dtype),
                     )
@@ -367,7 +369,9 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
                     ColumnParameters(
                         cardinality=cardinality,
                         null_frequency=null_frequency,
-                        generator=timedelta_generator(size=cardinality),
+                        generator=timedelta_generator(
+                            dtype=dtype, size=cardinality
+                        ),
                         is_sorted=False,
                         dtype=np.dtype(dtype),
                     )
@@ -413,13 +417,21 @@ def float_generator(dtype, size):
     )
 
 
-def datetime_generator(size):
-    return lambda: np.random.randint(low=0, high=2147483647 - 1, size=size,)
-
-
-def timedelta_generator(size):
+def datetime_generator(dtype, size):
+    iinfo = np.iinfo("int64")
     return lambda: np.random.randint(
-        low=-2147483648, high=2147483647 - 1, size=size
+        low=np.datetime64(iinfo.min + 1, "ns").astype(dtype).astype("int"),
+        high=np.datetime64(iinfo.max, "ns").astype(dtype).astype("int"),
+        size=size,
+    )
+
+
+def timedelta_generator(dtype, size):
+    iinfo = np.iinfo("int64")
+    return lambda: np.random.randint(
+        low=np.timedelta64(iinfo.min + 1, "ns").astype(dtype).astype("int"),
+        high=np.timedelta64(iinfo.max, "ns").astype(dtype).astype("int"),
+        size=size,
     )
 
 
