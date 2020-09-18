@@ -60,7 +60,7 @@ struct minmax_pair {
 template <typename T, bool has_nulls = true>
 struct minmax_binary_op
   : public thrust::binary_function<minmax_pair<T>, minmax_pair<T>, minmax_pair<T>> {
-  __device__ minmax_pair<T> operator()(const minmax_pair<T> &x, const minmax_pair<T> &y) const
+  __device__ minmax_pair<T> operator()(minmax_pair<T> const& lhs, minmax_pair<T> const& rhs) const
   {
     T const x_min = (x.min_valid || !has_nulls) ? x.min_val : cudf::DeviceMin::identity<T>();
     T const y_min = (y.min_valid || !has_nulls) ? y.min_val : cudf::DeviceMin::identity<T>();
