@@ -45,12 +45,12 @@ template <typename T>
 struct TypedLeadLagWindowTest : public cudf::test::BaseFixture {
 };
 
-using FixedWidthTypes = cudf::test::Concat<cudf::test::IntegralTypes,
-                                           cudf::test::FloatingPointTypes,
-                                           cudf::test::DurationTypes,
-                                           cudf::test::TimestampTypes>;
+using TypesForTest = cudf::test::Concat<cudf::test::IntegralTypes,
+                                        cudf::test::FloatingPointTypes,
+                                        cudf::test::DurationTypes,
+                                        cudf::test::TimestampTypes>;
 
-TYPED_TEST_CASE(TypedLeadLagWindowTest, FixedWidthTypes);
+TYPED_TEST_CASE(TypedLeadLagWindowTest, TypesForTest);
 
 TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagBasics)
 {
