@@ -226,6 +226,8 @@ std::unique_ptr<scalar> standard_deviation(
  *
  * @warning This function is expensive (invokes a kernel launch). So, it is not
  * recommended to be used in performance sensitive code or inside a loop.
+ * It takes O(`col.size()`) time and space complexity for nullable column with
+ * `null_policy::EXCLUDE` as input.
  *
  * @throw cudf::logic_error if n falls outside the range `[-count, count)` where `count` is the
  * number of valid * elements in the input column if `null_handling` is `null_policy::EXCLUDE`,
