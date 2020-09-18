@@ -62,10 +62,10 @@ struct minmax_binary_op
   : public thrust::binary_function<minmax_pair<T>, minmax_pair<T>, minmax_pair<T>> {
   __device__ minmax_pair<T> operator()(const minmax_pair<T> &x, const minmax_pair<T> &y) const
   {
-    T x_min = x.min_valid || !has_nulls ? x.min_val : cudf::DeviceMin::identity<T>();
-    T y_min = y.min_valid || !has_nulls ? y.min_val : cudf::DeviceMin::identity<T>();
-    T x_max = x.max_valid || !has_nulls ? x.max_val : cudf::DeviceMax::identity<T>();
-    T y_max = y.max_valid || !has_nulls ? y.max_val : cudf::DeviceMax::identity<T>();
+    T const x_min = (x.min_valid || !has_nulls) ? x.min_val : cudf::DeviceMin::identity<T>();
+    T const y_min = (y.min_valid || !has_nulls) ? y.min_val : cudf::DeviceMin::identity<T>();
+    T const x_max = (x.max_valid || !has_nulls) ? x.max_val : cudf::DeviceMax::identity<T>();
+    T const y_max = (y.max_valid || !has_nulls) ? y.max_val : cudf::DeviceMax::identity<T>();
 
     // The only invalid situation is if we compare two invalid values.
     // Otherwise, we are certain to select a valid value due to the
