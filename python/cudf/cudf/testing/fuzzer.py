@@ -5,6 +5,7 @@ import functools
 import json
 import logging
 import os
+import sys
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)-8s %(message)s",
@@ -83,6 +84,12 @@ class Fuzzer(object):
             try:
                 self._start_time = datetime.datetime.now()
                 self._target(file_name)
+            except KeyboardInterrupt:
+                logging.info(
+                    f"Keyboard Interrupt encountered, stopping after "
+                    f"{self.runs} runs."
+                )
+                sys.exit(0)
             except Exception as e:
                 logging.exception(e)
                 self.write_crash(e)
