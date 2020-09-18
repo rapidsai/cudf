@@ -107,8 +107,12 @@ struct host_span : public span_base<T, Extent, host_span<T, Extent>> {
 
   constexpr host_span() noexcept : base() {}
 
-  template <typename Container>
-  constexpr host_span(Container& in) : base(in.data(), in.size())
+  constexpr host_span(std::vector<T>& in) : base(in.data(), in.size()) {}
+
+  constexpr host_span(std::vector<std::remove_const_t<T>> const& in) : base(in.data(), in.size()) {}
+  constexpr host_span(thrust::host_vector<T>& in) : base(in.data(), in.size()) {}
+  constexpr host_span(thrust::host_vector<std::remove_const_t<T>> const& in)
+    : base(in.data(), in.size())
   {
   }
 };
@@ -120,9 +124,24 @@ struct device_span : public span_base<T, Extent, device_span<T, Extent>> {
 
   constexpr device_span() noexcept : base() {}
 
-  template <typename Container>
-  constexpr device_span(Container& in)
-    : base(static_cast<T*>(thrust::raw_pointer_cast(in.data())), in.size())
+  constexpr device_span(thrust::device_vector<T>& in) : base(in.data().get(), in.size()) {}
+  constexpr device_span(thrust::device_vector<std::remove_const_t<T>> const& in)
+    : base(in.data().get(), in.size())
+  {
+  }
+  constexpr device_span(rmm::device_vector<T>& in) : base(in.data().get(), in.size()) {}
+  constexpr device_span(rmm::device_vector<std::remove_const_t<T>> const& in)
+    : base(in.data().get(), in.size())
+  {
+  }
+  constexpr device_span(rmm::device_uvector<T>& in) : base(in.data(), in.size()) {}
+  constexpr device_span(rmm::device_uvector<std::remove_const_t<T>> const& in)
+    : base(in.data(), in.size())
+  {
+  }
+  constexpr device_span(rmm::device_buffer& in) : base(static_cast<T*>(in.data()), in.size()) {}
+  constexpr device_span(rmm::device_buffer const& in)
+    : base(static_cast<T const*>(in.data()), in.size())
   {
   }
 };
