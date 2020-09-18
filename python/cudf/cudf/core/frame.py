@@ -2693,7 +2693,11 @@ class Frame(libcudf.table.Table):
                     1.5707963267948966,  1.266103672779499],
                     dtype='float64')
         """
-        data_type = cudf.utils.dtypes.get_min_float_dtype(self._column)
+        if isinstance(self, cudf.Series):
+            data_type = cudf.utils.dtypes.get_min_float_dtype(self._column)
+        if isinstance(self, cudf.DataFrame):
+            for col in self._columns:
+                data_type = cudf.utils.dtypes.get_min_float_dtype(col)
         data = self.astype(data_type)
         data = data._unaryop("acos")
         newdata = data.mask((data < 0) | (data > np.pi + 1))

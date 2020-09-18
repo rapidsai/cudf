@@ -45,7 +45,7 @@ def math_op_test(dtype, fn, nelem=128, test_df=False, positive_only=False):
     print(got)
     print("expect")
     print(expect)
-    assert_eq(expect, got)
+    assert_eq(expect, got, check_dtype=False)
 
 
 params_real_types = [np.float64, np.float32]
