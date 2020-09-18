@@ -213,8 +213,6 @@ __inline__ __device__ cudf::timestamp_ns decode_value(const char *begin,
   return cudf::timestamp_ns{cudf::duration_ns{milli * 1000000}};
 }
 
-// The purpose of this is merely to allow compilation ONLY
-// TODO : make this work for json
 #ifndef DURATION_DECODE_VALUE
 #define DURATION_DECODE_VALUE(Type)                               \
   template <>                                                     \

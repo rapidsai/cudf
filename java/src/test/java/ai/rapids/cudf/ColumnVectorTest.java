@@ -34,6 +34,7 @@ import static ai.rapids.cudf.QuantileMethod.MIDPOINT;
 import static ai.rapids.cudf.QuantileMethod.NEAREST;
 import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
 import static ai.rapids.cudf.TableTest.assertTablesAreEqual;
+import static ai.rapids.cudf.TableTest.assertStructColumnsAreEqual;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -730,6 +731,7 @@ public class ColumnVectorTest extends CudfTestBase {
           break;
           case EMPTY:
           case LIST:
+          case STRUCT:
             continue;
         default:
           throw new IllegalArgumentException("Unexpected type: " + type);
@@ -896,9 +898,10 @@ public class ColumnVectorTest extends CudfTestBase {
           break;
         }
         case EMPTY:
-          case LIST:
-            continue;
-          default:
+        case LIST:
+        case STRUCT:
+          continue;
+        default:
           throw new IllegalArgumentException("Unexpected type: " + type);
         }
 
@@ -922,7 +925,7 @@ public class ColumnVectorTest extends CudfTestBase {
   void testFromScalarNull() {
     final int rowCount = 4;
     for (DType type : DType.values()) {
-      if (type == DType.EMPTY || type == DType.LIST) {
+      if (type == DType.EMPTY || type == DType.LIST || type == DType.STRUCT) {
         continue;
       }
       try (Scalar s = Scalar.fromNull(type);
@@ -2954,6 +2957,82 @@ public class ColumnVectorTest extends CudfTestBase {
          ContiguousTable ct = tmp.contiguousSplit()[0]) {
       // one reference for the device buffer itself, two more for the column using it
       assertEquals(3, ct.getBuffer().getRefCount());
+    }
+  }
+
+  @Test
+  void testHcvForStruct() {
+    HostColumnVector.ColumnBuilder.StructType type = new HostColumnVector.ColumnBuilder.StructType(true, 4);
+    type.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 4, DType.INT32));
+    type.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 4, DType.INT64));
+    List data1 = Arrays.asList(10, 20L);
+    List data2 = Arrays.asList(50, 60L);
+    List data3 = Arrays.asList(null, 80L);
+    List data4 = null;
+    HostColumnVector.ColumnBuilder.StructData structData1 = new HostColumnVector.ColumnBuilder.StructData(data1);
+    HostColumnVector.ColumnBuilder.StructData structData2 = new HostColumnVector.ColumnBuilder.StructData(data2);
+    HostColumnVector.ColumnBuilder.StructData structData3 = new HostColumnVector.ColumnBuilder.StructData(data3);
+    HostColumnVector.ColumnBuilder.StructData structData4 = new HostColumnVector.ColumnBuilder.StructData(data4);
+    try (HostColumnVector hcv = HostColumnVector.fromStructs(type, Arrays.asList(structData1, structData2, structData3, structData4));
+         ColumnVector columnVector = hcv.copyToDevice();
+         HostColumnVector hcv1 = columnVector.copyToHost();
+         ColumnVector expected = hcv1.copyToDevice()) {
+      HostColumnVector.ColumnBuilder.StructData retData1 = hcv1.getStruct(0, type);
+      HostColumnVector.ColumnBuilder.StructData retData2 = hcv1.getStruct(1, type);
+      HostColumnVector.ColumnBuilder.StructData retData3 = hcv1.getStruct(2, type);
+      HostColumnVector.ColumnBuilder.StructData retData4 = hcv1.getStruct(3, type);
+      assertEquals(data1, retData1.dataRecord);
+      assertEquals(data2, retData2.dataRecord);
+      assertEquals(data3, retData3.dataRecord);
+      assertEquals(data4, retData4);
+      assertStructColumnsAreEqual(expected, columnVector, type);
+    }
+  }
+
+  @Test
+  void testStructChildValidity() {
+    HostColumnVector.ColumnBuilder.StructType type = new HostColumnVector.ColumnBuilder.StructType(true, 4);
+    type.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 4, DType.INT32));
+    type.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 4, DType.INT64));
+    List data1 = Arrays.asList(1, 2L);
+    List data2 = Arrays.asList(4, 5L);
+    List data3 = null;
+    List data4 = Arrays.asList(8, null);
+    HostColumnVector.ColumnBuilder.StructData structData1 = new HostColumnVector.ColumnBuilder.StructData(data1);
+    HostColumnVector.ColumnBuilder.StructData structData2 = new HostColumnVector.ColumnBuilder.StructData(data2);
+    HostColumnVector.ColumnBuilder.StructData structData3 = new HostColumnVector.ColumnBuilder.StructData(data3);
+    HostColumnVector.ColumnBuilder.StructData structData4 = new HostColumnVector.ColumnBuilder.StructData(data4);
+    try (HostColumnVector hcv = HostColumnVector.fromStructs(type, Arrays.asList(structData1, structData2, structData3, structData4));
+         ColumnVector columnVector = hcv.copyToDevice();
+         HostColumnVector hcv1 = columnVector.copyToHost();
+         ColumnVector expected = hcv1.copyToDevice()) {
+      assertFalse(hcv.isNull(0));
+      assertFalse(hcv.isNull(1));
+      assertTrue(hcv.isNull(2));
+      assertFalse(hcv.isNull(3));
+      HostColumnVector.NestedHostColumnVector intChildCol = hcv.children.get(0);
+      HostColumnVector.NestedHostColumnVector longChildCol = hcv.children.get(1);
+      assertFalse(intChildCol.isNull(0));
+      assertFalse(intChildCol.isNull(1));
+      assertTrue(intChildCol.isNull(2));
+      assertFalse(intChildCol.isNull(3));
+      assertFalse(longChildCol.isNull(0));
+      assertFalse(longChildCol.isNull(1));
+      assertTrue(longChildCol.isNull(2));
+      assertTrue(longChildCol.isNull(3));
+
+      intChildCol = hcv1.children.get(0);
+      longChildCol = hcv1.children.get(1);
+
+      assertFalse(intChildCol.isNull(0));
+      assertFalse(intChildCol.isNull(1));
+      assertTrue(intChildCol.isNull(2));
+      assertFalse(intChildCol.isNull(3));
+      assertFalse(longChildCol.isNull(0));
+      assertFalse(longChildCol.isNull(1));
+      assertTrue(longChildCol.isNull(2));
+      assertTrue(longChildCol.isNull(3));
+      assertStructColumnsAreEqual(expected, columnVector, type);
     }
   }
 }

@@ -128,6 +128,34 @@ __device__ __forceinline__ uint8_t decode_digit(char c, bool* valid_flag)
   return 0;
 }
 
+// Converts character to lowercase.
+__inline__ __device__ char to_lower(char const c)
+{
+  return c >= 'A' && c <= 'Z' ? c + ('a' - 'A') : c;
+}
+
+/**
+ * @brief Check if string is infinity, case insensitive with/without sign
+ * Valid infinity strings are inf, +inf, -inf, infinity, +infinity, -infinity
+ * String comparison is case insensitive.
+ *
+ * @param start The pointer to character array to start parsing from
+ * @param end The pointer to character array to end parsing
+ * @return true if string is valid infinity, else false.
+ */
+__inline__ __device__ bool is_infinity(char const* start, char const* end)
+{
+  if (*start == '-' || *start == '+') start++;
+  char const* cinf = "infinity";
+  auto index       = start;
+  while (index <= end) {
+    if (*cinf != to_lower(*index)) break;
+    index++;
+    cinf++;
+  }
+  return ((index == start + 3 || index == start + 8) && index > end);
+}
+
 /**
  * @brief Parses a character string and returns its numeric value.
  *
@@ -145,11 +173,13 @@ __inline__ __device__ T parse_numeric(const char* begin, const char* end, ParseO
   bool all_digits_valid = true;
 
   // Handle negative values if necessary
-  int32_t sign = 1;
-  if (*begin == '-') {
-    sign = -1;
-    begin++;
+  int32_t sign = (*begin == '-') ? -1 : 1;
+
+  // Handle infinity
+  if (std::is_floating_point<T>::value && is_infinity(begin, end)) {
+    return sign * std::numeric_limits<T>::infinity();
   }
+  if (*begin == '-' || *begin == '+') begin++;
 
   // Skip over the "0x" prefix for hex notation
   if (base == 16 && begin + 2 <= end && *begin == '0' && *(begin + 1) == 'x') { begin += 2; }
