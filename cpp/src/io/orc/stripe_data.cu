@@ -1113,7 +1113,7 @@ __global__ void __launch_bounds__(block_size)
 {
   __shared__ __align__(16) orcdec_state_s state_g;
   using warp_reduce = cub::WarpReduce<uint32_t>;
-  typename warp_reduce::TempStorage temp_storage[block_size / 32];
+  __shared__ typename warp_reduce::TempStorage temp_storage[block_size / 32];
 
   orcdec_state_s *const s = &state_g;
   bool is_nulldec         = (blockIdx.y >= num_stripes);

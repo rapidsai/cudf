@@ -1289,6 +1289,7 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
       else {
         warp_valid_mask =
           warp_reduce(temp_storage).Reduce(is_valid << thread_value_count, BitWiseOR{});
+        warp_valid_mask = shuffle(warp_valid_mask);
       }
       thread_valid_count = __popc(warp_valid_mask & ((1 << thread_value_count) - 1));
       warp_valid_count   = __popc(warp_valid_mask);
