@@ -70,8 +70,8 @@ struct minmax_binary_op
     // The only invalid situation is if we compare two invalid values.
     // Otherwise, we are certain to select a valid value due to the
     // identity functions above changing the comparison value.
-    bool valid_min_result = !has_nulls || x.min_valid || y.min_valid;
-    bool valid_max_result = !has_nulls || x.max_valid || y.max_valid;
+    bool const valid_min_result = !has_nulls || x.min_valid || y.min_valid;
+    bool const valid_max_result = !has_nulls || x.max_valid || y.max_valid;
 
     return minmax_pair<T>{
       thrust::min(x_min, y_min), valid_min_result, thrust::max(x_max, y_max), valid_max_result};
