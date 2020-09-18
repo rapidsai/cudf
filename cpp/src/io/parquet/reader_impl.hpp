@@ -30,7 +30,6 @@
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/parquet.hpp>
-#include <cudf/io/readers.hpp>
 
 #include <memory>
 #include <string>
