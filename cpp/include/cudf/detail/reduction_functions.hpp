@@ -219,15 +219,17 @@ std::unique_ptr<scalar> standard_deviation(
 /**
  * @brief Returns nth element in input column
  *
- * A negative value `n` is interpreted as `n+valid_count`, where `valid_count` is the number of
- * valid elements in the input column.
+ * A negative value `n` is interpreted as `n+count`, where `count` is the number of valid
+ * elements in the input column if `null_handling` is `null_policy::EXCLUDE`, else `col.size()`.
  *
  * If all elements in input column are null, output scalar is null.
  *
  * @warning This function is expensive (invokes a kernel launch). So, it is not
  * recommended to be used in performance sensitive code or inside a loop.
  *
- * @throw cudf::logic_error if n falls outside the range `[-valid_count, valid_count)`
+ * @throw cudf::logic_error if n falls outside the range `[-count, count)` where `count` is the
+ * number of valid * elements in the input column if `null_handling` is `null_policy::EXCLUDE`,
+ * else `col.size()`.
  *
  * @param col input column to get nth element from.
  * @param n index of element to get
