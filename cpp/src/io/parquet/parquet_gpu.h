@@ -411,6 +411,7 @@ rmm::device_uvector<size_type> get_dremel_offsets(column_device_view col,
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::pair<rmm::device_uvector<uint8_t>, rmm::device_uvector<uint8_t>> get_levels(
+  column_view h_col,
   column_device_view col,
   rmm::device_uvector<size_type> const &dremel_offsets,
   cudaStream_t stream = (cudaStream_t)0);

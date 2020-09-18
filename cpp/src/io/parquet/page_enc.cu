@@ -16,6 +16,9 @@
 #include <io/utilities/block_utils.cuh>
 #include "parquet_gpu.h"
 
+#include <thrust/gather.h>
+#include <thrust/iterator/discard_iterator.h>
+
 namespace cudf {
 namespace io {
 namespace parquet {
@@ -95,85 +98,85 @@ __global__ void calculate_dremel_offsets(column_device_view col, size_type *valu
   if (row < col.size()) { values_in_row[row] = count_nested(col, row); }
 }
 
-__device__ void store_nested_rep_level(column_device_view const &col,
-                                       size_type idx,
-                                       uint8_t *rep_level,
-                                       size_type &cur_idx,
-                                       uint8_t cur_rep_level,
-                                       uint8_t depth)
-{
-  if (col.type().id() != type_id::LIST) {
-    rep_level[cur_idx++] = cur_rep_level;
-    return;
-  }
+// __device__ void store_nested_rep_level(column_device_view const &col,
+//                                        size_type idx,
+//                                        uint8_t *rep_level,
+//                                        size_type &cur_idx,
+//                                        uint8_t cur_rep_level,
+//                                        uint8_t depth)
+// {
+//   if (col.type().id() != type_id::LIST) {
+//     rep_level[cur_idx++] = cur_rep_level;
+//     return;
+//   }
 
-  lists_column_row_desc lcr(col, idx);
+//   lists_column_row_desc lcr(col, idx);
 
-  if (lcr.start_offset == lcr.end_offset) {
-    rep_level[cur_idx++] = cur_rep_level;
-    return;
-  }
+//   if (lcr.start_offset == lcr.end_offset) {
+//     rep_level[cur_idx++] = cur_rep_level;
+//     return;
+//   }
 
-  for (size_type i = lcr.start_offset; i < lcr.end_offset; i++) {
-    store_nested_rep_level(lcr.child_col,
-                           i,
-                           rep_level,
-                           cur_idx,
-                           (i == lcr.start_offset) ? cur_rep_level : depth + 1,
-                           depth + 1);
-  }
-}
+//   for (size_type i = lcr.start_offset; i < lcr.end_offset; i++) {
+//     store_nested_rep_level(lcr.child_col,
+//                            i,
+//                            rep_level,
+//                            cur_idx,
+//                            (i == lcr.start_offset) ? cur_rep_level : depth + 1,
+//                            depth + 1);
+//   }
+// }
 
-__device__ void store_nested_def_level(column_device_view const &col,
-                                       size_type idx,
-                                       uint8_t *def_level,
-                                       size_type &cur_idx,
-                                       uint8_t cur_def_level)
-{
-  if (col.nullable()) {
-    if (col.is_null_nocheck(idx)) {
-      def_level[cur_idx++] = cur_def_level;
-      return;
-    }
-    ++cur_def_level;
-  }
+// __device__ void store_nested_def_level(column_device_view const &col,
+//                                        size_type idx,
+//                                        uint8_t *def_level,
+//                                        size_type &cur_idx,
+//                                        uint8_t cur_def_level)
+// {
+//   if (col.nullable()) {
+//     if (col.is_null_nocheck(idx)) {
+//       def_level[cur_idx++] = cur_def_level;
+//       return;
+//     }
+//     ++cur_def_level;
+//   }
 
-  if (col.type().id() != type_id::LIST) {
-    def_level[cur_idx] = cur_def_level;
-    if (col.is_null(idx)) { --def_level[cur_idx]; }
-    ++cur_idx;
-    return;
-  } else {
-    ++cur_def_level;
-  }
+//   if (col.type().id() != type_id::LIST) {
+//     def_level[cur_idx] = cur_def_level;
+//     if (col.is_null(idx)) { --def_level[cur_idx]; }
+//     ++cur_idx;
+//     return;
+//   } else {
+//     ++cur_def_level;
+//   }
 
-  lists_column_row_desc lcr(col, idx);
+//   lists_column_row_desc lcr(col, idx);
 
-  if (lcr.start_offset == lcr.end_offset) {
-    def_level[cur_idx++] = cur_def_level - 1;
-    return;
-  }
+//   if (lcr.start_offset == lcr.end_offset) {
+//     def_level[cur_idx++] = cur_def_level - 1;
+//     return;
+//   }
 
-  for (size_type i = lcr.start_offset; i < lcr.end_offset; i++) {
-    store_nested_def_level(lcr.child_col, i, def_level, cur_idx, cur_def_level);
-  }
-}
+//   for (size_type i = lcr.start_offset; i < lcr.end_offset; i++) {
+//     store_nested_def_level(lcr.child_col, i, def_level, cur_idx, cur_def_level);
+//   }
+// }
 
-__global__ void calculate_levels(column_device_view col,
-                                 size_type const *dremel_offsets,
-                                 uint8_t *rep_level,
-                                 uint8_t *def_level)
-{
-  // launched one thread per row
-  size_type row = blockIdx.x * blockDim.x + threadIdx.x;
+// __global__ void calculate_levels(column_device_view col,
+//                                  size_type const *dremel_offsets,
+//                                  uint8_t *rep_level,
+//                                  uint8_t *def_level)
+// {
+//   // launched one thread per row
+//   size_type row = blockIdx.x * blockDim.x + threadIdx.x;
 
-  if (row < col.size()) {
-    size_type cur_idx = dremel_offsets[row];
-    store_nested_rep_level(col, row, rep_level, cur_idx, 0, 0);
-    cur_idx = dremel_offsets[row];
-    store_nested_def_level(col, row, def_level, cur_idx, 0);
-  }
-}
+//   if (row < col.size()) {
+//     size_type cur_idx = dremel_offsets[row];
+//     store_nested_rep_level(col, row, rep_level, cur_idx, 0, 0);
+//     cur_idx = dremel_offsets[row];
+//     store_nested_def_level(col, row, def_level, cur_idx, 0);
+//   }
+// }
 
 struct page_enc_state_s {
   uint8_t *cur;          //!< current output ptr
@@ -1706,8 +1709,21 @@ rmm::device_uvector<size_type> get_dremel_offsets(column_device_view col, cudaSt
   return dremel_offsets;
 }
 
+template <typename T>
+void print(rmm::device_uvector<T> const &d_vec, std::string label = "")
+{
+  std::vector<T> h_vec(d_vec.size());
+  cudaMemcpy(h_vec.data(), d_vec.data(), d_vec.size() * sizeof(T), cudaMemcpyDeviceToHost);
+  printf("%s (%lu)\t", label.c_str(), h_vec.size());
+  for (auto &&i : h_vec) std::cout << (int)i << " ";
+  printf("\n");
+}
+
 std::pair<rmm::device_uvector<uint8_t>, rmm::device_uvector<uint8_t>> get_levels(
-  column_device_view col, rmm::device_uvector<size_type> const &dremel_offsets, cudaStream_t stream)
+  column_view h_col,
+  column_device_view col,
+  rmm::device_uvector<size_type> const &dremel_offsets,
+  cudaStream_t stream)
 {
   CUDF_EXPECTS(col.type().id() == type_id::LIST,
                "Can only get rep/def levels for LIST type column");
@@ -1721,12 +1737,247 @@ std::pair<rmm::device_uvector<uint8_t>, rmm::device_uvector<uint8_t>> get_levels
   rmm::device_uvector<uint8_t> rep_level(flattened_size, stream);
   rmm::device_uvector<uint8_t> def_level(flattened_size, stream);
 
-  size_t existing_stack_limit;
-  CUDA_TRY(cudaDeviceGetLimit(&existing_stack_limit, cudaLimitStackSize));
-  CUDA_TRY(cudaDeviceSetLimit(cudaLimitStackSize, 4096));
-  calculate_levels<<<((col.size() - 1) >> 8) + 1, 256, 0, stream>>>(
-    col, dremel_offsets.data(), rep_level.data(), def_level.data());
-  CUDA_TRY(cudaDeviceSetLimit(cudaLimitStackSize, existing_stack_limit));
+  rmm::device_uvector<size_type> left_keys(flattened_size, stream);
+  rmm::device_uvector<size_type> right_keys(flattened_size, stream);
+
+  // Count nesting levels
+  size_t num_nesting_levels = 0;
+  auto curr_col             = h_col;
+  while (curr_col.type().id() == type_id::LIST) {
+    auto lcv = lists_column_view(curr_col);
+    ++num_nesting_levels;
+    curr_col = lcv.child();
+  }
+
+  auto get_empties = [&](column_view col) {
+    auto lcv = lists_column_view(col);
+    rmm::device_uvector<size_type> empties_idx(lcv.size(), stream);
+    rmm::device_uvector<size_type> empties(lcv.size(), stream);
+    auto d_off = lcv.offsets().data<size_type>();
+
+    auto empties_idx_end =
+      thrust::copy_if(rmm::exec_policy(stream)->on(stream),
+                      thrust::make_counting_iterator(0),
+                      thrust::make_counting_iterator(lcv.size()),
+                      empties_idx.begin(),
+                      [d_off] __device__(auto i) { return d_off[i] == d_off[i + 1]; });
+    auto empties_end = thrust::gather(rmm::exec_policy(stream)->on(stream),
+                                      empties_idx.begin(),
+                                      empties_idx_end,
+                                      lcv.offsets().begin<size_type>(),
+                                      empties.begin());
+    return std::make_tuple(
+      std::move(empties), std::move(empties_idx), empties_end - empties.begin());
+  };
+
+  if (num_nesting_levels == 1) {
+    // This is an optimization as for the single nesting level case we do not need to generate the
+    // merge values on the parent side and can discard output keys.
+
+    auto lcv = lists_column_view(h_col);
+    rmm::device_uvector<size_type> empties(0, stream);
+    rmm::device_uvector<size_type> empties_idx(0, stream);
+    size_t empties_size;
+    std::tie(empties, empties_idx, empties_size) = get_empties(h_col);
+    // print(empties, "empties");
+    // printf("empties size %lu \n", empties_size);
+
+    uint8_t curr_def_level   = 0;
+    uint8_t parent_def_level = curr_def_level;
+    uint8_t child_def_level  = parent_def_level + (h_col.nullable() ? 2 : 1);
+
+    // if mask
+    //   if null
+    //     0
+    //   else
+    //     1
+    // else
+    //   0
+    thrust::merge_by_key(
+      rmm::exec_policy(stream)->on(stream),
+      empties.begin(),
+      empties.begin() + empties_size,
+      thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(lcv.child().size()),
+      thrust::make_transform_iterator(
+        thrust::make_counting_iterator(0),
+        [idx = empties_idx.data(), mask = lcv.null_mask(), parent_def_level] __device__(auto i) {
+          return parent_def_level + ((mask && bit_is_set(mask, idx[i])) ? 1 : 0);
+        }),
+      thrust::make_transform_iterator(
+        thrust::make_counting_iterator(0),
+        [mask = lcv.child().null_mask(), child_def_level] __device__(auto i) {
+          return child_def_level + ((mask && bit_is_set(mask, i)) ? 1 : 0);
+        }),
+      thrust::make_discard_iterator(),
+      def_level.begin());
+
+    print(def_level, "def");
+  } else {
+    size_t curr_nesting_level = 0;
+
+    column_view curr_col = h_col;
+
+    // TODO (dm): consider renaming parent to curr
+    uint8_t curr_def_level   = 0;
+    uint8_t parent_def_level = curr_def_level;
+    uint8_t child_def_level  = parent_def_level + (curr_col.nullable() ? 2 : 1);
+
+    rmm::device_uvector<size_type> result_keys(flattened_size, stream);
+    rmm::device_uvector<uint8_t> vals(flattened_size, stream);
+    rmm::device_uvector<size_type> transformed_keys(0, stream);
+
+    {  // First level. Merge empty list levels on first level with those on second level
+      auto lcv = lists_column_view(curr_col);
+
+      rmm::device_uvector<size_type> parent_empties(0, stream);
+      rmm::device_uvector<size_type> parent_empties_idx(0, stream);
+      size_t parent_empties_size;
+      std::tie(parent_empties, parent_empties_idx, parent_empties_size) = get_empties(curr_col);
+      print(parent_empties, "empties");
+      printf("empties size %lu \n", parent_empties_size);
+
+      rmm::device_uvector<size_type> child_empties(0, stream);
+      rmm::device_uvector<size_type> child_empties_idx(0, stream);
+      size_t child_empties_size;
+      std::tie(child_empties, child_empties_idx, child_empties_size) = get_empties(lcv.child());
+      print(child_empties, "empties");
+      printf("empties size %lu \n", child_empties_size);
+
+      auto ends = thrust::merge_by_key(
+        rmm::exec_policy(stream)->on(stream),
+        parent_empties.begin(),
+        parent_empties.begin() + parent_empties_size,
+        child_empties_idx.begin(),
+        child_empties_idx.begin() + child_empties_size,
+        thrust::make_transform_iterator(
+          thrust::make_counting_iterator(0),
+          [idx = parent_empties_idx.data(), mask = lcv.null_mask(), parent_def_level] __device__(
+            auto i) { return parent_def_level + ((mask && bit_is_set(mask, idx[i])) ? 1 : 0); }),
+        thrust::make_transform_iterator(thrust::make_counting_iterator(0),
+                                        [idx  = child_empties_idx.data(),
+                                         mask = lcv.child().null_mask(),
+                                         child_def_level] __device__(auto i) {
+                                          return child_def_level +
+                                                 ((mask && bit_is_set(mask, idx[i])) ? 1 : 0);
+                                        }),
+        result_keys.begin(),
+        def_level.begin());
+
+      // Transform result_keys to child's offsets values
+      transformed_keys = rmm::device_uvector<size_type>(ends.first - result_keys.begin(), stream);
+      thrust::transform(
+        rmm::exec_policy(stream)->on(stream),
+        result_keys.begin(),
+        ends.first,
+        transformed_keys.begin(),
+        [child_offsets = lcv.child()
+                           .child(lists_column_view::offsets_column_index)
+                           .data<size_type>()] __device__(auto x) { return child_offsets[x]; });
+
+      print(def_level, "def");
+      std::swap(def_level, vals);
+      curr_col = lcv.child();
+    }
+
+    // Merge second level till last list level
+    while (curr_col.child(lists_column_view::child_column_index).type().id() == type_id::LIST) {
+      auto lcv = lists_column_view(curr_col);
+
+      rmm::device_uvector<size_type> child_empties(0, stream);
+      rmm::device_uvector<size_type> child_empties_idx(0, stream);
+      size_t child_empties_size;
+      std::tie(child_empties, child_empties_idx, child_empties_size) = get_empties(lcv.child());
+      print(child_empties, "empties");
+      printf("empties size %lu \n", child_empties_size);
+
+      child_def_level += (curr_col.nullable() ? 2 : 1);
+
+      print(transformed_keys, "tr_keys");
+      print(vals, "vals");
+      print(child_empties_idx, "empt_idx");
+      auto ends = thrust::merge_by_key(
+        rmm::exec_policy(stream)->on(stream),
+        transformed_keys.begin(),
+        transformed_keys.end(),
+        child_empties_idx.begin(),
+        child_empties_idx.begin() + child_empties_size,
+        vals.begin(),
+        thrust::make_transform_iterator(thrust::make_counting_iterator(0),
+                                        [idx  = child_empties_idx.data(),
+                                         mask = lcv.child().null_mask(),
+                                         child_def_level] __device__(auto i) {
+                                          return child_def_level +
+                                                 ((mask && bit_is_set(mask, idx[i])) ? 1 : 0);
+                                        }),
+        result_keys.begin(),
+        def_level.begin());
+
+      // Transform result_keys to child's offsets values
+      transformed_keys = rmm::device_uvector<size_type>(ends.first - result_keys.begin(), stream);
+      thrust::transform(
+        rmm::exec_policy(stream)->on(stream),
+        result_keys.begin(),
+        ends.first,
+        transformed_keys.begin(),
+        [child_offsets = lcv.child()
+                           .child(lists_column_view::offsets_column_index)
+                           .data<size_type>()] __device__(auto x) { return child_offsets[x]; });
+
+      print(def_level, "def");
+      std::swap(def_level, vals);
+      curr_col = lcv.child();
+    }
+
+    {  // Merge last list level with leaf
+      auto lcv = lists_column_view(curr_col);
+
+      auto max_merged_size = lcv.size() + lcv.child().size();
+      rmm::device_uvector<size_type> keys(max_merged_size, stream);
+
+      child_def_level += (curr_col.nullable() ? 2 : 1);
+
+      print(vals, "vals");
+      thrust::merge_by_key(rmm::exec_policy(stream)->on(stream),
+                           transformed_keys.begin(),
+                           transformed_keys.end(),
+                           thrust::make_counting_iterator(0),
+                           thrust::make_counting_iterator(lcv.child().size()),
+                           vals.begin(),
+                           thrust::make_transform_iterator(
+                             thrust::make_counting_iterator(0),
+                             [mask = lcv.child().null_mask(), child_def_level] __device__(auto i) {
+                               return child_def_level + ((mask && bit_is_set(mask, i)) ? 1 : 0);
+                             }),
+                           thrust::make_discard_iterator(),
+                           def_level.begin());
+      print(def_level, "def");
+    }
+  }
+
+  // // Now for the rep level
+  // rmm::device_uvector<size_type> rep_temp(lcv.child().size(), stream);
+  // thrust::fill_n(rmm::exec_policy(stream)->on(stream), rep_temp.begin(), lcv.child().size(), 1);
+  // // print(rep_temp, "rep filled");
+  // auto rep_it = thrust::make_constant_iterator(0);
+  // thrust::scatter(rmm::exec_policy(stream)->on(stream),
+  //                 rep_it,
+  //                 rep_it + lcv.size(),
+  //                 lcv.offsets().begin<size_type>(),
+  //                 rep_temp.begin());
+  // // print(rep_temp, "rep scattered");
+
+  // thrust::merge_by_key(rmm::exec_policy(stream)->on(stream),
+  //                      empties.begin(),
+  //                      empties.end(),
+  //                      thrust::make_counting_iterator(0),
+  //                      thrust::make_counting_iterator(lcv.child().size()),
+  //                      thrust::make_constant_iterator(0),
+  //                      rep_temp.begin(),
+  //                      thrust::make_discard_iterator(),
+  //                      rep_level.begin());
+  // // print(rep_level, "rep final");
+
   CUDA_TRY(cudaStreamSynchronize(stream));
 
   return std::make_pair(std::move(rep_level), std::move(def_level));
