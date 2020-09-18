@@ -76,9 +76,7 @@ class CSVReader(object):
         else:
             seed = random.randint(0, 2 ** 32 - 1)
             random.seed(seed)
-            dtypes_list = list(
-                cudf.utils.dtypes.ALL_TYPES - cudf.utils.dtypes.TIMEDELTA_TYPES
-            )
+            dtypes_list = list(cudf.utils.dtypes.ALL_TYPES)
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
                 self, dtypes_list
             )
@@ -160,9 +158,7 @@ class CSVWriter(object):
         else:
             seed = random.randint(0, 2 ** 32 - 1)
             random.seed(seed)
-            dtypes_list = list(
-                cudf.utils.dtypes.ALL_TYPES - cudf.utils.dtypes.TIMEDELTA_TYPES
-            )
+            dtypes_list = list(cudf.utils.dtypes.ALL_TYPES)
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
                 self, dtypes_list
             )
