@@ -96,16 +96,19 @@ struct minmax_functor {
     minmax_pair<T> const result = [&]() -> minmax_pair<T> {
       auto begin = thrust::make_counting_iterator<size_type>(0);
       auto end   = begin + col.size();
-      auto op    = [d_col = *device_col] __device__(size_type index) -> minmax_pair<T> {
+      auto nullable_op = [d_col = *device_col] __device__(size_type index) -> minmax_pair<T> {
         return minmax_pair<T>(d_col.element<T>(index), d_col.is_valid(index));
+      };
+      auto no_nulls_op = [d_col = *device_col] __device__(size_type index) -> minmax_pair<T> {
+        return minmax_pair<T>(d_col.element<T>(index), true);
       };
 
       if (col.nullable()) {
-        return thrust::transform_reduce(
-          begin, end, op, minmax_pair<T>{}, minmax_binary_op<T, true>{});
+        return thrust::transform_reduce(rmm::exec_policy(stream)->on(stream),
+          begin, end, nullable_op, minmax_pair<T>{}, minmax_binary_op<T, true>{});
       } else {
-        return thrust::transform_reduce(
-          begin, end, op, minmax_pair<T>{}, minmax_binary_op<T, false>{});
+        return thrust::transform_reduce(rmm::exec_policy(stream)->on(stream),
+          begin, end, no_nulls_op, minmax_pair<T>{}, minmax_binary_op<T, false>{});
       }
     }();
 
