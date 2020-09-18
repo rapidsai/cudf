@@ -57,43 +57,24 @@ struct minmax_pair {
  * validity.
  *
  */
-template <typename T>
-struct minmax_with_null_binary_op
+template <typename T, bool has_nulls = true>
+struct minmax_binary_op
   : public thrust::binary_function<minmax_pair<T>, minmax_pair<T>, minmax_pair<T>> {
-  __host__ __device__ minmax_pair<T> operator()(const minmax_pair<T> &x,
-                                                const minmax_pair<T> &y) const
+  __device__ minmax_pair<T> operator()(const minmax_pair<T> &x, const minmax_pair<T> &y) const
   {
-    T x_min = x.min_valid ? x.min_val : cudf::DeviceMin::identity<T>();
-    T y_min = y.min_valid ? y.min_val : cudf::DeviceMin::identity<T>();
-    T x_max = x.max_valid ? x.max_val : cudf::DeviceMax::identity<T>();
-    T y_max = y.max_valid ? y.max_val : cudf::DeviceMax::identity<T>();
+    T x_min = x.min_valid || !has_nulls ? x.min_val : cudf::DeviceMin::identity<T>();
+    T y_min = y.min_valid || !has_nulls ? y.min_val : cudf::DeviceMin::identity<T>();
+    T x_max = x.max_valid || !has_nulls ? x.max_val : cudf::DeviceMax::identity<T>();
+    T y_max = y.max_valid || !has_nulls ? y.max_val : cudf::DeviceMax::identity<T>();
 
     // The only invalid situation is if we compare two invalid values.
     // Otherwise, we are certain to select a valid value due to the
     // identity functions above changing the comparison value.
-    bool valid_min_result = x.min_valid || y.min_valid;
-    bool valid_max_result = x.max_valid || y.max_valid;
+    bool valid_min_result = !has_nulls || x.min_valid || y.min_valid;
+    bool valid_max_result = !has_nulls || x.max_valid || y.max_valid;
 
     return minmax_pair<T>{
       thrust::min(x_min, y_min), valid_min_result, thrust::max(x_max, y_max), valid_max_result};
-  }
-};
-
-/**
- * @brief functor that accepts two minmax_pairs and returns a
- * minmax_pair whose minimum and maximum values are the min() and max()
- * respectively of the minimums and maximums of the input pairs. Expects
- * no null values.
- *
- */
-template <typename T>
-struct minmax_no_null_binary_op
-  : public thrust::binary_function<minmax_pair<T>, minmax_pair<T>, minmax_pair<T>> {
-  __host__ __device__ minmax_pair<T> operator()(const minmax_pair<T> &x,
-                                                const minmax_pair<T> &y) const
-  {
-    return minmax_pair<T>{
-      thrust::min(x.min_val, y.min_val), true, thrust::max(x.max_val, y.max_val), true};
   }
 };
 
@@ -106,11 +87,8 @@ struct minmax_no_null_binary_op
  */
 struct minmax_functor {
   template <typename T>
-  // unable to support fixed point due to DeviceMin/DeviceMax not supporting fixed point
-  std::enable_if_t<cudf::is_relationally_comparable<T, T>() and
-                     not std::is_same<T, dictionary32>::value and not cudf::is_fixed_point<T>(),
-                   std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>>>
-  operator()(const cudf::column_view &col, rmm::mr::device_memory_resource *mr, cudaStream_t stream)
+  std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> operator()(
+    const cudf::column_view &col, rmm::mr::device_memory_resource *mr, cudaStream_t stream)
   {
     auto device_col = column_device_view::create(col, stream);
 
@@ -124,7 +102,7 @@ struct minmax_functor {
           return minmax_pair<T>(d_col.element<T>(index), d_col.is_valid(index));
         },
         minmax_pair<T>{},
-        minmax_with_null_binary_op<T>{});
+        minmax_binary_op<T, true>{});
     } else {
       result = thrust::transform_reduce(
         thrust::make_counting_iterator<size_type>(0),
@@ -133,7 +111,7 @@ struct minmax_functor {
           return minmax_pair<T>(d_col.element<T>(index), d_col.is_valid(index));
         },
         minmax_pair<T>{},
-        minmax_no_null_binary_op<T>{});
+        minmax_binary_op<T, false>{});
     }
 
     std::unique_ptr<scalar> min =
@@ -142,23 +120,62 @@ struct minmax_functor {
       make_fixed_width_scalar<T>(result.max_val, result.max_valid, stream, mr);
     return {std::move(min), std::move(max)};
   }
-
-  template <typename T,
-            std::enable_if_t<not cudf::is_relationally_comparable<T, T>() or
-                             cudf::is_fixed_point<T>()> * = nullptr>
-  std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> operator()(
-    const cudf::column_view &col, rmm::mr::device_memory_resource *mr, cudaStream_t stream)
-  {
-    CUDF_FAIL("type not supported");
-  }
-
-  template <typename T, typename std::enable_if_t<std::is_same<T, dictionary32>::value> * = nullptr>
-  std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> operator()(
-    const cudf::column_view &col, rmm::mr::device_memory_resource *mr, cudaStream_t stream)
-  {
-    CUDF_FAIL("dictionary type not supported");
-  }
 };
+
+template <>
+std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax_functor::
+operator()<cudf::dictionary32>(const cudf::column_view &col,
+                               rmm::mr::device_memory_resource *mr,
+                               cudaStream_t stream)
+{
+  CUDF_FAIL("dictionary type not supported");
+}
+
+template <>
+std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax_functor::
+operator()<cudf::string_view>(const cudf::column_view &col,
+                              rmm::mr::device_memory_resource *mr,
+                              cudaStream_t stream)
+{
+  CUDF_FAIL("string type not supported");
+}
+
+template <>
+std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax_functor::
+operator()<cudf::list_view>(const cudf::column_view &col,
+                            rmm::mr::device_memory_resource *mr,
+                            cudaStream_t stream)
+{
+  CUDF_FAIL("list type not supported");
+}
+
+template <>
+std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax_functor::
+operator()<cudf::struct_view>(const cudf::column_view &col,
+                              rmm::mr::device_memory_resource *mr,
+                              cudaStream_t stream)
+{
+  CUDF_FAIL("struct type not supported");
+}
+
+// unable to support fixed point due to DeviceMin/DeviceMax not supporting fixed point
+template <>
+std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax_functor::
+operator()<numeric::decimal32>(const cudf::column_view &col,
+                               rmm::mr::device_memory_resource *mr,
+                               cudaStream_t stream)
+{
+  CUDF_FAIL("fixed-point type not supported");
+}
+
+template <>
+std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax_functor::
+operator()<numeric::decimal64>(const cudf::column_view &col,
+                               rmm::mr::device_memory_resource *mr,
+                               cudaStream_t stream)
+{
+  CUDF_FAIL("fixed-point type not supported");
+}
 
 }  // namespace
 
