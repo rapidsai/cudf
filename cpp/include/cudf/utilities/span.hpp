@@ -58,6 +58,14 @@ class span_base {
   constexpr span_base(span_base const& other) noexcept = default;
   constexpr span_base& operator=(span_base const& other) noexcept = default;
 
+  template <typename C,
+            typename P = decltype(std::declval<C>().data()),
+            std::enable_if<std::is_same<std::add_pointer<T>, P>::value>* = nullptr>
+  constexpr span_base(C& in)
+    : _data(static_cast<T*>(thrust::raw_pointer_cast(in.data()))), _size(in.size())
+  {
+  }
+
   // not noexcept due to undefined behavior when size = 0
   constexpr reference front() const { return _data[0]; }
   // not noexcept due to undefined behavior when size = 0
@@ -107,14 +115,12 @@ struct host_span : public span_base<T, Extent, host_span<T, Extent>> {
 
   constexpr host_span() noexcept : base() {}
 
-  constexpr host_span(std::vector<T>& in) : base(in.data(), in.size()) {}
-
-  constexpr host_span(std::vector<std::remove_const_t<T>> const& in) : base(in.data(), in.size()) {}
-  constexpr host_span(thrust::host_vector<T>& in) : base(in.data(), in.size()) {}
-  constexpr host_span(thrust::host_vector<std::remove_const_t<T>> const& in)
-    : base(in.data(), in.size())
-  {
-  }
+  // template <typename C,
+  //           typename P = decltype(std::declval<C>().data()),
+  //           std::enable_if<std::is_same<std::add_pointer<T>, P>::value>* = nullptr>
+  // constexpr host_span(C& in) : base(in.data(), in.size())
+  // {
+  // }
 };
 
 template <typename T, std::size_t Extent = dynamic_extent>
@@ -124,26 +130,13 @@ struct device_span : public span_base<T, Extent, device_span<T, Extent>> {
 
   constexpr device_span() noexcept : base() {}
 
-  constexpr device_span(thrust::device_vector<T>& in) : base(in.data().get(), in.size()) {}
-  constexpr device_span(thrust::device_vector<std::remove_const_t<T>> const& in)
-    : base(in.data().get(), in.size())
-  {
-  }
-  constexpr device_span(rmm::device_vector<T>& in) : base(in.data().get(), in.size()) {}
-  constexpr device_span(rmm::device_vector<std::remove_const_t<T>> const& in)
-    : base(in.data().get(), in.size())
-  {
-  }
-  constexpr device_span(rmm::device_uvector<T>& in) : base(in.data(), in.size()) {}
-  constexpr device_span(rmm::device_uvector<std::remove_const_t<T>> const& in)
-    : base(in.data(), in.size())
-  {
-  }
-  constexpr device_span(rmm::device_buffer& in) : base(static_cast<T*>(in.data()), in.size()) {}
-  constexpr device_span(rmm::device_buffer const& in)
-    : base(static_cast<T const*>(in.data()), in.size())
-  {
-  }
+  // template <typename C,
+  //           typename P = decltype(std::declval<C>().data()),
+  //           std::enable_if<std::is_same<std::add_pointer<T>, P>::value>* = nullptr>
+  // constexpr device_span(C& in)
+  //   : base(static_cast<T*>(thrust::raw_pointer_cast(in.data())), in.size())
+  // {
+  // }
 };
 
 }  // namespace detail
