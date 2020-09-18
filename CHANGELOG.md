@@ -6,6 +6,7 @@
 - PR #5975 Add strings `filter_characters` API
 - PR #5843 Add `filters` parameter to Python `read_parquet` function for filtering row groups
 - PR #5974 Use libcudf instead of cupy for `arange` or column creation from a scalar.
+- PR #6076 Add durations type support for csv writer, reader
 - PR #5874 Add `COLLECT` groupby aggregation
 - PR #6119 Add support for `dayofweek` property in `DateTimeIndex` and `DatetimeProperties`
 - PR #6125 Add support for `Series.mode` and `DataFrame.mode`
@@ -35,6 +36,7 @@
 - PR #6162 Reduce output parameters in cuio csv and json reader internals
 - PR #6146 Added element/validity pair constructors for fixed_width and string wrappers
 - PR #6143 General improvements for java arrow IPC.
+- PR #6138 Add builder API for cuIO `orc_writer_options` and `orc_reader_options`
 - PR #6152 Change dictionary indices to uint32
 - PR #6099 Add fluent builder apis to `json_reader_options` and `avro_reader_options`
 - PR #6163 Use `Column.full` instead of `scalar_broadcast_to` or `cupy.zeros`
@@ -57,6 +59,7 @@
 - PR #6204 Add dockerfile and script to build cuDF jar
 - PR #6245 Split up replace.cu into multiple source files
 - PR #6218 increase visiblity/consistency for cuio reader writer private member variable names.
+- PR #6265 Update JNI to use ORC options builder
 
 ## Bug Fixes
 
