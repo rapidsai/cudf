@@ -847,5 +847,16 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet_chunked_end(
   bool return_filemetadata                   = false,
   const std::string& column_chunks_file_path = "");
 
+/**
+ * @brief Merges multiple raw metadata blobs that were previously created by write_parquet
+ * into a single metadata blob
+ *
+ * @ingroup io_writers
+ *
+ * @param[in] metadata_list List of input file metadata
+ * @return A parquet-compatible blob that contains the data for all rowgroups in the list
+ */
+std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
+  const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list);
 }  // namespace io
 }  // namespace cudf
