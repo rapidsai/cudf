@@ -2699,7 +2699,6 @@ class Frame(libcudf.table.Table):
         newdata = data.mask((data < 0) | (data > np.pi + 1))
         return newdata
 
-
     def atan(self):
         """
         Get Trigonometric inverse tangent, element-wise.
