@@ -105,7 +105,9 @@ def _generate_column(column_params, num_rows):
             )
             return pa.DictionaryArray.from_arrays(
                 dictionary=vals,
-                indices=np.random.choice(np.arange(len(vals)), size=num_rows),
+                indices=np.random.randint(
+                    low=0, high=len(vals), size=num_rows
+                ),
                 mask=np.random.choice(
                     [True, False],
                     size=num_rows,
