@@ -51,9 +51,9 @@ void check_nvcomp_status(JNIEnv *env, nvcompError_t status) {
 extern "C" {
 
 JNIEXPORT jlong JNICALL
-Java_ai_rapids_cudf_nvcomp_Nvcomp_decompressGetMetadata(JNIEnv *env, jclass,
-                                                        jlong in_ptr, jlong in_size,
-                                                        jlong jstream) {
+Java_ai_rapids_cudf_nvcomp_NvcompJni_decompressGetMetadata(JNIEnv *env, jclass,
+                                                           jlong in_ptr, jlong in_size,
+                                                           jlong jstream) {
   try {
     cudf::jni::auto_set_device(env);
     void *metadata_ptr;
@@ -66,8 +66,8 @@ Java_ai_rapids_cudf_nvcomp_Nvcomp_decompressGetMetadata(JNIEnv *env, jclass,
 }
 
 JNIEXPORT void JNICALL
-Java_ai_rapids_cudf_nvcomp_Nvcomp_decompressDestroyMetadata(JNIEnv *env, jclass,
-                                                            jlong metadata_ptr) {
+Java_ai_rapids_cudf_nvcomp_NvcompJni_decompressDestroyMetadata(JNIEnv *env, jclass,
+                                                               jlong metadata_ptr) {
   try {
     cudf::jni::auto_set_device(env);
     nvcompDecompressDestroyMetadata(reinterpret_cast<void *>(metadata_ptr));
@@ -75,7 +75,8 @@ Java_ai_rapids_cudf_nvcomp_Nvcomp_decompressDestroyMetadata(JNIEnv *env, jclass,
 }
 
 JNIEXPORT jlong JNICALL
-Java_ai_rapids_cudf_nvcomp_Nvcomp_decompressGetTempSize(JNIEnv *env, jclass, jlong metadata_ptr) {
+Java_ai_rapids_cudf_nvcomp_NvcompJni_decompressGetTempSize(JNIEnv *env, jclass,
+                                                           jlong metadata_ptr) {
   try {
     cudf::jni::auto_set_device(env);
     size_t temp_size;
@@ -86,7 +87,8 @@ Java_ai_rapids_cudf_nvcomp_Nvcomp_decompressGetTempSize(JNIEnv *env, jclass, jlo
 }
 
 JNIEXPORT jlong JNICALL
-Java_ai_rapids_cudf_nvcomp_Nvcomp_decompressGetOutputSize(JNIEnv *env, jclass, jlong metadata_ptr) {
+Java_ai_rapids_cudf_nvcomp_NvcompJni_decompressGetOutputSize(JNIEnv *env, jclass,
+                                                             jlong metadata_ptr) {
   try {
     cudf::jni::auto_set_device(env);
     size_t out_size;
@@ -97,10 +99,11 @@ Java_ai_rapids_cudf_nvcomp_Nvcomp_decompressGetOutputSize(JNIEnv *env, jclass, j
 }
 
 JNIEXPORT void JNICALL
-Java_ai_rapids_cudf_nvcomp_Nvcomp_decompressAsync(JNIEnv *env, jclass, jlong in_ptr, jlong in_size,
-                                                  jlong temp_ptr, jlong temp_size,
-                                                  jlong metadata_ptr,
-                                                  jlong out_ptr, jlong out_size, jlong jstream) {
+Java_ai_rapids_cudf_nvcomp_NvcompJni_decompressAsync(JNIEnv *env, jclass,
+                                                     jlong in_ptr, jlong in_size,
+                                                     jlong temp_ptr, jlong temp_size,
+                                                     jlong metadata_ptr,
+                                                     jlong out_ptr, jlong out_size, jlong jstream) {
   try {
     cudf::jni::auto_set_device(env);
     auto stream = reinterpret_cast<cudaStream_t>(jstream);
@@ -114,7 +117,7 @@ Java_ai_rapids_cudf_nvcomp_Nvcomp_decompressAsync(JNIEnv *env, jclass, jlong in_
 }
 
 JNIEXPORT jboolean JNICALL
-Java_ai_rapids_cudf_nvcomp_Nvcomp_isLZ4Data(JNIEnv *env, jclass, jlong in_ptr, jlong in_size) {
+Java_ai_rapids_cudf_nvcomp_NvcompJni_isLZ4Data(JNIEnv *env, jclass, jlong in_ptr, jlong in_size) {
   try {
     cudf::jni::auto_set_device(env);
     return LZ4IsData(reinterpret_cast<void *>(in_ptr), in_size);
@@ -122,7 +125,7 @@ Java_ai_rapids_cudf_nvcomp_Nvcomp_isLZ4Data(JNIEnv *env, jclass, jlong in_ptr, j
 }
 
 JNIEXPORT jboolean JNICALL
-Java_ai_rapids_cudf_nvcomp_Nvcomp_isLZ4Metadata(JNIEnv *env, jclass, jlong metadata_ptr) {
+Java_ai_rapids_cudf_nvcomp_NvcompJni_isLZ4Metadata(JNIEnv *env, jclass, jlong metadata_ptr) {
   try {
     cudf::jni::auto_set_device(env);
     return LZ4IsMetadata(reinterpret_cast<void *>(metadata_ptr));
@@ -130,9 +133,9 @@ Java_ai_rapids_cudf_nvcomp_Nvcomp_isLZ4Metadata(JNIEnv *env, jclass, jlong metad
 }
 
 JNIEXPORT jlong JNICALL
-Java_ai_rapids_cudf_nvcomp_Nvcomp_lz4CompressGetTempSize(JNIEnv *env, jclass,
-                                                         jlong in_ptr, jlong in_size,
-                                                         jint input_type, jlong chunk_size) {
+Java_ai_rapids_cudf_nvcomp_NvcompJni_lz4CompressGetTempSize(JNIEnv *env, jclass,
+                                                            jlong in_ptr, jlong in_size,
+                                                            jint input_type, jlong chunk_size) {
   try {
     cudf::jni::auto_set_device(env);
     auto comp_type = static_cast<nvcompType_t>(input_type);
@@ -147,11 +150,11 @@ Java_ai_rapids_cudf_nvcomp_Nvcomp_lz4CompressGetTempSize(JNIEnv *env, jclass,
 }
 
 JNIEXPORT jlong JNICALL
-Java_ai_rapids_cudf_nvcomp_Nvcomp_lz4CompressGetOutputSize(JNIEnv *env, jclass,
-                                                           jlong in_ptr, jlong in_size,
-                                                           jint input_type, jlong chunk_size,
-                                                           jlong temp_ptr, jlong temp_size,
-                                                           jboolean compute_exact) {
+Java_ai_rapids_cudf_nvcomp_NvcompJni_lz4CompressGetOutputSize(JNIEnv *env, jclass,
+                                                              jlong in_ptr, jlong in_size,
+                                                              jint input_type, jlong chunk_size,
+                                                              jlong temp_ptr, jlong temp_size,
+                                                              jboolean compute_exact) {
   try {
     cudf::jni::auto_set_device(env);
     auto comp_type = static_cast<nvcompType_t>(input_type);
@@ -168,12 +171,12 @@ Java_ai_rapids_cudf_nvcomp_Nvcomp_lz4CompressGetOutputSize(JNIEnv *env, jclass,
 }
 
 JNIEXPORT jlong JNICALL
-Java_ai_rapids_cudf_nvcomp_Nvcomp_lz4Compress(JNIEnv *env, jclass,
-                                              jlong in_ptr, jlong in_size,
-                                              jint input_type, jlong chunk_size,
-                                              jlong temp_ptr, jlong temp_size,
-                                              jlong out_ptr, jlong out_size,
-                                              jlong jstream) {
+Java_ai_rapids_cudf_nvcomp_NvcompJni_lz4Compress(JNIEnv *env, jclass,
+                                                 jlong in_ptr, jlong in_size,
+                                                 jint input_type, jlong chunk_size,
+                                                 jlong temp_ptr, jlong temp_size,
+                                                 jlong out_ptr, jlong out_size,
+                                                 jlong jstream) {
   try {
     cudf::jni::auto_set_device(env);
     auto comp_type = static_cast<nvcompType_t>(input_type);
@@ -195,13 +198,13 @@ Java_ai_rapids_cudf_nvcomp_Nvcomp_lz4Compress(JNIEnv *env, jclass,
 }
 
 JNIEXPORT void JNICALL
-Java_ai_rapids_cudf_nvcomp_Nvcomp_lz4CompressAsync(JNIEnv *env, jclass,
-                                                   jlong compressed_output_ptr,
-                                                   jlong in_ptr, jlong in_size,
-                                                   jint input_type, jlong chunk_size,
-                                                   jlong temp_ptr, jlong temp_size,
-                                                   jlong out_ptr, jlong out_size,
-                                                   jlong jstream) {
+Java_ai_rapids_cudf_nvcomp_NvcompJni_lz4CompressAsync(JNIEnv *env, jclass,
+                                                      jlong compressed_output_ptr,
+                                                      jlong in_ptr, jlong in_size,
+                                                      jint input_type, jlong chunk_size,
+                                                      jlong temp_ptr, jlong temp_size,
+                                                      jlong out_ptr, jlong out_size,
+                                                      jlong jstream) {
   try {
     cudf::jni::auto_set_device(env);
     auto comp_type = static_cast<nvcompType_t>(input_type);
@@ -220,10 +223,10 @@ Java_ai_rapids_cudf_nvcomp_Nvcomp_lz4CompressAsync(JNIEnv *env, jclass,
 }
 
 JNIEXPORT jlong JNICALL
-Java_ai_rapids_cudf_nvcomp_Nvcomp_batchedLZ4DecompressGetMetadata(JNIEnv* env, jclass,
-                                                                  jlongArray in_ptrs,
-                                                                  jlongArray in_sizes,
-                                                                  jlong jstream) {
+Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedLZ4DecompressGetMetadata(JNIEnv* env, jclass,
+                                                                     jlongArray in_ptrs,
+                                                                     jlongArray in_sizes,
+                                                                     jlong jstream) {
   try {
     cudf::jni::auto_set_device(env);
 
@@ -247,8 +250,8 @@ Java_ai_rapids_cudf_nvcomp_Nvcomp_batchedLZ4DecompressGetMetadata(JNIEnv* env, j
 }
 
 JNIEXPORT void JNICALL
-Java_ai_rapids_cudf_nvcomp_Nvcomp_batchedLZ4DecompressDestroyMetadata(JNIEnv* env, jclass,
-                                                                      jlong metadata_ptr) {
+Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedLZ4DecompressDestroyMetadata(JNIEnv* env, jclass,
+                                                                         jlong metadata_ptr) {
   try {
     cudf::jni::auto_set_device(env);
     nvcompBatchedLZ4DecompressDestroyMetadata(reinterpret_cast<void*>(metadata_ptr));
@@ -256,8 +259,8 @@ Java_ai_rapids_cudf_nvcomp_Nvcomp_batchedLZ4DecompressDestroyMetadata(JNIEnv* en
 }
 
 JNIEXPORT jlong JNICALL
-Java_ai_rapids_cudf_nvcomp_Nvcomp_batchedLZ4DecompressGetTempSize(JNIEnv* env, jclass,
-                                                                  jlong metadata_ptr) {
+Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedLZ4DecompressGetTempSize(JNIEnv* env, jclass,
+                                                                     jlong metadata_ptr) {
   try {
     cudf::jni::auto_set_device(env);
     size_t temp_size;
@@ -269,9 +272,9 @@ Java_ai_rapids_cudf_nvcomp_Nvcomp_batchedLZ4DecompressGetTempSize(JNIEnv* env, j
 }
 
 JNIEXPORT jlongArray JNICALL
-Java_ai_rapids_cudf_nvcomp_Nvcomp_batchedLZ4DecompressGetOutputSize(JNIEnv* env, jclass,
-                                                                    jlong metadata_ptr,
-                                                                    jint num_outputs) {
+Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedLZ4DecompressGetOutputSize(JNIEnv* env, jclass,
+                                                                       jlong metadata_ptr,
+                                                                       jint num_outputs) {
   try {
     cudf::jni::auto_set_device(env);
     std::vector<size_t> sizes(num_outputs);
@@ -287,15 +290,15 @@ Java_ai_rapids_cudf_nvcomp_Nvcomp_batchedLZ4DecompressGetOutputSize(JNIEnv* env,
 }
 
 JNIEXPORT void JNICALL
-Java_ai_rapids_cudf_nvcomp_Nvcomp_batchedLZ4DecompressAsync(JNIEnv* env, jclass,
-                                                            jlongArray in_ptrs,
-                                                            jlongArray in_sizes,
-                                                            jlong temp_ptr,
-                                                            jlong temp_size,
-                                                            jlong metadata_ptr,
-                                                            jlongArray out_ptrs,
-                                                            jlongArray out_sizes,
-                                                            jlong jstream) {
+Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedLZ4DecompressAsync(JNIEnv* env, jclass,
+                                                               jlongArray in_ptrs,
+                                                               jlongArray in_sizes,
+                                                               jlong temp_ptr,
+                                                               jlong temp_size,
+                                                               jlong metadata_ptr,
+                                                               jlongArray out_ptrs,
+                                                               jlongArray out_sizes,
+                                                               jlong jstream) {
   try {
     cudf::jni::auto_set_device(env);
     cudf::jni::native_jpointerArray<void const> input_ptrs(env, in_ptrs);
@@ -335,10 +338,10 @@ Java_ai_rapids_cudf_nvcomp_Nvcomp_batchedLZ4DecompressAsync(JNIEnv* env, jclass,
 }
 
 JNIEXPORT jlong JNICALL
-Java_ai_rapids_cudf_nvcomp_Nvcomp_batchedLZ4CompressGetTempSize(JNIEnv* env, jclass,
-                                                                jlongArray in_ptrs,
-                                                                jlongArray in_sizes,
-                                                                jlong chunk_size) {
+Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedLZ4CompressGetTempSize(JNIEnv* env, jclass,
+                                                                   jlongArray in_ptrs,
+                                                                   jlongArray in_sizes,
+                                                                   jlong chunk_size) {
   try {
     cudf::jni::auto_set_device(env);
     cudf::jni::native_jpointerArray<void const> input_ptrs(env, in_ptrs);
@@ -362,12 +365,12 @@ Java_ai_rapids_cudf_nvcomp_Nvcomp_batchedLZ4CompressGetTempSize(JNIEnv* env, jcl
 }
 
 JNIEXPORT jlongArray JNICALL
-Java_ai_rapids_cudf_nvcomp_Nvcomp_batchedLZ4CompressGetOutputSize(JNIEnv* env, jclass,
-                                                                  jlongArray in_ptrs,
-                                                                  jlongArray in_sizes,
-                                                                  jlong chunk_size,
-                                                                  jlong temp_ptr,
-                                                                  jlong temp_size) {
+Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedLZ4CompressGetOutputSize(JNIEnv* env, jclass,
+                                                                     jlongArray in_ptrs,
+                                                                     jlongArray in_sizes,
+                                                                     jlong chunk_size,
+                                                                     jlong temp_ptr,
+                                                                     jlong temp_size) {
   try {
     cudf::jni::auto_set_device(env);
     cudf::jni::native_jpointerArray<void const> input_ptrs(env, in_ptrs);
@@ -397,16 +400,16 @@ Java_ai_rapids_cudf_nvcomp_Nvcomp_batchedLZ4CompressGetOutputSize(JNIEnv* env, j
 }
 
 JNIEXPORT void JNICALL
-Java_ai_rapids_cudf_nvcomp_Nvcomp_batchedLZ4CompressAsync(JNIEnv* env, jclass,
-                                                          jlong compressed_sizes_out_ptr,
-                                                          jlongArray in_ptrs,
-                                                          jlongArray in_sizes,
-                                                          jlong chunk_size,
-                                                          jlong temp_ptr,
-                                                          jlong temp_size,
-                                                          jlongArray out_ptrs,
-                                                          jlongArray out_sizes,
-                                                          jlong jstream) {
+Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedLZ4CompressAsync(JNIEnv* env, jclass,
+                                                             jlong compressed_sizes_out_ptr,
+                                                             jlongArray in_ptrs,
+                                                             jlongArray in_sizes,
+                                                             jlong chunk_size,
+                                                             jlong temp_ptr,
+                                                             jlong temp_size,
+                                                             jlongArray out_ptrs,
+                                                             jlongArray out_sizes,
+                                                             jlong jstream) {
   try {
     cudf::jni::auto_set_device(env);
     cudf::jni::native_jpointerArray<void const> input_ptrs(env, in_ptrs);
@@ -448,10 +451,10 @@ Java_ai_rapids_cudf_nvcomp_Nvcomp_batchedLZ4CompressAsync(JNIEnv* env, jclass,
 }
 
 JNIEXPORT jlong JNICALL
-Java_ai_rapids_cudf_nvcomp_Nvcomp_cascadedCompressGetTempSize(JNIEnv *env, jclass,
-                                                              jlong in_ptr, jlong in_size,
-                                                              jint input_type, jint num_rles,
-                                                              jint num_deltas, jboolean use_bp) {
+Java_ai_rapids_cudf_nvcomp_NvcompJni_cascadedCompressGetTempSize(JNIEnv *env, jclass,
+                                                                 jlong in_ptr, jlong in_size,
+                                                                 jint input_type, jint num_rles,
+                                                                 jint num_deltas, jboolean use_bp) {
   try {
     cudf::jni::auto_set_device(env);
     auto comp_type = static_cast<nvcompType_t>(input_type);
@@ -468,12 +471,12 @@ Java_ai_rapids_cudf_nvcomp_Nvcomp_cascadedCompressGetTempSize(JNIEnv *env, jclas
 }
 
 JNIEXPORT jlong JNICALL
-Java_ai_rapids_cudf_nvcomp_Nvcomp_cascadedCompressGetOutputSize(JNIEnv *env, jclass,
-                                                                jlong in_ptr, jlong in_size,
-                                                                jint input_type, jint num_rles,
-                                                                jint num_deltas, jboolean use_bp,
-                                                                jlong temp_ptr, jlong temp_size,
-                                                                jboolean compute_exact) {
+Java_ai_rapids_cudf_nvcomp_NvcompJni_cascadedCompressGetOutputSize(JNIEnv *env, jclass,
+                                                                   jlong in_ptr, jlong in_size,
+                                                                   jint input_type, jint num_rles,
+                                                                   jint num_deltas, jboolean use_bp,
+                                                                   jlong temp_ptr, jlong temp_size,
+                                                                   jboolean compute_exact) {
   try {
     cudf::jni::auto_set_device(env);
     auto comp_type = static_cast<nvcompType_t>(input_type);
@@ -492,13 +495,13 @@ Java_ai_rapids_cudf_nvcomp_Nvcomp_cascadedCompressGetOutputSize(JNIEnv *env, jcl
 }
 
 JNIEXPORT jlong JNICALL
-Java_ai_rapids_cudf_nvcomp_Nvcomp_cascadedCompress(JNIEnv *env, jclass,
-                                                   jlong in_ptr, jlong in_size,
-                                                   jint input_type, jint num_rles,
-                                                   jint num_deltas, jboolean use_bp,
-                                                   jlong temp_ptr, jlong temp_size,
-                                                   jlong out_ptr, jlong out_size,
-                                                   jlong jstream) {
+Java_ai_rapids_cudf_nvcomp_NvcompJni_cascadedCompress(JNIEnv *env, jclass,
+                                                      jlong in_ptr, jlong in_size,
+                                                      jint input_type, jint num_rles,
+                                                      jint num_deltas, jboolean use_bp,
+                                                      jlong temp_ptr, jlong temp_size,
+                                                      jlong out_ptr, jlong out_size,
+                                                      jlong jstream) {
   try {
     cudf::jni::auto_set_device(env);
     auto comp_type = static_cast<nvcompType_t>(input_type);
@@ -522,14 +525,14 @@ Java_ai_rapids_cudf_nvcomp_Nvcomp_cascadedCompress(JNIEnv *env, jclass,
 }
 
 JNIEXPORT void JNICALL
-Java_ai_rapids_cudf_nvcomp_Nvcomp_cascadedCompressAsync(JNIEnv *env, jclass,
-                                                        jlong compressed_output_ptr,
-                                                        jlong in_ptr, jlong in_size,
-                                                        jint input_type, jint num_rles,
-                                                        jint num_deltas, jboolean use_bp,
-                                                        jlong temp_ptr, jlong temp_size,
-                                                        jlong out_ptr, jlong out_size,
-                                                        jlong jstream) {
+Java_ai_rapids_cudf_nvcomp_NvcompJni_cascadedCompressAsync(JNIEnv *env, jclass,
+                                                           jlong compressed_output_ptr,
+                                                           jlong in_ptr, jlong in_size,
+                                                           jint input_type, jint num_rles,
+                                                           jint num_deltas, jboolean use_bp,
+                                                           jlong temp_ptr, jlong temp_size,
+                                                           jlong out_ptr, jlong out_size,
+                                                           jlong jstream) {
   try {
     cudf::jni::auto_set_device(env);
     auto comp_type = static_cast<nvcompType_t>(input_type);

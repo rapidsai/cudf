@@ -19,7 +19,7 @@ package ai.rapids.cudf.nvcomp;
 import ai.rapids.cudf.NativeDepsLoader;
 
 /** Raw JNI interface to the nvcomp library. */
-public class Nvcomp {
+class NvcompJni {
   static {
     NativeDepsLoader.loadNativeDeps();
   }
@@ -33,13 +33,13 @@ public class Nvcomp {
    * @param stream address of CUDA stream that will be used for synchronization
    * @return address of the metadata on the host
    */
-  public static native long decompressGetMetadata(long inPtr, long inSize, long stream);
+  static native long decompressGetMetadata(long inPtr, long inSize, long stream);
 
   /**
    * Destroys the metadata object and frees the associated memory.
    * @param metadataPtr address of the metadata object
    */
-  public static native void decompressDestroyMetadata(long metadataPtr);
+  static native void decompressDestroyMetadata(long metadataPtr);
 
   /**
    * Computes the temporary storage size needed to decompress.
@@ -47,7 +47,7 @@ public class Nvcomp {
    * @param metadataPtr address of the metadata object
    * @return the number of temporary storage bytes needed to decompress
    */
-  public static native long decompressGetTempSize(long metadataPtr);
+  static native long decompressGetTempSize(long metadataPtr);
 
   /**
    * Computes the decompressed size of the data.  Gets this from the
@@ -55,7 +55,7 @@ public class Nvcomp {
    * @param metadataPtr address of the metadata object
    * @return the size of the decompressed data in bytes
    */
-  public static native long decompressGetOutputSize(long metadataPtr);
+  static native long decompressGetOutputSize(long metadataPtr);
 
   /**
    * Perform asynchronous decompression using the specified CUDA stream.
@@ -70,7 +70,7 @@ public class Nvcomp {
    * @param outSize size of the uncompressed output buffer in bytes
    * @param stream CUDA stream to use
    */
-  public static native void decompressAsync(
+  static native void decompressAsync(
       long inPtr,
       long inSize,
       long tempPtr,
@@ -86,14 +86,14 @@ public class Nvcomp {
    * @param inSize size of the compressed data in bytes
    * @return true if the data is compressed with the nvcomp LZ4 compressor
    */
-  public static native boolean isLZ4Data(long inPtr, long inSize);
+  static native boolean isLZ4Data(long inPtr, long inSize);
 
   /**
    * Determine if the metadata corresponds to data compressed with the nvcomp LZ4 compressor.
    * @param metadataPtr address of the metadata object
    * @return true if the metadata describes data compressed with the nvcomp LZ4 compressor.
    */
-  public static native boolean isLZ4Metadata(long metadataPtr);
+  static native boolean isLZ4Metadata(long metadataPtr);
 
   /**
    * Calculate the temporary buffer size needed for LZ4 compression.
@@ -103,7 +103,7 @@ public class Nvcomp {
    * @param chunkSize size of an LZ4 chunk in bytes
    * @return number of temporary storage bytes needed to compress
    */
-  public static native long lz4CompressGetTempSize(
+  static native long lz4CompressGetTempSize(
       long inPtr,
       long inSize,
       int inputType,
@@ -123,7 +123,7 @@ public class Nvcomp {
    * this is an exact size otherwise it is a maximum, worst-case size of the
    * compressed data.
    */
-  public static native long lz4CompressGetOutputSize(
+  static native long lz4CompressGetOutputSize(
       long inPtr,
       long inSize,
       int inputType,
@@ -146,7 +146,7 @@ public class Nvcomp {
    * @param stream CUDA stream to use
    * @return size of the compressed output in bytes
    */
-  public static native long lz4Compress(
+  static native long lz4Compress(
       long inPtr,
       long inSize,
       int inputType,
@@ -175,7 +175,7 @@ public class Nvcomp {
    * @param outSize size of the output buffer in bytes
    * @param stream CUDA stream to use
    */
-  public static native void lz4CompressAsync(
+  static native void lz4CompressAsync(
       long compressedSizeOutputPtr,
       long inPtr,
       long inSize,
@@ -195,7 +195,7 @@ public class Nvcomp {
    * @param stream CUDA stream to use
    * @return handle to the batched decompress metadata on the host
    */
-  public static native long batchedLZ4DecompressGetMetadata(
+  static native long batchedLZ4DecompressGetMetadata(
       long[] inPtrs,
       long[] inSizes,
       long stream);
@@ -204,7 +204,7 @@ public class Nvcomp {
    * Destroys batched metadata and frees the underlying host memory.
    * @param batchedMetadata handle to the batched decompress metadata
    */
-  public static native void batchedLZ4DecompressDestroyMetadata(long batchedMetadata);
+  static native void batchedLZ4DecompressDestroyMetadata(long batchedMetadata);
 
   /**
    * Computes the temporary storage size in bytes needed to decompress
@@ -212,7 +212,7 @@ public class Nvcomp {
    * @param batchedMetadata handle to the batched metadata
    * @return number of temporary storage bytes needed to decompress the batch
    */
-  public static native long batchedLZ4DecompressGetTempSize(long batchedMetadata);
+  static native long batchedLZ4DecompressGetTempSize(long batchedMetadata);
 
   /**
    * Computes the decompressed size of each chunk in the batch.
@@ -221,7 +221,7 @@ public class Nvcomp {
    * @return Array of corresponding output sizes needed to decompress
    * each buffer in the batch.
    */
-  public static native long[] batchedLZ4DecompressGetOutputSize(
+  static native long[] batchedLZ4DecompressGetOutputSize(
       long batchedMetadata,
       long numOutputs);
 
@@ -236,7 +236,7 @@ public class Nvcomp {
    * @param outSizes corresponding byte sizes of the uncompressed output buffers
    * @param stream CUDA stream to use
    */
-  public static native void batchedLZ4DecompressAsync(
+  static native void batchedLZ4DecompressAsync(
       long[] inPtrs,
       long[] inSizes,
       long tempPtr,
@@ -253,7 +253,7 @@ public class Nvcomp {
    * @param chunkSize size of an LZ4 chunk in bytes
    * @return The size of required temporary workspace in bytes to compress the batch.
    */
-  public static native long batchedLZ4CompressGetTempSize(
+  static native long batchedLZ4CompressGetTempSize(
       long[] inPtrs,
       long[] inSizes,
       long chunkSize);
@@ -268,7 +268,7 @@ public class Nvcomp {
    * @return array of corresponding sizes in bytes of the output buffers needed
    * to compress the buffers in the batch.
    */
-  public static native long[] batchedLZ4CompressGetOutputSize(
+  static native long[] batchedLZ4CompressGetOutputSize(
       long[] inPtrs,
       long[] inSizes,
       long chunkSize,
@@ -294,7 +294,7 @@ public class Nvcomp {
    * @param outSizes corresponding sizes in bytes of the output buffers
    * @param stream CUDA stream to use
    */
-  public static native void batchedLZ4CompressAsync(
+  static native void batchedLZ4CompressAsync(
       long compressedSizesOutPtr,
       long[] inPtrs,
       long[] inSizes,

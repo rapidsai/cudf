@@ -41,7 +41,7 @@ public class NvcompTest {
   @Test
   void testBatchedLZ4RoundTripAsync() {
     final long chunkSize = 64 * 1024;
-    final int maxElements = 1 * 1024 * 1024 + 1;
+    final int maxElements = 1024 * 1024 + 1;
     final int numBuffers = 200;
     long[] data = new long[maxElements];
     for (int i = 0; i < maxElements; ++i) {
@@ -50,7 +50,13 @@ public class NvcompTest {
 
     DeviceMemoryBuffer[] originalBuffers = new DeviceMemoryBuffer[numBuffers];
     DeviceMemoryBuffer[] uncompressedBuffers = new DeviceMemoryBuffer[numBuffers];
+
+    // compressed data in buffers that are likely oversized
     DeviceMemoryBuffer[] compressedBuffers = new DeviceMemoryBuffer[numBuffers];
+
+    // compressed data in right-sized buffers
+    DeviceMemoryBuffer[] compressedInputs = new DeviceMemoryBuffer[numBuffers];
+
     try {
       // create the batched buffers to compress
       for (int i = 0; i < numBuffers; ++i) {
@@ -58,67 +64,42 @@ public class NvcompTest {
       }
 
       // compress the buffers
-      long[] inputAddrs = new long[numBuffers];
-      long[] inputSizes = new long[numBuffers];
-      for (int i = 0; i < numBuffers; ++i) {
-        inputAddrs[i] = originalBuffers[i].getAddress();
-        inputSizes[i] = originalBuffers[i].getLength();
-      }
-      long[] outputAddrs = new long[numBuffers];
-      long[] outputSizes = null;
-      long[] compressedSizes = new long[numBuffers];
-      long tempSize = Nvcomp.batchedLZ4CompressGetTempSize(inputAddrs, inputSizes, chunkSize);
+      long[] outputSizes;
+      long[] compressedSizes;
+      long tempSize = BatchedLZ4Compressor.getTempSize(originalBuffers, chunkSize);
       try (DeviceMemoryBuffer tempBuffer = DeviceMemoryBuffer.allocate(tempSize)) {
-        outputSizes = Nvcomp.batchedLZ4CompressGetOutputSize(inputAddrs, inputSizes, chunkSize,
-                tempBuffer.getAddress(), tempBuffer.getLength());
+        outputSizes = BatchedLZ4Compressor.getOutputSizes(originalBuffers, chunkSize, tempBuffer);
         for (int i = 0; i < numBuffers; ++i) {
           compressedBuffers[i] = DeviceMemoryBuffer.allocate(outputSizes[i]);
-          outputAddrs[i] = compressedBuffers[i].getAddress();
         }
         try (HostMemoryBuffer compressedSizesBuffer = HostMemoryBuffer.allocate(8 * numBuffers)) {
-          Nvcomp.batchedLZ4CompressAsync(
-              compressedSizesBuffer.getAddress(),
-              inputAddrs,
-              inputSizes,
-              chunkSize,
-              tempBuffer.getAddress(),
-              tempBuffer.getLength(),
-              outputAddrs,
-              outputSizes,
-              0);
+          BatchedLZ4Compressor.compressAsync(compressedSizesBuffer, originalBuffers, chunkSize,
+              tempBuffer, compressedBuffers, Cuda.DEFAULT_STREAM);
           Cuda.DEFAULT_STREAM.sync();
+          compressedSizes = new long[numBuffers];
           for (int i = 0; i < numBuffers; ++i) {
             compressedSizes[i] = compressedSizesBuffer.getLong(i * 8);
           }
         }
       }
 
-      // decompress the buffers
+      // right-size the compressed buffers based on reported compressed sizes
       for (int i = 0; i < numBuffers; ++i) {
-        inputAddrs[i] = compressedBuffers[i].getAddress();
+        compressedInputs[i] = compressedBuffers[i].slice(0, compressedSizes[i]);
       }
-      inputSizes = compressedSizes;
-      long metadata = Nvcomp.batchedLZ4DecompressGetMetadata(inputAddrs, inputSizes, 0);
-      try {
-        outputSizes = Nvcomp.batchedLZ4DecompressGetOutputSize(metadata, numBuffers);
+
+      // decompress the buffers
+      try (BatchedLZ4Decompressor.BatchedMetadata metadata =
+               BatchedLZ4Decompressor.getMetadata(compressedInputs, Cuda.DEFAULT_STREAM)) {
+        outputSizes = BatchedLZ4Decompressor.getOutputSizes(metadata, numBuffers);
         for (int i = 0; i < numBuffers; ++i) {
           uncompressedBuffers[i] = DeviceMemoryBuffer.allocate(outputSizes[i]);
-          outputAddrs[i] = uncompressedBuffers[i].getAddress();
         }
-        tempSize = Nvcomp.batchedLZ4DecompressGetTempSize(metadata);
+        tempSize = BatchedLZ4Decompressor.getTempSize(metadata);
         try (DeviceMemoryBuffer tempBuffer = DeviceMemoryBuffer.allocate(tempSize)) {
-          Nvcomp.batchedLZ4DecompressAsync(
-              inputAddrs,
-              inputSizes,
-              tempBuffer.getAddress(),
-              tempBuffer.getLength(),
-              metadata,
-              outputAddrs,
-              outputSizes,
-              0);
+          BatchedLZ4Decompressor.decompressAsync(compressedInputs, tempBuffer, metadata,
+              uncompressedBuffers, Cuda.DEFAULT_STREAM);
         }
-      } finally {
-        Nvcomp.batchedLZ4DecompressDestroyMetadata(metadata);
       }
 
       // check the decompressed results against the original
@@ -143,6 +124,7 @@ public class NvcompTest {
       closeBufferArray(originalBuffers);
       closeBufferArray(uncompressedBuffers);
       closeBufferArray(compressedBuffers);
+      closeBufferArray(compressedInputs);
     }
   }
 
@@ -191,7 +173,7 @@ public class NvcompTest {
   }
 
   private void lz4RoundTrip(boolean useAsync) {
-    final long chunk_size = 64 * 1024;
+    final long chunkSize = 64 * 1024;
     final int numElements = 10 * 1024 * 1024 + 1;
     long[] data = new long[numElements];
     for (int i = 0; i < numElements; ++i) {
@@ -205,24 +187,14 @@ public class NvcompTest {
       BaseDeviceMemoryBuffer inputBuffer = v.getDeviceBufferFor(BufferType.DATA);
       log.debug("Uncompressed size is {}", inputBuffer.getLength());
 
-      long tempSize = Nvcomp.lz4CompressGetTempSize(
-          inputBuffer.getAddress(),
-          inputBuffer.getLength(),
-          CompressionType.CHAR.nativeId,
-          chunk_size);
+      long tempSize = LZ4Compressor.getTempSize(inputBuffer, CompressionType.CHAR, chunkSize);
 
       log.debug("Using {} temporary space for lz4 compression", tempSize);
       tempBuffer = DeviceMemoryBuffer.allocate(tempSize);
 
-      long outSize = Nvcomp.lz4CompressGetOutputSize(
-          inputBuffer.getAddress(),
-          inputBuffer.getLength(),
-          CompressionType.CHAR.nativeId,
-          chunk_size,
-          tempBuffer.getAddress(),
-          tempBuffer.getLength(),
-          false);
-      log.debug("Inexact lz4 compressed size estimate is {}", outSize);
+      long outSize = LZ4Compressor.getOutputSize(inputBuffer, CompressionType.CHAR, chunkSize,
+          tempBuffer);
+      log.debug("lz4 compressed size estimate is {}", outSize);
 
       compressedBuffer = DeviceMemoryBuffer.allocate(outSize);
 
@@ -230,31 +202,14 @@ public class NvcompTest {
       long compressedSize;
       if (useAsync) {
         try (HostMemoryBuffer tempHostBuffer = HostMemoryBuffer.allocate(8)) {
-          Nvcomp.lz4CompressAsync(
-              tempHostBuffer.getAddress(),
-              inputBuffer.getAddress(),
-              inputBuffer.getLength(),
-              CompressionType.CHAR.nativeId,
-              chunk_size,
-              tempBuffer.getAddress(),
-              tempBuffer.getLength(),
-              compressedBuffer.getAddress(),
-              compressedBuffer.getLength(),
-              0);
+          LZ4Compressor.compressAsync(tempHostBuffer, inputBuffer, CompressionType.CHAR, chunkSize,
+              tempBuffer, compressedBuffer, Cuda.DEFAULT_STREAM);
           Cuda.DEFAULT_STREAM.sync();
           compressedSize = tempHostBuffer.getLong(0);
         }
       } else {
-        compressedSize = Nvcomp.lz4Compress(
-            inputBuffer.getAddress(),
-            inputBuffer.getLength(),
-            CompressionType.CHAR.nativeId,
-            chunk_size,
-            tempBuffer.getAddress(),
-            tempBuffer.getLength(),
-            compressedBuffer.getAddress(),
-            compressedBuffer.getLength(),
-            0);
+        compressedSize = LZ4Compressor.compress(inputBuffer, CompressionType.CHAR, chunkSize,
+            tempBuffer, compressedBuffer, Cuda.DEFAULT_STREAM);
       }
       double duration = (System.nanoTime() - startTime) / 1000.0;
       log.info("Compressed with lz4 to {} in {} us", compressedSize, duration);
@@ -262,33 +217,23 @@ public class NvcompTest {
       tempBuffer.close();
       tempBuffer = null;
 
-      Assertions.assertTrue(Nvcomp.isLZ4Data(compressedBuffer.getAddress(), compressedSize));
+      Assertions.assertTrue(Decompressor.isLZ4Data(compressedBuffer));
 
-      long metadata = Nvcomp.decompressGetMetadata(
-          compressedBuffer.getAddress(),
-          compressedBuffer.getLength(),
-          0);
-      try {
-        Assertions.assertTrue(Nvcomp.isLZ4Metadata(metadata));
-        tempSize = Nvcomp.decompressGetTempSize(metadata);
+      try (Decompressor.Metadata metadata =
+               Decompressor.getMetadata(compressedBuffer, Cuda.DEFAULT_STREAM)) {
+        Assertions.assertTrue(metadata.isLZ4Metadata());
+        tempSize = Decompressor.getTempSize(metadata);
 
         log.debug("Using {} temporary space for lz4 compression", tempSize);
         tempBuffer = DeviceMemoryBuffer.allocate(tempSize);
 
-        outSize = Nvcomp.decompressGetOutputSize(metadata);
+        outSize = Decompressor.getOutputSize(metadata);
         Assertions.assertEquals(inputBuffer.getLength(), outSize);
 
         uncompressedBuffer = DeviceMemoryBuffer.allocate(outSize);
 
-        Nvcomp.decompressAsync(
-            compressedBuffer.getAddress(),
-            compressedSize,
-            tempBuffer.getAddress(),
-            tempBuffer.getLength(),
-            metadata,
-            uncompressedBuffer.getAddress(),
-            uncompressedBuffer.getLength(),
-            0);
+        Decompressor.decompressAsync(compressedBuffer, tempBuffer, metadata, uncompressedBuffer,
+            Cuda.DEFAULT_STREAM);
 
         try (ColumnVector v2 = new ColumnVector(
             DType.INT64,
@@ -306,8 +251,6 @@ public class NvcompTest {
             }
           }
         }
-      } finally {
-        Nvcomp.decompressDestroyMetadata(metadata);
       }
     } finally {
       closeBuffer(tempBuffer);
@@ -343,7 +286,7 @@ public class NvcompTest {
       BaseDeviceMemoryBuffer inputBuffer = v.getDeviceBufferFor(BufferType.DATA);
       log.debug("Uncompressed size is " + inputBuffer.getLength());
 
-      long tempSize = Nvcomp.cascadedCompressGetTempSize(
+      long tempSize = NvcompJni.cascadedCompressGetTempSize(
           inputBuffer.getAddress(),
           inputBuffer.getLength(),
           CompressionType.INT.nativeId,
@@ -354,7 +297,7 @@ public class NvcompTest {
       log.debug("Using {} temporary space for cascaded compression", tempSize);
       tempBuffer = DeviceMemoryBuffer.allocate(tempSize);
 
-      long outSize = Nvcomp.cascadedCompressGetOutputSize(
+      long outSize = NvcompJni.cascadedCompressGetOutputSize(
           inputBuffer.getAddress(),
           inputBuffer.getLength(),
           CompressionType.INT.nativeId,
@@ -372,7 +315,7 @@ public class NvcompTest {
       long compressedSize;
       if (useAsync) {
         try (HostMemoryBuffer tempHostBuffer = HostMemoryBuffer.allocate(8)) {
-          Nvcomp.cascadedCompressAsync(
+          NvcompJni.cascadedCompressAsync(
               tempHostBuffer.getAddress(),
               inputBuffer.getAddress(),
               inputBuffer.getLength(),
@@ -389,7 +332,7 @@ public class NvcompTest {
           compressedSize = tempHostBuffer.getLong(0);
         }
       } else {
-        compressedSize = Nvcomp.cascadedCompress(
+        compressedSize = NvcompJni.cascadedCompress(
             inputBuffer.getAddress(),
             inputBuffer.getLength(),
             CompressionType.INT.nativeId,
@@ -409,30 +352,20 @@ public class NvcompTest {
       tempBuffer.close();
       tempBuffer = null;
 
-      long metadata = Nvcomp.decompressGetMetadata(
-          compressedBuffer.getAddress(),
-          compressedBuffer.getLength(),
-          0);
-      try {
-        tempSize = Nvcomp.decompressGetTempSize(metadata);
+      try (Decompressor.Metadata metadata =
+               Decompressor.getMetadata(compressedBuffer, Cuda.DEFAULT_STREAM)) {
+        tempSize = Decompressor.getTempSize(metadata);
 
         log.debug("Using {} temporary space for cascaded compression", tempSize);
         tempBuffer = DeviceMemoryBuffer.allocate(tempSize);
 
-        outSize = Nvcomp.decompressGetOutputSize(metadata);
+        outSize = Decompressor.getOutputSize(metadata);
         Assertions.assertEquals(inputBuffer.getLength(), outSize);
 
         uncompressedBuffer = DeviceMemoryBuffer.allocate(outSize);
 
-        Nvcomp.decompressAsync(
-            compressedBuffer.getAddress(),
-            compressedSize,
-            tempBuffer.getAddress(),
-            tempBuffer.getLength(),
-            metadata,
-            uncompressedBuffer.getAddress(),
-            uncompressedBuffer.getLength(),
-            0);
+        Decompressor.decompressAsync(compressedBuffer, tempBuffer, metadata, uncompressedBuffer,
+            Cuda.DEFAULT_STREAM);
 
         try (ColumnVector v2 = new ColumnVector(
             DType.INT32,
@@ -447,8 +380,6 @@ public class NvcompTest {
             Assertions.assertTrue(compareAll.getBoolean());
           }
         }
-      } finally {
-        Nvcomp.decompressDestroyMetadata(metadata);
       }
     } finally {
       closeBuffer(tempBuffer);
