@@ -55,6 +55,8 @@
 - PR #6215 Add cmake command-line setting for spdlog logging level
 - PR #6240 Don't shallow copy index in as_index() unless necessary
 - PR #6204 Add dockerfile and script to build cuDF jar
+- PR #6245 Split up replace.cu into multiple source files
+- PR #6218 increase visiblity/consistency for cuio reader writer private member variable names.
 
 ## Bug Fixes
 
@@ -82,6 +84,10 @@
 - PR #6157 Fix issue related to `Series.concat` to concat a non-empty and empty series.
 - PR #6226 Add in some JNI checks for null handles
 - PR #6183 Fix issues related to `Series.acos` for consistent output regardless of dtype
+- PR #6234 Add float infinity parsing in csv reader
+- PR #6251 Replace remaining calls to RMM `get_default_resource`
+- PR #6259 Fix compilation error with GCC 8
+- PR #6258 Pin libcudf conda recipe to boost 1.72.0
 
 
 # cuDF 0.15.0 (26 Aug 2020)
