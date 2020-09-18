@@ -59,6 +59,7 @@
 - PR #6204 Add dockerfile and script to build cuDF jar
 - PR #6245 Split up replace.cu into multiple source files
 - PR #6218 increase visiblity/consistency for cuio reader writer private member variable names.
+- PR #6268 Add file tags to libcudf doxygen
 
 ## Bug Fixes
 
