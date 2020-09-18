@@ -20,12 +20,12 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <thrust/detail/raw_pointer_cast.h>
 #include <thrust/device_vector.h>
 
 #include <cstddef>
 #include <limits>
 #include <type_traits>
-#include "thrust/detail/raw_pointer_cast.h"
 
 namespace cudf {
 namespace detail {
@@ -126,18 +126,6 @@ struct device_span : public span_base<T, Extent, device_span<T, Extent>> {
   {
   }
 };
-
-// template <typename Container, typename T = typename Container::value_type>
-// host_span<T> make_span(Container& in)
-// {
-//   return host_span<T>(in.begin().get(), in.size());
-// }
-
-// template <typename Container, typename T = typename Container::value_type>
-// device_span<T> make_device_span(Container& in)
-// {
-//   return device_span<T>(in.begin(), in.size());
-// }
 
 }  // namespace detail
 }  // namespace cudf
