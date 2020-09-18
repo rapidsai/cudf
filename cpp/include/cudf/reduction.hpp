@@ -92,7 +92,6 @@ std::unique_ptr<column> scan(
 /**
  * @brief Determines the minimum and maximum values of a column.
  *
- * Supports nullable and non-nullable columns.
  *
  * @param col column to compute minmax
  * @param mr Device memory resource used to allocate the returned column's device memory
