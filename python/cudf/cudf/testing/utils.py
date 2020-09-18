@@ -17,7 +17,9 @@ def _generate_rand_meta(obj, dtypes_list):
             # We want to operate near the limits of string column
             # Hence creating a string column of size almost
             # equal to 2 Billion bytes(sizeof(int))
-            meta["max_string_length"] = 2000000000 / num_rows
+            meta["max_string_length"] = random.randrange(
+                0, 2000000000 / num_rows
+            )
         meta["dtype"] = dtype
         meta["null_frequency"] = null_frequency
         meta["cardinality"] = cardinality
