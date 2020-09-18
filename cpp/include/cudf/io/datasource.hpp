@@ -219,12 +219,12 @@ class datasource {
   class owning_buffer : public buffer {
    public:
     owning_buffer(Container&& data_owner)
-      : _owner(std::move(data_owner)), _data_ptr(_owner.data()), _size(_owner.size())
+      : _data(std::move(data_owner)), _data_ptr(_data.data()), _size(_data.size())
     {
     }
     // to create a view into an existing owning buffer
     owning_buffer(Container&& data_owner, const uint8_t* data_ptr, size_t size)
-      : _owner(std::move(data_owner)), _data_ptr(data_ptr), _size(size)
+      : _data(std::move(data_owner)), _data_ptr(data_ptr), _size(size)
     {
     }
 
