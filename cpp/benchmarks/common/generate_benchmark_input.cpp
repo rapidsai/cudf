@@ -43,18 +43,20 @@ auto deterministic_engine(unsigned seed) { return std::mt19937{seed}; }
 template <typename T>
 T get_distribution_mean(distribution_params<T> const& dist)
 {
-  if (dist.id == distribution_id::NORMAL || dist.id == distribution_id::UNIFORM) {
-    return (dist.lower_bound / 2.) + (dist.upper_bound / 2.);
-  }
-  if (dist.id == distribution_id::GEOMETRIC) {
-    auto const range_size = dist.lower_bound < dist.upper_bound
-                              ? dist.upper_bound - dist.lower_bound
-                              : dist.lower_bound - dist.upper_bound;
-    auto const p = geometric_dist_p(range_size);
-    if (dist.lower_bound < dist.upper_bound)
-      return dist.lower_bound + (1. / p);
-    else
-      return dist.lower_bound - (1. / p);
+  switch (dist.id) {
+    case distribution_id::NORMAL:
+    case distribution_id::UNIFORM: return (dist.lower_bound / 2.) + (dist.upper_bound / 2.);
+    case distribution_id::GEOMETRIC: {
+      auto const range_size = dist.lower_bound < dist.upper_bound
+                                ? dist.upper_bound - dist.lower_bound
+                                : dist.lower_bound - dist.upper_bound;
+      auto const p = geometric_dist_p(range_size);
+      if (dist.lower_bound < dist.upper_bound)
+        return dist.lower_bound + (1. / p);
+      else
+        return dist.lower_bound - (1. / p);
+    }
+    default: CUDF_FAIL("Unsupported distribution type.");
   }
 }
 
