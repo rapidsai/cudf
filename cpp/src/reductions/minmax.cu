@@ -60,18 +60,18 @@ struct minmax_pair {
 template <typename T, bool has_nulls = true>
 struct minmax_binary_op
   : public thrust::binary_function<minmax_pair<T>, minmax_pair<T>, minmax_pair<T>> {
-  __device__ minmax_pair<T> operator()(minmax_pair<T> const& lhs, minmax_pair<T> const& rhs) const
+  __device__ minmax_pair<T> operator()(minmax_pair<T> const &lhs, minmax_pair<T> const &rhs) const
   {
-    T const x_min = (x.min_valid || !has_nulls) ? x.min_val : cudf::DeviceMin::identity<T>();
-    T const y_min = (y.min_valid || !has_nulls) ? y.min_val : cudf::DeviceMin::identity<T>();
-    T const x_max = (x.max_valid || !has_nulls) ? x.max_val : cudf::DeviceMax::identity<T>();
-    T const y_max = (y.max_valid || !has_nulls) ? y.max_val : cudf::DeviceMax::identity<T>();
+    T const x_min = (lhs.min_valid || !has_nulls) ? lhs.min_val : cudf::DeviceMin::identity<T>();
+    T const y_min = (rhs.min_valid || !has_nulls) ? rhs.min_val : cudf::DeviceMin::identity<T>();
+    T const x_max = (lhs.max_valid || !has_nulls) ? lhs.max_val : cudf::DeviceMax::identity<T>();
+    T const y_max = (rhs.max_valid || !has_nulls) ? rhs.max_val : cudf::DeviceMax::identity<T>();
 
     // The only invalid situation is if we compare two invalid values.
     // Otherwise, we are certain to select a valid value due to the
     // identity functions above changing the comparison value.
-    bool const valid_min_result = !has_nulls || x.min_valid || y.min_valid;
-    bool const valid_max_result = !has_nulls || x.max_valid || y.max_valid;
+    bool const valid_min_result = !has_nulls || lhs.min_valid || rhs.min_valid;
+    bool const valid_max_result = !has_nulls || lhs.max_valid || rhs.max_valid;
 
     return minmax_pair<T>{
       thrust::min(x_min, y_min), valid_min_result, thrust::max(x_max, y_max), valid_max_result};
@@ -93,22 +93,20 @@ struct minmax_functor {
     auto device_col = column_device_view::create(col, stream);
 
     // compute minimum and maximum values
-    minmax_pair<T> const result = [&](){
-    auto begin = thrust::make_counting_iterator<size_type>(0);
-    auto end = begin + col.size();
-    auto op = [d_col = *device_col] __device__(size_type index) -> minmax_pair<T> {
-          return minmax_pair<T>(d_col.element<T>(index), d_col.is_valid(index));
-        };
-     
-    if (col.nullable()) {
-      return thrust::transform_reduce(begin, end,
-        op,
-        minmax_pair<T>{},
-        minmax_binary_op<T, true>{});
-    } else {
-      return thrust::transform_reduce(begin, end, op       
-        minmax_pair<T>{},
-        minmax_binary_op<T, false>{});
+    minmax_pair<T> const result = [&]() -> minmax_pair<T> {
+      auto begin = thrust::make_counting_iterator<size_type>(0);
+      auto end   = begin + col.size();
+      auto op    = [d_col = *device_col] __device__(size_type index) -> minmax_pair<T> {
+        return minmax_pair<T>(d_col.element<T>(index), d_col.is_valid(index));
+      };
+
+      if (col.nullable()) {
+        return thrust::transform_reduce(
+          begin, end, op, minmax_pair<T>{}, minmax_binary_op<T, true>{});
+      } else {
+        return thrust::transform_reduce(
+          begin, end, op, minmax_pair<T>{}, minmax_binary_op<T, false>{});
+      }
     }();
 
     std::unique_ptr<scalar> min =
