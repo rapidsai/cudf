@@ -505,7 +505,6 @@ void reader::impl::set_data_types(cudaStream_t stream)
     }
   } else {
     CUDF_EXPECTS(rec_starts_.size() != 0, "No data available for data type inference.\n");
-    
     auto const num_columns       = metadata_.column_names.size();
     auto const do_set_null_count = key_to_col_idx_map_ != nullptr;
 
