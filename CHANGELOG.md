@@ -9,6 +9,7 @@
 - PR #6076 Add durations type support for csv writer, reader
 - PR #5874 Add `COLLECT` groupby aggregation
 - PR #6119 Add support for `dayofweek` property in `DateTimeIndex` and `DatetimeProperties`
+- PR #6171 Java and Jni support for Struct columns
 - PR #6125 Add support for `Series.mode` and `DataFrame.mode`
 
 ## Improvements
@@ -32,6 +33,7 @@
 - PR #5984 Support gather() on CUDF struct columns
 - PR #6103 Small refactor of `print_differences`
 - PR #6124 Fix gcc-9 compilation errors on tests
+- PR #6122 Add builder API for cuIO `csv_writer_options` and `csv_reader_options`
 - PR #6141 Fix typo in custreamz README that was a result of recent changes
 - PR #6162 Reduce output parameters in cuio csv and json reader internals
 - PR #6146 Added element/validity pair constructors for fixed_width and string wrappers
@@ -46,6 +48,7 @@
 - PR #6189 Avoid deprecated pyarrow.compat for parquet
 - PR #6184 Add cuda 11 dev environment.yml
 - PR #6186 Update JNI to look for cub in new location
+- PR #6206 Replace functions macros with inline functions
 - PR #6194 Remove unnecessary memory-resource parameter in `cudf::contains` API
 - PR #6195 Update JNI to use parquet options builder
 - PR #6190 Avoid reading full csv files for metadata in dask_cudf
