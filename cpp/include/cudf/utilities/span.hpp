@@ -114,13 +114,6 @@ struct host_span : public span_base<T, Extent, host_span<T, Extent>> {
   using base::base;
 
   constexpr host_span() noexcept : base() {}
-
-  // template <typename C,
-  //           typename P = decltype(std::declval<C>().data()),
-  //           std::enable_if<std::is_same<std::add_pointer<T>, P>::value>* = nullptr>
-  // constexpr host_span(C& in) : base(in.data(), in.size())
-  // {
-  // }
 };
 
 template <typename T, std::size_t Extent = dynamic_extent>
@@ -129,14 +122,6 @@ struct device_span : public span_base<T, Extent, device_span<T, Extent>> {
   using base::base;
 
   constexpr device_span() noexcept : base() {}
-
-  // template <typename C,
-  //           typename P = decltype(std::declval<C>().data()),
-  //           std::enable_if<std::is_same<std::add_pointer<T>, P>::value>* = nullptr>
-  // constexpr device_span(C& in)
-  //   : base(static_cast<T*>(thrust::raw_pointer_cast(in.data())), in.size())
-  // {
-  // }
 };
 
 }  // namespace detail
