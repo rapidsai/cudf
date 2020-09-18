@@ -25,6 +25,7 @@
 #include <cstddef>
 #include <limits>
 #include <type_traits>
+#include "thrust/detail/raw_pointer_cast.h"
 
 namespace cudf {
 namespace detail {
@@ -105,8 +106,11 @@ struct host_span : public span_base<T, Extent, host_span<T, Extent>> {
   using base::base;
 
   constexpr host_span() noexcept : base() {}
-  explicit host_span(std::vector<T> in) : base(in.data(), in.size()) {}
-  explicit host_span(thrust::host_vector<T> in) : base(in.data(), in.size()) {}
+
+  template <typename Container>
+  constexpr host_span(Container& in) : base(in.data(), in.size())
+  {
+  }
 };
 
 template <typename T, std::size_t Extent = dynamic_extent>
@@ -115,11 +119,25 @@ struct device_span : public span_base<T, Extent, device_span<T, Extent>> {
   using base::base;
 
   constexpr device_span() noexcept : base() {}
-  explicit device_span(thrust::device_vector<T> in) : base(in.data().get(), in.size()) {}
-  explicit device_span(rmm::device_buffer in) : base(static_cast<T*>(in.data()), in.size()) {}
-  explicit device_span(rmm::device_vector<T> in) : base(in.data().get(), in.size()) {}
-  explicit device_span(rmm::device_uvector<T> in) : base(in.data(), in.size()) {}
+
+  template <typename Container>
+  constexpr device_span(Container& in)
+    : base(static_cast<T*>(thrust::raw_pointer_cast(in.data())), in.size())
+  {
+  }
 };
+
+// template <typename Container, typename T = typename Container::value_type>
+// host_span<T> make_span(Container& in)
+// {
+//   return host_span<T>(in.begin().get(), in.size());
+// }
+
+// template <typename Container, typename T = typename Container::value_type>
+// device_span<T> make_device_span(Container& in)
+// {
+//   return device_span<T>(in.begin(), in.size());
+// }
 
 }  // namespace detail
 }  // namespace cudf

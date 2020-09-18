@@ -188,22 +188,40 @@ TEST(SpanTest, CanSubscriptWrite)
 
 TEST(SpanTest, CanConstructFromHostContainers)
 {
-  std::vector<int> std_vector       = {7};
-  thrust::host_vector<int> h_vector = std_vector;
+  auto std_vector = std::vector<int>(1);
+  auto h_vector   = thrust::host_vector<int>(1);
 
   (void)host_span<int>(std_vector);
   (void)host_span<int>(h_vector);
+
+  auto const std_vector_c = std_vector;
+  auto const h_vector_c   = h_vector;
+
+  (void)host_span<int const>(std_vector_c);
+  (void)host_span<int const>(h_vector_c);
 }
 
 TEST(SpanTest, CanConstructFromDeviceContainers)
 {
-  rmm::device_vector<int> d_vector           = std::vector<int>({7});
-  rmm::device_buffer d_buffer                = rmm::device_buffer(1);
-  thrust::device_vector<int> thrust_d_vector = std::vector<int>({7});
+  auto d_thrust_vector = thrust::device_vector<int>(1);
+  auto d_vector        = rmm::device_vector<int>(1);
+  auto d_uvector       = rmm::device_uvector<int>(1, 0);
+  auto d_buffer        = rmm::device_buffer(1);
 
+  (void)device_span<int>(d_thrust_vector);
   (void)device_span<int>(d_vector);
+  (void)device_span<int>(d_uvector);
   (void)device_span<int>(d_buffer);
-  (void)device_span<int>(thrust_d_vector);
+
+  auto const& d_thrust_vector_c = d_thrust_vector;
+  auto const& d_vector_c        = d_vector;
+  auto const& d_uvector_c       = d_uvector;
+  auto const& d_buffer_c        = d_buffer;
+
+  (void)device_span<int const>(d_thrust_vector_c);
+  (void)device_span<int const>(d_vector_c);
+  (void)device_span<int const>(d_uvector_c);
+  (void)device_span<int const>(d_buffer_c);
 }
 
 __global__ void simple_device_kernel(device_span<bool> result) { result[0] = true; }
