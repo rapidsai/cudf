@@ -458,7 +458,7 @@ public final class HostColumnVector implements AutoCloseable {
   /**
    * WARNING: Strictly for test only. This call is not efficient for production.
    */
-  ColumnBuilder.StructData getStruct(long rowIndex, ColumnBuilder.DataType mainType) {
+  ColumnBuilder.StructData getStruct(int rowIndex, ColumnBuilder.DataType mainType) {
     assert rowIndex < rows;
     assert type == DType.STRUCT;
     List<Object> retList = new ArrayList<>();
@@ -468,7 +468,7 @@ public final class HostColumnVector implements AutoCloseable {
     }
     int numChildren = mainType.getNumChildren();
     for (int k = 0; k < numChildren; k++) {
-      retList.add(children.get(k).getElement((int) rowIndex));
+      retList.add(children.get(k).getElement(rowIndex));
     }
     return new ColumnBuilder.StructData(retList);
   }
