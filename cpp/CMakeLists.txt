@@ -444,6 +444,8 @@ add_library(cudf
             src/reductions/scan.cu
             src/replace/replace.cu
             src/replace/clamp.cu
+            src/replace/nans.cu
+            src/replace/nulls.cu
             src/reshape/interleave_columns.cu
             src/transpose/transpose.cu
             src/unary/cast_ops.cu
