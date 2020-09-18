@@ -23,7 +23,7 @@
 
 #include "types.hpp"
 
-#include <rmm/mr/device/default_memory_resource.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -312,7 +312,7 @@ class json_reader_options_builder {
  */
 table_with_metadata read_json(
   json_reader_options const& options,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace io
 }  // namespace cudf
