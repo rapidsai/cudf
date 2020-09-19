@@ -26,7 +26,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <rmm/mr/device/default_memory_resource.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <iostream>
 #include <memory>
@@ -339,7 +339,7 @@ class parquet_reader_options_builder {
  */
 table_with_metadata read_parquet(
   parquet_reader_options const& options,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Class to build `parquet_writer_options`.
@@ -600,7 +600,7 @@ class parquet_writer_options_builder {
 
 std::unique_ptr<std::vector<uint8_t>> write_parquet(
   parquet_writer_options const& options,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Merges multiple raw metadata blobs that were previously created by write_parquet
@@ -813,7 +813,7 @@ struct pq_chunked_state;
  */
 std::shared_ptr<pq_chunked_state> write_parquet_chunked_begin(
   chunked_parquet_writer_options const& options,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Write a single table as a subtable of a larger logical parquet file/table.
@@ -847,5 +847,16 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet_chunked_end(
   bool return_filemetadata                   = false,
   const std::string& column_chunks_file_path = "");
 
+/**
+ * @brief Merges multiple raw metadata blobs that were previously created by write_parquet
+ * into a single metadata blob
+ *
+ * @ingroup io_writers
+ *
+ * @param[in] metadata_list List of input file metadata
+ * @return A parquet-compatible blob that contains the data for all rowgroups in the list
+ */
+std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
+  const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list);
 }  // namespace io
 }  // namespace cudf
