@@ -22,8 +22,8 @@
 #include <cudf/groupby.hpp>
 #include <cudf/hashing.hpp>
 #include <cudf/interop.hpp>
+#include <cudf/io/csv.hpp>
 #include <cudf/io/data_sink.hpp>
-#include <cudf/io/functions.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/orc.hpp>
 #include <cudf/join.hpp>
@@ -832,38 +832,21 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readCSV(
       source.reset(new cudf::io::source_info(filename.get()));
     }
 
-    cudf::io::read_csv_args read_arg{*source};
-    read_arg.lineterminator = '\n';
-    // delimiter ideally passed in
-    read_arg.delimiter = delim;
-    read_arg.delim_whitespace = 0;
-    read_arg.skipinitialspace = 0;
-    read_arg.header = header_row;
-
-    read_arg.names = n_col_names.as_cpp_vector();
-    read_arg.dtype = n_data_types.as_cpp_vector();
-
-    read_arg.use_cols_names = n_filter_col_names.as_cpp_vector();
-
-    read_arg.skip_blank_lines = true;
-
-    read_arg.true_values = n_true_values.as_cpp_vector();
-    read_arg.false_values = n_false_values.as_cpp_vector();
-
-    read_arg.na_values = n_null_values.as_cpp_vector();
-    read_arg.keep_default_na = false; ///< Keep the default NA values
-    read_arg.na_filter = n_null_values.size() > 0;
-
-    read_arg.mangle_dupe_cols = true;
-    read_arg.dayfirst = 0;
-    read_arg.compression = cudf::io::compression_type::AUTO;
-    read_arg.decimal = '.';
-    read_arg.quotechar = quote;
-    read_arg.quoting = cudf::io::quote_style::MINIMAL;
-    read_arg.doublequote = true;
-    read_arg.comment = comment;
-
-    cudf::io::table_with_metadata result = cudf::io::read_csv(read_arg);
+    cudf::io::csv_reader_options opts = cudf::io::csv_reader_options::builder(*source)
+      .delimiter(delim)
+      .header(header_row)
+      .names(n_col_names.as_cpp_vector())
+      .dtypes(n_data_types.as_cpp_vector())
+      .use_cols_names(n_filter_col_names.as_cpp_vector())
+      .true_values(n_true_values.as_cpp_vector())
+      .false_values(n_false_values.as_cpp_vector())
+      .na_values(n_null_values.as_cpp_vector())
+      .keep_default_na(false)
+      .na_filter(n_null_values.size() > 0)
+      .quotechar(quote)
+      .comment(comment)
+      .build();
+    cudf::io::table_with_metadata result = cudf::io::read_csv(opts);
     return cudf::jni::convert_table_for_return(env, result.tbl);
   }
   CATCH_STD(env, NULL);
