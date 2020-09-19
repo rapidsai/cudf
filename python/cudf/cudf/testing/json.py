@@ -1,13 +1,12 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 import copy
-import json
 import logging
-import os
 import random
 import sys
 
 import cudf
+from cudf.testing.io import IOBase
 from cudf.testing.utils import _generate_rand_meta
 from cudf.tests import dataset_generator as dg
 
@@ -18,7 +17,7 @@ logging.basicConfig(
 )
 
 
-class JSONReader(object):
+class JSONReader(IOBase):
     def __init__(
         self,
         file_name="temp_json.json",
@@ -27,37 +26,13 @@ class JSONReader(object):
         max_columns=1000,
         max_string_length=None,
     ):
-        self._inputs = []
-        self._file_name = file_name
-        self._max_rows = max_rows
-        self._max_columns = max_columns
-        self._max_string_length = max_string_length
-
-        for i, path in enumerate(dirs):
-            if i == 0 and not os.path.exists(path):
-                raise FileNotFoundError(f"No {path} exists")
-
-            if os.path.isfile(path) and path.endswith("_crash.json"):
-                self._load_params(path)
-            else:
-                for i in os.listdir(path):
-                    file_name = os.path.join(path, i)
-                    if os.path.isfile(file_name) and file_name.endswith(
-                        "_crash.json"
-                    ):
-                        self._load_params(file_name)
-        self._regression = True if self._inputs else False
-        self._idx = 0
-        self._current_params = {}
-
-    def _load_params(self, path):
-        with open(path, "r") as f:
-            params = json.load(f)
-        self._inputs.append(params)
-
-    @staticmethod
-    def _rand(n):
-        return random.randrange(1, n)
+        super().__init__(
+            file_name=file_name,
+            dirs=dirs,
+            max_rows=max_rows,
+            max_columns=max_columns,
+            max_string_length=max_string_length,
+        )
 
     def generate_input(self):
         if self._regression:
@@ -98,12 +73,8 @@ class JSONReader(object):
 
         return file_name
 
-    @property
-    def current_params(self):
-        return self._current_params
 
-
-class JSONWriter(object):
+class JSONWriter(IOBase):
     def __init__(
         self,
         file_name="temp_json.json",
@@ -112,37 +83,13 @@ class JSONWriter(object):
         max_columns=1000,
         max_string_length=None,
     ):
-        self._inputs = []
-        self._file_name = file_name
-        self._max_rows = max_rows
-        self._max_columns = max_columns
-        self._max_string_length = max_string_length
-
-        for i, path in enumerate(dirs):
-            if i == 0 and not os.path.exists(path):
-                raise FileNotFoundError(f"No {path} exists")
-
-            if os.path.isfile(path) and path.endswith("_crash.json"):
-                self._load_params(path)
-            else:
-                for i in os.listdir(path):
-                    file_name = os.path.join(path, i)
-                    if os.path.isfile(file_name) and file_name.endswith(
-                        "_crash.json"
-                    ):
-                        self._load_params(file_name)
-        self._regression = True if self._inputs else False
-        self._idx = 0
-        self._current_params = {}
-
-    def _load_params(self, path):
-        with open(path, "r") as f:
-            params = json.load(f)
-        self._inputs.append(params)
-
-    @staticmethod
-    def _rand(n):
-        return random.randrange(1, n)
+        super().__init__(
+            file_name=file_name,
+            dirs=dirs,
+            max_rows=max_rows,
+            max_columns=max_columns,
+            max_string_length=max_string_length,
+        )
 
     def generate_input(self):
         if self._regression:
@@ -180,7 +127,3 @@ class JSONWriter(object):
         logging.info(f"Shape of DataFrame generated: {df.shape}")
 
         return df
-
-    @property
-    def current_params(self):
-        return self._current_params
