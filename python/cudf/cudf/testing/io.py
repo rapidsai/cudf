@@ -17,7 +17,7 @@ class IOBase(object):
         self,
         file_name=None,
         dirs=None,
-        max_rows=4096,
+        max_rows=100_000,
         max_columns=1000,
         max_string_length=None,
     ):
