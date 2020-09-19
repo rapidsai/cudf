@@ -63,6 +63,7 @@
 - PR #6245 Split up replace.cu into multiple source files
 - PR #6218 increase visiblity/consistency for cuio reader writer private member variable names.
 - PR #6265 Update JNI to use ORC options builder
+- PR #6273 Update JNI to use ORC options builder
 
 ## Bug Fixes
 
