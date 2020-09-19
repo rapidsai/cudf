@@ -72,10 +72,18 @@ def groupby_agg(
     if isinstance(gb_cols, str):
         gb_cols = [gb_cols]
     columns = [c for c in ddf.columns if c not in gb_cols]
+    str_cols_out = False
     if isinstance(aggs, dict):
+        # Use `str_cols_out` to specify if the output columns
+        # will have str (rather than MultiIndex/tuple) names.
+        # This happens when all values in the `aggs` dict are
+        # strings (no lists)
+        str_cols_out = True
         for col in aggs:
             if isinstance(aggs[col], str):
                 aggs[col] = [aggs[col]]
+            else:
+                str_cols_out = False
             if col in gb_cols:
                 columns.append(col)
 
@@ -148,8 +156,15 @@ def groupby_agg(
                     sep,
                 )
 
-    # Final output partitions
-    _meta = ddf._meta.groupby(gb_cols, as_index=as_index).agg(aggs)
+    # Final output partitions.
+    _aggs = aggs.copy()
+    if str_cols_out:
+        # Metadata should use `str` for dict values if that is
+        # what the user originally specified (column names will
+        # be str, rather than tuples).
+        for col in aggs:
+            _aggs[col] = _aggs[col][0]
+    _meta = ddf._meta.groupby(gb_cols, as_index=as_index).agg(_aggs)
     for s in range(split_out):
         dsk[(gb_agg_name, s)] = (
             _finalize_gb_agg,
@@ -161,6 +176,7 @@ def groupby_agg(
             as_index,
             sort,
             sep,
+            str_cols_out,
         )
 
     divisions = [None] * (split_out + 1)
@@ -258,7 +274,15 @@ def _tree_node_agg(dfs, gb_cols, split_out, dropna, sort, sep):
 
 
 def _finalize_gb_agg(
-    gb, gb_cols, aggs, columns, final_columns, as_index, sort, sep
+    gb,
+    gb_cols,
+    aggs,
+    columns,
+    final_columns,
+    as_index,
+    sort,
+    sep,
+    str_cols_out,
 ):
 
     # Deal with higher-order aggregations
@@ -313,6 +337,9 @@ def _finalize_gb_agg(
             name, agg = col.split(sep)
             col_array.append(name)
             agg_array.append(agg)
-    gb.columns = pd.MultiIndex.from_arrays([col_array, agg_array])
+    if str_cols_out:
+        gb.columns = col_array
+    else:
+        gb.columns = pd.MultiIndex.from_arrays([col_array, agg_array])
 
     return gb[final_columns]
