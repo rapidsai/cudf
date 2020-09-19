@@ -1,5 +1,4 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
-import itertools
 import math
 from operator import getitem
 
@@ -19,9 +18,12 @@ from dask.highlevelgraph import HighLevelGraph
 
 
 class CudfDataFrameGroupBy(DataFrameGroupBy):
-    def aggregate(
-        self, arg, split_every=None, split_out=1, sep="___", as_index=True,
-    ):
+    def __init__(self, *args, **kwargs):
+        self.sep = kwargs.pop("sep", "___")
+        self.as_index = kwargs.pop("as_index", True)
+        super().__init__(*args, **kwargs)
+
+    def aggregate(self, arg, split_every=None, split_out=1):
         if arg == "size":
             return self.size()
 
@@ -38,9 +40,9 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
                 split_every=split_every,
                 split_out=split_out,
                 dropna=self.dropna,
-                sep=sep,
+                sep=self.sep,
                 sort=self.sort,
-                as_index=as_index,
+                as_index=self.as_index,
             )
 
         return super().aggregate(
@@ -157,6 +159,7 @@ def groupby_agg(
             columns,
             _meta.columns,
             as_index,
+            sort,
             sep,
         )
 
@@ -170,7 +173,12 @@ def groupby_agg(
 def _is_supported(arg, supported: set):
     if isinstance(arg, (list, dict)):
         if isinstance(arg, dict):
-            _global_set = set(itertools.chain(*list(arg.values())))
+            _global_set = set()
+            for col in arg:
+                if isinstance(arg[col], list):
+                    _global_set.union(set(arg[col]))
+                else:
+                    _global_set.add(arg[col])
         else:
             _global_set = set(arg)
 
@@ -199,7 +207,7 @@ def _groupby_partition_agg(
         _agg_dict[col] = list(_agg_dict[col])
         if set(agg_list).intersection({"std", "var"}):
             pow2_name = _make_name(col, "pow2", sep=sep)
-            df[pow2_name] = df[col].pow(2)
+            df[pow2_name] = df[col].astype("float64").pow(2)
             _agg_dict[pow2_name] = ["sum"]
 
     gb = df.groupby(gb_cols, dropna=dropna, as_index=False, sort=sort).agg(
@@ -249,7 +257,9 @@ def _tree_node_agg(dfs, gb_cols, split_out, dropna, sort, sep):
     return gb
 
 
-def _finalize_gb_agg(gb, gb_cols, aggs, columns, final_columns, as_index, sep):
+def _finalize_gb_agg(
+    gb, gb_cols, aggs, columns, final_columns, as_index, sort, sep
+):
 
     # Deal with higher-order aggregations
     for col in columns:
@@ -283,6 +293,10 @@ def _finalize_gb_agg(gb, gb_cols, aggs, columns, final_columns, as_index, sep):
                 gb.drop(columns=[sum_name], inplace=True)
             if "count" not in agg_list:
                 gb.drop(columns=[count_name], inplace=True)
+
+    # Ensure sorted keys if `sort=True`
+    if sort:
+        gb = gb.sort_values(gb_cols)
 
     # Set index (use `inplace` when supported)
     if as_index:
