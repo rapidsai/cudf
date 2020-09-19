@@ -14,11 +14,6 @@
  * limitations under the License.
  */
 
-/**
- * @file reader_impl.hpp
- * @brief cuDF-IO ORC reader class implementation header
- */
-
 #pragma once
 
 #include "orc.h"

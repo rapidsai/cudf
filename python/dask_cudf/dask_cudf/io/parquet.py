@@ -103,6 +103,10 @@ class CudfEngine(ArrowEngine):
         **kwargs,
     ):
         preserve_index = False
+        if set(index_cols).issubset(set(df.columns)):
+            df.index = df[index_cols].copy(deep=False)
+            df.drop(columns=index_cols, inplace=True)
+            preserve_index = True
         if partition_on:
             md = write_to_dataset(
                 df,

@@ -1113,6 +1113,22 @@ def test_datetime_strftime_not_implemented_formats(date_format):
         gsr.dt.strftime(date_format=date_format)
 
 
+@pytest.mark.parametrize("data", [[1, 2, 3], [], [1, 20, 1000, None]])
+@pytest.mark.parametrize("dtype", DATETIME_TYPES)
+@pytest.mark.parametrize("stat", ["mean", "quantile"])
+def test_datetime_stats(data, dtype, stat):
+    gsr = cudf.Series(data, dtype=dtype)
+    psr = gsr.to_pandas()
+
+    expected = getattr(psr, stat)()
+    actual = getattr(gsr, stat)()
+
+    if len(data) == 0:
+        assert np.isnat(expected.to_numpy()) and np.isnat(actual.to_numpy())
+    else:
+        assert_eq(expected, actual)
+
+
 @pytest.mark.parametrize("op", ["max", "min"])
 @pytest.mark.parametrize(
     "data",
