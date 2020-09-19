@@ -16,6 +16,7 @@ class PythonFuzz(object):
             max_rows_size=kwargs.get("max_rows_size", 4096),
             max_cols_size=kwargs.get("max_cols_size", 1000),
             runs=kwargs.get("runs", -1),
+            max_string_length=kwargs.get("max_string_length", None),
         )
 
     def __call__(self, *args, **kwargs):

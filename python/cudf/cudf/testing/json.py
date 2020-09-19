@@ -25,11 +25,13 @@ class JSONReader(object):
         dirs=None,
         max_rows=4096,
         max_columns=1000,
+        max_string_length=None,
     ):
         self._inputs = []
         self._file_name = file_name
         self._max_rows = max_rows
         self._max_columns = max_columns
+        self._max_string_length = max_string_length
 
         for i, path in enumerate(dirs):
             if i == 0 and not os.path.exists(path):
@@ -108,11 +110,13 @@ class JSONWriter(object):
         dirs=None,
         max_rows=4096,
         max_columns=1000,
+        max_string_length=None,
     ):
         self._inputs = []
         self._file_name = file_name
         self._max_rows = max_rows
         self._max_columns = max_columns
+        self._max_string_length = max_string_length
 
         for i, path in enumerate(dirs):
             if i == 0 and not os.path.exists(path):

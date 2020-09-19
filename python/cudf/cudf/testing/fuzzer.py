@@ -33,13 +33,17 @@ class Fuzzer(object):
         max_rows_size=4096,
         max_cols_size=1000,
         runs=-1,
+        max_string_length=None,
     ):
 
         self._target = target
         self._dirs = [] if dirs is None else dirs
         self._crash_dir = crash_reports_dir
         self._data_handler = data_handler_class(
-            dirs=self._dirs, max_rows=max_rows_size, max_columns=max_cols_size
+            dirs=self._dirs,
+            max_rows=max_rows_size,
+            max_columns=max_cols_size,
+            max_string_length=max_string_length,
         )
         self._total_executions = 0
         self._regression = regression
