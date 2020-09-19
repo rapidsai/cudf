@@ -1,7 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 import datetime
-import functools
 import json
 import logging
 import os
@@ -12,14 +11,6 @@ logging.basicConfig(
     level=logging.INFO,
     datefmt="%Y-%m-%d %H:%M:%S",
 )
-
-
-try:
-    lru_cache = functools.lru_cache
-except Exception:
-    import functools32
-
-    lru_cache = functools32.lru_cache
 
 
 class Fuzzer(object):
