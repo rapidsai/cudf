@@ -60,7 +60,7 @@
 - PR #6215 Add cmake command-line setting for spdlog logging level
 - PR #6240 Don't shallow copy index in as_index() unless necessary
 - PR #6204 Add dockerfile and script to build cuDF jar
-- PR #6248 Optimized DataFrame.groupby_agg API
+- PR #6248 Optimize groupby-agg in dask_cudf
 - PR #6245 Split up replace.cu into multiple source files
 - PR #6218 increase visiblity/consistency for cuio reader writer private member variable names.
 - PR #6265 Update JNI to use ORC options builder
