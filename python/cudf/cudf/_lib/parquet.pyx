@@ -37,10 +37,8 @@ from cudf._lib.cpp.io.parquet cimport (
     write_parquet_chunked_begin,
     write_parquet_chunked,
     write_parquet_chunked_end,
+    merge_rowgroup_metadata as parquet_merge_metadata,
     pq_chunked_state
-)
-from cudf._lib.cpp.io.functions cimport (
-    merge_rowgroup_metadata as parquet_merge_metadata
 )
 from cudf._lib.io.utils cimport (
     make_source_info,
