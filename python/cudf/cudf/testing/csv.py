@@ -1,9 +1,8 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-import copy
+
 import logging
 import random
-import sys
 
 import cudf
 from cudf.testing.io import IOBase
@@ -36,20 +35,13 @@ class CSVReader(IOBase):
 
     def generate_input(self):
         if self._regression:
-            if self._idx >= len(self._inputs):
-                logging.info(
-                    "Reached the end of all crash.json files to run..Exiting.."
-                )
-                sys.exit(0)
-            param = self._inputs[self._idx]
-            dtypes_meta = param["dtypes_meta"]
-            num_rows = param["num_rows"]
-            file_name = param["file_name"]
-            num_cols = param["num_columns"]
-            seed = param["seed"]
-            random.seed(seed)
-            self._idx += 1
-            self._current_params = copy.copy(param)
+            (
+                dtypes_meta,
+                num_rows,
+                num_cols,
+                seed,
+                file_name,
+            ) = self.get_next_regression_params()
         else:
             seed = random.randint(0, 2 ** 32 - 1)
             random.seed(seed)
@@ -93,19 +85,13 @@ class CSVWriter(IOBase):
 
     def generate_input(self):
         if self._regression:
-            if self._idx >= len(self._inputs):
-                logging.info(
-                    "Reached the end of all crash.json files to run..Exiting.."
-                )
-                sys.exit(0)
-            param = self._inputs[self._idx]
-            dtypes_meta = param["dtypes_meta"]
-            num_rows = param["num_rows"]
-            num_cols = param["num_columns"]
-            seed = param["seed"]
-            random.seed(seed)
-            self._idx += 1
-            self._current_params = copy.copy(param)
+            (
+                dtypes_meta,
+                num_rows,
+                num_cols,
+                seed,
+                _,
+            ) = self.get_next_regression_params()
         else:
             seed = random.randint(0, 2 ** 32 - 1)
             random.seed(seed)

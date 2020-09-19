@@ -1,6 +1,15 @@
+import copy
 import json
+import logging
 import os
 import random
+import sys
+
+logging.basicConfig(
+    format="%(asctime)s %(levelname)-8s %(message)s",
+    level=logging.INFO,
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 
 
 class IOBase(object):
@@ -50,3 +59,20 @@ class IOBase(object):
     @property
     def current_params(self):
         return self._current_params
+
+    def get_next_regression_params(self):
+        if self._idx >= len(self._inputs):
+            logging.info(
+                "Reached the end of all crash.json files to run..Exiting.."
+            )
+            sys.exit(0)
+        param = self._inputs[self._idx]
+        dtypes_meta = param["dtypes_meta"]
+        num_rows = param["num_rows"]
+        num_cols = param["num_columns"]
+        seed = param["seed"]
+        file_name = param["file_name"]
+        random.seed(seed)
+        self._idx += 1
+        self._current_params = copy.copy(param)
+        return dtypes_meta, num_rows, num_cols, seed, file_name
