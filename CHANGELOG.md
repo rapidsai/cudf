@@ -11,6 +11,7 @@
 - PR #6119 Add support for `dayofweek` property in `DateTimeIndex` and `DatetimeProperties`
 - PR #6171 Java and Jni support for Struct columns
 - PR #6125 Add support for `Series.mode` and `DataFrame.mode`
+- PR #6271 Add support to deep-copy struct columns from struct column-view 
 
 ## Improvements
 
