@@ -3386,4 +3386,30 @@ public class TableTest extends CudfTestBase {
       tempFileUncompressed.delete();
     }
   }
+
+  @Test
+  void testStructColumnFilter() {
+    HostColumnVector.ColumnBuilder.StructType type = new HostColumnVector.ColumnBuilder.StructType(true, 4);
+    type.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 4, DType.INT32));
+    type.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 4, DType.INT64));
+    HostColumnVector.ColumnBuilder.StructType expectedType = new HostColumnVector.ColumnBuilder.StructType(true, 2);
+    expectedType.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 2, DType.INT32));
+    expectedType.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 2, DType.INT64));
+    List data1 = Arrays.asList(10, 20L);
+    List data2 = Arrays.asList(50, 60L);
+    List data3 = Arrays.asList(null, 80L);
+    List data4 = null;
+    HostColumnVector.ColumnBuilder.StructData structData1 = new HostColumnVector.ColumnBuilder.StructData(data1);
+    HostColumnVector.ColumnBuilder.StructData structData2 = new HostColumnVector.ColumnBuilder.StructData(data2);
+    HostColumnVector.ColumnBuilder.StructData structData3 = new HostColumnVector.ColumnBuilder.StructData(data3);
+    HostColumnVector.ColumnBuilder.StructData structData4 = new HostColumnVector.ColumnBuilder.StructData(data4);
+    try (ColumnVector mask = ColumnVector.fromBoxedBooleans(true, false, true, false);
+         ColumnVector fromStructs = ColumnVector.fromStructs(type, Arrays.asList(structData1, structData2, structData3, structData4));
+         Table input = new Table(fromStructs);
+         Table filteredTable = input.filter(mask);
+         ColumnVector expectedStructs = ColumnVector.fromStructs(expectedType, Arrays.asList(structData1, structData3));
+         Table expected = new Table(expectedStructs)) {
+      assertStructColumnsAreEqual(expected.getColumn(0), filteredTable.getColumn(0), expectedType);
+    }
+  }
 }
