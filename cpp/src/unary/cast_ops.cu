@@ -45,7 +45,7 @@ struct unary_cast {
     // Convert source tick counts into target tick counts without blindly truncating them
     // by dividing the respective duration time periods (which may not work for time before
     // UNIX epoch)
-    return TargetT{simt::std::chrono::floor<TargetT::duration>(element.time_since_epoch())};
+    return TargetT{cuda::std::chrono::floor<TargetT::duration>(element.time_since_epoch())};
   }
 
   template <typename SourceT,
@@ -54,7 +54,7 @@ struct unary_cast {
                                        cudf::is_duration<TargetT>())>* = nullptr>
   CUDA_DEVICE_CALLABLE TargetT operator()(SourceT const element)
   {
-    return TargetT{simt::std::chrono::floor<TargetT>(element)};
+    return TargetT{cuda::std::chrono::floor<TargetT>(element)};
   }
 
   template <typename SourceT,
@@ -72,7 +72,7 @@ struct unary_cast {
                                        cudf::is_duration<TargetT>())>* = nullptr>
   CUDA_DEVICE_CALLABLE TargetT operator()(SourceT const element)
   {
-    return TargetT{simt::std::chrono::floor<TargetT>(element.time_since_epoch())};
+    return TargetT{cuda::std::chrono::floor<TargetT>(element.time_since_epoch())};
   }
 
   template <typename SourceT,
@@ -90,7 +90,7 @@ struct unary_cast {
                                        cudf::is_timestamp<TargetT>())>* = nullptr>
   CUDA_DEVICE_CALLABLE TargetT operator()(SourceT const element)
   {
-    return TargetT{simt::std::chrono::floor<TargetT::duration>(element)};
+    return TargetT{cuda::std::chrono::floor<TargetT::duration>(element)};
   }
 };
 

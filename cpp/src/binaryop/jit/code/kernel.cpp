@@ -27,7 +27,7 @@ namespace code {
 const char* kernel =
   R"***(
     #include <cudf/types.hpp>
-    #include <simt/limits>
+    #include <cuda/std/limits>
     #include <cudf/utilities/bit.hpp>
     #include <cudf/wrappers/timestamps.hpp>
     #include <cudf/wrappers/durations.hpp>

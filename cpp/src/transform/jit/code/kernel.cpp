@@ -20,8 +20,8 @@ namespace jit {
 namespace code {
 const char* kernel_header =
   R"***(
+    #include <cuda/std/limits>
     #include <cudf/types.hpp>
-    #include <simt/limits>
 
     #include <cudf/wrappers/timestamps.hpp>
   )***";

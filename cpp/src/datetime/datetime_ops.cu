@@ -46,7 +46,7 @@ struct extract_component_operator {
   template <typename Timestamp>
   CUDA_DEVICE_CALLABLE int16_t operator()(Timestamp const ts) const
   {
-    using namespace simt::std::chrono;
+    using namespace cuda::std::chrono;
 
     auto days_since_epoch = floor<days>(ts);
 
@@ -81,7 +81,7 @@ static __device__ int16_t const days_until_month[2][13] = {
   {0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335, 366}   // For leap years
 };
 
-CUDA_DEVICE_CALLABLE uint8_t days_in_month(simt::std::chrono::month mon, bool is_leap_year)
+CUDA_DEVICE_CALLABLE uint8_t days_in_month(cuda::std::chrono::month mon, bool is_leap_year)
 {
   return days_until_month[is_leap_year][unsigned{mon}] -
          days_until_month[is_leap_year][unsigned{mon} - 1];
@@ -93,7 +93,7 @@ struct extract_last_day_of_month {
   template <typename Timestamp>
   CUDA_DEVICE_CALLABLE timestamp_D operator()(Timestamp const ts) const
   {
-    using namespace simt::std::chrono;
+    using namespace cuda::std::chrono;
     // IDEAL: does not work with CUDA10.0 due to nvcc compiler bug
     // cannot invoke ym_last_day.day()
     // const year_month_day orig_ymd(floor<days>(ts));
@@ -114,7 +114,7 @@ struct extract_day_num_of_year {
   template <typename Timestamp>
   CUDA_DEVICE_CALLABLE int16_t operator()(Timestamp const ts) const
   {
-    using namespace simt::std::chrono;
+    using namespace cuda::std::chrono;
 
     // Only has the days - time component is chopped off, which is what we want
     auto const days_since_epoch = floor<days>(ts);
@@ -189,9 +189,9 @@ struct add_calendrical_months_functor {
   // std chrono implementation is copied here due to nvcc bug 2909685
   // https://howardhinnant.github.io/date_algorithms.html#days_from_civil
   static CUDA_DEVICE_CALLABLE timestamp_D
-  compute_sys_days(simt::std::chrono::year_month_day const& ymd)
+  compute_sys_days(cuda::std::chrono::year_month_day const& ymd)
   {
-    const int yr = static_cast<int>(ymd.year()) - (ymd.month() <= simt::std::chrono::month{2});
+    const int yr = static_cast<int>(ymd.year()) - (ymd.month() <= cuda::std::chrono::month{2});
     const unsigned mth = static_cast<unsigned>(ymd.month());
     const unsigned dy  = static_cast<unsigned>(ymd.day());
 
@@ -219,7 +219,7 @@ struct add_calendrical_months_functor {
                       months_column.begin<int16_t>(),
                       output.begin<Timestamp>(),
                       [] __device__(auto time_val, auto months_val) {
-                        using namespace simt::std::chrono;
+                        using namespace cuda::std::chrono;
                         using duration_m = duration<int32_t, months::period>;
 
                         // Get the days component from the input

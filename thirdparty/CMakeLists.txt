@@ -45,8 +45,8 @@ message("Fetching libcudacxx")
 
 FetchContent_Declare(
     libcudacxx
-    GIT_REPOSITORY https://github.com/rapidsai/thirdparty-freestanding.git
-    GIT_TAG        cudf
+    GIT_REPOSITORY https://github.com/trxcllnt/libcudacxx.git
+    GIT_TAG        cudf-backports
     GIT_SHALLOW    true
 )
 

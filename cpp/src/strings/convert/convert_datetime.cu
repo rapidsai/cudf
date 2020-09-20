@@ -437,7 +437,7 @@ struct datetime_formatter {
 
   __device__ cudf::timestamp_D::duration convert_to_days(int64_t timestamp, timestamp_units units)
   {
-    using namespace simt::std::chrono;
+    using namespace cuda::std::chrono;
     using minutes = duration<timestamp_s::rep, minutes::period>;
     using hours   = duration<timestamp_s::rep, hours::period>;
     switch (units) {
@@ -452,7 +452,7 @@ struct datetime_formatter {
   }
 
   // divide timestamp integer into time components (year, month, day, etc)
-  // TODO call the simt::std::chrono methods here instead when they are ready
+  // TODO call the cuda::std::chrono methods here instead when they are ready
   __device__ void dissect_timestamp(int64_t timestamp, int32_t* timeparts)
   {
     if (units == timestamp_units::years) {
@@ -493,7 +493,7 @@ struct datetime_formatter {
 
     // first, convert to days so we can handle months, years, day of the year.
     auto const days  = convert_to_days(timestamp, units);
-    auto const ymd   = simt::std::chrono::year_month_day(simt::std::chrono::sys_days(days));
+    auto const ymd   = cuda::std::chrono::year_month_day(cuda::std::chrono::sys_days(days));
     auto const year  = static_cast<int32_t>(ymd.year());
     auto const month = static_cast<unsigned>(ymd.month());
     auto const day   = static_cast<unsigned>(ymd.day());
