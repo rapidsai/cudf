@@ -93,7 +93,7 @@ distribution_id default_distribution_id()
 template <typename T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
 std::pair<int64_t, int64_t> default_range()
 {
-  using simt::std::chrono::duration_cast;
+  using cuda::std::chrono::duration_cast;
   auto const year = duration_cast<typename T::duration>(cudf::duration_D{365l});
   return {50 * year.count(), 0};
 }
@@ -106,7 +106,7 @@ std::pair<int64_t, int64_t> default_range()
 template <typename T, std::enable_if_t<cudf::is_duration<T>()>* = nullptr>
 std::pair<int64_t, int64_t> default_range()
 {
-  using simt::std::chrono::duration_cast;
+  using cuda::std::chrono::duration_cast;
   auto const year = duration_cast<typename T::duration>(cudf::duration_D{365l});
   return {0, 2 * year.count()};
 }
