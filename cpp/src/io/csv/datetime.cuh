@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <cudf/wrappers/durations.hpp>
+
 /**
  * @brief Returns location to the first occurrence of a character in a string
  *
@@ -382,4 +384,89 @@ __inline__ __device__ int64_t parseDateTimeFormat(const char *data,
   }
 
   return answer;
+}
+
+// parse integer and update the start position
+template <typename T>
+__inline__ __device__ T parse_integer(const char *data, long &start, long end)
+{
+  bool is_negative = data[start] == '-';
+  T value          = 0;
+
+  long index = start + is_negative;
+  while (index <= end) {
+    if (data[index] >= '0' && data[index] <= '9') {
+      value *= 10;
+      value += data[index] - '0';
+    } else
+      break;
+    ++index;
+  }
+  start = index;
+
+  return is_negative ? -value : value;
+}
+
+__inline__ __device__ bool is_present(
+  const char *data, long &start, long end, const char *needle, int len)
+{
+  if (start + len - 1 > end) return false;
+  for (auto i = 0; i < len; i++) {
+    if (data[start + i] != needle[i]) return false;
+  }
+  start += len;
+  return true;
+}
+
+__inline__ __device__ int64_t parseDaysDeltaFormat(const char *data, long start, long end)
+{
+  return parse_integer<int>(data, start, end);
+}
+
+template <typename T>
+__inline__ __device__ int64_t parseTimeDeltaFormat(const char *data, long start, long end)
+{
+  // %d days [+]%H:%M:%S.n => %d days, %d days [+]%H:%M:%S,  %H:%M:%S.n, %H:%M:%S, %value.
+  int days{0};
+  int8_t hour{0}, minute{0}, second{0};
+  int nanosecond     = 0;
+  constexpr char sep = ':';
+
+  // single pass to parse days, hour, minute, seconds, nanosecond
+  long moving_pos = start;
+  int32_t value   = parse_integer<int>(data, moving_pos, end);
+  if (std::is_same<T, cudf::duration_D>::value) return value;
+  while (data[moving_pos] == ' ') moving_pos++;
+  if (moving_pos >= end) return value;  // %value
+  // " days [+]"
+  const bool days_seperator = is_present(data, moving_pos, end, "days", 4);
+  while (data[moving_pos] == ' ') moving_pos++;
+  moving_pos += (data[moving_pos] == '+');
+  if (days_seperator) {
+    days = value;
+    hour = parse_integer<int>(data, moving_pos, end);
+  } else {
+    hour = value;
+  }
+
+  //:%M:%S
+  if (data[moving_pos] == sep) { minute = parse_integer<int>(data, ++moving_pos, end); }
+  if (data[moving_pos] == sep) { second = parse_integer<int>(data, ++moving_pos, end); }
+  if (std::is_same<T, cudf::duration_s>::value) {
+    return ((days * 24L + hour) * 60L + minute) * 60L + second;
+  }
+  //.n
+  if (data[moving_pos] == '.') {
+    auto start_subsecond              = moving_pos + 1;
+    nanosecond                        = parse_integer<int>(data, ++moving_pos, end);
+    int8_t num_digits                 = min(9L, moving_pos - start_subsecond);
+    constexpr int64_t powers_of_ten[] = {
+      1L, 10L, 100L, 1000L, 10000L, 100000L, 1000000L, 10000000L, 100000000L, 1000000000L};
+    nanosecond *= powers_of_ten[9 - num_digits];
+  }
+
+  return simt::std::chrono::duration_cast<T>(
+           cudf::duration_s{((days * 24L + hour) * 60L + minute) * 60L + second})
+           .count() +
+         simt::std::chrono::duration_cast<T>(cudf::duration_ns{nanosecond}).count();
 }
