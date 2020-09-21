@@ -348,15 +348,15 @@ static inline __device__ void StoreBitsBigEndian(
  * @return number of input values encoded
  *
  **/
-template <StreamIndexType cid, class T, bool is_signed, uint32_t inmask>
+template <StreamIndexType cid, class T, bool is_signed, uint32_t inmask, uint32_t block_size>
 static __device__ uint32_t IntegerRLE(
-  orcenc_state_s *s, const T *inbuf, uint32_t inpos, uint32_t numvals, uint32_t flush, int t)
+  orcenc_state_s *s, const T *inbuf, uint32_t inpos, uint32_t numvals, uint32_t flush, uint32_t t)
 {
   using warp_reduce      = cub::WarpReduce<T>;
   using half_warp_reduce = cub::WarpReduce<T, 16>;
   __shared__ union {
-    typename warp_reduce::TempStorage full[2];
-    typename half_warp_reduce::TempStorage half[2];
+    typename warp_reduce::TempStorage full[2 * block_size];
+    typename half_warp_reduce::TempStorage half[2 * block_size];
   } temp_storage;
   uint8_t *dst     = s->chunk.streams[cid] + s->strm_pos[cid];
   uint32_t out_cnt = 0;
@@ -408,8 +408,8 @@ static __device__ uint32_t IntegerRLE(
       } else {
         intrle_minmax(vmax, vmin);
       }
-      vmin = warp_reduce(temp_storage.full[0]).Reduce(vmin, cub::Min());
-      vmax = warp_reduce(temp_storage.full[1]).Reduce(vmax, cub::Max());
+      vmin = warp_reduce(temp_storage.full[t / 32]).Reduce(vmin, cub::Min());
+      vmax = warp_reduce(temp_storage.full[t / 32 + block_size]).Reduce(vmax, cub::Max());
       if (!(t & 0x1f)) {
         s->u.intrle.scratch.u64[(t >> 5) * 2 + 0] = vmin;
         s->u.intrle.scratch.u64[(t >> 5) * 2 + 1] = vmax;
@@ -842,12 +842,12 @@ extern "C" __global__ void __launch_bounds__(512)
           case SHORT:
           case INT:
           case DATE:
-            n = IntegerRLE<CI_DATA, int32_t, true, 0x3ff>(
+            n = IntegerRLE<CI_DATA, int32_t, true, 0x3ff, 512>(
               s, s->vals.i32, s->nnz - s->numvals, s->numvals, flush, t);
             break;
           case LONG:
           case TIMESTAMP:
-            n = IntegerRLE<CI_DATA, int64_t, true, 0x3ff>(
+            n = IntegerRLE<CI_DATA, int64_t, true, 0x3ff, 512>(
               s, s->vals.i64, s->nnz - s->numvals, s->numvals, flush, t);
             break;
           case BYTE:
@@ -873,7 +873,7 @@ extern "C" __global__ void __launch_bounds__(512)
             break;
           case STRING:
             if (s->chunk.encoding_kind == DICTIONARY_V2) {
-              n = IntegerRLE<CI_DATA, uint32_t, false, 0x3ff>(
+              n = IntegerRLE<CI_DATA, uint32_t, false, 0x3ff, 512>(
                 s, s->vals.u32, s->nnz - s->numvals, s->numvals, flush, t);
             } else {
               n = s->numvals;
@@ -890,7 +890,7 @@ extern "C" __global__ void __launch_bounds__(512)
         switch (s->chunk.type_kind) {
           case TIMESTAMP:
           case STRING:
-            n = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff>(
+            n = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff, 512>(
               s, s->lengths.u32, s->nnz - s->numlengths, s->numlengths, flush, t);
             break;
           default: n = s->numlengths; break;
@@ -977,7 +977,7 @@ extern "C" __global__ void __launch_bounds__(512)
       __syncthreads();
       if (s->numlengths + numvals > 0) {
         uint32_t flush = (s->cur_row + numvals == s->nrows) ? 1 : 0;
-        uint32_t n     = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff>(
+        uint32_t n     = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff, 512>(
           s, s->lengths.u32, s->cur_row, s->numlengths + numvals, flush, t);
         __syncthreads();
         if (!t) {
