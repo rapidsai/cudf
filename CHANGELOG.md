@@ -65,6 +65,7 @@
 - PR #6218 increase visiblity/consistency for cuio reader writer private member variable names.
 - PR #6265 Update JNI to use ORC options builder
 - PR #6273 Update JNI to use ORC options builder
+- PR #6287 Make java aggregate API follow C++ API
 
 ## Bug Fixes
 
