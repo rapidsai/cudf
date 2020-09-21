@@ -355,8 +355,8 @@ static __device__ uint32_t IntegerRLE(
   using warp_reduce      = cub::WarpReduce<T>;
   using half_warp_reduce = cub::WarpReduce<T, 16>;
   __shared__ union {
-    typename warp_reduce::TempStorage full[2 * block_size / 32];
-    typename half_warp_reduce::TempStorage half[2 * block_size / 32];
+    typename warp_reduce::TempStorage full[block_size / 32];
+    typename half_warp_reduce::TempStorage half[2];
   } temp_storage;
   uint8_t *dst     = s->chunk.streams[cid] + s->strm_pos[cid];
   uint32_t out_cnt = 0;
@@ -409,7 +409,8 @@ static __device__ uint32_t IntegerRLE(
         intrle_minmax(vmax, vmin);
       }
       vmin = warp_reduce(temp_storage.full[t / 32]).Reduce(vmin, cub::Min());
-      vmax = warp_reduce(temp_storage.full[(t + block_size) / 32]).Reduce(vmax, cub::Max());
+      __syncwarp();
+      vmax = warp_reduce(temp_storage.full[t / 32]).Reduce(vmax, cub::Max());
       if (!(t & 0x1f)) {
         s->u.intrle.scratch.u64[(t >> 5) * 2 + 0] = vmin;
         s->u.intrle.scratch.u64[(t >> 5) * 2 + 1] = vmax;
