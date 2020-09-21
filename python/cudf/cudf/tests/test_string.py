@@ -1,4 +1,5 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
+import re
 from contextlib import ExitStack as does_not_raise
 from sys import getsizeof
 
@@ -2744,7 +2745,7 @@ def test_str_sum(data):
 def test_str_mean():
     sr = Series(["a", "b", "c", "d", "e"])
 
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(TypeError):
         sr.mean()
 
 
@@ -2756,7 +2757,8 @@ def test_string_product():
         psr.product()
     except Exception as e:
         with pytest.raises(
-            type(e), match=e.__str__().replace("str", "object")
+            type(e),
+            match=re.escape(f"cannot perform prod with type {sr.dtype}"),
         ):
             sr.product()
     else:

@@ -585,6 +585,31 @@ std::vector<size_type> segmented_count_unset_bits(bitmask_type const *bitmask,
   return ret;
 }
 
+// Returns the bitwise AND of the null masks of all columns in the table view
+rmm::device_buffer bitmask_and(table_view const &view,
+                               rmm::mr::device_memory_resource *mr,
+                               cudaStream_t stream)
+{
+  CUDF_FUNC_RANGE();
+  rmm::device_buffer null_mask{0, stream, mr};
+  if (view.num_rows() == 0 or view.num_columns() == 0) { return null_mask; }
+
+  std::vector<bitmask_type const *> masks;
+  std::vector<size_type> offsets;
+  for (auto &&col : view) {
+    if (col.nullable()) {
+      masks.push_back(col.null_mask());
+      offsets.push_back(col.offset());
+    }
+  }
+
+  if (masks.size() > 0) {
+    return cudf::detail::bitmask_and(masks, offsets, view.num_rows(), stream, mr);
+  }
+
+  return null_mask;
+}
+
 }  // namespace detail
 
 // Count non-zero bits in the specified range
@@ -660,29 +685,11 @@ rmm::device_buffer copy_bitmask(column_view const &view,
   return null_mask;
 }
 
-// Returns the bitwise AND of the null masks of all columns in the table view
 rmm::device_buffer bitmask_and(table_view const &view,
                                rmm::mr::device_memory_resource *mr,
                                cudaStream_t stream)
 {
-  CUDF_FUNC_RANGE();
-  rmm::device_buffer null_mask{0, stream, mr};
-  if (view.num_rows() == 0 or view.num_columns() == 0) { return null_mask; }
-
-  std::vector<bitmask_type const *> masks;
-  std::vector<size_type> offsets;
-  for (auto &&col : view) {
-    if (col.nullable()) {
-      masks.push_back(col.null_mask());
-      offsets.push_back(col.offset());
-    }
-  }
-
-  if (masks.size() > 0) {
-    return cudf::detail::bitmask_and(masks, offsets, view.num_rows(), stream, mr);
-  }
-
-  return null_mask;
+  return detail::bitmask_and(view, mr, stream);
 }
 
 }  // namespace cudf

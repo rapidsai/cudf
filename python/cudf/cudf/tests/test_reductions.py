@@ -1,11 +1,13 @@
 from __future__ import division, print_function
 
 import random
+import re
 from itertools import product
 
 import numpy as np
 import pytest
 
+import cudf
 from cudf.core import Series
 from cudf.tests import utils
 from cudf.tests.utils import NUMERIC_TYPES, gen_rand
@@ -160,3 +162,44 @@ def test_date_minmax():
     np_max = np_casted.max()
     gdf_max = gdf_casted.max()
     assert np_max == gdf_max
+
+
+@pytest.mark.parametrize(
+    "op",
+    ["sum", "product", "std", "var", "median", "kurt", "kurtosis", "skew"],
+)
+def test_datetime_unsupported_reductions(op):
+    gsr = cudf.Series([1, 2, 3, None], dtype="datetime64[ns]")
+    psr = gsr.to_pandas()
+
+    try:
+        getattr(psr, op)()
+    except Exception as e:
+        with pytest.raises(
+            type(e), match=re.escape(str(e)),
+        ):
+            getattr(gsr, op)()
+
+
+@pytest.mark.parametrize("op", ["product", "var", "kurt", "kurtosis", "skew"])
+def test_timedelta_unsupported_reductions(op):
+    gsr = cudf.Series([1, 2, 3, None], dtype="timedelta64[ns]")
+    psr = gsr.to_pandas()
+
+    try:
+        getattr(psr, op)()
+    except Exception as e:
+        with pytest.raises(type(e), match=re.escape(str(e))):
+            getattr(gsr, op)()
+
+
+@pytest.mark.parametrize("op", ["sum", "product", "std", "var"])
+def test_categorical_reductions(op):
+    gsr = cudf.Series([1, 2, 3, None], dtype="category")
+    psr = gsr.to_pandas()
+
+    try:
+        getattr(psr, op)()
+    except Exception as e:
+        with pytest.raises(type(e)):
+            getattr(gsr, op)()

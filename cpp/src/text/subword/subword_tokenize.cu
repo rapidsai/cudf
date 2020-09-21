@@ -154,14 +154,8 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
   auto const d_chars   = strings.chars().data<char>() + offset;
 
   // Create tokenizer
-  wordpiece_tokenizer tokenizer(vocab_table,
-                                strings.chars_size(),  // max value
-                                max_rows_tensor,
-                                max_sequence_length,
-                                stride,
-                                do_truncate,
-                                do_lower_case,
-                                stream);
+  wordpiece_tokenizer tokenizer(
+    vocab_table, max_rows_tensor, max_sequence_length, stride, do_truncate, do_lower_case, stream);
   // Run tokenizer
   auto const tokens = tokenizer.tokenize(d_chars, d_offsets, strings_count, stream);
   // assign output components

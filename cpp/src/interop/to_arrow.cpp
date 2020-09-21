@@ -18,12 +18,16 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/interop.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/unary.hpp>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/interop.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
+#include <rmm/mr/device/per_device_resource.hpp>
 
 namespace cudf {
 namespace detail {
@@ -38,10 +42,12 @@ std::shared_ptr<arrow::Buffer> fetch_data_buffer(column_view input_view,
                                                  cudaStream_t stream)
 {
   const int64_t data_size_in_bytes = sizeof(T) * input_view.size();
-  std::shared_ptr<arrow::Buffer> data_buffer;
 
-  CUDF_EXPECTS(arrow::AllocateBuffer(ar_mr, data_size_in_bytes, &data_buffer).ok(),
-               "Failed to allocate Arrow buffer for data");
+  auto result = arrow::AllocateBuffer(data_size_in_bytes, ar_mr);
+  CUDF_EXPECTS(result.ok(), "Failed to allocate Arrow buffer for data");
+
+  std::shared_ptr<arrow::Buffer> data_buffer = std::move(result.ValueOrDie());
+
   CUDA_TRY(cudaMemcpyAsync(data_buffer->mutable_data(),
                            input_view.data<T>(),
                            data_size_in_bytes,
@@ -59,12 +65,11 @@ std::shared_ptr<arrow::Buffer> fetch_mask_buffer(column_view input_view,
                                                  cudaStream_t stream)
 {
   const int64_t mask_size_in_bytes = cudf::bitmask_allocation_size_bytes(input_view.size());
-  std::shared_ptr<arrow::Buffer> mask_buffer;
 
   if (input_view.has_nulls()) {
-    CUDF_EXPECTS(
-      arrow::AllocateBitmap(ar_mr, static_cast<int64_t>(input_view.size()), &mask_buffer).ok(),
-      "Failed to allocate Arrow buffer for mask");
+    auto result = arrow::AllocateBitmap(static_cast<int64_t>(input_view.size()), ar_mr);
+    CUDF_EXPECTS(result.ok(), "Failed to allocate Arrow buffer for mask");
+    std::shared_ptr<arrow::Buffer> mask_buffer = std::move(result.ValueOrDie());
     CUDA_TRY(cudaMemcpyAsync(
       mask_buffer->mutable_data(),
       (input_view.offset() > 0) ? cudf::copy_bitmask(input_view).data() : input_view.null_mask(),
@@ -128,11 +133,11 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<bool>(column_view in
 {
   auto bitmask = bools_to_mask(input, rmm::mr::get_current_device_resource(), stream);
 
-  std::shared_ptr<arrow::Buffer> data_buffer;
+  auto result = arrow::AllocateBuffer(static_cast<int64_t>(bitmask.first->size()), ar_mr);
+  CUDF_EXPECTS(result.ok(), "Failed to allocate Arrow buffer for data");
 
-  CUDF_EXPECTS(
-    arrow::AllocateBuffer(ar_mr, static_cast<int64_t>(bitmask.first->size()), &data_buffer).ok(),
-    "Failed to allocate Arrow buffer for data");
+  std::shared_ptr<arrow::Buffer> data_buffer = std::move(result.ValueOrDie());
+
   CUDA_TRY(cudaMemcpyAsync(data_buffer->mutable_data(),
                            bitmask.first->data(),
                            bitmask.first->size(),
@@ -158,15 +163,17 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::string_view>(
   column_view input_view = (tmp_column != nullptr) ? tmp_column->view() : input;
   auto child_arrays      = fetch_child_array(input_view, ar_mr, stream);
   if (child_arrays.size() == 0) {
-    std::shared_ptr<arrow::Buffer> tmp_offset_buffer;
-    // Empty string will have only one value in offset of 4 bytes
-    CUDF_EXPECTS(arrow::AllocateBuffer(ar_mr, 4, &tmp_offset_buffer).ok(),
-                 "Failed to allocate buffer");
-    tmp_offset_buffer->mutable_data()[0] = 0;
+    arrow::Result<std::unique_ptr<arrow::Buffer>> result;
 
-    std::shared_ptr<arrow::Buffer> tmp_data_buffer;
-    CUDF_EXPECTS(arrow::AllocateBuffer(ar_mr, 0, &tmp_data_buffer).ok(),
-                 "Failed to allocate buffer");
+    // Empty string will have only one value in offset of 4 bytes
+    result = arrow::AllocateBuffer(4, ar_mr);
+    CUDF_EXPECTS(result.ok(), "Failed to allocate buffer");
+    std::shared_ptr<arrow::Buffer> tmp_offset_buffer = std::move(result.ValueOrDie());
+    tmp_offset_buffer->mutable_data()[0]             = 0;
+
+    result = arrow::AllocateBuffer(0, ar_mr);
+    CUDF_EXPECTS(result.ok(), "Failed to allocate buffer");
+    std::shared_ptr<arrow::Buffer> tmp_data_buffer = std::move(result.ValueOrDie());
 
     return std::make_shared<arrow::StringArray>(0, tmp_offset_buffer, tmp_data_buffer);
   }
@@ -177,28 +184,6 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::string_view>(
                                               data_buffer,
                                               fetch_mask_buffer(input_view, ar_mr, stream),
                                               static_cast<int64_t>(input_view.null_count()));
-}
-
-template <>
-std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::dictionary32>(
-  column_view input, cudf::type_id id, arrow::MemoryPool* ar_mr, cudaStream_t stream)
-{
-  std::unique_ptr<column> tmp_column = nullptr;
-  if ((input.offset() != 0) or (input.child(0).size() != input.size())) {
-    tmp_column = std::make_unique<cudf::column>(input);
-  }
-
-  column_view input_view = (tmp_column != nullptr) ? tmp_column->view() : input;
-  auto child_arrays      = fetch_child_array(input_view, ar_mr, stream);
-
-  auto indices    = to_arrow_array(type_id::INT32,
-                                static_cast<int64_t>(input_view.size()),
-                                child_arrays[0]->data()->buffers[1],
-                                fetch_mask_buffer(input_view, ar_mr, stream),
-                                static_cast<int64_t>(input_view.null_count()));
-  auto dictionary = child_arrays[1];
-  return std::make_shared<arrow::DictionaryArray>(
-    arrow::dictionary(indices->type(), dictionary->type()), indices, dictionary);
 }
 
 template <>
@@ -225,6 +210,26 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::list_view>(
                                             data,
                                             fetch_mask_buffer(input_view, ar_mr, stream),
                                             static_cast<int64_t>(input_view.null_count()));
+}
+
+template <>
+std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::dictionary32>(
+  column_view input, cudf::type_id id, arrow::MemoryPool* ar_mr, cudaStream_t stream)
+{
+  // Arrow dictionary requires indices to be signed integer
+  std::unique_ptr<column> dict_indices =
+    cast(cudf::dictionary_column_view(input).get_indices_annotated(),
+         cudf::data_type{type_id::INT32},
+         rmm::mr::get_current_device_resource(),
+         stream);
+  auto indices = dispatch_to_arrow{}.operator()<int32_t>(
+    dict_indices->view(), dict_indices->type().id(), ar_mr, stream);
+  auto dict_keys  = cudf::dictionary_column_view(input).keys();
+  auto dictionary = type_dispatcher(
+    dict_keys.type(), dispatch_to_arrow{}, dict_keys, dict_keys.type().id(), ar_mr, stream);
+
+  return std::make_shared<arrow::DictionaryArray>(
+    arrow::dictionary(indices->type(), dictionary->type()), indices, dictionary);
 }
 
 }  // namespace

@@ -31,15 +31,14 @@ std::vector<column_view> slice(column_view const& input,
 {
   CUDF_EXPECTS(indices.size() % 2 == 0, "indices size must be even");
 
-  std::vector<column_view> result{};
-
-  if (indices.size() == 0 or input.size() == 0) { return result; }
+  if (indices.empty()) { return {}; }
 
   auto null_counts = cudf::detail::segmented_count_unset_bits(input.null_mask(), indices, stream);
 
   std::vector<column_view> children{};
   for (size_type i = 0; i < input.num_children(); i++) { children.push_back(input.child(i)); }
 
+  std::vector<column_view> result{};
   for (size_t i = 0; i < indices.size() / 2; i++) {
     auto begin = indices[2 * i];
     auto end   = indices[2 * i + 1];
@@ -72,9 +71,7 @@ std::vector<cudf::table_view> slice(cudf::table_view const& input,
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(indices.size() % 2 == 0, "indices size must be even");
-  std::vector<cudf::table_view> result{};
-
-  if (indices.size() == 0 or input.num_columns() == 0) { return result; }
+  if (indices.empty()) { return {}; }
 
   // 2d arrangement of column_views that represent the outgoing table_views
   // sliced_table[i][j]
@@ -86,6 +83,7 @@ std::vector<cudf::table_view> slice(cudf::table_view const& input,
                  std::back_inserter(sliced_table),
                  [&indices](cudf::column_view const& c) { return cudf::slice(c, indices); });
 
+  std::vector<cudf::table_view> result{};
   // distribute columns into outgoing table_views
   size_t num_output_tables = indices.size() / 2;
   for (size_t i = 0; i < num_output_tables; i++) {

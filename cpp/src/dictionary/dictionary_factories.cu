@@ -26,7 +26,8 @@ std::unique_ptr<column> make_dictionary_column(column_view const& keys_column,
 {
   CUDF_EXPECTS(!keys_column.has_nulls(), "keys column must not have nulls");
   if (keys_column.size() == 0) return make_empty_column(data_type{type_id::DICTIONARY32});
-  CUDF_EXPECTS(indices_column.type().id() == cudf::type_id::INT32, "indices column must be INT32");
+  CUDF_EXPECTS(indices_column.type().id() == cudf::type_id::UINT32,
+               "indices column must be UINT32");
 
   auto keys_copy = std::make_unique<column>(keys_column, stream, mr);
   column_view indices_view{indices_column.type(),
@@ -58,7 +59,7 @@ std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys_colu
 {
   CUDF_EXPECTS(!keys_column->has_nulls(), "keys column must not have nulls");
   CUDF_EXPECTS(!indices_column->has_nulls(), "indices column must not have nulls");
-  CUDF_EXPECTS(indices_column->type().id() == cudf::type_id::INT32, "indices must be type INT32");
+  CUDF_EXPECTS(indices_column->type().id() == cudf::type_id::UINT32, "indices must be type UINT32");
 
   auto count = indices_column->size();
   std::vector<std::unique_ptr<column>> children;

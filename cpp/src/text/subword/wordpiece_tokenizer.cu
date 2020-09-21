@@ -265,7 +265,6 @@ __global__ void kernel_wordpiece_tokenizer(uint32_t const* code_points,
 }  // namespace
 
 wordpiece_tokenizer::wordpiece_tokenizer(hashed_vocabulary const& vocab_table,
-                                         uint32_t num_chars,
                                          uint32_t max_rows_final_tensor,
                                          uint32_t max_sequence_length,
                                          uint32_t stride,
@@ -278,7 +277,7 @@ wordpiece_tokenizer::wordpiece_tokenizer(hashed_vocabulary const& vocab_table,
     max_word_length{max_word_length},
     stride(stride),
     do_truncate(do_truncate),
-    normalizer(num_chars, stream, do_lower_case)
+    normalizer(stream, do_lower_case)
 {
 }
 

@@ -16,8 +16,10 @@
 
 #include "csv_common.h"
 #include "csv_gpu.h"
-
 #include "datetime.cuh"
+
+#include <io/utilities/block_utils.cuh>
+#include <io/utilities/parsing_utils.cuh>
 
 #include <cudf/detail/utilities/trie.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
@@ -29,8 +31,9 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <io/utilities/block_utils.cuh>
-#include <io/utilities/parsing_utils.cuh>
+#include <thrust/detail/copy.h>
+#include <thrust/transform.h>
+
 #include <type_traits>
 
 using namespace ::cudf::io;
@@ -222,6 +225,8 @@ __global__ void __launch_bounds__(csvparse_block_dim)
       } else if (serializedTrieContains(opts.trueValuesTrie, raw_csv + start, field_len) ||
                  serializedTrieContains(opts.falseValuesTrie, raw_csv + start, field_len)) {
         atomicAdd(&d_columnData[actual_col].countBool, 1);
+      } else if (cudf::io::gpu::is_infinity(raw_csv + start, raw_csv + tempPos)) {
+        atomicAdd(&d_columnData[actual_col].countFloat, 1);
       } else {
         long countNumber   = 0;
         long countDecimal  = 0;
@@ -354,15 +359,13 @@ __inline__ __device__ cudf::timestamp_ns decode_value(const char *data,
   return timestamp_ns{cudf::duration_ns{milli * 1000000}};
 }
 
-// The purpose of this is merely to allow compilation ONLY
-// TODO : make this work for json
 #ifndef DURATION_DECODE_VALUE
 #define DURATION_DECODE_VALUE(Type)                                   \
   template <>                                                         \
   __inline__ __device__ Type decode_value(                            \
     const char *data, long start, long end, ParseOptions const &opts) \
   {                                                                   \
-    return Type{};                                                    \
+    return Type{parseTimeDeltaFormat<Type>(data, start, end)};        \
   }
 #endif
 DURATION_DECODE_VALUE(duration_D)
@@ -751,7 +754,7 @@ static inline __device__ void rowctx_merge_transform(uint64_t ctxtree[1024],
   uint64_t tmp;
 
 #define CTX_MERGE(lanemask, tmask, base, level_scale)                       \
-  tmp = SHFL_XOR(ctxb, lanemask);                                           \
+  tmp = shuffle_xor(ctxb, lanemask);                                        \
   if (!(t & (tmask))) {                                                     \
     ctxb                                   = merge_row_contexts(ctxb, tmp); \
     ctxtree[(base) + (t >> (level_scale))] = ctxb;                          \
@@ -770,7 +773,7 @@ static inline __device__ void rowctx_merge_transform(uint64_t ctxtree[1024],
     CTX_MERGE(4, 0x7, 4, 3);
     CTX_MERGE(8, 0xf, 2, 4);
     // Final stage
-    tmp = SHFL_XOR(ctxb, 16);
+    tmp = shuffle_xor(ctxb, 16);
     if (t == 0) { ctxtree[1] = merge_row_contexts(ctxb, tmp); }
   }
 #undef CTX_MERGE
@@ -866,6 +869,12 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
                                                                            int commentchar)
 {
   __shared__ __align__(8) uint64_t ctxtree[rowofs_block_dim * 2];
+  using warp_reduce      = typename cub::WarpReduce<uint32_t>;
+  using half_warp_reduce = typename cub::WarpReduce<uint32_t, 16>;
+  __shared__ union {
+    typename warp_reduce::TempStorage full[rowofs_block_dim / 32];
+    typename half_warp_reduce::TempStorage half[rowofs_block_dim / 32];
+  } temp_storage;
 
   const char *end = start + (min(parse_pos + chunk_size, data_size) - start_offset);
   uint32_t t      = threadIdx.x;
@@ -959,12 +968,14 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
       rowmap >>= pos;
     }
     // Return the number of rows out of range
-    rows_out_of_range = WarpReduceSum16(rows_out_of_range);
+    rows_out_of_range =
+      half_warp_reduce(temp_storage.half[threadIdx.x / 32]).Sum(rows_out_of_range);
     __syncthreads();
     if (!(t & 0xf)) { ctxtree[t >> 4] = rows_out_of_range; }
     __syncthreads();
     if (t < 32) {
-      rows_out_of_range = WarpReduceSum32(static_cast<uint32_t>(ctxtree[t]));
+      rows_out_of_range =
+        warp_reduce(temp_storage.full[threadIdx.x / 32]).Sum(static_cast<uint32_t>(ctxtree[t]));
       if (t == 0) { row_ctx[blockIdx.x] = rows_out_of_range; }
     }
   } else {
@@ -1014,23 +1025,25 @@ void __host__ remove_blank_rows(rmm::device_vector<uint64_t> &row_offsets,
   row_offsets.resize(new_end - row_offsets.begin());
 }
 
-cudaError_t __host__ DetectColumnTypes(const char *data,
-                                       const uint64_t *row_starts,
-                                       size_t num_rows,
-                                       size_t num_columns,
-                                       const ParseOptions &options,
-                                       column_parse::flags *flags,
-                                       column_parse::stats *stats,
-                                       cudaStream_t stream)
+thrust::host_vector<column_parse::stats> detect_column_types(const char *data,
+                                                             const uint64_t *row_starts,
+                                                             size_t num_rows,
+                                                             size_t num_actual_columns,
+                                                             size_t num_active_columns,
+                                                             const cudf::io::ParseOptions &options,
+                                                             column_parse::flags *flags,
+                                                             cudaStream_t stream)
 {
   // Calculate actual block count to use based on records count
   const int block_size = csvparse_block_dim;
   const int grid_size  = (num_rows + block_size - 1) / block_size;
 
-  data_type_detection<<<grid_size, block_size, 0, stream>>>(
-    data, options, num_rows, num_columns, flags, row_starts, stats);
+  auto d_stats = rmm::device_vector<column_parse::stats>(num_active_columns);
 
-  return cudaSuccess;
+  data_type_detection<<<grid_size, block_size, 0, stream>>>(
+    data, options, num_rows, num_actual_columns, flags, row_starts, d_stats.data().get());
+
+  return thrust::host_vector<column_parse::stats>(d_stats);
 }
 
 cudaError_t __host__ DecodeRowColumnData(const char *data,

@@ -776,11 +776,11 @@ __device__ void process_symbols(inflate_state_s *s, int t)
     } else {
       batch_len = 0;
     }
-    batch_len = SHFL0(batch_len);
+    batch_len = shuffle(batch_len);
     if (batch_len < 0) { break; }
 
     symt     = (t < batch_len) ? b[t] : 256;
-    lit_mask = BALLOT(symt >= 256);
+    lit_mask = ballot(symt >= 256);
     pos      = min((__ffs(lit_mask) - 1) & 0xff, 32);
     if (t == 0) { s->x.batch_len[batch] = 0; }
     if (t < pos && out + t < outend) { out[t] = symt; }
@@ -790,7 +790,7 @@ __device__ void process_symbols(inflate_state_s *s, int t)
       int dist, len, symbol;
 
       // Process a non-literal symbol
-      symbol = SHFL(symt, pos);
+      symbol = shuffle(symt, pos);
       len    = max((symbol & 0xffff) - 256, 0);  // max should be unnecessary, but just in case
       dist   = symbol >> 16;
       for (int i = t; i < len; i += 32) {
@@ -804,7 +804,7 @@ __device__ void process_symbols(inflate_state_s *s, int t)
       // Process subsequent literals, if any
       if (!((lit_mask >> pos) & 1)) {
         len    = min((__ffs(lit_mask >> pos) - 1) & 0xff, batch_len);
-        symbol = SHFL(symt, (pos + t) & 0x1f);
+        symbol = shuffle(symt, (pos + t) & 0x1f);
         if (t < len && out + t < outend) { out[t] = symbol; }
         out += len;
         pos += len;
@@ -941,16 +941,16 @@ __device__ void prefetch_warp(volatile inflate_state_s *s, int t)
 {
   const uint8_t *cur_p = s->pref.cur_p;
   const uint8_t *end   = s->end;
-  while (SHFL0((t == 0) ? s->pref.run : 0)) {
+  while (shuffle((t == 0) ? s->pref.run : 0)) {
     int32_t cur_lo = (int32_t)(size_t)cur_p;
     int do_pref =
-      SHFL0((t == 0) ? (cur_lo - *(volatile int32_t *)&s->cur < PREFETCH_SIZE - 32 * 4 - 4) : 0);
+      shuffle((t == 0) ? (cur_lo - *(volatile int32_t *)&s->cur < PREFETCH_SIZE - 32 * 4 - 4) : 0);
     if (do_pref) {
       const uint8_t *p             = cur_p + 4 * t;
       *PREFETCH_ADDR32(s->pref, p) = (p < end) ? *(const uint32_t *)p : 0;
       cur_p += 4 * 32;
       __threadfence_block();
-      SYNCWARP();
+      __syncwarp();
       if (!t) {
         s->pref.cur_p = cur_p;
         __threadfence_block();

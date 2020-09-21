@@ -200,8 +200,6 @@ def cudf_dtype_from_pydata_dtype(dtype):
         return cudf.core.dtypes.CategoricalDtype
     elif dtype in cudf._lib.types.np_to_cudf_types:
         return dtype.type
-    elif np.issubdtype(dtype, np.datetime64):
-        dtype = np.datetime64
 
     return infer_dtype_from_object(dtype)
 
@@ -444,3 +442,16 @@ def get_time_unit(obj):
 
     time_unit, _ = np.datetime_data(obj.dtype)
     return time_unit
+
+
+def _get_nan_for_dtype(dtype):
+    dtype = np.dtype(dtype)
+    if pd.api.types.is_datetime64_dtype(
+        dtype
+    ) or pd.api.types.is_timedelta64_dtype(dtype):
+        time_unit, _ = np.datetime_data(dtype)
+        return dtype.type("nat", time_unit)
+    elif dtype.kind == "f":
+        return dtype.type("nan")
+    else:
+        return np.float64("nan")

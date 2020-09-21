@@ -76,12 +76,14 @@ std::unique_ptr<column> add_keys(
     stream);
   // now create the indices column -- map old values to the new ones
   // gather([4,0,3,1,2,2,2,4,0],[0,1,2,3,5]) = [5,0,3,1,2,2,2,5,0]
-  column_view indices_view(data_type{type_id::INT32},
+  column_view indices_view(dictionary_column.indices().type(),
                            dictionary_column.size(),
-                           dictionary_column.indices().data<int32_t>(),
+                           dictionary_column.indices().head(),
                            nullptr,
                            0,
                            dictionary_column.offset());
+  // the result may contain nulls if the input contains nulls
+  // and the corresponding index is therefore invalid/undefined
   auto table_indices = cudf::detail::gather(table_view{{map_indices->view()}},
                                             indices_view,
                                             cudf::detail::out_of_bounds_policy::IGNORE,
@@ -89,20 +91,23 @@ std::unique_ptr<column> add_keys(
                                             mr,
                                             stream)
                          ->release();
-  // the result may contain nulls if the input contains nulls and the corresponding index is
-  // therefore invalid
-  auto contents       = table_indices.front()->release();
-  auto indices_column = std::make_unique<column>(data_type{type_id::INT32},
-                                                 dictionary_column.size(),
+  // The output of lower_bound is INT32 but we need to convert to UINT32.
+  // There are no negative values and uint32 is the same width as int32
+  // so we can create a UINT32 column using the same data.
+  auto const indices_size = static_cast<size_type>(table_indices.front()->size());
+  auto contents           = table_indices.front()->release();
+  auto indices_column     = std::make_unique<column>(data_type{type_id::UINT32},
+                                                 indices_size,
                                                  std::move(*(contents.data.release())),
                                                  rmm::device_buffer{0, stream, mr},
                                                  0);
 
   // create new dictionary column with keys_column and indices_column
+  // null mask has not changed
   return make_dictionary_column(std::move(keys_column),
                                 std::move(indices_column),
-                                copy_bitmask(dictionary_column.parent(), stream, mr),  // nulls have
-                                dictionary_column.null_count());  // not changed
+                                copy_bitmask(dictionary_column.parent(), stream, mr),
+                                dictionary_column.null_count());
 }
 
 }  // namespace detail
