@@ -370,7 +370,7 @@ __inline__ __device__ int64_t parseDateTimeFormat(char const* begin, char const*
 
 // parse integer and update the start position
 template <typename T>
-__inline__ __device__ T parse_integer(const char *data, long &start, long end)
+__inline__ __device__ T parse_integer(const char* data, long& start, long end)
 {
   bool is_negative = data[start] == '-';
   T value          = 0;
@@ -390,7 +390,7 @@ __inline__ __device__ T parse_integer(const char *data, long &start, long end)
 }
 
 __inline__ __device__ bool is_present(
-  const char *data, long &start, long end, const char *needle, int len)
+  const char* data, long& start, long end, const char* needle, int len)
 {
   if (start + len - 1 > end) return false;
   for (auto i = 0; i < len; i++) {
@@ -400,13 +400,13 @@ __inline__ __device__ bool is_present(
   return true;
 }
 
-__inline__ __device__ int64_t parseDaysDeltaFormat(const char *data, long start, long end)
+__inline__ __device__ int64_t parseDaysDeltaFormat(const char* data, long start, long end)
 {
   return parse_integer<int>(data, start, end);
 }
 
 template <typename T>
-__inline__ __device__ int64_t parseTimeDeltaFormat(const char *data, long start, long end)
+__inline__ __device__ int64_t parseTimeDeltaFormat(const char* data, long start, long end)
 {
   // %d days [+]%H:%M:%S.n => %d days, %d days [+]%H:%M:%S,  %H:%M:%S.n, %H:%M:%S, %value.
   int days{0};
