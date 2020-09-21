@@ -9,7 +9,9 @@
 - PR #6076 Add durations type support for csv writer, reader
 - PR #5874 Add `COLLECT` groupby aggregation
 - PR #6119 Add support for `dayofweek` property in `DateTimeIndex` and `DatetimeProperties`
+- PR #6171 Java and Jni support for Struct columns
 - PR #6125 Add support for `Series.mode` and `DataFrame.mode`
+- PR #6262 Add nth_element series aggregation with null handling
 
 ## Improvements
 
@@ -47,6 +49,7 @@
 - PR #6189 Avoid deprecated pyarrow.compat for parquet
 - PR #6184 Add cuda 11 dev environment.yml
 - PR #6186 Update JNI to look for cub in new location
+- PR #6206 Replace functions macros with inline functions
 - PR #6194 Remove unnecessary memory-resource parameter in `cudf::contains` API
 - PR #6195 Update JNI to use parquet options builder
 - PR #6190 Avoid reading full csv files for metadata in dask_cudf
@@ -60,6 +63,8 @@
 - PR #6204 Add dockerfile and script to build cuDF jar
 - PR #6245 Split up replace.cu into multiple source files
 - PR #6218 increase visiblity/consistency for cuio reader writer private member variable names.
+- PR #6265 Update JNI to use ORC options builder
+- PR #6273 Update JNI to use ORC options builder
 
 ## Bug Fixes
 
@@ -90,6 +95,7 @@
 - PR #6251 Replace remaining calls to RMM `get_default_resource`
 - PR #6259 Fix compilation error with GCC 8
 - PR #6258 Pin libcudf conda recipe to boost 1.72.0
+- PR #6264 Remove include statement for missing rmm/mr/device/default_memory_resource.hpp file
 
 
 # cuDF 0.15.0 (26 Aug 2020)
