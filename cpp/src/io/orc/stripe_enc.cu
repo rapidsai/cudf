@@ -355,8 +355,8 @@ static __device__ uint32_t IntegerRLE(
   using warp_reduce      = cub::WarpReduce<T>;
   using half_warp_reduce = cub::WarpReduce<T, 16>;
   __shared__ union {
-    typename warp_reduce::TempStorage full[2 * block_size];
-    typename half_warp_reduce::TempStorage half[2 * block_size];
+    typename warp_reduce::TempStorage full[2 * block_size / 32];
+    typename half_warp_reduce::TempStorage half[2 * block_size / 32];
   } temp_storage;
   uint8_t *dst     = s->chunk.streams[cid] + s->strm_pos[cid];
   uint32_t out_cnt = 0;
