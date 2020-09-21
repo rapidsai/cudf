@@ -15,7 +15,7 @@
  */
 
 #include <io/utilities/block_utils.cuh>
-#include "parquet_gpu.h"
+#include "parquet_gpu.hpp"
 
 namespace cudf {
 namespace io {

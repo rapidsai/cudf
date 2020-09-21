@@ -17,7 +17,7 @@
 #ifndef __IO_PARQUET_H__
 #define __IO_PARQUET_H__
 
-#include "parquet_common.h"
+#include "parquet_common.hpp"
 
 #include <stddef.h>
 #include <stdint.h>

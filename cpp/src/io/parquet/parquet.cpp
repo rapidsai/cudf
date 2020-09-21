@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "parquet.h"
+#include "parquet.hpp"
 
 #include <algorithm>
 

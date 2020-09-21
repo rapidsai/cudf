@@ -22,7 +22,7 @@
 #include <io/statistics/column_stats.h>
 #include <io/utilities/hostdevice_vector.hpp>
 #include <vector>
-#include "parquet_common.h"
+#include "parquet_common.hpp"
 
 namespace cudf {
 namespace io {
