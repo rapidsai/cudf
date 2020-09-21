@@ -184,9 +184,9 @@ struct parse_datetime {
    *
    * @return `1x10^exponent` for `0 <= exponent <= 9`
    */
-  __device__ int64_t power_of_ten(int32_t exponent)
+  __device__ constexpr int64_t power_of_ten(int32_t exponent)
   {
-    static int64_t powers_of_ten[] = {
+    constexpr int64_t powers_of_ten[] = {
       1L, 10L, 100L, 1000L, 10000L, 100000L, 1000000L, 10000000L, 100000000L, 1000000000L};
     return powers_of_ten[exponent];
   }
@@ -234,8 +234,8 @@ struct parse_datetime {
         case 'M': timeparts[TP_MINUTE] = str2int(ptr, item.length); break;
         case 'S': timeparts[TP_SECOND] = str2int(ptr, item.length); break;
         case 'f': {
-          int32_t read_size       = std::min(static_cast<int32_t>(item.length), length);
-          int64_t fraction        = str2int(ptr, read_size) * power_of_ten(item.length - read_size);
+          int32_t const read_size = std::min(static_cast<int32_t>(item.length), length);
+          int64_t const fraction  = str2int(ptr, read_size) * power_of_ten(item.length - read_size);
           timeparts[TP_SUBSECOND] = static_cast<int32_t>(fraction);
           break;
         }
