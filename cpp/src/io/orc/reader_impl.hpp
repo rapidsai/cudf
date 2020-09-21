@@ -14,11 +14,6 @@
  * limitations under the License.
  */
 
-/**
- * @file reader_impl.hpp
- * @brief cuDF-IO ORC reader class implementation header
- */
-
 #pragma once
 
 #include "orc.h"
@@ -28,7 +23,8 @@
 #include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/io/datasource.hpp>
-#include <cudf/io/readers.hpp>
+#include <cudf/io/detail/orc.hpp>
+#include <cudf/io/orc.hpp>
 
 #include <memory>
 #include <string>
@@ -61,7 +57,7 @@ class reader::impl {
    * @param mr Device memory resource to use for device memory allocation
    */
   explicit impl(std::unique_ptr<datasource> source,
-                reader_options const &options,
+                orc_reader_options const &options,
                 rmm::mr::device_memory_resource *mr);
 
   /**
@@ -132,11 +128,11 @@ class reader::impl {
   std::unique_ptr<metadata> _metadata;
 
   std::vector<int> _selected_columns;
-  bool _use_index            = true;
-  bool _use_np_dtypes        = true;
-  bool _has_timestamp_column = false;
-  bool _decimals_as_float    = true;
-  int _decimals_as_int_scale = -1;
+  bool _use_index                  = true;
+  bool _use_np_dtypes              = true;
+  bool _has_timestamp_column       = false;
+  bool _decimals_as_float64        = true;
+  size_type _decimals_as_int_scale = -1;
   data_type _timestamp_type{type_id::EMPTY};
 };
 

@@ -431,6 +431,7 @@ add_library(cudf
             src/quantiles/quantile.cu
             src/quantiles/quantiles.cu
             src/reductions/reductions.cpp
+            src/reductions/nth_element.cu
             src/reductions/min.cu
             src/reductions/max.cu
             src/reductions/any.cu
@@ -459,6 +460,7 @@ add_library(cudf
             src/io/csv/csv_gpu.cu
             src/io/csv/reader_impl.cu
             src/io/csv/writer_impl.cu
+            src/io/csv/durations.cu
             src/io/json/reader_impl.cu
             src/io/json/json_gpu.cu
             src/io/orc/orc.cpp
