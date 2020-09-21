@@ -3483,9 +3483,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
             // least one byte or it will not be interpreted correctly.
             dataLen = 1;
           }
-        } else {
-          dataLen = dataBuffer.length;
         }
+        dataLen = Math.min(dataLen,dataBuffer.length);
         data = DeviceMemoryBuffer.allocate(dataLen);
         data.copyFromHostBuffer(dataBuffer, 0, dataLen);
       }
