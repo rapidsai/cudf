@@ -409,7 +409,7 @@ static __device__ uint32_t IntegerRLE(
         intrle_minmax(vmax, vmin);
       }
       vmin = warp_reduce(temp_storage.full[t / 32]).Reduce(vmin, cub::Min());
-      vmax = warp_reduce(temp_storage.full[t / 32 + block_size]).Reduce(vmax, cub::Max());
+      vmax = warp_reduce(temp_storage.full[(t + block_size) / 32]).Reduce(vmax, cub::Max());
       if (!(t & 0x1f)) {
         s->u.intrle.scratch.u64[(t >> 5) * 2 + 0] = vmin;
         s->u.intrle.scratch.u64[(t >> 5) * 2 + 1] = vmax;
