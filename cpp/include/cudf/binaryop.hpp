@@ -27,7 +27,7 @@ namespace cudf {
  * @addtogroup transformation_binaryops
  * @{
  * @file
- * @brief Binary-ops APIs
+ * @brief Column APIs for binary ops
  */
 
 /**

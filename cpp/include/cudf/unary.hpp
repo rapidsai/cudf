@@ -24,6 +24,7 @@ namespace cudf {
  * @addtogroup transformation_unaryops
  * @{
  * @file
+ * @brief Column APIs for unary ops
  */
 
 enum class unary_op : int32_t {
