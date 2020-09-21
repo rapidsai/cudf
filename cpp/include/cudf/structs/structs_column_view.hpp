@@ -25,6 +25,11 @@
 
 namespace cudf {
 
+/**
+ * @addtogroup structs_classes
+ * @{
+ */
+
 class structs_column_view : private column_view {
  public:
   // Foundation members:
@@ -44,6 +49,6 @@ class structs_column_view : private column_view {
   using column_view::offset;
   using column_view::size;
 
-};  // class structs_column_view;
-
+};         // class structs_column_view;
+/** @} */  // end of group
 }  // namespace cudf

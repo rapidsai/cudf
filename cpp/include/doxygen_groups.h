@@ -38,6 +38,7 @@
  *      @defgroup dictionary_classes Dictionary
  *      @defgroup timestamp_classes Timestamp
  *      @defgroup lists_classes Lists
+ *      @defgroup structs_classes Structs
  *   @}
  *   @defgroup table_classes Table
  *   @defgroup scalar_classes Scalar
