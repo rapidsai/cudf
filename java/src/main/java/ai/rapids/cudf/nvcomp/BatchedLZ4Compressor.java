@@ -18,9 +18,27 @@ package ai.rapids.cudf.nvcomp;
 
 import ai.rapids.cudf.BaseDeviceMemoryBuffer;
 import ai.rapids.cudf.Cuda;
+import ai.rapids.cudf.DeviceMemoryBuffer;
 import ai.rapids.cudf.HostMemoryBuffer;
 
 public class BatchedLZ4Compressor {
+  public static class BatchedCompressionResult {
+    private final DeviceMemoryBuffer[] compressedBuffers;
+    private final long[] compressedSizes;
+
+    BatchedCompressionResult(DeviceMemoryBuffer[] buffers, long[] sizes) {
+      this.compressedBuffers = buffers;
+      this.compressedSizes = sizes;
+    }
+
+    public DeviceMemoryBuffer[] getCompressedBuffers() {
+      return compressedBuffers;
+    }
+
+    public long[] getCompressedSizes() {
+      return compressedSizes;
+    }
+  }
 
   public static long getTempSize(BaseDeviceMemoryBuffer[] inputs, long chunkSize) {
     int numBuffers = inputs.length;
@@ -81,5 +99,50 @@ public class BatchedLZ4Compressor {
     NvcompJni.batchedLZ4CompressAsync(compressedSizesOutputBuffer.getAddress(),
         inputAddrs, inputSizes, chunkSize, tempBuffer.getAddress(), tempBuffer.getLength(),
         outputAddrs, outputSizes, stream.getStream());
+  }
+
+  public static BatchedCompressionResult compress(BaseDeviceMemoryBuffer[] inputs, long chunkSize,
+                                                  Cuda.Stream stream) {
+    int numBuffers = inputs.length;
+    long[] inputAddrs = new long[numBuffers];
+    long[] inputSizes = new long[numBuffers];
+    for (int i = 0; i < numBuffers; ++i) {
+      BaseDeviceMemoryBuffer buffer = inputs[i];
+      inputAddrs[i] = buffer.getAddress();
+      inputSizes[i] = buffer.getLength();
+    }
+
+    DeviceMemoryBuffer[] outputBuffers = new DeviceMemoryBuffer[numBuffers];
+    try {
+      long tempSize = NvcompJni.batchedLZ4CompressGetTempSize(inputAddrs, inputSizes, chunkSize);
+      try (DeviceMemoryBuffer tempBuffer = DeviceMemoryBuffer.allocate(tempSize)) {
+        long[] outputSizes = NvcompJni.batchedLZ4CompressGetOutputSize(inputAddrs, inputSizes,
+                chunkSize, tempBuffer.getAddress(), tempBuffer.getLength());
+        long[] outputAddrs = new long[numBuffers];
+        for (int i = 0; i < numBuffers; ++i) {
+          DeviceMemoryBuffer buffer = DeviceMemoryBuffer.allocate(outputSizes[i]);
+          outputBuffers[i] = buffer;
+          outputAddrs[i] = buffer.getAddress();
+        }
+
+        try (HostMemoryBuffer compressedSizesBuffer = HostMemoryBuffer.allocate(numBuffers * 8)) {
+          NvcompJni.batchedLZ4CompressAsync(compressedSizesBuffer.getAddress(),
+                  inputAddrs, inputSizes, chunkSize,
+                  tempBuffer.getAddress(), tempBuffer.getLength(),
+                  outputAddrs, outputSizes, stream.getStream());
+          stream.sync();
+          long[] compressedSizes = new long[numBuffers];
+          compressedSizesBuffer.getLongs(compressedSizes, 0, 0, numBuffers);
+          return new BatchedCompressionResult(outputBuffers, compressedSizes);
+        }
+      }
+    } catch (Throwable t) {
+      for (DeviceMemoryBuffer buffer : outputBuffers) {
+        if (buffer != null) {
+          buffer.close();
+        }
+      }
+      throw t;
+    }
   }
 }
