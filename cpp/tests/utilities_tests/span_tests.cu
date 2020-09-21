@@ -206,7 +206,6 @@ TEST(SpanTest, CanConstructFromDeviceContainers)
   auto d_thrust_vector = thrust::device_vector<int>(1);
   auto d_vector        = rmm::device_vector<int>(1);
   auto d_uvector       = rmm::device_uvector<int>(1, 0);
-  auto d_buffer        = rmm::device_buffer(1);
 
   (void)device_span<int>(d_thrust_vector);
   (void)device_span<int>(d_vector);

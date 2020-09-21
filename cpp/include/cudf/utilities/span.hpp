@@ -123,14 +123,12 @@ struct host_span : public span_base<T, Extent, host_span<T, Extent>> {
 
   constexpr host_span() noexcept : base() {}  // required to compile on centos
 
-  template <typename C,
-            typename std::enable_if_t<is_host_span_supported_container<C>::value>* = nullptr>
+  template <typename C, std::enable_if_t<is_host_span_supported_container<C>::value>* = nullptr>
   constexpr host_span(C& in) : base(in.data(), in.size())
   {
   }
 
-  template <typename C,
-            typename std::enable_if_t<is_host_span_supported_container<C>::value>* = nullptr>
+  template <typename C, std::enable_if_t<is_host_span_supported_container<C>::value>* = nullptr>
   constexpr host_span(C const& in) : base(in.data(), in.size())
   {
   }
