@@ -118,7 +118,7 @@ cdef binaryop_v_v(Column lhs, Column rhs,
 cdef binaryop_v_s(Column lhs, Scalar rhs,
                   binary_operator c_op, data_type c_dtype):
     cdef column_view c_lhs = lhs.view()
-    cdef scalar* c_rhs = rhs.c_value.get()
+    cdef scalar* c_rhs = rhs.get_c_value()
 
     cdef unique_ptr[column] c_result
 
@@ -137,7 +137,7 @@ cdef binaryop_v_s(Column lhs, Scalar rhs,
 
 cdef binaryop_s_v(Scalar lhs, Column rhs,
                   binary_operator c_op, data_type c_dtype):
-    cdef scalar* c_lhs = lhs.c_value.get()
+    cdef scalar* c_lhs = lhs.get_c_value()
     cdef column_view c_rhs = rhs.view()
 
     cdef unique_ptr[column] c_result

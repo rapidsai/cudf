@@ -561,7 +561,7 @@ cdef class Column:
 
 
 def make_column_from_scalar(Scalar val, size_type size):
-    cdef scalar* c_val = val.c_value.get()
+    cdef scalar* c_val = val.get_c_value()
 
     cdef unique_ptr[column] c_result
     with nogil:

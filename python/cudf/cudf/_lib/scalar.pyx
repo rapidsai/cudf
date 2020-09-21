@@ -120,6 +120,10 @@ cdef class Scalar:
                 "Could not convert cudf::scalar to a Python value"
             )
 
+    cdef scalar* get_c_value(self):
+        return self.c_value.get()
+        
+
     cpdef bool is_valid(self):
         """
         Returns if the Scalar is valid or not(i.e., <NA>).

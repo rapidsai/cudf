@@ -22,7 +22,7 @@ def ngrams_tokenize(
 ):
     cdef column_view c_strings = strings.view()
     cdef size_type c_ngrams = ngrams
-    cdef string_scalar* c_separator = <string_scalar*>separator.c_value.get()
+    cdef string_scalar* c_separator = <string_scalar*>separator.get_c_value()
     cdef string_scalar* c_delimiter = <string_scalar*>delimiter.c_value.get()
     cdef unique_ptr[column] c_result
 

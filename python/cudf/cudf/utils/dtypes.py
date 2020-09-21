@@ -228,7 +228,7 @@ def to_cudf_compatible_scalar(val, dtype=None):
 
     If `val` is None, returns None.
     """
-    if val is None:
+    if val is None or isinstance(val, cudf.Scalar):
         return val
 
     if not is_scalar(val):

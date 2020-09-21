@@ -4,7 +4,7 @@ from __future__ import division
 
 import operator
 import random
-from itertools import product
+from itertools import product, combinations
 
 import numpy as np
 import pandas as pd
@@ -15,6 +15,8 @@ from cudf.core import Series
 from cudf.core.index import as_index
 from cudf.tests import utils
 
+from cudf.utils.dtypes import NUMERIC_TYPES, DATETIME_TYPES
+
 _binops = [
     operator.add,
     operator.sub,
@@ -24,7 +26,6 @@ _binops = [
     operator.mod,
     operator.pow,
 ]
-
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
 @pytest.mark.parametrize("binop", _binops)
@@ -772,3 +773,95 @@ def test_ufunc_ops(lhs, rhs, ops):
         utils.assert_eq(
             expect, got,
         )
+
+
+def generate_valid_scalar_binop_combos():
+    results = []
+
+    # All int-int combinations
+    int_dtype_pairs = combinations(
+        cudf.utils.dtypes.INTEGER_TYPES, 2
+    )
+    int_data = (1, 2)
+    for pair in int_dtype_pairs:
+        results.append(
+            (*int_data, *pair)
+        )
+
+    # Int-Float
+    int_float_data = (1, 1.5)
+    int_float_dtype_pairs = product(
+        cudf.utils.dtypes.INTEGER_TYPES,
+        cudf.utils.dtypes.FLOAT_TYPES
+    )
+    for pair in int_float_dtype_pairs:
+        results.append(
+            (*int_float_data, *pair)
+        )
+
+    # Int-Bool
+    int_bool_combinations = [(1, True), (1, False), (0, True), (0, False), (5, True), (5, False)]
+    dtype_combinations = product({'bool'}, cudf.utils.dtypes.INTEGER_TYPES)
+    for cmb in int_bool_combinations:
+        for dtype_cmb in dtype_combinations:
+            results.append((*cmb, *dtype_cmb))
+
+    # Float-bool
+    float_bool_combinations = [(1.0, True), (1.0, False), (0.0, True), (0.0, False), (5.5, True), (5.5, False)]
+    dtype_combinations = product({'bool'}, cudf.utils.dtypes.FLOAT_TYPES)
+    for cmb in float_bool_combinations:
+        for dtype_cmb in dtype_combinations:
+            results.append((*cmb, *dtype_cmb))
+
+    return results
+
+
+@pytest.mark.parametrize('lhs,rhs,dtype_l,dtype_r', generate_valid_scalar_binop_combos())
+@pytest.mark.parametrize('op', _binops)
+def test_scalar_binops_value_valid_combinations(lhs, rhs, dtype_l, dtype_r, op):
+
+    dtype_l = np.dtype(dtype_l)
+    dtype_r = np.dtype(dtype_r)
+
+    lhs_host = dtype_l.type(lhs)
+    rhs_host = dtype_r.type(rhs)
+
+    lhs_dev = cudf.Scalar(lhs, dtype=dtype_l)
+    rhs_dev = cudf.Scalar(rhs, dtype=dtype_r)
+
+    host_result = op(lhs_host, rhs_host)
+    device_result = op(lhs_dev, rhs_dev)
+
+    assert host_result == device_result.value
+    assert host_result.dtype == device_result.dtype
+
+    '''
+    lval, rval = pairs
+    if (isinstance(lval, str) and dtype_l != np.dtype('str')) or (isinstance(rval, str) and dtype_r != np.dtype('str')):
+        pytest.skip("Invalid scalar/dtype combination")
+
+    import re
+    try:
+        host_value_l = dtype_l.type(lval)
+    except ValueError as e:
+        with pytest.raises(ValueError, match=re.escape(str(e))):
+            gpu_value_l = Scalar(lval, dtype=dtype_l)
+        return
+    try:
+        host_value_r = dtype_r.type(rval)
+    except ValueError as e:
+        with pytest.raises(ValueError, match=re.escape(str(e))):
+            gpu_value_r = Scalar(rval, dtype=dtype_r)
+        return
+
+    gpu_value_l = Scalar(lval, dtype=dtype_l)
+    gpu_value_r = Scalar(rval, dtype=dtype_r)
+    try:
+        expect = op(host_value_l, host_value_r)
+    except TypeError:
+        with pytest.raises(TypeError):
+            got = op(gpu_value_l, gpu_value_r)
+        return
+    got = op(gpu_value_l, gpu_value_r)
+    assert expect == got.value
+    '''

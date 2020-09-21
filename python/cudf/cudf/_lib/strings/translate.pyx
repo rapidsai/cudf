@@ -61,7 +61,7 @@ def filter_characters(Column source_strings,
     """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
-    cdef string_scalar* scalar_repl = <string_scalar*>(repl.c_value.get())
+    cdef string_scalar* scalar_repl = <string_scalar*>(repl.get_c_value())
     cdef int table_size
     table_size = len(mapping_table)
 

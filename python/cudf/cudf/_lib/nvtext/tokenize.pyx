@@ -34,7 +34,7 @@ def tokenize(Column strings, object delimiter):
 def _tokenize_scalar(Column strings, Scalar delimiter):
 
     cdef column_view c_strings = strings.view()
-    cdef string_scalar* c_delimiter = <string_scalar*>delimiter.c_value.get()
+    cdef string_scalar* c_delimiter = <string_scalar*>delimiter.get_c_value()
     cdef unique_ptr[column] c_result
 
     with nogil:
@@ -80,7 +80,7 @@ def count_tokens(Column strings, object delimiter):
 
 def _count_tokens_scalar(Column strings, Scalar delimiter):
     cdef column_view c_strings = strings.view()
-    cdef string_scalar* c_delimiter = <string_scalar*>delimiter.c_value.get()
+    cdef string_scalar* c_delimiter = <string_scalar*>delimiter.get_c_value()
     cdef unique_ptr[column] c_result
 
     with nogil:
@@ -124,7 +124,7 @@ def character_tokenize(Column strings):
 def detokenize(Column strings, Column indices, Scalar separator):
     cdef column_view c_strings = strings.view()
     cdef column_view c_indices = indices.view()
-    cdef string_scalar* c_separator = <string_scalar*>separator.c_value.get()
+    cdef string_scalar* c_separator = <string_scalar*>separator.get_c_value()
     cdef unique_ptr[column] c_result
     with nogil:
         c_result = move(

@@ -34,7 +34,7 @@ def replace_re(Column source_strings,
 
     cdef string pattern_string = <string>str(pattern).encode()
     cdef string_scalar* scalar_repl = \
-        <string_scalar*>(repl.c_value.get())
+        <string_scalar*>(repl.get_c_value())
 
     with nogil:
         c_result = move(cpp_replace_re(

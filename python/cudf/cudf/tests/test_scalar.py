@@ -7,7 +7,8 @@ import pytest
 
 from cudf._lib.scalar import Scalar
 from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, TIMEDELTA_TYPES
-
+import operator
+import cudf
 
 @pytest.mark.parametrize(
     "value",
@@ -87,18 +88,21 @@ from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, TIMEDELTA_TYPES
         np.object_("asdf"),
     ],
 )
-def test_round_trip_scalar(value):
-    s = Scalar(value)
+@pytest.mark.parametrize('constructor', [Scalar, cudf.Scalar])
+def test_round_trip_scalar(value, constructor):
+    s = constructor(value)
 
     np.testing.assert_equal(s.value, value)
     assert s.is_valid() is True
+    
 
 
 @pytest.mark.parametrize(
     "dtype", NUMERIC_TYPES + DATETIME_TYPES + TIMEDELTA_TYPES + ["object"]
 )
-def test_null_scalar(dtype):
-    s = Scalar(None, dtype=dtype)
+@pytest.mark.parametrize('constructor', [Scalar, cudf.Scalar])
+def test_null_scalar(dtype, constructor):
+    s = constructor(None, dtype=dtype)
     assert s.value is None
     assert s.dtype == np.dtype(dtype)
     assert s.is_valid() is False
@@ -107,8 +111,9 @@ def test_null_scalar(dtype):
 @pytest.mark.parametrize(
     "dtype", NUMERIC_TYPES + DATETIME_TYPES + TIMEDELTA_TYPES + ["object"]
 )
-def test_valid_scalar(dtype):
-    s = Scalar(1, dtype=dtype)
+@pytest.mark.parametrize('constructor', [Scalar, cudf.Scalar])
+def test_valid_scalar(dtype, constructor):
+    s = constructor(1, dtype=dtype)
 
     assert s.dtype == np.dtype(dtype)
     assert s.is_valid() is True
@@ -128,8 +133,9 @@ def test_valid_scalar(dtype):
         pd.Timedelta(34765, unit="D"),
     ],
 )
-def test_date_duration_scalars(value):
-    s = Scalar(value)
+@pytest.mark.parametrize('constructor', [Scalar, cudf.Scalar])
+def test_date_duration_scalars(value, constructor):
+    s = constructor(value)
 
     actual = s.value
 
