@@ -83,7 +83,7 @@ struct base_indexalator {
    */
   CUDA_HOST_DEVICE_CALLABLE T operator--(int)
   {
-    T tmp(static_cast<T&>(*this));
+    T tmp{static_cast<T&>(*this)};
     operator--();
     return tmp;
   }
@@ -103,7 +103,7 @@ struct base_indexalator {
    */
   CUDA_HOST_DEVICE_CALLABLE T operator+(difference_type offset) const
   {
-    auto tmp = T(static_cast<T const&>(*this));
+    auto tmp = T{static_cast<T const&>(*this)};
     tmp.p_ += (offset * width_);
     return tmp;
   }
@@ -113,7 +113,7 @@ struct base_indexalator {
    */
   CUDA_HOST_DEVICE_CALLABLE friend T operator+(difference_type offset, T const& rhs)
   {
-    T tmp(rhs);
+    T tmp{rhs};
     tmp.p_ += (offset * rhs.width_);
     return tmp;
   }
@@ -133,7 +133,7 @@ struct base_indexalator {
    */
   CUDA_HOST_DEVICE_CALLABLE T operator-(difference_type offset) const
   {
-    auto tmp = T(static_cast<T const&>(*this));
+    auto tmp = T{static_cast<T const&>(*this)};
     tmp.p_ -= (offset * width_);
     return tmp;
   }
@@ -143,7 +143,7 @@ struct base_indexalator {
    */
   CUDA_HOST_DEVICE_CALLABLE friend T operator-(difference_type offset, T const& rhs)
   {
-    T tmp(rhs);
+    T tmp{rhs};
     tmp.p_ -= (offset * rhs.width_);
     return tmp;
   }
@@ -345,7 +345,7 @@ struct output_indexalator : base_indexalator<output_indexalator> {
    */
   CUDA_DEVICE_CALLABLE output_indexalator const operator[](size_type idx) const
   {
-    output_indexalator tmp(*this);
+    output_indexalator tmp{*this};
     tmp.p_ += (idx * width_);
     return tmp;
   }
