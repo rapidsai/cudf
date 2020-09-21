@@ -56,10 +56,10 @@ std::unique_ptr<column> remove_keys_fn(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
-  auto const keys_view = dictionary_column.keys();
-  auto execpol         = rmm::exec_policy(stream);
-  auto indices_type    = dictionary_column.indices().type();
-  auto max_size        = dictionary_column.size();
+  auto const keys_view    = dictionary_column.keys();
+  auto execpol            = rmm::exec_policy(stream);
+  auto const indices_type = dictionary_column.indices().type();
+  auto const max_size     = dictionary_column.size();
 
   // create/init indices map array
   auto map_indices =

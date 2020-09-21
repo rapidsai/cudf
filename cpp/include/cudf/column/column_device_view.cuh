@@ -688,7 +688,7 @@ __device__ inline string_view const column_device_view::element<string_view>(
 }
 
 /**
- * @brief Dispatch functor for resolving the indices value for dictionary element.
+ * @brief Dispatch functor for resolving the index value for a dictionary element.
  *
  * The basic dictionary elements are the indices which can be any index type.
  */
@@ -736,8 +736,8 @@ template <>
 __device__ inline dictionary32 const column_device_view::element<dictionary32>(
   size_type element_index) const noexcept
 {
-  size_type index = element_index + offset();  // account for this view's _offset
-  auto indices    = d_children[0];
+  size_type index    = element_index + offset();  // account for this view's _offset
+  auto const indices = d_children[0];
   return dictionary32{type_dispatcher(indices.type(), index_element_fn{}, indices, index)};
 }
 

@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/column/column_view.hpp>
 #include <cudf/utilities/traits.hpp>
 
 namespace cudf {
@@ -24,8 +25,8 @@ namespace detail {
 /**
  * @brief The base class for the input or output index normalizing iterator.
  *
- * This implementation uses CTRP to define the input_indexalator and the
- * output_indexalator classes. This is so this class can manipulate the
+ * This implementation uses CTRP to define the `input_indexalator` and the
+ * `output_indexalator` classes. This is so this class can manipulate the
  * uniquely typed subclass member variable `p_` directly without requiring
  * virtual functions since iterator instances will be copied to device memory.
  *
@@ -62,7 +63,7 @@ struct base_indexalator {
    */
   CUDA_HOST_DEVICE_CALLABLE T operator++(int)
   {
-    T tmp(static_cast<T&>(*this));
+    T tmp{static_cast<T&>(*this)};
     operator++();
     return tmp;
   }
@@ -203,7 +204,7 @@ struct base_indexalator {
   /**
    * @brief Constructor assigns width and type member variables for base class.
    */
-  base_indexalator(int width, data_type dtype) : width_(width), dtype_(dtype) {}
+  base_indexalator(int32_t width, data_type dtype) : width_(width), dtype_(dtype) {}
 
   int width_;        /// integer type width = 1,2,4, or 8
   data_type dtype_;  /// for type-dispatcher calls
