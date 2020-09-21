@@ -1028,12 +1028,16 @@ def test_csv_reader_byte_range_type_corner_case(tmpdir):
 
     cudf.datasets.timeseries(
         start="2000-01-01",
-        end="2002-12-31",
+        end="2000-01-02",
         dtypes={"name": str, "id": int, "x": float, "y": float},
     ).to_csv(fname, chunksize=100000)
 
-    byte_range = (2_147_483_648, 100_000_000)
-    cudf.read_csv(fname, byte_range=byte_range, header=None)
+    byte_range = (2_147_483_648, 0)
+    try:
+        cudf.read_csv(fname, byte_range=byte_range, header=None)
+    except RuntimeError as e:
+        if "Offset is past end of file" not in str(e):
+            raise e
 
 
 @pytest.mark.parametrize("segment_bytes", [10, 19, 31, 36])
