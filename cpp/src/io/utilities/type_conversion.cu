@@ -43,6 +43,12 @@ data_type convert_string_to_dtype(const std::string& dtype_in)
   if (dtype == "date32") return data_type(cudf::type_id::TIMESTAMP_DAYS);
   if (dtype == "bool" || dtype == "boolean") return data_type(cudf::type_id::BOOL8);
   if (dtype == "date" || dtype == "date64") return data_type(cudf::type_id::TIMESTAMP_MILLISECONDS);
+  if (dtype == "timedelta[d]") return data_type(cudf::type_id::DURATION_DAYS);
+  if (dtype == "timedelta64[s]") return data_type(cudf::type_id::DURATION_SECONDS);
+  if (dtype == "timedelta64[ms]") return data_type(cudf::type_id::DURATION_MILLISECONDS);
+  if (dtype == "timedelta64[us]") return data_type(cudf::type_id::DURATION_MICROSECONDS);
+  if (dtype == "timedelta" || dtype == "timedelta64[ns]")
+    return data_type(cudf::type_id::DURATION_NANOSECONDS);
   if (dtype == "float" || dtype == "float32") return data_type(cudf::type_id::FLOAT32);
   if (dtype == "double" || dtype == "float64") return data_type(cudf::type_id::FLOAT64);
   if (dtype == "byte" || dtype == "int8") return data_type(cudf::type_id::INT8);

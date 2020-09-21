@@ -83,7 +83,7 @@ static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s, int t)
     }
     __syncthreads();
     is_valid = (i + t < s->chunk.num_rows) ? (s->scratch_red[t >> 5] >> (t & 0x1f)) & 1 : 0;
-    nz_map   = BALLOT(is_valid);
+    nz_map   = ballot(is_valid);
     nz_pos   = s->nnz + __popc(nz_map & (0x7fffffffu >> (0x1fu - ((uint32_t)t & 0x1f))));
     if (!(t & 0x1f)) { s->scratch_red[16 + (t >> 5)] = __popc(nz_map); }
     __syncthreads();
@@ -107,10 +107,15 @@ static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s, int t)
  *
  **/
 // blockDim {512,1,1}
-extern "C" __global__ void __launch_bounds__(512, 2)
+template <int block_size>
+__global__ void __launch_bounds__(block_size, 2)
   gpuInitDictionaryIndices(DictionaryChunk *chunks, uint32_t num_columns)
 {
   __shared__ __align__(16) dictinit_state_s state_g;
+  __shared__ union {
+    typename cub::WarpReduce<uint32_t>::TempStorage full[block_size / 32];
+    typename cub::WarpReduce<uint32_t, 16>::TempStorage half[block_size / 32];
+  } temp_storage;
 
   dictinit_state_s *const s = &state_g;
   uint32_t col_id           = blockIdx.x;
@@ -124,7 +129,7 @@ extern "C" __global__ void __launch_bounds__(512, 2)
     ((volatile uint32_t *)&s->chunk)[t] =
       ((const uint32_t *)&chunks[group_id * num_columns + col_id])[t];
   }
-  for (uint32_t i = 0; i < sizeof(s->map) / sizeof(uint32_t); i += 512) {
+  for (uint32_t i = 0; i < sizeof(s->map) / sizeof(uint32_t); i += block_size) {
     if (i + t < sizeof(s->map) / sizeof(uint32_t)) s->map.u32[i + t] = 0;
   }
   __syncthreads();
@@ -140,7 +145,7 @@ extern "C" __global__ void __launch_bounds__(512, 2)
   dict_data = s->chunk.dict_data;
   start_row = s->chunk.start_row;
   ck_data   = reinterpret_cast<const nvstrdesc_s *>(s->chunk.column_data_base) + start_row;
-  for (uint32_t i = 0; i < nnz; i += 512) {
+  for (uint32_t i = 0; i < nnz; i += block_size) {
     uint32_t ck_row = 0, len = 0, hash;
     const uint8_t *ptr = 0;
     if (i + t < nnz) {
@@ -149,11 +154,11 @@ extern "C" __global__ void __launch_bounds__(512, 2)
       len    = ck_data[ck_row].count;
       hash   = nvstr_init_hash(ptr, len);
     }
-    len                    = WarpReduceSum16(len);
-    s->scratch_red[t >> 4] = len;
+    len = cub::WarpReduce<uint32_t, 16>(temp_storage.half[threadIdx.x / 32]).Sum(len);
+    if (!(t & 0xf)) { s->scratch_red[t >> 4] = len; }
     __syncthreads();
     if (t < 32) {
-      len = WarpReduceSum32(s->scratch_red[t]);
+      len = cub::WarpReduce<uint32_t>(temp_storage.full[threadIdx.x / 32]).Sum(s->scratch_red[t]);
       if (t == 0) s->chunk.string_char_count += len;
     }
     if (i + t < nnz) {
@@ -198,7 +203,7 @@ extern "C" __global__ void __launch_bounds__(512, 2)
     __syncthreads();
   }
   // Put the indices back in hash order
-  for (uint32_t i = 0; i < nnz; i += 512) {
+  for (uint32_t i = 0; i < nnz; i += block_size) {
     uint32_t ck_row = 0, pos = 0, hash = 0, pos_old, pos_new, sh, colliding_row;
     bool collision;
     if (i + t < nnz) {
@@ -246,7 +251,7 @@ extern "C" __global__ void __launch_bounds__(512, 2)
   // Now that the strings are ordered by hash, compare every string with the first entry in the hash
   // map, the position of the first string can be inferred from the hash map counts
   dict_char_count = 0;
-  for (uint32_t i = 0; i < nnz; i += 512) {
+  for (uint32_t i = 0; i < nnz; i += block_size) {
     uint32_t ck_row = 0, ck_row_ref = 0, is_dupe = 0, dupe_mask, dupes_before;
     if (i + t < nnz) {
       const char *str1, *str2;
@@ -263,7 +268,7 @@ extern "C" __global__ void __launch_bounds__(512, 2)
         dict_char_count += (is_dupe) ? 0 : len1;
       }
     }
-    dupe_mask    = BALLOT(is_dupe);
+    dupe_mask    = ballot(is_dupe);
     dupes_before = s->total_dupes + __popc(dupe_mask & ((2 << (t & 0x1f)) - 1));
     if (!(t & 0x1f)) { s->scratch_red[t >> 5] = __popc(dupe_mask); }
     __syncthreads();
@@ -283,10 +288,14 @@ extern "C" __global__ void __launch_bounds__(512, 2)
       }
     }
   }
-  dict_char_count = WarpReduceSum32(dict_char_count);
+  dict_char_count =
+    cub::WarpReduce<uint32_t>(temp_storage.full[threadIdx.x / 32]).Sum(dict_char_count);
   if (!(t & 0x1f)) { s->scratch_red[t >> 5] = dict_char_count; }
   __syncthreads();
-  if (t < 32) { dict_char_count = WarpReduceSum16((t < 16) ? s->scratch_red[t] : 0); }
+  if (t < 32) {
+    dict_char_count = cub::WarpReduce<uint32_t, 16>(temp_storage.half[threadIdx.x / 32])
+                        .Sum((t < 16) ? s->scratch_red[t] : 0);
+  }
   if (!t) {
     chunks[group_id * num_columns + col_id].num_strings       = nnz;
     chunks[group_id * num_columns + col_id].string_char_count = s->chunk.string_char_count;
@@ -370,10 +379,13 @@ struct build_state_s {
  **/
 // NOTE: Prone to poor utilization on small datasets due to 1 block per dictionary
 // blockDim {1024,1,1}
-extern "C" __global__ void __launch_bounds__(1024)
+template <int block_size>
+__global__ void __launch_bounds__(block_size)
   gpuBuildStripeDictionaries(StripeDictionary *stripes, uint32_t num_columns)
 {
   __shared__ __align__(16) build_state_s state_g;
+  using warp_reduce = cub::WarpReduce<uint32_t>;
+  __shared__ typename warp_reduce::TempStorage temp_storage[block_size / 32];
 
   volatile build_state_s *const s = &state_g;
   uint32_t col_id                 = blockIdx.x;
@@ -396,7 +408,7 @@ extern "C" __global__ void __launch_bounds__(1024)
   dict_index      = s->stripe.dict_index;
   str_data        = reinterpret_cast<const nvstrdesc_s *>(s->stripe.column_data_base);
   dict_char_count = 0;
-  for (uint32_t i = 0; i < num_strings; i += 1024) {
+  for (uint32_t i = 0; i < num_strings; i += block_size) {
     uint32_t cur = (i + t < num_strings) ? dict_data[i + t] : 0;
     uint32_t dupe_mask, dupes_before, cur_len = 0;
     const char *cur_ptr;
@@ -410,7 +422,7 @@ extern "C" __global__ void __launch_bounds__(1024)
       is_dupe       = nvstr_is_equal(cur_ptr, cur_len, str_data[prev].ptr, str_data[prev].count);
     }
     dict_char_count += (is_dupe) ? 0 : cur_len;
-    dupe_mask    = BALLOT(is_dupe);
+    dupe_mask    = ballot(is_dupe);
     dupes_before = s->total_dupes + __popc(dupe_mask & ((2 << (t & 0x1f)) - 1));
     if (!(t & 0x1f)) { s->scratch_red[t >> 5] = __popc(dupe_mask); }
     __syncthreads();
@@ -428,10 +440,12 @@ extern "C" __global__ void __launch_bounds__(1024)
     }
     __syncthreads();
   }
-  dict_char_count = WarpReduceSum32(dict_char_count);
+  dict_char_count = warp_reduce(temp_storage[threadIdx.x / 32]).Sum(dict_char_count);
   if (!(t & 0x1f)) { s->scratch_red[t >> 5] = dict_char_count; }
   __syncthreads();
-  if (t < 32) { dict_char_count = WarpReduceSum32(s->scratch_red[t]); }
+  if (t < 32) {
+    dict_char_count = warp_reduce(temp_storage[threadIdx.x / 32]).Sum(s->scratch_red[t]);
+  }
   if (t == 0) {
     stripes[stripe_id * num_columns + col_id].num_strings     = num_strings - s->total_dupes;
     stripes[stripe_id * num_columns + col_id].dict_char_count = dict_char_count;
@@ -455,7 +469,7 @@ cudaError_t InitDictionaryIndices(DictionaryChunk *chunks,
 {
   dim3 dim_block(512, 1);  // 512 threads per chunk
   dim3 dim_grid(num_columns, num_rowgroups);
-  gpuInitDictionaryIndices<<<dim_grid, dim_block, 0, stream>>>(chunks, num_columns);
+  gpuInitDictionaryIndices<512><<<dim_grid, dim_block, 0, stream>>>(chunks, num_columns);
   return cudaSuccess;
 }
 
@@ -501,7 +515,7 @@ cudaError_t BuildStripeDictionaries(StripeDictionary *stripes,
                    });
     }
   }
-  gpuBuildStripeDictionaries<<<dim_grid_build, dim_block, 0, stream>>>(stripes, num_columns);
+  gpuBuildStripeDictionaries<1024><<<dim_grid_build, dim_block, 0, stream>>>(stripes, num_columns);
   return cudaSuccess;
 }
 

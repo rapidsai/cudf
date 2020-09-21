@@ -14,29 +14,16 @@
  * limitations under the License.
  */
 
-/**
- * @file json.hpp
- * @brief cuDF-IO reader classes API
- */
-
 #pragma once
 
-#include <cudf/io/json.hpp>
-
-// Forward declarations
-namespace arrow {
-namespace io {
-class RandomAccessFile;
-}
-}  // namespace arrow
+#include <cudf/io/csv.hpp>
 
 namespace cudf {
 namespace io {
 namespace detail {
-namespace json {
-
+namespace csv {
 /**
- * @brief Class to read JSON dataset data into columns.
+ * @brief Class to read CSV dataset data into columns.
  */
 class reader {
  private:
@@ -52,7 +39,7 @@ class reader {
    * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::vector<std::string> const &filepaths,
-                  json_reader_options const &options,
+                  csv_reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -63,7 +50,7 @@ class reader {
    * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
-                  json_reader_options const &options,
+                  csv_reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -71,16 +58,55 @@ class reader {
    */
   ~reader();
 
-  /*
-   * @brief Reads and returns the entire data set.
+  /**
+   * @brief Reads the entire dataset.
    *
-   * @param[in] options Settings for controlling reading behavior
-   * @return cudf::table object that contains the array of cudf::column.
+   * @param stream CUDA stream used for device memory operations and kernel launches.
+   *
+   * @return The set of columns along with table metadata
    */
-  table_with_metadata read(json_reader_options const &options, cudaStream_t stream = 0);
+  table_with_metadata read(cudaStream_t stream = 0);
 };
 
-}  // namespace json
+class writer {
+ public:
+  class impl;
+
+ private:
+  std::unique_ptr<impl> _impl;
+
+ public:
+  /**
+   * @brief Constructor for output to a file.
+   *
+   * @param sinkp The data sink to write the data to
+   * @param options Settings for controlling writing behavior
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  writer(std::unique_ptr<cudf::io::data_sink> sinkp,
+         csv_writer_options const &options,
+         rmm::mr::device_memory_resource *mr =
+           rmm::mr::get_current_device_resource());  // cannot provide definition here (because
+                                                     // _impl is incomplete, hence unique_ptr has
+                                                     // not enough sizeof() info)
+
+  /**
+   * @brief Destructor explicitly-declared to avoid inlined in header
+   */
+  ~writer();
+
+  /**
+   * @brief Writes the entire dataset.
+   *
+   * @param table Set of columns to output
+   * @param metadata Table metadata and column names
+   * @param stream CUDA stream used for device memory operations and kernel launches.
+   */
+  void write(table_view const &table,
+             const table_metadata *metadata = nullptr,
+             cudaStream_t stream            = 0);
+};
+}  // namespace csv
 }  // namespace detail
 }  // namespace io
 }  // namespace cudf

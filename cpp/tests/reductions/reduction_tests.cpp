@@ -992,4 +992,63 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSum)
   // EXPECT_EQ(result_scalar->value(), TEN);
 }
 
+TYPED_TEST(ReductionTest, NthElement)
+{
+  using T = TypeParam;
+  std::vector<int> int_values(4000);
+  std::iota(int_values.begin(), int_values.end(), 0);
+  std::vector<bool> host_bools(int_values.size());
+  auto valid_condition = [](auto i) { return (i % 3 and i % 7); };
+  std::transform(int_values.begin(), int_values.end(), host_bools.begin(), valid_condition);
+
+  cudf::size_type valid_count = std::count(host_bools.begin(), host_bools.end(), true);
+  std::vector<int> int_values_valid(valid_count);
+  std::copy_if(int_values.begin(), int_values.end(), int_values_valid.begin(), valid_condition);
+
+  std::vector<T> v           = convert_values<T>(int_values);
+  std::vector<T> v_valid     = convert_values<T>(int_values_valid);
+  cudf::size_type input_size = v.size();
+
+  auto mod = [](int a, int b) { return (a % b + b) % b; };
+  cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
+  cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
+  // without nulls
+  for (cudf::size_type n :
+       {-input_size, -input_size / 2, -2, -1, 0, 1, 2, input_size / 2, input_size - 1}) {
+    T expected_value_nonull = v[mod(n, v.size())];
+    this->reduction_test(col,
+                         expected_value_nonull,
+                         true,
+                         cudf::make_nth_element_aggregation(n, cudf::null_policy::INCLUDE));
+    this->reduction_test(col,
+                         expected_value_nonull,
+                         true,
+                         cudf::make_nth_element_aggregation(n, cudf::null_policy::EXCLUDE));
+    this->reduction_test(col_nulls,
+                         expected_value_nonull,
+                         true,
+                         cudf::make_nth_element_aggregation(n, cudf::null_policy::INCLUDE));
+  }
+  // valid only
+  for (cudf::size_type n :
+       {-valid_count, -valid_count / 2, -2, -1, 0, 1, 2, valid_count / 2, valid_count - 1}) {
+    T expected_value_null = v_valid[mod(n, v_valid.size())];
+    this->reduction_test(col_nulls,
+                         expected_value_null,
+                         true,
+                         cudf::make_nth_element_aggregation(n, cudf::null_policy::EXCLUDE));
+  }
+  // error cases
+  for (cudf::size_type n : {-input_size - 1, input_size}) {
+    this->reduction_test(
+      col, T{}, false, cudf::make_nth_element_aggregation(n, cudf::null_policy::INCLUDE));
+    this->reduction_test(
+      col_nulls, T{}, false, cudf::make_nth_element_aggregation(n, cudf::null_policy::INCLUDE));
+    this->reduction_test(
+      col, T{}, false, cudf::make_nth_element_aggregation(n, cudf::null_policy::EXCLUDE));
+    this->reduction_test(
+      col_nulls, T{}, false, cudf::make_nth_element_aggregation(n, cudf::null_policy::EXCLUDE));
+  }
+}
+
 CUDF_TEST_PROGRAM_MAIN()
