@@ -142,9 +142,12 @@ gatherIntColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Stora
     s->ck.non_nulls  = nn_cnt;
     s->ck.null_count = s->group.num_rows - nn_cnt;
   }
-  vmin = warp_reduce(storage.integer_stats[threadIdx.x / 32]).Reduce(vmin, cub::Min());
-  vmax = warp_reduce(storage.integer_stats[threadIdx.x / 32]).Reduce(vmax, cub::Max());
-  vsum = warp_reduce(storage.integer_stats[threadIdx.x / 32]).Sum(vsum);
+  vmin = warp_reduce(storage.integer_stats[t / 32]).Reduce(vmin, cub::Min());
+  __syncwarp();
+  vmax = warp_reduce(storage.integer_stats[t / 32]).Reduce(vmax, cub::Max());
+  __syncwarp();
+  vsum = warp_reduce(storage.integer_stats[t / 32]).Sum(vsum);
+  __syncwarp();
   if (!(t & 0x1f)) {
     s->warp_min[t >> 5].i_val = vmin;
     s->warp_max[t >> 5].i_val = vmax;
@@ -152,18 +155,17 @@ gatherIntColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Stora
   }
   has_minmax = __syncthreads_or(vmin <= vmax);
   if (t < 32 * 1) {
-    vmin =
-      warp_reduce(storage.integer_stats[threadIdx.x / 32]).Reduce(s->warp_min[t].i_val, cub::Min());
+    vmin = warp_reduce(storage.integer_stats[t / 32]).Reduce(s->warp_min[t].i_val, cub::Min());
     if (!(t & 0x1f)) {
       s->ck.min_value.i_val = vmin;
       s->ck.has_minmax      = (has_minmax);
     }
   } else if (t < 32 * 2) {
-    vmax = warp_reduce(storage.integer_stats[threadIdx.x / 32])
-             .Reduce(s->warp_max[t & 0x1f].i_val, cub::Max());
+    vmax =
+      warp_reduce(storage.integer_stats[t / 32]).Reduce(s->warp_max[t & 0x1f].i_val, cub::Max());
     if (!(t & 0x1f)) { s->ck.max_value.i_val = vmax; }
   } else if (t < 32 * 3) {
-    vsum = warp_reduce(storage.integer_stats[threadIdx.x / 32]).Sum(s->warp_sum[t & 0x1f].i_val);
+    vsum = warp_reduce(storage.integer_stats[t / 32]).Sum(s->warp_sum[t & 0x1f].i_val);
     if (!(t & 0x1f)) {
       s->ck.sum.i_val = vsum;
       // TODO: For now, don't set the sum flag with 64-bit values so we don't have to check for
@@ -214,9 +216,12 @@ gatherFloatColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Sto
     s->ck.non_nulls  = nn_cnt;
     s->ck.null_count = s->group.num_rows - nn_cnt;
   }
-  vmin = warp_reduce(storage.float_stats[threadIdx.x / 32]).Reduce(vmin, cub::Min());
-  vmax = warp_reduce(storage.float_stats[threadIdx.x / 32]).Reduce(vmax, cub::Max());
-  vsum = warp_reduce(storage.float_stats[threadIdx.x / 32]).Sum(vsum);
+  vmin = warp_reduce(storage.float_stats[t / 32]).Reduce(vmin, cub::Min());
+  __syncwarp();
+  vmax = warp_reduce(storage.float_stats[t / 32]).Reduce(vmax, cub::Max());
+  __syncwarp();
+  vsum = warp_reduce(storage.float_stats[t / 32]).Sum(vsum);
+  __syncwarp();
   if (!(t & 0x1f)) {
     s->warp_min[t >> 5].fp_val = vmin;
     s->warp_max[t >> 5].fp_val = vmax;
@@ -224,18 +229,17 @@ gatherFloatColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Sto
   }
   has_minmax = __syncthreads_or(vmin <= vmax);
   if (t < 32 * 1) {
-    vmin =
-      warp_reduce(storage.float_stats[threadIdx.x / 32]).Reduce(s->warp_min[t].fp_val, cub::Min());
+    vmin = warp_reduce(storage.float_stats[t / 32]).Reduce(s->warp_min[t].fp_val, cub::Min());
     if (!(t & 0x1f)) {
       s->ck.min_value.fp_val = (vmin != 0.0) ? vmin : CUDART_NEG_ZERO;
       s->ck.has_minmax       = (has_minmax);
     }
   } else if (t < 32 * 2) {
-    vmax = warp_reduce(storage.float_stats[threadIdx.x / 32])
-             .Reduce(s->warp_max[t & 0x1f].fp_val, cub::Max());
+    vmax =
+      warp_reduce(storage.float_stats[t / 32]).Reduce(s->warp_max[t & 0x1f].fp_val, cub::Max());
     if (!(t & 0x1f)) { s->ck.max_value.fp_val = (vmax != 0.0) ? vmax : CUDART_ZERO; }
   } else if (t < 32 * 3) {
-    vsum = warp_reduce(storage.float_stats[threadIdx.x / 32]).Sum(s->warp_sum[t & 0x1f].fp_val);
+    vsum = warp_reduce(storage.float_stats[t / 32]).Sum(s->warp_sum[t & 0x1f].fp_val);
     if (!(t & 0x1f)) {
       s->ck.sum.fp_val = vsum;
       s->ck.has_sum    = (has_minmax);  // Implies sum is valid as well
@@ -298,7 +302,8 @@ void __device__ gatherStringColumnStats(stats_state_s *s, uint32_t t, Storage &s
   }
   minval  = WarpReduceMinString(smin, lmin);
   maxval  = WarpReduceMaxString(smax, lmax);
-  len_sum = warp_reduce(storage.string_stats[threadIdx.x / 32]).Sum(len_sum);
+  len_sum = warp_reduce(storage.string_stats[t / 32]).Sum(len_sum);
+  __syncwarp();
   if (!(t & 0x1f)) {
     s->warp_min[t >> 5].str_val.ptr    = minval.ptr;
     s->warp_min[t >> 5].str_val.length = minval.length;
@@ -322,8 +327,7 @@ void __device__ gatherStringColumnStats(stats_state_s *s, uint32_t t, Storage &s
       s->ck.max_value.str_val.length = maxval.length;
     }
   } else if (t < 32 * 3) {
-    len_sum =
-      warp_reduce(storage.string_stats[threadIdx.x / 32]).Sum(s->warp_sum[t & 0x1f].str_val.length);
+    len_sum = warp_reduce(storage.string_stats[t / 32]).Sum(s->warp_sum[t & 0x1f].str_val.length);
     if (!(t & 0x1f)) {
       s->ck.sum.i_val = len_sum;
       s->ck.has_sum   = has_minmax;
@@ -415,11 +419,17 @@ void __device__ mergeIntColumnStats(merge_state_s *s,
     null_count += ck->null_count;
   }
   auto &temp = storage.temp.int64_stats;
-  non_nulls  = cub::WarpReduce<uint32_t>(storage.temp_32[0]).Sum(non_nulls);
-  null_count = cub::WarpReduce<uint32_t>(storage.temp_32[1]).Sum(null_count);
-  vmin       = cub::WarpReduce<int64_t>(temp[0]).Reduce(vmin, cub::Min());
-  vmax       = cub::WarpReduce<int64_t>(temp[1]).Reduce(vmax, cub::Max());
-  vsum       = cub::WarpReduce<int64_t>(temp[2]).Sum(vsum);
+
+  non_nulls = cub::WarpReduce<uint32_t>(storage.temp_32[t / 32]).Sum(non_nulls);
+  vmin      = cub::WarpReduce<int64_t>(temp[t / 32]).Reduce(vmin, cub::Min());
+  __syncwarp();
+
+  null_count = cub::WarpReduce<uint32_t>(storage.temp_32[t / 32]).Sum(null_count);
+  vmax       = cub::WarpReduce<int64_t>(temp[t / 32]).Reduce(vmax, cub::Max());
+  __syncwarp();
+
+  vsum = cub::WarpReduce<int64_t>(temp[t / 32]).Sum(vsum);
+  __syncwarp();
   // Every warp leader writes the results
   if (!(t & 0x1f)) {
     s->warp_non_nulls[t >> 5] = non_nulls;
@@ -430,16 +440,16 @@ void __device__ mergeIntColumnStats(merge_state_s *s,
   }
   has_minmax = __syncthreads_or(vmin <= vmax);
   if (t < 32 * 1) {
-    vmin = cub::WarpReduce<int64_t>(temp[0]).Reduce(s->warp_min[t].i_val, cub::Min());
+    vmin = cub::WarpReduce<int64_t>(temp[t / 32]).Reduce(s->warp_min[t].i_val, cub::Min());
     if (!(t & 0x1f)) {
       s->ck.min_value.i_val = vmin;
       s->ck.has_minmax      = (has_minmax);
     }
   } else if (t < 32 * 2) {
-    vmax = cub::WarpReduce<int64_t>(temp[1]).Reduce(s->warp_max[t & 0x1f].i_val, cub::Max());
+    vmax = cub::WarpReduce<int64_t>(temp[t / 32]).Reduce(s->warp_max[t & 0x1f].i_val, cub::Max());
     if (!(t & 0x1f)) { s->ck.max_value.i_val = vmax; }
   } else if (t < 32 * 3) {
-    vsum = cub::WarpReduce<int64_t>(temp[2]).Sum(s->warp_sum[t & 0x1f].i_val);
+    vsum = cub::WarpReduce<int64_t>(temp[t / 32]).Sum(s->warp_sum[t & 0x1f].i_val);
     if (!(t & 0x1f)) {
       s->ck.sum.i_val = vsum;
       // TODO: For now, don't set the sum flag with 64-bit values so we don't have to check for
@@ -447,10 +457,10 @@ void __device__ mergeIntColumnStats(merge_state_s *s,
       s->ck.has_sum = (dtype <= dtype_int32 && has_minmax);
     }
   } else if (t < 32 * 4) {
-    non_nulls = cub::WarpReduce<uint32_t>(storage.temp_32[0]).Sum(s->warp_non_nulls[t & 0x1f]);
+    non_nulls = cub::WarpReduce<uint32_t>(storage.temp_32[t / 32]).Sum(s->warp_non_nulls[t & 0x1f]);
     if (!(t & 0x1f)) { s->ck.non_nulls = non_nulls; }
   } else if (t < 32 * 5) {
-    null_count = cub::WarpReduce<uint32_t>(storage.temp_32[1]).Sum(s->warp_nulls[t & 0x1f]);
+    null_count = cub::WarpReduce<uint32_t>(storage.temp_32[t / 32]).Sum(s->warp_nulls[t & 0x1f]);
     if (!(t & 0x1f)) { s->ck.null_count = null_count; }
   }
 }
@@ -490,11 +500,18 @@ void __device__ mergeFloatColumnStats(merge_state_s *s,
     null_count += ck->null_count;
   }
   auto &temp = storage.temp.float_stats;
-  non_nulls  = cub::WarpReduce<uint32_t>(storage.temp_32[0]).Sum(non_nulls);
-  null_count = cub::WarpReduce<uint32_t>(storage.temp_32[1]).Sum(null_count);
-  vmin       = cub::WarpReduce<double>(temp[0]).Reduce(vmin, cub::Min());
-  vmax       = cub::WarpReduce<double>(temp[1]).Reduce(vmax, cub::Max());
-  vsum       = cub::WarpReduce<double>(temp[2]).Sum(vsum);
+
+  non_nulls = cub::WarpReduce<uint32_t>(storage.temp_32[t / 32]).Sum(non_nulls);
+  vmin      = cub::WarpReduce<double>(temp[t / 32]).Reduce(vmin, cub::Min());
+  __syncwarp();
+
+  null_count = cub::WarpReduce<uint32_t>(storage.temp_32[t / 32]).Sum(null_count);
+  vmax       = cub::WarpReduce<double>(temp[t / 32]).Reduce(vmax, cub::Max());
+  __syncwarp();
+
+  vsum = cub::WarpReduce<double>(temp[t / 32]).Sum(vsum);
+  __syncwarp();
+
   // Every warp leader writes the results
   if (!(t & 0x1f)) {
     s->warp_non_nulls[t >> 5]  = non_nulls;
@@ -505,25 +522,25 @@ void __device__ mergeFloatColumnStats(merge_state_s *s,
   }
   has_minmax = __syncthreads_or(vmin <= vmax);
   if (t < 32 * 1) {
-    vmin = cub::WarpReduce<double>(temp[0]).Reduce(s->warp_min[t].fp_val, cub::Min());
+    vmin = cub::WarpReduce<double>(temp[t / 32]).Reduce(s->warp_min[t].fp_val, cub::Min());
     if (!(t & 0x1f)) {
       s->ck.min_value.fp_val = (vmin != 0.0) ? vmin : CUDART_NEG_ZERO;
       s->ck.has_minmax       = (has_minmax);
     }
   } else if (t < 32 * 2) {
-    vmax = cub::WarpReduce<double>(temp[1]).Reduce(s->warp_max[t & 0x1f].fp_val, cub::Max());
+    vmax = cub::WarpReduce<double>(temp[t / 32]).Reduce(s->warp_max[t & 0x1f].fp_val, cub::Max());
     if (!(t & 0x1f)) { s->ck.max_value.fp_val = (vmax != 0.0) ? vmax : CUDART_ZERO; }
   } else if (t < 32 * 3) {
-    vsum = cub::WarpReduce<double>(temp[2]).Sum(s->warp_sum[t & 0x1f].fp_val);
+    vsum = cub::WarpReduce<double>(temp[t / 32]).Sum(s->warp_sum[t & 0x1f].fp_val);
     if (!(t & 0x1f)) {
       s->ck.sum.fp_val = vsum;
       s->ck.has_sum    = (has_minmax);  // Implies sum is valid as well
     }
   } else if (t < 32 * 4) {
-    non_nulls = cub::WarpReduce<uint32_t>(storage.temp_32[0]).Sum(s->warp_non_nulls[t & 0x1f]);
+    non_nulls = cub::WarpReduce<uint32_t>(storage.temp_32[t / 32]).Sum(s->warp_non_nulls[t & 0x1f]);
     if (!(t & 0x1f)) { s->ck.non_nulls = non_nulls; }
   } else if (t < 32 * 5) {
-    null_count = cub::WarpReduce<uint32_t>(storage.temp_32[1]).Sum(s->warp_nulls[t & 0x1f]);
+    null_count = cub::WarpReduce<uint32_t>(storage.temp_32[t / 32]).Sum(s->warp_nulls[t & 0x1f]);
     if (!(t & 0x1f)) { s->ck.null_count = null_count; }
   }
 }
@@ -573,11 +590,16 @@ void __device__ mergeStringColumnStats(merge_state_s *s,
     non_nulls += ck->non_nulls;
     null_count += ck->null_count;
   }
-  non_nulls  = cub::WarpReduce<uint32_t>(storage.temp_32[0]).Sum(non_nulls);
-  null_count = cub::WarpReduce<uint32_t>(storage.temp_32[1]).Sum(null_count);
-  minval     = WarpReduceMinString(smin, lmin);
-  maxval     = WarpReduceMaxString(smax, lmax);
-  len_sum    = cub::WarpReduce<uint32_t>(storage.temp.uint32_stats).Sum(len_sum);
+
+  minval    = WarpReduceMinString(smin, lmin);
+  maxval    = WarpReduceMaxString(smax, lmax);
+  non_nulls = cub::WarpReduce<uint32_t>(storage.temp_32[t / 32]).Sum(non_nulls);
+  __syncwarp();
+
+  null_count = cub::WarpReduce<uint32_t>(storage.temp_32[t / 32]).Sum(null_count);
+  len_sum    = cub::WarpReduce<uint32_t>(storage.temp.uint32_stats[t / 32]).Sum(len_sum);
+  __syncwarp();
+
   if (!(t & 0x1f)) {
     s->warp_non_nulls[t >> 5]          = non_nulls;
     s->warp_nulls[t >> 5]              = null_count;
@@ -603,17 +625,17 @@ void __device__ mergeStringColumnStats(merge_state_s *s,
       s->ck.max_value.str_val.length = maxval.length;
     }
   } else if (t < 32 * 3) {
-    len_sum = cub::WarpReduce<uint32_t>(storage.temp.uint32_stats)
+    len_sum = cub::WarpReduce<uint32_t>(storage.temp.uint32_stats[t / 32])
                 .Sum(s->warp_sum[t & 0x1f].str_val.length);
     if (!(t & 0x1f)) {
       s->ck.sum.i_val = len_sum;
       s->ck.has_sum   = has_minmax;
     }
   } else if (t < 32 * 4) {
-    non_nulls = cub::WarpReduce<uint32_t>(storage.temp_32[0]).Sum(s->warp_non_nulls[t & 0x1f]);
+    non_nulls = cub::WarpReduce<uint32_t>(storage.temp_32[t / 32]).Sum(s->warp_non_nulls[t & 0x1f]);
     if (!(t & 0x1f)) { s->ck.non_nulls = non_nulls; }
   } else if (t < 32 * 5) {
-    null_count = cub::WarpReduce<uint32_t>(storage.temp_32[1]).Sum(s->warp_nulls[t & 0x1f]);
+    null_count = cub::WarpReduce<uint32_t>(storage.temp_32[t / 32]).Sum(s->warp_nulls[t & 0x1f]);
     if (!(t & 0x1f)) { s->ck.null_count = null_count; }
   }
 }
@@ -636,11 +658,11 @@ __global__ void __launch_bounds__(block_size, 1)
   __shared__ __align__(8) merge_state_s state_g;
 
   __shared__ struct {
-    typename cub::WarpReduce<uint32_t>::TempStorage temp_32[2];
+    typename cub::WarpReduce<uint32_t>::TempStorage temp_32[block_size / 32];
     union {
-      typename cub::WarpReduce<int64_t>::TempStorage int64_stats[3];
-      typename cub::WarpReduce<double>::TempStorage float_stats[3];
-      typename cub::WarpReduce<uint32_t>::TempStorage uint32_stats;
+      typename cub::WarpReduce<int64_t>::TempStorage int64_stats[block_size / 32];
+      typename cub::WarpReduce<double>::TempStorage float_stats[block_size / 32];
+      typename cub::WarpReduce<uint32_t>::TempStorage uint32_stats[block_size / 32];
     } temp;
   } storage;
 
