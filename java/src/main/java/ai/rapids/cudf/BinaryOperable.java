@@ -354,4 +354,85 @@ public interface BinaryOperable {
   default ColumnVector or(BinaryOperable rhs) {
     return or(rhs, implicitConversion(this, rhs));
   }
+
+  /**
+   * Bitwise left shifts the values of this vector by shiftBy.
+   *
+   * If "this" and shiftBy are both vectors then, this[i] << shiftBy[i]
+   * If "this" is a scalar and shiftBy is a vector then returns a vector of size shiftBy.rows
+   *    with the scalar << shiftBy[i]
+   * If "this" is a vector and shiftBy is a scalar then returns a vector of size this.rows
+   *    with this[i] << shiftBy
+   *
+   */
+  default ColumnVector shiftLeft(BinaryOperable shiftBy, DType outType) {
+    return binaryOp(BinaryOp.SHIFT_LEFT, shiftBy, outType);
+  }
+
+  /**
+   * Bitwise left shift the values of this vector by the shiftBy.
+   *
+   * If "this" and shiftBy are both vectors then, this[i] << shiftBy[i]
+   * If "this" is a scalar and shiftBy is a vector then returns a vector of size shiftBy.rows
+   *    with the scalar << shiftBy[i]
+   * If "this" is a vector and shiftBy is a scalar then returns a vector of size this.rows
+   *    with this[i] << shiftBy
+   */
+  default ColumnVector shiftLeft(BinaryOperable shiftBy) {
+    return shiftLeft(shiftBy, implicitConversion(this, shiftBy));
+  }
+
+  /**
+   * Bitwise right shift this vector by the shiftBy.
+   *
+   * If "this" and shiftBy are both vectors then, this[i] >> shiftBy[i]
+   * If "this" is a scalar and shiftBy is a vector then returns a vector of size shiftBy.rows
+   *    with the scalar >> shiftBy[i]
+   * If "this" is a vector and shiftBy is a scalar then returns a vector of size this.rows
+   *    with this[i] >> shiftBy
+   */
+  default ColumnVector shiftRight(BinaryOperable shiftBy, DType outType) {
+    return binaryOp(BinaryOp.SHIFT_RIGHT, shiftBy, outType);
+  }
+
+  /**
+   * Bitwise right shift this vector by the shiftBy.
+   *
+   * If "this" and shiftBy are both vectors then, this[i] >> shiftBy[i]
+   * If "this" is a scalar and shiftBy is a vector then returns a vector of size shiftBy.rows
+   *    with the scalar >> shiftBy[i]
+   * If "this" is a vector and shiftBy is a scalar then returns a vector of size this.rows
+   *    with this[i] >> shiftBy
+   */
+  default ColumnVector shiftRight(BinaryOperable shiftBy) {
+    return shiftRight(shiftBy, implicitConversion(this, shiftBy));
+  }
+
+  /**
+   * This method bitwise right shifts the values of this vector by the shiftBy.
+   * This method always fills 0 irrespective of the sign of the number.
+   *
+   * If "this" and shiftBy are both vectors then, this[i] >>> shiftBy[i]
+   * If "this" is a scalar and shiftBy is a vector then returns a vector of size shiftBy.rows
+   *    with the scalar >>> shiftBy[i]
+   * If "this" is a vector and shiftBy is a scalar then returns a vector of size this.rows
+   *    with this[i] >>> shiftBy
+   */
+  default ColumnVector shiftRightUnsigned(BinaryOperable shiftBy, DType outType) {
+    return binaryOp(BinaryOp.SHIFT_RIGHT_UNSIGNED, shiftBy, outType);
+  }
+
+  /**
+   * This method bitwise right shifts the values of this vector by the shiftBy.
+   * This method always fills 0 irrespective of the sign of the number.
+   *
+   * If "this" and shiftBy are both vectors then, this[i] >>> shiftBy[i]
+   * If "this" is a scalar and shiftBy is a vector then returns a vector of size shiftBy.rows
+   *    with the scalar >>> shiftBy[i]
+   * If "this" is a vector and shiftBy is a scalar then returns a vector of size this.rows
+   *    with this[i] >>> shiftBy
+   */
+  default ColumnVector shiftRightUnsigned(BinaryOperable shiftBy) {
+    return shiftRightUnsigned(shiftBy, implicitConversion(this, shiftBy));
+  }
 }

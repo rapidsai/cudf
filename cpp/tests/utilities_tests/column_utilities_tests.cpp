@@ -165,7 +165,9 @@ TEST_F(ColumnUtilitiesStringsTest, StringsToHostAllNulls)
   cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
         thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
   auto host_data = cudf::test::to_host<std::string>(strings);
-  EXPECT_TRUE( host_data.first.empty() );
+  auto results = host_data.first;
+  EXPECT_EQ( 3, host_data.first.size() );
+  EXPECT_TRUE( std::all_of( results.begin(), results.end(), [] (auto s) { return s.empty();} ));
 }
 
 TYPED_TEST(ColumnUtilitiesTestNumeric, PrintColumnNumeric) {

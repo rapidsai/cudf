@@ -14,17 +14,19 @@
  * limitations under the License.
  */
 
-#include <memory>
-#include <vector>
 
+#include <quantiles/quantiles_util.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 
-#include <quantiles/quantiles_util.hpp>
+
+#include <memory>
+#include <vector>
 
 namespace cudf {
 namespace experimental {
@@ -56,8 +58,6 @@ quantiles(table_view const& input,
                           quantile_idx_iter,
                           quantile_idx_iter + q.size(),
                           false,
-                          false,
-                          false,
                           mr);
 }
 
@@ -72,6 +72,7 @@ quantiles(table_view const& input,
           std::vector<null_order> const& null_precedence,
           rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     if (q.size() == 0) {
         return empty_like(input);
     }

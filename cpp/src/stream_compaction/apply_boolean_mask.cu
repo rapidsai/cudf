@@ -23,6 +23,9 @@
 #include <cudf/detail/copy_if.cuh>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/detail/stream_compaction.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
+
+
 #include <algorithm>
 
 namespace {
@@ -102,7 +105,8 @@ std::unique_ptr<experimental::table>
     apply_boolean_mask(table_view const& input,
                        column_view const& boolean_mask,
                        rmm::mr::device_memory_resource *mr) {
-    return detail::apply_boolean_mask(input, boolean_mask, mr);
+  CUDF_FUNC_RANGE();
+  return detail::apply_boolean_mask(input, boolean_mask, mr);
 }
 } // namespace experimental
 }  // namespace cudf

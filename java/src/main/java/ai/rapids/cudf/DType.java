@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -74,7 +74,11 @@ public enum DType {
     return TIME_RESOLUTION.contains(this);
   }
 
-  static DType fromNative(int nativeId) {
+  public int getNativeId() {
+    return nativeId;
+  }
+
+  public static DType fromNative(int nativeId) {
     for (DType type : D_TYPES) {
       if (type.nativeId == nativeId) {
         return type;

@@ -71,8 +71,10 @@ void gpu_rolling_new(cudf::size_type nrows,
     cudf::size_type following_window = get_window(following_window_begin, i);
 
     // compute bounds
-    cudf::size_type start_index = max(0, i - preceding_window);
-    cudf::size_type end_index = min(nrows, i + following_window + 1);
+    cudf::size_type start = min(nrows, max(0, i - preceding_window + 1));
+    cudf::size_type end = min(nrows, max(0, i + following_window + 1));
+    cudf::size_type start_index = min(start, end);
+    cudf::size_type end_index = max(start, end);
 
     // aggregate
     // TODO: We should explore using shared memory to avoid redundant loads.
@@ -84,13 +86,13 @@ void gpu_rolling_new(cudf::size_type nrows,
     // check if we have enough input samples
     bool output_is_valid = (count >= min_periods);
 
+    // set the mask
+    const unsigned int result_mask = __ballot_sync(active_threads, output_is_valid);
+
     // store the output value, one per thread
     if (output_is_valid) {
       out_col[i] = val;
     }
-
-    // set the mask
-    const unsigned int result_mask = __ballot_sync(active_threads, output_is_valid);
 
     // only one thread writes the mask
     if (0 == cudf::intra_word_index(i)) {

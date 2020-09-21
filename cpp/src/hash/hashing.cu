@@ -17,12 +17,13 @@
 #include <cudf/copying.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/table/table_device_view.cuh>
-#include <cudf/utilities/nvtx_utils.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/table/row_operators.cuh>
-#include <cudf/detail/scatter.hpp>
 #include <cudf/detail/scatter.cuh>
+#include <cudf/detail/gather.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 #include <thrust/tabulate.h>
 
@@ -562,7 +563,8 @@ hash_partition_table(table_view const& input,
           grid_size, stream);
 
       // Handle bitmask using gather to take advantage of ballot_sync
-      experimental::detail::gather_bitmask(input, gather_map.begin(), output_cols, mr, stream);
+      experimental::detail::gather_bitmask(input, gather_map.begin(), output_cols,
+        experimental::detail::gather_bitmask_op::DONT_CHECK, mr, stream);
     }
 
     auto output {std::make_unique<experimental::table>(std::move(output_cols))};
@@ -585,12 +587,6 @@ hash_partition_table(table_view const& input,
   }
 }
 
-// Add a wrapper around nvtx to automatically pop the range when the function scope ends
-struct nvtx_raii {
-  nvtx_raii(char const* name, nvtx::color color) { nvtx::range_push(name, color); }
-  ~nvtx_raii() { nvtx::range_pop(); }
-};
-
 }  // namespace
 
 namespace detail {
@@ -602,8 +598,7 @@ hash_partition(table_view const& input,
                rmm::mr::device_memory_resource* mr,
                cudaStream_t stream)
 {
-  // Push/pop nvtx range around the scope of this function
-  nvtx_raii("CUDF_HASH_PARTITION", nvtx::PARTITION_COLOR);
+  CUDF_FUNC_RANGE();
 
   auto table_to_hash = input.select(columns_to_hash);
 
@@ -678,6 +673,7 @@ hash_partition(table_view const& input,
                int num_partitions,
                rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::hash_partition(input, columns_to_hash, num_partitions, mr);
 }
 
@@ -685,6 +681,7 @@ std::unique_ptr<column> hash(table_view const& input,
                              std::vector<uint32_t> const& initial_hash,
                              rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::hash(input, initial_hash, mr);
 }
 

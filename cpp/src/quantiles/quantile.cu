@@ -14,10 +14,8 @@
  * limitations under the License.
  */
 
-#include <memory>
-#include <thrust/functional.h>
-#include <thrust/iterator/counting_iterator.h>
 
+#include <quantiles/quantiles_util.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/table/row_operators.cuh>
@@ -25,8 +23,12 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 
-#include <quantiles/quantiles_util.hpp>
+
+#include <memory>
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
 
 
 namespace cudf {
@@ -104,8 +106,9 @@ quantile(column_view const& input,
          interpolation interp,
          order_info column_order)
 {
-        return type_dispatcher(input.type(), detail::quantile_functor{},
-                               input, q, interp, column_order);
+  CUDF_FUNC_RANGE();
+  return type_dispatcher(input.type(), detail::quantile_functor{}, input, q,
+                         interp, column_order);
 }
 
 } // namespace experimental

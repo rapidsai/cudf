@@ -347,3 +347,13 @@ TYPED_TEST(DLPackNumericTests, FromDlpackCpu)
   auto result = cudf::from_dlpack(&tensor);
   expect_tables_equal(expected, result->view());
 }
+
+TYPED_TEST(DLPackNumericTests, FromDlpackEmpty1D)
+{
+  // Use to_dlpack to generate an input tensor
+  cudf::table_view input(std::vector<cudf::column_view>{});
+  unique_managed_tensor tensor(cudf::to_dlpack(input));
+
+  // Verify that from_dlpack(to_dlpack(input)) == input
+  EXPECT_THROW(cudf::from_dlpack(tensor.get()), cudf::logic_error);
+}

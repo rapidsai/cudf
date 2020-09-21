@@ -19,6 +19,7 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 
@@ -36,10 +37,12 @@ auto is_sorted(
 {
     cudaStream_t stream = 0;
     auto in_d = table_device_view::create(in);
+    rmm::device_vector<order> d_column_order(column_order);
+    rmm::device_vector<null_order> const d_null_precedence = (has_nulls) ? rmm::device_vector<null_order>{null_precedence} : rmm::device_vector<null_order>{};
     auto ineq_op = row_lexicographic_comparator<has_nulls>(
         *in_d, *in_d,
-        rmm::device_vector<order>(column_order).data().get(),
-        rmm::device_vector<null_order>(null_precedence).data().get());
+        d_column_order.data().get(),
+        d_null_precedence.data().get());
 
     auto sorted = thrust::is_sorted(rmm::exec_policy(stream)->on(stream),
                                     thrust::make_counting_iterator(0),
@@ -55,6 +58,7 @@ bool is_sorted(cudf::table_view const& in,
                std::vector<order> const& column_order,
                std::vector<null_order> const& null_precedence)
 {
+    CUDF_FUNC_RANGE();
     if (in.num_columns() == 0 || in.num_rows() == 0) {
         return true;
     }

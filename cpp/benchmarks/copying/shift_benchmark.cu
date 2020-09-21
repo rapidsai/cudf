@@ -64,7 +64,7 @@ static void BM_shift(benchmark::State& state)
     auto idx_begin = thrust::make_counting_iterator<cudf::size_type>(0);
     auto idx_end   = thrust::make_counting_iterator<cudf::size_type>(size);
 
-    auto input_a = use_validity
+    auto input = use_validity
         ? cudf::test::fixed_width_column_wrapper<int> (
             idx_begin,
             idx_end,
@@ -75,18 +75,14 @@ static void BM_shift(benchmark::State& state)
             idx_begin,
             idx_end);
 
-    cudf::table_view input{ { input_a } };
-
     auto fill = use_validity
         ? make_scalar<int>()
         : make_scalar<int>(777);
 
-    std::vector<std::reference_wrapper<cudf::scalar>> fills{ *fill };
-
     for (auto _ : state)
     {
         cuda_event_timer raii(state, true);
-        auto output = cudf::experimental::shift(input, offset, fills);
+        auto output = cudf::experimental::shift(input, offset, *fill);
     }
 }
 

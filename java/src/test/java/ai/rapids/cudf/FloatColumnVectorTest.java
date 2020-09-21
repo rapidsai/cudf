@@ -18,6 +18,7 @@
 
 package ai.rapids.cudf;
 
+import ai.rapids.cudf.HostColumnVector.Builder;
 import org.junit.jupiter.api.Test;
 
 import java.util.Random;
@@ -39,7 +40,7 @@ public class FloatColumnVectorTest extends CudfTestBase {
 
   @Test
   public void testArrayAllocation() {
-    try (ColumnVector floatColumnVector = ColumnVector.fromFloats(2.1f, 3.02f, 5.003f)) {
+    try (HostColumnVector floatColumnVector = HostColumnVector.fromFloats(2.1f, 3.02f, 5.003f)) {
       assertFalse(floatColumnVector.hasNulls());
       assertEquals(floatColumnVector.getFloat(0), 2.1, 0.01);
       assertEquals(floatColumnVector.getFloat(1), 3.02, 0.01);
@@ -49,7 +50,7 @@ public class FloatColumnVectorTest extends CudfTestBase {
 
   @Test
   public void testUpperIndexOutOfBoundsException() {
-    try (ColumnVector floatColumnVector = ColumnVector.fromFloats(2.1f, 3.02f, 5.003f)) {
+    try (HostColumnVector floatColumnVector = HostColumnVector.fromFloats(2.1f, 3.02f, 5.003f)) {
       assertThrows(AssertionError.class, () -> floatColumnVector.getFloat(3));
       assertFalse(floatColumnVector.hasNulls());
     }
@@ -57,7 +58,7 @@ public class FloatColumnVectorTest extends CudfTestBase {
 
   @Test
   public void testLowerIndexOutOfBoundsException() {
-    try (ColumnVector floatColumnVector = ColumnVector.fromFloats(2.1f, 3.02f, 5.003f)) {
+    try (HostColumnVector floatColumnVector = HostColumnVector.fromFloats(2.1f, 3.02f, 5.003f)) {
       assertFalse(floatColumnVector.hasNulls());
       assertThrows(AssertionError.class, () -> floatColumnVector.getFloat(-1));
     }
@@ -65,7 +66,7 @@ public class FloatColumnVectorTest extends CudfTestBase {
 
   @Test
   public void testAddingNullValues() {
-    try (ColumnVector cv = ColumnVector.fromBoxedFloats(
+    try (HostColumnVector cv = HostColumnVector.fromBoxedFloats(
         new Float[]{2f, 3f, 4f, 5f, 6f, 7f, null, null})) {
       assertTrue(cv.hasNulls());
       assertEquals(2, cv.getNullCount());
@@ -79,7 +80,7 @@ public class FloatColumnVectorTest extends CudfTestBase {
 
   @Test
   public void testOverrunningTheBuffer() {
-    try (ColumnVector.Builder builder = ColumnVector.builder(DType.FLOAT32, 3)) {
+    try (Builder builder = HostColumnVector.builder(DType.FLOAT32, 3)) {
       assertThrows(AssertionError.class,
           () -> builder.append(2.1f).appendNull().appendArray(5.003f, 4.0f).build());
     }
@@ -89,10 +90,10 @@ public class FloatColumnVectorTest extends CudfTestBase {
   public void testCastToFloat() {
     try (ColumnVector doubleColumnVector = ColumnVector.fromDoubles(new double[]{4.3, 3.8, 8});
          ColumnVector shortColumnVector = ColumnVector.fromShorts(new short[]{100});
-         ColumnVector floatColumnVector1 = doubleColumnVector.asFloats();
-         ColumnVector floatColumnVector2 = shortColumnVector.asFloats()) {
-      floatColumnVector1.ensureOnHost();
-      floatColumnVector2.ensureOnHost();
+         ColumnVector tmp1 = doubleColumnVector.asFloats();
+         HostColumnVector floatColumnVector1 = tmp1.copyToHost();
+         ColumnVector tmp2 = shortColumnVector.asFloats();
+         HostColumnVector floatColumnVector2 = tmp2.copyToHost()) {
       assertEquals(4.3, floatColumnVector1.getFloat(0), 0.001);
       assertEquals(3.8, floatColumnVector1.getFloat(1), 0.001);
       assertEquals(8, floatColumnVector1.getFloat(2));
@@ -107,8 +108,8 @@ public class FloatColumnVectorTest extends CudfTestBase {
       for (int dstPrefilledSize = 0; dstPrefilledSize < dstSize; dstPrefilledSize++) {
         final int srcSize = dstSize - dstPrefilledSize;
         for (int sizeOfDataNotToAdd = 0; sizeOfDataNotToAdd <= dstPrefilledSize; sizeOfDataNotToAdd++) {
-          try (ColumnVector.Builder dst = ColumnVector.builder(DType.FLOAT32, dstSize);
-               ColumnVector src = ColumnVector.buildOnHost(DType.FLOAT32, srcSize, (b) -> {
+          try (Builder dst = HostColumnVector.builder(DType.FLOAT32, dstSize);
+               HostColumnVector src = HostColumnVector.build(DType.FLOAT32, srcSize, (b) -> {
                  for (int i = 0; i < srcSize; i++) {
                    if (random.nextBoolean()) {
                      b.appendNull();
@@ -117,7 +118,7 @@ public class FloatColumnVectorTest extends CudfTestBase {
                    }
                  }
                });
-               ColumnVector.Builder gtBuilder = ColumnVector.builder(DType.FLOAT32,
+               Builder gtBuilder = HostColumnVector.builder(DType.FLOAT32,
                    dstPrefilledSize)) {
             assertEquals(dstSize, srcSize + dstPrefilledSize);
             //add the first half of the prefilled list
@@ -133,8 +134,8 @@ public class FloatColumnVectorTest extends CudfTestBase {
             }
             // append the src vector
             dst.append(src);
-            try (ColumnVector dstVector = dst.buildOnHost();
-                 ColumnVector gt = gtBuilder.buildOnHost()) {
+            try (HostColumnVector dstVector = dst.build();
+                 HostColumnVector gt = gtBuilder.build()) {
               for (int i = 0; i < dstPrefilledSize - sizeOfDataNotToAdd; i++) {
                 assertEquals(gt.isNull(i), dstVector.isNull(i));
                 if (!gt.isNull(i)) {

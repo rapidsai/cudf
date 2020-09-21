@@ -63,3 +63,18 @@ def test_column_offset_and_size(pandas_input, offset, size):
     expect = pandas_input.iloc[slicer].reset_index(drop=True)
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        np.array([[23, 68, 2, 38, 9, 83, 72, 6, 98, 30]]),
+        np.array([[1, 2], [7, 6]]),
+    ],
+)
+def test_column_series_multi_dim(data):
+    with pytest.raises(ValueError):
+        cudf.Series(data)
+
+    with pytest.raises(ValueError):
+        cudf.core.column.as_column(data)

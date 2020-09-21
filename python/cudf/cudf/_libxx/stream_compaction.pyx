@@ -1,15 +1,20 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
-
 import pandas as pd
 
-from cudf._libxx.column cimport *
-from cudf._libxx.table cimport *
-from cudf._libxx.includes.stream_compaction cimport (
+from libcpp.memory cimport unique_ptr
+from libcpp.vector cimport vector
+from libcpp cimport bool
+
+from cudf._libxx.column cimport Column
+from cudf._libxx.table cimport Table
+from cudf._libxx.move cimport move
+
+from cudf._libxx.cpp.types cimport size_type
+from cudf._libxx.cpp.table.table cimport table
+from cudf._libxx.cpp.table.table_view cimport table_view
+from cudf._libxx.cpp.column.column_view cimport column_view
+from cudf._libxx.cpp.stream_compaction cimport (
     duplicate_keep_option,
     drop_nulls as cpp_drop_nulls,
     apply_boolean_mask as cpp_apply_boolean_mask,
@@ -61,10 +66,12 @@ def drop_nulls(Table source_table, how="any", keys=None, thresh=None):
     cdef table_view source_table_view = source_table.view()
 
     with nogil:
-        c_result = cpp_drop_nulls(
-            source_table_view,
-            cpp_keys,
-            c_keep_threshold
+        c_result = move(
+            cpp_drop_nulls(
+                source_table_view,
+                cpp_keys,
+                c_keep_threshold
+            )
         )
 
     return Table.from_unique_ptr(
@@ -97,9 +104,11 @@ def apply_boolean_mask(Table source_table, Column boolean_mask):
     cdef column_view boolean_mask_view = boolean_mask.view()
 
     with nogil:
-        c_result = cpp_apply_boolean_mask(
-            source_table_view,
-            boolean_mask_view
+        c_result = move(
+            cpp_apply_boolean_mask(
+                source_table_view,
+                boolean_mask_view
+            )
         )
 
     return Table.from_unique_ptr(
@@ -159,11 +168,13 @@ def drop_duplicates(Table source_table, keys=None,
     cdef table_view source_table_view = source_table.view()
 
     with nogil:
-        c_result = cpp_drop_duplicates(
-            source_table_view,
-            cpp_keys,
-            cpp_keep_option,
-            cpp_nulls_are_equal
+        c_result = move(
+            cpp_drop_duplicates(
+                source_table_view,
+                cpp_keys,
+                cpp_keep_option,
+                cpp_nulls_are_equal
+            )
         )
 
     return Table.from_unique_ptr(
@@ -197,8 +208,10 @@ def unique_count(Column source_column, ignore_nulls=True, nan_as_null=False):
 
     cdef column_view source_column_view = source_column.view()
     with nogil:
-        count = cpp_unique_count(source_column_view,
-                                 cpp_ignore_nulls,
-                                 cpp_nan_as_null)
+        count = cpp_unique_count(
+            source_column_view,
+            cpp_ignore_nulls,
+            cpp_nan_as_null
+        )
 
     return count

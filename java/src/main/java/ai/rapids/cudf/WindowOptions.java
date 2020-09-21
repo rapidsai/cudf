@@ -22,11 +22,16 @@ package ai.rapids.cudf;
   * Options for rolling windows.
  */
 public class WindowOptions {
+
+  enum FrameType {ROWS, RANGE}
+
   private final int preceding;
   private final int minPeriods;
   private final int following;
   private final ColumnVector precedingCol;
   private final ColumnVector followingCol;
+  private final int timestampColumnIndex;
+  private FrameType frameType = FrameType.ROWS;
 
   private WindowOptions(Builder builder) {
     this.preceding = builder.preceding;
@@ -34,6 +39,8 @@ public class WindowOptions {
     this.following = builder.following;
     this.precedingCol = builder.precedingCol;
     this.followingCol = builder.followingCol;
+    this.timestampColumnIndex = builder.timestampColumnIndex;
+    this.frameType = timestampColumnIndex == -1? FrameType.ROWS : FrameType.RANGE; 
   }
 
   public static Builder builder(){
@@ -50,6 +57,10 @@ public class WindowOptions {
 
   ColumnVector getFollowingCol() { return this.followingCol; }
 
+  int getTimestampColumnIndex() { return this.timestampColumnIndex; }
+
+  FrameType getFrameType() { return frameType; }
+
   public static class Builder {
     private int minPeriods = 1;
     private int preceding = 0;
@@ -57,6 +68,7 @@ public class WindowOptions {
     boolean staticSet = false;
     private ColumnVector precedingCol = null;
     private ColumnVector followingCol = null;
+    private int timestampColumnIndex = -1;
 
     /**
      * Set the minimum number of observation required to evaluate an element.  If there are not
@@ -82,6 +94,11 @@ public class WindowOptions {
       assert (followingCol != null && followingCol.getNullCount() == 0);
       this.precedingCol = precedingCol;
       this.followingCol = followingCol;
+      return this;
+    }
+
+    public Builder timestampColumnIndex(int index) {
+      this.timestampColumnIndex = index;
       return this;
     }
 

@@ -340,8 +340,8 @@ table_with_metadata reader::impl::read(size_t range_offset,
   std::vector<column_buffer> out_buffers;
   for (int col = 0, active_col = 0; col < num_actual_cols; ++col) {
     if (h_column_flags[col] & column_parse::enabled) {
-      out_buffers.emplace_back(column_types[active_col], num_records, stream,
-                               mr_);
+      out_buffers.emplace_back(column_types[active_col], num_records, true,
+                               stream, mr_);
       metadata.column_names.emplace_back(col_names[col]);
       active_col++;
     }

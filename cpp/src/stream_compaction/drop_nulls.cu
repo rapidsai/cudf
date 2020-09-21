@@ -20,6 +20,7 @@
 #include <cudf/stream_compaction.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/copy_if.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 namespace {
 
@@ -93,6 +94,7 @@ std::unique_ptr<experimental::table>
              std::vector<size_type> const& keys,
              cudf::size_type keep_threshold,
              rmm::mr::device_memory_resource *mr) {
+    CUDF_FUNC_RANGE();
     return cudf::experimental::detail::drop_nulls(input, keys, keep_threshold, mr);
 }
 /*
@@ -103,6 +105,7 @@ std::unique_ptr<experimental::table>
              std::vector<size_type> const& keys,
              rmm::mr::device_memory_resource *mr)
 {
+    CUDF_FUNC_RANGE();
     return cudf::experimental::detail::drop_nulls(input, keys, keys.size(), mr);
 }
 

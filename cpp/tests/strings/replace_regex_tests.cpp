@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,9 +19,8 @@
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/column_utilities.hpp>
-#include "./utilities.h"
+#include <tests/strings/utilities.h>
 
-#include <gmock/gmock.h>
 #include <vector>
 
 
@@ -110,6 +109,22 @@ TEST_F(StringsReplaceTests, ReplaceBackrefsRegexTest)
     auto results = cudf::strings::replace_with_backrefs(strings_view,pattern,repl_template);
     cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
         thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
+    cudf::test::expect_columns_equal(*results,expected);
+}
+
+TEST_F(StringsReplaceTests, ReplaceBackrefsRegexTest2)
+{
+    cudf::test::strings_column_wrapper strings( {"A543",
+         "Z756", "", "tést-string", "two-thréé four-fivé",
+         "abcd-éfgh","tést-string-again"} );
+    auto strings_view = cudf::strings_column_view(strings);
+    std::string pattern = "([a-z])-([a-zé])";
+    std::string repl_template = "X\\1+\\2Z";
+    auto results = cudf::strings::replace_with_backrefs(strings_view,pattern,repl_template);
+
+    cudf::test::strings_column_wrapper expected( {"A543",
+        "Z756", "", "tésXt+sZtring", "twXo+tZhréé fouXr+fZivé",
+        "abcXd+éZfgh", "tésXt+sZtrinXg+aZgain"} );
     cudf::test::expect_columns_equal(*results,expected);
 }
 

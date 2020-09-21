@@ -250,7 +250,7 @@ def test_merge_should_fail():
 
     with pytest.raises(KeyError):
         left.merge(right, how="left", on=["nonCol"])
-    with pytest.raises(ValueError):
+    with pytest.raises(KeyError):
         left.merge(right, how="left", on=["b"])
     with pytest.raises(KeyError):
         left.merge(right, how="left", on=["c"])

@@ -109,7 +109,7 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
    * @param len how many bytes to slice
    * @return a device buffer that will need to be closed independently from this buffer.
    */
-  public final DeviceMemoryBuffer slice(long offset, long len) {
+  public synchronized final DeviceMemoryBuffer slice(long offset, long len) {
     addressOutOfBoundsCheck(address + offset, len, "slice");
     refCount++;
     cleaner.addRef();
@@ -121,7 +121,7 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
    * @param view the view to use as a reference.
    * @return the sliced buffer.
    */
-  final BaseDeviceMemoryBuffer sliceFrom(DeviceMemoryBufferView view) {
+  synchronized final BaseDeviceMemoryBuffer sliceFrom(DeviceMemoryBufferView view) {
     if (view == null) {
       return null;
     }

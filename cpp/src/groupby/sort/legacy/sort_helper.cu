@@ -170,16 +170,16 @@ rmm::device_vector<cudf::size_type> const& helper::group_offsets() {
   auto device_input_table = device_table::create(_keys, _stream);
   auto sorted_order = static_cast<cudf::size_type*>(key_sort_order().data);
   decltype(_group_offsets->begin()) result_end;
-  auto exec = rmm::exec_policy(_stream)->on(_stream);
+  auto exec = rmm::exec_policy(_stream);
 
   if (has_nulls(_keys)) {
-    result_end = thrust::unique_copy(exec,
+    result_end = thrust::unique_copy(exec->on(_stream),
       thrust::make_counting_iterator<cudf::size_type>(0),
       thrust::make_counting_iterator<cudf::size_type>(num_keys()),
       _group_offsets->begin(),
       permuted_row_equality_comparator<true>(*device_input_table, sorted_order));
   } else {
-    result_end = thrust::unique_copy(exec, 
+    result_end = thrust::unique_copy(exec->on(_stream), 
       thrust::make_counting_iterator<cudf::size_type>(0),
       thrust::make_counting_iterator<cudf::size_type>(num_keys()),
       _group_offsets->begin(),
@@ -200,14 +200,14 @@ rmm::device_vector<cudf::size_type> const& helper::group_labels() {
   _group_labels = std::make_unique<index_vector>(num_keys());
 
   auto& group_labels = *_group_labels;
-  auto exec = rmm::exec_policy(_stream)->on(_stream);
-  thrust::scatter(exec,
+  auto exec = rmm::exec_policy(_stream);
+  thrust::scatter(exec->on(_stream),
     thrust::make_constant_iterator(1, decltype(num_groups())(1)), 
     thrust::make_constant_iterator(1, num_groups()), 
     group_offsets().begin() + 1, 
     group_labels.begin());
  
-  thrust::inclusive_scan(exec,
+  thrust::inclusive_scan(exec->on(_stream),
                         group_labels.begin(),
                         group_labels.end(),
                         group_labels.begin());
@@ -320,9 +320,9 @@ cudf::table helper::unique_keys() {
   auto idx_data = static_cast<cudf::size_type*>(key_sort_order().data);
   auto transformed_group_ids = index_vector(num_groups());
 
-  auto exec = rmm::exec_policy(_stream)->on(_stream);
+  auto exec = rmm::exec_policy(_stream);
 
-  thrust::transform(exec, group_offsets().begin(), group_offsets().end(),
+  thrust::transform(exec->on(_stream), group_offsets().begin(), group_offsets().end(),
                     transformed_group_ids.begin(),
     [=] __device__ (cudf::size_type i) { return idx_data[i]; } );
   

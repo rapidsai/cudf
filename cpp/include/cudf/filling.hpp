@@ -37,8 +37,7 @@ namespace experimental {
  * @throws `cudf::logic_error` if memory reallocation is required (e.g. for
  * variable width types).
  * @throws `cudf::logic_error` for invalid range (if @p begin < 0,
- * @p begin > @p end, @p begin >= @p destination.size(), or
- * @p end > @p destination.size()).
+ * @p begin > @p end, or @p end > @p destination.size()).
  * @throws `cudf::logic_error` if @p destination and @p value have different
  * types.
  * @throws `cudf::logic_error` if @p value is invalid but @p destination is not
@@ -62,8 +61,7 @@ void fill_in_place(mutable_column_view& destination, size_type begin,
  * indicated by the indices [@p begin, @p end) were overwritten by @p value.
  *
  * @throws `cudf::logic_error` for invalid range (if @p begin < 0,
- * @p begin > @p end, @p begin >= @p destination.size(), or
- * @p end > @p destination.size()).
+ * @p begin > @p end, or @p end > @p destination.size()).
  * @throws `cudf::logic_error` if @p destination and @p value have different
  * types.
  *
@@ -139,6 +137,55 @@ std::unique_ptr<table> repeat(
 std::unique_ptr<table> repeat(
     table_view const& input_table, scalar const& count,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Fills a column with a sequence of value specified by an initial value and a step.
+ * 
+ * Creates a new column and fills with @p size values starting at @p init and 
+ * incrementing by @p step, generating the sequence
+ * [ init, init+step, init+2*step, ... init + (size - 1)*step]
+ *
+ * ```
+ * size = 3
+ * init = 0
+ * step = 2 
+ * return = [0, 2, 4]
+ * ```  
+ * @throws `cudf::logic_error` if @p init and @p @step are not the same type.
+ * @throws `cudf::logic_error` if scalar types are not numeric.
+ * @throws `cudf::logic_error` if @p size is < 0. 
+ * 
+ * @param size Size of the output column
+ * @param init First value in the sequence
+ * @param step Increment value
+ * @param mr Memory resource to allocate the result output column
+ * @return std::unique_ptr<column> The result table containing the sequence
+ **/
+std::unique_ptr<column> sequence(size_type size, scalar const& init, scalar const& step,
+                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Fills a column with a sequence of value specified by an initial value and a step of 1.
+ * 
+ * Creates a new column and fills with @p size values starting at @p init and 
+ * incrementing by 1, generating the sequence
+ * [ init, init+1, init+2, ... init + (size - 1)]
+ *
+ * ```
+ * size = 3
+ * init = 0 
+ * return = [0, 1, 2]
+ * ```   
+ * @throws `cudf::logic_error` if @p init is not numeric.
+ * @throws `cudf::logic_error` if @p size is < 0. 
+ * 
+ * @param size Size of the output column
+ * @param init First value in the sequence 
+ * @param mr Memory resource to allocate the result output column
+ * @return std::unique_ptr<column> The result table containing the sequence
+ **/
+std::unique_ptr<column> sequence(size_type size, scalar const& init,
+                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace experimental
 }  // namespace cudf

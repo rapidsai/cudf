@@ -23,7 +23,7 @@ import org.junit.jupiter.api.Test;
 import java.util.function.Function;
 
 import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TimestampColumnVectorTest extends CudfTestBase {
   static final int[] TIMES_DAY = {-1528,    //1965-10-26
@@ -116,17 +116,17 @@ public class TimestampColumnVectorTest extends CudfTestBase {
   @Test
   public void getYear() {
     try (ColumnVector timestampColumnVector = ColumnVector.timestampMilliSecondsFromLongs(TIMES_MS);
-         ColumnVector result = timestampColumnVector.year();) {
+         ColumnVector tmp = timestampColumnVector.year();
+         HostColumnVector result = tmp.copyToHost()) {
       assert timestampColumnVector.getType() == DType.TIMESTAMP_MILLISECONDS;
-      result.ensureOnHost();
       assertEquals(1965, result.getShort(0));
       assertEquals(2018, result.getShort(1));
       assertEquals(2023, result.getShort(2));
     }
 
     try (ColumnVector timestampColumnVector = ColumnVector.timestampSecondsFromLongs(TIMES_S);
-      ColumnVector result = timestampColumnVector.year()) {
-      result.ensureOnHost();
+      ColumnVector tmp = timestampColumnVector.year();
+         HostColumnVector result = tmp.copyToHost()) {
       assertEquals(1965, result.getShort(0));
       assertEquals(2018, result.getShort(1));
       assertEquals(2023, result.getShort(2));
@@ -136,17 +136,17 @@ public class TimestampColumnVectorTest extends CudfTestBase {
   @Test
   public void getMonth() {
     try (ColumnVector timestampColumnVector = ColumnVector.timestampMilliSecondsFromLongs(TIMES_MS);
-         ColumnVector result = timestampColumnVector.month()) {
+         ColumnVector tmp = timestampColumnVector.month();
+         HostColumnVector result = tmp.copyToHost()) {
       assert timestampColumnVector.getType() == DType.TIMESTAMP_MILLISECONDS;
-      result.ensureOnHost();
       assertEquals(10, result.getShort(0));
       assertEquals(7, result.getShort(1));
       assertEquals(1, result.getShort(2));
     }
 
     try (ColumnVector timestampColumnVector = ColumnVector.timestampSecondsFromLongs(TIMES_S);
-         ColumnVector result = timestampColumnVector.month()) {
-      result.ensureOnHost();
+         ColumnVector tmp = timestampColumnVector.month();
+         HostColumnVector result = tmp.copyToHost()) {
       assertEquals(10, result.getShort(0));
       assertEquals(7, result.getShort(1));
       assertEquals(1, result.getShort(2));
@@ -157,8 +157,8 @@ public class TimestampColumnVectorTest extends CudfTestBase {
   public void getDay() {
     try (ColumnVector timestampColumnVector = ColumnVector.timestampMilliSecondsFromLongs(TIMES_MS)) {
       assert timestampColumnVector.getType() == DType.TIMESTAMP_MILLISECONDS;
-      try (ColumnVector result = timestampColumnVector.day()) {
-        result.ensureOnHost();
+      try (ColumnVector tmp = timestampColumnVector.day();
+           HostColumnVector result = tmp.copyToHost()) {
         assertEquals(26, result.getShort(0));
         assertEquals(4, result.getShort(1));
         assertEquals(25, result.getShort(2));
@@ -166,8 +166,8 @@ public class TimestampColumnVectorTest extends CudfTestBase {
     }
 
     try (ColumnVector timestampColumnVector = ColumnVector.timestampSecondsFromLongs(TIMES_S);
-         ColumnVector result = timestampColumnVector.day()) {
-      result.ensureOnHost();
+         ColumnVector tmp = timestampColumnVector.day();
+         HostColumnVector result = tmp.copyToHost()) {
       assertEquals(26, result.getShort(0));
       assertEquals(4, result.getShort(1));
       assertEquals(25, result.getShort(2));
@@ -178,8 +178,8 @@ public class TimestampColumnVectorTest extends CudfTestBase {
   public void getHour() {
     try (ColumnVector timestampColumnVector = ColumnVector.timestampMilliSecondsFromLongs(TIMES_MS)) {
       assert timestampColumnVector.getType() == DType.TIMESTAMP_MILLISECONDS;
-      try (ColumnVector result = timestampColumnVector.hour()) {
-        result.ensureOnHost();
+      try (ColumnVector tmp = timestampColumnVector.hour();
+           HostColumnVector result = tmp.copyToHost()) {
         assertEquals(14, result.getShort(0));
         assertEquals(12, result.getShort(1));
         assertEquals(7, result.getShort(2));
@@ -187,8 +187,8 @@ public class TimestampColumnVectorTest extends CudfTestBase {
     }
 
     try (ColumnVector timestampColumnVector = ColumnVector.timestampSecondsFromLongs(TIMES_S);
-         ColumnVector result = timestampColumnVector.hour()) {
-      result.ensureOnHost();
+         ColumnVector tmp = timestampColumnVector.hour();
+         HostColumnVector result = tmp.copyToHost()) {
       assertEquals(14, result.getShort(0));
       assertEquals(12, result.getShort(1));
       assertEquals(7, result.getShort(2));
@@ -199,8 +199,8 @@ public class TimestampColumnVectorTest extends CudfTestBase {
   public void getMinute() {
     try (ColumnVector timestampColumnVector = ColumnVector.timestampMilliSecondsFromLongs(TIMES_MS)) {
       assert timestampColumnVector.getType() == DType.TIMESTAMP_MILLISECONDS;
-      try (ColumnVector result = timestampColumnVector.minute()) {
-        result.ensureOnHost();
+      try (ColumnVector tmp = timestampColumnVector.minute();
+           HostColumnVector result = tmp.copyToHost()) {
         assertEquals(1, result.getShort(0));
         assertEquals(0, result.getShort(1));
         assertEquals(32, result.getShort(2));
@@ -208,8 +208,8 @@ public class TimestampColumnVectorTest extends CudfTestBase {
     }
 
     try (ColumnVector timestampColumnVector = ColumnVector.timestampSecondsFromLongs(TIMES_S);
-         ColumnVector result = timestampColumnVector.minute()) {
-      result.ensureOnHost();
+         ColumnVector tmp = timestampColumnVector.minute();
+         HostColumnVector result = tmp.copyToHost()) {
       assertEquals(1, result.getShort(0));
       assertEquals(0, result.getShort(1));
       assertEquals(32, result.getShort(2));
@@ -220,8 +220,8 @@ public class TimestampColumnVectorTest extends CudfTestBase {
   public void getSecond() {
     try (ColumnVector timestampColumnVector = ColumnVector.timestampMilliSecondsFromLongs(TIMES_MS)) {
       assert timestampColumnVector.getType() == DType.TIMESTAMP_MILLISECONDS;
-      try (ColumnVector result = timestampColumnVector.second()) {
-        result.ensureOnHost();
+      try (ColumnVector tmp = timestampColumnVector.second();
+           HostColumnVector result = tmp.copyToHost()) {
         assertEquals(12, result.getShort(0));
         assertEquals(0, result.getShort(1));
         assertEquals(12, result.getShort(2));
@@ -229,8 +229,8 @@ public class TimestampColumnVectorTest extends CudfTestBase {
     }
 
     try (ColumnVector timestampColumnVector = ColumnVector.timestampSecondsFromLongs(TIMES_S);
-         ColumnVector result = timestampColumnVector.second()) {
-      result.ensureOnHost();
+         ColumnVector tmp = timestampColumnVector.second();
+         HostColumnVector result = tmp.copyToHost()) {
       assertEquals(12, result.getShort(0));
       assertEquals(0, result.getShort(1));
       assertEquals(12, result.getShort(2));
@@ -240,11 +240,11 @@ public class TimestampColumnVectorTest extends CudfTestBase {
   @Test
   public void testCastToTimestamp() {
     try (ColumnVector timestampMillis = ColumnVector.timestampMilliSecondsFromLongs(TIMES_MS);
-         ColumnVector timestampSeconds = timestampMillis.asTimestampSeconds()) {
-      timestampSeconds.ensureOnHost();
-      assertEquals(-131968728L, timestampSeconds.getLong(0));
-      assertEquals(1530705600L, timestampSeconds.getLong(1));
-      assertEquals(1674631932L, timestampSeconds.getLong(2));
+         ColumnVector tmp = timestampMillis.asTimestampSeconds();
+         HostColumnVector result = tmp.copyToHost()) {
+      assertEquals(-131968728L, result.getLong(0));
+      assertEquals(1530705600L, result.getLong(1));
+      assertEquals(1674631932L, result.getLong(2));
     }
   }
 

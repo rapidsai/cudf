@@ -77,8 +77,11 @@ def test_full_series(nrows, dtype):
 @pytest.mark.parametrize("ncols", [0, 1, 2, 9, 20 / 2, 11, 20 - 1, 20, 20 + 1])
 def test_full_dataframe_20(dtype, nrows, ncols):
     size = 20
-    pdf = pd.DataFrame(np.random.randint(0, 100, (size, size))).astype(dtype)
+    pdf = pd.DataFrame(
+        {idx: np.random.randint(0, 100, size) for idx in range(size)}
+    ).astype(dtype)
     gdf = cudf.from_pandas(pdf)
+
     ncols, nrows = gdf._repr_pandas025_formatting(ncols, nrows, dtype)
     pd.options.display.max_rows = int(nrows)
     pd.options.display.max_columns = int(ncols)
@@ -93,8 +96,11 @@ def test_full_dataframe_20(dtype, nrows, ncols):
 @pytest.mark.parametrize("ncols", [9, 21 / 2, 11, 21 - 1])
 def test_full_dataframe_21(dtype, nrows, ncols):
     size = 21
-    pdf = pd.DataFrame(np.random.randint(0, 100, (size, size))).astype(dtype)
+    pdf = pd.DataFrame(
+        {idx: np.random.randint(0, 100, size) for idx in range(size)}
+    ).astype(dtype)
     gdf = cudf.from_pandas(pdf)
+
     pd.options.display.max_rows = int(nrows)
     pd.options.display.max_columns = int(ncols)
     assert pdf.__repr__() == gdf.__repr__()
@@ -186,9 +192,9 @@ def test_MI():
     levels = [["a", "b", "c", "d"], ["w", "x", "y", "z"], ["m", "n"]]
     codes = cudf.DataFrame(
         {
-            "a": np.random.randint(0, 4, 10),
-            "b": np.random.randint(0, 4, 10),
-            "c": np.random.randint(0, 2, 10),
+            "a": [0, 0, 0, 0, 1, 1, 2, 2, 3, 3],
+            "b": [0, 1, 2, 3, 0, 1, 2, 3, 0, 1],
+            "c": [0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
         }
     )
     pd.options.display.max_rows = 999

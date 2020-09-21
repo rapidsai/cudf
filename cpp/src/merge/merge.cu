@@ -13,6 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <cudf/table/table.hpp>
+#include <cudf/table/table_device_view.cuh>
+#include <rmm/thrust_rmm_allocator.h>
+#include <cudf/copying.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/merge.cuh>
+#include <cudf/strings/detail/merge.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
+
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/tuple.h>
@@ -21,14 +30,6 @@
 #include <vector>
 #include <queue>
 
-#include <cudf/table/table.hpp>
-#include <cudf/table/table_device_view.cuh>
-#include <rmm/thrust_rmm_allocator.h>
-#include <cudf/copying.hpp>
-#include <cudf/detail/utilities/cuda.cuh>
-
-#include <cudf/detail/merge.cuh>
-#include <cudf/strings/detail/merge.cuh>
 
 namespace { // anonym.
 
@@ -496,6 +497,7 @@ std::unique_ptr<cudf::experimental::table> merge(std::vector<table_view> const& 
                                                  std::vector<cudf::order> const& column_order,
                                                  std::vector<cudf::null_order> const& null_precedence,
                                                  rmm::mr::device_memory_resource* mr){
+  CUDF_FUNC_RANGE();
   return detail::merge(tables_to_merge, key_cols, column_order, null_precedence, mr);
 }
  

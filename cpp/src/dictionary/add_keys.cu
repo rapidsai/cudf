@@ -19,6 +19,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/stream_compaction.hpp>
+#include <cudf/detail/concatenate.cuh>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/search.hpp>
@@ -54,7 +55,7 @@ std::unique_ptr<column> add_keys( dictionary_column_view const& dictionary_colum
     CUDF_EXPECTS( new_keys.type()==old_keys.type(), "Keys must be the same type");
     // first, concatenate the keys together
     // [a,b,c,d,f] + [d,b,e] = [a,b,c,d,f,d,b,e]
-    auto combined_keys = cudf::concatenate(std::vector<column_view>{old_keys, new_keys}, mr, stream);
+    auto combined_keys = cudf::detail::concatenate(std::vector<column_view>{old_keys, new_keys}, mr, stream);
     // sort and remove any duplicates from the combined keys
     // drop_duplicates([a,b,c,d,f,d,b,e]) = [a,b,c,d,e,f]
     auto table_keys = experimental::detail::drop_duplicates( table_view{{*combined_keys}},

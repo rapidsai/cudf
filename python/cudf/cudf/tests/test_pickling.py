@@ -7,8 +7,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import rmm
-
 from cudf.core import DataFrame, GenericIndex, Series
 from cudf.core.buffer import Buffer
 
@@ -70,7 +68,7 @@ def test_sizeof_dataframe():
 
 def test_pickle_index():
     nelem = 10
-    idx = GenericIndex(rmm.to_device(np.arange(nelem)), name="a")
+    idx = GenericIndex(np.arange(nelem), name="a")
     pickled = pickle.dumps(idx)
     out = pickle.loads(pickled)
     assert idx == out

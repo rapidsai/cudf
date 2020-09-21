@@ -425,7 +425,7 @@ table_with_metadata reader::impl::convert_data_to_table(cudaStream_t stream) {
   // alloc output buffers. 
   std::vector<column_buffer> out_buffers;
   for (size_t col = 0; col < num_columns; ++col) {
-    out_buffers.emplace_back(dtypes_[col], num_records, stream, mr_);
+    out_buffers.emplace_back(dtypes_[col], num_records, true, stream, mr_);
   }
 
   thrust::host_vector<data_type> h_dtypes(num_columns);

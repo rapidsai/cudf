@@ -135,6 +135,22 @@ TEST_F(HashPartition, MixedColumnTypes)
   expect_tables_equal(output1->view(), output2->view());
 }
 
+TEST_F(HashPartition, NullableStrings)
+{
+  strings_column_wrapper strings({"a", "bb", "ccc", "d"}, {1, 1, 1, 1});
+  cudf::table_view input({strings});
+
+  std::vector<cudf::size_type> const columns_to_hash({0});
+  cudf::size_type const num_partitions = 3;
+
+  std::unique_ptr<cudf::experimental::table> result;
+  std::vector<cudf::size_type> offsets;
+  std::tie(result, offsets) = cudf::hash_partition(input, columns_to_hash, num_partitions);
+
+  auto const& col = result->get_column(0);
+  EXPECT_EQ(0, col.null_count());
+}
+
 TEST_F(HashPartition, ColumnsToHash)
 {
   fixed_width_column_wrapper<int32_t> to_hash({1, 2, 3, 4, 5, 6});
@@ -165,6 +181,22 @@ template <typename T>
 class HashPartitionFixedWidth : public cudf::test::BaseFixture {};
 
 TYPED_TEST_CASE(HashPartitionFixedWidth, cudf::test::FixedWidthTypes);
+
+TYPED_TEST(HashPartitionFixedWidth, NullableFixedWidth)
+{
+  fixed_width_column_wrapper<TypeParam> fixed({1, 2, 3, 4}, {1, 1, 1, 1});
+  cudf::table_view input({fixed});
+
+  std::vector<cudf::size_type> const columns_to_hash({0});
+  cudf::size_type const num_partitions = 3;
+
+  std::unique_ptr<cudf::experimental::table> result;
+  std::vector<cudf::size_type> offsets;
+  std::tie(result, offsets) = cudf::hash_partition(input, columns_to_hash, num_partitions);
+
+  auto const& col = result->get_column(0);
+  EXPECT_EQ(0, col.null_count());
+}
 
 template <typename T>
 void run_fixed_width_test(size_t cols, size_t rows, cudf::size_type num_partitions, bool has_nulls = false)

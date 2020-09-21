@@ -307,3 +307,39 @@ def test_from_pandas_gen():
 def test_index_names():
     idx = cudf.core.index.as_index([1, 2, 3], name="idx")
     assert idx.names == ("idx",)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        range(0),
+        range(1),
+        range(0, 1),
+        range(0, 5),
+        range(1, 10),
+        range(1, 10, 1),
+        range(-5, 10),
+    ],
+)
+def test_range_index_from_range(data):
+    assert_eq(pd.Index(data), cudf.core.index.as_index(data))
+
+
+@pytest.mark.parametrize(
+    "n", [-10, -5, -2, 0, 1, 0, 2, 5, 10],
+)
+def test_empty_df_head_tail_index(n):
+    df = cudf.DataFrame()
+    pdf = pd.DataFrame()
+    assert_eq(df.head(n).index.values, pdf.head(n).index.values)
+    assert_eq(df.tail(n).index.values, pdf.tail(n).index.values)
+
+    df = cudf.DataFrame({"a": [11, 2, 33, 44, 55]})
+    pdf = pd.DataFrame({"a": [11, 2, 33, 44, 55]})
+    assert_eq(df.head(n).index.values, pdf.head(n).index.values)
+    assert_eq(df.tail(n).index.values, pdf.tail(n).index.values)
+
+    df = cudf.DataFrame(index=[1, 2, 3])
+    pdf = pd.DataFrame(index=[1, 2, 3])
+    assert_eq(df.head(n).index.values, pdf.head(n).index.values)
+    assert_eq(df.tail(n).index.values, pdf.tail(n).index.values)

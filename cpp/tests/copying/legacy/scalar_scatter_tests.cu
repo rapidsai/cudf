@@ -136,7 +136,7 @@ TYPED_TEST(ScalarScatterTest, ScatterMultiColValid) {
   destination_table.destroy();
 }
 
-TYPED_TEST(ScalarScatterTest, ScatterValid) {
+TYPED_TEST(ScalarScatterTest, DISABLED_ScatterValid) {
   constexpr cudf::size_type target_size{1920};
 
   static_assert(0 == target_size % 3,
@@ -182,7 +182,7 @@ TYPED_TEST(ScalarScatterTest, ScatterValid) {
   destination_table.destroy();
 }
 
-TYPED_TEST(ScalarScatterTest, ScatterNull) {
+TYPED_TEST(ScalarScatterTest, DISABLED_ScatterNull) {
   constexpr cudf::size_type target_size{1920};
 
   static_assert(0 == target_size % 3,

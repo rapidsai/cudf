@@ -19,6 +19,7 @@
 
 package ai.rapids.cudf;
 
+import ai.rapids.cudf.HostColumnVector.Builder;
 import org.junit.jupiter.api.Test;
 
 import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
@@ -29,7 +30,7 @@ public class UnaryOpTest extends CudfTestBase {
   private static final Boolean[] BOOLEANS_1 = new Boolean[]{true, false, true, false, true, false, null};
 
   interface CpuOp {
-    void computeNullSafe(ColumnVector.Builder ret, ColumnVector input, int index);
+    void computeNullSafe(Builder ret, HostColumnVector input, int index);
   }
 
   interface DoubleFun {
@@ -48,7 +49,7 @@ public class UnaryOpTest extends CudfTestBase {
     }
 
     @Override
-    public void computeNullSafe(ColumnVector.Builder ret, ColumnVector input, int index) {
+    public void computeNullSafe(Builder ret, HostColumnVector input, int index) {
       ret.append(fun.apply(input.getDouble(index)));
     }
   }
@@ -69,7 +70,7 @@ public class UnaryOpTest extends CudfTestBase {
     }
 
     @Override
-    public void computeNullSafe(ColumnVector.Builder ret, ColumnVector input, int index) {
+    public void computeNullSafe(Builder ret, HostColumnVector input, int index) {
       ret.append(fun.apply(input.getInt(index)));
     }
   }
@@ -90,22 +91,23 @@ public class UnaryOpTest extends CudfTestBase {
     }
 
     @Override
-    public void computeNullSafe(ColumnVector.Builder ret, ColumnVector input, int index) {
+    public void computeNullSafe(Builder ret, HostColumnVector input, int index) {
       ret.append(fun.apply(input.getBoolean(index)));
     }
   }
 
   public static ColumnVector forEach(ColumnVector input, CpuOp op) {
     int len = (int)input.getRowCount();
-    try (ColumnVector.Builder builder = ColumnVector.builder(input.getType(), len)) {
+    try (HostColumnVector host = input.copyToHost();
+         Builder builder = HostColumnVector.builder(input.getType(), len)) {
       for (int i = 0; i < len; i++) {
-        if (input.isNull(i)) {
+        if (host.isNull(i)) {
           builder.appendNull();
         } else {
-          op.computeNullSafe(builder, input, i);
+          op.computeNullSafe(builder, host, i);
         }
       }
-      return builder.build();
+      return builder.buildAndPutOnDevice();
     }
   }
 

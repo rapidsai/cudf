@@ -24,16 +24,16 @@ def test_rollling_series_basic(data, index, agg, nulls, center):
     if len(data) > 0:
         if nulls == "one":
             p = np.random.randint(0, len(data))
-            data[p] = None
+            data[p] = np.nan
         elif nulls == "some":
             p1, p2 = np.random.randint(0, len(data), (2,))
-            data[p1] = None
-            data[p2] = None
+            data[p1] = np.nan
+            data[p2] = np.nan
         elif nulls == "all":
-            data = [None] * len(data)
+            data = [np.nan] * len(data)
 
     psr = pd.Series(data, index=index)
-    gsr = cudf.from_pandas(psr)
+    gsr = cudf.Series(psr)
 
     for window_size in range(1, len(data) + 1):
         for min_periods in range(1, window_size + 1):
@@ -70,13 +70,13 @@ def test_rolling_dataframe_basic(data, agg, nulls, center):
         for col_name in pdf.columns:
             if nulls == "one":
                 p = np.random.randint(0, len(data))
-                pdf[col_name][p] = None
+                pdf[col_name][p] = np.nan
             elif nulls == "some":
                 p1, p2 = np.random.randint(0, len(data), (2,))
-                pdf[col_name][p1] = None
-                pdf[col_name][p2] = None
+                pdf[col_name][p1] = np.nan
+                pdf[col_name][p2] = np.nan
             elif nulls == "all":
-                pdf[col_name][:] = None
+                pdf[col_name][:] = np.nan
 
     gdf = cudf.from_pandas(pdf)
 

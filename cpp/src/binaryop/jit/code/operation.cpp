@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -25,7 +25,7 @@ namespace code {
 
 const char* operation =
 R"***(
-#pragma once
+    #pragma once
     #include "traits.h"
     using namespace simt::std;
 
@@ -335,8 +335,49 @@ R"***(
             GENERIC_BINARY_OP(&output, x, y);
             return output;
         }
+    };    
+    
+    struct ShiftLeft {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return (x << y);
+        }
     };
 
+    struct RShiftLeft {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return (y << x);
+        }
+    };
+
+    struct ShiftRight {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return (x >> y);
+        }
+    };    
+
+    struct RShiftRight {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return (y >> x);
+        }
+    };
+
+    struct ShiftRightUnsigned {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return (static_cast<make_unsigned_t<TypeLhs>>(x) >> y);            
+        }
+    };    
+
+    struct RShiftRightUnsigned {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return (static_cast<make_unsigned_t<TypeLhs>>(y) >> x);            
+        }
+    };    
 )***";
 
 } // namespace code

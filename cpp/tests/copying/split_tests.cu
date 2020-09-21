@@ -610,6 +610,6 @@ TEST_F(ContiguousSplitTableCornerCases, MixedColumnTypes) {
   auto expected = cudf::experimental::split(tbl, splits);
   
   for (unsigned long index = 0; index < expected.size(); index++) {      
-    cudf::test::expect_tables_equal(expected[index], result[index].table);
+    cudf::test::expect_tables_equivalent(expected[index], result[index].table);
   }
 }

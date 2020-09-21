@@ -1,3 +1,4 @@
+import numba.cuda
 import pytest
 
 import dask
@@ -10,6 +11,11 @@ import cudf
 import dask_cudf
 
 dask_cuda = pytest.importorskip("dask_cuda")
+
+
+def more_than_two_gpus():
+    ngpus = len(numba.cuda.gpus)
+    return ngpus >= 2
 
 
 @pytest.mark.parametrize("delayed", [True, False])
@@ -44,6 +50,9 @@ def test_merge():
             assert len(res) == 4
 
 
+@pytest.mark.skipif(
+    not more_than_two_gpus(), reason="Machine does not have more than two GPUs"
+)
 def test_ucx_seriesgroupby():
     pytest.importorskip("ucp")
 

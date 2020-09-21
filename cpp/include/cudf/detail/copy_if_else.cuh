@@ -128,7 +128,7 @@ std::unique_ptr<column> copy_if_else(data_type type, bool nullable,
    constexpr int block_size = 256;
    cudf::experimental::detail::grid_1d grid{num_els, block_size, 1};
 
-   std::unique_ptr<column> out = make_fixed_width_column(type, size, nullable ? UNINITIALIZED : UNALLOCATED, stream, mr);
+   std::unique_ptr<column> out = make_fixed_width_column(type, size, nullable ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED, stream, mr);
    
    auto out_v = mutable_column_device_view::create(*out);
 

@@ -24,6 +24,212 @@ namespace gpu {
 #define NWARPS                  16
 #define MAX_SHARED_SCHEMA_LEN   1000
 
+/*
+ * Avro varint encoding - see
+ * https://avro.apache.org/docs/1.2.0/spec.html#binary_encoding
+ */
+static inline int64_t __device__ avro_decode_zigzag_varint(const uint8_t *&cur, const uint8_t *end) {
+  uint64_t u = 0;
+  if (cur < end) {
+    u = *cur++;
+    if (u > 0x7f) {
+      uint64_t scale = 128;
+      u &= 0x7f;
+      while (cur < end) {
+        uint32_t c = *cur++;
+        u += (c & 0x7f) * scale;
+        scale <<= 7;
+        if (c < 0x80)
+          break;
+      }
+    }
+  }
+  return (int64_t)((u >> 1u) ^ -(int64_t)(u & 1));
+}
+
+
+/**
+ * @brief Decode a row of values given an avro schema
+ *
+ * @param[in] schema Schema description
+ * @param[in] schema_g Global schema in device mem
+ * @param[in] schema_len Number of schema entries
+ * @param[in] row Current row
+ * @param[in] max_rows Total number of rows
+ * @param[in] cur Current input data pointer
+ * @param[in] end End of input data
+ * @param[in] global_Dictionary Global dictionary entries
+ *
+ * @return data pointer at the end of the row (start of next row)
+ *
+ **/
+static const uint8_t * __device__ avro_decode_row(
+    const schemadesc_s *schema, schemadesc_s *schema_g, uint32_t schema_len,
+    size_t row, size_t max_rows,
+    const uint8_t *cur, const uint8_t *end,
+    const nvstrdesc_s *global_dictionary, uint32_t num_dictionary_entries)
+{
+  uint32_t array_start = 0, array_repeat_count = 0;
+  int array_children = 0;
+  for (uint32_t i = 0; i < schema_len; ) {
+    uint32_t kind = schema[i].kind;
+    int skip = 0;
+    uint8_t *dataptr;
+    if (kind == type_union) {
+      int skip_after;
+      if (cur >= end)
+        break;
+      skip = (*cur++) >> 1;  // NOTE: Assumes 1-byte union member
+      skip_after = schema[i].count - skip - 1;
+      ++i;
+      while (skip > 0 && i < schema_len) {
+        if (schema[i].kind >= type_record) {
+          skip += schema[i].count;
+        }
+        ++i;
+        --skip;
+      }
+      if (i >= schema_len || skip_after < 0)
+        break;
+      kind = schema[i].kind;
+      skip = skip_after;
+    }
+    dataptr = reinterpret_cast<uint8_t *>(schema[i].dataptr);
+    switch (kind) {
+    case type_null:
+      if (dataptr && row < max_rows) {
+        atomicAnd(reinterpret_cast<uint32_t *>(dataptr) + (row >> 5), ~(1 << (row & 0x1f)));
+        atomicAdd(&schema_g[i].count, 1);
+      }
+      break;
+
+    case type_int:
+    case type_long:
+    case type_bytes:
+    case type_string:
+    case type_enum:
+      {
+        int64_t v = avro_decode_zigzag_varint(cur, end);
+        if (kind == type_int) {
+          if (dataptr && row < max_rows) {
+            reinterpret_cast<int32_t *>(dataptr)[row] = static_cast<int32_t>(v);
+          }
+        }
+        else if (kind == type_long) {
+          if (dataptr && row < max_rows) {
+            reinterpret_cast<int64_t *>(dataptr)[row] = v;
+          }
+        }
+        else { // string or enum
+          size_t count = 0;
+          const char *ptr = 0;
+          if (kind == type_enum) { // dictionary
+            size_t idx = schema[i].count + v;
+            if (idx < num_dictionary_entries) {
+              ptr = global_dictionary[idx].ptr;
+              count = global_dictionary[idx].count;
+            }
+          }
+          else if (v >= 0 && cur + v <= end) { // string
+            ptr = reinterpret_cast<const char *>(cur);
+            count = (size_t)v;
+            cur += count;
+          }
+          if (dataptr && row < max_rows) {
+            reinterpret_cast<nvstrdesc_s *>(dataptr)[row].ptr = ptr;
+            reinterpret_cast<nvstrdesc_s *>(dataptr)[row].count = count;
+          }
+        }
+      }
+      break;
+
+    case type_float:
+      if (dataptr && row < max_rows) {
+        uint32_t v;
+        if (cur + 3 < end) {
+          v = unaligned_load32(cur);
+          cur += 4;
+        }
+        else {
+          v = 0;
+        }
+        reinterpret_cast<uint32_t *>(dataptr)[row] = v;
+      }
+      else {
+        cur += 4;
+      }
+      break;
+
+    case type_double:
+      if (dataptr && row < max_rows) {
+        uint64_t v;
+        if (cur + 7 < end) {
+          v = unaligned_load64(cur);
+          cur += 8;
+        }
+        else {
+          v = 0;
+        }
+        reinterpret_cast<uint64_t *>(dataptr)[row] = v;
+      }
+      else {
+        cur += 8;
+      }
+      break;
+
+    case type_boolean:
+      if (dataptr && row < max_rows) {
+        uint8_t v = (cur < end) ? *cur : 0;
+        reinterpret_cast<uint8_t *>(dataptr)[row] = (v) ? 1 : 0;
+      }
+      cur++;
+      break;
+
+    case type_array:
+      {
+        int32_t array_block_count = avro_decode_zigzag_varint(cur, end);
+        if (array_block_count < 0) {
+          avro_decode_zigzag_varint(cur, end); // block size in bytes, ignored
+          array_block_count = -array_block_count;
+        }
+        array_start = i;
+        array_repeat_count = array_block_count;
+        array_children = 1;
+        if (array_repeat_count == 0) {
+          skip += schema[i].count; // Should always be 1
+        }
+      }
+      break;
+    }
+    if (array_repeat_count != 0) {
+      array_children--;
+      if (schema[i].kind >= type_record) {
+        array_children += schema[i].count;
+      }
+    }
+    i++;
+    while (skip > 0 && i < schema_len) {
+      if (schema[i].kind >= type_record) {
+        skip += schema[i].count;
+      }
+      ++i;
+      --skip;
+    }
+    // If within an array, check if we reached the last item
+    if (array_repeat_count != 0 && array_children <= 0 && cur < end) {
+      if (!--array_repeat_count) {
+        i = array_start; // Restart at the array parent
+      }
+      else {
+        i = array_start + 1; // Restart after the array parent
+        array_children = schema[array_start].count;
+      }
+    }
+  }
+  return cur;
+}
+
+
 /**
  * @brief Decode column data
  *
@@ -100,176 +306,10 @@ gpuDecodeAvroColumnData(block_desc_s *blocks, schemadesc_s *schema_g, nvstrdesc_
         }
         if (threadIdx.x < nrows)
         {
-            for (uint32_t i = 0; i < schema_len; )
-            {
-                uint32_t kind = schema[i].kind;
-                int skip = 0;
-                uint8_t *dataptr;
-                if (kind == type_union)
-                {
-                    int skip_after;
-                    if (cur >= end)
-                        break;
-                    skip = (*cur++) >> 1;  // NOTE: Assumes 1-byte union member
-                    skip_after = schema[i].count - skip - 1;
-                    ++i;
-                    while (skip > 0 && i < schema_len)
-                    {
-                        if (schema[i].kind >= type_record)
-                        {
-                            skip += schema[i].count;
-                        }
-                        ++i;
-                        --skip;
-                    }
-                    if (i >= schema_len || skip_after < 0)
-                        break;
-                    kind = schema[i].kind;
-                    skip = skip_after;
-                }
-                dataptr = reinterpret_cast<uint8_t *>(schema[i].dataptr);
-                if (dataptr)
-                {
-                    size_t row = cur_row - first_row + threadIdx.x;
-                    switch (kind)
-                    {
-                    case type_null:
-                        if (row < max_rows)
-                        {
-                            atomicAnd(reinterpret_cast<uint32_t *>(dataptr) + (row >> 5), ~(1 << (row & 0x1f)));
-                            atomicAdd(&schema_g[i].count, 1);
-                        }
-                        break;
-
-                    case type_int:
-                    case type_long:
-                    case type_bytes:
-                    case type_string:
-                    case type_enum:
-                        {
-                            uint64_t u = 0;
-                            int64_t v;
-                            if (cur < end)
-                            {
-                                u = *cur++;
-                                if (u > 0x7f)
-                                {
-                                    uint64_t scale = 128;
-                                    u &= 0x7f;
-                                    while (cur < end)
-                                    {
-                                        uint32_t c = *cur++;
-                                        u += (c & 0x7f) * scale;
-                                        scale <<= 7;
-                                        if (c < 0x80)
-                                            break;
-                                    }
-                                }
-                            }
-                            v = (int64_t)((u >> 1u) ^ -(int64_t)(u & 1));
-                            if (kind == type_int)
-                            {
-                                if (row < max_rows)
-                                {
-                                    reinterpret_cast<int32_t *>(dataptr)[row] = static_cast<int32_t>(v);
-                                }
-                            }
-                            else if (kind == type_long)
-                            {
-                                if (row < max_rows)
-                                {
-                                    reinterpret_cast<int64_t *>(dataptr)[row] = v;
-                                }
-                            }
-                            else // string or enum
-                            {
-                                size_t count = 0;
-                                const char *ptr = 0;
-                                if (kind == type_enum) // dictionary
-                                {
-                                    size_t idx = schema[i].count + v;
-                                    if (idx < num_dictionary_entries)
-                                    {
-                                        ptr = global_dictionary[idx].ptr;
-                                        count = global_dictionary[idx].count;
-                                    }
-                                }
-                                else if (v > 0 && cur + v <= end) // string
-                                {
-                                    ptr = reinterpret_cast<const char *>(cur);
-                                    count = (size_t)v;
-                                    cur += count;
-                                }
-                                if (row < max_rows)
-                                {
-                                    reinterpret_cast<nvstrdesc_s *>(dataptr)[row].ptr = ptr;
-                                    reinterpret_cast<nvstrdesc_s *>(dataptr)[row].count = count;
-                                }
-                            }
-                        }
-                        break;
-
-                    case type_float:
-                        {
-                            uint32_t v;
-                            if (cur + 3 < end)
-                            {
-                                v = (cur[3] << 24) | (cur[2] << 16) | (cur[1] << 8) | cur[0];
-                                cur += 4;
-                            }
-                            else
-                            {
-                                v = 0;
-                            }
-                            if (row < max_rows)
-                            {
-                                reinterpret_cast<uint32_t *>(dataptr)[row] = v;
-                            }
-                        }
-                        break;
-
-                    case type_double:
-                        {
-                            uint2 v;
-                            if (cur + 7 < end)
-                            {
-                                v.x = (cur[3] << 24) | (cur[2] << 16) | (cur[1] << 8) | cur[0];
-                                v.y = (cur[7] << 24) | (cur[6] << 16) | (cur[5] << 8) | cur[4];
-                                cur += 8;
-                            }
-                            else
-                            {
-                                v.x = v.y = 0;
-                            }
-                            if (row < max_rows)
-                            {
-                                reinterpret_cast<uint2 *>(dataptr)[row] = v;
-                            }
-                        }
-                        break;
-
-                    case type_boolean:
-                        {
-                            uint8_t v = (cur < end) ? *cur++ : 0;
-                            if (row < max_rows)
-                            {
-                                reinterpret_cast<uint8_t *>(dataptr)[row] = (v) ? 1 : 0;
-                            }
-                        }
-                        break;
-                    }
-                }
-                i++;
-                while (skip > 0 && i < schema_len)
-                {
-                    if (schema[i].kind >= type_record)
-                    {
-                        skip += schema[i].count;
-                    }
-                    ++i;
-                    --skip;
-                }
-            }
+            cur = avro_decode_row(schema, schema_g, schema_len,
+                                  cur_row - first_row + threadIdx.x,
+                                  max_rows, cur, end,
+                                  global_dictionary, num_dictionary_entries);
         }
         if (nrows <= 1)
         {

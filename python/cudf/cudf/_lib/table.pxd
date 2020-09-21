@@ -1,10 +1,5 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
-
 from libcpp.memory cimport unique_ptr
 from cudf._lib.cudf cimport *
 

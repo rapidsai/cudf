@@ -48,7 +48,7 @@ struct BinaryOperationNullTest : public BinaryOperationTest {
                 data_iter, data_iter + size);
         }
         default:
-            break;
+            CUDF_FAIL("Unknown mask state " + std::to_string(static_cast<int64_t>(state)));
         }
     }
 };

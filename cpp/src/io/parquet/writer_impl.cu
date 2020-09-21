@@ -114,8 +114,8 @@ class parquet_column_view {
         _ts_scale(0),
         _data_count(col.size()),
         _null_count(col.null_count()),
-        _data(col.data<uint8_t>()),
-        _nulls(col.has_nulls() ? col.null_mask() : nullptr) {
+        _data(col.head<uint8_t>() + col.offset() * _type_width),
+        _nulls(col.nullable() ? col.null_mask() : nullptr) {
     switch(col.type().id()) {
       case cudf::type_id::INT8:
         _physical_type = Type::INT32;
@@ -207,6 +207,7 @@ class parquet_column_view {
   size_t type_width() const noexcept { return _type_width; }
   size_t data_count() const noexcept { return _data_count; }
   size_t null_count() const noexcept { return _null_count; }
+  bool nullable() const noexcept { return (_nulls != nullptr); }
   void const *data() const noexcept { return _data; }
   uint32_t const *nulls() const noexcept { return _nulls; }
 
@@ -383,7 +384,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink, writer_options const &option
   stats_granularity_(options.stats_granularity),
   out_sink_(std::move(sink)){}
 
-void writer::impl::write(table_view const &table, const table_metadata *metadata, cudaStream_t stream) {    
+void writer::impl::write(table_view const &table, const table_metadata *metadata, cudaStream_t stream) {
   pq_chunked_state state;
   state.user_metadata = metadata;
   state.stream = stream;
@@ -398,13 +399,13 @@ void writer::impl::write_chunked_begin(pq_chunked_state& state){
   // Write file header
   file_header_s fhdr;
   fhdr.magic = PARQUET_MAGIC;
-  out_sink_->write(&fhdr, sizeof(fhdr));
+  out_sink_->host_write(&fhdr, sizeof(fhdr));
 
   state.current_chunk_offset = sizeof(file_header_s);
 }
 
-void writer::impl::write_chunked(table_view const& table, pq_chunked_state& state){  
-size_type num_columns = table.num_columns();
+void writer::impl::write_chunked(table_view const& table, pq_chunked_state& state){
+  size_type num_columns = table.num_columns();
   size_type num_rows = 0;
 
   // Wrapper around cudf columns to attach parquet-specific type info.
@@ -453,7 +454,7 @@ size_type num_columns = table.num_columns();
       // if the user is explictly saying "I am only calling this once", fall back to the original behavior and assume
       // the columns in this one table tell us everything we need to know. 
       if(state.single_write_mode){
-        state.md.schema[1 + i].repetition_type = (col.null_count() || col.data_count() < (size_t)num_rows) ? OPTIONAL : REQUIRED;
+        state.md.schema[1 + i].repetition_type = (col.nullable() || col.data_count() < (size_t)num_rows) ? OPTIONAL : REQUIRED;
       } 
       // otherwise, if the user is explicitly telling us global information about all the tables that will ever get passed in
       else if(state.user_metadata_with_nullability.column_nullable.size() > 0){        
@@ -695,12 +696,17 @@ size_type num_columns = table.num_columns();
   }
 
   auto host_bfr = [&]() {
-    return pinned_buffer<uint8_t>{[](size_t size) {
+    // if the writer supports device_write(), we don't need this scratch space
+    if(out_sink_->supports_device_write()){
+      return pinned_buffer<uint8_t>{nullptr, cudaFreeHost};
+    } else {
+      return pinned_buffer<uint8_t>{[](size_t size) {
                                     uint8_t *ptr = nullptr;
-                                    CUDA_TRY(cudaMallocHost(&ptr, size));
+                                      CUDA_TRY(cudaMallocHost(&ptr, size));
                                     return ptr;
-                                  }(max_chunk_bfr_size),
+                                    }(max_chunk_bfr_size),
                                   cudaFreeHost};
+    }
   }();
 
   // Encode row groups in batches  
@@ -718,7 +724,7 @@ size_type num_columns = table.num_columns();
     for (; r < rnext; r++, global_r++) {
       for (auto i = 0; i < num_columns; i++) {
         gpu::EncColumnChunk *ck = &chunks[r * num_columns + i];
-        void *dev_bfr;
+        uint8_t *dev_bfr;
         if (ck->is_compressed) {
           state.md.row_groups[global_r].columns[i].meta_data.codec = compression_;
           dev_bfr = ck->compressed_bfr;
@@ -726,47 +732,53 @@ size_type num_columns = table.num_columns();
         else {
           dev_bfr = ck->uncompressed_bfr;
         }
-        CUDA_TRY(cudaMemcpyAsync(host_bfr.get(), dev_bfr, ck->ck_stat_size + ck->compressed_size,
-                                 cudaMemcpyDeviceToHost, state.stream));
-        CUDA_TRY(cudaStreamSynchronize(state.stream));
+        
+        if(out_sink_->supports_device_write()){
+          // let the writer do what it wants to retrieve the data from the gpu. 
+          out_sink_->device_write(dev_bfr + ck->ck_stat_size, ck->compressed_size, state.stream);
+          // we still need to do a (much smaller) memcpy for the statistics.
+          if (ck->ck_stat_size != 0) {
+            state.md.row_groups[global_r].columns[i].meta_data.statistics_blob.resize(ck->ck_stat_size);
+            CUDA_TRY(cudaMemcpyAsync(state.md.row_groups[global_r].columns[i].meta_data.statistics_blob.data(), dev_bfr, ck->ck_stat_size,
+                     cudaMemcpyDeviceToHost, state.stream));
+            CUDA_TRY(cudaStreamSynchronize(state.stream));
+          }
+        } else {
+          // copy the full data
+          CUDA_TRY(cudaMemcpyAsync(host_bfr.get(), dev_bfr, ck->ck_stat_size + ck->compressed_size,
+                                  cudaMemcpyDeviceToHost, state.stream));
+          CUDA_TRY(cudaStreamSynchronize(state.stream));
+          out_sink_->host_write(host_bfr.get() + ck->ck_stat_size, ck->compressed_size);
+          if (ck->ck_stat_size != 0) {        
+            state.md.row_groups[global_r].columns[i].meta_data.statistics_blob.resize(ck->ck_stat_size);
+            memcpy(state.md.row_groups[global_r].columns[i].meta_data.statistics_blob.data(), host_bfr.get(), ck->ck_stat_size);
+          }
+        }
         state.md.row_groups[global_r].total_byte_size += ck->compressed_size;
         state.md.row_groups[global_r].columns[i].meta_data.data_page_offset = state.current_chunk_offset + ((ck->has_dictionary) ? ck->dictionary_size : 0);
         state.md.row_groups[global_r].columns[i].meta_data.dictionary_page_offset = (ck->has_dictionary) ? state.current_chunk_offset : 0;
         state.md.row_groups[global_r].columns[i].meta_data.total_uncompressed_size = ck->bfr_size;
         state.md.row_groups[global_r].columns[i].meta_data.total_compressed_size = ck->compressed_size;
-        out_sink_->write(host_bfr.get() + ck->ck_stat_size, ck->compressed_size);
-        if (ck->ck_stat_size != 0) {
-          state.md.row_groups[global_r].columns[i].meta_data.statistics_blob.resize(ck->ck_stat_size);
-          memcpy(state.md.row_groups[global_r].columns[i].meta_data.statistics_blob.data(), host_bfr.get(), ck->ck_stat_size);
-        }
         state.current_chunk_offset += ck->compressed_size;
       }
     }
   }
 }
 
-void writer::impl::write_chunked_end(pq_chunked_state &state){    
+void writer::impl::write_chunked_end(pq_chunked_state &state){
   CompactProtocolWriter cpw(&buffer_);
   file_ender_s fendr;
   fendr.footer_len = (uint32_t)cpw.write(&state.md);  
   fendr.magic = PARQUET_MAGIC;
-  out_sink_->write(buffer_.data(), buffer_.size());  
-  out_sink_->write(&fendr, sizeof(fendr));  
+  out_sink_->host_write(buffer_.data(), buffer_.size());  
+  out_sink_->host_write(&fendr, sizeof(fendr));  
   out_sink_->flush();
 }
 
 // Forward to implementation
-writer::writer(std::string const& filepath, writer_options const& options,
-               rmm::mr::device_memory_resource *mr)
-    : _impl(std::make_unique<impl>(data_sink::create(filepath), options, mr)) {}
-
-writer::writer(std::vector<char>* buffer, writer_options const& options,
-      rmm::mr::device_memory_resource *mr)
-: _impl(std::make_unique<impl>(data_sink::create(buffer), options, mr)) {}
-
-writer::writer(writer_options const& options,
-      rmm::mr::device_memory_resource *mr)
-: _impl(std::make_unique<impl>(data_sink::create(), options, mr)) {}
+writer::writer(std::unique_ptr<data_sink> sink, writer_options const& options,
+                rmm::mr::device_memory_resource* mr)
+    : _impl(std::make_unique<impl>(std::move(sink), options, mr)) {}
 
 // Destructor within this translation unit
 writer::~writer() = default;

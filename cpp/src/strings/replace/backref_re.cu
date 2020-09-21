@@ -113,9 +113,9 @@ struct backrefs_fn
         u_char data1[stack_size];
         u_char data2[stack_size];
         prog.set_stack_mem(data1,data2);
-        string_view d_str = d_strings.element<string_view>(idx);
-        auto nchars = d_str.length();     // number of characters in input string
-        auto nbytes = d_str.size_bytes(); // number of bytes in input string
+        string_view const d_str = d_strings.element<string_view>(idx);
+        auto const nchars = d_str.length();  // number of characters in input string
+        auto nbytes = d_str.size_bytes();    // number of bytes in input string
         const char* in_ptr = d_str.data();
         char* out_ptr = d_offsets ? (d_chars + d_offsets[idx]) : nullptr;
         size_type lpos = 0;      // last byte position processed in d_str
@@ -130,15 +130,14 @@ struct backrefs_fn
             if( out_ptr )
                 out_ptr = copy_and_increment(out_ptr,in_ptr+lpos,spos-lpos);
             size_type lpos_template = 0;   // last end pos of replace template
-            auto repl_ptr = d_repl.data(); // replace template pattern
+            auto const repl_ptr = d_repl.data(); // replace template pattern
             thrust::for_each( thrust::seq, backrefs_begin, backrefs_end,
                 [&] __device__ (backref_type backref)
                 {
                     if( out_ptr )
                     {
                         auto const copy_length = backref.second - lpos_template;
-                        out_ptr = copy_and_increment(out_ptr, repl_ptr, copy_length );
-                        repl_ptr += copy_length;
+                        out_ptr = copy_and_increment(out_ptr, repl_ptr+lpos_template, copy_length );
                         lpos_template += copy_length;
                     }
                     // extract the specific group's string for this backref's index
@@ -151,7 +150,7 @@ struct backrefs_fn
                     epos_extract = d_str.byte_offset(epos_extract); // to bytes
                     nbytes += epos_extract - spos_extract;
                     if( out_ptr )
-                        out_ptr = copy_and_increment(out_ptr, d_str.data()+spos_extract, (epos_extract-spos_extract));
+                        out_ptr = copy_and_increment(out_ptr, in_ptr+spos_extract, (epos_extract-spos_extract));
                 });
             if( out_ptr && (lpos_template < d_repl.size_bytes()) )// copy remainder of template
                 out_ptr = copy_and_increment(out_ptr, repl_ptr+lpos_template, d_repl.size_bytes() - lpos_template);

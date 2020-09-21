@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,10 +38,23 @@ namespace detail {
  * If empty, all columns will be sorted in `null_order::BEFORE`.
  * @param[in] mr Optional, The resource to use for all allocations
  * @param[in] stream Optional CUDA stream on which to execute kernels
- * @return std::unique_ptr<column> A non-nullable column of INT32 elements
+ * @return std::unique_ptr<column> A non-nullable column of `size_type` elements
  * containing the permuted row indices of `input` if it were sorted
  *---------------------------------------------------------------------------**/
 std::unique_ptr<column> sorted_order(
+    table_view input, std::vector<order> const& column_order = {},
+    std::vector<null_order> const& null_precedence = {},
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+    cudaStream_t stream = 0);
+
+/**
+ * @brief Computes the row indices that would produce `input` in a stable
+ * lexicographical sorted order.
+ * The order of equivalent elements is guaranteed to be preserved.
+ *
+ * @copydetails cudf::experimental::detail::sorted_order
+ */
+std::unique_ptr<column> stable_sorted_order(
     table_view input, std::vector<order> const& column_order = {},
     std::vector<null_order> const& null_precedence = {},
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),

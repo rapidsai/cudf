@@ -63,6 +63,14 @@ class UnsafeMemoryAccessor {
   }
 
   /**
+   * Get the system memory page size.
+   * @return system memory page size in bytes
+   */
+  public static int pageSize() {
+    return UNSAFE.pageSize();
+  }
+
+  /**
    * Allocate bytes on host
    * @param bytes - number of bytes to allocate
    * @return - allocated address

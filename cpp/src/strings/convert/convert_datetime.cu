@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,14 +23,12 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/error.hpp>
-#include "../utilities.hpp"
-#include "../utilities.cuh"
+#include <strings/utilities.hpp>
+#include <strings/utilities.cuh>
 
 #include <vector>
 #include <map>
 #include <rmm/thrust_rmm_allocator.h>
-#include <thrust/sort.h>
-#include <thrust/sequence.h>
 
 namespace cudf
 {
@@ -63,12 +61,13 @@ enum timestamp_parse_component {
     TP_YEAR        = 0,
     TP_MONTH       = 1,
     TP_DAY         = 2,
-    TP_HOUR        = 3,
-    TP_MINUTE      = 4,
-    TP_SECOND      = 5,
-    TP_SUBSECOND   = 6,
-    TP_TZ_MINUTES  = 7,
-    TP_ARRAYSIZE   = 8
+    TP_DAY_OF_YEAR = 3,
+    TP_HOUR        = 4,
+    TP_MINUTE      = 5,
+    TP_SECOND      = 6,
+    TP_SUBSECOND   = 7,
+    TP_TZ_MINUTES  = 8,
+    TP_ARRAYSIZE   = 9
 };
 
 enum class format_char_type : int8_t
@@ -79,7 +78,7 @@ enum class format_char_type : int8_t
 
 /**
  * @brief Represents a format specifier or literal from a timestamp format string.
- * 
+ *
  * Created by the format_compiler when parsing a format string.
  */
 struct alignas(4) format_item
@@ -101,7 +100,7 @@ struct alignas(4) format_item
 /**
  * @brief The format_compiler parses a timestamp format string into a vector of
  * format_items.
- * 
+ *
  * The vector of format_items are used when parsing a string into timestamp
  * components and when formatting a string from timestamp components.
  */
@@ -112,14 +111,11 @@ struct format_compiler
     timestamp_units units;
     rmm::device_vector<format_item> d_items;
 
-    std::map<char,int8_t> specifiers = {
-        {'a',0}, {'A',0},
-        {'w',1},
-        {'b',0}, {'B',0},
-        {'Y',4},{'y',2}, {'m',2}, {'d',2},
-        {'H',2},{'I',2},{'M',2},{'S',2},{'f',6},
-        {'p',2},{'z',5},
-        {'j',3},{'U',2},{'W',2}
+    std::map<char,int8_t> specifier_lengths = {
+        {'Y',4}, {'y',2}, {'m',2}, {'d',2},
+        {'H',2}, {'I',2}, {'M',2}, {'S',2}, {'f',6},
+        {'z',5}, {'Z',3},
+        {'p',2}, {'j',3}
     };
 
     format_compiler( const char* format, timestamp_units units )
@@ -150,12 +146,15 @@ struct format_compiler
                 template_string.append(1,ch);
                 continue;
             }
-            if( specifiers.find(ch)==specifiers.end() )
+            if( specifier_lengths.find(ch)==specifier_lengths.end() )
             {
-                CUDF_FAIL( "Invalid specifier" ); // show ch in here somehow
+                std::ostringstream message;
+                message << "cuDF failure at: " __FILE__ ":" << __LINE__ << ": ";
+                message << "invalid timestamp specifier: " << ch;
+                throw cudf::logic_error(message.str());
             }
 
-            int8_t spec_length = specifiers[ch];
+            int8_t spec_length = specifier_lengths[ch];
             if( ch=='f' )
             {
                 // adjust spec_length based on units (default is 6 for micro-seconds)
@@ -212,6 +211,8 @@ struct parse_datetime
         for( size_t idx=0; idx < items_count; ++idx )
         {
             auto item = d_format_items[idx];
+            if( length < item.length )
+                return 1;
             if(item.item_type==format_char_type::literal)
             {   // static character we'll just skip;
                 // consume item.length bytes from string
@@ -219,8 +220,6 @@ struct parse_datetime
                 length -= item.length;
                 continue;
             }
-            if( length < item.length )
-                return 1;
 
             // special logic for each specifier
             switch(item.value)
@@ -235,8 +234,10 @@ struct parse_datetime
                     timeparts[TP_MONTH] = str2int(ptr,item.length);
                     break;
                 case 'd':
-                case 'j':
                     timeparts[TP_DAY] = str2int(ptr,item.length);
+                    break;
+                case 'j':
+                    timeparts[TP_DAY_OF_YEAR] = str2int(ptr,item.length);
                     break;
                 case 'H':
                 case 'I':
@@ -254,14 +255,20 @@ struct parse_datetime
                 case 'p':
                 {
                     string_view am_pm(ptr,2);
-                    if( (timeparts[TP_HOUR] <= 12) &&
-                        ((am_pm.compare("PM",2)==0) || (am_pm.compare("pm",2)==0)) )
-                        timeparts[TP_HOUR] += 12;
+                    auto hour = timeparts[TP_HOUR];
+                    if((am_pm.compare("AM",2)==0) || (am_pm.compare("am",2)==0))
+                    {
+                        if( hour == 12 )
+                            hour = 0;
+                    }
+                    else if( hour < 12 )
+                        hour += 12;
+                    timeparts[TP_HOUR] = hour;
                     break;
                 }
                 case 'z':
                 {
-                    int sign = *ptr=='-' ? -1:1;
+                    int sign = *ptr=='-' ? 1:-1; // revert timezone back to UTC
                     int hh = str2int(ptr+1,2);
                     int mm = str2int(ptr+3,2);
                     // ignoring the rest for now
@@ -269,6 +276,8 @@ struct parse_datetime
                     timeparts[TP_TZ_MINUTES] = sign * ((hh*60)+mm);
                     break;
                 }
+                case 'Z':
+                    break; // skip
                 default:
                     return 3;
             }
@@ -373,7 +382,6 @@ struct dispatch_to_timestamps_fn
                      mutable_column_view& results_view,
                      cudaStream_t stream ) const
     {
-        CUDF_EXPECTS( cudf::is_timestamp<T>(), "Expecting timestamp type" );
         format_compiler compiler(format.c_str(),units);
         auto d_items = compiler.compile_to_device();
         auto d_results = results_view.data<T>();
@@ -492,7 +500,9 @@ struct datetime_formatter
         constexpr int32_t daysInCentury = 36524; // (100*365) + 24;
         constexpr int32_t daysIn4Years = 1461; // (4*365) + 1;
         constexpr int32_t daysInYear = 365;
-        // day offsets for each month:   Mar Apr May June July  Aug  Sep  Oct  Nov  Dec  Jan  Feb
+        // The months are shifted so that March is the starting month and February
+        // (with possible leap day in it) is the last month for the linear calculation.
+        // Day offsets for each month:   Mar Apr May June July  Aug Sep  Oct  Nov  Dec  Jan  Feb
         const int32_t monthDayOffset[] = { 0, 31, 61, 92, 122, 153, 184, 214, 245, 275, 306, 337, 366 };
 
         // code logic handles leap years in chunks: 400y,100y,4y,1y
@@ -527,6 +537,13 @@ struct datetime_formatter
                 break;
             }
         }
+
+        // compute day of the year and account for calculating with March being the first month
+        // for month >= 10, leap-day has been already been included
+        timeparts[TP_DAY_OF_YEAR] = (month >= 10) ? days - monthDayOffset[10] + 1
+                                    : days + /*Jan=*/ 31  + /*Feb=*/ 28 + 1 + // 2-month shift
+                                      ((year % 4 == 0) && ((year % 100 != 0) || (year % 400 == 0)));
+
         int32_t day = days - monthDayOffset[month] +1; // compute day of month
         if( month >= 10 )
             ++year;
@@ -633,15 +650,25 @@ struct datetime_formatter
                     ptr = int2str(ptr,item.length,timeparts[TP_MONTH]);
                     break;
                 case 'd': // day of month
-                case 'j': // day of year
                     ptr = int2str(ptr,item.length,timeparts[TP_DAY]);
+                    break;
+                case 'j': // day of year
+                    ptr = int2str(ptr,item.length,timeparts[TP_DAY_OF_YEAR]);
                     break;
                 case 'H': // 24-hour
                     ptr = int2str(ptr,item.length,timeparts[TP_HOUR]);
                     break;
                 case 'I': // 12-hour
-                    ptr = int2str(ptr,item.length,timeparts[TP_HOUR] % 12);
+                {
+                    // 0 = 12am; 12 = 12pm; 6 = 06am; 18 = 06pm
+                    auto hour = timeparts[TP_HOUR];
+                    if( hour==0 )
+                        hour = 12;
+                    if( hour > 12 )
+                        hour -= 12;
+                    ptr = int2str(ptr,item.length,hour);
                     break;
+                }
                 case 'M': // minute
                     ptr = int2str(ptr,item.length,timeparts[TP_MINUTE]);
                     break;
@@ -652,14 +679,17 @@ struct datetime_formatter
                     ptr = int2str(ptr,item.length,timeparts[TP_SUBSECOND]);
                     break;
                 case 'p': // am or pm
-                    if( timeparts[TP_HOUR] <= 12 )
+                    // 0 = 12am, 12 = 12pm
+                    if( timeparts[TP_HOUR] < 12 )
                         memcpy(ptr,"AM",2);
                     else
                         memcpy(ptr,"PM",2);
                     ptr += 2;
                     break;
                 case 'z': // timezone
-                    break; // do nothing for this one
+                    memcpy(ptr,"+0000",5); // always UTC
+                    ptr += 5;
+                    break;
                 case 'Z':
                     memcpy(ptr,"UTC",3);
                     ptr += 3;

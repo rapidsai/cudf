@@ -144,7 +144,7 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>>
         reclass& h_class = h_prog.class_at(idx);
         reclass_device d_class;
         d_class.builtins = h_class.builtins;
-        d_class.count = h_class.literals.size();
+        d_class.count = h_class.literals.size()/2;
         d_class.literals = reinterpret_cast<char32_t*>(d_end);
         memcpy( classes++, &d_class, sizeof(d_class) );
         memcpy( h_end, h_class.literals.c_str(), h_class.literals.size()*sizeof(char32_t) );

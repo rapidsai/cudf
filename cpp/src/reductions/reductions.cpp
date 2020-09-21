@@ -18,6 +18,7 @@
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/detail/reduction_functions.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 namespace cudf {
 namespace experimental {
@@ -101,7 +102,8 @@ std::unique_ptr<scalar> reduce(
     data_type output_dtype,
     rmm::mr::device_memory_resource* mr)
 {
-  return detail::reduce(col, agg, output_dtype, mr);
+   CUDF_FUNC_RANGE();
+   return detail::reduce(col, agg, output_dtype, mr);
 }
 
 }  // namespace experimental

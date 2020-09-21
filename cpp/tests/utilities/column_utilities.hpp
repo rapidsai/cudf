@@ -160,22 +160,18 @@ inline std::pair<std::vector<std::string>, std::vector<bitmask_type>> to_host(co
   thrust::host_vector<size_type> h_offsets(strings_data.second);
 
   // build std::string vector from chars and offsets
-  if( !h_chars.empty() ) { // check for all nulls case
-    std::vector<std::string> host_data;
-    host_data.reserve(c.size());
+  std::vector<std::string> host_data;
+  host_data.reserve(c.size());
 
-    // When C++17, replace this loop with std::adjacent_difference()
-    for( size_type idx=0; idx < c.size(); ++idx )
-    {
-        auto offset = h_offsets[idx];
-        auto length = h_offsets[idx+1] - offset;
-        host_data.push_back(std::string( h_chars.data()+offset, length));
-    }
-
-    return { host_data, bitmask_to_host(c) };
+  // When C++17, replace this loop with std::adjacent_difference()
+  for( size_type idx=0; idx < c.size(); ++idx )
+  {
+      auto offset = h_offsets[idx];
+      auto length = h_offsets[idx+1] - offset;
+      host_data.push_back(std::string( h_chars.data()+offset, length));
   }
-  else 
-    return { std::vector<std::string>{}, bitmask_to_host(c) };
+
+  return { host_data, bitmask_to_host(c) };
 }
 
 }  // namespace test

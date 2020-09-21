@@ -22,7 +22,7 @@
 namespace cudf {
 namespace experimental {
 
-enum class unary_op {
+enum class unary_op : int32_t {
   SIN,          // < Trigonometric sine
   COS,          // < Trigonometric cosine
   TAN,          // < Trigonometric tangent

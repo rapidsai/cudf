@@ -2,7 +2,8 @@ import numba
 import pandas as pd
 
 import cudf
-import cudf._lib as libcudf
+import cudf._libxx as libcudf
+from cudf.core.column.column import as_column
 from cudf.utils import cudautils
 
 
@@ -192,9 +193,30 @@ class Rolling:
         )
 
     def _apply_agg_series(self, sr, agg_name):
-        result_col = libcudf.rolling.rolling(
-            sr._column, self.window, self.min_periods, self.center, agg_name
-        )
+        if isinstance(self.window, int):
+            result_col = libcudf.rolling.rolling(
+                sr._column,
+                None,
+                None,
+                self.window,
+                self.min_periods,
+                self.center,
+                agg_name,
+            )
+        else:
+            from cudf.utils import cudautils
+
+            result_col = libcudf.rolling.rolling(
+                sr._column,
+                as_column(self.window),
+                as_column(
+                    cudautils.full(self.window.size, 0, self.window.dtype)
+                ),
+                None,
+                self.min_periods,
+                self.center,
+                agg_name,
+            )
         return sr._copy_construct(data=result_col)
 
     def _apply_agg_dataframe(self, df, agg_name):

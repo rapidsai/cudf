@@ -1,10 +1,5 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
-
 import cudf
 from cudf._lib.cudf cimport *
 from cudf._lib.GDFError import GDFError
@@ -23,7 +18,7 @@ import pyarrow as pa
 
 from cudf.utils import cudautils
 from cudf.utils.dtypes import is_categorical_dtype
-from cudf.utils.utils import calc_chunk_size, mask_dtype, mask_bitsize
+from cudf._libxx.null_mask import bitmask_allocation_size_bytes
 import rmm
 import nvstrings
 import nvcategory
@@ -329,7 +324,6 @@ cdef Column gdf_column_to_column(gdf_column* c_col):
     """
     from cudf.core.buffer import Buffer
     from cudf.core.column import build_column, as_column
-    from cudf.utils.utils import mask_bitsize, calc_chunk_size
 
     gdf_dtype = c_col.dtype
     data_ptr = int(<uintptr_t>c_col.data)
@@ -359,7 +353,7 @@ cdef Column gdf_column_to_column(gdf_column* c_col):
         mask = None
         if mask_ptr != 0:
             mptr = rmm._DevicePointer(mask_ptr)
-            mask = Buffer(mptr, size=calc_chunk_size(c_col.size, mask_bitsize))
+            mask = Buffer(mptr, size=bitmask_allocation_size_bytes(c_col.size))
 
         result = build_column(data=data,
                               dtype=dtype,
@@ -511,25 +505,6 @@ cpdef check_gdf_error(errcode):
             msg = errname
 
         raise GDFError(errname, msg)
-
-
-cpdef count_nonzero_mask(mask, size):
-    """ Counts the number of null bits in a given validity mask
-    """
-    assert mask.size * mask_bitsize >= size
-    cdef int nnz = 0
-    cdef uintptr_t mask_ptr = get_ctype_ptr(mask)
-    cdef int c_size = size
-
-    if mask_ptr:
-        with nogil:
-            gdf_count_nonzero_mask(
-                <valid_type*>mask_ptr,
-                c_size,
-                &nnz
-            )
-
-    return nnz
 
 
 cdef char* py_to_c_str(object py_str) except? NULL:

@@ -90,7 +90,9 @@ void BM_pre_sorted_sum(benchmark::State& state){
   auto sorted_keys = cudf::experimental::gather(keys_table, *sort_order);
   // No need to sort values using sort_order because they were generated randomly
 
-  cudf::experimental::groupby::groupby gb_obj(*sorted_keys, true, true);
+  cudf::experimental::groupby::groupby gb_obj(*sorted_keys, 
+                                              cudf::include_nulls::NO,
+                                              cudf::sorted::YES);
 
   std::vector<cudf::experimental::groupby::aggregation_request> requests;
   requests.emplace_back(cudf::experimental::groupby::aggregation_request());

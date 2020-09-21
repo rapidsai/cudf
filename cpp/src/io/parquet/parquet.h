@@ -297,8 +297,6 @@ protected:
     std::vector<uint8_t> *m_buf;
 };
 
-
-
 } // namespace parquet
 } // namespace io
 } // namespace cudf
