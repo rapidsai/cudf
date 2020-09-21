@@ -22,6 +22,8 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/replace.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/dictionary/detail/replace.hpp>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/replace.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -257,6 +259,18 @@ std::unique_ptr<cudf::column> replace_nulls_column_kernel_forwarder::operator()<
                                    std::move(valid_bits),
                                    stream,
                                    mr);
+}
+
+template <>
+std::unique_ptr<cudf::column> replace_nulls_column_kernel_forwarder::operator()<cudf::dictionary32>(
+  cudf::column_view const& input,
+  cudf::column_view const& replacement,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
+{
+  cudf::dictionary_column_view dict_input(input);
+  cudf::dictionary_column_view dict_repl(replacement);
+  return cudf::dictionary::detail::replace_nulls(dict_input, dict_repl, mr, stream);
 }
 
 template <typename T>

@@ -19,6 +19,7 @@
 
 #include <cudf/replace.hpp>
 
+#include <cudf/dictionary/encode.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/utilities/error.hpp>
@@ -295,6 +296,35 @@ TYPED_TEST(ReplaceNullsTest, LargeScaleScalar)
                                 replacement,
                                 cudf::test::fixed_width_column_wrapper<TypeParam>(
                                   expectedColumn.begin(), expectedColumn.end()));
+}
+
+struct ReplaceDictionaryTest : public cudf::test::BaseFixture {
+};
+
+TEST_F(ReplaceDictionaryTest, ReplaceNulls)
+{
+  cudf::test::strings_column_wrapper input_w({"c", "", "", "a", "d", "d", "", ""},
+                                             {1, 0, 0, 1, 1, 1, 0, 0});
+  auto input = cudf::dictionary::encode(input_w);
+  cudf::test::strings_column_wrapper replacement_w({"c", "c", "", "a", "d", "d", "b", ""},
+                                                   {1, 1, 0, 1, 1, 1, 1, 0});
+  auto replacement = cudf::dictionary::encode(replacement_w);
+  cudf::test::strings_column_wrapper expected_w({"c", "c", "", "a", "d", "d", "b", ""},
+                                                {1, 1, 0, 1, 1, 1, 1, 0});
+  auto expected = cudf::dictionary::encode(expected_w);
+
+  auto result = cudf::replace_nulls(input->view(), replacement->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected->view());
+}
+
+TEST_F(ReplaceDictionaryTest, ReplaceNullsError)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> input_w({1, 1, 2, 2}, {1, 0, 0, 1});
+  auto input = cudf::dictionary::encode(input_w);
+  cudf::test::fixed_width_column_wrapper<int64_t> replacement_w({1, 2, 3, 4});
+  auto replacement = cudf::dictionary::encode(replacement_w);
+
+  EXPECT_THROW(cudf::replace_nulls(input->view(), replacement->view()), cudf::logic_error);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
