@@ -27,6 +27,7 @@ namespace cudf {
  * @addtogroup column_nullmask
  * @{
  * @file
+ * @brief APIs for managing validity bitmasks
  */
 
 /**

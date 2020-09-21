@@ -30,6 +30,7 @@ namespace cudf {
  * @addtogroup column_copy
  * @{
  * @file
+ * @brief Column APIs for gather, scatter, split, slice, etc.
  */
 
 /**

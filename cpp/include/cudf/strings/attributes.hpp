@@ -25,7 +25,8 @@ namespace strings {
 /**
  * @addtogroup strings_apis
  * @{
- * @file
+ * @file strings/attributes.hpp
+ * @brief Read attributes of strings column
  */
 
 /**

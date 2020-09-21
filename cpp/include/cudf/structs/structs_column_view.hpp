@@ -18,6 +18,11 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 
+/**
+ * @file
+ * @brief Class definition for cudf::structs_column_view.
+ */
+
 namespace cudf {
 
 class structs_column_view : private column_view {

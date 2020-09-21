@@ -26,6 +26,7 @@ namespace cudf {
  * @addtogroup column_reshape
  * @{
  * @file
+ * @brief Column APIs for interleave and tile
  */
 
 /**

@@ -25,6 +25,7 @@ namespace cudf {
  * @addtogroup transformation_transform
  * @{
  * @file
+ * @brief Column APIs for transforming rows
  */
 
 /**

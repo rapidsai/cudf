@@ -25,6 +25,7 @@ namespace cudf {
  * @addtogroup scalar_factories
  * @{
  * @file
+ * @brief Scalar factory APIs
  */
 
 /**

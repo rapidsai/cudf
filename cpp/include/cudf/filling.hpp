@@ -25,6 +25,7 @@ namespace cudf {
  * @addtogroup transformation_fill
  * @{
  * @file
+ * @brief Column APIs for fill, repeat, and sequence
  */
 
 /**

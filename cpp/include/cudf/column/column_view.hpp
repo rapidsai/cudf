@@ -19,7 +19,8 @@
 #include <vector>
 
 /**
- * @file
+ * @file column_view.hpp
+ * @brief column view class definitons
  */
 
 namespace cudf {

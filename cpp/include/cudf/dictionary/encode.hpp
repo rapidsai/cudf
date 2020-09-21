@@ -25,6 +25,7 @@ namespace dictionary {
  * @addtogroup dictionary_encode
  * @{
  * @file
+ * @brief Dictionary column encode and decode APIs
  */
 
 /**

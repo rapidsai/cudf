@@ -14,6 +14,11 @@
  * limitations under the License.
  */
 
+/**
+ * @file
+ * @brief Doxygen group definitions
+ */
+
 // This header is only processed by doxygen and does
 // not need to be included in any source file.
 // Below are the main groups that doxygen uses to build

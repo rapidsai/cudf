@@ -25,6 +25,7 @@ namespace cudf {
  * @addtogroup column_factories
  * @{
  * @file
+ * @brief Column factory APIs
  */
 
 /**

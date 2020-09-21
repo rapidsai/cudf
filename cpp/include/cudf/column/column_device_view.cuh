@@ -27,9 +27,13 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+/**
+ * @file column_device_view.cuh
+ * @brief Column device view class definitons
+ */
+
 namespace cudf {
 namespace detail {
-
 /**
  * @brief An immutable, non-owning view of device data as a column of elements
  * that is trivially copyable and usable in CUDA device code.

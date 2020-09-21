@@ -24,7 +24,8 @@ namespace strings {
 /**
  * @addtogroup strings_split
  * @{
- * @file
+ * @file strings/split/partition.hpp
+ * @brief Strings partition APIs
  */
 
 /**

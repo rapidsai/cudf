@@ -25,7 +25,8 @@ namespace strings {
 /**
  * @addtogroup strings_combine
  * @{
- * @file
+ * @file strings/combine.hpp
+ * @brief Strings APIs for concatenate and join
  */
 
 /**

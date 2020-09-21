@@ -26,6 +26,7 @@ namespace cudf {
  * @addtogroup copy_concatenate
  * @{
  * @file
+ * @brief Concatenate columns APIs
  */
 
 /**

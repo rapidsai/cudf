@@ -252,6 +252,7 @@ CUDA_HOST_DEVICE_CALLABLE auto shift_with_precise_round(T const& value, scale_ty
  * @addtogroup fixed_point_classes
  * @{
  * @file
+ * @brief Class definition for fixed point data type
  */
 
 /**
