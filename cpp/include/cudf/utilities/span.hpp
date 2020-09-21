@@ -58,14 +58,6 @@ class span_base {
   constexpr span_base(span_base const& other) noexcept = default;
   constexpr span_base& operator=(span_base const& other) noexcept = default;
 
-  template <typename C,
-            typename P = decltype(std::declval<C>().data()),
-            std::enable_if<std::is_same<std::add_pointer<T>, P>::value>* = nullptr>
-  constexpr span_base(C& in)
-    : _data(static_cast<T*>(thrust::raw_pointer_cast(in.data()))), _size(in.size())
-  {
-  }
-
   // not noexcept due to undefined behavior when size = 0
   constexpr reference front() const { return _data[0]; }
   // not noexcept due to undefined behavior when size = 0
@@ -108,13 +100,68 @@ class span_base {
   size_type _size;
 };
 
+// ===== host_span =================================================================================
+
+namespace {
+
+template <typename T>
+struct is_host_span_container : std::false_type {
+};
+
+template <typename T, typename Alloc>
+struct is_host_span_container<  //
+  std::vector<T, Alloc>> : std::true_type {
+};
+
+template <typename T, typename Alloc>
+struct is_host_span_container<  //
+  thrust::host_vector<T, Alloc>> : std::true_type {
+};
+
+}  // namespace
+
 template <typename T, std::size_t Extent = dynamic_extent>
 struct host_span : public span_base<T, Extent, host_span<T, Extent>> {
   using base = cudf::detail::span_base<T, Extent, host_span<T, Extent>>;
   using base::base;
 
   constexpr host_span() noexcept : base() {}
+
+  template <typename C, std::enable_if<is_host_span_container<C>::value>* = nullptr>
+  constexpr host_span(C& in) : base(in.data(), in.size())
+  {
+  }
+
+  template <typename C, std::enable_if<is_host_span_container<C>::value>* = nullptr>
+  constexpr host_span(C const& in) : base(in.data(), in.size())
+  {
+  }
 };
+
+// ===== device_span ===============================================================================
+
+namespace {
+
+template <typename T>
+struct is_device_span_container : std::false_type {
+};
+
+template <typename T, typename Alloc>
+struct is_device_span_container<  //
+  thrust::device_vector<T, Alloc>> : std::true_type {
+};
+
+template <typename T>
+struct is_device_span_container<  //
+  rmm::device_vector<T>> : std::true_type {
+};
+
+template <>
+struct is_device_span_container<  //
+  rmm::device_buffer> : std::true_type {
+};
+
+}  // namespace
 
 template <typename T, std::size_t Extent = dynamic_extent>
 struct device_span : public span_base<T, Extent, device_span<T, Extent>> {
@@ -122,6 +169,22 @@ struct device_span : public span_base<T, Extent, device_span<T, Extent>> {
   using base::base;
 
   constexpr device_span() noexcept : base() {}
+
+  template <typename C, std::enable_if<is_device_span_container<C>::value>* = nullptr>
+  constexpr device_span(C& in)
+    : base(static_cast<T*>(  //
+             thrust::raw_pointer_cast(in.data())),
+           in.size())
+  {
+  }
+
+  template <typename C, std::enable_if<is_device_span_container<C>::value>* = nullptr>
+  constexpr device_span(C const& in)
+    : base(static_cast<T const*>(  //
+             thrust::raw_pointer_cast(in.data())),
+           in.size())
+  {
+  }
 };
 
 }  // namespace detail
