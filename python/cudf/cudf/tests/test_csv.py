@@ -1023,6 +1023,19 @@ def test_csv_reader_byte_range(tmpdir, segment_bytes):
     assert list(df["int2"]) == list(ref_df["int2"])
 
 
+def test_csv_reader_byte_range_type_corner_case(tmpdir):
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file17.csv")
+
+    cudf.datasets.timeseries(
+        start="2000-01-01",
+        end="2002-12-31",
+        dtypes={"name": str, "id": int, "x": float, "y": float},
+    ).to_csv(fname, chunksize=100000)
+
+    byte_range = (2_147_483_648, 100_000_000)
+    cudf.read_csv(fname, byte_range=byte_range, header=None)
+
+
 @pytest.mark.parametrize("segment_bytes", [10, 19, 31, 36])
 def test_csv_reader_byte_range_strings(segment_bytes):
     names = ["strings"]
