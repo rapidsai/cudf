@@ -23,18 +23,43 @@ import ai.rapids.cudf.HostMemoryBuffer;
 /** Single-buffer compressor implementing LZ4 */
 public class LZ4Compressor {
 
+  /**
+   * Calculate the amount of temporary storage space required to compress a buffer.
+   * @param input     buffer to compress
+   * @param inputType type of data within the buffer
+   * @param chunkSize compression chunk size to use
+   * @return amount in bytes of temporary storage space required to compress the buffer
+   */
   public static long getTempSize(BaseDeviceMemoryBuffer input, CompressionType inputType,
                                  long chunkSize) {
     return NvcompJni.lz4CompressGetTempSize(input.getAddress(), input.getLength(),
         inputType.nativeId, chunkSize);
   }
 
+  /**
+   * Calculate the amount of output storage space required to compress a buffer.
+   * @param input      buffer to compress
+   * @param inputType  type of data within the buffer
+   * @param chunkSize  compression chunk size to use
+   * @param tempBuffer temporary storage space
+   * @return amount in bytes of output storage space required to compress the buffer
+   */
   public static long getOutputSize(BaseDeviceMemoryBuffer input, CompressionType inputType,
                                    long chunkSize, BaseDeviceMemoryBuffer tempBuffer) {
     return NvcompJni.lz4CompressGetOutputSize(input.getAddress(), input.getLength(),
         inputType.nativeId, chunkSize, tempBuffer.getAddress(), tempBuffer.getLength(), false);
   }
 
+  /**
+   * Compress a buffer with LZ4.
+   * @param input      buffer to compress
+   * @param inputType  type of data within the buffer
+   * @param chunkSize  compression chunk size to use
+   * @param tempBuffer temporary storage space
+   * @param output     buffer that will contain the compressed result
+   * @param stream     CUDA stream to use
+   * @return size of the resulting compressed data stored to the output buffer
+   */
   public static long compress(BaseDeviceMemoryBuffer input, CompressionType inputType,
                               long chunkSize, BaseDeviceMemoryBuffer tempBuffer,
                               BaseDeviceMemoryBuffer output, Cuda.Stream stream) {
@@ -43,6 +68,18 @@ public class LZ4Compressor {
         output.getAddress(), output.getLength(), stream.getStream());
   }
 
+  /**
+   * Asynchronously compress a buffer with LZ4. The compressed size output buffer must be pinned
+   * memory for this operation to be truly asynchronous. Note that the caller must synchronize
+   * on the specified CUDA stream in order to safely examine the compressed output size!
+   * @param compressedSizeOutputBuffer host memory where the compressed output size will be stored
+   * @param input      buffer to compress
+   * @param inputType  type of data within the buffer
+   * @param chunkSize  compression chunk size to use
+   * @param tempBuffer temporary storage space
+   * @param output     buffer that will contain the compressed result
+   * @param stream     CUDA stream to use
+   */
   public static void compressAsync(HostMemoryBuffer compressedSizeOutputBuffer,
                                    BaseDeviceMemoryBuffer input, CompressionType inputType,
                                    long chunkSize, BaseDeviceMemoryBuffer tempBuffer,

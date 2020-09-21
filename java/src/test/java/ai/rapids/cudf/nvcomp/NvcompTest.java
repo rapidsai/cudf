@@ -162,24 +162,13 @@ public class NvcompTest {
       }
 
       // decompress the buffers
-      long[] outputSizes;
-      try (BatchedLZ4Decompressor.BatchedMetadata metadata =
-                   BatchedLZ4Decompressor.getMetadata(compressedInputs, Cuda.DEFAULT_STREAM)) {
-        outputSizes = BatchedLZ4Decompressor.getOutputSizes(metadata, numBuffers);
-        for (int i = 0; i < numBuffers; ++i) {
-          uncompressedBuffers[i] = DeviceMemoryBuffer.allocate(outputSizes[i]);
-        }
-        long tempSize = BatchedLZ4Decompressor.getTempSize(metadata);
-        try (DeviceMemoryBuffer tempBuffer = DeviceMemoryBuffer.allocate(tempSize)) {
-          BatchedLZ4Decompressor.decompressAsync(compressedInputs, tempBuffer, metadata,
-                  uncompressedBuffers, Cuda.DEFAULT_STREAM);
-        }
-      }
+      uncompressedBuffers = BatchedLZ4Decompressor.decompressAsync(compressedInputs,
+              Cuda.DEFAULT_STREAM);
 
       // check the decompressed results against the original
       for (int i = 0; i < numBuffers; ++i) {
         try (HostMemoryBuffer expected = HostMemoryBuffer.allocate(originalBuffers[i].getLength());
-             HostMemoryBuffer actual = HostMemoryBuffer.allocate(outputSizes[i])) {
+             HostMemoryBuffer actual = HostMemoryBuffer.allocate(uncompressedBuffers[i].getLength())) {
           Assertions.assertTrue(expected.getLength() <= Integer.MAX_VALUE);
           Assertions.assertTrue(actual.getLength() <= Integer.MAX_VALUE);
           Assertions.assertEquals(originalBuffers[i].getLength(), uncompressedBuffers[i].getLength(),

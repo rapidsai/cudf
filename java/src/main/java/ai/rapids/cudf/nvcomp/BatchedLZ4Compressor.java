@@ -21,7 +21,9 @@ import ai.rapids.cudf.Cuda;
 import ai.rapids.cudf.DeviceMemoryBuffer;
 import ai.rapids.cudf.HostMemoryBuffer;
 
+/** Multi-buffer LZ4 compressor */
 public class BatchedLZ4Compressor {
+  /** Describes a batched compression result */
   public static class BatchedCompressionResult {
     private final DeviceMemoryBuffer[] compressedBuffers;
     private final long[] compressedSizes;
@@ -31,15 +33,26 @@ public class BatchedLZ4Compressor {
       this.compressedSizes = sizes;
     }
 
+    /**
+     * Get the output compressed buffers corresponding to the input buffers.
+     * Note that the buffers are likely larger than required to store the compressed data.
+     */
     public DeviceMemoryBuffer[] getCompressedBuffers() {
       return compressedBuffers;
     }
 
+    /** Get the corresponding amount of compressed data in each output buffer. */
     public long[] getCompressedSizes() {
       return compressedSizes;
     }
   }
 
+  /**
+   * Get the amount of temporary storage space required to compress a batch of buffers.
+   * @param inputs    batch of data buffers to be individually compressed
+   * @param chunkSize compression chunk size to use
+   * @return amount in bytes of temporary storage space required to compress the batch
+   */
   public static long getTempSize(BaseDeviceMemoryBuffer[] inputs, long chunkSize) {
     int numBuffers = inputs.length;
     long[] inputAddrs = new long[numBuffers];
@@ -52,6 +65,13 @@ public class BatchedLZ4Compressor {
     return NvcompJni.batchedLZ4CompressGetTempSize(inputAddrs, inputSizes, chunkSize);
   }
 
+  /**
+   * Get the amount of output storage space required to compress a batch of buffers.
+   * @param inputs     batch of data buffers to be individually compressed
+   * @param chunkSize  compression chunk size to use
+   * @param tempBuffer temporary storage space
+   * @return amount in bytes of output storage space corresponding to each input buffer in the batch
+   */
   public static long[] getOutputSizes(BaseDeviceMemoryBuffer[] inputs, long chunkSize,
                                       BaseDeviceMemoryBuffer tempBuffer) {
     int numBuffers = inputs.length;
@@ -66,6 +86,18 @@ public class BatchedLZ4Compressor {
         tempBuffer.getAddress(), tempBuffer.getLength());
   }
 
+  /**
+   * Asynchronously compress a batch of input buffers. The compressed size output buffer must be
+   * pinned memory for this operation to be truly asynchronous. Note that the caller must
+   * synchronize on the specified CUDA stream in order to safely examine the compressed output
+   * sizes!
+   * @param compressedSizesOutputBuffer host memory where the compressed output size will be stored
+   * @param inputs     buffers to compress
+   * @param chunkSize  type of data within each buffer
+   * @param tempBuffer compression chunk size to use
+   * @param outputs    output buffers that will contain the compressed results
+   * @param stream     CUDA stream to use
+   */
   public static void compressAsync(HostMemoryBuffer compressedSizesOutputBuffer,
                                    BaseDeviceMemoryBuffer[] inputs, long chunkSize,
                                    BaseDeviceMemoryBuffer tempBuffer,
@@ -101,6 +133,14 @@ public class BatchedLZ4Compressor {
         outputAddrs, outputSizes, stream.getStream());
   }
 
+  /**
+   * Compress a batch of buffers with LZ4
+   * @param inputs    buffers to compress
+   * @param chunkSize compression chunk size to use
+   * @param stream    CUDA stream to use
+   * @return compression results containing the corresponding output buffer and compressed data size
+   *         for each input buffer
+   */
   public static BatchedCompressionResult compress(BaseDeviceMemoryBuffer[] inputs, long chunkSize,
                                                   Cuda.Stream stream) {
     int numBuffers = inputs.length;

@@ -26,20 +26,44 @@ import org.slf4j.LoggerFactory;
 public class Decompressor {
   private static final Logger log = LoggerFactory.getLogger(Decompressor.class);
 
+  /**
+   * Get the metadata associated with a compressed buffer
+   * @param buffer compressed data buffer
+   * @param stream CUDA stream to use
+   * @return opaque metadata object
+   */
   public static Metadata getMetadata(BaseDeviceMemoryBuffer buffer, Cuda.Stream stream) {
     long metadata = NvcompJni.decompressGetMetadata(buffer.getAddress(), buffer.getLength(),
         stream.getStream());
     return new Metadata(metadata);
   }
 
+  /**
+   * Get the amount of temporary storage space required to decompress a buffer.
+   * @param metadata metadata retrieved from the compressed data
+   * @return amount in bytes of temporary storage space required to decompress
+   */
   public static long getTempSize(Metadata metadata) {
     return NvcompJni.decompressGetTempSize(metadata.getMetadata());
   }
 
+  /**
+   * Get the amount of output storage space required to hold the uncompressed data.
+   * @param metadata metadata retrieved from the compressed data
+   * @return amount in bytes of output storage space required to decompress
+   */
   public static long getOutputSize(Metadata metadata) {
     return NvcompJni.decompressGetOutputSize(metadata.getMetadata());
   }
 
+  /**
+   * Asynchronously decompress a buffer.
+   * @param input      compressed data buffer
+   * @param tempBuffer temporary storage buffer
+   * @param metadata   metadata retrieved from compressed data
+   * @param output     output storage buffer
+   * @param stream     CUDA stream to use
+   */
   public static void decompressAsync(BaseDeviceMemoryBuffer input, BaseDeviceMemoryBuffer tempBuffer,
       Metadata metadata, BaseDeviceMemoryBuffer output, Cuda.Stream stream) {
     NvcompJni.decompressAsync(
@@ -50,6 +74,11 @@ public class Decompressor {
         stream.getStream());
   }
 
+  /**
+   * Determine if a buffer is data compressed with LZ4.
+   * @param buffer data to examine
+   * @return true if the data is LZ4 compressed
+   */
   public static boolean isLZ4Data(BaseDeviceMemoryBuffer buffer) {
     return NvcompJni.isLZ4Data(buffer.getAddress(), buffer.getLength());
   }
@@ -72,6 +101,10 @@ public class Decompressor {
       return cleaner.metadata;
     }
 
+    /**
+     * Determine if this metadata is associated with LZ4-compressed data
+     * @return true if the metadata is associated with LZ4-compressed data
+     */
     public boolean isLZ4Metadata() {
       return NvcompJni.isLZ4Metadata(getMetadata());
     }
