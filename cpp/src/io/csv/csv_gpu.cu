@@ -353,12 +353,12 @@ __inline__ __device__ cudf::timestamp_ns decode_value(char const *begin,
 }
 
 #ifndef DURATION_DECODE_VALUE
-#define DURATION_DECODE_VALUE(Type)                               \
-  template <>                                                     \
-  __inline__ __device__ Type decode_value(                        \
-    const char *begin, const char *end, ParseOptions const &opts) \
-  {                                                               \
-    return Type{};                                                \
+#define DURATION_DECODE_VALUE(Type)                                 \
+  template <>                                                       \
+  __inline__ __device__ Type decode_value(                          \
+    const char *begin, const char *end, ParseOptions const &opts)   \
+  {                                                                 \
+    return Type{parseTimeDeltaFormat<Type>(begin, 0, end - begin)}; \
   }
 #endif
 DURATION_DECODE_VALUE(duration_D)
@@ -454,7 +454,7 @@ struct decode_op {
       if (serializedTrieContains(opts.trueValuesTrie, begin, field_len)) {
         return static_cast<T>(1);
       } else if (serializedTrieContains(opts.falseValuesTrie, begin, field_len)) {
-        return static_cast<T>(1);
+        return static_cast<T>(0);
       } else {
         if (flags & column_parse::as_hexadecimal) {
           return decode_value<T, 16>(begin, end, opts);
