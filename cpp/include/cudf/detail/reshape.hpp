@@ -33,26 +33,4 @@ std::unique_ptr<table> tile(
   cudaStream_t stream                 = 0,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 }  // namespace detail
-
-/*
- * Configures if byte casting flips endianness
- */
-enum class flip_endianness : bool { NO, YES };
-
-/**
- * @brief Converts a column's elements to lists of bytes
- *
- * @param inpu_column column to be converted to lists of bytes.
- * @param configuration configuration to retain or flip the endianness of a row.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @param  stream CUDA stream to launch kernels within
- *
- * @return The column containing the lists of bytes.
- */
-std::unique_ptr<column> byte_cast(
-  column_view const& input_column,
-  flip_endianness configuration,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0);
-
 }  // namespace cudf

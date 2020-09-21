@@ -18,8 +18,8 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
 #include <memory>
-#include "cudf/types.hpp"
 
 namespace cudf {
 /**
@@ -71,4 +71,26 @@ std::unique_ptr<table> tile(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
+
+/*
+ * Configures if byte casting flips endianness
+ */
+enum class flip_endianness : bool { NO, YES };
+
+/**
+ * @brief Converts a column's elements to lists of bytes
+ *
+ * @param input_column column to be converted to lists of bytes.
+ * @param configuration configuration retain or flip the endianness of a row.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ *
+ * @return The column containing the lists of bytes.
+ */
+std::unique_ptr<column> byte_cast(
+  column_view const& input_column,
+  flip_endianness configuration,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0);
+
 }  // namespace cudf

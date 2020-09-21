@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#include "cudf/detail/reshape.hpp"
-
+#include <cudf/reshape.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/type_lists.hpp>
@@ -25,20 +24,26 @@ using namespace cudf::test;
 class ByteCastTest : public cudf::test::BaseFixture {
 };
 
-TEST_F(ByteCastTest, int16Values)
+TEST_F(ByteCastTest, int16ValuesWithSplit)
 {
   using limits = std::numeric_limits<int16_t>;
   fixed_width_column_wrapper<int16_t> const int16_col(
     {short(0), short(100), short(-100), limits::min(), limits::max()});
-  lists_column_wrapper<uint8_t> const int16_expected_flipped(
-    {{0x00, 0x00}, {0x00, 0x64}, {0xff, 0x9c}, {0x80, 0x00}, {0x7f, 0xff}});
   lists_column_wrapper<uint8_t> const int16_expected(
     {{0x00, 0x00}, {0x64, 0x00}, {0x9c, 0xff}, {0x00, 0x80}, {0xff, 0x7f}});
+  lists_column_wrapper<uint8_t> const int16_expected_slice1(
+    {{0x00, 0x00}, {0x00, 0x64}, {0xff, 0x9c}});
+  lists_column_wrapper<uint8_t> const int16_expected_slice2({{0x80, 0x00}, {0x7f, 0xff}});
 
-  auto const output_int16_flipped = cudf::byte_cast(int16_col, cudf::flip_endianness::YES);
-  auto const output_int16         = cudf::byte_cast(int16_col, cudf::flip_endianness::NO);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_int16_flipped->view(), int16_expected_flipped, true);
+  std::vector<cudf::size_type> splits({3});
+  std::vector<cudf::column_view> split_column = cudf::split(int16_col, splits);
+
+  auto const output_int16        = cudf::byte_cast(int16_col, cudf::flip_endianness::NO);
+  auto const output_int16_slice1 = cudf::byte_cast(split_column.at(0), cudf::flip_endianness::YES);
+  auto const output_int16_slice2 = cudf::byte_cast(split_column.at(1), cudf::flip_endianness::YES);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_int16->view(), int16_expected, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_int16_slice1->view(), int16_expected_slice1, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_int16_slice2->view(), int16_expected_slice2, true);
 }
 
 TEST_F(ByteCastTest, int16ValuesWithNulls)
@@ -112,7 +117,7 @@ TEST_F(ByteCastTest, int32ValuesWithNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(output_int32->view(), int32_expected->view());
 }
 
-TEST_F(ByteCastTest, int64Values)
+TEST_F(ByteCastTest, int64ValuesWithSplit)
 {
   using limits = std::numeric_limits<int64_t>;
   fixed_width_column_wrapper<int64_t> const int64_col(
@@ -123,17 +128,23 @@ TEST_F(ByteCastTest, int64Values)
      {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x9c},
      {0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
      {0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}});
-  lists_column_wrapper<uint8_t> const int64_expected(
+  lists_column_wrapper<uint8_t> const int64_expected_slice1(
     {{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
      {0x64, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-     {0x9c, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
-     {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80},
+     {0x9c, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}});
+  lists_column_wrapper<uint8_t> const int64_expected_slice2(
+    {{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80},
      {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f}});
 
+  std::vector<cudf::size_type> splits({3});
+  std::vector<cudf::column_view> split_column = cudf::split(int64_col, splits);
+
   auto const output_int64_flipped = cudf::byte_cast(int64_col, cudf::flip_endianness::YES);
-  auto const output_int64         = cudf::byte_cast(int64_col, cudf::flip_endianness::NO);
+  auto const output_int64_slice1  = cudf::byte_cast(split_column.at(0), cudf::flip_endianness::NO);
+  auto const output_int64_slice2  = cudf::byte_cast(split_column.at(1), cudf::flip_endianness::NO);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_int64_flipped->view(), int64_expected_flipped, true);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_int64->view(), int64_expected, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_int64_slice1->view(), int64_expected_slice1, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_int64_slice2->view(), int64_expected_slice2, true);
 }
 
 TEST_F(ByteCastTest, int64ValuesWithNulls)
@@ -162,22 +173,13 @@ TEST_F(ByteCastTest, int64ValuesWithNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(output_int64->view(), int64_expected->view());
 }
 
-TEST_F(ByteCastTest, fp32Values)
+TEST_F(ByteCastTest, fp32ValuesWithSplit)
 {
   using limits = std::numeric_limits<float>;
   float nan    = limits::quiet_NaN();
   float inf    = limits::infinity();
   fixed_width_column_wrapper<float> const fp32_col(
     {float(0.0), float(100.0), float(-100.0), limits::min(), limits::max(), nan, -nan, inf, -inf});
-  lists_column_wrapper<uint8_t> const fp32_expected_flipped({{0x00, 0x00, 0x00, 0x00},
-                                                             {0x42, 0xc8, 0x00, 0x00},
-                                                             {0xc2, 0xc8, 0x00, 0x00},
-                                                             {0x00, 0x80, 0x00, 0x00},
-                                                             {0x7f, 0x7f, 0xff, 0xff},
-                                                             {0x7f, 0xc0, 0x00, 0x00},
-                                                             {0x7f, 0xc0, 0x00, 0x00},
-                                                             {0x7f, 0x80, 0x00, 0x00},
-                                                             {0xff, 0x80, 0x00, 0x00}});
   lists_column_wrapper<uint8_t> const fp32_expected({{0x00, 0x00, 0x00, 0x00},
                                                      {0x00, 0x00, 0xc8, 0x42},
                                                      {0x00, 0x00, 0xc8, 0xc2},
@@ -187,11 +189,25 @@ TEST_F(ByteCastTest, fp32Values)
                                                      {0x00, 0x00, 0xc0, 0x7f},
                                                      {0x00, 0x00, 0x80, 0x7f},
                                                      {0x00, 0x00, 0x80, 0xff}});
+  lists_column_wrapper<uint8_t> const fp32_expected_slice1({{0x00, 0x00, 0x00, 0x00},
+                                                            {0x42, 0xc8, 0x00, 0x00},
+                                                            {0xc2, 0xc8, 0x00, 0x00},
+                                                            {0x00, 0x80, 0x00, 0x00},
+                                                            {0x7f, 0x7f, 0xff, 0xff}});
+  lists_column_wrapper<uint8_t> const fp32_expected_slice2({{0x7f, 0xc0, 0x00, 0x00},
+                                                            {0x7f, 0xc0, 0x00, 0x00},
+                                                            {0x7f, 0x80, 0x00, 0x00},
+                                                            {0xff, 0x80, 0x00, 0x00}});
 
-  auto const output_fp32_flipped = cudf::byte_cast(fp32_col, cudf::flip_endianness::YES);
-  auto const output_fp32         = cudf::byte_cast(fp32_col, cudf::flip_endianness::NO);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_fp32_flipped->view(), fp32_expected_flipped, true);
+  std::vector<cudf::size_type> splits({5});
+  std::vector<cudf::column_view> split_column = cudf::split(fp32_col, splits);
+
+  auto const output_fp32        = cudf::byte_cast(fp32_col, cudf::flip_endianness::NO);
+  auto const output_fp32_slice1 = cudf::byte_cast(split_column.at(0), cudf::flip_endianness::YES);
+  auto const output_fp32_slice2 = cudf::byte_cast(split_column.at(1), cudf::flip_endianness::YES);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_fp32->view(), fp32_expected, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_fp32_slice1->view(), fp32_expected_slice1, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_fp32_slice2->view(), fp32_expected_slice2, true);
 }
 
 TEST_F(ByteCastTest, fp32ValuesWithNulls)
@@ -213,14 +229,14 @@ TEST_F(ByteCastTest, fp32ValuesWithNulls)
     5,
     std::move(fixed_width_column_wrapper<cudf::size_type>{0, 4, 8, 12, 16, 20}.release()),
     std::move(fp32_data.release()),
-    3,
+    2,
     detail::make_null_mask(even_validity, even_validity + 5));
 
   auto const output_fp32 = cudf::byte_cast(fp32_col, cudf::flip_endianness::YES);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(output_fp32->view(), fp32_expected->view());
 }
 
-TEST_F(ByteCastTest, fp64Values)
+TEST_F(ByteCastTest, fp64ValuesWithSplit)
 {
   using limits = std::numeric_limits<double>;
   double nan   = limits::quiet_NaN();
@@ -234,7 +250,6 @@ TEST_F(ByteCastTest, fp64Values)
                                                      -nan,
                                                      inf,
                                                      -inf});
-
   lists_column_wrapper<uint8_t> const fp64_flipped_expected(
     {{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
      {0x40, 0x59, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
@@ -245,21 +260,27 @@ TEST_F(ByteCastTest, fp64Values)
      {0x7f, 0xf8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
      {0x7f, 0xf0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
      {0xff, 0xf0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}});
-  lists_column_wrapper<uint8_t> const fp64_expected(
+  lists_column_wrapper<uint8_t> const fp64_expected_slice1(
     {{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
      {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x59, 0x40},
      {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x59, 0xc0},
      {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00},
-     {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xef, 0x7f},
-     {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf8, 0x7f},
+     {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xef, 0x7f}});
+  lists_column_wrapper<uint8_t> const fp64_expected_slice2(
+    {{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf8, 0x7f},
      {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf8, 0x7f},
      {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf0, 0x7f},
      {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf0, 0xff}});
 
+  std::vector<cudf::size_type> splits({5});
+  std::vector<cudf::column_view> split_column = cudf::split(fp64_col, splits);
+
   auto const output_fp64_flipped = cudf::byte_cast(fp64_col, cudf::flip_endianness::YES);
-  auto const output_fp64         = cudf::byte_cast(fp64_col, cudf::flip_endianness::NO);
+  auto const output_fp64_slice1  = cudf::byte_cast(split_column.at(0), cudf::flip_endianness::NO);
+  auto const output_fp64_slice2  = cudf::byte_cast(split_column.at(1), cudf::flip_endianness::NO);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_fp64_flipped->view(), fp64_flipped_expected, true);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_fp64->view(), fp64_expected, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_fp64_slice1->view(), fp64_expected_slice1, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output_fp64_slice2->view(), fp64_expected_slice2, true);
 }
 
 TEST_F(ByteCastTest, fp64ValuesWithNulls)
