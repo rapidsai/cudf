@@ -40,6 +40,7 @@ from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     cudf_dtype_from_pydata_dtype,
     is_categorical_dtype,
+    is_column_like,
     is_list_dtype,
     is_list_like,
     is_scalar,
@@ -2628,12 +2629,7 @@ class DataFrame(Frame, Serializable):
         return DataFrame(cols, idx)
 
     def _set_index(
-        self,
-        index,
-        drop=True,
-        append=False,
-        inplace=False,
-        verify_integrity=False,
+        self, index, to_drop=[], inplace=False, verify_integrity=False,
     ):
         """Helper for `.set_index`
 
@@ -2641,10 +2637,8 @@ class DataFrame(Frame, Serializable):
         ----------
         index : Index
             The new index to set.
-        drop : boolean
-            Whether to drop corresponding column for str index argument
-        append : boolean
-            Append current to new index to form a multiindex
+        to_drop : list
+            The list of labels indicating columns to drop
         inplace : boolean
             Modify the DataFrame in place (do not create a new object)
         verify_integrity : boolean
@@ -2653,26 +2647,13 @@ class DataFrame(Frame, Serializable):
         if not isinstance(index, Index):
             raise ValueError("Parameter index should be type `Index`.")
 
-        df = self if inplace else self.copy(deep=False)
+        df = self if inplace else self.copy(deep=True)
 
         if verify_integrity and not index.is_unique:
             # TODO: indicate duplicate keys
             raise ValueError("Index is not unique.\n {}".format(index))
 
-        if drop:
-            col = (
-                index.names
-                if isinstance(index, cudf.MultiIndex)
-                else [index.name]
-            )
-            old_idx_ncol = (
-                len(self.index.names)
-                if isinstance(self.index, cudf.MultiIndex)
-                else 1
-            )
-            col = (
-                col[old_idx_ncol:] if append else col
-            )  # dont include old index column during drop
+        for col in to_drop:
             df.drop(columns=col, inplace=True)
 
         df.index = index
@@ -2750,92 +2731,78 @@ class DataFrame(Frame, Serializable):
         5  e  5.0
         """
 
-        def _merge_index_frame(idf, names):
-            if isinstance(idf, Series):
-                idf = cudf.DataFrame(idf._data)
+        if not isinstance(index, list):
+            index = [index]
 
-            if isinstance(self.index, cudf.MultiIndex):
-                left = self.index._source_data.copy(deep=False)
-                right = idf
-
-                # Preprocess for join
-                left.columns = list(range(len(left.columns)))
-                right.columns = list(
-                    range(
-                        len(left.columns),
-                        len(left.columns) + len(right.columns),
+        # Preliminary type check
+        col_not_found = []
+        columns_to_add = []
+        names = []
+        to_drop = []
+        for i, col in enumerate(index):
+            # Is column label
+            if is_scalar(col) or isinstance(col, tuple):
+                if col in self.columns:
+                    columns_to_add.append(self[col])
+                    names.append(col)
+                    if drop:
+                        to_drop.append(col)
+                else:
+                    col_not_found.append(col)
+            else:
+                # Try coerce into column
+                if not is_column_like(col):
+                    try:
+                        col = as_column(col)
+                    except TypeError:
+                        raise f"{col} cannot be converted to column-like."
+                if isinstance(col, (cudf.MultiIndex, pd.MultiIndex)):
+                    col = (
+                        cudf.from_pandas(col)
+                        if isinstance(col, pd.MultiIndex)
+                        else col
                     )
-                )
+                    cols = [col._data[x] for x in col._data]
+                    columns_to_add = columns_to_add + cols
+                    names = names + col.names
+                else:
+                    # Column-like
+                    columns_to_add.append(col)
+                    if isinstance(
+                        col, (cudf.Series, cudf.Index, pd.Series, pd.Index)
+                    ):
+                        names.append(col.name)
+                    else:
+                        names.append(None)
 
-                idf = self.index._source_data.join(idf, how="left")
-                names = self.index.names + names
-            elif isinstance(self.index, Index):
-                idf.columns = list(range(1, 1 + len(idf.columns)))
-                idf.insert(loc=0, name=0, value=self.index._values)
-                names = [self.index.name] + names
-            return idf, names
-
-        # When index is a list of column names
-        if isinstance(index, list):
-            if not all([isinstance(x, str) for x in index]):
-                # TODO: add support for heterogenous index list
-                raise NotImplementedError(
-                    "Heterogenous index list is not supported."
-                )
-
-            if len(index) == 1:
-                return self.set_index(
-                    index=index[0],
-                    drop=drop,
-                    inplace=inplace,
-                    verify_integrity=verify_integrity,
-                )
-            else:
-                idf = self[index]
-                names = index
-                if append:
-                    idf, names = _merge_index_frame(idf, names)
-                return self._set_index(
-                    index=cudf.MultiIndex.from_frame(idf, names=names),
-                    inplace=inplace,
-                    drop=drop,
-                    append=append,
-                    verify_integrity=verify_integrity,
-                )
-
-        # When index is a column name
-        if isinstance(index, str):
-            idf = self[index]
-            names = [index]
-            if append:
-                idf, names = _merge_index_frame(idf, names)
-                index = cudf.MultiIndex.from_frame(idf, names=names)
-            else:
-                index = as_index(idf)
-            return self._set_index(
-                index=index,
-                inplace=inplace,
-                drop=drop,
-                append=append,
-                verify_integrity=verify_integrity,
+        if len(col_not_found) > 0:
+            raise ValueError(
+                f"The following columns are not found: {col_not_found}"
             )
 
-        # When index is a new `Index` or `Series-convertible`
-        # Will not drop columns
-        index = index if isinstance(index, Index) else as_index(index)
-        idf = DataFrame(index._data)
-        names = (
-            index.names if isinstance(index, cudf.MultiIndex) else [index.name]
-        )
         if append:
-            idf, names = _merge_index_frame(idf, names)
-            index = cudf.MultiIndex.from_frame(idf, names=names)
+            idx_cols = [self.index._data[x] for x in self.index._data]
+            if isinstance(self.index, cudf.MultiIndex):
+                idx_names = self.index.names
+            else:
+                idx_names = [self.index.name]
+            columns_to_add = idx_cols + columns_to_add
+            names = idx_names + names
+
+        if len(columns_to_add) == 0:
+            raise ValueError("No valid columns to be added to index.")
+        elif len(columns_to_add) == 1:
+            idx = cudf.Index(columns_to_add[0], name=names[0])
+        else:
+            idf = cudf.DataFrame()
+            for i, col in enumerate(columns_to_add):
+                idf[i] = col
+            idx = cudf.MultiIndex(source_data=idf, names=names)
 
         return self._set_index(
-            index=index,
+            index=idx,
+            to_drop=to_drop,
             inplace=inplace,
-            drop=False,
-            append=append,
             verify_integrity=verify_integrity,
         )
 
