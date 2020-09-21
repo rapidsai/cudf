@@ -123,12 +123,14 @@ struct host_span : public span_base<T, Extent, host_span<T, Extent>> {
 
   constexpr host_span() noexcept : base() {}  // required to compile on centos
 
-  template <typename C, std::enable_if<is_host_span_supported_container<C>::value>* = nullptr>
+  template <typename C,
+            typename std::enable_if_t<is_host_span_supported_container<C>::value>* = nullptr>
   constexpr host_span(C& in) : base(in.data(), in.size())
   {
   }
 
-  template <typename C, std::enable_if<is_host_span_supported_container<C>::value>* = nullptr>
+  template <typename C,
+            typename std::enable_if_t<is_host_span_supported_container<C>::value>* = nullptr>
   constexpr host_span(C const& in) : base(in.data(), in.size())
   {
   }
@@ -150,9 +152,9 @@ struct is_device_span_supported_container<  //
   rmm::device_vector<T>> : std::true_type {
 };
 
-template <>
+template <typename T>
 struct is_device_span_supported_container<  //
-  rmm::device_buffer> : std::true_type {
+  rmm::device_uvector<T>> : std::true_type {
 };
 
 template <typename T, std::size_t Extent = dynamic_extent>
@@ -162,19 +164,13 @@ struct device_span : public span_base<T, Extent, device_span<T, Extent>> {
 
   constexpr device_span() noexcept : base() {}  // required to compile on centos
 
-  template <typename C, std::enable_if<is_device_span_supported_container<C>::value>* = nullptr>
-  constexpr device_span(C& in)
-    : base(static_cast<T*>(  // safe because we support only specific containers
-             thrust::raw_pointer_cast(in.data())),
-           in.size())
+  template <typename C, std::enable_if_t<is_device_span_supported_container<C>::value>* = nullptr>
+  constexpr device_span(C& in) : base(thrust::raw_pointer_cast(in.data()), in.size())
   {
   }
 
-  template <typename C, std::enable_if<is_device_span_supported_container<C>::value>* = nullptr>
-  constexpr device_span(C const& in)
-    : base(static_cast<T const*>(  // safe because we support only specific containers
-             thrust::raw_pointer_cast(in.data())),
-           in.size())
+  template <typename C, std::enable_if_t<is_device_span_supported_container<C>::value>* = nullptr>
+  constexpr device_span(C const& in) : base(thrust::raw_pointer_cast(in.data()), in.size())
   {
   }
 };

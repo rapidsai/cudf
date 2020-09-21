@@ -211,17 +211,14 @@ TEST(SpanTest, CanConstructFromDeviceContainers)
   (void)device_span<int>(d_thrust_vector);
   (void)device_span<int>(d_vector);
   (void)device_span<int>(d_uvector);
-  (void)device_span<int>(d_buffer);
 
   auto const& d_thrust_vector_c = d_thrust_vector;
   auto const& d_vector_c        = d_vector;
   auto const& d_uvector_c       = d_uvector;
-  auto const& d_buffer_c        = d_buffer;
 
   (void)device_span<int const>(d_thrust_vector_c);
   (void)device_span<int const>(d_vector_c);
   (void)device_span<int const>(d_uvector_c);
-  (void)device_span<int const>(d_buffer_c);
 }
 
 __global__ void simple_device_kernel(device_span<bool> result) { result[0] = true; }
