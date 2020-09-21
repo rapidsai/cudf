@@ -351,7 +351,7 @@ class csv_reader_options {
    *
    * @param offset Number of bytes of offset.
    */
-  void set_byte_range_offset(size_type offset)
+  void set_byte_range_offset(size_t offset)
   {
     if ((offset != 0) and ((_skiprows != 0) or (_skipfooter != 0) or (_nrows != -1))) {
       CUDF_FAIL(
@@ -366,7 +366,7 @@ class csv_reader_options {
    *
    * @param size Number of bytes to read.
    */
-  void set_byte_range_size(size_type size)
+  void set_byte_range_size(size_t size)
   {
     if ((size != 0) and ((_skiprows != 0) or (_skipfooter != 0) or (_nrows != -1))) {
       CUDF_FAIL(
@@ -685,7 +685,7 @@ class csv_reader_options_builder {
    * @param offset Number of bytes of offset.
    * @return this for chaining.
    */
-  csv_reader_options_builder& byte_range_offset(size_type offset)
+  csv_reader_options_builder& byte_range_offset(size_t offset)
   {
     options.set_byte_range_offset(offset);
     return *this;
@@ -697,7 +697,7 @@ class csv_reader_options_builder {
    * @param size Number of bytes to read.
    * @return this for chaining.
    */
-  csv_reader_options_builder& byte_range_size(size_type size)
+  csv_reader_options_builder& byte_range_size(size_t size)
   {
     options.set_byte_range_size(size);
     return *this;
