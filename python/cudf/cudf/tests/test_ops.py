@@ -88,7 +88,7 @@ def test_acos(dtype, test_df):
 @pytest.mark.parametrize("dtype", int_type)
 @pytest.mark.parametrize("test_df", [False, True])
 def test_acos_integer(dtype, test_df):
-    math_op_test(dtype, np.arccos, test_df=test_df)
+    math_op_test(dtype, np.arccos, test_df=test_df, check_dtype=False)
 
 
 @pytest.mark.parametrize("dtype", params_real_types)
