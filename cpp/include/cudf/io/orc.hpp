@@ -17,12 +17,8 @@
 #pragma once
 
 #include <cudf/io/types.hpp>
-
-#include <cudf/io/writers.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-
-#include <rmm/mr/device/default_memory_resource.hpp>
 
 #include <memory>
 #include <string>

@@ -92,6 +92,10 @@ struct reduce_dispatch_functor {
           stream,
           mr);
       } break;
+      case aggregation::NTH_ELEMENT: {
+        auto nth_agg = static_cast<nth_element_aggregation const *>(agg.get());
+        return reduction::nth_element(col, nth_agg->_n, nth_agg->_null_handling, mr, stream);
+      } break;
       default: CUDF_FAIL("Unsupported reduction operator");
     }
   }
