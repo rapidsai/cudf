@@ -158,7 +158,7 @@ static __device__ uint32_t ByteRLE(
   while (numvals > 0) {
     uint8_t v0       = (t < numvals) ? inbuf[(inpos + t) & inmask] : 0;
     uint8_t v1       = (t + 1 < numvals) ? inbuf[(inpos + t + 1) & inmask] : 0;
-    uint32_t rpt_map = BALLOT(t + 1 < numvals && v0 == v1), literal_run, repeat_run,
+    uint32_t rpt_map = ballot(t + 1 < numvals && v0 == v1), literal_run, repeat_run,
              maxvals = min(numvals, 512);
     if (!(t & 0x1f)) s->u.byterle.rpt_map[t >> 5] = rpt_map;
     __syncthreads();
@@ -315,17 +315,17 @@ static inline __device__ void StoreBitsBigEndian(
   if (t <= (num_vals | 0x1f)) {
     uint32_t mask;
     if (w <= 1) {
-      v    = (v << 1) | (SHFL_XOR(v, 1) & 0x1);
-      v    = (v << 2) | (SHFL_XOR(v, 2) & 0x3);
-      v    = (v << 4) | (SHFL_XOR(v, 4) & 0xf);
+      v    = (v << 1) | (shuffle_xor(v, 1) & 0x1);
+      v    = (v << 2) | (shuffle_xor(v, 2) & 0x3);
+      v    = (v << 4) | (shuffle_xor(v, 4) & 0xf);
       mask = 0x7;
     } else if (w <= 2) {
-      v    = (v << 2) | (SHFL_XOR(v, 1) & 0x3);
-      v    = (v << 4) | (SHFL_XOR(v, 2) & 0xf);
+      v    = (v << 2) | (shuffle_xor(v, 1) & 0x3);
+      v    = (v << 4) | (shuffle_xor(v, 2) & 0xf);
       mask = 0x3;
     } else  // if (w <= 4)
     {
-      v    = (v << 4) | (SHFL_XOR(v, 1) & 0xf);
+      v    = (v << 4) | (shuffle_xor(v, 1) & 0xf);
       mask = 0x1;
     }
     if (t < num_vals && !(t & mask)) { dst[(t * w) >> 3] = static_cast<uint8_t>(v); }
@@ -352,6 +352,12 @@ template <StreamIndexType cid, class T, bool is_signed, uint32_t inmask>
 static __device__ uint32_t IntegerRLE(
   orcenc_state_s *s, const T *inbuf, uint32_t inpos, uint32_t numvals, uint32_t flush, int t)
 {
+  using warp_reduce      = cub::WarpReduce<T>;
+  using half_warp_reduce = cub::WarpReduce<T, 16>;
+  __shared__ union {
+    typename warp_reduce::TempStorage full[2];
+    typename half_warp_reduce::TempStorage half[2];
+  } temp_storage;
   uint8_t *dst     = s->chunk.streams[cid] + s->strm_pos[cid];
   uint32_t out_cnt = 0;
 
@@ -359,7 +365,7 @@ static __device__ uint32_t IntegerRLE(
     T v0               = (t < numvals) ? inbuf[(inpos + t) & inmask] : 0;
     T v1               = (t + 1 < numvals) ? inbuf[(inpos + t + 1) & inmask] : 0;
     T v2               = (t + 2 < numvals) ? inbuf[(inpos + t + 2) & inmask] : 0;
-    uint32_t delta_map = BALLOT(t + 2 < numvals && v1 - v0 == v2 - v1), maxvals = min(numvals, 512),
+    uint32_t delta_map = ballot(t + 2 < numvals && v1 - v0 == v2 - v1), maxvals = min(numvals, 512),
              literal_run, delta_run;
     if (!(t & 0x1f)) s->u.intrle.delta_map[t >> 5] = delta_map;
     __syncthreads();
@@ -402,16 +408,8 @@ static __device__ uint32_t IntegerRLE(
       } else {
         intrle_minmax(vmax, vmin);
       }
-      vmin = min(vmin, (T)SHFL_XOR(vmin, 1));
-      vmin = min(vmin, (T)SHFL_XOR(vmin, 2));
-      vmin = min(vmin, (T)SHFL_XOR(vmin, 4));
-      vmin = min(vmin, (T)SHFL_XOR(vmin, 8));
-      vmin = min(vmin, (T)SHFL_XOR(vmin, 16));
-      vmax = max(vmax, (T)SHFL_XOR(vmax, 1));
-      vmax = max(vmax, (T)SHFL_XOR(vmax, 2));
-      vmax = max(vmax, (T)SHFL_XOR(vmax, 4));
-      vmax = max(vmax, (T)SHFL_XOR(vmax, 8));
-      vmax = max(vmax, (T)SHFL_XOR(vmax, 16));
+      vmin = warp_reduce(temp_storage.full[0]).Reduce(vmin, cub::Min());
+      vmax = warp_reduce(temp_storage.full[1]).Reduce(vmax, cub::Max());
       if (!(t & 0x1f)) {
         s->u.intrle.scratch.u64[(t >> 5) * 2 + 0] = vmin;
         s->u.intrle.scratch.u64[(t >> 5) * 2 + 1] = vmax;
@@ -420,14 +418,8 @@ static __device__ uint32_t IntegerRLE(
       if (t < 32) {
         vmin = (T)s->u.intrle.scratch.u64[(t & 0xf) * 2 + 0];
         vmax = (T)s->u.intrle.scratch.u64[(t & 0xf) * 2 + 1];
-        vmin = min(vmin, (T)SHFL_XOR(vmin, 1));
-        vmin = min(vmin, (T)SHFL_XOR(vmin, 2));
-        vmin = min(vmin, (T)SHFL_XOR(vmin, 4));
-        vmin = min(vmin, (T)SHFL_XOR(vmin, 8));
-        vmax = max(vmax, (T)SHFL_XOR(vmax, 1));
-        vmax = max(vmax, (T)SHFL_XOR(vmax, 2));
-        vmax = max(vmax, (T)SHFL_XOR(vmax, 4));
-        vmax = max(vmax, (T)SHFL_XOR(vmax, 8));
+        vmin = half_warp_reduce(temp_storage.half[0]).Reduce(vmin, cub::Min());
+        vmax = half_warp_reduce(temp_storage.half[1]).Reduce(vmax, cub::Max());
         if (t == 0) {
           uint32_t mode1_w, mode2_w;
           T vrange_mode1, vrange_mode2;
@@ -599,7 +591,7 @@ static __device__ void StoreStringData(uint8_t *dst,
   uint32_t pos = len;
   uint32_t wt  = t & 0x1f;
   for (uint32_t n = 1; n < 32; n <<= 1) {
-    uint32_t tmp = SHFL(pos, (wt & ~n) | (n - 1));
+    uint32_t tmp = shuffle(pos, (wt & ~n) | (n - 1));
     pos += (wt & n) ? tmp : 0;
   }
   if (wt == 0x1f) { strenc->lengths_red[t >> 5] = pos; }
@@ -609,7 +601,7 @@ static __device__ void StoreStringData(uint8_t *dst,
     uint32_t wlen = (wt < 16) ? strenc->lengths_red[wt] : 0;
     uint32_t wpos = wlen;
     for (uint32_t n = 1; n < 16; n <<= 1) {
-      uint32_t tmp = SHFL(wpos, (wt & ~n) | (n - 1));
+      uint32_t tmp = shuffle(wpos, (wt & ~n) | (n - 1));
       wpos += (wt & n) ? tmp : 0;
     }
     if (wt < 16) { strenc->lengths_red[wt] = wpos - wlen; }

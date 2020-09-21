@@ -16,16 +16,16 @@
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/avro.hpp>
+#include <cudf/io/csv.hpp>
+#include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/avro.hpp>
+#include <cudf/io/detail/csv.hpp>
 #include <cudf/io/detail/json.hpp>
 #include <cudf/io/detail/orc.hpp>
 #include <cudf/io/detail/parquet.hpp>
-#include <cudf/io/functions.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/io/orc.hpp>
 #include <cudf/io/parquet.hpp>
-#include <cudf/io/readers.hpp>
-#include <cudf/io/writers.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -34,6 +34,18 @@
 
 namespace cudf {
 namespace io {
+// Returns builder for csv_reader_options
+csv_reader_options_builder csv_reader_options::builder(source_info const& src)
+{
+  return csv_reader_options_builder{src};
+}
+
+// Returns builder for csv_writer_options
+csv_writer_options_builder csv_writer_options::builder(sink_info const& sink,
+                                                       table_view const& table)
+{
+  return csv_writer_options_builder{sink, table};
+}
 
 // Returns builder for orc_reader_options
 orc_reader_options_builder orc_reader_options::builder(source_info const& src)
@@ -157,65 +169,24 @@ table_with_metadata read_json(json_reader_options const& opts, rmm::mr::device_m
 }
 
 // Freeform API wraps the detail reader class API
-table_with_metadata read_csv(read_csv_args const& args, rmm::mr::device_memory_resource* mr)
+table_with_metadata read_csv(csv_reader_options const& options, rmm::mr::device_memory_resource* mr)
 {
   namespace csv = cudf::io::detail::csv;
 
   CUDF_FUNC_RANGE();
-  csv::reader_options options{};
-  options.compression        = args.compression;
-  options.lineterminator     = args.lineterminator;
-  options.delimiter          = args.delimiter;
-  options.decimal            = args.decimal;
-  options.thousands          = args.thousands;
-  options.comment            = args.comment;
-  options.dayfirst           = args.dayfirst;
-  options.delim_whitespace   = args.delim_whitespace;
-  options.skipinitialspace   = args.skipinitialspace;
-  options.skip_blank_lines   = args.skip_blank_lines;
-  options.header             = args.header;
-  options.infer_date_names   = args.infer_date_names;
-  options.infer_date_indexes = args.infer_date_indexes;
-  options.names              = args.names;
-  options.dtype              = args.dtype;
-  options.use_cols_indexes   = args.use_cols_indexes;
-  options.use_cols_names     = args.use_cols_names;
-  options.true_values.insert(
-    options.true_values.end(), args.true_values.begin(), args.true_values.end());
-  options.false_values.insert(
-    options.false_values.end(), args.false_values.begin(), args.false_values.end());
-  if (!args.na_filter) {
-    options.na_values.clear();
-  } else if (!args.keep_default_na) {
-    options.na_values = args.na_values;
-  } else {
-    options.na_values.insert(options.na_values.end(), args.na_values.begin(), args.na_values.end());
-  }
-  options.prefix           = args.prefix;
-  options.mangle_dupe_cols = args.mangle_dupe_cols;
-  options.quotechar        = args.quotechar;
-  options.quoting          = args.quoting;
-  options.doublequote      = args.doublequote;
-  options.timestamp_type   = args.timestamp_type;
-  auto reader              = make_reader<csv::reader>(args.source, options, mr);
+  auto reader = make_reader<csv::reader>(options.get_source(), options, mr);
 
-  if (args.byte_range_offset != 0 || args.byte_range_size != 0) {
-    return reader->read_byte_range(args.byte_range_offset, args.byte_range_size);
-  } else if (args.skiprows != -1 || args.skipfooter != -1 || args.nrows != -1) {
-    return reader->read_rows(args.skiprows, args.skipfooter, args.nrows);
-  } else {
-    return reader->read_all();
-  }
+  return reader->read();
 }
 
 // Freeform API wraps the detail writer class API
-void write_csv(write_csv_args const& args, rmm::mr::device_memory_resource* mr)
+void write_csv(csv_writer_options const& options, rmm::mr::device_memory_resource* mr)
 {
   using namespace cudf::io::detail;
 
-  auto writer = make_writer<csv::writer>(args.sink(), args, mr);
+  auto writer = make_writer<csv::writer>(options.get_sink(), options, mr);
 
-  writer->write_all(args.table(), args.metadata());
+  writer->write(options.get_table(), options.get_metadata());
 }
 
 namespace detail_orc = cudf::io::detail::orc;

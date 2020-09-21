@@ -95,19 +95,18 @@ test:
     - test -f $PREFIX/include/cudf/hashing.hpp
     - test -f $PREFIX/include/cudf/interop.hpp
     - test -f $PREFIX/include/cudf/io/avro.hpp
+    - test -f $PREFIX/include/cudf/io/csv.hpp
     - test -f $PREFIX/include/cudf/io/data_sink.hpp
     - test -f $PREFIX/include/cudf/io/datasource.hpp
     - test -f $PREFIX/include/cudf/io/detail/avro.hpp
+    - test -f $PREFIX/include/cudf/io/detail/csv.hpp
     - test -f $PREFIX/include/cudf/io/detail/json.hpp
     - test -f $PREFIX/include/cudf/io/detail/orc.hpp
     - test -f $PREFIX/include/cudf/io/detail/parquet.hpp
-    - test -f $PREFIX/include/cudf/io/functions.hpp
     - test -f $PREFIX/include/cudf/io/json.hpp
     - test -f $PREFIX/include/cudf/io/orc.hpp
     - test -f $PREFIX/include/cudf/io/parquet.hpp
-    - test -f $PREFIX/include/cudf/io/readers.hpp
     - test -f $PREFIX/include/cudf/io/types.hpp
-    - test -f $PREFIX/include/cudf/io/writers.hpp
     - test -f $PREFIX/include/cudf/ipc.hpp
     - test -f $PREFIX/include/cudf/join.hpp
     - test -f $PREFIX/include/cudf/lists/detail/concatenate.hpp
