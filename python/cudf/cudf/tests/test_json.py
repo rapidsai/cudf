@@ -334,7 +334,7 @@ def test_json_corner_case_with_escape_and_double_quote_char(tmpdir):
 
     pdf = pd.DataFrame(
         {
-            "a": ["ab\"cd", "?1sde", "rdsd"],
+            "a": ['ab"cd', "?1sde", "rdsd"],
             "b": ["234", "\\", "lstm"],
             "c": ["aeiou", "sample", "json"],
         }
