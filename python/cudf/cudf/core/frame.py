@@ -2693,15 +2693,13 @@ class Frame(libcudf.table.Table):
                     1.5707963267948966,  1.266103672779499],
                     dtype='float64')
         """
-        if isinstance(self, cudf.Series):
-            data_type = cudf.utils.dtypes.get_min_float_dtype(self._column)
-        if isinstance(self, cudf.DataFrame):
-            for col in self._columns:
-                data_type = cudf.utils.dtypes.get_min_float_dtype(col)
-        data = self.astype(data_type)
-        data = data._unaryop("acos")
-        newdata = data.mask((data < 0) | (data > np.pi + 1))
-        return newdata
+        result = self.copy()
+        for col in result._data:
+            min_float_dtype = cudf.utils.dtypes.get_min_float_dtype(result._data[col])
+            result._data[col] = result._data[col].astype(min_float_dtype)
+        result = result._unaryop("acos")
+        result = result.mask((result < 0) | (result > np.pi + 1))
+        return result
 
     def atan(self):
         """
