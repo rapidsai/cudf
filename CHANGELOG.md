@@ -49,16 +49,17 @@
 - PR #6189 Avoid deprecated pyarrow.compat for parquet
 - PR #6184 Add cuda 11 dev environment.yml
 - PR #6186 Update JNI to look for cub in new location
-- PR #6206 Replace functions macros with inline functions
 - PR #6194 Remove unnecessary memory-resource parameter in `cudf::contains` API
 - PR #6195 Update JNI to use parquet options builder
 - PR #6190 Avoid reading full csv files for metadata in dask_cudf
 - PR #6197 Remove librmm dependency for libcudf
+- PR #6230 Support any unsigned int type for dictionary indices
 - PR #6202 Add additional parameter support to `DataFrame.drop`
 - PR #6214 Small clean up to use more algorithms
 - PR #6209 Remove CXX11 ABI handling from CMake
 - PR #6223 Remove CXX11 ABI flag from JNI build
 - PR #6215 Add cmake command-line setting for spdlog logging level
+- PR #6242 Added cudf::detail::host_span and device_span
 - PR #6240 Don't shallow copy index in as_index() unless necessary
 - PR #6204 Add dockerfile and script to build cuDF jar
 - PR #6245 Split up replace.cu into multiple source files
@@ -93,9 +94,11 @@
 - PR #6226 Add in some JNI checks for null handles
 - PR #6234 Add float infinity parsing in csv reader
 - PR #6251 Replace remaining calls to RMM `get_default_resource`
+- PR #6257 Support truncated fractions in `cudf::strings::to_timestamp`
 - PR #6259 Fix compilation error with GCC 8
 - PR #6258 Pin libcudf conda recipe to boost 1.72.0
 - PR #6264 Remove include statement for missing rmm/mr/device/default_memory_resource.hpp file
+- PR #6289 Revert #6206
 
 
 # cuDF 0.15.0 (26 Aug 2020)
