@@ -2695,7 +2695,9 @@ class Frame(libcudf.table.Table):
         """
         result = self.copy()
         for col in result._data:
-            min_float_dtype = cudf.utils.dtypes.get_min_float_dtype(result._data[col])
+            min_float_dtype = cudf.utils.dtypes.get_min_float_dtype(
+                result._data[col]
+            )
             result._data[col] = result._data[col].astype(min_float_dtype)
         result = result._unaryop("acos")
         result = result.mask((result < 0) | (result > np.pi + 1))
