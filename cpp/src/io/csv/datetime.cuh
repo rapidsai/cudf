@@ -455,7 +455,7 @@ __inline__ __device__ int64_t parseTimeDeltaFormat(const char *data, long start,
     if (data[moving_pos] == sep) { second = parse_integer<int>(data, ++moving_pos, end); }
     if (std::is_same<T, cudf::duration_s>::value) {
       return ((days * 24L + hour) * 60L + minute) * 60L + second;
-    } else if (data[moving_pos] == '.') { //.n
+    } else if (data[moving_pos] == '.') {  //.n
       auto start_subsecond              = moving_pos + 1;
       nanosecond                        = parse_integer<int>(data, ++moving_pos, end);
       int8_t num_digits                 = min(9L, moving_pos - start_subsecond);
