@@ -1352,7 +1352,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * of the specified type.
    */
   public Scalar sum(DType outType) {
-    return reduce(AggregateOp.SUM, outType);
+    return reduce(Aggregation.sum(), outType);
   }
 
   /**
@@ -1368,7 +1368,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * of the specified type.
    */
   public Scalar min(DType outType) {
-    return reduce(AggregateOp.MIN, outType);
+    return reduce(Aggregation.min(), outType);
   }
 
   /**
@@ -1384,7 +1384,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * of the specified type.
    */
   public Scalar max(DType outType) {
-    return reduce(AggregateOp.MAX, outType);
+    return reduce(Aggregation.max(), outType);
   }
 
   /**
@@ -1400,7 +1400,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * of the specified type.
    */
   public Scalar product(DType outType) {
-    return reduce(AggregateOp.PRODUCT, outType);
+    return reduce(Aggregation.product(), outType);
   }
 
   /**
@@ -1416,7 +1416,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * scalar of the specified type.
    */
   public Scalar sumOfSquares(DType outType) {
-    return reduce(AggregateOp.SUMOFSQUARES, outType);
+    return reduce(Aggregation.sumOfSquares(), outType);
   }
 
   /**
@@ -1438,7 +1438,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * Null values are skipped.
    */
   public Scalar mean(DType outType) {
-    return reduce(AggregateOp.MEAN, outType);
+    return reduce(Aggregation.mean(), outType);
   }
 
   /**
@@ -1460,7 +1460,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * Null values are skipped.
    */
   public Scalar variance(DType outType) {
-    return reduce(AggregateOp.VAR, outType);
+    return reduce(Aggregation.variance(), outType);
   }
 
   /**
@@ -1483,7 +1483,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * an element of the column when calculating the standard deviation.
    */
   public Scalar standardDeviation(DType outType) {
-    return reduce(AggregateOp.STD, outType);
+    return reduce(Aggregation.standardDeviation(), outType);
   }
 
   /**
@@ -1502,7 +1502,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * Null values are skipped.
    */
   public Scalar any(DType outType) {
-    return reduce(AggregateOp.ANY, outType);
+    return reduce(Aggregation.any(), outType);
   }
 
   /**
@@ -1521,7 +1521,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * Null values are skipped.
    */
   public Scalar all(DType outType) {
-    return reduce(AggregateOp.ALL, outType);
+    return reduce(Aggregation.all(), outType);
   }
 
   /**
@@ -1529,13 +1529,13 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * Overflows in reductions are not detected. Specifying a higher precision
    * output type may prevent overflow. Only the MIN and MAX ops are
    * The null values are skipped for the operation.
-   * @param op The reduction operation to perform
+   * @param aggregation The reduction aggregation to perform
    * @return The scalar result of the reduction operation. If the column is
    * empty or the reduction operation fails then the
    * {@link Scalar#isValid()} method of the result will return false.
    */
-  public Scalar reduce(AggregateOp op) {
-    return reduce(op, type);
+  public Scalar reduce(Aggregation aggregation) {
+    return reduce(aggregation, type);
   }
 
   /**
@@ -1544,14 +1544,19 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * output type may prevent overflow. Only the MIN and MAX ops are
    * supported for reduction of non-arithmetic types (TIMESTAMP...)
    * The null values are skipped for the operation.
-   * @param op      The reduction operation to perform
+   * @param aggregation The reduction aggregation to perform
    * @param outType The type of scalar value to return
    * @return The scalar result of the reduction operation. If the column is
    * empty or the reduction operation fails then the
    * {@link Scalar#isValid()} method of the result will return false.
    */
-  public Scalar reduce(AggregateOp op, DType outType) {
-    return new Scalar(outType, reduce(getNativeView(), op.nativeId, outType.nativeId));
+  public Scalar reduce(Aggregation aggregation, DType outType) {
+    long nativeId = aggregation.createNativeInstance();
+    try {
+      return new Scalar(outType, reduce(getNativeView(), nativeId, outType.nativeId));
+    } finally {
+      Aggregation.close(nativeId);
+    }
   }
 
   /**
@@ -1574,21 +1579,26 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * @return Column containing aggregate function result.
    * @throws IllegalArgumentException if unsupported window specification * (i.e. other than {@link FrameType#ROWS} is used.
    */
-  public ColumnVector rollingWindow(AggregateOp op, WindowOptions options) {
+  public ColumnVector rollingWindow(Aggregation op, WindowOptions options) {
     // Check that only row-based windows are used.
     if (!options.getFrameType().equals(FrameType.ROWS)) {
       throw new IllegalArgumentException("Expected ROWS-based window specification. Unexpected window type: "
             + options.getFrameType());
     }
 
-    return new ColumnVector(
-        rollingWindow(this.getNativeView(),
-            options.getMinPeriods(),
-            op.nativeId,
-            options.getPreceding(),
-            options.getFollowing(),
-            options.getPrecedingCol() == null ? 0 : options.getPrecedingCol().getNativeView(),
-            options.getFollowingCol() == null ? 0 : options.getFollowingCol().getNativeView()));
+    long nativePtr = op.createNativeInstance();
+    try {
+      return new ColumnVector(
+              rollingWindow(this.getNativeView(),
+                      options.getMinPeriods(),
+                      nativePtr,
+                      options.getPreceding(),
+                      options.getFollowing(),
+                      options.getPrecedingCol() == null ? 0 : options.getPrecedingCol().getNativeView(),
+                      options.getFollowingCol() == null ? 0 : options.getFollowingCol().getNativeView()));
+    } finally {
+      Aggregation.close(nativePtr);
+    }
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -2844,7 +2854,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
   private static native long quantile(long cudfColumnHandle, int quantileMethod, double[] quantiles) throws CudfException;
 
-  private static native long rollingWindow(long viewHandle, int min_periods, int agg_type,
+  private static native long rollingWindow(long viewHandle, int min_periods, long aggPtr,
                                            int preceding, int following,
                                            long preceding_col, long following_col);
 
@@ -2868,7 +2878,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
   private static native long ifElseSS(long predVec, long trueScalar, long falseScalar) throws CudfException;
 
-  private static native long reduce(long viewHandle, int reduceOp, int dtype) throws CudfException;
+  private static native long reduce(long viewHandle, long aggregation, int dtype) throws CudfException;
 
   private static native long isNullNative(long viewHandle);
 
