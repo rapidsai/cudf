@@ -216,10 +216,11 @@ struct column_to_strings_fn {
     //
     return not((std::is_same<column_type, cudf::string_view>::value) ||
                (std::is_integral<column_type>::value) ||
-               (std::is_floating_point<column_type>::value) || (cudf::is_timestamp<column_type>()));
+               (std::is_floating_point<column_type>::value) ||
+               (cudf::is_timestamp<column_type>()) || (cudf::is_duration<column_type>()));
   }
 
-  explicit column_to_strings_fn(writer_options const& options,
+  explicit column_to_strings_fn(csv_writer_options const& options,
                                 rmm::mr::device_memory_resource* mr = nullptr,
                                 cudaStream_t stream                 = nullptr)
     : options_(options), mr_(mr), stream_(stream)
@@ -240,8 +241,8 @@ struct column_to_strings_fn {
   std::enable_if_t<std::is_same<column_type, bool>::value, std::unique_ptr<column>> operator()(
     column_view const& column) const
   {
-    auto conv_col_ptr =
-      cudf::strings::from_booleans(column, options_.true_value(), options_.false_value(), mr_);
+    auto conv_col_ptr = cudf::strings::from_booleans(
+      column, options_.get_true_value(), options_.get_false_value(), mr_);
 
     return conv_col_ptr;
   }
@@ -269,7 +270,7 @@ struct column_to_strings_fn {
     // where modify() = duplicate the double quotes, if any; add 2bl quotes prefix/suffix;
     //}
     //
-    std::string delimiter{options_.inter_column_delimiter()};
+    std::string delimiter{options_.get_inter_column_delimiter()};
     predicate_special_chars pred{delimiter, stream_};
 
     return modify_strings<probe_special_chars, modify_special_chars>(column_v, mr_, stream_, pred);
@@ -309,8 +310,8 @@ struct column_to_strings_fn {
     // handle the cases where delimiter / line-terminator can be
     // "-" or ":", in which case they are to be dropped from the format:
     //
-    std::string delimiter{options_.inter_column_delimiter()};
-    std::string newline{options_.line_terminator()};
+    std::string delimiter{options_.get_inter_column_delimiter()};
+    std::string newline{options_.get_line_terminator()};
 
     constexpr char const* dash{"-"};
     constexpr char const* colon{":"};
@@ -327,6 +328,13 @@ struct column_to_strings_fn {
     return conv_col_ptr;
   }
 
+  template <typename column_type>
+  std::enable_if_t<cudf::is_duration<column_type>(), std::unique_ptr<column>> operator()(
+    column_view const& column) const
+  {
+    return cudf::io::detail::csv::pandas_format_durations(column, stream_);
+  }
+
   // unsupported type of column:
   //
   template <typename column_type>
@@ -337,7 +345,7 @@ struct column_to_strings_fn {
   }
 
  private:
-  writer_options const& options_;
+  csv_writer_options const& options_;
   rmm::mr::device_memory_resource* mr_;
   cudaStream_t stream_;
 };
@@ -345,7 +353,7 @@ struct column_to_strings_fn {
 
 // Forward to implementation
 writer::writer(std::unique_ptr<data_sink> sink,
-               writer_options const& options,
+               csv_writer_options const& options,
                rmm::mr::device_memory_resource* mr)
   : _impl(std::make_unique<impl>(std::move(sink), options, mr))
 {
@@ -355,7 +363,7 @@ writer::writer(std::unique_ptr<data_sink> sink,
 writer::~writer() = default;
 
 writer::impl::impl(std::unique_ptr<data_sink> sink,
-                   writer_options const& options,
+                   csv_writer_options const& options,
                    rmm::mr::device_memory_resource* mr)
   : out_sink_(std::move(sink)), mr_(mr), options_(options)
 {
@@ -367,11 +375,11 @@ void writer::impl::write_chunked_begin(table_view const& table,
                                        const table_metadata* metadata,
                                        cudaStream_t stream)
 {
-  if ((metadata != nullptr) && (options_.include_header())) {
+  if ((metadata != nullptr) && (options_.is_enabled_include_header())) {
     CUDF_EXPECTS(metadata->column_names.size() == static_cast<size_t>(table.num_columns()),
                  "Mismatch between number of column headers and table columns.");
 
-    std::string delimiter_str{options_.inter_column_delimiter()};
+    std::string delimiter_str{options_.get_inter_column_delimiter()};
 
     // avoid delimiter after last element:
     //
@@ -379,7 +387,7 @@ void writer::impl::write_chunked_begin(table_view const& table,
     std::copy(metadata->column_names.begin(),
               metadata->column_names.end() - 1,
               std::ostream_iterator<std::string>(ss, delimiter_str.c_str()));
-    ss << metadata->column_names.back() << options_.line_terminator();
+    ss << metadata->column_names.back() << options_.get_line_terminator();
 
     out_sink_->host_write(ss.str().data(), ss.str().size());
   }
@@ -402,7 +410,7 @@ void writer::impl::write_chunked(strings_column_view const& str_column_view,
 
   CUDF_EXPECTS(str_column_view.size() > 0, "Unexpected empty strings column.");
 
-  cudf::string_scalar newline{options_.line_terminator()};
+  cudf::string_scalar newline{options_.get_line_terminator()};
   auto p_str_col_w_nl = cudf::strings::join_strings(str_column_view, newline);
   strings_column_view strings_column{std::move(p_str_col_w_nl->view())};
 
@@ -436,9 +444,9 @@ void writer::impl::write_chunked(strings_column_view const& str_column_view,
     //
     char const* ptr_h_bytes = h_bytes.data();
     out_sink_->host_write(ptr_h_bytes, total_num_bytes);
-    out_sink_->host_write(
-      options_.line_terminator().data(),
-      options_.line_terminator().size());  // needs newline at the end, to separate from next chunk
+    out_sink_->host_write(options_.get_line_terminator().data(),
+                          options_.get_line_terminator()
+                            .size());  // needs newline at the end, to separate from next chunk
   }
 }
 
@@ -455,7 +463,7 @@ void writer::impl::write(table_view const& table,
 
   if (table.num_rows() > 0) {
     // no need to check same-size columns constraint; auto-enforced by table_view
-    auto n_rows_per_chunk = options_.rows_per_chunk();
+    auto n_rows_per_chunk = options_.get_rows_per_chunk();
     //
     // This outputs the CSV in row chunks to save memory.
     // Maybe we can use the total_rows*count calculation and a memory threshold
@@ -520,9 +528,9 @@ void writer::impl::write(table_view const& table,
       // concatenate columns in each row into one big string column
       //(using null representation and delimiter):
       //
-      std::string delimiter_str{options_.inter_column_delimiter()};
+      std::string delimiter_str{options_.get_inter_column_delimiter()};
       auto str_concat_col =
-        cudf::strings::concatenate(str_table_view, delimiter_str, options_.na_rep(), mr_);
+        cudf::strings::concatenate(str_table_view, delimiter_str, options_.get_na_rep(), mr_);
 
       write_chunked(str_concat_col->view(), metadata, stream);
     }
@@ -533,7 +541,7 @@ void writer::impl::write(table_view const& table,
   write_chunked_end(table, metadata, stream);
 }
 
-void writer::write_all(table_view const& table, const table_metadata* metadata, cudaStream_t stream)
+void writer::write(table_view const& table, const table_metadata* metadata, cudaStream_t stream)
 {
   _impl->write(table, metadata, stream);
 }
