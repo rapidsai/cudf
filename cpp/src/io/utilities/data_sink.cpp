@@ -58,7 +58,7 @@ class file_sink : public data_sink {
  private:
   std::ofstream outfile_;
   size_t bytes_written_ = 0;
-  gdsoutfile _gds_file;
+  gds_output _gds_file;
 };
 
 /**

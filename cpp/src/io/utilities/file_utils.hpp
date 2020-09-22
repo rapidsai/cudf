@@ -38,32 +38,34 @@ class file_wrapper {
   auto desc() const { return fd; }
 };
 
-class gdsinfile {
+struct cf_file_wrapper {
+  CUfileHandle_t handle = nullptr;
+  explicit cf_file_wrapper(int fd);
+  ~cf_file_wrapper();
+};
+
+class gds_input {
  public:
-  gdsinfile(std::string const &filepath);
+  gds_input(std::string const &filepath);
 
   std::unique_ptr<datasource::buffer> read(size_t offset, size_t size);
 
   size_t read(size_t offset, size_t size, uint8_t *dst);
 
-  ~gdsinfile();
-
  private:
   file_wrapper const file;
-  CUfileHandle_t cufile_handle = nullptr;
+  cf_file_wrapper const cf_file;
 };
 
-class gdsoutfile {
+class gds_output {
  public:
-  gdsoutfile(std::string const &filepath);
+  gds_output(std::string const &filepath);
 
   void write(void const *data, size_t offset, size_t size);
 
-  ~gdsoutfile();
-
  private:
   file_wrapper const file;
-  CUfileHandle_t cufile_handle = nullptr;
+  cf_file_wrapper const cf_file;
 };
 
 };  // namespace io

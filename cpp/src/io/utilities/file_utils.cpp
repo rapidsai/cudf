@@ -59,55 +59,51 @@ long file_wrapper::size() const
   return _size;
 }
 
-gdsinfile::gdsinfile(std::string const &filepath) : file(filepath, O_RDONLY | O_DIRECT)
+cf_file_wrapper::cf_file_wrapper(int fd)
 {
   init_cufile_driver();
 
   CUfileDescr_t cufile_desc{};
-  cufile_desc.handle.fd = file.desc();
+  cufile_desc.handle.fd = fd;
   cufile_desc.type      = CU_FILE_HANDLE_TYPE_OPAQUE_FD;
-  CUDF_EXPECTS(cuFileHandleRegister(&cufile_handle, &cufile_desc).err == CU_FILE_SUCCESS,
+  CUDF_EXPECTS(cuFileHandleRegister(&handle, &cufile_desc).err == CU_FILE_SUCCESS,
                "Cannot register file handle with cuFile");
 }
 
-std::unique_ptr<datasource::buffer> gdsinfile::read(size_t offset, size_t size)
+cf_file_wrapper::~cf_file_wrapper() { cuFileHandleDeregister(handle); }
+
+gds_input::gds_input(std::string const &filepath)
+  : file(filepath, O_RDONLY | O_DIRECT), cf_file{file.desc()}
+{
+}
+
+std::unique_ptr<datasource::buffer> gds_input::read(size_t offset, size_t size)
 {
   rmm::device_buffer out_data(size);
-  CUDF_EXPECTS(cuFileRead(cufile_handle, out_data.data(), size, offset, 0) != -1,
+  CUDF_EXPECTS(cuFileRead(cf_file.handle, out_data.data(), size, offset, 0) != -1,
                "cuFile error reading from a file");
 
   return datasource::buffer::create(std::move(out_data));
 }
 
-size_t gdsinfile::read(size_t offset, size_t size, uint8_t *dst)
+size_t gds_input::read(size_t offset, size_t size, uint8_t *dst)
 {
-  CUDF_EXPECTS(cuFileRead(cufile_handle, dst, size, offset, 0) != -1,
+  CUDF_EXPECTS(cuFileRead(cf_file.handle, dst, size, offset, 0) != -1,
                "cuFile error reading from a file");
   // have to read the requested size for now
   return size;
 }
 
-gdsinfile::~gdsinfile() { cuFileHandleDeregister(cufile_handle); }
-
-gdsoutfile::gdsoutfile(std::string const &filepath)
-  : file(filepath, O_CREAT | O_RDWR | O_DIRECT, 0664)
+gds_output::gds_output(std::string const &filepath)
+  : file(filepath, O_CREAT | O_RDWR | O_DIRECT, 0664), cf_file(file.desc())
 {
-  init_cufile_driver();
-
-  CUfileDescr_t cufile_desc{};
-  cufile_desc.handle.fd = file.desc();
-  cufile_desc.type      = CU_FILE_HANDLE_TYPE_OPAQUE_FD;
-  CUDF_EXPECTS(cuFileHandleRegister(&cufile_handle, &cufile_desc).err == CU_FILE_SUCCESS,
-               "Cannot register file handle with cuFile");
 }
 
-void gdsoutfile::write(void const *data, size_t offset, size_t size)
+void gds_output::write(void const *data, size_t offset, size_t size)
 {
-  CUDF_EXPECTS(cuFileWrite(cufile_handle, data, size, offset, 0) != -1,
+  CUDF_EXPECTS(cuFileWrite(cf_file.handle, data, size, offset, 0) != -1,
                "cuFile error writing to a file");
 }
-
-gdsoutfile::~gdsoutfile() { cuFileHandleDeregister(cufile_handle); }
 
 };  // namespace io
 };  // namespace cudf

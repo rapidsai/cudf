@@ -125,7 +125,7 @@ class memory_mapped_source : public datasource {
   void *map_addr_    = nullptr;
   size_t map_size_   = 0;
   size_t map_offset_ = 0;
-  gdsinfile _gds_file;
+  gds_input _gds_file;
 };
 
 /**
