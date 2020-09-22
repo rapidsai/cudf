@@ -64,8 +64,8 @@ cdef extern from "cudf/io/csv.hpp" \
 
         # Reader settings
         void set_compression(cudf_io_types.compression_type comp) except+
-        void set_byte_range_offset(size_type val) except+
-        void set_byte_range_size(size_type val) except+
+        void set_byte_range_offset(size_t val) except+
+        void set_byte_range_size(size_t val) except+
         void set_names(vector[string] val) except+
         void set_prefix(string pfx) except+
         void set_mangle_dupe_cols(bool val) except+
@@ -123,8 +123,8 @@ cdef extern from "cudf/io/csv.hpp" \
         csv_reader_options_builder& compression(
             cudf_io_types.compression_type comp
         ) except+
-        csv_reader_options_builder& byte_range_offset(size_type val) except+
-        csv_reader_options_builder& byte_range_size(size_type val) except+
+        csv_reader_options_builder& byte_range_offset(size_t val) except+
+        csv_reader_options_builder& byte_range_size(size_t val) except+
         csv_reader_options_builder& names(vector[string] val) except+
         csv_reader_options_builder& prefix(string pfx) except+
         csv_reader_options_builder& mangle_dupe_cols(bool val) except+

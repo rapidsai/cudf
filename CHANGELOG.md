@@ -55,6 +55,7 @@
 - PR #6190 Avoid reading full csv files for metadata in dask_cudf
 - PR #6197 Remove librmm dependency for libcudf
 - PR #6205 Add dictionary support to cudf::contains
+- PR #6213 Reduce subscript usage in cuio in favor of pointer dereferencing
 - PR #6230 Support any unsigned int type for dictionary indices
 - PR #6202 Add additional parameter support to `DataFrame.drop`
 - PR #6214 Small clean up to use more algorithms
@@ -87,6 +88,7 @@
 - PR #6150 Fix issue related to inferring `datetime64` format with UTC timezone in string data
 - PR #6179 `make_elements` copies to `iterator` without adjusting `size`
 - PR #6182 Fix cmake build of arrow
+- PR #6288 Fix gcc-9 compilation error with `ColumnVectorJni.cpp`
 - PR #6173 Fix normalize_characters offset logic on sliced strings column
 - PR #6159 Fix issue related to empty `Dataframe` with columns input to `DataFrame.appened`
 - PR #6199 Fix index preservation for dask_cudf parquet
@@ -101,6 +103,7 @@
 - PR #6259 Fix compilation error with GCC 8
 - PR #6258 Pin libcudf conda recipe to boost 1.72.0
 - PR #6264 Remove include statement for missing rmm/mr/device/default_memory_resource.hpp file
+- PR #6286 Fix `read_csv` `int32` overflow 
 - PR #6289 Revert #6206
 
 

@@ -1369,6 +1369,8 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_ColumnVector_getNativeNumChildren(JNI
         return static_cast<jint>(column->num_children() - 1);
       } else if (column->type().id() == cudf::type_id::STRUCT) {
         return static_cast<jint>(column->num_children());
+      } else {
+        return 0;
       }
     }
     CATCH_STD(env, 0);
