@@ -149,33 +149,6 @@ public final class HostColumnVector extends HostColumnVectorCore {
   }
 
   /**
-   * Returns the number of rows in this vector.
-   */
-  public long getRowCount() {
-    return rows;
-  }
-
-  /**
-   * Returns the amount of host memory used to store column/validity data (not metadata).
-   */
-  public long getHostMemorySize() {
-    long childTotalSize = 0;
-    if (!children.isEmpty()) {
-      for (HostColumnVectorCore nhcv : children) {
-        childTotalSize += nhcv.getHostMemorySize();
-      }
-    }
-    return offHeap.getHostMemorySize() + childTotalSize;
-  }
-
-  /**
-   * Returns the type of this vector.
-   */
-  public DType getType() {
-    return type;
-  }
-
-  /**
    * Returns this column's current refcount
    */
   synchronized int getRefCount() {

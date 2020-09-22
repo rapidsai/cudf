@@ -3410,7 +3410,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       }
       DType colType = nestedChildren.getType();
       Optional<Long> nullCount = Optional.of(nestedChildren.getNullCount());
-      long colRows = nestedChildren.getRows();
+      long colRows = nestedChildren.getRowCount();
       HostMemoryBuffer colData = nestedChildren.getNestedChildren().isEmpty() ? nestedChildren.getData() : null;
       HostMemoryBuffer colValid = nestedChildren.getValidity();
       HostMemoryBuffer colOffsets = nestedChildren.getOffsets();

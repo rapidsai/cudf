@@ -53,7 +53,7 @@ public class HostColumnVectorCore implements AutoCloseable {
   /**
    * Returns the type of this vector.
    */
-  DType getType() {
+  public DType getType() {
     return type;
   }
 
@@ -83,7 +83,7 @@ public class HostColumnVectorCore implements AutoCloseable {
    * being a very expensive operation because if the null count is not
    * known it will be calculated.
    */
-  long getNullCount() {
+  public long getNullCount() {
     if (!nullCount.isPresent()) {
       throw new IllegalStateException("Calculating an unknown null count on the host is not currently supported");
     }
@@ -100,7 +100,7 @@ public class HostColumnVectorCore implements AutoCloseable {
   /**
    * Returns the number of rows for a given host side column vector
    */
-  public long getRows() {
+  public long getRowCount() {
     return rows;
   }
 
@@ -187,20 +187,10 @@ public class HostColumnVectorCore implements AutoCloseable {
   }
 
   /**
-   * Calculates the host side memory footprint of a given column
-   * @return memory footprint in bytes
+   * Returns the amount of host memory used to store column/validity data (not metadata).
    */
   public long getHostMemorySize() {
-    long totalSize = 0;
-    if (offHeap.data != null) {
-      totalSize += offHeap.data.length;
-    }
-    if (offHeap.offsets != null) {
-      totalSize += offHeap.offsets.length;
-    }
-    if (offHeap.valid != null) {
-      totalSize += offHeap.valid.length;
-    }
+    long totalSize = offHeap.getHostMemorySize();
     for (HostColumnVectorCore nhcv : children) {
       totalSize += nhcv.getHostMemorySize();
     }

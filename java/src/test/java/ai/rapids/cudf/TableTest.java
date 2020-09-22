@@ -191,14 +191,14 @@ public class TableTest extends CudfTestBase {
                                                   HostColumnVectorCore cv,
                                                   String colName, boolean enableNullCheck) {
     assertEquals(expected.getType(), cv.getType(), "Type For Column " + colName);
-    assertEquals(expected.getRows(), cv.getRows(), "Row Count For Column " + colName);
+    assertEquals(expected.getRowCount(), cv.getRowCount(), "Row Count For Column " + colName);
     if (enableNullCheck) {
       assertEquals(expected.getNullCount(), cv.getNullCount(), "Null Count For Column " + colName);
     } else {
       // TODO add in a proper check when null counts are supported by serializing a partitioned column
     }
     DType type = expected.getType();
-    for (int expectedRow = 0; expectedRow < expected.getRows(); expectedRow++) {
+    for (int expectedRow = 0; expectedRow < expected.getRowCount(); expectedRow++) {
       assertEquals(expected.isNull(expectedRow), cv.isNull(expectedRow),
           "NULL for Column " + colName + " Row " + expectedRow);
       if (!expected.isNull(expectedRow)) {
