@@ -1492,23 +1492,23 @@ public class ColumnVectorTest extends CudfTestBase {
         .minPeriods(2).build();
     try (ColumnVector v1 = ColumnVector.fromInts(5, 4, 7, 6, 8)) {
       try (ColumnVector expected = ColumnVector.fromLongs(9, 16, 17, 21, 14);
-           ColumnVector result = v1.rollingWindow(AggregateOp.SUM, options)) {
+           ColumnVector result = v1.rollingWindow(Aggregation.sum(), options)) {
         assertColumnsAreEqual(expected, result);
       }
 
       try (ColumnVector expected = ColumnVector.fromInts(4, 4, 4, 6, 6);
-           ColumnVector result = v1.rollingWindow(AggregateOp.MIN, options)) {
+           ColumnVector result = v1.rollingWindow(Aggregation.min(), options)) {
         assertColumnsAreEqual(expected, result);
       }
 
       try (ColumnVector expected = ColumnVector.fromInts(5, 7, 7, 8, 8);
-           ColumnVector result = v1.rollingWindow(AggregateOp.MAX, options)) {
+           ColumnVector result = v1.rollingWindow(Aggregation.max(), options)) {
         assertColumnsAreEqual(expected, result);
       }
 
       // The rolling window produces the same result type as the input
       try (ColumnVector expected = ColumnVector.fromDoubles(4.5, 16.0 / 3, 17.0 / 3, 7, 7);
-           ColumnVector result = v1.rollingWindow(AggregateOp.MEAN, options)) {
+           ColumnVector result = v1.rollingWindow(Aggregation.mean(), options)) {
         assertColumnsAreEqual(expected, result);
       }
     }
@@ -1520,11 +1520,11 @@ public class ColumnVectorTest extends CudfTestBase {
             .minPeriods(2).build();
     try (ColumnVector v1 = ColumnVector.fromBoxedInts(5, 4, null, 6, 8)) {
       try (ColumnVector expected = ColumnVector.fromInts(2, 2, 2, 2, 2);
-           ColumnVector result = v1.rollingWindow(AggregateOp.COUNT_VALID, options)) {
+           ColumnVector result = v1.rollingWindow(Aggregation.count(false), options)) {
         assertColumnsAreEqual(expected, result);
       }
       try (ColumnVector expected = ColumnVector.fromInts(2, 3, 3, 3, 2);
-           ColumnVector result = v1.rollingWindow(AggregateOp.COUNT_ALL, options)) {
+           ColumnVector result = v1.rollingWindow(Aggregation.count(true), options)) {
         assertColumnsAreEqual(expected, result);
       }
     }
@@ -1538,7 +1538,7 @@ public class ColumnVectorTest extends CudfTestBase {
           .minPeriods(2).window(precedingCol, followingCol).build();
       try (ColumnVector v1 = ColumnVector.fromInts(5, 4, 7, 6, 8);
            ColumnVector expected = ColumnVector.fromBoxedLongs(null, null, 9L, 16L, 25L);
-           ColumnVector result = v1.rollingWindow(AggregateOp.SUM, window)) {
+           ColumnVector result = v1.rollingWindow(Aggregation.sum(), window)) {
         assertColumnsAreEqual(expected, result);
       }
     }
@@ -1550,7 +1550,7 @@ public class ColumnVectorTest extends CudfTestBase {
         .window(2, -1).build();
     try (ColumnVector v1 = ColumnVector.fromInts(5, 4, 7, 6, 8);
          ColumnVector expected = ColumnVector.fromBoxedInts(null, 5, 4, 7, 6);
-         ColumnVector result = v1.rollingWindow(AggregateOp.MAX, window)) {
+         ColumnVector result = v1.rollingWindow(Aggregation.max(), window)) {
       assertColumnsAreEqual(expected, result);
     }
   }
@@ -1563,7 +1563,7 @@ public class ColumnVectorTest extends CudfTestBase {
           .window(precedingCol, followingCol).build();
       try (ColumnVector v1 = ColumnVector.fromInts(5, 4, 7, 6, 8);
            ColumnVector expected = ColumnVector.fromLongs(16, 22, 30, 14, 14);
-           ColumnVector result = v1.rollingWindow(AggregateOp.SUM, window)) {
+           ColumnVector result = v1.rollingWindow(Aggregation.sum(), window)) {
         assertColumnsAreEqual(expected, result);
       }
     }
@@ -1577,8 +1577,12 @@ public class ColumnVectorTest extends CudfTestBase {
           .window(arraywindowCol, arraywindowCol).build());
 
       assertThrows(IllegalArgumentException.class, 
-                   () -> arraywindowCol.rollingWindow(AggregateOp.SUM, 
-                                                      WindowOptions.builder().window(2, 1).minPeriods(1).timestampColumnIndex(0).build()));
+                   () -> arraywindowCol.rollingWindow(Aggregation.sum(),
+                                                      WindowOptions.builder()
+                                                              .window(2, 1)
+                                                              .minPeriods(1)
+                                                              .timestampColumnIndex(0)
+                                                              .build()));
     }
   }
 
@@ -3010,8 +3014,8 @@ public class ColumnVectorTest extends CudfTestBase {
       assertFalse(hcv.isNull(1));
       assertTrue(hcv.isNull(2));
       assertFalse(hcv.isNull(3));
-      HostColumnVector.NestedHostColumnVector intChildCol = hcv.children.get(0);
-      HostColumnVector.NestedHostColumnVector longChildCol = hcv.children.get(1);
+      HostColumnVectorCore intChildCol = hcv.children.get(0);
+      HostColumnVectorCore longChildCol = hcv.children.get(1);
       assertFalse(intChildCol.isNull(0));
       assertFalse(intChildCol.isNull(1));
       assertTrue(intChildCol.isNull(2));
