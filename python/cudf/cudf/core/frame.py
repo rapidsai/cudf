@@ -487,6 +487,31 @@ class Frame(libcudf.table.Table):
         >>> different = cudf.Series([1.5, 2, 3])
         >>> s.equals(different)
         False
+        
+       `equals` between two DataFrames:
+
+        >>> import cudf	
+        >>> df = cudf.DataFrame({1: [10], 2: [20]})	
+        >>> df	
+            1   2	
+        0  10  20	
+        >>> exactly_equal = cudf.DataFrame({1: [10], 2: [20]})	
+        >>> exactly_equal	
+            1   2	
+        0  10  20	
+        >>> df.equals(exactly_equal)	
+        True
+
+        Two DataFrames with different types for the column labels are,
+        still treated equal if the underlying data is same.
+
+        >>> different_column_type = cudf.DataFrame({1.0: [10], 2.0: [20]})	
+        >>> different_column_type	
+           1.0  2.0	
+        0   10   20	
+        >>> df.equals(different_column_type)	
+        True
+        """
         """
         if self is other:
             return True
