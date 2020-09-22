@@ -50,7 +50,7 @@ class memory_mapped_source : public datasource {
   {
     auto const file = file_wrapper(filepath, O_RDONLY);
     file_size_      = file.size();
-    if (file_size_ != 0) { map(file.get_desc(), offset, size); }
+    if (file_size_ != 0) { map(file.desc(), offset, size); }
   }
 
   virtual ~memory_mapped_source()
@@ -125,7 +125,7 @@ class memory_mapped_source : public datasource {
   void *map_addr_    = nullptr;
   size_t map_size_   = 0;
   size_t map_offset_ = 0;
-  gdsfile _gds_file;
+  gdsinfile _gds_file;
 };
 
 /**

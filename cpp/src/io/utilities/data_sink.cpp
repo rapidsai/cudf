@@ -18,6 +18,7 @@
 
 #include <cudf/io/data_sink.hpp>
 #include <cudf/utilities/error.hpp>
+#include <io/utilities/file_utils.hpp>
 
 namespace cudf {
 namespace io {
@@ -27,7 +28,7 @@ namespace io {
  */
 class file_sink : public data_sink {
  public:
-  explicit file_sink(std::string const& filepath) : bytes_written_(0)
+  explicit file_sink(std::string const& filepath) : _gds_file(filepath)
   {
     outfile_.open(filepath, std::ios::out | std::ios::binary | std::ios::trunc);
     CUDF_EXPECTS(outfile_.is_open(), "Cannot open output file");
@@ -37,23 +38,27 @@ class file_sink : public data_sink {
 
   void host_write(void const* data, size_t size) override
   {
+    outfile_.seekp(bytes_written_);
     outfile_.write(reinterpret_cast<char const*>(data), size);
+    bytes_written_ += size;
   }
 
   void flush() override { outfile_.flush(); }
 
   size_t bytes_written() override { return bytes_written_; }
 
-  // bool supports_device_write() const override { return true; }
+  bool supports_device_write() const override { return true; }
 
-  // void device_write(void const* gpu_data, size_t size, cudaStream_t stream) override
-  //{
-  //  bytes_written_ += size;
-  //}
+  void device_write(void const* gpu_data, size_t size, cudaStream_t stream) override
+  {
+    _gds_file.write(gpu_data, bytes_written_, size);
+    bytes_written_ += size;
+  }
 
  private:
   std::ofstream outfile_;
-  size_t bytes_written_;
+  size_t bytes_written_ = 0;
+  gdsoutfile _gds_file;
 };
 
 /**

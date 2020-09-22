@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <string>
+
 #include <cufile.h>
 
 #include <cudf/io/datasource.hpp>
@@ -25,32 +27,39 @@ namespace cudf {
 namespace io {
 
 class file_wrapper {
-  int const fd = -1;
+  int const fd       = -1;
+  long mutable _size = -1;
 
  public:
-  explicit file_wrapper(const char *filepath, int oflags);
+  explicit file_wrapper(std::string const &filepath, int flags);
+  explicit file_wrapper(std::string const &filepath, int flags, mode_t mode);
   ~file_wrapper();
-  size_t size() const;
-  auto get_desc() const { return fd; }
+  long size() const;
+  auto desc() const { return fd; }
 };
 
-struct cufile_driver {
-  cufile_driver()
-  {
-    if (cuFileDriverOpen().err != CU_FILE_SUCCESS) CUDF_FAIL("Cannot init cufile driver");
-  }
-  ~cufile_driver() { cuFileDriverClose(); }
-};
-
-class gdsfile {
+class gdsinfile {
  public:
-  gdsfile(const char *filepath);
+  gdsinfile(std::string const &filepath);
 
   std::unique_ptr<datasource::buffer> read(size_t offset, size_t size);
 
   size_t read(size_t offset, size_t size, uint8_t *dst);
 
-  ~gdsfile();
+  ~gdsinfile();
+
+ private:
+  file_wrapper const file;
+  CUfileHandle_t cufile_handle = nullptr;
+};
+
+class gdsoutfile {
+ public:
+  gdsoutfile(std::string const &filepath);
+
+  void write(void const *data, size_t offset, size_t size);
+
+  ~gdsoutfile();
 
  private:
   file_wrapper const file;

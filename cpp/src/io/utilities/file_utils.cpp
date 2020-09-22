@@ -25,50 +25,89 @@
 namespace cudf {
 namespace io {
 
-file_wrapper::file_wrapper(const char *filepath, int oflags) : fd(open(filepath, oflags))
+file_wrapper::file_wrapper(std::string const &filepath, int flags)
+  : fd(open(filepath.c_str(), flags))
 {
   CUDF_EXPECTS(fd != -1, "Cannot open file");
 }
 
+file_wrapper::file_wrapper(std::string const &filepath, int flags, mode_t mode)
+  : fd(open(filepath.c_str(), flags, mode))
+{
+  CUDF_EXPECTS(fd != -1, "Cannot open file");
+}
+
+struct cufile_driver {
+  cufile_driver()
+  {
+    if (cuFileDriverOpen().err != CU_FILE_SUCCESS) CUDF_FAIL("Cannot init cufile driver");
+  }
+  ~cufile_driver() { cuFileDriverClose(); }
+};
+
+void init_cufile_driver() { static cufile_driver driver; }
+
 file_wrapper::~file_wrapper() { close(fd); }
 
-size_t file_wrapper::size() const
+long file_wrapper::size() const
 {
-  struct stat st;
-  CUDF_EXPECTS(fstat(fd, &st) != -1, "Cannot query file size");
-  return static_cast<size_t>(st.st_size);
+  if (_size < 0) {
+    struct stat st;
+    CUDF_EXPECTS(fstat(fd, &st) != -1, "Cannot query file size");
+    _size = static_cast<size_t>(st.st_size);
+  }
+  return _size;
 }
 
-gdsfile::gdsfile(const char *filepath) : file(filepath, O_RDONLY | O_DIRECT)
+gdsinfile::gdsinfile(std::string const &filepath) : file(filepath, O_RDONLY | O_DIRECT)
 {
-  static cufile_driver driver;
-  CUDF_EXPECTS(file.get_desc() != -1, "Cannot open file");
+  init_cufile_driver();
 
   CUfileDescr_t cufile_desc{};
-  cufile_desc.handle.fd = file.get_desc();
+  cufile_desc.handle.fd = file.desc();
   cufile_desc.type      = CU_FILE_HANDLE_TYPE_OPAQUE_FD;
   CUDF_EXPECTS(cuFileHandleRegister(&cufile_handle, &cufile_desc).err == CU_FILE_SUCCESS,
-               "Cannot map cufile");
-
-  struct stat st;
-  CUDF_EXPECTS(fstat(file.get_desc(), &st) != -1, "Cannot query file size");
+               "Cannot register file handle with cuFile");
 }
 
-std::unique_ptr<datasource::buffer> gdsfile::read(size_t offset, size_t size)
+std::unique_ptr<datasource::buffer> gdsinfile::read(size_t offset, size_t size)
 {
   rmm::device_buffer out_data(size);
-  cuFileRead(cufile_handle, out_data.data(), size, offset, 0);
+  CUDF_EXPECTS(cuFileRead(cufile_handle, out_data.data(), size, offset, 0) != -1,
+               "cuFile error reading from a file");
 
   return datasource::buffer::create(std::move(out_data));
 }
 
-size_t gdsfile::read(size_t offset, size_t size, uint8_t *dst)
+size_t gdsinfile::read(size_t offset, size_t size, uint8_t *dst)
 {
-  cuFileRead(cufile_handle, dst, size, offset, 0);
+  CUDF_EXPECTS(cuFileRead(cufile_handle, dst, size, offset, 0) != -1,
+               "cuFile error reading from a file");
   // have to read the requested size for now
   return size;
 }
 
-gdsfile::~gdsfile() { cuFileHandleDeregister(cufile_handle); }
+gdsinfile::~gdsinfile() { cuFileHandleDeregister(cufile_handle); }
+
+gdsoutfile::gdsoutfile(std::string const &filepath)
+  : file(filepath, O_CREAT | O_RDWR | O_DIRECT, 0664)
+{
+  init_cufile_driver();
+
+  CUfileDescr_t cufile_desc{};
+  cufile_desc.handle.fd = file.desc();
+  cufile_desc.type      = CU_FILE_HANDLE_TYPE_OPAQUE_FD;
+  CUDF_EXPECTS(cuFileHandleRegister(&cufile_handle, &cufile_desc).err == CU_FILE_SUCCESS,
+               "Cannot register file handle with cuFile");
+}
+
+void gdsoutfile::write(void const *data, size_t offset, size_t size)
+{
+  CUDF_EXPECTS(cuFileWrite(cufile_handle, data, size, offset, 0) != -1,
+               "cuFile error writing to a file");
+}
+
+gdsoutfile::~gdsoutfile() { cuFileHandleDeregister(cufile_handle); }
+
 };  // namespace io
 };  // namespace cudf
