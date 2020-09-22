@@ -18,6 +18,7 @@
 #include <thrust/transform_reduce.h>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/reduction.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
@@ -27,6 +28,57 @@ namespace cudf {
 namespace detail {
 
 namespace {
+
+/**
+ * @brief Reduce the binary operation in device and return a device scalar.
+ *
+ * @tparam Op Binary operator functor
+ * @tparam InputIterator Input iterator Type
+ * @param d_in input iterator
+ * @param num_items number of items to reduce
+ * @param binary_op binary operator used to reduce
+ * @param mr Device resource used for result allocation
+ * @param stream CUDA stream to run kernels on.
+ * @return rmm::device_scalar<OutputType>
+ */
+template <typename Op,
+          typename InputIterator,
+          typename OutputType = typename thrust::iterator_value<InputIterator>::type>
+// typename std::enable_if_t<is_fixed_width<OutputType>()>* = nullptr>
+rmm::device_scalar<OutputType> reduce_device(InputIterator d_in,
+                                             cudf::size_type num_items,
+                                             Op binary_op,
+                                             rmm::mr::device_memory_resource *mr,
+                                             cudaStream_t stream)
+{
+  OutputType identity{};
+  rmm::device_scalar<OutputType> dev_result{identity, stream, mr};  // TODO remove mr
+
+  // Allocate temporary storage
+  rmm::device_buffer d_temp_storage;
+  size_t temp_storage_bytes = 0;
+  cub::DeviceReduce::Reduce(d_temp_storage.data(),
+                            temp_storage_bytes,
+                            d_in,
+                            dev_result.data(),
+                            num_items,
+                            binary_op,
+                            identity,
+                            stream);
+  d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream};
+
+  // Run reduction
+  cub::DeviceReduce::Reduce(d_temp_storage.data(),
+                            temp_storage_bytes,
+                            d_in,
+                            dev_result.data(),
+                            num_items,
+                            binary_op,
+                            identity,
+                            stream);
+  return std::move(dev_result);
+}
+
 /**
  * @brief stores the minimum and maximum
  * values that have been encountered so far
@@ -98,35 +150,41 @@ struct minmax_functor {
   std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> operator()(
     const cudf::column_view &col, rmm::mr::device_memory_resource *mr, cudaStream_t stream)
   {
-    auto device_col = column_device_view::create(col, stream);
+    auto device_col  = column_device_view::create(col, stream);
+    using OutputType = minmax_pair<T>;
 
     // compute minimum and maximum values
-    minmax_pair<T> const result = [&]() -> minmax_pair<T> {
+    auto dev_result = [&]() -> rmm::device_scalar<OutputType> {
       auto op = minmax_iterfunctor<T>{*device_col};
       auto begin =
         thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), op);
-      auto end = begin + col.size();
 
       if (col.nullable()) {
-        return thrust::reduce(rmm::exec_policy(stream)->on(stream),
-                              begin,
-                              end,
-                              minmax_pair<T>{},
-                              minmax_binary_op<T, true>{});
+        auto binary_op = minmax_binary_op<T, true>{};
+        return reduce_device(begin, col.size(), binary_op, mr, stream);
       } else {
-        return thrust::reduce(rmm::exec_policy(stream)->on(stream),
-                              begin,
-                              end,
-                              minmax_pair<T>{},
-                              minmax_binary_op<T, false>{});
+        auto binary_op = minmax_binary_op<T, false>{};
+        return reduce_device(begin, col.size(), binary_op, mr, stream);
       }
     }();
 
-    std::unique_ptr<scalar> min =
-      make_fixed_width_scalar<T>(result.min_val, result.min_valid, stream, mr);
-    std::unique_ptr<scalar> max =
-      make_fixed_width_scalar<T>(result.max_val, result.max_valid, stream, mr);
-    return {std::move(min), std::move(max)};
+    using ScalarType = cudf::scalar_type_t<T>;
+    auto min         = new ScalarType(T{}, false, stream, mr);
+    auto max         = new ScalarType(T{}, false, stream, mr);
+
+    device_single_thread(
+      [result    = dev_result.data(),
+       min_data  = min->data(),
+       min_valid = min->validity_data(),
+       max_data  = max->data(),
+       max_valid = max->validity_data()] __device__() mutable {
+        *min_data  = result->min_val;
+        *min_valid = result->min_valid;
+        *max_data  = result->max_val;
+        *max_valid = result->max_valid;
+      },
+      stream);
+    return {std::move(std::unique_ptr<scalar>(min)), std::move(std::unique_ptr<scalar>(max))};
   }
 };
 
