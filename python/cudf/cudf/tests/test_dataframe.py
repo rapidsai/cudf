@@ -2306,6 +2306,7 @@ def test_reset_index_inplace(pdf, gdf, drop):
         "a",
         ["a", "b"],
         pd.CategoricalIndex(["I", "II", "III", "IV", "V"]),
+        pd.Series(["h", "i", "k", "l", "m"]),
         ["b", pd.Index(["I", "II", "III", "IV", "V"])],
         ["c", [11, 12, 13, 14, 15]],
         pd.MultiIndex(

@@ -2654,8 +2654,7 @@ class DataFrame(Frame, Serializable):
             raise ValueError("Index is not unique.\n {}".format(index))
 
         if to_drop:
-            for col in to_drop:
-                df.drop(columns=col, inplace=True)
+            df.drop(columns=to_drop, inplace=True)
 
         df.index = index
         return df if not inplace else None
@@ -2677,21 +2676,42 @@ class DataFrame(Frame, Serializable):
             Series-convertible : values for the new index.
             str : name of column to be used as series
             list of str : name of columns to be converted to a MultiIndex
-        drop : boolean
+        drop : boolean, default True
             Whether to drop corresponding column for str index argument
-        append : boolean
-            Append current to new index to form a multiindex
-        inplace : boolean
-            Modify the DataFrame in place (do not create a new object)
-        verify_integrity : boolean
-            Check for duplicates in the new index
+        append : boolean, default True
+            Whether to append columns to the existing index,
+            resulting in a MultiIndex.
+        inplace : boolean, default False
+            Modify the DataFrame in place (do not create a new object).
+        verify_integrity : boolean, default False
+            Check for duplicates in the new index.
 
         Examples
         --------
-        Set existing column as index
-        >>> df = cudf.DataFrame({"a": [1,2,3,4,5],
-        ... "b":["a", "b", "c", "d","e"],
-        ... "c":[1.0, 2.0, 3.0, 4.0, 5.0]})
+        >>> df = cudf.DataFrame({"a": [1, 2, 3, 4, 5],
+        ... "b": ["a", "b", "c", "d","e"],
+        ... "c": [1.0, 2.0, 3.0, 4.0, 5.0]})
+        >>> df
+           a  b    c
+        0  1  a  1.0
+        1  2  b  2.0
+        2  3  c  3.0
+        3  4  d  4.0
+        4  5  e  5.0
+
+        Set the index to become the ‘b’ column:
+
+        >>> df.set_index('b')
+           a    c
+        b        
+        a  1  1.0
+        b  2  2.0
+        c  3  3.0
+        d  4  4.0
+        e  5  5.0
+
+        Create a MultiIndex using columns ‘a’ and ‘b’:
+
         >>> df.set_index(["a", "b"])
                c
         a b
@@ -2701,7 +2721,8 @@ class DataFrame(Frame, Serializable):
         4 d  4.0
         5 e  5.0
 
-        Set new Index instance as index
+        Set new Index instance as index:
+
         >>> df.set_index(cudf.RangeIndex(10, 15))
             a  b    c
         10  1  a  1.0
@@ -2710,7 +2731,8 @@ class DataFrame(Frame, Serializable):
         13  4  d  4.0
         14  5  e  5.0
 
-        Setting `append=True` will combine current index with the column
+        Setting `append=True` will combine current index with column `a`:
+
         >>> df.set_index("a", append=True)
              b    c
           a
@@ -2720,7 +2742,8 @@ class DataFrame(Frame, Serializable):
         3 4  d  4.0
         4 5  e  5.0
 
-        `inplace` operation:
+        `set_index` supports `inplace` parameter too:
+
         >>> df.set_index("a", inplace=True)
         >>> df
            b    c
@@ -2756,7 +2779,7 @@ class DataFrame(Frame, Serializable):
                     try:
                         col = as_column(col)
                     except TypeError:
-                        raise f"{col} cannot be converted to column-like."
+                        raise TypeError(f"{col} cannot be converted to column-like.")
                 if isinstance(col, (cudf.MultiIndex, pd.MultiIndex)):
                     col = (
                         cudf.from_pandas(col)
@@ -2764,11 +2787,11 @@ class DataFrame(Frame, Serializable):
                         else col
                     )
                     cols = [col._data[x] for x in col._data]
-                    columns_to_add = columns_to_add + cols
-                    names = names + col.names
+                    columns_to_add.extend(cols)
+                    names.extend(col.names)
                 else:
                     # Column-like
-                    columns_to_add.append(col)
+                    columns_to_add.append(as_column(col))
                     if isinstance(
                         col, (cudf.Series, cudf.Index, pd.Series, pd.Index)
                     ):
@@ -2776,9 +2799,9 @@ class DataFrame(Frame, Serializable):
                     else:
                         names.append(None)
 
-        if len(col_not_found) > 0:
-            raise ValueError(
-                f"The following columns are not found: {col_not_found}"
+        if col_not_found:
+            raise KeyError(
+                f"None of {col_not_found} are in the columns"
             )
 
         if append:
