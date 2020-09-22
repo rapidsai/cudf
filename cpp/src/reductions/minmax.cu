@@ -158,7 +158,6 @@ struct minmax_functor {
       auto op = minmax_iterfunctor<T>{*device_col};
       auto begin =
         thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), op);
-      // auto end = begin + col.size();
 
       if (col.nullable()) {
         auto binary_op = minmax_binary_op<T, true>{};
