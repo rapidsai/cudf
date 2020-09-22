@@ -608,7 +608,6 @@ extern "C" __global__ void __launch_bounds__(128)
   unsnap_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs)
 {
   __shared__ __align__(16) unsnap_state_s state_g;
-  __shared__ cub::WarpReduce<uint32_t>::TempStorage temp_storage;
 
   int t             = threadIdx.x;
   unsnap_state_s *s = &state_g;
@@ -677,7 +676,7 @@ extern "C" __global__ void __launch_bounds__(128)
       snappy_prefetch_bytestream(s, t & 0x1f);
     } else if (t < 96) {
       // WARP2: LZ77
-      snappy_process_symbols(s, t & 0x1f, temp_storage);
+      snappy_process_symbols(s, t & 0x1f);
     }
     __syncthreads();
   }

@@ -107,8 +107,7 @@ static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s, int t)
  *
  **/
 // blockDim {512,1,1}
-template <int block_size>
-__global__ void __launch_bounds__(block_size, 2)
+extern "C" __global__ void __launch_bounds__(512, 2)
   gpuInitDictionaryIndices(DictionaryChunk *chunks, uint32_t num_columns)
 {
   __shared__ __align__(16) dictinit_state_s state_g;
@@ -131,7 +130,7 @@ __global__ void __launch_bounds__(block_size, 2)
     ((volatile uint32_t *)&s->chunk)[t] =
       ((const uint32_t *)&chunks[group_id * num_columns + col_id])[t];
   }
-  for (uint32_t i = 0; i < sizeof(s->map) / sizeof(uint32_t); i += block_size) {
+  for (uint32_t i = 0; i < sizeof(s->map) / sizeof(uint32_t); i += 512) {
     if (i + t < sizeof(s->map) / sizeof(uint32_t)) s->map.u32[i + t] = 0;
   }
   __syncthreads();
@@ -147,7 +146,7 @@ __global__ void __launch_bounds__(block_size, 2)
   dict_data = s->chunk.dict_data;
   start_row = s->chunk.start_row;
   ck_data   = reinterpret_cast<const nvstrdesc_s *>(s->chunk.column_data_base) + start_row;
-  for (uint32_t i = 0; i < nnz; i += block_size) {
+  for (uint32_t i = 0; i < nnz; i += 512) {
     uint32_t ck_row = 0, len = 0, hash;
     const uint8_t *ptr = 0;
     if (i + t < nnz) {
@@ -205,7 +204,7 @@ __global__ void __launch_bounds__(block_size, 2)
     __syncthreads();
   }
   // Put the indices back in hash order
-  for (uint32_t i = 0; i < nnz; i += block_size) {
+  for (uint32_t i = 0; i < nnz; i += 512) {
     uint32_t ck_row = 0, pos = 0, hash = 0, pos_old, pos_new, sh, colliding_row;
     bool collision;
     if (i + t < nnz) {
@@ -253,7 +252,7 @@ __global__ void __launch_bounds__(block_size, 2)
   // Now that the strings are ordered by hash, compare every string with the first entry in the hash
   // map, the position of the first string can be inferred from the hash map counts
   dict_char_count = 0;
-  for (uint32_t i = 0; i < nnz; i += block_size) {
+  for (uint32_t i = 0; i < nnz; i += 512) {
     uint32_t ck_row = 0, ck_row_ref = 0, is_dupe = 0, dupe_mask, dupes_before;
     if (i + t < nnz) {
       const char *str1, *str2;
@@ -380,13 +379,10 @@ struct build_state_s {
  **/
 // NOTE: Prone to poor utilization on small datasets due to 1 block per dictionary
 // blockDim {1024,1,1}
-template <int block_size>
-__global__ void __launch_bounds__(block_size)
+extern "C" __global__ void __launch_bounds__(1024)
   gpuBuildStripeDictionaries(StripeDictionary *stripes, uint32_t num_columns)
 {
   __shared__ __align__(16) build_state_s state_g;
-  using warp_reduce = cub::WarpReduce<uint32_t>;
-  __shared__ typename warp_reduce::TempStorage temp_storage[block_size / 32];
 
   volatile build_state_s *const s = &state_g;
   uint32_t col_id                 = blockIdx.x;
@@ -409,7 +405,7 @@ __global__ void __launch_bounds__(block_size)
   dict_index      = s->stripe.dict_index;
   str_data        = reinterpret_cast<const nvstrdesc_s *>(s->stripe.column_data_base);
   dict_char_count = 0;
-  for (uint32_t i = 0; i < num_strings; i += block_size) {
+  for (uint32_t i = 0; i < num_strings; i += 1024) {
     uint32_t cur = (i + t < num_strings) ? dict_data[i + t] : 0;
     uint32_t dupe_mask, dupes_before, cur_len = 0;
     const char *cur_ptr;
@@ -468,7 +464,7 @@ cudaError_t InitDictionaryIndices(DictionaryChunk *chunks,
 {
   dim3 dim_block(512, 1);  // 512 threads per chunk
   dim3 dim_grid(num_columns, num_rowgroups);
-  gpuInitDictionaryIndices<512><<<dim_grid, dim_block, 0, stream>>>(chunks, num_columns);
+  gpuInitDictionaryIndices<<<dim_grid, dim_block, 0, stream>>>(chunks, num_columns);
   return cudaSuccess;
 }
 
@@ -514,7 +510,7 @@ cudaError_t BuildStripeDictionaries(StripeDictionary *stripes,
                    });
     }
   }
-  gpuBuildStripeDictionaries<1024><<<dim_grid_build, dim_block, 0, stream>>>(stripes, num_columns);
+  gpuBuildStripeDictionaries<<<dim_grid_build, dim_block, 0, stream>>>(stripes, num_columns);
   return cudaSuccess;
 }
 
