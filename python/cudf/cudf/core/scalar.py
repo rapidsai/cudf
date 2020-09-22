@@ -7,28 +7,6 @@ import numpy as np
 class Scalar(libcudf.scalar.Scalar):
     def __init__(self, value, dtype=None):
 
-        # When a scalar is instantiated from python, 
-        # cache on the host until needed in libcudf
-        # Not synced, so set _device_sync = False
-
-        # when the value is requested in libcudf, 
-        # perform host-device transfer
-        # set device-host sync flag to True
-
-        # When a scalar is received from a libcudf function
-        # value is not cached on the host
-        # _device_sync = False in that case
-        
-        # When the scalar is needed in python
-        # perform a device-to-host transfer
-        # set _device-host sync flag to True
-
-        #self._host_value = value
-        #self._device_value_is_current = False
-        # Do not immediately create 
-
-
-
         if isinstance(value, libcudf.scalar.Scalar):
             if dtype and not value.dtype == dtype:
                 # TODO should be doable on the device

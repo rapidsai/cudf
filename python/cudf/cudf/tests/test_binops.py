@@ -834,34 +834,3 @@ def test_scalar_binops_value_valid_combinations(lhs, rhs, dtype_l, dtype_r, op):
 
     assert host_result == device_result.value
     assert host_result.dtype == device_result.dtype
-
-    '''
-    lval, rval = pairs
-    if (isinstance(lval, str) and dtype_l != np.dtype('str')) or (isinstance(rval, str) and dtype_r != np.dtype('str')):
-        pytest.skip("Invalid scalar/dtype combination")
-
-    import re
-    try:
-        host_value_l = dtype_l.type(lval)
-    except ValueError as e:
-        with pytest.raises(ValueError, match=re.escape(str(e))):
-            gpu_value_l = Scalar(lval, dtype=dtype_l)
-        return
-    try:
-        host_value_r = dtype_r.type(rval)
-    except ValueError as e:
-        with pytest.raises(ValueError, match=re.escape(str(e))):
-            gpu_value_r = Scalar(rval, dtype=dtype_r)
-        return
-
-    gpu_value_l = Scalar(lval, dtype=dtype_l)
-    gpu_value_r = Scalar(rval, dtype=dtype_r)
-    try:
-        expect = op(host_value_l, host_value_r)
-    except TypeError:
-        with pytest.raises(TypeError):
-            got = op(gpu_value_l, gpu_value_r)
-        return
-    got = op(gpu_value_l, gpu_value_r)
-    assert expect == got.value
-    '''
