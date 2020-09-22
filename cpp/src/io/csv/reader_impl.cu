@@ -266,7 +266,7 @@ table_with_metadata reader::impl::read(cudaStream_t stream)
     h_column_flags_.resize(opts_.get_names().size(), column_parse::enabled);
     col_names_ = opts_.get_names();
   } else {
-    col_names_ = setColumnNames(header_, opts, opts_.get_header(), opts_.get_prefix());
+    col_names_ = setColumnNames(opts, header_, opts_.get_header(), opts_.get_prefix());
 
     num_actual_cols_ = num_active_cols_ = col_names_.size();
 
