@@ -2650,7 +2650,7 @@ class DataFrame(Frame, Serializable):
         df = self if inplace else self.copy(deep=True)
 
         if verify_integrity and not index.is_unique:
-            raise ValueError("Index is not unique.\n {}".format(index))
+            raise ValueError(f"Values in Index are not unique: {index}")
 
         if to_drop:
             df.drop(columns=to_drop, inplace=True)
@@ -2670,9 +2670,9 @@ class DataFrame(Frame, Serializable):
 
         Parameters
         ----------
-        index : Index, Columns-convertible, label-like, or list
+        index : Index, Series-convertible, label-like, or list
             Index : the new index.
-            Columns-convertible : values for the new index.
+            Series-convertible : values for the new index.
             Label-like : Label of column to be used as index.
             List : List of items from above.
         drop : boolean, default True
