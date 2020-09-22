@@ -5379,17 +5379,33 @@ class DataFrame(Frame, Serializable):
     #
     # Stats
     #
-    def _prepare_for_rowwise_op(self):
+    def _prepare_for_rowwise_op(self, method):
         """Prepare a DataFrame for CuPy-based row-wise operations.
         """
 
         if any([col.nullable for col in self._columns]):
-            msg = (
-                "Row-wise operations do not currently support columns with "
-                "null values. Consider removing them with .dropna() "
-                "or using .fillna()."
-            )
-            raise ValueError(msg)
+            if method not in (
+                "nanmin",
+                "min",
+                "nanmax",
+                "max",
+                "nansum",
+                "sum",
+                "nanprod",
+                "prod",
+                "nanmean",
+                "mean",
+                "nanstd",
+                "std",
+                "nanvar",
+                "var",
+            ):
+                msg = (
+                    "Row-wise operations do not currently support columns "
+                    "with null values. Consider removing them with .dropna() "
+                    "or using .fillna()."
+                )
+                raise ValueError(msg)
 
         filtered = self.select_dtypes(include=[np.number, np.bool])
         common_dtype = np.find_common_type(filtered.dtypes, [])
@@ -5476,7 +5492,9 @@ class DataFrame(Frame, Serializable):
         dtype: int64
         """
         return self._apply_support_method(
-            "min",
+            "nanmin"
+            if axis in (1, "columns") and skipna in (None, True)
+            else "min",
             axis=axis,
             skipna=skipna,
             level=level,
@@ -5521,7 +5539,9 @@ class DataFrame(Frame, Serializable):
         dtype: int64
         """
         return self._apply_support_method(
-            "max",
+            "nanmax"
+            if axis in (1, "columns") and skipna in (None, True)
+            else "max",
             axis=axis,
             skipna=skipna,
             level=level,
@@ -5577,7 +5597,9 @@ class DataFrame(Frame, Serializable):
         dtype: int64
         """
         return self._apply_support_method(
-            "sum",
+            "nansum"
+            if axis in (1, "columns") and skipna in (None, True)
+            else "sum",
             axis=axis,
             skipna=skipna,
             dtype=dtype,
@@ -5635,7 +5657,9 @@ class DataFrame(Frame, Serializable):
         dtype: int64
         """
         return self._apply_support_method(
-            "prod",
+            "nanprod"
+            if axis in (1, "columns") and skipna in (None, True)
+            else "prod",
             axis=axis,
             skipna=skipna,
             dtype=dtype,
@@ -5875,7 +5899,9 @@ class DataFrame(Frame, Serializable):
         dtype: float64
         """
         return self._apply_support_method(
-            "mean",
+            "nanmean"
+            if axis in (1, "columns") and skipna in (None, True)
+            else "mean",
             axis=axis,
             skipna=skipna,
             level=level,
@@ -6029,7 +6055,9 @@ class DataFrame(Frame, Serializable):
         """
 
         return self._apply_support_method(
-            "std",
+            "nanstd"
+            if axis in (1, "columns") and skipna in (None, True)
+            else "std",
             axis=axis,
             skipna=skipna,
             level=level,
@@ -6083,7 +6111,9 @@ class DataFrame(Frame, Serializable):
         dtype: float64
         """
         return self._apply_support_method(
-            "var",
+            "nanvar"
+            if axis in (1, "columns") and skipna in (None, True)
+            else "var",
             axis=axis,
             skipna=skipna,
             level=level,
@@ -6304,11 +6334,7 @@ class DataFrame(Frame, Serializable):
 
         elif axis == 1:
             # for dask metadata compatibility
-            skipna = kwargs.pop("skipna", None)
-            if skipna not in (None, True, 1):
-                msg = "Row-wise operations currently do not "
-                "support `skipna=False`."
-                raise NotImplementedError(msg)
+            # skipna = kwargs.pop("skipna", None)
 
             level = kwargs.pop("level", None)
             if level not in (None,):
@@ -6334,10 +6360,12 @@ class DataFrame(Frame, Serializable):
                 "support `bool_only`."
                 raise NotImplementedError(msg)
 
-            prepared = self._prepare_for_rowwise_op()
-            arr = cupy.asarray(prepared.as_gpu_matrix())
+            prepared = self._prepare_for_rowwise_op(method)
+            prepared = prepared.astype("float64")
+            prepared = prepared.fillna(np.nan)
 
-            result = getattr(arr, method)(axis=1, **kwargs)
+            arr = cupy.asarray(prepared.as_gpu_matrix())
+            result = getattr(cupy, method)(arr, axis=1, **kwargs)
 
             if len(result.shape) == 1:
                 return Series(result, index=self.index)
