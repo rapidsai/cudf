@@ -497,8 +497,6 @@ class Frame(libcudf.table.Table):
             )
         )
         result._copy_categories(self)
-        if keep_index and self._index is not None:
-            result._index.names = self._index.names
         return result
 
     def _hash(self, initial_hash_values=None):
@@ -2159,7 +2157,6 @@ class Frame(libcudf.table.Table):
                     ordered=other_col.ordered,
                     size=col.size,
                     offset=col.offset,
-                    null_count=col.null_count,
                 )
         if include_index:
             # include_index will still behave as False
@@ -2176,15 +2173,13 @@ class Frame(libcudf.table.Table):
                 # When other._index is a CategoricalIndex, there is
                 # possibility that corresposing self._index be GenericIndex
                 # with codes. So to update even the class signature, we
-                # have to reconstruct self._index:
+                # have to call as_index.
                 if isinstance(
                     other._index, cudf.core.index.CategoricalIndex
                 ) and not isinstance(
                     self._index, cudf.core.index.CategoricalIndex
                 ):
-                    self._index = cudf.core.index.Index._from_table(
-                        self._index
-                    )
+                    self._index = cudf.core.index.as_index(self._index)
         return self
 
     def _unaryop(self, op):
@@ -2693,15 +2688,7 @@ class Frame(libcudf.table.Table):
                     1.5707963267948966,  1.266103672779499],
                     dtype='float64')
         """
-        result = self.copy()
-        for col in result._data:
-            min_float_dtype = cudf.utils.dtypes.get_min_float_dtype(
-                result._data[col]
-            )
-            result._data[col] = result._data[col].astype(min_float_dtype)
-        result = result._unaryop("acos")
-        result = result.mask((result < 0) | (result > np.pi + 1))
-        return result
+        return self._unaryop("acos")
 
     def atan(self):
         """

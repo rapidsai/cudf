@@ -24,9 +24,7 @@ def test_sqrt_integer():
     )
 
 
-def math_op_test(
-    dtype, fn, nelem=128, test_df=False, positive_only=False, check_dtype=True
-):
+def math_op_test(dtype, fn, nelem=128, test_df=False, positive_only=False):
     randvals = gen_rand(dtype, nelem, positive_only=positive_only)
     h_series = pd.Series(randvals.astype(dtype))
     d_series = cudf.Series(h_series)
@@ -47,11 +45,10 @@ def math_op_test(
     print(got)
     print("expect")
     print(expect)
-    assert_eq(expect, got, check_dtype=check_dtype)
+    assert_eq(expect, got)
 
 
 params_real_types = [np.float64, np.float32]
-int_type = [np.int64, np.int32]
 
 
 # trig
@@ -84,13 +81,7 @@ def test_asin(dtype, test_df):
 @pytest.mark.parametrize("dtype", params_real_types)
 @pytest.mark.parametrize("test_df", [False, True])
 def test_acos(dtype, test_df):
-    math_op_test(dtype, np.arccos, test_df=test_df, check_dtype=False)
-
-
-@pytest.mark.parametrize("dtype", int_type)
-@pytest.mark.parametrize("test_df", [False, True])
-def test_acos_integer(dtype, test_df):
-    math_op_test(dtype, np.arccos, test_df=test_df, check_dtype=False)
+    math_op_test(dtype, np.arccos, test_df=test_df)
 
 
 @pytest.mark.parametrize("dtype", params_real_types)
