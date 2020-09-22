@@ -88,22 +88,22 @@ class Scalar(libcudf.scalar.Scalar):
         return self._scalar_binop(other, "__pow__")
 
     def __gt__(self, other):
-        return self._scalar_binop(other, "__gt__").value
+        return self._scalar_binop(other, "__gt__")
 
     def __lt__(self, other):
-        return self._scalar_binop(other, "__lt__").value
+        return self._scalar_binop(other, "__lt__")
 
     def __ge__(self, other):
-        return self._scalar_binop(other, "__ge__").value
+        return self._scalar_binop(other, "__ge__")
 
     def __le__(self, other):
-        return self._scalar_binop(other, "__le__").value
+        return self._scalar_binop(other, "__le__")
 
     def __eq__(self, other):
-        return self._scalar_binop(other, '__eq__').value
+        return self._scalar_binop(other, '__eq__')
 
     def __ne__(self, other):
-        return self._scalar_binop(other, "__ne__").value
+        return self._scalar_binop(other, "__ne__")
 
     def __abs__(self):
         return self._scalar_unaop('__abs__')
