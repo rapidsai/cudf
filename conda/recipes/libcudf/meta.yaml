@@ -171,6 +171,7 @@ test:
     - test -f $PREFIX/include/cudf/types.hpp
     - test -f $PREFIX/include/cudf/unary.hpp
     - test -f $PREFIX/include/cudf/utilities/bit.hpp
+    - test -f $PREFIX/include/cudf/utilities/span.hpp
     - test -f $PREFIX/include/cudf/utilities/error.hpp
     - test -f $PREFIX/include/cudf/utilities/traits.hpp
     - test -f $PREFIX/include/cudf/utilities/type_dispatcher.hpp
