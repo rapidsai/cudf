@@ -1033,11 +1033,8 @@ def test_csv_reader_byte_range_type_corner_case(tmpdir):
     ).to_csv(fname, chunksize=100000)
 
     byte_range = (2_147_483_648, 0)
-    try:
+    with pytest.raises(RuntimeError, match="Offset is past end of file"):
         cudf.read_csv(fname, byte_range=byte_range, header=None)
-    except RuntimeError as e:
-        if "Offset is past end of file" not in str(e):
-            raise e
 
 
 @pytest.mark.parametrize("segment_bytes", [10, 19, 31, 36])
