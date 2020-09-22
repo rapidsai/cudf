@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,74 +14,17 @@
  * limitations under the License.
  */
 
+#include <cudf/io/datasource.hpp>
+
 #include <fcntl.h>
 #include <sys/mman.h>
-#include <sys/stat.h>
-#include <sys/types.h>
 #include <unistd.h>
 
-#include <cufile.h>
-
-#include <rmm/device_buffer.hpp>
-
-#include <cudf/io/datasource.hpp>
 #include <cudf/utilities/error.hpp>
+#include <io/utilities/file_utils.hpp>
 
 namespace cudf {
 namespace io {
-
-struct file_wrapper {
-  int const fd = -1;
-  explicit file_wrapper(const char *filepath, int oflags = O_RDONLY) : fd(open(filepath, oflags)) {}
-  ~file_wrapper() { close(fd); }
-};
-
-struct cufile_driver {
-  cufile_driver()
-  {
-    if (cuFileDriverOpen().err != CU_FILE_SUCCESS) throw "Cannot init cufile driver";
-  }
-  ~cufile_driver() { cuFileDriverClose(); }
-};
-
-class gdsfile {
- public:
-  gdsfile(const char *filepath) : handle(filepath, O_RDONLY | O_DIRECT)
-  {
-    static cufile_driver driver;
-    CUDF_EXPECTS(handle.fd != -1, "Cannot open file");
-
-    CUfileDescr_t cf_desc{};
-    cf_desc.handle.fd = handle.fd;
-    cf_desc.type      = CU_FILE_HANDLE_TYPE_OPAQUE_FD;
-    CUDF_EXPECTS(cuFileHandleRegister(&cf_handle, &cf_desc).err == CU_FILE_SUCCESS,
-                 "Cannot map cufile");
-
-    struct stat st;
-    CUDF_EXPECTS(fstat(handle.fd, &st) != -1, "Cannot query file size");
-  }
-
-  std::unique_ptr<datasource::buffer> read(size_t offset, size_t size)
-  {
-    rmm::device_buffer out_data(size);
-    cuFileRead(cf_handle, out_data.data(), size, offset, 0);
-
-    return datasource::buffer::create(std::move(out_data));
-  }
-
-  size_t read(size_t offset, size_t size, uint8_t *dst)
-  {
-    cuFileRead(cf_handle, dst, size, offset, 0);
-    // have to read the requested size for now
-    return size;
-  }
-
-  ~gdsfile() { cuFileHandleDeregister(cf_handle); }
-
- private:
-  file_wrapper handle;
-  CUfileHandle_t cf_handle = nullptr;
-};
 
 /**
  * @brief Implementation class for reading from a file or memory source using
@@ -105,14 +48,9 @@ class memory_mapped_source : public datasource {
   explicit memory_mapped_source(const char *filepath, size_t offset, size_t size)
     : _gds_file(filepath)
   {
-    auto const file = file_wrapper(filepath);
-    CUDF_EXPECTS(file.fd != -1, "Cannot open file");
-
-    struct stat st;
-    CUDF_EXPECTS(fstat(file.fd, &st) != -1, "Cannot query file size");
-    file_size_ = static_cast<size_t>(st.st_size);
-
-    if (file_size_ != 0) { map(file.fd, offset, size); }
+    auto const file = file_wrapper(filepath, O_RDONLY);
+    file_size_      = file.size();
+    if (file_size_ != 0) { map(file.get_desc(), offset, size); }
   }
 
   virtual ~memory_mapped_source()
@@ -165,7 +103,7 @@ class memory_mapped_source : public datasource {
     CUDF_EXPECTS(offset < file_size_, "Offset is past end of file");
 
     // Offset for `mmap()` must be page aligned
-    auto const map_offset = offset & ~(sysconf(_SC_PAGESIZE) - 1);
+    map_offset_ = offset & ~(sysconf(_SC_PAGESIZE) - 1);
 
     // Clamp length to available data in the file
     if (size == 0) {
@@ -175,13 +113,11 @@ class memory_mapped_source : public datasource {
     }
 
     // Size for `mmap()` needs to include the page padding
-    const auto map_size = size + (offset - map_offset);
+    map_size_ = size + (offset - map_offset_);
 
     // Check if accessing a region within already mapped area
-    map_addr_ = mmap(NULL, map_size, PROT_READ, MAP_PRIVATE, fd, map_offset);
+    map_addr_ = mmap(nullptr, map_size_, PROT_READ, MAP_PRIVATE, fd, map_offset_);
     CUDF_EXPECTS(map_addr_ != MAP_FAILED, "Cannot create memory mapping");
-    map_offset_ = map_offset;
-    map_size_   = map_size;
   }
 
  private:
