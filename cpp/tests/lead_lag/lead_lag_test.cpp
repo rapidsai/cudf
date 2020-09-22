@@ -34,6 +34,7 @@
 #include <tests/utilities/cudf_gtest.hpp>
 #include <tests/utilities/type_lists.hpp>
 #include "cudf/scalar/scalar_factories.hpp"
+#include "thrust/iterator/transform_iterator.h"
 
 using cudf::size_type;
 using namespace cudf::test;
@@ -273,6 +274,42 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithNoGrouping)
   expect_columns_equivalent(
     *lag_2_output_col,
     fixed_width_column_wrapper<T>{{99, 99, 0, 1, -1, 3}, {1, 1, 1, 1, 0, 1}}.release()->view());
+}
+
+TEST_F(LeadLagWindowTest, TestLeadLagWithAllNullInput)
+{
+  using T = int32_t;
+
+  auto const input_col = fixed_width_column_wrapper<T>{
+    {0, 1, 2, 3, 4, 5, 0, 10, 20, 30, 40, 50}, make_counting_transform_iterator(0, [](auto i) {
+      return false;
+    })}.release();
+  auto const input_size   = input_col->size();
+  auto const grouping_key = fixed_width_column_wrapper<int32_t>{0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1};
+  auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grouping_key}};
+
+  auto const default_value =
+    cudf::make_fixed_width_scalar(detail::fixed_width_type_converter<int32_t, T>{}(99));
+  auto const default_outputs = cudf::make_column_from_scalar(*default_value, input_col->size());
+
+  auto lead_3_output_col = cudf::grouped_rolling_window(
+    grouping_keys, input_col->view(), *default_outputs, 4, 3, 1, cudf::make_lead_aggregation(3));
+  expect_columns_equivalent(
+    *lead_3_output_col,
+    fixed_width_column_wrapper<T>{{-1, -1, -1, 99, 99, 99, -1, -1, -1, 99, 99, 99},
+                                  {0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1}}
+      .release()
+      ->view());
+
+  auto const lag_2_output_col = cudf::grouped_rolling_window(
+    grouping_keys, input_col->view(), *default_outputs, 3, 2, 1, cudf::make_lag_aggregation(2));
+
+  expect_columns_equivalent(
+    *lag_2_output_col,
+    fixed_width_column_wrapper<T>{{99, 99, -1, -1, -1, -1, 99, 99, -1, -1, -1, -1},
+                                  {1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0}}
+      .release()
+      ->view());
 }
 
 CUDF_TEST_PROGRAM_MAIN()
