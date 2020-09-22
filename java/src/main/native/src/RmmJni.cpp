@@ -36,7 +36,7 @@ using rmm::mr::logging_resource_adaptor;
 namespace {
 
 // Alignment to which the RMM memory resource will round allocation sizes
-constexpr std::size_t RMM_ALLOC_SIZE_ALIGNMENT = 512;
+constexpr std::size_t RMM_ALLOC_SIZE_ALIGNMENT = 256;
 
 constexpr char const *RMM_EXCEPTION_CLASS = "ai/rapids/cudf/RmmException";
 
