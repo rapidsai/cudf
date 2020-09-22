@@ -179,7 +179,7 @@ class Index(Frame, Serializable):
         return item in self._values
 
     @annotate("INDEX_EQUALS", color="green", domain="cudf_python")
-    def equals(self, other):
+    def equals(self, other, **kwargs):
         """
         Determine if two Index objects contain the same elements.
 
@@ -191,12 +191,20 @@ class Index(Frame, Serializable):
         """
         if not isinstance(other, Index):
             return False
-        if isinstance(self, CategoricalIndex):
+
+        check_types = False
+
+        self_is_categorical = isinstance(self, CategoricalIndex)
+        other_is_categorical = isinstance(other, CategoricalIndex)
+        if self_is_categorical and not other_is_categorical:
             other = other.astype(self.dtype)
-        elif isinstance(other, CategoricalIndex):
+            check_types = True
+        elif other_is_categorical and not self_is_categorical:
             self = self.astype(other.dtype)
+            check_types = True
+
         try:
-            return super(Index, self).equals(other, check_types=False)
+            return super(Index, self).equals(other, check_types=check_types)
         except TypeError:
             return False
 
@@ -2515,7 +2523,6 @@ class CategoricalIndex(GenericIndex):
                     "Cannot specify `categories` or "
                     "`ordered` together with `dtype`."
                 )
-
         if copy:
             data = column.as_column(data, dtype=dtype).copy(deep=True)
         out = Frame.__new__(cls)

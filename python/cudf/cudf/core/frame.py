@@ -491,26 +491,26 @@ class Frame(libcudf.table.Table):
         if self is other:
             return True
 
-        if other is None or len(self) != len(other):
-            return False
+        check_types = kwargs.get("check_types", True)
 
-        if kwargs.get("check_types", True):
+        if check_types:
             if type(self) is not type(other):
                 return False
+
+        if other is None or len(self) != len(other):
+            return False
 
         # check data:
         for self_col, other_col in zip(
             self._data.values(), other._data.values()
         ):
-            if not self_col.equals(other_col):
+            if not self_col.equals(other_col, check_dtypes=check_types):
                 return False
 
         # check index:
         if self._index is None:
             return other._index is None
         else:
-            if other._index is None:
-                return False
             return self._index.equals(other._index)
 
     def _get_columns_by_label(self, labels, downcast=False):

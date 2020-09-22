@@ -7302,3 +7302,23 @@ def test_dataframe_mode(df, numeric_only, dropna):
     actual = df.mode(numeric_only=numeric_only, dropna=dropna)
 
     assert_eq(expected, actual, check_dtype=False)
+
+
+def test_equals_names():
+    lhs = gd.DataFrame({"a": [1, 2]})
+    rhs = gd.DataFrame({"b": [1, 2]})
+
+    got = lhs.equals(rhs)
+    expect = lhs.to_pandas().equals(rhs.to_pandas())
+
+    assert_eq(expect, got)
+
+
+def test_equals_dtypes():
+    lhs = gd.DataFrame({"a": [1, 2.0]})
+    rhs = gd.DataFrame({"a": [1, 2]})
+
+    got = lhs.equals(rhs)
+    expect = lhs.to_pandas().equals(rhs.to_pandas())
+
+    assert_eq(expect, got)
