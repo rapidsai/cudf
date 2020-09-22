@@ -43,10 +43,6 @@ def math_op_test(
     expect = fn(h_in)
     got = fn(d_in)
 
-    print("got")
-    print(got)
-    print("expect")
-    print(expect)
     assert_eq(expect, got, check_dtype=check_dtype)
 
 

@@ -2693,7 +2693,7 @@ class Frame(libcudf.table.Table):
                     1.5707963267948966,  1.266103672779499],
                     dtype='float64')
         """
-        result = self.copy()
+        result = self.copy(deep=False)
         for col in result._data:
             min_float_dtype = cudf.utils.dtypes.get_min_float_dtype(
                 result._data[col]
