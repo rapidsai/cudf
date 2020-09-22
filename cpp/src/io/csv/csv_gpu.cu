@@ -448,25 +448,25 @@ struct decode_op {
                                                       size_t row,
                                                       char const *begin,
                                                       char const *end,
-
                                                       column_parse::flags flags)
   {
-    auto &value{static_cast<T *>(out_buffer)[row]};
-
-    // Check for user-specified true/false values first, where the output is
-    // replaced with 1/0 respectively
-    const size_t field_len = end - begin + 1;
-    if (serializedTrieContains(opts.trueValuesTrie, begin, field_len)) {
-      value = 1;
-    } else if (serializedTrieContains(opts.falseValuesTrie, begin, field_len)) {
-      value = 0;
-    } else {
-      if (flags & column_parse::as_hexadecimal) {
-        value = decode_value<T, 16>(opts, begin, end);
+    static_cast<T *>(out_buffer)[row] = [&]() {
+      // Check for user-specified true/false values first, where the output is
+      // replaced with 1/0 respectively
+      const size_t field_len = end - begin + 1;
+      if (serializedTrieContains(opts.trueValuesTrie, begin, field_len)) {
+        return static_cast<T>(1);
+      } else if (serializedTrieContains(opts.falseValuesTrie, begin, field_len)) {
+        return static_cast<T>(0);
       } else {
-        value = decode_value<T>(opts, begin, end);
+        if (flags & column_parse::as_hexadecimal) {
+          return decode_value<T, 16>(opts, begin, end);
+        } else {
+          return decode_value<T>(opts, begin, end);
+        }
       }
-    }
+    }();
+
     return true;
   }
 

@@ -219,7 +219,7 @@ final class MemoryCleaner {
     all.add(new CleanerWeakReference(vec, cleaner, collected, true));
   }
 
-  static void register(HostColumnVector vec, Cleaner cleaner) {
+  static void register(HostColumnVectorCore vec, Cleaner cleaner) {
     // It is now registered...
     all.add(new CleanerWeakReference(vec, cleaner, collected, false));
   }

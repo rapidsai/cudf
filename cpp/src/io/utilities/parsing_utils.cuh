@@ -185,40 +185,40 @@ __inline__ __device__ T parse_numeric(const char* begin, const char* end, ParseO
   if (base == 16 && begin + 2 <= end && *begin == '0' && *(begin + 1) == 'x') { begin += 2; }
 
   // Handle the whole part of the number
-  auto index = begin;
-  while (index <= end) {
-    if (*index == opts.decimal) {
-      ++index;
+  // auto index = begin;
+  while (begin <= end) {
+    if (*begin == opts.decimal) {
+      ++begin;
       break;
-    } else if (base == 10 && (*index == 'e' || *index == 'E')) {
+    } else if (base == 10 && (*begin == 'e' || *begin == 'E')) {
       break;
-    } else if (*index != opts.thousands && *index != '+') {
-      value = (value * base) + decode_digit<T>(*index, &all_digits_valid);
+    } else if (*begin != opts.thousands && *begin != '+') {
+      value = (value * base) + decode_digit<T>(*begin, &all_digits_valid);
     }
-    ++index;
+    ++begin;
   }
 
   if (std::is_floating_point<T>::value) {
     // Handle fractional part of the number if necessary
     double divisor = 1;
-    while (index <= end) {
-      if (*index == 'e' || *index == 'E') {
-        ++index;
+    while (begin <= end) {
+      if (*begin == 'e' || *begin == 'E') {
+        ++begin;
         break;
-      } else if (*index != opts.thousands && *index != '+') {
+      } else if (*begin != opts.thousands && *begin != '+') {
         divisor /= base;
-        value += decode_digit<T>(*index, &all_digits_valid) * divisor;
+        value += decode_digit<T>(*begin, &all_digits_valid) * divisor;
       }
-      ++index;
+      ++begin;
     }
 
     // Handle exponential part of the number if necessary
-    if (index <= end) {
-      const int32_t exponent_sign = *index == '-' ? -1 : 1;
-      if (*index == '-' || *index == '+') { ++index; }
+    if (begin <= end) {
+      const int32_t exponent_sign = *begin == '-' ? -1 : 1;
+      if (*begin == '-' || *begin == '+') { ++begin; }
       int32_t exponent = 0;
-      while (index <= end) {
-        exponent = (exponent * 10) + decode_digit<T>(*(index++), &all_digits_valid);
+      while (begin <= end) {
+        exponent = (exponent * 10) + decode_digit<T>(*(begin++), &all_digits_valid);
       }
       if (exponent != 0) { value *= exp10(double(exponent * exponent_sign)); }
     }
