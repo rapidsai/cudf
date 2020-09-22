@@ -681,13 +681,10 @@ void reader::impl::decode_data(thrust::host_vector<column_parse::column_builder>
 
   cudf::io::csv::gpu::decode_row_column_data(opts,
                                              data_.data().get(),
-                                             // todo: replace with device_span
-                                             num_records_,
-                                             row_offsets_.data().get(),
-                                             // todo: replace with device_span
-                                             num_actual_cols_,
-                                             d_builders.data().get(),
+                                             device_span<uint64_t const>(row_offsets_),
+                                             device_span<column_parse::column_builder>(d_builders),
                                              stream);
+
   CUDA_TRY(cudaStreamSynchronize(stream));
 }
 

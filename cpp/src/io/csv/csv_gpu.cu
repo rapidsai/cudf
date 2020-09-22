@@ -32,8 +32,6 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
-
 #include <thrust/detail/copy.h>
 #include <thrust/transform.h>
 
@@ -541,8 +539,6 @@ struct decode_op {
  *
  * @param[in] opts A set of parsing options
  * @param[in] raw_csv The entire CSV data to read
- * @param[in] num_records The number of lines/rows of CSV data
- * @param[in] num_columns The number of columns of CSV data
  * @param[in] column_flags Per-column parsing behavior flags
  * @param[in] recStart The start the CSV data of interest
  * @param[in] dtype The data type of the column
@@ -553,12 +549,8 @@ struct decode_op {
 __global__ void __launch_bounds__(csvparse_block_dim)
   convert_csv_to_cudf(ParseOptions const opts,
                       char const *raw_csv,
-                      // todo: replace with device_span
-                      size_t record_count,
-                      uint64_t const *record_offsets,
-                      // todo: replace with device_span
-                      size_t column_count,
-                      column_parse::column_builder *columns)
+                      device_span<uint64_t const> row_offsets,
+                      device_span<column_parse::column_builder> columns)
 
 {
   // thread IDs range per block, so also need the block id
@@ -568,15 +560,15 @@ __global__ void __launch_bounds__(csvparse_block_dim)
 
   // we can have more threads than data, make sure we are not past the end of
   // the data
-  if (rec_id >= record_count) return;
+  if (rec_id >= row_offsets.size()) return;
 
-  long start = record_offsets[rec_id];
-  long stop  = record_offsets[rec_id + 1];
+  long start = row_offsets[rec_id];
+  long stop  = row_offsets[rec_id + 1];
 
   long pos = start;
   int col  = 0;
 
-  while (col < column_count) {
+  while (col < columns.size()) {
     if (start > stop) break;
 
     pos = cudf::io::gpu::seek_field_end(raw_csv + pos, raw_csv + stop, opts) - raw_csv;
@@ -1023,30 +1015,17 @@ thrust::host_vector<column_parse::stats> detect_column_types(
   return thrust::host_vector<column_parse::stats>(d_stats);
 }
 
-struct boop_functor {
-  column_parse::column_builder *builders;
-  cudf::data_type *dtypes;
-  void **columns;
-  cudf::bitmask_type **valids;
-  void __device__ operator()(size_t i) { builders[i] = {dtypes[i], columns[i], valids[i]}; }
-};
-
 void __host__ decode_row_column_data(ParseOptions const &options,
                                      char const *data,
-                                     // todo: replace with device_span
-                                     size_t row_count,
-                                     uint64_t const *row_offsets,
-                                     // todo: replace with device_span
-                                     size_t column_count,
-                                     column_parse::column_builder *columns,
+                                     device_span<uint64_t const> const &row_offsets,
+                                     device_span<column_parse::column_builder> const &columns,
                                      cudaStream_t stream)
 {
   // Calculate actual block count to use based on records count
   const int block_size = csvparse_block_dim;
-  const int grid_size  = (row_count + block_size - 1) / block_size;
+  const int grid_size  = (row_offsets.size() + block_size - 1) / block_size;
 
-  convert_csv_to_cudf<<<grid_size, block_size, 0, stream>>>(
-    options, data, row_count, row_offsets, column_count, columns);
+  convert_csv_to_cudf<<<grid_size, block_size, 0, stream>>>(options, data, row_offsets, columns);
 }
 
 uint32_t __host__ gather_row_offsets(ParseOptions const &options,

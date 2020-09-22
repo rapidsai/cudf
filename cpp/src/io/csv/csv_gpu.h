@@ -221,18 +221,14 @@ thrust::host_vector<column_parse::stats> detect_column_types(
  *
  * @param[in] options Options that control individual field data conversion
  * @param[in] data The row-column data
- * @param[in] row_count Number of rows
  * @param[in] row_offsets List of row data start positions
- * @param[in] column_count Number of columns
  * @param[out] columns column flags, data, null_mask, etc.
  * @param[in] stream CUDA stream to use, default 0
  **/
 void decode_row_column_data(ParseOptions const &options,
                             char const *data,
-                            size_t row_count,
-                            uint64_t const *row_offsets,
-                            size_t column_count,
-                            column_parse::column_builder *columns,
+                            device_span<uint64_t const> const &row_offsets,
+                            device_span<column_parse::column_builder> const &columns,
                             cudaStream_t stream = 0);
 
 }  // namespace gpu
