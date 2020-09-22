@@ -726,9 +726,8 @@ __device__ inline numeric::decimal32 const column_device_view::element<numeric::
   size_type element_index) const noexcept
 {
   using namespace numeric;
-  auto const scale       = scale_type{_type.scale()};
-  auto const fixed_point = scaled_integer<int32_t>{data<int32_t>()[element_index], scale};
-  return decimal32{fixed_point};
+  auto const scale = scale_type{_type.scale()};
+  return decimal32{scaled_integer<int32_t>{10 * data<int32_t>()[element_index], scale}};
 }
 
 // TODO add docs
@@ -737,9 +736,8 @@ __device__ inline numeric::decimal64 const column_device_view::element<numeric::
   size_type element_index) const noexcept
 {
   using namespace numeric;
-  auto const scale       = scale_type{_type.scale()};
-  auto const fixed_point = scaled_integer<int64_t>{data<int64_t>()[element_index], scale};
-  return decimal64{fixed_point};
+  auto const scale = scale_type{_type.scale()};
+  return decimal64{scaled_integer<int64_t>{data<int64_t>()[element_index], scale}};
 }
 
 namespace detail {
