@@ -226,14 +226,12 @@ public abstract class Aggregation {
     }
 
     /**
-     * <code>cudf::aggregation</code>, which is the equivalent of this class, is always used as
-     * a <code>std::unique_ptr&gt;cudf::aggregation&lt;</code>.  This means that ownership of the
-     * object is transferred when used.  We also don't want to force users to close an Aggregation.
-     * Both of these things together lead to a design where Aggregation objects are created in pure
-     * java, but when it is time to use them this method is called to return a pointer to a
-     * <code>std::unique_ptr</code> to the c++ aggregation instance. All values returned by this
-     * can be used at most once, and should be closed by calling the static close method.
-     * Yes this creates a lot more JNI calls, but it keeps the user API clean.
+     * returns a <code>cudf::aggregation *</code> cast to a long. We don't want to force users to
+     * close an Aggregation. Because of this Aggregation objects are created in pure java, but when
+     * it is time to use them this method is called to return a pointer to the c++ aggregation
+     * instance. All values returned by this can be used multiple times, and should be closed by
+     * calling the static close method. Yes, this creates a lot more JNI calls, but it keeps the
+     * user API clean.
      */
     abstract long createNativeInstance();
 
