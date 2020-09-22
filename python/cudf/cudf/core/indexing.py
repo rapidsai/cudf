@@ -295,7 +295,10 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 return columns_df.take(indices)
 
             else:
-                return columns_df.index._get_row_major(columns_df, arg[0])
+                if isinstance(arg, tuple):
+                    return columns_df.index._get_row_major(columns_df, arg[0])
+                else:
+                    return columns_df.index._get_row_major(columns_df, arg)
         else:
             if isinstance(arg[0], slice):
                 out = get_label_range_or_mask(
@@ -329,7 +332,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     # update it over here
                     df.index.name = columns_df.index.name
                     df = df.sort_values(tmp_col_name)
-                    df.drop([tmp_col_name], inplace=True)
+                    df.drop(columns=[tmp_col_name], inplace=True)
                     # There were no indices found
                     if len(df) == 0:
                         raise IndexError
