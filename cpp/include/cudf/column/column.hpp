@@ -34,7 +34,7 @@
 namespace cudf {
 
 /**
- * @brief A container of nullable device data as a column of elements,
+ * @brief A container of nullable device data as a column of elements.
  *
  * @ingroup column_classes Column
  * @{

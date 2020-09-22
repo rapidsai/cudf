@@ -36,7 +36,7 @@ namespace io {
  */
 
 /**
- * @brief To build options for `read_avro()`.
+ * @brief Builder to build options for `read_avro()`.
  */
 class avro_reader_options_builder;
 
