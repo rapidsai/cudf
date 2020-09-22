@@ -61,6 +61,17 @@ def groupby_agg(
     sort=False,
     as_index=True,
 ):
+    """ Optimized groupby aggregation for Dask-CuDF.
+
+        This aggregation algorithm only supports the following options:
+
+        {"count", "mean", "std", "var", "sum", "min", "max"}
+
+        This "optimized" approach is more performant than the algorithm
+        in `dask.dataframe`, because it allows the cudf backend to
+        perform multiple aggregations at once.
+    """
+
     # Deal with default split_out and split_every params
     if split_every is False:
         split_every = ddf.npartitions
@@ -187,6 +198,8 @@ def groupby_agg(
 
 
 def _is_supported(arg, supported: set):
+    """ Check that aggregations in `args` is a subset of `supportd`
+    """
     if isinstance(arg, (list, dict)):
         if isinstance(arg, dict):
             _global_set = set()
@@ -203,6 +216,8 @@ def _is_supported(arg, supported: set):
 
 
 def _make_name(*args, sep="_"):
+    """ Combine elements of `args` into a new string
+    """
     _args = (arg for arg in args if arg != "")
     return sep.join(_args)
 
@@ -210,6 +225,17 @@ def _make_name(*args, sep="_"):
 def _groupby_partition_agg(
     df, gb_cols, aggs, columns, split_out, dropna, sort, sep
 ):
+    """ Initial partition-level aggregation task.
+
+        This is the first operation to be executed on each input
+        partition in `groupby_agg`.  Depending on `aggs`, four possible
+        groupby aggregations ("count", "sum", "min", and "max") are
+        performed.  The result is then partitioned (by hashing `gb_cols`)
+        into a number of distinct dictionary elements.  The number of
+        elements in the output dictionary (`split_out`) corresponds to
+        the number of partitions in the final output of `groupby_agg`.
+    """
+
     # Modify dict for initial (partition-wise) aggregations
     _agg_dict = {}
     for col, agg_list in aggs.items():
@@ -231,13 +257,16 @@ def _groupby_partition_agg(
     )
     gb.columns = [_make_name(*name, sep=sep) for name in gb.columns]
 
-    if hasattr(gb, "partition_by_hash"):
+    if split_out == 1:
+        output = {0: gb.copy(deep=False)}
+    elif hasattr(gb, "partition_by_hash"):
         # For cudf, we can use `partition_by_hash` method
         output = {}
         for j, split in enumerate(
             gb.partition_by_hash(gb_cols, split_out, keep_index=False)
         ):
             output[j] = split
+        del gb
     else:
         # Dask-Dataframe (Pandas) support
         output = hash_shard(
@@ -246,11 +275,22 @@ def _groupby_partition_agg(
             split_out_setup=split_out_on_cols,
             split_out_setup_kwargs={"cols": gb_cols},
         )
-    del gb
+        del gb
     return output
 
 
 def _tree_node_agg(dfs, gb_cols, split_out, dropna, sort, sep):
+    """ Node in groupby-aggregation reduction tree.
+
+        Following the initial `_groupby_partition_agg` tasks,
+        the `groupby_agg` algorithm will perform a tree reduction
+        to combine the data from the input partitions into
+        `split_out` different output partitions.  For each node in
+        the reduction tree, the input DataFrame objects are
+        concatenated, and "sum", "min" and/or "max" groupby
+        aggregations are used to combine the necessary statistics.
+    """
+
     df = _concat(dfs, ignore_index=True)
     agg_dict = {}
     for col in df.columns:
@@ -273,6 +313,28 @@ def _tree_node_agg(dfs, gb_cols, split_out, dropna, sort, sep):
     return gb
 
 
+def _var_agg(df, col, count_name, sum_name, pow2_sum_name, ddof=1):
+    """ Calculate variance (given count, sum, and sum-squared columns).
+    """
+
+    # Select count, sum, and sum-squared
+    n = df[count_name]
+    x = df[sum_name]
+    x2 = df[pow2_sum_name]
+
+    # Use sum-squared approach to get variance
+    var = x2 - x ** 2 / n
+    div = n - ddof
+    div[div < 1] = 1  # Avoid division by 0
+    var /= div
+
+    # Set appropriate NaN elements
+    # (since we avoided 0-division)
+    var[(n - ddof) == 0] = np.nan
+
+    return var
+
+
 def _finalize_gb_agg(
     gb,
     gb_cols,
@@ -284,6 +346,14 @@ def _finalize_gb_agg(
     sep,
     str_cols_out,
 ):
+    """ Final aggregation task.
+
+        This is the final operation on each output partitions
+        of the `groupby_agg` algorithm.  This function must
+        take care of higher-order aggregations, like "mean",
+        "std" and "var".  We also need to deal with the column
+        index, the row index, and final sorting behavior.
+    """
 
     # Deal with higher-order aggregations
     for col in columns:
@@ -293,22 +363,14 @@ def _finalize_gb_agg(
             count_name = _make_name(col, "count", sep=sep)
             sum_name = _make_name(col, "sum", sep=sep)
             if agg_set.intersection({"std", "var"}):
-                n = gb[count_name]
-                x = gb[sum_name]
                 pow2_sum_name = _make_name(col, "pow2", "sum", sep=sep)
-                x2 = gb[pow2_sum_name]
-                result = x2 - x ** 2 / n
-                ddof = 1
-                div = n - ddof
-                div[div < 1] = 1
-                result /= div
-                result[(n - ddof) == 0] = np.nan
+                var = _var_agg(gb, col, count_name, sum_name, pow2_sum_name)
                 if "var" in agg_list:
                     name_var = _make_name(col, "var", sep=sep)
-                    gb[name_var] = result
+                    gb[name_var] = var
                 if "std" in agg_list:
                     name_std = _make_name(col, "std", sep=sep)
-                    gb[name_std] = np.sqrt(result)
+                    gb[name_std] = np.sqrt(var)
                 gb.drop(columns=[pow2_sum_name], inplace=True)
             if "mean" in agg_list:
                 mean_name = _make_name(col, "mean", sep=sep)
@@ -322,7 +384,8 @@ def _finalize_gb_agg(
     if sort:
         gb = gb.sort_values(gb_cols)
 
-    # Set index (use `inplace` when supported)
+    # Set index
+    # TODO: Use `inplace` when supported (See GH PR#6231)
     if as_index:
         gb = gb.set_index(gb_cols)
 
