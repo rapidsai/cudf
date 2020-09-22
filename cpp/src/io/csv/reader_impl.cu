@@ -38,6 +38,8 @@
 #include <tuple>
 #include <unordered_map>
 
+using cudf::detail::device_span;
+
 using std::string;
 using std::vector;
 
@@ -569,14 +571,14 @@ std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream)
     } else {
       d_column_flags_ = h_column_flags_;
 
-      auto column_stats = cudf::io::csv::gpu::detect_column_types(data_.data().get(),
-                                                                  row_offsets_.data().get(),
-                                                                  num_records_,
-                                                                  num_actual_cols_,
-                                                                  num_active_cols_,
-                                                                  opts,
-                                                                  d_column_flags_.data().get(),
-                                                                  stream);
+      auto column_stats =
+        cudf::io::csv::gpu::detect_column_types(data_.data().get(),
+                                                device_span<uint64_t const>(row_offsets_),
+                                                num_actual_cols_,
+                                                num_active_cols_,
+                                                opts,
+                                                d_column_flags_.data().get(),
+                                                stream);
 
       CUDA_TRY(cudaStreamSynchronize(stream));
 
