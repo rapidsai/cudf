@@ -91,13 +91,13 @@
 - PR #6212 Update codeowners file
 - PR #6157 Fix issue related to `Series.concat` to concat a non-empty and empty series.
 - PR #6226 Add in some JNI checks for null handles
-- PR #6183 Fix issues related to `Series.acos` for consistent output regardless of dtype
 - PR #6234 Add float infinity parsing in csv reader
 - PR #6251 Replace remaining calls to RMM `get_default_resource`
 - PR #6257 Support truncated fractions in `cudf::strings::to_timestamp`
 - PR #6259 Fix compilation error with GCC 8
 - PR #6258 Pin libcudf conda recipe to boost 1.72.0
 - PR #6264 Remove include statement for missing rmm/mr/device/default_memory_resource.hpp file
+- PR #6294 Fix read parquet key error when reading empty pandas DataFrame with cudf
 
 
 # cuDF 0.15.0 (26 Aug 2020)
