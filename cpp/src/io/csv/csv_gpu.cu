@@ -737,7 +737,7 @@ static inline __device__ void rowctx_merge_transform(uint64_t ctxtree[1024],
   uint64_t tmp;
 
 #define CTX_MERGE(lanemask, tmask, base, level_scale)                       \
-  tmp = shuffle_xor(ctxb, lanemask);                                        \
+  tmp = SHFL_XOR(ctxb, lanemask);                                           \
   if (!(t & (tmask))) {                                                     \
     ctxb                                   = merge_row_contexts(ctxb, tmp); \
     ctxtree[(base) + (t >> (level_scale))] = ctxb;                          \
@@ -756,7 +756,7 @@ static inline __device__ void rowctx_merge_transform(uint64_t ctxtree[1024],
     CTX_MERGE(4, 0x7, 4, 3);
     CTX_MERGE(8, 0xf, 2, 4);
     // Final stage
-    tmp = shuffle_xor(ctxb, 16);
+    tmp = SHFL_XOR(ctxb, 16);
     if (t == 0) { ctxtree[1] = merge_row_contexts(ctxb, tmp); }
   }
 #undef CTX_MERGE
@@ -852,12 +852,6 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
                                                                            int commentchar)
 {
   __shared__ __align__(8) uint64_t ctxtree[rowofs_block_dim * 2];
-  using warp_reduce      = typename cub::WarpReduce<uint32_t>;
-  using half_warp_reduce = typename cub::WarpReduce<uint32_t, 16>;
-  __shared__ union {
-    typename warp_reduce::TempStorage full[rowofs_block_dim / 32];
-    typename half_warp_reduce::TempStorage half[rowofs_block_dim / 32];
-  } temp_storage;
 
   const char *end = start + (min(parse_pos + chunk_size, data_size) - start_offset);
   uint32_t t      = threadIdx.x;
@@ -951,14 +945,12 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
       rowmap >>= pos;
     }
     // Return the number of rows out of range
-    rows_out_of_range =
-      half_warp_reduce(temp_storage.half[threadIdx.x / 32]).Sum(rows_out_of_range);
+    rows_out_of_range = WarpReduceSum16(rows_out_of_range);
     __syncthreads();
     if (!(t & 0xf)) { ctxtree[t >> 4] = rows_out_of_range; }
     __syncthreads();
     if (t < 32) {
-      rows_out_of_range =
-        warp_reduce(temp_storage.full[threadIdx.x / 32]).Sum(static_cast<uint32_t>(ctxtree[t]));
+      rows_out_of_range = WarpReduceSum32(static_cast<uint32_t>(ctxtree[t]));
       if (t == 0) { row_ctx[blockIdx.x] = rows_out_of_range; }
     }
   } else {
