@@ -407,8 +407,7 @@ endif(CONDA_INCLUDE_DIRS)
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
                  "${CMAKE_BINARY_DIR}/lib"
                  "${CMAKE_BINARY_DIR}"
-                 "${GTEST_LIBRARY_DIR}"
-                 "${CUFILE_LIBRARY}")
+                 "${GTEST_LIBRARY_DIR}")
 
 if(CONDA_LINK_DIRS)
     link_directories("${CONDA_LINK_DIRS}")
@@ -809,7 +808,7 @@ target_compile_definitions(cudf PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${LOGGIN
 # - link libraries --------------------------------------------------------------------------------
 
 # link targets for cuDF
-target_link_libraries(cudf arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+target_link_libraries(cudf arrow arrow_cuda nvrtc ${CUDART_LIBRARY} "${CUFILE_LIBRARY}" cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
