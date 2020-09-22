@@ -146,12 +146,29 @@ class Scalar(libcudf.scalar.Scalar):
             other = other.value
         return getattr(self.value, op)(other)
 
+    def _unaop_result_type_or_error(self, op):
+        if op == '__neg__' and self.dtype == 'bool':
+            raise TypeError("Boolean scalars in cuDF, do not support" \
+                            "negation, use logical not")
+        if op in {'__ceil__', '__floor__'} and self.dtype == 'int8':
+            return np.dtype('float32')
+        else:
+            return self.dtype
+
     def _scalar_unaop(self, op):
+        out_dtype = self._unaop_result_type_or_error(op)
+        if not self.is_valid():
+            result = None
+        else:
+            result = self._dispatch_scalar_unaop(op)
+            return Scalar(result, dtype=out_dtype)
+
+    def _dispatch_scalar_unaop(self, op):
         if op == '__floor__':
-            return Scalar(np.floor(self.value))
+            return np.floor(self.value)
         if op == '__ceil__':
-            return Scalar(np.ceil(self.value))
-        return Scalar(getattr(self.value, op)())
+            return np.ceil(self.value)
+        return getattr(self.value, op)()
 
 class NAType(object):
     def __init__(self):
