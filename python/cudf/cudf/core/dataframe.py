@@ -2637,12 +2637,12 @@ class DataFrame(Frame, Serializable):
         ----------
         index : Index
             The new index to set.
-        to_drop : list
-            The list of labels indicating columns to drop
-        inplace : boolean
-            Modify the DataFrame in place (do not create a new object)
-        verify_integrity : boolean
-            Check for duplicates in the new index
+        to_drop : list optional, default None
+            A list of labels indicating columns to drop.
+        inplace : boolean, default False
+            Modify the DataFrame in place (do not create a new object).
+        verify_integrity : boolean, default False
+            Check for duplicates in the new index.
         """
         if not isinstance(index, Index):
             raise ValueError("Parameter index should be type `Index`.")
@@ -2650,7 +2650,6 @@ class DataFrame(Frame, Serializable):
         df = self if inplace else self.copy(deep=True)
 
         if verify_integrity and not index.is_unique:
-            # TODO: indicate duplicate keys
             raise ValueError("Index is not unique.\n {}".format(index))
 
         if to_drop:
@@ -2671,11 +2670,11 @@ class DataFrame(Frame, Serializable):
 
         Parameters
         ----------
-        index : Index, Series-convertible, str, or list of str
+        index : Index, Columns-convertible, label-like, or list
             Index : the new index.
-            Series-convertible : values for the new index.
-            str : name of column to be used as series
-            list of str : name of columns to be converted to a MultiIndex
+            Columns-convertible : values for the new index.
+            Label-like : Label of column to be used as index.
+            List : List of items from above.
         drop : boolean, default True
             Whether to drop corresponding column for str index argument
         append : boolean, default True
@@ -2703,7 +2702,7 @@ class DataFrame(Frame, Serializable):
 
         >>> df.set_index('b')
            a    c
-        b        
+        b
         a  1  1.0
         b  2  2.0
         c  3  3.0
@@ -2779,7 +2778,8 @@ class DataFrame(Frame, Serializable):
                     try:
                         col = as_column(col)
                     except TypeError:
-                        raise TypeError(f"{col} cannot be converted to column-like.")
+                        msg = f"{col} cannot be converted to column-like."
+                        raise TypeError(msg)
                 if isinstance(col, (cudf.MultiIndex, pd.MultiIndex)):
                     col = (
                         cudf.from_pandas(col)
@@ -2800,9 +2800,7 @@ class DataFrame(Frame, Serializable):
                         names.append(None)
 
         if col_not_found:
-            raise KeyError(
-                f"None of {col_not_found} are in the columns"
-            )
+            raise KeyError(f"None of {col_not_found} are in the columns")
 
         if append:
             idx_cols = [self.index._data[x] for x in self.index._data]
