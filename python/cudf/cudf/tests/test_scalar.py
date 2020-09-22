@@ -8,6 +8,7 @@ import pytest
 from cudf._lib.scalar import Scalar
 from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, TIMEDELTA_TYPES
 import operator
+import re
 import cudf
 
 @pytest.mark.parametrize(
@@ -150,3 +151,33 @@ def test_date_duration_scalars(value, constructor):
 
     np.testing.assert_equal(actual, expected)
     assert s.is_valid() is True
+
+def test_scalar_implicit_bool_conversion():
+    assert cudf.Scalar(True)
+    assert not cudf.Scalar(False)
+    assert cudf.Scalar(0) == cudf.Scalar(0)
+    assert cudf.Scalar(1) <= cudf.Scalar(2)
+    assert cudf.Scalar(1) <= 2
+
+
+@pytest.mark.parametrize('value', [1, -1, 1.5, 0, '1.5', '1', True, False])
+def test_scalar_implicit_float_conversion(value):
+    expect = float(value)
+    got = float(cudf.Scalar(value))
+
+    assert expect == got
+    assert type(expect) == type(got)
+
+@pytest.mark.parametrize('value', [1, -1, 1.5, 0, '1', True, False])
+def test_scalar_implicit_int_conversion(value):
+    expect = int(value)
+    got = int(cudf.Scalar(value))
+
+    assert expect == got
+    assert type(expect) == type(got)
+
+@pytest.mark.parametrize('cls', [int, float, bool])
+def test_scalar_invalid_implicit_conversion(cls):
+    slr = cudf.Scalar(None, dtype=cls)
+    with pytest.raises(ValueError, match=re.escape(f"Can not convert NULL value to {cls}")):
+        cls(slr)
