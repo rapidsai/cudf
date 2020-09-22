@@ -56,14 +56,8 @@ rmm::device_scalar<OutputType> reduce_device(InputIterator d_in,
 
   // Allocate temporary storage
   size_t temp_storage_bytes = 0;
-  cub::DeviceReduce::Reduce(nullptr,
-                            temp_storage_bytes,
-                            d_in,
-                            dev_result.data(),
-                            num_items,
-                            binary_op,
-                            identity,
-                            stream);
+  cub::DeviceReduce::Reduce(
+    nullptr, temp_storage_bytes, d_in, dev_result.data(), num_items, binary_op, identity, stream);
   auto d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream};
 
   // Run reduction
