@@ -49,9 +49,9 @@ class csv_reader_options {
   // Specify the compression format of the source or infer from file extension
   compression_type _compression = compression_type::AUTO;
   // Bytes to skip from the source start
-  size_t _byte_range_offset = 0;
+  std::size_t _byte_range_offset = 0;
   // Bytes to read; always reads complete rows
-  size_t _byte_range_size = 0;
+  std::size_t _byte_range_size = 0;
   // Names of all the columns; if empty then names are auto-generated
   std::vector<std::string> _names;
   // If there is no header or names, prepend this to the column ID as the name
@@ -177,12 +177,12 @@ class csv_reader_options {
   /**
    * @brief Returns number of bytes to skip from source start.
    */
-  size_t get_byte_range_offset() const { return _byte_range_offset; }
+  std::size_t get_byte_range_offset() const { return _byte_range_offset; }
 
   /**
    * @brief Returns number of bytes to read.
    */
-  size_t get_byte_range_size() const { return _byte_range_size; }
+  std::size_t get_byte_range_size() const { return _byte_range_size; }
 
   /**
    * @brief Returns names of the columns.
@@ -351,7 +351,7 @@ class csv_reader_options {
    *
    * @param offset Number of bytes of offset.
    */
-  void set_byte_range_offset(size_type offset)
+  void set_byte_range_offset(std::size_t offset)
   {
     if ((offset != 0) and ((_skiprows != 0) or (_skipfooter != 0) or (_nrows != -1))) {
       CUDF_FAIL(
@@ -366,7 +366,7 @@ class csv_reader_options {
    *
    * @param size Number of bytes to read.
    */
-  void set_byte_range_size(size_type size)
+  void set_byte_range_size(std::size_t size)
   {
     if ((size != 0) and ((_skiprows != 0) or (_skipfooter != 0) or (_nrows != -1))) {
       CUDF_FAIL(
@@ -685,7 +685,7 @@ class csv_reader_options_builder {
    * @param offset Number of bytes of offset.
    * @return this for chaining.
    */
-  csv_reader_options_builder& byte_range_offset(size_type offset)
+  csv_reader_options_builder& byte_range_offset(std::size_t offset)
   {
     options.set_byte_range_offset(offset);
     return *this;
@@ -697,7 +697,7 @@ class csv_reader_options_builder {
    * @param size Number of bytes to read.
    * @return this for chaining.
    */
-  csv_reader_options_builder& byte_range_size(size_type size)
+  csv_reader_options_builder& byte_range_size(std::size_t size)
   {
     options.set_byte_range_size(size);
     return *this;
