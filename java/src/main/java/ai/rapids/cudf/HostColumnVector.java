@@ -585,7 +585,8 @@ public final class HostColumnVector implements AutoCloseable {
    * Get the value at index.
    */
   public byte getByte(long index) {
-    assert type == DType.INT8 || type == DType.UINT8 || type == DType.BOOL8;
+    assert type == DType.INT8 || type == DType.UINT8 || type == DType.BOOL8 : type +
+            " is not stored as a byte.";
     assertsForGet(index);
     return offHeap.data.getByte(index * type.sizeInBytes);
   }
@@ -594,7 +595,7 @@ public final class HostColumnVector implements AutoCloseable {
    * Get the value at index.
    */
   public final short getShort(long index) {
-    assert type == DType.INT16 || type == DType.UINT16;
+    assert type == DType.INT16 || type == DType.UINT16 : type + " is not stored as a short.";
     assertsForGet(index);
     return offHeap.data.getShort(index * type.sizeInBytes);
   }
@@ -603,7 +604,7 @@ public final class HostColumnVector implements AutoCloseable {
    * Get the value at index.
    */
   public final int getInt(long index) {
-    assert type.isBackedByInt();
+    assert type.isBackedByInt() : type + " is not stored as a int.";
     assertsForGet(index);
     return offHeap.data.getInt(index * type.sizeInBytes);
   }
@@ -612,7 +613,7 @@ public final class HostColumnVector implements AutoCloseable {
    * Get the starting byte offset for the string at index
    */
   long getStartStringOffset(long index) {
-    assert type == DType.STRING;
+    assert type == DType.STRING: type + " is not a supported string type.";
     assert (index >= 0 && index < rows) : "index is out of range 0 <= " + index + " < " + rows;
     return offHeap.offsets.getInt(index * 4);
   }
@@ -621,7 +622,7 @@ public final class HostColumnVector implements AutoCloseable {
    * Get the ending byte offset for the string at index.
    */
   long getEndStringOffset(long index) {
-    assert type == DType.STRING;
+    assert type == DType.STRING : type + " is not a supported string type.";
     assert (index >= 0 && index < rows) : "index is out of range 0 <= " + index + " < " + rows;
     // The offsets has one more entry than there are rows.
     return offHeap.offsets.getInt((index + 1) * 4);
@@ -632,7 +633,7 @@ public final class HostColumnVector implements AutoCloseable {
    */
   public final long getLong(long index) {
     // Timestamps with time values are stored as longs
-    assert type.isBackedByLong();
+    assert type.isBackedByLong(): type + " is not stored as a long.";
     assertsForGet(index);
     return offHeap.data.getLong(index * type.sizeInBytes);
   }
@@ -641,7 +642,7 @@ public final class HostColumnVector implements AutoCloseable {
    * Get the value at index.
    */
   public final float getFloat(long index) {
-    assert type == DType.FLOAT32;
+    assert type == DType.FLOAT32 : type + " is not a supported float type.";
     assertsForGet(index);
     return offHeap.data.getFloat(index * type.sizeInBytes);
   }
@@ -659,7 +660,7 @@ public final class HostColumnVector implements AutoCloseable {
    * Get the boolean value at index
    */
   public final boolean getBoolean(long index) {
-    assert type == DType.BOOL8;
+    assert type == DType.BOOL8 : type + " is not a supported boolean type.";
     assertsForGet(index);
     return offHeap.data.getBoolean(index * type.sizeInBytes);
   }
@@ -669,7 +670,7 @@ public final class HostColumnVector implements AutoCloseable {
    * ideal because it is copying the data onto the heap.
    */
   public byte[] getUTF8(long index) {
-    assert type == DType.STRING;
+    assert type == DType.STRING : type + " is not a supported string type.";
     assertsForGet(index);
     int start = offHeap.offsets.getInt(index * OFFSET_SIZE);
     int size = offHeap.offsets.getInt((index + 1) * OFFSET_SIZE) - start;

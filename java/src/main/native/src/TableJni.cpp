@@ -572,7 +572,7 @@ jlongArray convert_table_for_return(JNIEnv *env, std::unique_ptr<cudf::table> &t
 namespace {
 // Check that window parameters are valid.
 bool valid_window_parameters(native_jintArray const &values,
-                             native_jpointerArray<std::unique_ptr<cudf::aggregation>> const &ops,
+                             native_jpointerArray<cudf::aggregation> const &ops,
                              native_jintArray const &min_periods, native_jintArray const &preceding,
                              native_jintArray const &following) {
   return values.size() == ops.size() && values.size() == min_periods.size() &&
@@ -581,7 +581,7 @@ bool valid_window_parameters(native_jintArray const &values,
 
 // Check that time-range window parameters are valid.
 bool valid_window_parameters(native_jintArray const &values, native_jintArray const &timestamps,
-                             native_jpointerArray<std::unique_ptr<cudf::aggregation>> const &ops,
+                             native_jpointerArray<cudf::aggregation> const &ops,
                              native_jintArray const &min_periods,
                              native_jintArray const &preceding, native_jintArray const &following) {
   return values.size() == timestamps.size() &&
@@ -1633,8 +1633,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_groupByAggregate(
     cudf::table_view *n_input_table = reinterpret_cast<cudf::table_view *>(input_table);
     cudf::jni::native_jintArray n_keys(env, keys);
     cudf::jni::native_jintArray n_values(env, aggregate_column_indices);
-    cudf::jni::native_jpointerArray<std::unique_ptr<cudf::aggregation>> 
-        n_agg_instances(env, agg_instances);
+    cudf::jni::native_jpointerArray<cudf::aggregation> n_agg_instances(env, agg_instances);
     std::vector<cudf::column_view> n_keys_cols;
     n_keys_cols.reserve(n_keys.size());
     for (int i = 0; i < n_keys.size(); i++) {
@@ -1654,10 +1653,10 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_groupByAggregate(
       cudf::groupby::aggregation_request req;
       int col_index = n_values[i];
       if (col_index == previous_index) {
-        requests.back().aggregations.push_back((*n_agg_instances[i])->clone());
+        requests.back().aggregations.push_back(n_agg_instances[i]->clone());
       } else {
         req.values = n_input_table->column(col_index);
-        req.aggregations.push_back((*n_agg_instances[i])->clone());
+        req.aggregations.push_back(n_agg_instances[i]->clone());
         requests.push_back(std::move(req));
       }
       previous_index = col_index;
@@ -1821,8 +1820,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rollingWindowAggregate(
     cudf::table_view *input_table{reinterpret_cast<cudf::table_view *>(j_input_table)};
     cudf::jni::native_jintArray keys{env, j_keys};
     cudf::jni::native_jintArray values{env, j_aggregate_column_indices};
-    cudf::jni::native_jpointerArray<std::unique_ptr<cudf::aggregation>> 
-        agg_instances(env, j_agg_instances);
+    cudf::jni::native_jpointerArray<cudf::aggregation> agg_instances(env, j_agg_instances);
     cudf::jni::native_jintArray min_periods{env, j_min_periods};
     cudf::jni::native_jintArray preceding{env, j_preceding};
     cudf::jni::native_jintArray following{env, j_following};
@@ -1842,7 +1840,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rollingWindowAggregate(
       int agg_column_index = values[i];
       result_columns.emplace_back(std::move(cudf::grouped_rolling_window(
           groupby_keys, input_table->column(agg_column_index), preceding[i], following[i],
-          min_periods[i], (*agg_instances[i])->clone())));
+          min_periods[i], agg_instances[i]->clone())));
     }
 
     auto result_table = std::make_unique<cudf::table>(std::move(result_columns));
@@ -1875,8 +1873,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_timeRangeRollingWindowAgg
     cudf::jni::native_jintArray timestamps{env, j_timestamp_column_indices};
     cudf::jni::native_jbooleanArray timestamp_ascending{env, j_is_timestamp_ascending};
     cudf::jni::native_jintArray values{env, j_aggregate_column_indices};
-    cudf::jni::native_jpointerArray<std::unique_ptr<cudf::aggregation>> 
-        agg_instances(env, j_agg_instances);
+    cudf::jni::native_jpointerArray<cudf::aggregation> agg_instances(env, j_agg_instances);
     cudf::jni::native_jintArray min_periods{env, j_min_periods};
     cudf::jni::native_jintArray preceding{env, j_preceding};
     cudf::jni::native_jintArray following{env, j_following};
@@ -1898,7 +1895,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_timeRangeRollingWindowAgg
           groupby_keys, input_table->column(timestamps[i]),
           timestamp_ascending[i] ? cudf::order::ASCENDING : cudf::order::DESCENDING,
           input_table->column(agg_column_index), preceding[i], following[i], min_periods[i],
-          (*agg_instances[i])->clone())));
+          agg_instances[i]->clone())));
     }
 
     auto result_table = std::make_unique<cudf::table>(std::move(result_columns));

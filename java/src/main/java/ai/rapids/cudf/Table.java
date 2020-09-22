@@ -1763,14 +1763,12 @@ public final class Table implements AutoCloseable {
         }
         assert opIndex == totalOps : opIndex + " == " + totalOps;
 
-        Table aggregate;
-        aggregate = new Table(groupByAggregate(
-                operation.table.nativeHandle,
-                operation.indices,
-                aggColumnIndexes,
-                aggOperationInstances,
-                groupByOptions.getIgnoreNullKeys()));
-        try {
+        try (Table aggregate = new Table(groupByAggregate(
+            operation.table.nativeHandle,
+            operation.indices,
+            aggColumnIndexes,
+            aggOperationInstances,
+            groupByOptions.getIgnoreNullKeys()))) {
           // prepare the final table
           ColumnVector[] finalCols = new ColumnVector[keysLength + aggregates.length];
 
@@ -1790,15 +1788,9 @@ public final class Table implements AutoCloseable {
             }
           }
           return new Table(finalCols);
-        } finally {
-          aggregate.close();
         }
       } finally {
-        for (long instance : aggOperationInstances) {
-          if (instance > 0) {
-            Aggregation.close(instance);
-          }
-        }
+        Aggregation.close(aggOperationInstances);
       }
     }
 
@@ -1894,11 +1886,11 @@ public final class Table implements AutoCloseable {
         assert opIndex == totalOps : opIndex + " == " + totalOps;
 
         try (Table aggregate = new Table(rollingWindowAggregate(
-                operation.table.nativeHandle,
-                operation.indices,
-                aggColumnIndexes,
-                aggInstances, aggMinPeriods, aggPrecedingWindows, aggFollowingWindows,
-                groupByOptions.getIgnoreNullKeys()))) {
+            operation.table.nativeHandle,
+            operation.indices,
+            aggColumnIndexes,
+            aggInstances, aggMinPeriods, aggPrecedingWindows, aggFollowingWindows,
+            groupByOptions.getIgnoreNullKeys()))) {
           // prepare the final table
           ColumnVector[] finalCols = new ColumnVector[windowAggregates.length];
 
@@ -1915,11 +1907,7 @@ public final class Table implements AutoCloseable {
           return new Table(finalCols);
         }
       } finally {
-        for (long ptr: aggInstances) {
-          if (ptr != 0) {
-            Aggregation.close(ptr);
-          }
-        }
+        Aggregation.close(aggInstances);
       }
     }
 
@@ -2021,13 +2009,13 @@ public final class Table implements AutoCloseable {
         assert opIndex == totalOps : opIndex + " == " + totalOps;
 
         try (Table aggregate = new Table(timeRangeRollingWindowAggregate(
-                operation.table.nativeHandle,
-                operation.indices,
-                timestampColumnIndexes,
-                isTimestampOrderAscending,
-                aggColumnIndexes,
-                aggInstances, aggMinPeriods, aggPrecedingWindows, aggFollowingWindows,
-                groupByOptions.getIgnoreNullKeys()))) {
+            operation.table.nativeHandle,
+            operation.indices,
+            timestampColumnIndexes,
+            isTimestampOrderAscending,
+            aggColumnIndexes,
+            aggInstances, aggMinPeriods, aggPrecedingWindows, aggFollowingWindows,
+            groupByOptions.getIgnoreNullKeys()))) {
           // prepare the final table
           ColumnVector[] finalCols = new ColumnVector[windowAggregates.length];
 
@@ -2044,11 +2032,7 @@ public final class Table implements AutoCloseable {
           return new Table(finalCols);
         }
       } finally {
-        for (long ptr: aggInstances) {
-          if (ptr != 0) {
-            Aggregation.close(ptr);
-          }
-        }
+        Aggregation.close(aggInstances);
       }
     }
   }

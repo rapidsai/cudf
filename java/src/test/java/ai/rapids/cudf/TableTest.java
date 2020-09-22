@@ -2097,6 +2097,27 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testGroupByUniqueCountNulls() {
+    try (Table t1 = new Table.TestBuilder()
+            .column( "1",  "1",  "1",  "1",  "1",  "1")
+            .column(   1,    3,    3,    5,    5,    0)
+            .column(null, null, 13.0, null, null, null)
+            .build()) {
+      try (Table t3 = t1
+              .groupBy(0, 1)
+              .aggregate(Aggregation.nunique(true).onColumn(0));
+           Table sorted = t3.orderBy(Table.asc(0), Table.asc(1), Table.asc(2));
+           Table expected = new Table.TestBuilder()
+                   .column( "1",  "1",  "1",  "1")
+                   .column(   0,    1,    3,    5)
+                   .column(   1,    1,    1,    1)
+                   .build()) {
+        assertTablesAreEqual(expected, sorted);
+      }
+    }
+  }
+
+  @Test
   void testGroupByCount() {
     try (Table t1 = new Table.TestBuilder().column( "1",  "1",  "1",  "1",  "1",  "1")
                                            .column(   1,    3,    3,    5,    5,    0)
