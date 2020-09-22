@@ -37,13 +37,22 @@ class Scalar(libcudf.scalar.Scalar):
         return self._data.is_valid
 
     def __int__(self):
-        return int(self.value)
+        if self.is_valid():
+            return int(self.value)
+        else:
+            raise ValueError(f"Can not convert NULL value to {int}")
 
     def __float__(self):
-        return float(self.value)
+        if self.is_valid():
+            return float(self.value)
+        else:
+            raise ValueError(f"Can not convert NULL value to {float}")
 
     def __bool__(self):
-        return bool(self.value)
+        if self.is_valid():
+            return bool(self.value)
+        else:
+            raise ValueError(f"Can not convert NULL value to {bool}")
 
     def __add__(self, other):
         return self._scalar_binop(other, "__add__")
