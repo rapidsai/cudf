@@ -210,8 +210,7 @@ table_with_metadata reader::impl::read(cudaStream_t stream)
 
   // Transfer source data to GPU
   if (!source_->is_empty()) {
-    const char *h_uncomp_data = nullptr;
-    size_t h_uncomp_size      = 0;
+    auto h_uncomp = host_span<char const>();
 
     auto data_size = (map_range_size != 0) ? map_range_size : source_->size();
     auto buffer    = source_->host_read(range_offset, data_size);
@@ -219,31 +218,28 @@ table_with_metadata reader::impl::read(cudaStream_t stream)
     std::vector<char> h_uncomp_data_owner;
     if (compression_type_ == "none") {
       // Do not use the owner vector here to avoid extra copy
-      h_uncomp_data = reinterpret_cast<const char *>(buffer->data());
-      h_uncomp_size = buffer->size();
+      h_uncomp =
+        host_span<char const>(reinterpret_cast<const char *>(buffer->data()), buffer->size());
     } else {
       h_uncomp_data_owner = getUncompressedHostData(
         reinterpret_cast<const char *>(buffer->data()), buffer->size(), compression_type_);
-      h_uncomp_data = h_uncomp_data_owner.data();
-      h_uncomp_size = h_uncomp_data_owner.size();
+      h_uncomp = h_uncomp_data_owner;
     }
     // None of the parameters for row selection is used, we are parsing the entire file
     const bool load_whole_file = range_offset == 0 && range_size == 0 && skip_rows <= 0 &&
                                  skip_end_rows <= 0 && num_rows == -1;
 
     // With byte range, find the start of the first data row
-    size_t const data_start_offset =
-      (range_offset != 0) ? find_first_row_start(h_uncomp_data, h_uncomp_size) : 0;
+    size_t const data_start_offset = (range_offset != 0) ? find_first_row_start(h_uncomp) : 0;
 
     // TODO: Allow parsing the header outside the mapped range
     CUDF_EXPECTS((range_offset == 0 || opts_.get_header() < 0),
                  "byte_range offset with header not supported");
 
     // Gather row offsets
-    gather_row_offsets(h_uncomp_data,
-                       h_uncomp_size,
+    gather_row_offsets(h_uncomp,
                        data_start_offset,
-                       (range_size) ? range_size : h_uncomp_size,
+                       (range_size) ? range_size : h_uncomp.size(),
                        (skip_rows > 0) ? skip_rows : 0,
                        num_rows,
                        load_whole_file,
@@ -403,17 +399,16 @@ table_with_metadata reader::impl::read(cudaStream_t stream)
   return {std::make_unique<table>(std::move(out_columns)), std::move(metadata)};
 }
 
-size_t reader::impl::find_first_row_start(const char *h_data, size_t h_size)
+size_t reader::impl::find_first_row_start(host_span<char const> data)
 {
   // For now, look for the first terminator (assume the first terminator isn't within a quote)
   // TODO: Attempt to infer this from the data
   size_t pos = 0;
-  while (pos < h_size && h_data[pos] != opts.terminator) { ++pos; }
-  return std::min(pos + 1, h_size);
+  while (pos < data.size() && data[pos] != opts.terminator) { ++pos; }
+  return std::min(pos + 1, data.size());
 }
 
-void reader::impl::gather_row_offsets(const char *h_data,
-                                      size_t h_size,
+void reader::impl::gather_row_offsets(host_span<char const> data,
                                       size_t range_begin,
                                       size_t range_end,
                                       size_t skip_rows,
@@ -422,26 +417,26 @@ void reader::impl::gather_row_offsets(const char *h_data,
                                       cudaStream_t stream)
 {
   constexpr size_t max_chunk_bytes = 64 * 1024 * 1024;  // 64MB
-  size_t buffer_size               = std::min(max_chunk_bytes, h_size);
+  size_t buffer_size               = std::min(max_chunk_bytes, data.size());
   size_t max_blocks =
     std::max<size_t>((buffer_size / cudf::io::csv::gpu::rowofs_block_bytes) + 1, 2);
   hostdevice_vector<uint64_t> row_ctx(max_blocks);
-  size_t buffer_pos  = std::min(range_begin - std::min(range_begin, sizeof(char)), h_size);
-  size_t pos         = std::min(range_begin, h_size);
+  size_t buffer_pos  = std::min(range_begin - std::min(range_begin, sizeof(char)), data.size());
+  size_t pos         = std::min(range_begin, data.size());
   size_t header_rows = (opts_.get_header() >= 0) ? opts_.get_header() + 1 : 0;
   uint64_t ctx       = 0;
 
   // For compatibility with the previous parser, a row is considered in-range if the
   // previous row terminator is within the given range
-  range_end += (range_end < h_size);
+  range_end += (range_end < data.size());
   data_.resize(0);
   row_offsets_.resize(0);
-  data_.reserve((load_whole_file) ? h_size : std::min(buffer_size * 2, h_size));
+  data_.reserve((load_whole_file) ? data.size() : std::min(buffer_size * 2, data.size()));
   do {
-    size_t target_pos = std::min(pos + max_chunk_bytes, h_size);
+    size_t target_pos = std::min(pos + max_chunk_bytes, data.size());
     size_t chunk_size = target_pos - pos;
 
-    data_.insert(data_.end(), h_data + buffer_pos + data_.size(), h_data + target_pos);
+    data_.insert(data_.end(), data.data() + buffer_pos + data_.size(), data.data() + target_pos);
 
     // Pass 1: Count the potential number of rows in each character block for each
     // possible parser state at the beginning of the block.
@@ -452,7 +447,7 @@ void reader::impl::gather_row_offsets(const char *h_data,
                                                                  chunk_size,
                                                                  pos,
                                                                  buffer_pos,
-                                                                 h_size,
+                                                                 data.size(),
                                                                  range_begin,
                                                                  range_end,
                                                                  skip_rows,
@@ -490,14 +485,14 @@ void reader::impl::gather_row_offsets(const char *h_data,
                                              chunk_size,
                                              pos,
                                              buffer_pos,
-                                             h_size,
+                                             data.size(),
                                              range_begin,
                                              range_end,
                                              skip_rows,
                                              num_row_offsets,
                                              stream);
       // With byte range, we want to keep only one row out of the specified range
-      if (range_end < h_size) {
+      if (range_end < data.size()) {
         CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
                                  row_ctx.device_ptr(),
                                  num_blocks * sizeof(uint64_t),
@@ -534,7 +529,7 @@ void reader::impl::gather_row_offsets(const char *h_data,
       }
     }
     pos = target_pos;
-  } while (pos < h_size);
+  } while (pos < data.size());
 
   // Eliminate blank rows
   if (row_offsets_.size() != 0) {
@@ -551,8 +546,9 @@ void reader::impl::gather_row_offsets(const char *h_data,
     CUDA_TRY(cudaStreamSynchronize(stream));
     const auto header_start = buffer_pos + row_ctx[0];
     const auto header_end   = buffer_pos + row_ctx[1];
-    CUDF_EXPECTS(header_start <= header_end && header_end <= h_size, "Invalid csv header location");
-    header_.assign(h_data + header_start, h_data + header_end);
+    CUDF_EXPECTS(header_start <= header_end && header_end <= data.size(),
+                 "Invalid csv header location");
+    header_.assign(data.data() + header_start, data.data() + header_end);
     if (header_rows > 0) {
       row_offsets_.erase(row_offsets_.begin(), row_offsets_.begin() + header_rows);
     }
