@@ -243,6 +243,14 @@ public abstract class Aggregation {
     @Override
     public abstract boolean equals(Object other);
 
+    static void close(long[] ptrs) {
+        for (long ptr: ptrs) {
+            if (ptr != 0) {
+                close(ptr);
+            }
+        }
+    }
+
     static native void close(long ptr);
 
     /**
@@ -274,14 +282,14 @@ public abstract class Aggregation {
     }
 
     /**
-     * Count number of valid elements.
+     * Count number of valid, a.k.a. non-null, elements.
      */
     public static Aggregation count() {
         return count(false);
     }
 
     /**
-     * Count number of elements
+     * Count number of elements.
      * @param includeNulls true if nulls should be counted. false if only non-null values should be
      *                     counted.
      */
@@ -290,14 +298,18 @@ public abstract class Aggregation {
     }
 
     /**
-     * Any reduction.
+     * Any reduction. Produces a true or 1, depending on the output type,
+     * if any of the elements in the range are true or non-zero, otherwise produces a false or 0.
+     * Null values are skipped.
      */
     public static Aggregation any() {
         return new NoParamAggregation(Kind.ANY);
     }
 
     /**
-     * All reduction.
+     * All reduction. Produces true or 1, depending on the output type, if all of the elements in
+     * the range are true or non-zero, otherwise produces a false or 0.
+     * Null values are skipped.
      */
     public static Aggregation all() {
         return new NoParamAggregation(Kind.ALL);
@@ -318,14 +330,14 @@ public abstract class Aggregation {
     }
 
     /**
-     * Variance aggregation
+     * Variance aggregation with 1 as the delta degrees of freedom.
      */
     public static Aggregation variance() {
         return variance(1);
     }
 
     /**
-     * Variance aggregation
+     * Variance aggregation.
      * @param ddof delta degrees of freedom. The divisor used in calculation of variance is
      *             <code>N - ddof</code>, where N is the population size.
      */
@@ -335,14 +347,14 @@ public abstract class Aggregation {
 
 
     /**
-     * Standard deviation aggregation
+     * Standard deviation aggregation with 1 as the delta degrees of freedom.
      */
     public static Aggregation standardDeviation() {
         return standardDeviation(1);
     }
 
     /**
-     * Standard deviation aggregation
+     * Standard deviation aggregation.
      * @param ddof delta degrees of freedom. The divisor used in calculation of std is
      *             <code>N - ddof</code>, where N is the population size.
      */
@@ -358,7 +370,7 @@ public abstract class Aggregation {
     }
 
     /**
-     * Aggregate to compute various quantiles.
+     * Aggregate to compute the specified quantiles. Uses linear interpolation by default.
      */
     public static Aggregation quantile(double ... quantiles) {
         return quantile(QuantileMethod.LINEAR, quantiles);
@@ -372,42 +384,58 @@ public abstract class Aggregation {
     }
 
     /**
-     * index of max element.
+     * Index of max element. Please note that when using this aggregation with a group by if the
+     * data is not already sorted by the grouping keys it may be automatically sorted
+     * prior to doing the aggregation. This would result in an index into the sorted data being
+     * returned.
      */
     public static Aggregation argMax() {
         return new NoParamAggregation(Kind.ARGMAX);
     }
 
     /**
-     * index of min element.
+     * Index of min element. Please note that when using this aggregation with a group by if the
+     * data is not already sorted by the grouping keys it may be automatically sorted
+     * prior to doing the aggregation. This would result in an index into the sorted data being
+     * returned.
      */
     public static Aggregation argMin() {
         return new NoParamAggregation(Kind.ARGMIN);
     }
 
     /**
-     * Number of unique elements
+     * Number of unique, non-null, elements.
      */
     public static Aggregation nunique() {
         return nunique(false);
     }
 
     /**
-     * Number of unique elements
+     * Number of unique elements.
+     * @param includeNulls true if nulls should be counted else false. If nulls are counted they
+     *                     compare as equal so multiple null values in a range would all only
+     *                     increase the count by 1.
      */
     public static Aggregation nunique(boolean includeNulls) {
         return new CountLikeAggregation(Kind.NUNIQUE, includeNulls);
     }
 
     /**
-     * Get the nth element in a group.
-     * @param offset the offset to look at. Negative numbers go from the end of the group.  Any
+     * Get the nth, non-null, element in a group.
+     * @param offset the offset to look at. Negative numbers go from the end of the group. Any
      *               value outside of the group range results in a null.
      */
     public static Aggregation nth(int offset) {
         return nth(offset, true);
     }
 
+    /**
+     * Get the nth element in a group.
+     * @param offset the offset to look at. Negative numbers go from the end of the group. Any
+     *               value outside of the group range results in a null.
+     * @param includeNulls true if nulls should be included in the aggregation or false if they
+     *                     should be skipped.
+     */
     public static Aggregation nth(int offset, boolean includeNulls) {
         return new NthAggregation(offset, includeNulls);
     }
