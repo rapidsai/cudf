@@ -20,49 +20,81 @@ package ai.rapids.cudf;
 
 /**
  * Spec for window-based aggregation (for analytical functions)
+ * @deprecated use Aggregation.onColumn.overWindow instead.
  */
-public class WindowAggregate {
-  private final int columnIndex; // Index of column to be aggregated.
-  private final WindowAggregateOp windowAggregateOp; // Window-based aggregation operation.
-
-  private WindowAggregate(AggregateOp op, int columnIndex, WindowOptions windowOptions) {
-    this.columnIndex = columnIndex;
-    this.windowAggregateOp = new WindowAggregateOp(op, windowOptions);
+@Deprecated
+public class WindowAggregate extends AggregationOverWindow {
+  private WindowAggregate(AggregationOverWindow other) {
+    super(other.wrapped, other.columnIndex, other.windowOptions);
   }
 
+  /**
+   * @deprecated please use Aggregation.count().onColumn().overWindow()
+   */
+  @Deprecated
   public static WindowAggregate count(int columnIndex, WindowOptions windowOptions) {
-    return new WindowAggregate(AggregateOp.COUNT_ALL, columnIndex, windowOptions);
+    return new WindowAggregate(Aggregation.count(true)
+            .onColumn(columnIndex)
+            .overWindow(windowOptions));
   }
 
+  /**
+   * @deprecated please use Aggregation.min().onColumn().overWindow()
+   */
+  @Deprecated
   public static WindowAggregate min(int columnIndex, WindowOptions windowOptions) {
-    return new WindowAggregate(AggregateOp.MIN, columnIndex, windowOptions);
+    return new WindowAggregate(Aggregation.min()
+            .onColumn(columnIndex)
+            .overWindow(windowOptions));
   }
 
+  /**
+   * @deprecated please use Aggregation.max().onColumn().overWindow()
+   */
+  @Deprecated
   public static WindowAggregate max(int columnIndex, WindowOptions windowOptions) {
-    return new WindowAggregate(AggregateOp.MAX, columnIndex, windowOptions);
+    return new WindowAggregate(Aggregation.max()
+            .onColumn(columnIndex)
+            .overWindow(windowOptions));
   }
 
+  /**
+   * @deprecated please use Aggregation.sum().onColumn().overWindow()
+   */
+  @Deprecated
   public static WindowAggregate sum(int columnIndex, WindowOptions windowOptions) {
-    return new WindowAggregate(AggregateOp.SUM, columnIndex, windowOptions);
+    return new WindowAggregate(Aggregation.sum()
+            .onColumn(columnIndex)
+            .overWindow(windowOptions));
   }
 
+  /**
+   * @deprecated please use Aggregation.mean().onColumn().overWindow()
+   */
+  @Deprecated
   public static WindowAggregate mean(int columnIndex, WindowOptions windowOptions) {
-    return new WindowAggregate(AggregateOp.MEAN, columnIndex, windowOptions);
+    return new WindowAggregate(Aggregation.mean()
+            .onColumn(columnIndex)
+            .overWindow(windowOptions));
   }
 
+  /**
+   * @deprecated please use Aggregation.median().onColumn().overWindow()
+   */
+  @Deprecated
   public static WindowAggregate median(int columnIndex, WindowOptions windowOptions) {
-    return new WindowAggregate(AggregateOp.MEDIAN, columnIndex, windowOptions);
+    return new WindowAggregate(Aggregation.median()
+            .onColumn(columnIndex)
+            .overWindow(windowOptions));
   }
 
+  /**
+   * @deprecated please use Aggregation.rowNumber().onColumn().overWindow()
+   */
+  @Deprecated
   public static WindowAggregate row_number(int columnIndex, WindowOptions windowOptions) {
-    return new WindowAggregate(AggregateOp.ROW_NUMBER, columnIndex, windowOptions);
-  }
-
-  int getColumnIndex() {
-    return columnIndex;
-  }
-
-  WindowAggregateOp getOp() {
-    return windowAggregateOp;
+    return new WindowAggregate(Aggregation.rowNumber()
+            .onColumn(columnIndex)
+            .overWindow(windowOptions));
   }
 }
