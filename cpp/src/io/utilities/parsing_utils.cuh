@@ -58,15 +58,20 @@ namespace gpu {
  */
 __device__ __inline__ char const* seek_field_end(char const* begin,
                                                  char const* end,
-                                                 ParseOptions const& opts)
+                                                 ParseOptions const& opts,
+                                                 bool escape_char = false)
 {
   bool quotation = false;
   auto current   = begin;
   while (true) {
     // Use simple logic to ignore control chars between any quote seq
     // Handles nominal cases including doublequotes within quotes, but
-    // may not output exact failures as PANDAS for malformed fields
-    if (*current == opts.quotechar) {
+    // may not output exact failures as PANDAS for malformed fields.
+    // Check for instances such as "a2\"bc" and "\\" if `escape_char` is true.
+    if (*current == opts.quotechar and
+        (escape_char == false or
+         ((current == begin) or
+          ((current >= begin + 2) and (*(current - 1) != '\\' or *(current - 2) == '\\'))))) {
       quotation = !quotation;
     } else if (!quotation) {
       if (*current == opts.delimiter) {

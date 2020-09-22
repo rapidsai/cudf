@@ -327,3 +327,25 @@ def test_json_bad_protocol_string():
     got = cudf.read_json(test_string, lines=True)
 
     assert_eq(expect, got)
+
+
+def test_json_corner_case_with_escape_and_double_quote_char(tmpdir):
+    fname = tmpdir.mkdir("gdf_json").join("tmp_json_escape_double_quote")
+
+    pdf = pd.DataFrame(
+        {
+            "a": ['ab"cd', "?1sde", "rdsd"],
+            "b": ["234", "\\", "lstm"],
+            "c": ["aeiou", "sample", "json"],
+        }
+    )
+    pdf.to_json(fname, compression="infer", lines=True, orient="records")
+
+    df = cudf.read_json(
+        fname, compression="infer", lines=True, orient="records"
+    )
+    pdf = pd.read_json(
+        fname, compression="infer", lines=True, orient="records"
+    )
+
+    assert_eq(pdf, df)
