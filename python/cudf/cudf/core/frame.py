@@ -480,6 +480,9 @@ class Frame(libcudf.table.Table):
         Examples
         --------
         >>> import cudf
+
+        Comparing Series with `equals`:
+
         >>> s = cudf.Series([1, 2, 3])
         >>> other = cudf.Series([1, 2, 3])
         >>> s.equals(other)
@@ -487,6 +490,30 @@ class Frame(libcudf.table.Table):
         >>> different = cudf.Series([1.5, 2, 3])
         >>> s.equals(different)
         False
+
+        Comparing DataFrames with `equals`:
+
+        >>> df = cudf.DataFrame({1: [10], 2: [20]})
+        >>> df
+            1   2
+        0  10  20
+        >>> exactly_equal = cudf.DataFrame({1: [10], 2: [20]})
+        >>> exactly_equal
+            1   2
+        0  10  20
+        >>> df.equals(exactly_equal)
+        True
+
+        For two DataFrames to compare equal, the types of column
+        values must be equal, but the types of column labels
+        need not:
+
+        >>> different_column_type = cudf.DataFrame({1.0: [10], 2.0: [20]})
+        >>> different_column_type
+           1.0  2.0
+        0   10   20
+        >>> df.equals(different_column_type)
+        True
         """
         if self is other:
             return True
