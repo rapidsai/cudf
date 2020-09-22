@@ -43,6 +43,26 @@ struct ParseOptions {
 };
 
 namespace gpu {
+
+/**
+ * @brief Checks whether escaped quote char to be considered as a quote or not.
+ *
+ * @param begin Pointer to the first character in the parsing range
+ * @param current Pointer to the current character being analyzed
+ * @param escape_char A boolean value to signify whether to consider `\` as escape character or just
+ * a character.
+ *
+ * @return true/false depending on it is considered a quote or not.
+ */
+__device__ __inline__ bool use_escaped_quote_char(char const* begin,
+                                                  char const* current,
+                                                  bool escape_char = false)
+{
+  return (escape_char == false or
+          ((current == begin) or
+           ((current >= begin + 2) and (*(current - 1) != '\\' or *(current - 2) == '\\'))));
+}
+
 /**
  * @brief CUDA kernel iterates over the data until the end of the current field
  *
@@ -52,6 +72,8 @@ namespace gpu {
  * @param begin Pointer to the first character in the parsing range
  * @param end pointer to the first character after the parsing range
  * @param opts A set of parsing options
+ * @param escape_char A boolean value to signify whether to consider `\` as escape character or just
+ * a character.
  *
  * @return Pointer to the last character in the field, including the
  *  delimiter(s) following the field data
@@ -68,10 +90,7 @@ __device__ __inline__ char const* seek_field_end(char const* begin,
     // Handles nominal cases including doublequotes within quotes, but
     // may not output exact failures as PANDAS for malformed fields.
     // Check for instances such as "a2\"bc" and "\\" if `escape_char` is true.
-    if (*current == opts.quotechar and
-        (escape_char == false or
-         ((current == begin) or
-          ((current >= begin + 2) and (*(current - 1) != '\\' or *(current - 2) == '\\'))))) {
+    if (*current == opts.quotechar and use_escaped_quote_char(begin, current, escape_char)) {
       quotation = !quotation;
     } else if (!quotation) {
       if (*current == opts.delimiter) {

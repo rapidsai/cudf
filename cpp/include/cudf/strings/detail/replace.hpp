@@ -24,7 +24,7 @@ namespace strings {
 namespace detail {
 
 /**
- * @copy @copydoc cudf::strings::replace(strings_column_view const&, string_scalar const&,
+ * @copydoc cudf::strings::replace(strings_column_view const&, string_scalar const&,
  * string_scalar const&, int32_t, rmm::mr::device_memory_resource*)
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
@@ -38,7 +38,7 @@ std::unique_ptr<column> replace(
   cudaStream_t stream                 = 0);
 
 /**
- * @copy @copydoc cudf::strings::replace_slice(strings_column_view const&, string_scalar const&,
+ * @copydoc cudf::strings::replace_slice(strings_column_view const&, string_scalar const&,
  * size_type. size_type, rmm::mr::device_memory_resource*)
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
@@ -52,7 +52,7 @@ std::unique_ptr<column> replace_slice(
   cudaStream_t stream                 = 0);
 
 /**
- * @copy @copydoc cudf::strings::replace(strings_column_view const&, strings_column_view const&,
+ * @copydoc cudf::strings::replace(strings_column_view const&, strings_column_view const&,
  * strings_column_view const&, rmm::mr::device_memory_resource*)
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
@@ -65,7 +65,7 @@ std::unique_ptr<column> replace(
   cudaStream_t stream                 = 0);
 
 /**
- * @copy @copydoc cudf::strings::replace(strings_column_view const&, string_scalar const&,
+ * @copydoc cudf::strings::replace(strings_column_view const&, string_scalar const&,
  * rmm::mr::device_memory_resource*)
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
