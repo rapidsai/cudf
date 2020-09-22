@@ -53,7 +53,7 @@
 - PR #6195 Update JNI to use parquet options builder
 - PR #6190 Avoid reading full csv files for metadata in dask_cudf
 - PR #6197 Remove librmm dependency for libcudf
-- PR #6213 Reduce subscript usage in cuio in favor of pointer dereferencing
+- PR #6213 Improve internal csv reader/writer function signatures in favor of consistency and iterator usages.
 - PR #6230 Support any unsigned int type for dictionary indices
 - PR #6202 Add additional parameter support to `DataFrame.drop`
 - PR #6214 Small clean up to use more algorithms
