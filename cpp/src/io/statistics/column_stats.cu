@@ -143,11 +143,10 @@ gatherIntColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Stora
     s->ck.null_count = s->group.num_rows - nn_cnt;
   }
   vmin = warp_reduce(storage.integer_stats[t / 32]).Reduce(vmin, cub::Min());
-  __syncwarp();
+  vmin = shuffle(vmin);
   vmax = warp_reduce(storage.integer_stats[t / 32]).Reduce(vmax, cub::Max());
-  __syncwarp();
+  vmax = shuffle(vmax);
   vsum = warp_reduce(storage.integer_stats[t / 32]).Sum(vsum);
-  __syncwarp();
   if (!(t & 0x1f)) {
     s->warp_min[t >> 5].i_val = vmin;
     s->warp_max[t >> 5].i_val = vmax;
@@ -217,11 +216,10 @@ gatherFloatColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Sto
     s->ck.null_count = s->group.num_rows - nn_cnt;
   }
   vmin = warp_reduce(storage.float_stats[t / 32]).Reduce(vmin, cub::Min());
-  __syncwarp();
+  vmin = shuffle(vmin);
   vmax = warp_reduce(storage.float_stats[t / 32]).Reduce(vmax, cub::Max());
-  __syncwarp();
+  vmax = shuffle(vmax);
   vsum = warp_reduce(storage.float_stats[t / 32]).Sum(vsum);
-  __syncwarp();
   if (!(t & 0x1f)) {
     s->warp_min[t >> 5].fp_val = vmin;
     s->warp_max[t >> 5].fp_val = vmax;
@@ -422,14 +420,13 @@ void __device__ mergeIntColumnStats(merge_state_s *s,
 
   non_nulls = cub::WarpReduce<uint32_t>(storage.temp_32[t / 32]).Sum(non_nulls);
   vmin      = cub::WarpReduce<int64_t>(temp[t / 32]).Reduce(vmin, cub::Min());
-  __syncwarp();
+  vmin      = shuffle(vmin);
 
   null_count = cub::WarpReduce<uint32_t>(storage.temp_32[t / 32]).Sum(null_count);
   vmax       = cub::WarpReduce<int64_t>(temp[t / 32]).Reduce(vmax, cub::Max());
-  __syncwarp();
+  vmax       = shuffle(vmax);
 
   vsum = cub::WarpReduce<int64_t>(temp[t / 32]).Sum(vsum);
-  __syncwarp();
   // Every warp leader writes the results
   if (!(t & 0x1f)) {
     s->warp_non_nulls[t >> 5] = non_nulls;
@@ -503,14 +500,13 @@ void __device__ mergeFloatColumnStats(merge_state_s *s,
 
   non_nulls = cub::WarpReduce<uint32_t>(storage.temp_32[t / 32]).Sum(non_nulls);
   vmin      = cub::WarpReduce<double>(temp[t / 32]).Reduce(vmin, cub::Min());
-  __syncwarp();
+  vmin      = shuffle(vmin);
 
   null_count = cub::WarpReduce<uint32_t>(storage.temp_32[t / 32]).Sum(null_count);
   vmax       = cub::WarpReduce<double>(temp[t / 32]).Reduce(vmax, cub::Max());
-  __syncwarp();
+  vmax       = shuffle(vmax);
 
   vsum = cub::WarpReduce<double>(temp[t / 32]).Sum(vsum);
-  __syncwarp();
 
   // Every warp leader writes the results
   if (!(t & 0x1f)) {
@@ -598,7 +594,6 @@ void __device__ mergeStringColumnStats(merge_state_s *s,
 
   null_count = cub::WarpReduce<uint32_t>(storage.temp_32[t / 32]).Sum(null_count);
   len_sum    = cub::WarpReduce<uint32_t>(storage.temp.uint32_stats[t / 32]).Sum(len_sum);
-  __syncwarp();
 
   if (!(t & 0x1f)) {
     s->warp_non_nulls[t >> 5]          = non_nulls;
