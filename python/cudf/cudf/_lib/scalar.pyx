@@ -79,7 +79,6 @@ cdef class Scalar:
         self._host_dtype = dtype
         self._host_value_current = True
         self._device_value_current = False
-
         self.set_device_value(value, dtype)
 
 
@@ -119,7 +118,10 @@ cdef class Scalar:
         Returns a host copy of the underlying device scalar.
         """
         if self._host_value_current:
-            return self._host_value
+            if self.is_valid():
+                return self._host_value
+            else:
+                return cudf.NA
         else:
             if pd.api.types.is_string_dtype(self.dtype):
                 result = _get_py_string_from_string(self.c_value)
@@ -135,7 +137,7 @@ cdef class Scalar:
                 )
             self._host_value = result
             self._host_value_current = True
-        
+        print(result)
         return result
 
     cdef scalar* get_c_value(self):
@@ -152,7 +154,7 @@ cdef class Scalar:
         return self.c_value.get()[0].is_valid()
 
     def __repr__(self):
-        if self.value is None:
+        if self.value is cudf.NA:
             return f"Scalar({self.value}, {self.dtype.__repr__()})"
         else:
             return f"Scalar({self.value.__repr__()})"
@@ -257,14 +259,14 @@ cdef _set_timedelta64_from_np_scalar(unique_ptr[scalar]& s,
 
 cdef _get_py_string_from_string(unique_ptr[scalar]& s):
     if not s.get()[0].is_valid():
-        return None
+        return cudf.NA
     return (<string_scalar*>s.get())[0].to_string().decode()
 
 
 cdef _get_np_scalar_from_numeric(unique_ptr[scalar]& s):
     cdef scalar* s_ptr = s.get()
     if not s_ptr[0].is_valid():
-        return None
+        return cudf.NA
 
     cdef libcudf_types.data_type cdtype = s_ptr[0].type()
 
@@ -299,7 +301,7 @@ cdef _get_np_scalar_from_timestamp64(unique_ptr[scalar]& s):
     cdef scalar* s_ptr = s.get()
 
     if not s_ptr[0].is_valid():
-        return None
+        return cudf.NA
 
     cdef libcudf_types.data_type cdtype = s_ptr[0].type()
 

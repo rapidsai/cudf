@@ -31,7 +31,8 @@ from cudf.core import (
     UInt64Index,
     from_pandas,
     merge,
-    Scalar
+    Scalar,
+    NA
 )
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.groupby import Grouper

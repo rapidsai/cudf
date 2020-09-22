@@ -6,35 +6,12 @@ import numpy as np
 
 class Scalar(libcudf.scalar.Scalar):
     def __init__(self, value, dtype=None):
-
-        if isinstance(value, libcudf.scalar.Scalar):
-            if dtype and not value.dtype == dtype:
-                # TODO should be doable on the device
-                value = libcudf.scalar.Scalar(value.value, dtype=dtype)
-            self._data = value
-        else:
-            self._data = libcudf.scalar.Scalar(value, dtype=dtype)
-
-    @property
-    def value(self):
-        return self._data.value
+        super().__init__(value, dtype=dtype)
 
     def __index__(self):
         if not self.dtype.kind in {'u', 'i'}:
             raise TypeError("Only Integer typed scalars may be used in slices")
         return int(self)
-
-    @property
-    def ptr(self):
-        return self._data.ptr
-
-    @property
-    def dtype(self):
-        return self._data.dtype
-
-    @property
-    def is_valid(self):
-        return self._data.is_valid
 
     def __int__(self):
         if self.is_valid():
@@ -54,6 +31,7 @@ class Scalar(libcudf.scalar.Scalar):
         else:
             raise ValueError(f"Can not convert NULL value to {bool}")
 
+    # Scalar Binary Operations
     def __add__(self, other):
         return self._scalar_binop(other, "__add__")
 
@@ -114,13 +92,24 @@ class Scalar(libcudf.scalar.Scalar):
     def __ne__(self, other):
         return self._scalar_binop(other, "__ne__")
 
+    def __round__(self, n):
+        return self._scalar_binop(n, '__round__')
+
+    # Scalar Unary Operations
     def __abs__(self):
         return self._scalar_unaop('__abs__')
 
-    def __round__(self, n):
-        return self._scalar_binop(n, '__round__')
-    
-    __div__ = __truediv__
+    def __ceil__(self):
+        return self._scalar_unaop('__ceil__')
+
+    def __floor__(self):
+        return self._scalar_unaop('__floor__')
+
+    def __invert__(self):
+        return self._scalar_unaop('__invert__')
+
+    def __neg__(self):
+        return self._scalar_unaop('__neg__')
 
     def _binop_result_dtype_or_error(self, other, op):
 
@@ -158,4 +147,16 @@ class Scalar(libcudf.scalar.Scalar):
         return getattr(self.value, op)(other)
 
     def _scalar_unaop(self, op):
+        if op == '__floor__':
+            return Scalar(np.floor(self.value))
+        if op == '__ceil__':
+            return Scalar(np.ceil(self.value))
         return Scalar(getattr(self.value, op)())
+
+class NAType(object):
+    def __init__(self):
+        pass
+    def __repr__(self):
+        return "<NA>"
+
+NA = NAType()

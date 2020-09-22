@@ -13,7 +13,6 @@ import operator
 _unaops = [
     operator.abs,
     operator.invert,
-    operator.not_,
     operator.neg,
     np.ceil,
     np.floor
