@@ -18,12 +18,12 @@
 
 #include "csv.h"
 #include "csv_gpu.h"
-#include "io/csv/csv_common.h"
 
-#include <cudf/detail/utilities/trie.cuh>
+#include <io/csv/csv_common.h>
 #include <io/utilities/column_buffer.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 
+#include <cudf/detail/utilities/trie.cuh>
 #include <cudf/io/csv.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/csv.hpp>

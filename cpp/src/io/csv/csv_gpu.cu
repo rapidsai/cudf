@@ -180,8 +180,8 @@ __device__ __inline__ bool is_floatingpoint(
  * Data is processed in one row/record at a time, so the number of total
  * threads (tid) is equal to the number of rows.
  *
- * @param raw_csv The entire CSV data to read
  * @param opts A set of parsing options
+ * @param raw_csv The entire CSV data to read
  * @param num_records The number of lines/rows of CSV data
  * @param num_columns The number of columns of CSV data
  * @param column_flags Per-column parsing behavior flags
@@ -539,8 +539,8 @@ struct decode_op {
  *
  * Data is processed one record at a time
  *
- * @param[in] raw_csv The entire CSV data to read
  * @param[in] opts A set of parsing options
+ * @param[in] raw_csv The entire CSV data to read
  * @param[in] num_records The number of lines/rows of CSV data
  * @param[in] num_columns The number of columns of CSV data
  * @param[in] column_flags Per-column parsing behavior flags
