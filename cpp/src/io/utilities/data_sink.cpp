@@ -27,7 +27,7 @@ namespace io {
  */
 class file_sink : public data_sink {
  public:
-  explicit file_sink(std::string const& filepath)
+  explicit file_sink(std::string const& filepath) : bytes_written_(0)
   {
     outfile_.open(filepath, std::ios::out | std::ios::binary | std::ios::trunc);
     CUDF_EXPECTS(outfile_.is_open(), "Cannot open output file");
@@ -42,10 +42,18 @@ class file_sink : public data_sink {
 
   void flush() override { outfile_.flush(); }
 
-  size_t bytes_written() override { return outfile_.tellp(); }
+  size_t bytes_written() override { return bytes_written_; }
+
+  // bool supports_device_write() const override { return true; }
+
+  // void device_write(void const* gpu_data, size_t size, cudaStream_t stream) override
+  //{
+  //  bytes_written_ += size;
+  //}
 
  private:
   std::ofstream outfile_;
+  size_t bytes_written_;
 };
 
 /**

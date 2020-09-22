@@ -511,6 +511,7 @@ add_library(cudf
             src/io/functions.cpp
             src/io/statistics/column_stats.cu
             src/io/utilities/datasource.cpp
+            src/io/utilities/file_utils.cpp
             src/io/utilities/parsing_utils.cu
             src/io/utilities/type_conversion.cu
             src/io/utilities/data_sink.cpp
