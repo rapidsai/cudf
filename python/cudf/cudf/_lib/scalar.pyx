@@ -62,7 +62,6 @@ cdef class Scalar:
         """
 
         value = cudf.utils.dtypes.to_cudf_compatible_scalar(value, dtype=dtype)
-
         valid = value is not None
 
         if dtype is None:
@@ -74,6 +73,18 @@ cdef class Scalar:
                 dtype = value.dtype
 
         dtype = np.dtype(dtype)
+
+        # Caching Mechanism
+        self._host_value = value
+        self._host_dtype = dtype
+        self._host_value_current = True
+        self._device_value_current = False
+
+        self.set_device_value(value, dtype)
+
+
+    def set_device_value(self, value, dtype):
+        valid = value is not None
 
         if pd.api.types.is_string_dtype(dtype):
             _set_string_from_np_string(self.c_value, value, valid)
@@ -107,21 +118,31 @@ cdef class Scalar:
         """
         Returns a host copy of the underlying device scalar.
         """
-        if pd.api.types.is_string_dtype(self.dtype):
-            return _get_py_string_from_string(self.c_value)
-        elif pd.api.types.is_numeric_dtype(self.dtype):
-            return _get_np_scalar_from_numeric(self.c_value)
-        elif pd.api.types.is_datetime64_dtype(self.dtype):
-            return _get_np_scalar_from_timestamp64(self.c_value)
-        elif pd.api.types.is_timedelta64_dtype(self.dtype):
-            return _get_np_scalar_from_timedelta64(self.c_value)
+        if self._host_value_current:
+            return self._host_value
         else:
-            raise ValueError(
-                "Could not convert cudf::scalar to a Python value"
-            )
+            if pd.api.types.is_string_dtype(self.dtype):
+                result = _get_py_string_from_string(self.c_value)
+            elif pd.api.types.is_numeric_dtype(self.dtype):
+                result = _get_np_scalar_from_numeric(self.c_value)
+            elif pd.api.types.is_datetime64_dtype(self.dtype):
+                result = _get_np_scalar_from_timestamp64(self.c_value)
+            elif pd.api.types.is_timedelta64_dtype(self.dtype):
+                result = _get_np_scalar_from_timedelta64(self.c_value)
+            else:
+                raise ValueError(
+                    "Could not convert cudf::scalar to a Python value"
+                )
+            self._host_value = result
+            self._host_value_current = True
+        
+        return result
 
     cdef scalar* get_c_value(self):
-        return self.c_value.get()
+        if not self._device_value_current:
+            self.set_device_value(self._host_value, self._host_dtype)
+            self._device_value_current = True
+        return self.c_value.get() 
         
 
     cpdef bool is_valid(self):
