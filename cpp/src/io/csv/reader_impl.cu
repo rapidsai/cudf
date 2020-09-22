@@ -115,8 +115,8 @@ string removeQuotes(string str, char quotechar)
  * @brief Parse the first row to set the column names in the raw_csv parameter.
  * The first row can be either the header row, or the first data row
  */
-std::vector<std::string> setColumnNames(std::vector<char> const &header,
-                                        ParseOptions const &opts,
+std::vector<std::string> setColumnNames(ParseOptions const &opts,
+                                        std::vector<char> const &header,
                                         int header_row,
                                         std::string prefix)
 {
@@ -445,7 +445,8 @@ void reader::impl::gather_row_offsets(const char *h_data,
 
     // Pass 1: Count the potential number of rows in each character block for each
     // possible parser state at the beginning of the block.
-    uint32_t num_blocks = cudf::io::csv::gpu::gather_row_offsets(row_ctx.device_ptr(),
+    uint32_t num_blocks = cudf::io::csv::gpu::gather_row_offsets(opts,
+                                                                 row_ctx.device_ptr(),
                                                                  nullptr,
                                                                  data_.data().get(),
                                                                  chunk_size,
@@ -456,7 +457,6 @@ void reader::impl::gather_row_offsets(const char *h_data,
                                                                  range_end,
                                                                  skip_rows,
                                                                  0,
-                                                                 opts,
                                                                  stream);
     CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
                              row_ctx.device_ptr(),
@@ -483,7 +483,8 @@ void reader::impl::gather_row_offsets(const char *h_data,
                                cudaMemcpyHostToDevice,
                                stream));
       // Pass 2: Output row offsets
-      cudf::io::csv::gpu::gather_row_offsets(row_ctx.device_ptr(),
+      cudf::io::csv::gpu::gather_row_offsets(opts,
+                                             row_ctx.device_ptr(),
                                              row_offsets_.data().get(),
                                              data_.data().get(),
                                              chunk_size,
@@ -494,7 +495,6 @@ void reader::impl::gather_row_offsets(const char *h_data,
                                              range_end,
                                              skip_rows,
                                              num_row_offsets,
-                                             opts,
                                              stream);
       // With byte range, we want to keep only one row out of the specified range
       if (range_end < h_size) {
@@ -518,7 +518,7 @@ void reader::impl::gather_row_offsets(const char *h_data,
       if (num_rows >= 0) {
         if (num_row_offsets > header_rows + static_cast<size_t>(num_rows)) {
           size_t num_blanks =
-            cudf::io::csv::gpu::count_blank_rows(row_offsets_, data_, opts, stream);
+            cudf::io::csv::gpu::count_blank_rows(opts, row_offsets_, data_, stream);
           if (num_row_offsets - num_blanks > header_rows + static_cast<size_t>(num_rows)) {
             // Got the desired number of rows
             break;
@@ -538,7 +538,7 @@ void reader::impl::gather_row_offsets(const char *h_data,
 
   // Eliminate blank rows
   if (row_offsets_.size() != 0) {
-    cudf::io::csv::gpu::remove_blank_rows(row_offsets_, data_, opts, stream);
+    cudf::io::csv::gpu::remove_blank_rows(opts, row_offsets_, data_, stream);
   }
   // Remove header rows and extract header
   const size_t header_row_index = std::max<size_t>(header_rows, 1) - 1;
@@ -572,11 +572,11 @@ std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream)
       d_column_flags_ = h_column_flags_;
 
       auto column_stats =
-        cudf::io::csv::gpu::detect_column_types(data_.data().get(),
+        cudf::io::csv::gpu::detect_column_types(opts,
+                                                data_.data().get(),
                                                 device_span<uint64_t const>(row_offsets_),
                                                 num_actual_cols_,
                                                 num_active_cols_,
-                                                opts,
                                                 d_column_flags_.data().get(),
                                                 stream);
 
@@ -679,8 +679,8 @@ void reader::impl::decode_data(thrust::host_vector<column_parse::column_builder>
 {
   rmm::device_vector<column_parse::column_builder> d_builders = builders;
 
-  cudf::io::csv::gpu::decode_row_column_data(data_.data().get(),
-                                             opts,
+  cudf::io::csv::gpu::decode_row_column_data(opts,
+                                             data_.data().get(),
                                              // todo: replace with device_span
                                              num_records_,
                                              row_offsets_.data().get(),

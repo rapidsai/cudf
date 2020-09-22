@@ -189,8 +189,8 @@ __device__ __inline__ bool is_floatingpoint(
  * @param d_columnData The count for each column data type
  */
 __global__ void __launch_bounds__(csvparse_block_dim)
-  data_type_detection(const char *raw_csv,
-                      const ParseOptions opts,
+  data_type_detection(ParseOptions const opts,
+                      char const *raw_csv,
                       device_span<uint64_t const> const row_offsets,
                       int num_columns,
                       column_parse::flags *flags,
@@ -550,11 +550,11 @@ struct decode_op {
  * @param[out] num_valid The numbers of valid fields in columns
  **/
 __global__ void __launch_bounds__(csvparse_block_dim)
-  convert_csv_to_cudf(const char *raw_csv,
-                      const ParseOptions opts,
+  convert_csv_to_cudf(ParseOptions const opts,
+                      char const *raw_csv,
                       // todo: replace with device_span
                       size_t record_count,
-                      const uint64_t *record_offsets,
+                      uint64_t const *record_offsets,
                       // todo: replace with device_span
                       size_t column_count,
                       column_parse::column_builder *columns)
@@ -959,9 +959,9 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
   }
 }
 
-size_t __host__ count_blank_rows(rmm::device_vector<uint64_t> const &row_offsets,
+size_t __host__ count_blank_rows(ParseOptions const &opts,
+                                 rmm::device_vector<uint64_t> const &row_offsets,
                                  rmm::device_vector<char> const &data,
-                                 const cudf::io::ParseOptions &opts,
                                  cudaStream_t stream)
 {
   const char *d_data  = data.data().get();
@@ -979,9 +979,9 @@ size_t __host__ count_blank_rows(rmm::device_vector<uint64_t> const &row_offsets
     });
 }
 
-void __host__ remove_blank_rows(rmm::device_vector<uint64_t> &row_offsets,
+void __host__ remove_blank_rows(ParseOptions const &opts,
+                                rmm::device_vector<uint64_t> &row_offsets,
                                 rmm::device_vector<char> const &data,
-                                const cudf::io::ParseOptions &opts,
                                 cudaStream_t stream)
 {
   const char *d_data  = data.data().get();
@@ -1001,11 +1001,11 @@ void __host__ remove_blank_rows(rmm::device_vector<uint64_t> &row_offsets,
 }
 
 thrust::host_vector<column_parse::stats> detect_column_types(
-  const char *data,
+  ParseOptions const &options,
+  char const *data,
   device_span<uint64_t const> const &row_offsets,
   size_t num_actual_columns,
   size_t num_active_columns,
-  const cudf::io::ParseOptions &options,
   column_parse::flags *flags,
   cudaStream_t stream)
 {
@@ -1016,7 +1016,7 @@ thrust::host_vector<column_parse::stats> detect_column_types(
   auto d_stats = rmm::device_vector<column_parse::stats>(num_active_columns);
 
   data_type_detection<<<grid_size, block_size, 0, stream>>>(
-    data, options, row_offsets, num_actual_columns, flags, d_stats.data().get());
+    options, data, row_offsets, num_actual_columns, flags, d_stats.data().get());
 
   return thrust::host_vector<column_parse::stats>(d_stats);
 }
@@ -1029,11 +1029,11 @@ struct boop_functor {
   void __device__ operator()(size_t i) { builders[i] = {dtypes[i], columns[i], valids[i]}; }
 };
 
-void __host__ decode_row_column_data(const char *data,
-                                     const ParseOptions &options,
+void __host__ decode_row_column_data(ParseOptions const &options,
+                                     char const *data,
                                      // todo: replace with device_span
                                      size_t row_count,
-                                     const uint64_t *row_offsets,
+                                     uint64_t const *row_offsets,
                                      // todo: replace with device_span
                                      size_t column_count,
                                      column_parse::column_builder *columns,
@@ -1044,12 +1044,13 @@ void __host__ decode_row_column_data(const char *data,
   const int grid_size  = (row_count + block_size - 1) / block_size;
 
   convert_csv_to_cudf<<<grid_size, block_size, 0, stream>>>(
-    data, options, row_count, row_offsets, column_count, columns);
+    options, data, row_count, row_offsets, column_count, columns);
 }
 
-uint32_t __host__ gather_row_offsets(uint64_t *row_ctx,
+uint32_t __host__ gather_row_offsets(ParseOptions const &options,
+                                     uint64_t *row_ctx,
                                      uint64_t *offsets_out,
-                                     const char *start,
+                                     char const *start,
                                      size_t chunk_size,
                                      size_t parse_pos,
                                      size_t start_offset,
@@ -1058,7 +1059,6 @@ uint32_t __host__ gather_row_offsets(uint64_t *row_ctx,
                                      size_t byte_range_end,
                                      size_t skip_rows,
                                      size_t num_row_offsets,
-                                     const ParseOptions &options,
                                      cudaStream_t stream)
 {
   uint32_t dim_grid = 1 + (chunk_size / rowofs_block_bytes);
