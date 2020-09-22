@@ -49,7 +49,6 @@
 - PR #6189 Avoid deprecated pyarrow.compat for parquet
 - PR #6184 Add cuda 11 dev environment.yml
 - PR #6186 Update JNI to look for cub in new location
-- PR #6206 Replace functions macros with inline functions
 - PR #6194 Remove unnecessary memory-resource parameter in `cudf::contains` API
 - PR #6195 Update JNI to use parquet options builder
 - PR #6190 Avoid reading full csv files for metadata in dask_cudf
