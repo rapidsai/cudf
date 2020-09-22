@@ -92,14 +92,21 @@ inline __device__ uint32_t uint64_init_hash(uint64_t v)
  *
  **/
 // blockDim {512,1,1}
-__global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
-                                                            const EncColumnDesc *col_desc,
-                                                            int32_t num_fragments,
-                                                            int32_t num_columns,
-                                                            uint32_t fragment_size,
-                                                            uint32_t max_num_rows)
+template <int block_size>
+__global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment *frag,
+                                                                   const EncColumnDesc *col_desc,
+                                                                   int32_t num_fragments,
+                                                                   int32_t num_columns,
+                                                                   uint32_t fragment_size,
+                                                                   uint32_t max_num_rows)
 {
   __shared__ __align__(16) frag_init_state_s state_g;
+  using warp_reduce      = cub::WarpReduce<uint32_t>;
+  using half_warp_reduce = cub::WarpReduce<uint32_t, 16>;
+  __shared__ union {
+    typename warp_reduce::TempStorage full_warp[block_size / 32];
+    typename half_warp_reduce::TempStorage half_warp;
+  } temp_storage;
 
   frag_init_state_s *const s = &state_g;
   uint32_t t                 = threadIdx.x;
@@ -138,7 +145,7 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
     uint32_t is_valid     = (i + t < nrows && row < s->col.num_rows)
                           ? (valid) ? (valid[row >> 5] >> (row & 0x1f)) & 1 : 1
                           : 0;
-    uint32_t valid_warp = BALLOT(is_valid);
+    uint32_t valid_warp = ballot(is_valid);
     uint32_t len, nz_pos, hash;
     if (is_valid) {
       len = dtype_len;
@@ -165,7 +172,7 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
     }
     nz_pos =
       s->frag.non_nulls + __popc(valid_warp & (0x7fffffffu >> (0x1fu - ((uint32_t)t & 0x1f))));
-    len = WarpReduceSum32(len);
+    len = warp_reduce(temp_storage.full_warp[threadIdx.x / 32]).Sum(len);
     if (!(t & 0x1f)) {
       s->scratch_red[(t >> 5) + 0]  = __popc(valid_warp);
       s->scratch_red[(t >> 5) + 16] = len;
@@ -173,8 +180,8 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
     __syncthreads();
     if (t < 32) {
       uint32_t warp_pos  = WarpReducePos16((t < 16) ? s->scratch_red[t] : 0, t);
-      uint32_t non_nulls = SHFL(warp_pos, 0xf);
-      len                = WarpReduceSum16((t < 16) ? s->scratch_red[t + 16] : 0);
+      uint32_t non_nulls = shuffle(warp_pos, 0xf);
+      len = half_warp_reduce(temp_storage.half_warp).Sum((t < 16) ? s->scratch_red[t + 16] : 0);
       if (t < 16) { s->scratch_red[t] = warp_pos; }
       if (!t) {
         s->frag.non_nulls = s->frag.non_nulls + non_nulls;
@@ -308,7 +315,7 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
           }
         }
       }
-      dupe_mask    = BALLOT(is_dupe);
+      dupe_mask    = ballot(is_dupe);
       dupes_before = s->total_dupes + __popc(dupe_mask & ((2 << (t & 0x1f)) - 1));
       if (!(t & 0x1f)) { s->scratch_red[t >> 5] = __popc(dupe_mask); }
       __syncthreads();
@@ -329,11 +336,12 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
       }
     }
     __syncthreads();
-    dupe_data_size = WarpReduceSum32(dupe_data_size);
+    dupe_data_size = warp_reduce(temp_storage.full_warp[threadIdx.x / 32]).Sum(dupe_data_size);
     if (!(t & 0x1f)) { s->scratch_red[t >> 5] = dupe_data_size; }
     __syncthreads();
     if (t < 32) {
-      dupe_data_size = WarpReduceSum16((t < 16) ? s->scratch_red[t] : 0);
+      dupe_data_size =
+        half_warp_reduce(temp_storage.half_warp).Sum((t < 16) ? s->scratch_red[t] : 0);
       if (!t) {
         s->frag.dict_data_size = s->frag.fragment_data_size - dupe_data_size;
         s->frag.num_dict_vals  = s->frag.non_nulls - s->total_dupes;
@@ -434,7 +442,7 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
         page_offset += page_g.max_hdr_size + page_g.max_data_size;
         comp_page_offset += page_g.max_hdr_size + GetMaxCompressedBfrSize(page_g.max_data_size);
       }
-      SYNCWARP();
+      __syncwarp();
       if (pages && t < sizeof(EncPage) / sizeof(uint32_t)) {
         reinterpret_cast<uint32_t *>(&pages[ck_g.first_page])[t] =
           reinterpret_cast<uint32_t *>(&page_g)[t];
@@ -445,10 +453,10 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
       }
       num_pages = 1;
     }
-    SYNCWARP();
+    __syncwarp();
     do {
       uint32_t fragment_data_size, max_page_size, minmax_len = 0;
-      SYNCWARP();
+      __syncwarp();
       if (num_rows < ck_g.num_rows) {
         if (t < sizeof(PageFragment) / sizeof(uint32_t)) {
           reinterpret_cast<uint32_t *>(&frag_g)[t] =
@@ -462,7 +470,7 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
         frag_g.fragment_data_size = 0;
         frag_g.num_rows           = 0;
       }
-      SYNCWARP();
+      __syncwarp();
       if (ck_g.has_dictionary && fragments_in_chunk < ck_g.num_dict_fragments) {
         fragment_data_size =
           frag_g.num_rows * 2;  // Assume worst-case of 2-bytes per dictionary index
@@ -531,7 +539,7 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
           cur_row += rows_in_page;
           ck_max_stats_len = max(ck_max_stats_len, max_stats_len);
         }
-        SYNCWARP();
+        __syncwarp();
         if (pages && t < sizeof(EncPage) / sizeof(uint32_t)) {
           reinterpret_cast<uint32_t *>(&pages[ck_g.first_page + num_pages])[t] =
             reinterpret_cast<uint32_t *>(&page_g)[t];
@@ -553,7 +561,7 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
       num_rows += frag_g.num_rows;
       fragments_in_chunk++;
     } while (frag_g.num_rows != 0);
-    SYNCWARP();
+    __syncwarp();
     if (!t) {
       if (ck_g.ck_stat_size == 0 && ck_g.stats) {
         uint32_t ck_stat_size = 48 + 2 * ck_max_stats_len;
@@ -609,23 +617,23 @@ inline __device__ void PackLiterals(
     if (w < 8) {
       uint32_t mask;
       if (w <= 1) {
-        v |= SHFL_XOR(v, 1) << 1;
-        v |= SHFL_XOR(v, 2) << 2;
-        v |= SHFL_XOR(v, 4) << 4;
+        v |= shuffle_xor(v, 1) << 1;
+        v |= shuffle_xor(v, 2) << 2;
+        v |= shuffle_xor(v, 4) << 4;
         mask = 0x7;
       } else if (w <= 2) {
-        v |= SHFL_XOR(v, 1) << 2;
-        v |= SHFL_XOR(v, 2) << 4;
+        v |= shuffle_xor(v, 1) << 2;
+        v |= shuffle_xor(v, 2) << 4;
         mask = 0x3;
       } else {  // w=4
-        v |= SHFL_XOR(v, 1) << 4;
+        v |= shuffle_xor(v, 1) << 4;
         mask = 0x1;
       }
       if (t < count && !(t & mask)) { dst[(t * w) >> 3] = v; }
     } else if (w < 12) {  // w=8
       if (t < count) { dst[t] = v; }
     } else if (w < 16) {  // w=12
-      v |= SHFL_XOR(v, 1) << 12;
+      v |= shuffle_xor(v, 1) << 12;
       if (t < count && !(t & 1)) {
         dst[(t >> 1) * 3 + 0] = v;
         dst[(t >> 1) * 3 + 1] = v >> 8;
@@ -657,12 +665,12 @@ static __device__ void RleEncode(
     uint32_t pos = rle_pos + t;
     if (rle_run > 0 && !(rle_run & 1)) {
       // Currently in a long repeat run
-      uint32_t mask = BALLOT(pos < numvals && s->vals[pos & (RLE_BFRSZ - 1)] == s->run_val);
+      uint32_t mask = ballot(pos < numvals && s->vals[pos & (RLE_BFRSZ - 1)] == s->run_val);
       uint32_t rle_rpt_count, max_rpt_count;
       if (!(t & 0x1f)) { s->rpt_map[t >> 5] = mask; }
       __syncthreads();
       if (t < 32) {
-        uint32_t c32 = BALLOT(t >= 4 || s->rpt_map[t] != 0xffffffffu);
+        uint32_t c32 = ballot(t >= 4 || s->rpt_map[t] != 0xffffffffu);
         if (!t) {
           uint32_t last_idx = __ffs(c32) - 1;
           s->rle_rpt_count =
@@ -688,7 +696,7 @@ static __device__ void RleEncode(
       // New run or in a literal run
       uint32_t v0      = s->vals[pos & (RLE_BFRSZ - 1)];
       uint32_t v1      = s->vals[(pos + 1) & (RLE_BFRSZ - 1)];
-      uint32_t mask    = BALLOT(pos + 1 < numvals && v0 == v1);
+      uint32_t mask    = ballot(pos + 1 < numvals && v0 == v1);
       uint32_t maxvals = min(numvals - rle_pos, 128);
       uint32_t rle_lit_count, rle_rpt_count;
       if (!(t & 0x1f)) { s->rpt_map[t >> 5] = mask; }
@@ -700,7 +708,7 @@ static __device__ void RleEncode(
         uint32_t m0          = (idx8 < 4) ? s->rpt_map[idx8] : 0;
         uint32_t m1          = (idx8 < 3) ? s->rpt_map[idx8 + 1] : 0;
         uint32_t needed_mask = kRleRunMask[nbits - 1];
-        mask                 = BALLOT((__funnelshift_r(m0, m1, pos8) & needed_mask) == needed_mask);
+        mask                 = ballot((__funnelshift_r(m0, m1, pos8) & needed_mask) == needed_mask);
         if (!t) {
           uint32_t rle_run_start = (mask != 0) ? min((__ffs(mask) - 1) * 8, maxvals) : maxvals;
           uint32_t rpt_len       = 0;
@@ -800,9 +808,9 @@ static __device__ void PlainBoolEncode(page_enc_state_s *s,
     uint32_t n      = min(numvals - rle_pos, 128);
     uint32_t nbytes = (n + ((flush) ? 7 : 0)) >> 3;
     if (!nbytes) { break; }
-    v |= SHFL_XOR(v, 1) << 1;
-    v |= SHFL_XOR(v, 2) << 2;
-    v |= SHFL_XOR(v, 4) << 4;
+    v |= shuffle_xor(v, 1) << 1;
+    v |= shuffle_xor(v, 2) << 2;
+    v |= shuffle_xor(v, 4) << 4;
     if (t < n && !(t & 7)) { dst[t >> 3] = v; }
     rle_pos = min(rle_pos + nbytes * 8, numvals);
     dst += nbytes;
@@ -878,7 +886,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
           uint32_t rle_bytes = (uint32_t)(rle_out - cur) - 4;
           cur[t]             = rle_bytes >> (t * 8);
         }
-        SYNCWARP();
+        __syncwarp();
         if (t == 0) { s->cur = rle_out; }
       }
     }
@@ -919,7 +927,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
                    ? (valid) ? (valid[row >> 5] >> (row & 0x1f)) & 1 : 1
                    : 0;
     }
-    warp_valids = BALLOT(is_valid);
+    warp_valids = ballot(is_valid);
     cur_row += nrows;
     if (dict_bits >= 0) {
       // Dictionary encoding
@@ -1064,6 +1072,8 @@ __global__ void __launch_bounds__(128) gpuDecideCompression(EncColumnChunk *chun
 {
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(4) unsigned int error_count;
+  using warp_reduce = cub::WarpReduce<int>;
+  __shared__ typename warp_reduce::TempStorage temp_storage[2];
 
   uint32_t t                      = threadIdx.x;
   uint32_t uncompressed_data_size = 0;
@@ -1088,8 +1098,8 @@ __global__ void __launch_bounds__(128) gpuDecideCompression(EncColumnChunk *chun
         if (comp_out[comp_idx].status != 0) { atomicAdd(&error_count, 1); }
       }
     }
-    uncompressed_data_size = WarpReduceSum32(uncompressed_data_size);
-    compressed_data_size   = WarpReduceSum32(compressed_data_size);
+    uncompressed_data_size = warp_reduce(temp_storage[0]).Sum(uncompressed_data_size);
+    compressed_data_size   = warp_reduce(temp_storage[1]).Sum(compressed_data_size);
   }
   __syncthreads();
   if (t == 0) {
@@ -1412,7 +1422,7 @@ cudaError_t InitPageFragments(PageFragment *frag,
                               cudaStream_t stream)
 {
   dim3 dim_grid(num_columns, num_fragments);  // 1 threadblock per fragment
-  gpuInitPageFragments<<<dim_grid, 512, 0, stream>>>(
+  gpuInitPageFragments<512><<<dim_grid, 512, 0, stream>>>(
     frag, col_desc, num_fragments, num_columns, fragment_size, num_rows);
   return cudaSuccess;
 }
