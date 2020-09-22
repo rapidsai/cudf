@@ -219,8 +219,6 @@ TEST_F(ApplyBooleanMask, ListOfStructsFiltering)
     cudf::apply_boolean_mask(cudf::table_view({list_of_structs_column->view()}), filter_mask);
   auto filtered_list_column = filtered_table->get_column(0);
 
-  cudf::test::print(filtered_list_column.view());
-
   // Compare against expected values.
   auto expected_key_column =
     fixed_width_column_wrapper<int32_t>{{0, 1, 4, 5, 8, 9}, {0, 1, 0, 0, 1, 0}};
@@ -239,6 +237,35 @@ TEST_F(ApplyBooleanMask, ListOfStructsFiltering)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(filtered_list_column,
                                       expected_list_of_structs_column->view());
+}
+
+TEST_F(ApplyBooleanMask, StructOfListsFiltering)
+{
+  using namespace cudf::test;
+
+  auto lists_column = lists_column_wrapper<int32_t>{
+    { {0,0}, {1,1}, {2,2}, {3,3}, {4,4} },
+    make_counting_transform_iterator(0, [](auto i) {return i != 2;})
+  };
+
+  auto structs_column = structs_column_wrapper{{lists_column}};
+
+  auto filter_mask = fixed_width_column_wrapper<bool>{{1, 0, 1, 0, 1}};
+  auto filtered_table =
+    cudf::apply_boolean_mask(cudf::table_view({structs_column}), filter_mask);
+
+  auto filtered_lists_column = filtered_table->get_column(0);
+
+  // Compare against expected values;
+  
+  auto expected_lists_column = lists_column_wrapper<int32_t>{
+    {{0,0}, {2,2}, {4,4}},
+    make_counting_transform_iterator(0, [](auto i) {return i != 1;})
+  };
+
+  auto expected_structs_column = structs_column_wrapper{{expected_lists_column}};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(filtered_lists_column, expected_structs_column);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
