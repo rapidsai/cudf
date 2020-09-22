@@ -776,14 +776,13 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointColumnWrapper)
   using RepType   = TypeParam;
 
   // fixed_point_column_wrapper
-  auto const w =
-    cudf::test::fixed_point_column_wrapper<RepType>{{110, 220, 330, 550}, scale_type{-2}};
+  auto const w = cudf::test::fixed_point_column_wrapper<RepType>{{1, 2, 3, 4}, scale_type{0}};
 
   // fixed_width_column_wrapper
-  auto const ONE   = decimalXX{1.1, scale_type{-2}};
-  auto const TWO   = decimalXX{2.2, scale_type{-2}};
-  auto const THREE = decimalXX{3.3, scale_type{-2}};
-  auto const FOUR  = decimalXX{5.5, scale_type{-2}};
+  auto const ONE   = decimalXX{1, scale_type{0}};
+  auto const TWO   = decimalXX{2, scale_type{0}};
+  auto const THREE = decimalXX{3, scale_type{0}};
+  auto const FOUR  = decimalXX{4, scale_type{0}};
 
   auto const vec = std::vector<decimalXX>{ONE, TWO, THREE, FOUR};
   auto const col = cudf::test::fixed_width_column_wrapper<decimalXX>(vec.begin(), vec.end());
