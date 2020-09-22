@@ -2629,7 +2629,7 @@ class DataFrame(Frame, Serializable):
         return DataFrame(cols, idx)
 
     def _set_index(
-        self, index, to_drop=[], inplace=False, verify_integrity=False,
+        self, index, to_drop=None, inplace=False, verify_integrity=False,
     ):
         """Helper for `.set_index`
 
@@ -2653,8 +2653,9 @@ class DataFrame(Frame, Serializable):
             # TODO: indicate duplicate keys
             raise ValueError("Index is not unique.\n {}".format(index))
 
-        for col in to_drop:
-            df.drop(columns=col, inplace=True)
+        if to_drop:
+            for col in to_drop:
+                df.drop(columns=col, inplace=True)
 
         df.index = index
         return df if not inplace else None
@@ -2797,7 +2798,7 @@ class DataFrame(Frame, Serializable):
             idf = cudf.DataFrame()
             for i, col in enumerate(columns_to_add):
                 idf[i] = col
-            idx = cudf.MultiIndex(source_data=idf, names=names)
+            idx = cudf.MultiIndex.from_frame(idf, names=names)
 
         return self._set_index(
             index=idx,
