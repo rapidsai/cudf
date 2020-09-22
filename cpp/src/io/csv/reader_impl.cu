@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -176,20 +176,21 @@ std::vector<std::string> setColumnNames(std::vector<char> const &header,
   return col_names;
 }
 
-table_with_metadata reader::impl::read(size_t range_offset,
-                                       size_t range_size,
-                                       int skip_rows,
-                                       int skip_end_rows,
-                                       int num_rows,
-                                       cudaStream_t stream)
+table_with_metadata reader::impl::read(cudaStream_t stream)
 {
+  auto range_offset  = opts_.get_byte_range_offset();
+  auto range_size    = opts_.get_byte_range_size();
+  auto skip_rows     = opts_.get_skiprows();
+  auto skip_end_rows = opts_.get_skipfooter();
+  auto num_rows      = opts_.get_nrows();
+
   if (range_offset > 0 || range_size > 0) {
     CUDF_EXPECTS(compression_type_ == "none",
                  "Reading compressed data using `byte range` is unsupported");
   }
   size_t map_range_size = 0;
   if (range_size != 0) {
-    const auto num_columns = std::max(args_.names.size(), args_.dtype.size());
+    const auto num_columns = std::max(opts_.get_names().size(), opts_.get_dtypes().size());
     map_range_size         = range_size + calculateMaxRowSize(num_columns);
   }
 
@@ -201,7 +202,7 @@ table_with_metadata reader::impl::read(size_t range_offset,
   }
 
   // Return an empty dataframe if no data and no column metadata to process
-  if (source_->is_empty() && (args_.names.empty() || args_.dtype.empty())) {
+  if (source_->is_empty() && (opts_.get_names().empty() || opts_.get_dtypes().empty())) {
     return {std::make_unique<table>(), {}};
   }
 
@@ -233,7 +234,7 @@ table_with_metadata reader::impl::read(size_t range_offset,
       (range_offset != 0) ? find_first_row_start(h_uncomp_data, h_uncomp_size) : 0;
 
     // TODO: Allow parsing the header outside the mapped range
-    CUDF_EXPECTS((range_offset == 0 || args_.header < 0),
+    CUDF_EXPECTS((range_offset == 0 || opts_.get_header() < 0),
                  "byte_range offset with header not supported");
 
     // Gather row offsets
@@ -259,11 +260,11 @@ table_with_metadata reader::impl::read(size_t range_offset,
   }
 
   // Check if the user gave us a list of column names
-  if (not args_.names.empty()) {
-    h_column_flags_.resize(args_.names.size(), column_parse::enabled);
-    col_names_ = args_.names;
+  if (not opts_.get_names().empty()) {
+    h_column_flags_.resize(opts_.get_names().size(), column_parse::enabled);
+    col_names_ = opts_.get_names();
   } else {
-    col_names_ = setColumnNames(header_, opts, args_.header, args_.prefix);
+    col_names_ = setColumnNames(header_, opts, opts_.get_header(), opts_.get_prefix());
 
     num_actual_cols_ = num_active_cols_ = col_names_.size();
 
@@ -282,7 +283,7 @@ table_with_metadata reader::impl::read(size_t range_offset,
       // Operator [] inserts a default-initialized value if the given key is not
       // present
       if (++col_names_histogram[col_name] > 1) {
-        if (args_.mangle_dupe_cols) {
+        if (opts_.is_enabled_mangle_dupe_cols()) {
           // Rename duplicates of column X as X.1, X.2, ...; First appearance
           // stays as X
           col_name += "." + std::to_string(col_names_histogram[col_name] - 1);
@@ -296,19 +297,19 @@ table_with_metadata reader::impl::read(size_t range_offset,
 
     // Update the number of columns to be processed, if some might have been
     // removed
-    if (!args_.mangle_dupe_cols) { num_active_cols_ = col_names_histogram.size(); }
+    if (!opts_.is_enabled_mangle_dupe_cols()) { num_active_cols_ = col_names_histogram.size(); }
   }
 
   // User can specify which columns should be parsed
-  if (!args_.use_cols_indexes.empty() || !args_.use_cols_names.empty()) {
+  if (!opts_.get_use_cols_indexes().empty() || !opts_.get_use_cols_names().empty()) {
     std::fill(h_column_flags_.begin(), h_column_flags_.end(), column_parse::disabled);
 
-    for (const auto index : args_.use_cols_indexes) {
+    for (const auto index : opts_.get_use_cols_indexes()) {
       h_column_flags_[index] = column_parse::enabled;
     }
-    num_active_cols_ = args_.use_cols_indexes.size();
+    num_active_cols_ = opts_.get_use_cols_indexes().size();
 
-    for (auto const &name : args_.use_cols_names) {
+    for (const auto &name : opts_.get_use_cols_names()) {
       const auto it = std::find(col_names_.begin(), col_names_.end(), name);
       if (it != col_names_.end()) {
         h_column_flags_[it - col_names_.begin()] = column_parse::enabled;
@@ -318,12 +319,12 @@ table_with_metadata reader::impl::read(size_t range_offset,
   }
 
   // User can specify which columns should be inferred as datetime
-  if (!args_.infer_date_indexes.empty() || !args_.infer_date_names.empty()) {
-    for (const auto index : args_.infer_date_indexes) {
+  if (!opts_.get_infer_date_indexes().empty() || !opts_.get_infer_date_names().empty()) {
+    for (const auto index : opts_.get_infer_date_indexes()) {
       h_column_flags_[index] |= column_parse::as_datetime;
     }
 
-    for (auto const &name : args_.infer_date_names) {
+    for (const auto &name : opts_.get_infer_date_names()) {
       auto it = std::find(col_names_.begin(), col_names_.end(), name);
       if (it != col_names_.end()) {
         h_column_flags_[it - col_names_.begin()] |= column_parse::as_datetime;
@@ -425,7 +426,7 @@ void reader::impl::gather_row_offsets(const char *h_data,
   hostdevice_vector<uint64_t> row_ctx(max_blocks);
   size_t buffer_pos  = std::min(range_begin - std::min(range_begin, sizeof(char)), h_size);
   size_t pos         = std::min(range_begin, h_size);
-  size_t header_rows = (args_.header >= 0) ? args_.header + 1 : 0;
+  size_t header_rows = (opts_.get_header() >= 0) ? opts_.get_header() + 1 : 0;
   uint64_t ctx       = 0;
 
   // For compatibility with the previous parser, a row is considered in-range if the
@@ -562,7 +563,7 @@ std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream)
 {
   std::vector<data_type> dtypes;
 
-  if (args_.dtype.empty()) {
+  if (opts_.get_dtypes().empty()) {
     if (num_records_ == 0) {
       dtypes.resize(num_active_cols_, data_type{type_id::EMPTY});
     } else {
@@ -606,22 +607,23 @@ std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream)
       }
     }
   } else {
-    const bool is_dict = std::all_of(args_.dtype.begin(), args_.dtype.end(), [](const auto &s) {
-      return s.find(':') != std::string::npos;
-    });
+    const bool is_dict =
+      std::all_of(opts_.get_dtypes().begin(), opts_.get_dtypes().end(), [](const auto &s) {
+        return s.find(':') != std::string::npos;
+      });
 
     if (!is_dict) {
-      if (args_.dtype.size() == 1) {
+      if (opts_.get_dtypes().size() == 1) {
         // If it's a single dtype, assign that dtype to all active columns
         data_type dtype_;
         column_parse::flags col_flags_;
-        std::tie(dtype_, col_flags_) = get_dtype_info(args_.dtype[0]);
+        std::tie(dtype_, col_flags_) = get_dtype_info(opts_.get_dtypes()[0]);
         dtypes.resize(num_active_cols_, dtype_);
         for (int col = 0; col < num_actual_cols_; col++) { h_column_flags_[col] |= col_flags_; }
         CUDF_EXPECTS(dtypes.back().id() != cudf::type_id::EMPTY, "Unsupported data type");
       } else {
         // If it's a list, assign dtypes to active columns in the given order
-        CUDF_EXPECTS(static_cast<int>(args_.dtype.size()) >= num_actual_cols_,
+        CUDF_EXPECTS(static_cast<int>(opts_.get_dtypes().size()) >= num_actual_cols_,
                      "Must specify data types for all columns");
 
         auto dtype_ = std::back_inserter(dtypes);
@@ -629,7 +631,7 @@ std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream)
         for (int col = 0; col < num_actual_cols_; col++) {
           if (h_column_flags_[col] & column_parse::enabled) {
             column_parse::flags col_flags_;
-            std::tie(dtype_, col_flags_) = get_dtype_info(args_.dtype[col]);
+            std::tie(dtype_, col_flags_) = get_dtype_info(opts_.get_dtypes()[col]);
             h_column_flags_[col] |= col_flags_;
             CUDF_EXPECTS(dtypes.back().id() != cudf::type_id::EMPTY, "Unsupported data type");
           }
@@ -639,7 +641,7 @@ std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream)
       // Translate vector of `name : dtype` strings to map
       // NOTE: Incoming pairs can be out-of-order from column names in dataset
       std::unordered_map<std::string, std::string> col_type_map;
-      for (const auto &pair : args_.dtype) {
+      for (const auto &pair : opts_.get_dtypes()) {
         const auto pos     = pair.find_last_of(':');
         const auto name    = pair.substr(0, pos);
         const auto dtype   = pair.substr(pos + 1, pair.size());
@@ -661,9 +663,9 @@ std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream)
     }
   }
 
-  if (args_.timestamp_type.id() != cudf::type_id::EMPTY) {
+  if (opts_.get_timestamp_type().id() != cudf::type_id::EMPTY) {
     for (auto &type : dtypes) {
-      if (cudf::is_timestamp(type)) { type = args_.timestamp_type; }
+      if (cudf::is_timestamp(type)) { type = opts_.get_timestamp_type(); }
     }
   }
 
@@ -689,66 +691,68 @@ void reader::impl::decode_data(thrust::host_vector<column_parse::column_builder>
 
 reader::impl::impl(std::unique_ptr<datasource> source,
                    std::string filepath,
-                   reader_options const &options,
+                   csv_reader_options const &options,
                    rmm::mr::device_memory_resource *mr)
-  : mr_(mr), source_(std::move(source)), filepath_(filepath), args_(options)
+  : mr_(mr), source_(std::move(source)), filepath_(filepath), opts_(options)
 {
-  num_actual_cols_ = args_.names.size();
-  num_active_cols_ = args_.names.size();
+  num_actual_cols_ = opts_.get_names().size();
+  num_active_cols_ = num_actual_cols_;
 
-  if (args_.delim_whitespace) {
+  if (opts_.is_enabled_delim_whitespace()) {
     opts.delimiter       = ' ';
     opts.multi_delimiter = true;
   } else {
-    opts.delimiter       = args_.delimiter;
+    opts.delimiter       = opts_.get_delimiter();
     opts.multi_delimiter = false;
   }
-  opts.terminator = args_.lineterminator;
-  if (args_.quotechar != '\0' && args_.quoting != quote_style::NONE) {
-    opts.quotechar   = args_.quotechar;
+  opts.terminator = opts_.get_lineterminator();
+  if (opts_.get_quotechar() != '\0' && opts_.get_quoting() != quote_style::NONE) {
+    opts.quotechar   = opts_.get_quotechar();
     opts.keepquotes  = false;
-    opts.doublequote = args_.doublequote;
+    opts.doublequote = opts_.is_enabled_doublequote();
   } else {
     opts.quotechar   = '\0';
     opts.keepquotes  = true;
     opts.doublequote = false;
   }
-  opts.skipblanklines = args_.skip_blank_lines;
-  opts.comment        = args_.comment;
-  opts.dayfirst       = args_.dayfirst;
-  opts.decimal        = args_.decimal;
-  opts.thousands      = args_.thousands;
+  opts.skipblanklines = opts_.is_enabled_skip_blank_lines();
+  opts.comment        = opts_.get_comment();
+  opts.dayfirst       = opts_.is_enabled_dayfirst();
+  opts.decimal        = opts_.get_decimal();
+  opts.thousands      = opts_.get_thousands();
   CUDF_EXPECTS(opts.decimal != opts.delimiter, "Decimal point cannot be the same as the delimiter");
   CUDF_EXPECTS(opts.thousands != opts.delimiter,
                "Thousands separator cannot be the same as the delimiter");
 
-  compression_type_ = infer_compression_type(
-    args_.compression, filepath, {{"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}});
+  compression_type_ =
+    infer_compression_type(opts_.get_compression(),
+                           filepath,
+                           {{"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}});
 
   // Handle user-defined false values, whereby field data is substituted with a
   // boolean true or numeric `1` value
-  if (args_.true_values.size() != 0) {
-    d_trie_true_        = createSerializedTrie(args_.true_values);
+  if (opts_.get_true_values().size() != 0) {
+    d_trie_true_        = createSerializedTrie(opts_.get_true_values());
     opts.trueValuesTrie = d_trie_true_.data().get();
   }
 
   // Handle user-defined false values, whereby field data is substituted with a
   // boolean false or numeric `0` value
-  if (args_.false_values.size() != 0) {
-    d_trie_false_        = createSerializedTrie(args_.false_values);
+  if (opts_.get_false_values().size() != 0) {
+    d_trie_false_        = createSerializedTrie(opts_.get_false_values());
     opts.falseValuesTrie = d_trie_false_.data().get();
   }
 
   // Handle user-defined N/A values, whereby field data is treated as null
-  if (args_.na_values.size() != 0) {
-    d_trie_na_        = createSerializedTrie(args_.na_values);
+  if (opts_.get_na_values().size() != 0) {
+    d_trie_na_        = createSerializedTrie(opts_.get_na_values());
     opts.naValuesTrie = d_trie_na_.data().get();
   }
 }
 
 // Forward to implementation
 reader::reader(std::vector<std::string> const &filepaths,
-               reader_options const &options,
+               csv_reader_options const &options,
                rmm::mr::device_memory_resource *mr)
 {
   CUDF_EXPECTS(filepaths.size() == 1, "Only a single source is currently supported.");
@@ -759,7 +763,7 @@ reader::reader(std::vector<std::string> const &filepaths,
 
 // Forward to implementation
 reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
-               reader_options const &options,
+               csv_reader_options const &options,
                rmm::mr::device_memory_resource *mr)
 {
   CUDF_EXPECTS(sources.size() == 1, "Only a single source is currently supported.");
@@ -770,28 +774,7 @@ reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
 reader::~reader() = default;
 
 // Forward to implementation
-table_with_metadata reader::read_all(cudaStream_t stream)
-{
-  return _impl->read(0, 0, 0, 0, -1, stream);
-}
-
-// Forward to implementation
-table_with_metadata reader::read_byte_range(size_t offset, size_t size, cudaStream_t stream)
-{
-  return _impl->read(offset, size, 0, 0, -1, stream);
-}
-
-// Forward to implementation
-table_with_metadata reader::read_rows(size_type num_skip_header,
-                                      size_type num_skip_footer,
-                                      size_type num_rows,
-                                      cudaStream_t stream)
-{
-  CUDF_EXPECTS(num_rows == -1 || num_skip_footer == 0,
-               "Cannot use both `num_rows` and `num_skip_footer`");
-
-  return _impl->read(0, 0, num_skip_header, num_skip_footer, num_rows, stream);
-}
+table_with_metadata reader::read(cudaStream_t stream) { return _impl->read(stream); }
 
 }  // namespace csv
 }  // namespace detail

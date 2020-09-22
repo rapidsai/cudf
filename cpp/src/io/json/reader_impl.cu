@@ -27,7 +27,6 @@
 
 #include <cudf/detail/utilities/trie.cuh>
 #include <cudf/groupby.hpp>
-#include <cudf/io/readers.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>

@@ -9,7 +9,9 @@
 - PR #6076 Add durations type support for csv writer, reader
 - PR #5874 Add `COLLECT` groupby aggregation
 - PR #6119 Add support for `dayofweek` property in `DateTimeIndex` and `DatetimeProperties`
+- PR #6171 Java and Jni support for Struct columns
 - PR #6125 Add support for `Series.mode` and `DataFrame.mode`
+- PR #6262 Add nth_element series aggregation with null handling
 
 ## Improvements
 
@@ -32,6 +34,7 @@
 - PR #5984 Support gather() on CUDF struct columns
 - PR #6103 Small refactor of `print_differences`
 - PR #6124 Fix gcc-9 compilation errors on tests
+- PR #6122 Add builder API for cuIO `csv_writer_options` and `csv_reader_options`
 - PR #6141 Fix typo in custreamz README that was a result of recent changes
 - PR #6162 Reduce output parameters in cuio csv and json reader internals
 - PR #6146 Added element/validity pair constructors for fixed_width and string wrappers
@@ -51,6 +54,7 @@
 - PR #6190 Avoid reading full csv files for metadata in dask_cudf
 - PR #6197 Remove librmm dependency for libcudf
 - PR #6213 Reduce subscript usage in cuio in favor of pointer dereferencing
+- PR #6230 Support any unsigned int type for dictionary indices
 - PR #6202 Add additional parameter support to `DataFrame.drop`
 - PR #6214 Small clean up to use more algorithms
 - PR #6209 Remove CXX11 ABI handling from CMake
@@ -62,6 +66,7 @@
 - PR #6245 Split up replace.cu into multiple source files
 - PR #6218 increase visiblity/consistency for cuio reader writer private member variable names.
 - PR #6265 Update JNI to use ORC options builder
+- PR #6273 Update JNI to use ORC options builder
 
 ## Bug Fixes
 
@@ -90,9 +95,11 @@
 - PR #6226 Add in some JNI checks for null handles
 - PR #6234 Add float infinity parsing in csv reader
 - PR #6251 Replace remaining calls to RMM `get_default_resource`
+- PR #6257 Support truncated fractions in `cudf::strings::to_timestamp`
 - PR #6259 Fix compilation error with GCC 8
 - PR #6258 Pin libcudf conda recipe to boost 1.72.0
 - PR #6264 Remove include statement for missing rmm/mr/device/default_memory_resource.hpp file
+- PR #6289 Revert #6206
 
 
 # cuDF 0.15.0 (26 Aug 2020)

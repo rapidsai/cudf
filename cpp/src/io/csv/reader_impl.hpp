@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,6 @@
  * limitations under the License.
  */
 
-/**
- * @file reader_impl.hpp
- * @brief cuDF-IO CSV reader class implementation header
- */
-
 #pragma once
 
 #include "csv.h"
@@ -29,8 +24,9 @@
 #include <io/utilities/column_buffer.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 
+#include <cudf/io/csv.hpp>
 #include <cudf/io/datasource.hpp>
-#include <cudf/io/readers.hpp>
+#include <cudf/io/detail/csv.hpp>
 
 #include <memory>
 #include <string>
@@ -78,28 +74,17 @@ class reader::impl {
    */
   explicit impl(std::unique_ptr<datasource> source,
                 std::string filepath,
-                reader_options const &options,
+                csv_reader_options const &options,
                 rmm::mr::device_memory_resource *mr);
 
   /**
    * @brief Read an entire set or a subset of data and returns a set of columns.
    *
-   * @param range_offset Number of bytes offset from the start
-   * @param range_size Bytes to read; use `0` for all remaining data
-   * @param skip_rows Number of rows to skip from the start
-   * @param skip_rows_end Number of rows to skip from the end
-   * @param num_rows Number of rows to read
-   * @param metadata Optional location to return table metadata
    * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with metadata
    */
-  table_with_metadata read(size_t range_offset,
-                           size_t range_size,
-                           int skip_rows,
-                           int skip_end_rows,
-                           int num_rows,
-                           cudaStream_t stream);
+  table_with_metadata read(cudaStream_t stream);
 
  private:
   /**
@@ -161,7 +146,7 @@ class reader::impl {
   std::unique_ptr<datasource> source_;
   std::string filepath_;
   std::string compression_type_;
-  const reader_options args_;
+  const csv_reader_options opts_;
 
   rmm::device_vector<char> data_;
   rmm::device_vector<uint64_t> row_offsets_;
