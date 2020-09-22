@@ -604,11 +604,12 @@ __device__ void snappy_process_symbols(unsnap_state_s *s, int t, Storage &temp_s
  * @param[in] inputs Source & destination information per block
  * @param[out] outputs Decompression status per block
  **/
-extern "C" __global__ void __launch_bounds__(128)
+template <int block_size>
+__global__ void __launch_bounds__(block_size)
   unsnap_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs)
 {
   __shared__ __align__(16) unsnap_state_s state_g;
-
+  __shared__ cub::WarpReduce<uint32_t>::TempStorage temp_storage;
   int t             = threadIdx.x;
   unsnap_state_s *s = &state_g;
   int strm_id       = blockIdx.x;
@@ -676,7 +677,7 @@ extern "C" __global__ void __launch_bounds__(128)
       snappy_prefetch_bytestream(s, t & 0x1f);
     } else if (t < 96) {
       // WARP2: LZ77
-      snappy_process_symbols(s, t & 0x1f);
+      snappy_process_symbols(s, t & 0x1f, temp_storage);
     }
     __syncthreads();
   }
@@ -700,7 +701,7 @@ cudaError_t __host__ gpu_unsnap(gpu_inflate_input_s *inputs,
   dim3 dim_block(128, 1);     // 4 warps per stream, 1 stream per block
   dim3 dim_grid(count32, 1);  // TODO: Check max grid dimensions vs max expected count
 
-  unsnap_kernel<<<dim_grid, dim_block, 0, stream>>>(inputs, outputs);
+  unsnap_kernel<128><<<dim_grid, dim_block, 0, stream>>>(inputs, outputs);
 
   return cudaSuccess;
 }
