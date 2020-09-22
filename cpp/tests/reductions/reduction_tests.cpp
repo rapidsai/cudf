@@ -29,6 +29,7 @@
 #include <thrust/device_vector.h>
 
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include "cudf/types.hpp"
 using aggregation = cudf::aggregation;
 
 template <typename T>
@@ -1067,7 +1068,9 @@ TYPED_TEST(ReductionTest, NthElement)
   // without nulls
   for (cudf::size_type n :
        {-input_size, -input_size / 2, -2, -1, 0, 1, 2, input_size / 2, input_size - 1}) {
-    T expected_value_nonull = v[mod(n, v.size())];
+    auto const index = mod(n, v.size());
+    T expected_value_nonull = v[index];
+    bool const expected_null = !host_bools[index];
     this->reduction_test(col,
                          expected_value_nonull,
                          true,
@@ -1079,7 +1082,7 @@ TYPED_TEST(ReductionTest, NthElement)
     this->reduction_test(col_nulls,
                          expected_value_nonull,
                          true,
-                         cudf::make_nth_element_aggregation(n, cudf::null_policy::INCLUDE));
+                         cudf::make_nth_element_aggregation(n, cudf::null_policy::INCLUDE), cudf::data_type{}, expected_null);
   }
   // valid only
   for (cudf::size_type n :
