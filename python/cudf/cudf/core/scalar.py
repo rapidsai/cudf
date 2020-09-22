@@ -14,22 +14,13 @@ class Scalar(libcudf.scalar.Scalar):
         return int(self)
 
     def __int__(self):
-        if self.is_valid():
-            return int(self.value)
-        else:
-            raise ValueError(f"Can not convert NULL value to {int}")
-
+        return int(self.value)
+    
     def __float__(self):
-        if self.is_valid():
-            return float(self.value)
-        else:
-            raise ValueError(f"Can not convert NULL value to {float}")
+        return float(self.value)
 
     def __bool__(self):
-        if self.is_valid():
-            return bool(self.value)
-        else:
-            raise ValueError(f"Can not convert NULL value to {bool}")
+        return bool(self.value)
 
     # Scalar Binary Operations
     def __add__(self, other):
@@ -170,10 +161,12 @@ class Scalar(libcudf.scalar.Scalar):
             return np.ceil(self.value)
         return getattr(self.value, op)()
 
-class NAType(object):
+class cudf_NA_type(object):
     def __init__(self):
         pass
     def __repr__(self):
         return "<NA>"
+    def __bool__(self):
+        raise TypeError("boolean value of cudf.NA is ambiguous")
 
-NA = NAType()
+NA = cudf_NA_type()

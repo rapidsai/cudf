@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 
 from cudf._lib.scalar import Scalar
-from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, TIMEDELTA_TYPES
+from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, TIMEDELTA_TYPES, ALL_TYPES
 import operator
 import re
 import cudf
@@ -177,7 +177,14 @@ def test_scalar_implicit_int_conversion(value):
     assert type(expect) == type(got)
 
 @pytest.mark.parametrize('cls', [int, float, bool])
-def test_scalar_invalid_implicit_conversion(cls):
-    slr = cudf.Scalar(None, dtype=cls)
-    with pytest.raises(ValueError, match=re.escape(f"Can not convert NULL value to {cls}")):
-        cls(slr)
+@pytest.mark.parametrize('dtype', set(ALL_TYPES) - {'category'})
+def test_scalar_invalid_implicit_conversion(cls, dtype):
+
+    try:
+        cls(pd.NA)
+    except TypeError as e:
+
+        error = str(e).replace('NAType', 'cudf_NA_type').replace(' NA ', " cudf.NA ")
+        with pytest.raises(TypeError, match=re.escape(str(error))):
+            slr = cudf.Scalar(None, dtype=dtype)
+            cls(slr)
