@@ -25,19 +25,23 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-public class BaseHostColumnVector implements AutoCloseable {
+/**
+ * A class that holds Host side Column Vector APIs and the OffHeapState.
+ * Any children of a HostColumnVector will be instantiated via this class.
+ */
+public class HostColumnVectorCore implements AutoCloseable {
 
   private static final Logger log = LoggerFactory.getLogger(HostColumnVector.class);
 
   protected final OffHeapState offHeap;
   protected final DType type;
   protected long rows;
-  protected Optional<Long> nullCount = Optional.empty();
-  protected List<BaseHostColumnVector> children = new ArrayList<>();
+  protected Optional<Long> nullCount;
+  protected List<HostColumnVectorCore> children;
 
-  public BaseHostColumnVector(DType type, long rows,
+  public HostColumnVectorCore(DType type, long rows,
                               Optional<Long> nullCount, HostMemoryBuffer data, HostMemoryBuffer validity,
-                              HostMemoryBuffer offsets, List<BaseHostColumnVector> nestedChildren) {
+                              HostMemoryBuffer offsets, List<HostColumnVectorCore> nestedChildren) {
     this.offHeap = new OffHeapState(data, validity,  offsets);
     MemoryCleaner.register(this, offHeap);
     this.type = type;
@@ -46,46 +50,65 @@ public class BaseHostColumnVector implements AutoCloseable {
     this.children = nestedChildren;
   }
 
-  @Override
-  public void close() {
-    for (BaseHostColumnVector child : children) {
-      if (child != null) {
-        child.close();
-      }
-    }
-    offHeap.delRef();
-    offHeap.cleanImpl(false);
-  }
-
-  HostMemoryBuffer getData() {
-    return offHeap.data;
-  }
-
-  HostMemoryBuffer getValidity() {
-    return offHeap.valid;
-  }
-
+  /**
+   * Returns the type of this vector.
+   */
   DType getType() {
     return type;
   }
 
-  long getNullCount() {
-    return nullCount.get();
+  /**
+   * Returns the data buffer for a given host side column vector
+   */
+  HostMemoryBuffer getData() {
+    return offHeap.data;
   }
 
-  List<BaseHostColumnVector> getNestedChildren() {
-    return children;
+  /**
+   * Returns the validity buffer for a given host side column vector
+   */
+  HostMemoryBuffer getValidity() {
+    return offHeap.valid;
   }
 
+  /**
+   * Returns the offset buffer
+   */
   public HostMemoryBuffer getOffsets() {
     return offHeap.offsets;
   }
 
+  /**
+   * Returns the number of nulls in the data. Note that this might end up
+   * being a very expensive operation because if the null count is not
+   * known it will be calculated.
+   */
+  long getNullCount() {
+    if (!nullCount.isPresent()) {
+      throw new IllegalStateException("Calculating an unknown null count on the host is not currently supported");
+    }
+    return nullCount.get();
+  }
+
+  /**
+   * Returns the list of child host column vectors for a given host side column
+   */
+  List<HostColumnVectorCore> getNestedChildren() {
+    return children;
+  }
+
+  /**
+   * Returns the number of rows for a given host side column vector
+   */
   public long getRows() {
     return rows;
   }
 
-
+  /**
+   * Return the element at a given row for a give data type
+   * @param rowIndex the row number
+   * @return an object that would need to be casted to appropriate type based on this vector's data type
+   */
   Object getElement(int rowIndex) {
     if (type == DType.LIST) {
       List retList = new ArrayList();
@@ -117,21 +140,31 @@ public class BaseHostColumnVector implements AutoCloseable {
     }
   }
 
-  public boolean isNull(long index) {
-    assert (index >= 0 && index < rows) : "index is out of range 0 <= " + index + " < " + rows;
+  /**
+   * Method that returns a boolean to indicate if the element at a given row index is null
+   * @param rowIndex the row index
+   * @return true if null else false
+   */
+  public boolean isNull(long rowIndex) {
+    assert (rowIndex >= 0 && rowIndex < rows) : "index is out of range 0 <= " + rowIndex + " < " + rows;
     if (offHeap.valid != null) {
-      return BitVectorHelper.isNull(offHeap.valid, index);
+      return BitVectorHelper.isNull(offHeap.valid, rowIndex);
     }
     return false;
   }
 
-  private Object readValue(int index){
-    assert index < rows * type.getSizeInBytes();
+  /**
+   * Helper method that reads in a value at a given row index
+   * @param rowIndex the row index
+   * @return an object that would need to be casted to appropriate type based on this vector's data type
+   */
+  private Object readValue(int rowIndex){
+    assert rowIndex < rows * type.getSizeInBytes();
     switch (type) {
       case INT32: // fall through
       case UINT32: // fall through
       case TIMESTAMP_DAYS:
-      case DURATION_DAYS: return offHeap.data.getInt(index);
+      case DURATION_DAYS: return offHeap.data.getInt(rowIndex);
       case INT64: // fall through
       case UINT64: // fall through
       case DURATION_MICROSECONDS: // fall through
@@ -141,18 +174,22 @@ public class BaseHostColumnVector implements AutoCloseable {
       case TIMESTAMP_MICROSECONDS: // fall through
       case TIMESTAMP_MILLISECONDS: // fall through
       case TIMESTAMP_NANOSECONDS: // fall through
-      case TIMESTAMP_SECONDS: return offHeap.data.getLong(index);
-      case FLOAT32: return offHeap.data.getFloat(index);
-      case FLOAT64: return offHeap.data.getDouble(index);
+      case TIMESTAMP_SECONDS: return offHeap.data.getLong(rowIndex);
+      case FLOAT32: return offHeap.data.getFloat(rowIndex);
+      case FLOAT64: return offHeap.data.getDouble(rowIndex);
       case UINT8: // fall through
-      case INT8: return offHeap.data.getByte(index);
+      case INT8: return offHeap.data.getByte(rowIndex);
       case UINT16: // fall through
-      case INT16: return offHeap.data.getShort(index);
-      case BOOL8: return offHeap.data.getBoolean(index);
+      case INT16: return offHeap.data.getShort(rowIndex);
+      case BOOL8: return offHeap.data.getBoolean(rowIndex);
       default: throw new UnsupportedOperationException("Do not support " + type);
     }
   }
 
+  /**
+   * Calculates the host side memory footprint of a given column
+   * @return memory footprint in bytes
+   */
   public long getHostMemorySize() {
     long totalSize = 0;
     if (offHeap.data != null) {
@@ -164,15 +201,29 @@ public class BaseHostColumnVector implements AutoCloseable {
     if (offHeap.valid != null) {
       totalSize += offHeap.valid.length;
     }
-    for (BaseHostColumnVector nhcv : children) {
+    for (HostColumnVectorCore nhcv : children) {
       totalSize += nhcv.getHostMemorySize();
     }
     return totalSize;
   }
 
+  /**
+   * Close method for the column
+   */
+  @Override
+  public void close() {
+    for (HostColumnVectorCore child : children) {
+      if (child != null) {
+        child.close();
+      }
+    }
+    offHeap.delRef();
+    offHeap.cleanImpl(false);
+  }
+
   @Override
   public String toString() {
-    return "BaseHostColumnVector{" +
+    return "HostColumnVectorCore{" +
         "rows=" + rows +
         ", type=" + type +
         ", nullCount=" + nullCount +

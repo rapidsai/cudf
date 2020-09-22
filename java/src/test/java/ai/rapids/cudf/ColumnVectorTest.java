@@ -3010,8 +3010,8 @@ public class ColumnVectorTest extends CudfTestBase {
       assertFalse(hcv.isNull(1));
       assertTrue(hcv.isNull(2));
       assertFalse(hcv.isNull(3));
-      HostColumnVector.NestedHostColumnVector intChildCol = hcv.children.get(0);
-      HostColumnVector.NestedHostColumnVector longChildCol = hcv.children.get(1);
+      HostColumnVectorCore intChildCol = hcv.children.get(0);
+      HostColumnVectorCore longChildCol = hcv.children.get(1);
       assertFalse(intChildCol.isNull(0));
       assertFalse(intChildCol.isNull(1));
       assertTrue(intChildCol.isNull(2));
