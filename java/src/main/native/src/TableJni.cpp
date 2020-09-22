@@ -1803,13 +1803,16 @@ JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_Table_contiguousSplit(JNIEnv 
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rollingWindowAggregate(
     JNIEnv *env, jclass clazz, jlong j_input_table, jintArray j_keys,
-    jintArray j_aggregate_column_indices, jlongArray j_agg_instances, jintArray j_min_periods,
+    jlongArray j_default_output, 
+    jintArray j_aggregate_column_indices, jlongArray j_agg_instances, 
+    jintArray j_min_periods,
     jintArray j_preceding, jintArray j_following, jboolean ignore_null_keys) {
 
   JNI_NULL_CHECK(env, j_input_table, "input table is null", NULL);
   JNI_NULL_CHECK(env, j_keys, "input keys are null", NULL);
   JNI_NULL_CHECK(env, j_aggregate_column_indices, "input aggregate_column_indices are null", NULL);
   JNI_NULL_CHECK(env, j_agg_instances, "agg_instances are null", NULL);
+  JNI_NULL_CHECK(env, j_default_output, "default_outputs are null", NULL);
 
   try {
     cudf::jni::auto_set_device(env);
@@ -1821,6 +1824,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rollingWindowAggregate(
     cudf::jni::native_jintArray keys{env, j_keys};
     cudf::jni::native_jintArray values{env, j_aggregate_column_indices};
     cudf::jni::native_jpointerArray<cudf::aggregation> agg_instances(env, j_agg_instances);
+    cudf::jni::native_jpointerArray<cudf::column_view> default_output(env, j_default_output);
     cudf::jni::native_jintArray min_periods{env, j_min_periods};
     cudf::jni::native_jintArray preceding{env, j_preceding};
     cudf::jni::native_jintArray following{env, j_following};
@@ -1838,9 +1842,17 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rollingWindowAggregate(
     std::vector<std::unique_ptr<cudf::column>> result_columns;
     for (int i(0); i < values.size(); ++i) {
       int agg_column_index = values[i];
-      result_columns.emplace_back(std::move(cudf::grouped_rolling_window(
-          groupby_keys, input_table->column(agg_column_index), preceding[i], following[i],
-          min_periods[i], agg_instances[i]->clone())));
+      if (default_output[i] != nullptr) {
+        result_columns.emplace_back(std::move(cudf::grouped_rolling_window(
+            groupby_keys, input_table->column(agg_column_index), *default_output[i],
+            preceding[i], following[i],
+            min_periods[i], agg_instances[i]->clone())));
+      } else {
+        result_columns.emplace_back(std::move(cudf::grouped_rolling_window(
+            groupby_keys, input_table->column(agg_column_index),
+            preceding[i], following[i],
+            min_periods[i], agg_instances[i]->clone())));
+      }
     }
 
     auto result_table = std::make_unique<cudf::table>(std::move(result_columns));

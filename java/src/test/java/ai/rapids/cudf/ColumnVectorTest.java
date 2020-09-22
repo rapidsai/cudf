@@ -1511,6 +1511,22 @@ public class ColumnVectorTest extends CudfTestBase {
            ColumnVector result = v1.rollingWindow(Aggregation.mean(), options)) {
         assertColumnsAreEqual(expected, result);
       }
+
+      try (ColumnVector expected = ColumnVector.fromBoxedInts(4, 7, 6, 8, null);
+           ColumnVector result = v1.rollingWindow(Aggregation.lead(1), options)) {
+        assertColumnsAreEqual(expected, result);
+      }
+
+      try (ColumnVector expected = ColumnVector.fromBoxedInts(null, 5, 4, 7, 6);
+           ColumnVector result = v1.rollingWindow(Aggregation.lag(1), options)) {
+        assertColumnsAreEqual(expected, result);
+      }
+
+      try (ColumnVector defaultOutput = ColumnVector.fromInts(-1, -2, -3, -4, -5);
+           ColumnVector expected = ColumnVector.fromBoxedInts(-1,  5,  4,  7,  6);
+           ColumnVector result = v1.rollingWindow(Aggregation.lag(1, defaultOutput), options)) {
+        assertColumnsAreEqual(expected, result);
+      }
     }
   }
 

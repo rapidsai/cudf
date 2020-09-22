@@ -1590,6 +1590,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     try {
       return new ColumnVector(
               rollingWindow(this.getNativeView(),
+                      op.getDefaultOutput(),
                       options.getMinPeriods(),
                       nativePtr,
                       options.getPreceding(),
@@ -2854,9 +2855,14 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
   private static native long quantile(long cudfColumnHandle, int quantileMethod, double[] quantiles) throws CudfException;
 
-  private static native long rollingWindow(long viewHandle, int min_periods, long aggPtr,
-                                           int preceding, int following,
-                                           long preceding_col, long following_col);
+  private static native long rollingWindow(long viewHandle,
+      long defaultOutputHandle,
+      int min_periods,
+      long aggPtr,
+      int preceding,
+      int following,
+      long preceding_col,
+      long following_col);
 
   private static native long nansToNulls(long viewHandle) throws CudfException;
 
