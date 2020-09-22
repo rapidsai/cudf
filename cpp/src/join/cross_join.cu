@@ -38,7 +38,7 @@ std::unique_ptr<cudf::table> cross_join(
   cudf::table_view const& left,
   cudf::table_view const& right,
   cudaStream_t stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(0 != left.num_columns(), "Left table is empty");
   CUDF_EXPECTS(0 != right.num_columns(), "Right table is empty");

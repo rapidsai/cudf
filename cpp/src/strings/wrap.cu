@@ -85,10 +85,11 @@ struct execute_wrap {
 }  // namespace
 
 template <typename device_execute_functor>
-std::unique_ptr<column> wrap(strings_column_view const& strings,
-                             size_type width,
-                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                             cudaStream_t stream                 = 0)
+std::unique_ptr<column> wrap(
+  strings_column_view const& strings,
+  size_type width,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0)
 {
   CUDF_EXPECTS(width > 0, "Positive wrap width required");
 

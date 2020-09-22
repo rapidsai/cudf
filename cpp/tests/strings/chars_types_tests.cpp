@@ -370,7 +370,7 @@ TEST_F(StringsCharsTest, FilterCharTypesErrors)
 
 TEST_F(StringsCharsTest, EmptyStringsColumn)
 {
-  cudf::test::strings_column_wrapper strings({});
+  cudf::test::strings_column_wrapper strings;
   auto strings_view = cudf::strings_column_view(strings);
   auto results      = cudf::strings::all_characters_of_type(
     strings_view, cudf::strings::string_character_types::ALPHANUM);

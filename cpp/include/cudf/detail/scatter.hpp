@@ -64,7 +64,7 @@ std::unique_ptr<table> scatter(
   column_view const& scatter_map,
   table_view const& target,
   bool check_bounds                   = false,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 /**
@@ -104,7 +104,7 @@ std::unique_ptr<table> scatter(
   column_view const& indices,
   table_view const& target,
   bool check_bounds                   = false,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 /**
@@ -134,7 +134,7 @@ std::unique_ptr<table> boolean_mask_scatter(
   std::vector<std::reference_wrapper<scalar>> const& source,
   table_view const& target,
   column_view const& boolean_mask,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 }  // namespace detail

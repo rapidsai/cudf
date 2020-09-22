@@ -258,7 +258,7 @@ __global__ void kernel_data_normalizer(unsigned char const* strings,
 
 }  // namespace
 
-data_normalizer::data_normalizer(uint32_t num_chars, cudaStream_t stream, bool do_lower_case)
+data_normalizer::data_normalizer(cudaStream_t stream, bool do_lower_case)
   : do_lower_case(do_lower_case)
 {
   d_cp_metadata = detail::get_codepoint_metadata(stream);
@@ -274,14 +274,18 @@ uvector_pair data_normalizer::normalize(char const* d_strings,
     return std::make_pair(std::make_unique<rmm::device_uvector<uint32_t>>(0, stream),
                           std::make_unique<rmm::device_uvector<uint32_t>>(0, stream));
 
+  auto const execpol = rmm::exec_policy(stream);
   // copy offsets to working memory
   size_t const num_offsets = num_strings + 1;
   auto d_strings_offsets   = std::make_unique<rmm::device_uvector<uint32_t>>(num_offsets, stream);
-  CUDA_TRY(cudaMemcpyAsync(d_strings_offsets->data(),
-                           d_offsets,
-                           sizeof(uint32_t) * num_offsets,
-                           cudaMemcpyDeviceToDevice,
-                           stream));
+  thrust::transform(execpol->on(stream),
+                    thrust::make_counting_iterator<uint32_t>(0),
+                    thrust::make_counting_iterator<uint32_t>(num_offsets),
+                    d_strings_offsets->begin(),
+                    [d_offsets] __device__(auto idx) {
+                      auto const offset = d_offsets[0];  // adjust for any offset to the offsets
+                      return d_offsets[idx] - offset;
+                    });
   uint32_t const bytes_count = d_strings_offsets->element(num_strings, stream);
   if (bytes_count == 0)  // if no bytes, nothing to do
     return std::make_pair(std::make_unique<rmm::device_uvector<uint32_t>>(0, stream),
@@ -304,7 +308,6 @@ uvector_pair data_normalizer::normalize(char const* d_strings,
     d_chars_per_thread.data());
 
   // Remove the 'empty' code points from the vector
-  auto const execpol = rmm::exec_policy(stream);
   thrust::remove(
     execpol->on(stream), d_code_points->begin(), d_code_points->end(), uint32_t{1 << FILTER_BIT});
 

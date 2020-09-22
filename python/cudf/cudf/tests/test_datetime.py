@@ -66,7 +66,16 @@ def numerical_data():
     return np.arange(1, 10)
 
 
-fields = ["year", "month", "day", "hour", "minute", "second", "weekday"]
+fields = [
+    "year",
+    "month",
+    "day",
+    "hour",
+    "minute",
+    "second",
+    "weekday",
+    "dayofweek",
+]
 
 
 @pytest.mark.parametrize("data", [data1(), data2()])
@@ -1102,3 +1111,80 @@ def test_datetime_strftime_not_implemented_formats(date_format):
 
     with pytest.raises(NotImplementedError):
         gsr.dt.strftime(date_format=date_format)
+
+
+@pytest.mark.parametrize("data", [[1, 2, 3], [], [1, 20, 1000, None]])
+@pytest.mark.parametrize("dtype", DATETIME_TYPES)
+@pytest.mark.parametrize("stat", ["mean", "quantile"])
+def test_datetime_stats(data, dtype, stat):
+    gsr = cudf.Series(data, dtype=dtype)
+    psr = gsr.to_pandas()
+
+    expected = getattr(psr, stat)()
+    actual = getattr(gsr, stat)()
+
+    if len(data) == 0:
+        assert np.isnat(expected.to_numpy()) and np.isnat(actual.to_numpy())
+    else:
+        assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("op", ["max", "min"])
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
+        [1, 2, 3, 100],
+        [10, None, 100, None, None],
+        [None, None, None],
+        [1231],
+    ],
+)
+@pytest.mark.parametrize("dtype", DATETIME_TYPES)
+def test_datetime_reductions(data, op, dtype):
+    sr = cudf.Series(data, dtype=dtype)
+    psr = sr.to_pandas()
+
+    actual = getattr(sr, op)()
+    expected = getattr(psr, op)()
+
+    if np.isnat(expected.to_numpy()) and np.isnat(actual):
+        assert True
+    else:
+        assert_eq(expected.to_numpy(), actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        np.datetime_as_string(
+            np.arange("2002-10-27T04:30", 4 * 60, 60, dtype="M8[m]"),
+            timezone="UTC",
+        ),
+        np.datetime_as_string(
+            np.arange("2002-10-27T04:30", 10 * 60, 1, dtype="M8[m]"),
+            timezone="UTC",
+        ),
+        np.datetime_as_string(
+            np.arange("2002-10-27T04:30", 10 * 60, 1, dtype="M8[ns]"),
+            timezone="UTC",
+        ),
+        np.datetime_as_string(
+            np.arange("2002-10-27T04:30", 10 * 60, 1, dtype="M8[us]"),
+            timezone="UTC",
+        ),
+        np.datetime_as_string(
+            np.arange("2002-10-27T04:30", 4 * 60, 60, dtype="M8[s]"),
+            timezone="UTC",
+        ),
+    ],
+)
+@pytest.mark.parametrize("dtype", DATETIME_TYPES)
+def test_datetime_infer_format(data, dtype):
+    sr = cudf.Series(data)
+    psr = pd.Series(data)
+
+    expected = psr.astype(dtype)
+    actual = sr.astype(dtype)
+
+    assert_eq(expected, actual)

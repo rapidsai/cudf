@@ -83,7 +83,7 @@ rmm::device_buffer create_null_mask(
   size_type size,
   mask_state state,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Sets a pre-allocated bitmask buffer to a given state in the range
@@ -196,7 +196,7 @@ rmm::device_buffer copy_bitmask(
   size_type begin_bit,
   size_type end_bit,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Copies `view`'s bitmask from the bits
@@ -213,7 +213,7 @@ rmm::device_buffer copy_bitmask(
 rmm::device_buffer copy_bitmask(
   column_view const& view,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a bitwise AND of the bitmasks of columns of a table
@@ -228,7 +228,7 @@ rmm::device_buffer copy_bitmask(
  */
 rmm::device_buffer bitmask_and(
   table_view const& view,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 /** @} */  // end of group

@@ -63,7 +63,7 @@ class column {
    */
   column(column const& other,
          cudaStream_t stream,
-         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+         rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Move the contents from `other` to create a new column.
@@ -118,7 +118,7 @@ class column {
    */
   explicit column(column_view view,
                   cudaStream_t stream                 = 0,
-                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Returns the column's logical element type

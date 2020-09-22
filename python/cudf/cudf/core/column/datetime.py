@@ -1,6 +1,7 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
 import datetime as dt
 import re
+from numbers import Number
 
 import numpy as np
 import pandas as pd
@@ -182,6 +183,25 @@ class DatetimeColumn(column.ColumnBase):
         """
         return np.datetime64("nat", self.time_unit)
 
+    def mean(self, skipna=None, dtype=np.float64):
+        return pd.Timestamp(
+            self.as_numerical.mean(skipna=skipna, dtype=dtype),
+            unit=self.time_unit,
+        )
+
+    def quantile(self, q, interpolation, exact):
+        result = self.as_numerical.quantile(
+            q=q, interpolation=interpolation, exact=exact
+        )
+        if isinstance(q, Number):
+            return pd.Timestamp(result, unit=self.time_unit)
+
+        result = result.binary_operator(
+            "mul", as_scalar(_numpy_to_pandas_conversion[self.time_unit])
+        )
+
+        return result.astype("datetime64[ns]")
+
     def binary_operator(self, op, rhs, reflect=False):
         lhs, rhs = self, rhs
         if op in ("eq", "ne", "lt", "gt", "le", "ge"):
@@ -329,9 +349,18 @@ def infer_format(element, **kwargs):
         raise ValueError("Unable to infer the timestamp format from the data")
 
     if len(second_part) > 1:
-        second_part = pd.core.tools.datetimes._guess_datetime_format(
-            "".join(second_part[1:]), **kwargs
-        )
+        # "Z" indicates Zulu time(widely used in aviation) - Which is
+        # UTC timezone that currently cudf only supports. Having any other
+        # unsuppported timezone will let the code fail below
+        # with a ValueError.
+        second_part.remove("Z")
+        second_part = "".join(second_part[1:])
+
+        if len(second_part) > 1:
+            # Only infer if second_part is not an empty string.
+            second_part = pd.core.tools.datetimes._guess_datetime_format(
+                second_part, **kwargs
+            )
     else:
         second_part = ""
 

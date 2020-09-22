@@ -34,7 +34,7 @@ std::unique_ptr<column> group_argmax(column_view const& values,
                                  values,
                                  num_groups,
                                  group_labels,
-                                 rmm::mr::get_default_resource(),
+                                 rmm::mr::get_current_device_resource(),
                                  stream);
 
   // The functor returns the index of maximum in the sorted values.
