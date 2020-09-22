@@ -80,7 +80,7 @@ std::unique_ptr<column> remove_keys_fn(
         indices_type, keys_view.size(), cudf::mask_state::UNALLOCATED, stream);
       auto itr = cudf::detail::indexalator_factory::make_output_iterator(positions->mutable_view());
       thrust::sequence(execpol->on(stream), itr, itr + keys_view.size());
-      return positions;
+      return std::move(positions);
     }();
     // copy the non-removed keys ( keys_to_keep_fn(idx)==true )
     auto table_keys =
