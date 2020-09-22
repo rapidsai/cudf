@@ -74,7 +74,7 @@ std::unique_ptr<column> make_dictionary_column(
  * The indices values must be in the range [0,keys_column.size()).
  *
  * @throw cudf::logic_error if keys_column or indices_column contains nulls
- * @throw cudf::logic_error if indices_column type is not INT32
+ * @throw cudf::logic_error if indices_column type is not an unsigned integer type
  *
  * @param keys_column Column of unique, ordered values to use as the new dictionary column's keys.
  * @param indices_column Indices to use for the new dictionary column.

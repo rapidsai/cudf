@@ -20,69 +20,63 @@ package ai.rapids.cudf;
 
 /**
  * Class for all the aggregate functions like count, max etc
+ * @deprecated please use Aggregation.onColumn instead.
  */
-public final class Aggregate {
-  private final AggregateOp type;
-  private final int index;
-
-  private Aggregate(AggregateOp type, int index) {
-    this.type = type;
-    this.index = index;
+@Deprecated
+public final class Aggregate extends AggregationOnColumn {
+  private Aggregate(AggregationOnColumn toCopy) {
+    super(toCopy.wrapped, toCopy.getColumnIndex());
   }
 
-  // Include null in count if include_nulls = true
-  static Aggregate count(int index, boolean include_nulls) {
-    return new Aggregate(include_nulls ?
-            AggregateOp.COUNT_ALL :
-            AggregateOp.COUNT_VALID,
-            index);
+  /**
+   * Include null in count if includeNulls = true
+   * @deprecated please use Aggregation.count instead.
+   */
+  @Deprecated
+  static Aggregate count(int index, boolean includeNulls) {
+    return new Aggregate(Aggregation.count(includeNulls).onColumn(index));
   }
 
+  /**
+   * Get the first element in a list (possibly first non-null element)
+   * @deprecated please use Aggregation.nth instead
+   */
+  @Deprecated
   static Aggregate first(int index, boolean includeNulls) {
-    return new Aggregate(includeNulls ?
-            AggregateOp.FIRST_INCLUDE_NULLS :
-            AggregateOp.FIRST_EXCLUDE_NULLS,
-            index);
+    return new Aggregate(Aggregate.nth(0, includeNulls).onColumn(index));
   }
 
+  /**
+   * Get the last element in a list (possibly last non-null element)
+   * @deprecated please use Aggregation.nth instead
+   */
+  @Deprecated
   static Aggregate last(int index, boolean includeNulls) {
-    return new Aggregate(includeNulls ?
-            AggregateOp.LAST_INCLUDE_NULLS :
-            AggregateOp.LAST_EXCLUDE_NULLS,
-            index);
+    return new Aggregate(Aggregate.nth(-1, includeNulls).onColumn(index));
   }
 
+  @Deprecated
   static Aggregate max(int index) {
-    return new Aggregate(AggregateOp.MAX, index);
+    return new Aggregate(Aggregation.max().onColumn(index));
   }
 
+  @Deprecated
   static Aggregate min(int index) {
-    return new Aggregate(AggregateOp.MIN, index);
+    return new Aggregate(Aggregation.min().onColumn(index));
   }
 
+  @Deprecated
   static Aggregate mean(int index) {
-    return new Aggregate(AggregateOp.MEAN, index);
+    return new Aggregate(Aggregation.mean().onColumn(index));
   }
 
+  @Deprecated
   static Aggregate sum(int index) {
-    return new Aggregate(AggregateOp.SUM, index);
+    return new Aggregate(Aggregation.sum().onColumn(index));
   }
 
+  @Deprecated
   static Aggregate median(int index) {
-    return new Aggregate(AggregateOp.MEDIAN, index);
-  }
-
-  // TODO add in quantile
-
-  int getIndex() {
-    return index;
-  }
-
-  int getNativeId() {
-    return type.nativeId;
-  }
-
-  AggregateOp getOp() {
-    return type;
+    return new Aggregate(Aggregation.median().onColumn(index));
   }
 }
