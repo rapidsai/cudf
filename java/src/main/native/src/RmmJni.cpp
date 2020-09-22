@@ -95,6 +95,8 @@ private:
   }
 
   void do_deallocate(void *p, std::size_t size, cudaStream_t stream) override {
+    size = (size + size_align - 1) / size_align * size_align;
+    
     resource->deallocate(p, size, stream);
 
     if (p) {
