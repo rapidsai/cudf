@@ -127,11 +127,6 @@ struct host_span : public span_base<T, Extent, host_span<T, Extent>> {
   constexpr host_span(C& in) : base(in.data(), in.size())
   {
   }
-
-  template <typename C, std::enable_if_t<is_host_span_supported_container<C>::value>* = nullptr>
-  constexpr host_span(C const& in) : base(in.data(), in.size())
-  {
-  }
 };
 
 // ===== device_span ===============================================================================
@@ -164,11 +159,6 @@ struct device_span : public span_base<T, Extent, device_span<T, Extent>> {
 
   template <typename C, std::enable_if_t<is_device_span_supported_container<C>::value>* = nullptr>
   constexpr device_span(C& in) : base(thrust::raw_pointer_cast(in.data()), in.size())
-  {
-  }
-
-  template <typename C, std::enable_if_t<is_device_span_supported_container<C>::value>* = nullptr>
-  constexpr device_span(C const& in) : base(thrust::raw_pointer_cast(in.data()), in.size())
   {
   }
 };
