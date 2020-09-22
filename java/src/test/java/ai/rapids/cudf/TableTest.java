@@ -3410,8 +3410,8 @@ public class TableTest extends CudfTestBase {
   @Test
   void testStructColumnFilter() {
     HostColumnVector.ColumnBuilder.StructType type = new HostColumnVector.ColumnBuilder.StructType(true, 4);
-    type.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 4, DType.INT32));
-    type.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 4, DType.INT64));
+    type.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 3, DType.INT32));
+    type.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 3, DType.INT64));
     HostColumnVector.ColumnBuilder.StructType expectedType = new HostColumnVector.ColumnBuilder.StructType(true, 2);
     expectedType.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 2, DType.INT32));
     expectedType.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 2, DType.INT64));

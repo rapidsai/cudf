@@ -23,6 +23,7 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -1515,7 +1516,7 @@ public final class HostColumnVector implements AutoCloseable {
     private void resizeDataBuffer(int length) {
       // just for strings we want to throw a real exception if we would overrun the buffer
       if (data == null) {
-        data = HostMemoryBuffer.allocate(length);
+        data = HostMemoryBuffer.allocate(Math.max(type.sizeInBytes * rows, length));
         return;
       }
       long oldLen = data.getLength();
@@ -1560,6 +1561,15 @@ public final class HostColumnVector implements AutoCloseable {
           offsets = null;
         }
         built = true;
+      }
+    }
+
+    protected class TableSchema {
+
+      List<DataType> types;
+
+      public TableSchema(DataType... types) {
+        this.types = Arrays.asList(types);
       }
     }
 
