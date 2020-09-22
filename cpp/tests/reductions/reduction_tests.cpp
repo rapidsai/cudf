@@ -1068,8 +1068,8 @@ TYPED_TEST(ReductionTest, NthElement)
   // without nulls
   for (cudf::size_type n :
        {-input_size, -input_size / 2, -2, -1, 0, 1, 2, input_size / 2, input_size - 1}) {
-    auto const index = mod(n, v.size());
-    T expected_value_nonull = v[index];
+    auto const index         = mod(n, v.size());
+    T expected_value_nonull  = v[index];
     bool const expected_null = !host_bools[index];
     this->reduction_test(col,
                          expected_value_nonull,
@@ -1082,7 +1082,9 @@ TYPED_TEST(ReductionTest, NthElement)
     this->reduction_test(col_nulls,
                          expected_value_nonull,
                          true,
-                         cudf::make_nth_element_aggregation(n, cudf::null_policy::INCLUDE), cudf::data_type{}, expected_null);
+                         cudf::make_nth_element_aggregation(n, cudf::null_policy::INCLUDE),
+                         cudf::data_type{},
+                         expected_null);
   }
   // valid only
   for (cudf::size_type n :
