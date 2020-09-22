@@ -491,7 +491,7 @@ class Frame(libcudf.table.Table):
         if self is other:
             return True
 
-        if len(self) != len(other):
+        if other is None or len(self) != len(other):
             return False
 
         if kwargs.get("check_types", True):
