@@ -2317,6 +2317,19 @@ def test_reset_index_inplace(pdf, gdf, drop):
             codes=[[0, 1, 2, 3, 4], [4, 3, 2, 1, 0]],
             names=["col1", "col2"],
         ),
+        pd.RangeIndex(0, 5),  # corner case
+        [pd.Series(["h", "i", "k", "l", "m"]), pd.RangeIndex(0, 5)],
+        [
+            pd.MultiIndex(
+                levels=[
+                    ["I", "II", "III", "IV", "V"],
+                    ["one", "two", "three", "four", "five"],
+                ],
+                codes=[[0, 1, 2, 3, 4], [4, 3, 2, 1, 0]],
+                names=["col1", "col2"],
+            ),
+            pd.RangeIndex(0, 5),
+        ],
     ],
 )
 @pytest.mark.parametrize("drop", [True, False])

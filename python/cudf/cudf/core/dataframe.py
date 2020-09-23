@@ -2790,8 +2790,12 @@ class DataFrame(Frame, Serializable):
                     columns_to_add.extend(cols)
                     names.extend(col.names)
                 else:
-                    # Column-like
-                    columns_to_add.append(as_column(col))
+                    if isinstance(col, (pd.RangeIndex, cudf.RangeIndex)):
+                        # Corner case: RangeIndex does not need to instantiate
+                        columns_to_add.append(col)
+                    else:
+                        # For pandas obj, convert to gpu obj
+                        columns_to_add.append(as_column(col))
                     if isinstance(
                         col, (cudf.Series, cudf.Index, pd.Series, pd.Index)
                     ):
