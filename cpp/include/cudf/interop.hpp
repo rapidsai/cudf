@@ -29,6 +29,7 @@ namespace cudf {
 /**
  * @addtogroup interop_dlpack
  * @{
+ * @file
  */
 
 /**
@@ -79,6 +80,7 @@ DLManagedTensor* to_dlpack(
 /**
  * @addtogroup interop_arrow
  * @{
+ * @file
  */
 
 /**

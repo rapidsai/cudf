@@ -24,6 +24,7 @@ namespace nvtext {
 /**
  * @addtogroup nvtext_replace
  * @{
+ * @file
  */
 
 /**
