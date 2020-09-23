@@ -43,26 +43,6 @@ struct ParseOptions {
 };
 
 namespace gpu {
-
-/**
- * @brief Checks whether escaped quote char to be considered as a quote or not.
- *
- * @param[in] begin Beginning of the character string
- * @param[in] current Pointer to current character in string.
- * @param[in] escape_char A boolean value to signify whether to consider `\` as escape character or
- * just a character.
- *
- * @return true/false depending on it is considered a quote or not.
- */
-__device__ __inline__ bool use_escaped_quote_char(char const* begin,
-                                                  char const* current,
-                                                  bool escape_char = false)
-{
-  return (escape_char == false or
-          ((current == begin) or
-           ((current >= begin + 2) and (*(current - 1) != '\\' or *(current - 2) == '\\'))));
-}
-
 /**
  * @brief CUDA kernel iterates over the data until the end of the current field
  *
@@ -83,14 +63,16 @@ __device__ __inline__ char const* seek_field_end(char const* begin,
                                                  ParseOptions const& opts,
                                                  bool escape_char = false)
 {
-  bool quotation = false;
-  auto current   = begin;
+  bool quotation   = false;
+  auto current     = begin;
+  bool escape_next = false;
   while (true) {
     // Use simple logic to ignore control chars between any quote seq
     // Handles nominal cases including doublequotes within quotes, but
     // may not output exact failures as PANDAS for malformed fields.
     // Check for instances such as "a2\"bc" and "\\" if `escape_char` is true.
-    if (*current == opts.quotechar and use_escaped_quote_char(begin, current, escape_char)) {
+
+    if (*current == opts.quotechar and not escape_next) {
       quotation = !quotation;
     } else if (!quotation) {
       if (*current == opts.delimiter) {
@@ -105,6 +87,16 @@ __device__ __inline__ char const* seek_field_end(char const* begin,
         break;
       }
     }
+
+    if (escape_char == true) {
+      // If a escape character is encountered, escape next character in next loop.
+      if (escape_next == false and *current == '\\') {
+        escape_next = true;
+      } else {
+        escape_next = false;
+      }
+    }
+
     if (current >= end) break;
     current++;
   }
