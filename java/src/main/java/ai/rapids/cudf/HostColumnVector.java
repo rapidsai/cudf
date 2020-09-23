@@ -1005,7 +1005,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
         offsets = HostMemoryBuffer.allocate((rows + 1) * OFFSET_SIZE);
         offsets.setInt(0, 0);
       } else {
-        if (offsets.length <= currentIndex * OFFSET_SIZE + OFFSET_SIZE || offsets.length < (rows + 1) * OFFSET_SIZE) {
+        if (offsets.length <= currentIndex * OFFSET_SIZE + OFFSET_SIZE) {
           HostMemoryBuffer newOffset = HostMemoryBuffer.allocate(offsets.length * 2);
           try {
             newOffset.copyFromHostBuffer(0, offsets, 0, offsets.length);
@@ -1224,6 +1224,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     private void resizeDataBuffer(int length) {
       // just for strings we want to throw a real exception if we would overrun the buffer
       if (data == null) {
+        // since rows can be updated as we go, make data buffer as big as that or the requested length
         data = HostMemoryBuffer.allocate(Math.max(type.sizeInBytes * rows, length));
         return;
       }
