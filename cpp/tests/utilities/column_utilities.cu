@@ -14,11 +14,6 @@
  * limitations under the License.
  */
 
-#include "column_utilities.hpp"
-#include "cudf/utilities/type_dispatcher.hpp"
-#include "detail/column_utilities.hpp"
-#include "thrust/iterator/counting_iterator.h"
-
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/get_value.cuh>
@@ -30,14 +25,18 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/bit.hpp>
-
-#include <sstream>
-#include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/cudf_gtest.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/detail/column_utilities.hpp>
 
 #include <jit/type.h>
 
+#include <sstream>
+
 #include <thrust/equal.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
 
 #include <numeric>
@@ -607,9 +606,9 @@ struct column_view_printer {
     cudf::dictionary_column_view dictionary(col);
     if (col.size() == 0) return;
     std::vector<std::string> keys    = to_strings(dictionary.keys());
-    std::vector<std::string> indices = to_strings({cudf::data_type{cudf::type_id::INT32},
+    std::vector<std::string> indices = to_strings({dictionary.indices().type(),
                                                    dictionary.size(),
-                                                   dictionary.indices().head<int32_t>(),
+                                                   dictionary.indices().head(),
                                                    dictionary.null_mask(),
                                                    dictionary.null_count(),
                                                    dictionary.offset()});

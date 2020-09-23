@@ -88,19 +88,35 @@ public class TableTest extends CudfTestBase {
   }
 
   public static void assertColumnsAreEqual(HostColumnVector expected, HostColumnVector cv, String colName) {
-    assertPartialColumnsAreEqual(expected, 0, expected.getRowCount(), cv, colName, true);
+    assertPartialColumnsAreEqual(expected, 0, expected.getRowCount(), cv, colName, true, null);
+  }
+
+  public static void assertStructColumnsAreEqual(ColumnVector expected, ColumnVector cv,
+                                                 HostColumnVector.ColumnBuilder.DataType schema) {
+    assertPartialStructColumnsAreEqual(expected, 0, expected.getRowCount(), cv, "unnamed", true, schema);
+  }
+
+  public static void assertPartialStructColumnsAreEqual(ColumnVector expected, long rowOffset, long length,
+                                                        ColumnVector cv, String colName, boolean enableNullCheck,
+                                                        HostColumnVector.ColumnBuilder.DataType schema) {
+    try (HostColumnVector hostExpected = expected.copyToHost();
+         HostColumnVector hostcv = cv.copyToHost()) {
+      assertPartialColumnsAreEqual(hostExpected, rowOffset, length, hostcv, colName, enableNullCheck,
+          schema);
+    }
   }
 
   public static void assertPartialColumnsAreEqual(ColumnVector expected, long rowOffset, long length,
                                                   ColumnVector cv, String colName, boolean enableNullCheck) {
     try (HostColumnVector hostExpected = expected.copyToHost();
          HostColumnVector hostcv = cv.copyToHost()) {
-      assertPartialColumnsAreEqual(hostExpected, rowOffset, length, hostcv, colName, enableNullCheck);
+      assertPartialColumnsAreEqual(hostExpected, rowOffset, length, hostcv, colName, enableNullCheck, null);
     }
   }
 
   public static void assertPartialColumnsAreEqual(HostColumnVector expected, long rowOffset, long length,
-                                                  HostColumnVector cv, String colName, boolean enableNullCheck) {
+                                                  HostColumnVector cv, String colName, boolean enableNullCheck,
+                                                  HostColumnVector.ColumnBuilder.DataType schema) {
     assertEquals(expected.getType(), cv.getType(), "Type For Column " + colName);
     assertEquals(length, cv.getRowCount(), "Row Count For Column " + colName);
     if (enableNullCheck) {
@@ -161,6 +177,9 @@ public class TableTest extends CudfTestBase {
           case LIST:
             assertListColumnsEquals(expected, cv, colName, enableNullCheck);
             break;
+          case STRUCT:
+            assertStructColumnsEquals(expected, cv, colName, enableNullCheck, schema);
+            break;
           default:
             throw new IllegalArgumentException(type + " is not supported yet");
         }
@@ -168,18 +187,18 @@ public class TableTest extends CudfTestBase {
     }
   }
 
-  public static void assertPartialColumnsAreEqual(HostColumnVector.NestedHostColumnVector expected,
-                                                  HostColumnVector.NestedHostColumnVector cv,
+  public static void assertPartialColumnsAreEqual(HostColumnVectorCore expected,
+                                                  HostColumnVectorCore cv,
                                                   String colName, boolean enableNullCheck) {
     assertEquals(expected.getType(), cv.getType(), "Type For Column " + colName);
-    assertEquals(expected.getRows(), cv.getRows(), "Row Count For Column " + colName);
+    assertEquals(expected.getRowCount(), cv.getRowCount(), "Row Count For Column " + colName);
     if (enableNullCheck) {
       assertEquals(expected.getNullCount(), cv.getNullCount(), "Null Count For Column " + colName);
     } else {
       // TODO add in a proper check when null counts are supported by serializing a partitioned column
     }
     DType type = expected.getType();
-    for (int expectedRow = 0; expectedRow < expected.getRows(); expectedRow++) {
+    for (int expectedRow = 0; expectedRow < expected.getRowCount(); expectedRow++) {
       assertEquals(expected.isNull(expectedRow), cv.isNull(expectedRow),
           "NULL for Column " + colName + " Row " + expectedRow);
       if (!expected.isNull(expectedRow)) {
@@ -219,11 +238,12 @@ public class TableTest extends CudfTestBase {
                 "Column " + colName + " Row " + expectedRow);
             break;
           case LIST:
+          case STRUCT:
             assertEquals(expected.getNestedChildren().size(),
                 cv.getNestedChildren().size(), " num children don't match");
             for (int k = 0; k < expected.getNestedChildren().size(); k++)
-            assertPartialColumnsAreEqual(expected.getNestedChildren().get(k),
-                cv.getNestedChildren().get(k), colName, enableNullCheck);
+              assertPartialColumnsAreEqual(expected.getNestedChildren().get(k),
+                  cv.getNestedChildren().get(k), colName, enableNullCheck);
             break;
           default:
             throw new IllegalArgumentException(type + " is not supported yet");
@@ -239,6 +259,21 @@ public class TableTest extends CudfTestBase {
       if (expected.getList(rowIndex) != null) {
         assertArrayEquals(expected.getList(rowIndex).toString().getBytes(),
           input.getList(rowIndex).toString().getBytes());
+      }
+    }
+    for (int j = 0; j < expected.children.size(); j++) {
+      assertPartialColumnsAreEqual(expected.children.get(j), input.children.get(j), colName, enableNullCheck);
+    }
+  }
+
+  private static void assertStructColumnsEquals(HostColumnVector expected, HostColumnVector input,
+                                                String colName, boolean enableNullCheck,
+                                                HostColumnVector.ColumnBuilder.DataType schema) {
+    for (int rowIndex = 0; rowIndex < expected.getRowCount(); rowIndex++) {
+      assertEquals(expected.isNull(rowIndex), input.isNull(rowIndex));
+      if (expected.getStruct(rowIndex, schema) != null) {
+        assertArrayEquals(expected.getStruct(rowIndex, schema).dataRecord.toString().getBytes(),
+            input.getStruct(rowIndex, schema).dataRecord.toString().getBytes());
       }
     }
     for (int j = 0; j < expected.children.size(); j++) {
@@ -2041,6 +2076,48 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testGroupByUniqueCount() {
+    try (Table t1 = new Table.TestBuilder()
+            .column( "1",  "1",  "1",  "1",  "1",  "1")
+            .column(   1,    3,    3,    5,    5,    0)
+            .column(12.0, 14.0, 13.0, 17.0, 17.0, 17.0)
+            .build()) {
+      try (Table t3 = t1
+              .groupBy(0, 1)
+              .aggregate(Aggregation.nunique().onColumn(0));
+           Table sorted = t3.orderBy(Table.asc(0), Table.asc(1), Table.asc(2));
+           Table expected = new Table.TestBuilder()
+                   .column( "1",  "1",  "1",  "1")
+                   .column(   0,    1,    3,    5)
+                   .column(   1,    1,    1,    1)
+                   .build()) {
+        assertTablesAreEqual(expected, sorted);
+      }
+    }
+  }
+
+  @Test
+  void testGroupByUniqueCountNulls() {
+    try (Table t1 = new Table.TestBuilder()
+            .column( "1",  "1",  "1",  "1",  "1",  "1")
+            .column(   1,    3,    3,    5,    5,    0)
+            .column(null, null, 13.0, null, null, null)
+            .build()) {
+      try (Table t3 = t1
+              .groupBy(0, 1)
+              .aggregate(Aggregation.nunique(true).onColumn(0));
+           Table sorted = t3.orderBy(Table.asc(0), Table.asc(1), Table.asc(2));
+           Table expected = new Table.TestBuilder()
+                   .column( "1",  "1",  "1",  "1")
+                   .column(   0,    1,    3,    5)
+                   .column(   1,    1,    1,    1)
+                   .build()) {
+        assertTablesAreEqual(expected, sorted);
+      }
+    }
+  }
+
+  @Test
   void testGroupByCount() {
     try (Table t1 = new Table.TestBuilder().column( "1",  "1",  "1",  "1",  "1",  "1")
                                            .column(   1,    3,    3,    5,    5,    0)
@@ -2612,7 +2689,8 @@ public class TableTest extends CudfTestBase {
                                            .column(   1,    3,    3,    5,    5,    0)
                                            .column(12.0, 14.0, 13.0, 17.0, 17.0, 17.0)
                                            .build()) {
-      try (Table t3 = t1.groupBy(0, 1).aggregate(max(2));
+      try (Table t3 = t1.groupBy(0, 1)
+              .aggregate(max(2));
            HostColumnVector aggOut1 = t3.getColumn(2).copyToHost()) {
         // verify t3
         assertEquals(4, t3.getRowCount());
@@ -2634,6 +2712,50 @@ public class TableTest extends CudfTestBase {
             expectedAggregateResult.put(key, count - 1);
           }
         }
+      }
+    }
+  }
+
+  @Test
+  void testGroupByArgMax() {
+    // ArgMax is a sort based aggregation.
+    try (Table t1 = new Table.TestBuilder()
+            .column(   1,    1,    1,    1,    1,    1)
+            .column(   0,    1,    2,    2,    3,    3)
+            .column(17.0, 14.0, 14.0, 17.0, 17.1, 17.0)
+            .build()) {
+      try (Table t3 = t1.groupBy(0, 1)
+              .aggregate(Aggregation.argMax().onColumn(2));
+           Table sorted = t3
+              .orderBy(Table.asc(0), Table.asc(1), Table.asc(2));
+           Table expected = new Table.TestBuilder()
+                   .column(1, 1, 1, 1)
+                   .column(0, 1, 2, 3)
+                   .column(0, 1, 3, 4)
+                   .build()) {
+        assertTablesAreEqual(expected, sorted);
+      }
+    }
+  }
+
+  @Test
+  void testGroupByArgMin() {
+    // ArgMin is a sort based aggregation
+    try (Table t1 = new Table.TestBuilder()
+            .column(   1,    1,    1,    1,    1,    1)
+            .column(   0,    1,    2,    2,    3,    3)
+            .column(17.0, 14.0, 14.0, 17.0, 17.1, 17.0)
+            .build()) {
+      try (Table t3 = t1.groupBy(0, 1)
+              .aggregate(Aggregation.argMin().onColumn(2));
+           Table sorted = t3
+                   .orderBy(Table.asc(0), Table.asc(1), Table.asc(2));
+           Table expected = new Table.TestBuilder()
+                   .column(1, 1, 1, 1)
+                   .column(0, 1, 2, 3)
+                   .column(0, 1, 2, 5)
+                   .build()) {
+        assertTablesAreEqual(expected, sorted);
       }
     }
   }

@@ -36,7 +36,7 @@ from cudf.core.groupby.groupby import SeriesGroupBy
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.core.window import Rolling
-from cudf.utils import cudautils, ioutils, utils
+from cudf.utils import cudautils, docutils, ioutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     can_convert_to_column,
@@ -524,8 +524,8 @@ class Series(Frame, Serializable):
         """
         result = self._copy_construct()
         if deep:
-            result._column = self._column.copy(deep)
-            result.index = self.index.copy(deep)
+            result._column = self._column.copy(deep=deep)
+            result.index = self.index.copy(deep=deep)
         return result
 
     def __copy__(self, deep=True):
@@ -1867,12 +1867,8 @@ class Series(Frame, Serializable):
         """
         Convert nans (if any) to nulls
         """
-        if self.dtype.kind == "f":
-            sr = self.fillna(np.nan)
-            newmask = libcudf.transform.nans_to_nulls(sr._column)
-            return self.set_mask(newmask)
-        else:
-            return self
+        result_col = self._column.nans_to_nulls()
+        return self._copy_construct(data=result_col)
 
     def all(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
         """
@@ -2408,8 +2404,8 @@ class Series(Frame, Serializable):
 
         def _return_sentinel_series():
             return Series(
-                utils.scalar_broadcast_to(
-                    na_sentinel, size=len(self), dtype=dtype
+                cudf.core.column.full(
+                    size=len(self), fill_value=na_sentinel, dtype=dtype
                 ),
                 index=self.index,
                 name=None,
@@ -2683,19 +2679,7 @@ class Series(Frame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        skipna = True if skipna is None else skipna
-
-        if skipna:
-            result_series = self.nans_to_nulls()
-            if result_series.has_nulls:
-                result_series = result_series.dropna()
-        else:
-            if self.has_nulls:
-                return np.nan
-
-            result_series = self
-
-        return result_series._column.min(dtype=dtype)
+        return self._column.min(skipna=skipna, dtype=dtype)
 
     def max(
         self,
@@ -2745,19 +2729,7 @@ class Series(Frame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        skipna = True if skipna is None else skipna
-
-        if skipna:
-            result_series = self.nans_to_nulls()
-            if result_series.has_nulls:
-                result_series = result_series.dropna()
-        else:
-            if self.has_nulls:
-                return np.nan
-
-            result_series = self
-
-        return result_series._column.max(dtype=dtype)
+        return self._column.max(skipna=skipna, dtype=dtype)
 
     def sum(
         self,
@@ -2816,27 +2788,9 @@ class Series(Frame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        skipna = True if skipna is None else skipna
-
-        if skipna:
-            result_series = self.nans_to_nulls()
-            if result_series.has_nulls:
-                result_series = result_series.dropna()
-        else:
-            if self.has_nulls:
-                return np.nan
-
-            result_series = self
-
-        if min_count > 0:
-            valid_count = len(result_series) - result_series.null_count
-            if valid_count < min_count:
-                return np.nan
-        elif min_count < 0:
-            msg = "min_count value cannot be negative({0}), will default to 0."
-            warnings.warn(msg.format(min_count))
-
-        return result_series._column.sum(dtype=dtype)
+        return self._column.sum(
+            skipna=skipna, dtype=dtype, min_count=min_count
+        )
 
     def product(
         self,
@@ -2895,27 +2849,9 @@ class Series(Frame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        skipna = True if skipna is None else skipna
-
-        if skipna:
-            result_series = self.nans_to_nulls()
-            if result_series.has_nulls:
-                result_series = result_series.dropna()
-        else:
-            if self.has_nulls:
-                return np.nan
-
-            result_series = self
-
-        if min_count > 0:
-            valid_count = len(result_series) - result_series.null_count
-            if valid_count < min_count:
-                return np.nan
-        elif min_count < 0:
-            msg = "min_count value cannot be negative({0}), will default to 0."
-            warnings.warn(msg.format(min_count))
-
-        return result_series._column.product(dtype=dtype)
+        return self._column.product(
+            skipna=skipna, dtype=dtype, min_count=min_count
+        )
 
     def prod(
         self,
@@ -3240,19 +3176,7 @@ class Series(Frame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        skipna = True if skipna is None else skipna
-
-        if skipna:
-            result_series = self.nans_to_nulls()
-            if result_series.has_nulls:
-                result_series = result_series.dropna()
-        else:
-            if self.has_nulls:
-                return np.nan
-
-            result_series = self
-
-        return result_series._column.mean()
+        return self._column.mean(skipna=skipna)
 
     def std(
         self,
@@ -3301,19 +3225,7 @@ class Series(Frame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        skipna = True if skipna is None else skipna
-
-        if skipna:
-            result_series = self.nans_to_nulls()
-            if result_series.has_nulls:
-                result_series = result_series.dropna()
-        else:
-            if self.has_nulls:
-                return np.nan
-
-            result_series = self
-
-        return result_series._column.std(ddof=ddof)
+        return self._column.std(skipna=skipna, ddof=ddof)
 
     def var(
         self,
@@ -3362,30 +3274,59 @@ class Series(Frame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        skipna = True if skipna is None else skipna
-
-        if skipna:
-            result_series = self.nans_to_nulls()
-            if result_series.has_nulls:
-                result_series = result_series.dropna()
-        else:
-            if self.has_nulls:
-                return np.nan
-
-            result_series = self
-
-        return result_series._column.var(ddof=ddof)
+        return self._column.var(skipna=skipna, ddof=ddof)
 
     def sum_of_squares(self, dtype=None):
         return self._column.sum_of_squares(dtype=dtype)
 
-    def median(self, skipna=True):
-        """Compute the median of the series
+    def median(
+        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
+    ):
         """
-        if not skipna and self.has_nulls:
-            return np.nan
-        # enforce linear in case the default ever changes
-        return self.quantile(0.5, interpolation="linear", exact=True)
+        Return the median of the values for the requested axis.
+
+        Parameters
+        ----------
+
+        skipna : bool, default True
+            Exclude NA/null values when computing the result.
+
+        Returns
+        -------
+        scalar
+
+        Notes
+        -----
+        Parameters currently not supported are `axis`, `level` and
+        `numeric_only`
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series([10, 25, 3, 25, 24, 6])
+        >>> ser
+        0    10
+        1    25
+        2     3
+        3    25
+        4    24
+        5     6
+        dtype: int64
+        >>> ser.median()
+        17.0
+        """
+        if axis not in (None, 0):
+            raise NotImplementedError("axis parameter is not implemented yet")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not implemented yet")
+
+        if numeric_only not in (None, True):
+            raise NotImplementedError(
+                "numeric_only parameter is not implemented yet"
+            )
+
+        return self._column.median(skipna=skipna)
 
     def mode(self, dropna=True):
         """
@@ -3500,29 +3441,7 @@ class Series(Frame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        skipna = True if skipna is None else skipna
-
-        if self.empty or (not skipna and self.has_nulls):
-            return np.nan
-
-        self = self.nans_to_nulls().dropna()
-
-        if len(self) < 4:
-            return np.nan
-
-        n = len(self)
-        miu = self.mean()
-        m4_numerator = ((self - miu) ** 4).sum()
-        V = self.var()
-
-        if V == 0:
-            return 0
-
-        term_one_section_one = (n * (n + 1)) / ((n - 1) * (n - 2) * (n - 3))
-        term_one_section_two = m4_numerator / (V ** 2)
-        term_two = ((n - 1) ** 2) / ((n - 2) * (n - 3))
-        kurt = term_one_section_one * term_one_section_two - 3 * term_two
-        return kurt
+        return self._column.kurtosis(skipna=skipna)
 
     # Alias for kurtosis.
     kurt = kurtosis
@@ -3559,27 +3478,7 @@ class Series(Frame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        skipna = True if skipna is None else skipna
-
-        if self.empty or (not skipna and self.has_nulls):
-            return np.nan
-
-        self = self.nans_to_nulls().dropna()
-
-        if len(self) < 3:
-            return np.nan
-
-        n = len(self)
-        miu = self.mean()
-        m3 = ((self - miu) ** 3).sum() / n
-        m2 = self.var(ddof=0)
-
-        if m2 == 0:
-            return 0
-
-        unbiased_coef = ((n * (n - 1)) ** 0.5) / (n - 2)
-        skew = unbiased_coef * m3 / (m2 ** (3 / 2))
-        return skew
+        return self._column.skew(skipna=skipna)
 
     def cov(self, other, min_periods=None):
         """
@@ -3615,19 +3514,14 @@ class Series(Frame, Serializable):
             )
 
         if self.empty or other.empty:
-            return np.nan
+            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
         lhs = self.nans_to_nulls().dropna()
         rhs = other.nans_to_nulls().dropna()
 
         lhs, rhs = _align_indices([lhs, rhs], how="inner")
 
-        if lhs.empty or rhs.empty or (len(lhs) == 1 and len(rhs) == 1):
-            return np.nan
-
-        result = (lhs - lhs.mean()) * (rhs - rhs.mean())
-        cov_sample = result.sum() / (len(lhs) - 1)
-        return cov_sample
+        return lhs._column.cov(rhs._column)
 
     def corr(self, other, method="pearson", min_periods=None):
         """Calculates the sample correlation between two Series,
@@ -3645,21 +3539,13 @@ class Series(Frame, Serializable):
         assert method in ("pearson",) and min_periods in (None,)
 
         if self.empty or other.empty:
-            return np.nan
+            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
         lhs = self.nans_to_nulls().dropna()
         rhs = other.nans_to_nulls().dropna()
         lhs, rhs = _align_indices([lhs, rhs], how="inner")
 
-        if lhs.empty or rhs.empty:
-            return np.nan
-
-        cov = lhs.cov(rhs)
-        lhs_std, rhs_std = lhs.std(), rhs.std()
-
-        if not cov or lhs_std == 0 or rhs_std == 0:
-            return np.nan
-        return cov / lhs_std / rhs_std
+        return lhs._column.corr(rhs._column)
 
     def isin(self, values):
         """Check whether values are contained in Series.
@@ -3926,78 +3812,37 @@ class Series(Frame, Serializable):
 
         Returns
         -------
-
-        DataFrame
+        float or Series
+            If ``q`` is an array, a Series will be returned where the
+            index is ``q`` and the values are the quantiles, otherwise
+            a float will be returned.
         """
 
-        if isinstance(q, Number) or is_list_like(q):
-            np_array_q = np.asarray(q)
-            if np.logical_or(np_array_q < 0, np_array_q > 1).any():
-                raise ValueError(
-                    "percentiles should all be in the interval [0, 1]"
-                )
-
-        # Beyond this point, q either being scalar or list-like
-        # will only have values in range [0, 1]
+        result = self._column.quantile(q, interpolation, exact)
 
         if isinstance(q, Number):
-            res = self._column.quantile(q, interpolation, exact)
-            res = res[0]
-            return np.nan if res is None else res
+            return result
 
-        if not quant_index:
-            return Series(
-                self._column.quantile(q, interpolation, exact), name=self.name
-            )
-        else:
-            np_array_q = np.asarray(q)
+        if quant_index:
+            index = np.asarray(q)
             if len(self) == 0:
                 result = column_empty_like(
-                    np_array_q,
-                    dtype=self.dtype,
-                    masked=True,
-                    newsize=len(np_array_q),
+                    index, dtype=self.dtype, masked=True, newsize=len(index),
                 )
-            else:
-                result = self._column.quantile(q, interpolation, exact)
-            return Series(result, index=as_index(np_array_q), name=self.name)
+        else:
+            index = None
 
-    def describe(self, percentiles=None, include=None, exclude=None):
-        """Compute summary statistics of a Series. For numeric
-        data, the output includes the minimum, maximum, mean, median,
-        standard deviation, and various quantiles. For object data, the output
-        includes the count, number of unique values, the most common value, and
-        the number of occurrences of the most common value.
+        return Series(result, index=index, name=self.name)
 
-        Parameters
-        ----------
-        percentiles : list-like, optional
-            The percentiles used to generate the output summary statistics.
-            If None, the default percentiles used are the 25th, 50th and 75th.
-            Values should be within the interval [0, 1].
-
-        Returns
-        -------
-        A DataFrame containing summary statistics of relevant columns from
-        the input DataFrame.
-
-        Examples
-        --------
-        Describing a ``Series`` containing numeric values.
-
-        >>> import cudf
-        >>> s = cudf.Series([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-        >>> print(s.describe())
-           stats   values
-        0  count     10.0
-        1   mean      5.5
-        2    std  3.02765
-        3    min      1.0
-        4    25%      2.5
-        5    50%      5.5
-        6    75%      7.5
-        7    max     10.0
-        """
+    @docutils.doc_describe()
+    def describe(
+        self,
+        percentiles=None,
+        include=None,
+        exclude=None,
+        datetime_is_numeric=False,
+    ):
+        """{docstring}"""
 
         def _prepare_percentiles(percentiles):
             percentiles = list(percentiles)
@@ -4020,9 +3865,9 @@ class Series(Frame, Serializable):
         def _format_stats_values(stats_data):
             return list(map(lambda x: round(x, 6), stats_data))
 
-        def describe_numeric(self):
+        def _describe_numeric(self):
             # mimicking pandas
-            names = (
+            index = (
                 ["count", "mean", "std", "min"]
                 + _format_percentile_names(percentiles)
                 + ["max"]
@@ -4035,13 +3880,90 @@ class Series(Frame, Serializable):
             data = _format_stats_values(data)
 
             return Series(
-                data=data, index=names, nan_as_null=False, name=self.name,
+                data=data, index=index, nan_as_null=False, name=self.name,
             )
 
-        def describe_categorical(self):
+        def _describe_timedelta(self):
+            # mimicking pandas
+            index = (
+                ["count", "mean", "std", "min"]
+                + _format_percentile_names(percentiles)
+                + ["max"]
+            )
+
+            data = (
+                [
+                    str(self.count()),
+                    str(self.mean()),
+                    str(self.std()),
+                    str(pd.Timedelta(self.min())),
+                ]
+                + self.quantile(percentiles)
+                .astype("str")
+                .to_array(fillna="pandas")
+                .tolist()
+                + [str(pd.Timedelta(self.max()))]
+            )
+
+            return Series(
+                data=data,
+                index=index,
+                dtype="str",
+                nan_as_null=False,
+                name=self.name,
+            )
+
+        def _describe_categorical(self):
             # blocked by StringColumn/DatetimeColumn support for
             # value_counts/unique
-            pass
+            index = ["count", "unique", "top", "freq"]
+            val_counts = self.value_counts(ascending=False)
+            data = [self.count(), self.unique().size]
+
+            if data[1] > 0:
+                top, freq = val_counts.index[0], val_counts.iloc[0]
+                data += [str(top), freq]
+            # If the DataFrame is empty, set 'top' and 'freq' to None
+            # to maintain output shape consistency
+            else:
+                data += [None, None]
+
+            return Series(
+                data=data,
+                dtype="str",
+                index=index,
+                nan_as_null=False,
+                name=self.name,
+            )
+
+        def _describe_timestamp(self):
+
+            index = (
+                ["count", "mean", "min"]
+                + _format_percentile_names(percentiles)
+                + ["max"]
+            )
+
+            data = (
+                [
+                    str(self.count()),
+                    str(self.mean().to_numpy().astype("datetime64[ns]")),
+                    str(pd.Timestamp(self.min().astype("datetime64[ns]"))),
+                ]
+                + self.quantile(percentiles)
+                .astype("str")
+                .to_array(fillna="pandas")
+                .tolist()
+                + [str(pd.Timestamp((self.max()).astype("datetime64[ns]")))]
+            )
+
+            return Series(
+                data=data,
+                dtype="str",
+                index=index,
+                nan_as_null=False,
+                name=self.name,
+            )
 
         if percentiles is not None:
             percentiles = _prepare_percentiles(percentiles)
@@ -4049,12 +3971,16 @@ class Series(Frame, Serializable):
             # pandas defaults
             percentiles = np.array([0.25, 0.5, 0.75])
 
-        if np.issubdtype(self.dtype, np.number):
-            return describe_numeric(self)
+        if pd.api.types.is_bool_dtype(self.dtype):
+            return _describe_categorical(self)
+        elif isinstance(self._column, cudf.core.column.NumericalColumn):
+            return _describe_numeric(self)
+        elif isinstance(self._column, cudf.core.column.TimeDeltaColumn):
+            return _describe_timedelta(self)
+        elif isinstance(self._column, cudf.core.column.DatetimeColumn):
+            return _describe_timestamp(self)
         else:
-            raise NotImplementedError(
-                "Describing non-numeric columns is not " "yet supported"
-            )
+            return _describe_categorical(self)
 
     def digitize(self, bins, right=False):
         """Return the indices of the bins to which each value in series belongs.

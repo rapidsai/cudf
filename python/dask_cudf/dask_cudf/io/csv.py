@@ -106,7 +106,9 @@ def read_csv_without_chunksize(path, **kwargs):
 
     name = "read-csv-" + tokenize(path, **kwargs)
 
-    meta = cudf.read_csv(filenames[0], **kwargs)
+    # Read "head" of first file (first 5 rows).
+    # Convert to empty df for metadata.
+    meta = cudf.read_csv(filenames[0], nrows=5, **kwargs).iloc[:0]
 
     graph = {
         (name, i): (apply, cudf.read_csv, [fn], kwargs)

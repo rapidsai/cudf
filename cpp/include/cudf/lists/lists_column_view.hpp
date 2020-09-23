@@ -18,10 +18,15 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 
+/**
+ * @file
+ * @brief Class definition for cudf::lists_column_view
+ */
+
 namespace cudf {
 
 /**
- * @ingroup lists_classes
+ * @addtogroup lists_classes
  * @{
  */
 
