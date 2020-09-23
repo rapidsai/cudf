@@ -83,7 +83,7 @@ public class UnsafeMemoryAccessorTest {
     for (int i = 0; i < numLongs; ++i) {
       UnsafeMemoryAccessor.setLong(address + (i * 8), i);
     }
-    long[] result = new long[numLongs ];
+    long[] result = new long[numLongs];
     UnsafeMemoryAccessor.getLongs(result, 0, address, numLongs);
     for (int i = 0; i < numLongs; ++i) {
       assertEquals(i, result[i]);

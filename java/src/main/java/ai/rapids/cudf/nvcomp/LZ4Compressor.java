@@ -32,6 +32,9 @@ public class LZ4Compressor {
    */
   public static long getTempSize(BaseDeviceMemoryBuffer input, CompressionType inputType,
                                  long chunkSize) {
+    if (chunkSize <= 0) {
+      throw new IllegalArgumentException("Illegal chunk size: " + chunkSize);
+    }
     return NvcompJni.lz4CompressGetTempSize(input.getAddress(), input.getLength(),
         inputType.nativeId, chunkSize);
   }
@@ -46,6 +49,9 @@ public class LZ4Compressor {
    */
   public static long getOutputSize(BaseDeviceMemoryBuffer input, CompressionType inputType,
                                    long chunkSize, BaseDeviceMemoryBuffer tempBuffer) {
+    if (chunkSize <= 0) {
+      throw new IllegalArgumentException("Illegal chunk size: " + chunkSize);
+    }
     return NvcompJni.lz4CompressGetOutputSize(input.getAddress(), input.getLength(),
         inputType.nativeId, chunkSize, tempBuffer.getAddress(), tempBuffer.getLength(), false);
   }
@@ -63,6 +69,9 @@ public class LZ4Compressor {
   public static long compress(BaseDeviceMemoryBuffer input, CompressionType inputType,
                               long chunkSize, BaseDeviceMemoryBuffer tempBuffer,
                               BaseDeviceMemoryBuffer output, Cuda.Stream stream) {
+    if (chunkSize <= 0) {
+      throw new IllegalArgumentException("Illegal chunk size: " + chunkSize);
+    }
     return NvcompJni.lz4Compress(input.getAddress(), input.getLength(), inputType.nativeId,
         chunkSize, tempBuffer.getAddress(), tempBuffer.getLength(),
         output.getAddress(), output.getLength(), stream.getStream());
@@ -84,6 +93,9 @@ public class LZ4Compressor {
                                    BaseDeviceMemoryBuffer input, CompressionType inputType,
                                    long chunkSize, BaseDeviceMemoryBuffer tempBuffer,
                                    BaseDeviceMemoryBuffer output, Cuda.Stream stream) {
+    if (chunkSize <= 0) {
+      throw new IllegalArgumentException("Illegal chunk size: " + chunkSize);
+    }
     if (compressedSizeOutputBuffer.getLength() < 8) {
       throw new IllegalArgumentException("compressed output size buffer must be able to hold " +
           "at least 8 bytes, size is only " + compressedSizeOutputBuffer.getLength());

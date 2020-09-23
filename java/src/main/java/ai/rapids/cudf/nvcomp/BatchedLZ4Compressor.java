@@ -54,6 +54,9 @@ public class BatchedLZ4Compressor {
    * @return amount in bytes of temporary storage space required to compress the batch
    */
   public static long getTempSize(BaseDeviceMemoryBuffer[] inputs, long chunkSize) {
+    if (chunkSize <= 0) {
+      throw new IllegalArgumentException("Illegal chunk size: " + chunkSize);
+    }
     int numBuffers = inputs.length;
     long[] inputAddrs = new long[numBuffers];
     long[] inputSizes = new long[numBuffers];
@@ -74,6 +77,9 @@ public class BatchedLZ4Compressor {
    */
   public static long[] getOutputSizes(BaseDeviceMemoryBuffer[] inputs, long chunkSize,
                                       BaseDeviceMemoryBuffer tempBuffer) {
+    if (chunkSize <= 0) {
+      throw new IllegalArgumentException("Illegal chunk size: " + chunkSize);
+    }
     int numBuffers = inputs.length;
     long[] inputAddrs = new long[numBuffers];
     long[] inputSizes = new long[numBuffers];
@@ -102,6 +108,9 @@ public class BatchedLZ4Compressor {
                                    BaseDeviceMemoryBuffer[] inputs, long chunkSize,
                                    BaseDeviceMemoryBuffer tempBuffer,
                                    BaseDeviceMemoryBuffer[] outputs, Cuda.Stream stream) {
+    if (chunkSize <= 0) {
+      throw new IllegalArgumentException("Illegal chunk size: " + chunkSize);
+    }
     int numBuffers = inputs.length;
     if (outputs.length != numBuffers) {
       throw new IllegalArgumentException("buffer count mismatch, " + numBuffers + " inputs and " +
@@ -143,6 +152,9 @@ public class BatchedLZ4Compressor {
    */
   public static BatchedCompressionResult compress(BaseDeviceMemoryBuffer[] inputs, long chunkSize,
                                                   Cuda.Stream stream) {
+    if (chunkSize <= 0) {
+      throw new IllegalArgumentException("Illegal chunk size: " + chunkSize);
+    }
     int numBuffers = inputs.length;
     long[] inputAddrs = new long[numBuffers];
     long[] inputSizes = new long[numBuffers];
