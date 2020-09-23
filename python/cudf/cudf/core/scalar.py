@@ -3,6 +3,7 @@ import cudf._lib as libcudf
 from cudf.utils.dtypes import to_cudf_compatible_scalar
 from numpy import find_common_type
 import numpy as np
+from cudf.core.series import truediv_int_dtype_corrections
 
 class Scalar(libcudf.scalar.Scalar):
     def __init__(self, value, dtype=None):
@@ -103,6 +104,17 @@ class Scalar(libcudf.scalar.Scalar):
         return self._scalar_unaop('__neg__')
 
     def _binop_result_dtype_or_error(self, other, op):
+        if op in ["__eq__", "__ne__", "__lt__", "__gt__", "__le__", "__ge__"]:
+            return np.bool
+
+        elif op == '__truediv__':
+            dtype_l = truediv_int_dtype_corrections.get(self.dtype.name, self.dtype.name)
+            dtype_r = truediv_int_dtype_corrections.get(other.dtype.name, other.dtype.name)
+
+            if dtype_l == 'float32' and dtype_r == 'float32':
+                return 'float32'
+            else:
+                return 'float64'
 
         if (self.dtype.kind == "O" and other.dtype.kind != "O") or (
             self.dtype.kind != "O" and other.dtype.kind == "O"
@@ -118,11 +130,7 @@ class Scalar(libcudf.scalar.Scalar):
 
     def _scalar_binop(self, other, op):
         other = to_cudf_compatible_scalar(other)
-
-        if op in ["__eq__", "__ne__", "__lt__", "__gt__", "__le__", "__ge__"]:
-            out_dtype = np.bool
-        else:
-            out_dtype = self._binop_result_dtype_or_error(other, op)
+        out_dtype = self._binop_result_dtype_or_error(other, op)
         valid = self.is_valid() and (
             isinstance(other, np.generic) or other.is_valid()
         )
