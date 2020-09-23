@@ -106,6 +106,7 @@
 - PR #6264 Remove include statement for missing rmm/mr/device/default_memory_resource.hpp file
 - PR #6286 Fix `read_csv` `int32` overflow 
 - PR #6289 Revert #6206
+- PR #6304 Fix span_tests.cu includes
 
 
 # cuDF 0.15.0 (26 Aug 2020)
