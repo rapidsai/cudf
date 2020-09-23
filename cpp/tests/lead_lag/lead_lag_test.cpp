@@ -15,26 +15,26 @@
  */
 
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 #include <algorithm>
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/rolling.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/type_lists.hpp>
 #include <functional>
 #include <initializer_list>
 #include <iterator>
 #include <memory>
 #include <rmm/device_buffer.hpp>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/cudf_gtest.hpp>
-#include <tests/utilities/type_lists.hpp>
-#include "cudf/scalar/scalar_factories.hpp"
-#include "thrust/iterator/transform_iterator.h"
 
 using cudf::size_type;
 using namespace cudf::test;
