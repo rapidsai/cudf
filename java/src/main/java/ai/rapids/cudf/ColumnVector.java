@@ -3495,7 +3495,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       if (offsetBuffer != null) {
         long offsetsLen = OFFSET_SIZE * (rows + 1);
         offsets = DeviceMemoryBuffer.allocate(offsetsLen);
-        System.out.println("rows"+ rows + "type=" + type + " KUHU offsetBuffer len=" + offsetBuffer.length + " offsetsLen=" + offsetsLen);
         offsets.copyFromHostBuffer(offsetBuffer, 0, offsetsLen);
       }
       NestedColumnVector ret = new NestedColumnVector(type, rows, nullCount, data, valid, offsets,
