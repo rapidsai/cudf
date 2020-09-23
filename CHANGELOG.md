@@ -109,11 +109,11 @@
 - PR #6259 Fix compilation error with GCC 8
 - PR #6258 Pin libcudf conda recipe to boost 1.72.0
 - PR #6264 Remove include statement for missing rmm/mr/device/default_memory_resource.hpp file
-- PR #6278 Add filter tests for struct columns
 - PR #6281 Fix unreachable code warning in datetime.cuh
 - PR #6286 Fix `read_csv` `int32` overflow 
 - PR #6289 Revert #6206
 - PR #6304 Fix span_tests.cu includes
+- PR #6278 Add filter tests for struct columns
 
 
 # cuDF 0.15.0 (26 Aug 2020)
