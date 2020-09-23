@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef __IO_PARQUET_H__
-#define __IO_PARQUET_H__
+#pragma once
 
 #include <io/parquet/parquet_common.hpp>
 
@@ -379,5 +378,3 @@ class CompactProtocolWriter {
 }  // namespace parquet
 }  // namespace io
 }  // namespace cudf
-
-#endif  // __IO_PARQUET_H__

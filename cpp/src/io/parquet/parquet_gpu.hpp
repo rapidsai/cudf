@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef __IO_PARQUET_GPU_H__
-#define __IO_PARQUET_GPU_H__
+#pragma once
 
 #include <cuda_runtime.h>
 #include <io/comp/gpuinflate.h>
@@ -520,5 +519,3 @@ cudaError_t BuildChunkDictionaries(EncColumnChunk *chunks,
 }  // namespace parquet
 }  // namespace io
 }  // namespace cudf
-
-#endif  // __IO_PARQUET_GPU_H__
