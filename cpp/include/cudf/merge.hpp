@@ -24,6 +24,7 @@ namespace cudf {
 /**
  * @addtogroup column_merge
  * @{
+ * @file
  */
 
 /**

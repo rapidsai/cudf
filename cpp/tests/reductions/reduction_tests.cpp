@@ -17,9 +17,9 @@
 #include <iostream>
 #include <vector>
 
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/type_lists.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/type_lists.hpp>
 
 #include <cudf/copying.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
