@@ -120,8 +120,11 @@ endif()
 message(STATUS "GPU_ARCHS: ${GPU_ARCHS}")
 
 foreach(arch ${GPU_ARCHS})
-  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_${arch},code=compute_${arch}")
+  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_${arch},code=sm_${arch}")
 endforeach()
+
+list(GET GPU_ARCHS -1 ptx)
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_${ptx},code=compute_${ptx}")
 
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr")
 
@@ -711,51 +714,51 @@ foreach(CUDF_LIBRARY IN LISTS CUDF_LIBRARIES)
   target_link_libraries(${CUDF_LIBRARY} rmm arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
 endforeach()
 
-##################################################################################################
-# - install targets ------------------------------------------------------------------------------
+# ##################################################################################################
+# # - install targets ------------------------------------------------------------------------------
 
-# install targets for cuDF
-install(TARGETS ${CUDF_LIBRARIES}
-        DESTINATION lib
-        COMPONENT cudf)
+# # install targets for cuDF
+# install(TARGETS ${CUDF_LIBRARIES}
+#         DESTINATION lib
+#         COMPONENT cudf)
 
-install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/cudf"
-        DESTINATION "include"
-        COMPONENT cudf)
+# install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/cudf"
+#         DESTINATION "include"
+#         COMPONENT cudf)
 
-install(DIRECTORY "${CMAKE_BINARY_DIR}/include/libcxx"
-        DESTINATION "include/libcudf"
-        COMPONENT cudf)
+# install(DIRECTORY "${CMAKE_BINARY_DIR}/include/libcxx"
+#         DESTINATION "include/libcudf"
+#         COMPONENT cudf)
 
-install(DIRECTORY "${CMAKE_BINARY_DIR}/include/libcudacxx"
-        DESTINATION "include/libcudf"
-        COMPONENT cudf)
+# install(DIRECTORY "${CMAKE_BINARY_DIR}/include/libcudacxx"
+#         DESTINATION "include/libcudf"
+#         COMPONENT cudf)
 
-add_custom_target(install_cudf
-                  COMMAND "${CMAKE_COMMAND}" -DCOMPONENT=cudf -P "${CMAKE_BINARY_DIR}/cmake_install.cmake"
-                  DEPENDS cudf)
+# add_custom_target(install_cudf
+#                   COMMAND "${CMAKE_COMMAND}" -DCOMPONENT=cudf -P "${CMAKE_BINARY_DIR}/cmake_install.cmake"
+#                   DEPENDS cudf)
 
-if(BUILD_TESTS)
-    add_dependencies(install_cudf cudftestutil)
-endif(BUILD_TESTS)
+# if(BUILD_TESTS)
+#     add_dependencies(install_cudf cudftestutil)
+# endif(BUILD_TESTS)
 
-add_custom_target(build_tests_cudf
-                  DEPENDS ${CUDF_TEST_LIST})
+# add_custom_target(build_tests_cudf
+#                   DEPENDS ${CUDF_TEST_LIST})
 
-add_custom_target(test_cudf
-                  COMMAND ctest
-                  DEPENDS build_tests_cudf)
+# add_custom_target(test_cudf
+#                   COMMAND ctest
+#                   DEPENDS build_tests_cudf)
 
-add_custom_target(build_benchmarks_cudf
-                  DEPENDS ${BENCHMARK_LIST})
+# add_custom_target(build_benchmarks_cudf
+#                   DEPENDS ${BENCHMARK_LIST})
 
-###################################################################################################
-# - make documentation ----------------------------------------------------------------------------
+# ###################################################################################################
+# # - make documentation ----------------------------------------------------------------------------
 
-# doc targets for cuDF
-add_custom_command(OUTPUT CUDF_DOXYGEN
-                   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/doxygen
-                   COMMAND doxygen Doxyfile
-                   VERBATIM)
+# # doc targets for cuDF
+# add_custom_command(OUTPUT CUDF_DOXYGEN
+#                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/doxygen
+#                    COMMAND doxygen Doxyfile
+#                    VERBATIM)
 
-add_custom_target(docs_cudf DEPENDS CUDF_DOXYGEN)
+# add_custom_target(docs_cudf DEPENDS CUDF_DOXYGEN)
