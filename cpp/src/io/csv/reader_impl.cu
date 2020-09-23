@@ -557,6 +557,18 @@ void reader::impl::gather_row_offsets(host_span<char const> data,
   if (num_rows >= 0) { row_offsets_.resize(std::min<size_t>(row_offsets_.size(), num_rows + 1)); }
 }
 
+constexpr cudf::type_id get_type_id_for_stats(size_t num_records, column_parse::stats const &stats)
+{
+  if (stats.countNULL == num_records) { return cudf::type_id::INT8; }
+  if (stats.countString > 0) { return cudf::type_id::STRING; }
+  if (stats.countDateAndTime > 0) { return cudf::type_id::TIMESTAMP_NANOSECONDS; }
+  if (stats.countBool > 0) { return cudf::type_id::BOOL8; }
+  if (stats.countFloat > 0) { return cudf::type_id::FLOAT64; }
+  if (stats.countNULL > 0) { return cudf::type_id::FLOAT64; }
+
+  return cudf::type_id::INT64;
+}
+
 std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream)
 {
   std::vector<data_type> dtypes;
@@ -579,29 +591,7 @@ std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream)
       CUDA_TRY(cudaStreamSynchronize(stream));
 
       for (int col = 0; col < num_active_cols_; col++) {
-        unsigned long long countInt = column_stats[col].countInt8 + column_stats[col].countInt16 +
-                                      column_stats[col].countInt32 + column_stats[col].countInt64;
-
-        if (column_stats[col].countNULL == num_records_) {
-          // Entire column is NULL; allocate the smallest amount of memory
-          dtypes.emplace_back(cudf::type_id::INT8);
-        } else if (column_stats[col].countString > 0L) {
-          dtypes.emplace_back(cudf::type_id::STRING);
-        } else if (column_stats[col].countDateAndTime > 0L) {
-          dtypes.emplace_back(cudf::type_id::TIMESTAMP_NANOSECONDS);
-        } else if (column_stats[col].countBool > 0L) {
-          dtypes.emplace_back(cudf::type_id::BOOL8);
-        } else if (column_stats[col].countFloat > 0L ||
-                   (column_stats[col].countFloat == 0L && countInt > 0L &&
-                    column_stats[col].countNULL > 0L)) {
-          // The second condition has been added to conform to
-          // PANDAS which states that a column of integers with
-          // a single NULL record need to be treated as floats.
-          dtypes.emplace_back(cudf::type_id::FLOAT64);
-        } else {
-          // All other integers are stored as 64-bit to conform to PANDAS
-          dtypes.emplace_back(cudf::type_id::INT64);
-        }
+        dtypes.emplace_back(get_type_id_for_stats(num_records_, column_stats[0]));
       }
     }
   } else {
