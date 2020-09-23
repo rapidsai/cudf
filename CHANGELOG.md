@@ -16,6 +16,7 @@
 
 ## Improvements
 
+- PR #6292 Remove individual size tracking from JNI tracking resource adaptor
 - PR #5946 Add cython and python support for libcudf `to_arrow` and `from_arrow`
 - PR #5919 Remove max_strings and max_chars from nvtext::subword_tokenize
 - PR #5956 Add/Update tests for cuStreamz
@@ -47,6 +48,7 @@
 - PR #6163 Use `Column.full` instead of `scalar_broadcast_to` or `cupy.zeros`
 - PR #6176 Fix cmake warnings for GoogleTest, GoogleBenchmark, and Arrow external projects
 - PR #6149 Update to Arrow v1.0.1
+- PR #6201 Expose libcudf test utilities headers for external project use.
 - PR #6174 Data profile support in random data generator; Expand cuIO benchmarks
 - PR #6189 Avoid deprecated pyarrow.compat for parquet
 - PR #6184 Add cuda 11 dev environment.yml
@@ -67,6 +69,7 @@
 - PR #6204 Add dockerfile and script to build cuDF jar
 - PR #6245 Split up replace.cu into multiple source files
 - PR #6218 increase visiblity/consistency for cuio reader writer private member variable names.
+- PR #6268 Add file tags to libcudf doxygen
 - PR #6265 Update JNI to use ORC options builder
 - PR #6273 Update JNI to use ORC options builder
 - PR #6287 Make java aggregate API follow C++ API
@@ -97,6 +100,7 @@
 - PR #6212 Update codeowners file
 - PR #6157 Fix issue related to `Series.concat` to concat a non-empty and empty series.
 - PR #6226 Add in some JNI checks for null handles
+- PR #6183 Fix issues related to `Series.acos` for consistent output regardless of dtype
 - PR #6234 Add float infinity parsing in csv reader
 - PR #6251 Replace remaining calls to RMM `get_default_resource`
 - PR #6257 Support truncated fractions in `cudf::strings::to_timestamp`
@@ -105,6 +109,7 @@
 - PR #6264 Remove include statement for missing rmm/mr/device/default_memory_resource.hpp file
 - PR #6286 Fix `read_csv` `int32` overflow 
 - PR #6289 Revert #6206
+- PR #6304 Fix span_tests.cu includes
 
 
 # cuDF 0.15.0 (26 Aug 2020)

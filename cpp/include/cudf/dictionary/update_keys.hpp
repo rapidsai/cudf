@@ -23,6 +23,7 @@ namespace dictionary {
 /**
  * @addtogroup dictionary_update
  * @{
+ * @file
  */
 
 /**

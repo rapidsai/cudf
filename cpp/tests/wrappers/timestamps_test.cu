@@ -17,16 +17,15 @@
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/column/column_view.hpp>
+#include <cudf/types.hpp>
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
-
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/timestamp_utilities.cuh>
-#include <tests/utilities/type_lists.hpp>
-#include "cudf/column/column_view.hpp"
-#include "cudf/types.hpp"
-#include "tests/utilities/column_utilities.hpp"
-#include "tests/utilities/column_wrapper.hpp"
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/timestamp_utilities.cuh>
+#include <cudf_test/type_lists.hpp>
 
 template <typename T>
 struct ChronoColumnTest : public cudf::test::BaseFixture {
