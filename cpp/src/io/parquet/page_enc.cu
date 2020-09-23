@@ -1737,9 +1737,6 @@ std::pair<rmm::device_uvector<uint8_t>, rmm::device_uvector<uint8_t>> get_levels
   rmm::device_uvector<uint8_t> rep_level(flattened_size, stream);
   rmm::device_uvector<uint8_t> def_level(flattened_size, stream);
 
-  rmm::device_uvector<size_type> left_keys(flattened_size, stream);
-  rmm::device_uvector<size_type> right_keys(flattened_size, stream);
-
   // Count nesting levels
   size_t num_nesting_levels = 0;
   auto curr_col             = h_col;
@@ -1991,7 +1988,7 @@ std::pair<rmm::device_uvector<uint8_t>, rmm::device_uvector<uint8_t>> get_levels
                            empties.begin(),
                            empties.begin() + empties_size,
                            thrust::make_counting_iterator(0),
-                           thrust::make_counting_iterator(lcv.child().size()),  // change this
+                           thrust::make_counting_iterator(lcv.child().size()),
                            thrust::make_constant_iterator(level - 1),
                            temp_vals.begin(),
                            thrust::make_discard_iterator(),
@@ -2027,23 +2024,21 @@ std::pair<rmm::device_uvector<uint8_t>, rmm::device_uvector<uint8_t>> get_levels
     auto scatter_it = thrust::make_constant_iterator(level - 1);
     thrust::scatter(rmm::exec_policy(stream)->on(stream),
                     scatter_it,
-                    scatter_it + new_offsets.size(),
+                    scatter_it + new_offsets.size() - 1,
                     new_offsets.begin(),
                     rep_level.begin());
     print(rep_level, "rep final");
   }
 
-  for (int level = nesting_levels.size() - 1; level > 0; level--) {
-    curr_col = nesting_levels[level - 1];
+  for (int level = nesting_levels.size() - 2; level >= 0; level--) {
+    curr_col = nesting_levels[level];
     auto lcv = lists_column_view(curr_col);
 
     // Get empties at this level
     rmm::device_uvector<size_type> empties(0, stream);
     size_t empties_size;
-    std::tie(empties, std::ignore, empties_size) = get_empties(nesting_levels[level - 1]);
-    printf("level %d ", level - 1);
-    print(empties, "empties");
-    print(lcv.offsets(), "offsets");
+    std::tie(empties, std::ignore, empties_size) = get_empties(nesting_levels[level]);
+    printf("level %d ", level);
 
     auto offset_transformer = [new_child_offsets = new_offsets.data()] __device__(auto x) {
       return new_child_offsets[x];
@@ -2068,8 +2063,8 @@ std::pair<rmm::device_uvector<uint8_t>, rmm::device_uvector<uint8_t>> get_levels
                            transformed_empties,
                            transformed_empties + empties_size,
                            thrust::make_counting_iterator(0),
-                           thrust::make_counting_iterator(curr_rep_values_size),  // change this
-                           thrust::make_constant_iterator(level - 1),
+                           thrust::make_counting_iterator(curr_rep_values_size),
+                           thrust::make_constant_iterator(level),
                            temp_vals.begin(),
                            thrust::make_discard_iterator(),
                            rep_level.begin());
@@ -2106,10 +2101,10 @@ std::pair<rmm::device_uvector<uint8_t>, rmm::device_uvector<uint8_t>> get_levels
     print(new_offsets, "new_offsets");
 
     // Set rep level values at level starts to appropriate rep level
-    auto scatter_it = thrust::make_constant_iterator(level - 1);
+    auto scatter_it = thrust::make_constant_iterator(level);
     thrust::scatter(rmm::exec_policy(stream)->on(stream),
                     scatter_it,
-                    scatter_it + new_offsets.size(),
+                    scatter_it + new_offsets.size() - 1,
                     new_offsets.begin(),
                     rep_level.begin());
     print(rep_level, "rep final");
