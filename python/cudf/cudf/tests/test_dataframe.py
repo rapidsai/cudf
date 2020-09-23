@@ -2290,10 +2290,80 @@ def test_reset_index_inplace(pdf, gdf, drop):
     assert_eq(pdf, gdf)
 
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "a": [1, 2, 3, 4, 5],
+            "b": ["a", "b", "c", "d", "e"],
+            "c": [1.0, 2.0, 3.0, 4.0, 5.0],
+        }
+    ],
+)
+@pytest.mark.parametrize(
+    "index",
+    [
+        "a",
+        ["a", "b"],
+        pd.CategoricalIndex(["I", "II", "III", "IV", "V"]),
+        pd.Series(["h", "i", "k", "l", "m"]),
+        ["b", pd.Index(["I", "II", "III", "IV", "V"])],
+        ["c", [11, 12, 13, 14, 15]],
+        pd.MultiIndex(
+            levels=[
+                ["I", "II", "III", "IV", "V"],
+                ["one", "two", "three", "four", "five"],
+            ],
+            codes=[[0, 1, 2, 3, 4], [4, 3, 2, 1, 0]],
+            names=["col1", "col2"],
+        ),
+        pd.RangeIndex(0, 5),  # corner case
+        [pd.Series(["h", "i", "k", "l", "m"]), pd.RangeIndex(0, 5)],
+        [
+            pd.MultiIndex(
+                levels=[
+                    ["I", "II", "III", "IV", "V"],
+                    ["one", "two", "three", "four", "five"],
+                ],
+                codes=[[0, 1, 2, 3, 4], [4, 3, 2, 1, 0]],
+                names=["col1", "col2"],
+            ),
+            pd.RangeIndex(0, 5),
+        ],
+    ],
+)
 @pytest.mark.parametrize("drop", [True, False])
-def test_set_index(pdf, gdf, drop):
-    for col in pdf.columns:
-        assert_eq(pdf.set_index(col, drop=drop), gdf.set_index(col, drop=drop))
+@pytest.mark.parametrize("append", [True, False])
+@pytest.mark.parametrize("inplace", [True, False])
+def test_set_index(data, index, drop, append, inplace):
+    gdf = gd.DataFrame(data)
+    pdf = gdf.to_pandas()
+
+    expected = pdf.set_index(index, inplace=inplace, drop=drop, append=append)
+    actual = gdf.set_index(index, inplace=inplace, drop=drop, append=append)
+
+    if inplace:
+        expected = pdf
+        actual = gdf
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "a": [1, 1, 2, 2, 5],
+            "b": ["a", "b", "c", "d", "e"],
+            "c": [1.0, 2.0, 3.0, 4.0, 5.0],
+        }
+    ],
+)
+@pytest.mark.parametrize("index", ["a", pd.Index([1, 1, 2, 2, 3])])
+@pytest.mark.parametrize("verify_integrity", [True])
+@pytest.mark.xfail
+def test_set_index_verify_integrity(data, index, verify_integrity):
+    gdf = gd.DataFrame(data)
+    gdf.set_index(index, verify_integrity=verify_integrity)
 
 
 @pytest.mark.parametrize("drop", [True, False])
