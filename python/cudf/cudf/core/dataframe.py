@@ -6521,17 +6521,43 @@ class DataFrame(Frame, Serializable):
                 raise NotImplementedError(msg)
 
             prepared = self._prepare_for_rowwise_op(method)
+            if skipna is False and any(
+                [col.nullable for col in prepared._columns]
+            ):
+                mask = cudf.DataFrame(
+                    {
+                        name: cudf._lib.transform.mask_to_bools(
+                            prepared._data[name].base_mask,
+                            0,
+                            len(prepared._data[name]),
+                        )
+                        if prepared._data[name].nullable
+                        else column.full(len(prepared._data[name]), True)
+                        for name in prepared._data.names
+                    }
+                )
+                mask = mask.all(axis=1)
+            else:
+                mask = None
+
             prepared = prepared.astype("float64")
             prepared = prepared.fillna(np.nan)
 
             arr = cupy.asarray(prepared.as_gpu_matrix())
 
-            if method in _cupy_nan_methods_map:
+            if skipna is not False and method in _cupy_nan_methods_map:
                 method = _cupy_nan_methods_map[method]
 
             result = getattr(cupy, method)(arr, axis=1, **kwargs)
 
             if len(result.shape) == 1:
+                result = column.as_column(result)
+                if mask is not None:
+                    result = column.build_column(
+                        data=result.data,
+                        dtype=result.dtype,
+                        mask=cudf._lib.transform.bools_to_mask(mask._column),
+                    )
                 return Series(result, index=self.index)
             else:
                 result_df = DataFrame.from_gpu_matrix(result).set_index(
