@@ -18,11 +18,19 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 
+/**
+ * @file
+ * @brief Class definition for cudf::dictionary_column_view
+ */
+
 namespace cudf {
 /**
+ * @addtogroup dictionary_classes
+ * @{
+ */
+
+/**
  * @brief A wrapper class for operations on a dictionary column.
- *
- * @ingroup dictionary_classes
  *
  * A dictionary column contains a set of keys and a column of indices.
  * The keys are a sorted set of unique values for the column.
@@ -70,6 +78,7 @@ class dictionary_column_view : private column_view {
    */
   size_type keys_size() const noexcept;
 };
+/** @} */  // end of group
 
 //! Dictionary column APIs.
 namespace dictionary {  // defined here for doxygen output
