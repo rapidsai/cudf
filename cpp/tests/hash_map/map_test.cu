@@ -15,8 +15,8 @@
  */
 
 #include <cudf/types.hpp>
+#include <cudf_test/base_fixture.hpp>
 #include <hash/concurrent_unordered_map.cuh>
-#include <tests/utilities/base_fixture.hpp>
 
 #include <gtest/gtest.h>
 #include <rmm/thrust_rmm_allocator.h>

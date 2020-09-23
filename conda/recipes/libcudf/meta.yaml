@@ -177,6 +177,17 @@ test:
     - test -f $PREFIX/include/cudf/wrappers/dictionary.hpp
     - test -f $PREFIX/include/cudf/wrappers/durations.hpp
     - test -f $PREFIX/include/cudf/wrappers/timestamps.hpp
+    - test -f $PREFIX/include/cudf_test/detail/column_utilities.hpp
+    - test -f $PREFIX/include/cudf_test/base_fixture.hpp
+    - test -f $PREFIX/include/cudf_test/column_utilities.hpp
+    - test -f $PREFIX/include/cudf_test/column_wrapper.hpp
+    - test -f $PREFIX/include/cudf_test/cudf_gtest.hpp
+    - test -f $PREFIX/include/cudf_test/cxxopts.hpp
+    - test -f $PREFIX/include/cudf_test/scalar_utilities.hpp
+    - test -f $PREFIX/include/cudf_test/table_utilities.hpp
+    - test -f $PREFIX/include/cudf_test/timestamp_utilities.cuh
+    - test -f $PREFIX/include/cudf_test/type_list_utilities.hpp
+    - test -f $PREFIX/include/cudf_test/type_lists.hpp
 
 about:
   home: http://rapids.ai/
