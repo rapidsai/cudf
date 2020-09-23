@@ -22,7 +22,7 @@
 
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
-#include <tests/utilities/column_wrapper.hpp>
+#include <cudf_test/column_wrapper.hpp>
 
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
 

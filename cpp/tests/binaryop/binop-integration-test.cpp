@@ -22,10 +22,11 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/type_lists.hpp>
+
 #include <tests/binaryop/assert-binops.h>
 #include <tests/binaryop/binop-fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/type_lists.hpp>
 
 namespace cudf {
 namespace test {
