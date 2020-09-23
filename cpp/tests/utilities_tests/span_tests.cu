@@ -16,9 +16,9 @@
 
 #include <cudf/utilities/span.hpp>
 
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/cudf_gtest.hpp>
-#include <tests/utilities/type_lists.hpp>
+#include <cudf_test/utilities/base_fixture.hpp>
+#include <cudf_test/utilities/cudf_gtest.hpp>
+#include <cudf_test/utilities/type_lists.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <rmm/device_buffer.hpp>
