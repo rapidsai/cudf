@@ -1024,6 +1024,8 @@ thrust::host_vector<column_parse::stats> detect_column_types(
   data_type_detection<<<grid_size, block_size, 0, stream>>>(
     options, data, row_offsets, num_actual_columns, flags, d_stats.data().get());
 
+  CUDA_TRY(cudaStreamSynchronize(stream));
+
   return thrust::host_vector<column_parse::stats>(d_stats);
 }
 

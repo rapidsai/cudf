@@ -32,6 +32,8 @@
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <thrust/iterator/transform_iterator.h>
+
 #include <algorithm>
 #include <iostream>
 #include <numeric>
@@ -559,94 +561,103 @@ void reader::impl::gather_row_offsets(host_span<char const> data,
 
 constexpr cudf::type_id get_type_id_for_stats(size_t num_records, column_parse::stats const &stats)
 {
-  if (stats.countNULL == num_records) { return cudf::type_id::INT8; }
+  if (stats.countNULL == num_records) {
+    // If entire column is NULL, allocate the smallest amount of memory.
+    return cudf::type_id::INT8;
+  }
   if (stats.countString > 0) { return cudf::type_id::STRING; }
   if (stats.countDateAndTime > 0) { return cudf::type_id::TIMESTAMP_NANOSECONDS; }
   if (stats.countBool > 0) { return cudf::type_id::BOOL8; }
   if (stats.countFloat > 0) { return cudf::type_id::FLOAT64; }
-  if (stats.countNULL > 0) { return cudf::type_id::FLOAT64; }
+  if (stats.countNULL > 0) {
+    // conforms with PANDAS which states that a column of integers with a single NULL record need to
+    // be treated as floats.
+    return cudf::type_id::FLOAT64;
+  }
 
+  // All other integers are stored as 64-bit to conform to PANDAS
   return cudf::type_id::INT64;
 }
 
 std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream)
 {
-  std::vector<data_type> dtypes;
-
   if (opts_.get_dtypes().empty()) {
     if (num_records_ == 0) {
-      dtypes.resize(num_active_cols_, data_type{type_id::EMPTY});
-    } else {
-      d_column_flags_ = h_column_flags_;
-
-      auto column_stats =
-        cudf::io::csv::gpu::detect_column_types(opts,
-                                                data_.data().get(),
-                                                device_span<uint64_t const>(row_offsets_),
-                                                num_actual_cols_,
-                                                num_active_cols_,
-                                                d_column_flags_.data().get(),
-                                                stream);
-
-      CUDA_TRY(cudaStreamSynchronize(stream));
-
-      for (int col = 0; col < num_active_cols_; col++) {
-        dtypes.emplace_back(get_type_id_for_stats(num_records_, column_stats[0]));
-      }
+      return std::vector<data_type>(num_active_cols_, data_type{type_id::EMPTY});
     }
-  } else {
-    const bool is_dict =
-      std::all_of(opts_.get_dtypes().begin(), opts_.get_dtypes().end(), [](const auto &s) {
-        return s.find(':') != std::string::npos;
+
+    d_column_flags_ = h_column_flags_;
+
+    auto column_stats =
+      cudf::io::csv::gpu::detect_column_types(opts,
+                                              data_.data().get(),
+                                              device_span<uint64_t const>(row_offsets_),
+                                              num_actual_cols_,
+                                              num_active_cols_,
+                                              d_column_flags_.data().get(),
+                                              stream);
+
+    auto type_ids = thrust::make_transform_iterator(
+      column_stats.begin(), [num_records = num_records_](column_parse::stats const &stats) {
+        return get_type_id_for_stats(num_records, stats);
       });
 
-    if (!is_dict) {
-      if (opts_.get_dtypes().size() == 1) {
-        // If it's a single dtype, assign that dtype to all active columns
-        data_type dtype_;
-        column_parse::flags col_flags_;
-        std::tie(dtype_, col_flags_) = get_dtype_info(opts_.get_dtypes()[0]);
-        dtypes.resize(num_active_cols_, dtype_);
-        for (int col = 0; col < num_actual_cols_; col++) { h_column_flags_[col] |= col_flags_; }
-        CUDF_EXPECTS(dtypes.back().id() != cudf::type_id::EMPTY, "Unsupported data type");
-      } else {
-        // If it's a list, assign dtypes to active columns in the given order
-        CUDF_EXPECTS(static_cast<int>(opts_.get_dtypes().size()) >= num_actual_cols_,
-                     "Must specify data types for all columns");
+    return std::vector<data_type>(type_ids, type_ids + column_stats.size());
+  }
 
-        auto dtype_ = std::back_inserter(dtypes);
+  std::vector<data_type> dtypes;
 
-        for (int col = 0; col < num_actual_cols_; col++) {
-          if (h_column_flags_[col] & column_parse::enabled) {
-            column_parse::flags col_flags_;
-            std::tie(dtype_, col_flags_) = get_dtype_info(opts_.get_dtypes()[col]);
-            h_column_flags_[col] |= col_flags_;
-            CUDF_EXPECTS(dtypes.back().id() != cudf::type_id::EMPTY, "Unsupported data type");
-          }
-        }
-      }
+  const bool is_dict =
+    std::all_of(opts_.get_dtypes().begin(), opts_.get_dtypes().end(), [](std::string const &s) {
+      return s.find(':') != std::string::npos;
+    });
+
+  if (!is_dict) {
+    if (opts_.get_dtypes().size() == 1) {
+      // If it's a single dtype, assign that dtype to all active columns
+      data_type dtype_;
+      column_parse::flags col_flags_;
+      std::tie(dtype_, col_flags_) = get_dtype_info(opts_.get_dtypes()[0]);
+      dtypes.resize(num_active_cols_, dtype_);
+      for (int col = 0; col < num_actual_cols_; col++) { h_column_flags_[col] |= col_flags_; }
+      CUDF_EXPECTS(dtypes.back().id() != cudf::type_id::EMPTY, "Unsupported data type");
     } else {
-      // Translate vector of `name : dtype` strings to map
-      // NOTE: Incoming pairs can be out-of-order from column names in dataset
-      std::unordered_map<std::string, std::string> col_type_map;
-      for (const auto &pair : opts_.get_dtypes()) {
-        const auto pos     = pair.find_last_of(':');
-        const auto name    = pair.substr(0, pos);
-        const auto dtype   = pair.substr(pos + 1, pair.size());
-        col_type_map[name] = dtype;
-      }
+      // If it's a list, assign dtypes to active columns in the given order
+      CUDF_EXPECTS(static_cast<int>(opts_.get_dtypes().size()) >= num_actual_cols_,
+                   "Must specify data types for all columns");
 
       auto dtype_ = std::back_inserter(dtypes);
 
       for (int col = 0; col < num_actual_cols_; col++) {
         if (h_column_flags_[col] & column_parse::enabled) {
-          CUDF_EXPECTS(col_type_map.find(col_names_[col]) != col_type_map.end(),
-                       "Must specify data types for all active columns");
           column_parse::flags col_flags_;
-          std::tie(dtype_, col_flags_) = get_dtype_info(col_type_map[col_names_[col]]);
+          std::tie(dtype_, col_flags_) = get_dtype_info(opts_.get_dtypes()[col]);
           h_column_flags_[col] |= col_flags_;
           CUDF_EXPECTS(dtypes.back().id() != cudf::type_id::EMPTY, "Unsupported data type");
         }
+      }
+    }
+  } else if (is_dict) {
+    // Translate vector of `name : dtype` strings to map
+    // NOTE: Incoming pairs can be out-of-order from column names in dataset
+    std::unordered_map<std::string, std::string> col_type_map;
+    for (const auto &pair : opts_.get_dtypes()) {
+      const auto pos     = pair.find_last_of(':');
+      const auto name    = pair.substr(0, pos);
+      const auto dtype   = pair.substr(pos + 1, pair.size());
+      col_type_map[name] = dtype;
+    }
+
+    auto dtype_ = std::back_inserter(dtypes);
+
+    for (int col = 0; col < num_actual_cols_; col++) {
+      if (h_column_flags_[col] & column_parse::enabled) {
+        CUDF_EXPECTS(col_type_map.find(col_names_[col]) != col_type_map.end(),
+                     "Must specify data types for all active columns");
+        column_parse::flags col_flags_;
+        std::tie(dtype_, col_flags_) = get_dtype_info(col_type_map[col_names_[col]]);
+        h_column_flags_[col] |= col_flags_;
+        CUDF_EXPECTS(dtypes.back().id() != cudf::type_id::EMPTY, "Unsupported data type");
       }
     }
   }
