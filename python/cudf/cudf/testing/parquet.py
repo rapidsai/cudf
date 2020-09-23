@@ -7,7 +7,7 @@ import random
 import pyarrow as pa
 
 import cudf
-from cudf.testing.io import IOBase
+from cudf.testing.io import IOFuzz
 from cudf.testing.utils import _generate_rand_meta
 from cudf.tests import dataset_generator as dg
 
@@ -18,7 +18,7 @@ logging.basicConfig(
 )
 
 
-class ParquetReader(IOBase):
+class ParquetReader(IOFuzz):
     def __init__(
         self,
         file_name="temp_parquet",
@@ -71,7 +71,7 @@ class ParquetReader(IOBase):
         return file_name
 
 
-class ParquetWriter(IOBase):
+class ParquetWriter(IOFuzz):
     def __init__(
         self,
         file_name="temp_parquet",

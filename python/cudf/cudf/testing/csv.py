@@ -5,7 +5,7 @@ import logging
 import random
 
 import cudf
-from cudf.testing.io import IOBase
+from cudf.testing.io import IOFuzz
 from cudf.testing.utils import _generate_rand_meta, pyarrow_to_pandas
 from cudf.tests import dataset_generator as dg
 
@@ -16,7 +16,7 @@ logging.basicConfig(
 )
 
 
-class CSVReader(IOBase):
+class CSVReader(IOFuzz):
     def __init__(
         self,
         file_name="temp_csv.csv",
@@ -67,7 +67,7 @@ class CSVReader(IOBase):
         return file_name
 
 
-class CSVWriter(IOBase):
+class CSVWriter(IOFuzz):
     def __init__(
         self,
         file_name="temp_csv.csv",

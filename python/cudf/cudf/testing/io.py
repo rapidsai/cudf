@@ -12,7 +12,7 @@ logging.basicConfig(
 )
 
 
-class IOBase(object):
+class IOFuzz(object):
     def __init__(
         self,
         file_name=None,
