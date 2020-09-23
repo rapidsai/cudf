@@ -6474,16 +6474,10 @@ class DataFrame(Frame, Serializable):
                 raise NotImplementedError(msg)
 
             prepared = self._prepare_for_rowwise_op(method)
-            if not skipna and any(
-                col.nullable for col in prepared._columns
-            ):
+            if not skipna and any(col.nullable for col in prepared._columns):
                 mask = cudf.DataFrame(
                     {
-                        name: cudf._lib.transform.mask_to_bools(
-                            prepared._data[name].base_mask,
-                            0,
-                            len(prepared._data[name]),
-                        )
+                        name: prepared._data[name]._get_mask_as_column()
                         if prepared._data[name].nullable
                         else column.full(len(prepared._data[name]), True)
                         for name in prepared._data.names
@@ -6506,10 +6500,8 @@ class DataFrame(Frame, Serializable):
             if len(result.shape) == 1:
                 result = column.as_column(result)
                 if mask is not None:
-                    result = column.build_column(
-                        data=result.data,
-                        dtype=result.dtype,
-                        mask=cudf._lib.transform.bools_to_mask(mask._column),
+                    result = result.set_mask(
+                        cudf._lib.transform.bools_to_mask(mask._column)
                     )
                 return Series(result, index=self.index)
             else:

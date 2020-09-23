@@ -4619,6 +4619,83 @@ def test_rowwise_ops(data, op, skipna):
 
 
 @pytest.mark.parametrize(
+    "pdf,gdf",
+    [
+        (
+            pd.DataFrame(
+                {
+                    "a": [1, 2, 3, 4],
+                    "b": [7, np.NaN, 9, 10],
+                    "c": [np.NaN, np.NaN, np.NaN, np.NaN],
+                    "d": pd.Series(
+                        [None, None, None, None], dtype=pd.Int64Dtype()
+                    ),
+                    "e": pd.Series(
+                        [100, None, 200, None], dtype=pd.Int64Dtype()
+                    ),
+                    "f": pd.Series([10, None, np.NaN, 11]),
+                }
+            ),
+            gd.DataFrame(
+                {
+                    "a": [1, 2, 3, 4],
+                    "b": [7, np.NaN, 9, 10],
+                    "c": [np.NaN, np.NaN, np.NaN, np.NaN],
+                    "d": gd.Series([None, None, None, None], dtype="int64"),
+                    "e": [100, None, 200, None],
+                    "f": gd.Series([10, None, np.NaN, 11], nan_as_null=False),
+                }
+            ),
+        ),
+        (
+            pd.DataFrame(
+                {
+                    "a": [10, 11, 12, 13, 14, 15],
+                    "b": pd.Series([10, None, np.NaN, 2234, None, np.NaN],),
+                }
+            ),
+            gd.DataFrame(
+                {
+                    "a": [10, 11, 12, 13, 14, 15],
+                    "b": gd.Series(
+                        [10, None, np.NaN, 2234, None, np.NaN],
+                        nan_as_null=False,
+                    ),
+                }
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "op", ["max", "min", "sum", "product", "mean", "var", "std"]
+)
+@pytest.mark.parametrize(
+    "skipna",
+    [
+        True,
+        pytest.param(
+            False,
+            marks=[
+                pytest.mark.xfail(
+                    reason="https://github.com/pandas-dev/pandas/issues/36585"
+                )
+            ],
+        ),
+    ],
+)
+def test_rowwise_ops_nullable_dtypes(pdf, gdf, op, skipna):
+
+    if op in ("var", "std"):
+        expected = getattr(pdf, op)(axis=1, ddof=0, skipna=skipna)
+        got = getattr(gdf, op)(axis=1, ddof=0, skipna=skipna)
+    else:
+        expected = getattr(pdf, op)(axis=1, skipna=skipna)
+        got = getattr(gdf, op)(axis=1, skipna=skipna)
+
+    assert_eq(expected, got, check_less_precise=7)
+
+
+@pytest.mark.parametrize(
     "data",
     [
         [5.0, 6.0, 7.0],
