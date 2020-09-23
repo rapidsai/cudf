@@ -735,13 +735,6 @@ class MultiIndex(Index):
     def __len__(self):
         return self._data.nrows
 
-    def equals(self, other):
-        if self is other:
-            return True
-        if len(self) != len(other):
-            return False
-        return self == other
-
     def __eq__(self, other):
         if not hasattr(other, "_levels"):
             return False
