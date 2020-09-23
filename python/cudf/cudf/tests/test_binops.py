@@ -834,3 +834,26 @@ def test_scalar_binops_value_valid_combinations(lhs, rhs, dtype_l, dtype_r, op):
 
     assert host_result == device_result.value
     assert host_result.dtype == device_result.dtype
+
+@pytest.mark.parametrize('op', _binops)
+@pytest.mark.parametrize('dtype_l', cudf.utils.dtypes.NUMERIC_TYPES)
+@pytest.mark.parametrize('dtype_r', cudf.utils.dtypes.NUMERIC_TYPES)
+@pytest.mark.parametrize('l_valid', [True, False])
+@pytest.mark.parametrize('r_valid', [True, False])
+def test_scalar_binops_dtype_and_validity(dtype_l, dtype_r, l_valid, r_valid, op):
+
+    dtype_l = np.dtype(dtype_l)
+    dtype_r = np.dtype(dtype_r)
+
+    l_value = 0 if l_valid else None
+    r_value = 0 if r_valid else None
+
+    expect_dtype = op(dtype_l.type(0), dtype_r.type(0)).dtype
+
+    scalar_l = cudf.Scalar(l_value, dtype=dtype_l)
+    scalar_r = cudf.Scalar(r_value, dtype=dtype_r)
+
+    got = op(scalar_l, scalar_r)
+
+    assert got.dtype == expect_dtype
+    assert got.is_valid() == (l_valid and r_valid)
