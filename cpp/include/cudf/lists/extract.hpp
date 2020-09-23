@@ -22,8 +22,9 @@
 namespace cudf {
 namespace lists {
 /**
- * @ingroup lists_extract
+ * @addtogroup lists_extract
  * @{
+ * @file
  */
 
 /**

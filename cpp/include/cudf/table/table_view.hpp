@@ -22,8 +22,10 @@
 #include <vector>
 
 /**
- * @file table_view.hpp
- * @brief A `(mutable_)table_view` is a set of `(mutable_)column_view`s of equal
+ * @file
+ * @brief Class definitions for `(mutable)_table_view`
+ *
+ * A `(mutable_)table_view` is a set of `(mutable_)column_view`s of equal
  * size.
  *
  * A `(mutable_)table_view` is non-owning and trivially copyable and should be
@@ -137,7 +139,7 @@ class table_view_base {
 }  // namespace detail
 
 /**
- * @brief A set of `column_view`s of the same size.
+ * @brief A set of cudf::column_view's of the same size.
  *
  * @ingroup table_classes
  *
