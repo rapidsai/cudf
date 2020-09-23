@@ -1069,7 +1069,6 @@ public final class HostColumnVector extends HostColumnVectorCore {
     // For lists
     private <T> ColumnBuilder append(List<T> inputList) {
       assert type.isNestedType();
-      //rows += 1;
       // We know lists have only 1 children
       ColumnBuilder childBuilder = childBuilders.get(0);
       if (inputList == null) {
