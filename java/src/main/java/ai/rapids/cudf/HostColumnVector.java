@@ -459,7 +459,7 @@ public final class HostColumnVector implements AutoCloseable {
   /**
    * WARNING: Strictly for test only. This call is not efficient for production.
    */
-  ColumnBuilder.StructData getStruct(int rowIndex, ColumnBuilder.DataType mainType) {
+  StructData getStruct(int rowIndex, DataType mainType) {
     assert rowIndex < rows;
     assert type == DType.STRUCT;
     List<Object> retList = new ArrayList<>();
@@ -471,7 +471,7 @@ public final class HostColumnVector implements AutoCloseable {
     for (int k = 0; k < numChildren; k++) {
       retList.add(children.get(k).getElement(rowIndex));
     }
-    return new ColumnBuilder.StructData(retList);
+    return new StructData(retList);
   }
 
   /**
@@ -481,6 +481,7 @@ public final class HostColumnVector implements AutoCloseable {
     assert rowIndex < rows;
     assert type == DType.LIST;
     List retList = new ArrayList();
+    offHeap.offsets.printBuffer();
     int start = offHeap.offsets.getInt(rowIndex * DType.INT32.getSizeInBytes());
     int end = offHeap.offsets.getInt((rowIndex + 1) * DType.INT32.getSizeInBytes());
     // check if null or empty
@@ -824,15 +825,15 @@ public final class HostColumnVector implements AutoCloseable {
     }
   }
 
-  public static<T> HostColumnVector fromLists(ColumnBuilder.DataType dataType, List<T>... values) {
-    ColumnBuilder cb = new ColumnBuilder(dataType);
+  public static<T> HostColumnVector fromLists(DataType dataType, List<T>... values) {
+    ColumnBuilder cb = new ColumnBuilder(dataType, values.length);
     cb.appendLists(values);
     return cb.build();
   }
 
-  public static HostColumnVector fromStructs(ColumnBuilder.DataType dataType,
-                                                List<ColumnBuilder.StructData> values) {
-    ColumnBuilder cb = new ColumnBuilder(dataType);
+  public static HostColumnVector fromStructs(DataType dataType,
+                                             List<StructData> values) {
+    ColumnBuilder cb = new ColumnBuilder(dataType, values.size());
     cb.appendStructValues(values);
     return cb.build();
   }
@@ -1229,7 +1230,6 @@ public final class HostColumnVector implements AutoCloseable {
 
   public static final class ColumnBuilder implements  AutoCloseable {
 
-    public static final int INIT_OFFSET_SIZE = 10;
     private DType type;
     private HostMemoryBuffer data;
     private HostMemoryBuffer valid;
@@ -1245,18 +1245,19 @@ public final class HostColumnVector implements AutoCloseable {
     private int currentByteIndex = 0;
 
 
-    public ColumnBuilder(DataType type) {
+    public ColumnBuilder(HostColumnVector.DataType type, int rows) {
       this.type = type.getType();
       this.nullable = type.isNullable();
-      this.rows = type.getSize();
+      this.rows = rows;
       for (int i = 0; i < type.getNumChildren(); i++) {
-        childBuilders.add(new ColumnBuilder(type.getChild(i)));
+        childBuilders.add(new ColumnBuilder(type.getChild(i), 0));
       }
     }
 
     public HostColumnVector build() {
       List<NestedHostColumnVector> nestedHostColumnVectorList = new ArrayList<>();
       for (ColumnBuilder childBuilder : childBuilders) {
+        System.out.println("ChildBuilder =" + childBuilder.type + " offset=" + childBuilder.offsets + " data=" + childBuilder.data);
         nestedHostColumnVectorList.add(childBuilder.buildNestedInternal());
       }
       HostColumnVector hostColumnVector = new HostColumnVector(type, rows, Optional.of(nullCount), data, valid, offsets,
@@ -1297,10 +1298,10 @@ public final class HostColumnVector implements AutoCloseable {
 
     private void initAndResizeOffsetBuffer(int currentIndex) {
       if (this.offsets == null) {
-        offsets = HostMemoryBuffer.allocate(INIT_OFFSET_SIZE);
+        offsets = HostMemoryBuffer.allocate((rows + 1) * OFFSET_SIZE);
         offsets.setInt(0, 0);
       } else {
-        if (offsets.length <= currentIndex * OFFSET_SIZE + OFFSET_SIZE) {
+        if (offsets.length <= currentIndex * OFFSET_SIZE + OFFSET_SIZE || offsets.length < (rows + 1) * OFFSET_SIZE) {
           HostMemoryBuffer newOffset = HostMemoryBuffer.allocate(offsets.length * 2);
           try {
             newOffset.copyFromHostBuffer(0, offsets, 0, offsets.length);
@@ -1328,9 +1329,11 @@ public final class HostColumnVector implements AutoCloseable {
     }
 
     public final ColumnBuilder appendNull() {
+      resizeDataBuffer(currentIndex * type.getSizeInBytes());
       setNullAt(currentIndex);
+      //initAndResizeOffsetBuffer(currentIndex);
       currentIndex++;
-      if (type == DType.STRING) {
+      if (type == DType.STRING || type.isNestedType()) {
         initAndResizeOffsetBuffer(currentIndex);
         offsets.setInt(currentIndex * OFFSET_SIZE, currentByteIndex);
       }
@@ -1362,6 +1365,7 @@ public final class HostColumnVector implements AutoCloseable {
     // For lists
     private <T> ColumnBuilder append(List<T> inputList) {
       assert type.isNestedType();
+      //rows += 1;
       // We know lists have only 1 children
       ColumnBuilder childBuilder = childBuilders.get(0);
       if (inputList == null) {
@@ -1379,6 +1383,7 @@ public final class HostColumnVector implements AutoCloseable {
     }
 
     private void appendChildOrNull(ColumnBuilder childBuilder, Object listElement) {
+      childBuilder.rows += 1;
       if (listElement == null || (listElement instanceof StructData && ((StructData) listElement).dataRecord == null)) {
         childBuilder.appendNull();
       } else if (listElement instanceof Integer) {
@@ -1561,156 +1566,6 @@ public final class HostColumnVector implements AutoCloseable {
           offsets = null;
         }
         built = true;
-      }
-    }
-
-    protected class TableSchema {
-
-      List<DataType> types;
-
-      public TableSchema(DataType... types) {
-        this.types = Arrays.asList(types);
-      }
-    }
-
-    public static abstract class DataType {
-      abstract DType getType();
-      abstract boolean isNullable();
-      abstract long getSize();
-      abstract DataType getChild(int index);
-      abstract int getNumChildren();
-    }
-
-    public static class ListType extends DataType {
-      private boolean isNullable;
-      private long size;
-      private DataType child;
-
-      public ListType(boolean isNullable, long size, DataType child) {
-        this.isNullable = isNullable;
-        this.size = size;
-        this.child = child;
-      }
-
-      @Override
-      DType getType() {
-        return DType.LIST;
-      }
-
-      @Override
-      boolean isNullable() {
-        return isNullable;
-      }
-
-      @Override
-      long getSize() {
-        return size;
-      }
-
-      @Override
-      DataType getChild(int index) {
-        if (index > 0) {
-          return null;
-        }
-        return child;
-      }
-
-      @Override
-      int getNumChildren() {
-        return 1;
-      }
-    }
-
-    public static class StructData {
-      List<Object> dataRecord;
-
-      public StructData(List<Object> dataRecord) {
-        this.dataRecord = dataRecord;
-      }
-
-      public int getNumFields() {
-        if (dataRecord != null) {
-          return dataRecord.size();
-        } else {
-          return 0;
-        }
-      }
-    }
-
-    public static class StructType extends DataType {
-      private boolean isNullable;
-      private long size;
-      private List<DataType> children = new ArrayList<>();
-
-      public StructType(boolean isNullable, long size) {
-        this.isNullable = isNullable;
-        this.size = size;
-      }
-
-      @Override
-      DType getType() {
-        return DType.STRUCT;
-      }
-
-      @Override
-      boolean isNullable() {
-        return isNullable;
-      }
-
-      @Override
-      long getSize() {
-        return size;
-      }
-
-      @Override
-      DataType getChild(int index) {
-        return children.get(index);
-      }
-
-      @Override
-      int getNumChildren() {
-        return children.size();
-      }
-
-      void addChild(DataType childType) {
-        this.children.add(childType);
-      }
-    }
-
-    public static class BasicType extends DataType {
-      private DType type;
-      private boolean isNullable;
-      private long size;
-
-      public BasicType(boolean isNullable, long size, DType type) {
-        this.isNullable = isNullable;
-        this.size = size;
-        this.type = type;
-      }
-
-      @Override
-      DType getType() {
-        return type;
-      }
-
-      @Override
-      boolean isNullable() {
-        return isNullable;
-      }
-
-      @Override
-      long getSize() {
-        return size;
-      }
-
-      @Override
-      DataType getChild(int index) {
-        return null;
-      }
-
-      @Override
-      int getNumChildren() {
-        return 0;
       }
     }
   }
@@ -2182,6 +2037,142 @@ public final class HostColumnVector implements AutoCloseable {
           ", rows=" + rows +
           ", built=" + built +
           '}';
+    }
+  }
+
+  public static abstract class DataType {
+    abstract DType getType();
+    abstract boolean isNullable();
+    //abstract long getSize();
+    abstract DataType getChild(int index);
+    abstract int getNumChildren();
+  }
+
+  protected class TableSchema {
+
+    List<HostColumnVector.DataType> types;
+
+    public TableSchema(HostColumnVector.DataType... types) {
+      this.types = Arrays.asList(types);
+    }
+  }
+
+  public static class ListType extends HostColumnVector.DataType {
+    private boolean isNullable;
+    private HostColumnVector.DataType child;
+
+    public ListType(boolean isNullable, DataType child) {
+      this.isNullable = isNullable;
+      this.child = child;
+    }
+
+    @Override
+    DType getType() {
+      return DType.LIST;
+    }
+
+    @Override
+    boolean isNullable() {
+      return isNullable;
+    }
+
+//      @Override
+//      long getSize() {
+//        return size;
+//      }
+
+    @Override
+    HostColumnVector.DataType getChild(int index) {
+      if (index > 0) {
+        return null;
+      }
+      return child;
+    }
+
+    @Override
+    int getNumChildren() {
+      return 1;
+    }
+  }
+
+  public static class StructData {
+    List<Object> dataRecord;
+
+    public StructData(List<Object> dataRecord) {
+      this.dataRecord = dataRecord;
+    }
+
+    public int getNumFields() {
+      if (dataRecord != null) {
+        return dataRecord.size();
+      } else {
+        return 0;
+      }
+    }
+  }
+
+  public static class StructType extends HostColumnVector.DataType {
+    private boolean isNullable;
+    private List<HostColumnVector.DataType> children;
+
+    public StructType(boolean isNullable, List<HostColumnVector.DataType> children) {
+      this.isNullable = isNullable;
+      this.children = children;
+    }
+
+    @Override
+    DType getType() {
+      return DType.STRUCT;
+    }
+
+    @Override
+    boolean isNullable() {
+      return isNullable;
+    }
+
+//      @Override
+//      long getSize() {
+//        return size;
+//      }
+
+    @Override
+    HostColumnVector.DataType getChild(int index) {
+      return children.get(index);
+    }
+
+    @Override
+    int getNumChildren() {
+      return children.size();
+    }
+  }
+
+  public static class BasicType extends HostColumnVector.DataType {
+    private DType type;
+    private boolean isNullable;
+
+    public BasicType(boolean isNullable, DType type) {
+      this.isNullable = isNullable;
+      this.type = type;
+    }
+
+    @Override
+    DType getType() {
+      return type;
+    }
+
+    @Override
+    boolean isNullable() {
+      return isNullable;
+    }
+
+    @Override
+    HostColumnVector.DataType getChild(int index) {
+      return null;
+    }
+
+    @Override
+    int getNumChildren() {
+      return 0;
     }
   }
 }

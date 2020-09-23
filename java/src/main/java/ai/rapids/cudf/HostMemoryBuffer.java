@@ -632,4 +632,9 @@ public class HostMemoryBuffer extends MemoryBuffer {
     }
     System.out.println();
   }
+
+  @Override
+  public String toString() {
+    return "Buffer len=" + this.length;
+  }
 }

@@ -92,13 +92,13 @@ public class TableTest extends CudfTestBase {
   }
 
   public static void assertStructColumnsAreEqual(ColumnVector expected, ColumnVector cv,
-                                                 HostColumnVector.ColumnBuilder.DataType schema) {
+                                                 HostColumnVector.DataType schema) {
     assertPartialStructColumnsAreEqual(expected, 0, expected.getRowCount(), cv, "unnamed", true, schema);
   }
 
   public static void assertPartialStructColumnsAreEqual(ColumnVector expected, long rowOffset, long length,
                                                         ColumnVector cv, String colName, boolean enableNullCheck,
-                                                        HostColumnVector.ColumnBuilder.DataType schema) {
+                                                        HostColumnVector.DataType schema) {
     try (HostColumnVector hostExpected = expected.copyToHost();
          HostColumnVector hostcv = cv.copyToHost()) {
       assertPartialColumnsAreEqual(hostExpected, rowOffset, length, hostcv, colName, enableNullCheck,
@@ -108,7 +108,7 @@ public class TableTest extends CudfTestBase {
 
   public static void assertPartialColumnsAreEqual(ColumnVector expected, long rowOffset, long length,
                                                   ColumnVector cv, String colName, boolean enableNullCheck,
-                                                  HostColumnVector.ColumnBuilder.DataType type) {
+                                                  HostColumnVector.DataType type) {
     try (HostColumnVector hostExpected = expected.copyToHost();
          HostColumnVector hostcv = cv.copyToHost()) {
       assertPartialColumnsAreEqual(hostExpected, rowOffset, length, hostcv, colName, enableNullCheck, type);
@@ -117,7 +117,7 @@ public class TableTest extends CudfTestBase {
 
   public static void assertPartialColumnsAreEqual(HostColumnVector expected, long rowOffset, long length,
                                                   HostColumnVector cv, String colName, boolean enableNullCheck,
-                                                  HostColumnVector.ColumnBuilder.DataType schema) {
+                                                  HostColumnVector.DataType schema) {
     assertEquals(expected.getType(), cv.getType(), "Type For Column " + colName);
     assertEquals(length, cv.getRowCount(), "Row Count For Column " + colName);
     if (enableNullCheck) {
@@ -269,7 +269,7 @@ public class TableTest extends CudfTestBase {
 
   private static void assertStructColumnsEquals(HostColumnVector expected, HostColumnVector input,
                                                 String colName, boolean enableNullCheck,
-                                                HostColumnVector.ColumnBuilder.DataType schema) {
+                                                HostColumnVector.DataType schema) {
     for (int rowIndex = 0; rowIndex < expected.getRowCount(); rowIndex++) {
       assertEquals(expected.isNull(rowIndex), input.isNull(rowIndex));
       if (expected.getStruct(rowIndex, schema) != null) {
@@ -297,7 +297,7 @@ public class TableTest extends CudfTestBase {
   }
 
   public static void assertPartialTablesAreEqual(Table expected, long rowOffset, long length, Table table,
-                                                 boolean enableNullCheck, HostColumnVector.ColumnBuilder.DataType type) {
+                                                 boolean enableNullCheck, HostColumnVector.DataType type) {
     assertEquals(expected.getNumberOfColumns(), table.getNumberOfColumns());
     assertEquals(length, table.getRowCount(), "ROW COUNT");
     for (int col = 0; col < expected.getNumberOfColumns(); col++) {
@@ -315,7 +315,7 @@ public class TableTest extends CudfTestBase {
     assertPartialTablesAreEqual(expected, 0, expected.getRowCount(), table, true);
   }
 
-  public static void assertTablesAreEqual(Table expected, Table table, HostColumnVector.ColumnBuilder.DataType mainType) {
+  public static void assertTablesAreEqual(Table expected, Table table, HostColumnVector.DataType mainType) {
     assertPartialTablesAreEqual(expected, 0, expected.getRowCount(), table, true, mainType);
   }
 
@@ -3409,20 +3409,19 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testStructColumnFilter() {
-    HostColumnVector.ColumnBuilder.StructType type = new HostColumnVector.ColumnBuilder.StructType(true, 4);
-    type.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 3, DType.INT32));
-    type.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 3, DType.INT64));
-    HostColumnVector.ColumnBuilder.StructType expectedType = new HostColumnVector.ColumnBuilder.StructType(true, 2);
-    expectedType.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 2, DType.INT32));
-    expectedType.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 2, DType.INT64));
+    List<HostColumnVector.DataType> children =
+        Arrays.asList(new HostColumnVector.BasicType(true, DType.INT32),
+            new HostColumnVector.BasicType(true, DType.INT64));
+    HostColumnVector.StructType type = new HostColumnVector.StructType(true, children);
+    HostColumnVector.StructType expectedType = new HostColumnVector.StructType(true, children);
     List data1 = Arrays.asList(10, 20L);
     List data2 = Arrays.asList(50, 60L);
     List data3 = Arrays.asList(null, 80L);
     List data4 = null;
-    HostColumnVector.ColumnBuilder.StructData structData1 = new HostColumnVector.ColumnBuilder.StructData(data1);
-    HostColumnVector.ColumnBuilder.StructData structData2 = new HostColumnVector.ColumnBuilder.StructData(data2);
-    HostColumnVector.ColumnBuilder.StructData structData3 = new HostColumnVector.ColumnBuilder.StructData(data3);
-    HostColumnVector.ColumnBuilder.StructData structData4 = new HostColumnVector.ColumnBuilder.StructData(data4);
+    HostColumnVector.StructData structData1 = new HostColumnVector.StructData(data1);
+    HostColumnVector.StructData structData2 = new HostColumnVector.StructData(data2);
+    HostColumnVector.StructData structData3 = new HostColumnVector.StructData(data3);
+    HostColumnVector.StructData structData4 = new HostColumnVector.StructData(data4);
     try (ColumnVector mask = ColumnVector.fromBoxedBooleans(true, false, true, false);
          ColumnVector fromStructs = ColumnVector.fromStructs(type, Arrays.asList(structData1, structData2, structData3, structData4));
          Table input = new Table(fromStructs);
@@ -3435,20 +3434,19 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testStructColumnFilterStrings() {
-    HostColumnVector.ColumnBuilder.StructType type = new HostColumnVector.ColumnBuilder.StructType(true, 4);
-    type.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 4, DType.STRING));
-    type.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 4, DType.STRING));
-    HostColumnVector.ColumnBuilder.StructType expectedType = new HostColumnVector.ColumnBuilder.StructType(true, 3);
-    expectedType.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 3, DType.STRING));
-    expectedType.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 3, DType.STRING));
+    List<HostColumnVector.DataType> children =
+        Arrays.asList(new HostColumnVector.BasicType(true, DType.STRING),
+            new HostColumnVector.BasicType(true, DType.STRING));
+    HostColumnVector.StructType type = new HostColumnVector.StructType(true, children);
+    HostColumnVector.StructType expectedType = new HostColumnVector.StructType(true, children);
     List data1 = Arrays.asList("10", "aliceAndBob");
     List data2 = Arrays.asList("50", "foobar");
     List data3 = Arrays.asList(null, "zombies");
     List data4 = null;
-    HostColumnVector.ColumnBuilder.StructData structData1 = new HostColumnVector.ColumnBuilder.StructData(data1);
-    HostColumnVector.ColumnBuilder.StructData structData2 = new HostColumnVector.ColumnBuilder.StructData(data2);
-    HostColumnVector.ColumnBuilder.StructData structData3 = new HostColumnVector.ColumnBuilder.StructData(data3);
-    HostColumnVector.ColumnBuilder.StructData structData4 = new HostColumnVector.ColumnBuilder.StructData(data4);
+    HostColumnVector.StructData structData1 = new HostColumnVector.StructData(data1);
+    HostColumnVector.StructData structData2 = new HostColumnVector.StructData(data2);
+    HostColumnVector.StructData structData3 = new HostColumnVector.StructData(data3);
+    HostColumnVector.StructData structData4 = new HostColumnVector.StructData(data4);
     try (ColumnVector mask = ColumnVector.fromBoxedBooleans(true, false, true, true);
          ColumnVector fromStructs = ColumnVector.fromStructs(type, Arrays.asList(structData1, structData2, structData3, structData4));
          Table input = new Table(fromStructs);
