@@ -25,9 +25,13 @@ namespace code {
 const char* operation =
   R"***(
     #pragma once
-    #include <cmath>
-    #include <type_traits>
+
     #include "traits.h"
+
+    #include <cmath>
+
+    #include <cuda/std/type_traits>
+
     using namespace cuda::std;
 
     struct Add {

@@ -28,22 +28,22 @@
 #include <cudf/rolling.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
-#include <rolling/rolling_detail.hpp>
-#include <rolling/rolling_jit_detail.hpp>
 
-#include <jit/launcher.h>
-#include <jit/parser.h>
-#include <jit/type.h>
-#include <rolling/jit/code/code.h>
-
-#include <bit.hpp.jit>
-#include <rolling_jit_detail.hpp.jit>
-#include <types.hpp.jit>
+#include <jit/bit.hpp.jit>
+#include <jit/rolling_jit_detail.hpp.jit>
+#include <jit/types.hpp.jit>
 
 #include <thrust/binary_search.h>
 #include <rmm/device_scalar.hpp>
 
 #include <memory>
+
+#include "jit/launcher.h"
+#include "jit/parser.h"
+#include "jit/type.h"
+#include "rolling/jit/code/code.h"
+#include "rolling/rolling_detail.hpp"
+#include "rolling/rolling_jit_detail.hpp"
 
 namespace cudf {
 namespace detail {

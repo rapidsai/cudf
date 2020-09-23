@@ -23,18 +23,18 @@ namespace jit {
 namespace code {
 const char* traits =
   R"***(
-#pragma once
-    #include <cstdint>
+    #pragma once
+
+    // Include Jitify's cstddef header first
+    #include <cstddef>
+
+    #include <cuda/std/climits>
+    #include <cuda/std/cstddef>
+    #include <cuda/std/limits>
     #include <cuda/std/type_traits>
 
-    // -------------------------------------------------------------------------
-    // Simplifying std::is_integral
-    template <typename T>
-    constexpr bool is_integral_v = cuda::std::is_integral<T>::value;
-
-    // Simplifying std::is_floating_point
-    template <typename T>
-    constexpr bool is_floating_point_v = cuda::std::is_floating_point<T>::value;
+    #include <cudf/wrappers/durations.hpp>
+    #include <cudf/wrappers/timestamps.hpp>
 
     // -------------------------------------------------------------------------
     // type_traits cannot tell the difference between float and double

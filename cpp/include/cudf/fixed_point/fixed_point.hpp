@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <cudf/types.hpp>
+
 // Note: The <cuda/std/*> versions are used in order for Jitify to work with our fixed_point type.
 //       Jitify is needed for several algorithms (binaryop, rolling, etc)
 #include <cuda/std/limits>
@@ -24,7 +26,6 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
-
 #include <string>
 
 //! `fixed_point` and supporting types

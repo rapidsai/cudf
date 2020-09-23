@@ -27,7 +27,7 @@ message("Fetching Jitify")
 FetchContent_Declare(
     jitify
     GIT_REPOSITORY https://github.com/rapidsai/jitify.git
-    GIT_TAG        cudf_0.15
+    GIT_TAG        cudf_0.16
     GIT_SHALLOW    true
 )
 

@@ -17,6 +17,13 @@
  * limitations under the License.
  */
 
+#include "binaryop/jit/code/code.h"
+#include "binaryop/jit/util.hpp"
+#include "compiled/binary_ops.hpp"
+#include "jit/launcher.h"
+#include "jit/parser.h"
+#include "jit/type.h"
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/binaryop.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -25,23 +32,16 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+// #include <cudf/datetime.hpp>  // replace eventually
 
-#include <binaryop/jit/code/code.h>
-#include <jit/launcher.h>
-#include <jit/parser.h>
-#include <jit/type.h>
-#include <binaryop/jit/util.hpp>
-#include <cudf/datetime.hpp>  // replace eventually
-
-#include "compiled/binary_ops.hpp"
-
-#include <bit.hpp.jit>
-#include <durations.hpp.jit>
-#include <fixed_point.hpp.jit>
+#include <jit/bit.hpp.jit>
 #include <jit/common_headers.hpp>
+#include <jit/durations.hpp.jit>
+#include <jit/fixed_point.hpp.jit>
+#include <jit/timestamps.hpp.jit>
+#include <jit/types.hpp.jit>
+
 #include <string>
-#include <timestamps.hpp.jit>
-#include <types.hpp.jit>
 
 namespace cudf {
 
