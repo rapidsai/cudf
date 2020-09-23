@@ -384,10 +384,9 @@ def _finalize_gb_agg(
     if sort:
         gb = gb.sort_values(gb_cols)
 
-    # Set index
-    # TODO: Use `inplace` when supported (See GH PR#6231)
+    # Set index if necessary
     if as_index:
-        gb = gb.set_index(gb_cols)
+        gb.set_index(gb_cols, inplace=True)
 
     # Unflatten column names
     col_array = []
