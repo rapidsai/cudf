@@ -73,7 +73,7 @@
 - PR #6265 Update JNI to use ORC options builder
 - PR #6273 Update JNI to use ORC options builder
 - PR #6287 Make java aggregate API follow C++ API
-- PR Remove cpw macros from page encode kernels
+- PR #6306 Remove cpw macros from page encode kernels
 - PR #6303 Use cudf test dtypes so timedelta tests are determinstic
 
 ## Bug Fixes
