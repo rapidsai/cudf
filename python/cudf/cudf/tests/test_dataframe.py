@@ -4587,6 +4587,15 @@ def test_df_constructor_dtype(dtype):
                 "c": [np.NaN, np.NaN, np.NaN, np.NaN],
                 "d": gd.Series([None, None, None, None], dtype="int64"),
                 "e": [100, None, 200, None],
+                "f": gd.Series([10, None, np.NaN, 11], nan_as_null=False),
+            }
+        ),
+        gd.DataFrame(
+            {
+                "a": [10, 11, 12, 13, 14, 15],
+                "b": gd.Series(
+                    [10, None, np.NaN, 2234, None, np.NaN], nan_as_null=False
+                ),
             }
         ),
     ],
@@ -4594,16 +4603,17 @@ def test_df_constructor_dtype(dtype):
 @pytest.mark.parametrize(
     "op", ["max", "min", "sum", "product", "mean", "var", "std"]
 )
-def test_rowwise_ops(data, op):
+@pytest.mark.parametrize("skipna", [True, False])
+def test_rowwise_ops(data, op, skipna):
     gdf = data
     pdf = gdf.to_pandas()
 
     if op in ("var", "std"):
-        expected = getattr(pdf, op)(axis=1, ddof=0)
-        got = getattr(gdf, op)(axis=1, ddof=0)
+        expected = getattr(pdf, op)(axis=1, ddof=0, skipna=skipna)
+        got = getattr(gdf, op)(axis=1, ddof=0, skipna=skipna)
     else:
-        expected = getattr(pdf, op)(axis=1)
-        got = getattr(gdf, op)(axis=1)
+        expected = getattr(pdf, op)(axis=1, skipna=skipna)
+        got = getattr(gdf, op)(axis=1, skipna=skipna)
 
     assert_eq(expected, got, check_less_precise=7)
 
