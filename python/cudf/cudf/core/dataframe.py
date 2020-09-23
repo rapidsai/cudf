@@ -6522,7 +6522,7 @@ class DataFrame(Frame, Serializable):
                 raise NotImplementedError(msg)
 
             prepared = self._prepare_for_rowwise_op(method)
-            if skipna is False and any(
+            if not skipna and any(
                 [col.nullable for col in prepared._columns]
             ):
                 mask = cudf.DataFrame(
