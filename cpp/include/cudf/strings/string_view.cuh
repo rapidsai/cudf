@@ -21,13 +21,13 @@
 #include <iterator>
 
 /**
- * @file string_view.cuh
+ * @file
  * @brief Class definition for cudf::string_view.
  */
 
 namespace cudf {
 
-using char_utf8 = uint32_t;  //<< UTF-8 characters are 1-4 bytes
+using char_utf8 = uint32_t;  ///< UTF-8 characters are 1-4 bytes
 
 /**
  * @brief A non-owning, immutable view of device data that is a variable length

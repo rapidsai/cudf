@@ -283,24 +283,41 @@ typedef native_jArray<jboolean, jbooleanArray, native_jbooleanArray_accessor> na
 template <typename T> class native_jpointerArray {
 private:
   native_jlongArray wrapped;
+  JNIEnv *const env;
 
 public:
   native_jpointerArray(native_jpointerArray const &) = delete;
   native_jpointerArray &operator=(native_jpointerArray const &) = delete;
 
-  native_jpointerArray(JNIEnv *const env, jlongArray orig) : wrapped(env, orig) {}
+  native_jpointerArray(JNIEnv *const env, jlongArray orig) : wrapped(env, orig), env(env) {}
 
-  native_jpointerArray(JNIEnv *const env, int len) : wrapped(env, len) {}
+  native_jpointerArray(JNIEnv *const env, int len) : wrapped(env, len), env(env) {}
 
-  native_jpointerArray(JNIEnv *const env, T *arr, int len) : wrapped(env, arr, len) {}
+  native_jpointerArray(JNIEnv *const env, T *arr, int len) : wrapped(env, arr, len), env(env) {}
 
   bool is_null() const noexcept { return wrapped.is_null(); }
 
   int size() const noexcept { return wrapped.size(); }
 
-  T *operator[](int index) const { return data()[index]; }
+  T *operator[](int index) const { 
+    if (data() == NULL) {
+      throw_java_exception(env, NPE_CLASS, "pointer is NULL");
+    }
+    if (index < 0 || index >= wrapped.size()) {
+      throw_java_exception(env, INDEX_OOB_CLASS, "NOT IN BOUNDS");
+    }
+    return data()[index];
+  }
 
-  T *&operator[](int index) { return data()[index]; }
+  T *&operator[](int index) {
+    if (data() == NULL) {
+      throw_java_exception(env, NPE_CLASS, "pointer is NULL");
+    }
+    if (index < 0 || index >= wrapped.size()) {
+      throw_java_exception(env, INDEX_OOB_CLASS, "NOT IN BOUNDS");
+    }
+    return data()[index];
+  }
 
   T *const *data() const { return reinterpret_cast<T **>(wrapped.data()); }
 

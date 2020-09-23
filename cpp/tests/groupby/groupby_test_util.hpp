@@ -16,9 +16,9 @@
 
 #pragma once
 
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/table_utilities.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/table_utilities.hpp>
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
