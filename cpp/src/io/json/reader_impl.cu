@@ -27,7 +27,6 @@
 
 #include <cudf/detail/utilities/trie.cuh>
 #include <cudf/groupby.hpp>
-#include <cudf/io/readers.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
@@ -61,13 +60,10 @@ constexpr size_t calculate_max_row_size(int num_columns = 0) noexcept
   constexpr size_t max_row_bytes = 16 * 1024;  // 16KB
   constexpr size_t column_bytes  = 64;
   constexpr size_t base_padding  = 1024;  // 1KB
-  if (num_columns == 0) {
-    // Use flat size if the number of columns is not known
-    return max_row_bytes;
-  } else {
-    // Expand the size based on the number of columns, if available
-    return base_padding + num_columns * column_bytes;
-  }
+  return num_columns == 0
+           ? max_row_bytes  // Use flat size if the # of columns is not known
+           : base_padding +
+               num_columns * column_bytes;  // Expand size based on the # of columns, if available
 }
 
 }  // anonymous namespace
@@ -437,8 +433,8 @@ void reader::impl::set_column_names(cudaStream_t stream)
   // If the first opening bracket is '{', assume object format
   if (first_curly_bracket < first_square_bracket) {
     // use keys as column names if input rows are objects
-    auto keys_desc        = get_json_object_keys_hashes(stream);
-    metadata.column_names = keys_desc.first;
+    auto keys_desc         = get_json_object_keys_hashes(stream);
+    metadata_.column_names = keys_desc.first;
     set_column_map(std::move(keys_desc.second));
   } else {
     int cols_found = 0;
@@ -450,7 +446,7 @@ void reader::impl::set_column_names(cudaStream_t stream)
       }
       // Check if end of a column/row
       else if (pos == first_row.size() - 1 || (!quotation && first_row[pos] == opts_.delimiter)) {
-        metadata.column_names.emplace_back(std::to_string(cols_found++));
+        metadata_.column_names.emplace_back(std::to_string(cols_found++));
       }
     }
   }
@@ -467,43 +463,51 @@ void reader::impl::set_data_types(cudaStream_t stream)
 {
   auto const dtype = options_.get_dtypes();
   if (!dtype.empty()) {
-    CUDF_EXPECTS(dtype.size() == metadata.column_names.size(),
+    CUDF_EXPECTS(dtype.size() == metadata_.column_names.size(),
                  "Need to specify the type of each column.\n");
+
     // Assume that the dtype is in dictionary format only if all elements contain a colon
-    const bool is_dict = std::all_of(dtype.begin(), dtype.end(), [](const std::string &s) {
-      return std::find(s.begin(), s.end(), ':') != s.end();
-    });
+    const bool is_dict =
+      std::all_of(std::cbegin(dtype), std::cend(dtype), [](const std::string &s) {
+        return std::find(std::cbegin(s), std::cend(s), ':') != std::cend(s);
+      });
+
+    // When C++17, use std::string_view and CTAD
+    auto split_on_colon = [](auto const &s) -> std::pair<std::string, std::string> {
+      auto const i = s.find(":");
+      auto const a = s.substr(0, i);
+      auto const b = s.substr(i + 1);
+      return {a, b};
+    };
+
     if (is_dict) {
       std::map<std::string, data_type> col_type_map;
-
-      for (const auto &ts : dtype) {
-        const size_t colon_idx = ts.find(":");
-        const std::string col_name(ts.begin(), ts.begin() + colon_idx);
-        const std::string type_str(ts.begin() + colon_idx + 1, ts.end());
-
-        col_type_map[col_name] = convert_string_to_dtype(type_str);
-      }
+      std::transform(std::cbegin(dtype),
+                     std::cend(dtype),
+                     std::inserter(col_type_map, col_type_map.end()),
+                     [&](auto const &ts) -> std::pair<std::string, data_type> {
+                       // When C++17, use structured bindings: auto const& [col_name, type_str] = ..
+                       auto split = split_on_colon(ts);
+                       return {split.first, convert_string_to_dtype(split.second)};
+                     });
 
       // Using the map here allows O(n log n) complexity
-      for (size_t col = 0; col < dtype.size(); ++col) {
-        dtypes_.push_back(col_type_map[metadata.column_names[col]]);
-        // dtypes_extra_info_.push_back(col_type_info_map[column_names_[col]]);
-      }
+      std::transform(std::cbegin(metadata_.column_names),
+                     std::cend(metadata_.column_names),
+                     std::back_inserter(dtypes_),
+                     [&](auto const &column_name) { return col_type_map[column_name]; });
     } else {
-      auto dtype_ = std::back_inserter(dtypes_);
-      // auto dtype_info_ = std::back_inserter(dtypes_extra_info_);
-      for (size_t col = 0; col < dtype.size(); ++col) {
-        // std::tie(dtype_, dtype_info_) = convertStringToDtype(options_.dtype[col]);
-        dtype_ = convert_string_to_dtype(dtype[col]);
-      }
+      std::transform(std::cbegin(dtype),
+                     std::cend(dtype),
+                     std::back_inserter(dtypes_),
+                     [](auto const &col_dtype) { return convert_string_to_dtype(col_dtype); });
     }
   } else {
     CUDF_EXPECTS(rec_starts_.size() != 0, "No data available for data type inference.\n");
-    const auto num_columns = metadata.column_names.size();
+    auto const num_columns       = metadata_.column_names.size();
+    auto const do_set_null_count = key_to_col_idx_map_ != nullptr;
 
-    auto do_set_null_count = key_to_col_idx_map != nullptr;
-
-    auto h_column_infos =
+    auto const h_column_infos =
       cudf::io::json::gpu::detect_data_types(static_cast<const char *>(data_.data()),
                                              data_.size(),
                                              opts_,
@@ -514,26 +518,31 @@ void reader::impl::set_data_types(cudaStream_t stream)
                                              rec_starts_.size(),
                                              stream);
 
-    for (const auto &cinfo : h_column_infos) {
+    auto get_type_id = [&](auto const &cinfo) {
       if (cinfo.null_count == static_cast<int>(rec_starts_.size())) {
         // Entire column is NULL; allocate the smallest amount of memory
-        dtypes_.push_back(data_type(type_id::INT8));
+        return type_id::INT8;
       } else if (cinfo.string_count > 0) {
-        dtypes_.push_back(data_type(type_id::STRING));
+        return type_id::STRING;
       } else if (cinfo.datetime_count > 0) {
-        dtypes_.push_back(data_type(type_id::TIMESTAMP_MILLISECONDS));
+        return type_id::TIMESTAMP_MILLISECONDS;
       } else if (cinfo.float_count > 0 || (cinfo.int_count > 0 && cinfo.null_count > 0)) {
-        dtypes_.push_back(data_type(type_id::FLOAT64));
+        return type_id::FLOAT64;
       } else if (cinfo.int_count > 0) {
-        dtypes_.push_back(data_type(type_id::INT64));
+        return type_id::INT64;
       } else if (cinfo.bool_count > 0) {
-        dtypes_.push_back(data_type(type_id::BOOL8));
+        return type_id::BOOL8;
       } else {
         CUDF_FAIL("Data type detection failed.\n");
       }
-    }
+    };
+
+    std::transform(std::cbegin(h_column_infos),
+                   std::cend(h_column_infos),
+                   std::back_inserter(dtypes_),
+                   [&](auto const &cinfo) { return data_type{get_type_id(cinfo)}; });
   }
-}
+}  // namespace json
 
 /**
  * @brief Parse the input data and store results a table
@@ -593,7 +602,7 @@ table_with_metadata reader::impl::convert_data_to_table(cudaStream_t stream)
 
   CUDF_EXPECTS(!out_columns.empty(), "Error converting json input into gdf columns.\n");
 
-  return table_with_metadata{std::make_unique<table>(std::move(out_columns)), metadata};
+  return table_with_metadata{std::make_unique<table>(std::move(out_columns)), metadata_};
 }
 
 reader::impl::impl(std::unique_ptr<datasource> source,
@@ -604,14 +613,14 @@ reader::impl::impl(std::unique_ptr<datasource> source,
 {
   CUDF_EXPECTS(options_.is_enabled_lines(), "Only JSON Lines format is currently supported.\n");
 
-  d_true_trie_         = createSerializedTrie({"true"});
-  opts_.trueValuesTrie = d_true_trie_.data().get();
+  d_trie_true_         = createSerializedTrie({"true"});
+  opts_.trueValuesTrie = d_trie_true_.data().get();
 
-  d_false_trie_         = createSerializedTrie({"false"});
-  opts_.falseValuesTrie = d_false_trie_.data().get();
+  d_trie_false_         = createSerializedTrie({"false"});
+  opts_.falseValuesTrie = d_trie_false_.data().get();
 
-  d_na_trie_         = createSerializedTrie({"null"});
-  opts_.naValuesTrie = d_na_trie_.data().get();
+  d_trie_na_         = createSerializedTrie({"null"});
+  opts_.naValuesTrie = d_trie_na_.data().get();
 
   opts_.dayfirst = options.is_enabled_dayfirst();
 }
@@ -644,7 +653,7 @@ table_with_metadata reader::impl::read(json_reader_options const &options, cudaS
   CUDF_EXPECTS(data_.size() != 0, "Error uploading input data to the GPU.\n");
 
   set_column_names(stream);
-  CUDF_EXPECTS(!metadata.column_names.empty(), "Error determining column names.\n");
+  CUDF_EXPECTS(!metadata_.column_names.empty(), "Error determining column names.\n");
 
   set_data_types(stream);
   CUDF_EXPECTS(!dtypes_.empty(), "Error in data type detection.\n");

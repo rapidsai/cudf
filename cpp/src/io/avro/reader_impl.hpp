@@ -29,7 +29,6 @@
 
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/avro.hpp>
-#include <cudf/io/readers.hpp>
 
 #include <memory>
 #include <string>

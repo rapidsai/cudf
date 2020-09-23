@@ -180,3 +180,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
 
     cdef cppclass pq_chunked_state:
         pass
+
+    cdef unique_ptr[vector[uint8_t]] merge_rowgroup_metadata(
+        const vector[unique_ptr[vector[uint8_t]]]& metadata_list
+    ) except +
