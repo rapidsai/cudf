@@ -220,7 +220,7 @@ struct EncPage {
   uint8_t *page_data;        //!< Ptr to uncompressed page
   uint8_t *compressed_data;  //!< Ptr to compressed page
   uint16_t num_fragments;    //!< Number of fragments in page
-  uint8_t page_type;         //!< Page type (0=data, 2=dictionary)
+  PageType page_type;        //!< Page type (0=data, 2=dictionary)
   uint8_t dict_bits_plus1;   //!< 0=plain, nonzero:bits to encoding dictionary indices + 1
   uint32_t chunk_id;         //!< Index in chunk array
   uint32_t hdr_size;         //!< Size of page header

@@ -186,7 +186,7 @@ struct DictionaryPageHeader {
  * skipped during reading.
  **/
 struct PageHeader {
-  PageType type = DATA_PAGE;  // the type of the page: indicates which of the *_header fields is set
+  PageType type = PageType::DATA_PAGE;  // the type of the page: indicates which of the *_header fields is set
   int32_t uncompressed_page_size = 0;  // Uncompressed page size in bytes (not including the header)
   int32_t compressed_page_size   = 0;  // Compressed page size in bytes (not including the header)
   DataPageHeader data_page_header;

@@ -17,6 +17,8 @@
 #ifndef __IO_PARQUET_COMMON_H__
 #define __IO_PARQUET_COMMON_H__
 
+#include <cstdint>
+
 namespace cudf {
 namespace io {
 namespace parquet {
@@ -111,7 +113,7 @@ enum FieldRepetitionType {
 /**
  * @brief Types of pages
  **/
-enum PageType {
+enum class PageType : uint8_t {
   DATA_PAGE       = 0,
   INDEX_PAGE      = 1,
   DICTIONARY_PAGE = 2,
