@@ -23,7 +23,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
-#include <tests/utilities/column_wrapper.hpp>
+#include <cudf_test/column_wrapper.hpp>
 
 #include <fixture/benchmark_fixture.hpp>
 #include <synchronization/synchronization.hpp>
