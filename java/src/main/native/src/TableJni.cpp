@@ -22,8 +22,10 @@
 #include <cudf/groupby.hpp>
 #include <cudf/hashing.hpp>
 #include <cudf/interop.hpp>
+#include <cudf/io/csv.hpp>
 #include <cudf/io/data_sink.hpp>
-#include <cudf/io/functions.hpp>
+#include <cudf/io/parquet.hpp>
+#include <cudf/io/orc.hpp>
 #include <cudf/join.hpp>
 #include <cudf/merge.hpp>
 #include <cudf/partitioning.hpp>
@@ -191,9 +193,9 @@ public:
   std::unique_ptr<jni_writer_data_sink> sink;
 };
 
-typedef jni_table_writer_handle<cudf::io::detail::parquet::pq_chunked_state>
+typedef jni_table_writer_handle<cudf::io::pq_chunked_state>
     native_parquet_writer_handle;
-typedef jni_table_writer_handle<cudf::io::detail::orc::orc_chunked_state> native_orc_writer_handle;
+typedef jni_table_writer_handle<cudf::io::orc_chunked_state> native_orc_writer_handle;
 
 class native_arrow_ipc_writer_handle final {
 public:
@@ -830,38 +832,21 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readCSV(
       source.reset(new cudf::io::source_info(filename.get()));
     }
 
-    cudf::io::read_csv_args read_arg{*source};
-    read_arg.lineterminator = '\n';
-    // delimiter ideally passed in
-    read_arg.delimiter = delim;
-    read_arg.delim_whitespace = 0;
-    read_arg.skipinitialspace = 0;
-    read_arg.header = header_row;
-
-    read_arg.names = n_col_names.as_cpp_vector();
-    read_arg.dtype = n_data_types.as_cpp_vector();
-
-    read_arg.use_cols_names = n_filter_col_names.as_cpp_vector();
-
-    read_arg.skip_blank_lines = true;
-
-    read_arg.true_values = n_true_values.as_cpp_vector();
-    read_arg.false_values = n_false_values.as_cpp_vector();
-
-    read_arg.na_values = n_null_values.as_cpp_vector();
-    read_arg.keep_default_na = false; ///< Keep the default NA values
-    read_arg.na_filter = n_null_values.size() > 0;
-
-    read_arg.mangle_dupe_cols = true;
-    read_arg.dayfirst = 0;
-    read_arg.compression = cudf::io::compression_type::AUTO;
-    read_arg.decimal = '.';
-    read_arg.quotechar = quote;
-    read_arg.quoting = cudf::io::quote_style::MINIMAL;
-    read_arg.doublequote = true;
-    read_arg.comment = comment;
-
-    cudf::io::table_with_metadata result = cudf::io::read_csv(read_arg);
+    cudf::io::csv_reader_options opts = cudf::io::csv_reader_options::builder(*source)
+      .delimiter(delim)
+      .header(header_row)
+      .names(n_col_names.as_cpp_vector())
+      .dtypes(n_data_types.as_cpp_vector())
+      .use_cols_names(n_filter_col_names.as_cpp_vector())
+      .true_values(n_true_values.as_cpp_vector())
+      .false_values(n_false_values.as_cpp_vector())
+      .na_values(n_null_values.as_cpp_vector())
+      .keep_default_na(false)
+      .na_filter(n_null_values.size() > 0)
+      .quotechar(quote)
+      .comment(comment)
+      .build();
+    cudf::io::table_with_metadata result = cudf::io::read_csv(opts);
     return cudf::jni::convert_table_for_return(env, result.tbl);
   }
   CATCH_STD(env, NULL);
@@ -899,16 +884,13 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(
       source.reset(new cudf::io::source_info(filename.get()));
     }
 
-    cudf::io::read_parquet_args read_arg(*source);
-
-    read_arg.columns = n_filter_col_names.as_cpp_vector();
-
-    read_arg.skip_rows = -1;
-    read_arg.num_rows = -1;
-    read_arg.strings_to_categorical = false;
-    read_arg.timestamp_type = cudf::data_type(static_cast<cudf::type_id>(unit));
-
-    cudf::io::table_with_metadata result = cudf::io::read_parquet(read_arg);
+    cudf::io::parquet_reader_options opts =
+      cudf::io::parquet_reader_options::builder(*source)
+        .columns(n_filter_col_names.as_cpp_vector())
+        .convert_strings_to_categories(false)
+        .timestamp_type(cudf::data_type(static_cast<cudf::type_id>(unit)))
+        .build();
+    cudf::io::table_with_metadata result = cudf::io::read_parquet(opts);
     return cudf::jni::convert_table_for_return(env, result.tbl);
   }
   CATCH_STD(env, NULL);
@@ -943,11 +925,13 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
     std::unique_ptr<cudf::jni::jni_writer_data_sink> data_sink(
         new cudf::jni::jni_writer_data_sink(env, consumer));
     sink_info sink{data_sink.get()};
-    compression_type compression{static_cast<compression_type>(j_compression)};
-    statistics_freq stats{static_cast<statistics_freq>(j_stats_freq)};
-
-    write_parquet_chunked_args args(sink, &metadata, compression, stats);
-    std::shared_ptr<detail::parquet::pq_chunked_state> state = write_parquet_chunked_begin(args);
+    chunked_parquet_writer_options opts =
+      chunked_parquet_writer_options::builder(sink)
+        .nullable_metadata(&metadata)
+        .compression(static_cast<compression_type>(j_compression))
+        .stats_level(static_cast<statistics_freq>(j_stats_freq))
+        .build();
+    std::shared_ptr<pq_chunked_state> state = write_parquet_chunked_begin(opts);
     cudf::jni::native_parquet_writer_handle *ret =
         new cudf::jni::native_parquet_writer_handle(state, data_sink);
     return reinterpret_cast<jlong>(ret);
@@ -983,11 +967,13 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetFileBegin(
     }
 
     sink_info sink{output_path.get()};
-    compression_type compression{static_cast<compression_type>(j_compression)};
-    statistics_freq stats{static_cast<statistics_freq>(j_stats_freq)};
-
-    write_parquet_chunked_args args(sink, &metadata, compression, stats);
-    std::shared_ptr<detail::parquet::pq_chunked_state> state = write_parquet_chunked_begin(args);
+    chunked_parquet_writer_options opts =
+      chunked_parquet_writer_options::builder(sink)
+        .nullable_metadata(&metadata)
+        .compression(static_cast<compression_type>(j_compression))
+        .stats_level(static_cast<statistics_freq>(j_stats_freq))
+        .build();
+    std::shared_ptr<pq_chunked_state> state = write_parquet_chunked_begin(opts);
     cudf::jni::native_parquet_writer_handle *ret =
         new cudf::jni::native_parquet_writer_handle(state);
     return reinterpret_cast<jlong>(ret);
@@ -1064,15 +1050,13 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readORC(
       source.reset(new cudf::io::source_info(filename.get()));
     }
 
-    cudf::io::read_orc_args read_arg{*source};
-    read_arg.columns = n_filter_col_names.as_cpp_vector();
-    read_arg.skip_rows = -1;
-    read_arg.num_rows = -1;
-    read_arg.use_index = false;
-    read_arg.use_np_dtypes = static_cast<bool>(usingNumPyTypes);
-    read_arg.timestamp_type = cudf::data_type(static_cast<cudf::type_id>(unit));
-
-    cudf::io::table_with_metadata result = cudf::io::read_orc(read_arg);
+    cudf::io::orc_reader_options opts = cudf::io::orc_reader_options::builder(*source)
+      .columns(n_filter_col_names.as_cpp_vector())
+      .use_index(false)
+      .use_np_dtypes(static_cast<bool>(usingNumPyTypes))
+      .timestamp_type(cudf::data_type(static_cast<cudf::type_id>(unit)))
+      .build();
+    cudf::io::table_with_metadata result = cudf::io::read_orc(opts);
     return cudf::jni::convert_table_for_return(env, result.tbl);
   }
   CATCH_STD(env, NULL);
@@ -1107,10 +1091,13 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCBufferBegin(
     std::unique_ptr<cudf::jni::jni_writer_data_sink> data_sink(
         new cudf::jni::jni_writer_data_sink(env, consumer));
     sink_info sink{data_sink.get()};
-    compression_type compression{static_cast<compression_type>(j_compression)};
-
-    write_orc_chunked_args args(sink, &metadata, compression, true);
-    std::shared_ptr<detail::orc::orc_chunked_state> state = write_orc_chunked_begin(args);
+    chunked_orc_writer_options opts =
+      chunked_orc_writer_options::builder(sink)
+        .metadata(&metadata)
+        .compression(static_cast<compression_type>(j_compression))
+        .enable_statistics(true)
+        .build();
+    std::shared_ptr<orc_chunked_state> state = write_orc_chunked_begin(opts);
     cudf::jni::native_orc_writer_handle *ret =
         new cudf::jni::native_orc_writer_handle(state, data_sink);
     return reinterpret_cast<jlong>(ret);
@@ -1146,10 +1133,13 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCFileBegin(
     }
 
     sink_info sink{output_path.get()};
-    compression_type compression{static_cast<compression_type>(j_compression)};
-
-    write_orc_chunked_args args(sink, &metadata, compression, true);
-    std::shared_ptr<detail::orc::orc_chunked_state> state = write_orc_chunked_begin(args);
+    chunked_orc_writer_options opts =
+      chunked_orc_writer_options::builder(sink)
+        .metadata(&metadata)
+        .compression(static_cast<compression_type>(j_compression))
+        .enable_statistics(true)
+        .build();
+    std::shared_ptr<orc_chunked_state> state = write_orc_chunked_begin(opts);
     cudf::jni::native_orc_writer_handle *ret = new cudf::jni::native_orc_writer_handle(state);
     return reinterpret_cast<jlong>(ret);
   }

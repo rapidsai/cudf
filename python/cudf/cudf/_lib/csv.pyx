@@ -3,8 +3,11 @@
 from libcpp cimport bool
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.string cimport string
+from libcpp.vector cimport vector
 
 import cudf
+
+from cudf._lib.cpp.types cimport size_type
 
 import collections.abc as abc
 import errno
@@ -17,12 +20,13 @@ from libcpp cimport bool
 
 from libc.stdint cimport int32_t
 
-from cudf._lib.cpp.io.functions cimport (
+from cudf._lib.cpp.io.csv cimport (
     read_csv as cpp_read_csv,
-    read_csv_args,
+    csv_reader_options,
     write_csv as cpp_write_csv,
-    write_csv_args
+    csv_writer_options,
 )
+
 from cudf._lib.cpp.io.types cimport (
     compression_type,
     data_sink,
@@ -64,7 +68,7 @@ class Compression(IntEnum):
     )
 
 
-cdef read_csv_args make_read_csv_args(
+cdef csv_reader_options make_csv_reader_options(
     object datasource,
     object lineterminator,
     object quotechar,
@@ -98,88 +102,113 @@ cdef read_csv_args make_read_csv_args(
     object index_col,
 ) except +:
     cdef source_info c_source_info = make_source_info([datasource])
-    cdef read_csv_args read_csv_args_c = read_csv_args(c_source_info)
+    cdef compression_type c_compression
+    cdef size_type c_header
+    cdef string c_prefix
+    cdef vector[string] c_names
+    cdef size_type c_byte_range_offset = (
+        byte_range[0] if byte_range is not None else 0
+    )
+    cdef size_type c_byte_range_size = (
+        byte_range[1] if byte_range is not None else 0
+    )
+    cdef vector[int] c_use_cols_indexes
+    cdef vector[string] c_use_cols_names
+    cdef size_type c_nrows = nrows if nrows is not None else -1
+    cdef quote_style c_quoting
+    cdef vector[string] c_infer_date_names
+    cdef vector[int] c_infer_date_indexes
+    cdef vector[string] c_dtypes
+    cdef vector[string] c_true_values
+    cdef vector[string] c_false_values
+    cdef vector[string] c_na_values
 
     # Reader settings
     if compression is None:
-        read_csv_args_c.compression = compression_type.NONE
+        c_compression = compression_type.NONE
     else:
         compression = Compression[compression.upper()]
-        read_csv_args_c.compression = <compression_type> (
+        c_compression = <compression_type> (
             <underlying_type_t_compression> compression
         )
+
+    if quoting == 1:
+        c_quoting = quote_style.QUOTE_ALL
+    elif quoting == 2:
+        c_quoting = quote_style.QUOTE_NONNUMERIC
+    elif quoting == 3:
+        c_quoting = quote_style.QUOTE_NONE
+    else:
+        # Default value
+        c_quoting = quote_style.QUOTE_MINIMAL
+
+    cdef csv_reader_options csv_reader_options_c = move(
+        csv_reader_options.builder(c_source_info)
+        .compression(c_compression)
+        .mangle_dupe_cols(mangle_dupe_cols)
+        .byte_range_offset(c_byte_range_offset)
+        .byte_range_size(c_byte_range_size)
+        .nrows(c_nrows)
+        .skiprows(skiprows)
+        .skipfooter(skipfooter)
+        .quoting(c_quoting)
+        .lineterminator(ord(lineterminator))
+        .quotechar(ord(quotechar))
+        .decimal(ord(decimal))
+        .delim_whitespace(delim_whitespace)
+        .skipinitialspace(skipinitialspace)
+        .skip_blank_lines(skip_blank_lines)
+        .doublequote(doublequote)
+        .keep_default_na(keep_default_na)
+        .na_filter(na_filter)
+        .dayfirst(dayfirst)
+        .build()
+    )
 
     if names is not None:
         # explicitly mentioned name, so don't check header
         if header is None or header == 'infer':
-            read_csv_args_c.header = -1
+            csv_reader_options_c.set_header(-1)
         else:
-            read_csv_args_c.header = header
+            csv_reader_options_c.set_header(header)
 
-        read_csv_args_c.names.reserve(len(names))
+        c_names.reserve(len(names))
         for name in names:
-            read_csv_args_c.names.push_back(str(name).encode())
+            c_names.push_back(str(name).encode())
+        csv_reader_options_c.set_names(c_names)
     else:
-        if header is -1:
-            header_infer = 0
         if header is None:
-            header_infer = -1
+            csv_reader_options_c.set_header(-1)
+        elif header == 'infer':
+            csv_reader_options_c.set_header(0)
+        else:
+            csv_reader_options_c.set_header(header)
 
     if prefix is not None:
-        read_csv_args_c.prefix = prefix.encode()
+        csv_reader_options_c.set_prefix(prefix.encode())
 
-    read_csv_args_c.mangle_dupe_cols = mangle_dupe_cols
-    read_csv_args_c.byte_range_offset = (
-        byte_range[0] if byte_range is not None else 0
-    )
-    read_csv_args_c.byte_range_size = (
-        byte_range[1] if byte_range is not None else 0
-    )
-
-    # Filter settings
     if usecols is not None:
         all_int = all(isinstance(col, int) for col in usecols)
         if all_int:
-            read_csv_args_c.use_cols_indexes.reserve(len(usecols))
-            read_csv_args_c.use_cols_indexes = usecols
+            c_use_cols_indexes.reserve(len(usecols))
+            c_use_cols_indexes = usecols
+            csv_reader_options_c.set_use_cols_indexes(c_use_cols_indexes)
         else:
-            read_csv_args_c.use_cols_names.reserve(len(usecols))
+            c_use_cols_names.reserve(len(usecols))
             for col_name in usecols:
-                read_csv_args_c.use_cols_names.push_back(
+                c_use_cols_names.push_back(
                     str(col_name).encode()
                 )
+            csv_reader_options_c.set_use_cols_names(c_use_cols_names)
 
-    if names is None:
-        if header is None:
-            read_csv_args_c.header = -1
-        elif header == 'infer':
-            read_csv_args_c.header = 0
-        else:
-            read_csv_args_c.header = header
-
-    read_csv_args_c.nrows = nrows if nrows is not None else -1
-    read_csv_args_c.skiprows = skiprows
-    read_csv_args_c.skipfooter = skipfooter
-
-    # Parsing settings
     if delimiter is not None:
-        read_csv_args_c.delimiter = ord(delimiter)
+        csv_reader_options_c.set_delimiter(ord(delimiter))
 
     if thousands is not None:
-        read_csv_args_c.thousands = ord(thousands)
+        csv_reader_options_c.set_thousands(ord(thousands))
 
     if comment is not None:
-        read_csv_args_c.comment = ord(comment)
-
-    if quoting == 1:
-        read_csv_args_c.quoting = quote_style.QUOTE_ALL
-    elif quoting == 2:
-        read_csv_args_c.quoting = quote_style.QUOTE_NONNUMERIC
-    elif quoting == 3:
-        read_csv_args_c.quoting = quote_style.QUOTE_NONE
-    else:
-        # Default value
-        read_csv_args_c.quoting = quote_style.QUOTE_MINIMAL
+        csv_reader_options_c.set_comment(ord(comment))
 
     if parse_dates is not None:
         if isinstance(parse_dates, abc.Mapping):
@@ -190,56 +219,50 @@ cdef read_csv_args make_read_csv_args(
                 "`parse_dates`: non-lists are unsupported")
         for col in parse_dates:
             if isinstance(col, str):
-                read_csv_args_c.infer_date_names.push_back(str(col).encode())
+                c_infer_date_names.push_back(str(col).encode())
             elif isinstance(col, int):
-                read_csv_args_c.infer_date_indexes.push_back(col)
+                c_infer_date_indexes.push_back(col)
             else:
                 raise NotImplementedError(
                     "`parse_dates`: Nesting is unsupported")
+        csv_reader_options_c.set_infer_date_names(c_infer_date_names)
+        csv_reader_options_c.set_infer_date_indexes(c_infer_date_indexes)
 
-    read_csv_args_c.lineterminator = ord(lineterminator)
-    read_csv_args_c.quotechar = ord(quotechar)
-    read_csv_args_c.decimal = ord(decimal)
-    read_csv_args_c.delim_whitespace = delim_whitespace
-    read_csv_args_c.skipinitialspace = skipinitialspace
-    read_csv_args_c.skip_blank_lines = skip_blank_lines
-    read_csv_args_c.doublequote = doublequote
-
-    # Conversion settings
     if dtype is not None:
         if isinstance(dtype, abc.Mapping):
-            read_csv_args_c.dtype.reserve(len(dtype))
+            c_dtypes.reserve(len(dtype))
             for k, v in dtype.items():
-                read_csv_args_c.dtype.push_back(
+                c_dtypes.push_back(
                     str(str(k)+":"+str(v)).encode()
                 )
         elif isinstance(dtype, abc.Iterable):
-            read_csv_args_c.dtype.reserve(len(dtype))
+            c_dtypes.reserve(len(dtype))
             for col_dtype in dtype:
-                read_csv_args_c.dtype.push_back(str(col_dtype).encode())
+                c_dtypes.push_back(str(col_dtype).encode())
         else:
-            read_csv_args_c.dtype.push_back(str(dtype).encode())
+            c_dtypes.push_back(str(dtype).encode())
+
+        csv_reader_options_c.set_dtypes(c_dtypes)
 
     if true_values is not None:
-        read_csv_args_c.true_values.reserve(len(true_values))
+        c_true_values.reserve(len(true_values))
         for tv in true_values:
-            read_csv_args_c.true_values.push_back(tv.encode())
+            c_true_values.push_back(tv.encode())
+        csv_reader_options_c.set_true_values(c_true_values)
 
     if false_values is not None:
-        read_csv_args_c.false_values.reserve(len(false_values))
-        for fv in false_values:
-            read_csv_args_c.false_values.push_back(fv.encode())
+        c_false_values.reserve(len(false_values))
+        for fv in c_false_values:
+            c_false_values.push_back(fv.encode())
+        csv_reader_options_c.set_false_values(c_false_values)
 
     if na_values is not None:
-        read_csv_args_c.na_values.reserve(len(na_values))
+        c_na_values.reserve(len(na_values))
         for nv in na_values:
-            read_csv_args_c.na_values.push_back(nv.encode())
+            c_na_values.push_back(nv.encode())
+        csv_reader_options_c.set_na_values(c_na_values)
 
-    read_csv_args_c.keep_default_na = keep_default_na
-    read_csv_args_c.na_filter = na_filter
-    read_csv_args_c.dayfirst=dayfirst
-
-    return read_csv_args_c
+    return csv_reader_options_c
 
 
 def validate_args(
@@ -339,7 +362,7 @@ def read_csv(
     if delimiter is None:
         delimiter = sep
 
-    cdef read_csv_args read_csv_arg_c = make_read_csv_args(
+    cdef csv_reader_options read_csv_options_c = make_csv_reader_options(
         datasource, lineterminator, quotechar, quoting, doublequote,
         header, mangle_dupe_cols, usecols, delimiter, delim_whitespace,
         skipinitialspace, names, dtype, skipfooter, skiprows, dayfirst,
@@ -349,7 +372,7 @@ def read_csv(
 
     cdef table_with_metadata c_result
     with nogil:
-        c_result = move(cpp_read_csv(read_csv_arg_c))
+        c_result = move(cpp_read_csv(read_csv_options_c))
 
     meta_names = [name.decode() for name in c_result.metadata.column_names]
     df = cudf.DataFrame._from_table(Table.from_unique_ptr(
@@ -408,13 +431,18 @@ cpdef write_csv(
         for col_name in table._column_names:
             metadata_.column_names.push_back(str(col_name).encode())
 
-    cdef unique_ptr[write_csv_args] write_csv_args_c = (
-        make_unique[write_csv_args](
-            sink_info_c, input_table_view, na_c, include_header_c,
-            rows_per_chunk_c, line_term_c, delim_c, true_value_c,
-            false_value_c, &metadata_
-        )
+    cdef csv_writer_options options = move(
+        csv_writer_options.builder(sink_info_c, input_table_view)
+        .metadata(&metadata_)
+        .na_rep(na_c)
+        .include_header(include_header_c)
+        .rows_per_chunk(rows_per_chunk_c)
+        .line_terminator(line_term_c)
+        .inter_column_delimiter(delim_c)
+        .true_value(true_value_c)
+        .false_value(false_value_c)
+        .build()
     )
 
     with nogil:
-        cpp_write_csv(write_csv_args_c.get()[0])
+        cpp_write_csv(options)

@@ -49,15 +49,12 @@ class data_normalizer {
   /**
    * @brief Transfer to the GPU the metadata needed to normalize characters.
    *
-   * @param max_num_chars Maximum number of characters for instantiating the normalizer.
-   *        Used to allocate temporary working memory on device.
-   *        If the input contains a larger number of characters, behavior is undefined.
    * @param stream CUDA stream used for device memory operations and kernel launches.
    * @param do_lower_case If true, the normalizer will convert uppercase characters in the
    *        input stream to lower case and strip accents from those characters.
    *        If false, accented and uppercase characters are not transformed.
    */
-  data_normalizer(uint32_t num_chars, cudaStream_t stream, bool do_lower_case = true);
+  data_normalizer(cudaStream_t stream, bool do_lower_case = true);
 
   /**
    * @brief Normalize a vector of strings.

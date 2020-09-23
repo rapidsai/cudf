@@ -194,12 +194,12 @@ struct create_column_from_view {
     std::vector<std::unique_ptr<column>> children;
     if (view.num_children()) {
       cudf::dictionary_column_view dict_view(view);
-      auto indices_view = column_view(data_type{type_id::INT32},
-                                      view.size(),
-                                      dict_view.indices().data<int32_t>(),
+      auto indices_view = column_view(dict_view.indices().type(),
+                                      dict_view.size(),
+                                      dict_view.indices().head(),
                                       nullptr,
                                       0,
-                                      view.offset());
+                                      dict_view.offset());
       children.emplace_back(std::make_unique<column>(indices_view, stream, mr));
       children.emplace_back(std::make_unique<column>(dict_view.keys(), stream, mr));
     }

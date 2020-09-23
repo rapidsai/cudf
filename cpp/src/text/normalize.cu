@@ -205,7 +205,7 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
   if (strings_count == 0) return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
 
   // create the normalizer and call it
-  data_normalizer normalizer(strings.chars_size(), stream, do_lower_case);
+  data_normalizer normalizer(stream, do_lower_case);
   auto result = [&strings, &normalizer, stream] {
     auto const offsets   = strings.offsets();
     auto const d_offsets = offsets.data<uint32_t>() + strings.offset();

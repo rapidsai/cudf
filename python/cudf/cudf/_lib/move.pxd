@@ -19,7 +19,19 @@ from cudf._lib.cpp.groupby cimport (
     aggregation_result
 )
 from cudf._lib.cpp.table.table_view cimport table_view
+from cudf._lib.cpp.io.csv cimport csv_reader_options, csv_writer_options
+from cudf._lib.cpp.io.avro cimport avro_reader_options
+from cudf._lib.cpp.io.json cimport json_reader_options
 from pyarrow.includes.libarrow cimport CMessageReader
+from cudf._lib.cpp.io.parquet cimport (
+    parquet_reader_options,
+    parquet_writer_options,
+    chunked_parquet_writer_options,
+)
+from cudf._lib.cpp.io.orc cimport (
+    orc_reader_options,
+    orc_writer_options,
+)
 cimport cudf._lib.cpp.io.types as cudf_io_types
 
 
@@ -76,4 +88,19 @@ cdef extern from "<utility>" namespace "std" nogil:
         cudf_io_types.table_with_metadata)
     cdef pair[unique_ptr[column], table_view] move(
         pair[unique_ptr[column], table_view]
+    )
+    cdef csv_reader_options move(csv_reader_options)
+    cdef csv_writer_options move(csv_writer_options)
+    cdef orc_reader_options move(orc_reader_options)
+    cdef orc_writer_options move(orc_writer_options)
+    cdef avro_reader_options move(avro_reader_options)
+    cdef json_reader_options move(json_reader_options)
+    cdef parquet_reader_options move(parquet_reader_options)
+    cdef parquet_writer_options move(parquet_writer_options)
+    cdef chunked_parquet_writer_options move(chunked_parquet_writer_options)
+    cdef pair[unique_ptr[column], unique_ptr[column]] move(
+        pair[unique_ptr[column], unique_ptr[column]]
+    )
+    cdef pair[unique_ptr[table], unique_ptr[column]] move(
+        pair[unique_ptr[table], unique_ptr[column]]
     )

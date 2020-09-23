@@ -1,26 +1,7 @@
 include(FetchContent)
 
 ###################################################################################################
-# - cub -------------------------------------------------------------------------------------------
-
-message("Fetching CUB")
-
-FetchContent_Declare(
-    cub
-    GIT_REPOSITORY https://github.com/thrust/cub.git
-    # August 28, 2020
-    GIT_TAG        2442f44532ffcc53298c7e3a298feb5134563860
-)
-
-FetchContent_GetProperties(cub)
-if(NOT cub_POPULATED)
-  FetchContent_Populate(cub)
-  # We are not using the cub CMake targets, so no need to call `add_subdirectory()`.
-endif()
-set(CUB_INCLUDE_DIR "${cub_SOURCE_DIR}" PARENT_SCOPE)
-
-###################################################################################################
-# - thrust ----------------------------------------------------------------------------------------
+# - thrust/cub ------------------------------------------------------------------------------------
 
 message("Fetching Thrust")
 

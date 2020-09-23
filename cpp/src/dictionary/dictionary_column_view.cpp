@@ -36,12 +36,8 @@ column_view dictionary_column_view::indices() const noexcept { return child(0); 
 
 column_view dictionary_column_view::get_indices_annotated() const noexcept
 {
-  return column_view(data_type{type_id::INT32},
-                     size(),
-                     indices().data<int32_t>(),
-                     null_mask(),
-                     null_count(),
-                     offset());
+  return column_view(
+    indices().type(), size(), indices().head(), null_mask(), null_count(), offset());
 }
 
 column_view dictionary_column_view::keys() const noexcept { return child(1); }
