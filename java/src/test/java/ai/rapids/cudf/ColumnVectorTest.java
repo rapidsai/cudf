@@ -2845,6 +2845,7 @@ public class ColumnVectorTest extends CudfTestBase {
     ColumnVector v = ColumnVector.concatenate(res1, res2);
     ColumnVector expected =  ColumnVector.fromLists(new HostColumnVector.ListType(true,
         new HostColumnVector.BasicType(true, DType.INT32)), list1, list2, list3, list4, list5, list6)) {
+      assertEquals(expected.getRowCount(), 6L, "Expected column row count is incorrect");
       assertColumnsAreEqual(expected, v);
     }
   }
@@ -2977,6 +2978,7 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector columnVector = hcv.copyToDevice();
          HostColumnVector hcv1 = columnVector.copyToHost();
          ColumnVector expected = hcv1.copyToDevice()) {
+      assertEquals(expected.getRowCount(), 4L, "Expected column row count is incorrect");
       HostColumnVector.StructData retData1 = hcv1.getStruct(0, type);
       HostColumnVector.StructData retData2 = hcv1.getStruct(1, type);
       HostColumnVector.StructData retData3 = hcv1.getStruct(2, type);

@@ -2048,7 +2048,7 @@ public final class HostColumnVector implements AutoCloseable {
     abstract int getNumChildren();
   }
 
-  protected class TableSchema {
+  protected static class TableSchema {
 
     List<HostColumnVector.DataType> types;
 
