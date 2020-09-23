@@ -22,7 +22,7 @@
 #pragma once
 
 #include <cudf/io/detail/parquet.hpp>
-#include "parquet.hpp"
+#include <io/parquet/parquet.hpp>
 
 namespace cudf {
 namespace io {

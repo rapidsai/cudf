@@ -20,9 +20,9 @@
 #include <cuda_runtime.h>
 #include <io/comp/gpuinflate.h>
 #include <io/statistics/column_stats.h>
+#include <io/parquet/parquet_common.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 #include <vector>
-#include "parquet_common.hpp"
 
 namespace cudf {
 namespace io {

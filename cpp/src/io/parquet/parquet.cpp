@@ -15,6 +15,7 @@
  */
 
 #include "parquet.hpp"
+#include <io/parquet/parquet.hpp>
 
 #include <algorithm>
 
