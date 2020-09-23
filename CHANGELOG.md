@@ -87,6 +87,7 @@
 - PR #6121 Replace calls to get_default_resource with get_current_device_resource
 - PR #6128 Add support for numpy RandomState handling in `sample`
 - PR #6137 Fix issue where `np.nan` is being return instead of `NAT` for datetime/duration types
+- PR #6298 Fix gcc-9 compilation error in dictionary/remove_keys.cu
 - PR #6172 Fix slice issue with empty column
 - PR #6154 Warnings on row-wise op only when non-numeric columns are found.
 - PR #6150 Fix issue related to inferring `datetime64` format with UTC timezone in string data
