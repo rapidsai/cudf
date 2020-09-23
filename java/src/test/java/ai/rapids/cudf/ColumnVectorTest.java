@@ -3039,4 +3039,17 @@ public class ColumnVectorTest extends CudfTestBase {
       assertStructColumnsAreEqual(expected, columnVector, type);
     }
   }
+
+  @Test
+  void testListOfStruct() {
+    List<HostColumnVector.ColumnBuilder.StructData> list = Arrays.asList(new HostColumnVector.ColumnBuilder.StructData(Arrays.asList("a", "b")));
+    List<HostColumnVector.ColumnBuilder.StructData> list2 = Arrays.asList(new HostColumnVector.ColumnBuilder.StructData(Arrays.asList("a", "c")));
+    List<String> list3 = null;
+    HostColumnVector.ColumnBuilder.StructType structType = new HostColumnVector.ColumnBuilder.StructType(true, 2);
+    structType.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 2, DType.STRING));
+    structType.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 2, DType.STRING));
+    try (ColumnVector res1 = ColumnVector.fromLists(new HostColumnVector.ColumnBuilder.ListType(true, 2, structType), list, list2)) {
+      System.out.println("YAY!" + ((HostColumnVector.ColumnBuilder.StructData)(res1.copyToHost().getList(0)).get(0)).dataRecord);
+    }
+  }
 }

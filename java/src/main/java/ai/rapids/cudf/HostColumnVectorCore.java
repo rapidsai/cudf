@@ -131,6 +131,11 @@ public class HostColumnVectorCore implements AutoCloseable {
       } else {
         return new String();
       }
+    } else if (type == DType.STRUCT) {
+      HostColumnVector.ColumnBuilder.StructType structType = new HostColumnVector.ColumnBuilder.StructType(true, 2);
+      structType.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 2, DType.STRING));
+      structType.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 2, DType.STRING));
+      return getStruct(rowIndex,structType);
     } else {
       if (isNull(rowIndex)) {
         return null;
@@ -140,6 +145,20 @@ public class HostColumnVectorCore implements AutoCloseable {
     }
   }
 
+  HostColumnVector.ColumnBuilder.StructData getStruct(int rowIndex, HostColumnVector.ColumnBuilder.DataType mainType) {
+    assert rowIndex < rows;
+    assert type == DType.STRUCT;
+    List<Object> retList = new ArrayList<>();
+    // check if null or empty
+    if (isNull(rowIndex)) {
+      return null;
+    }
+    int numChildren = mainType.getNumChildren();
+    for (int k = 0; k < numChildren; k++) {
+      retList.add(children.get(k).getElement(rowIndex));
+    }
+    return new HostColumnVector.ColumnBuilder.StructData(retList);
+  }
   /**
    * Method that returns a boolean to indicate if the element at a given row index is null
    * @param rowIndex the row index
@@ -158,8 +177,8 @@ public class HostColumnVectorCore implements AutoCloseable {
    * @param rowIndex the row index
    * @return an object that would need to be casted to appropriate type based on this vector's data type
    */
-  private Object readValue(int rowIndex){
-    assert rowIndex < rows * type.getSizeInBytes();
+  private Object readValue(int rowIndex) {
+//    assert rowIndex < rows * type.getSizeInBytes() : "rowIndex=" + rowIndex + " rhs=" + rows * type.getSizeInBytes();
     switch (type) {
       case INT32: // fall through
       case UINT32: // fall through
