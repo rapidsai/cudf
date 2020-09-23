@@ -20,7 +20,7 @@
 #include <cudf/types.hpp>
 
 /**
- * @file dictionary.hpp
+ * @file
  * @brief Concrete type definition for dictionary columns.
  */
 
@@ -28,6 +28,7 @@ namespace cudf {
 /**
  * @addtogroup dictionary_classes
  * @{
+ * @file
  */
 
 /**
