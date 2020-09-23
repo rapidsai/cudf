@@ -7377,3 +7377,24 @@ def test_dataframe_mode(df, numeric_only, dropna):
     actual = df.mode(numeric_only=numeric_only, dropna=dropna)
 
     assert_eq(expected, actual, check_dtype=False)
+
+
+@pytest.mark.parametrize("lhs, rhs", [("a", "a"), ("a", "b"), (1, 1.0)])
+def test_equals_names(lhs, rhs):
+    lhs = gd.DataFrame({lhs: [1, 2]})
+    rhs = gd.DataFrame({rhs: [1, 2]})
+
+    got = lhs.equals(rhs)
+    expect = lhs.to_pandas().equals(rhs.to_pandas())
+
+    assert_eq(expect, got)
+
+
+def test_equals_dtypes():
+    lhs = gd.DataFrame({"a": [1, 2.0]})
+    rhs = gd.DataFrame({"a": [1, 2]})
+
+    got = lhs.equals(rhs)
+    expect = lhs.to_pandas().equals(rhs.to_pandas())
+
+    assert_eq(expect, got)

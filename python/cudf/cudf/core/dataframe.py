@@ -2238,54 +2238,6 @@ class DataFrame(Frame, Serializable):
     def __iter__(self):
         return iter(self.columns)
 
-    def equals(self, other):
-        """
-        Test whether two objects contain the same elements.
-        This function allows two Series or DataFrames to be compared against
-        each other to see if they have the same shape and elements. NaNs in
-        the same location are considered equal. The column headers do not
-        need to have the same type.
-
-        Parameters
-        ----------
-        other : Series or DataFrame
-            The other Series or DataFrame to be compared with the first.
-
-        Returns
-        -------
-        bool
-            True if all elements are the same in both objects, False
-            otherwise.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({1: [10], 2: [20]})
-        >>> df
-            1   2
-        0  10  20
-        >>> exactly_equal = cudf.DataFrame({1: [10], 2: [20]})
-        >>> exactly_equal
-            1   2
-        0  10  20
-        >>> df.equals(exactly_equal)
-        True
-        >>> different_column_type = cudf.DataFrame({1.0: [10], 2.0: [20]})
-        >>> different_column_type
-           1.0  2.0
-        0   10   20
-        >>> df.equals(different_column_type)
-        True
-        """
-        for col in self._data.names:
-            if col not in other._data.names:
-                return False
-            if not self[col].equals(other[col]):
-                return False
-        if not self.index.equals(other.index):
-            return False
-        return True
-
     def iteritems(self):
         """ Iterate over column names and series pairs """
         for k in self:
@@ -7082,6 +7034,14 @@ class DataFrame(Frame, Serializable):
         return cudf.core.reshape.unstack(
             self, level=level, fill_value=fill_value
         )
+
+    def equals(self, other):
+        if not isinstance(other, DataFrame):
+            return False
+        for self_name, other_name in zip(self._data.names, other._data.names):
+            if self_name != other_name:
+                return False
+        return super().equals(other)
 
 
 def from_pandas(obj, nan_as_null=None):
