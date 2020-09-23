@@ -26,7 +26,6 @@
 #include <rmm/mr/device/owning_wrapper.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
-#include <unordered_map>
 
 #include "cudf_jni_apis.hpp"
 
@@ -100,10 +99,7 @@ private:
     resource->deallocate(p, size, stream);
 
     if (p) {
-        total_allocated -= size;
-      } else {
-        // Untracked size, may be an allocation from before resource was installed.
-      }
+      total_allocated -= size;
     }
   }
 
