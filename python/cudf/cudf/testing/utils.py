@@ -88,3 +88,12 @@ def pyarrow_to_pandas(table):
             df[column._name] = column.to_pandas()
 
     return df
+
+
+def compare_content(a, b):
+    if a == b:
+        return
+    else:
+        raise ValueError(
+            f"Contents of two files are different:\n left: {a} \n right: {b}"
+        )

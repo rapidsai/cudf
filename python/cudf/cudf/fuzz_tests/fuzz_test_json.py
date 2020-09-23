@@ -7,7 +7,7 @@ import pandas as pd
 import cudf
 from cudf.testing.json import JSONReader, JSONWriter
 from cudf.testing.main import pythonfuzz
-from cudf.testing.utils import run_test
+from cudf.testing.utils import compare_content, run_test
 from cudf.tests.utils import assert_eq
 
 
@@ -21,20 +21,19 @@ def json_reader_test(json_buffer):
 
 @pythonfuzz(data_handle=JSONWriter)
 def json_writer_test(gdf):
-    pd_file_name = "cpu_pdf.json"
-    gd_file_name = "gpu_pdf.json"
-
     pdf = gdf.to_pandas()
 
-    pdf.to_json(pd_file_name, lines=True, orient="records")
-    gdf.to_json(gd_file_name, lines=True, orient="records")
+    pdf_buffer = pdf.to_json(lines=True, orient="records")
+    gdf_buffer = gdf.to_json(lines=True, orient="records")
 
-    actual = cudf.read_json(gd_file_name, lines=True, orient="records")
-    expected = pd.read_json(pd_file_name, lines=True, orient="records")
+    compare_content(pdf_buffer, gdf_buffer)
+
+    actual = cudf.read_json(gdf_buffer, lines=True, orient="records")
+    expected = pd.read_json(pdf_buffer, lines=True, orient="records")
     assert_eq(actual, expected)
 
-    actual = cudf.read_json(pd_file_name, lines=True, orient="records")
-    expected = pd.read_json(gd_file_name, lines=True, orient="records")
+    actual = cudf.read_json(pdf_buffer, lines=True, orient="records")
+    expected = pd.read_json(gdf_buffer, lines=True, orient="records")
     assert_eq(actual, expected)
 
 

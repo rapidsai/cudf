@@ -8,7 +8,7 @@ import pandas as pd
 import cudf
 from cudf.testing.csv import CSVReader, CSVWriter
 from cudf.testing.main import pythonfuzz
-from cudf.testing.utils import run_test
+from cudf.testing.utils import compare_content, run_test
 from cudf.tests.utils import assert_eq
 
 
@@ -26,6 +26,8 @@ def csv_writer_test(gdf):
 
     pd_buffer = pdf.to_csv()
     gd_buffer = gdf.to_csv()
+
+    compare_content(pd_buffer, gd_buffer)
 
     actual = cudf.read_csv(StringIO(gd_buffer))
     expected = pd.read_csv(StringIO(pd_buffer))
