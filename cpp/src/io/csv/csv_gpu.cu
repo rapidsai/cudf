@@ -951,7 +951,7 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
       rowmap >>= pos;
     }
     // Return the number of rows out of range
-    rows_out_of_range = WarpReduceSum16(rows_out_of_range);
+    rows_out_of_range = half_warp_reduce(temp_storage.half[t / 32]).Sum(rows_out_of_range);
     __syncthreads();
     if (!(t & 0xf)) { ctxtree[t >> 4] = rows_out_of_range; }
     __syncthreads();
