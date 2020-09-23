@@ -16,7 +16,7 @@
 #include <algorithm>
 #include <iostream>
 
-#include <tests/utilities/base_fixture.hpp>
+#include <cudf_test/base_fixture.hpp>
 
 #include <cudf/null_mask.hpp>
 
