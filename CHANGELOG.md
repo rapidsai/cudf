@@ -15,6 +15,7 @@
 
 ## Improvements
 
+- PR #6292 Remove individual size tracking from JNI tracking resource adaptor
 - PR #5946 Add cython and python support for libcudf `to_arrow` and `from_arrow`
 - PR #5919 Remove max_strings and max_chars from nvtext::subword_tokenize
 - PR #5956 Add/Update tests for cuStreamz
@@ -62,15 +63,18 @@
 - PR #6209 Remove CXX11 ABI handling from CMake
 - PR #6223 Remove CXX11 ABI flag from JNI build
 - PR #6114 Implement Fuzz tests for cuIO
+- PR #6231 Adds `inplace`, `append`, `verify_integrity` fields to `DataFrame.set_index`
 - PR #6215 Add cmake command-line setting for spdlog logging level
 - PR #6242 Added cudf::detail::host_span and device_span
 - PR #6240 Don't shallow copy index in as_index() unless necessary
 - PR #6204 Add dockerfile and script to build cuDF jar
 - PR #6245 Split up replace.cu into multiple source files
 - PR #6218 increase visiblity/consistency for cuio reader writer private member variable names.
+- PR #6268 Add file tags to libcudf doxygen
 - PR #6265 Update JNI to use ORC options builder
 - PR #6273 Update JNI to use ORC options builder
 - PR #6287 Make java aggregate API follow C++ API
+- PR #6303 Use cudf test dtypes so timedelta tests are determinstic
 
 ## Bug Fixes
 
@@ -107,6 +111,7 @@
 - PR #6264 Remove include statement for missing rmm/mr/device/default_memory_resource.hpp file
 - PR #6286 Fix `read_csv` `int32` overflow 
 - PR #6289 Revert #6206
+- PR #6304 Fix span_tests.cu includes
 
 
 # cuDF 0.15.0 (26 Aug 2020)
