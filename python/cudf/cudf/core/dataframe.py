@@ -5690,7 +5690,7 @@ class DataFrame(Frame, Serializable):
 
         Notes
         -----
-        Parameters currently not supported are level`, `numeric_only`.
+        Parameters currently not supported are `level`, `numeric_only`.
 
         Examples
         --------
@@ -5862,7 +5862,7 @@ class DataFrame(Frame, Serializable):
 
         Notes
         -----
-        Parameters currently not supported are level`, `numeric_only`.
+        Parameters currently not supported are `level`, `numeric_only`.
 
         Examples
         --------
@@ -6238,10 +6238,11 @@ class DataFrame(Frame, Serializable):
         Parameters
         ----------
 
+        axis: {index (0), columns(1)}
+            Axis for the function to be applied on.
         skipna: bool, default True
             Exclude NA/null values. If an entire row/column is NA, the result
             will be NA.
-
         ddof: int, default 1
             Delta Degrees of Freedom. The divisor used in calculations is
             N - ddof, where N represents the number of elements.
@@ -6252,7 +6253,7 @@ class DataFrame(Frame, Serializable):
 
         Notes
         -----
-        Parameters currently not supported are `axis`, `level` and
+        Parameters currently not supported are `level` and
         `numeric_only`
 
         Examples
