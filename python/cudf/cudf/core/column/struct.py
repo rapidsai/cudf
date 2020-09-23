@@ -51,3 +51,21 @@ class StructColumn(ColumnBase):
             buffers,
             children=tuple(col.to_arrow() for col in self.children),
         )
+
+    def _rename_fields(self, names):
+        """
+        Return a StructColumn with the same field values as this StructColumn,
+        but with the field names equal to `names`.
+        """
+        dtype = cudf.core.dtypes.StructDtype(
+            {name: col.dtype for name, col in zip(names, self.children)}
+        )
+        return StructColumn(
+            data=None,
+            size=self.size,
+            dtype=dtype,
+            mask=self.mask,
+            offset=self.offset,
+            null_count=self.null_count,
+            children=self.children,
+        )

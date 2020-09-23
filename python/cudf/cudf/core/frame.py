@@ -497,6 +497,7 @@ class Frame(libcudf.table.Table):
             )
         )
         result._copy_categories(self)
+        result._copy_struct_names(self)
         if keep_index and self._index is not None:
             result._index.names = self._index.names
         return result
@@ -2185,6 +2186,31 @@ class Frame(libcudf.table.Table):
                     self._index = cudf.core.index.Index._from_table(
                         self._index
                     )
+        return self
+
+    def _copy_struct_names(self, other, include_index=True):
+        """
+        Utility that copies struct field names.
+        """
+        for name, col, other_col in zip(
+            self._data.keys(), self._data.values(), other._data.values()
+        ):
+            if isinstance(other_col, cudf.core.column.StructColumn):
+                self._data[name] = col._rename_fields(
+                    other_col.dtype.fields.keys()
+                )
+
+        if include_index and self._index is not None:
+            for name, col, other_col in zip(
+                self._index._data.keys(),
+                self._index._data.values(),
+                other._index.data_values(),
+            ):
+                if isinstance(other_col, cudf.core.column.StructColumn):
+                    self._index._data[name] = col._rename_fields(
+                        other_col.dtype.fields.keys()
+                    )
+
         return self
 
     def _unaryop(self, op):
