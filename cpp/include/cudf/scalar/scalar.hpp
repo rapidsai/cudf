@@ -27,12 +27,19 @@
 #include <utility>
 #include <vector>
 
+/**
+ * @file
+ * @brief Class definitions for cudf::scalar
+ */
+
 namespace cudf {
+/**
+ * @addtogroup scalar_classes
+ * @{
+ */
 
 /**
  * @brief An owning class to represent a singular value
- *
- * @ingroup scalar_classes
  *
  * A scalar is a singular value of any of the supported datatypes in cudf.
  * Classes derived from this class are used to represent a scalar. Objects of
@@ -199,8 +206,6 @@ class fixed_width_scalar : public scalar {
 /**
  * @brief An owning class to represent a numerical value in device memory
  *
- * @ingroup scalar_classes
- *
  * @tparam T the data type of the numerical value
  */
 template <typename T>
@@ -251,8 +256,6 @@ class numeric_scalar : public detail::fixed_width_scalar<T> {
 /**
  * @brief An owning class to represent a fixed_point number in device memory
  *
- * @ingroup scalar_classes
- *
  * @tparam T the data type of the fixed_point number
  */
 template <typename T>
@@ -302,8 +305,6 @@ class fixed_point_scalar : public detail::fixed_width_scalar<T> {
 
 /**
  * @brief An owning class to represent a string in device memory
- *
- * @ingroup scalar_classes
  */
 class string_scalar : public scalar {
  public:
@@ -402,8 +403,6 @@ class string_scalar : public scalar {
 
 /**
  * @brief An owning class to represent a timestamp/duration value in device memory
- *
- * @ingroup scalar_classes
  *
  * @tparam T the data type of the timestamp/duration value
  * @see cudf/wrappers/timestamps.hpp, cudf/wrappers/durations.hpp for a list of allowed types
@@ -513,5 +512,5 @@ struct duration_scalar : chrono_scalar<T> {
    */
   typename T::rep count() { return this->value().count(); }
 };
-
+/** @} */  // end of group
 }  // namespace cudf

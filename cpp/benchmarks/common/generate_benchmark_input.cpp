@@ -21,8 +21,8 @@
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/bit.hpp>
 
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
 
 #include <rmm/device_buffer.hpp>
 

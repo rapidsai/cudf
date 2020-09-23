@@ -244,18 +244,18 @@ public class TableTest extends CudfTestBase {
    * @param colName The name of the column
    * @param enableNullCheck Whether to check for nulls in the column
    */
-  public static void assertPartialColumnsAreEqual(HostColumnVector.NestedHostColumnVector expected,
-                                                  HostColumnVector.NestedHostColumnVector cv,
+  public static void assertPartialColumnsAreEqual(HostColumnVectorCore expected,
+                                                  HostColumnVectorCore cv,
                                                   String colName, boolean enableNullCheck) {
     assertEquals(expected.getType(), cv.getType(), "Type For Column " + colName);
-    assertEquals(expected.getRows(), cv.getRows(), "Row Count For Column " + colName);
+    assertEquals(expected.getRowCount(), cv.getRowCount(), "Row Count For Column " + colName);
     if (enableNullCheck) {
       assertEquals(expected.getNullCount(), cv.getNullCount(), "Null Count For Column " + colName);
     } else {
       // TODO add in a proper check when null counts are supported by serializing a partitioned column
     }
     DType type = expected.getType();
-    for (int expectedRow = 0; expectedRow < expected.getRows(); expectedRow++) {
+    for (int expectedRow = 0; expectedRow < expected.getRowCount(); expectedRow++) {
       assertEquals(expected.isNull(expectedRow), cv.isNull(expectedRow),
           "NULL for Column " + colName + " Row " + expectedRow);
       if (!expected.isNull(expectedRow)) {
@@ -2195,6 +2195,48 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testGroupByUniqueCount() {
+    try (Table t1 = new Table.TestBuilder()
+            .column( "1",  "1",  "1",  "1",  "1",  "1")
+            .column(   1,    3,    3,    5,    5,    0)
+            .column(12.0, 14.0, 13.0, 17.0, 17.0, 17.0)
+            .build()) {
+      try (Table t3 = t1
+              .groupBy(0, 1)
+              .aggregate(Aggregation.nunique().onColumn(0));
+           Table sorted = t3.orderBy(Table.asc(0), Table.asc(1), Table.asc(2));
+           Table expected = new Table.TestBuilder()
+                   .column( "1",  "1",  "1",  "1")
+                   .column(   0,    1,    3,    5)
+                   .column(   1,    1,    1,    1)
+                   .build()) {
+        assertTablesAreEqual(expected, sorted);
+      }
+    }
+  }
+
+  @Test
+  void testGroupByUniqueCountNulls() {
+    try (Table t1 = new Table.TestBuilder()
+            .column( "1",  "1",  "1",  "1",  "1",  "1")
+            .column(   1,    3,    3,    5,    5,    0)
+            .column(null, null, 13.0, null, null, null)
+            .build()) {
+      try (Table t3 = t1
+              .groupBy(0, 1)
+              .aggregate(Aggregation.nunique(true).onColumn(0));
+           Table sorted = t3.orderBy(Table.asc(0), Table.asc(1), Table.asc(2));
+           Table expected = new Table.TestBuilder()
+                   .column( "1",  "1",  "1",  "1")
+                   .column(   0,    1,    3,    5)
+                   .column(   1,    1,    1,    1)
+                   .build()) {
+        assertTablesAreEqual(expected, sorted);
+      }
+    }
+  }
+
+  @Test
   void testGroupByCount() {
     try (Table t1 = new Table.TestBuilder().column( "1",  "1",  "1",  "1",  "1",  "1")
                                            .column(   1,    3,    3,    5,    5,    0)
@@ -2766,7 +2808,8 @@ public class TableTest extends CudfTestBase {
                                            .column(   1,    3,    3,    5,    5,    0)
                                            .column(12.0, 14.0, 13.0, 17.0, 17.0, 17.0)
                                            .build()) {
-      try (Table t3 = t1.groupBy(0, 1).aggregate(max(2));
+      try (Table t3 = t1.groupBy(0, 1)
+              .aggregate(max(2));
            HostColumnVector aggOut1 = t3.getColumn(2).copyToHost()) {
         // verify t3
         assertEquals(4, t3.getRowCount());
@@ -2788,6 +2831,50 @@ public class TableTest extends CudfTestBase {
             expectedAggregateResult.put(key, count - 1);
           }
         }
+      }
+    }
+  }
+
+  @Test
+  void testGroupByArgMax() {
+    // ArgMax is a sort based aggregation.
+    try (Table t1 = new Table.TestBuilder()
+            .column(   1,    1,    1,    1,    1,    1)
+            .column(   0,    1,    2,    2,    3,    3)
+            .column(17.0, 14.0, 14.0, 17.0, 17.1, 17.0)
+            .build()) {
+      try (Table t3 = t1.groupBy(0, 1)
+              .aggregate(Aggregation.argMax().onColumn(2));
+           Table sorted = t3
+              .orderBy(Table.asc(0), Table.asc(1), Table.asc(2));
+           Table expected = new Table.TestBuilder()
+                   .column(1, 1, 1, 1)
+                   .column(0, 1, 2, 3)
+                   .column(0, 1, 3, 4)
+                   .build()) {
+        assertTablesAreEqual(expected, sorted);
+      }
+    }
+  }
+
+  @Test
+  void testGroupByArgMin() {
+    // ArgMin is a sort based aggregation
+    try (Table t1 = new Table.TestBuilder()
+            .column(   1,    1,    1,    1,    1,    1)
+            .column(   0,    1,    2,    2,    3,    3)
+            .column(17.0, 14.0, 14.0, 17.0, 17.1, 17.0)
+            .build()) {
+      try (Table t3 = t1.groupBy(0, 1)
+              .aggregate(Aggregation.argMin().onColumn(2));
+           Table sorted = t3
+                   .orderBy(Table.asc(0), Table.asc(1), Table.asc(2));
+           Table expected = new Table.TestBuilder()
+                   .column(1, 1, 1, 1)
+                   .column(0, 1, 2, 3)
+                   .column(0, 1, 2, 5)
+                   .build()) {
+        assertTablesAreEqual(expected, sorted);
       }
     }
   }
