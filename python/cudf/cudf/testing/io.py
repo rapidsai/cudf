@@ -51,7 +51,7 @@ class IOBase(object):
 
     @staticmethod
     def _rand(n):
-        return random.randrange(1, n)
+        return random.randrange(0, n)
 
     def generate_input(self):
         raise NotImplementedError("Must be implemented by inherited class")

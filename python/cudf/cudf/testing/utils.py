@@ -2,6 +2,22 @@
 
 import random
 
+import pandas as pd
+import pyarrow as pa
+
+pyarrow_dtypes_to_pandas_dtypes = {
+    pa.uint8(): pd.UInt8Dtype(),
+    pa.uint16(): pd.UInt16Dtype(),
+    pa.uint32(): pd.UInt32Dtype(),
+    pa.uint64(): pd.UInt64Dtype(),
+    pa.int8(): pd.Int8Dtype(),
+    pa.int16(): pd.Int16Dtype(),
+    pa.int32(): pd.Int32Dtype(),
+    pa.int64(): pd.Int64Dtype(),
+    pa.bool_(): pd.BooleanDtype(),
+    pa.string(): pd.StringDtype(),
+}
+
 
 def _generate_rand_meta(obj, dtypes_list):
     obj._current_params = {}
@@ -44,3 +60,31 @@ def run_test(funcs, args):
         print(
             f"Provided function name({function_name_to_run}) does not exist."
         )
+
+
+def pyarrow_to_pandas(table):
+    """
+    Converts a pyarrow table to a pandas dataframe
+    with Nullable dtypes.
+
+    Parameters
+    ----------
+    table: Pyarrow Table
+        Pyarrow table to be converted to pandas
+
+    Returns
+    -------
+    DataFrame
+        A Pandas dataframe with nullable dtypes.
+    """
+    df = pd.DataFrame()
+
+    for column in table.columns:
+        if column.type in pyarrow_dtypes_to_pandas_dtypes:
+            df[column._name] = pd.Series(
+                column, dtype=pyarrow_dtypes_to_pandas_dtypes[column.type]
+            )
+        else:
+            df[column._name] = column.to_pandas()
+
+    return df

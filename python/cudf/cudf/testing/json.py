@@ -6,7 +6,7 @@ import random
 
 import cudf
 from cudf.testing.io import IOBase
-from cudf.testing.utils import _generate_rand_meta
+from cudf.testing.utils import _generate_rand_meta, pyarrow_to_pandas
 from cudf.tests import dataset_generator as dg
 
 logging.basicConfig(
@@ -59,7 +59,8 @@ class JSONReader(IOBase):
             f"Generating DataFrame with rows: {num_rows} "
             f"and columns: {num_cols}"
         )
-        df = dg.rand_dataframe(dtypes_meta, num_rows, seed).to_pandas()
+        table = dg.rand_dataframe(dtypes_meta, num_rows, seed)
+        df = pyarrow_to_pandas(table)
         df.to_json(file_name)
         logging.info(f"Shape of DataFrame generated: {df.shape}")
 
