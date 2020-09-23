@@ -6864,6 +6864,8 @@ class DataFrame(Frame, Serializable):
             self, level=level, fill_value=fill_value
         )
 
+    _accessors = set()
+
 
 def from_pandas(obj, nan_as_null=None):
     """

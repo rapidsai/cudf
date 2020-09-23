@@ -4295,6 +4295,8 @@ class Series(Frame, Serializable):
         """
         return self.index
 
+    _accessors = set()
+
 
 truediv_int_dtype_corrections = {
     "int8": "float32",

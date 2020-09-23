@@ -49,3 +49,42 @@ def test_dataframe_accessor_idendity(gdf1, gdf2):
 
     assert gdf1.point is gdf1.point
     assert not (gdf1.point is gdf2.point)
+
+
+@pd.api.extensions.register_index_accessor("odd")
+@pd.api.extensions.register_series_accessor("odd")
+@gd.api.extensions.register_index_accessor("odd")
+@gd.api.extensions.register_series_accessor("odd")
+class OddRowAccessor:
+    def __init__(self, obj):
+        self._obj = obj
+
+    def __getitem__(self, i):
+        return self._obj[2 * i - 1]
+
+
+@pytest.mark.parametrize("gidx", [gd.Index(list(range(1, 50)))])
+def test_index_accessor(gidx):
+    pidx = gidx.to_pandas()
+
+    for i in range(1, 10):
+        assert_eq(gidx.odd[i], pidx.odd[i])
+
+
+@pytest.mark.parametrize("gs", [gd.Series(list(range(1, 50)))])
+def test_series_accessor(gs):
+    ps = gs.to_pandas()
+
+    for i in range(1, 10):
+        assert_eq(gs.odd[i], ps.odd[i])
+
+
+@pytest.mark.parametrize(
+    "gdf", [gd.datasets.randomdata(nrows=6, dtypes={"x": int, "y": int})]
+)
+@pytest.mark.parametrize("gidx", [gd.Index(list(range(1, 50)))])
+@pytest.mark.parametrize("gs", [gd.Series(list(range(1, 50)))])
+def test_accessor_space_separate(gdf, gidx, gs):
+    assert not id(gdf._accessors) == id(gidx._accessors)
+    assert not id(gidx._accessors) == id(gs._accessors)
+    assert not id(gdf._accessors) == id(gs._accessors)
