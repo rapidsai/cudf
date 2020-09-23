@@ -229,6 +229,15 @@ def cudf_dtype_to_pa_type(dtype):
         return np_to_pa_dtype(np.dtype(dtype))
 
 
+def cudf_dtype_from_pa_type(typ):
+    if pa.types.is_list(typ):
+        return cudf.core.dtypes.ListDtype.from_arrow(typ)
+    elif pa.types.is_struct(typ):
+        return cudf.core.dtypes.StructDtype.from_arrow(typ)
+    else:
+        return typ.to_pandas_dtype()
+
+
 def is_scalar(val):
     return (
         val is None

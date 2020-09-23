@@ -151,9 +151,6 @@ class ListDtype(ExtensionDtype):
     def to_arrow(self):
         return self._typ
 
-    def to_pandas(self):
-        super().to_pandas(integer_object_nulls=True)
-
     def __eq__(self, other):
         if isinstance(other, str):
             return other == self.name
@@ -184,9 +181,16 @@ class StructDtype(ExtensionDtype):
         self._typ = pa.struct(pa_fields)
 
     @property
+    def fields(self):
+        return {
+            field.name: cudf.utils.dtypes.cudf_dtype_from_pa_type(field.type)
+            for field in self._typ
+        }
+
+    @property
     def type(self):
         # TODO: we should change this to return something like a
-        # ListDtypeType, once we figure out what that should look like
+        # StructDtypeType, once we figure out what that should look like
         return dict
 
     @classmethod
@@ -198,18 +202,12 @@ class StructDtype(ExtensionDtype):
     def to_arrow(self):
         return self._typ
 
-    # def to_pandas(self):
-    #     super().to_pandas(integer_object_nulls=True)
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return other == self.name
+        if type(other) is not StructDtype:
+            return False
+        return self._typ.equals(other._typ)
 
-    # def __eq__(self, other):
-    #     if isinstance(other, str):
-    #         return other == self.name
-    #     if type(other) is not ListDtype:
-    #         return False
-    #     return self._typ.equals(other._typ)
-
-    # def __repr__(self):
-    #     if isinstance(self.element_type, ListDtype):
-    #         return f"ListDtype({self.element_type.__repr__()})"
-    #     else:
-    #         return f"ListDtype({self.element_type})"
+    def __repr__(self):
+        return f"StructDtype({self.fields})"
