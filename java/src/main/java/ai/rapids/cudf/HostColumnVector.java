@@ -955,6 +955,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
       this.nullable = type.isNullable();
       this.rows = rows;
       for (int i = 0; i < type.getNumChildren(); i++) {
+        // initially assume 0 rows and increment as we go
         childBuilders.add(new ColumnBuilder(type.getChild(i), 0));
       }
     }
@@ -974,8 +975,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
       for (ColumnBuilder childBuilder : childBuilders) {
         hostColumnVectorCoreList.add(childBuilder.buildNestedInternal());
       }
-      HostColumnVectorCore ret = new HostColumnVectorCore(type, rows, Optional.of(nullCount), data, valid, offsets, hostColumnVectorCoreList);
-      return ret;
+      return new HostColumnVectorCore(type, rows, Optional.of(nullCount), data, valid, offsets, hostColumnVectorCoreList);
     }
 
     private void allocateBitmaskAndSetDefaultValues() {
@@ -1225,7 +1225,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
       // just for strings we want to throw a real exception if we would overrun the buffer
       if (data == null) {
         // since rows can be updated as we go, make data buffer as big as that or the requested length
-        data = HostMemoryBuffer.allocate(Math.max(type.sizeInBytes * rows, length));
+        data = HostMemoryBuffer.allocate(length);
         return;
       }
       long oldLen = data.getLength();
