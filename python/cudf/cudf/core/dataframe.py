@@ -6523,7 +6523,7 @@ class DataFrame(Frame, Serializable):
 
             prepared = self._prepare_for_rowwise_op(method)
             if not skipna and any(
-                [col.nullable for col in prepared._columns]
+                col.nullable for col in prepared._columns
             ):
                 mask = cudf.DataFrame(
                     {
