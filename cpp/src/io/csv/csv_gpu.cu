@@ -36,6 +36,7 @@
 #include <thrust/transform.h>
 
 #include <type_traits>
+#include <utility>
 
 using namespace ::cudf::io;
 
@@ -62,21 +63,32 @@ __device__ __inline__ bool is_whitespace(char c) { return c == '\t' || c == ' ';
  * @brief Scans a character stream within a range, and adjusts the start and end
  * indices of the range to ignore whitespace and quotation characters.
  *
- * @param[in] begin Beginning of the character string
- * @param[in] end End of the character string
- * @param quotechar The character used to denote quotes
+ * @param[in] data      The csv text
+ * @param[in] start_idx Beginning index of the character string
+ * @param[in] end_idx   Ending index of the character string
+ * @param[in] quotechar The character used to denote quotes
  *
  * @return Adjusted or unchanged start_idx and end_idx
  */
-__device__ __inline__ void trim_field_start_end(char const *data,
-                                                long *start,
-                                                long *end,
-                                                char quotechar = '\0')
+__device__ __inline__ thrust::pair<long, long> trim_field_start_end(char const *data,
+                                                                    long start_idx,
+                                                                    long end_idx,
+                                                                    char const quotechar = '\0')
 {
-  while ((*start < *end) && is_whitespace(data[*start])) { (*start)++; }
-  if ((*start < *end) && data[*start] == quotechar) { (*start)++; }
-  while ((*start <= *end) && is_whitespace(data[*end])) { (*end)--; }
-  if ((*start <= *end) && data[*end] == quotechar) { (*end)--; }
+  while (start_idx < end_idx && is_whitespace(*(data + start_idx))) {  //
+    ++start_idx;
+  }
+  while (start_idx <= end_idx && is_whitespace(*(data + end_idx))) {  //
+    --end_idx;
+  }
+  if (start_idx < end_idx && *(data + start_idx) == quotechar) {  //
+    ++start_idx;
+  }
+  if (start_idx <= end_idx && *(data + end_idx) == quotechar) {  //
+    --end_idx;
+  }
+
+  return {start_idx, end_idx};
 }
 
 /*
@@ -240,8 +252,8 @@ __global__ void __launch_bounds__(csvparse_block_dim)
 
         // Modify start & end to ignore whitespace and quotechars
         // This could possibly result in additional empty fields
-        trim_field_start_end(raw_csv, &start, &tempPos);
-        field_len = tempPos - start + 1;
+        thrust::tie(start, tempPos) = trim_field_start_end(raw_csv, start, tempPos);
+        field_len                   = tempPos - start + 1;
 
         for (long startPos = start; startPos <= tempPos; startPos++) {
           if (is_digit(raw_csv[startPos])) {
@@ -580,7 +592,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
       // Modify start & end to ignore whitespace and quotechars
       long tempPos = pos - 1;
       if (!is_na && columns[col].type.id() != cudf::type_id::STRING) {
-        trim_field_start_end(raw_csv, &start, &tempPos, opts.quotechar);
+        thrust::tie(start, tempPos) = trim_field_start_end(raw_csv, start, tempPos, opts.quotechar);
       }
 
       if (!is_na && start <= (tempPos)) {  // Empty fields are not legal values
