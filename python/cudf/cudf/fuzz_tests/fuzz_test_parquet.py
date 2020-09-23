@@ -12,9 +12,9 @@ from cudf.tests.utils import assert_eq
 
 
 @pythonfuzz(data_handle=ParquetReader)
-def parquet_reader_test(file_name):
-    pdf = pd.read_parquet(file_name)
-    gdf = cudf.read_parquet(file_name)
+def parquet_reader_test(parquet_buffer):
+    pdf = pd.read_parquet(parquet_buffer)
+    gdf = cudf.read_parquet(parquet_buffer)
 
     assert_eq(gdf, pdf)
 

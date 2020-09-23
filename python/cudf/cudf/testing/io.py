@@ -17,14 +17,12 @@ logging.basicConfig(
 class IOFuzz(object):
     def __init__(
         self,
-        file_name=None,
         dirs=None,
         max_rows=100_000,
         max_columns=1000,
         max_string_length=None,
     ):
         self._inputs = []
-        self._file_name = file_name
         self._max_rows = max_rows
         self._max_columns = max_columns
         self._max_string_length = max_string_length
@@ -73,8 +71,7 @@ class IOFuzz(object):
         num_rows = param["num_rows"]
         num_cols = param["num_columns"]
         seed = param["seed"]
-        file_name = param["file_name"]
         random.seed(seed)
         self._idx += 1
         self._current_params = copy.copy(param)
-        return dtypes_meta, num_rows, num_cols, seed, file_name
+        return dtypes_meta, num_rows, num_cols, seed

@@ -19,14 +19,12 @@ logging.basicConfig(
 class CSVReader(IOFuzz):
     def __init__(
         self,
-        file_name="temp_csv.csv",
         dirs=None,
         max_rows=100_000,
         max_columns=1000,
         max_string_length=None,
     ):
         super().__init__(
-            file_name=file_name,
             dirs=dirs,
             max_rows=max_rows,
             max_columns=max_columns,
@@ -40,7 +38,6 @@ class CSVReader(IOFuzz):
                 num_rows,
                 num_cols,
                 seed,
-                file_name,
             ) = self.get_next_regression_params()
         else:
             seed = random.randint(0, 2 ** 32 - 1)
@@ -49,9 +46,7 @@ class CSVReader(IOFuzz):
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
                 self, dtypes_list
             )
-            file_name = self._file_name
             self._current_params["dtypes_meta"] = dtypes_meta
-            self._current_params["file_name"] = self._file_name
             self._current_params["seed"] = seed
             self._current_params["num_rows"] = num_rows
             self._current_params["num_columns"] = num_cols
@@ -61,23 +56,21 @@ class CSVReader(IOFuzz):
         )
         table = dg.rand_dataframe(dtypes_meta, num_rows, seed)
         df = pyarrow_to_pandas(table)
-        df.to_csv(file_name)
+
         logging.info(f"Shape of DataFrame generated: {df.shape}")
 
-        return file_name
+        return df.to_csv()
 
 
 class CSVWriter(IOFuzz):
     def __init__(
         self,
-        file_name="temp_csv.csv",
         dirs=None,
         max_rows=100_000,
         max_columns=1000,
         max_string_length=None,
     ):
         super().__init__(
-            file_name=file_name,
             dirs=dirs,
             max_rows=max_rows,
             max_columns=max_columns,
@@ -91,7 +84,6 @@ class CSVWriter(IOFuzz):
                 num_rows,
                 num_cols,
                 seed,
-                _,
             ) = self.get_next_regression_params()
         else:
             seed = random.randint(0, 2 ** 32 - 1)

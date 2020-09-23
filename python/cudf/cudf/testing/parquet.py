@@ -1,14 +1,13 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 
+import io
 import logging
 import random
 
-import pyarrow as pa
-
 import cudf
 from cudf.testing.io import IOFuzz
-from cudf.testing.utils import _generate_rand_meta
+from cudf.testing.utils import _generate_rand_meta, pyarrow_to_pandas
 from cudf.tests import dataset_generator as dg
 
 logging.basicConfig(
@@ -21,14 +20,12 @@ logging.basicConfig(
 class ParquetReader(IOFuzz):
     def __init__(
         self,
-        file_name="temp_parquet",
         dirs=None,
         max_rows=100_000,
         max_columns=1000,
         max_string_length=None,
     ):
         super().__init__(
-            file_name=file_name,
             dirs=dirs,
             max_rows=max_rows,
             max_columns=max_columns,
@@ -42,7 +39,6 @@ class ParquetReader(IOFuzz):
                 num_rows,
                 num_cols,
                 seed,
-                file_name,
             ) = self.get_next_regression_params()
         else:
             dtypes_list = list(
@@ -53,9 +49,7 @@ class ParquetReader(IOFuzz):
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
                 self, dtypes_list
             )
-            file_name = self._file_name
             self._current_params["dtypes_meta"] = dtypes_meta
-            self._current_params["file_name"] = self._file_name
             seed = random.randint(0, 2 ** 32 - 1)
             self._current_params["seed"] = seed
             self._current_params["num_rows"] = num_rows
@@ -65,23 +59,24 @@ class ParquetReader(IOFuzz):
             f"and columns: {num_cols}"
         )
         table = dg.rand_dataframe(dtypes_meta, num_rows, seed)
-        pa.parquet.write_table(table, file_name)
+        df = pyarrow_to_pandas(table)
         logging.info(f"Shape of DataFrame generated: {table.shape}")
+        file = io.BytesIO()
+        df.to_parquet(file)
+        file.seek(0)
 
-        return file_name
+        return file.read()
 
 
 class ParquetWriter(IOFuzz):
     def __init__(
         self,
-        file_name="temp_parquet",
         dirs=None,
         max_rows=100_000,
         max_columns=1000,
         max_string_length=None,
     ):
         super().__init__(
-            file_name=file_name,
             dirs=dirs,
             max_rows=max_rows,
             max_columns=max_columns,
@@ -95,7 +90,6 @@ class ParquetWriter(IOFuzz):
                 num_rows,
                 num_cols,
                 seed,
-                _,
             ) = self.get_next_regression_params()
         else:
             seed = random.randint(0, 2 ** 32 - 1)

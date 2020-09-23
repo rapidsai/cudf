@@ -13,9 +13,9 @@ from cudf.tests.utils import assert_eq
 
 
 @pythonfuzz(data_handle=CSVReader)
-def csv_reader_test(file_name):
-    pdf = pd.read_csv(file_name)
-    gdf = cudf.read_csv(file_name)
+def csv_reader_test(csv_buffer):
+    pdf = pd.read_csv(csv_buffer)
+    gdf = cudf.read_csv(csv_buffer)
 
     assert_eq(gdf, pdf)
 

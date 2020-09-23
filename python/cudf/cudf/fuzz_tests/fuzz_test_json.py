@@ -12,9 +12,9 @@ from cudf.tests.utils import assert_eq
 
 
 @pythonfuzz(data_handle=JSONReader)
-def json_reader_test(file_name):
-    pdf = pd.read_json(file_name)
-    gdf = cudf.read_json(file_name)
+def json_reader_test(json_buffer):
+    pdf = pd.read_json(json_buffer)
+    gdf = cudf.read_json(json_buffer)
 
     assert_eq(gdf, pdf)
 
