@@ -27,6 +27,8 @@ namespace cudf {
 /**
  * @addtogroup column_search
  * @{
+ * @file
+ * @brief Column APIs for lower_bound, upper_bound, and contains
  */
 
 /**

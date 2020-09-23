@@ -67,6 +67,7 @@
 - PR #6204 Add dockerfile and script to build cuDF jar
 - PR #6245 Split up replace.cu into multiple source files
 - PR #6218 increase visiblity/consistency for cuio reader writer private member variable names.
+- PR #6268 Add file tags to libcudf doxygen
 - PR #6265 Update JNI to use ORC options builder
 - PR #6273 Update JNI to use ORC options builder
 - PR #6287 Make java aggregate API follow C++ API

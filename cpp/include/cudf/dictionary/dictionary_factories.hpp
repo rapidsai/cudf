@@ -20,10 +20,14 @@
 
 namespace cudf {
 /**
+ * @addtogroup column_factories Factories
+ * @{
+ * @file
+ */
+
+/**
  * @brief Construct a dictionary column by copying the provided `keys`
  * and `indices`.
- *
- * @ingroup column_factories
  *
  * It is expected that `keys_column.has_nulls() == false`.
  * It is assumed the elements in `keys_column` are unique and
@@ -64,8 +68,6 @@ std::unique_ptr<column> make_dictionary_column(
  * @brief Construct a dictionary column by taking ownership of the provided keys
  * and indices columns.
  *
- * @ingroup column_factories
- *
  * The keys_column and indices columns must contain no nulls.
  * It is assumed the elements in `keys_column` are unique and
  * are in a strict, total order. Meaning, `keys_column[i]` is ordered before
@@ -86,5 +88,5 @@ std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys_colu
                                                std::unique_ptr<column> indices_column,
                                                rmm::device_buffer&& null_mask,
                                                size_type null_count);
-
+/** @} */  // end of group
 }  // namespace cudf

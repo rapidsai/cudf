@@ -5,16 +5,15 @@
 #include <stdexcept>
 #include <string>
 
+namespace cudf {
 /**
  * @addtogroup utility_error
  * @{
+ * @file
  */
 
-namespace cudf {
 /**
  * @brief Exception thrown when logical precondition is violated.
- *
- * @ingroup utility_error
  *
  * This exception should not be thrown directly and is instead thrown by the
  * CUDF_EXPECTS macro.
@@ -30,16 +29,21 @@ struct logic_error : public std::logic_error {
 };
 /**
  * @brief Exception thrown when a CUDA error is encountered.
- *
- * @ingroup utility_error
  */
 struct cuda_error : public std::runtime_error {
   cuda_error(std::string const& message) : std::runtime_error(message) {}
 };
+/** @} */
+
 }  // namespace cudf
 
 #define STRINGIFY_DETAIL(x) #x
 #define CUDF_STRINGIFY(x) STRINGIFY_DETAIL(x)
+
+/**
+ * @addtogroup utility_error
+ * @{
+ */
 
 /**
  * @brief Macro for checking (pre-)conditions that throws an exception when
@@ -125,5 +129,4 @@ inline void throw_cuda_error(cudaError_t error, const char* file, unsigned int l
 #else
 #define CHECK_CUDA(stream) CUDA_TRY(cudaPeekAtLastError());
 #endif
-
 /** @} */
