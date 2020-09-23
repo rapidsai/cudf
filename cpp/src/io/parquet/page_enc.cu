@@ -1169,20 +1169,20 @@ struct cpw {
   }
 
   template <typename T>
-    inline __device__ void field_int32(int f, T v)
-    {
-      p       = cpw_put_fldh(p, f, cur_fld, ST_FLD_I32);
-      p       = cpw_put_int32(p, static_cast<int32_t>(v));
-      cur_fld = f;
-    }
+  inline __device__ void field_int32(int f, T v)
+  {
+    p       = cpw_put_fldh(p, f, cur_fld, ST_FLD_I32);
+    p       = cpw_put_int32(p, static_cast<int32_t>(v));
+    cur_fld = f;
+  }
 
   template <typename T>
-    inline __device__ void field_int64(int f, T v)
-    {
-      p       = cpw_put_fldh(p, f, cur_fld, ST_FLD_I64);
-      p       = cpw_put_int64(p, static_cast<int64_t>(v));
-      cur_fld = f;
-    }
+  inline __device__ void field_int64(int f, T v)
+  {
+    p       = cpw_put_fldh(p, f, cur_fld, ST_FLD_I64);
+    p       = cpw_put_int64(p, static_cast<int64_t>(v));
+    cur_fld = f;
+  }
 
   inline __device__ void field_binary(int f, const void *v, uint32_t l)
   {
@@ -1311,14 +1311,14 @@ __global__ void __launch_bounds__(128) gpuEncodePageHeaders(EncPage *pages,
     Encoding encoding;
     if (enable_bool_rle) {
       encoding = (col_g.physical_type != BOOLEAN)
-        ? (page_type == PageType::DICTIONARY_PAGE || page_g.dict_bits_plus1 != 0)
-        ? Encoding::PLAIN_DICTIONARY
-        : Encoding::PLAIN
-        : Encoding::RLE;
+                   ? (page_type == PageType::DICTIONARY_PAGE || page_g.dict_bits_plus1 != 0)
+                       ? Encoding::PLAIN_DICTIONARY
+                       : Encoding::PLAIN
+                   : Encoding::RLE;
     } else {
       encoding = (page_type == PageType::DICTIONARY_PAGE || page_g.dict_bits_plus1 != 0)
-        ? Encoding::PLAIN_DICTIONARY
-        : Encoding::PLAIN;
+                   ? Encoding::PLAIN_DICTIONARY
+                   : Encoding::PLAIN;
     }
     c.field_int32(1, page_type);
     c.field_int32(2, uncompressed_page_size);
@@ -1334,7 +1334,7 @@ __global__ void __launch_bounds__(128) gpuEncodePageHeaders(EncPage *pages,
       if (page_stats) {
         c.field_struct_begin(5);
         c.set_ptr(
-            EncodeStatistics(c.get_ptr(), &page_stats[start_page + blockIdx.x], &col_g, fp_scratch));
+          EncodeStatistics(c.get_ptr(), &page_stats[start_page + blockIdx.x], &col_g, fp_scratch));
         c.field_struct_end(5);
       }
       c.field_struct_end(5);
