@@ -112,8 +112,8 @@ TEST_F(DictionaryScatterTest, ScalarWithNulls)
                                                               {0, 1, 0, 1, 1, 1, 1, 1}};
   auto target = cudf::dictionary::encode(data_target);
   std::vector<std::unique_ptr<cudf::scalar>> source;
-  source.push_back(std::move(std::make_unique<cudf::numeric_scalar<int64_t>>(
-    cudf::test::make_type_param_scalar<int64_t>(100))));
+  source.emplace_back(std::make_unique<cudf::numeric_scalar<int64_t>>(
+    cudf::test::make_type_param_scalar<int64_t>(100)));
 
   cudf::test::fixed_width_column_wrapper<int32_t> scatter_map{7, 2, 3, 1};
   auto table_result =
