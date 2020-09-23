@@ -6817,15 +6817,12 @@ class DataFrame(Frame, Serializable):
         )
 
     def equals(self, other):
-        frames_equal = super().equals(other)
-        if frames_equal:
-            # additionally, check equality of names
-            for self_name, other_name in zip(
-                self._data.names, other._data.names
-            ):
-                if self_name != other_name:
-                    return False
-        return frames_equal
+        if not isinstance(other, DataFrame):
+            return False
+        for self_name, other_name in zip(self._data.names, other._data.names):
+            if self_name != other_name:
+                return False
+        return super().equals(other)
 
 
 def from_pandas(obj, nan_as_null=None):
