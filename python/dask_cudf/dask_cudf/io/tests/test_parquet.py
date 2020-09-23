@@ -251,7 +251,10 @@ def test_roundtrip_from_dask_partitioned(tmpdir, parts, daskcudf, metadata):
             write_metadata_file=metadata,
             partition_on=parts,
         )
-    df_read = dd.read_parquet(tmpdir, engine="pyarrow")
+    try:
+        df_read = dd.read_parquet(tmpdir, engine="pyarrow-legacy")
+    except ValueError:
+        df_read = dd.read_parquet(tmpdir, engine="pyarrow")
     gdf_read = dask_cudf.read_parquet(tmpdir)
 
     dd.assert_eq(
