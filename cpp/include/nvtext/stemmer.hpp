@@ -23,6 +23,7 @@ namespace nvtext {
 /**
  * @addtogroup nvtext_stemmer
  * @{
+ * @file
  */
 
 /**

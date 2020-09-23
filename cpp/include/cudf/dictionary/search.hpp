@@ -22,6 +22,7 @@ namespace dictionary {
 /**
  * @addtogroup dictionary_search
  * @{
+ * @file
  */
 
 /**
