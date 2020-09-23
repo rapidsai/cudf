@@ -575,6 +575,7 @@ add_library(cudf
             src/lists/copying/copying.cu
             src/structs/structs_column_view.cu
             src/structs/structs_column_factories.cu
+            src/maps/map_lookup.cu
             src/text/detokenize.cu
             src/text/edit_distance.cu
             src/text/generate_ngrams.cu

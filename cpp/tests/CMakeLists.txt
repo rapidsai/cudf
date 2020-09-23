@@ -555,6 +555,14 @@ set(STRUCTS_TEST_SRC
 ConfigureTest(STRUCTS_TEST "${STRUCTS_TEST_SRC}")
 
 ###################################################################################################
+# - map_lookup test ----------------------------------------------------------------------------------
+
+set(MAP_LOOKUP_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/maps/map_lookup_tests.cu")
+
+ConfigureTest(MAP_LOOKUP_TEST "${MAP_LOOKUP_TEST_SRC}")
+
+###################################################################################################
 # - nvtext test ----------------------------------------------------------------------------------
 
 set(TEXT_TEST_SRC
