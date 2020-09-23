@@ -22,6 +22,7 @@ class IOFuzz(object):
         max_columns=1000,
         max_string_length=None,
     ):
+        dirs = [] if dirs is None else dirs
         self._inputs = []
         self._max_rows = max_rows
         self._max_columns = max_columns
