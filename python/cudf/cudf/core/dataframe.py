@@ -6519,7 +6519,7 @@ class DataFrame(Frame, Serializable):
                     index=self.index,
                     dtype=common_dtype
                     if method
-                    in (
+                    in {
                         "count",
                         "min",
                         "max",
@@ -6529,7 +6529,7 @@ class DataFrame(Frame, Serializable):
                         "cummax",
                         "cumsum",
                         "cumprod",
-                    )
+                    }
                     else None,
                 )
             else:
