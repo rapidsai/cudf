@@ -2206,7 +2206,7 @@ class Frame(libcudf.table.Table):
             for name, col, other_col in zip(
                 self._index._data.keys(),
                 self._index._data.values(),
-                other._index.data_values(),
+                other._index._data.values(),
             ):
                 if isinstance(other_col, cudf.core.column.StructColumn):
                     self._index._data[name] = col._rename_fields(
