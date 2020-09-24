@@ -1482,42 +1482,6 @@ class Series(Frame, Serializable):
     def __eq__(self, other):
         return self._binaryop(other, "eq")
 
-    def equals(self, other):
-        """
-        Test whether two objects contain the same elements.
-        This function allows two Series or DataFrames to be compared against
-        each other to see if they have the same shape and elements. NaNs in
-        the same location are considered equal. The column headers do not
-        need to have the same type.
-
-        Parameters
-        ----------
-        other : Series or DataFrame
-            The other Series or DataFrame to be compared with the first.
-
-        Returns
-        -------
-        bool
-            True if all elements are the same in both objects, False
-            otherwise.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series([1, 2, 3])
-        >>> other = cudf.Series([1, 2, 3])
-        >>> s.equals(other)
-        True
-        >>> different = cudf.Series([1.5, 2, 3])
-        >>> s.equals(different)
-        False
-        """
-        if self is other:
-            return True
-        if other is None or len(self) != len(other):
-            return False
-        return self._binaryop(other, "eq").min()
-
     def ne(self, other, fill_value=None, axis=0):
         """Not equal to of series and other, element-wise
         (binary operator ne).
