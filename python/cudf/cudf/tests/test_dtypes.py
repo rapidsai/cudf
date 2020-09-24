@@ -108,3 +108,5 @@ def test_struct_dtype_eq():
     assert lhs == rhs
     rhs = StructDtype({"a": "int32", "b": "int64"})
     assert lhs != rhs
+    lhs = StructDtype({"b": "int64", "a": "int32"})
+    assert lhs != rhs
