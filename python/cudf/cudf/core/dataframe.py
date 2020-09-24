@@ -5518,9 +5518,10 @@ class DataFrame(Frame, Serializable):
             col.nullable for col in self._columns
         ):
             msg = (
-                "Row-wise operations do not currently support columns "
-                "with null values. Consider removing them with .dropna() "
-                "or using .fillna()."
+                f"Row-wise operations to calculate '{method}' is not "
+                f"currently support columns with null values. "
+                f"Consider removing them with .dropna() "
+                f"or using .fillna()."
             )
             raise ValueError(msg)
 
@@ -6459,9 +6460,10 @@ class DataFrame(Frame, Serializable):
                 True,
                 1,
             ):
-                msg = "Row-wise operations currently do not "
-                "support `skipna=False`."
-                raise NotImplementedError(msg)
+                raise NotImplementedError(
+                    f"Row-wise operation to calculate '{method}'"
+                    f" currently do not support `skipna=False`."
+                )
 
             level = kwargs.pop("level", None)
             if level not in (None,):
@@ -6508,7 +6510,7 @@ class DataFrame(Frame, Serializable):
 
             result = getattr(cupy, method)(arr, axis=1, **kwargs)
 
-            if len(result.shape) == 1:
+            if result.ndim == 1:
                 result = column.as_column(result)
                 if mask is not None:
                     result = result.set_mask(
