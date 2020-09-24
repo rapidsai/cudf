@@ -15,7 +15,7 @@ from cudf.core import Series
 from cudf.core.index import as_index
 from cudf.tests import utils
 
-from cudf.utils.dtypes import NUMERIC_TYPES, DATETIME_TYPES
+from cudf.utils.dtypes import NUMERIC_TYPES, DATETIME_TYPES, ALL_TYPES
 
 _binops = [
     operator.add,
@@ -26,6 +26,7 @@ _binops = [
     operator.mod,
     operator.pow,
 ]
+
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
 @pytest.mark.parametrize("binop", _binops)
@@ -779,36 +780,43 @@ def generate_valid_scalar_binop_combos():
     results = []
 
     # All int-int combinations
-    int_dtype_pairs = combinations(
-        cudf.utils.dtypes.INTEGER_TYPES, 2
-    )
+    int_dtype_pairs = combinations(cudf.utils.dtypes.INTEGER_TYPES, 2)
     int_data = (1, 2)
     for pair in int_dtype_pairs:
-        results.append(
-            (*int_data, *pair)
-        )
+        results.append((*int_data, *pair))
 
     # Int-Float
     int_float_data = (1, 1.5)
     int_float_dtype_pairs = product(
-        cudf.utils.dtypes.INTEGER_TYPES,
-        cudf.utils.dtypes.FLOAT_TYPES
+        cudf.utils.dtypes.INTEGER_TYPES, cudf.utils.dtypes.FLOAT_TYPES
     )
     for pair in int_float_dtype_pairs:
-        results.append(
-            (*int_float_data, *pair)
-        )
+        results.append((*int_float_data, *pair))
 
     # Int-Bool
-    int_bool_combinations = [(1, True), (1, False), (0, True), (0, False), (5, True), (5, False)]
-    dtype_combinations = product({'bool'}, cudf.utils.dtypes.INTEGER_TYPES)
+    int_bool_combinations = [
+        (1, True),
+        (1, False),
+        (0, True),
+        (0, False),
+        (5, True),
+        (5, False),
+    ]
+    dtype_combinations = product({"bool"}, cudf.utils.dtypes.INTEGER_TYPES)
     for cmb in int_bool_combinations:
         for dtype_cmb in dtype_combinations:
             results.append((*cmb, *dtype_cmb))
 
     # Float-bool
-    float_bool_combinations = [(1.0, True), (1.0, False), (0.0, True), (0.0, False), (5.5, True), (5.5, False)]
-    dtype_combinations = product({'bool'}, cudf.utils.dtypes.FLOAT_TYPES)
+    float_bool_combinations = [
+        (1.0, True),
+        (1.0, False),
+        (0.0, True),
+        (0.0, False),
+        (5.5, True),
+        (5.5, False),
+    ]
+    dtype_combinations = product({"bool"}, cudf.utils.dtypes.FLOAT_TYPES)
     for cmb in float_bool_combinations:
         for dtype_cmb in dtype_combinations:
             results.append((*cmb, *dtype_cmb))
@@ -816,9 +824,13 @@ def generate_valid_scalar_binop_combos():
     return results
 
 
-@pytest.mark.parametrize('lhs,rhs,dtype_l,dtype_r', generate_valid_scalar_binop_combos())
-@pytest.mark.parametrize('op', _binops)
-def test_scalar_binops_value_valid_combinations(lhs, rhs, dtype_l, dtype_r, op):
+@pytest.mark.parametrize(
+    "lhs,rhs,dtype_l,dtype_r", generate_valid_scalar_binop_combos()
+)
+@pytest.mark.parametrize("op", _binops)
+def test_scalar_binops_value_valid_combinations(
+    lhs, rhs, dtype_l, dtype_r, op
+):
 
     dtype_l = np.dtype(dtype_l)
     dtype_r = np.dtype(dtype_r)
@@ -835,12 +847,15 @@ def test_scalar_binops_value_valid_combinations(lhs, rhs, dtype_l, dtype_r, op):
     assert host_result == device_result.value
     assert host_result.dtype == device_result.dtype
 
-@pytest.mark.parametrize('op', _binops)
-@pytest.mark.parametrize('dtype_l', cudf.utils.dtypes.NUMERIC_TYPES)
-@pytest.mark.parametrize('dtype_r', cudf.utils.dtypes.NUMERIC_TYPES)
-@pytest.mark.parametrize('l_valid', [True, False])
-@pytest.mark.parametrize('r_valid', [True, False])
-def test_scalar_binops_dtype_and_validity(dtype_l, dtype_r, l_valid, r_valid, op):
+
+@pytest.mark.parametrize("op", _binops)
+@pytest.mark.parametrize("dtype_l", cudf.utils.dtypes.NUMERIC_TYPES)
+@pytest.mark.parametrize("dtype_r", cudf.utils.dtypes.NUMERIC_TYPES)
+@pytest.mark.parametrize("l_valid", [True, False])
+@pytest.mark.parametrize("r_valid", [True, False])
+def test_scalar_binops_dtype_and_validity(
+    dtype_l, dtype_r, l_valid, r_valid, op
+):
 
     dtype_l = np.dtype(dtype_l)
     dtype_r = np.dtype(dtype_r)
@@ -857,3 +872,33 @@ def test_scalar_binops_dtype_and_validity(dtype_l, dtype_r, l_valid, r_valid, op
 
     assert got.dtype == expect_dtype
     assert got.is_valid() == (l_valid and r_valid)
+
+@pytest.mark.parametrize('op', _binops)
+@pytest.mark.parametrize('dtype_l', ALL_TYPES - {'category'})
+@pytest.mark.parametrize('dtype_r', ALL_TYPES - {'category'})
+def test_scalar_binops_invalid_combinations_of_dtypes(dtype_l, dtype_r, op):
+    dtype_l = np.dtype(dtype_l)
+    dtype_r = np.dtype(dtype_r)
+
+    if dtype_l.type == np.datetime64:
+        lres, _ = np.datetime_data(dtype_l)
+        lval = np.datetime64(0, lres)
+    else:
+        lval = dtype_l.type(0)
+    if dtype_r.type == np.datetime64:
+        rres, _ = np.datetime_data(dtype_r)
+        rval = np.datetime64(0, rres)
+    else:
+        rval = dtype_r.type(0)
+
+    try:
+        op(lval, rval)
+    except Exception as e:
+        assert('ufunc') in str(e)
+        lval_gpu = cudf.Scalar(lval, dtype=dtype_l)
+        rval_gpu = cudf.Scalar(rval, dtype=dtype_r)
+
+        with pytest.raises(TypeError):
+            op(lval_gpu, rval_gpu)
+            return 
+    pytest.skip()

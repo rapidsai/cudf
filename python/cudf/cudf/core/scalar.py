@@ -1,6 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 import cudf._lib as libcudf
-from cudf.utils.dtypes import to_cudf_compatible_scalar
+from cudf.utils.dtypes import to_cudf_compatible_scalar, INVALID_BINOP_DTYPE_COMBOS
 from numpy import find_common_type
 import numpy as np
 from cudf.core.series import truediv_int_dtype_corrections
@@ -107,7 +107,12 @@ class Scalar(libcudf.scalar.Scalar):
         if op in ["__eq__", "__ne__", "__lt__", "__gt__", "__le__", "__ge__"]:
             return np.bool
 
-        elif op == '__truediv__':
+        if (self.dtype.name, other.dtype.name) in INVALID_BINOP_DTYPE_COMBOS[op]:
+            raise TypeError(f"{op} not supported between "\
+                            f"{self.dtype} and {other.dtype} scalars")
+
+        if op == '__truediv__':
+            # todo - this doesn't work out quite right w.r.t numpy 
             dtype_l = truediv_int_dtype_corrections.get(self.dtype.name, self.dtype.name)
             dtype_r = truediv_int_dtype_corrections.get(other.dtype.name, other.dtype.name)
 
@@ -115,16 +120,6 @@ class Scalar(libcudf.scalar.Scalar):
                 return 'float32'
             else:
                 return 'float64'
-
-        if (self.dtype.kind == "O" and other.dtype.kind != "O") or (
-            self.dtype.kind != "O" and other.dtype.kind == "O"
-        ):
-            wrong_dtype = self.dtype if self.dtype.kind != "O" else other.dtype
-            raise TypeError(
-                f"Can only concatenate string (not {wrong_dtype}) to string"
-            )
-        if (self.dtype.kind == "O" or other.dtype.kind == "O") and op != "__add__":
-            raise TypeError(f"{op} is not supported for string type scalars")
 
         return find_common_type([self.dtype, other.dtype], [])
 
