@@ -19,7 +19,7 @@ python API, but this is not a requirement.
 pytest cudf/benchmarks/
 ```
 * cuIO benchmarks have option of using file path directly or memory buffers,
-  by default file path options is enabled. To enable memory buffers, use
+  by default file path option is enabled. To enable memory buffer usage, use
   `--use_buffer True` with pytest as shown below.
 ```
 pytest --use_buffer True cudf/benchmarks/
