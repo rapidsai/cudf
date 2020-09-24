@@ -5515,7 +5515,7 @@ class DataFrame(Frame, Serializable):
         """
 
         if method not in _cupy_nan_methods_map and any(
-            [col.nullable for col in self._columns]
+            col.nullable for col in self._columns
         ):
             msg = (
                 "Row-wise operations do not currently support columns "
