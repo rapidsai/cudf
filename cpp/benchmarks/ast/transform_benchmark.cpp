@@ -14,20 +14,20 @@
  * limitations under the License.
  */
 
-#include <benchmark/benchmark.h>
-
-#include <thrust/iterator/counting_iterator.h>
-
 #include <cudf/ast/transform.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
-#include <tests/utilities/column_wrapper.hpp>
 
+#include <cudf_test/column_wrapper.hpp>
+
+#include <benchmark/benchmark.h>
 #include <fixture/benchmark_fixture.hpp>
 #include <synchronization/synchronization.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
 #include <iostream>
