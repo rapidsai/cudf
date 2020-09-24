@@ -13,7 +13,7 @@ set -o pipefail
 # confusing now that there's dedicated datasets for benchmarks.
 CUIO_BENCHMARK_DATASET_DATA="
 # 10GB File
-https://github.com/rapidsai/cudf/files/5044005/orc_mismatch.orc.zip
+https://rapidsai-data.s3.us-east-2.amazonaws.com/cudf/benchmark/avro_json_datasets.zip
 cudf/benchmarks/cuio_data/
 # ~14s download
 "

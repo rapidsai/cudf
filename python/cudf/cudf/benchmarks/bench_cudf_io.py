@@ -4,12 +4,12 @@ import pytest
 import cudf
 import glob
 
-@pytest.mark.parametrize(file_path, glob.glob("cudf/benchmarks/datasets/datasets/avro_*"))
-def bench_avro(benchmark, ):
+@pytest.mark.parametrize("file_path", glob.glob("cudf/benchmarks//cuio_data/datasets/avro_*"))
+def bench_avro(benchmark, file_path):
     benchmark(cudf.read_avro, file_path)
 
 
-@pytest.mark.parametrize(file_path, glob.glob("cudf/benchmarks/datasets/datasets/json_*"))
+@pytest.mark.parametrize("file_path", glob.glob("cudf/benchmarks//cuio_data/datasets/json_*"))
 def bench_json(benchmark, file_path):
     if "bz2" in file_path:
         compression="bz2"
@@ -21,7 +21,7 @@ def bench_json(benchmark, file_path):
         raise TypeError("Unsupported compression type")
     benchmark(
         cudf.read_json,
-        fname,
+        file_path,
         engine="cudf",
         compression=compression,
         lines=True,
