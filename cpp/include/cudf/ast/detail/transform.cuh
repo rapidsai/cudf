@@ -370,7 +370,7 @@ std::unique_ptr<column> compute_column(
   table_view const table,
   expression const& expr,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 }  // namespace detail
 
 }  // namespace ast

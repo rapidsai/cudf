@@ -36,7 +36,7 @@ namespace ast {
 std::unique_ptr<column> compute_column(
   table_view const table,
   expression const& expr,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace ast
 
