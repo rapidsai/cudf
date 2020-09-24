@@ -77,7 +77,7 @@ struct SchemaElement {
 
   // the parquet format is a little squishy when it comes to interpreting
   // repeated fields. sometimes repeated fields act as "stubs" in the schema
-  // that don't represent a true nesting level. 
+  // that don't represent a true nesting level.
   //
   // this is the case with plain lists:
   //
@@ -96,18 +96,15 @@ struct SchemaElement {
   //     required binary str (UTF8);
   //     required int32 num;
   //  };
-  // }  
-  bool is_stub() const
-  {
-    return repetition_type == REPEATED && num_children == 1;
-  }
+  // }
+  bool is_stub() const { return repetition_type == REPEATED && num_children == 1; }
   // in parquet terms, a group is a level of nesting in the schema. a group
   // can be a struct or a list
   bool is_struct() const
   {
-    return type == UNDEFINED_TYPE && 
-          // this assumption might be a little weak.
-          ((repetition_type != REPEATED) || (repetition_type == REPEATED && num_children == 2));
+    return type == UNDEFINED_TYPE &&
+           // this assumption might be a little weak.
+           ((repetition_type != REPEATED) || (repetition_type == REPEATED && num_children == 2));
   }
 };
 
@@ -340,11 +337,11 @@ class CompactProtocolReader {
 
  protected:
   int WalkSchema(FileMetaData *md,
-                 int idx           = 0,
-                 int parent_idx    = 0,
-                 int max_def_level = 0,
-                 int max_rep_level = 0,
-                 std::vector<std::string> const& parent_path_in_schema = {});
+                 int idx                                               = 0,
+                 int parent_idx                                        = 0,
+                 int max_def_level                                     = 0,
+                 int max_rep_level                                     = 0,
+                 std::vector<std::string> const &parent_path_in_schema = {});
 
  protected:
   const uint8_t *m_base = nullptr;

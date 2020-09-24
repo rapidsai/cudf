@@ -289,7 +289,7 @@ PARQUET_END_STRUCT()
  */
 bool CompactProtocolReader::InitSchema(FileMetaData *md)
 {
-  if (WalkSchema(md) != md->schema.size()) return false; 
+  if (WalkSchema(md) != md->schema.size()) return false;
 
   /* Inside FileMetaData, there is a std::vector of RowGroups and each RowGroup contains a
    * a std::vector of ColumnChunks. Each ColumnChunk has a member ColumnMetaData, which contains
@@ -312,8 +312,8 @@ bool CompactProtocolReader::InitSchema(FileMetaData *md)
         }();
         if (it == md->schema.cend()) return false;
         current_schema_index = std::distance(md->schema.cbegin(), it);
-        column.schema_idx = current_schema_index;
-        parent            = current_schema_index;
+        column.schema_idx    = current_schema_index;
+        parent               = current_schema_index;
       }
     }
   }
@@ -333,12 +333,14 @@ bool CompactProtocolReader::InitSchema(FileMetaData *md)
  *
  * @return The node index that was populated
  */
-int CompactProtocolReader::WalkSchema(
-  FileMetaData *md,
-  int idx, int parent_idx, int max_def_level, int max_rep_level,
-  std::vector<std::string> const& parent_path_in_schema)
-{  
-  if (idx >= 0 && (size_t)idx < md->schema.size()) {    
+int CompactProtocolReader::WalkSchema(FileMetaData *md,
+                                      int idx,
+                                      int parent_idx,
+                                      int max_def_level,
+                                      int max_rep_level,
+                                      std::vector<std::string> const &parent_path_in_schema)
+{
+  if (idx >= 0 && (size_t)idx < md->schema.size()) {
     SchemaElement *e = &md->schema[idx];
     if (e->repetition_type == OPTIONAL) {
       ++max_def_level;
@@ -352,11 +354,9 @@ int CompactProtocolReader::WalkSchema(
 
     std::vector<std::string> path_in_schema = parent_path_in_schema;
     // ignore the root schema element
-    if(idx > 0){
-      path_in_schema.push_back(e->name);
-    }
+    if (idx > 0) { path_in_schema.push_back(e->name); }
 
-    parent_idx              = idx;
+    parent_idx = idx;
     ++idx;
     if (e->num_children > 0) {
       for (int i = 0; i < e->num_children; i++) {

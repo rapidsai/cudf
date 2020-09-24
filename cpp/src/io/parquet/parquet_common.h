@@ -140,14 +140,14 @@ enum {
 };
 
 /**
- * @brief Struct representing an input column in the file. 
+ * @brief Struct representing an input column in the file.
  **/
 struct input_column_info {
-  int                                 schema_idx;
-  std::string                         name;
+  int schema_idx;
+  std::string name;
   // size == nesting depth. the associated real output
   // buffer index in the dest column for each level of nesting.
-  std::vector<int>                    nesting;
+  std::vector<int> nesting;
 };
 
 }  // namespace parquet

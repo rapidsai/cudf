@@ -20,10 +20,10 @@
 #include <cuda_runtime.h>
 #include <io/comp/gpuinflate.h>
 #include <io/statistics/column_stats.h>
-#include <io/utilities/hostdevice_vector.hpp>
 #include <cudf/types.hpp>
-#include <vector>
 #include <io/utilities/column_buffer.hpp>
+#include <io/utilities/hostdevice_vector.hpp>
+#include <vector>
 #include "parquet_common.h"
 
 namespace cudf {
@@ -98,12 +98,12 @@ struct PageInfo {
   // - In the case of a nested schema, you have to decode the repetition and definition
   //   levels to extract actual column values
   int32_t num_input_values;
-  int32_t chunk_row;   // starting row of this page relative to the start of the chunk
-  int32_t num_rows;    // number of rows in this page
-  int32_t chunk_idx;   // column chunk this page belongs to
+  int32_t chunk_row;       // starting row of this page relative to the start of the chunk
+  int32_t num_rows;        // number of rows in this page
+  int32_t chunk_idx;       // column chunk this page belongs to
   int32_t src_col_schema;  // schema index of this column
-  uint8_t flags;       // PAGEINFO_FLAGS_XXX
-  uint8_t encoding;    // Encoding for data or dictionary page
+  uint8_t flags;           // PAGEINFO_FLAGS_XXX
+  uint8_t encoding;        // Encoding for data or dictionary page
   uint8_t definition_level_encoding;  // Encoding used for definition levels (data page)
   uint8_t repetition_level_encoding;  // Encoding used for repetition levels (data page)
 
@@ -185,7 +185,7 @@ struct ColumnChunkDesc {
   int8_t codec;                               // compressed codec enum
   int8_t converted_type;                      // converted type enum
   int8_t decimal_scale;                       // decimal scale pow(10, -decimal_scale)
-  int32_t ts_clock_rate;   // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
+  int32_t ts_clock_rate;  // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
 
   int32_t src_col_index;   // my input column index
   int32_t src_col_schema;  // my schema index in the file
@@ -322,7 +322,7 @@ cudaError_t BuildStringDictionaryIndex(ColumnChunkDesc *chunks,
  * - The total sizes of all output columns at all nesting levels
  * - The starting output buffer offset for each page, for each nesting level
  * For flat schemas, these values are computed during header decoding (see gpuDecodePageHeaders)
- * 
+ *
  * Note : this function is where output device memory is allocated for nested columns.
  *
  * @param[in,out] pages All pages to be decoded

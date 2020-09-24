@@ -46,8 +46,6 @@ using namespace cudf::io;
 // Forward declarations
 class aggregate_metadata;
 
-
-
 /**
  * @brief Implementation for Parquet reader
  */
@@ -201,11 +199,11 @@ class reader::impl {
   std::unique_ptr<aggregate_metadata> _metadata;
 
   // input columns to be processed
-  std::vector<input_column_info> _input_columns;  
+  std::vector<input_column_info> _input_columns;
   // output columns to be generated
   std::vector<column_buffer> _output_columns;
-  // _output_columns associated schema indices 
-  std::vector<int> _output_column_schemas;  
+  // _output_columns associated schema indices
+  std::vector<int> _output_column_schemas;
 
   bool _strings_to_categorical = false;
   data_type _timestamp_type{type_id::EMPTY};
