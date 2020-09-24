@@ -63,11 +63,10 @@ _dataframe_example = """
 
     Then in user code:
 
-        .. code-block:: ipython
+        >>> df = gd.DataFrame({'x': [1,2,3,4,5,6], 'y':[7,6,5,4,3,2]})
+        >>> df.point.bounding_box
+        (1, 2, 6, 7)
 
-            In [3]: df = gd.DataFrame({'x': [1,2,3,4,5,6], 'y':[7,6,5,4,3,2]})
-            In [4]: df.point.bounding_box
-            Out[4]: (1, 2, 6, 7)
 """
 
 _index_example = """
@@ -87,18 +86,13 @@ _index_example = """
 
     Then in user code:
 
-        .. code-block:: ipython
-
-            In [1]: gs = gd.Index(list(range(0, 50)))
-
-            In [2]: gs.odd[1]
-            Out[2]: 1
-
-            In [3]: gs.odd[2]
-            Out[3]: 3
-
-            In [4]: gs.odd[3]
-            Out[4]: 5
+        >>> gs = gd.Index(list(range(0, 50)))
+        >>> gs.odd[1]
+        1
+        >>> gs.odd[2]
+        3
+        >>> gs.odd[3]
+        5
 
 """
 
@@ -119,18 +113,13 @@ _series_example = """
 
     Then in user code:
 
-        .. code-block:: ipython
-
-            In [1]: gs = gd.Series(list(range(0, 50)))
-
-            In [2]: gs.odd[1]
-            Out[2]: 1
-
-            In [3]: gs.odd[2]
-            Out[3]: 3
-
-            In [4]: gs.odd[3]
-            Out[4]: 5
+        >>> gs = gd.Series(list(range(0, 50)))
+        >>> gs.odd[1]
+        1
+        >>> gs.odd[2]
+        3
+        >>> gs.odd[3]
+        5
 
 """
 
