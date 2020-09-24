@@ -132,8 +132,8 @@ from cudf._lib.strings.substring import (
     slice_strings as cpp_slice_strings,
 )
 from cudf._lib.strings.translate import (
-    translate as cpp_translate,
     filter_characters as cpp_filter_characters,
+    translate as cpp_translate,
 )
 from cudf._lib.strings.wrap import wrap as cpp_wrap
 from cudf.core.buffer import Buffer
@@ -4492,22 +4492,14 @@ class StringColumn(column.ColumnBase):
                 / self.base_children[0].dtype.itemsize
             )
 
-    def sum(self, dtype=None):
-        return self.str().cat()
-
-    def product(self, dtype=None):
-        raise TypeError("can't multiply sequence by non-int of type 'object'")
-
-    def mean(self, dtype=np.float64):
-        raise NotImplementedError(
-            "mean for Series of type 'object' is not yet implemented."
+    def sum(self, skipna=None, dtype=None, min_count=0):
+        result_col = self._process_for_reduction(
+            skipna=skipna, min_count=min_count
         )
-
-    def var(self, ddof=1, dtype=np.float64):
-        raise TypeError("unsupported operation for object of type 'object'")
-
-    def std(self, ddof=1, dtype=np.float64):
-        raise TypeError("unsupported operation for object of type 'object'")
+        if isinstance(result_col, cudf.core.column.ColumnBase):
+            return result_col.str().cat()
+        else:
+            return result_col
 
     def set_base_data(self, value):
         if value is not None:

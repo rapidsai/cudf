@@ -19,16 +19,13 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 
-/**
- * @file encode.hpp
- * @brief Dictionary encode and decode APIs.
- */
-
 namespace cudf {
 namespace dictionary {
 /**
  * @addtogroup dictionary_encode
  * @{
+ * @file
+ * @brief Dictionary column encode and decode APIs
  */
 
 /**
@@ -43,7 +40,7 @@ namespace dictionary {
  *
  * The null_mask and null count are copied from the input column to the output column.
  *
- * @throw cudf::logic_error if indices type is not INT32
+ * @throw cudf::logic_error if indices type is not an unsigned integer type.
  * @throw cudf::logic_error if the column to encode is already a DICTIONARY type.
  *
  * @code{.pseudo}
@@ -59,7 +56,7 @@ namespace dictionary {
  */
 std::unique_ptr<column> encode(
   column_view const& column,
-  data_type indices_type              = data_type{type_id::INT32},
+  data_type indices_type              = data_type{type_id::UINT32},
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**

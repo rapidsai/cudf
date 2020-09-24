@@ -1113,6 +1113,47 @@ def test_datetime_strftime_not_implemented_formats(date_format):
         gsr.dt.strftime(date_format=date_format)
 
 
+@pytest.mark.parametrize("data", [[1, 2, 3], [], [1, 20, 1000, None]])
+@pytest.mark.parametrize("dtype", DATETIME_TYPES)
+@pytest.mark.parametrize("stat", ["mean", "quantile"])
+def test_datetime_stats(data, dtype, stat):
+    gsr = cudf.Series(data, dtype=dtype)
+    psr = gsr.to_pandas()
+
+    expected = getattr(psr, stat)()
+    actual = getattr(gsr, stat)()
+
+    if len(data) == 0:
+        assert np.isnat(expected.to_numpy()) and np.isnat(actual.to_numpy())
+    else:
+        assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("op", ["max", "min"])
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
+        [1, 2, 3, 100],
+        [10, None, 100, None, None],
+        [None, None, None],
+        [1231],
+    ],
+)
+@pytest.mark.parametrize("dtype", DATETIME_TYPES)
+def test_datetime_reductions(data, op, dtype):
+    sr = cudf.Series(data, dtype=dtype)
+    psr = sr.to_pandas()
+
+    actual = getattr(sr, op)()
+    expected = getattr(psr, op)()
+
+    if np.isnat(expected.to_numpy()) and np.isnat(actual):
+        assert True
+    else:
+        assert_eq(expected.to_numpy(), actual)
+
+
 @pytest.mark.parametrize(
     "data",
     [

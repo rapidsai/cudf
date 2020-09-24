@@ -15,12 +15,13 @@
  */
 
 #include <cudf/column/column.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
 
 #include <nvtext/normalize.hpp>
 
@@ -127,7 +128,7 @@ TEST_F(TextNormalizeTest, NormalizeCharacters)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
-    auto results = nvtext::normalize_characters(cudf::strings_column_view(strings), false);
+    auto results = nvtext::normalize_characters(strings_view, false);
     cudf::test::strings_column_wrapper expected({"abc£def",
                                                  "",
                                                  "éè â îô aeio",
@@ -141,4 +142,19 @@ TEST_F(TextNormalizeTest, NormalizeCharacters)
                                                 validity);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
+}
+
+TEST_F(TextNormalizeTest, NormalizeSlicedColumn)
+{
+  cudf::test::strings_column_wrapper strings(
+    {"abc£def", "éè â îô\taeio", "ACEN U", "P^NP", "$41.07", "[a,b]", "丏丟"});
+
+  std::vector<cudf::column_view> sliced = cudf::split(strings, {4});
+  auto results = nvtext::normalize_characters(cudf::strings_column_view(sliced.front()), true);
+  cudf::test::strings_column_wrapper expected({"abc£def", "ee a io aeio", "acen u", "p ^ np"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  results = nvtext::normalize_characters(cudf::strings_column_view(sliced[1]), false);
+  cudf::test::strings_column_wrapper expected2({" $ 41 . 07", " [ a , b ] ", " 丏  丟 "});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected2);
 }

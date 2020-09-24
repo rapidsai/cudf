@@ -58,8 +58,7 @@ endfunction(ConfigureTest)
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
-include_directories("${CUB_INCLUDE_DIR}"
-                    "${THRUST_INCLUDE_DIR}"
+include_directories("${THRUST_INCLUDE_DIR}"
                     "${JITIFY_INCLUDE_DIR}"
                     "${LIBCUDACXX_INCLUDE_DIR}")
 
@@ -379,6 +378,14 @@ set(UTILITIES_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/lists_column_wrapper_tests.cpp")
 
 ConfigureTest(UTILITIES_TEST "${UTILITIES_TEST_SRC}")
+
+###################################################################################################
+# - span tests -------------------------------------------------------------------------------
+
+set(SPAN_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/span_tests.cu")
+
+ConfigureTest(SPAN_TEST "${SPAN_TEST_SRC}")
 
 ###################################################################################################
 # - iterator tests --------------------------------------------------------------------------------

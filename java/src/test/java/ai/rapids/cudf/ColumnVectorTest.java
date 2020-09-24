@@ -34,6 +34,7 @@ import static ai.rapids.cudf.QuantileMethod.MIDPOINT;
 import static ai.rapids.cudf.QuantileMethod.NEAREST;
 import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
 import static ai.rapids.cudf.TableTest.assertTablesAreEqual;
+import static ai.rapids.cudf.TableTest.assertStructColumnsAreEqual;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -730,6 +731,7 @@ public class ColumnVectorTest extends CudfTestBase {
           break;
           case EMPTY:
           case LIST:
+          case STRUCT:
             continue;
         default:
           throw new IllegalArgumentException("Unexpected type: " + type);
@@ -896,9 +898,10 @@ public class ColumnVectorTest extends CudfTestBase {
           break;
         }
         case EMPTY:
-          case LIST:
-            continue;
-          default:
+        case LIST:
+        case STRUCT:
+          continue;
+        default:
           throw new IllegalArgumentException("Unexpected type: " + type);
         }
 
@@ -922,7 +925,7 @@ public class ColumnVectorTest extends CudfTestBase {
   void testFromScalarNull() {
     final int rowCount = 4;
     for (DType type : DType.values()) {
-      if (type == DType.EMPTY || type == DType.LIST) {
+      if (type == DType.EMPTY || type == DType.LIST || type == DType.STRUCT) {
         continue;
       }
       try (Scalar s = Scalar.fromNull(type);
@@ -1489,23 +1492,23 @@ public class ColumnVectorTest extends CudfTestBase {
         .minPeriods(2).build();
     try (ColumnVector v1 = ColumnVector.fromInts(5, 4, 7, 6, 8)) {
       try (ColumnVector expected = ColumnVector.fromLongs(9, 16, 17, 21, 14);
-           ColumnVector result = v1.rollingWindow(AggregateOp.SUM, options)) {
+           ColumnVector result = v1.rollingWindow(Aggregation.sum(), options)) {
         assertColumnsAreEqual(expected, result);
       }
 
       try (ColumnVector expected = ColumnVector.fromInts(4, 4, 4, 6, 6);
-           ColumnVector result = v1.rollingWindow(AggregateOp.MIN, options)) {
+           ColumnVector result = v1.rollingWindow(Aggregation.min(), options)) {
         assertColumnsAreEqual(expected, result);
       }
 
       try (ColumnVector expected = ColumnVector.fromInts(5, 7, 7, 8, 8);
-           ColumnVector result = v1.rollingWindow(AggregateOp.MAX, options)) {
+           ColumnVector result = v1.rollingWindow(Aggregation.max(), options)) {
         assertColumnsAreEqual(expected, result);
       }
 
       // The rolling window produces the same result type as the input
       try (ColumnVector expected = ColumnVector.fromDoubles(4.5, 16.0 / 3, 17.0 / 3, 7, 7);
-           ColumnVector result = v1.rollingWindow(AggregateOp.MEAN, options)) {
+           ColumnVector result = v1.rollingWindow(Aggregation.mean(), options)) {
         assertColumnsAreEqual(expected, result);
       }
     }
@@ -1517,11 +1520,11 @@ public class ColumnVectorTest extends CudfTestBase {
             .minPeriods(2).build();
     try (ColumnVector v1 = ColumnVector.fromBoxedInts(5, 4, null, 6, 8)) {
       try (ColumnVector expected = ColumnVector.fromInts(2, 2, 2, 2, 2);
-           ColumnVector result = v1.rollingWindow(AggregateOp.COUNT_VALID, options)) {
+           ColumnVector result = v1.rollingWindow(Aggregation.count(false), options)) {
         assertColumnsAreEqual(expected, result);
       }
       try (ColumnVector expected = ColumnVector.fromInts(2, 3, 3, 3, 2);
-           ColumnVector result = v1.rollingWindow(AggregateOp.COUNT_ALL, options)) {
+           ColumnVector result = v1.rollingWindow(Aggregation.count(true), options)) {
         assertColumnsAreEqual(expected, result);
       }
     }
@@ -1535,7 +1538,7 @@ public class ColumnVectorTest extends CudfTestBase {
           .minPeriods(2).window(precedingCol, followingCol).build();
       try (ColumnVector v1 = ColumnVector.fromInts(5, 4, 7, 6, 8);
            ColumnVector expected = ColumnVector.fromBoxedLongs(null, null, 9L, 16L, 25L);
-           ColumnVector result = v1.rollingWindow(AggregateOp.SUM, window)) {
+           ColumnVector result = v1.rollingWindow(Aggregation.sum(), window)) {
         assertColumnsAreEqual(expected, result);
       }
     }
@@ -1547,7 +1550,7 @@ public class ColumnVectorTest extends CudfTestBase {
         .window(2, -1).build();
     try (ColumnVector v1 = ColumnVector.fromInts(5, 4, 7, 6, 8);
          ColumnVector expected = ColumnVector.fromBoxedInts(null, 5, 4, 7, 6);
-         ColumnVector result = v1.rollingWindow(AggregateOp.MAX, window)) {
+         ColumnVector result = v1.rollingWindow(Aggregation.max(), window)) {
       assertColumnsAreEqual(expected, result);
     }
   }
@@ -1560,7 +1563,7 @@ public class ColumnVectorTest extends CudfTestBase {
           .window(precedingCol, followingCol).build();
       try (ColumnVector v1 = ColumnVector.fromInts(5, 4, 7, 6, 8);
            ColumnVector expected = ColumnVector.fromLongs(16, 22, 30, 14, 14);
-           ColumnVector result = v1.rollingWindow(AggregateOp.SUM, window)) {
+           ColumnVector result = v1.rollingWindow(Aggregation.sum(), window)) {
         assertColumnsAreEqual(expected, result);
       }
     }
@@ -1574,8 +1577,12 @@ public class ColumnVectorTest extends CudfTestBase {
           .window(arraywindowCol, arraywindowCol).build());
 
       assertThrows(IllegalArgumentException.class, 
-                   () -> arraywindowCol.rollingWindow(AggregateOp.SUM, 
-                                                      WindowOptions.builder().window(2, 1).minPeriods(1).timestampColumnIndex(0).build()));
+                   () -> arraywindowCol.rollingWindow(Aggregation.sum(),
+                                                      WindowOptions.builder()
+                                                              .window(2, 1)
+                                                              .minPeriods(1)
+                                                              .timestampColumnIndex(0)
+                                                              .build()));
     }
   }
 
@@ -3044,6 +3051,82 @@ public class ColumnVectorTest extends CudfTestBase {
          ContiguousTable ct = tmp.contiguousSplit()[0]) {
       // one reference for the device buffer itself, two more for the column using it
       assertEquals(3, ct.getBuffer().getRefCount());
+    }
+  }
+
+  @Test
+  void testHcvForStruct() {
+    HostColumnVector.ColumnBuilder.StructType type = new HostColumnVector.ColumnBuilder.StructType(true, 4);
+    type.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 4, DType.INT32));
+    type.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 4, DType.INT64));
+    List data1 = Arrays.asList(10, 20L);
+    List data2 = Arrays.asList(50, 60L);
+    List data3 = Arrays.asList(null, 80L);
+    List data4 = null;
+    HostColumnVector.ColumnBuilder.StructData structData1 = new HostColumnVector.ColumnBuilder.StructData(data1);
+    HostColumnVector.ColumnBuilder.StructData structData2 = new HostColumnVector.ColumnBuilder.StructData(data2);
+    HostColumnVector.ColumnBuilder.StructData structData3 = new HostColumnVector.ColumnBuilder.StructData(data3);
+    HostColumnVector.ColumnBuilder.StructData structData4 = new HostColumnVector.ColumnBuilder.StructData(data4);
+    try (HostColumnVector hcv = HostColumnVector.fromStructs(type, Arrays.asList(structData1, structData2, structData3, structData4));
+         ColumnVector columnVector = hcv.copyToDevice();
+         HostColumnVector hcv1 = columnVector.copyToHost();
+         ColumnVector expected = hcv1.copyToDevice()) {
+      HostColumnVector.ColumnBuilder.StructData retData1 = hcv1.getStruct(0, type);
+      HostColumnVector.ColumnBuilder.StructData retData2 = hcv1.getStruct(1, type);
+      HostColumnVector.ColumnBuilder.StructData retData3 = hcv1.getStruct(2, type);
+      HostColumnVector.ColumnBuilder.StructData retData4 = hcv1.getStruct(3, type);
+      assertEquals(data1, retData1.dataRecord);
+      assertEquals(data2, retData2.dataRecord);
+      assertEquals(data3, retData3.dataRecord);
+      assertEquals(data4, retData4);
+      assertStructColumnsAreEqual(expected, columnVector, type);
+    }
+  }
+
+  @Test
+  void testStructChildValidity() {
+    HostColumnVector.ColumnBuilder.StructType type = new HostColumnVector.ColumnBuilder.StructType(true, 4);
+    type.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 4, DType.INT32));
+    type.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 4, DType.INT64));
+    List data1 = Arrays.asList(1, 2L);
+    List data2 = Arrays.asList(4, 5L);
+    List data3 = null;
+    List data4 = Arrays.asList(8, null);
+    HostColumnVector.ColumnBuilder.StructData structData1 = new HostColumnVector.ColumnBuilder.StructData(data1);
+    HostColumnVector.ColumnBuilder.StructData structData2 = new HostColumnVector.ColumnBuilder.StructData(data2);
+    HostColumnVector.ColumnBuilder.StructData structData3 = new HostColumnVector.ColumnBuilder.StructData(data3);
+    HostColumnVector.ColumnBuilder.StructData structData4 = new HostColumnVector.ColumnBuilder.StructData(data4);
+    try (HostColumnVector hcv = HostColumnVector.fromStructs(type, Arrays.asList(structData1, structData2, structData3, structData4));
+         ColumnVector columnVector = hcv.copyToDevice();
+         HostColumnVector hcv1 = columnVector.copyToHost();
+         ColumnVector expected = hcv1.copyToDevice()) {
+      assertFalse(hcv.isNull(0));
+      assertFalse(hcv.isNull(1));
+      assertTrue(hcv.isNull(2));
+      assertFalse(hcv.isNull(3));
+      HostColumnVectorCore intChildCol = hcv.children.get(0);
+      HostColumnVectorCore longChildCol = hcv.children.get(1);
+      assertFalse(intChildCol.isNull(0));
+      assertFalse(intChildCol.isNull(1));
+      assertTrue(intChildCol.isNull(2));
+      assertFalse(intChildCol.isNull(3));
+      assertFalse(longChildCol.isNull(0));
+      assertFalse(longChildCol.isNull(1));
+      assertTrue(longChildCol.isNull(2));
+      assertTrue(longChildCol.isNull(3));
+
+      intChildCol = hcv1.children.get(0);
+      longChildCol = hcv1.children.get(1);
+
+      assertFalse(intChildCol.isNull(0));
+      assertFalse(intChildCol.isNull(1));
+      assertTrue(intChildCol.isNull(2));
+      assertFalse(intChildCol.isNull(3));
+      assertFalse(longChildCol.isNull(0));
+      assertFalse(longChildCol.isNull(1));
+      assertTrue(longChildCol.isNull(2));
+      assertTrue(longChildCol.isNull(3));
+      assertStructColumnsAreEqual(expected, columnVector, type);
     }
   }
 }
