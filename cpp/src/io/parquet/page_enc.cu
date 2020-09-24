@@ -1189,13 +1189,13 @@ class header_encoder {
     current_field_index = field;
   }
 
-  inline __device__ void field_binary(int field, const void *value, uint32_t l)
+  inline __device__ void field_binary(int field, const void *value, uint32_t length)
   {
     current_header_ptr =
       cpw_put_fldh(current_header_ptr, field, current_field_index, ST_FLD_BINARY);
-    current_header_ptr = cpw_put_uint32(current_header_ptr, l);
-    memcpy(current_header_ptr, value, l);
-    current_header_ptr += l;
+    current_header_ptr = cpw_put_uint32(current_header_ptr, length);
+    memcpy(current_header_ptr, value, length);
+    current_header_ptr += length;
     current_field_index = field;
   }
 
