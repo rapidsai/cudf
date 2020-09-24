@@ -53,6 +53,9 @@ TEST_F(ByteCastTest, int16ValuesWithNulls)
 
   fixed_width_column_wrapper<int16_t> const int16_col(
     {short(0), short(100), short(-100), limits::min(), limits::max()}, {0, 1, 0, 1, 0});
+  /* CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT compares underlying values even when specified as null,
+   * resulting in erroneous test failures. The commented out data tests the case where underlying
+   * values are different, but are both null. */
   // auto int16_data =
   //   fixed_width_column_wrapper<uint8_t>{0xee, 0xff, 0x00, 0x64, 0xee, 0xff, 0x80, 0x00, 0xee,
   //   0xff};
