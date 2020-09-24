@@ -239,3 +239,10 @@ GpuArrowReader
 .. currentmodule:: cudf.comm.gpuarrow
 .. autoclass:: GpuArrowReader
     :members:
+
+Extending cuDF
+----------------
+.. currentmodule:: cudf.api.extensions
+
+.. automodule:: cudf.api.extensions.accessor
+    :members:

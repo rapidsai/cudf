@@ -63,7 +63,7 @@ class OddRowAccessor:
         return self._obj[2 * i - 1]
 
 
-@pytest.mark.parametrize("gidx", [gd.Index(list(range(1, 50)))])
+@pytest.mark.parametrize("gidx", [gd.Index(list(range(0, 50)))])
 def test_index_accessor(gidx):
     pidx = gidx.to_pandas()
 

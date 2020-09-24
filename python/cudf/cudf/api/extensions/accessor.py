@@ -1,53 +1,43 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+from cudf.utils.docutils import docfmt_partial
 import warnings
 
 import cudf
 from pandas.core.accessor import CachedAccessor
-from pandas.util._decorators import doc
 
 
-def _register_accessor(name, cls):
-    def decorator(accessor):
-        if hasattr(cls, name):
-            msg = f"Attribute {name} will be overidden in {cls.__name__}"
-            warnings.warn(msg)
-        cached_accessor = CachedAccessor(name, accessor)
-        cls._accessors.add(name)
-        setattr(cls, name, cached_accessor)
-
-        return accessor
-
-    return decorator
-
-
-@doc(klass="DataFrame")
-def register_dataframe_accessor(name):
-    """
-    Extends `cudf.DataFrame` with custom defined accessor
+_docstring_register_accessor = """
+    Extends `cudf.{klass}` with custom defined accessor
 
     Parameters
     ----------
-    name : the name to be registered in {klass} for the custom accessor
+    name : str
+        The name to be registered in `{klass}` for the custom accessor
 
-    Returns:
-    --------
-    callable
-        A class decorator
+    Returns
+    -------
+    decorator : callable
+        Decorator function for accessor
 
-    Notes:
-    --------
-    The {klass} object will be passed to your custom accessor upon first
+    Notes
+    -----
+    The `{klass}` object will be passed to your custom accessor upon first
     invocation. And will be cached for future calls.
 
     If the data passed to your accessor is of wrong datatype, you should
     raise an `AttributeError` in consistent with other cudf methods.
 
-    Examples:
+
+    Examples
     --------
+    {example}
+"""
+
+_dataframe_example = """
     In your library code:
 
-        ..code-block:: python
+        .. code-block:: python
 
             import cudf as gd
 
@@ -73,20 +63,124 @@ def register_dataframe_accessor(name):
 
     Then in user code:
 
-        ..code-block:: ipython
+        .. code-block:: ipython
+
             In [3]: df = gd.DataFrame({'x': [1,2,3,4,5,6], 'y':[7,6,5,4,3,2]})
             In [4]: df.point.bounding_box
             Out[4]: (1, 2, 6, 7)
+"""
 
-    """
+_index_example = """
+    In your library code:
+
+        .. code-block:: python
+
+            import cudf as gd
+
+            @gd.api.extensions.register_index_accessor("odd")
+            class OddRowAccessor:
+                def __init__(self, obj):
+                    self._obj = obj
+
+                def __getitem__(self, i):
+                    return self._obj[2 * i - 1]
+
+    Then in user code:
+
+        .. code-block:: ipython
+
+            In [1]: gs = gd.Index(list(range(0, 50)))
+
+            In [2]: gs.odd[1]
+            Out[2]: 1
+
+            In [3]: gs.odd[2]
+            Out[3]: 3
+
+            In [4]: gs.odd[3]
+            Out[4]: 5
+
+"""
+
+_series_example = """
+    In your library code:
+
+        .. code-block:: python
+
+            import cudf as gd
+
+            @gd.api.extensions.register_series_accessor("odd")
+            class OddRowAccessor:
+                def __init__(self, obj):
+                    self._obj = obj
+
+                def __getitem__(self, i):
+                    return self._obj[2 * i - 1]
+
+    Then in user code:
+
+        .. code-block:: ipython
+
+            In [1]: gs = gd.Series(list(range(0, 50)))
+
+            In [2]: gs.odd[1]
+            Out[2]: 1
+
+            In [3]: gs.odd[2]
+            Out[3]: 3
+
+            In [4]: gs.odd[3]
+            Out[4]: 5
+
+"""
+
+
+doc_register_dataframe_accessor = docfmt_partial(
+    docstring=_docstring_register_accessor.format(
+        klass="DataFrame", example=_dataframe_example
+    )
+)
+
+doc_register_index_accessor = docfmt_partial(
+    docstring=_docstring_register_accessor.format(
+        klass="Index", example=_index_example
+    )
+)
+
+doc_register_series_accessor = docfmt_partial(
+    docstring=_docstring_register_accessor.format(
+        klass="Series", example=_series_example
+    )
+)
+
+
+def _register_accessor(name, cls):
+    def decorator(accessor):
+        if hasattr(cls, name):
+            msg = f"Attribute {name} will be overidden in {cls.__name__}"
+            warnings.warn(msg)
+        cached_accessor = CachedAccessor(name, accessor)
+        cls._accessors.add(name)
+        setattr(cls, name, cached_accessor)
+
+        return accessor
+
+    return decorator
+
+
+@doc_register_dataframe_accessor()
+def register_dataframe_accessor(name):
+    """{docstring}"""
     return _register_accessor(name, cudf.DataFrame)
 
 
-@doc(register_dataframe_accessor, klass="Index")
+@doc_register_index_accessor()
 def register_index_accessor(name):
+    """{docstring}"""
     return _register_accessor(name, cudf.Index)
 
 
-@doc(register_dataframe_accessor, klass="Series")
+@doc_register_series_accessor()
 def register_series_accessor(name):
+    """{docstring}"""
     return _register_accessor(name, cudf.Series)
