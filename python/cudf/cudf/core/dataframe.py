@@ -40,6 +40,7 @@ from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     cudf_dtype_from_pydata_dtype,
     is_categorical_dtype,
+    is_column_like,
     is_list_dtype,
     is_list_like,
     is_scalar,
@@ -2226,54 +2227,6 @@ class DataFrame(Frame, Serializable):
     def __iter__(self):
         return iter(self.columns)
 
-    def equals(self, other):
-        """
-        Test whether two objects contain the same elements.
-        This function allows two Series or DataFrames to be compared against
-        each other to see if they have the same shape and elements. NaNs in
-        the same location are considered equal. The column headers do not
-        need to have the same type.
-
-        Parameters
-        ----------
-        other : Series or DataFrame
-            The other Series or DataFrame to be compared with the first.
-
-        Returns
-        -------
-        bool
-            True if all elements are the same in both objects, False
-            otherwise.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({1: [10], 2: [20]})
-        >>> df
-            1   2
-        0  10  20
-        >>> exactly_equal = cudf.DataFrame({1: [10], 2: [20]})
-        >>> exactly_equal
-            1   2
-        0  10  20
-        >>> df.equals(exactly_equal)
-        True
-        >>> different_column_type = cudf.DataFrame({1.0: [10], 2.0: [20]})
-        >>> different_column_type
-           1.0  2.0
-        0   10   20
-        >>> df.equals(different_column_type)
-        True
-        """
-        for col in self._data.names:
-            if col not in other._data.names:
-                return False
-            if not self[col].equals(other[col]):
-                return False
-        if not self.index.equals(other.index):
-            return False
-        return True
-
     def iteritems(self):
         """ Iterate over column names and series pairs """
         for k in self:
@@ -2627,42 +2580,209 @@ class DataFrame(Frame, Serializable):
 
         return DataFrame(cols, idx)
 
-    def set_index(self, index, drop=True):
+    def _set_index(
+        self, index, to_drop=None, inplace=False, verify_integrity=False,
+    ):
+        """Helper for `.set_index`
+
+        Parameters
+        ----------
+        index : Index
+            The new index to set.
+        to_drop : list optional, default None
+            A list of labels indicating columns to drop.
+        inplace : boolean, default False
+            Modify the DataFrame in place (do not create a new object).
+        verify_integrity : boolean, default False
+            Check for duplicates in the new index.
+        """
+        if not isinstance(index, Index):
+            raise ValueError("Parameter index should be type `Index`.")
+
+        df = self if inplace else self.copy(deep=True)
+
+        if verify_integrity and not index.is_unique:
+            raise ValueError(f"Values in Index are not unique: {index}")
+
+        if to_drop:
+            df.drop(columns=to_drop, inplace=True)
+
+        df.index = index
+        return df if not inplace else None
+
+    def set_index(
+        self,
+        index,
+        drop=True,
+        append=False,
+        inplace=False,
+        verify_integrity=False,
+    ):
         """Return a new DataFrame with a new index
 
         Parameters
         ----------
-        index : Index, Series-convertible, str, or list of str
+        index : Index, Series-convertible, label-like, or list
             Index : the new index.
             Series-convertible : values for the new index.
-            str : name of column to be used as series
-            list of str : name of columns to be converted to a MultiIndex
-        drop : boolean
-            whether to drop corresponding column for str index argument
-        """
-        # When index is a list of column names
-        if isinstance(index, list):
-            if len(index) > 1:
-                df = self.copy(deep=False)
-                if drop:
-                    df = df.drop(columns=index, axis=1)
-                return df.set_index(
-                    cudf.MultiIndex.from_frame(self[index], names=index)
-                )
-            index = index[0]  # List contains single item
+            Label-like : Label of column to be used as index.
+            List : List of items from above.
+        drop : boolean, default True
+            Whether to drop corresponding column for str index argument
+        append : boolean, default True
+            Whether to append columns to the existing index,
+            resulting in a MultiIndex.
+        inplace : boolean, default False
+            Modify the DataFrame in place (do not create a new object).
+        verify_integrity : boolean, default False
+            Check for duplicates in the new index.
 
-        # When index is a column name
-        if isinstance(index, str):
-            df = self.copy(deep=False)
-            if drop:
-                df._drop_column(index)
-            return df.set_index(self[index])
-        # Otherwise
+        Examples
+        --------
+        >>> df = cudf.DataFrame({"a": [1, 2, 3, 4, 5],
+        ... "b": ["a", "b", "c", "d","e"],
+        ... "c": [1.0, 2.0, 3.0, 4.0, 5.0]})
+        >>> df
+           a  b    c
+        0  1  a  1.0
+        1  2  b  2.0
+        2  3  c  3.0
+        3  4  d  4.0
+        4  5  e  5.0
+
+        Set the index to become the ‘b’ column:
+
+        >>> df.set_index('b')
+           a    c
+        b
+        a  1  1.0
+        b  2  2.0
+        c  3  3.0
+        d  4  4.0
+        e  5  5.0
+
+        Create a MultiIndex using columns ‘a’ and ‘b’:
+
+        >>> df.set_index(["a", "b"])
+               c
+        a b
+        1 a  1.0
+        2 b  2.0
+        3 c  3.0
+        4 d  4.0
+        5 e  5.0
+
+        Set new Index instance as index:
+
+        >>> df.set_index(cudf.RangeIndex(10, 15))
+            a  b    c
+        10  1  a  1.0
+        11  2  b  2.0
+        12  3  c  3.0
+        13  4  d  4.0
+        14  5  e  5.0
+
+        Setting `append=True` will combine current index with column `a`:
+
+        >>> df.set_index("a", append=True)
+             b    c
+          a
+        0 1  a  1.0
+        1 2  b  2.0
+        2 3  c  3.0
+        3 4  d  4.0
+        4 5  e  5.0
+
+        `set_index` supports `inplace` parameter too:
+
+        >>> df.set_index("a", inplace=True)
+        >>> df
+           b    c
+        a
+        1  a  1.0
+        2  b  2.0
+        3  c  3.0
+        4  d  4.0
+        5  e  5.0
+        """
+
+        if not isinstance(index, list):
+            index = [index]
+
+        # Preliminary type check
+        col_not_found = []
+        columns_to_add = []
+        names = []
+        to_drop = []
+        for i, col in enumerate(index):
+            # Is column label
+            if is_scalar(col) or isinstance(col, tuple):
+                if col in self.columns:
+                    columns_to_add.append(self[col])
+                    names.append(col)
+                    if drop:
+                        to_drop.append(col)
+                else:
+                    col_not_found.append(col)
+            else:
+                # Try coerce into column
+                if not is_column_like(col):
+                    try:
+                        col = as_column(col)
+                    except TypeError:
+                        msg = f"{col} cannot be converted to column-like."
+                        raise TypeError(msg)
+                if isinstance(col, (cudf.MultiIndex, pd.MultiIndex)):
+                    col = (
+                        cudf.from_pandas(col)
+                        if isinstance(col, pd.MultiIndex)
+                        else col
+                    )
+                    cols = [col._data[x] for x in col._data]
+                    columns_to_add.extend(cols)
+                    names.extend(col.names)
+                else:
+                    if isinstance(col, (pd.RangeIndex, cudf.RangeIndex)):
+                        # Corner case: RangeIndex does not need to instantiate
+                        columns_to_add.append(col)
+                    else:
+                        # For pandas obj, convert to gpu obj
+                        columns_to_add.append(as_column(col))
+                    if isinstance(
+                        col, (cudf.Series, cudf.Index, pd.Series, pd.Index)
+                    ):
+                        names.append(col.name)
+                    else:
+                        names.append(None)
+
+        if col_not_found:
+            raise KeyError(f"None of {col_not_found} are in the columns")
+
+        if append:
+            idx_cols = [self.index._data[x] for x in self.index._data]
+            if isinstance(self.index, cudf.MultiIndex):
+                idx_names = self.index.names
+            else:
+                idx_names = [self.index.name]
+            columns_to_add = idx_cols + columns_to_add
+            names = idx_names + names
+
+        if len(columns_to_add) == 0:
+            raise ValueError("No valid columns to be added to index.")
+        elif len(columns_to_add) == 1:
+            idx = cudf.Index(columns_to_add[0], name=names[0])
         else:
-            index = index if isinstance(index, Index) else as_index(index)
-            df = self.copy(deep=False)
-            df.index = index
-            return df
+            idf = cudf.DataFrame()
+            for i, col in enumerate(columns_to_add):
+                idf[i] = col
+            idx = cudf.MultiIndex.from_frame(idf, names=names)
+
+        return self._set_index(
+            index=idx,
+            to_drop=to_drop,
+            inplace=inplace,
+            verify_integrity=verify_integrity,
+        )
 
     def reset_index(
         self, level=None, drop=False, inplace=False, col_level=0, col_fill=""
@@ -6863,6 +6983,14 @@ class DataFrame(Frame, Serializable):
         return cudf.core.reshape.unstack(
             self, level=level, fill_value=fill_value
         )
+
+    def equals(self, other):
+        if not isinstance(other, DataFrame):
+            return False
+        for self_name, other_name in zip(self._data.names, other._data.names):
+            if self_name != other_name:
+                return False
+        return super().equals(other)
 
 
 def from_pandas(obj, nan_as_null=None):

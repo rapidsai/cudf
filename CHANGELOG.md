@@ -15,6 +15,7 @@
 
 ## Improvements
 
+- PR #6292 Remove individual size tracking from JNI tracking resource adaptor
 - PR #5946 Add cython and python support for libcudf `to_arrow` and `from_arrow`
 - PR #5919 Remove max_strings and max_chars from nvtext::subword_tokenize
 - PR #5956 Add/Update tests for cuStreamz
@@ -46,6 +47,7 @@
 - PR #6163 Use `Column.full` instead of `scalar_broadcast_to` or `cupy.zeros`
 - PR #6176 Fix cmake warnings for GoogleTest, GoogleBenchmark, and Arrow external projects
 - PR #6149 Update to Arrow v1.0.1
+- PR #6201 Expose libcudf test utilities headers for external project use.
 - PR #6174 Data profile support in random data generator; Expand cuIO benchmarks
 - PR #6189 Avoid deprecated pyarrow.compat for parquet
 - PR #6184 Add cuda 11 dev environment.yml
@@ -60,15 +62,19 @@
 - PR #6214 Small clean up to use more algorithms
 - PR #6209 Remove CXX11 ABI handling from CMake
 - PR #6223 Remove CXX11 ABI flag from JNI build
+- PR #6231 Adds `inplace`, `append`, `verify_integrity` fields to `DataFrame.set_index`
 - PR #6215 Add cmake command-line setting for spdlog logging level
 - PR #6242 Added cudf::detail::host_span and device_span
 - PR #6240 Don't shallow copy index in as_index() unless necessary
 - PR #6204 Add dockerfile and script to build cuDF jar
+- PR #6243 Move `equals()` logic to `Frame`
 - PR #6245 Split up replace.cu into multiple source files
 - PR #6218 increase visiblity/consistency for cuio reader writer private member variable names.
+- PR #6268 Add file tags to libcudf doxygen
 - PR #6265 Update JNI to use ORC options builder
 - PR #6273 Update JNI to use ORC options builder
 - PR #6287 Make java aggregate API follow C++ API
+- PR #6303 Use cudf test dtypes so timedelta tests are determinstic
 
 ## Bug Fixes
 
@@ -82,6 +88,7 @@
 - PR #6121 Replace calls to get_default_resource with get_current_device_resource
 - PR #6128 Add support for numpy RandomState handling in `sample`
 - PR #6137 Fix issue where `np.nan` is being return instead of `NAT` for datetime/duration types
+- PR #6298 Fix gcc-9 compilation error in dictionary/remove_keys.cu
 - PR #6172 Fix slice issue with empty column
 - PR #6154 Warnings on row-wise op only when non-numeric columns are found.
 - PR #6150 Fix issue related to inferring `datetime64` format with UTC timezone in string data
@@ -104,8 +111,10 @@
 - PR #6258 Pin libcudf conda recipe to boost 1.72.0
 - PR #6264 Remove include statement for missing rmm/mr/device/default_memory_resource.hpp file
 - PR #6296 Handle double quote and escape character in json
+- PR #6281 Fix unreachable code warning in datetime.cuh
 - PR #6286 Fix `read_csv` `int32` overflow 
 - PR #6289 Revert #6206
+- PR #6304 Fix span_tests.cu includes
 
 
 # cuDF 0.15.0 (26 Aug 2020)
