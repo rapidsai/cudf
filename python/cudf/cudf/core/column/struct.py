@@ -52,6 +52,12 @@ class StructColumn(ColumnBase):
             children=tuple(col.to_arrow() for col in self.children),
         )
 
+    def copy(self, deep=True):
+        result = super().copy(deep=deep)
+        if deep:
+            result = result._rename_fields(self.dtype.fields.keys())
+        return result
+
     def _rename_fields(self, names):
         """
         Return a StructColumn with the same field values as this StructColumn,

@@ -410,6 +410,8 @@ class ColumnBase(Column, Serializable):
                 size=codes.size,
                 ordered=array.type.ordered,
             )
+        elif isinstance(array.type, pa.StructType):
+            return cudf.core.column.StructColumn.from_arrow(array)
 
         return libcudf.interop.from_arrow(data, data.column_names)._data[
             "None"
