@@ -26,6 +26,7 @@
 #include <rmm/mr/device/managed_memory_resource.hpp>
 #include <rmm/mr/device/owning_wrapper.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/mr/device/pool_memory_resource.hpp>
 
 #include "cudf_jni_apis.hpp"
 
@@ -342,7 +343,22 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(JNIEnv *env, j
 
     bool use_pool_alloc = allocation_mode & 1;
     bool use_managed_mem = allocation_mode & 2;
+    bool use_arena_alloc = allocation_mode & 3;
     if (use_pool_alloc) {
+      std::size_t pool_limit = (max_pool_size > 0) ? static_cast<std::size_t>(max_pool_size) :
+                                                     std::numeric_limits<std::size_t>::max();
+      if (use_managed_mem) {
+        Initialized_resource = rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
+            std::make_shared<rmm::mr::managed_memory_resource>(), pool_size, pool_limit);
+        auto wrapped = make_tracking_adaptor(Initialized_resource.get(), RMM_ALLOC_SIZE_ALIGNMENT);
+        Tracking_memory_resource.reset(wrapped);
+      } else {
+        Initialized_resource = rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
+            std::make_shared<rmm::mr::cuda_memory_resource>(), pool_size, pool_limit);
+        auto wrapped = make_tracking_adaptor(Initialized_resource.get(), RMM_ALLOC_SIZE_ALIGNMENT);
+        Tracking_memory_resource.reset(wrapped);
+      }
+    } else if (use_arena_alloc) {
       std::size_t pool_limit = (max_pool_size > 0) ? static_cast<std::size_t>(max_pool_size) :
                                                      std::numeric_limits<std::size_t>::max();
       if (use_managed_mem) {
