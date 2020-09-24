@@ -1163,6 +1163,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
       }
     };
     encode_levels(s->col.rep_values, s->col.level_bits >> 4);
+    __syncthreads();
     encode_levels(s->col.def_values, s->col.level_bits & 0xf);
   }
   // Encode data values
