@@ -21,7 +21,7 @@ namespace io {
 namespace parquet {
 namespace gpu {
 // Spark doesn't support RLE encoding for BOOLEANs
-constexpr int enable_bool_rle = 0;
+constexpr bool enable_bool_rle = false;
 
 #define INIT_HASH_BITS 12
 
@@ -1150,58 +1150,64 @@ inline __device__ uint8_t *cpw_put_fldh(uint8_t *p, int f, int cur, int t)
   }
 }
 
-struct cpw {
-  uint8_t *p;
-  int cur_fld;
+class header_encoder {
+  uint8_t *current_header_ptr;
+  int current_field_index;
 
-  inline __device__ cpw(uint8_t *hdr_start) : p(hdr_start), cur_fld(0) {}
-
-  inline __device__ void field_struct_begin(int f)
+ public:
+  inline __device__ header_encoder(uint8_t *header_start)
+    : current_header_ptr(header_start), current_field_index(0)
   {
-    p       = cpw_put_fldh(p, f, cur_fld, ST_FLD_STRUCT);
-    cur_fld = 0;
   }
 
-  inline __device__ void field_struct_end(int f)
+  inline __device__ void field_struct_begin(int field)
   {
-    *p++    = 0;
-    cur_fld = f;
+    current_header_ptr =
+      cpw_put_fldh(current_header_ptr, field, current_field_index, ST_FLD_STRUCT);
+    current_field_index = 0;
   }
 
-  template <typename T>
-  inline __device__ void field_int32(int f, T v)
+  inline __device__ void field_struct_end(int field)
   {
-    p       = cpw_put_fldh(p, f, cur_fld, ST_FLD_I32);
-    p       = cpw_put_int32(p, static_cast<int32_t>(v));
-    cur_fld = f;
+    *current_header_ptr++ = 0;
+    current_field_index   = field;
   }
 
   template <typename T>
-  inline __device__ void field_int64(int f, T v)
+  inline __device__ void field_int32(int field, T value)
   {
-    p       = cpw_put_fldh(p, f, cur_fld, ST_FLD_I64);
-    p       = cpw_put_int64(p, static_cast<int64_t>(v));
-    cur_fld = f;
+    current_header_ptr  = cpw_put_fldh(current_header_ptr, field, current_field_index, ST_FLD_I32);
+    current_header_ptr  = cpw_put_int32(current_header_ptr, static_cast<int32_t>(value));
+    current_field_index = field;
   }
 
-  inline __device__ void field_binary(int f, const void *v, uint32_t l)
+  template <typename T>
+  inline __device__ void field_int64(int field, T value)
   {
-    p = cpw_put_fldh(p, f, cur_fld, ST_FLD_BINARY);
-    p = cpw_put_uint32(p, l);
-    memcpy(p, v, l);
-    p += l;
-    cur_fld = f;
+    current_header_ptr  = cpw_put_fldh(current_header_ptr, field, current_field_index, ST_FLD_I64);
+    current_header_ptr  = cpw_put_int64(current_header_ptr, static_cast<int64_t>(value));
+    current_field_index = field;
   }
 
-  inline __device__ void end(uint8_t **hdr_end, bool termination_flag = true)
+  inline __device__ void field_binary(int field, const void *value, uint32_t l)
   {
-    if (termination_flag == false) { *p++ = 0; }
-    *hdr_end = p;
+    current_header_ptr =
+      cpw_put_fldh(current_header_ptr, field, current_field_index, ST_FLD_BINARY);
+    current_header_ptr = cpw_put_uint32(current_header_ptr, l);
+    memcpy(current_header_ptr, value, l);
+    current_header_ptr += l;
+    current_field_index = field;
   }
 
-  inline __device__ uint8_t *get_ptr(void) { return p; }
+  inline __device__ void end(uint8_t **header_end, bool termination_flag = true)
+  {
+    if (termination_flag == false) { *current_header_ptr++ = 0; }
+    *header_end = current_header_ptr;
+  }
 
-  inline __device__ void set_ptr(uint8_t *ptr) { p = ptr; }
+  inline __device__ uint8_t *get_ptr(void) { return current_header_ptr; }
+
+  inline __device__ void set_ptr(uint8_t *ptr) { current_header_ptr = ptr; }
 };
 
 __device__ uint8_t *EncodeStatistics(uint8_t *start,
@@ -1226,8 +1232,8 @@ __device__ uint8_t *EncodeStatistics(uint8_t *start,
     case dtype_string:
     default: dtype_len = 0; break;
   }
-  cpw c(start);
-  c.field_int64(3, s->null_count);
+  header_encoder encoder(start);
+  encoder.field_int64(3, s->null_count);
   if (s->has_minmax) {
     const void *vmin, *vmax;
     uint32_t lmin, lmax;
@@ -1249,10 +1255,10 @@ __device__ uint8_t *EncodeStatistics(uint8_t *start,
         vmax = &s->max_value;
       }
     }
-    c.field_binary(5, vmax, lmax);
-    c.field_binary(6, vmin, lmin);
+    encoder.field_binary(5, vmax, lmax);
+    encoder.field_binary(6, vmin, lmin);
   }
-  c.end(&end);
+  encoder.end(&end);
   return end;
 }
 
@@ -1303,7 +1309,7 @@ __global__ void __launch_bounds__(128) gpuEncodePageHeaders(EncPage *pages,
       hdr_start            = page_g.page_data;
       compressed_page_size = uncompressed_page_size;
     }
-    cpw c(hdr_start);
+    header_encoder encoder(hdr_start);
     PageType page_type = page_g.page_type;
     // NOTE: For dictionary encoding, parquet v2 recommends using PLAIN in dictionary page and
     // RLE_DICTIONARY in data page, but parquet v1 uses PLAIN_DICTIONARY in both dictionary and data
@@ -1320,32 +1326,32 @@ __global__ void __launch_bounds__(128) gpuEncodePageHeaders(EncPage *pages,
                    ? Encoding::PLAIN_DICTIONARY
                    : Encoding::PLAIN;
     }
-    c.field_int32(1, page_type);
-    c.field_int32(2, uncompressed_page_size);
-    c.field_int32(3, compressed_page_size);
+    encoder.field_int32(1, page_type);
+    encoder.field_int32(2, uncompressed_page_size);
+    encoder.field_int32(3, compressed_page_size);
     if (page_type == PageType::DATA_PAGE) {
       // DataPageHeader
-      c.field_struct_begin(5);
-      c.field_int32(1, page_g.num_rows);  // NOTE: num_values != num_rows for list types
-      c.field_int32(2, encoding);         // encoding
-      c.field_int32(3, Encoding::RLE);    // definition_level_encoding
-      c.field_int32(4, Encoding::RLE);    // repetition_level_encoding
+      encoder.field_struct_begin(5);
+      encoder.field_int32(1, page_g.num_rows);  // NOTE: num_values != num_rows for list types
+      encoder.field_int32(2, encoding);         // encoding
+      encoder.field_int32(3, Encoding::RLE);    // definition_level_encoding
+      encoder.field_int32(4, Encoding::RLE);    // repetition_level_encoding
       // Optionally encode page-level statistics
       if (page_stats) {
-        c.field_struct_begin(5);
-        c.set_ptr(
-          EncodeStatistics(c.get_ptr(), &page_stats[start_page + blockIdx.x], &col_g, fp_scratch));
-        c.field_struct_end(5);
+        encoder.field_struct_begin(5);
+        encoder.set_ptr(EncodeStatistics(
+          encoder.get_ptr(), &page_stats[start_page + blockIdx.x], &col_g, fp_scratch));
+        encoder.field_struct_end(5);
       }
-      c.field_struct_end(5);
+      encoder.field_struct_end(5);
     } else {
       // DictionaryPageHeader
-      c.field_struct_begin(7);
-      c.field_int32(1, ck_g.total_dict_entries);  // number of values in dictionary
-      c.field_int32(2, encoding);
-      c.field_struct_end(7);
+      encoder.field_struct_begin(7);
+      encoder.field_int32(1, ck_g.total_dict_entries);  // number of values in dictionary
+      encoder.field_int32(2, encoding);
+      encoder.field_struct_end(7);
     }
-    c.end(&hdr_end, false);
+    encoder.end(&hdr_end, false);
     page_g.hdr_size = (uint32_t)(hdr_end - hdr_start);
   }
   __syncthreads();
