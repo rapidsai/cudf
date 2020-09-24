@@ -214,14 +214,15 @@ def test_parquet_reader_basic(parquet_file, columns, engine):
 @pytest.mark.parametrize("engine", ["cudf"])
 def test_parquet_reader_empty_pandas_dataframe(tmpdir, engine):
     df = pd.DataFrame()
-
     fname = tmpdir.join("test_pq_reader_empty_pandas_dataframe.parquet")
-
     df.to_parquet(fname)
     assert os.path.exists(fname)
-
     expect = pd.read_parquet(fname)
     got = cudf.read_parquet(fname, engine=engine)
+    expect = expect.reset_index(drop=True)
+    got = got.reset_index(drop=True)
+
+    assert_eq(expect, got, check_categorical=False)
 
 
 @pytest.mark.parametrize("has_null", [False, True])
