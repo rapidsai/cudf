@@ -106,10 +106,10 @@ cdef csv_reader_options make_csv_reader_options(
     cdef size_type c_header
     cdef string c_prefix
     cdef vector[string] c_names
-    cdef size_type c_byte_range_offset = (
+    cdef size_t c_byte_range_offset = (
         byte_range[0] if byte_range is not None else 0
     )
-    cdef size_type c_byte_range_size = (
+    cdef size_t c_byte_range_size = (
         byte_range[1] if byte_range is not None else 0
     )
     cdef vector[int] c_use_cols_indexes
