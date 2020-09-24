@@ -18,7 +18,11 @@ class StructColumn(ColumnBase):
     def from_arrow(self, data):
         size = len(data)
         dtype = cudf.core.dtypes.StructDtype.from_arrow(data.type)
+
         mask = data.buffers()[0]
+        if mask is not None:
+            mask = cudf.utils.utils.pa_mask_buffer_to_mask(mask, len(data))
+
         offset = data.offset
         null_count = data.null_count
         children = tuple(
