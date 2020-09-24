@@ -19,9 +19,9 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <nvtext/tokenize.hpp>
 
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
 
 #include <vector>
 
@@ -93,7 +93,7 @@ TEST_F(TextTokenizeTest, TokenizeErrorTest)
   cudf::strings_column_view strings_view(strings);
 
   {
-    cudf::test::strings_column_wrapper delimiters{};  // empty delimiters
+    cudf::test::strings_column_wrapper delimiters;  // empty delimiters
     cudf::strings_column_view delimiters_view(delimiters);
     EXPECT_THROW(nvtext::tokenize(strings_view, delimiters_view), cudf::logic_error);
     EXPECT_THROW(nvtext::count_tokens(strings_view, delimiters_view), cudf::logic_error);

@@ -92,7 +92,7 @@ std::unique_ptr<column> replace(
   string_scalar const& target,
   string_scalar const& repl,
   int32_t maxrepl                     = -1,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   size_type strings_count = strings.size();
@@ -181,7 +181,7 @@ std::unique_ptr<column> replace_slice(
   string_scalar const& repl,
   size_type start,
   size_type stop                      = -1,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   size_type strings_count = strings.size();
@@ -285,7 +285,7 @@ std::unique_ptr<column> replace(
   strings_column_view const& strings,
   strings_column_view const& targets,
   strings_column_view const& repls,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   auto strings_count = strings.size();
@@ -337,7 +337,7 @@ std::unique_ptr<column> replace(
 std::unique_ptr<column> replace_nulls(
   strings_column_view const& strings,
   string_scalar const& repl           = string_scalar(""),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   size_type strings_count = strings.size();

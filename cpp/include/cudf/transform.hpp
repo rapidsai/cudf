@@ -24,6 +24,8 @@ namespace cudf {
 /**
  * @addtogroup transformation_transform
  * @{
+ * @file
+ * @brief Column APIs for transforming rows
  */
 
 /**
@@ -49,7 +51,7 @@ std::unique_ptr<column> transform(
   std::string const& unary_udf,
   data_type output_type,
   bool is_ptx,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Creates a null_mask from `input` by converting `NaN` to null and
@@ -63,7 +65,8 @@ std::unique_ptr<column> transform(
  * null count obtained by replacing `NaN` in `input` with null.
  **/
 std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
-  column_view const& input, rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  column_view const& input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Creates a bitmask from a column of boolean elements.
@@ -81,35 +84,36 @@ std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
  * `false` represent `invalid`/`0`.
  **/
 std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
-  column_view const& input, rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  column_view const& input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Encode the values of the given column as integers
+ * @brief Encode the rows of the given table as integers
  *
  * The encoded values are integers in the range [0, n), where `n`
- * is the number of distinct values in the input column.
- * The result column is such that keys[result[i]] == input[i],
- * where `keys` is the set of distinct values in `input` in sorted ascending order.
- * If nulls are present in the input column, they are encoded as the
- * integer `k`, where `k` is the number of distinct non-null values.
+ * is the number of distinct rows in the input table.
+ * The result table is such that `keys[result[i]] == input[i]`,
+ * where `keys` is a table containing the distinct rows  in `input` in
+ * sorted ascending order. Nulls, if any, are sorted to the end of
+ * the `keys` table.
  *
  * Examples:
  * @code{.pseudo}
- * input: {'a', 'b', 'b', 'a'}
- * output: [{'a', 'b'}, {0, 1, 1, 0}]
+ * input: [{'a', 'b', 'b', 'a'}]
+ * output: [{'a', 'b'}], {0, 1, 1, 0}
  *
- * input: {1, 3, 1, 2, 9}
- * output: [{1, 2, 3, 9}, {0, 2, 0, 1, 3}]
+ * input: [{1, 3, 1, 2, 9}, {1, 2, 1, 3, 5}]
+ * output: [{1, 2, 3, 9}, {1, 3, 2, 5}], {0, 2, 0, 1, 3}
  * @endcode
  *
- * @param input        Column containing values to be encoded
- * @param mr           Device memory resource used to allocate the returned columns's device memory
- * @return A pair containing the distinct values of the input column in sorter order,
- * and a column of integer indices representing the encoded values.
+ * @param input Table containing values to be encoded
+ * @param mr Device memory resource used to allocate the returned table's device memory
+ * @return A pair containing the distinct row of the input table in sorter order,
+ * and a column of integer indices representing the encoded rows.
  */
-std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> encode(
-  cudf::column_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>> encode(
+  cudf::table_view const& input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Creates a boolean column from given bitmask.
@@ -136,7 +140,7 @@ std::unique_ptr<column> mask_to_bools(
   bitmask_type const* bitmask,
   size_type begin_bit,
   size_type end_bit,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace cudf

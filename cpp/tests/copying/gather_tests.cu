@@ -20,12 +20,12 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/cudf_gtest.hpp>
-#include <tests/utilities/table_utilities.hpp>
-#include <tests/utilities/type_lists.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/table_utilities.hpp>
+#include <cudf_test/type_lists.hpp>
 
 template <typename T>
 class GatherTest : public cudf::test::BaseFixture {
@@ -151,11 +151,11 @@ TYPED_TEST(GatherTest, AllNull)
   std::iota(host_map_data.begin(), host_map_data.end(), 0);
   std::mt19937 g(0);
   std::shuffle(host_map_data.begin(), host_map_data.end(), g);
-  thrust::device_vector<cudf::size_type> map_data(host_map_data);
 
   cudf::test::fixed_width_column_wrapper<TypeParam> source_column{
     data, data + source_size, validity};
-  cudf::test::fixed_width_column_wrapper<int32_t> gather_map(map_data.begin(), map_data.end());
+  cudf::test::fixed_width_column_wrapper<int32_t> gather_map(host_map_data.begin(),
+                                                             host_map_data.end());
 
   cudf::table_view source_table({source_column});
 

@@ -21,13 +21,18 @@
 #include <memory>
 #include <vector>
 
+/**
+ * @file
+ * @brief Class definition for cudf::table
+ */
+
 namespace cudf {
 
 /**
- * @addtogroup table_classes
- * @{
+ * @brief A set of cudf::column's of the same size.
+ *
+ * @ingroup table_classes
  */
-
 class table {
  public:
   table()        = default;
@@ -59,7 +64,7 @@ class table {
    **/
   table(table_view view,
         cudaStream_t stream                 = 0,
-        rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+        rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Returns the number of columns in the table
@@ -141,6 +146,5 @@ class table {
   std::vector<std::unique_ptr<column>> _columns{};
   size_type _num_rows{};
 };
-/** @} */  // end of group
 
 }  // namespace cudf

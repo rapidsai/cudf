@@ -23,6 +23,7 @@ namespace strings {
 /**
  * @addtogroup strings_convert
  * @{
+ * @file
  */
 
 /**
@@ -51,7 +52,7 @@ namespace strings {
 std::unique_ptr<column> to_integers(
   strings_column_view const& strings,
   data_type output_type,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a new strings column converting the integer values from the
@@ -70,7 +71,7 @@ std::unique_ptr<column> to_integers(
  */
 std::unique_ptr<column> from_integers(
   column_view const& integers,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a new integer numeric column parsing hexadecimal values from the
@@ -98,7 +99,7 @@ std::unique_ptr<column> from_integers(
 std::unique_ptr<column> hex_to_integers(
   strings_column_view const& strings,
   data_type output_type,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a boolean column identifying strings in which all
@@ -123,7 +124,7 @@ std::unique_ptr<column> hex_to_integers(
  */
 std::unique_ptr<column> is_hex(
   strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings

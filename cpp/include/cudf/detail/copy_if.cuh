@@ -209,7 +209,7 @@ struct scatter_gather_functor {
     cudf::size_type const* block_offsets,
     Filter filter,
     cudf::size_type per_thread,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
     cudaStream_t stream                 = 0)
   {
     auto output_column = cudf::detail::allocate_like(
@@ -255,7 +255,7 @@ struct scatter_gather_functor {
     cudf::size_type const* block_offsets,
     Filter filter,
     cudf::size_type per_thread,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
     cudaStream_t stream                 = 0)
   {
     rmm::device_uvector<cudf::size_type> indices(output_size, stream);
@@ -280,7 +280,7 @@ struct scatter_gather_functor {
     cudf::size_type const* block_offsets,
     Filter filter,
     cudf::size_type per_thread,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
     cudaStream_t stream                 = 0)
   {
     CUDF_FAIL("fixed_point type not supported for this operation yet");
@@ -308,7 +308,7 @@ template <typename Filter>
 std::unique_ptr<table> copy_if(
   table_view const& input,
   Filter filter,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   CUDF_FUNC_RANGE();

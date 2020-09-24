@@ -4,17 +4,7 @@ set(GTEST_CMAKE_ARGS "")
                      #" -Dgtest_build_samples=ON" 
                      #" -DCMAKE_VERBOSE_MAKEFILE=ON")
 
-if(NOT CMAKE_CXX11_ABI)
-    message(STATUS "GTEST: Disabling the GLIBCXX11 ABI")
-    list(APPEND GTEST_CMAKE_ARGS " -DCMAKE_C_FLAGS=-D_GLIBCXX_USE_CXX11_ABI=0")
-    list(APPEND GTEST_CMAKE_ARGS " -DCMAKE_CXX_FLAGS=-D_GLIBCXX_USE_CXX11_ABI=0")
-elseif(CMAKE_CXX11_ABI)
-    message(STATUS "GTEST: Enabling the GLIBCXX11 ABI")
-    list(APPEND GTEST_CMAKE_ARGS " -DCMAKE_C_FLAGS=-D_GLIBCXX_USE_CXX11_ABI=1")
-    list(APPEND GTEST_CMAKE_ARGS " -DCMAKE_CXX_FLAGS=-D_GLIBCXX_USE_CXX11_ABI=1")
-endif(NOT CMAKE_CXX11_ABI)
-
-configure_file("${CMAKE_SOURCE_DIR}/cmake/Templates/GoogleTest.CMakeLists.txt.cmake"
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/Templates/GoogleTest.CMakeLists.txt.cmake"
                "${GTEST_ROOT}/CMakeLists.txt")
 
 file(MAKE_DIRECTORY "${GTEST_ROOT}/build")
@@ -56,4 +46,3 @@ message(STATUS "GoogleTest installed here: " ${GTEST_ROOT}/install)
 set(GTEST_INCLUDE_DIR "${GTEST_ROOT}/install/include")
 set(GTEST_LIBRARY_DIR "${GTEST_ROOT}/install/lib")
 set(GTEST_FOUND TRUE)
-

@@ -22,6 +22,7 @@ namespace dictionary {
 /**
  * @addtogroup dictionary_search
  * @{
+ * @file
  */
 
 /**
@@ -33,12 +34,12 @@ namespace dictionary {
  *
  * @param dictionary The dictionary to search for the key.
  * @param key The value to search for in the dictionary keyset.
- * @return index value of the key within the dictionary
+ * @return Numeric scalar index value of the key within the dictionary
  */
-std::unique_ptr<numeric_scalar<int32_t>> get_index(
+std::unique_ptr<scalar> get_index(
   dictionary_column_view const& dictionary,
   scalar const& key,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace dictionary

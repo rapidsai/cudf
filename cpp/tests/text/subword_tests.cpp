@@ -18,9 +18,9 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
 
 #include <nvtext/subword_tokenize.hpp>
 
@@ -168,7 +168,7 @@ TEST(TextSubwordTest, ParameterErrors)
 
 TEST(TextSubwordTest, EmptyStrings)
 {
-  cudf::test::strings_column_wrapper strings({});
+  cudf::test::strings_column_wrapper strings;
   std::string hash_file = temp_env->get_temp_filepath("hashed_vocab.txt");
   create_hashed_vocab(hash_file);
   auto result = nvtext::subword_tokenize(cudf::strings_column_view{strings},

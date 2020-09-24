@@ -16,16 +16,16 @@
 
 #pragma once
 
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
-#include <tests/utilities/type_list_utilities.hpp>
+#include <cudf_test/type_list_utilities.hpp>
 
 #include <array>
 #include <tuple>
-#include "cudf/fixed_point/fixed_point.hpp"
 
 /**
  * @filename type_lists.hpp
@@ -218,8 +218,8 @@ using StringTypes = cudf::test::Types<string_view>;
  *
  * Example:
  * ```
- * // Invokes all typed fixture tests for all string types in libcudf
- * TYPED_TEST_CASE(MyTypedFixture, cudf::test::StringTypes);
+ * // Invokes all typed fixture tests for all list types in libcudf
+ * TYPED_TEST_CASE(MyTypedFixture, cudf::test::ListTypes);
  * ```
  */
 using ListTypes = cudf::test::Types<list_view>;

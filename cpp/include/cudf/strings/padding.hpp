@@ -24,6 +24,7 @@ namespace strings {
 /**
  * @addtogroup strings_modify
  * @{
+ * @file
  */
 
 /**
@@ -60,11 +61,12 @@ enum class pad_side {
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New column with padded strings.
  */
-std::unique_ptr<column> pad(strings_column_view const& strings,
-                            size_type width,
-                            pad_side side                       = cudf::strings::pad_side::RIGHT,
-                            std::string const& fill_char        = " ",
-                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> pad(
+  strings_column_view const& strings,
+  size_type width,
+  pad_side side                       = cudf::strings::pad_side::RIGHT,
+  std::string const& fill_char        = " ",
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Add '0' as padding to the left of each string.
@@ -91,7 +93,7 @@ std::unique_ptr<column> pad(strings_column_view const& strings,
 std::unique_ptr<column> zfill(
   strings_column_view const& strings,
   size_type width,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings

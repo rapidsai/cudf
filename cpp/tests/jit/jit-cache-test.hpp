@@ -18,9 +18,9 @@
 
 #include <boost/filesystem.hpp>
 
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
 
 #include <jit/cache.h>
 
@@ -54,8 +54,8 @@ struct JitCacheTest : public ::testing::Test, public cudf::jit::cudfJitCache {
     // Prime up the cache so that the in-memory and file cache is populated
 
     // Single value column
-    auto column = cudf::test::fixed_width_column_wrapper<int>{{4, 0}};
-    auto expect = cudf::test::fixed_width_column_wrapper<int>{{64, 0}};
+    auto column = cudf::test::fixed_width_column_wrapper<int>({4, 0});
+    auto expect = cudf::test::fixed_width_column_wrapper<int>({64, 0});
 
     // make program
     auto program = getProgram("MemoryCacheTestProg", program_source);

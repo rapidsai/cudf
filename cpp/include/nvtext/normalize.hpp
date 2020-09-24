@@ -23,6 +23,7 @@ namespace nvtext {
 /**
  * @addtogroup nvtext_normalize
  * @{
+ * @file
  */
 
 /**
@@ -49,7 +50,7 @@ namespace nvtext {
  */
 std::unique_ptr<cudf::column> normalize_spaces(
   cudf::strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Normalizes strings characters for tokenizing.
@@ -98,7 +99,7 @@ std::unique_ptr<cudf::column> normalize_spaces(
 std::unique_ptr<cudf::column> normalize_characters(
   cudf::strings_column_view const& strings,
   bool do_lower_case,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace nvtext

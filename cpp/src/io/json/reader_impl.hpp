@@ -31,7 +31,8 @@
 #include <io/utilities/column_buffer.hpp>
 
 #include <cudf/io/datasource.hpp>
-#include <cudf/io/readers.hpp>
+#include <cudf/io/detail/json.hpp>
+#include <cudf/io/json.hpp>
 
 namespace cudf {
 namespace io {
@@ -49,7 +50,7 @@ using col_map_ptr_type = std::unique_ptr<col_map_type, std::function<void(col_ma
 class reader::impl {
  public:
  private:
-  const reader_options args_{};
+  const json_reader_options options_{};
 
   rmm::mr::device_memory_resource *mr_ = nullptr;
 
@@ -69,20 +70,20 @@ class reader::impl {
   size_t byte_range_size_   = 0;
   bool load_whole_file_     = true;
 
-  table_metadata metadata;
+  table_metadata metadata_;
   std::vector<data_type> dtypes_;
 
   // the map is only used for files with rows in object format; initialize to a dummy value so the
   // map object can be passed to the kernel in any case
-  col_map_ptr_type key_to_col_idx_map;
-  std::unique_ptr<rmm::device_scalar<col_map_type>> d_key_col_map;
+  col_map_ptr_type key_to_col_idx_map_;
+  std::unique_ptr<rmm::device_scalar<col_map_type>> d_key_col_map_;
 
   // parsing options
   const bool allow_newlines_in_strings_ = false;
   ParseOptions opts_{',', '\n', '\"', '.'};
-  rmm::device_vector<SerialTrieNode> d_true_trie_;
-  rmm::device_vector<SerialTrieNode> d_false_trie_;
-  rmm::device_vector<SerialTrieNode> d_na_trie_;
+  rmm::device_vector<SerialTrieNode> d_trie_true_;
+  rmm::device_vector<SerialTrieNode> d_trie_false_;
+  rmm::device_vector<SerialTrieNode> d_trie_na_;
 
   /**
    * @brief Sets the column map data member and makes a device copy to be used as a kernel
@@ -90,15 +91,18 @@ class reader::impl {
    */
   void set_column_map(col_map_ptr_type &&map)
   {
-    key_to_col_idx_map = std::move(map);
-    d_key_col_map      = std::make_unique<rmm::device_scalar<col_map_type>>(*key_to_col_idx_map);
+    key_to_col_idx_map_ = std::move(map);
+    d_key_col_map_      = std::make_unique<rmm::device_scalar<col_map_type>>(*key_to_col_idx_map_);
   }
   /**
    * @brief Gets the pointer to the column hash map in the device memory.
    *
    * Returns `nullptr` if the map is not created.
    */
-  auto get_column_map_device_ptr() { return key_to_col_idx_map ? d_key_col_map->data() : nullptr; }
+  auto get_column_map_device_ptr()
+  {
+    return key_to_col_idx_map_ ? d_key_col_map_->data() : nullptr;
+  }
 
   /**
    * @brief Ingest input JSON file/buffer, without decompression
@@ -176,19 +180,18 @@ class reader::impl {
    */
   explicit impl(std::unique_ptr<datasource> source,
                 std::string filepath,
-                reader_options const &args,
+                json_reader_options const &options,
                 rmm::mr::device_memory_resource *mr);
 
   /**
    * @brief Read an entire set or a subset of data from the source
    *
-   * @param[in] range_offset Number of bytes offset from the start
-   * @param[in] range_size Bytes to read; use `0` for all remaining data
+   * @param[in] options Settings for controlling reading behavior
    * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return Table and its metadata
    */
-  table_with_metadata read(size_t range_offset, size_t range_size, cudaStream_t stream);
+  table_with_metadata read(json_reader_options const &options, cudaStream_t stream);
 };
 
 }  // namespace json

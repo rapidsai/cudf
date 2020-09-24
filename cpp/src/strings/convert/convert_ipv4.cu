@@ -70,7 +70,7 @@ struct ipv4_to_integers_fn {
 // Convert strings column of IPv4 addresses to integers column
 std::unique_ptr<column> ipv4_to_integers(
   strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   size_type strings_count = strings.size();
@@ -156,7 +156,7 @@ struct integers_to_ipv4_fn {
 // Convert integers into IPv4 addresses
 std::unique_ptr<column> integers_to_ipv4(
   column_view const& integers,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   size_type strings_count = integers.size();

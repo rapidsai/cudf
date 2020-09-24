@@ -26,7 +26,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <../tests/utilities/column_utilities.hpp>
+#include <cudf_test/column_utilities.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <rmm/device_buffer.hpp>
@@ -49,7 +49,7 @@ inline rmm::device_buffer create_data(
   data_type type,
   size_type size,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   std::size_t data_size = size_of(type) * size;
 
@@ -77,7 +77,7 @@ struct column_buffer {
                 size_type _size,
                 bool is_nullable                    = true,
                 cudaStream_t stream                 = 0,
-                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
     : type(_type), size(_size), _null_count(0)
   {
     switch (type.id()) {
@@ -129,7 +129,7 @@ namespace {
 std::unique_ptr<column> make_column(
   column_buffer& buffer,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   using str_pair = thrust::pair<const char*, size_type>;
 

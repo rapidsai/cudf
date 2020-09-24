@@ -131,7 +131,10 @@ from cudf._lib.strings.substring import (
     slice_from as cpp_slice_from,
     slice_strings as cpp_slice_strings,
 )
-from cudf._lib.strings.translate import translate as cpp_translate
+from cudf._lib.strings.translate import (
+    filter_characters as cpp_filter_characters,
+    translate as cpp_translate,
+)
 from cudf._lib.strings.wrap import wrap as cpp_wrap
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
@@ -3612,6 +3615,56 @@ class StringMethods(ColumnMethodsMixin):
             cpp_translate(self._column, table), **kwargs
         )
 
+    def filter_characters(self, table, keep=True, repl=None, **kwargs):
+        """
+        Remove characters from each string using the character ranges
+        in the given mapping table.
+
+        Parameters
+        ----------
+        table : dict
+            This table is a range of Unicode ordinals to filter.
+            The minimum value is the key and the maximum value is the value.
+            You can use `str.maketrans()
+            <https://docs.python.org/3/library/stdtypes.html#str.maketrans>`_
+            as a helper function for making the filter table.
+            Overlapping ranges will cause undefined results.
+            Range values are inclusive.
+        keep : boolean
+            If False, the character ranges in the ``table`` are removed.
+            If True, the character ranges not in the ``table`` are removed.
+            Default is True.
+        repl : str
+            Optional replacement string to use in place of removed characters.
+
+        Returns
+        -------
+        Series or Index.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> data = ['aeiou', 'AEIOU', '0123456789']
+        >>> s = cudf.Series(data)
+        >>> s.str.filter_characters({'a':'l', 'M':'Z', '4':'6'})
+        0    aei
+        1     OU
+        2    456
+        dtype: object
+        >>> s.str.filter_characters({'a':'l', 'M':'Z', '4':'6'}, False, "_")
+        0         ___ou
+        1         AEI__
+        2    0123___789
+        dtype: object
+        """
+        if repl is None:
+            repl = ""
+        table = str.maketrans(table)
+        return self._return_or_inplace(
+            cpp_filter_characters(self._column, table, keep, as_scalar(repl)),
+            **kwargs,
+        )
+
     def normalize_spaces(self, **kwargs):
         """
         Remove extra whitespace between tokens and trim whitespace
@@ -4439,22 +4492,14 @@ class StringColumn(column.ColumnBase):
                 / self.base_children[0].dtype.itemsize
             )
 
-    def sum(self, dtype=None):
-        return self.str().cat()
-
-    def product(self, dtype=None):
-        raise TypeError("can't multiply sequence by non-int of type 'object'")
-
-    def mean(self, dtype=np.float64):
-        raise NotImplementedError(
-            "mean for Series of type 'object' is not yet implemented."
+    def sum(self, skipna=None, dtype=None, min_count=0):
+        result_col = self._process_for_reduction(
+            skipna=skipna, min_count=min_count
         )
-
-    def var(self, ddof=1, dtype=np.float64):
-        raise TypeError("unsupported operation for object of type 'object'")
-
-    def std(self, ddof=1, dtype=np.float64):
-        raise TypeError("unsupported operation for object of type 'object'")
+        if isinstance(result_col, cudf.core.column.ColumnBase):
+            return result_col.str().cat()
+        else:
+            return result_col
 
     def set_base_data(self, value):
         if value is not None:
@@ -4722,13 +4767,13 @@ class StringColumn(column.ColumnBase):
         lhs = self
         if reflect:
             lhs, rhs = rhs, lhs
-        if isinstance(rhs, StringColumn) and op == "add":
-            return lhs.str().cat(others=rhs)
-        elif op in ("eq", "ne", "gt", "lt", "ge", "le"):
-            return _string_column_binop(self, rhs, op=op, out_dtype="bool")
-        else:
-            msg = "{!r} operator not supported between {} and {}"
-            raise TypeError(msg.format(op, type(self), type(rhs)))
+        if isinstance(rhs, (StringColumn, str)):
+            if op == "add":
+                return lhs.str().cat(others=rhs)
+            elif op in ("eq", "ne", "gt", "lt", "ge", "le"):
+                return _string_column_binop(self, rhs, op=op, out_dtype="bool")
+        msg = "{!r} operator not supported between {} and {}"
+        raise TypeError(msg.format(op, type(self), type(rhs)))
 
     @property
     def is_unique(self):

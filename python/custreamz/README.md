@@ -22,14 +22,13 @@ kafka_configs = {
 consumer = kafka.Consumer(kafka_configs)
 
 # Read 10,000 messages from `custreamz_tips` topic in CSV format.
-gdf = consumer.read_gdf(consumer,
-                        topic="custreamz_tips",
+tips_df = consumer.read_gdf(topic="custreamz_tips",
                         partition=0,
                         start=0,
                         end=10000,
                         message_format="CSV")
 
-print(gdf.head())
+print(tips_df.head())
 tips_df['tip_percentage'] = tips_df['tip'] / tips_df['total_bill'] * 100
 
 # display average tip by dining party size

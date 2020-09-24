@@ -24,6 +24,8 @@ namespace strings {
 /**
  * @addtogroup strings_split
  * @{
+ * @file strings/split/partition.hpp
+ * @brief Strings partition APIs
  */
 
 /**
@@ -56,7 +58,7 @@ namespace strings {
 std::unique_ptr<table> partition(
   strings_column_view const& strings,
   string_scalar const& delimiter      = string_scalar(""),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a set of 3 columns by splitting each string using the
@@ -88,7 +90,7 @@ std::unique_ptr<table> partition(
 std::unique_ptr<table> rpartition(
   strings_column_view const& strings,
   string_scalar const& delimiter      = string_scalar(""),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings

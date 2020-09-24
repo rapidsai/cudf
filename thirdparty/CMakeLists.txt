@@ -1,31 +1,7 @@
 include(FetchContent)
 
 ###################################################################################################
-# - cub -------------------------------------------------------------------------------------------
-
-set(SRC_CUB "https://github.com/thrust/cub.git")
-
-message(STATUS "Fetching cub from ${SRC_CUB}")
-
-FetchContent_Declare(
-    cub
-    GIT_REPOSITORY ${SRC_CUB}
-    GIT_TAG        1.9.10
-    GIT_SHALLOW    true
-    # TODO(rongou): remove this after upgrading to new CUB release.
-    PATCH_COMMAND
-        COMMAND    sed -i "494 a histogram_sweep_config.template Init<typename Policy110::HistogramSweepPolicy>()$<SEMICOLON>" cub/device/dispatch/dispatch_histogram.cuh
-)
-
-FetchContent_GetProperties(cub)
-if(NOT cub_POPULATED)
-  FetchContent_Populate(cub)
-  # We are not using the cub CMake targets, so no need to call `add_subdirectory()`.
-endif()
-set(CUB_INCLUDE_DIR "${cub_SOURCE_DIR}" PARENT_SCOPE)
-
-###################################################################################################
-# - thrust ----------------------------------------------------------------------------------------
+# - thrust/cub ------------------------------------------------------------------------------------
 
 set(SRC_THRUST "https://github.com/thrust/thrust.git")
 
@@ -33,10 +9,9 @@ message(STATUS "Fetching thrust from ${SRC_THRUST}")
 
 FetchContent_Declare(
     thrust
-    GIT_REPOSITORY ${SRC_THRUST}
-    GIT_TAG        1.9.10
-    GIT_SHALLOW    true
-    PATCH_COMMAND COMMAND patch -p1 < "${CMAKE_CURRENT_SOURCE_DIR}/thrust-ret-if-fail.patch" || true
+    GIT_REPOSITORY https://github.com/thrust/thrust.git
+    # August 28, 2020
+    GIT_TAG        52a8bda46c5c2128414d1d47f546b486ff0be2f0
 )
 
 FetchContent_GetProperties(thrust)

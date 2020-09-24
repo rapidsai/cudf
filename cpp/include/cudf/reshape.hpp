@@ -25,6 +25,8 @@ namespace cudf {
 /**
  * @addtogroup column_reshape
  * @{
+ * @file
+ * @brief Column APIs for interleave and tile
  */
 
 /**
@@ -45,7 +47,8 @@ namespace cudf {
  * @return The interleaved columns as a single column
  */
 std::unique_ptr<column> interleave_columns(
-  table_view const& input, rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  table_view const& input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Repeats the rows from `input` table `count` times to form a new table.
@@ -64,9 +67,10 @@ std::unique_ptr<column> interleave_columns(
  *
  * @return The table containing the tiled "rows".
  */
-std::unique_ptr<table> tile(table_view const& input,
-                            size_type count,
-                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<table> tile(
+  table_view const& input,
+  size_type count,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace cudf

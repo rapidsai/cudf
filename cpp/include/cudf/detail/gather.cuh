@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/release_assert.cuh>
 #include <cudf/detail/valid_if.cuh>
@@ -25,6 +26,7 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/detail/gather.cuh>
+#include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
@@ -97,8 +99,53 @@ struct gather_bitmask_functor {
 };
 
 /**
- * @brief Function object for gathering a type-erased
- * column. To be used with column_gatherer to provide specialization to handle
+ * @brief Function for calling gather using iterators.
+ *
+ * Used by column_gatherer_impl definitions below.
+ *
+ * @tparam InputIterator Type for gather source data
+ * @tparam OutputIterator Type for gather results
+ * @tparam MapIterator Iterator type for the gather map
+ *
+ * @param source_itr Source data up to `source_size`
+ * @param source_size Maximum index value for source data
+ * @param target_itr Output iterator for gather result
+ * @param gather_map_begin Start of the gather map
+ * @param gather_map_end End of the gather map
+ * @param nullify_out_of_bounds True if map values are checked against `source_size`
+ * @param stream CUDA stream used for kernel launches.
+ */
+template <typename InputItr, typename OutputItr, typename MapIterator>
+void gather_helper(InputItr source_itr,
+                   size_type source_size,
+                   OutputItr target_itr,
+                   MapIterator gather_map_begin,
+                   MapIterator gather_map_end,
+                   bool nullify_out_of_bounds,
+                   cudaStream_t stream)
+{
+  using map_type = typename std::iterator_traits<MapIterator>::value_type;
+  if (nullify_out_of_bounds) {
+    thrust::gather_if(rmm::exec_policy(stream)->on(stream),
+                      gather_map_begin,
+                      gather_map_end,
+                      gather_map_begin,
+                      source_itr,
+                      target_itr,
+                      bounds_checker<map_type>{0, source_size});
+  } else {
+    thrust::gather(rmm::exec_policy(stream)->on(stream),
+                   gather_map_begin,
+                   gather_map_end,
+                   source_itr,
+                   target_itr);
+  }
+}
+
+/**
+ * @brief Function object for gathering a type-erased column.
+ *
+ * To be used with column_gatherer to provide specialization to handle
  * fixed-width, string and other types.
  *
  * @tparam Element Dispatched type for the column being gathered
@@ -131,26 +178,14 @@ struct column_gatherer_impl {
     cudf::mask_allocation_policy policy = cudf::mask_allocation_policy::NEVER;
     std::unique_ptr<column> destination_column =
       cudf::detail::allocate_like(source_column, num_destination_rows, policy, mr, stream);
-    Element const* source_data{source_column.data<Element>()};
-    Element* destination_data{destination_column->mutable_view().data<Element>()};
 
-    using map_type = typename std::iterator_traits<MapIterator>::value_type;
-
-    if (nullify_out_of_bounds) {
-      thrust::gather_if(rmm::exec_policy(stream)->on(stream),
-                        gather_map_begin,
-                        gather_map_end,
-                        gather_map_begin,
-                        source_data,
-                        destination_data,
-                        bounds_checker<map_type>{0, source_column.size()});
-    } else {
-      thrust::gather(rmm::exec_policy(stream)->on(stream),
-                     gather_map_begin,
-                     gather_map_end,
-                     source_data,
-                     destination_data);
-    }
+    gather_helper(source_column.data<Element>(),
+                  source_column.size(),
+                  destination_column->mutable_view().data<Element>(),
+                  gather_map_begin,
+                  gather_map_end,
+                  nullify_out_of_bounds,
+                  stream);
 
     return destination_column;
   }
@@ -191,70 +226,6 @@ struct column_gatherer_impl<string_view, MapItType> {
       return cudf::strings::detail::gather<false>(
         strings_column_view(source_column), gather_map_begin, gather_map_end, mr, stream);
     }
-  }
-};
-
-/**
- * @brief Column gather specialization for dictionary column type.
- */
-template <typename MapItType>
-struct column_gatherer_impl<dictionary32, MapItType> {
-  /**
-   * @brief Type-dispatched function to gather from one column to another based
-   * on a `gather_map`.
-   *
-   * @param source_column View into the column to gather from
-   * @param gather_map_begin Beginning of iterator range of integral values representing the gather
-   * map
-   * @param gather_map_end End of iterator range of integral values representing the gather map
-   * @param nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   * @param mr Device memory resource used to allocate the returned column's device memory
-   * @return New dictionary column with gathered rows.
-   */
-  std::unique_ptr<column> operator()(column_view const& source_column,
-                                     MapItType gather_map_begin,
-                                     MapItType gather_map_end,
-                                     bool nullify_out_of_bounds,
-                                     cudaStream_t stream,
-                                     rmm::mr::device_memory_resource* mr)
-  {
-    dictionary_column_view dictionary(source_column);
-    auto output_count = std::distance(gather_map_begin, gather_map_end);
-    if (output_count == 0) return make_empty_column(data_type{type_id::DICTIONARY32});
-    // The gather could cause some keys to be abandoned -- no indices point to them.
-    // In this case, we could do further work to remove the abandoned keys and
-    // reshuffle the indices values.
-    // We decided we will copy the keys for gather since the keys column should
-    // be relatively smallish.
-    // Also, there are scenarios where the keys are common with other dictionaries
-    // and the original intention was to share the keys here.
-    auto keys_copy = std::make_unique<column>(dictionary.keys(), stream, mr);
-    // create view of the indices column combined with the null mask
-    // in order to call gather on it
-    column_view indices(data_type{type_id::INT32},
-                        dictionary.size(),
-                        dictionary.indices().data<int32_t>(),
-                        dictionary.null_mask(),
-                        dictionary.null_count(),
-                        dictionary.offset());
-    column_gatherer_impl<int32_t, MapItType> index_gatherer;
-    auto new_indices =
-      index_gatherer(indices, gather_map_begin, gather_map_end, nullify_out_of_bounds, stream, mr);
-    // dissect the column's contents
-    auto null_count = new_indices->null_count();  // get this before it goes away
-    auto contents   = new_indices->release();     // new_indices will now be empty
-    // build the output indices column from the contents' data component
-    auto indices_column = std::make_unique<column>(data_type{type_id::INT32},
-                                                   static_cast<size_type>(output_count),
-                                                   std::move(*(contents.data.release())),
-                                                   rmm::device_buffer{0, stream, mr},
-                                                   0);  // set null count to 0
-    // finally, build the dictionary with the null_mask component and the keys and indices
-    return make_dictionary_column(std::move(keys_copy),
-                                  std::move(indices_column),
-                                  std::move(*(contents.null_mask.release())),
-                                  null_count);
   }
 };
 
@@ -358,19 +329,6 @@ struct column_gatherer_impl<list_view, MapItRoot> {
   }
 };
 
-template <typename MapItRoot>
-struct column_gatherer_impl<struct_view, MapItRoot> {
-  std::unique_ptr<column> operator()(column_view const& column,
-                                     MapItRoot gather_map_begin,
-                                     MapItRoot gather_map_end,
-                                     bool nullify_out_of_bounds,
-                                     cudaStream_t stream,
-                                     rmm::mr::device_memory_resource* mr)
-  {
-    CUDF_FAIL("Gather not yet supported on struct_view.");
-  }
-};
-
 /**
  * @brief Function object for gathering a type-erased
  * column. To be used with the cudf::type_dispatcher.
@@ -403,6 +361,72 @@ struct column_gatherer {
 
     return gatherer(
       source_column, gather_map_begin, gather_map_end, nullify_out_of_bounds, stream, mr);
+  }
+};
+
+/**
+ * @brief Column gather specialization for dictionary column type.
+ */
+template <typename MapItType>
+struct column_gatherer_impl<dictionary32, MapItType> {
+  /**
+   * @brief Type-dispatched function to gather from one column to another based
+   * on a `gather_map`.
+   *
+   * @param source_column View into the column to gather from
+   * @param gather_map_begin Beginning of iterator range of integral values representing the gather
+   * map
+   * @param gather_map_end End of iterator range of integral values representing the gather map
+   * @param nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds
+   * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param mr Device memory resource used to allocate the returned column's device memory
+   * @return New dictionary column with gathered rows.
+   */
+  std::unique_ptr<column> operator()(column_view const& source_column,
+                                     MapItType gather_map_begin,
+                                     MapItType gather_map_end,
+                                     bool nullify_out_of_bounds,
+                                     cudaStream_t stream,
+                                     rmm::mr::device_memory_resource* mr)
+  {
+    dictionary_column_view dictionary(source_column);
+    auto output_count = std::distance(gather_map_begin, gather_map_end);
+    if (output_count == 0) return make_empty_column(data_type{type_id::DICTIONARY32});
+    // The gather could cause some keys to be abandoned -- no indices point to them.
+    // In this case, we could do further work to remove the abandoned keys and
+    // reshuffle the indices values.
+    // We decided we will copy the keys for gather since the keys column should
+    // be relatively smallish.
+    // Also, there are scenarios where the keys are common with other dictionaries
+    // and the original intention was to share the keys here.
+    auto keys_copy = std::make_unique<column>(dictionary.keys(), stream, mr);
+    // Perform gather on just the indices
+    column_view indices = dictionary.get_indices_annotated();
+    auto new_indices    = cudf::detail::allocate_like(
+      indices, output_count, cudf::mask_allocation_policy::NEVER, mr, stream);
+    gather_helper(
+      cudf::detail::indexalator_factory::make_input_iterator(indices),
+      indices.size(),
+      cudf::detail::indexalator_factory::make_output_iterator(new_indices->mutable_view()),
+      gather_map_begin,
+      gather_map_end,
+      nullify_out_of_bounds,
+      stream);
+    // dissect the column's contents
+    auto indices_type = new_indices->type();
+    auto null_count   = new_indices->null_count();  // get this before calling release()
+    auto contents     = new_indices->release();     // new_indices will now be empty
+    // build the output indices column from the contents' data component
+    auto indices_column = std::make_unique<column>(indices_type,
+                                                   static_cast<size_type>(output_count),
+                                                   std::move(*(contents.data.release())),
+                                                   rmm::device_buffer{0, stream, mr},
+                                                   0);  // set null count to 0
+    // finally, build the dictionary with the null_mask component and the keys and indices
+    return make_dictionary_column(std::move(keys_copy),
+                                  std::move(indices_column),
+                                  std::move(*(contents.null_mask.release())),
+                                  null_count);
   }
 };
 
@@ -518,6 +542,55 @@ void gather_bitmask(table_view const& source,
   }
 }
 
+template <typename MapItRoot>
+struct column_gatherer_impl<struct_view, MapItRoot> {
+  std::unique_ptr<column> operator()(column_view const& column,
+                                     MapItRoot gather_map_begin,
+                                     MapItRoot gather_map_end,
+                                     bool nullify_out_of_bounds,
+                                     cudaStream_t stream,
+                                     rmm::mr::device_memory_resource* mr)
+  {
+    structs_column_view structs_column(column);
+    auto gather_map_size{std::distance(gather_map_begin, gather_map_end)};
+    if (gather_map_size == 0) { return empty_like(column); }
+
+    std::vector<std::unique_ptr<cudf::column>> output_struct_members;
+    std::transform(structs_column.child_begin(),
+                   structs_column.child_end(),
+                   std::back_inserter(output_struct_members),
+                   [&gather_map_begin, &gather_map_end, nullify_out_of_bounds, stream, mr](
+                     cudf::column_view const& col) {
+                     return cudf::type_dispatcher(col.type(),
+                                                  column_gatherer{},
+                                                  col,
+                                                  gather_map_begin,
+                                                  gather_map_end,
+                                                  nullify_out_of_bounds,
+                                                  stream,
+                                                  mr);
+                   });
+
+    gather_bitmask(
+      // Table view of struct column.
+      cudf::table_view{
+        std::vector<cudf::column_view>{structs_column.child_begin(), structs_column.child_end()}},
+      gather_map_begin,
+      output_struct_members,
+      nullify_out_of_bounds ? gather_bitmask_op::NULLIFY : gather_bitmask_op::DONT_CHECK,
+      mr,
+      stream);
+
+    return cudf::make_structs_column(
+      gather_map_size,
+      std::move(output_struct_members),
+      0,
+      rmm::device_buffer{0, stream, mr},  // Null mask will be fixed up in cudf::gather().
+      stream,
+      mr);
+  }
+};
+
 /**
  * @brief Gathers the specified rows of a set of columns according to a gather map.
  *
@@ -542,12 +615,13 @@ void gather_bitmask(table_view const& source,
  * @return cudf::table Result of the gather
  */
 template <typename MapIterator>
-std::unique_ptr<table> gather(table_view const& source_table,
-                              MapIterator gather_map_begin,
-                              MapIterator gather_map_end,
-                              bool nullify_out_of_bounds          = false,
-                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                              cudaStream_t stream                 = 0)
+std::unique_ptr<table> gather(
+  table_view const& source_table,
+  MapIterator gather_map_begin,
+  MapIterator gather_map_end,
+  bool nullify_out_of_bounds          = false,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0)
 {
   std::vector<std::unique_ptr<column>> destination_columns;
 

@@ -25,6 +25,7 @@ namespace cudf {
 /**
  * @addtogroup column_join
  * @{
+ * @file
  */
 
 /**
@@ -91,7 +92,7 @@ std::unique_ptr<cudf::table> inner_join(
   std::vector<cudf::size_type> const& right_on,
   std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
   null_equality compare_nulls         = null_equality::EQUAL,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Performs a left join (also known as left outer join) on the
@@ -159,7 +160,7 @@ std::unique_ptr<cudf::table> left_join(
   std::vector<cudf::size_type> const& right_on,
   std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
   null_equality compare_nulls         = null_equality::EQUAL,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Performs a full join (also known as full outer join) on the
@@ -227,7 +228,7 @@ std::unique_ptr<cudf::table> full_join(
   std::vector<cudf::size_type> const& right_on,
   std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
   null_equality compare_nulls         = null_equality::EQUAL,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 /**
  * @brief Performs a left semi join on the specified columns of two
  * tables (`left`, `right`)
@@ -282,7 +283,7 @@ std::unique_ptr<cudf::table> left_semi_join(
   std::vector<cudf::size_type> const& right_on,
   std::vector<cudf::size_type> const& return_columns,
   null_equality compare_nulls         = null_equality::EQUAL,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Performs a left anti join on the specified columns of two
@@ -338,7 +339,7 @@ std::unique_ptr<cudf::table> left_anti_join(
   std::vector<cudf::size_type> const& right_on,
   std::vector<cudf::size_type> const& return_columns,
   null_equality compare_nulls         = null_equality::EQUAL,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Performs a cross join on two tables (`left`, `right`)
@@ -365,7 +366,7 @@ std::unique_ptr<cudf::table> left_anti_join(
 std::unique_ptr<cudf::table> cross_join(
   cudf::table_view const& left,
   cudf::table_view const& right,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Hash join that builds hash table in creation and probes results in subsequent `*_join`
@@ -444,7 +445,7 @@ class hash_join {
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
     common_columns_output_side common_columns_output_side = common_columns_output_side::PROBE,
     null_equality compare_nulls                           = null_equality::EQUAL,
-    rmm::mr::device_memory_resource* mr                   = rmm::mr::get_default_resource()) const;
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
   /**
    * @brief Performs a left join by probing in the internal hash table.
@@ -472,7 +473,7 @@ class hash_join {
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
     null_equality compare_nulls         = null_equality::EQUAL,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) const;
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
   /**
    * @brief Performs a full join by probing in the internal hash table.
@@ -500,7 +501,7 @@ class hash_join {
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
     null_equality compare_nulls         = null_equality::EQUAL,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) const;
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
  private:
   struct hash_join_impl;

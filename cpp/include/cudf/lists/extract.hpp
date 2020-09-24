@@ -22,8 +22,9 @@
 namespace cudf {
 namespace lists {
 /**
- * @ingroup lists_extract
+ * @addtogroup lists_extract
  * @{
+ * @file
  */
 
 /**
@@ -62,7 +63,7 @@ namespace lists {
 std::unique_ptr<column> extract_list_element(
   lists_column_view const& lists_column,
   size_type index,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace lists

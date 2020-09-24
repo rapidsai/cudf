@@ -29,6 +29,7 @@ namespace cudf {
 /**
  * @addtogroup interop_dlpack
  * @{
+ * @file
  */
 
 /**
@@ -50,7 +51,7 @@ namespace cudf {
  */
 std::unique_ptr<table> from_dlpack(
   DLManagedTensor const* managed_tensor,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Convert a cudf table into a DLPack DLTensor
@@ -70,14 +71,16 @@ std::unique_ptr<table> from_dlpack(
  *
  * @return 1D or 2D DLPack tensor with a copy of the table data, or nullptr
  */
-DLManagedTensor* to_dlpack(table_view const& input,
-                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+DLManagedTensor* to_dlpack(
+  table_view const& input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 
 /**
  * @addtogroup interop_arrow
  * @{
+ * @file
  */
 
 /**
@@ -106,7 +109,8 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
  **/
 
 std::unique_ptr<table> from_arrow(
-  arrow::Table const& input, rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  arrow::Table const& input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace cudf

@@ -24,6 +24,7 @@ namespace nvtext {
 /**
  * @addtogroup nvtext_edit_distance
  * @{
+ * @file
  */
 
 /**
@@ -58,7 +59,7 @@ namespace nvtext {
 std::unique_ptr<cudf::column> edit_distance(
   cudf::strings_column_view const& strings,
   cudf::strings_column_view const& targets,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Compute the edit distance between all the strings in the input column.
@@ -94,7 +95,7 @@ std::unique_ptr<cudf::column> edit_distance(
  */
 std::unique_ptr<cudf::column> edit_distance_matrix(
   cudf::strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace nvtext

@@ -23,6 +23,7 @@ namespace strings {
 /**
  * @addtogroup strings_substring
  * @{
+ * @file
  */
 
 /**
@@ -52,7 +53,7 @@ namespace strings {
 std::unique_ptr<table> extract(
   strings_column_view const& strings,
   std::string const& pattern,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings

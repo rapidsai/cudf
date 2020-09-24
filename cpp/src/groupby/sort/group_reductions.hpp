@@ -219,6 +219,21 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
                                           null_policy null_handling,
                                           rmm::mr::device_memory_resource* mr,
                                           cudaStream_t stream = 0);
+/**
+ * @brief Internal API to collect grouped values into a lists column
+ *
+ * @param values Grouped values to collect
+ * @param group_offsets Offsets of groups' starting points within @p values
+ * @param num_groups Number of groups
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<column> group_collect(column_view const& values,
+                                      rmm::device_vector<size_type> const& group_offsets,
+                                      size_type num_groups,
+                                      rmm::mr::device_memory_resource* mr,
+                                      cudaStream_t stream = 0);
+
 }  // namespace detail
 }  // namespace groupby
 }  // namespace cudf

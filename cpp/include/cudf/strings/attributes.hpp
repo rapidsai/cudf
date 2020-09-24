@@ -25,6 +25,8 @@ namespace strings {
 /**
  * @addtogroup strings_apis
  * @{
+ * @file strings/attributes.hpp
+ * @brief Read attributes of strings column
  */
 
 /**
@@ -43,7 +45,7 @@ namespace strings {
  */
 std::unique_ptr<column> count_characters(
   strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a numeric column containing the length of each string in
@@ -61,7 +63,7 @@ std::unique_ptr<column> count_characters(
  */
 std::unique_ptr<column> count_bytes(
   strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Creates a numeric column with code point values (integers) for each
@@ -81,7 +83,7 @@ std::unique_ptr<column> count_bytes(
  */
 std::unique_ptr<column> code_points(
   strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of strings_apis group
 

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <tests/utilities/base_fixture.hpp>
+#include <cudf_test/base_fixture.hpp>
 
 #include <thrust/device_vector.h>
 

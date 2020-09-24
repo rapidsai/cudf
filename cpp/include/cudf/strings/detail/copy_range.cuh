@@ -100,7 +100,7 @@ std::unique_ptr<column> copy_range(
   strings_column_view const& target,
   size_type target_begin,
   size_type target_end,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   CUDF_EXPECTS(

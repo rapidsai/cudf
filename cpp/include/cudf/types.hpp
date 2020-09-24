@@ -28,7 +28,7 @@
 #include <cstdint>
 
 /**
- * @file types.hpp
+ * @file
  * @brief Type declarations for libcudf.
  *
  **/
@@ -47,7 +47,7 @@ namespace rmm {
 class device_buffer;
 namespace mr {
 class device_memory_resource;
-device_memory_resource* get_default_resource();
+device_memory_resource* get_current_device_resource();
 }  // namespace mr
 
 }  // namespace rmm
@@ -97,6 +97,7 @@ class mutable_table_view;
 /**
  * @addtogroup utility_types
  * @{
+ * @file
  */
 
 using size_type    = int32_t;
@@ -178,8 +179,6 @@ enum class mask_state : int32_t {
 /**
  * @brief Interpolation method to use when the desired quantile lies between
  * two data points i and j
- *
- * @ingroup utility_types
  */
 enum class interpolation : int32_t {
   LINEAR,    ///< Linear interpolation between i and j

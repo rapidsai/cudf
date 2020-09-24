@@ -34,6 +34,7 @@ def make_datetime_dataframe(include_non_standard=False):
             "18/10/1990",
             "1/1/1970",
             "2016-04-30T01:02:03.000",
+            "2038-01-19 03:14:07",
         ]
     )
     df["col2"] = np.array(
@@ -44,6 +45,7 @@ def make_datetime_dataframe(include_non_standard=False):
             "16/09/2005",
             "2/2/1970",
             "2007-4-30 1:6:40.000PM",
+            "2038-01-19 03:14:08",
         ]
     )
     if include_non_standard:
@@ -56,6 +58,7 @@ def make_datetime_dataframe(include_non_standard=False):
                 "31-01-2000",
                 "1-1-1996",
                 "15-May-2009",
+                "21-Dec-3262",
             ]
         )
     return df
@@ -122,6 +125,46 @@ def make_all_numeric_dataframe():
         df,
         OrderedDict(zip(gdf_dtypes, gdf_dtypes)),
         OrderedDict(zip(gdf_dtypes, np_dtypes)),
+    )
+
+
+def make_all_numeric_extremes_dataframe():
+    # integers 0,+1,-1,min,max
+    # float 0.0, -0.0,+1,-1,min,max, nan, esp, espneg, tiny, [-ve values]
+    df, gdf_dtypes, pdf_dtypes = make_all_numeric_dataframe()
+    df = pd.DataFrame()
+
+    for gdf_dtype in gdf_dtypes:
+        np_type = pdf_dtypes[gdf_dtype]
+        if np.issubdtype(np_type, np.integer):
+            itype = np.iinfo(np_type)
+            extremes = [0, +1, -1, itype.min, itype.max]
+            df[gdf_dtype] = np.array(extremes * 4, dtype=np_type)[:20]
+        else:
+            ftype = np.finfo(np_type)
+            extremes = [
+                0.0,
+                -0.0,
+                +1,
+                -1,
+                np.nan,
+                -np.nan,
+                # ftype.min, # TODO enable after fixing truncation issue #6235
+                # ftype.max, # TODO enable after fixing truncation issue #6235
+                np_type(np.inf),
+                -np_type(np.inf),
+                ftype.eps,
+                ftype.epsneg,
+                ftype.tiny,
+                -ftype.eps,
+                -ftype.epsneg,
+                -ftype.tiny,
+            ]
+            df[gdf_dtype] = np.array(extremes * 4, dtype=np_type)[:20]
+    return (
+        df,
+        gdf_dtypes,
+        pdf_dtypes,
     )
 
 
@@ -262,6 +305,21 @@ def test_csv_reader_dtype_list(use_list):
 def test_csv_reader_dtype_dict(use_names):
     # Save with the column header if not explicitly specifying a list of names
     df, gdf_dtypes, pdf_dtypes = make_all_numeric_dataframe()
+    buffer = df.to_csv(index=False, header=(not use_names))
+
+    gdf_names = list(gdf_dtypes.keys()) if use_names else None
+    pdf_names = list(pdf_dtypes.keys()) if use_names else None
+
+    gdf = read_csv(StringIO(buffer), dtype=gdf_dtypes, names=gdf_names)
+    pdf = pd.read_csv(StringIO(buffer), dtype=pdf_dtypes, names=pdf_names)
+
+    assert_eq(gdf, pdf)
+
+
+@pytest.mark.parametrize("use_names", [True])
+def test_csv_reader_dtype_extremes(use_names):
+    # Save with the column header if not explicitly specifying a list of names
+    df, gdf_dtypes, pdf_dtypes = make_all_numeric_extremes_dataframe()
     buffer = df.to_csv(index=False, header=(not use_names))
 
     gdf_names = list(gdf_dtypes.keys()) if use_names else None
@@ -963,6 +1021,20 @@ def test_csv_reader_byte_range(tmpdir, segment_bytes):
 
     assert list(df["int1"]) == list(ref_df["int1"])
     assert list(df["int2"]) == list(ref_df["int2"])
+
+
+def test_csv_reader_byte_range_type_corner_case(tmpdir):
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file17.csv")
+
+    cudf.datasets.timeseries(
+        start="2000-01-01",
+        end="2000-01-02",
+        dtypes={"name": str, "id": int, "x": float, "y": float},
+    ).to_csv(fname, chunksize=100000)
+
+    byte_range = (2_147_483_648, 0)
+    with pytest.raises(RuntimeError, match="Offset is past end of file"):
+        cudf.read_csv(fname, byte_range=byte_range, header=None)
 
 
 @pytest.mark.parametrize("segment_bytes", [10, 19, 31, 36])

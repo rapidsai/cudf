@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <tests/utilities/cudf_gtest.hpp>
-#include <tests/utilities/type_list_utilities.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/type_list_utilities.hpp>
 
 using namespace cudf::test;  // this will make reading code way easier
 

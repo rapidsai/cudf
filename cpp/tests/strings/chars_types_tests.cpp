@@ -18,9 +18,9 @@
 #include <cudf/column/column.hpp>
 #include <cudf/strings/char_types/char_types.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
 
 #include <vector>
 
@@ -370,7 +370,7 @@ TEST_F(StringsCharsTest, FilterCharTypesErrors)
 
 TEST_F(StringsCharsTest, EmptyStringsColumn)
 {
-  cudf::test::strings_column_wrapper strings({});
+  cudf::test::strings_column_wrapper strings;
   auto strings_view = cudf::strings_column_view(strings);
   auto results      = cudf::strings::all_characters_of_type(
     strings_view, cudf::strings::string_character_types::ALPHANUM);

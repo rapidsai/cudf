@@ -27,6 +27,7 @@ namespace nvtext {
 /**
  * @addtogroup nvtext_tokenize
  * @{
+ * @file
  */
 
 /**
@@ -60,7 +61,7 @@ struct hashed_vocabulary {
  */
 hashed_vocabulary load_vocabulary_file(
   std::string const& filename_hashed_vocabulary,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Result object for the subword_tokenize functions.
@@ -157,7 +158,7 @@ tokenizer_result subword_tokenize(
   bool do_lower_case,
   bool do_truncate,
   uint32_t max_rows_tensor,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @copydoc subword_tokenize()
@@ -176,7 +177,7 @@ tokenizer_result subword_tokenize(
   bool do_lower_case,
   bool do_truncate,
   uint32_t max_rows_tensor,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace nvtext
