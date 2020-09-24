@@ -6487,8 +6487,17 @@ class DataFrame(Frame, Serializable):
             else:
                 mask = None
 
-            prepared = prepared.astype("float64")
-            prepared = prepared.fillna(np.nan)
+            for col in prepared._data.names:
+                if prepared._data[col].nullable:
+                    prepared._data[col] = (
+                        prepared._data[col]
+                        .astype(
+                            cudf.utils.dtypes.get_min_float_dtype(
+                                prepared._data[col]
+                            )
+                        )
+                        .fillna(np.nan)
+                    )
 
             arr = cupy.asarray(prepared.as_gpu_matrix())
 
