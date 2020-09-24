@@ -17,6 +17,9 @@
 #ifndef __IO_PARQUET_COMMON_H__
 #define __IO_PARQUET_COMMON_H__
 
+#include <string>
+#include <vector>
+
 namespace cudf {
 namespace io {
 namespace parquet {
@@ -134,6 +137,17 @@ enum {
   ST_FLD_SET    = 10,
   ST_FLD_MAP    = 11,
   ST_FLD_STRUCT = 12,
+};
+
+/**
+ * @brief Struct representing an input column in the file. 
+ **/
+struct input_column_info {
+  int                                 schema_idx;
+  std::string                         name;
+  // size == nesting depth. the associated real output
+  // buffer index in the dest column for each level of nesting.
+  std::vector<int>                    nesting;
 };
 
 }  // namespace parquet

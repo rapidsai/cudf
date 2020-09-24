@@ -73,19 +73,54 @@ struct column_buffer {
 
   column_buffer() = default;
 
+  // construct without a known size. call create() later to actually
+  // allocate memory
+  column_buffer(data_type _type,
+                bool _is_nullable)
+    :type(_type), is_nullable(_is_nullable), _null_count(0)
+  {
+  }
+
+  // construct with a known size. allocates memory
   column_buffer(data_type _type,
                 size_type _size,
-                bool is_nullable                    = true,
+                bool _is_nullable                    = true,
                 cudaStream_t stream                 = 0,
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-    : type(_type), size(_size), _null_count(0)
+    : type(_type), is_nullable(_is_nullable), _null_count(0)
   {
+    create(_size, stream, mr);    
+  }
+
+  // move constructor
+  column_buffer(column_buffer &&col)
+  {
+    _strings = std::move(col._strings);
+    _data = std::move(col._data);
+    _null_mask = std::move(col._null_mask);
+    _null_count = col._null_count;
+    type = col.type;
+    size = col.size;
+    children = std::move(col.children);
+  }
+
+  // instantiate a column of known type with a specified size.  Allows deferred creation for preprocessing
+  // steps such as in the Parquet reader
+  void create(size_type _size,
+              cudaStream_t stream                 = 0,
+              rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  {
+    size = _size;
+
     switch (type.id()) {
       case type_id::STRING: _strings.resize(size); break;
 
       // list columns store a buffer of int32's as offsets to represent
       // their individual rows
       case type_id::LIST: _data = create_data(data_type{type_id::INT32}, size, stream, mr); break;
+
+      // struct columns store no data themselves.  just validity and children.
+      case type_id::STRUCT: break;
 
       default: _data = create_data(type, size, stream, mr); break;
     }
@@ -109,9 +144,11 @@ struct column_buffer {
   rmm::device_buffer _null_mask{};
   size_type _null_count{0};
 
+  bool is_nullable{false};
   data_type type{type_id::EMPTY};
   size_type size{0};
   std::vector<column_buffer> children;
+  uint32_t user_data{0};     // arbitrary user data
 };
 
 namespace {
@@ -154,6 +191,18 @@ std::unique_ptr<column> make_column(
                                std::move(buffer._null_mask),
                                stream,
                                mr);
+    } break;
+
+    case type_id::STRUCT: {
+      std::vector<std::unique_ptr<cudf::column>> output_children;
+      output_children.reserve(buffer.children.size());
+      std::transform(buffer.children.begin(), buffer.children.end(), std::back_inserter(output_children), 
+        [&](column_buffer& col){
+          return make_column(col, stream, mr);
+        });
+
+      return make_structs_column(buffer.size, std::move(output_children), buffer._null_count, 
+        std::move(buffer._null_mask), stream, mr);
     } break;
 
     default: {
