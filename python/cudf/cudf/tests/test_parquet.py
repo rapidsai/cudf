@@ -221,22 +221,7 @@ def test_parquet_reader_empty_pandas_dataframe(tmpdir, engine):
     assert os.path.exists(fname)
 
     expect = pd.read_parquet(fname)
-    got = cudf.read_parquet(fname, engine="cudf")
-
-    if len(expect) == 0:
-        expect = expect.reset_index(drop=True)
-        got = got.reset_index(drop=True)
-        if "col_category" in expect.columns:
-            expect["col_category"] = expect["col_category"].astype("category")
-
-    # PANDAS returns category objects whereas cuDF returns hashes
-    if engine == "cudf":
-        if "col_category" in expect.columns:
-            expect = expect.drop(columns=["col_category"])
-        if "col_category" in got.columns:
-            got = got.drop(columns=["col_category"])
-
-    assert_eq(expect, got, check_categorical=False)
+    got = cudf.read_parquet(fname, engine=engine)
 
 
 @pytest.mark.parametrize("has_null", [False, True])
