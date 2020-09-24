@@ -329,13 +329,15 @@ def test_json_bad_protocol_string():
     assert_eq(expect, got)
 
 
-def test_json_corner_case_with_escape_and_double_quote_char(tmpdir):
+def test_json_corner_case_with_escape_and_double_quote_char_with_pandas(
+    tmpdir,
+):
     fname = tmpdir.mkdir("gdf_json").join("tmp_json_escape_double_quote")
 
     pdf = pd.DataFrame(
         {
-            "a": ['ab"cd', "?1sde", "rdsd", "halt"],
-            "b": ["234", "\\", '\\"', "type"],
+            "a": ['ab"cd', "\\\b", "\r\\", "'"],
+            "b": ["a\tb\t", "\\", '\\"', "\t"],
             "c": ["aeiou", "try", "json", "cudf"],
         }
     )
@@ -348,4 +350,28 @@ def test_json_corner_case_with_escape_and_double_quote_char(tmpdir):
         fname, compression="infer", lines=True, orient="records"
     )
 
-    assert_eq(pdf, df)
+    assert_eq(cudf.DataFrame(pdf), df)
+
+
+def test_json_corner_case_with_escape_and_double_quote_char_with_strings():
+    str_buffer = StringIO(
+        """{"a":"ab\\"cd","b":"a\\tb\\t","c":"aeiou"}
+           {"a":"\\\\\\b","b":"\\\\","c":"try"}
+           {"a":"\\r\\\\","b":"\\\\\\"","c":"json"}
+           {"a":"\'","b":"\\t","c":"cudf"}"""
+    )
+
+    df = cudf.read_json(
+        str_buffer, compression="infer", lines=True, orient="records"
+    )
+
+    expected = {
+        "a": ['ab"cd', "\\\b", "\r\\", "'"],
+        "b": ["a\tb\t", "\\", '\\"', "\t"],
+        "c": ["aeiou", "try", "json", "cudf"],
+    }
+
+    num_rows = df.shape[0]
+    for col_name in df._data:
+        for i in range(num_rows):
+            assert expected[col_name][i] == df[col_name][i]
