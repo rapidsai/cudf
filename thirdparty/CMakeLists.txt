@@ -7,7 +7,7 @@ message("Fetching Thrust")
 
 FetchContent_Declare(
     thrust
-    GIT_REPOSITORY https://github.com/thrust/thrust.git
+    GIT_REPOSITORY https://github.com/NVIDIA/thrust.git
     # August 28, 2020
     GIT_TAG        52a8bda46c5c2128414d1d47f546b486ff0be2f0
 )
