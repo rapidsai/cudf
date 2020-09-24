@@ -343,6 +343,11 @@ class DataFrame(_Frame, dd.core.DataFrame):
             raise ValueError("dask_cudf does not support disk-based shuffle.")
         return super().shuffle(*args, shuffle="tasks", **kwargs)
 
+    def groupby(self, by=None, **kwargs):
+        from .groupby import CudfDataFrameGroupBy
+
+        return CudfDataFrameGroupBy(self, by=by, **kwargs)
+
 
 def sum_of_squares(x):
     x = x.astype("f8")._column
