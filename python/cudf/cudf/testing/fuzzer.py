@@ -21,7 +21,7 @@ class Fuzzer(object):
         dirs=None,
         crash_reports_dir=None,
         regression=False,
-        max_rows_size=4096,
+        max_rows_size=100_000,
         max_cols_size=1000,
         runs=-1,
         max_string_length=None,
