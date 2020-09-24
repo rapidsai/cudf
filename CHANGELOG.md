@@ -12,6 +12,7 @@
 - PR #6171 Java and Jni support for Struct columns
 - PR #6125 Add support for `Series.mode` and `DataFrame.mode`
 - PR #6262 Add nth_element series aggregation with null handling
+- PR #6318 Add support for reading Struct and map types from Parquet files
 
 ## Improvements
 
