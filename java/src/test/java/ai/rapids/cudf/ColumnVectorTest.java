@@ -3050,6 +3050,10 @@ public class ColumnVectorTest extends CudfTestBase {
     structType.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 2, DType.STRING));
     try (ColumnVector res1 = ColumnVector.fromLists(new HostColumnVector.ColumnBuilder.ListType(true, 2, structType), list, list2)) {
       System.out.println("YAY!" + ((HostColumnVector.ColumnBuilder.StructData)(res1.copyToHost().getList(0)).get(0)).dataRecord);
+      System.out.println("YAY!" + ((HostColumnVector.ColumnBuilder.StructData)(res1.copyToHost().getList(1)).get(0)).dataRecord);
+      ColumnVector res = res1.mapLookup(Scalar.fromString("a"));
+      System.out.println("YAY!" + res.getType() + " " + res.getRowCount() + " " + res.copyToHost().getJavaString(0));
+      System.out.println("YAY!" + res.getType() + " " + res.getRowCount() + " " + res.copyToHost().getJavaString(1));
     }
   }
 }

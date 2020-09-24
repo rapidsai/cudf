@@ -2601,6 +2601,16 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     return new Table(extractRe(this.getNativeView(), pattern));
   }
 
+
+  public ColumnVector mapLookup(Scalar key) {
+
+    assert type == DType.LIST : "column type must be a String";
+    assert key != null : "target string may not be null";
+    assert key.getType() == DType.STRING : "target string must be a string scalar";
+
+    return new ColumnVector(mapLookup(getNativeView(), key.getScalarHandle()));
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
   /////////////////////////////////////////////////////////////////////////////
@@ -2813,6 +2823,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    */
   private static native long stringConcatenation(long[] columnViews, long separator, long narep);
 
+  private static native long mapLookup(long columnView, long key) throws CudfException;
   /**
    * Native method to add zeros as padding to the left of each string.
    */
