@@ -32,10 +32,6 @@ def json_writer_test(gdf):
     expected = pd.read_json(pdf_buffer, lines=True, orient="records")
     assert_eq(actual, expected)
 
-    actual = cudf.read_json(pdf_buffer, lines=True, orient="records")
-    expected = pd.read_json(gdf_buffer, lines=True, orient="records")
-    assert_eq(actual, expected)
-
 
 if __name__ == "__main__":
     run_test(globals(), sys.argv)

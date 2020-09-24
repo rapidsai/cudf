@@ -33,10 +33,6 @@ def csv_writer_test(gdf):
     expected = pd.read_csv(StringIO(pd_buffer))
     assert_eq(actual, expected)
 
-    actual = cudf.read_csv(StringIO(pd_buffer))
-    expected = pd.read_csv(StringIO(gd_buffer))
-    assert_eq(actual, expected)
-
 
 if __name__ == "__main__":
     run_test(globals(), sys.argv)
