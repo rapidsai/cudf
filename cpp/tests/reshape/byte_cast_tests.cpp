@@ -101,6 +101,7 @@ TEST_F(ByteCastTest, int32ValuesWithNulls)
 
   fixed_width_column_wrapper<int32_t> const int32_col({0, 100, -100, limits::min(), limits::max()},
                                                       {1, 0, 1, 0, 1});
+  /* Data commented out below explained by comment in int16ValuesWithNulls test */
   // auto int32_data =
   //   fixed_width_column_wrapper<uint8_t>{0x00, 0x00, 0x00, 0x00, 0xcc, 0xdd, 0xee, 0xff, 0xff,
   //   0xff,
@@ -157,6 +158,7 @@ TEST_F(ByteCastTest, int64ValuesWithNulls)
 
   fixed_width_column_wrapper<int64_t> const int64_col(
     {long(0), long(100), long(-100), limits::min(), limits::max()}, {0, 1, 0, 1, 0});
+  /* Data commented out below explained by comment in int16ValuesWithNulls test */
   // auto int64_data = fixed_width_column_wrapper<uint8_t>{
   //   0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
   //   0x00, 0x64, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x80, 0x00, 0x00, 0x00,
@@ -220,6 +222,7 @@ TEST_F(ByteCastTest, fp32ValuesWithNulls)
 
   fixed_width_column_wrapper<float> const fp32_col(
     {float(0.0), float(100.0), float(-100.0), limits::min(), limits::max()}, {1, 0, 1, 0, 1});
+  /* Data commented out below explained by comment in int16ValuesWithNulls test */
   // auto fp32_data =
   //   fixed_width_column_wrapper<uint8_t>{0x00, 0x00, 0x00, 0x00, 0xcc, 0xdd, 0xee, 0xff, 0xc2,
   //   0xc8,
@@ -293,6 +296,7 @@ TEST_F(ByteCastTest, fp64ValuesWithNulls)
 
   fixed_width_column_wrapper<double> const fp64_col(
     {double(0.0), double(100.0), double(-100.0), limits::min(), limits::max()}, {0, 1, 0, 1, 0});
+  /* Data commented out below explained by comment in int16ValuesWithNulls test */
   // auto fp64_data = fixed_width_column_wrapper<uint8_t>{
   //   0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x40, 0x59, 0x00, 0x00, 0x00, 0x00,
   //   0x00, 0x00, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00, 0x10, 0x00, 0x00,
