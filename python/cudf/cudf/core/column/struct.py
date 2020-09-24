@@ -38,6 +38,11 @@ class StructColumn(ColumnBase):
     def to_arrow(self):
         pa_type = self.dtype.to_arrow()
 
+        children = list(col.to_arrow() for col in self.children)
+        for i, child in enumerate(children):
+            if len(child) == child.null_count:
+                children[i] = pa.NullArray.from_pandas([None] * len(child))
+
         if self.nullable:
             nbuf = self.mask.to_host_array().view("int8")
             nbuf = pa.py_buffer(nbuf)
@@ -46,10 +51,7 @@ class StructColumn(ColumnBase):
             buffers = (None,)
 
         return pa.StructArray.from_buffers(
-            pa_type,
-            len(self),
-            buffers,
-            children=tuple(col.to_arrow() for col in self.children),
+            pa_type, len(self), buffers, children=children
         )
 
     def copy(self, deep=True):
