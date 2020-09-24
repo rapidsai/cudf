@@ -613,7 +613,7 @@ table_with_metadata reader::impl::convert_data_to_table(cudaStream_t stream)
     }
   }
 
-  CUDF_EXPECTS(!out_columns.empty(), "Error converting json input into gdf columns.\n");
+  CUDF_EXPECTS(!out_columns.empty(), "No columns created from json input");
 
   return table_with_metadata{std::make_unique<table>(std::move(out_columns)), metadata_};
 }
