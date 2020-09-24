@@ -151,7 +151,7 @@ class kafka_consumer : public cudf::io::datasource {
    *
    * @return Map of Kafka topics with their corresponding topic partition values.
    */
-  const std::map<std::string, std::vector<int32_t>> list_topics();
+  std::map<std::string, std::vector<int32_t>> list_topics() const;
 
   /**
    * @brief Close the underlying socket connection to Kafka and clean up system resources

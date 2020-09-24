@@ -153,23 +153,26 @@ int64_t kafka_consumer::get_committed_offset(std::string const &topic, int parti
   return offset > 0 ? offset : 0;
 }
 
-const std::map<std::string, std::vector<int32_t>> kafka_consumer::list_topics()
+std::map<std::string, std::vector<int32_t>> kafka_consumer::list_topics() const
 {
-  RdKafka::Metadata *md;
+  auto const md = [&]() {
+    RdKafka::Metadata *md;
+    CUDF_EXPECTS(RdKafka::ERR_NO_ERROR == consumer->metadata(true, nullptr, &md, default_timeout),
+                 "Failed to list_topics in Kafka broker");
+    return std::unique_ptr<RdKafka::Metadata>{md};
+  }();
   std::map<std::string, std::vector<int32_t>> topic_parts;
 
-  CUDF_EXPECTS(RdKafka::ERR_NO_ERROR == consumer->metadata(true, nullptr, &md, default_timeout),
-               "Failed to list_topics in Kafka broker");
-
-  const RdKafka::Metadata::TopicMetadataVector *mdv = md->topics();
-
-  for (auto &topic : *mdv) {
-    std::vector<int32_t> t_parts;
-    for (auto &partition : *(topic->partitions())) { t_parts.push_back(partition->id()); }
-    topic_parts[topic->topic()] = t_parts;
+  for (auto const &topic :
+       *(std::unique_ptr<const RdKafka::Metadata::TopicMetadataVector>{md->topics()})) {
+    auto &part_ids    = topic_parts[topic->topic()];
+    auto const &parts = *(topic->partitions());
+    std::transform(
+      parts.cbegin(), parts.cend(), std::back_inserter(part_ids), [](auto const &part) {
+        return part->id();
+      });
   }
 
-  delete md, mdv;
   return topic_parts;
 }
 
