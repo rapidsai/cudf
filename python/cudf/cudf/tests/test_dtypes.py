@@ -96,3 +96,15 @@ def test_struct_dtype_pyarrow_round_trip(fields):
     expect = pa_type
     got = StructDtype.from_arrow(expect).to_arrow()
     assert expect.equals(got)
+
+
+def test_struct_dtype_eq():
+    lhs = StructDtype(
+        {"a": "int32", "b": StructDtype({"c": "int64", "ab": "int32"})}
+    )
+    rhs = StructDtype(
+        {"a": "int32", "b": StructDtype({"c": "int64", "ab": "int32"})}
+    )
+    assert lhs == rhs
+    rhs = StructDtype({"a": "int32", "b": "int64"})
+    assert lhs != rhs
