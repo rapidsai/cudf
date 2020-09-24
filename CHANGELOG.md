@@ -13,6 +13,7 @@
 - PR #6125 Add support for `Series.mode` and `DataFrame.mode`
 - PR #6271 Add support to deep-copy struct columns from struct column-view
 - PR #6262 Add nth_element series aggregation with null handling
+- PR #6316 Add StructColumn to Python API
 
 ## Improvements
 
