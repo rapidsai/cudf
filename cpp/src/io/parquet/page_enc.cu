@@ -1806,38 +1806,40 @@ std::pair<rmm::device_uvector<uint8_t>, rmm::device_uvector<uint8_t>> get_levels
     size_t empties_size;
     std::tie(empties, empties_idx, empties_size) = get_empties(nesting_levels[level]);
 
-    // Merge empty at parent level with the rep level vals at current level
-    auto ends = thrust::merge_by_key(rmm::exec_policy(stream)->on(stream),
-                                     empties.begin(),
-                                     empties.begin() + empties_size,
-                                     thrust::make_counting_iterator(0),  // (off)
-                                     thrust::make_counting_iterator(lcv.child().size()),
-                                     thrust::make_constant_iterator(level),
-                                     temp_vals.begin(),
-                                     thrust::make_discard_iterator(),
-                                     rep_level.begin());
+    // Merge empty at parent level with the rep, def level vals at leaf level
 
-    thrust::merge_by_key(
-      rmm::exec_policy(stream)->on(stream),
-      empties.begin(),
-      empties.begin() + empties_size,
-      thrust::make_counting_iterator(0),  // (off)
-      thrust::make_counting_iterator(lcv.child().size()),
+    // Zip the input and output value iterators so that merge operation is done only once
+    auto input_parent_zip_it = thrust::make_zip_iterator(thrust::make_tuple(
+      thrust::make_constant_iterator(level),
       thrust::make_transform_iterator(thrust::make_counting_iterator(0),
                                       [idx            = empties_idx.data(),
                                        mask           = lcv.null_mask(),
                                        curr_def_level = def_at_level[level]] __device__(auto i) {
                                         return curr_def_level +
                                                ((mask && bit_is_set(mask, idx[i])) ? 1 : 0);
-                                      }),
+                                      })));
+
+    auto input_child_zip_it = thrust::make_zip_iterator(thrust::make_tuple(
+      temp_vals.begin(),
       thrust::make_transform_iterator(
         thrust::make_counting_iterator(0),
         [mask = lcv.child().null_mask(), curr_def_level = def_at_level[level + 1]] __device__(
-          auto i) { return curr_def_level + ((mask && bit_is_set(mask, i)) ? 1 : 0); }),
-      thrust::make_discard_iterator(),
-      def_level.begin());
+          auto i) { return curr_def_level + ((mask && bit_is_set(mask, i)) ? 1 : 0); })));
 
-    curr_rep_values_size = ends.second - rep_level.begin();
+    auto output_zip_it =
+      thrust::make_zip_iterator(thrust::make_tuple(rep_level.begin(), def_level.begin()));
+
+    auto ends = thrust::merge_by_key(rmm::exec_policy(stream)->on(stream),
+                                     empties.begin(),
+                                     empties.begin() + empties_size,
+                                     thrust::make_counting_iterator(0),  // (off)
+                                     thrust::make_counting_iterator(lcv.child().size()),
+                                     input_parent_zip_it,
+                                     input_child_zip_it,
+                                     thrust::make_discard_iterator(),
+                                     output_zip_it);
+
+    curr_rep_values_size = ends.second - output_zip_it;
     print(rep_level, "rep merged");
 
     // Scan to get distance by which each offset value is shifted due to the insertion of empties
@@ -1904,36 +1906,37 @@ std::pair<rmm::device_uvector<uint8_t>, rmm::device_uvector<uint8_t>> get_levels
     std::swap(temp_vals, rep_level);
     std::swap(vals, def_level);
 
-    // Merge empty at parent level with the rep level vals at current level
+    // Merge empty at parent level with the rep, def level vals at current level
     auto transformed_empties = thrust::make_transform_iterator(empties.begin(), offset_transformer);
+
+    // Zip the input and output value iterators so that merge operation is done only once
+    auto input_parent_zip_it = thrust::make_zip_iterator(thrust::make_tuple(
+      thrust::make_constant_iterator(level),
+      thrust::make_transform_iterator(thrust::make_counting_iterator(0),
+                                      [idx            = empties_idx.data(),
+                                       mask           = lcv.null_mask(),
+                                       curr_def_level = def_at_level[level]] __device__(auto i) {
+                                        return curr_def_level +
+                                               ((mask && bit_is_set(mask, idx[i])) ? 1 : 0);
+                                      })));
+
+    auto input_child_zip_it =
+      thrust::make_zip_iterator(thrust::make_tuple(temp_vals.begin(), vals.begin()));
+
+    auto output_zip_it =
+      thrust::make_zip_iterator(thrust::make_tuple(rep_level.begin(), def_level.begin()));
 
     auto ends = thrust::merge_by_key(rmm::exec_policy(stream)->on(stream),
                                      transformed_empties,
                                      transformed_empties + empties_size,
                                      thrust::make_counting_iterator(0),
                                      thrust::make_counting_iterator(curr_rep_values_size),
-                                     thrust::make_constant_iterator(level),
-                                     temp_vals.begin(),
+                                     input_parent_zip_it,
+                                     input_child_zip_it,
                                      thrust::make_discard_iterator(),
-                                     rep_level.begin());
+                                     output_zip_it);
 
-    thrust::merge_by_key(rmm::exec_policy(stream)->on(stream),
-                         transformed_empties,
-                         transformed_empties + empties_size,
-                         thrust::make_counting_iterator(0),  // (off)
-                         thrust::make_counting_iterator(curr_rep_values_size),
-                         thrust::make_transform_iterator(
-                           thrust::make_counting_iterator(0),
-                           [idx            = empties_idx.data(),
-                            mask           = lcv.null_mask(),
-                            curr_def_level = def_at_level[level]] __device__(auto i) {
-                             return curr_def_level + ((mask && bit_is_set(mask, idx[i])) ? 1 : 0);
-                           }),
-                         vals.begin(),
-                         thrust::make_discard_iterator(),
-                         def_level.begin());
-
-    curr_rep_values_size = ends.second - rep_level.begin();
+    curr_rep_values_size = ends.second - output_zip_it;
     print(rep_level, "rep merged");
     print(def_level, "def merged");
 
