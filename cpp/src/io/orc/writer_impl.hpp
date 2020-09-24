@@ -14,11 +14,6 @@
  * limitations under the License.
  */
 
-/**
- * @file writer_impl.hpp
- * @brief cuDF-IO ORC writer class implementation header
- */
-
 #pragma once
 
 #include "orc.h"
@@ -28,7 +23,8 @@
 
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/io/data_sink.hpp>
-#include <cudf/io/writers.hpp>
+#include <cudf/io/detail/orc.hpp>
+#include <cudf/io/orc.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -73,7 +69,7 @@ class writer::impl {
    * @param mr Device memory resource to use for device memory allocation
    **/
   explicit impl(std::unique_ptr<data_sink> sink,
-                writer_options const& options,
+                orc_writer_options const& options,
                 rmm::mr::device_memory_resource* mr);
 
   /**
@@ -88,7 +84,7 @@ class writer::impl {
   /**
    * @brief Begins the chunked/streamed write process.
    *
-   * @param[in] orc_chunked_state State information that crosses _begin() / write_chunked() / _end()
+   * @param[in] orc_chunked_state Internal state maintained between chunks.
    * boundaries.
    */
   void write_chunked_begin(orc_chunked_state& state);
@@ -97,15 +93,15 @@ class writer::impl {
    * @brief Writes a single subtable as part of a larger ORC file/table write.
    *
    * @param[in] table The table information to be written
-   * @param[in] orc_chunked_state State information that crosses _begin() / write_chunked() / _end()
+   * @param[in] orc_chunked_state Internal state maintained between chunks.
    * boundaries.
    */
-  void write_chunked(table_view const& table, orc_chunked_state& state);
+  void write_chunk(table_view const& table, orc_chunked_state& state);
 
   /**
    * @brief Finishes the chunked/streamed write process.
    *
-   * @param[in] orc_chunked_state State information that crosses _begin() / write_chunked() / _end()
+   * @param[in] orc_chunked_state Internal state maintained between chunks.
    * boundaries.
    */
   void write_chunked_end(orc_chunked_state& state);

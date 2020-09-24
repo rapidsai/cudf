@@ -52,6 +52,7 @@ constexpr CUDA_HOST_DEVICE_CALLABLE std::size_t size_in_bits()
 /**
  * @addtogroup utility_bitmask
  * @{
+ * @file
  */
 
 /**

@@ -19,7 +19,6 @@ from cudf._lib.null_mask import (
     bitmask_allocation_size_bytes,
     create_null_mask,
 )
-from cudf._lib.quantiles import quantile as cpp_quantile
 from cudf._lib.scalar import as_scalar
 from cudf._lib.stream_compaction import distinct_count as cpp_distinct_count
 from cudf._lib.transform import bools_to_mask
@@ -162,17 +161,14 @@ class ColumnBase(Column, Serializable):
         else:
             return libcudf.replace.clip(self, lo, hi)
 
-    def equals(self, other):
+    def equals(self, other, check_dtypes=False):
         if self is other:
             return True
         if other is None or len(self) != len(other):
             return False
-        if len(self) == 1:
-            val = self[0] == other[0]
-            # when self is multiindex we need to checkall
-            if isinstance(val, np.ndarray):
-                return val.all()
-            return bool(val)
+        if check_dtypes:
+            if self.dtype != other.dtype:
+                return False
         return self.binary_operator("eq", other).min()
 
     def all(self):
@@ -810,22 +806,10 @@ class ColumnBase(Column, Serializable):
         return ColumnBase._concat([self, as_column(other)])
 
     def quantile(self, q, interpolation, exact):
+        raise TypeError(f"cannot perform quantile with type {self.dtype}")
 
-        is_number = isinstance(q, Number)
-
-        if is_number:
-            quant = [float(q)]
-        elif isinstance(q, list) or isinstance(q, np.ndarray):
-            quant = q
-        else:
-            msg = "`q` must be either a single element, list or numpy array"
-            raise TypeError(msg)
-
-        # get sorted indices and exclude nulls
-        sorted_indices = self.as_frame()._get_sorted_inds(True, "first")
-        sorted_indices = sorted_indices[self.null_count :]
-
-        return cpp_quantile(self, quant, interpolation, sorted_indices, exact)
+    def median(self, skipna=None):
+        raise TypeError(f"cannot perform median with type {self.dtype}")
 
     def take(self, indices, keep_index=True):
         """Return Column by taking values from the corresponding *indices*.
@@ -1159,11 +1143,83 @@ class ColumnBase(Column, Serializable):
             mask = Buffer.deserialize(header["mask"], [frames[1]])
         return build_column(data=data, dtype=dtype, mask=mask)
 
-    def min(self, dtype=None):
-        return libcudf.reduce.reduce("min", self, dtype=dtype)
+    def min(self, skipna=None, dtype=None):
+        result_col = self._process_for_reduction(skipna=skipna)
+        if isinstance(result_col, ColumnBase):
+            return libcudf.reduce.reduce("min", result_col, dtype=dtype)
+        else:
+            return result_col
 
-    def max(self, dtype=None):
-        return libcudf.reduce.reduce("max", self, dtype=dtype)
+    def max(self, skipna=None, dtype=None):
+        result_col = self._process_for_reduction(skipna=skipna)
+        if isinstance(result_col, ColumnBase):
+            return libcudf.reduce.reduce("max", result_col, dtype=dtype)
+        else:
+            return result_col
+
+    def sum(self, skipna=None, dtype=None, min_count=0):
+        raise TypeError(f"cannot perform sum with type {self.dtype}")
+
+    def product(self, skipna=None, dtype=None, min_count=0):
+        raise TypeError(f"cannot perform prod with type {self.dtype}")
+
+    def mean(self, skipna=None, dtype=None):
+        raise TypeError(f"cannot perform mean with type {self.dtype}")
+
+    def std(self, skipna=None, ddof=1, dtype=np.float64):
+        raise TypeError(f"cannot perform std with type {self.dtype}")
+
+    def var(self, skipna=None, ddof=1, dtype=np.float64):
+        raise TypeError(f"cannot perform var with type {self.dtype}")
+
+    def kurtosis(self, skipna=None):
+        raise TypeError(f"cannot perform kurt with type {self.dtype}")
+
+    def skew(self, skipna=None):
+        raise TypeError(f"cannot perform skew with type {self.dtype}")
+
+    def cov(self, other):
+        raise TypeError(
+            f"cannot perform covarience with types {self.dtype}, "
+            f"{other.dtype}"
+        )
+
+    def corr(self, other):
+        raise TypeError(
+            f"cannot perform corr with types {self.dtype}, {other.dtype}"
+        )
+
+    def nans_to_nulls(self):
+        if self.dtype.kind == "f":
+            col = self.fillna(np.nan)
+            newmask = libcudf.transform.nans_to_nulls(col)
+            return self.set_mask(newmask)
+        else:
+            return self
+
+    def _process_for_reduction(self, skipna=None, min_count=0):
+        skipna = True if skipna is None else skipna
+
+        if skipna:
+            result_col = self.nans_to_nulls()
+            if result_col.has_nulls:
+                result_col = result_col.dropna()
+        else:
+            if self.has_nulls:
+                return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+
+            result_col = self
+
+        if min_count > 0:
+            valid_count = len(result_col) - result_col.null_count
+            if valid_count < min_count:
+                return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+        elif min_count < 0:
+            warnings.warn(
+                f"min_count value cannot be negative({min_count}), will "
+                f"default to 0."
+            )
+        return result_col
 
     def scatter_to_table(
         self, row_indices, column_indices, names, nrows=None, ncols=None

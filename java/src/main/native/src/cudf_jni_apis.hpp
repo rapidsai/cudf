@@ -28,8 +28,6 @@ jobject contiguous_table_from(JNIEnv *env, cudf::contiguous_split_result &split)
 
 native_jobjectArray<jobject> contiguous_table_array(JNIEnv *env, jsize length);
 
-std::unique_ptr<cudf::aggregation> map_jni_aggregation(jint op);
-
 jlongArray convert_table_for_return(JNIEnv *env, std::unique_ptr<cudf::table> &table_result);
 
 /**

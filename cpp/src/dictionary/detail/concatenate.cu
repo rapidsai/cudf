@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/concatenate.cuh>
+#include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/dictionary/detail/concatenate.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
@@ -136,28 +137,30 @@ struct dispatch_compute_indices {
     auto indices_view  = column_device_view::create(all_indices, stream);
     auto d_all_indices = *indices_view;
 
+    auto indices_itr = cudf::detail::indexalator_factory::make_input_iterator(all_indices);
     // map the concatenated indices to the concatenated keys
     auto all_itr = thrust::make_permutation_iterator(
       keys_view->begin<Element>(),
       thrust::make_transform_iterator(
         thrust::make_counting_iterator<size_type>(0),
-        [d_offsets, d_map_to_keys, d_all_indices] __device__(size_type idx) {
+        [d_offsets, d_map_to_keys, d_all_indices, indices_itr] __device__(size_type idx) {
           if (d_all_indices.is_null(idx)) return 0;
-          return d_all_indices.template element<int32_t>(idx) + d_offsets[d_map_to_keys[idx]].first;
+          return indices_itr[idx] + d_offsets[d_map_to_keys[idx]].first;
         }));
 
     auto new_keys_view = column_device_view::create(new_keys, stream);
     // create the indices output column
     auto result = make_numeric_column(
-      data_type{type_id::INT32}, all_indices.size(), mask_state::UNALLOCATED, stream, mr);
-    auto d_result = result->mutable_view().data<int32_t>();
+      all_indices.type(), all_indices.size(), mask_state::UNALLOCATED, stream, mr);
+    auto result_itr =
+      cudf::detail::indexalator_factory::make_output_iterator(result->mutable_view());
     // new indices values are computed by matching the concatenated keys to the new key set
     thrust::lower_bound(rmm::exec_policy(stream)->on(stream),
                         new_keys_view->begin<Element>(),
                         new_keys_view->end<Element>(),
                         all_itr,
                         all_itr + all_indices.size(),
-                        d_result,
+                        result_itr,
                         thrust::less<Element>());
     return result;
   }
@@ -216,7 +219,7 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
   std::vector<column_view> indices_views(columns.size());
   std::transform(columns.begin(), columns.end(), indices_views.begin(), [](auto cv) {
     auto dict_view = dictionary_column_view(cv);
-    if (dict_view.size() == 0) return column_view{data_type{type_id::INT32}, 0, nullptr};
+    if (dict_view.size() == 0) return column_view{data_type{type_id::UINT32}, 0, nullptr};
     return dict_view.get_indices_annotated();  // nicely includes validity mask and view offset
   });
   auto all_indices        = cudf::detail::concatenate(indices_views, mr, stream);
