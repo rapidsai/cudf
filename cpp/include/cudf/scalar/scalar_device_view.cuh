@@ -19,6 +19,11 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 
+/**
+ * @file scalar_device_view.cuh
+ * @brief Scalar device view class definitons
+ */
+
 namespace cudf {
 namespace detail {
 /**

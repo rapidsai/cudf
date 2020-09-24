@@ -14,18 +14,12 @@
  * limitations under the License.
  */
 
-/**
- * @file avro.hpp
- * @brief cuDF-IO freeform API
- */
-
 #pragma once
 
 #include "types.hpp"
 
-#include <rmm/mr/device/default_memory_resource.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 
-#include <cudf/io/writers.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
@@ -36,14 +30,18 @@
 namespace cudf {
 namespace io {
 /**
- * @brief To build options for `read_avro()`.
+ * @addtogroup io_readers
+ * @{
+ * @file
+ */
+
+/**
+ * @brief Builder to build options for `read_avro()`.
  */
 class avro_reader_options_builder;
 
 /**
  * @brief Settings to use for `read_avro()`.
- *
- * @ingroup io_readers
  */
 class avro_reader_options {
   source_info _source;
@@ -195,8 +193,6 @@ class avro_reader_options_builder {
 /**
  * @brief Reads an Avro dataset into a set of columns.
  *
- * @ingroup io_readers
- *
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
  *  ...
@@ -215,6 +211,8 @@ class avro_reader_options_builder {
  */
 table_with_metadata read_avro(
   avro_reader_options const& options,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/** @} */  // end of group
 }  // namespace io
 }  // namespace cudf

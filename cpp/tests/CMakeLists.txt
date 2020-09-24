@@ -380,6 +380,14 @@ set(UTILITIES_TEST_SRC
 ConfigureTest(UTILITIES_TEST "${UTILITIES_TEST_SRC}")
 
 ###################################################################################################
+# - span tests -------------------------------------------------------------------------------
+
+set(SPAN_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/span_tests.cu")
+
+ConfigureTest(SPAN_TEST "${SPAN_TEST_SRC}")
+
+###################################################################################################
 # - iterator tests --------------------------------------------------------------------------------
 
 set(ITERATOR_TEST_SRC

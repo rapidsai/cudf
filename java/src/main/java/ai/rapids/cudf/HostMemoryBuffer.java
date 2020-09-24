@@ -616,4 +616,20 @@ public class HostMemoryBuffer extends MemoryBuffer {
       }
     }
   }
+
+  /**
+   * WARNING: Debug only method to print a passed in buffer
+   */
+  public void printBuffer() {
+    byte[] offsetbytes = new byte[(int)length];
+    System.out.println("BUFFER length =" + offsetbytes.length);
+    getBytes(offsetbytes, 0, 0, length);
+    for (int i = 0; i < offsetbytes.length; i++) {
+      System.out.print(offsetbytes[i]);
+      if (i%4 == 0) {
+        System.out.print(" ");
+      }
+    }
+    System.out.println();
+  }
 }

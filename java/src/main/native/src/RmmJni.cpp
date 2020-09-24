@@ -18,7 +18,7 @@
 #include <fstream>
 #include <iostream>
 #include <limits>
-#include <mutex>
+#include <atomic>
 
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/logging_resource_adaptor.hpp>
@@ -26,7 +26,6 @@
 #include <rmm/mr/device/owning_wrapper.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
-#include <unordered_map>
 
 #include "cudf_jni_apis.hpp"
 
@@ -36,7 +35,7 @@ using rmm::mr::logging_resource_adaptor;
 namespace {
 
 // Alignment to which the RMM memory resource will round allocation sizes
-constexpr std::size_t RMM_ALLOC_SIZE_ALIGNMENT = 512;
+constexpr std::size_t RMM_ALLOC_SIZE_ALIGNMENT = 256;
 
 constexpr char const *RMM_EXCEPTION_CLASS = "ai/rapids/cudf/RmmException";
 
@@ -75,51 +74,32 @@ public:
   Upstream *get_wrapped_resource() { return resource; }
 
   std::size_t get_total_allocated() override {
-    std::lock_guard<std::mutex> lock(size_map_mutex);
-    return total_allocated;
+    return total_allocated.load();
   }
 
 private:
   Upstream *const resource;
   std::size_t const size_align;
-  std::size_t total_allocated{0};
-
-  // map and associated lock to track memory sizes by address
-  // TODO: This should be removed when rmm::alloc and rmm::free are removed and the size parameter
-  //       for do_deallocate can be trusted. If map and mutex are removed then total_allocated
-  //       should be updated to be atomic.
-  std::unordered_map<void *, std::size_t> size_map{};
-  std::mutex size_map_mutex{};
+  std::atomic_size_t total_allocated{0};
 
   void *do_allocate(std::size_t num_bytes, cudaStream_t stream) override {
     // adjust size of allocation based on specified size alignment
     num_bytes = (num_bytes + size_align - 1) / size_align * size_align;
 
-    std::lock_guard<std::mutex> lock(size_map_mutex);
-
     auto result = resource->allocate(num_bytes, stream);
     if (result) {
       total_allocated += num_bytes;
-      size_map[result] = num_bytes;
     }
     return result;
   }
 
   void do_deallocate(void *p, std::size_t size, cudaStream_t stream) override {
-    std::lock_guard<std::mutex> lock(size_map_mutex);
-
+    size = (size + size_align - 1) / size_align * size_align;
+    
     resource->deallocate(p, size, stream);
 
     if (p) {
-      // TODO: size can't be trusted until rmm::alloc and rmm::free are removed,
-      //       see https://github.com/rapidsai/rmm/issues/302
-      auto it = size_map.find(p);
-      if (it != size_map.end()) {
-        total_allocated -= it->second;
-        size_map.erase(it);
-      } else {
-        // Untracked size, may be an allocation from before resource was installed.
-      }
+      total_allocated -= size;
     }
   }
 
