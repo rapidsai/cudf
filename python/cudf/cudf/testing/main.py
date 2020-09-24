@@ -1,3 +1,5 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 from cudf.testing import fuzzer
 
 
@@ -11,9 +13,10 @@ class PythonFuzz(object):
             dirs=kwargs.get("dir", None),
             crash_reports_dir=kwargs.get("crash_reports_dir", None),
             regression=kwargs.get("regression", False),
-            max_rows_size=kwargs.get("max_rows_size", 4096),
+            max_rows_size=kwargs.get("max_rows_size", 100_000),
             max_cols_size=kwargs.get("max_cols_size", 1000),
             runs=kwargs.get("runs", -1),
+            max_string_length=kwargs.get("max_string_length", None),
         )
 
     def __call__(self, *args, **kwargs):

@@ -1,50 +1,38 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 import sys
+from io import StringIO
 
 import pandas as pd
 
 import cudf
 from cudf.testing.csv import CSVReader, CSVWriter
 from cudf.testing.main import pythonfuzz
+from cudf.testing.utils import compare_content, run_test
 from cudf.tests.utils import assert_eq
 
 
 @pythonfuzz(data_handle=CSVReader)
-def csv_reader_test(file_name):
-    print("csv_reader_test")
-    pdf = pd.read_csv(file_name)
-    gdf = cudf.read_csv(file_name)
+def csv_reader_test(csv_buffer):
+    pdf = pd.read_csv(csv_buffer)
+    gdf = cudf.read_csv(csv_buffer)
 
     assert_eq(gdf, pdf)
 
 
 @pythonfuzz(data_handle=CSVWriter)
 def csv_writer_test(gdf):
-    print("csv_writer_test")
-    pd_file_name = "cpu_pdf.csv"
-    gd_file_name = "gpu_pdf.csv"
-
     pdf = gdf.to_pandas()
 
-    pdf.to_csv(pd_file_name)
-    gdf.to_csv(gd_file_name)
+    pd_buffer = pdf.to_csv()
+    gd_buffer = gdf.to_csv()
 
-    actual = cudf.read_csv(gd_file_name)
-    expected = pd.read_csv(pd_file_name)
-    assert_eq(actual, expected)
+    compare_content(pd_buffer, gd_buffer)
 
-    actual = cudf.read_csv(pd_file_name)
-    expected = pd.read_csv(gd_file_name)
+    actual = cudf.read_csv(StringIO(gd_buffer))
+    expected = pd.read_csv(StringIO(pd_buffer))
     assert_eq(actual, expected)
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Usage is python file_name.py function_name")
-
-    function_name_to_run = sys.argv[1]
-    try:
-        globals()[function_name_to_run]()
-    except KeyError:
-        print(
-            f"Provided function name({function_name_to_run}) does not exist."
-        )
+    run_test(globals(), sys.argv)

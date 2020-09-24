@@ -1,3 +1,5 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 import sys
 
 import pandas as pd
@@ -5,44 +7,31 @@ import pandas as pd
 import cudf
 from cudf.testing.json import JSONReader, JSONWriter
 from cudf.testing.main import pythonfuzz
+from cudf.testing.utils import compare_content, run_test
 from cudf.tests.utils import assert_eq
 
 
 @pythonfuzz(data_handle=JSONReader)
-def json_reader_test(file_name):
-    pdf = pd.read_json(file_name)
-    gdf = cudf.read_json(file_name)
+def json_reader_test(json_buffer):
+    pdf = pd.read_json(json_buffer)
+    gdf = cudf.read_json(json_buffer)
 
     assert_eq(gdf, pdf)
 
 
 @pythonfuzz(data_handle=JSONWriter)
 def json_writer_test(gdf):
-    pd_file_name = "cpu_pdf.json"
-    gd_file_name = "gpu_pdf.json"
-
     pdf = gdf.to_pandas()
 
-    pdf.to_json(pd_file_name)
-    gdf.to_json(gd_file_name)
+    pdf_buffer = pdf.to_json(lines=True, orient="records")
+    gdf_buffer = gdf.to_json(lines=True, orient="records")
 
-    actual = cudf.read_json(gd_file_name)
-    expected = pd.read_json(pd_file_name)
-    assert_eq(actual, expected)
+    compare_content(pdf_buffer, gdf_buffer)
 
-    actual = cudf.read_json(pd_file_name)
-    expected = pd.read_json(gd_file_name)
+    actual = cudf.read_json(gdf_buffer, lines=True, orient="records")
+    expected = pd.read_json(pdf_buffer, lines=True, orient="records")
     assert_eq(actual, expected)
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Usage is python file_name.py function_name")
-
-    function_name_to_run = sys.argv[1]
-    try:
-        globals()[function_name_to_run]()
-    except KeyError:
-        print(
-            f"Provided function name({function_name_to_run}) does not exist."
-        )
+    run_test(globals(), sys.argv)

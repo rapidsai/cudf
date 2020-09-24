@@ -19,6 +19,7 @@ from cudf._lib.cpp.groupby cimport (
     aggregation_result
 )
 from cudf._lib.cpp.table.table_view cimport table_view
+from cudf._lib.cpp.io.csv cimport csv_reader_options, csv_writer_options
 from cudf._lib.cpp.io.avro cimport avro_reader_options
 from cudf._lib.cpp.io.json cimport json_reader_options
 from pyarrow.includes.libarrow cimport CMessageReader
@@ -88,6 +89,8 @@ cdef extern from "<utility>" namespace "std" nogil:
     cdef pair[unique_ptr[column], table_view] move(
         pair[unique_ptr[column], table_view]
     )
+    cdef csv_reader_options move(csv_reader_options)
+    cdef csv_writer_options move(csv_writer_options)
     cdef orc_reader_options move(orc_reader_options)
     cdef orc_writer_options move(orc_writer_options)
     cdef avro_reader_options move(avro_reader_options)

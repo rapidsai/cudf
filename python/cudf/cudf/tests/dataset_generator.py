@@ -105,7 +105,9 @@ def _generate_column(column_params, num_rows):
             )
             return pa.DictionaryArray.from_arrays(
                 dictionary=vals,
-                indices=np.random.choice(np.arange(len(vals)), size=num_rows),
+                indices=np.random.randint(
+                    low=0, high=len(vals), size=num_rows
+                ),
                 mask=np.random.choice(
                     [True, False],
                     size=num_rows,
@@ -297,7 +299,7 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
         null_frequency = copy.deepcopy(meta["null_frequency"])
         cardinality = copy.deepcopy(meta["cardinality"])
 
-        if isinstance(dtype, str) and dtype == "category":
+        if dtype == "category":
             column_params.append(
                 ColumnParameters(
                     cardinality=cardinality,
@@ -355,7 +357,9 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
                     ColumnParameters(
                         cardinality=cardinality,
                         null_frequency=null_frequency,
-                        generator=datetime_generator(size=cardinality),
+                        generator=datetime_generator(
+                            dtype=dtype, size=cardinality
+                        ),
                         is_sorted=False,
                         dtype=np.dtype(dtype),
                     )
@@ -365,7 +369,9 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
                     ColumnParameters(
                         cardinality=cardinality,
                         null_frequency=null_frequency,
-                        generator=timedelta_generator(size=cardinality),
+                        generator=timedelta_generator(
+                            dtype=dtype, size=cardinality
+                        ),
                         is_sorted=False,
                         dtype=np.dtype(dtype),
                     )
@@ -382,6 +388,9 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
                 )
             else:
                 raise TypeError(f"Unsupported dtype: {dtype}")
+            # TODO: Add List column support once
+            # https://github.com/rapidsai/cudf/pull/6075
+            # is merged.
 
     df = get_dataframe(
         Parameters(num_rows=rows, column_parameters=column_params, seed=seed,),
@@ -408,13 +417,21 @@ def float_generator(dtype, size):
     )
 
 
-def datetime_generator(size):
-    return lambda: np.random.randint(low=0, high=2147483647 - 1, size=size,)
-
-
-def timedelta_generator(size):
+def datetime_generator(dtype, size):
+    iinfo = np.iinfo("int64")
     return lambda: np.random.randint(
-        low=-2147483648, high=2147483647 - 1, size=size
+        low=np.datetime64(iinfo.min + 1, "ns").astype(dtype).astype("int"),
+        high=np.datetime64(iinfo.max, "ns").astype(dtype).astype("int"),
+        size=size,
+    )
+
+
+def timedelta_generator(dtype, size):
+    iinfo = np.iinfo("int64")
+    return lambda: np.random.randint(
+        low=np.timedelta64(iinfo.min + 1, "ns").astype(dtype).astype("int"),
+        high=np.timedelta64(iinfo.max, "ns").astype(dtype).astype("int"),
+        size=size,
     )
 
 

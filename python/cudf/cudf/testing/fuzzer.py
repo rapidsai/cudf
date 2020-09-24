@@ -1,22 +1,16 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 import datetime
-import functools
 import json
 import logging
 import os
+import sys
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)-8s %(message)s",
     level=logging.INFO,
     datefmt="%Y-%m-%d %H:%M:%S",
 )
-
-
-try:
-    lru_cache = functools.lru_cache
-except Exception:
-    import functools32
-
-    lru_cache = functools32.lru_cache
 
 
 class Fuzzer(object):
@@ -27,16 +21,20 @@ class Fuzzer(object):
         dirs=None,
         crash_reports_dir=None,
         regression=False,
-        max_rows_size=4096,
+        max_rows_size=100_000,
         max_cols_size=1000,
         runs=-1,
+        max_string_length=None,
     ):
 
         self._target = target
         self._dirs = [] if dirs is None else dirs
         self._crash_dir = crash_reports_dir
         self._data_handler = data_handler_class(
-            dirs=self._dirs, max_rows=max_rows_size, max_columns=max_cols_size
+            dirs=self._dirs,
+            max_rows=max_rows_size,
+            max_columns=max_cols_size,
+            max_string_length=max_string_length,
         )
         self._total_executions = 0
         self._regression = regression
@@ -81,6 +79,12 @@ class Fuzzer(object):
             try:
                 self._start_time = datetime.datetime.now()
                 self._target(file_name)
+            except KeyboardInterrupt:
+                logging.info(
+                    f"Keyboard Interrupt encountered, stopping after "
+                    f"{self.runs} runs."
+                )
+                sys.exit(0)
             except Exception as e:
                 logging.exception(e)
                 self.write_crash(e)

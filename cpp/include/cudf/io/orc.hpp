@@ -17,7 +17,6 @@
 #pragma once
 
 #include <cudf/io/types.hpp>
-#include <cudf/io/writers.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
@@ -29,16 +28,18 @@
 namespace cudf {
 namespace io {
 /**
+ * @addtogroup io_readers
+ * @{
+ * @file
+ */
+
+/**
  * @brief Builds settings to use for `read_orc()`.
- *
- * @ingroup io_readers
  */
 class orc_reader_options_builder;
 
 /**
  * @brief Settings to use for `read_orc()`.
- *
- * @ingroup io_readers
  */
 class orc_reader_options {
   source_info _source;
@@ -363,8 +364,6 @@ class orc_reader_options_builder {
 /**
  * @brief Reads an ORC dataset into a set of columns.
  *
- * @ingroup io_readers
- *
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
  *  ...
@@ -385,17 +384,20 @@ table_with_metadata read_orc(
   orc_reader_options const& options,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/** @} */  // end of group
+/**
+ * @addtogroup io_writers
+ * @{
+ * @file
+ */
+
 /**
  * @brief Builds settings to use for `write_orc()`.
- *
- * @ingroup io_writers
  */
 class orc_writer_options_builder;
 
 /**
  * @brief Settings to use for `write_orc()`.
- *
- * @ingroup io_writers
  */
 class orc_writer_options {
   // Specify the sink to use for writer output
@@ -581,8 +583,6 @@ class orc_writer_options_builder {
 /**
  * @brief Writes a set of columns to ORC format.
  *
- * @ingroup io_writers
- *
  * The following code snippet demonstrates how to write columns to a file:
  * @code
  *  ...
@@ -601,15 +601,11 @@ void write_orc(orc_writer_options const& options,
 
 /**
  * @brief Builds settings to use for `write_orc_chunked()`.
- *
- * @ingroup io_writers
  */
 class chunked_orc_writer_options_builder;
 
 /**
  * @brief Settings to use for `write_orc_chunked()`.
- *
- * @ingroup io_writers
  */
 class chunked_orc_writer_options {
   // Specify the sink to use for writer output
@@ -766,8 +762,6 @@ struct orc_chunked_state;
 /**
  * @brief Begin the process of writing an ORC file in a chunked/stream form.
  *
- * @ingroup io_writers
- *
  * The intent of the write_orc_chunked_ path is to allow writing of an
  * arbitrarily large / arbitrary number of rows to an ORC file in multiple passes.
  *
@@ -800,8 +794,6 @@ std::shared_ptr<orc_chunked_state> write_orc_chunked_begin(
 /**
  * @brief Write a single table as a subtable of a larger logical orc file/table.
  *
- * @ingroup io_writers
- *
  * All tables passed into multiple calls of this function must contain the same # of columns and
  * have columns of the same type.
  *
@@ -814,12 +806,11 @@ void write_orc_chunked(table_view const& table, std::shared_ptr<orc_chunked_stat
 /**
  * @brief Finish writing a chunked/stream orc file.
  *
- * @ingroup io_writers
- *
  * @param[in] state Opaque state information about the writer process. Must be the same pointer
  * returned from write_orc_chunked_begin().
  */
 void write_orc_chunked_end(std::shared_ptr<orc_chunked_state>& state);
 
+/** @} */  // end of group
 }  // namespace io
 }  // namespace cudf

@@ -14,11 +14,6 @@
  * limitations under the License.
  */
 
-/**
- * @file writer_impl.hpp
- * @brief cuDF-IO CSV writer class implementation header
- */
-
 #pragma once
 
 #include "csv.h"
@@ -29,7 +24,7 @@
 
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/io/data_sink.hpp>
-#include <cudf/io/writers.hpp>
+#include <cudf/io/detail/csv.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -58,7 +53,7 @@ class writer::impl {
    * @param mr Device memory resource to use for device memory allocation
    **/
   impl(std::unique_ptr<data_sink> sink,
-       writer_options const& options,
+       csv_writer_options const& options,
        rmm::mr::device_memory_resource* mr);
 
   /**
@@ -111,7 +106,7 @@ class writer::impl {
  private:
   std::unique_ptr<data_sink> out_sink_;
   rmm::mr::device_memory_resource* mr_ = nullptr;
-  writer_options const options_;
+  csv_writer_options const options_;
 };
 
 std::unique_ptr<column> pandas_format_durations(
