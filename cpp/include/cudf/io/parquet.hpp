@@ -14,11 +14,6 @@
  * limitations under the License.
  */
 
-/**
- * @file parquet.hpp
- * @brief cuDF-IO freeform API
- */
-
 #pragma once
 
 #include <cudf/io/types.hpp>
@@ -26,7 +21,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <rmm/mr/device/default_memory_resource.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <iostream>
 #include <memory>
@@ -35,6 +30,11 @@
 
 namespace cudf {
 namespace io {
+/**
+ * @addtogroup io_readers
+ * @{
+ * @file
+ */
 
 /**
  * @brief Builds parquet_reader_options to use for `read_parquet()`.
@@ -319,8 +319,6 @@ class parquet_reader_options_builder {
 /**
  * @brief Reads a Parquet dataset into a set of columns.
  *
- * @ingroup io_readers
- *
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
  *  ...
@@ -341,17 +339,20 @@ table_with_metadata read_parquet(
   parquet_reader_options const& options,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/** @} */  // end of group
+/**
+ * @addtogroup io_writers
+ * @{
+ * @file
+ */
+
 /**
  * @brief Class to build `parquet_writer_options`.
- *
- * @ingroup io_writers
  */
 class parquet_writer_options_builder;
 
 /**
  * @brief Settings for `write_parquet()`.
- *
- * @ingroup io_writers
  */
 class parquet_writer_options {
   // Specify the sink to use for writer output
@@ -579,8 +580,6 @@ class parquet_writer_options_builder {
 /**
  * @brief Writes a set of columns to parquet format.
  *
- * @ingroup io_writers
- *
  * The following code snippet demonstrates how to write columns to a file:
  * @code
  *  ...
@@ -606,8 +605,6 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(
  * @brief Merges multiple raw metadata blobs that were previously created by write_parquet
  * into a single metadata blob.
  *
- * @ingroup io_writers
- *
  * @param[in] metadata_list List of input file metadata.
  * @return A parquet-compatible blob that contains the data for all row groups in the list.
  */
@@ -621,8 +618,6 @@ class chunked_parquet_writer_options_builder;
 
 /**
  * @brief Settings for `write_parquet_chunked()`.
- *
- * @ingroup io_writers
  */
 class chunked_parquet_writer_options {
   // Specify the sink to use for writer output
@@ -784,8 +779,6 @@ struct pq_chunked_state;
 /**
  * @brief Begin the process of writing a parquet file in a chunked/stream form.
  *
- * @ingroup io_writers
- *
  * The intent of the write_parquet_chunked_ path is to allow writing of an
  * arbitrarily large / arbitrary number of rows to a parquet file in multiple passes.
  *
@@ -818,8 +811,6 @@ std::shared_ptr<pq_chunked_state> write_parquet_chunked_begin(
 /**
  * @brief Write a single table as a subtable of a larger logical parquet file/table.
  *
- * @ingroup io_writers
- *
  * All tables passed into multiple calls of this function must contain the same # of columns and
  * have columns of the same type.
  *
@@ -831,8 +822,6 @@ void write_parquet_chunked(table_view const& table, std::shared_ptr<pq_chunked_s
 
 /**
  * @brief Finish writing a chunked/stream parquet file.
- *
- * @ingroup io_writers
  *
  * @param[in] state Opaque state information about the writer process. Must be the same pointer
  * returned from write_parquet_chunked_begin().
@@ -847,5 +836,18 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet_chunked_end(
   bool return_filemetadata                   = false,
   const std::string& column_chunks_file_path = "");
 
+/**
+ * @brief Merges multiple raw metadata blobs that were previously created by write_parquet
+ * into a single metadata blob
+ *
+ * @ingroup io_writers
+ *
+ * @param[in] metadata_list List of input file metadata
+ * @return A parquet-compatible blob that contains the data for all rowgroups in the list
+ */
+std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
+  const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list);
+
+/** @} */  // end of group
 }  // namespace io
 }  // namespace cudf

@@ -14,16 +14,11 @@
  * limitations under the License.
  */
 
-/**
- * @file json.hpp
- * @brief cuDF-IO freeform API
- */
-
 #pragma once
 
 #include "types.hpp"
 
-#include <rmm/mr/device/default_memory_resource.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -33,6 +28,11 @@
 
 namespace cudf {
 namespace io {
+/**
+ * @addtogroup io_readers
+ * @{
+ * @file
+ */
 
 /**
  * @brief Builds settings to use for `read_json()`.
@@ -41,8 +41,6 @@ class json_reader_options_builder;
 
 /**
  * @brief Input arguments to the `read_json` interface.
- *
- * @ingroup io_readers
  *
  * Available parameters and are closely patterned after PANDAS' `read_json` API.
  * Not all parameters are unsupported. If the matching PANDAS' parameter
@@ -293,8 +291,6 @@ class json_reader_options_builder {
 /**
  * @brief Reads a JSON dataset into a set of columns.
  *
- * @ingroup io_readers
- *
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
  *  ...
@@ -312,7 +308,8 @@ class json_reader_options_builder {
  */
 table_with_metadata read_json(
   json_reader_options const& options,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/** @} */  // end of group
 }  // namespace io
 }  // namespace cudf

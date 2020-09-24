@@ -26,7 +26,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <../tests/utilities/column_utilities.hpp>
+#include <cudf_test/column_utilities.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <rmm/device_buffer.hpp>

@@ -18,6 +18,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/detail/search.hpp>
 #include <cudf/dictionary/search.hpp>
+#include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <thrust/binary_search.h>
@@ -26,6 +27,27 @@
 namespace cudf {
 namespace dictionary {
 namespace detail {
+
+namespace {
+
+struct dispatch_scalar_index {
+  template <typename IndexType, std::enable_if_t<is_index_type<IndexType>()>* = nullptr>
+  std::unique_ptr<scalar> operator()(size_type index,
+                                     bool is_valid,
+                                     cudaStream_t stream,
+                                     rmm::mr::device_memory_resource* mr)
+  {
+    return std::make_unique<numeric_scalar<IndexType>>(index, is_valid, stream, mr);
+  }
+  template <typename IndexType,
+            typename... Args,
+            std::enable_if_t<not is_index_type<IndexType>()>* = nullptr>
+  std::unique_ptr<scalar> operator()(Args&&... args)
+  {
+    CUDF_FAIL("indices must be an integral type");
+  }
+};
+}  // namespace
 
 /**
  * @brief Find index of a given key within a dictionary's keys column.
@@ -45,8 +67,7 @@ struct find_index_fn {
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream) const
   {
-    auto result = std::make_unique<numeric_scalar<uint32_t>>(0, false, stream, mr);
-    if (input.size() == 0) return result;
+    if (input.size() == 0) return std::make_unique<numeric_scalar<uint32_t>>(0, false, stream, mr);
     CUDF_EXPECTS(input.keys().type() == key.type(),
                  "search key type must match dictionary keys type");
     auto keys_view = column_device_view::create(input.keys(), stream);
@@ -57,9 +78,12 @@ struct find_index_fn {
                           keys_view->begin<Element>(),
                           keys_view->end<Element>(),
                           find_key);
-    if (thrust::distance(iter.first, iter.second) > 0)
-      result->set_value(thrust::distance(keys_view->begin<Element>(), iter.first), stream);
-    return result;
+    return type_dispatcher(input.indices().type(),
+                           dispatch_scalar_index{},
+                           thrust::distance(keys_view->begin<Element>(), iter.first),
+                           (thrust::distance(iter.first, iter.second) > 0),
+                           stream,
+                           mr);
   }
   template <typename Element,
             std::enable_if_t<std::is_same<Element, dictionary32>::value>* = nullptr>

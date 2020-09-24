@@ -16,7 +16,7 @@
 #pragma once
 
 /**
- * @file struct_view.cuh
+ * @file
  * @brief Class definition for cudf::struct_view.
  */
 
