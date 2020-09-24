@@ -281,20 +281,6 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
             return cudf.DataFrame._concat(
                 objs, axis=axis, ignore_index=ignore_index, sort=sort
             )
-<<<<<<< HEAD
-    elif typ is Series:
-        objs = [obj for obj in objs if len(obj)]
-        if len(objs) == 0:
-            return cudf.Series()
-        elif len(objs) == 1:
-            if ignore_index:
-                result = Series._concat(objs, axis=axis, index=None)
-            else:
-                result = objs[0]
-            return result
-        else:
-            return Series._concat(
-=======
     elif typ is cudf.Series:
         objs = [obj for obj in objs if len(obj)]
         if len(objs) == 0:
@@ -303,7 +289,6 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
             return objs[0]
         else:
             return cudf.Series._concat(
->>>>>>> 0bbb1c6d39aff9eb975a7d3fe9e575463f2d14b2
                 objs, axis=axis, index=None if ignore_index else True
             )
     elif typ is cudf.MultiIndex:
