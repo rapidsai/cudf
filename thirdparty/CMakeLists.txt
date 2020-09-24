@@ -8,8 +8,8 @@ message("Fetching Thrust")
 FetchContent_Declare(
     thrust
     GIT_REPOSITORY https://github.com/NVIDIA/thrust.git
-    # August 28, 2020
-    GIT_TAG        52a8bda46c5c2128414d1d47f546b486ff0be2f0
+    GIT_TAG        1.10.0
+    GIT_SHALLOW    true
 )
 
 FetchContent_GetProperties(thrust)
