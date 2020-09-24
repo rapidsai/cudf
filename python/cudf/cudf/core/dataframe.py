@@ -5510,7 +5510,7 @@ class DataFrame(Frame, Serializable):
     #
     # Stats
     #
-    def _prepare_for_rowwise_op(self, method):
+    def _prepare_for_rowwise_op(self, method, skipna):
         """Prepare a DataFrame for CuPy-based row-wise operations.
         """
 
@@ -5532,8 +5532,22 @@ class DataFrame(Frame, Serializable):
                 "and bool dtypes. Non numeric columns are ignored."
             )
             warnings.warn(msg)
+
+        if not skipna and any(col.nullable for col in filtered._columns):
+            mask = cudf.DataFrame(
+                {
+                    name: filtered._data[name]._get_mask_as_column()
+                    if filtered._data[name].nullable
+                    else column.full(len(filtered._data[name]), True)
+                    for name in filtered._data.names
+                }
+            )
+            mask = mask.all(axis=1)
+        else:
+            mask = None
+
         coerced = filtered.astype(common_dtype)
-        return coerced
+        return coerced, mask, common_dtype
 
     def count(self, axis=0, level=None, numeric_only=False, **kwargs):
         """
@@ -6473,20 +6487,9 @@ class DataFrame(Frame, Serializable):
                 "support `bool_only`."
                 raise NotImplementedError(msg)
 
-            prepared = self._prepare_for_rowwise_op(method)
-            if not skipna and any(col.nullable for col in prepared._columns):
-                mask = cudf.DataFrame(
-                    {
-                        name: prepared._data[name]._get_mask_as_column()
-                        if prepared._data[name].nullable
-                        else column.full(len(prepared._data[name]), True)
-                        for name in prepared._data.names
-                    }
-                )
-                mask = mask.all(axis=1)
-            else:
-                mask = None
-
+            prepared, mask, common_dtype = self._prepare_for_rowwise_op(
+                method, skipna
+            )
             for col in prepared._data.names:
                 if prepared._data[col].nullable:
                     prepared._data[col] = (
@@ -6498,7 +6501,6 @@ class DataFrame(Frame, Serializable):
                         )
                         .fillna(np.nan)
                     )
-
             arr = cupy.asarray(prepared.as_gpu_matrix())
 
             if skipna is not False and method in _cupy_nan_methods_map:
@@ -6512,7 +6514,24 @@ class DataFrame(Frame, Serializable):
                     result = result.set_mask(
                         cudf._lib.transform.bools_to_mask(mask._column)
                     )
-                return Series(result, index=self.index)
+                return Series(
+                    result,
+                    index=self.index,
+                    dtype=common_dtype
+                    if method
+                    in (
+                        "count",
+                        "min",
+                        "max",
+                        "sum",
+                        "prod",
+                        "cummin",
+                        "cummax",
+                        "cumsum",
+                        "cumprod",
+                    )
+                    else None,
+                )
             else:
                 result_df = DataFrame.from_gpu_matrix(result).set_index(
                     self.index

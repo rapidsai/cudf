@@ -4725,6 +4725,55 @@ def test_rowwise_ops_nullable_dtypes_partial_null(op, expected):
 
 
 @pytest.mark.parametrize(
+    "op,expected",
+    [
+        ("max", gd.Series([10, None, None, 2234, None, 453], dtype="int64",),),
+        ("min", gd.Series([10, None, None, 13, None, 15], dtype="int64",),),
+        ("sum", gd.Series([20, None, None, 2247, None, 468], dtype="int64",),),
+        (
+            "product",
+            gd.Series([100, None, None, 29042, None, 6795], dtype="int64",),
+        ),
+        (
+            "mean",
+            gd.Series(
+                [10.0, None, None, 1123.5, None, 234.0], dtype="float32",
+            ),
+        ),
+        (
+            "var",
+            gd.Series(
+                [0.0, None, None, 1233210.25, None, 47961.0], dtype="float32",
+            ),
+        ),
+        (
+            "std",
+            gd.Series(
+                [0.0, None, None, 1110.5, None, 219.0], dtype="float32",
+            ),
+        ),
+    ],
+)
+def test_rowwise_ops_nullable_int_dtypes(op, expected):
+    gdf = gd.DataFrame(
+        {
+            "a": [10, 11, None, 13, None, 15],
+            "b": gd.Series(
+                [10, None, 323, 2234, None, 453], nan_as_null=False,
+            ),
+        }
+    )
+
+    if op in ("var", "std"):
+        got = getattr(gdf, op)(axis=1, ddof=0, skipna=False)
+    else:
+        got = getattr(gdf, op)(axis=1, skipna=False)
+
+    assert_eq(got.null_count, expected.null_count)
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
     "data",
     [
         [5.0, 6.0, 7.0],
