@@ -1,3 +1,5 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 import pandas as pd
 import pytest
 import cudf as gd
