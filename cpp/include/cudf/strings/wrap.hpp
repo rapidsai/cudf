@@ -23,6 +23,7 @@ namespace strings {
 /**
  * @addtogroup strings_modify
  * @{
+ * @file
  */
 
 /**
