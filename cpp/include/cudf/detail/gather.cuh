@@ -44,6 +44,7 @@
 #include <thrust/logical.h>
 
 #include <cub/cub.cuh>
+#include <type_traits>
 
 namespace cudf {
 namespace detail {
@@ -128,12 +129,19 @@ struct column_gatherer_impl {
                                      cudaStream_t stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    size_type num_destination_rows      = std::distance(gather_map_begin, gather_map_end);
-    cudf::mask_allocation_policy policy = cudf::mask_allocation_policy::NEVER;
-    std::unique_ptr<column> destination_column =
-      cudf::detail::allocate_like(source_column, num_destination_rows, policy, mr, stream);
-    Element const* source_data{source_column.data<Element>()};
-    Element* destination_data{destination_column->mutable_view().data<Element>()};
+    auto const num_rows = cudf::distance(gather_map_begin, gather_map_end);
+    auto const policy   = cudf::mask_allocation_policy::NEVER;
+    auto destination_column =
+      cudf::detail::allocate_like(source_column, num_rows, policy, mr, stream);
+
+    // TODO fix this hack to be a comprehensive fix
+    constexpr bool is_decimal32 = std::is_same<numeric::decimal32, Element>();
+    using Type                  = std::conditional_t<cudf::is_fixed_point<Element>(),
+                                    std::conditional_t<is_decimal32, int32_t, int64_t>,
+                                    Element>;
+
+    auto const source_data = source_column.begin<Type>();
+    auto destination_data  = destination_column->mutable_view().begin<Type>();
 
     using map_type = typename std::iterator_traits<MapIterator>::value_type;
 
