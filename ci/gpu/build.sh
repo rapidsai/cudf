@@ -20,8 +20,10 @@ export CUDA_REL=${CUDA_VERSION%.*}
 # Set home to the job's workspace
 export HOME=$WORKSPACE
 
-# Parse git describe
+# Switch to project root; also root of repo checkout
 cd $WORKSPACE
+
+# Parse git describe
 export GIT_DESCRIBE_TAG=`git describe --tags`
 export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
 # Set `LIBCUDF_KERNEL_CACHE_PATH` environment variable to $HOME/.jitify-cache because
