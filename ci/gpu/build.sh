@@ -26,8 +26,9 @@ cd $WORKSPACE
 export CUDA_REL=${CUDA_VERSION%.*}
 
 # Parse git describe
-export GIT_DESCRIBE_TAG=`git describe --tags`
-export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
+#export GIT_DESCRIBE_TAG=`git describe --tags`
+#export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
+export MINOR_VERSION="0.16"
 
 ################################################################################
 # TRAP - Setup trap for removing jitify cache
