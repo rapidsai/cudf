@@ -280,13 +280,10 @@ class parquet_column_view {
       }
       _offsets_array = offsets_array;
 
-      // Calculate row offset into dremel data (repetition/definition values)
-      _dremel_offsets = std::move(gpu::get_dremel_offsets(*d_col, stream));
-
-      // Calculate definition and repetition levels
-      std::tie(_rep_level, _def_level) = gpu::get_levels(col, *d_col, _dremel_offsets, stream);
-      cudaDeviceSynchronize();
-      std::tie(_rep_level, _def_level) = gpu::get_levels(*d_col, _dremel_offsets, stream);
+      // Calculate row offset into dremel data (repetition/definition values) and the respective
+      // definition and repetition levels
+      std::tie(_dremel_offsets, _rep_level, _def_level) = gpu::get_levels(col, stream);
+      CUDA_TRY(cudaStreamSynchronize(stream));
     }
     if (_string_type && _data_count > 0) {
       strings_column_view view{_leaf_col};

@@ -75,29 +75,6 @@ struct lists_column_row_desc {
   }
 };
 
-__device__ size_type count_nested(column_device_view const &col, size_type idx)
-{
-  lists_column_row_desc lcr(col, idx);
-
-  // Dremel encoding needs one set of repetition/definition values for null/empty records
-  if (lcr.start_offset == lcr.end_offset) { return 1; }
-  if (lcr.child_col.type().id() != type_id::LIST) { return lcr.end_offset - lcr.start_offset; }
-
-  size_type result = 0;
-  for (size_type i = lcr.start_offset; i < lcr.end_offset; i++) {
-    result += count_nested(lcr.child_col, i);
-  }
-  return result;
-}
-
-__global__ void calculate_dremel_offsets(column_device_view col, size_type *values_in_row)
-{
-  // launched one thread per row
-  size_type row = blockIdx.x * blockDim.x + threadIdx.x;
-
-  if (row < col.size()) { values_in_row[row] = count_nested(col, row); }
-}
-
 // __device__ void store_nested_rep_level(column_device_view const &col,
 //                                        size_type idx,
 //                                        uint8_t *rep_level,
@@ -1693,23 +1670,6 @@ std::pair<size_type, size_type> get_leaf_offset(column_device_view col, cudaStre
   return std::make_pair(leaf_col_offset, leaf_data_size);
 }
 
-rmm::device_uvector<size_type> get_dremel_offsets(column_device_view col, cudaStream_t stream)
-{
-  CUDF_EXPECTS(col.type().id() == type_id::LIST, "Can only get dremel offset for LIST type column");
-
-  rmm::device_uvector<size_type> dremel_offsets(col.size() + 1, stream);
-  calculate_dremel_offsets<<<((col.size() - 1) >> 8) + 1, 256, 0, stream>>>(col,
-                                                                            dremel_offsets.data());
-
-  thrust::exclusive_scan(rmm::exec_policy(stream)->on(stream),
-                         dremel_offsets.begin(),
-                         dremel_offsets.end(),
-                         dremel_offsets.begin());
-  CUDA_TRY(cudaStreamSynchronize(stream));
-
-  return dremel_offsets;
-}
-
 template <typename T>
 void print(rmm::device_uvector<T> const &d_vec, std::string label = "")
 {
@@ -1720,32 +1680,41 @@ void print(rmm::device_uvector<T> const &d_vec, std::string label = "")
   printf("\n");
 }
 
-std::pair<rmm::device_uvector<uint8_t>, rmm::device_uvector<uint8_t>> get_levels(
-  column_view h_col,
-  column_device_view col,
-  rmm::device_uvector<size_type> const &dremel_offsets,
-  cudaStream_t stream)
+template <typename T>
+void print(rmm::device_vector<T> const &d_vec, std::string label = "")
 {
-  CUDF_EXPECTS(col.type().id() == type_id::LIST,
-               "Can only get rep/def levels for LIST type column");
+  // thrust::host_vector<T> h_vec = d_vec;
+  // printf("%s \t", label.c_str());
+  // for (auto &&i : h_vec) std::cout << i << " ";
+  // printf("\n");
+}
 
-  size_type flattened_size;
-  CUDA_TRY(cudaMemcpy(&flattened_size,
-                      dremel_offsets.data() + col.size(),
-                      sizeof(flattened_size),
-                      cudaMemcpyDeviceToHost));
-
-  rmm::device_uvector<uint8_t> rep_level(flattened_size, stream);
-  rmm::device_uvector<uint8_t> def_level(flattened_size, stream);
-
-  // Count nesting levels
-  size_t num_nesting_levels = 0;
-  auto curr_col             = h_col;
-  while (curr_col.type().id() == type_id::LIST) {
-    auto lcv = lists_column_view(curr_col);
-    ++num_nesting_levels;
-    curr_col = lcv.child();
+struct printer {
+  template <typename T>
+  std::enable_if_t<cudf::is_numeric<T>(), void> operator()(column_view const &col,
+                                                           std::string label = "")
+  {
+    auto d_vec = rmm::device_vector<T>(col.begin<T>(), col.end<T>());
+    print(d_vec, label);
   }
+  template <typename T>
+  std::enable_if_t<!cudf::is_numeric<T>(), void> operator()(column_view const &col,
+                                                            std::string label = "")
+  {
+    CUDF_FAIL("no strings");
+  }
+};
+void print(column_view const &col, std::string label = "")
+{
+  cudf::type_dispatcher(col.type(), printer{}, col, label);
+}
+
+std::
+  tuple<rmm::device_uvector<size_type>, rmm::device_uvector<uint8_t>, rmm::device_uvector<uint8_t>>
+  get_levels(column_view h_col, cudaStream_t stream)
+{
+  CUDF_EXPECTS(h_col.type().id() == type_id::LIST,
+               "Can only get rep/def levels for LIST type column");
 
   auto get_empties = [&](column_view col) {
     auto lcv = lists_column_view(col);
@@ -1768,32 +1737,36 @@ std::pair<rmm::device_uvector<uint8_t>, rmm::device_uvector<uint8_t>> get_levels
       std::move(empties), std::move(empties_idx), empties_end - empties.begin());
   };
 
-  // Now for the rep level
-
-  // Reverse the nesting in order to apply the deepest level's offsets first
-  curr_col = h_col;
+  // Reverse the nesting in order to merge the deepest level with the leaf first and merge bottom up
+  auto curr_col        = h_col;
+  size_t max_vals_size = 0;
   std::vector<column_view> nesting_levels;
   std::vector<uint8_t> def_at_level;
   while (curr_col.type().id() == type_id::LIST) {
     nesting_levels.push_back(curr_col);
     def_at_level.push_back(curr_col.nullable() ? 2 : 1);
     auto lcv = lists_column_view(curr_col);
+    max_vals_size += lcv.offsets().size();
     curr_col = lcv.child();
   }
   // One more entry for leaf col
   def_at_level.push_back(curr_col.nullable() ? 2 : 1);
+  max_vals_size += curr_col.size();
 
   thrust::exclusive_scan(
     thrust::host, def_at_level.begin(), def_at_level.end(), def_at_level.begin());
 
-  rmm::device_uvector<uint8_t> temp_vals(flattened_size, stream);
-  rmm::device_uvector<uint8_t> vals(flattened_size, stream);
+  rmm::device_uvector<uint8_t> rep_level(max_vals_size, stream);
+  rmm::device_uvector<uint8_t> def_level(max_vals_size, stream);
+
+  rmm::device_uvector<uint8_t> temp_rep_vals(max_vals_size, stream);
+  rmm::device_uvector<uint8_t> temp_def_vals(max_vals_size, stream);
   rmm::device_uvector<size_type> new_offsets(0, stream);
   size_type curr_rep_values_size = 0;
   {
     // At this point, curr_col contains the leaf column. Max nesting level is nesting_levels.size().
     thrust::fill_n(rmm::exec_policy(stream)->on(stream),
-                   temp_vals.begin(),
+                   temp_rep_vals.begin(),
                    curr_col.size(),
                    nesting_levels.size());
 
@@ -1821,7 +1794,7 @@ std::pair<rmm::device_uvector<uint8_t>, rmm::device_uvector<uint8_t>> get_levels
                                       })));
 
     auto input_child_zip_it = thrust::make_zip_iterator(thrust::make_tuple(
-      temp_vals.begin(),
+      temp_rep_vals.begin(),
       thrust::make_transform_iterator(
         thrust::make_counting_iterator(0),
         [mask = lcv.child().null_mask(), curr_def_level = def_at_level[level + 1]] __device__(
@@ -1902,10 +1875,8 @@ std::pair<rmm::device_uvector<uint8_t>, rmm::device_uvector<uint8_t>> get_levels
                       lcv.offsets().end<size_type>(),
                       transformed_offsets.begin(),
                       offset_transformer);
-    print(transformed_offsets, "transf off");
-
-    std::swap(temp_vals, rep_level);
-    std::swap(vals, def_level);
+    std::swap(temp_rep_vals, rep_level);
+    std::swap(temp_def_vals, def_level);
 
     // Merge empty at parent level with the rep, def level vals at current level
     auto transformed_empties = thrust::make_transform_iterator(empties.begin(), offset_transformer);
@@ -1922,7 +1893,7 @@ std::pair<rmm::device_uvector<uint8_t>, rmm::device_uvector<uint8_t>> get_levels
                                       })));
 
     auto input_child_zip_it =
-      thrust::make_zip_iterator(thrust::make_tuple(temp_vals.begin(), vals.begin()));
+      thrust::make_zip_iterator(thrust::make_tuple(temp_rep_vals.begin(), temp_def_vals.begin()));
 
     auto output_zip_it =
       thrust::make_zip_iterator(thrust::make_tuple(rep_level.begin(), def_level.begin()));
@@ -1965,10 +1936,7 @@ std::pair<rmm::device_uvector<uint8_t>, rmm::device_uvector<uint8_t>> get_levels
                         offset_transformer] __device__(auto i) {
                          new_off[i] = offset_transformer(off[i]) + scan_out[i];
                        });
-    // TODO (dm): I would've liked to use assignment to set new_offsets to temp_new_offsets but
-    // device_uvector<T>.operator=() is deleted
-    std::swap(new_offsets, temp_new_offsets);
-    print(new_offsets, "new_offsets");
+    new_offsets = std::move(temp_new_offsets);
 
     // Set rep level values at level starts to appropriate rep level
     auto scatter_it = thrust::make_constant_iterator(level);
@@ -1980,12 +1948,13 @@ std::pair<rmm::device_uvector<uint8_t>, rmm::device_uvector<uint8_t>> get_levels
     print(rep_level, "rep final");
   }
 
-  // TODO (dm): new_offsets is the same as dremel_offsets. Replace dremel offsets calculation with
-  // it. But we need another way to calculate flattened_size then.
+  size_t level_vals_size = new_offsets.back_element(stream);
+  rep_level.resize(level_vals_size, stream);
+  def_level.resize(level_vals_size, stream);
 
   CUDA_TRY(cudaStreamSynchronize(stream));
 
-  return std::make_pair(std::move(rep_level), std::move(def_level));
+  return std::make_tuple(std::move(new_offsets), std::move(rep_level), std::move(def_level));
 }
 
 /**
