@@ -800,9 +800,6 @@ TYPED_TEST(FixedPointTestBothReps, NoScaleOrWrongTypeID)
   auto const id           = is_decimal32 ? cudf::type_id::DECIMAL32 : cudf::type_id::DECIMAL64;
   auto const null_mask    = cudf::create_null_mask(0, cudf::mask_state::ALL_NULL);
 
-  // data_type::_scale not set
-  EXPECT_THROW(cudf::make_fixed_point_column(cudf::data_type{id}, 0, null_mask), cudf::logic_error);
-  // data_type::_scale should be set to either DECIMAL32 or DECIMAL64
   EXPECT_THROW(cudf::make_fixed_point_column(cudf::data_type{cudf::type_id::INT32}, 0, null_mask),
                cudf::logic_error);
 }
