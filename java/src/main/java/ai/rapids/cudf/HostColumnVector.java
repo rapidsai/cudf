@@ -268,7 +268,6 @@ public final class HostColumnVector extends HostColumnVectorCore {
     assert rowIndex < rows;
     assert type == DType.LIST;
     List retList = new ArrayList();
-    offHeap.offsets.printBuffer();
     int start = offHeap.offsets.getInt(rowIndex * DType.INT32.getSizeInBytes());
     int end = offHeap.offsets.getInt((rowIndex + 1) * DType.INT32.getSizeInBytes());
     // check if null or empty
@@ -1035,7 +1034,6 @@ public final class HostColumnVector extends HostColumnVectorCore {
     public final ColumnBuilder appendNull() {
       resizeDataBuffer(currentIndex * type.getSizeInBytes());
       setNullAt(currentIndex);
-      //initAndResizeOffsetBuffer(currentIndex);
       currentIndex++;
       if (type == DType.STRING || type.isNestedType()) {
         initAndResizeOffsetBuffer(currentIndex);
