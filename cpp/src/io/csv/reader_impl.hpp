@@ -116,11 +116,10 @@ class reader::impl {
    * @brief Find the start position of the first data row
    *
    * @param h_data Uncompressed input data in host memory
-   * @param h_size Number of bytes of uncompressed input data
    *
    * @return Byte position of the first row
    */
-  size_t find_first_row_start(const char *h_data, size_t h_size);
+  size_t find_first_row_start(host_span<char const> const &data);
 
   /**
    * @brief Returns a detected or parsed list of column dtypes.

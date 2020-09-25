@@ -30,11 +30,14 @@
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <rmm/device_scalar.hpp>
 
 #include <thrust/optional.h>
+
+using cudf::detail::host_span;
 
 namespace cudf {
 namespace io {
@@ -274,8 +277,12 @@ void reader::impl::decompress_input(cudaStream_t stream)
     uncomp_data_ = reinterpret_cast<const char *>(buffer_->data());
     uncomp_size_ = buffer_->size();
   } else {
-    uncomp_data_owner_ = getUncompressedHostData(
-      reinterpret_cast<const char *>(buffer_->data()), buffer_->size(), compression_type);
+    uncomp_data_owner_ = get_uncompressed_data(  //
+      host_span<char const>(                     //
+        reinterpret_cast<const char *>(buffer_->data()),
+        buffer_->size()),
+      compression_type);
+
     uncomp_data_ = uncomp_data_owner_.data();
     uncomp_size_ = uncomp_data_owner_.size();
   }

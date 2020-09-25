@@ -819,7 +819,7 @@ static inline __device__ rowctx32_t rowctx_inverse_merge_transform(uint64_t ctxt
  *
  * @param row_ctx Row parsing context (output of phase 1 or input to phase 2)
  * @param offsets_out Row offsets (nullptr for phase1, non-null indicates phase 2)
- * @param start Base pointer of character data (all row offsets are relative to this)
+ * @param data Base pointer of character data (all row offsets are relative to this)
  * @param chunk_size Total number of characters to parse
  * @param parse_pos Current parsing position in the file
  * @param start_offset Position of the start of the character buffer in the file
@@ -827,7 +827,6 @@ static inline __device__ rowctx32_t rowctx_inverse_merge_transform(uint64_t ctxt
  * @param byte_range_start Ignore rows starting before this position in the file
  * @param byte_range_end In phase 2, store the number of rows beyond range in row_ctx
  * @param skip_rows Number of rows to skip (ignored in phase 1)
- * @param num_row_offsets Number of entries in offsets_out array
  * @param terminator Line terminator character
  * @param delimiter Column delimiter character
  * @param quotechar Quote character
