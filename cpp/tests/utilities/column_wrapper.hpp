@@ -39,6 +39,7 @@
 #include <iterator>
 #include <memory>
 #include <numeric>
+#include <type_traits>
 
 namespace cudf {
 namespace test {
@@ -169,7 +170,10 @@ struct fixed_width_type_converter {
  * @return rmm::device_buffer Buffer containing all elements in the range
  *`[begin,end)`
  **/
-template <typename ElementTo, typename ElementFrom, typename InputIterator>
+template <typename ElementTo,
+          typename ElementFrom,
+          typename InputIterator,
+          typename std::enable_if_t<not cudf::is_fixed_point<ElementTo>()>* = nullptr>
 rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 {
   static_assert(cudf::is_fixed_width<ElementTo>(), "Unexpected non-fixed width type.");
@@ -178,6 +182,24 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
   elements.reserve(size);
   fixed_width_type_converter<ElementFrom, ElementTo>{}(begin, end, elements.begin());
   return rmm::device_buffer{elements.data(), size * sizeof(ElementTo)};
+}
+
+// TODO add docs
+template <typename ElementTo,
+          typename ElementFrom,
+          typename InputIterator,
+          typename std::enable_if_t<cudf::is_fixed_point<ElementTo>()>* = nullptr>
+rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
+{
+  // TODO clean this function up
+
+  using RepType = typename ElementTo::representation_type;
+
+  cudf::size_type size = std::distance(begin, end);
+  thrust::host_vector<RepType> elements;
+  elements.reserve(size);
+  fixed_width_type_converter<ElementFrom, RepType>{}(begin, end, elements.begin());
+  return rmm::device_buffer{elements.data(), size * sizeof(RepType)};
 }
 
 /**
