@@ -32,8 +32,8 @@ source activate rapids
 
 gpuci_logger "Check compiler versions"
 python --version
-gcc --version
-g++ --version
+$CC --version
+$CXX --version
 
 gpuci_logger "Check conda environment"
 conda list
