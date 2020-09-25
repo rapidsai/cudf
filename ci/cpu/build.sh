@@ -64,9 +64,10 @@ source ci/cpu/cudf_kafka/build_cudf_kafka.sh
 
 gpuci_logger "Build conda pkg for custreamz"
 source ci/cpu/custreamz/build_custreamz.sh
+
 ################################################################################
 # UPLOAD - Conda packages
 ################################################################################
 
 gpuci_logger "Upload conda pkgs"
-source ci/cpu/upload_anaconda.sh
+source ci/cpu/upload.sh
