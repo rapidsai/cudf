@@ -441,7 +441,9 @@ class Frame(libcudf.table.Table):
         # Reassign the categories for any categorical index cols
         if not isinstance(out._index, cudf.RangeIndex):
             reassign_categories(
-                categories, out._index._data, indices[:first_data_column_position]
+                categories,
+                out._index._data,
+                indices[:first_data_column_position],
             )
             if not isinstance(
                 out._index, cudf.MultiIndex
