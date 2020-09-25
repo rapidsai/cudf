@@ -214,7 +214,6 @@ struct column_scalar_scatterer_impl<dictionary32, MapIterator> {
       dict_view, *source, rmm::mr::get_current_device_resource(), stream);
     auto scalar_iter = indexalator_factory::make_constant_iterator(*scalar_index);
     auto new_indices = std::make_unique<column>(dict_view.get_indices_annotated(), stream, mr);
-    scalar_iter      = indexalator_factory::make_constant_iterator(*scalar_index);
     auto target_iter = indexalator_factory::make_output_iterator(new_indices->mutable_view());
     thrust::scatter(rmm::exec_policy(stream)->on(stream),
                     scalar_iter,
@@ -228,7 +227,7 @@ struct column_scalar_scatterer_impl<dictionary32, MapIterator> {
     auto contents           = new_indices->release();
     auto indices_column     = std::make_unique<column>(indices_type,
                                                    static_cast<size_type>(output_size),
-                                                   std::move(*(contents.data.release())),
+                                                   *(contents.data.release()),
                                                    rmm::device_buffer{0, stream, mr},
                                                    0);
     // use the keys from the matched column
