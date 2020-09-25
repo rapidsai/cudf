@@ -35,6 +35,7 @@ namespace cudf {
 /**
  * @addtogroup aggregation_factories
  * @{
+ * @file
  */
 
 /**

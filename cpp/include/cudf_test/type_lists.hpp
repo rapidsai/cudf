@@ -16,16 +16,16 @@
 
 #pragma once
 
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
-#include <tests/utilities/type_list_utilities.hpp>
+#include <cudf_test/type_list_utilities.hpp>
 
 #include <array>
 #include <tuple>
-#include "cudf/fixed_point/fixed_point.hpp"
 
 /**
  * @filename type_lists.hpp
