@@ -65,7 +65,7 @@ TIMEDELTA_TYPES = {
     "timedelta64[ns]",
 }
 OTHER_TYPES = {"bool", "category", "str"}
-STRING_TYPES = {"str"}
+STRING_TYPES = {"object"}
 BOOL_TYPES = {"bool"}
 ALL_TYPES = NUMERIC_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | OTHER_TYPES
 

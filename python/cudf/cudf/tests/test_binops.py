@@ -880,25 +880,25 @@ def test_scalar_binops_invalid_combinations_of_dtypes(dtype_l, dtype_r, op):
     dtype_l = np.dtype(dtype_l)
     dtype_r = np.dtype(dtype_r)
 
-    if dtype_l.type == np.datetime64:
+    if dtype_l.type in {np.datetime64, np.timedelta64}:
         lres, _ = np.datetime_data(dtype_l)
-        lval = np.datetime64(0, lres)
+        lval = dtype_l.type(0, lres)
     else:
         lval = dtype_l.type(0)
-    if dtype_r.type == np.datetime64:
+    if dtype_r.type in {np.datetime64, np.timedelta64}:
         rres, _ = np.datetime_data(dtype_r)
-        rval = np.datetime64(0, rres)
+        rval = dtype_r.type(0, rres)
     else:
         rval = dtype_r.type(0)
 
+    lval_gpu = cudf.Scalar(lval, dtype=dtype_l)
+    rval_gpu = cudf.Scalar(rval, dtype=dtype_r)
+
     try:
         op(lval, rval)
-    except Exception as e:
-        assert('ufunc') in str(e)
-        lval_gpu = cudf.Scalar(lval, dtype=dtype_l)
-        rval_gpu = cudf.Scalar(rval, dtype=dtype_r)
-
+    except TypeError as e:
         with pytest.raises(TypeError):
             op(lval_gpu, rval_gpu)
-            return 
-    pytest.skip()
+        return 
+
+    op(lval_gpu, rval_gpu)
