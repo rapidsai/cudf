@@ -350,7 +350,9 @@
                                     <arg value="-DPER_THREAD_DEFAULT_STREAM=${PER_THREAD_DEFAULT_STREAM}" />
                                     <arg value="-DLOGGING_LEVEL=${LOGGING_LEVEL}" />
                                     <arg value="-DCMAKE_CXX_FLAGS=${cxx.flags}"/>
-                                    <arg value="-DCMAKE_EXPORT_COMPILE_COMMANDS=${CMAKE_EXPORT_COMPILE_COMMANDS}"/>
+				    <arg value="-DCMAKE_EXPORT_COMPILE_COMMANDS=${CMAKE_EXPORT_COMPILE_COMMANDS}"/>
+				    <arg value="-DGPU_ARCHS=ALL"/>
+				    <arg value="-DCUDA_VERSION_MAJOR=10"/>
                                 </exec>
                                 <exec dir="${native.build.path}"
                                       failonerror="true"

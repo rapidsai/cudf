@@ -12,6 +12,7 @@
 - PR #6171 Java and Jni support for Struct columns
 - PR #6125 Add support for `Series.mode` and `DataFrame.mode`
 - PR #6262 Add nth_element series aggregation with null handling
+- PR #6315 Native code for string-map lookups, for cudf-java
 
 ## Improvements
 
