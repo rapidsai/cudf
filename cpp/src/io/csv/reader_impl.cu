@@ -334,36 +334,16 @@ table_with_metadata reader::impl::read(cudaStream_t stream)
   // Return empty table rather than exception if nothing to load
   if (num_active_cols_ == 0) { return {std::make_unique<table>(), {}}; }
 
-  std::vector<data_type> column_types = gather_column_types(stream);
+  auto metadata     = table_metadata{};
+  auto out_columns  = std::vector<std::unique_ptr<cudf::column>>();
+  auto column_types = gather_column_types(stream);
 
-  auto metadata = table_metadata{};
-
-  // Alloc output; columns' data memory is still expected for empty dataframe
-  std::vector<column_buffer> out_buffers;
-  out_buffers.reserve(column_types.size());
-  for (int col = 0, active_col = 0; col < num_actual_cols_; ++col) {
-    if (h_column_flags_[col] & column_parse::enabled) {
-      // Replace EMPTY dtype with STRING
-      if (column_types[active_col].id() == type_id::EMPTY) {
-        column_types[active_col] = data_type{type_id::STRING};
-      }
-      const bool is_final_allocation = column_types[active_col].id() != type_id::STRING;
-      out_buffers.emplace_back(column_types[active_col],
-                               num_records_,
-                               true,
-                               stream,
-                               is_final_allocation ? mr_ : rmm::mr::get_current_device_resource());
-      metadata.column_names.emplace_back(col_names_[col]);
-      active_col++;
-    }
-  }
-
-  auto out_columns = std::vector<std::unique_ptr<cudf::column>>();
   out_columns.reserve(column_types.size());
-  if (num_records_ != 0) {
-    decode_data(column_types, out_buffers, stream);
 
+  if (num_records_ != 0) {
+    auto out_buffers = decode_data(column_types, stream);
     for (size_t i = 0; i < column_types.size(); ++i) {
+      metadata.column_names.emplace_back(out_buffers[i].name);
       if (column_types[i].id() == type_id::STRING && opts.quotechar != '\0' &&
           opts.doublequote == true) {
         // PANDAS' default behavior of enabling doublequote for two consecutive
@@ -659,13 +639,38 @@ std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream)
     }
   }
 
+  for (size_t i = 0; i < dtypes.size(); i++) {
+    // Replace EMPTY dtype with STRING
+    if (dtypes[i].id() == type_id::EMPTY) { dtypes[i] = data_type{type_id::STRING}; }
+  }
+
   return dtypes;
 }
 
-void reader::impl::decode_data(const std::vector<data_type> &column_types,
-                               std::vector<column_buffer> &out_buffers,
-                               cudaStream_t stream)
+std::vector<column_buffer> reader::impl::decode_data(std::vector<data_type> const &column_types,
+                                                     cudaStream_t stream)
 {
+  // Alloc output; columns' data memory is still expected for empty dataframe
+  std::vector<column_buffer> out_buffers;
+
+  out_buffers.reserve(column_types.size());
+
+  for (int col = 0, active_col = 0; col < num_actual_cols_; ++col) {
+    if (h_column_flags_[col] & column_parse::enabled) {
+      const bool is_final_allocation = column_types[active_col].id() != type_id::STRING;
+      auto out_buffer =
+        column_buffer(column_types[active_col],
+                      num_records_,
+                      true,
+                      stream,
+                      is_final_allocation ? mr_ : rmm::mr::get_current_device_resource());
+
+      out_buffer.name = col_names_[col];
+      out_buffers.emplace_back(out_buffer);
+      active_col++;
+    }
+  }
+
   thrust::host_vector<void *> h_data(num_active_cols_);
   thrust::host_vector<bitmask_type *> h_valid(num_active_cols_);
 
@@ -688,9 +693,12 @@ void reader::impl::decode_data(const std::vector<data_type> &column_types,
     d_data.data().get(),
     d_valid.data().get(),
     stream);
+
   CUDA_TRY(cudaStreamSynchronize(stream));
 
   for (int i = 0; i < num_active_cols_; ++i) { out_buffers[i].null_count() = UNKNOWN_NULL_COUNT; }
+
+  return out_buffers;
 }
 
 reader::impl::impl(std::unique_ptr<datasource> source,
