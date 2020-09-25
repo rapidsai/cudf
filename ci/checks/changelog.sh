@@ -13,7 +13,7 @@ git checkout --force --quiet current-pr-branch
 # Ignore errors during searching
 set +e
 
-# Get list of modified files between matster and PR branch
+# Get list of modified files between main and PR branch
 CHANGELOG=`git diff --name-only main...current-pr-branch | grep CHANGELOG.md`
 # Check if CHANGELOG has PR ID
 PRNUM=`cat CHANGELOG.md | grep "$PR_ID"`
