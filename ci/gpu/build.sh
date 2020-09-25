@@ -13,15 +13,17 @@ function hasArg {
 }
 
 # Set path and build parallel level
-export PATH=/conda/bin:/usr/local/cuda/bin:$PATH
-export PARALLEL_LEVEL=8
-export CUDA_REL=${CUDA_VERSION%.*}
+export PATH=/opt/conda/bin:/usr/local/cuda/bin:$PATH
+export PARALLEL_LEVEL=${PARALLEL_LEVEL:-8}
 
 # Set home to the job's workspace
 export HOME=$WORKSPACE
 
 # Switch to project root; also root of repo checkout
 cd $WORKSPACE
+
+# Determine CUDA release version
+export CUDA_REL=${CUDA_VERSION%.*}
 
 # Parse git describe
 export GIT_DESCRIBE_TAG=`git describe --tags`
