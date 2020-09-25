@@ -4,6 +4,9 @@
 
 set -e
 
+# Set default label options if they are not defined elsewhere
+export LABEL_OPTION=${LABEL_OPTION:-"--label main"}
+
 # Skip uploads unless BUILD_MODE == "branch"
 if [ ${BUILD_MODE} != "branch" ]; then
   echo "Skipping upload"
@@ -34,9 +37,6 @@ export CUSTREAMZ_FILE=`conda build conda/recipes/custreamz --python=$PYTHON --ou
 
 gpuci_logger "Staring conda uploads"
 if [ "$UPLOAD_LIBCUDF" == "1" ]; then
-  LABEL_OPTION="--label main"
-  echo "LABEL_OPTION=${LABEL_OPTION}"
-
   test -e ${LIBCUDF_FILE}
   echo "Upload libcudf"
   echo ${LIBCUDF_FILE}
@@ -44,9 +44,6 @@ if [ "$UPLOAD_LIBCUDF" == "1" ]; then
 fi
 
 if [ "$UPLOAD_CUDF" == "1" ]; then
-  LABEL_OPTION="--label main"
-  echo "LABEL_OPTION=${LABEL_OPTION}"
-
   test -e ${CUDF_FILE}
   echo "Upload cudf"
   echo ${CUDF_FILE}
@@ -64,9 +61,6 @@ if [ "$UPLOAD_CUDF" == "1" ]; then
 fi
 
 if [ "$UPLOAD_LIBCUDF_KAFKA" == "1" ]; then
-  LABEL_OPTION="--label main"
-  echo "LABEL_OPTION=${LABEL_OPTION}"
-
   test -e ${LIBCUDF_KAFKA_FILE}
   echo "Upload libcudf_kafka"
   echo ${LIBCUDF_KAFKA_FILE}
@@ -74,9 +68,6 @@ if [ "$UPLOAD_LIBCUDF_KAFKA" == "1" ]; then
 fi
 
 if [ "$UPLOAD_CUDF_KAFKA" == "1" ]; then
-  LABEL_OPTION="--label main"
-  echo "LABEL_OPTION=${LABEL_OPTION}"
-
   test -e ${CUDF_KAFKA_FILE}
   echo "Upload cudf_kafka"
   echo ${CUDF_KAFKA_FILE}
