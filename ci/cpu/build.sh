@@ -34,7 +34,11 @@ gpuci_logger "Check compiler versions"
 python --version
 gcc --version
 g++ --version
+
+gpuci_logger "Check conda environment"
 conda list
+conda config --show-sources
+conda list --show-channel-urls
 
 # FIX Added to deal with Anancoda SSL verification issues during conda builds
 conda config --set ssl_verify False
