@@ -1,8 +1,8 @@
 #!/bin/bash
-# Copyright (c) 2018, NVIDIA CORPORATION.
-######################################
-# cuDF CPU conda build script for CI #
-######################################
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+##############################################
+# cuDF CPU conda build script for CI         #
+##############################################
 set -ex
 
 # Set path and build parallel level
