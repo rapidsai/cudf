@@ -528,7 +528,8 @@ void reader::impl::gather_row_offsets(const char *h_data,
 
   // Eliminate blank rows
   if (row_offsets_.size() != 0) {
-    cudf::io::csv::gpu::remove_blank_rows(row_offsets_, data_, opts, stream);
+    cudf::io::csv::gpu::remove_blank_rows(
+      opts, device_span<char const>(data_), row_offsets_, stream);
   }
   // Remove header rows and extract header
   const size_t header_row_index = std::max<size_t>(header_rows, 1) - 1;

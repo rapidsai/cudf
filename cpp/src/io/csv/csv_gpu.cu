@@ -972,29 +972,28 @@ size_t __host__ count_blank_rows(const cudf::io::ParseOptions &opts,
     rmm::exec_policy(stream)->on(stream),
     row_offsets.begin(),
     row_offsets.end(),
-    [data, newline, comment, carriage] __device__(const uint64_t pos) {
+    [data = data, newline, comment, carriage] __device__(const uint64_t pos) {
       return ((pos != data.size()) &&
               (data[pos] == newline || data[pos] == comment || data[pos] == carriage));
     });
 }
 
-void __host__ remove_blank_rows(rmm::device_vector<uint64_t> &row_offsets,
-                                rmm::device_vector<char> const &data,
-                                const cudf::io::ParseOptions &opts,
+void __host__ remove_blank_rows(const cudf::io::ParseOptions &options,
+                                device_span<char const> const &data,
+                                rmm::device_vector<uint64_t> &row_offsets,
                                 cudaStream_t stream)
 {
-  const char *d_data  = data.data().get();
   size_t d_size       = data.size();
-  const auto newline  = opts.skipblanklines ? opts.terminator : opts.comment;
-  const auto comment  = opts.comment != '\0' ? opts.comment : newline;
-  const auto carriage = (opts.skipblanklines && opts.terminator == '\n') ? '\r' : comment;
+  const auto newline  = options.skipblanklines ? options.terminator : options.comment;
+  const auto comment  = options.comment != '\0' ? options.comment : newline;
+  const auto carriage = (options.skipblanklines && options.terminator == '\n') ? '\r' : comment;
   auto new_end        = thrust::remove_if(
     rmm::exec_policy(stream)->on(stream),
     row_offsets.begin(),
     row_offsets.end(),
-    [d_data, d_size, newline, comment, carriage] __device__(const uint64_t pos) {
+    [data = data, d_size, newline, comment, carriage] __device__(const uint64_t pos) {
       return ((pos != d_size) &&
-              (d_data[pos] == newline || d_data[pos] == comment || d_data[pos] == carriage));
+              (data[pos] == newline || data[pos] == comment || data[pos] == carriage));
     });
   row_offsets.resize(new_end - row_offsets.begin());
 }
