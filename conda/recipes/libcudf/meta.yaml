@@ -82,6 +82,7 @@ test:
     - test -f $PREFIX/include/cudf/detail/utilities/int_fastdiv.h
     - test -f $PREFIX/include/cudf/dictionary/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/dictionary/detail/encode.hpp
+    - test -f $PREFIX/include/cudf/dictionary/detail/replace.hpp
     - test -f $PREFIX/include/cudf/dictionary/detail/search.hpp
     - test -f $PREFIX/include/cudf/dictionary/detail/update_keys.hpp
     - test -f $PREFIX/include/cudf/dictionary/dictionary_column_view.hpp
