@@ -3,7 +3,7 @@
 #########################################
 # cuDF GPU build and test script for CI #
 #########################################
-set -e
+set -ex
 NUMARGS=$#
 ARGS=$*
 
@@ -75,11 +75,8 @@ conda install "rmm=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
 # conda install "your-pkg=1.0.0"
 
 # Install the master version of dask, distributed, and streamz
-logger "pip install git+https://github.com/dask/distributed.git --upgrade --no-deps"
 pip install "git+https://github.com/dask/distributed.git" --upgrade --no-deps
-logger "pip install git+https://github.com/dask/dask.git --upgrade --no-deps"
 pip install "git+https://github.com/dask/dask.git" --upgrade --no-deps
-logger "pip install git+https://github.com/python-streamz/streamz.git --upgrade --no-deps"
 pip install "git+https://github.com/python-streamz/streamz.git" --upgrade --no-deps
 
 logger "Check versions..."
@@ -123,7 +120,6 @@ else
     # will be enabled for later versions by default
     np_ver=$(python -c "import numpy; print('.'.join(numpy.__version__.split('.')[:-1]))")
     if [ "$np_ver" == "1.16" ];then
-        logger "export NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=1"
         export NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=1
     fi
 
