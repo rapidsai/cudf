@@ -3,12 +3,7 @@
 ######################################
 # cuDF CPU conda build script for CI #
 ######################################
-set -e
-
-# Logger function for build status output
-function logger() {
-  echo -e "\n>>>> $@\n"
-}
+set -ex
 
 # Set path and build parallel level
 export PATH=/conda/bin:/usr/local/cuda/bin:$PATH
