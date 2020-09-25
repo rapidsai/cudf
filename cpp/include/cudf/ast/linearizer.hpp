@@ -214,6 +214,11 @@ class expression : public detail::node {
   }
 
   /**
+   * @brief `expression` doesn't accept r-value references for expression nodes
+   */
+  expression(ast_operator op, node&& input) = delete;
+
+  /**
    * @brief Construct a new binary expression object.
    *
    * @param op Operator
@@ -226,6 +231,21 @@ class expression : public detail::node {
       CUDF_FAIL("The provided operator is not a binary operator.");
     }
   }
+
+  /**
+   * @brief `expression` doesn't accept r-value references for expression nodes
+   */
+  expression(ast_operator op, node&& left, node&& right) = delete;
+
+  /**
+   * @brief `expression` doesn't accept r-value references for expression nodes
+   */
+  expression(ast_operator op, node&& left, node const& right) = delete;
+
+  /**
+   * @brief `expression` doesn't accept r-value references for expression nodes
+   */
+  expression(ast_operator op, node const& left, node&& right) = delete;
 
   /**
    * @brief Get the operator.
