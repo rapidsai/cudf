@@ -4,17 +4,23 @@
 
 set -e
 
+# Skip uploads unless BUILD_MODE == "branch"
 if [ ${BUILD_MODE} != "branch" ]; then
   echo "Skipping upload"
   return 0
 fi
 
+# Skip uploads if there is no upload key
 if [ -z "$MY_UPLOAD_KEY" ]; then
   echo "No upload key"
   return 0
 fi
 
-# Get conda file output locations
+################################################################################
+# SETUP - Get conda file output locations
+################################################################################
+
+gpuci_logger "Get conda file output locations"
 export LIBCUDF_FILE=`conda build conda/recipes/libcudf --output`
 export CUDF_FILE=`conda build conda/recipes/cudf --python=$PYTHON --output`
 export DASK_CUDF_FILE=`conda build conda/recipes/dask-cudf --python=$PYTHON --output`
@@ -22,7 +28,11 @@ export LIBCUDF_KAFKA_FILE=`conda build conda/recipes/libcudf_kafka --output`
 export CUDF_KAFKA_FILE=`conda build conda/recipes/cudf_kafka --python=$PYTHON --output`
 export CUSTREAMZ_FILE=`conda build conda/recipes/custreamz --python=$PYTHON --output`
 
+################################################################################
+# UPLOAD - Conda packages
+################################################################################
 
+gpuci_logger "Staring conda uploads"
 if [ "$UPLOAD_LIBCUDF" == "1" ]; then
   LABEL_OPTION="--label main"
   echo "LABEL_OPTION=${LABEL_OPTION}"
