@@ -196,14 +196,15 @@ __global__ void __launch_bounds__(csvparse_block_dim)
 
   // ThreadIds range per block, so also need the blockId
   // This is entry into the fields; threadId is an element within `num_records`
-  long rec_id = threadIdx.x + (blockDim.x * blockIdx.x);
+  long rec_id      = threadIdx.x + (blockDim.x * blockIdx.x);
+  long rec_id_next = rec_id + 1;
 
   // we can have more threads than data, make sure we are not past the end of
   // the data
-  if (rec_id >= row_offsets.size()) { return; }
+  if (rec_id_next >= row_offsets.size()) { return; }
 
   long start = row_offsets[rec_id];
-  long stop  = row_offsets[rec_id + 1];
+  long stop  = row_offsets[rec_id_next];
 
   long pos       = start;
   int col        = 0;
@@ -558,17 +559,17 @@ __global__ void __launch_bounds__(csvparse_block_dim)
                       cudf::bitmask_type **valids)
 {
   auto raw_csv = data.data();
-  // thread IDs range per block, so also need the block id
-  long rec_id =
-    threadIdx.x + (blockDim.x * blockIdx.x);  // this is entry into the field array - tid is
-                                              // an elements within the num_entries array
+  // thread IDs range per block, so also need the block id.
+  // this is entry into the field array - tid is an elements within the num_entries array
+  long rec_id      = threadIdx.x + (blockDim.x * blockIdx.x);
+  long rec_id_next = rec_id + 1;
 
   // we can have more threads than data, make sure we are not past the end of
   // the data
-  if (rec_id >= row_offsets.size()) return;
+  if (rec_id_next >= row_offsets.size()) return;
 
   long start = row_offsets[rec_id];
-  long stop  = row_offsets[rec_id + 1];
+  long stop  = row_offsets[rec_id_next];
 
   long pos       = start;
   int col        = 0;
@@ -1027,8 +1028,9 @@ void __host__ decode_row_column_data(cudf::io::ParseOptions const &options,
                                      cudaStream_t stream)
 {
   // Calculate actual block count to use based on records count
-  const int block_size = csvparse_block_dim;
-  const int grid_size  = (row_offsets.size() + block_size - 1) / block_size;
+  auto const block_size = csvparse_block_dim;
+  auto const num_rows   = row_offsets.size() - 1;
+  auto const grid_size  = (num_rows + block_size - 1) / block_size;
 
   convert_csv_to_cudf<<<grid_size, block_size, 0, stream>>>(
     options, data, flags, row_offsets, dtypes, columns, valids);
