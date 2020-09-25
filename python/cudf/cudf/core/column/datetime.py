@@ -120,7 +120,8 @@ class DatetimeColumn(column.ColumnBase):
             other = other.to_datetime64()
         elif isinstance(other, pd.Timedelta):
             other = other.to_timedelta64()
-
+        elif isinstance(other, cudf.Scalar):
+            return other
         if isinstance(other, np.datetime64):
             if np.isnat(other):
                 return as_scalar(val=None, dtype=self.dtype)
