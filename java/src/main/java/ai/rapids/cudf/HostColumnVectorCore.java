@@ -107,15 +107,16 @@ public class HostColumnVectorCore implements AutoCloseable {
   /**
    * Return the element at a given row for a give data type
    * @param rowIndex the row number
+   * @param structType DataType to help figure out the schema if type == STRUCT else null
    * @return an object that would need to be casted to appropriate type based on this vector's data type
    */
-  Object getElement(int rowIndex) {
+  Object getElement(int rowIndex, HostColumnVector.ColumnBuilder.DataType structType) {
     if (type == DType.LIST) {
       List retList = new ArrayList();
       int start = offHeap.offsets.getInt(rowIndex * DType.INT32.getSizeInBytes());
       int end = offHeap.offsets.getInt((rowIndex + 1) * DType.INT32.getSizeInBytes());
       for (int j = start; j < end; j++) {
-        retList.add(children.get(0).getElement(j));
+        retList.add(children.get(0).getElement(j, null));
       }
       return retList;
     } else if (type == DType.STRING) {
@@ -132,10 +133,7 @@ public class HostColumnVectorCore implements AutoCloseable {
         return new String();
       }
     } else if (type == DType.STRUCT) {
-      HostColumnVector.ColumnBuilder.StructType structType = new HostColumnVector.ColumnBuilder.StructType(true, 2);
-      structType.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 2, DType.STRING));
-      structType.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 2, DType.STRING));
-      return getStruct(rowIndex,structType);
+      return getStruct(rowIndex, structType);
     } else {
       if (isNull(rowIndex)) {
         return null;
@@ -144,6 +142,10 @@ public class HostColumnVectorCore implements AutoCloseable {
       return readValue(start);
     }
   }
+
+  /**
+   * WARNING: Strictly for test only. This call is not efficient for production.
+   */
 
   HostColumnVector.ColumnBuilder.StructData getStruct(int rowIndex, HostColumnVector.ColumnBuilder.DataType mainType) {
     assert rowIndex < rows;
@@ -155,7 +157,7 @@ public class HostColumnVectorCore implements AutoCloseable {
     }
     int numChildren = mainType.getNumChildren();
     for (int k = 0; k < numChildren; k++) {
-      retList.add(children.get(k).getElement(rowIndex));
+      retList.add(children.get(k).getElement(rowIndex, mainType));
     }
     return new HostColumnVector.ColumnBuilder.StructData(retList);
   }
@@ -166,10 +168,26 @@ public class HostColumnVectorCore implements AutoCloseable {
    */
   public boolean isNull(long rowIndex) {
     assert (rowIndex >= 0 && rowIndex < rows) : "index is out of range 0 <= " + rowIndex + " < " + rows;
-    if (offHeap.valid != null) {
+    if (hasValidityVector()) {
       return BitVectorHelper.isNull(offHeap.valid, rowIndex);
     }
     return false;
+  }
+
+  /**
+   * Returns if the vector has a validity vector allocated or not.
+   */
+  public boolean hasValidityVector() {
+    return (offHeap.valid != null);
+  }
+
+  /**
+   * Returns if the vector has nulls.  Note that this might end up
+   * being a very expensive operation because if the null count is not
+   * known it will be calculated.
+   */
+  public boolean hasNulls() {
+    return getNullCount() > 0;
   }
 
   /**
@@ -178,7 +196,7 @@ public class HostColumnVectorCore implements AutoCloseable {
    * @return an object that would need to be casted to appropriate type based on this vector's data type
    */
   private Object readValue(int rowIndex) {
-//    assert rowIndex < rows * type.getSizeInBytes() : "rowIndex=" + rowIndex + " rhs=" + rows * type.getSizeInBytes();
+    assert rowIndex < rows * type.getSizeInBytes();
     switch (type) {
       case INT32: // fall through
       case UINT32: // fall through

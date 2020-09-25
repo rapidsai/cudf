@@ -222,19 +222,19 @@ public class TableTest extends CudfTestBase {
           case TIMESTAMP_MILLISECONDS: // fall through
           case TIMESTAMP_NANOSECONDS: // fall through
           case TIMESTAMP_SECONDS:
-            assertEquals(expected.getElement(expectedRow), cv.getElement(expectedRow),
+            assertEquals(expected.getElement(expectedRow, null), cv.getElement(expectedRow, null),
                 "Column " + colName + " Row " + expectedRow);
             break;
           case FLOAT32:
-            assertEqualsWithinPercentage((float)expected.getElement(expectedRow), (float)cv.getElement(expectedRow), 0.0001,
+            assertEqualsWithinPercentage((float)expected.getElement(expectedRow, null), (float)cv.getElement(expectedRow, null), 0.0001,
                 "Column " + colName + " Row " + expectedRow);
             break;
           case FLOAT64:
-            assertEqualsWithinPercentage((double)expected.getElement(expectedRow), (double)cv.getElement(expectedRow), 0.0001,
+            assertEqualsWithinPercentage((double)expected.getElement(expectedRow, null), (double)cv.getElement(expectedRow, null), 0.0001,
                 "Column " + colName + " Row " + expectedRow);
             break;
           case STRING:
-            assertArrayEquals(((String)expected.getElement(expectedRow)).getBytes(), ((String)cv.getElement(expectedRow)).getBytes(),
+            assertArrayEquals(((String)expected.getElement(expectedRow, null)).getBytes(), ((String)cv.getElement(expectedRow, null)).getBytes(),
                 "Column " + colName + " Row " + expectedRow);
             break;
           case LIST:

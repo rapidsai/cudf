@@ -155,22 +155,6 @@ public final class HostColumnVector extends HostColumnVectorCore {
     return refCount;
   }
 
-  /**
-   * Returns if the vector has a validity vector allocated or not.
-   */
-  public boolean hasValidityVector() {
-    return (offHeap.valid != null);
-  }
-
-  /**
-   * Returns if the vector has nulls.  Note that this might end up
-   * being a very expensive operation because if the null count is not
-   * known it will be calculated.
-   */
-  public boolean hasNulls() {
-    return getNullCount() > 0;
-  }
-
   /////////////////////////////////////////////////////////////////////////////
   // DATA MOVEMENT
   /////////////////////////////////////////////////////////////////////////////
@@ -245,24 +229,6 @@ public final class HostColumnVector extends HostColumnVectorCore {
   /**
    * WARNING: Strictly for test only. This call is not efficient for production.
    */
-  ColumnBuilder.StructData getStruct(int rowIndex, ColumnBuilder.DataType mainType) {
-    assert rowIndex < rows;
-    assert type == DType.STRUCT;
-    List<Object> retList = new ArrayList<>();
-    // check if null or empty
-    if (isNull(rowIndex)) {
-      return null;
-    }
-    int numChildren = mainType.getNumChildren();
-    for (int k = 0; k < numChildren; k++) {
-      retList.add(children.get(k).getElement(rowIndex));
-    }
-    return new ColumnBuilder.StructData(retList);
-  }
-
-  /**
-   * WARNING: Strictly for test only. This call is not efficient for production.
-   */
   List getList(long rowIndex) {
     assert rowIndex < rows;
     assert type == DType.LIST;
@@ -276,20 +242,9 @@ public final class HostColumnVector extends HostColumnVectorCore {
       }
     }
     for(int j = start; j < end; j++) {
-      retList.add(children.get(0).getElement(j));
+      retList.add(children.get(0).getElement(j, null));
     }
     return retList;
-  }
-
-  /**
-   * Check if the value at index is null or not.
-   */
-  public boolean isNull(long index) {
-    assert (index >= 0 && index < rows) : "index is out of range 0 <= " + index + " < " + rows;
-    if (hasValidityVector()) {
-      return BitVectorHelper.isNull(offHeap.valid, index);
-    }
-    return false;
   }
 
   /**
