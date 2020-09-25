@@ -231,9 +231,10 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                 column_names.remove(index_col)
 
         for col in column_names:
+            meta_dtype = cols_dtype_map.get(col, None)
             df._data[col] = cudf.core.column.column_empty(
                 row_count=0,
-                dtype=np.dtype(cols_dtype_map[col])
+                dtype=np.dtype(meta_dtype)
             )
 
     # Set the index column

@@ -822,6 +822,9 @@ install(TARGETS cudf
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf
         DESTINATION include
         COMPONENT cudf)
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf_test
+        DESTINATION include
+        COMPONENT cudf)
 
 install(DIRECTORY ${CMAKE_BINARY_DIR}/include/libcxx
         DESTINATION include/libcudf

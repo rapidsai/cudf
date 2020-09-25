@@ -36,6 +36,7 @@ class sort_groupby_helper;
 /**
  * @addtogroup aggregation_groupby
  * @{
+ * @file
  */
 
 /**

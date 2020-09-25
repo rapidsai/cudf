@@ -106,6 +106,18 @@ public class HostMemoryBufferTest extends CudfTestBase {
   }
 
   @Test
+  public void testGetLongs() {
+    try (HostMemoryBuffer hostMemoryBuffer = HostMemoryBuffer.allocate(16)) {
+      hostMemoryBuffer.setLong(0, 3);
+      hostMemoryBuffer.setLong(DType.INT64.sizeInBytes, 10);
+      long[] results = new long[2];
+      hostMemoryBuffer.getLongs(results, 0, 0, 2);
+      assertEquals(3, results[0]);
+      assertEquals(10, results[1]);
+    }
+  }
+
+  @Test
   public void testGetLength() {
     try (HostMemoryBuffer hostMemoryBuffer = HostMemoryBuffer.allocate(16)) {
       long length = hostMemoryBuffer.getLength();

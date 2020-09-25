@@ -18,10 +18,10 @@
 #include <iterator>
 #include <tests/groupby/groupby_test_util.hpp>
 
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/type_list_utilities.hpp>
-#include <tests/utilities/type_lists.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/type_list_utilities.hpp>
+#include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <type_traits>

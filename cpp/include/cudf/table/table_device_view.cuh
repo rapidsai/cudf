@@ -22,6 +22,11 @@
 #include <cassert>
 #include <memory>
 
+/**
+ * @file table_device_view.cuh
+ * @brief Table device view class definitons
+ */
+
 namespace cudf {
 namespace detail {
 template <typename ColumnDeviceView, typename HostTableView>
