@@ -44,7 +44,7 @@ conda list --show-channel-urls
 conda config --set ssl_verify False
 
 ################################################################################
-# BUILD - Conda package builds (conda deps: libcudf <- libcudf_cffi <- cudf)
+# BUILD - Conda package builds
 ################################################################################
 
 gpuci_logger "Build conda pkg for libcudf"
