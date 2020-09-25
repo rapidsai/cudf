@@ -25,9 +25,9 @@ fi
 
 gpuci_logger "Get conda file output locations"
 export LIBCUDF_FILE=`conda build conda/recipes/libcudf --output`
+export LIBCUDF_KAFKA_FILE=`conda build conda/recipes/libcudf_kafka --output`
 export CUDF_FILE=`conda build conda/recipes/cudf --python=$PYTHON --output`
 export DASK_CUDF_FILE=`conda build conda/recipes/dask-cudf --python=$PYTHON --output`
-export LIBCUDF_KAFKA_FILE=`conda build conda/recipes/libcudf_kafka --output`
 export CUDF_KAFKA_FILE=`conda build conda/recipes/cudf_kafka --python=$PYTHON --output`
 export CUSTREAMZ_FILE=`conda build conda/recipes/custreamz --python=$PYTHON --output`
 
