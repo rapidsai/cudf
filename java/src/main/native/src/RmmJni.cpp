@@ -343,7 +343,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(JNIEnv *env, j
 
     bool use_pool_alloc = allocation_mode & 1;
     bool use_managed_mem = allocation_mode & 2;
-    bool use_arena_alloc = allocation_mode & 3;
+    bool use_arena_alloc = allocation_mode & 4;
     if (use_pool_alloc) {
       std::size_t pool_limit = (max_pool_size > 0) ? static_cast<std::size_t>(max_pool_size) :
                                                      std::numeric_limits<std::size_t>::max();
