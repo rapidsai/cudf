@@ -178,6 +178,36 @@ class Index(Frame, Serializable):
     def __contains__(self, item):
         return item in self._values
 
+    @annotate("INDEX_EQUALS", color="green", domain="cudf_python")
+    def equals(self, other, **kwargs):
+        """
+        Determine if two Index objects contain the same elements.
+
+        Returns
+        -------
+        out: bool
+            True if “other” is an Index and it has the same elements
+            as calling index; False otherwise.
+        """
+        if not isinstance(other, Index):
+            return False
+
+        check_types = False
+
+        self_is_categorical = isinstance(self, CategoricalIndex)
+        other_is_categorical = isinstance(other, CategoricalIndex)
+        if self_is_categorical and not other_is_categorical:
+            other = other.astype(self.dtype)
+            check_types = True
+        elif other_is_categorical and not self_is_categorical:
+            self = self.astype(other.dtype)
+            check_types = True
+
+        try:
+            return super(Index, self).equals(other, check_types=check_types)
+        except TypeError:
+            return False
+
     def get_level_values(self, level):
         """
         Return an Index of values for requested level.
@@ -993,36 +1023,6 @@ class Index(Frame, Serializable):
     def __ge__(self, other):
         return self._apply_op("__ge__", other)
 
-    @annotate("INDEX_EQUALS", color="green", domain="cudf_python")
-    def equals(self, other):
-        """
-        Determine if two Index objects contain the same elements.
-
-        Returns
-        -------
-        out: bool
-            True if “other” is an Index and it has the same elements
-            as calling index; False otherwise.
-        """
-        basic_equality = _check_basic_index_equality(self, other)
-
-        if basic_equality is not None:
-            return basic_equality
-        elif len(self) == 1:
-            val = self[0] == other[0]
-            # when self is multiindex we need to checkall
-            if isinstance(val, np.ndarray):
-                return val.all()
-            return bool(val)
-        elif isinstance(other, CategoricalIndex):
-            return other.equals(self)
-        else:
-            if is_mixed_with_object_dtype(self, other):
-                return False
-
-            result = self == other
-            return result._values.all()
-
     def join(
         self, other, how="left", level=None, return_indexers=False, sort=False
     ):
@@ -1635,16 +1635,11 @@ class RangeIndex(Index):
     def __eq__(self, other):
         return super(type(self), self).__eq__(other)
 
-    @annotate("RANGE_INDEX_EQUALS", color="green", domain="cudf_python")
     def equals(self, other):
-        basic_equality = _check_basic_index_equality(self, other)
-
-        if basic_equality is not None:
-            return basic_equality
-        elif isinstance(other, cudf.core.index.RangeIndex):
-            return self._start == other._start and self._stop == other._stop
-        else:
-            return super().equals(other)
+        if isinstance(other, RangeIndex):
+            if (self._start, self._stop) == (other._start, other._stop):
+                return True
+        return super().equals(other)
 
     def serialize(self):
         header = {}
@@ -2528,7 +2523,6 @@ class CategoricalIndex(GenericIndex):
                     "Cannot specify `categories` or "
                     "`ordered` together with `dtype`."
                 )
-
         if copy:
             data = column.as_column(data, dtype=dtype).copy(deep=True)
         out = Frame.__new__(cls)
@@ -2588,32 +2582,6 @@ class CategoricalIndex(GenericIndex):
         The categories of this categorical.
         """
         return self._values.cat().categories
-
-    @annotate("CATEGORICAL_INDEX_EQUALS", color="green", domain="cudf_python")
-    def equals(self, other):
-        """
-        Determine if two Index objects contain the same elements.
-
-        Returns
-        -------
-        out: bool
-            True if “other” is an Index and it has the same elements
-            as calling index; False otherwise.
-        """
-        basic_equality = _check_basic_index_equality(self, other)
-
-        if basic_equality is not None:
-            return basic_equality
-        else:
-            casted_other = other
-            if not isinstance(other, CategoricalIndex):
-                casted_other = other.astype(self.dtype)
-
-            if self.dtype != casted_other.dtype:
-                return False
-
-            result = self._values == casted_other._values
-            return result
 
 
 class StringIndex(GenericIndex):
@@ -2773,13 +2741,3 @@ def _setdefault_name(values, **kwargs):
         else:
             kwargs.update({"name": values.name})
     return kwargs
-
-
-def _check_basic_index_equality(left, right):
-    if left is right:
-        return True
-    elif not isinstance(right, Index):
-        return False
-    elif len(left) != len(right):
-        return False
-    return None
