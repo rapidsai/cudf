@@ -17,8 +17,10 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/fill.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/detail/fill.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -209,6 +211,20 @@ std::unique_ptr<column> make_column_from_scalar(scalar const& s,
 {
   if (size == 0) return make_empty_column(s.type());
   return type_dispatcher(s.type(), column_from_scalar_dispatch{}, s, size, mr, stream);
+}
+
+std::unique_ptr<column> make_dictionary_from_scalar(scalar const& s,
+                                                    size_type size,
+                                                    rmm::mr::device_memory_resource* mr,
+                                                    cudaStream_t stream)
+{
+  if (size == 0) return make_empty_column(data_type{type_id::DICTIONARY32});
+  CUDF_EXPECTS(s.is_valid(), "cannot create a dictionary with a null key");
+  return make_dictionary_column(
+    make_column_from_scalar(s, 1, mr, stream),
+    make_column_from_scalar(numeric_scalar<uint32_t>(0), size, mr, stream),
+    rmm::device_buffer{0, stream, mr},
+    0);
 }
 
 }  // namespace cudf
