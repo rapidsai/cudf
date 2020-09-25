@@ -23,8 +23,17 @@ namespace dictionary {
 namespace detail {
 
 /**
- * @brief Create a new dictionary column by replace nulls with values
- * from second dictionary.
+ * @brief Create a new dictionary column by replacing nulls with values
+ * from a second dictionary.
+ *
+ * @throw cudf::logic_error if the keys type of both dictionaries do not match.
+ * @throw cudf::logic_error if the column sizes do not match.
+ *
+ * @param input Column with nulls to replace.
+ * @param replacement Column with values to use for replacing.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @return New dictionary column with nulls entries replaced.
  */
 std::unique_ptr<column> replace_nulls(
   dictionary_column_view const& input,
