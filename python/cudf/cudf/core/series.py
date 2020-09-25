@@ -186,6 +186,9 @@ class Series(Frame, Serializable):
 
         if not isinstance(data, column.ColumnBase):
             data = column.as_column(data, nan_as_null=nan_as_null, dtype=dtype)
+        else:
+            if dtype is not None:
+                data = data.astype(dtype)
 
         if index is not None and not isinstance(index, Index):
             index = as_index(index)
