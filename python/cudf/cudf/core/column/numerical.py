@@ -103,6 +103,8 @@ class NumericalColumn(column.ColumnBase):
         return libcudf.reduce.scan(op, self, True)
 
     def normalize_binop_value(self, other):
+        import pdb
+        pdb.set_trace()
         if other is None:
             return other
         if isinstance(other, cudf.Scalar):
@@ -428,6 +430,8 @@ class NumericalColumn(column.ColumnBase):
         """
         Fill null values with *fill_value*
         """
+        if isinstance(fill_value, cudf.Scalar) and fill_value.dtype == self.dtype:
+            return libcudf.replace.replace_nulls(self, fill_value)
         if np.isscalar(fill_value):
             # castsafely to the same dtype as self
             fill_value_casted = self.dtype.type(fill_value)
