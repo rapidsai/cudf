@@ -21,6 +21,7 @@
 namespace cudf {
 namespace dictionary {
 namespace detail {
+
 /**
  * @brief Create a new dictionary column by replace nulls with values
  * from second dictionary.
