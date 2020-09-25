@@ -64,6 +64,7 @@ conda install "rmm=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
 # conda install "your-pkg=1.0.0"
 
 # Install the master version of dask, distributed, and streamz
+gpuci_logger "Install the master version of dask, distributed, and streamz"
 pip install "git+https://github.com/dask/distributed.git" --upgrade --no-deps
 pip install "git+https://github.com/dask/dask.git" --upgrade --no-deps
 pip install "git+https://github.com/python-streamz/streamz.git" --upgrade --no-deps
@@ -128,6 +129,7 @@ else
     gpuci_logger "Python py.test for cuStreamz..."
     py.test --cache-clear --basetemp=${WORKSPACE}/custreamz-cuda-tmp --junitxml=${WORKSPACE}/junit-custreamz.xml -v --cov-config=.coveragerc --cov=custreamz --cov-report=xml:${WORKSPACE}/python/custreamz/custreamz-coverage.xml --cov-report term
 
+    gpuci_logger "Test notebooks..."
     ${WORKSPACE}/ci/gpu/test-notebooks.sh 2>&1 | tee nbtest.log
     python ${WORKSPACE}/ci/utils/nbtestlog2junitxml.py nbtest.log
 fi
