@@ -834,23 +834,24 @@ static inline __device__ rowctx32_t rowctx_inverse_merge_transform(uint64_t ctxt
  * @param escapechar Delimiter escape character
  * @param commentchar Comment line character (skip rows starting with this character)
  **/
-__global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint64_t *row_ctx,
-                                                                           uint64_t *offsets_out,
-                                                                           const char *start,
-                                                                           size_t chunk_size,
-                                                                           size_t parse_pos,
-                                                                           size_t start_offset,
-                                                                           size_t data_size,
-                                                                           size_t byte_range_start,
-                                                                           size_t byte_range_end,
-                                                                           size_t skip_rows,
-                                                                           size_t num_row_offsets,
-                                                                           int terminator,
-                                                                           int delimiter,
-                                                                           int quotechar,
-                                                                           int escapechar,
-                                                                           int commentchar)
+__global__ void __launch_bounds__(rowofs_block_dim)
+  gather_row_offsets_gpu(uint64_t *row_ctx,
+                         device_span<uint64_t> offsets_out,
+                         device_span<char const> const data,
+                         size_t chunk_size,
+                         size_t parse_pos,
+                         size_t start_offset,
+                         size_t data_size,
+                         size_t byte_range_start,
+                         size_t byte_range_end,
+                         size_t skip_rows,
+                         int terminator,
+                         int delimiter,
+                         int quotechar,
+                         int escapechar,
+                         int commentchar)
 {
+  auto start = data.begin();
   __shared__ __align__(8) uint64_t ctxtree[rowofs_block_dim * 2];
 
   const char *end = start + (min(parse_pos + chunk_size, data_size) - start_offset);
@@ -923,7 +924,7 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
   rowctx_merge_transform(ctxtree, pack_rowmaps(ctx_map), t);
 
   // If this is the second phase, get the block's initial parser state and row counter
-  if (offsets_out) {
+  if (offsets_out.data()) {
     if (t == 0) { ctxtree[0] = row_ctx[blockIdx.x]; }
     __syncthreads();
 
@@ -936,7 +937,7 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
     while (rowmap != 0) {
       uint32_t pos = __ffs(rowmap);
       block_pos += pos;
-      if (row >= skip_rows && row - skip_rows < num_row_offsets) {
+      if (row >= skip_rows && row - skip_rows < offsets_out.size()) {
         // Output byte offsets are relative to the base of the input buffer
         offsets_out[row - skip_rows] = block_pos - 1;
         rows_out_of_range += (start_offset + block_pos - 1 >= byte_range_end);
@@ -1034,9 +1035,10 @@ void __host__ decode_row_column_data(cudf::io::ParseOptions const &options,
     options, data, flags, row_offsets, dtypes, columns, valids);
 }
 
-uint32_t __host__ gather_row_offsets(uint64_t *row_ctx,
-                                     uint64_t *offsets_out,
-                                     const char *start,
+uint32_t __host__ gather_row_offsets(const ParseOptions &options,
+                                     uint64_t *row_ctx,
+                                     device_span<uint64_t> const &offsets_out,
+                                     device_span<char const> const &data,
                                      size_t chunk_size,
                                      size_t parse_pos,
                                      size_t start_offset,
@@ -1044,15 +1046,14 @@ uint32_t __host__ gather_row_offsets(uint64_t *row_ctx,
                                      size_t byte_range_start,
                                      size_t byte_range_end,
                                      size_t skip_rows,
-                                     size_t num_row_offsets,
-                                     const ParseOptions &options,
                                      cudaStream_t stream)
 {
   uint32_t dim_grid = 1 + (chunk_size / rowofs_block_bytes);
+
   gather_row_offsets_gpu<<<dim_grid, rowofs_block_dim, 0, stream>>>(
     row_ctx,
     offsets_out,
-    start,
+    data,
     chunk_size,
     parse_pos,
     start_offset,
@@ -1060,7 +1061,6 @@ uint32_t __host__ gather_row_offsets(uint64_t *row_ctx,
     byte_range_start,
     byte_range_end,
     skip_rows,
-    num_row_offsets,
     options.terminator,
     options.delimiter,
     (options.quotechar) ? options.quotechar : 0x100,

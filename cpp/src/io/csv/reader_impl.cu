@@ -432,9 +432,10 @@ void reader::impl::gather_row_offsets(host_span<char const> const &data,
 
     // Pass 1: Count the potential number of rows in each character block for each
     // possible parser state at the beginning of the block.
-    uint32_t num_blocks = cudf::io::csv::gpu::gather_row_offsets(row_ctx.device_ptr(),
-                                                                 nullptr,
-                                                                 data_.data().get(),
+    uint32_t num_blocks = cudf::io::csv::gpu::gather_row_offsets(opts,
+                                                                 row_ctx.device_ptr(),
+                                                                 device_span<uint64_t>(),
+                                                                 device_span<char const>(data_),
                                                                  chunk_size,
                                                                  pos,
                                                                  buffer_pos,
@@ -442,8 +443,6 @@ void reader::impl::gather_row_offsets(host_span<char const> const &data,
                                                                  range_begin,
                                                                  range_end,
                                                                  skip_rows,
-                                                                 0,
-                                                                 opts,
                                                                  stream);
     CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
                              row_ctx.device_ptr(),
@@ -462,17 +461,19 @@ void reader::impl::gather_row_offsets(host_span<char const> const &data,
     size_t total_rows = ctx >> 2;
     if (total_rows > skip_rows) {
       // At least one row in range in this batch
-      size_t num_row_offsets = total_rows - skip_rows;
-      row_offsets_.resize(num_row_offsets);
+      row_offsets_.resize(total_rows - skip_rows);
+
       CUDA_TRY(cudaMemcpyAsync(row_ctx.device_ptr(),
                                row_ctx.host_ptr(),
                                num_blocks * sizeof(uint64_t),
                                cudaMemcpyHostToDevice,
                                stream));
+
       // Pass 2: Output row offsets
-      cudf::io::csv::gpu::gather_row_offsets(row_ctx.device_ptr(),
-                                             row_offsets_.data().get(),
-                                             data_.data().get(),
+      cudf::io::csv::gpu::gather_row_offsets(opts,
+                                             row_ctx.device_ptr(),
+                                             device_span<uint64_t>(row_offsets_),
+                                             device_span<char const>(data_),
                                              chunk_size,
                                              pos,
                                              buffer_pos,
@@ -480,8 +481,6 @@ void reader::impl::gather_row_offsets(host_span<char const> const &data,
                                              range_begin,
                                              range_end,
                                              skip_rows,
-                                             num_row_offsets,
-                                             opts,
                                              stream);
       // With byte range, we want to keep only one row out of the specified range
       if (range_end < data.size()) {
@@ -495,21 +494,22 @@ void reader::impl::gather_row_offsets(host_span<char const> const &data,
         for (uint32_t i = 0; i < num_blocks; i++) { rows_out_of_range += row_ctx[i]; }
         if (rows_out_of_range != 0) {
           // Keep one row out of range (used to infer length of previous row)
-          num_row_offsets -= std::min(rows_out_of_range - 1, num_row_offsets);
-          row_offsets_.resize(num_row_offsets);
+          auto new_row_offsets_size =
+            row_offsets_.size() - std::min(rows_out_of_range - 1, row_offsets_.size());
+          row_offsets_.resize(new_row_offsets_size);
           // Implies we reached the end of the range
           break;
         }
       }
       // num_rows does not include blank rows
       if (num_rows >= 0) {
-        if (num_row_offsets > header_rows + static_cast<size_t>(num_rows)) {
+        if (row_offsets_.size() > header_rows + static_cast<size_t>(num_rows)) {
           size_t num_blanks =
             cudf::io::csv::gpu::count_blank_rows(opts,
                                                  device_span<char const>(data_),
                                                  device_span<uint64_t const>(row_offsets_),
                                                  stream);
-          if (num_row_offsets - num_blanks > header_rows + static_cast<size_t>(num_rows)) {
+          if (row_offsets_.size() - num_blanks > header_rows + static_cast<size_t>(num_rows)) {
             // Got the desired number of rows
             break;
           }
