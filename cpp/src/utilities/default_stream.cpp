@@ -19,11 +19,11 @@
 namespace cudf {
 
 /**
- * @brief Check if the default stream is per-thread.
+ * @brief Check if per-thread default stream is enabled.
  *
- * @return true if the default stream is per-thread, false otherwise.
+ * @return true if PTDS is enabled, false otherwise.
  */
-bool is_per_thread_default_stream()
+bool is_ptds_enabled()
 {
 #ifdef CUDA_API_PER_THREAD_DEFAULT_STREAM
   return true;

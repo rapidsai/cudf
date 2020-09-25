@@ -19,7 +19,7 @@
 #include <cudf_test/cudf_gtest.hpp>
 
 #ifdef CUDA_API_PER_THREAD_DEFAULT_STREAM
-TEST(DefaultStreamTest, IsPerThread) { EXPECT_TRUE(cudf::is_per_thread_default_stream()); }
+TEST(DefaultStreamTest, PtdsIsEnabled) { EXPECT_TRUE(cudf::is_ptds_enabled()); }
 #else
-TEST(DefaultStreamTest, IsNotPerThread) { EXPECT_FALSE(cudf::is_per_thread_default_stream()); }
+TEST(DefaultStreamTest, PtdsIsNotEnabled) { EXPECT_FALSE(cudf::is_ptds_enabled()); }
 #endif
