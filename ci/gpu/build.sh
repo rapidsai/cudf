@@ -91,8 +91,7 @@ else
 fi
 
 ################################################################################
-# TEST - Run GoogleTest and py.tests for libcudf, and
-# cuDF
+# TEST - Run GoogleTest, py.tests, and notebooks
 ################################################################################
 
 if hasArg --skip-tests; then
