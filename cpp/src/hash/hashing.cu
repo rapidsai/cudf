@@ -27,8 +27,6 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 
-#include <thrust/tabulate.h>
-
 namespace cudf {
 namespace {
 // Launch configuration for optimized hash partition
@@ -649,9 +647,13 @@ std::unique_ptr<column> hash(table_view const& input,
 {
   switch (hash_function) {
     case (hash_id::HASH_MURMUR3): return murmur_hash3_32(input, initial_hash, mr, stream);
-    case (hash_id::HASH_MD5): return md5_hash(input, mr, stream);
+    case (hash_id::HASH_MD5): return md5_hash(input, policy, mr, stream);
     default: return nullptr;
   }
+}
+
+bool md5_type_check(data_type d) {
+  return !is_chrono(d) && (is_fixed_width(d) || (d.id() == type_id::STRING));
 }
 
 std::unique_ptr<column> md5_hash(table_view const& input,
@@ -669,8 +671,7 @@ std::unique_ptr<column> md5_hash(table_view const& input,
     std::all_of(input.begin(),
                 input.end(),
                 [](auto col) {
-                  return !is_chrono(col.type()) &&
-                         (is_fixed_width(col.type()) || (col.type().id() == type_id::STRING));
+                  return md5_type_check(col.type()) || (col.type().id() == type_id::LIST && md5_type_check(col.child(1).getType()));
                 }),
     "MD5 unsupported column type");
 
@@ -687,8 +688,8 @@ std::unique_ptr<column> md5_hash(table_view const& input,
   auto d_chars    = chars_view.data<char>();
 
   rmm::device_buffer null_mask;
-  if (policy == retain_nulls::RETAIN_NULLS && input.num_columns() == 1)
-    null_mask = copy_bitmask(input.column(0), stream, mr);
+  if(policy == retain_nulls::RETAIN_NULLS && input.num_columns() == 1)
+    null_mask = bitmask_and(input, mr, stream);
   else
     null_mask = rmm::device_buffer{0, stream, mr};
 
@@ -780,11 +781,12 @@ std::unique_ptr<column> murmur_hash3_32(table_view const& input,
 
 std::unique_ptr<column> hash(table_view const& input,
                              hash_id hash_function,
+                             retain_nulls  policy,
                              std::vector<uint32_t> const& initial_hash,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::hash(input, hash_function, initial_hash, mr);
+  return detail::hash(input, hash_function, policy, initial_hash, mr);
 }
 
 std::unique_ptr<column> murmur_hash3_32(table_view const& input,

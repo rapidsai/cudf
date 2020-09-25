@@ -328,4 +328,51 @@ TYPED_TEST(MD5HashTestFloatTyped, TestExtremes)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view(), true);
 }
 
+TYPED_TEST(MD5HashTestFloatTyped, TestListExtremes)
+{
+  using T = TypeParam;
+  T min   = std::numeric_limits<T>::min();
+  T max   = std::numeric_limits<T>::max();
+  T nan   = std::numeric_limits<T>::quiet_NaN();
+  T inf   = std::numeric_limits<T>::infinity();
+
+  fixed_width_column_wrapper<T> const col1 = lists_column_wrapper({{T(0.0)}, {T(100.0), T(-100.0)}, {min, max, nan}, {inf, -inf}});
+  fixed_width_column_wrapper<T> const col2 = lists_column_wrapper({{T(-0.0)}, {T(100.0), T(-100.0)}, {min, max, -nan}, {inf, -inf}});
+
+  auto const input1 = cudf::table_view({col1});
+  auto const input2 = cudf::table_view({col2});
+
+  auto const output1 = cudf::hash(input1, cudf::hash_id::HASH_MD5);
+  auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_MD5);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view(), true);
+}
+
+TEST_F(MD5HashTest, StringListsWithNulls)
+{
+  strings_column_wrapper const strings_col(
+    {"",
+     "A 60 character string to test MD5's message padding algorithm",
+     "A very long (greater than 128 bytes/char string) to test a multi hash-step data point in the "
+     "MD5 hash function. This string needed to be longer. It needed to be even longer.",
+     "All work and no play makes Jack a dull boy",
+     "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"});
+
+  cudf::test::lists_column_wrapper<cudf::string_view> strings_list_col(
+    {{""},
+     {"", "A 60 character string to test MD5's message padding algorithm"},
+     {"A very long (greater than 128 bytes/char string) to test a multi hash-step data point in the "
+     "MD5 hash function. This string needed to be longer.", " It needed to be even longer."},
+     {"All ", "work ", "and", " no", " play ", "makes Jack", " a dull boy"},
+     {"!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`", "{|}~"}});
+
+  auto const input1 = cudf::table_view({strings_col});
+  auto const input2 = cudf::table_view({strings_list_col});
+
+  auto const output1 = cudf::hash(input1, cudf::hash_id::HASH_MD5);
+  auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_MD5);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view(), true);
+}
+
 CUDF_TEST_PROGRAM_MAIN()

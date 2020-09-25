@@ -252,32 +252,10 @@ void CUDA_DEVICE_CALLABLE MD5Hash::operator()<list_view>(column_device_view col,
 {
   static constexpr size_type offsets_column_index{0};
   static constexpr size_type data_column_index{1};
-
-
-  //check  max depth
-  // if (col.child(data_column_index).dataType() == LIST)
-  //   release_assert(false && "MD5 Unsupported nested list  type");
-
-
-  list_view list = col.element<list_view>(row_index);
-  // column_device_view list = col.child(row_index);
-
-  //extract row's list
-
-  //extract offsets, data, and nulls
   
   column_device_view offsets = col.child(offsets_column_index);
   column_device_view data = col.child(data_column_index);
 
-  //{{1,2,3}{456},{7,null,9}}
-  //offsets 0,3,6,9
-  //nulls
-
-  //for each inthe list
-  //if null, skip
-  //otherwise type dispatch, can't reuse struct functor
-
-  // MD5Hash hasher = MD5Hash{};
   for(int i = offsets.element<size_type>(row_index); i  < offsets.element<size_type>(row_index+1);  i++) {
     if(!data.is_null(i))
       cudf::type_dispatcher(data.type(),
@@ -286,53 +264,6 @@ void CUDA_DEVICE_CALLABLE MD5Hash::operator()<list_view>(column_device_view col,
                             i,
                             hash_state);
   }
-
-
-  //BUT,if I can reuse it what do I need
-    //child data  that's a column device view
-  
-
-  
-
-
-  // size_type size = 10; //list.size();
-
-  // if(list.depth > 1)
-  // if(list.child.type == list)
-  //   release_assert(false && "MD5 Unsupported chrono type column");
-    // Hash each row, hashing each element sequentially left to right
-    
-  // return lists_column.child().element<T>(element_offset(idx));
-
-
-  // CUDA_DEVICE_CALLABLE size_type list_device_view::element_offset(size_type idx) const
-  // {
-  //   release_assert(idx >= 0 && idx < size() && "idx out of bounds");
-  //   release_assert(!is_null() && !is_null(idx) && "Cannot read null element.");
-  //   return begin_offset + idx;
-  // }
-  
-
-  //   for(int i = 0; i  < size;  i++) {
-  //     MD5Hash hasher = MD5Hash{};
-    //   if(!is_null)
-    //   cudf::type_dispatcher(list_view.data.type(),
-    //                         hasher,
-    //                         list,
-    //                         i,
-    //                         hash_state);
-    // }
-    // thrust::for_each(
-    //   thrust::make_counting_iterator(0),
-    //   thrust::make_counting_iterator(col.size()),
-    //   // double_type_dispatcher_first_type<template<...> class IdTypeMap>
-    //   [d_chars, device_input = *device_input, has_nulls = nullable] __device__(auto row_index) {
-    //     for (int col_index = 0; col_index < device_input.num_columns(); col_index++) {
-    //       if (device_input.column(col_index).is_valid(row_index)) {
-    //       }
-    //     }
-    //     hasher.finalize(&hash_state, d_chars + (row_index * 32));
-    //   });
 }
 
 }  // namespace detail
