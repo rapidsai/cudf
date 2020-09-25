@@ -24,13 +24,13 @@ fi
 # SETUP - Check environment
 ################################################################################
 
-logger "Get env..."
+gpuci_logger "Check environment variables"
 env
 
-logger "Activate conda env..."
+gpuci_logger "Activate conda env"
 source activate rapids
 
-logger "Check versions..."
+gpuci_logger "Check compiler versions"
 python --version
 gcc --version
 g++ --version
@@ -43,26 +43,26 @@ conda config --set ssl_verify False
 # BUILD - Conda package builds (conda deps: libcudf <- libcudf_cffi <- cudf)
 ################################################################################
 
-logger "Build conda pkg for libcudf..."
+gpuci_logger "Build conda pkg for libcudf"
 source ci/cpu/libcudf/build_libcudf.sh
 
-logger "Build conda pkg for libcudf_kafka..."
+gpuci_logger "Build conda pkg for libcudf_kafka"
 source ci/cpu/libcudf_kafka/build_libcudf_kafka.sh
 
-logger "Build conda pkg for cudf..."
+gpuci_logger "Build conda pkg for cudf"
 source ci/cpu/cudf/build_cudf.sh
 
-logger "Build conda pkg for dask-cudf..."
+gpuci_logger "Build conda pkg for dask-cudf"
 source ci/cpu/dask-cudf/build_dask_cudf.sh
 
-logger "Build conda pkg for cudf_kafka..."
+gpuci_logger "Build conda pkg for cudf_kafka"
 source ci/cpu/cudf_kafka/build_cudf_kafka.sh
 
-logger "Build conda pkg for custreamz..."
+gpuci_logger "Build conda pkg for custreamz"
 source ci/cpu/custreamz/build_custreamz.sh
 ################################################################################
 # UPLOAD - Conda packages
 ################################################################################
 
-logger "Upload conda pkgs..."
+gpuci_logger "Upload conda pkgs"
 source ci/cpu/upload_anaconda.sh
