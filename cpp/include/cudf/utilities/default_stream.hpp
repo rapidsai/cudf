@@ -24,7 +24,7 @@ namespace cudf {
 
 namespace detail {
 #if __cpp_inline_variables
-inline cudaStream_t default_stream;
+inline cudaStream_t default_stream{cudaStreamDefault};
 #else
 extern cudaStream_t default_stream;
 #endif
