@@ -28,9 +28,14 @@ export CUDA_REL=${CUDA_VERSION%.*}
 # Parse git describe
 export GIT_DESCRIBE_TAG=`git describe --tags`
 export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
-# Set `LIBCUDF_KERNEL_CACHE_PATH` environment variable to $HOME/.jitify-cache because
-# it's local to the container's virtual file system, and not shared with other CI jobs
-# like `/tmp` is.
+
+################################################################################
+# TRAP - Setup trap for removing jitify cache
+################################################################################
+
+# Set `LIBCUDF_KERNEL_CACHE_PATH` environment variable to $HOME/.jitify-cache
+# because it's local to the container's virtual file system, and not shared with
+# other CI jobs like `/tmp` is
 export LIBCUDF_KERNEL_CACHE_PATH="$HOME/.jitify-cache"
 
 function remove_libcudf_kernel_cache_dir {
@@ -40,6 +45,7 @@ function remove_libcudf_kernel_cache_dir {
     exit $EXITCODE
 }
 
+# Set trap to run on exit
 trap remove_libcudf_kernel_cache_dir EXIT
 
 mkdir -p "$LIBCUDF_KERNEL_CACHE_PATH" || logger "could not mkdir -p $LIBCUDF_KERNEL_CACHE_PATH"
