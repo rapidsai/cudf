@@ -1595,13 +1595,25 @@ def test_csv_writer_chunksize(chunksize, tmpdir):
     assert_eq(expect, got)
 
 
-def test_to_csv_empty_filename():
-    df = cudf.DataFrame({"vals": [1, 2, 3]})
+@pytest.mark.parametrize(
+    "df",
+    [
+        cudf.DataFrame({"vals": [1, 2, 3]}),
+        cudf.DataFrame(
+            {"vals1": [1, 2, 3], "vals2": ["hello", "rapids", "cudf"]}
+        ),
+        cudf.DataFrame(
+            {"vals1": [None, 2.0, 3.0], "vals2": ["hello", "rapids", None]}
+        ),
+    ],
+)
+def test_to_csv_empty_filename(df):
+    pdf = df.to_pandas()
 
-    exception = pytest.raises(ValueError, match="path/filename not provided")
+    actual = df.to_csv()
+    expected = pdf.to_csv()
 
-    with exception:
-        df.to_csv()
+    assert actual == expected
 
 
 def test_csv_writer_empty_dataframe(tmpdir):
