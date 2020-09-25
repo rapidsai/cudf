@@ -19,15 +19,15 @@ export PARALLEL_LEVEL=${PARALLEL_LEVEL:-8}
 # Set home to the job's workspace
 export HOME=$WORKSPACE
 
-# Switch to project root; also root of repo checkout
-cd $WORKSPACE
-
 # Determine CUDA release version
 export CUDA_REL=${CUDA_VERSION%.*}
 
 # Parse git describe
 export GIT_DESCRIBE_TAG=`git describe --tags`
 export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
+
+# Switch to project root; also root of repo checkout
+cd $WORKSPACE
 
 ################################################################################
 # TRAP - Setup trap for removing jitify cache
