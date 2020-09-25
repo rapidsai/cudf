@@ -51,22 +51,22 @@ conda config --set ssl_verify False
 ################################################################################
 
 gpuci_logger "Build conda pkg for libcudf"
-source ci/cpu/libcudf/build_libcudf.sh
+conda build conda/recipes/libcudf
 
 gpuci_logger "Build conda pkg for libcudf_kafka"
-source ci/cpu/libcudf_kafka/build_libcudf_kafka.sh
+conda build conda/recipes/libcudf_kafka
 
 gpuci_logger "Build conda pkg for cudf"
-source ci/cpu/cudf/build_cudf.sh
+conda build conda/recipes/cudf --python=$PYTHON
 
 gpuci_logger "Build conda pkg for dask-cudf"
-source ci/cpu/dask-cudf/build_dask_cudf.sh
+conda build conda/recipes/dask-cudf --python=$PYTHON
 
 gpuci_logger "Build conda pkg for cudf_kafka"
-source ci/cpu/cudf_kafka/build_cudf_kafka.sh
+conda build conda/recipes/cudf_kafka --python=$PYTHON
 
 gpuci_logger "Build conda pkg for custreamz"
-source ci/cpu/custreamz/build_custreamz.sh
+conda build conda/recipes/custreamz --python=$PYTHON
 
 ################################################################################
 # UPLOAD - Conda packages
