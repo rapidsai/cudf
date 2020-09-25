@@ -3041,19 +3041,17 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testListOfStruct() {
-    List<HostColumnVector.ColumnBuilder.StructData> list = Arrays.asList(new HostColumnVector.ColumnBuilder.StructData(Arrays.asList("a", "b")));
+  void testGetMapValue() {
+    List<HostColumnVector.ColumnBuilder.StructData> list1 = Arrays.asList(new HostColumnVector.ColumnBuilder.StructData(Arrays.asList("a", "b")));
     List<HostColumnVector.ColumnBuilder.StructData> list2 = Arrays.asList(new HostColumnVector.ColumnBuilder.StructData(Arrays.asList("a", "c")));
-    List<String> list3 = null;
+    List<HostColumnVector.ColumnBuilder.StructData> list3 = Arrays.asList(new HostColumnVector.ColumnBuilder.StructData(Arrays.asList(null, "d")));
     HostColumnVector.ColumnBuilder.StructType structType = new HostColumnVector.ColumnBuilder.StructType(true, 2);
     structType.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 2, DType.STRING));
     structType.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 2, DType.STRING));
-    try (ColumnVector res1 = ColumnVector.fromLists(new HostColumnVector.ColumnBuilder.ListType(true, 2, structType), list, list2)) {
-      System.out.println("YAY!" + ((HostColumnVector.ColumnBuilder.StructData)(res1.copyToHost().getList(0)).get(0)).dataRecord);
-      System.out.println("YAY!" + ((HostColumnVector.ColumnBuilder.StructData)(res1.copyToHost().getList(1)).get(0)).dataRecord);
-      ColumnVector res = res1.mapLookup(Scalar.fromString("a"));
-      System.out.println("YAY!" + res.getType() + " " + res.getRowCount() + " " + res.copyToHost().getJavaString(0));
-      System.out.println("YAY!" + res.getType() + " " + res.getRowCount() + " " + res.copyToHost().getJavaString(1));
+    try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ColumnBuilder.ListType(true, 2, structType), list1, list2, list3);
+         ColumnVector res = cv.getMapValue(Scalar.fromString("a"));
+         ColumnVector expected = ColumnVector.fromStrings("b", "c")) {
+      assertColumnsAreEqual(expected, res);
     }
   }
 }

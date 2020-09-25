@@ -2602,7 +2602,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   }
 
 
-  public ColumnVector mapLookup(Scalar key) {
+  public ColumnVector getMapValue(Scalar key) {
 
     assert type == DType.LIST : "column type must be a String";
     assert key != null : "target string may not be null";

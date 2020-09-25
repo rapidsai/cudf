@@ -52,7 +52,7 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
-#include <cudf/maps/map_lookup.hpp>
+#include <map_lookup.hpp>
 
 #include "cudf_jni_apis.hpp"
 
@@ -1085,9 +1085,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_mapLookup(JNIEnv *env, 
   try {
     cudf::jni::auto_set_device(env);
     cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(map_column_view);
-    cudf::string_scalar *ss_target = reinterpret_cast<cudf::string_scalar *>(lookup_key);
+    cudf::string_scalar *ss_key = reinterpret_cast<cudf::string_scalar *>(lookup_key);
 
-    std::unique_ptr<cudf::column> result = cudf::map_lookup(*cv, *ss_target);
+    std::unique_ptr<cudf::column> result = cudf::jni::map_lookup(*cv, *ss_key);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
