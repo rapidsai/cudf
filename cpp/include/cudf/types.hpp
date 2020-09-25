@@ -97,6 +97,13 @@ using size_type    = int32_t;
 using bitmask_type = uint32_t;
 using valid_type   = uint8_t;
 
+// TODO add docs
+template <typename T>
+size_type distance(T f, T l)
+{
+  return static_cast<size_type>(std::distance(f, l));
+}
+
 /**
  * @brief Indicates an unknown null count.
  *
