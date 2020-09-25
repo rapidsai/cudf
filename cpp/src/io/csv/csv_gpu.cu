@@ -28,6 +28,7 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -37,6 +38,8 @@
 #include <type_traits>
 
 using namespace ::cudf::io;
+
+using cudf::detail::device_span;
 
 namespace cudf {
 namespace io {
@@ -176,47 +179,45 @@ __device__ __inline__ bool is_floatingpoint(
  * Data is processed in one row/record at a time, so the number of total
  * threads (tid) is equal to the number of rows.
  *
- * @param raw_csv The entire CSV data to read
  * @param opts A set of parsing options
- * @param num_records The number of lines/rows of CSV data
- * @param num_columns The number of columns of CSV data
+ * @param csv_text The entire CSV data to read
  * @param column_flags Per-column parsing behavior flags
- * @param recStart The start the CSV data of interest
+ * @param row_offsets The start the CSV data of interest
  * @param d_columnData The count for each column data type
  */
 __global__ void __launch_bounds__(csvparse_block_dim)
-  data_type_detection(const char *raw_csv,
-                      const ParseOptions opts,
-                      size_t num_records,
-                      int num_columns,
-                      column_parse::flags *flags,
-                      const uint64_t *recStart,
-                      column_parse::stats *d_columnData)
+  data_type_detection(ParseOptions const opts,
+                      device_span<char const> const csv_text,
+                      device_span<column_parse::flags const> const column_flags,
+                      device_span<uint64_t const> const row_offsets,
+                      device_span<column_parse::stats> d_columnData)
 {
+  auto raw_csv = csv_text.data();
+
   // ThreadIds range per block, so also need the blockId
   // This is entry into the fields; threadId is an element within `num_records`
   long rec_id = threadIdx.x + (blockDim.x * blockIdx.x);
 
   // we can have more threads than data, make sure we are not past the end of
   // the data
-  if (rec_id >= num_records) { return; }
+  if (rec_id >= row_offsets.size()) { return; }
 
-  long start = recStart[rec_id];
-  long stop  = recStart[rec_id + 1];
+  long start = row_offsets[rec_id];
+  long stop  = row_offsets[rec_id + 1];
 
   long pos       = start;
   int col        = 0;
   int actual_col = 0;
 
   // Going through all the columns of a given record
-  while (col < num_columns) {
+  while (col < column_flags.size()) {
     if (start > stop) { break; }
 
     pos = cudf::io::gpu::seek_field_end(raw_csv + pos, raw_csv + stop, opts) - raw_csv;
 
     // Checking if this is a column that the user wants --- user can filter
     // columns
-    if (flags[col] & column_parse::enabled) {
+    if (column_flags[col] & column_parse::enabled) {
       long tempPos   = pos - 1;
       long field_len = pos - start;
 
@@ -272,7 +273,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
         if (field_len == 0) {
           // Ignoring whitespace and quotes can result in empty fields
           atomicAdd(&d_columnData[actual_col].countNULL, 1);
-        } else if (flags[col] & column_parse::as_datetime) {
+        } else if (column_flags[col] & column_parse::as_datetime) {
           // PANDAS uses `object` dtype if the date is unparseable
           if (is_datetime(countString, countDecimal, countColon, countDash, countSlash)) {
             atomicAdd(&d_columnData[actual_col].countDateAndTime, 1);
@@ -1000,23 +1001,22 @@ void __host__ remove_blank_rows(rmm::device_vector<uint64_t> &row_offsets,
   row_offsets.resize(new_end - row_offsets.begin());
 }
 
-thrust::host_vector<column_parse::stats> detect_column_types(const char *data,
-                                                             const uint64_t *row_starts,
-                                                             size_t num_rows,
-                                                             size_t num_actual_columns,
-                                                             size_t num_active_columns,
-                                                             const cudf::io::ParseOptions &options,
-                                                             column_parse::flags *flags,
-                                                             cudaStream_t stream)
+thrust::host_vector<column_parse::stats> detect_column_types(
+  cudf::io::ParseOptions const &options,
+  device_span<char const> const &data,
+  device_span<column_parse::flags const> const column_flags,
+  device_span<uint64_t const> const &row_starts,
+  size_t const num_active_columns,
+  cudaStream_t stream)
 {
   // Calculate actual block count to use based on records count
   const int block_size = csvparse_block_dim;
-  const int grid_size  = (num_rows + block_size - 1) / block_size;
+  const int grid_size  = (row_starts.size() + block_size - 1) / block_size;
 
   auto d_stats = rmm::device_vector<column_parse::stats>(num_active_columns);
 
   data_type_detection<<<grid_size, block_size, 0, stream>>>(
-    data, options, num_rows, num_actual_columns, flags, row_starts, d_stats.data().get());
+    options, data, column_flags, row_starts, device_span<column_parse::stats>(d_stats));
 
   return thrust::host_vector<column_parse::stats>(d_stats);
 }
