@@ -82,7 +82,7 @@ class NumericalColumn(column.ColumnBase):
         tmp = rhs
         if reflect:
             tmp = self
-        if isinstance(rhs, (NumericalColumn, Scalar)) or np.isscalar(rhs):
+        if isinstance(rhs, (NumericalColumn, (Scalar, cudf.Scalar))) or np.isscalar(rhs):
             out_dtype = np.result_type(self.dtype, rhs.dtype)
             if binop in ["mod", "floordiv"]:
                 if (tmp.dtype in int_dtypes) and (
@@ -105,8 +105,13 @@ class NumericalColumn(column.ColumnBase):
     def normalize_binop_value(self, other):
         if other is None:
             return other
-        other_dtype = np.min_scalar_type(other)
+        if isinstance(other, cudf.Scalar):
+            other_dtype = other.dtype
+        else:
+            other_dtype = np.min_scalar_type(other)
         if other_dtype.kind in {"b", "i", "u", "f"}:
+            if isinstance(other, cudf.Scalar):
+                return other
             other_dtype = np.promote_types(self.dtype, other_dtype)
             if other_dtype == np.dtype("float16"):
                 other = np.dtype("float32").type(other)

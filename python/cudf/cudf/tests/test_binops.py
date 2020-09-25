@@ -70,16 +70,21 @@ def test_series_binop_concurrent(binop):
         list(e.map(func, indices))
 
 
+@pytest.mark.parametrize('use_cudf_scalar', [False, True])
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
 @pytest.mark.parametrize("nelem,binop", list(product([1, 2, 100], _binops)))
-def test_series_binop_scalar(nelem, binop, obj_class):
+def test_series_binop_scalar(nelem, binop, obj_class, use_cudf_scalar):
     arr = np.random.random(nelem)
     rhs = random.choice(arr).item()
+
     sr = Series(arr)
     if obj_class == "Index":
         sr = as_index(sr)
 
-    result = binop(sr, rhs)
+    if use_cudf_scalar:
+        result = binop(sr, rhs)
+    else:
+        result = binop(sr, cudf.Scalar(rhs))
 
     if obj_class == "Index":
         result = Series(result)

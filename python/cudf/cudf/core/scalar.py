@@ -3,7 +3,8 @@ import cudf._lib as libcudf
 from cudf.utils.dtypes import to_cudf_compatible_scalar, INVALID_BINOP_DTYPE_COMBOS
 from numpy import find_common_type
 import numpy as np
-from cudf.core.series import truediv_int_dtype_corrections
+from cudf.core.series import Series, truediv_int_dtype_corrections
+from cudf.core.column.column import ColumnBase
 
 class Scalar(libcudf.scalar.Scalar):
     def __init__(self, value, dtype=None):
@@ -104,6 +105,7 @@ class Scalar(libcudf.scalar.Scalar):
         return self._scalar_unaop('__neg__')
 
     def _binop_result_dtype_or_error(self, other, op):
+
         if op in ["__eq__", "__ne__", "__lt__", "__gt__", "__le__", "__ge__"]:
             return np.bool
 
@@ -124,6 +126,8 @@ class Scalar(libcudf.scalar.Scalar):
         return find_common_type([self.dtype, other.dtype], [])
 
     def _scalar_binop(self, other, op):
+        if isinstance(other, (ColumnBase, Series)):
+            return NotImplemented
         other = to_cudf_compatible_scalar(other)
         out_dtype = self._binop_result_dtype_or_error(other, op)
         valid = self.is_valid() and (
