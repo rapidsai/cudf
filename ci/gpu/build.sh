@@ -60,7 +60,7 @@ conda install "rmm=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
               "ucx-py=${MINOR_VERSION}" \
 
 # https://docs.rapids.ai/maintainers/depmgmt/
-# conda remove -f rapids-build-env rapids-notebook-env
+# conda remove --force rapids-build-env rapids-notebook-env
 # conda install "your-pkg=1.0.0"
 
 # Install the master version of dask, distributed, and streamz
