@@ -28,7 +28,7 @@ logger "Get env..."
 env
 
 logger "Activate conda env..."
-source activate gdf
+source activate rapids
 
 logger "Check versions..."
 python --version
