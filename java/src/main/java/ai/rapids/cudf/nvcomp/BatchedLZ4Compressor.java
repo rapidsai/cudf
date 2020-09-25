@@ -93,6 +93,17 @@ public class BatchedLZ4Compressor {
   }
 
   /**
+   * Calculates the minimum size in bytes necessary to store the compressed output sizes
+   * when performing an asynchronous batch compression.
+   * @param numBuffers number of buffers in the batch
+   * @return minimum size of the compressed output sizes buffer needed
+   */
+  public static long getCompressedSizesBufferSize(int numBuffers) {
+    // Each compressed size value is a 64-bit long
+    return numBuffers * 8;
+  }
+
+  /**
    * Asynchronously compress a batch of input buffers. The compressed size output buffer must be
    * pinned memory for this operation to be truly asynchronous. Note that the caller must
    * synchronize on the specified CUDA stream in order to safely examine the compressed output
@@ -116,7 +127,7 @@ public class BatchedLZ4Compressor {
       throw new IllegalArgumentException("buffer count mismatch, " + numBuffers + " inputs and " +
           outputs.length + " outputs");
     }
-    if (compressedSizesOutputBuffer.getLength() < numBuffers * 8) {
+    if (compressedSizesOutputBuffer.getLength() < getCompressedSizesBufferSize(numBuffers)) {
       throw new IllegalArgumentException("compressed output size buffer must be able to hold " +
           "at least 8 bytes per buffer, size is only " + compressedSizesOutputBuffer.getLength());
     }
@@ -177,11 +188,13 @@ public class BatchedLZ4Compressor {
           outputAddrs[i] = buffer.getAddress();
         }
 
-        try (HostMemoryBuffer compressedSizesBuffer = HostMemoryBuffer.allocate(numBuffers * 8)) {
+        long compressedSizesBufferSize = getCompressedSizesBufferSize(numBuffers);
+        try (HostMemoryBuffer compressedSizesBuffer =
+                 HostMemoryBuffer.allocate(compressedSizesBufferSize)) {
           NvcompJni.batchedLZ4CompressAsync(compressedSizesBuffer.getAddress(),
-                  inputAddrs, inputSizes, chunkSize,
-                  tempBuffer.getAddress(), tempBuffer.getLength(),
-                  outputAddrs, outputSizes, stream.getStream());
+              inputAddrs, inputSizes, chunkSize,
+              tempBuffer.getAddress(), tempBuffer.getLength(),
+              outputAddrs, outputSizes, stream.getStream());
           stream.sync();
           long[] compressedSizes = new long[numBuffers];
           compressedSizesBuffer.getLongs(compressedSizes, 0, 0, numBuffers);
@@ -197,4 +210,6 @@ public class BatchedLZ4Compressor {
       throw t;
     }
   }
+
+
 }

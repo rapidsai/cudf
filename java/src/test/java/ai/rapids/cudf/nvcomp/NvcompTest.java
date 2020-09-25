@@ -72,7 +72,8 @@ public class NvcompTest {
         for (int i = 0; i < numBuffers; ++i) {
           compressedBuffers[i] = DeviceMemoryBuffer.allocate(outputSizes[i]);
         }
-        try (HostMemoryBuffer compressedSizesBuffer = HostMemoryBuffer.allocate(8 * numBuffers)) {
+        long sizesBufferSize = BatchedLZ4Compressor.getCompressedSizesBufferSize(numBuffers);
+        try (HostMemoryBuffer compressedSizesBuffer = HostMemoryBuffer.allocate(sizesBufferSize)) {
           BatchedLZ4Compressor.compressAsync(compressedSizesBuffer, originalBuffers, chunkSize,
               tempBuffer, compressedBuffers, Cuda.DEFAULT_STREAM);
           Cuda.DEFAULT_STREAM.sync();
