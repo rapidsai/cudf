@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/copy_if_else.cuh>
 #include <cudf/detail/indexalator.cuh>
-#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/unary.hpp>
 #include <cudf/dictionary/detail/encode.hpp>
 #include <cudf/dictionary/detail/replace.hpp>
@@ -28,30 +28,51 @@ namespace dictionary {
 namespace detail {
 namespace {
 
+/**
+ * @brief An index accessor that returns a validity flag along with the index value.
+ */
 template <bool has_nulls = false>
 struct nullable_index_accessor {
-  cudf::detail::input_indexalator itr;
+  cudf::detail::input_indexalator iter;
   bitmask_type const* null_mask;
   size_type const offset;
   nullable_index_accessor(column_view const& col) : null_mask{col.null_mask()}, offset{col.offset()}
   {
     if (has_nulls) { CUDF_EXPECTS(col.nullable(), "Unexpected non-nullable column."); }
-    itr = cudf::detail::indexalator_factory::make_input_iterator(col);
+    iter = cudf::detail::indexalator_factory::make_input_iterator(col);
   }
 
   __device__ thrust::pair<size_type, bool> operator()(size_type i) const
   {
-    return {itr[i], (has_nulls ? bit_is_set(null_mask, i + offset) : true)};
+    return {iter[i], (has_nulls ? bit_is_set(null_mask, i + offset) : true)};
   }
 };
 
+/**
+ * @brief Create an index iterator with a nullable index accessor.
+ */
 template <bool has_nulls>
-static auto make_pair_iterator(column_view const& col)
+static auto make_nullable_index_iterator(column_view const& col)
 {
   return thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
                                          nullable_index_accessor<has_nulls>{col});
 }
 
+/**
+ * @brief Utility uses `copy_if_else` to replace null entries using the input bitmask as a
+ * predicate.
+ *
+ * The predicate identifies which column row to copy from and the bitmask specifies which rows
+ * are null. Since the `copy_if_else` accepts iterators, we also supply it with pair-iterators
+ * created from indexalators and the validity masks.
+ *
+ * @tparam has_nulls Set to true if the replacement column has nulls.
+ *
+ * @param input lhs for `copy_if_else`
+ * @param replacement rhs for `copy_if_else`
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
 template <bool has_nulls>
 std::unique_ptr<column> replace_indices(column_view const& input,
                                         column_view const& replacement,
@@ -63,33 +84,21 @@ std::unique_ptr<column> replace_indices(column_view const& input,
   auto const d_input    = *input_view;
   auto predicate        = [d_input] __device__(auto i) { return d_input.is_valid(i); };
 
-  auto input_pair_iterator = make_pair_iterator<has_nulls>(input);
-  if (replacement.nullable()) {
-    auto replacement_pair_iterator = make_pair_iterator<true>(replacement);
-    return cudf::detail::copy_if_else(true,
-                                      input_pair_iterator,
-                                      input_pair_iterator + size,
-                                      replacement_pair_iterator,
-                                      predicate,
-                                      mr,
-                                      stream);
-  } else {
-    auto replacement_pair_iterator = make_pair_iterator<false>(replacement);
-    return cudf::detail::copy_if_else(has_nulls,
-                                      input_pair_iterator,
-                                      input_pair_iterator + size,
-                                      replacement_pair_iterator,
-                                      predicate,
-                                      mr,
-                                      stream);
-  }
+  auto input_pair_iterator       = make_nullable_index_iterator<true>(input);
+  auto replacement_pair_iterator = make_nullable_index_iterator<has_nulls>(replacement);
+  return cudf::detail::copy_if_else(true,
+                                    input_pair_iterator,
+                                    input_pair_iterator + size,
+                                    replacement_pair_iterator,
+                                    predicate,
+                                    mr,
+                                    stream);
 }
 
 }  // namespace
 
 /**
- * @brief Create a new dictionary column by replace nulls with values
- * from second dictionary.
+ * @copydoc cudf::dictionary::detail::replace_nulls
  */
 std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
                                       dictionary_column_view const& replacement,
@@ -97,6 +106,9 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
                                       cudaStream_t stream)
 {
   CUDF_EXPECTS(input.keys().type() == replacement.keys().type(), "keys must match");
+  CUDF_EXPECTS(replacement.size() == input.size(), "column sizes must match");
+  if (input.size() == 0) { return cudf::empty_like(input.parent()); }
+  if (!input.has_nulls()) { return std::make_unique<cudf::column>(input.parent()); }
 
   // first combine keys so both dictionaries have the same set
   auto input_matched    = dictionary::detail::add_keys(input, replacement.keys(), mr, stream);
@@ -108,8 +120,8 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
   // now build the new indices by doing replace-null on the indices
   auto const input_indices = input_view.get_indices_annotated();
   auto const repl_indices  = repl_view.get_indices_annotated();
-  //
-  auto new_indices = input_indices.has_nulls()
+
+  auto new_indices = repl_indices.has_nulls()
                        ? replace_indices<true>(input_indices, repl_indices, mr, stream)
                        : replace_indices<false>(input_indices, repl_indices, mr, stream);
 
