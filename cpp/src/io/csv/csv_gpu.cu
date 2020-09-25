@@ -960,13 +960,11 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
   }
 }
 
-size_t __host__ count_blank_rows(rmm::device_vector<uint64_t> const &row_offsets,
-                                 rmm::device_vector<char> const &data,
-                                 const cudf::io::ParseOptions &opts,
+size_t __host__ count_blank_rows(const cudf::io::ParseOptions &opts,
+                                 device_span<char const> const &data,
+                                 device_span<uint64_t const> const &row_offsets,
                                  cudaStream_t stream)
 {
-  const char *d_data  = data.data().get();
-  size_t d_size       = data.size();
   const auto newline  = opts.skipblanklines ? opts.terminator : opts.comment;
   const auto comment  = opts.comment != '\0' ? opts.comment : newline;
   const auto carriage = (opts.skipblanklines && opts.terminator == '\n') ? '\r' : comment;
@@ -974,9 +972,9 @@ size_t __host__ count_blank_rows(rmm::device_vector<uint64_t> const &row_offsets
     rmm::exec_policy(stream)->on(stream),
     row_offsets.begin(),
     row_offsets.end(),
-    [d_data, d_size, newline, comment, carriage] __device__(const uint64_t pos) {
-      return ((pos != d_size) &&
-              (d_data[pos] == newline || d_data[pos] == comment || d_data[pos] == carriage));
+    [data, newline, comment, carriage] __device__(const uint64_t pos) {
+      return ((pos != data.size()) &&
+              (data[pos] == newline || data[pos] == comment || data[pos] == carriage));
     });
 }
 

@@ -169,15 +169,15 @@ uint32_t gather_row_offsets(uint64_t *row_ctx,
 /**
  * Count the number of blank rows in the given row offset array
  *
- * @param row_offsets Row offsets in the character data buffer
- * @param d_data Character data buffer
  * @param options Options that control parsing of individual fields
+ * @param d_data Character data buffer
+ * @param row_offsets Row offsets in the character data buffer
  * @param stream CUDA stream used for device memory operations and kernel launches.
  *
  **/
-size_t count_blank_rows(rmm::device_vector<uint64_t> const &row_offsets,
-                        rmm::device_vector<char> const &d_data,
-                        const cudf::io::ParseOptions &options,
+size_t count_blank_rows(const cudf::io::ParseOptions &options,
+                        device_span<char const> const &data,
+                        device_span<uint64_t const> const &row_offsets,
                         cudaStream_t stream = 0);
 
 /**

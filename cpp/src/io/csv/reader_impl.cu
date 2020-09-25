@@ -505,7 +505,10 @@ void reader::impl::gather_row_offsets(const char *h_data,
       if (num_rows >= 0) {
         if (num_row_offsets > header_rows + static_cast<size_t>(num_rows)) {
           size_t num_blanks =
-            cudf::io::csv::gpu::count_blank_rows(row_offsets_, data_, opts, stream);
+            cudf::io::csv::gpu::count_blank_rows(opts,
+                                                 device_span<char const>(data_),
+                                                 device_span<uint64_t const>(row_offsets_),
+                                                 stream);
           if (num_row_offsets - num_blanks > header_rows + static_cast<size_t>(num_rows)) {
             // Got the desired number of rows
             break;
