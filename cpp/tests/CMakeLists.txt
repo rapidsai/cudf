@@ -45,10 +45,12 @@ install(TARGETS cudftestutil
 set(CUDF_TEST_LIST CACHE INTERNAL "CUDF_TEST_LIST")
 
 function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
-    add_executable(${CMAKE_TEST_NAME}
-                    ${CMAKE_TEST_SRC})
+    add_executable(
+        ${CMAKE_TEST_NAME} 
+        ${CMAKE_TEST_SRC}
+    )
     set_target_properties(${CMAKE_TEST_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
-    target_link_libraries(${CMAKE_TEST_NAME} gmock gtest pthread ${CUDF_LIBRARIES} cudftestutil)
+    target_link_libraries(${CMAKE_TEST_NAME} gmock gtest pthread cudf_base cudf_groupby cudf_quant ${CUDF_LIBRARIES} cudftestutil)
     set_target_properties(${CMAKE_TEST_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gtests")
     add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
     set(CUDF_TEST_LIST ${CUDF_TEST_LIST} ${CMAKE_TEST_NAME} CACHE INTERNAL "CUDF_TEST_LIST")

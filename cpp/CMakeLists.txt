@@ -318,24 +318,6 @@ if(PER_THREAD_DEFAULT_STREAM)
 endif(PER_THREAD_DEFAULT_STREAM)
 
 ###################################################################################################
-# - add gtest -------------------------------------------------------------------------------------
-
-if(BUILD_TESTS)
-    include(CTest)
-    include(ConfigureGoogleTest)
-
-    if(GTEST_FOUND)
-        message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
-        include_directories(${GTEST_INCLUDE_DIR})
-        add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
-    else()
-        message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
-    endif(GTEST_FOUND)
-endif(BUILD_TESTS)
-
-message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
-
-###################################################################################################
 # - add google benchmark --------------------------------------------------------------------------
 
 if(BUILD_BENCHMARKS)
@@ -394,45 +376,83 @@ endif(CONDA_LINK_DIRS)
 ###################################################################################################
 # - library targets -------------------------------------------------------------------------------
 
+# Set a default logging level if none was specified
+set(DEFAULT_LOGGING_LEVEL INFO)
+
+if(NOT LOGGING_LEVEL)
+    message(STATUS "Setting logging level to '${DEFAULT_LOGGING_LEVEL}' since none specified.")
+    set(LOGGING_LEVEL "${DEFAULT_LOGGING_LEVEL}" CACHE
+      STRING "Choose the logging level." FORCE)
+    # Set the possible values of build type for cmake-gui
+    set_property(CACHE LOGGING_LEVEL PROPERTY STRINGS
+        "TRACE" "DEBUG" "INFO" "WARN" "ERROR" "CRITICAL" "OFF")
+else()
+    message(STATUS "Setting logging level to '${LOGGING_LEVEL}'")
+endif(NOT LOGGING_LEVEL)
+
+set(CUDF_TYPES_DIRS "${CMAKE_SOURCE_DIR}/src/datetime"
+                    "${CMAKE_SOURCE_DIR}/src/dictionary"
+                    "${CMAKE_SOURCE_DIR}/src/lists"
+                    "${CMAKE_SOURCE_DIR}/src/structs"
+                    "${CMAKE_SOURCE_DIR}/src/filling"
+                    "${CMAKE_SOURCE_DIR}/src/unary"
+                    "${CMAKE_SOURCE_DIR}/src/search"
+                    "${CMAKE_SOURCE_DIR}/src/jit"
+)
+
+foreach(CUDF_TYPES_DIR IN LISTS CUDF_TYPES_DIRS)
+  file(GLOB_RECURSE CUDF_TYPES_SRC "${CUDF_TYPES_DIR}/*")
+  list(APPEND CUDF_BASE_SRC ${CUDF_TYPES_SRC})
+endforeach()
+
+
+set(CUDF_CONTAINERS_DIRS "${CMAKE_SOURCE_DIR}/src/scalar"
+                          "${CMAKE_SOURCE_DIR}/src/column"
+                          "${CMAKE_SOURCE_DIR}/src/table"
+)
+
+foreach(CUDF_CONTAINERS_DIR IN LISTS CUDF_CONTAINERS_DIRS)
+  file(GLOB_RECURSE CUDF_CONTAINERS_SRC "${CUDF_CONTAINERS_DIR}/*")
+  list(APPEND CUDF_BASE_SRC ${CUDF_CONTAINERS_SRC})
+endforeach()
+
+add_library(cudf_base ${CUDF_BASE_SRC})
+
 function(add_library_module MODULE MODULE_DIR)
   file(GLOB_RECURSE MODULE_SRC "${MODULE_DIR}/*")
   add_library(${MODULE} OBJECT ${MODULE_SRC})
+  target_link_libraries(${MODULE} cudf_base)
   set_target_properties(${MODULE} PROPERTIES BUILD_RPATH "\$ORIGIN")
+  target_compile_definitions(${MODULE} PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${LOGGING_LEVEL})
 endfunction()
 
 add_library_module(cudf_agg       "${CMAKE_SOURCE_DIR}/src/aggregation")
 add_library_module(cudf_binop     "${CMAKE_SOURCE_DIR}/src/binaryop")
 add_library_module(cudf_bitmask   "${CMAKE_SOURCE_DIR}/src/bitmask")
-add_library_module(cudf_column    "${CMAKE_SOURCE_DIR}/src/column")
 add_library_module(cudf_comms     "${CMAKE_SOURCE_DIR}/src/comms")
 add_library_module(cudf_copying   "${CMAKE_SOURCE_DIR}/src/copying")
-add_library_module(cudf_datetime  "${CMAKE_SOURCE_DIR}/src/datetime")
-add_library_module(cudf_dict      "${CMAKE_SOURCE_DIR}/src/dictionary")
-add_library_module(cudf_filling   "${CMAKE_SOURCE_DIR}/src/filling")
+# add_library_module(cudf_filling   "${CMAKE_SOURCE_DIR}/src/filling")
 add_library_module(cudf_groupby   "${CMAKE_SOURCE_DIR}/src/groupby")
 add_library_module(cudf_hash      "${CMAKE_SOURCE_DIR}/src/hash")
 add_library_module(cudf_interop   "${CMAKE_SOURCE_DIR}/src/interop")
 add_library_module(cudf_io        "${CMAKE_SOURCE_DIR}/src/io")
-add_library_module(cudf_jit       "${CMAKE_SOURCE_DIR}/src/jit")
+# add_library_module(cudf_jit       "${CMAKE_SOURCE_DIR}/src/jit")
 add_library_module(cudf_join      "${CMAKE_SOURCE_DIR}/src/join")
-add_library_module(cudf_lists     "${CMAKE_SOURCE_DIR}/src/lists")
 add_library_module(cudf_merge     "${CMAKE_SOURCE_DIR}/src/merge")
 add_library_module(cudf_part      "${CMAKE_SOURCE_DIR}/src/partitioning")
 add_library_module(cudf_quant     "${CMAKE_SOURCE_DIR}/src/quantiles")
 add_library_module(cudf_reduce    "${CMAKE_SOURCE_DIR}/src/reductions")
 add_library_module(cudf_replace   "${CMAKE_SOURCE_DIR}/src/replace")
+add_library_module(cudf_reshape   "${CMAKE_SOURCE_DIR}/src/reshape")
 add_library_module(cudf_rolling   "${CMAKE_SOURCE_DIR}/src/rolling")
-add_library_module(cudf_scalar    "${CMAKE_SOURCE_DIR}/src/scalar")
-add_library_module(cudf_search    "${CMAKE_SOURCE_DIR}/src/search")
+# add_library_module(cudf_search    "${CMAKE_SOURCE_DIR}/src/search")
 add_library_module(cudf_sort      "${CMAKE_SOURCE_DIR}/src/sort")
 add_library_module(cudf_streamc   "${CMAKE_SOURCE_DIR}/src/stream_compaction")
 add_library_module(cudf_strings   "${CMAKE_SOURCE_DIR}/src/strings")
-add_library_module(cudf_structs   "${CMAKE_SOURCE_DIR}/src/structs")
-add_library_module(cudf_table     "${CMAKE_SOURCE_DIR}/src/table")
 add_library_module(cudf_text      "${CMAKE_SOURCE_DIR}/src/text")
 add_library_module(cudf_xform     "${CMAKE_SOURCE_DIR}/src/transform")
 add_library_module(cudf_xpose     "${CMAKE_SOURCE_DIR}/src/transpose")
-add_library_module(cudf_unop      "${CMAKE_SOURCE_DIR}/src/unary")
+# add_library_module(cudf_unop      "${CMAKE_SOURCE_DIR}/src/unary")
 
 ###################################################################################################
 # - jitify ----------------------------------------------------------------------------------------
@@ -561,39 +581,34 @@ add_custom_target(stringify_run DEPENDS
                   ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/cassert.jit
                   )
 
+add_dependencies(cudf_base      stringify_run)
 add_dependencies(cudf_agg       stringify_run)
 add_dependencies(cudf_binop     stringify_run)
 add_dependencies(cudf_bitmask   stringify_run)
-add_dependencies(cudf_column    stringify_run)
 add_dependencies(cudf_comms     stringify_run)
 add_dependencies(cudf_copying   stringify_run)
-add_dependencies(cudf_datetime  stringify_run)
-add_dependencies(cudf_dict      stringify_run)
-add_dependencies(cudf_filling   stringify_run)
+# add_dependencies(cudf_filling   stringify_run)
 add_dependencies(cudf_groupby   stringify_run)
 add_dependencies(cudf_hash      stringify_run)
 add_dependencies(cudf_interop   stringify_run)
 add_dependencies(cudf_io        stringify_run)
-add_dependencies(cudf_jit       stringify_run)
+# add_dependencies(cudf_jit       stringify_run)
 add_dependencies(cudf_join      stringify_run)
-add_dependencies(cudf_lists     stringify_run)
 add_dependencies(cudf_merge     stringify_run)
 add_dependencies(cudf_part      stringify_run)
 add_dependencies(cudf_quant     stringify_run)
 add_dependencies(cudf_reduce    stringify_run)
 add_dependencies(cudf_replace   stringify_run)
+add_dependencies(cudf_reshape   stringify_run)
 add_dependencies(cudf_rolling   stringify_run)
-add_dependencies(cudf_scalar    stringify_run)
-add_dependencies(cudf_search    stringify_run)
+# add_dependencies(cudf_search    stringify_run)
 add_dependencies(cudf_sort      stringify_run)
 add_dependencies(cudf_streamc   stringify_run)
 add_dependencies(cudf_strings   stringify_run)
-add_dependencies(cudf_structs   stringify_run)
-add_dependencies(cudf_table     stringify_run)
 add_dependencies(cudf_text      stringify_run)
 add_dependencies(cudf_xform     stringify_run)
 add_dependencies(cudf_xpose     stringify_run)
-add_dependencies(cudf_unop      stringify_run)
+# add_dependencies(cudf_unop      stringify_run)
 
 ###################################################################################################
 # - build options ---------------------------------------------------------------------------------
@@ -612,64 +627,43 @@ if(HT_DEFAULT_ALLOCATOR)
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DHT_DEFAULT_ALLOCATOR")
 endif(HT_DEFAULT_ALLOCATOR)
 
-# Set a default logging level if none was specified
-set(DEFAULT_LOGGING_LEVEL INFO)
-
-if(NOT LOGGING_LEVEL)
-    message(STATUS "Setting logging level to '${DEFAULT_LOGGING_LEVEL}' since none specified.")
-    set(LOGGING_LEVEL "${DEFAULT_LOGGING_LEVEL}" CACHE
-      STRING "Choose the logging level." FORCE)
-    # Set the possible values of build type for cmake-gui
-    set_property(CACHE LOGGING_LEVEL PROPERTY STRINGS
-        "TRACE" "DEBUG" "INFO" "WARN" "ERROR" "CRITICAL" "OFF")
-else()
-    message(STATUS "Setting logging level to '${LOGGING_LEVEL}'")
-endif(NOT LOGGING_LEVEL)
-
-target_compile_definitions(cudf PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${LOGGING_LEVEL})
-
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
-set(CUDF_MODULES cudf_agg
+
+set(CUDF_MODULES # cudf_jit
+                 cudf_agg
                  cudf_binop
                  cudf_bitmask
-                 cudf_column
-                 cudf_comms
-                 cudf_copying
-                 cudf_datetime
-                 cudf_dict
-                 cudf_filling
                  cudf_groupby
                  cudf_hash
                  cudf_interop
                  cudf_io
-                 cudf_jit
                  cudf_join
-                 cudf_lists
                  cudf_merge
                  cudf_part
                  cudf_quant
                  cudf_reduce
                  cudf_replace
                  cudf_rolling
-                 cudf_scalar
-                 cudf_search
-                 cudf_sort
-                 cudf_streamc
                  cudf_strings
-                 cudf_structs
-                 cudf_table
                  cudf_text
                  cudf_xform
                  cudf_xpose
-                 cudf_unop
+                 cudf_comms
+                #  cudf_filling
+                #  cudf_search
+                 cudf_reshape
+                 cudf_copying
+                 cudf_streamc
+                 cudf_sort
+                #  cudf_unop
 )
 
 foreach(MODULE IN LISTS CUDF_MODULES)
   list(APPEND CUDF_MODULE_TARGETS "\$<TARGET_OBJECTS:${MODULE}>")
 endforeach()
 
-set(NUM_LIBRARY_PARTITIONS 1 CACHE INTERNAL "")
+set(NUM_LIBRARY_PARTITIONS 23 CACHE INTERNAL "")
 message(STATUS "Number of libraries to be created: ${NUM_LIBRARY_PARTITIONS}")
 
 list(LENGTH CUDF_MODULES NUM_MODULES)
@@ -686,6 +680,7 @@ if(${NUM_LIBRARY_PARTITIONS} GREATER_EQUAL 2)
     list(SUBLIST CUDF_MODULE_TARGETS ${START_INDEX} ${NUM_MODULES_PER_LIB} LIB_TARGETS)
     message(STATUS "Targets for cudf_partition_${INDEX}: ${LIB_TARGETS}")
     add_library("cudf_partition_${INDEX}" ${LIB_TARGETS})
+    target_link_libraries("cudf_partition_${INDEX}")
     list(APPEND CUDF_LIBRARIES "cudf_partition_${INDEX}")
   endforeach()
 
@@ -695,10 +690,12 @@ if(${NUM_LIBRARY_PARTITIONS} GREATER_EQUAL 2)
   list(SUBLIST CUDF_MODULE_TARGETS ${START_INDEX} ${NMODULES} LIB_TARGETS)
   message(STATUS "Targets for cudf_partition_${INDEX}: ${LIB_TARGETS}")
   add_library("cudf_partition_${INDEX}" ${LIB_TARGETS})
+  target_link_libraries("cudf_partition_${INDEX}")
   list(APPEND CUDF_LIBRARIES "cudf_partition_${INDEX}")
 else ()
   message(STATUS "Targets for libcudf: ${CUDF_MODULE_TARGETS}")
   add_library("cudf" ${CUDF_MODULE_TARGETS})
+  target_link_libraries("cudf")
   list(APPEND CUDF_LIBRARIES "cudf")
 endif()
 
@@ -706,8 +703,26 @@ message(STATUS "cuDF library partitions: ${CUDF_LIBRARIES}")
 
 # link targets for cuDF
 foreach(CUDF_LIBRARY IN LISTS CUDF_LIBRARIES)
-  target_link_libraries(${CUDF_LIBRARY} rmm arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+  target_link_libraries(${CUDF_LIBRARY} arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
 endforeach()
+
+###################################################################################################
+# - add gtest -------------------------------------------------------------------------------------
+
+if(BUILD_TESTS)
+    include(CTest)
+    include(ConfigureGoogleTest)
+
+    if(GTEST_FOUND)
+        message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
+        include_directories(${GTEST_INCLUDE_DIR})
+        add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
+    else()
+        message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
+    endif(GTEST_FOUND)
+endif(BUILD_TESTS)
+
+message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
 
 # ##################################################################################################
 # # - install targets ------------------------------------------------------------------------------
