@@ -17,13 +17,19 @@
 #include <cudf/utilities/default_stream.hpp>
 
 namespace cudf {
-namespace default_stream {
 
+/**
+ * @brief Check if the default stream is per-thread.
+ *
+ * @return true if the default stream is per-thread, false otherwise.
+ */
+bool is_per_thread_default_stream()
+{
 #ifdef CUDA_API_PER_THREAD_DEFAULT_STREAM
-bool const is_per_thread{true};
+  return true;
 #else
-bool const is_per_thread{false};
+  return false;
 #endif
+}
 
-}  // namespace default_stream
 }  // namespace cudf

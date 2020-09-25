@@ -17,10 +17,12 @@
 #pragma once
 
 namespace cudf {
-namespace default_stream {
 
-/// Whether the default stream is per-thread.
-extern bool const is_per_thread;
+/**
+ * @brief Check if the default stream is per-thread.
+ *
+ * @return true if the default stream is per-thread, false otherwise.
+ */
+bool is_per_thread_default_stream();
 
-}  // namespace default_stream
 }  // namespace cudf

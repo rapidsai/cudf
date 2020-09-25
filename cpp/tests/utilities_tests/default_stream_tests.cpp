@@ -19,7 +19,7 @@
 #include <cudf_test/cudf_gtest.hpp>
 
 #ifdef CUDA_API_PER_THREAD_DEFAULT_STREAM
-TEST(DefaultStreamTest, IsPerThread) { EXPECT_TRUE(cudf::default_stream::is_per_thread); }
+TEST(DefaultStreamTest, IsPerThread) { EXPECT_TRUE(cudf::is_per_thread_default_stream()); }
 #else
-TEST(DefaultStreamTest, IsNotPerThread) { EXPECT_FALSE(cudf::default_stream::is_per_thread); }
+TEST(DefaultStreamTest, IsNotPerThread) { EXPECT_FALSE(cudf::is_per_thread_default_stream()); }
 #endif
