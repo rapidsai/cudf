@@ -466,20 +466,19 @@ struct indexalator_factory {
   }
 
   /**
+   * @brief Create an indexalator over a scalar of index type.
+   */
+  static input_indexalator make_input_iterator(scalar const& index)
+  {
+    return type_dispatcher(index.type(), input_indexalator_scalar_fn{}, index);
+  }
+
+  /**
    * @brief Create an output indexalator instance from an indices column.
    */
   static output_indexalator make_output_iterator(mutable_column_view const& indices)
   {
     return type_dispatcher(indices.type(), output_indexalator_fn{}, indices);
-  }
-
-  /**
-   * @brief Create an indexalator over a scalar of index type.
-   */
-  static auto make_constant_iterator(scalar const& index)
-  {
-    auto itr = type_dispatcher(index.type(), input_indexalator_scalar_fn{}, index);
-    return thrust::make_permutation_iterator(itr, thrust::make_constant_iterator(0));
   }
 };
 
