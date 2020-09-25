@@ -12,6 +12,9 @@ export PARALLEL_LEVEL=${PARALLEL_LEVEL:-8}
 # Set home to the job's workspace
 export HOME=$WORKSPACE
 
+# Determine CUDA release version
+export CUDA_REL=${CUDA_VERSION%.*}
+
 # Switch to project root; also root of repo checkout
 cd $WORKSPACE
 
