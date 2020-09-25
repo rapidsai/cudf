@@ -291,6 +291,7 @@ struct replace_nulls_scalar_kernel_forwarder {
                                            rmm::mr::device_memory_resource* mr,
                                            cudaStream_t stream = 0)
   {
+    CUDF_EXPECTS(input.type() == replacement.type(), "Data type mismatch");
     std::unique_ptr<cudf::column> output =
       cudf::allocate_like(input, cudf::mask_allocation_policy::NEVER, mr);
     auto output_view = output->mutable_view();
@@ -326,6 +327,7 @@ std::unique_ptr<cudf::column> replace_nulls_scalar_kernel_forwarder::operator()<
   rmm::mr::device_memory_resource* mr,
   cudaStream_t stream)
 {
+  CUDF_EXPECTS(input.type() == replacement.type(), "Data type mismatch");
   cudf::strings_column_view input_s(input);
   const cudf::string_scalar& repl = static_cast<const cudf::string_scalar&>(replacement);
   return cudf::strings::replace_nulls(input_s, repl, mr);
@@ -372,8 +374,6 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
   if (!input.has_nulls() || !replacement.is_valid()) {
     return std::make_unique<cudf::column>(input, stream, mr);
   }
-
-  CUDF_EXPECTS(input.type() == replacement.type(), "Data type mismatch");
 
   return cudf::type_dispatcher(
     input.type(), replace_nulls_scalar_kernel_forwarder{}, input, replacement, mr, stream);
