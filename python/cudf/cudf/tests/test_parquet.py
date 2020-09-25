@@ -222,7 +222,7 @@ def test_parquet_reader_empty_pandas_dataframe(tmpdir, engine):
     expect = expect.reset_index(drop=True)
     got = got.reset_index(drop=True)
 
-    assert_eq(expect, got, check_categorical=False)
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("has_null", [False, True])
