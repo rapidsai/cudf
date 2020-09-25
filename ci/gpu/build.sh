@@ -67,9 +67,11 @@ conda install "rmm=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
 
 # Install the master version of dask, distributed, and streamz
 gpuci_logger "Install the master version of dask, distributed, and streamz"
+set -x
 pip install "git+https://github.com/dask/distributed.git" --upgrade --no-deps
 pip install "git+https://github.com/dask/dask.git" --upgrade --no-deps
 pip install "git+https://github.com/python-streamz/streamz.git" --upgrade --no-deps
+set +x
 
 gpuci_logger "Check compiler versions"
 python --version
@@ -103,6 +105,7 @@ else
     nvidia-smi
 
     gpuci_logger "GoogleTests"
+    set -x
     cd $WORKSPACE/cpp/build
 
     for gt in ${WORKSPACE}/cpp/build/gtests/* ; do
