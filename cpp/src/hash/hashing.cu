@@ -635,9 +635,15 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   }
 }
 
+/*
+ * Configures if single column hashing retains null rows
+ */
+ enum class retain_nulls : bool { HASH_NULLS, RETAIN_NULLS };
+
 std::unique_ptr<column> hash(table_view const& input,
                              hash_id hash_function,
                              std::vector<uint32_t> const& initial_hash,
+                             retain_nulls  policy,
                              rmm::mr::device_memory_resource* mr,
                              cudaStream_t stream)
 {
@@ -649,6 +655,7 @@ std::unique_ptr<column> hash(table_view const& input,
 }
 
 std::unique_ptr<column> md5_hash(table_view const& input,
+                                 retain_nulls policy,
                                  rmm::mr::device_memory_resource* mr,
                                  cudaStream_t stream)
 {
@@ -679,7 +686,11 @@ std::unique_ptr<column> md5_hash(table_view const& input,
   auto chars_view = chars_column->mutable_view();
   auto d_chars    = chars_view.data<char>();
 
-  rmm::device_buffer null_mask{0, stream, mr};
+  rmm::device_buffer null_mask;
+  if (policy == retain_nulls::RETAIN_NULLS && input.num_columns() == 1)
+    null_mask = copy_bitmask(input.column(0), stream, mr);
+  else
+    null_mask = rmm::device_buffer{0, stream, mr};
 
   bool const nullable     = has_nulls(input);
   auto const device_input = table_device_view::create(input, stream);
