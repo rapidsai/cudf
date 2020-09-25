@@ -11,10 +11,13 @@
 - PR #6119 Add support for `dayofweek` property in `DateTimeIndex` and `DatetimeProperties`
 - PR #6171 Java and Jni support for Struct columns
 - PR #6125 Add support for `Series.mode` and `DataFrame.mode`
+- PR #6254 Add `cudf::make_dictionary_from_scalar` factory function
 - PR #6262 Add nth_element series aggregation with null handling
+- PR #6301 Add JNI bindings to nvcomp
 
 ## Improvements
 
+- PR #6292 Remove individual size tracking from JNI tracking resource adaptor
 - PR #5946 Add cython and python support for libcudf `to_arrow` and `from_arrow`
 - PR #5919 Remove max_strings and max_chars from nvtext::subword_tokenize
 - PR #5956 Add/Update tests for cuStreamz
@@ -25,7 +28,9 @@
 - PR #5971 Add cuStreamz README for basic installation and use
 - PR #6024 Expose selecting multiple ORC stripes to read from Python
 - PR #6155 Use the CUB submodule in Thrust instead of fetching CUB separately
+- PR #6321 Add option in JNI code to use `arena_memory_resource`
 - PR #6002 Add Java bindings for md5
+- PR #6311 Switch Thrust to use the NVIDIA/thrust repo
 - PR #6060 Add support for all types in `Series.describe` and `DataFrame.describe`
 - PR #6051 Add builder API for cuIO `parquet_writer_options` and `parquet_reader_options`
 - PR #6067 Added compute codes for aarch64 devices
@@ -61,10 +66,14 @@
 - PR #6214 Small clean up to use more algorithms
 - PR #6209 Remove CXX11 ABI handling from CMake
 - PR #6223 Remove CXX11 ABI flag from JNI build
+- PR #6114 Implement Fuzz tests for cuIO
+- PR #6231 Adds `inplace`, `append`, `verify_integrity` fields to `DataFrame.set_index`
 - PR #6215 Add cmake command-line setting for spdlog logging level
 - PR #6242 Added cudf::detail::host_span and device_span
 - PR #6240 Don't shallow copy index in as_index() unless necessary
 - PR #6204 Add dockerfile and script to build cuDF jar
+- PR #6248 Optimize groupby-agg in dask_cudf
+- PR #6243 Move `equals()` logic to `Frame`
 - PR #6245 Split up replace.cu into multiple source files
 - PR #6218 increase visiblity/consistency for cuio reader writer private member variable names.
 - PR #6268 Add file tags to libcudf doxygen
@@ -72,6 +81,7 @@
 - PR #6273 Update JNI to use ORC options builder
 - PR #6293 Replace shuffle warp reduce with cub calls
 - PR #6287 Make java aggregate API follow C++ API
+- PR #6303 Use cudf test dtypes so timedelta tests are determinstic
 
 ## Bug Fixes
 
@@ -85,6 +95,7 @@
 - PR #6121 Replace calls to get_default_resource with get_current_device_resource
 - PR #6128 Add support for numpy RandomState handling in `sample`
 - PR #6137 Fix issue where `np.nan` is being return instead of `NAT` for datetime/duration types
+- PR #6298 Fix gcc-9 compilation error in dictionary/remove_keys.cu
 - PR #6172 Fix slice issue with empty column
 - PR #6154 Warnings on row-wise op only when non-numeric columns are found.
 - PR #6150 Fix issue related to inferring `datetime64` format with UTC timezone in string data
@@ -106,8 +117,15 @@
 - PR #6259 Fix compilation error with GCC 8
 - PR #6258 Pin libcudf conda recipe to boost 1.72.0
 - PR #6264 Remove include statement for missing rmm/mr/device/default_memory_resource.hpp file
+- PR #6294 Fix read parquet key error when reading empty pandas DataFrame with cudf
+- PR #6285 Removed unsafe `reinterpret_cast` and implicit pointer-to-bool casts
+- PR #6281 Fix unreachable code warning in datetime.cuh
 - PR #6286 Fix `read_csv` `int32` overflow 
+- PR #6310 Replace a misspelled reference to `master` branch with `main` branch in a comment in changelog.sh
+- PR #6289 Revert #6206
+- PR #6291 Fix issue related to row-wise operations in `cudf.DataFrame`
 - PR #6304 Fix span_tests.cu includes
+
 
 
 # cuDF 0.15.0 (26 Aug 2020)
