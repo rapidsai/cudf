@@ -549,16 +549,15 @@ struct decode_op {
  * @param[out] num_valid The numbers of valid fields in columns
  **/
 __global__ void __launch_bounds__(csvparse_block_dim)
-  convert_csv_to_cudf(const char *raw_csv,
-                      const ParseOptions opts,
-                      size_t num_records,
-                      size_t num_columns,
-                      const column_parse::flags *flags,
-                      const uint64_t *recStart,
-                      cudf::data_type *dtype,
-                      void **data,
-                      cudf::bitmask_type **valid)
+  convert_csv_to_cudf(cudf::io::ParseOptions const options,
+                      device_span<char const> const data,
+                      device_span<column_parse::flags const> const column_flags,
+                      device_span<uint64_t const> const row_offsets,
+                      cudf::data_type *dtypes,
+                      void **columns,
+                      cudf::bitmask_type **valids)
 {
+  auto raw_csv = data.data();
   // thread IDs range per block, so also need the block id
   long rec_id =
     threadIdx.x + (blockDim.x * blockIdx.x);  // this is entry into the field array - tid is
@@ -566,59 +565,59 @@ __global__ void __launch_bounds__(csvparse_block_dim)
 
   // we can have more threads than data, make sure we are not past the end of
   // the data
-  if (rec_id >= num_records) return;
+  if (rec_id >= row_offsets.size()) return;
 
-  long start = recStart[rec_id];
-  long stop  = recStart[rec_id + 1];
+  long start = row_offsets[rec_id];
+  long stop  = row_offsets[rec_id + 1];
 
   long pos       = start;
   int col        = 0;
   int actual_col = 0;
 
-  while (col < num_columns) {
+  while (col < column_flags.size()) {
     if (start > stop) break;
 
-    pos = cudf::io::gpu::seek_field_end(raw_csv + pos, raw_csv + stop, opts) - raw_csv;
+    pos = cudf::io::gpu::seek_field_end(raw_csv + pos, raw_csv + stop, options) - raw_csv;
 
-    if (flags[col] & column_parse::enabled) {
+    if (column_flags[col] & column_parse::enabled) {
       // check if the entire field is a NaN string - consistent with pandas
-      const bool is_na = serializedTrieContains(opts.naValuesTrie, raw_csv + start, pos - start);
+      const bool is_na = serializedTrieContains(options.naValuesTrie, raw_csv + start, pos - start);
 
       // Modify start & end to ignore whitespace and quotechars
       long tempPos = pos - 1;
-      if (!is_na && dtype[actual_col].id() != cudf::type_id::STRING) {
-        trim_field_start_end(raw_csv, &start, &tempPos, opts.quotechar);
+      if (!is_na && dtypes[actual_col].id() != cudf::type_id::STRING) {
+        trim_field_start_end(raw_csv, &start, &tempPos, options.quotechar);
       }
 
       if (!is_na && start <= (tempPos)) {  // Empty fields are not legal values
 
         // Type dispatcher does not handle STRING
-        if (dtype[actual_col].id() == cudf::type_id::STRING) {
+        if (dtypes[actual_col].id() == cudf::type_id::STRING) {
           long end = pos;
-          if (opts.keepquotes == false) {
-            if ((raw_csv[start] == opts.quotechar) && (raw_csv[end - 1] == opts.quotechar)) {
+          if (options.keepquotes == false) {
+            if ((raw_csv[start] == options.quotechar) && (raw_csv[end - 1] == options.quotechar)) {
               start++;
               end--;
             }
           }
-          auto str_list          = static_cast<std::pair<const char *, size_t> *>(data[actual_col]);
-          str_list[rec_id].first = raw_csv + start;
+          auto str_list = static_cast<std::pair<const char *, size_t> *>(columns[actual_col]);
+          str_list[rec_id].first  = raw_csv + start;
           str_list[rec_id].second = end - start;
         } else {
-          if (cudf::type_dispatcher(dtype[actual_col],
+          if (cudf::type_dispatcher(dtypes[actual_col],
                                     decode_op{},
-                                    data[actual_col],
+                                    columns[actual_col],
                                     rec_id,
                                     raw_csv + start,
                                     raw_csv + tempPos,
-                                    opts,
-                                    flags[col])) {
+                                    options,
+                                    column_flags[col])) {
             // set the valid bitmap - all bits were set to 0 to start
-            set_bit(valid[actual_col], rec_id);
+            set_bit(valids[actual_col], rec_id);
           }
         }
-      } else if (dtype[actual_col].id() == cudf::type_id::STRING) {
-        auto str_list           = static_cast<std::pair<const char *, size_t> *>(data[actual_col]);
+      } else if (dtypes[actual_col].id() == cudf::type_id::STRING) {
+        auto str_list = static_cast<std::pair<const char *, size_t> *>(columns[actual_col]);
         str_list[rec_id].first  = nullptr;
         str_list[rec_id].second = 0;
       }
@@ -1018,25 +1017,21 @@ thrust::host_vector<column_parse::stats> detect_column_types(
   return thrust::host_vector<column_parse::stats>(d_stats);
 }
 
-cudaError_t __host__ DecodeRowColumnData(const char *data,
-                                         const uint64_t *row_starts,
-                                         size_t num_rows,
-                                         size_t num_columns,
-                                         const ParseOptions &options,
-                                         const column_parse::flags *flags,
-                                         cudf::data_type *dtypes,
-                                         void **columns,
-                                         cudf::bitmask_type **valids,
-                                         cudaStream_t stream)
+void __host__ decode_row_column_data(cudf::io::ParseOptions const &options,
+                                     device_span<char const> const &data,
+                                     device_span<column_parse::flags const> const &flags,
+                                     device_span<uint64_t const> const &row_offsets,
+                                     cudf::data_type *dtypes,
+                                     void **columns,
+                                     cudf::bitmask_type **valids,
+                                     cudaStream_t stream)
 {
   // Calculate actual block count to use based on records count
   const int block_size = csvparse_block_dim;
-  const int grid_size  = (num_rows + block_size - 1) / block_size;
+  const int grid_size  = (row_offsets.size() + block_size - 1) / block_size;
 
   convert_csv_to_cudf<<<grid_size, block_size, 0, stream>>>(
-    data, options, num_rows, num_columns, flags, row_starts, dtypes, columns, valids);
-
-  return cudaSuccess;
+    options, data, flags, row_offsets, dtypes, columns, valids);
 }
 
 uint32_t __host__ gather_row_offsets(uint64_t *row_ctx,

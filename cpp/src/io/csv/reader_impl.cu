@@ -19,6 +19,7 @@
  * @brief cuDF-IO CSV reader class implementation
  **/
 
+#include "io/csv/csv_common.h"
 #include "reader_impl.hpp"
 
 #include <io/comp/io_uncomp.h>
@@ -681,16 +682,15 @@ void reader::impl::decode_data(const std::vector<data_type> &column_types,
   rmm::device_vector<bitmask_type *> d_valid = h_valid;
   d_column_flags_                            = h_column_flags_;
 
-  CUDA_TRY(cudf::io::csv::gpu::DecodeRowColumnData(data_.data().get(),
-                                                   row_offsets_.data().get(),
-                                                   num_records_,
-                                                   num_actual_cols_,
-                                                   opts,
-                                                   d_column_flags_.data().get(),
-                                                   d_dtypes.data().get(),
-                                                   d_data.data().get(),
-                                                   d_valid.data().get(),
-                                                   stream));
+  cudf::io::csv::gpu::decode_row_column_data(
+    opts,
+    device_span<char const>(data_),
+    device_span<column_parse::flags const>(d_column_flags_),
+    device_span<uint64_t const>(row_offsets_),
+    d_dtypes.data().get(),
+    d_data.data().get(),
+    d_valid.data().get(),
+    stream);
   CUDA_TRY(cudaStreamSynchronize(stream));
 
   for (int i = 0; i < num_active_cols_; ++i) { out_buffers[i].null_count() = UNKNOWN_NULL_COUNT; }

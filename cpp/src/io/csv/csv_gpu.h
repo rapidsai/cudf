@@ -199,8 +199,8 @@ void remove_blank_rows(const cudf::io::ParseOptions &options,
  *
  * @param[in] options Options that control individual field data conversion
  * @param[in] data The row-column data
- * @param[in] flags Flags that control individual column parsing
- * @param[in] row_starts List of row data start positions (offsets)
+ * @param[in] column_flags Flags that control individual column parsing
+ * @param[in] row_offsets List of row data start positions (offsets)
  * @param[in] stream CUDA stream to use, default 0
  *
  * @return stats Histogram of each dtypes' occurrence for each column
@@ -208,38 +208,31 @@ void remove_blank_rows(const cudf::io::ParseOptions &options,
 thrust::host_vector<column_parse::stats> detect_column_types(
   cudf::io::ParseOptions const &options,
   device_span<char const> const &data,
-  device_span<column_parse::flags const> const &column_flags,
-  device_span<uint64_t const> const &row_starts,
-  size_t num_active_columns,
-  cudaStream_t stream = (cudaStream_t)0);
+  device_span<column_parse::flags const> const column_flags,
+  device_span<uint64_t const> const &row_offsets,
+  size_t const num_active_columns,
+  cudaStream_t stream = 0);
 
 /**
  * @brief Launches kernel for decoding row-column data
  *
- * @param[in] data The row-column data
- * @param[in] row_starts List of row data start positions (offsets)
- * @param[in] num_rows Number of rows
- * @param[in] num_columns Number of columns
  * @param[in] options Options that control individual field data conversion
- * @param[in] flags Flags that control individual column parsing
+ * @param[in] data The row-column data
+ * @param[in] column_flags Flags that control individual column parsing
+ * @param[in] row_offsets List of row data start positions (offsets)
  * @param[in] dtypes List of dtype corresponding to each column
  * @param[out] columns Device memory output of column data
  * @param[out] valids Device memory output of column valids bitmap data
- * @param[out] num_valid Number of valid fields in each column
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t DecodeRowColumnData(const char *data,
-                                const uint64_t *row_starts,
-                                size_t num_rows,
-                                size_t num_columns,
-                                const cudf::io::ParseOptions &options,
-                                const column_parse::flags *flags,
-                                cudf::data_type *dtypes,
-                                void **columns,
-                                cudf::bitmask_type **valids,
-                                cudaStream_t stream = (cudaStream_t)0);
+void decode_row_column_data(cudf::io::ParseOptions const &options,
+                            device_span<char const> const &data,
+                            device_span<column_parse::flags const> const &column_flags,
+                            device_span<uint64_t const> const &row_offsets,
+                            cudf::data_type *dtypes,
+                            void **columns,
+                            cudf::bitmask_type **valids,
+                            cudaStream_t stream = 0);
 
 }  // namespace gpu
 }  // namespace csv
