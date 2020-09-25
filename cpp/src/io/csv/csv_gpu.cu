@@ -977,7 +977,7 @@ size_t __host__ count_blank_rows(const cudf::io::ParseOptions &opts,
     });
 }
 
-void __host__ remove_blank_rows(const cudf::io::ParseOptions &options,
+void __host__ remove_blank_rows(cudf::io::ParseOptions const &options,
                                 device_span<char const> const &data,
                                 rmm::device_vector<uint64_t> &row_offsets,
                                 cudaStream_t stream)
@@ -1012,7 +1012,7 @@ thrust::host_vector<column_parse::stats> detect_column_types(
   auto d_stats = rmm::device_vector<column_parse::stats>(num_active_columns);
 
   data_type_detection<<<grid_size, block_size, 0, stream>>>(
-    options, data, column_flags, row_starts, device_span<column_parse::stats>(d_stats));
+    options, data, column_flags, row_starts, d_stats);
 
   return thrust::host_vector<column_parse::stats>(d_stats);
 }

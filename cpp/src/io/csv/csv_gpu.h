@@ -136,6 +136,7 @@ inline __host__ __device__ rowctx64_t select_row_context(rowctx64_t sel_ctx,
  * Row parsing context will be updated after phase 2 such that the value contains
  * the number of rows starting at byte_range_end or beyond.
  *
+ * @param options Options that control parsing of individual fields
  * @param row_ctx Row parsing context (output of phase 1 or input to phase 2)
  * @param offsets_out Row offsets (nullptr for phase1, non-null indicates phase 2)
  * @param data Base pointer of character data (all row offsets are relative to this)
@@ -146,12 +147,11 @@ inline __host__ __device__ rowctx64_t select_row_context(rowctx64_t sel_ctx,
  * @param byte_range_start Ignore rows starting before this position in the file
  * @param byte_range_end In phase 2, store the number of rows beyond range in row_ctx
  * @param skip_rows Number of rows to skip (ignored in phase 1)
- * @param options Options that control parsing of individual fields
  * @param stream CUDA stream used for device memory operations and kernel launches.
  *
  * @return Number of row contexts
  **/
-uint32_t gather_row_offsets(const cudf::io::ParseOptions &options,
+uint32_t gather_row_offsets(cudf::io::ParseOptions const &options,
                             uint64_t *row_ctx,
                             device_span<uint64_t> const &offsets_out,
                             device_span<char const> const &data,
@@ -173,7 +173,7 @@ uint32_t gather_row_offsets(const cudf::io::ParseOptions &options,
  * @param stream CUDA stream used for device memory operations and kernel launches.
  *
  **/
-size_t count_blank_rows(const cudf::io::ParseOptions &options,
+size_t count_blank_rows(cudf::io::ParseOptions const &options,
                         device_span<char const> const &data,
                         device_span<uint64_t const> const &row_offsets,
                         cudaStream_t stream = 0);

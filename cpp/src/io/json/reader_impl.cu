@@ -508,7 +508,7 @@ void reader::impl::set_data_types(cudaStream_t stream)
     auto const h_column_infos = cudf::io::json::gpu::detect_data_types(
       opts_,
       device_span<char const>(static_cast<char const *>(data_.data()), data_.size()),
-      device_span<uint64_t const>(rec_starts_),
+      rec_starts_,
       do_set_null_count,
       num_columns,
       get_column_map_device_ptr(),
@@ -576,8 +576,8 @@ table_with_metadata reader::impl::convert_data_to_table(cudaStream_t stream)
   cudf::io::json::gpu::convert_json_to_columns(
     opts_,
     device_span<char const>(static_cast<char const *>(data_.data()), data_.size()),
-    device_span<uint64_t const>(rec_starts_),
-    device_span<data_type const>(d_dtypes),
+    rec_starts_,
+    d_dtypes,
     get_column_map_device_ptr(),
     d_data.data().get(),
     d_valid.data().get(),

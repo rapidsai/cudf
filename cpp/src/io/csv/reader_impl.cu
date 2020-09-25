@@ -221,10 +221,7 @@ table_with_metadata reader::impl::read(cudaStream_t stream)
 
     if (compression_type_ != "none") {
       h_uncomp_data_owner = get_uncompressed_data(h_data, compression_type_);
-
-      h_data = host_span<char const>(  //
-        h_uncomp_data_owner.data(),
-        h_uncomp_data_owner.size());
+      h_data              = h_uncomp_data_owner;
     }
     // None of the parameters for row selection is used, we are parsing the entire file
     const bool load_whole_file = range_offset == 0 && range_size == 0 && skip_rows <= 0 &&
@@ -412,7 +409,7 @@ void reader::impl::gather_row_offsets(host_span<char const> const &data,
     uint32_t num_blocks = cudf::io::csv::gpu::gather_row_offsets(opts,
                                                                  row_ctx.device_ptr(),
                                                                  device_span<uint64_t>(),
-                                                                 device_span<char const>(data_),
+                                                                 data_,
                                                                  chunk_size,
                                                                  pos,
                                                                  buffer_pos,
@@ -449,8 +446,8 @@ void reader::impl::gather_row_offsets(host_span<char const> const &data,
       // Pass 2: Output row offsets
       cudf::io::csv::gpu::gather_row_offsets(opts,
                                              row_ctx.device_ptr(),
-                                             device_span<uint64_t>(row_offsets_),
-                                             device_span<char const>(data_),
+                                             row_offsets_,
+                                             data_,
                                              chunk_size,
                                              pos,
                                              buffer_pos,
@@ -482,10 +479,7 @@ void reader::impl::gather_row_offsets(host_span<char const> const &data,
       if (num_rows >= 0) {
         if (row_offsets_.size() > header_rows + static_cast<size_t>(num_rows)) {
           size_t num_blanks =
-            cudf::io::csv::gpu::count_blank_rows(opts,
-                                                 device_span<char const>(data_),
-                                                 device_span<uint64_t const>(row_offsets_),
-                                                 stream);
+            cudf::io::csv::gpu::count_blank_rows(opts, data_, row_offsets_, stream);
           if (row_offsets_.size() - num_blanks > header_rows + static_cast<size_t>(num_rows)) {
             // Got the desired number of rows
             break;
@@ -505,8 +499,7 @@ void reader::impl::gather_row_offsets(host_span<char const> const &data,
 
   // Eliminate blank rows
   if (row_offsets_.size() != 0) {
-    cudf::io::csv::gpu::remove_blank_rows(
-      opts, device_span<char const>(data_), row_offsets_, stream);
+    cudf::io::csv::gpu::remove_blank_rows(opts, data_, row_offsets_, stream);
   }
   // Remove header rows and extract header
   const size_t header_row_index = std::max<size_t>(header_rows, 1) - 1;
@@ -541,12 +534,7 @@ std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream)
       d_column_flags_ = h_column_flags_;
 
       auto column_stats = cudf::io::csv::gpu::detect_column_types(
-        opts,
-        device_span<char const>(data_),
-        device_span<column_parse::flags const>(d_column_flags_),
-        device_span<uint64_t const>(row_offsets_),
-        num_active_cols_,
-        stream);
+        opts, data_, d_column_flags_, row_offsets_, num_active_cols_, stream);
 
       CUDA_TRY(cudaStreamSynchronize(stream));
 
@@ -684,15 +672,14 @@ std::vector<column_buffer> reader::impl::decode_data(std::vector<data_type> cons
   rmm::device_vector<bitmask_type *> d_valid = h_valid;
   d_column_flags_                            = h_column_flags_;
 
-  cudf::io::csv::gpu::decode_row_column_data(
-    opts,
-    device_span<char const>(data_),
-    device_span<column_parse::flags const>(d_column_flags_),
-    device_span<uint64_t const>(row_offsets_),
-    d_dtypes.data().get(),
-    d_data.data().get(),
-    d_valid.data().get(),
-    stream);
+  cudf::io::csv::gpu::decode_row_column_data(opts,
+                                             data_,
+                                             d_column_flags_,
+                                             row_offsets_,
+                                             d_dtypes.data().get(),
+                                             d_data.data().get(),
+                                             d_valid.data().get(),
+                                             stream);
 
   CUDA_TRY(cudaStreamSynchronize(stream));
 
