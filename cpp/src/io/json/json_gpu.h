@@ -72,7 +72,7 @@ void convert_json_to_columns(ParseOptions const &options,
  *
  * @returns The count for each column data type
  */
-std::vector<cudf::io::json::ColumnInfo> detect_data_types(
+std::vector<cudf::io::json::column_info> detect_data_types(
   ParseOptions const &options,
   device_span<char const> const &data,
   device_span<uint64_t const> const &row_offsets,
