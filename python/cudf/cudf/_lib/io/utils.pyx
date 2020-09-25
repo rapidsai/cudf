@@ -67,7 +67,10 @@ cdef source_info make_source_info(list src) except*:
 
 # Converts the Python sink input to libcudf++ IO sink_info.
 cdef sink_info make_sink_info(src, unique_ptr[data_sink] * sink) except*:
-    if isinstance(src, io.TextIOBase):
+    if isinstance(src, io.StringIO):
+        sink.reset(new iobase_data_sink(src))
+        return sink_info(sink.get())
+    elif isinstance(src, io.TextIOBase):
         # Files opened in text mode expect writes to be str rather than bytes,
         # which requires conversion from utf-8. If the underlying buffer is
         # utf-8, we can bypass this conversion by writing directly to it.
@@ -93,7 +96,11 @@ cdef cppclass iobase_data_sink(data_sink):
         this.buf = buf_
 
     void host_write(const void * data, size_t size) with gil:
-        buf.write(PyMemoryView_FromMemory(<char*>data, size, PyBUF_READ))
+        if isinstance(buf, io.StringIO):
+            buf.write(PyMemoryView_FromMemory(<char*>data, size, PyBUF_READ)
+                      .tobytes().decode())
+        else:
+            buf.write(PyMemoryView_FromMemory(<char*>data, size, PyBUF_READ))
 
     void flush() with gil:
         buf.flush()
