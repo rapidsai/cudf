@@ -115,9 +115,11 @@
 - PR #6285 Removed unsafe `reinterpret_cast` and implicit pointer-to-bool casts
 - PR #6281 Fix unreachable code warning in datetime.cuh
 - PR #6286 Fix `read_csv` `int32` overflow 
+- PR #6310 Replace a misspelled reference to `master` branch with `main` branch in a comment in changelog.sh
 - PR #6289 Revert #6206
 - PR #6291 Fix issue related to row-wise operations in `cudf.DataFrame`
 - PR #6304 Fix span_tests.cu includes
+
 
 
 # cuDF 0.15.0 (26 Aug 2020)
