@@ -17,6 +17,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/scalar/scalar.hpp>
 
 namespace cudf {
 namespace dictionary {
@@ -38,6 +39,24 @@ namespace detail {
 std::unique_ptr<column> replace_nulls(
   dictionary_column_view const& input,
   dictionary_column_view const& replacement,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0);
+
+/**
+ * @brief Create a new dictionary column by replacing nulls with a
+ * specified scalar.
+ *
+ * @throw cudf::logic_error if the keys type does not match the replacement type.
+ *
+ * @param input Column with nulls to replace.
+ * @param replacement Values to use for replacing.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @return New dictionary column with nulls entries replaced.
+ */
+std::unique_ptr<column> replace_nulls(
+  dictionary_column_view const& input,
+  scalar const& replacement,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 

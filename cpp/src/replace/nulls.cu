@@ -331,6 +331,17 @@ std::unique_ptr<cudf::column> replace_nulls_scalar_kernel_forwarder::operator()<
   return cudf::strings::replace_nulls(input_s, repl, mr);
 }
 
+template <>
+std::unique_ptr<cudf::column> replace_nulls_scalar_kernel_forwarder::operator()<cudf::dictionary32>(
+  cudf::column_view const& input,
+  cudf::scalar const& replacement,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
+{
+  cudf::dictionary_column_view dict_input(input);
+  return cudf::dictionary::detail::replace_nulls(dict_input, replacement, mr, stream);
+}
+
 }  // end anonymous namespace
 
 namespace cudf {
