@@ -11,8 +11,10 @@
 - PR #6119 Add support for `dayofweek` property in `DateTimeIndex` and `DatetimeProperties`
 - PR #6171 Java and Jni support for Struct columns
 - PR #6125 Add support for `Series.mode` and `DataFrame.mode`
+- PR #6254 Add `cudf::make_dictionary_from_scalar` factory function
 - PR #6262 Add nth_element series aggregation with null handling
 - PR #6302 Add custom dataframe accessors
+- PR #6301 Add JNI bindings to nvcomp
 
 ## Improvements
 
@@ -28,6 +30,7 @@
 - PR #6024 Expose selecting multiple ORC stripes to read from Python
 - PR #6155 Use the CUB submodule in Thrust instead of fetching CUB separately
 - PR #6002 Add Java bindings for md5
+- PR #6311 Switch Thrust to use the NVIDIA/thrust repo
 - PR #6060 Add support for all types in `Series.describe` and `DataFrame.describe`
 - PR #6051 Add builder API for cuIO `parquet_writer_options` and `parquet_reader_options`
 - PR #6067 Added compute codes for aarch64 devices
@@ -113,11 +116,15 @@
 - PR #6259 Fix compilation error with GCC 8
 - PR #6258 Pin libcudf conda recipe to boost 1.72.0
 - PR #6264 Remove include statement for missing rmm/mr/device/default_memory_resource.hpp file
+- PR #6294 Fix read parquet key error when reading empty pandas DataFrame with cudf
 - PR #6285 Removed unsafe `reinterpret_cast` and implicit pointer-to-bool casts
 - PR #6281 Fix unreachable code warning in datetime.cuh
 - PR #6286 Fix `read_csv` `int32` overflow 
+- PR #6310 Replace a misspelled reference to `master` branch with `main` branch in a comment in changelog.sh
 - PR #6289 Revert #6206
+- PR #6291 Fix issue related to row-wise operations in `cudf.DataFrame`
 - PR #6304 Fix span_tests.cu includes
+
 
 
 # cuDF 0.15.0 (26 Aug 2020)

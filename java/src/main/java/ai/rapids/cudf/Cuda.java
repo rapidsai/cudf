@@ -88,7 +88,7 @@ public class Cuda {
       streamWaitEvent(getStream(), event.getEvent());
     }
 
-    long getStream() {
+    public long getStream() {
       return cleaner == null ? 0 : cleaner.stream;
     }
 

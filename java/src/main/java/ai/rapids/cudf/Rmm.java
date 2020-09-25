@@ -314,7 +314,7 @@ public class Rmm {
    * @param stream The stream in which to synchronize this command.
    * @return Returned pointer to the allocated memory
    */
-  static DeviceMemoryBuffer alloc(long size, Cuda.Stream stream) {
+  public static DeviceMemoryBuffer alloc(long size, Cuda.Stream stream) {
     long s = stream == null ? 0 : stream.getStream();
     return new DeviceMemoryBuffer(allocInternal(size, s), size, stream);
   }
