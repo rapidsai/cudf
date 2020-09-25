@@ -58,11 +58,6 @@ nvidia-smi
 logger "Activate conda env..."
 source activate gdf
 
-# Install contextvars on Python 3.6
-py_ver=$(python -c "import sys; print('.'.join(map(str, sys.version_info[:2])))")
-if [ "$py_ver" == "3.6" ];then
-    conda install contextvars
-fi
 
 conda install "rmm=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
               "rapids-build-env=$MINOR_VERSION.*" \
