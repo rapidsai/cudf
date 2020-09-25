@@ -40,15 +40,18 @@ export LIBCUDF_KERNEL_CACHE_PATH="$HOME/.jitify-cache"
 
 function remove_libcudf_kernel_cache_dir {
     EXITCODE=$?
-    gpuci_logger "removing kernel cache dir: $LIBCUDF_KERNEL_CACHE_PATH"
-    rm -rf "$LIBCUDF_KERNEL_CACHE_PATH" || logger "could not rm -rf $LIBCUDF_KERNEL_CACHE_PATH"
+    gpuci_logger "TRAP: Removing kernel cache dir: $LIBCUDF_KERNEL_CACHE_PATH"
+    rm -rf "$LIBCUDF_KERNEL_CACHE_PATH" \
+        || gpuci_logger "[ERROR] TRAP: Could not rm -rf $LIBCUDF_KERNEL_CACHE_PATH"
     exit $EXITCODE
 }
 
 # Set trap to run on exit
+gpuci_logger "TRAP: Set trap to remove jitify cache on exit"
 trap remove_libcudf_kernel_cache_dir EXIT
 
-mkdir -p "$LIBCUDF_KERNEL_CACHE_PATH" || logger "could not mkdir -p $LIBCUDF_KERNEL_CACHE_PATH"
+mkdir -p "$LIBCUDF_KERNEL_CACHE_PATH" \
+    || gpuci_logger "[ERROR] TRAP: Could not mkdir -p $LIBCUDF_KERNEL_CACHE_PATH"
 
 ################################################################################
 # SETUP - Check environment
