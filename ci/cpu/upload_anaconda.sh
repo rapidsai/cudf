@@ -22,9 +22,6 @@ export LIBCUDF_KAFKA_FILE=`conda build conda/recipes/libcudf_kafka --output`
 export CUDF_KAFKA_FILE=`conda build conda/recipes/cudf_kafka --python=$PYTHON --output`
 export CUSTREAMZ_FILE=`conda build conda/recipes/custreamz --python=$PYTHON --output`
 
-CUDA_REL=${CUDA_VERSION%.*}
-
-
 
 if [ "$UPLOAD_LIBCUDF" == "1" ]; then
   LABEL_OPTION="--label main"
