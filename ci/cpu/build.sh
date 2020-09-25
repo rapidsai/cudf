@@ -3,7 +3,7 @@
 ##############################################
 # cuDF CPU conda build script for CI         #
 ##############################################
-set -ex
+set -e
 
 # Set path and build parallel level
 export PATH=/conda/bin:/usr/local/cuda/bin:$PATH
