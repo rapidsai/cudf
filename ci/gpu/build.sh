@@ -7,11 +7,6 @@ set -ex
 NUMARGS=$#
 ARGS=$*
 
-# Logger function for build status output
-function logger() {
-  echo -e "\n>>>> $@\n"
-}
-
 # Arg parsing function
 function hasArg {
     (( ${NUMARGS} != 0 )) && (echo " ${ARGS} " | grep -q " $1 ")
@@ -36,7 +31,7 @@ export LIBCUDF_KERNEL_CACHE_PATH="$HOME/.jitify-cache"
 
 function remove_libcudf_kernel_cache_dir {
     EXITCODE=$?
-    logger "removing kernel cache dir: $LIBCUDF_KERNEL_CACHE_PATH"
+    gpuci_logger "removing kernel cache dir: $LIBCUDF_KERNEL_CACHE_PATH"
     rm -rf "$LIBCUDF_KERNEL_CACHE_PATH" || logger "could not rm -rf $LIBCUDF_KERNEL_CACHE_PATH"
     exit $EXITCODE
 }
@@ -49,15 +44,15 @@ mkdir -p "$LIBCUDF_KERNEL_CACHE_PATH" || logger "could not mkdir -p $LIBCUDF_KER
 # SETUP - Check environment
 ################################################################################
 
-logger "Check environment..."
+gpuci_logger "Check environment variables"
 env
 
-logger "Check GPU usage..."
+gpuci_logger "Check GPU usage"
 nvidia-smi
 
-logger "Activate conda env..."
 source activate gdf
 
+gpuci_logger "Activate conda env"
 
 conda install "rmm=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
               "rapids-build-env=$MINOR_VERSION.*" \
@@ -74,7 +69,7 @@ pip install "git+https://github.com/dask/distributed.git" --upgrade --no-deps
 pip install "git+https://github.com/dask/dask.git" --upgrade --no-deps
 pip install "git+https://github.com/python-streamz/streamz.git" --upgrade --no-deps
 
-logger "Check versions..."
+gpuci_logger "Check compiler versions..."
 python --version
 $CC --version
 $CXX --version
@@ -84,7 +79,7 @@ conda list
 # BUILD - Build libcudf, cuDF, libcudf_kafka, and dask_cudf from source
 ################################################################################
 
-logger "Build libcudf..."
+gpuci_logger "Build from source..."
 if [[ ${BUILD_MODE} == "pull-request" ]]; then
     $WORKSPACE/build.sh clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests --ptds
 else
@@ -97,12 +92,12 @@ fi
 ################################################################################
 
 if hasArg --skip-tests; then
-    logger "Skipping Tests..."
+    gpuci_logger "Skipping Tests..."
 else
-    logger "Check GPU usage..."
+    gpuci_logger "Check GPU usage..."
     nvidia-smi
 
-    logger "GoogleTests..."
+    gpuci_logger "GoogleTests..."
     cd $WORKSPACE/cpp/build
 
     for gt in ${WORKSPACE}/cpp/build/gtests/* ; do
@@ -119,15 +114,15 @@ else
     fi
 
     cd $WORKSPACE/python/cudf
-    logger "Python py.test for cuDF..."
+    gpuci_logger "Python py.test for cuDF..."
     py.test --cache-clear --basetemp=${WORKSPACE}/cudf-cuda-tmp --junitxml=${WORKSPACE}/junit-cudf.xml -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:${WORKSPACE}/python/cudf/cudf-coverage.xml --cov-report term
 
     cd $WORKSPACE/python/dask_cudf
-    logger "Python py.test for dask-cudf..."
+    gpuci_logger "Python py.test for dask-cudf..."
     py.test --cache-clear --basetemp=${WORKSPACE}/dask-cudf-cuda-tmp --junitxml=${WORKSPACE}/junit-dask-cudf.xml -v --cov-config=.coveragerc --cov=dask_cudf --cov-report=xml:${WORKSPACE}/python/dask_cudf/dask-cudf-coverage.xml --cov-report term
 
     cd $WORKSPACE/python/custreamz
-    logger "Python py.test for cuStreamz..."
+    gpuci_logger "Python py.test for cuStreamz..."
     py.test --cache-clear --basetemp=${WORKSPACE}/custreamz-cuda-tmp --junitxml=${WORKSPACE}/junit-custreamz.xml -v --cov-config=.coveragerc --cov=custreamz --cov-report=xml:${WORKSPACE}/python/custreamz/custreamz-coverage.xml --cov-report term
 
     ${WORKSPACE}/ci/gpu/test-notebooks.sh 2>&1 | tee nbtest.log
