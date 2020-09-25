@@ -22,6 +22,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include "cudf/utilities/traits.hpp"
 
 namespace cudf {
 namespace test {
@@ -146,12 +147,33 @@ bool validate_host_masks(std::vector<bitmask_type> const& expected_mask,
  * @return std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> first is the
  *  `column_view`'s data, and second is the column's bitmask.
  */
-template <typename T>
+template <typename T, typename std::enable_if_t<not cudf::is_fixed_point<T>()>* = nullptr>
 std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view c)
 {
   thrust::host_vector<T> host_data(c.size());
   CUDA_TRY(cudaMemcpy(host_data.data(), c.data<T>(), c.size() * sizeof(T), cudaMemcpyDeviceToHost));
   return {host_data, bitmask_to_host(c)};
+}
+
+template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
+std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view c)
+{
+  using RepType = typename T::representation_type;
+
+  auto host_fixed_points = thrust::host_vector<T>(c.size());
+  auto host_rep_types    = thrust::host_vector<RepType>(c.size());
+
+  CUDA_TRY(cudaMemcpy(
+    host_rep_types.data(), c.begin<RepType>(), c.size() * sizeof(RepType), cudaMemcpyDeviceToHost));
+
+  std::transform(std::cbegin(host_rep_types),
+                 std::cend(host_rep_types),
+                 std::begin(host_fixed_points),
+                 [&](auto value) {
+                   return T{value, numeric::scale_type{c.type().scale()}};
+                 });
+
+  return {host_rep_types, bitmask_to_host(c)};
 }
 
 /**
