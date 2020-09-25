@@ -19,6 +19,7 @@
 
 #include <cudf/replace.hpp>
 
+#include <cudf/dictionary/detail/replace.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
@@ -325,6 +326,30 @@ TEST_F(ReplaceDictionaryTest, ReplaceNullsError)
   auto replacement = cudf::dictionary::encode(replacement_w);
 
   EXPECT_THROW(cudf::replace_nulls(input->view(), replacement->view()), cudf::logic_error);
+
+  cudf::test::fixed_width_column_wrapper<int64_t> input_empty_w({});
+  auto input_empty = cudf::dictionary::encode(input_empty_w);
+  auto dict_input  = cudf::dictionary_column_view(input_empty->view());
+  auto dict_repl   = cudf::dictionary_column_view(replacement->view());
+  EXPECT_THROW(cudf::dictionary::detail::replace_nulls(dict_input, dict_repl), cudf::logic_error);
+}
+
+TEST_F(ReplaceDictionaryTest, ReplaceNullsEmpty)
+{
+  cudf::test::fixed_width_column_wrapper<int64_t> input_empty_w({});
+  auto input_empty = cudf::dictionary::encode(input_empty_w);
+  auto dict_input  = cudf::dictionary_column_view(input_empty->view());
+  auto result      = cudf::dictionary::detail::replace_nulls(dict_input, dict_input);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), input_empty->view());
+}
+
+TEST_F(ReplaceDictionaryTest, ReplaceNullsNoNulls)
+{
+  cudf::test::fixed_width_column_wrapper<int8_t> input_w({1, 1, 1});
+  auto input      = cudf::dictionary::encode(input_w);
+  auto dict_input = cudf::dictionary_column_view(input->view());
+  auto result     = cudf::dictionary::detail::replace_nulls(dict_input, dict_input);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), input->view());
 }
 
 CUDF_TEST_PROGRAM_MAIN()
