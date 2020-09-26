@@ -381,17 +381,17 @@ public final class HostColumnVector extends HostColumnVectorCore {
   /**
    * Get the byte list at index.
    */
-  public byte[] getByteList(long rowIndex) {
+  public byte[] getByteList(long index) {
     assert type == DType.LIST;
     assertsForGet(index);
 
-    int start = offHeap.offsets.getInt(rowIndex * DType.INT32.getSizeInBytes());
-    int end = offHeap.offsets.getInt((rowIndex + 1) * DType.INT32.getSizeInBytes());
+    int start = offHeap.offsets.getInt(index * DType.INT32.getSizeInBytes());
+    int end = offHeap.offsets.getInt((index + 1) * DType.INT32.getSizeInBytes());
     int size = end-start;
 
     // check if null or empty
     if (start == end) {
-      if (isNull(rowIndex)) {
+      if (isNull(index)) {
         return null;
       }
     }
