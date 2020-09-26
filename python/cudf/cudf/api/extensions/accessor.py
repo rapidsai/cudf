@@ -37,29 +37,23 @@ _docstring_register_accessor = """
 _dataframe_example = """
     In your library code:
 
-        .. code-block:: python
-
-            import cudf as gd
-
-            @gd.api.extensions.register_dataframe_accessor("point")
-            class PointsAccessor:
-                def __init__(self, obj):
-                    self._validate(obj)
-                    self._obj = obj
-
-                @staticmethod
-                def _validate(obj):
-                    cols = obj.columns
-                    if not all([vertex in cols for vertex in ["x", "y"]]):
-                        raise AttributeError("Must have vertices 'x', 'y'.")
-
-                @property
-                def bounding_box(self):
-                    xs, ys = self._obj["x"], self._obj["y"]
-                    min_x, min_y = xs.min(), ys.min()
-                    max_x, max_y = xs.max(), ys.max()
-
-                    return (min_x, min_y, max_x, max_y)
+        >>> import cudf as gd
+        >>> @gd.api.extensions.register_dataframe_accessor("point")
+        ... class PointsAccessor:
+        ...     def __init__(self, obj):
+        ...         self._validate(obj)
+        ...         self._obj = obj
+        ...     @staticmethod
+        ...     def _validate(obj):
+        ...         cols = obj.columns
+        ...         if not all([vertex in cols for vertex in ["x", "y"]]):
+        ...             raise AttributeError("Must have vertices 'x', 'y'.")
+        ...     @property
+        ...     def bounding_box(self):
+        ...         xs, ys = self._obj["x"], self._obj["y"]
+        ...         min_x, min_y = xs.min(), ys.min()
+        ...         max_x, max_y = xs.max(), ys.max()
+        ...         return (min_x, min_y, max_x, max_y)
 
     Then in user code:
 
@@ -72,17 +66,13 @@ _dataframe_example = """
 _index_example = """
     In your library code:
 
-        .. code-block:: python
-
-            import cudf as gd
-
-            @gd.api.extensions.register_index_accessor("odd")
-            class OddRowAccessor:
-                def __init__(self, obj):
-                    self._obj = obj
-
-                def __getitem__(self, i):
-                    return self._obj[2 * i - 1]
+        >>> import cudf as gd
+        >>> @gd.api.extensions.register_index_accessor("odd")
+        ... class OddRowAccessor:
+        ...     def __init__(self, obj):
+        ...         self._obj = obj
+        ...     def __getitem__(self, i):
+        ...         return self._obj[2 * i - 1]
 
     Then in user code:
 
@@ -99,17 +89,13 @@ _index_example = """
 _series_example = """
     In your library code:
 
-        .. code-block:: python
-
-            import cudf as gd
-
-            @gd.api.extensions.register_series_accessor("odd")
-            class OddRowAccessor:
-                def __init__(self, obj):
-                    self._obj = obj
-
-                def __getitem__(self, i):
-                    return self._obj[2 * i - 1]
+        >>> import cudf as gd
+        >>> @gd.api.extensions.register_series_accessor("odd")
+        ... class OddRowAccessor:
+        ...     def __init__(self, obj):
+        ...         self._obj = obj
+        ...     def __getitem__(self, i):
+        ...         return self._obj[2 * i - 1]
 
     Then in user code:
 
