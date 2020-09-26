@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <cub/cub.cuh>
 #include <io/utilities/block_utils.cuh>
 #include "orc_common.h"
 #include "orc_gpu.h"
@@ -348,12 +349,25 @@ static inline __device__ void StoreBitsBigEndian(
  * @return number of input values encoded
  *
  **/
-template <StreamIndexType cid, class T, bool is_signed, uint32_t inmask>
-static __device__ uint32_t IntegerRLE(
-  orcenc_state_s *s, const T *inbuf, uint32_t inpos, uint32_t numvals, uint32_t flush, int t)
+template <StreamIndexType cid,
+          class T,
+          bool is_signed,
+          uint32_t inmask,
+          typename FullStorage,
+          typename HalfStorage>
+static __device__ uint32_t IntegerRLE(orcenc_state_s *s,
+                                      const T *inbuf,
+                                      uint32_t inpos,
+                                      uint32_t numvals,
+                                      uint32_t flush,
+                                      int t,
+                                      FullStorage &temp_storage_full,
+                                      HalfStorage &temp_storage_half)
 {
-  uint8_t *dst     = s->chunk.streams[cid] + s->strm_pos[cid];
-  uint32_t out_cnt = 0;
+  using warp_reduce      = cub::WarpReduce<T>;
+  using half_warp_reduce = cub::WarpReduce<T, 16>;
+  uint8_t *dst           = s->chunk.streams[cid] + s->strm_pos[cid];
+  uint32_t out_cnt       = 0;
 
   while (numvals > 0) {
     T v0               = (t < numvals) ? inbuf[(inpos + t) & inmask] : 0;
@@ -402,16 +416,10 @@ static __device__ uint32_t IntegerRLE(
       } else {
         intrle_minmax(vmax, vmin);
       }
-      vmin = min(vmin, (T)SHFL_XOR(vmin, 1));
-      vmin = min(vmin, (T)SHFL_XOR(vmin, 2));
-      vmin = min(vmin, (T)SHFL_XOR(vmin, 4));
-      vmin = min(vmin, (T)SHFL_XOR(vmin, 8));
-      vmin = min(vmin, (T)SHFL_XOR(vmin, 16));
-      vmax = max(vmax, (T)SHFL_XOR(vmax, 1));
-      vmax = max(vmax, (T)SHFL_XOR(vmax, 2));
-      vmax = max(vmax, (T)SHFL_XOR(vmax, 4));
-      vmax = max(vmax, (T)SHFL_XOR(vmax, 8));
-      vmax = max(vmax, (T)SHFL_XOR(vmax, 16));
+      vmin = warp_reduce(temp_storage_full[t / 32]).Reduce(vmin, cub::Min());
+      __syncwarp();
+      vmax = warp_reduce(temp_storage_full[t / 32]).Reduce(vmax, cub::Max());
+      __syncwarp();
       if (!(t & 0x1f)) {
         s->u.intrle.scratch.u64[(t >> 5) * 2 + 0] = vmin;
         s->u.intrle.scratch.u64[(t >> 5) * 2 + 1] = vmax;
@@ -420,14 +428,10 @@ static __device__ uint32_t IntegerRLE(
       if (t < 32) {
         vmin = (T)s->u.intrle.scratch.u64[(t & 0xf) * 2 + 0];
         vmax = (T)s->u.intrle.scratch.u64[(t & 0xf) * 2 + 1];
-        vmin = min(vmin, (T)SHFL_XOR(vmin, 1));
-        vmin = min(vmin, (T)SHFL_XOR(vmin, 2));
-        vmin = min(vmin, (T)SHFL_XOR(vmin, 4));
-        vmin = min(vmin, (T)SHFL_XOR(vmin, 8));
-        vmax = max(vmax, (T)SHFL_XOR(vmax, 1));
-        vmax = max(vmax, (T)SHFL_XOR(vmax, 2));
-        vmax = max(vmax, (T)SHFL_XOR(vmax, 4));
-        vmax = max(vmax, (T)SHFL_XOR(vmax, 8));
+        vmin = half_warp_reduce(temp_storage_half[t / 32]).Reduce(vmin, cub::Min());
+        __syncwarp();
+        vmax = half_warp_reduce(temp_storage_half[t / 32]).Reduce(vmax, cub::Max());
+        __syncwarp();
         if (t == 0) {
           uint32_t mode1_w, mode2_w;
           T vrange_mode1, vrange_mode2;
@@ -655,10 +659,19 @@ static const __device__ __constant__ int32_t kTimeScale[10] = {
  *
  **/
 // blockDim {512,1,1}
-extern "C" __global__ void __launch_bounds__(512)
+template <int block_size>
+__global__ void __launch_bounds__(block_size)
   gpuEncodeOrcColumnData(EncChunk *chunks, uint32_t num_columns, uint32_t num_rowgroups)
 {
   __shared__ __align__(16) orcenc_state_s state_g;
+  __shared__ union {
+    typename cub::WarpReduce<int32_t>::TempStorage full_i32[block_size / 32];
+    typename cub::WarpReduce<int64_t>::TempStorage full_i64[block_size / 32];
+    typename cub::WarpReduce<uint32_t>::TempStorage full_u32[block_size / 32];
+    typename cub::WarpReduce<int32_t, 16>::TempStorage half_i32[block_size / 32];
+    typename cub::WarpReduce<int64_t, 16>::TempStorage half_i64[block_size / 32];
+    typename cub::WarpReduce<uint32_t, 16>::TempStorage half_u32[block_size / 32];
+  } temp_storage;
 
   orcenc_state_s *const s = &state_g;
   uint32_t col_id         = blockIdx.x;
@@ -850,13 +863,25 @@ extern "C" __global__ void __launch_bounds__(512)
           case SHORT:
           case INT:
           case DATE:
-            n = IntegerRLE<CI_DATA, int32_t, true, 0x3ff>(
-              s, s->vals.i32, s->nnz - s->numvals, s->numvals, flush, t);
+            n = IntegerRLE<CI_DATA, int32_t, true, 0x3ff>(s,
+                                                          s->vals.i32,
+                                                          s->nnz - s->numvals,
+                                                          s->numvals,
+                                                          flush,
+                                                          t,
+                                                          temp_storage.full_i32,
+                                                          temp_storage.half_i32);
             break;
           case LONG:
           case TIMESTAMP:
-            n = IntegerRLE<CI_DATA, int64_t, true, 0x3ff>(
-              s, s->vals.i64, s->nnz - s->numvals, s->numvals, flush, t);
+            n = IntegerRLE<CI_DATA, int64_t, true, 0x3ff>(s,
+                                                          s->vals.i64,
+                                                          s->nnz - s->numvals,
+                                                          s->numvals,
+                                                          flush,
+                                                          t,
+                                                          temp_storage.full_i64,
+                                                          temp_storage.half_i64);
             break;
           case BYTE:
             n = ByteRLE<CI_DATA, 0x3ff>(s, s->vals.u8, s->nnz - s->numvals, s->numvals, flush, t);
@@ -881,8 +906,14 @@ extern "C" __global__ void __launch_bounds__(512)
             break;
           case STRING:
             if (s->chunk.encoding_kind == DICTIONARY_V2) {
-              n = IntegerRLE<CI_DATA, uint32_t, false, 0x3ff>(
-                s, s->vals.u32, s->nnz - s->numvals, s->numvals, flush, t);
+              n = IntegerRLE<CI_DATA, uint32_t, false, 0x3ff>(s,
+                                                              s->vals.u32,
+                                                              s->nnz - s->numvals,
+                                                              s->numvals,
+                                                              flush,
+                                                              t,
+                                                              temp_storage.full_u32,
+                                                              temp_storage.half_u32);
             } else {
               n = s->numvals;
             }
@@ -898,8 +929,14 @@ extern "C" __global__ void __launch_bounds__(512)
         switch (s->chunk.type_kind) {
           case TIMESTAMP:
           case STRING:
-            n = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff>(
-              s, s->lengths.u32, s->nnz - s->numlengths, s->numlengths, flush, t);
+            n = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff>(s,
+                                                             s->lengths.u32,
+                                                             s->nnz - s->numlengths,
+                                                             s->numlengths,
+                                                             flush,
+                                                             t,
+                                                             temp_storage.full_u32,
+                                                             temp_storage.half_u32);
             break;
           default: n = s->numlengths; break;
         }
@@ -930,10 +967,15 @@ extern "C" __global__ void __launch_bounds__(512)
  *
  **/
 // blockDim {512,1,1}
-extern "C" __global__ void __launch_bounds__(512)
+template <int block_size>
+__global__ void __launch_bounds__(block_size)
   gpuEncodeStringDictionaries(StripeDictionary *stripes, EncChunk *chunks, uint32_t num_columns)
 {
   __shared__ __align__(16) orcenc_state_s state_g;
+  __shared__ union {
+    typename cub::WarpReduce<uint32_t>::TempStorage full_u32[block_size / 32];
+    typename cub::WarpReduce<uint32_t, 16>::TempStorage half_u32[block_size / 32];
+  } temp_storage;
 
   orcenc_state_s *const s = &state_g;
   uint32_t stripe_id      = blockIdx.x;
@@ -985,8 +1027,14 @@ extern "C" __global__ void __launch_bounds__(512)
       __syncthreads();
       if (s->numlengths + numvals > 0) {
         uint32_t flush = (s->cur_row + numvals == s->nrows) ? 1 : 0;
-        uint32_t n     = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff>(
-          s, s->lengths.u32, s->cur_row, s->numlengths + numvals, flush, t);
+        uint32_t n     = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff>(s,
+                                                                  s->lengths.u32,
+                                                                  s->cur_row,
+                                                                  s->numlengths + numvals,
+                                                                  flush,
+                                                                  t,
+                                                                  temp_storage.full_u32,
+                                                                  temp_storage.half_u32);
         __syncthreads();
         if (!t) {
           s->numlengths += numvals;
@@ -1010,7 +1058,7 @@ extern "C" __global__ void __launch_bounds__(512)
  *
  **/
 // blockDim {1024,1,1}
-extern "C" __global__ void __launch_bounds__(1024)
+__global__ void __launch_bounds__(1024)
   gpuCompactOrcDataStreams(StripeStream *strm_desc, EncChunk *chunks, uint32_t num_columns)
 {
   __shared__ __align__(16) StripeStream ss;
@@ -1072,13 +1120,12 @@ extern "C" __global__ void __launch_bounds__(1024)
  *
  **/
 // blockDim {256,1,1}
-extern "C" __global__ void __launch_bounds__(256)
-  gpuInitCompressionBlocks(StripeStream *strm_desc,
-                           EncChunk *chunks,
-                           gpu_inflate_input_s *comp_in,
-                           gpu_inflate_status_s *comp_out,
-                           uint8_t *compressed_bfr,
-                           uint32_t comp_blk_size)
+__global__ void __launch_bounds__(256) gpuInitCompressionBlocks(StripeStream *strm_desc,
+                                                                EncChunk *chunks,
+                                                                gpu_inflate_input_s *comp_in,
+                                                                gpu_inflate_status_s *comp_out,
+                                                                uint8_t *compressed_bfr,
+                                                                uint32_t comp_blk_size)
 {
   __shared__ __align__(16) StripeStream ss;
   __shared__ uint8_t *volatile uncomp_base_g;
@@ -1124,12 +1171,11 @@ extern "C" __global__ void __launch_bounds__(256)
  *
  **/
 // blockDim {1024,1,1}
-extern "C" __global__ void __launch_bounds__(1024)
-  gpuCompactCompressedBlocks(StripeStream *strm_desc,
-                             gpu_inflate_input_s *comp_in,
-                             gpu_inflate_status_s *comp_out,
-                             uint8_t *compressed_bfr,
-                             uint32_t comp_blk_size)
+__global__ void __launch_bounds__(1024) gpuCompactCompressedBlocks(StripeStream *strm_desc,
+                                                                   gpu_inflate_input_s *comp_in,
+                                                                   gpu_inflate_status_s *comp_out,
+                                                                   uint8_t *compressed_bfr,
+                                                                   uint32_t comp_blk_size)
 {
   __shared__ __align__(16) StripeStream ss;
   __shared__ const uint8_t *volatile comp_src_g;
@@ -1210,7 +1256,8 @@ cudaError_t EncodeOrcColumnData(EncChunk *chunks,
 {
   dim3 dim_block(512, 1);  // 512 threads per chunk
   dim3 dim_grid(num_columns, num_rowgroups);
-  gpuEncodeOrcColumnData<<<dim_grid, dim_block, 0, stream>>>(chunks, num_columns, num_rowgroups);
+  gpuEncodeOrcColumnData<512>
+    <<<dim_grid, dim_block, 0, stream>>>(chunks, num_columns, num_rowgroups);
   return cudaSuccess;
 }
 
@@ -1235,7 +1282,8 @@ cudaError_t EncodeStripeDictionaries(StripeDictionary *stripes,
 {
   dim3 dim_block(512, 1);  // 512 threads per dictionary
   dim3 dim_grid(num_string_columns * num_stripes, 2);
-  gpuEncodeStringDictionaries<<<dim_grid, dim_block, 0, stream>>>(stripes, chunks, num_columns);
+  gpuEncodeStringDictionaries<512>
+    <<<dim_grid, dim_block, 0, stream>>>(stripes, chunks, num_columns);
   return cudaSuccess;
 }
 
