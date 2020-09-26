@@ -49,7 +49,7 @@ namespace {
 constexpr type_id to_type_id(const orc::SchemaType &schema,
                              bool use_np_dtypes,
                              type_id timestamp_type_id,
-                             bool decimals_as_float)
+                             bool decimals_as_float64)
 {
   switch (schema.kind) {
     case orc::BOOLEAN: return type_id::BOOL8;
@@ -73,7 +73,7 @@ constexpr type_id to_type_id(const orc::SchemaType &schema,
       return (use_np_dtypes) ? type_id::TIMESTAMP_MILLISECONDS : type_id::TIMESTAMP_DAYS;
     case orc::DECIMAL:
       // There isn't an arbitrary-precision type in cuDF, so map as float or int
-      return (decimals_as_float) ? type_id::FLOAT64 : type_id::INT64;
+      return (decimals_as_float64) ? type_id::FLOAT64 : type_id::INT64;
     default: break;
   }
 
@@ -578,7 +578,7 @@ void reader::impl::decode_stream_data(hostdevice_vector<gpu::ColumnDesc> &chunks
 }
 
 reader::impl::impl(std::unique_ptr<datasource> source,
-                   reader_options const &options,
+                   orc_reader_options const &options,
                    rmm::mr::device_memory_resource *mr)
   : _source(std::move(source)), _mr(mr)
 {
@@ -586,20 +586,22 @@ reader::impl::impl(std::unique_ptr<datasource> source,
   _metadata = std::make_unique<metadata>(_source.get());
 
   // Select only columns required by the options
-  _selected_columns = _metadata->select_columns(options.columns, _has_timestamp_column);
+  _selected_columns = _metadata->select_columns(options.get_columns(), _has_timestamp_column);
 
   // Override output timestamp resolution if requested
-  if (options.timestamp_type.id() != type_id::EMPTY) { _timestamp_type = options.timestamp_type; }
+  if (options.get_timestamp_type().id() != type_id::EMPTY) {
+    _timestamp_type = options.get_timestamp_type();
+  }
 
   // Enable or disable attempt to use row index for parsing
-  _use_index = options.use_index;
+  _use_index = options.is_enabled_use_index();
 
   // Enable or disable the conversion to numpy-compatible dtypes
-  _use_np_dtypes = options.use_np_dtypes;
+  _use_np_dtypes = options.is_enabled_use_np_dtypes();
 
   // Control decimals conversion (float64 or int64 with optional scale)
-  _decimals_as_float     = options.decimals_as_float;
-  _decimals_as_int_scale = options.forced_decimals_scale;
+  _decimals_as_float64   = options.is_enabled_decimals_as_float64();
+  _decimals_as_int_scale = options.get_forced_decimals_scale();
 }
 
 table_with_metadata reader::impl::read(size_type skip_rows,
@@ -620,7 +622,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   std::vector<data_type> column_types;
   for (const auto &col : _selected_columns) {
     auto col_type = to_type_id(
-      _metadata->ff.types[col], _use_np_dtypes, _timestamp_type.id(), _decimals_as_float);
+      _metadata->ff.types[col], _use_np_dtypes, _timestamp_type.id(), _decimals_as_float64);
     CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
     column_types.emplace_back(col_type);
 
@@ -703,7 +705,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         chunk.num_rows      = stripe_info->numberOfRows;
         chunk.encoding_kind = stripe_footer->columns[_selected_columns[j]].kind;
         chunk.type_kind     = _metadata->ff.types[_selected_columns[j]].kind;
-        if (_decimals_as_float) {
+        if (_decimals_as_float64) {
           chunk.decimal_scale =
             _metadata->ff.types[_selected_columns[j]].scale | ORC_DECIMAL2FLOAT64_SCALE;
         } else if (_decimals_as_int_scale < 0) {
@@ -815,7 +817,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
 // Forward to implementation
 reader::reader(std::vector<std::string> const &filepaths,
-               reader_options const &options,
+               orc_reader_options const &options,
                rmm::mr::device_memory_resource *mr)
 {
   CUDF_EXPECTS(filepaths.size() == 1, "Only a single source is currently supported.");
@@ -824,7 +826,7 @@ reader::reader(std::vector<std::string> const &filepaths,
 
 // Forward to implementation
 reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
-               reader_options const &options,
+               orc_reader_options const &options,
                rmm::mr::device_memory_resource *mr)
 {
   CUDF_EXPECTS(sources.size() == 1, "Only a single source is currently supported.");
@@ -835,23 +837,11 @@ reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
 reader::~reader() = default;
 
 // Forward to implementation
-table_with_metadata reader::read_all(cudaStream_t stream)
+table_with_metadata reader::read(orc_reader_options const &options, cudaStream_t stream)
 {
-  return _impl->read(0, -1, std::vector<size_type>(), stream);
+  return _impl->read(
+    options.get_skip_rows(), options.get_num_rows(), options.get_stripes(), stream);
 }
-
-// Forward to implementation
-table_with_metadata reader::read_stripes(const std::vector<size_type> &stripes, cudaStream_t stream)
-{
-  return _impl->read(0, -1, stripes, stream);
-}
-
-// Forward to implementation
-table_with_metadata reader::read_rows(size_type skip_rows, size_type num_rows, cudaStream_t stream)
-{
-  return _impl->read(skip_rows, (num_rows != 0) ? num_rows : -1, std::vector<size_type>(), stream);
-}
-
 }  // namespace orc
 }  // namespace detail
 }  // namespace io

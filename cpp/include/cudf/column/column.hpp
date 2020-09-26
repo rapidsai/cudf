@@ -26,9 +26,16 @@
 #include <utility>
 #include <vector>
 
+/**
+ * @file
+ * @brief Class definition for cudf::column
+ */
+
 namespace cudf {
 
 /**
+ * @brief A container of nullable device data as a column of elements.
+ *
  * @ingroup column_classes Column
  * @{
  */

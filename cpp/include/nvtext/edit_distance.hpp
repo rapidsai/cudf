@@ -24,6 +24,7 @@ namespace nvtext {
 /**
  * @addtogroup nvtext_edit_distance
  * @{
+ * @file
  */
 
 /**

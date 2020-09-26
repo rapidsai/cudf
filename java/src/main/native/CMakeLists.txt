@@ -47,16 +47,6 @@ set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
 if(CMAKE_COMPILER_IS_GNUCXX)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wno-error=deprecated-declarations")
-
-    option(CMAKE_CXX11_ABI "Enable the GLIBCXX11 ABI" ON)
-    if(CMAKE_CXX11_ABI)
-        message(STATUS "CUDF: Enabling the GLIBCXX11 ABI")
-    else()
-        message(STATUS "CUDF: Disabling the GLIBCXX11 ABI")
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_GLIBCXX_USE_CXX11_ABI=0")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_GLIBCXX_USE_CXX11_ABI=0")
-        set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -D_GLIBCXX_USE_CXX11_ABI=0")
-    endif(CMAKE_CXX11_ABI)
 endif(CMAKE_COMPILER_IS_GNUCXX)
 
 #set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_60,code=sm_60 -gencode=arch=compute_61,code=sm_61")
@@ -192,12 +182,25 @@ else()
 endif(JNI_FOUND)
 
 ###################################################################################################
+# - nvcomp ----------------------------------------------------------------------------------------
+
+include(ConfigureNvcomp)
+if(NVCOMP_FOUND)
+    message(STATUS "nvcomp compression library found in ${NVCOMP_ROOT}")
+else()
+    message(FATAL_ERROR "nvcomp compression library not found.")
+endif(NVCOMP_FOUND)
+
+add_library(nvcomp STATIC IMPORTED ${NVCOMP_LIB})
+
+###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
 include_directories("${THRUST_INCLUDE}"
                     "${CUB_INCLUDE}"
                     "${LIBCUDACXX_INCLUDE}"
                     "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
+                    "${NVCOMP_INCLUDE_DIR}"
                     "${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${SPDLOG_INCLUDE}"
@@ -219,10 +222,12 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
 # - library targets -------------------------------------------------------------------------------
 
 set(SOURCE_FILES
+    "src/AggregationJni.cpp"
     "src/CudfJni.cpp"
     "src/CudaJni.cpp"
     "src/ColumnVectorJni.cpp"
     "src/HostMemoryBufferNativeUtilsJni.cpp"
+    "src/NvcompJni.cpp"
     "src/NvtxRangeJni.cpp"
     "src/RmmJni.cpp"
     "src/ScalarJni.cpp"
@@ -249,7 +254,23 @@ if(PER_THREAD_DEFAULT_STREAM)
     add_compile_definitions(CUDA_API_PER_THREAD_DEFAULT_STREAM)
 endif(PER_THREAD_DEFAULT_STREAM)
 
+# Set a default logging level if none was specified
+set(DEFAULT_LOGGING_LEVEL INFO)
+
+if(NOT LOGGING_LEVEL)
+    message(STATUS "Setting logging level to '${DEFAULT_LOGGING_LEVEL}' since none specified.")
+    set(LOGGING_LEVEL "${DEFAULT_LOGGING_LEVEL}" CACHE
+      STRING "Choose the logging level." FORCE)
+    # Set the possible values of build type for cmake-gui
+    set_property(CACHE LOGGING_LEVEL PROPERTY STRINGS
+        "TRACE" "DEBUG" "INFO" "WARN" "ERROR" "CRITICAL" "OFF")
+else()
+    message(STATUS "Setting logging level to '${LOGGING_LEVEL}'")
+endif(NOT LOGGING_LEVEL)
+
+target_compile_definitions(cudfjni PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${LOGGING_LEVEL})
+
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudfjni cudf ${ARROW_LIBRARY} ${CUDART_LIBRARY} cuda nvrtc)
+target_link_libraries(cudfjni cudf ${ARROW_LIBRARY} ${NVCOMP_LIB} ${CUDART_LIBRARY} cuda nvrtc)

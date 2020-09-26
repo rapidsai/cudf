@@ -16,9 +16,6 @@
 
 #pragma once
 
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/cudf_gtest.hpp>
-
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/concatenate.hpp>
@@ -30,6 +27,10 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+
 #include <rmm/device_buffer.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
@@ -107,54 +108,41 @@ class column_wrapper {
   std::unique_ptr<cudf::column> wrapped{};  ///< The wrapped column
 };
 
-// TODO add docs
-template <typename Iterator>
-cudf::size_type size_type_distance(Iterator begin, Iterator end)
-{
-  return static_cast<cudf::size_type>(std::distance(begin, end));
-}
-
 /**
  * @brief Convert between source and target types when they differ and where possible.
  **/
 template <typename From, typename To>
 struct fixed_width_type_converter {
   // Are the types same - simply copy elements from [begin, end) to out
-  template <typename FromT = From,
-            typename ToT   = To,
-            typename InputIterator,
-            typename OutputIterator,
+  template <typename FromT                                                        = From,
+            typename ToT                                                          = To,
             typename std::enable_if<std::is_same<FromT, ToT>::value, void>::type* = nullptr>
-  void operator()(InputIterator begin, InputIterator end, OutputIterator out) const
+  ToT operator()(FromT element) const
   {
-    std::copy(begin, end, out);
+    return element;
   }
 
   // Are the types convertible or can target be constructed from source?
-  template <typename FromT = From,
-            typename ToT   = To,
-            typename InputIterator,
-            typename OutputIterator,
+  template <typename FromT                       = From,
+            typename ToT                         = To,
             typename std::enable_if<!std::is_same<FromT, ToT>::value &&
                                       (cudf::is_convertible<FromT, ToT>::value ||
                                        std::is_constructible<ToT, FromT>::value),
                                     void>::type* = nullptr>
-  void operator()(InputIterator begin, InputIterator end, OutputIterator out) const
+  ToT operator()(FromT element) const
   {
-    std::transform(begin, end, out, [](auto const& e) { return static_cast<ToT>(e); });
+    return static_cast<ToT>(element);
   }
 
   // Convert integral values to timestamps
   template <
-    typename FromT = From,
-    typename ToT   = To,
-    typename InputIterator,
-    typename OutputIterator,
+    typename FromT                       = From,
+    typename ToT                         = To,
     typename std::enable_if<std::is_integral<FromT>::value && cudf::is_timestamp_t<ToT>::value,
                             void>::type* = nullptr>
-  void operator()(InputIterator begin, InputIterator end, OutputIterator out) const
+  ToT operator()(FromT element) const
   {
-    std::transform(begin, end, out, [](auto const& e) { return ToT{typename ToT::duration{e}}; });
+    return ToT{typename ToT::duration{element}};
   }
 };
 
@@ -177,10 +165,10 @@ template <typename ElementTo,
 rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 {
   static_assert(cudf::is_fixed_width<ElementTo>(), "Unexpected non-fixed width type.");
-  cudf::size_type size = std::distance(begin, end);
-  thrust::host_vector<ElementTo> elements;
-  elements.reserve(size);
-  fixed_width_type_converter<ElementFrom, ElementTo>{}(begin, end, elements.begin());
+  auto transformer     = fixed_width_type_converter<ElementFrom, ElementTo>{};
+  auto transform_begin = thrust::make_transform_iterator(begin, transformer);
+  auto const size      = cudf::distance(begin, end);
+  auto const elements  = thrust::host_vector<ElementTo>(transform_begin, transform_begin + size);
   return rmm::device_buffer{elements.data(), size * sizeof(ElementTo)};
 }
 
@@ -196,10 +184,16 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 
   using RepType = typename ElementTo::representation_type;
 
-  cudf::size_type size = std::distance(begin, end);
-  thrust::host_vector<RepType> elements;
-  elements.reserve(size);
-  fixed_width_type_converter<ElementFrom, RepType>{}(begin, end, elements.begin());
+  // auto const size = cudf::distance(begin, end);
+  // thrust::host_vector<RepType> elements;
+  // elements.reserve(size);
+  // fixed_width_type_converter<ElementFrom, RepType>{}(begin, end, elements.begin());
+  // return rmm::device_buffer{elements.data(), size * sizeof(RepType)};
+
+  auto transformer     = fixed_width_type_converter<ElementFrom, RepType>{};
+  auto transform_begin = thrust::make_transform_iterator(begin, transformer);
+  auto const size      = cudf::distance(begin, end);
+  auto const elements  = thrust::host_vector<ElementTo>(transform_begin, transform_begin + size);
   return rmm::device_buffer{elements.data(), size * sizeof(RepType)};
 }
 
@@ -215,7 +209,7 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 
   using RepType = typename ElementTo::representation_type;
 
-  cudf::size_type size = std::distance(begin, end);
+  auto const size = cudf::distance(begin, end);
   thrust::host_vector<RepType> elements;
   elements.reserve(size);
   // fixed_width_type_converter<ElementFrom, RepType>{}(begin, end, elements.begin());
@@ -241,7 +235,7 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 template <typename ValidityIterator>
 std::vector<bitmask_type> make_null_mask_vector(ValidityIterator begin, ValidityIterator end)
 {
-  auto const size      = size_type_distance(begin, end);
+  auto const size      = cudf::distance(begin, end);
   auto const num_words = cudf::bitmask_allocation_size_bytes(size) / sizeof(bitmask_type);
 
   auto null_mask = std::vector<bitmask_type>(num_words, 0);
@@ -344,7 +338,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
   template <typename InputIterator>
   fixed_width_column_wrapper(InputIterator begin, InputIterator end) : column_wrapper{}
   {
-    auto const size = detail::size_type_distance(begin, end);
+    auto const size = cudf::distance(begin, end);
     wrapped.reset(new cudf::column{cudf::data_type{cudf::type_to_id<ElementTo>()},
                                    size,
                                    detail::make_elements<ElementTo, SourceElementT>(begin, end)});
@@ -377,7 +371,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
   fixed_width_column_wrapper(InputIterator begin, InputIterator end, ValidityIterator v)
     : column_wrapper{}
   {
-    auto const size = detail::size_type_distance(begin, end);
+    auto const size = cudf::distance(begin, end);
     wrapped.reset(new cudf::column{cudf::data_type{cudf::type_to_id<ElementTo>()},
                                    size,
                                    detail::make_elements<ElementTo, SourceElementT>(begin, end),
@@ -514,7 +508,7 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
                              numeric::scale_type scale)
     : column_wrapper{}
   {
-    auto const size         = detail::size_type_distance(begin, end);
+    auto const size         = cudf::distance(begin, end);
     auto const elements     = thrust::host_vector<Rep>(begin, end);
     auto const is_decimal32 = std::is_same<Rep, int32_t>::value;
     auto const id           = is_decimal32 ? type_id::DECIMAL32 : type_id::DECIMAL64;

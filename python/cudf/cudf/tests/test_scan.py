@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from cudf.core.dataframe import DataFrame, Series
+import cudf
 from cudf.tests.utils import INTEGER_TYPES, NUMERIC_TYPES, assert_eq, gen_rand
 
 params_sizes = [0, 1, 2, 5]
@@ -29,15 +29,15 @@ def test_cumsum(dtype, nelem):
     decimal = 4 if dtype == np.float32 else 6
 
     # series
-    gs = Series(data)
+    gs = cudf.Series(data)
     ps = pd.Series(data)
     np.testing.assert_array_almost_equal(
         gs.cumsum().to_array(), ps.cumsum(), decimal=decimal
     )
 
     # dataframe series (named series)
-    gdf = DataFrame()
-    gdf["a"] = Series(data)
+    gdf = cudf.DataFrame()
+    gdf["a"] = cudf.Series(data)
     pdf = pd.DataFrame()
     pdf["a"] = pd.Series(data)
     np.testing.assert_array_almost_equal(
@@ -50,12 +50,12 @@ def test_cumsum_masked():
     float_types = ["float32", "float64"]
 
     for type_ in float_types:
-        gs = Series(data).astype(type_)
+        gs = cudf.Series(data).astype(type_)
         ps = pd.Series(data).astype(type_)
         assert_eq(gs.cumsum(), ps.cumsum())
 
     for type_ in INTEGER_TYPES:
-        gs = Series(data).astype(type_)
+        gs = cudf.Series(data).astype(type_)
         got = gs.cumsum()
         expected = pd.Series([1, 3, np.nan, 7, 12], dtype="float64")
         assert_eq(got, expected)
@@ -72,15 +72,15 @@ def test_cummin(dtype, nelem):
     decimal = 4 if dtype == np.float32 else 6
 
     # series
-    gs = Series(data)
+    gs = cudf.Series(data)
     ps = pd.Series(data)
     np.testing.assert_array_almost_equal(
         gs.cummin().to_array(), ps.cummin(), decimal=decimal
     )
 
     # dataframe series (named series)
-    gdf = DataFrame()
-    gdf["a"] = Series(data)
+    gdf = cudf.DataFrame()
+    gdf["a"] = cudf.Series(data)
     pdf = pd.DataFrame()
     pdf["a"] = pd.Series(data)
     np.testing.assert_array_almost_equal(
@@ -93,12 +93,12 @@ def test_cummin_masked():
     float_types = ["float32", "float64"]
 
     for type_ in float_types:
-        gs = Series(data).astype(type_)
+        gs = cudf.Series(data).astype(type_)
         ps = pd.Series(data).astype(type_)
         assert_eq(gs.cummin(), ps.cummin())
 
     for type_ in INTEGER_TYPES:
-        gs = Series(data).astype(type_)
+        gs = cudf.Series(data).astype(type_)
         expected = pd.Series([1, 1, np.nan, 1, 1]).astype("float64")
         assert_eq(gs.cummin(), expected)
 
@@ -114,15 +114,15 @@ def test_cummax(dtype, nelem):
     decimal = 4 if dtype == np.float32 else 6
 
     # series
-    gs = Series(data)
+    gs = cudf.Series(data)
     ps = pd.Series(data)
     np.testing.assert_array_almost_equal(
         gs.cummax().to_array(), ps.cummax(), decimal=decimal
     )
 
     # dataframe series (named series)
-    gdf = DataFrame()
-    gdf["a"] = Series(data)
+    gdf = cudf.DataFrame()
+    gdf["a"] = cudf.Series(data)
     pdf = pd.DataFrame()
     pdf["a"] = pd.Series(data)
     np.testing.assert_array_almost_equal(
@@ -135,12 +135,12 @@ def test_cummax_masked():
     float_types = ["float32", "float64"]
 
     for type_ in float_types:
-        gs = Series(data).astype(type_)
+        gs = cudf.Series(data).astype(type_)
         ps = pd.Series(data).astype(type_)
         assert_eq(gs.cummax(), ps.cummax())
 
     for type_ in INTEGER_TYPES:
-        gs = Series(data).astype(type_)
+        gs = cudf.Series(data).astype(type_)
         expected = pd.Series([1, 2, np.nan, 4, 5]).astype("float64")
         assert_eq(gs.cummax(), expected)
 
@@ -156,15 +156,15 @@ def test_cumprod(dtype, nelem):
     decimal = 4 if dtype == np.float32 else 6
 
     # series
-    gs = Series(data)
+    gs = cudf.Series(data)
     ps = pd.Series(data)
     np.testing.assert_array_almost_equal(
         gs.cumprod().to_array(), ps.cumprod(), decimal=decimal
     )
 
     # dataframe series (named series)
-    gdf = DataFrame()
-    gdf["a"] = Series(data)
+    gdf = cudf.DataFrame()
+    gdf["a"] = cudf.Series(data)
     pdf = pd.DataFrame()
     pdf["a"] = pd.Series(data)
     np.testing.assert_array_almost_equal(
@@ -177,19 +177,19 @@ def test_cumprod_masked():
     float_types = ["float32", "float64"]
 
     for type_ in float_types:
-        gs = Series(data).astype(type_)
+        gs = cudf.Series(data).astype(type_)
         ps = pd.Series(data).astype(type_)
         assert_eq(gs.cumprod(), ps.cumprod())
 
     for type_ in INTEGER_TYPES:
-        gs = Series(data).astype(type_)
+        gs = cudf.Series(data).astype(type_)
         got = gs.cumprod()
         expected = pd.Series([1, 2, np.nan, 8, 40], dtype="float64")
         assert_eq(got, expected)
 
 
 def test_scan_boolean_cumsum():
-    s = Series([0, -1, -300, 23, 4, -3, 0, 0, 100])
+    s = cudf.Series([0, -1, -300, 23, 4, -3, 0, 0, 100])
 
     # cumsum test
     got = (s > 0).cumsum()
@@ -199,7 +199,7 @@ def test_scan_boolean_cumsum():
 
 
 def test_scan_boolean_cumprod():
-    s = Series([0, -1, -300, 23, 4, -3, 0, 0, 100])
+    s = cudf.Series([0, -1, -300, 23, 4, -3, 0, 0, 100])
 
     # cumprod test
     got = (s > 0).cumprod()

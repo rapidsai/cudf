@@ -458,6 +458,88 @@ class Frame(libcudf.table.Table):
 
         return out
 
+    def equals(self, other, **kwargs):
+        """
+        Test whether two objects contain the same elements.
+        This function allows two Series or DataFrames to be compared against
+        each other to see if they have the same shape and elements. NaNs in
+        the same location are considered equal. The column headers do not
+        need to have the same type.
+
+        Parameters
+        ----------
+        other : Series or DataFrame
+            The other Series or DataFrame to be compared with the first.
+
+        Returns
+        -------
+        bool
+            True if all elements are the same in both objects, False
+            otherwise.
+
+        Examples
+        --------
+        >>> import cudf
+
+        Comparing Series with `equals`:
+
+        >>> s = cudf.Series([1, 2, 3])
+        >>> other = cudf.Series([1, 2, 3])
+        >>> s.equals(other)
+        True
+        >>> different = cudf.Series([1.5, 2, 3])
+        >>> s.equals(different)
+        False
+
+        Comparing DataFrames with `equals`:
+
+        >>> df = cudf.DataFrame({1: [10], 2: [20]})
+        >>> df
+            1   2
+        0  10  20
+        >>> exactly_equal = cudf.DataFrame({1: [10], 2: [20]})
+        >>> exactly_equal
+            1   2
+        0  10  20
+        >>> df.equals(exactly_equal)
+        True
+
+        For two DataFrames to compare equal, the types of column
+        values must be equal, but the types of column labels
+        need not:
+
+        >>> different_column_type = cudf.DataFrame({1.0: [10], 2.0: [20]})
+        >>> different_column_type
+           1.0  2.0
+        0   10   20
+        >>> df.equals(different_column_type)
+        True
+        """
+        if self is other:
+            return True
+
+        check_types = kwargs.get("check_types", True)
+
+        if check_types:
+            if type(self) is not type(other):
+                return False
+
+        if other is None or len(self) != len(other):
+            return False
+
+        # check data:
+        for self_col, other_col in zip(
+            self._data.values(), other._data.values()
+        ):
+            if not self_col.equals(other_col, check_dtypes=check_types):
+                return False
+
+        # check index:
+        if self._index is None:
+            return other._index is None
+        else:
+            return self._index.equals(other._index)
+
     def _get_columns_by_label(self, labels, downcast=False):
         """
         Returns columns of the Frame specified by `labels`
@@ -497,6 +579,8 @@ class Frame(libcudf.table.Table):
             )
         )
         result._copy_categories(self)
+        if keep_index and self._index is not None:
+            result._index.names = self._index.names
         return result
 
     def _hash(self, initial_hash_values=None):
@@ -1048,14 +1132,6 @@ class Frame(libcudf.table.Table):
             cond = cupy.asarray(cond)
 
         return self.where(cond=~cond, other=other, inplace=inplace)
-
-    def _split(self, splits, keep_index=True):
-        result = libcudf.copying.table_split(
-            self, splits, keep_index=keep_index
-        )
-
-        result = [self.__class__._from_table(tbl) for tbl in result]
-        return result
 
     def _partition(self, scatter_map, npartitions, keep_index=True):
 
@@ -2165,6 +2241,7 @@ class Frame(libcudf.table.Table):
                     ordered=other_col.ordered,
                     size=col.size,
                     offset=col.offset,
+                    null_count=col.null_count,
                 )
         if include_index:
             # include_index will still behave as False
@@ -2181,13 +2258,15 @@ class Frame(libcudf.table.Table):
                 # When other._index is a CategoricalIndex, there is
                 # possibility that corresposing self._index be GenericIndex
                 # with codes. So to update even the class signature, we
-                # have to call as_index.
+                # have to reconstruct self._index:
                 if isinstance(
                     other._index, cudf.core.index.CategoricalIndex
                 ) and not isinstance(
                     self._index, cudf.core.index.CategoricalIndex
                 ):
-                    self._index = cudf.core.index.as_index(self._index)
+                    self._index = cudf.core.index.Index._from_table(
+                        self._index
+                    )
         return self
 
     def _unaryop(self, op):
@@ -2696,7 +2775,15 @@ class Frame(libcudf.table.Table):
                     1.5707963267948966,  1.266103672779499],
                     dtype='float64')
         """
-        return self._unaryop("acos")
+        result = self.copy(deep=False)
+        for col in result._data:
+            min_float_dtype = cudf.utils.dtypes.get_min_float_dtype(
+                result._data[col]
+            )
+            result._data[col] = result._data[col].astype(min_float_dtype)
+        result = result._unaryop("acos")
+        result = result.mask((result < 0) | (result > np.pi + 1))
+        return result
 
     def atan(self):
         """
@@ -3127,6 +3214,18 @@ class Frame(libcudf.table.Table):
         return libcudf.sort.is_sorted(
             self, ascending=ascending, null_position=null_position
         )
+
+    def _split(self, splits, keep_index=True):
+        result = libcudf.copying.table_split(
+            self, splits, keep_index=keep_index
+        )
+        result = [self.__class__._from_table(tbl) for tbl in result]
+        return result
+
+    def _encode(self):
+        keys, indices = libcudf.transform.table_encode(self)
+        keys = self.__class__._from_table(keys)
+        return keys, indices
 
 
 def _get_replacement_values(to_replace, replacement, col_name, column):

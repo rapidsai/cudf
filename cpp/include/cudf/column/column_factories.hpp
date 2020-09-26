@@ -22,8 +22,10 @@
 
 namespace cudf {
 /**
- * @ingroup column_factories Factories
+ * @addtogroup column_factories
  * @{
+ * @file
+ * @brief Column factory APIs
  */
 
 /**
@@ -607,6 +609,26 @@ std::unique_ptr<cudf::column> make_structs_column(
  * @param mr Device memory resource used to allocate the returned column's device memory.
  */
 std::unique_ptr<column> make_column_from_scalar(
+  scalar const& s,
+  size_type size,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0);
+
+/**
+ * @brief Return a dictionary column with size elements that are all equal to the
+ * given scalar.
+ *
+ * The output column will have keys of type `s.type()`
+ * The output column will be empty if `size==0`.
+ *
+ * @throw cudf::logic_error if `s.is_valid()==false`
+ *
+ * @param s The scalar to use for values in the column.
+ * @param size The number of rows for the output column.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ */
+std::unique_ptr<column> make_dictionary_from_scalar(
   scalar const& s,
   size_type size,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),

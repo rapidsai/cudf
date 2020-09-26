@@ -17,22 +17,22 @@
 #include "json_common.h"
 #include "json_gpu.h"
 
-#include <thrust/find.h>
-#include <rmm/device_buffer.hpp>
+#include <io/csv/datetime.cuh>
+#include <io/utilities/parsing_utils.cuh>
 
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/detail/utilities/trie.cuh>
-
+#include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/lists/list_view.cuh>
+#include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <cudf/fixed_point/fixed_point.hpp>
-#include <cudf/lists/list_view.cuh>
-#include <cudf/strings/string_view.cuh>
+#include <rmm/device_buffer.hpp>
 
-#include <io/csv/datetime.cuh>
-#include <io/utilities/parsing_utils.cuh>
+#include <thrust/detail/copy.h>
+#include <thrust/find.h>
 
 namespace cudf {
 namespace io {
@@ -97,145 +97,129 @@ __device__ std::pair<char const *, char const *> get_next_key(char const *begin,
  * @brief Decodes a numeric value base on templated cudf type T with specified
  * base.
  *
- * @param data The character string for parse
- * @param start The index within data to start parsing from
- * @param end The end index within data to end parsing
+ * @param[in] begin Beginning of the character string
+ * @param[in] end End of the character string
  * @param opts The global parsing behavior options
  *
  * @return The parsed numeric value
  */
 template <typename T, int base>
-__inline__ __device__ T
-decode_value(const char *data, uint64_t start, uint64_t end, ParseOptions const &opts)
+__inline__ __device__ T decode_value(const char *begin, uint64_t end, ParseOptions const &opts)
 {
-  return cudf::io::gpu::parse_numeric<T, base>(data, start, end, opts);
+  return cudf::io::gpu::parse_numeric<T, base>(begin, end, opts);
 }
 
 /**
  * @brief Decodes a numeric value base on templated cudf type T
  *
- * @param data The character string for parse
- * @param start The index within data to start parsing from
- * @param end The end index within data to end parsing
+ * @param[in] begin Beginning of the character string
+ * @param[in] end End of the character string
  * @param opts The global parsing behavior options
  *
  * @return The parsed numeric value
  */
 template <typename T>
-__inline__ __device__ T
-decode_value(const char *data, uint64_t start, uint64_t end, ParseOptions const &opts)
+__inline__ __device__ T decode_value(const char *begin, const char *end, ParseOptions const &opts)
 {
-  return cudf::io::gpu::parse_numeric<T>(data, start, end, opts);
+  return cudf::io::gpu::parse_numeric<T>(begin, end, opts);
 }
 
 /**
  * @brief Decodes a timestamp_D
  *
- * @param data The character string for parse
- * @param start The index within data to start parsing from
- * @param end The end index within data to end parsing
+ * @param[in] begin Beginning of the character string
+ * @param[in] end End of the character string
  * @param opts The global parsing behavior options
  *
  * @return The parsed timestamp_D
  */
 template <>
-__inline__ __device__ cudf::timestamp_D decode_value(const char *data,
-                                                     uint64_t start,
-                                                     uint64_t end,
+__inline__ __device__ cudf::timestamp_D decode_value(const char *begin,
+                                                     const char *end,
                                                      ParseOptions const &opts)
 {
-  return cudf::timestamp_D{cudf::duration_D{parseDateFormat(data, start, end, opts.dayfirst)}};
+  return cudf::timestamp_D{cudf::duration_D{parseDateFormat(begin, end, opts.dayfirst)}};
 }
 
 /**
  * @brief Decodes a timestamp_s
  *
- * @param data The character string for parse
- * @param start The index within data to start parsing from
- * @param end The end index within data to end parsing
+ * @param[in] begin Beginning of the character string
+ * @param[in] end End of the character string
  * @param opts The global parsing behavior options
  *
  * @return The parsed timestamp_s
  */
 template <>
-__inline__ __device__ cudf::timestamp_s decode_value(const char *data,
-                                                     uint64_t start,
-                                                     uint64_t end,
+__inline__ __device__ cudf::timestamp_s decode_value(const char *begin,
+                                                     const char *end,
                                                      ParseOptions const &opts)
 {
-  auto milli = parseDateTimeFormat(data, start, end, opts.dayfirst);
+  auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
   return cudf::timestamp_s{cudf::duration_s{milli / 1000}};
 }
 
 /**
  * @brief Decodes a timestamp_ms
  *
- * @param data The character string for parse
- * @param start The index within data to start parsing from
- * @param end The end index within data to end parsing
+ * @param[in] begin Beginning of the character string
+ * @param[in] end End of the character string
  * @param opts The global parsing behavior options
  *
  * @return The parsed timestamp_ms
  */
 template <>
-__inline__ __device__ cudf::timestamp_ms decode_value(const char *data,
-                                                      uint64_t start,
-                                                      uint64_t end,
+__inline__ __device__ cudf::timestamp_ms decode_value(const char *begin,
+                                                      const char *end,
                                                       ParseOptions const &opts)
 {
-  auto milli = parseDateTimeFormat(data, start, end, opts.dayfirst);
+  auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
   return cudf::timestamp_ms{cudf::duration_ms{milli}};
 }
 
 /**
  * @brief Decodes a timestamp_us
  *
- * @param data The character string for parse
- * @param start The index within data to start parsing from
- * @param end The end index within data to end parsing
+ * @param[in] begin Beginning of the character string
+ * @param[in] end End of the character string
  * @param opts The global parsing behavior options
  *
  * @return The parsed timestamp_us
  */
 template <>
-__inline__ __device__ cudf::timestamp_us decode_value(const char *data,
-                                                      uint64_t start,
-                                                      uint64_t end,
+__inline__ __device__ cudf::timestamp_us decode_value(const char *begin,
+                                                      const char *end,
                                                       ParseOptions const &opts)
 {
-  auto milli = parseDateTimeFormat(data, start, end, opts.dayfirst);
+  auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
   return cudf::timestamp_us{cudf::duration_us{milli * 1000}};
 }
 
 /**
  * @brief Decodes a timestamp_ns
  *
- * @param data The character string for parse
- * @param start The index within data to start parsing from
- * @param end The end index within data to end parsing
+ * @param[in] begin Beginning of the character string
+ * @param[in] end End of the character string
  * @param opts The global parsing behavior options
  *
  * @return The parsed timestamp_ns
  */
 template <>
-__inline__ __device__ cudf::timestamp_ns decode_value(const char *data,
-                                                      uint64_t start,
-                                                      uint64_t end,
+__inline__ __device__ cudf::timestamp_ns decode_value(const char *begin,
+                                                      const char *end,
                                                       ParseOptions const &opts)
 {
-  auto milli = parseDateTimeFormat(data, start, end, opts.dayfirst);
+  auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
   return cudf::timestamp_ns{cudf::duration_ns{milli * 1000000}};
 }
 
-// The purpose of this is merely to allow compilation ONLY
-// TODO : make this work for json
 #ifndef DURATION_DECODE_VALUE
-#define DURATION_DECODE_VALUE(Type)                                           \
-  template <>                                                                 \
-  __inline__ __device__ Type decode_value(                                    \
-    const char *data, uint64_t start, uint64_t end, ParseOptions const &opts) \
-  {                                                                           \
-    return Type{};                                                            \
+#define DURATION_DECODE_VALUE(Type)                                 \
+  template <>                                                       \
+  __inline__ __device__ Type decode_value(                          \
+    const char *begin, const char *end, ParseOptions const &opts)   \
+  {                                                                 \
+    return Type{parseTimeDeltaFormat<Type>(begin, 0, end - begin)}; \
   }
 #endif
 DURATION_DECODE_VALUE(duration_D)
@@ -246,53 +230,47 @@ DURATION_DECODE_VALUE(duration_ns)
 
 // The purpose of these is merely to allow compilation ONLY
 template <>
-__inline__ __device__ cudf::string_view decode_value(const char *data,
-                                                     uint64_t start,
-                                                     uint64_t end,
+__inline__ __device__ cudf::string_view decode_value(const char *begin,
+                                                     const char *end,
                                                      ParseOptions const &opts)
 {
   return cudf::string_view{};
 }
 
 template <>
-__inline__ __device__ cudf::dictionary32 decode_value(const char *data,
-                                                      uint64_t start,
-                                                      uint64_t end,
+__inline__ __device__ cudf::dictionary32 decode_value(const char *begin,
+                                                      const char *end,
                                                       ParseOptions const &opts)
 {
   return cudf::dictionary32{};
 }
 
 template <>
-__inline__ __device__ cudf::list_view decode_value(const char *data,
-                                                   uint64_t start,
-                                                   uint64_t end,
+__inline__ __device__ cudf::list_view decode_value(const char *begin,
+                                                   const char *end,
                                                    ParseOptions const &opts)
 {
   return cudf::list_view{};
 }
 template <>
-__inline__ __device__ cudf::struct_view decode_value(const char *data,
-                                                     uint64_t start,
-                                                     uint64_t end,
+__inline__ __device__ cudf::struct_view decode_value(const char *begin,
+                                                     const char *end,
                                                      ParseOptions const &opts)
 {
   return cudf::struct_view{};
 }
 
 template <>
-__inline__ __device__ numeric::decimal32 decode_value(const char *data,
-                                                      uint64_t start,
-                                                      uint64_t end,
+__inline__ __device__ numeric::decimal32 decode_value(const char *begin,
+                                                      const char *end,
                                                       ParseOptions const &opts)
 {
   return numeric::decimal32{};
 }
 
 template <>
-__inline__ __device__ numeric::decimal64 decode_value(const char *data,
-                                                      uint64_t start,
-                                                      uint64_t end,
+__inline__ __device__ numeric::decimal64 decode_value(const char *begin,
+                                                      const char *end,
                                                       ParseOptions const &opts)
 {
   return numeric::decimal64{};
@@ -321,14 +299,13 @@ struct ConvertFunctor {
 
     // Check for user-specified true/false values first, where the output is
     // replaced with 1/0 respectively
-    value = [&, field_len = end - begin]() -> T {
-      if (serializedTrieContains(opts.trueValuesTrie, begin, field_len)) {
+    value = [&opts, end, begin]() -> T {
+      if (serializedTrieContains(opts.trueValuesTrie, begin, end - begin)) {
         return 1;
-      } else if (serializedTrieContains(opts.falseValuesTrie, begin, field_len)) {
+      } else if (serializedTrieContains(opts.falseValuesTrie, begin, end - begin)) {
         return 0;
       } else {
-        // TODO: refactor decode_value to use pointers too
-        return decode_value<T>(begin, 0, field_len - 1, opts);
+        return decode_value<T>(begin, end - 1, opts);
       }
     }();
 
@@ -344,7 +321,7 @@ struct ConvertFunctor {
     char const *begin, char const *end, void *out_buffer, size_t row, ParseOptions const &opts)
   {
     auto &value{static_cast<T *>(out_buffer)[row]};
-    value = decode_value<T>(begin, 0, end - begin - 1, opts);
+    value = decode_value<T>(begin, end - 1, opts);
     return !std::isnan(value);
   }
 
@@ -362,7 +339,7 @@ struct ConvertFunctor {
                                                       const ParseOptions &opts)
   {
     T &value{static_cast<T *>(output_column)[row]};
-    value = decode_value<T>(begin, 0, end - begin - 1, opts);
+    value = decode_value<T>(begin, end - 1, opts);
 
     return true;
   }
@@ -477,7 +454,7 @@ __device__ field_descriptor next_field_descriptor(const char *begin,
   auto const desc_pre_trim =
     col_map == nullptr
       // No key - column and begin are trivial
-      ? field_descriptor{field_idx, begin, cudf::io::gpu::seek_field_end(begin, end, opts)}
+      ? field_descriptor{field_idx, begin, cudf::io::gpu::seek_field_end(begin, end, opts, true)}
       : [&]() {
           auto const key_range = get_next_key(begin, end, opts.quotechar);
           auto const key_hash  = MurmurHash3_32<cudf::string_view>{}(
@@ -489,7 +466,7 @@ __device__ field_descriptor next_field_descriptor(const char *begin,
           // Skip the colon between the key and the value
           auto const value_begin = thrust::find(thrust::seq, key_range.second, end, ':') + 1;
           return field_descriptor{
-            column, value_begin, cudf::io::gpu::seek_field_end(value_begin, end, opts)};
+            column, value_begin, cudf::io::gpu::seek_field_end(value_begin, end, opts, true)};
         }();
 
   // Modify start & end to ignore whitespace and quotechars
@@ -752,7 +729,7 @@ __device__ key_value_range get_next_key_value_range(char const *begin,
   if (colon == end) return {end, end, end};
 
   // Field value (including delimiters)
-  auto const value_end = cudf::io::gpu::seek_field_end(colon + 1, end, opts);
+  auto const value_end = cudf::io::gpu::seek_field_end(colon + 1, end, opts, true);
   return {key_range.first, key_range.second, colon + 1, value_end};
 }
 
@@ -841,28 +818,52 @@ void convert_json_to_columns(rmm::device_buffer const &input_data,
 /**
  * @copydoc cudf::io::json::gpu::detect_data_types
  */
-void detect_data_types(ColumnInfo *column_infos,
-                       const char *data,
-                       size_t data_size,
-                       const ParseOptions &options,
-                       col_map_type *col_map,
-                       int num_columns,
-                       const uint64_t *rec_starts,
-                       cudf::size_type num_records,
-                       cudaStream_t stream)
+
+std::vector<cudf::io::json::ColumnInfo> detect_data_types(const char *data,
+                                                          size_t data_size,
+                                                          const ParseOptions &options,
+                                                          bool do_set_null_count,
+                                                          col_map_type *col_map,
+                                                          int num_columns,
+                                                          const uint64_t *rec_starts,
+                                                          cudf::size_type num_records,
+                                                          cudaStream_t stream)
 {
   int block_size;
   int min_grid_size;
   CUDA_TRY(
     cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, detect_data_types_kernel));
 
+  rmm::device_vector<cudf::io::json::ColumnInfo> d_column_infos(num_columns,
+                                                                cudf::io::json::ColumnInfo{});
+
+  if (do_set_null_count) {
+    // Set the null count to the row count (all fields assumes to be null).
+    thrust::for_each(rmm::exec_policy(stream)->on(stream),
+                     d_column_infos.begin(),
+                     d_column_infos.end(),
+                     [num_records] __device__(auto &info) { info.null_count = num_records; });
+  }
+
   // Calculate actual block count to use based on records count
   const int grid_size = (num_records + block_size - 1) / block_size;
 
-  detect_data_types_kernel<<<grid_size, block_size, 0, stream>>>(
-    data, data_size, options, col_map, num_columns, rec_starts, num_records, column_infos);
+  detect_data_types_kernel<<<grid_size, block_size, 0, stream>>>(data,
+                                                                 data_size,
+                                                                 options,
+                                                                 col_map,
+                                                                 num_columns,
+                                                                 rec_starts,
+                                                                 num_records,
+                                                                 d_column_infos.data().get());
 
   CUDA_TRY(cudaGetLastError());
+
+  auto h_column_infos = std::vector<cudf::io::json::ColumnInfo>(num_columns);
+
+  thrust::copy(d_column_infos.begin(), d_column_infos.end(), h_column_infos.begin());
+
+  return h_column_infos;
 }
 
 /**

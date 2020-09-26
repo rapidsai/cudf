@@ -512,6 +512,10 @@ class Merge(object):
                     output._index._data[
                         index_col_lbl
                     ] = self._build_output_col(index_col, index_dtype)
+            # reconstruct the Index object as the underlying data types
+            # have changed:
+            output._index = cudf.core.index.Index._from_table(output._index)
+
         for data_col_lbl, data_col in output._data.items():
             data_dtype = data_dtypes[data_col_lbl]
             if data_dtype:

@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/type_lists.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -792,13 +792,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointColumnWrapper)
 
 TYPED_TEST(FixedPointTestBothReps, NoScaleOrWrongTypeID)
 {
-  using namespace numeric;
-  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
-  using RepType   = TypeParam;
-
-  auto const is_decimal32 = std::is_same<RepType, int32_t>::value;
-  auto const id           = is_decimal32 ? cudf::type_id::DECIMAL32 : cudf::type_id::DECIMAL64;
-  auto const null_mask    = cudf::create_null_mask(0, cudf::mask_state::ALL_NULL);
+  auto const null_mask = cudf::create_null_mask(0, cudf::mask_state::ALL_NULL);
 
   EXPECT_THROW(cudf::make_fixed_point_column(cudf::data_type{cudf::type_id::INT32}, 0, null_mask),
                cudf::logic_error);

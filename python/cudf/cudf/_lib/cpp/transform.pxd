@@ -14,6 +14,8 @@ from cudf._lib.cpp.types cimport (
 )
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.table.table cimport table
+from cudf._lib.cpp.table.table_view cimport table_view
 
 
 cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
@@ -34,4 +36,8 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
         string unary_udf,
         data_type output_type,
         bool is_ptx
+    ) except +
+
+    cdef pair[unique_ptr[table], unique_ptr[column]] encode(
+        table_view input
     ) except +

@@ -16,9 +16,11 @@
 
 #pragma once
 
-#include <rmm/thrust_rmm_allocator.h>
-#include <cudf/types.hpp>
 #include <io/utilities/parsing_utils.cuh>
+
+#include <cudf/types.hpp>
+
+#include <rmm/thrust_rmm_allocator.h>
 
 namespace cudf {
 namespace io {
@@ -198,19 +200,18 @@ void remove_blank_rows(rmm::device_vector<uint64_t> &row_offsets,
  * @param[in] num_columns Number of columns
  * @param[in] options Options that control individual field data conversion
  * @param[in,out] flags Flags that control individual column parsing
- * @param[out] stats Histogram of each dtypes' occurrence for each column
  * @param[in] stream CUDA stream to use, default 0
  *
- * @return cudaSuccess if successful, a CUDA error code otherwise
+ * @return stats Histogram of each dtypes' occurrence for each column
  **/
-cudaError_t DetectColumnTypes(const char *data,
-                              const uint64_t *row_starts,
-                              size_t num_rows,
-                              size_t num_columns,
-                              const cudf::io::ParseOptions &options,
-                              column_parse::flags *flags,
-                              column_parse::stats *stats,
-                              cudaStream_t stream = (cudaStream_t)0);
+thrust::host_vector<column_parse::stats> detect_column_types(const char *data,
+                                                             const uint64_t *row_starts,
+                                                             size_t num_rows,
+                                                             size_t num_actual_columns,
+                                                             size_t num_active_columns,
+                                                             const cudf::io::ParseOptions &options,
+                                                             column_parse::flags *flags,
+                                                             cudaStream_t stream = (cudaStream_t)0);
 
 /**
  * @brief Launches kernel for decoding row-column data

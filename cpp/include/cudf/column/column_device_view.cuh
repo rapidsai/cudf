@@ -28,9 +28,13 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+/**
+ * @file column_device_view.cuh
+ * @brief Column device view class definitons
+ */
+
 namespace cudf {
 namespace detail {
-
 /**
  * @brief An immutable, non-owning view of device data as a column of elements
  * that is trivially copyable and usable in CUDA device code.
@@ -240,6 +244,8 @@ struct mutable_value_accessor;
 /**
  * @brief An immutable, non-owning view of device data as a column of elements
  * that is trivially copyable and usable in CUDA device code.
+ *
+ * @ingroup column_classes
  */
 class alignas(16) column_device_view : public detail::column_device_view_base {
  public:
@@ -431,6 +437,8 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
 /**
  * @brief A mutable, non-owning view of device data as a column of elements
  * that is trivially copyable and usable in CUDA device code.
+ *
+ * @ingroup column_classes
  */
 class alignas(16) mutable_column_device_view : public detail::column_device_view_base {
  public:
@@ -689,6 +697,27 @@ __device__ inline string_view const column_device_view::element<string_view>(
 }
 
 /**
+ * @brief Dispatch functor for resolving the index value for a dictionary element.
+ *
+ * The basic dictionary elements are the indices which can be any index type.
+ */
+struct index_element_fn {
+  template <typename IndexType, std::enable_if_t<is_index_type<IndexType>()>* = nullptr>
+  __device__ size_type operator()(column_device_view const& input, size_type index)
+  {
+    return static_cast<size_type>(input.element<IndexType>(index));
+  }
+  template <typename IndexType,
+            typename... Args,
+            std::enable_if_t<not is_index_type<IndexType>()>* = nullptr>
+  __device__ size_type operator()(Args&&... args)
+  {
+    release_assert(false and "indices must be an integral type");
+    return 0;
+  }
+};
+
+/**
  * @brief Returns `dictionary32` element at the specified index for a
  * dictionary column.
  *
@@ -716,8 +745,9 @@ template <>
 __device__ inline dictionary32 const column_device_view::element<dictionary32>(
   size_type element_index) const noexcept
 {
-  size_type index = element_index + offset();  // account for this view's _offset
-  return dictionary32{d_children[0].element<int32_t>(index)};
+  size_type index    = element_index + offset();  // account for this view's _offset
+  auto const indices = d_children[0];
+  return dictionary32{type_dispatcher(indices.type(), index_element_fn{}, indices, index)};
 }
 
 // TODO add docs
