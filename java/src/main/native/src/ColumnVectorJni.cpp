@@ -19,7 +19,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/concatenate.hpp>
 #include <cudf/lists/extract.hpp>
-#include <cudf/detail/reshape.hpp>
+#include <cudf/reshape.hpp>
 #include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/datetime.hpp>
 #include <cudf/filling.hpp>
