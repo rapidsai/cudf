@@ -80,6 +80,7 @@
 - PR #6268 Add file tags to libcudf doxygen
 - PR #6265 Update JNI to use ORC options builder
 - PR #6273 Update JNI to use ORC options builder
+- PR #6293 Replace shuffle warp reduce with cub calls
 - PR #6287 Make java aggregate API follow C++ API
 - PR #6303 Use cudf test dtypes so timedelta tests are determinstic
 
