@@ -63,7 +63,7 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatScalarCount)
       expected_elements, expected_elements + num_values * repeat_count);
 
   auto input_table = cudf::table_view{{input}};
-  auto p_ret       = cudf::repeat(input_table, repeat_count);
+  auto const p_ret = cudf::repeat(input_table, repeat_count);
 
   EXPECT_EQ(p_ret->num_columns(), 1);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(p_ret->view().column(0), expected, true);
