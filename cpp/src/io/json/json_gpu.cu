@@ -454,7 +454,7 @@ __device__ field_descriptor next_field_descriptor(const char *begin,
   auto const desc_pre_trim =
     col_map == nullptr
       // No key - column and begin are trivial
-      ? field_descriptor{field_idx, begin, cudf::io::gpu::seek_field_end(begin, end, opts)}
+      ? field_descriptor{field_idx, begin, cudf::io::gpu::seek_field_end(begin, end, opts, true)}
       : [&]() {
           auto const key_range = get_next_key(begin, end, opts.quotechar);
           auto const key_hash  = MurmurHash3_32<cudf::string_view>{}(
@@ -466,7 +466,7 @@ __device__ field_descriptor next_field_descriptor(const char *begin,
           // Skip the colon between the key and the value
           auto const value_begin = thrust::find(thrust::seq, key_range.second, end, ':') + 1;
           return field_descriptor{
-            column, value_begin, cudf::io::gpu::seek_field_end(value_begin, end, opts)};
+            column, value_begin, cudf::io::gpu::seek_field_end(value_begin, end, opts, true)};
         }();
 
   // Modify start & end to ignore whitespace and quotechars
@@ -729,7 +729,7 @@ __device__ key_value_range get_next_key_value_range(char const *begin,
   if (colon == end) return {end, end, end};
 
   // Field value (including delimiters)
-  auto const value_end = cudf::io::gpu::seek_field_end(colon + 1, end, opts);
+  auto const value_end = cudf::io::gpu::seek_field_end(colon + 1, end, opts, true);
   return {key_range.first, key_range.second, colon + 1, value_end};
 }
 

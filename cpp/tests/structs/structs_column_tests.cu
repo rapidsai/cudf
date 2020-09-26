@@ -582,4 +582,38 @@ TYPED_TEST(TypedStructColumnWrapperTest, EmptyColumnsOfStructs)
   // }
 }
 
+TYPED_TEST(TypedStructColumnWrapperTest, CopyColumnFromView)
+{
+  // Testing deep-copying structs from column-views.
+
+  using namespace cudf::test;
+  using T = TypeParam;
+
+  auto numeric_column =
+    fixed_width_column_wrapper<T, int32_t>{{0, 1, 2, 3, 4, 5}, {1, 1, 1, 1, 1, 0}};
+
+  auto lists_column = lists_column_wrapper<T, int32_t>{
+    {{0, 0}, {1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}},
+    make_counting_transform_iterator(0, [](auto i) { return i != 4; })};
+
+  auto structs_column =
+    structs_column_wrapper{{numeric_column, lists_column},
+                           make_counting_transform_iterator(0, [](auto i) { return i != 3; })};
+
+  auto clone_structs_column = cudf::column(structs_column);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(clone_structs_column, structs_column);
+
+  auto list_of_structs_column =
+    cudf::make_lists_column(3,
+                            fixed_width_column_wrapper<int32_t>{0, 2, 4, 6}.release(),
+                            structs_column.release(),
+                            cudf::UNKNOWN_NULL_COUNT,
+                            {})
+      .release();
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(list_of_structs_column->view(),
+                                      cudf::column(list_of_structs_column->view()));
+}
+
 CUDF_TEST_PROGRAM_MAIN()
