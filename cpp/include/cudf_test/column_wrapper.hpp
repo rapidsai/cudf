@@ -198,17 +198,12 @@ template <typename ElementTo,
                                     cudf::is_fixed_point<ElementTo>()>* = nullptr>
 rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 {
-  // TODO clean this function up
-
-  using RepType = typename ElementTo::representation_type;
-
-  auto const size = cudf::distance(begin, end);
-  thrust::host_vector<RepType> elements;
-  elements.reserve(size);
-  // fixed_width_type_converter<ElementFrom, RepType>{}(begin, end, elements.begin());
-  std::transform(begin, end, elements.begin(), [](auto fp) {
-    return static_cast<numeric::scaled_integer<RepType>>(fp).value;
-  });
+  using namespace numeric;
+  using RepType          = typename ElementTo::representation_type;
+  auto to_rep            = [](auto fp) { return static_cast<scaled_integer<RepType>>(fp).value; };
+  auto transformer_begin = thrust::make_transform_iterator(begin, to_rep);
+  auto const size        = cudf::distance(begin, end);
+  auto const elements = thrust::host_vector<RepType>(transformer_begin, transformer_begin + size);
   return rmm::device_buffer{elements.data(), size * sizeof(RepType)};
 }
 
