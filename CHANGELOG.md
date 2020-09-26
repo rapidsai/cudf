@@ -14,6 +14,7 @@
 - PR #6271 Add support to deep-copy struct columns from struct column-view
 - PR #6254 Add `cudf::make_dictionary_from_scalar` factory function
 - PR #6262 Add nth_element series aggregation with null handling
+- PR #6302 Add custom dataframe accessors
 - PR #6301 Add JNI bindings to nvcomp
 
 ## Improvements
