@@ -118,7 +118,7 @@ std::unique_ptr<column> make_fixed_point_column(
   size_type size,
   mask_state state                    = mask_state::UNALLOCATED,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Construct column with sufficient uninitialized storage
@@ -144,7 +144,7 @@ std::unique_ptr<column> make_fixed_point_column(
   B&& null_mask,
   size_type null_count                = cudf::UNKNOWN_NULL_COUNT,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(is_fixed_point(type), "Invalid, non-fixed_point type.");
   return std::make_unique<column>(type,
