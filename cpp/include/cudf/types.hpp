@@ -26,8 +26,7 @@
 
 #include <thrust/optional.h>  // TODO no idea why this is needed ¯\_(ツ)_/¯
 
-#include <cudf/utilities/error.hpp>
-
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
 
@@ -254,10 +253,9 @@ class data_type {
    * @param id The `fixed_point`'s identifier
    * @param scale The `fixed_point`'s scale (see `fixed_poit::_scale`)
    **/
-  explicit constexpr data_type(type_id id, int32_t scale) : _id{id}, _scale{scale}
+  explicit data_type(type_id id, int32_t scale) : _id{id}, _scale{scale}
   {
-    CUDF_EXPECTS(id == type_id::DECIMAL32 || id == type_id::DECIMAL64,
-                 "id should be DECIMAL32 of DECIMAL64");
+    assert(id == type_id::DECIMAL32 || id == type_id::DECIMAL64);
   }
 
   /**
