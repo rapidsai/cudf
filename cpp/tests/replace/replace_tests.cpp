@@ -25,6 +25,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/replace.hpp>
 #include "cudf/fixed_point/fixed_point.hpp"
+#include "thrust/iterator/transform_iterator.h"
 
 #include <thrust/device_vector.h>
 
@@ -547,10 +548,11 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReplace)
   auto const TWO = decimalXX{2, scale_type{0}};
   auto const sz  = std::size_t{1000};
 
-  auto vec1       = std::vector<decimalXX>(sz);
-  auto const vec2 = std::vector<decimalXX>(sz, TWO);
-
-  std::generate(vec1.begin(), vec1.end(), [&, i = 0]() mutable { return ++i % 2 ? ONE : TWO; });
+  auto iota            = thrust::counting_iterator<int>{};
+  auto mod2            = [&](auto e) { return e % 2 ? ONE : TWO; };
+  auto transform_begin = thrust::make_transform_iterator(iota, mod2);
+  auto const vec1      = std::vector<decimalXX>(transform_begin, transform_begin + sz);
+  auto const vec2      = std::vector<decimalXX>(sz, TWO);
 
   auto const to_replace  = std::vector<decimalXX>{ONE};
   auto const replacement = std::vector<decimalXX>{TWO};
