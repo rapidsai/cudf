@@ -40,23 +40,8 @@ struct byte_list_conversion {
     }
   };
 
-  template <typename T>
-  struct flip_endianness_lambda {
-    char* d_chars;
-    char const* d_data;
-    __device__ void operator()(int index)
-    {
-      size_type const mask = sizeof(T) - 1;
-      d_chars[index] = d_data[index +]
-      T value   = d_data[index];
-      char* val = reinterpret_cast<char*>(&value);
-      for (int i = 0; i < sizeof(T); i++) {
-        d_chars[index * sizeof(T) + i] = val[sizeof(T) - 1 - i];
-      }
-    }
-  };
   template <typename T, typename Iter>
-  struct flip_endianness_lambda2 {
+  struct flip_endianness_lambda {
     char* d_chars;
     Iter const d_data;
     __device__ void operator()(int index)
@@ -83,12 +68,6 @@ struct byte_list_conversion {
                                            mr);
 
     if (configuration == flip_endianness::YES) {
-      thrust::for_each(
-        rmm::exec_policy(stream)->on(stream),
-        thrust::make_counting_iterator(0),
-        thrust::make_counting_iterator(input_column.size() * sizeof(T)),
-        flip_endianness_lambda<typename T, typename Iter>
-      )
       thrust::for_each(
         rmm::exec_policy(stream)->on(stream),
         thrust::make_counting_iterator(0),
