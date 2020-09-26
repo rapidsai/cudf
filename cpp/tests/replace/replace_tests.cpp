@@ -548,9 +548,8 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReplace)
   auto const TWO = decimalXX{2, scale_type{0}};
   auto const sz  = std::size_t{1000};
 
-  auto iota            = thrust::counting_iterator<int>{};
   auto mod2            = [&](auto e) { return e % 2 ? ONE : TWO; };
-  auto transform_begin = thrust::make_transform_iterator(iota, mod2);
+  auto transform_begin = thrust::make_transform_iterator(thrust::counting_iterator<int>{}, mod2);
   auto const vec1      = std::vector<decimalXX>(transform_begin, transform_begin + sz);
   auto const vec2      = std::vector<decimalXX>(sz, TWO);
 
