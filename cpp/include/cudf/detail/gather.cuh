@@ -188,7 +188,7 @@ struct column_gatherer_impl {
 
     gather_helper(source_column.data<Type>(),
                   source_column.size(),
-                  destination_column->mutable_view().begin<Type>(),
+                  destination_column->mutable_view().template begin<Type>(),
                   gather_map_begin,
                   gather_map_end,
                   nullify_out_of_bounds,
