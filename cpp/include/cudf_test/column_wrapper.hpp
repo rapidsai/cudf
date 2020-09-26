@@ -182,18 +182,11 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 {
   // TODO clean this function up
 
-  using RepType = typename ElementTo::representation_type;
-
-  // auto const size = cudf::distance(begin, end);
-  // thrust::host_vector<RepType> elements;
-  // elements.reserve(size);
-  // fixed_width_type_converter<ElementFrom, RepType>{}(begin, end, elements.begin());
-  // return rmm::device_buffer{elements.data(), size * sizeof(RepType)};
-
+  using RepType        = typename ElementTo::representation_type;
   auto transformer     = fixed_width_type_converter<ElementFrom, RepType>{};
   auto transform_begin = thrust::make_transform_iterator(begin, transformer);
   auto const size      = cudf::distance(begin, end);
-  auto const elements  = thrust::host_vector<ElementTo>(transform_begin, transform_begin + size);
+  auto const elements  = thrust::host_vector<RepType>(transform_begin, transform_begin + size);
   return rmm::device_buffer{elements.data(), size * sizeof(RepType)};
 }
 
