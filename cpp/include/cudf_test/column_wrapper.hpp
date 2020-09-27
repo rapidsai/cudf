@@ -199,8 +199,8 @@ template <typename ElementTo,
 rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 {
   using namespace numeric;
-  using RepType          = typename ElementTo::representation_type;
-  auto to_rep            = [](auto fp) { return static_cast<scaled_integer<RepType>>(fp).value; };
+  using RepType = typename ElementTo::representation_type;
+  auto to_rep   = [](ElementTo fp) { return static_cast<scaled_integer<RepType>>(fp).value; };
   auto transformer_begin = thrust::make_transform_iterator(begin, to_rep);
   auto const size        = cudf::distance(begin, end);
   auto const elements = thrust::host_vector<RepType>(transformer_begin, transformer_begin + size);
