@@ -31,14 +31,18 @@ namespace cudf {
 namespace io {
 
 /**
- *@breif Builder to build options for `read_csv()`.
+ * @addtogroup io_readers
+ * @{
+ * @file
+ */
+
+/**
+ *@brief Builder to build options for `read_csv()`.
  */
 class csv_reader_options_builder;
 
 /**
  * @brief Settings to use for `read_csv()`.
- *
- * @ingroup io_readers
  */
 
 class csv_reader_options {
@@ -49,9 +53,9 @@ class csv_reader_options {
   // Specify the compression format of the source or infer from file extension
   compression_type _compression = compression_type::AUTO;
   // Bytes to skip from the source start
-  size_t _byte_range_offset = 0;
+  std::size_t _byte_range_offset = 0;
   // Bytes to read; always reads complete rows
-  size_t _byte_range_size = 0;
+  std::size_t _byte_range_size = 0;
   // Names of all the columns; if empty then names are auto-generated
   std::vector<std::string> _names;
   // If there is no header or names, prepend this to the column ID as the name
@@ -177,12 +181,12 @@ class csv_reader_options {
   /**
    * @brief Returns number of bytes to skip from source start.
    */
-  size_t get_byte_range_offset() const { return _byte_range_offset; }
+  std::size_t get_byte_range_offset() const { return _byte_range_offset; }
 
   /**
    * @brief Returns number of bytes to read.
    */
-  size_t get_byte_range_size() const { return _byte_range_size; }
+  std::size_t get_byte_range_size() const { return _byte_range_size; }
 
   /**
    * @brief Returns names of the columns.
@@ -351,7 +355,7 @@ class csv_reader_options {
    *
    * @param offset Number of bytes of offset.
    */
-  void set_byte_range_offset(size_type offset)
+  void set_byte_range_offset(std::size_t offset)
   {
     if ((offset != 0) and ((_skiprows != 0) or (_skipfooter != 0) or (_nrows != -1))) {
       CUDF_FAIL(
@@ -366,7 +370,7 @@ class csv_reader_options {
    *
    * @param size Number of bytes to read.
    */
-  void set_byte_range_size(size_type size)
+  void set_byte_range_size(std::size_t size)
   {
     if ((size != 0) and ((_skiprows != 0) or (_skipfooter != 0) or (_nrows != -1))) {
       CUDF_FAIL(
@@ -685,7 +689,7 @@ class csv_reader_options_builder {
    * @param offset Number of bytes of offset.
    * @return this for chaining.
    */
-  csv_reader_options_builder& byte_range_offset(size_type offset)
+  csv_reader_options_builder& byte_range_offset(std::size_t offset)
   {
     options.set_byte_range_offset(offset);
     return *this;
@@ -697,7 +701,7 @@ class csv_reader_options_builder {
    * @param size Number of bytes to read.
    * @return this for chaining.
    */
-  csv_reader_options_builder& byte_range_size(size_type size)
+  csv_reader_options_builder& byte_range_size(std::size_t size)
   {
     options.set_byte_range_size(size);
     return *this;
@@ -1091,8 +1095,6 @@ class csv_reader_options_builder {
 /**
  * @brief Reads a CSV dataset into a set of columns.
  *
- * @ingroup io_readers
- *
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
  *  std::string filepath = "dataset.csv";
@@ -1112,15 +1114,20 @@ table_with_metadata read_csv(
   csv_reader_options const& options,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/** @} */  // end of group
 /**
- *@breif Builder to build options for `writer_csv()`.
+ * @addtogroup io_writers
+ * @{
+ * @file
+ */
+
+/**
+ *@brief Builder to build options for `writer_csv()`.
  */
 class csv_writer_options_builder;
 
 /**
  * @brief Settings to use for `write_csv()`.
- *
- * @ingroup io_writers
  */
 class csv_writer_options {
   // Specify the sink to use for writer output
@@ -1433,5 +1440,7 @@ class csv_writer_options_builder {
  */
 void write_csv(csv_writer_options const& options,
                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/** @} */  // end of group
 }  // namespace io
 }  // namespace cudf

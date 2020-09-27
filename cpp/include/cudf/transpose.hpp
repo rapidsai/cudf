@@ -22,6 +22,7 @@ namespace cudf {
 /**
  * @addtogroup reshape_transpose
  * @{
+ * @file
  */
 
 /**

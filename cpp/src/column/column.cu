@@ -29,11 +29,14 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <iterator>
 #include <rmm/device_buffer.hpp>
 
 #include <algorithm>
 #include <numeric>
 #include <vector>
+#include "cudf/structs/structs_column_view.hpp"
+#include "cudf/types.hpp"
 
 namespace cudf {
 // Copy constructor
@@ -244,7 +247,26 @@ struct create_column_from_view {
             std::enable_if_t<std::is_same<ColumnType, cudf::struct_view>::value> * = nullptr>
   std::unique_ptr<column> operator()()
   {
-    CUDF_FAIL("struct_view not supported yet");
+    if (view.is_empty()) { return cudf::empty_like(view); }
+
+    std::vector<std::unique_ptr<column>> children;
+    children.reserve(view.num_children());
+
+    std::transform(view.child_begin(),
+                   view.child_end(),
+                   std::back_inserter(children),
+                   [stream = this->stream, mr = this->mr](auto child) {
+                     return std::make_unique<column>(child, stream, mr);
+                   });
+
+    auto num_rows = children.empty() ? 0 : children.front()->size();
+
+    return make_structs_column(num_rows,
+                               std::move(children),
+                               view.null_count(),
+                               cudf::copy_bitmask(view.null_mask(), 0, view.size(), stream, mr),
+                               stream,
+                               mr);
   }
 };
 }  // anonymous namespace

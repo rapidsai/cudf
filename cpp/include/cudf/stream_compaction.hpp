@@ -25,6 +25,8 @@ namespace cudf {
 /**
  * @addtogroup reorder_compact
  * @{
+ * @file
+ * @brief Column APIs for filtering rows
  */
 
 /**
