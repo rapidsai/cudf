@@ -442,16 +442,40 @@ TEST_F(ParquetWriterTest, SlicedTable)
   column_wrapper<int> col0{seq_col0.begin(), seq_col0.end(), validity};
   column_wrapper<cudf::string_view> col1{strings.begin(), strings.end()};
   column_wrapper<float> col2{seq_col2.begin(), seq_col2.end(), validity};
-  cudf::test::lists_column_wrapper<uint64_t> col3{
-    {9, 8}, {7, 6, 5}, {}, {4}, {3, 2, 1, 0}, {20, 21, 22, 23, 24}, {}, {66, 666}};
+
+  using lcw = cudf::test::lists_column_wrapper<uint64_t>;
+  lcw col3{{9, 8}, {7, 6, 5}, {}, {4}, {3, 2, 1, 0}, {20, 21, 22, 23, 24}, {}, {66, 666}};
+
+  // [[[NULL,2,NULL,4]], [[NULL,6,NULL], [8,9]]]
+  // [NULL, [[13],[14,15,16]],  NULL]
+  // [NULL, [], NULL, [[]]]
+  // NULL
+  // [[[NULL,2,NULL,4]], [[NULL,6,NULL], [8,9]]]
+  // [NULL, [[13],[14,15,16]],  NULL]
+  // [[[]]]
+  // [NULL, [], NULL, [[]]]
+  auto valids  = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+  auto valids2 = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
+  lcw col4{{
+             {{{{1, 2, 3, 4}, valids}}, {{{5, 6, 7}, valids}, {8, 9}}},
+             {{{{10, 11}, {12}}, {{13}, {14, 15, 16}}, {{17, 18}}}, valids},
+             {{lcw{lcw{}}, lcw{}, lcw{}, lcw{lcw{}}}, valids},
+             lcw{lcw{lcw{}}},
+             {{{{1, 2, 3, 4}, valids}}, {{{5, 6, 7}, valids}, {8, 9}}},
+             {{{{10, 11}, {12}}, {{13}, {14, 15, 16}}, {{17, 18}}}, valids},
+             lcw{lcw{lcw{}}},
+             {{lcw{lcw{}}, lcw{}, lcw{}, lcw{lcw{}}}, valids},
+           },
+           valids2};
 
   cudf_io::table_metadata expected_metadata;
   expected_metadata.column_names.emplace_back("col_other");
   expected_metadata.column_names.emplace_back("col_string");
   expected_metadata.column_names.emplace_back("col_another");
   expected_metadata.column_names.emplace_back("col_list");
+  expected_metadata.column_names.emplace_back("col_multi_level_list");
 
-  auto expected = table_view({col0, col1, col2, col3});
+  auto expected = table_view({col0, col1, col2, col3, col4});
 
   auto expected_slice = cudf::slice(expected, {2, static_cast<cudf::size_type>(num_rows) - 1});
 
