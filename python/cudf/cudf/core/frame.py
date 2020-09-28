@@ -23,7 +23,6 @@ from cudf.utils.dtypes import (
     min_scalar_type,
     min_signed_type,
 )
-from cudf.core.index import as_index
 
 
 class Frame(libcudf.table.Table):
@@ -290,7 +289,7 @@ class Frame(libcudf.table.Table):
         for cols in columns:
             table_index = None
             if 1 == first_data_column_position:
-                table_index = as_index(cols[0])
+                table_index = cudf.core.index.as_index(cols[0])
             elif first_data_column_position > 1:
                 table_index = libcudf.table.Table(
                     data=dict(
@@ -338,7 +337,9 @@ class Frame(libcudf.table.Table):
             if not isinstance(
                 out._index, cudf.MultiIndex
             ) and is_categorical_dtype(out._index._values.dtype):
-                out = out.set_index(as_index(out.index._values))
+                out = out.set_index(
+                    cudf.core.index.as_index(out.index._values)
+                )
 
         # Reassign index and column names
         if isinstance(objs[0].columns, pd.MultiIndex):
@@ -346,8 +347,9 @@ class Frame(libcudf.table.Table):
         else:
             out.columns = names
 
-        out._index.name = objs[0]._index.name
-        out._index.names = objs[0]._index.names
+        if not ignore_index:
+            out._index.name = objs[0]._index.name
+            out._index.names = objs[0]._index.names
 
         return out
 
