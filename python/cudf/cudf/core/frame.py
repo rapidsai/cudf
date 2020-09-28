@@ -207,8 +207,9 @@ class Frame(libcudf.table.Table):
 
     @classmethod
     @annotate("CONCAT", color="orange", domain="cudf_python")
-    def _concat(cls, objs, axis=0, ignore_index=False, sort=False):
-
+    def _concat(
+        cls, objs, axis=0, join="outer", ignore_index=False, sort=False
+    ):
         # shallow-copy the input DFs in case the same DF instance
         # is concatenated with itself
 
@@ -351,6 +352,23 @@ class Frame(libcudf.table.Table):
         names = [name for f in objs for name in f._column_names]
         names = OrderedDict.fromkeys(names).keys()
 
+        indexes = [index for f in objs for index in (f._index._data.columns)]
+
+        if join == "inner":
+            old_indexe = []
+            indexes = []
+            for obj in objs:
+                index = obj.columns
+                old_indexe.append(index)
+            index = old_indexe[0]
+            for other in old_indexe[1:]:
+                index = index.intersection(other)
+            names = list(index)
+            for obj in objs:
+                for col in obj.columns:
+                    if col not in names:
+                        obj.drop(columns=[col])
+
         try:
             if sort:
                 names = list(sorted(names))
@@ -367,11 +385,7 @@ class Frame(libcudf.table.Table):
         # frames are empty and `ignore_index=True`.
 
         columns = [
-            (
-                []
-                if (ignore_index and not empty_has_index)
-                else list(f._index._data.columns)
-            )
+            ([] if (ignore_index and not empty_has_index) else indexes)
             + [f._data[name] if name in f._data else None for name in names]
             for i, f in enumerate(objs)
         ]

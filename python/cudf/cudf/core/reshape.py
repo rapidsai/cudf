@@ -62,7 +62,7 @@ def _normalize_series_and_dataframe(objs, axis):
             objs[idx] = o.to_frame(name=name)
 
 
-def concat(objs, axis=0, ignore_index=False, sort=None):
+def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     """Concatenate DataFrames, Series, or Indices row-wise.
 
     Parameters
@@ -70,6 +70,8 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     objs : list of DataFrame, Series, or Index
     axis : {0/'index', 1/'columns'}, default 0
         The axis to concatenate along.
+    join : {'inner', 'outer'}, default 'outer'
+        How to handle indexes on other axis (or axes).
     ignore_index : bool, default False
         Set True to ignore the index of the *objs* and provide a
         default range index instead.
@@ -149,6 +151,16 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     1      b       2   None
     0      c       3    cat
     1      d       4    dog
+
+    Combine ``DataFrame`` objects with overlapping columns
+    and return only those that are shared by passing ``inner`` to
+    the ``join`` keyword argument.
+    >>> pd.concat([df1, df3], join="inner")
+      letter  number
+    0      a       1
+    1      b       2
+    0      c       3
+    1      d       4
 
     Combine ``DataFrame`` objects horizontally along the
     x axis by passing in ``axis=1``.
@@ -279,7 +291,11 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
             return result
         else:
             return cudf.DataFrame._concat(
-                objs, axis=axis, ignore_index=ignore_index, sort=sort
+                objs,
+                axis=axis,
+                join=join,
+                ignore_index=ignore_index,
+                sort=sort,
             )
     elif typ is cudf.Series:
         objs = [obj for obj in objs if len(obj)]
