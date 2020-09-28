@@ -363,6 +363,10 @@ TEST_F(ReplaceDictionaryTest, ReplaceNullsNoNulls)
   auto dict_input = cudf::dictionary_column_view(input->view());
   auto result     = cudf::dictionary::detail::replace_nulls(dict_input, dict_input);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), input->view());
+
+  result =
+    cudf::dictionary::detail::replace_nulls(dict_input, cudf::numeric_scalar<int64_t>(0, false));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), input->view());
 }
 
 CUDF_TEST_PROGRAM_MAIN()

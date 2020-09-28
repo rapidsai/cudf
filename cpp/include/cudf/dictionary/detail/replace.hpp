@@ -34,7 +34,7 @@ namespace detail {
  * @param replacement Column with values to use for replacing.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
- * @return New dictionary column with nulls entries replaced.
+ * @return New dictionary column with null rows replaced.
  */
 std::unique_ptr<column> replace_nulls(
   dictionary_column_view const& input,
@@ -49,10 +49,10 @@ std::unique_ptr<column> replace_nulls(
  * @throw cudf::logic_error if the keys type does not match the replacement type.
  *
  * @param input Column with nulls to replace.
- * @param replacement Values to use for replacing.
+ * @param replacement Value to use for replacing.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
- * @return New dictionary column with nulls entries replaced.
+ * @return New dictionary column with null rows replaced.
  */
 std::unique_ptr<column> replace_nulls(
   dictionary_column_view const& input,

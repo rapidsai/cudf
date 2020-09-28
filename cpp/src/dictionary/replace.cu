@@ -34,18 +34,27 @@ namespace {
 
 /**
  * @brief An index accessor that returns a validity flag along with the index value.
+ *
+ * This is used to make a `pair_iterator` for calling `copy_if_else`.
  */
 template <bool has_nulls = false>
 struct nullable_index_accessor {
   cudf::detail::input_indexalator iter;
   bitmask_type const* null_mask{};
   size_type const offset{};
+
+  /**
+   * @brief Create an accessor from a column_view.
+   */
   nullable_index_accessor(column_view const& col) : null_mask{col.null_mask()}, offset{col.offset()}
   {
     if (has_nulls) { CUDF_EXPECTS(col.nullable(), "Unexpected non-nullable column."); }
     iter = cudf::detail::indexalator_factory::make_input_iterator(col);
   }
 
+  /**
+   * @brief Create an accessor from a scalar.
+   */
   nullable_index_accessor(scalar const& input)
   {
     iter = cudf::detail::indexalator_factory::make_input_iterator(input);
@@ -68,7 +77,7 @@ auto make_nullable_index_iterator(column_view const& col)
 }
 
 /**
- * @brief Create an index iterator with a nullable index accessor for scalar.
+ * @brief Create an index iterator with a nullable index accessor for a scalar.
  */
 auto make_scalar_iterator(scalar const& input)
 {
@@ -77,7 +86,7 @@ auto make_scalar_iterator(scalar const& input)
 }
 
 /**
- * @brief Utility uses `copy_if_else` to replace null entries using the input bitmask as a
+ * @brief This tility uses `copy_if_else` to replace null entries using the input bitmask as a
  * predicate.
  *
  * The predicate identifies which column row to copy from and the bitmask specifies which rows
@@ -128,14 +137,14 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
   CUDF_EXPECTS(input.keys().type() == replacement.keys().type(), "keys must match");
   CUDF_EXPECTS(replacement.size() == input.size(), "column sizes must match");
 
-  // first combine keys so both dictionaries have the same set
+  // first combine the keys so both input dictionaries have the same set
   auto input_matched    = dictionary::detail::add_keys(input, replacement.keys(), mr, stream);
   auto const input_view = dictionary_column_view(input_matched->view());
   auto repl_matched     = dictionary::detail::set_keys(
     replacement, input_view.keys(), rmm::mr::get_current_device_resource(), stream);
   auto const repl_view = dictionary_column_view(repl_matched->view());
 
-  // now build the new indices by doing replace-null on the indices
+  // now build the new indices by doing replace-null using the updated input indices
   auto const input_indices = input_view.get_indices_annotated();
   auto const repl_indices  = repl_view.get_indices_annotated();
   auto new_indices =
@@ -149,7 +158,7 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
   auto const null_count   = new_indices->null_count();
   auto contents           = new_indices->release();
   auto const new_type     = get_indices_type_for_size(input_view.keys().size());
-  // build the indices for the output column
+  // create the indices for the output column
   auto indices_column = [&] {
     if (new_type.id() == cudf::type_id::UINT32) {
       return std::make_unique<column>(cudf::data_type{cudf::type_id::UINT32},
@@ -162,7 +171,7 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
     return cudf::detail::cast(cast_view, new_type, mr, stream);
   }();
 
-  // take the keys from the matched column allocated using mr
+  // take the keys from the matched column (allocated above using mr parameter)
   std::unique_ptr<column> keys_column(std::move(input_matched->release().children.back()));
 
   // create column with keys_column and indices_column
@@ -182,10 +191,12 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
                                       cudaStream_t stream)
 {
   if (input.size() == 0) { return cudf::empty_like(input.parent()); }
-  if (!input.has_nulls()) { return std::make_unique<cudf::column>(input.parent()); }
+  if (!input.has_nulls() || !replacement.is_valid()) {
+    return std::make_unique<cudf::column>(input.parent());
+  }
   CUDF_EXPECTS(input.keys().type() == replacement.type(), "keys must match scalar type");
 
-  // first combine keys so both dictionaries have the same set
+  // first add the replacment to the keys so only the indices need to be replaced
   auto input_matched = dictionary::detail::add_keys(
     input,
     make_column_from_scalar(replacement, 1, rmm::mr::get_current_device_resource(), stream)->view(),
@@ -195,7 +206,7 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
   auto scalar_index =
     get_index(input_view, replacement, rmm::mr::get_current_device_resource(), stream);
 
-  // now build the new indices by doing replace-null on the indices
+  // now build the new indices by doing replace-null on the updated indices
   auto const input_indices = input_view.get_indices_annotated();
   auto new_indices =
     replace_indices(input_indices, make_scalar_iterator(*scalar_index), mr, stream);
@@ -217,7 +228,7 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
     return cudf::detail::cast(cast_view, new_type, mr, stream);
   }();
 
-  // take the keys from the matched column allocated using mr above
+  // take the keys from the matched column (allocated above using mr parameter)
   std::unique_ptr<column> keys_column(std::move(input_matched->release().children.back()));
 
   // create column with keys_column and indices_column
