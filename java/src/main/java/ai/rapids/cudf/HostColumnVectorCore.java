@@ -107,22 +107,22 @@ public class HostColumnVectorCore implements AutoCloseable {
   /**
    * Return the element at a given row for a give data type
    * @param rowIndex the row number
-   * @param structType DataType to help figure out the schema if type == STRUCT else null
+   * @param schema DataType to help figure out the schema if type == STRUCT else null
    * @return an object that would need to be casted to appropriate type based on this vector's data type
    */
-  Object getElement(int rowIndex, HostColumnVector.DataType structType) {
+  Object getElement(int rowIndex, HostColumnVector.DataType schema) {
     if (type == DType.LIST) {
       List retList = new ArrayList();
       int start = offHeap.offsets.getInt(rowIndex * DType.INT32.getSizeInBytes());
       int end = offHeap.offsets.getInt((rowIndex + 1) * DType.INT32.getSizeInBytes());
       for (int j = start; j < end; j++) {
         for (HostColumnVectorCore childHcv : children) {
-          retList.add(childHcv.getElement(j, structType));
+          retList.add(childHcv.getElement(j, schema));
         }
       }
       return retList;
     } else if (type == DType.STRUCT) {
-      return getStruct(rowIndex, structType);
+      return getStruct(rowIndex, schema);
     } else {
       if (isNull(rowIndex)) {
         return null;
@@ -149,7 +149,7 @@ public class HostColumnVectorCore implements AutoCloseable {
   /**
    * WARNING: Strictly for test only. This call is not efficient for production.
    */
-  HostColumnVector.StructData getStruct(int rowIndex, HostColumnVector.DataType mainType) {
+  HostColumnVector.StructData getStruct(int rowIndex, HostColumnVector.DataType schema) {
     assert rowIndex < rows;
     assert type == DType.STRUCT;
     List<Object> retList = new ArrayList<>();
@@ -157,9 +157,9 @@ public class HostColumnVectorCore implements AutoCloseable {
     if (isNull(rowIndex)) {
       return null;
     }
-    int numChildren = mainType.getNumChildren();
+    int numChildren = schema.getNumChildren();
     for (int k = 0; k < numChildren; k++) {
-      retList.add(children.get(k).getElement(rowIndex, mainType));
+      retList.add(children.get(k).getElement(rowIndex, schema));
     }
     return new HostColumnVector.StructData(retList);
   }
