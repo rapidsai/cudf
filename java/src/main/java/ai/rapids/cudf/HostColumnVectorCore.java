@@ -141,6 +141,9 @@ public class HostColumnVectorCore implements AutoCloseable {
   }
 
   private Object getString(int rowIndex) {
+    if (isNull(rowIndex)) {
+      return null;
+    }
     int start = offHeap.offsets.getInt(rowIndex * DType.INT32.getSizeInBytes());
     int end = offHeap.offsets.getInt((rowIndex + 1) * DType.INT32.getSizeInBytes());
     int size = end - start;
@@ -148,8 +151,6 @@ public class HostColumnVectorCore implements AutoCloseable {
     if (size > 0) {
       offHeap.data.getBytes(rawData, 0, start, size);
       return new String(rawData);
-    } else if (isNull(rowIndex)) {
-      return null;
     } else {
       return new String();
     }
