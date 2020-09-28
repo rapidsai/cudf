@@ -7065,6 +7065,8 @@ class DataFrame(Frame, Serializable):
                 return False
         return super().equals(other)
 
+    _accessors = set()
+
 
 def from_pandas(obj, nan_as_null=None):
     """
