@@ -69,23 +69,24 @@ conda install -c rapidsai -c nvidia -c numba -c conda-forge \
     cudf=0.13 python=3.6 cudatoolkit=10.2
 
 ```
+Note: cuDF stable is supported only on Linux, and with Python versions 3.6 or 3.7.
 
 For the nightly version of `cudf` :
 ```bash
 # for CUDA 10.0
 conda install -c rapidsai-nightly -c nvidia -c numba -c conda-forge \
-    cudf python=3.6 cudatoolkit=10.0
+    cudf python=3.7 cudatoolkit=10.0
 
 # or, for CUDA 10.1
 conda install -c rapidsai-nightly -c nvidia -c numba -c conda-forge \
-    cudf python=3.6 cudatoolkit=10.1
+    cudf python=3.7 cudatoolkit=10.1
 
 # or, for CUDA 10.2
 conda install -c rapidsai-nightly -c nvidia -c numba -c conda-forge \
-    cudf python=3.6 cudatoolkit=10.2
+    cudf python=3.7 cudatoolkit=10.2
 ```
 
-Note: cuDF is supported only on Linux, and with Python versions 3.6 or 3.7.
+Note: cuDF nightly is supported only on Linux, and with Python versions 3.7 or 3.8.
 
 See the [Get RAPIDS version picker](https://rapids.ai/start.html) for more OS and version info. 
 
