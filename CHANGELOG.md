@@ -84,6 +84,7 @@
 - PR #6293 Replace shuffle warp reduce with cub calls
 - PR #6287 Make java aggregate API follow C++ API
 - PR #6303 Use cudf test dtypes so timedelta tests are determinstic
+- PR #6338 Added a new comment: imports cudf
 
 ## Bug Fixes
 
