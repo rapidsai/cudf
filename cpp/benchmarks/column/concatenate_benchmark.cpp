@@ -16,7 +16,7 @@
 #include <cudf/concatenate.hpp>
 #include <cudf/table/table.hpp>
 
-#include <tests/utilities/column_wrapper.hpp>
+#include <cudf_test/column_wrapper.hpp>
 
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>

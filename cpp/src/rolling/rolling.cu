@@ -45,9 +45,9 @@
 
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/utilities/device_operators.cuh>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/traits.hpp>
 #include <memory>
-#include "cudf/utilities/error.hpp"
-#include "cudf/utilities/traits.hpp"
 
 namespace cudf {
 namespace detail {
@@ -111,8 +111,9 @@ process_rolling_window(column_device_view input,
 }
 
 /**
- * LEAD(N): Returns the row from the input column, at the specified offset past the
- * current row. If the offset crosses the grouping boundary or column boundary for
+ * @brief LEAD(N): Returns the row from the input column, at the specified offset past the
+ *        current row.
+ * If the offset crosses the grouping boundary or column boundary for
  * a given row, a "default" value is returned. The "default" value is null, by default.
  *
  * E.g. Consider an input column with the following values and grouping:
@@ -160,8 +161,9 @@ process_rolling_window(column_device_view input,
 }
 
 /**
- * LAG(N): returns the row from the input column at the specified offset preceding
- * the current row. If the offset crosses the grouping boundary or column boundary for
+ * @brief LAG(N): returns the row from the input column at the specified offset preceding
+ *        the current row.
+ * If the offset crosses the grouping boundary or column boundary for
  * a given row, a "default" value is returned. The "default" value is null, by default.
  *
  * E.g. Consider an input column with the following values and grouping:
@@ -817,7 +819,7 @@ struct rolling_window_launcher {
              cudaStream_t stream)
   {
     return launch<InputType,
-                  cudf::DeviceLeadLag<op == aggregation::LEAD>,
+                  cudf::DeviceLeadLag,
                   op,
                   PrecedingWindowIterator,
                   FollowingWindowIterator>(
@@ -827,8 +829,7 @@ struct rolling_window_launcher {
       following_window_begin,
       min_periods,
       agg,
-      cudf::DeviceLeadLag<op == aggregation::LEAD>{
-        static_cast<cudf::detail::lead_lag_aggregation*>(agg.get())->row_offset},
+      cudf::DeviceLeadLag{static_cast<cudf::detail::lead_lag_aggregation*>(agg.get())->row_offset},
       mr,
       stream);
   }

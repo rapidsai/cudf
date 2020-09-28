@@ -225,7 +225,6 @@ struct DeviceXor {
 /**
  * @brief Operator for calculating Lead/Lag window function.
  */
-template <bool is_lead>
 struct DeviceLeadLag {
   const size_type row_offset;
 
