@@ -14,12 +14,13 @@
  * limitations under the License.
  */
 
+#include <atomic>
 #include <ctime>
 #include <fstream>
 #include <iostream>
 #include <limits>
-#include <atomic>
 
+#include <rmm/mr/device/arena_memory_resource.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/logging_resource_adaptor.hpp>
 #include <rmm/mr/device/managed_memory_resource.hpp>
@@ -73,9 +74,7 @@ public:
 
   Upstream *get_wrapped_resource() { return resource; }
 
-  std::size_t get_total_allocated() override {
-    return total_allocated.load();
-  }
+  std::size_t get_total_allocated() override { return total_allocated.load(); }
 
 private:
   Upstream *const resource;
@@ -95,7 +94,7 @@ private:
 
   void do_deallocate(void *p, std::size_t size, cudaStream_t stream) override {
     size = (size + size_align - 1) / size_align * size_align;
-    
+
     resource->deallocate(p, size, stream);
 
     if (p) {
@@ -344,6 +343,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(JNIEnv *env, j
 
     bool use_pool_alloc = allocation_mode & 1;
     bool use_managed_mem = allocation_mode & 2;
+    bool use_arena_alloc = allocation_mode & 4;
     if (use_pool_alloc) {
       std::size_t pool_limit = (max_pool_size > 0) ? static_cast<std::size_t>(max_pool_size) :
                                                      std::numeric_limits<std::size_t>::max();
@@ -354,6 +354,20 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(JNIEnv *env, j
         Tracking_memory_resource.reset(wrapped);
       } else {
         Initialized_resource = rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
+            std::make_shared<rmm::mr::cuda_memory_resource>(), pool_size, pool_limit);
+        auto wrapped = make_tracking_adaptor(Initialized_resource.get(), RMM_ALLOC_SIZE_ALIGNMENT);
+        Tracking_memory_resource.reset(wrapped);
+      }
+    } else if (use_arena_alloc) {
+      std::size_t pool_limit = (max_pool_size > 0) ? static_cast<std::size_t>(max_pool_size) :
+                                                     std::numeric_limits<std::size_t>::max();
+      if (use_managed_mem) {
+        Initialized_resource = rmm::mr::make_owning_wrapper<rmm::mr::arena_memory_resource>(
+            std::make_shared<rmm::mr::managed_memory_resource>(), pool_size, pool_limit);
+        auto wrapped = make_tracking_adaptor(Initialized_resource.get(), RMM_ALLOC_SIZE_ALIGNMENT);
+        Tracking_memory_resource.reset(wrapped);
+      } else {
+        Initialized_resource = rmm::mr::make_owning_wrapper<rmm::mr::arena_memory_resource>(
             std::make_shared<rmm::mr::cuda_memory_resource>(), pool_size, pool_limit);
         auto wrapped = make_tracking_adaptor(Initialized_resource.get(), RMM_ALLOC_SIZE_ALIGNMENT);
         Tracking_memory_resource.reset(wrapped);

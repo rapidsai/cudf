@@ -412,7 +412,9 @@ class ColumnBase(Column, Serializable):
         ]
 
     def _get_mask_as_column(self):
-        return libcudf.transform.mask_to_bools(self)
+        return libcudf.transform.mask_to_bools(
+            self.base_mask, self.offset, self.offset + len(self)
+        )
 
     def _memory_usage(self, **kwargs):
         return self.__sizeof__()
