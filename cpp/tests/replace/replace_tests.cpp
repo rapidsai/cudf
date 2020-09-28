@@ -531,39 +531,39 @@ TYPED_TEST(ReplaceTest, LargeScaleReplaceTest)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *actual_result);
 }
 
-template <typename T>
-struct FixedPointTestBothReps : public cudf::test::BaseFixture {
-};
+// template <typename T>
+// struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+// };
 
-template <typename T>
-using wrapper = cudf::test::fixed_width_column_wrapper<T>;
-TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+// template <typename T>
+// using wrapper = cudf::test::fixed_width_column_wrapper<T>;
+// TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReplace)
-{
-  using namespace numeric;
-  using decimalXX = TypeParam;
+// TYPED_TEST(FixedPointTestBothReps, FixedPointReplace)
+// {
+//   using namespace numeric;
+//   using decimalXX = TypeParam;
 
-  auto const ONE = decimalXX{1, scale_type{0}};
-  auto const TWO = decimalXX{2, scale_type{0}};
-  auto const sz  = std::size_t{1000};
+//   auto const ONE = decimalXX{1, scale_type{0}};
+//   auto const TWO = decimalXX{2, scale_type{0}};
+//   auto const sz  = std::size_t{1000};
 
-  auto mod2            = [&](auto e) { return e % 2 ? ONE : TWO; };
-  auto transform_begin = thrust::make_transform_iterator(thrust::counting_iterator<int>{}, mod2);
-  auto const vec1      = std::vector<decimalXX>(transform_begin, transform_begin + sz);
-  auto const vec2      = std::vector<decimalXX>(sz, TWO);
+//   auto mod2            = [&](auto e) { return e % 2 ? ONE : TWO; };
+//   auto transform_begin = thrust::make_transform_iterator(thrust::counting_iterator<int>{}, mod2);
+//   auto const vec1      = std::vector<decimalXX>(transform_begin, transform_begin + sz);
+//   auto const vec2      = std::vector<decimalXX>(sz, TWO);
 
-  auto const to_replace  = std::vector<decimalXX>{ONE};
-  auto const replacement = std::vector<decimalXX>{TWO};
+//   auto const to_replace  = std::vector<decimalXX>{ONE};
+//   auto const replacement = std::vector<decimalXX>{TWO};
 
-  auto const input_w       = wrapper<decimalXX>(vec1.begin(), vec1.end());
-  auto const to_replace_w  = wrapper<decimalXX>(to_replace.begin(), to_replace.end());
-  auto const replacement_w = wrapper<decimalXX>(replacement.begin(), replacement.end());
-  auto const expected_w    = wrapper<decimalXX>(vec2.begin(), vec2.end());
+//   auto const input_w       = wrapper<decimalXX>(vec1.begin(), vec1.end());
+//   auto const to_replace_w  = wrapper<decimalXX>(to_replace.begin(), to_replace.end());
+//   auto const replacement_w = wrapper<decimalXX>(replacement.begin(), replacement.end());
+//   auto const expected_w    = wrapper<decimalXX>(vec2.begin(), vec2.end());
 
-  auto const result = cudf::find_and_replace_all(input_w, to_replace_w, replacement_w);
+//   auto const result = cudf::find_and_replace_all(input_w, to_replace_w, replacement_w);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
-}
+//   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
+// }
 
 CUDF_TEST_PROGRAM_MAIN()
