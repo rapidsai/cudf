@@ -270,10 +270,16 @@ struct column_merger {
     //
     p_merged_col->set_null_count(lcol.null_count() + rcol.null_count());
 
+    // TODO fix this hack to be a comprehensive fix
+    constexpr bool is_decimal32 = std::is_same<numeric::decimal32, Element>();
+    using Type                  = std::conditional_t<cudf::is_fixed_point<Element>(),
+                                    std::conditional_t<is_decimal32, int32_t, int64_t>,
+                                    Element>;
+
     // to resolve view.data()'s types use: Element
     //
-    Element const* p_d_lcol = lcol.data<Element>();
-    Element const* p_d_rcol = rcol.data<Element>();
+    auto const p_d_lcol = lcol.data<Type>();
+    auto const p_d_rcol = rcol.data<Type>();
 
     auto exe_pol = rmm::exec_policy(stream_);
 
@@ -284,13 +290,12 @@ struct column_merger {
     thrust::transform(exe_pol->on(stream_),
                       dv_row_order_.begin(),
                       dv_row_order_.end(),
-                      merged_view.begin<Element>(),
+                      merged_view.begin<Type>(),
                       [p_d_lcol, p_d_rcol] __device__(index_type const& index_pair) {
+                        // When C++17, use structure bindings
                         auto side  = thrust::get<0>(index_pair);
                         auto index = thrust::get<1>(index_pair);
-
-                        Element val = (side == side::LEFT ? p_d_lcol[index] : p_d_rcol[index]);
-                        return val;
+                        return side == side::LEFT ? p_d_lcol[index] : p_d_rcol[index];
                       });
 
     // CAVEAT: conditional call below is erroneous without
