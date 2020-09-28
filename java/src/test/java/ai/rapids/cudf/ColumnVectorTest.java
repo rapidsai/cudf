@@ -3068,9 +3068,9 @@ public class ColumnVectorTest extends CudfTestBase {
     HostColumnVector.StructType structType = new HostColumnVector.StructType(true, Arrays.asList(new HostColumnVector.StructType(true,
         Arrays.asList(new HostColumnVector.BasicType(true, DType.STRING)))));
     HostColumnVector.ListType schema = new HostColumnVector.ListType(true, structType);
-    try (ColumnVector cv = ColumnVector.fromLists(schema, list1, list2, list3)) {
-      HostColumnVector hostColumnVector = cv.copyToHost();
-      ColumnVector expected = hostColumnVector.copyToDevice();
+    try (ColumnVector cv = ColumnVector.fromLists(schema, list1, list2, list3);
+         HostColumnVector hostColumnVector = cv.copyToHost();
+         ColumnVector expected = hostColumnVector.copyToDevice()) {
       assertColumnsAreEqual(expected, cv);
     }
   }
