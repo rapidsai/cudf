@@ -236,7 +236,12 @@ __global__ void replace_kernel(cudf::column_device_view input,
                                cudf::column_device_view values_to_replace,
                                cudf::column_device_view replacement)
 {
-  T* __restrict__ output_data = output.data<T>();
+  // TODO fix this hack to be a comprehensive fix
+  constexpr bool is_decimal32 = std::is_same<numeric::decimal32, T>();
+  using Type                  = std::
+    conditional_t<cudf::is_fixed_point<T>(), std::conditional_t<is_decimal32, int32_t, int64_t>, T>;
+
+  Type* __restrict__ output_data = output.data<Type>();
 
   cudf::size_type i = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -253,12 +258,12 @@ __global__ void replace_kernel(cudf::column_device_view input,
       output_is_valid = input_is_valid;
     }
     if (input_is_valid)
-      thrust::tie(output_data[i], output_is_valid) = get_new_value<T, replacement_has_nulls>(
+      thrust::tie(output_data[i], output_is_valid) = get_new_value<Type, replacement_has_nulls>(
         i,
-        input.data<T>(),
-        values_to_replace.data<T>(),
-        values_to_replace.data<T>() + values_to_replace.size(),
-        replacement.data<T>(),
+        input.data<Type>(),
+        values_to_replace.data<Type>(),
+        values_to_replace.data<Type>() + values_to_replace.size(),
+        replacement.data<Type>(),
         replacement.null_mask());
 
     /* output valid counts calculations*/
