@@ -3056,4 +3056,22 @@ public class ColumnVectorTest extends CudfTestBase {
       assertColumnsAreEqual(expected, res);
     }
   }
+
+  @Test
+  void testListOfStructsOfStructs() {
+    List<HostColumnVector.StructData> list1 = Arrays.asList(
+        new HostColumnVector.StructData(Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a")))));
+    List<HostColumnVector.StructData> list2 = Arrays.asList(
+        new HostColumnVector.StructData(Arrays.asList(new HostColumnVector.StructData(Arrays.asList("b")))));
+    List<HostColumnVector.StructData> list3 = Arrays.asList(
+        new HostColumnVector.StructData(Arrays.asList(new HostColumnVector.StructData(Arrays.asList("c")))));
+    HostColumnVector.StructType structType = new HostColumnVector.StructType(true, Arrays.asList(new HostColumnVector.StructType(true,
+        Arrays.asList(new HostColumnVector.BasicType(true, DType.STRING)))));
+    HostColumnVector.ListType schema = new HostColumnVector.ListType(true, structType);
+    try (ColumnVector cv = ColumnVector.fromLists(schema, list1, list2, list3)) {
+      HostColumnVector hostColumnVector = cv.copyToHost();
+      ColumnVector expected = hostColumnVector.copyToDevice();
+      assertColumnsAreEqual(expected, cv, schema);
+    }
+  }
 }

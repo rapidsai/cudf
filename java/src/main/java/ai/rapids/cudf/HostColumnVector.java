@@ -231,6 +231,14 @@ public final class HostColumnVector extends HostColumnVectorCore {
    * WARNING: Strictly for test only. This call is not efficient for production.
    */
   List getList(long rowIndex) {
+    return getList(rowIndex, null);
+  }
+
+
+  /**
+   * WARNING: Strictly for test only. This call is not efficient for production.
+   */
+  List getList(long rowIndex, DataType schema) {
     assert rowIndex < rows;
     assert type == DType.LIST;
     List retList = new ArrayList();
@@ -243,11 +251,13 @@ public final class HostColumnVector extends HostColumnVectorCore {
       }
     }
     for(int j = start; j < end; j++) {
-      retList.add(children.get(0).getElement(j, null));
+      for (HostColumnVectorCore childHcv : children) {
+        // lists have only 1 child
+        retList.add(childHcv.getElement(j, schema != null ? schema.getChild(0) : null));
+      }
     }
     return retList;
   }
-
   /**
    * For testing only.  Allows null checks to go past the number of rows, but not past the end
    * of the buffer.  NOTE: If the validity vector was allocated by cudf itself it is not
