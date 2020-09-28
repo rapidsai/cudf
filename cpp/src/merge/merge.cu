@@ -245,15 +245,11 @@ struct column_merger {
   template <typename Element>  // required: column type
   std::unique_ptr<column> operator()(column_view const& lcol, column_view const& rcol) const
   {
-    auto lsz         = lcol.size();
-    auto merged_size = lsz + rcol.size();
-    auto type        = lcol.type();
-
-    std::unique_ptr<cudf::column> p_merged_col{nullptr};
-    if (lcol.has_nulls())
-      p_merged_col = cudf::allocate_like(lcol, merged_size);
-    else
-      p_merged_col = cudf::allocate_like(rcol, merged_size);
+    auto lsz          = lcol.size();
+    auto merged_size  = lsz + rcol.size();
+    auto type         = lcol.type();
+    auto p_merged_col = lcol.has_nulls() ? cudf::allocate_like(lcol, merged_size)
+                                         : cudf::allocate_like(rcol, merged_size);
 
     //"gather" data from lcol, rcol according to dv_row_order_ "map"
     //(directly calling gather() won't work because
