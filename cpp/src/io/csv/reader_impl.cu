@@ -361,6 +361,12 @@ table_with_metadata reader::impl::read(cudaStream_t stream)
     for (size_t i = 0; i < column_types.size(); ++i) {
       out_columns.emplace_back(make_empty_column(column_types[i]));
     }
+    // Handle empty metadata
+    for (int col = 0; col < num_actual_cols_; ++col) {
+      if (h_column_flags_[col] & column_parse::enabled) {
+        metadata.column_names.emplace_back(col_names_[col]);
+      }
+    }
   }
   return {std::make_unique<table>(std::move(out_columns)), std::move(metadata)};
 }
