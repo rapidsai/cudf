@@ -21,7 +21,11 @@ namespace io {
 namespace parquet {
 namespace gpu {
 // Spark doesn't support RLE encoding for BOOLEANs
+#ifdef ENABLE_BOOL_RLE
+constexpr bool enable_bool_rle = true;
+#else
 constexpr bool enable_bool_rle = false;
+#endif
 
 #define INIT_HASH_BITS 12
 
