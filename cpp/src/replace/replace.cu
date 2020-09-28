@@ -314,23 +314,22 @@ struct replace_kernel_forwarder {
         input_col, input_col.size(), mask_allocation_policy, mr, stream);
     }();
 
-    cudf::mutable_column_view outputView = output->mutable_view();
-
-    cudf::detail::grid_1d grid{outputView.size(), BLOCK_SIZE, 1};
+    auto output_view = output->mutable_view();
+    auto grid        = cudf::detail::grid_1d{output_view.size(), BLOCK_SIZE, 1};
 
     auto device_in                 = cudf::column_device_view::create(input_col);
-    auto device_out                = cudf::mutable_column_device_view::create(outputView);
+    auto device_out                = cudf::mutable_column_device_view::create(output_view);
     auto device_values_to_replace  = cudf::column_device_view::create(values_to_replace);
     auto device_replacement_values = cudf::column_device_view::create(replacement_values);
 
     replace<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(*device_in,
                                                         *device_out,
                                                         valid_count,
-                                                        outputView.size(),
+                                                        output_view.size(),
                                                         *device_values_to_replace,
                                                         *device_replacement_values);
 
-    if (outputView.nullable()) {
+    if (output_view.nullable()) {
       output->set_null_count(output->size() - valid_counter.value(stream));
     }
     return output;
