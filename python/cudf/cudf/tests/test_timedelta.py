@@ -445,43 +445,50 @@ def test_timedelta_dataframe_ops(df, op):
         ),
     ],
 )
-def test_timedelta_series_ops_with_scalars(data, other_scalars, dtype, op):
+@pytest.mark.parametrize('use_cudf_scalar', [False, True])
+def test_timedelta_series_ops_with_scalars(data, other_scalars, dtype, op, use_cudf_scalar):
+    if isinstance(other_scalars, np.timedelta64) and other_scalars.dtype not in dtypeutils.TIMEDELTA_TYPES and use_cudf_scalar:
+        pytest.skip()
+
     gsr = cudf.Series(data=data, dtype=dtype)
     psr = gsr.to_pandas()
 
+    cpu_other_scalars = other_scalars
+    gpu_other_scalars = cudf.Scalar(other_scalars) if use_cudf_scalar is True else other_scalars
+
     if op == "add":
-        expected = psr + other_scalars
-        actual = gsr + other_scalars
+        expected = psr + cpu_other_scalars
+        actual = gsr + gpu_other_scalars
     elif op == "sub":
-        expected = psr - other_scalars
-        actual = gsr - other_scalars
+        expected = psr - cpu_other_scalars
+        actual = gsr - gpu_other_scalars
     elif op == "truediv":
-        expected = psr / other_scalars
-        actual = gsr / other_scalars
+        expected = psr / cpu_other_scalars
+        actual = gsr / gpu_other_scalars
     elif op == "floordiv":
-        expected = psr // other_scalars
-        actual = gsr // other_scalars
+        expected = psr // cpu_other_scalars
+        actual = gsr // gpu_other_scalars
     elif op == "mod":
-        expected = psr % other_scalars
-        actual = gsr % other_scalars
+        expected = psr % cpu_other_scalars
+        actual = gsr % gpu_other_scalars
 
     assert_eq(expected, actual)
 
     if op == "add":
-        expected = other_scalars + psr
-        actual = other_scalars + gsr
+        expected = cpu_other_scalars + psr
+        actual = gpu_other_scalars + gsr
     elif op == "sub":
-        expected = other_scalars - psr
-        actual = other_scalars - gsr
+        expected = cpu_other_scalars - psr
+        actual = gpu_other_scalars - gsr
     elif op == "truediv":
-        expected = other_scalars / psr
-        actual = other_scalars / gsr
+        expected = cpu_other_scalars / psr
+        actual = gpu_other_scalars / gsr
     elif op == "floordiv":
-        expected = other_scalars // psr
-        actual = other_scalars // gsr
+        expected = cpu_other_scalars // psr
+        actual = gpu_other_scalars // gsr
     elif op == "mod":
-        expected = other_scalars % psr
-        actual = other_scalars % gsr
+        expected = cpu_other_scalars % psr
+        actual = gpu_other_scalars % gsr
 
     assert_eq(expected, actual)
 
@@ -709,37 +716,45 @@ def test_timedelta_datetime_index_ops_misc(
         ),
     ],
 )
-def test_timedelta_index_ops_with_scalars(data, other_scalars, dtype, op):
+@pytest.mark.parametrize('use_cudf_scalar', [False, True])
+def test_timedelta_index_ops_with_scalars(data, other_scalars, dtype, op, use_cudf_scalar):
+
+    if isinstance(other_scalars, np.timedelta64) and other_scalars.dtype not in dtypeutils.TIMEDELTA_TYPES and use_cudf_scalar:
+        pytest.skip()
+
     gtdi = cudf.Index(data=data, dtype=dtype)
     ptdi = gtdi.to_pandas()
 
+    cpu_other_scalars = other_scalars
+    gpu_other_scalars = cudf.Scalar(other_scalars) if use_cudf_scalar is True else other_scalars
+
     if op == "add":
-        expected = ptdi + other_scalars
-        actual = gtdi + other_scalars
+        expected = ptdi + cpu_other_scalars
+        actual = gtdi + gpu_other_scalars
     elif op == "sub":
-        expected = ptdi - other_scalars
-        actual = gtdi - other_scalars
+        expected = ptdi - cpu_other_scalars
+        actual = gtdi - gpu_other_scalars
     elif op == "truediv":
-        expected = ptdi / other_scalars
-        actual = gtdi / other_scalars
+        expected = ptdi / cpu_other_scalars
+        actual = gtdi / gpu_other_scalars
     elif op == "floordiv":
-        expected = ptdi // other_scalars
-        actual = gtdi // other_scalars
+        expected = ptdi // cpu_other_scalars
+        actual = gtdi // gpu_other_scalars
 
     assert_eq(expected, actual)
 
     if op == "add":
-        expected = other_scalars + ptdi
-        actual = other_scalars + gtdi
+        expected = cpu_other_scalars + ptdi
+        actual = gpu_other_scalars + gtdi
     elif op == "sub":
-        expected = other_scalars - ptdi
-        actual = other_scalars - gtdi
+        expected = cpu_other_scalars - ptdi
+        actual = gpu_other_scalars - gtdi
     elif op == "truediv":
-        expected = other_scalars / ptdi
-        actual = other_scalars / gtdi
+        expected = cpu_other_scalars / ptdi
+        actual = gpu_other_scalars / gtdi
     elif op == "floordiv":
-        expected = other_scalars // ptdi
-        actual = other_scalars // gtdi
+        expected = cpu_other_scalars // ptdi
+        actual = gpu_other_scalars // gtdi
 
     assert_eq(expected, actual)
 

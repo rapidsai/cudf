@@ -1004,8 +1004,6 @@ def test_datetime_series_ops_with_cudf_scalars(data, scalar, dtype, op):
     got = op(gsr, cudf.Scalar(scalar))
 
     assert_eq(expect, got)
-    
-
 
 def test_datetime_invalid_ops():
     sr = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
