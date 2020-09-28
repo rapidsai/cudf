@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <io/parquet/parquet_gpu.hpp>
 #include <cub/cub.cuh>
+#include <io/parquet/parquet_gpu.hpp>
 #include <io/utilities/block_utils.cuh>
 
 namespace cudf {
