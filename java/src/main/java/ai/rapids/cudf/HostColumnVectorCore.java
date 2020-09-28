@@ -105,24 +105,30 @@ public class HostColumnVectorCore implements AutoCloseable {
   }
 
   /**
+   * Returns the number of children for this column
+   */
+  public int getNumChildren() {
+    return children.size();
+  }
+
+  /**
    * Return the element at a given row for a give data type
    * @param rowIndex the row number
-   * @param schema DataType to help figure out the schema if type == STRUCT else null
    * @return an object that would need to be casted to appropriate type based on this vector's data type
    */
-  Object getElement(int rowIndex, HostColumnVector.DataType schema) {
+  Object getElement(int rowIndex) {
     if (type == DType.LIST) {
       List retList = new ArrayList();
       int start = offHeap.offsets.getInt(rowIndex * DType.INT32.getSizeInBytes());
       int end = offHeap.offsets.getInt((rowIndex + 1) * DType.INT32.getSizeInBytes());
       for (int j = start; j < end; j++) {
         for (HostColumnVectorCore childHcv : children) {
-          retList.add(childHcv.getElement(j, schema));
+          retList.add(childHcv.getElement(j));
         }
       }
       return retList;
     } else if (type == DType.STRUCT) {
-      return getStruct(rowIndex, schema);
+      return getStruct(rowIndex);
     } else {
       if (isNull(rowIndex)) {
         return null;
@@ -149,7 +155,7 @@ public class HostColumnVectorCore implements AutoCloseable {
   /**
    * WARNING: Strictly for test only. This call is not efficient for production.
    */
-  HostColumnVector.StructData getStruct(int rowIndex, HostColumnVector.DataType schema) {
+  HostColumnVector.StructData getStruct(int rowIndex) {
     assert rowIndex < rows;
     assert type == DType.STRUCT;
     List<Object> retList = new ArrayList<>();
@@ -157,12 +163,12 @@ public class HostColumnVectorCore implements AutoCloseable {
     if (isNull(rowIndex)) {
       return null;
     }
-    int numChildren = schema.getNumChildren();
-    for (int k = 0; k < numChildren; k++) {
-      retList.add(children.get(k).getElement(rowIndex, schema));
+    for (int k = 0; k < this.getNumChildren(); k++) {
+      retList.add(children.get(k).getElement(rowIndex));
     }
     return new HostColumnVector.StructData(retList);
   }
+
   /**
    * Method that returns a boolean to indicate if the element at a given row index is null
    * @param rowIndex the row index

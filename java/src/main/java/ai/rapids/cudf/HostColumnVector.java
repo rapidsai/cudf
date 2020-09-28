@@ -231,14 +231,6 @@ public final class HostColumnVector extends HostColumnVectorCore {
    * WARNING: Strictly for test only. This call is not efficient for production.
    */
   List getList(long rowIndex) {
-    return getList(rowIndex, null);
-  }
-
-
-  /**
-   * WARNING: Strictly for test only. This call is not efficient for production.
-   */
-  List getList(long rowIndex, DataType schema) {
     assert rowIndex < rows;
     assert type == DType.LIST;
     List retList = new ArrayList();
@@ -253,7 +245,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     for(int j = start; j < end; j++) {
       for (HostColumnVectorCore childHcv : children) {
         // lists have only 1 child
-        retList.add(childHcv.getElement(j, schema != null ? schema.getChild(0) : null));
+        retList.add(childHcv.getElement(j));
       }
     }
     return retList;
@@ -1712,15 +1704,6 @@ public final class HostColumnVector extends HostColumnVectorCore {
     abstract boolean isNullable();
     abstract DataType getChild(int index);
     abstract int getNumChildren();
-  }
-
-  protected static class TableSchema {
-
-    List<HostColumnVector.DataType> types;
-
-    public TableSchema(HostColumnVector.DataType... types) {
-      this.types = Arrays.asList(types);
-    }
   }
 
   public static class ListType extends HostColumnVector.DataType {

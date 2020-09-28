@@ -2983,15 +2983,15 @@ public class ColumnVectorTest extends CudfTestBase {
          HostColumnVector hcv1 = columnVector.copyToHost();
          ColumnVector expected = hcv1.copyToDevice()) {
       assertEquals(expected.getRowCount(), 4L, "Expected column row count is incorrect");
-      HostColumnVector.StructData retData1 = hcv1.getStruct(0, type);
-      HostColumnVector.StructData retData2 = hcv1.getStruct(1, type);
-      HostColumnVector.StructData retData3 = hcv1.getStruct(2, type);
-      HostColumnVector.StructData retData4 = hcv1.getStruct(3, type);
+      HostColumnVector.StructData retData1 = hcv1.getStruct(0);
+      HostColumnVector.StructData retData2 = hcv1.getStruct(1);
+      HostColumnVector.StructData retData3 = hcv1.getStruct(2);
+      HostColumnVector.StructData retData4 = hcv1.getStruct(3);
       assertEquals(data1, retData1.dataRecord);
       assertEquals(data2, retData2.dataRecord);
       assertEquals(data3, retData3.dataRecord);
       assertEquals(data4, retData4);
-      assertStructColumnsAreEqual(expected, columnVector, type);
+      assertStructColumnsAreEqual(expected, columnVector);
     }
   }
 
@@ -3039,7 +3039,7 @@ public class ColumnVectorTest extends CudfTestBase {
       assertFalse(longChildCol.isNull(1));
       assertTrue(longChildCol.isNull(2));
       assertTrue(longChildCol.isNull(3));
-      assertStructColumnsAreEqual(expected, columnVector, type);
+      assertStructColumnsAreEqual(expected, columnVector);
     }
   }
 
@@ -3071,7 +3071,7 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector cv = ColumnVector.fromLists(schema, list1, list2, list3)) {
       HostColumnVector hostColumnVector = cv.copyToHost();
       ColumnVector expected = hostColumnVector.copyToDevice();
-      assertColumnsAreEqual(expected, cv, schema);
+      assertColumnsAreEqual(expected, cv);
     }
   }
 }
