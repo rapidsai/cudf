@@ -102,6 +102,22 @@ cdef class Scalar:
                 f"Cannot convert value of type "
                 f"{type(value).__name__} to cudf scalar"
             )
+    
+    def get_device_value(self):
+        if pd.api.types.is_string_dtype(self.dtype):
+            result = _get_py_string_from_string(self.c_value)
+        elif pd.api.types.is_numeric_dtype(self.dtype):
+            result = _get_np_scalar_from_numeric(self.c_value)
+        elif pd.api.types.is_datetime64_dtype(self.dtype):
+            result = _get_np_scalar_from_timestamp64(self.c_value)
+        elif pd.api.types.is_timedelta64_dtype(self.dtype):
+            result = _get_np_scalar_from_timedelta64(self.c_value)
+        else:
+            raise ValueError(
+                "Could not convert cudf::scalar to a Python value"
+            )
+        return result
+
 
     @property
     def dtype(self):
@@ -123,22 +139,20 @@ cdef class Scalar:
             else:
                 return cudf.NA
         else:
-            if pd.api.types.is_string_dtype(self.dtype):
-                result = _get_py_string_from_string(self.c_value)
-            elif pd.api.types.is_numeric_dtype(self.dtype):
-                result = _get_np_scalar_from_numeric(self.c_value)
-            elif pd.api.types.is_datetime64_dtype(self.dtype):
-                result = _get_np_scalar_from_timestamp64(self.c_value)
-            elif pd.api.types.is_timedelta64_dtype(self.dtype):
-                result = _get_np_scalar_from_timedelta64(self.c_value)
-            else:
-                raise ValueError(
-                    "Could not convert cudf::scalar to a Python value"
-                )
+            result = self.get_device_value()
             self._host_value = result
             self._host_value_current = True
-        print(result)
-        return result
+            return result
+
+    def sync(self):
+        if self._host_value_current and self._device_value_current:
+            return
+        elif self._host_value_current and not self._device_value_current:
+            self.set_device_value(self._host_value, self._host_dtype)
+        elif self._device_value_current and not self._host_value_current:
+            self._host_value = self.get_device_value()
+
+    
 
     cdef scalar* get_c_value(self):
         if not self._device_value_current:
