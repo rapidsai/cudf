@@ -2601,7 +2601,11 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     return new Table(extractRe(this.getNativeView(), pattern));
   }
 
-
+  /** For a column of type List<Struct<String, String>> and a passed in String key, return a string column
+   * for all the values in the struct that match the key, null otherwise.
+   * @param key the String scalar to lookup in the column
+   * @return a string column of values or nulls based on the lookup result
+   */
   public ColumnVector getMapValue(Scalar key) {
 
     assert type == DType.LIST : "column type must be a LIST";
@@ -2823,6 +2827,13 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    */
   private static native long stringConcatenation(long[] columnViews, long separator, long narep);
 
+  /**
+   * Native method for map lookup over a column of List<Struct<String,String>>
+   * @param columnView the column view handle of the map
+   * @param key the string scalar that is the key for lookup
+   * @return a string column handle of the resultant
+   * @throws CudfException
+   */
   private static native long mapLookup(long columnView, long key) throws CudfException;
   /**
    * Native method to add zeros as padding to the left of each string.

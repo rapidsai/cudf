@@ -14,9 +14,8 @@
 - PR #6271 Add support to deep-copy struct columns from struct column-view
 - PR #6254 Add `cudf::make_dictionary_from_scalar` factory function
 - PR #6262 Add nth_element series aggregation with null handling
-- PR #6315 Native code for string-map lookups, for cudf-java
-- PR #6328 Java and JNI bindings for getMapValue/map_lookup
 - PR #6301 Add JNI bindings to nvcomp
+- PR #6328 Java and JNI bindings for getMapValue/map_lookup
 
 ## Improvements
 

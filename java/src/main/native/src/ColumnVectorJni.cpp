@@ -1076,7 +1076,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringReplace(JNIEnv *e
   CATCH_STD(env, 0);
 }
 
-
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_mapLookup(JNIEnv *env, jclass,
                                                                        jlong map_column_view,
                                                                        jlong lookup_key) {
