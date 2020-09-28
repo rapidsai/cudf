@@ -103,8 +103,6 @@ class NumericalColumn(column.ColumnBase):
         return libcudf.reduce.scan(op, self, True)
 
     def normalize_binop_value(self, other):
-        import pdb
-        pdb.set_trace()
         if other is None:
             return other
         if isinstance(other, cudf.Scalar):

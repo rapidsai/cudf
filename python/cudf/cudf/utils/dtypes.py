@@ -460,236 +460,42 @@ def _get_nan_for_dtype(dtype):
         return np.float64("nan")
 
 
-def _build_invalid_dtype_combos_add():
-    results = set()
-    results |= set(
-        product(DATETIME_TYPES, DATETIME_TYPES | STRING_TYPES | FLOAT_TYPES)
-    )
-    results |= set(
-        product(
-            STRING_TYPES,
-            DATETIME_TYPES
-            | FLOAT_TYPES
-            | TIMEDELTA_TYPES
-            | BOOL_TYPES
-            | INTEGER_TYPES,
-        )
-    )
-    results |= set(
-        product(FLOAT_TYPES, DATETIME_TYPES | STRING_TYPES | TIMEDELTA_TYPES)
-    )
-    results |= set(product(TIMEDELTA_TYPES, STRING_TYPES | FLOAT_TYPES))
-    results |= set(product(BOOL_TYPES, STRING_TYPES))
-    results |= set(product(INTEGER_TYPES, STRING_TYPES))
+def get_allowed_combinations_for_operator(dtype_l, dtype_r, op):
 
-    return results
-
-
-def _build_invalid_dtype_combos_sub():
-    results = set()
-    results |= set(
-        product(BOOL_TYPES, BOOL_TYPES | STRING_TYPES | DATETIME_TYPES)
-    )
-    results |= set(
-        product(FLOAT_TYPES, STRING_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES)
-    )
-    results |= set(
-        product(
-            STRING_TYPES,
-            BOOL_TYPES
-            | FLOAT_TYPES
-            | STRING_TYPES
-            | DATETIME_TYPES
-            | TIMEDELTA_TYPES
-            | INTEGER_TYPES,
-        )
-    )
-    results |= set(product(DATETIME_TYPES, FLOAT_TYPES | STRING_TYPES))
-    results |= set(
-        product(TIMEDELTA_TYPES, FLOAT_TYPES | STRING_TYPES | DATETIME_TYPES)
-    )
-    results |= set(product(INTEGER_TYPES, STRING_TYPES | DATETIME_TYPES))
-
-    return results
-
-
-def _build_invalid_dtype_combos_mul():
-    results = set()
-    results |= set(product(INTEGER_TYPES, DATETIME_TYPES | STRING_TYPES))
-    results |= set(
-        product(
-            DATETIME_TYPES,
-            INTEGER_TYPES
-            | DATETIME_TYPES
-            | STRING_TYPES
-            | FLOAT_TYPES
-            | BOOL_TYPES
-            | TIMEDELTA_TYPES,
-        )
-    )
-    results |= set(
-        product(
-            STRING_TYPES,
-            INTEGER_TYPES
-            | DATETIME_TYPES
-            | STRING_TYPES
-            | FLOAT_TYPES
-            | BOOL_TYPES
-            | TIMEDELTA_TYPES,
-        )
-    )
-    results |= set(product(FLOAT_TYPES, DATETIME_TYPES | STRING_TYPES))
-    results |= set(product(BOOL_TYPES, DATETIME_TYPES | STRING_TYPES))
-    results |= set(
-        product(
-            TIMEDELTA_TYPES, DATETIME_TYPES | TIMEDELTA_TYPES | STRING_TYPES
-        )
-    )
-    return results
-
-def _build_invalid_dtype_combos_floordiv():
-    results = set()
-    results |= set(
-        product(INTEGER_TYPES, TIMEDELTA_TYPES | STRING_TYPES | DATETIME_TYPES)
-    )
-    results |= set(
-        product(FLOAT_TYPES, TIMEDELTA_TYPES | DATETIME_TYPES | STRING_TYPES)
-    )
-    results |= set(
-        product(TIMEDELTA_TYPES, BOOL_TYPES | STRING_TYPES | DATETIME_TYPES)
-    )
-    results |= set(
-        product(BOOL_TYPES, TIMEDELTA_TYPES | DATETIME_TYPES | STRING_TYPES)
-    )
-    results |= set(
-        product(
-            STRING_TYPES,
-            INTEGER_TYPES
-            | FLOAT_TYPES
-            | TIMEDELTA_TYPES
-            | BOOL_TYPES
-            | STRING_TYPES
-            | DATETIME_TYPES,
-        )
-    )
-    results |= set(
-        product(
-            DATETIME_TYPES,
-            INTEGER_TYPES
-            | FLOAT_TYPES
-            | TIMEDELTA_TYPES
-            | BOOL_TYPES
-            | STRING_TYPES
-            | DATETIME_TYPES,
-        )
-    )
-    return results
-
-
-def _build_invalid_dtype_combos_truediv():
-    results = set()
-    results |= set(
-        product(BOOL_TYPES, STRING_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES)
-    )
-    results |= set(
-        product(
-            STRING_TYPES,
-            BOOL_TYPES
-            | STRING_TYPES
-            | INTEGER_TYPES
-            | FLOAT_TYPES
-            | DATETIME_TYPES
-            | TIMEDELTA_TYPES,
-        )
-    )
-    results |= set(
-        product(INTEGER_TYPES, STRING_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES)
-    )
-    results |= set(
-        product(FLOAT_TYPES, STRING_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES)
-    )
-    results |= set(
-        product(
-            DATETIME_TYPES,
-            BOOL_TYPES
-            | STRING_TYPES
-            | INTEGER_TYPES
-            | FLOAT_TYPES
-            | DATETIME_TYPES
-            | TIMEDELTA_TYPES,
-        )
-    )
-    results |= set(
-        product(TIMEDELTA_TYPES, BOOL_TYPES | STRING_TYPES | DATETIME_TYPES)
-    )
-
-    return results
-
-def _build_invalid_dtype_combos_mod():
-    results = set()
-    results |= set(
-        product(FLOAT_TYPES, DATETIME_TYPES | TIMEDELTA_TYPES | STRING_TYPES)
-    )
-    results |= set(
-        product(
-            DATETIME_TYPES,
-            FLOAT_TYPES
-            | DATETIME_TYPES
-            | TIMEDELTA_TYPES
-            | INTEGER_TYPES
-            | STRING_TYPES
-            | BOOL_TYPES,
-        )
-    )
-    results |= set(
-        product(
-            TIMEDELTA_TYPES,
-            FLOAT_TYPES
-            | DATETIME_TYPES
-            | INTEGER_TYPES
-            | STRING_TYPES
-            | BOOL_TYPES,
-        )
-    )
-    results |= set(
-        product(INTEGER_TYPES, DATETIME_TYPES | TIMEDELTA_TYPES | STRING_TYPES)
-    )
-    results |= set(product(STRING_TYPES, STRING_TYPES))
-    results |= set(
-        product(BOOL_TYPES, DATETIME_TYPES | TIMEDELTA_TYPES | STRING_TYPES)
-    )
-    return results
-
-
-def _build_invalid_dtype_combos_pow():
-    results = set()
-    results |= set(
-        product(
-            BOOL_TYPES | INTEGER_TYPES | FLOAT_TYPES,
-            DATETIME_TYPES | TIMEDELTA_TYPES | STRING_TYPES,
-        )
-    )
-    results |= set(
-        product(
-            DATETIME_TYPES | TIMEDELTA_TYPES | STRING_TYPES,
-            BOOL_TYPES
-            | INTEGER_TYPES
-            | FLOAT_TYPES
-            | DATETIME_TYPES
-            | TIMEDELTA_TYPES,
-        )
-    )
-    return results
-
-def _build_invalid_dtype_binop_combos():
-    return {
-        '__add__': _build_invalid_dtype_combos_add(),
-        '__sub__': _build_invalid_dtype_combos_sub(),
-        '__mul__': _build_invalid_dtype_combos_mul(),
-        '__floordiv__': _build_invalid_dtype_combos_floordiv(),
-        '__truediv__': _build_invalid_dtype_combos_truediv(),
-        '__mod__': _build_invalid_dtype_combos_mod(),
-        '__pow__': _build_invalid_dtype_combos_pow()
+    to_numpy_ops = {
+        "__add__": np.add,
+        "__sub__": np.subtract,
+        "__mul__": np.multiply,
+        "__floordiv__": np.floor_divide,
+        "__truediv__": np.true_divide,
+        "__pow__": np.power,
+        "__mod__": np.remainder,
+        '__or__': np.logical_or,
+        '__and__': np.logical_and,
+        '__not__': np.logical_not,
+        '__xor__': np.logical_xor
     }
+    op = to_numpy_ops.get(op, op)
 
-INVALID_BINOP_DTYPE_COMBOS = _build_invalid_dtype_binop_combos()
+    # special rules for string
+    if dtype_l == 'object' or dtype_r == 'object':
+        if (dtype_l == dtype_r == 'object') and op == np.add:
+            return True
+        else:
+            return False
+
+    # Look for a numpy ufunc loop 
+    typ = dtype_l.char + dtype_r.char
+    allowed = set(t.split("->")[0] for t in op.types)
+    allowed.discard("OO")
+    if typ in allowed:
+        return True
+    else:
+        # if no loop found, numpy would check if operands can be 
+        # cast to something it does have a loop implemented for
+        for l_cast_to, r_cast_to in (list(pair) for pair in allowed):
+            if np.can_cast(dtype_l.char, l_cast_to) and np.can_cast(
+                dtype_r.char, r_cast_to
+            ):
+                return True
+    return False

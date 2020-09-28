@@ -1,10 +1,11 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 import cudf._lib as libcudf
-from cudf.utils.dtypes import to_cudf_compatible_scalar, INVALID_BINOP_DTYPE_COMBOS
+from cudf.utils.dtypes import to_cudf_compatible_scalar, get_allowed_combinations_for_operator
 from numpy import find_common_type
 import numpy as np
 from cudf.core.series import Series, truediv_int_dtype_corrections
 from cudf.core.column.column import ColumnBase
+from cudf.core.index import Index
 
 class Scalar(libcudf.scalar.Scalar):
     def __init__(self, value, dtype=None):
@@ -109,7 +110,7 @@ class Scalar(libcudf.scalar.Scalar):
         if op in ["__eq__", "__ne__", "__lt__", "__gt__", "__le__", "__ge__"]:
             return np.bool
 
-        if (self.dtype.name, other.dtype.name) in INVALID_BINOP_DTYPE_COMBOS[op]:
+        if not get_allowed_combinations_for_operator(self.dtype, other.dtype, op):
             raise TypeError(f"{op} not supported between "\
                             f"{self.dtype} and {other.dtype} scalars")
 
@@ -126,7 +127,8 @@ class Scalar(libcudf.scalar.Scalar):
         return find_common_type([self.dtype, other.dtype], [])
 
     def _scalar_binop(self, other, op):
-        if isinstance(other, (ColumnBase, Series)):
+        if isinstance(other, (ColumnBase, Series, Index, np.ndarray)):
+            # dispatch to column implementation
             return NotImplemented
         other = to_cudf_compatible_scalar(other)
         out_dtype = self._binop_result_dtype_or_error(other, op)
