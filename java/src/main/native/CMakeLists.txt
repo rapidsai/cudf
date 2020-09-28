@@ -238,12 +238,25 @@ else()
 endif(JNI_FOUND)
 
 ###################################################################################################
+# - nvcomp ----------------------------------------------------------------------------------------
+
+include(ConfigureNvcomp)
+if(NVCOMP_FOUND)
+    message(STATUS "nvcomp compression library found in ${NVCOMP_ROOT}")
+else()
+    message(FATAL_ERROR "nvcomp compression library not found.")
+endif(NVCOMP_FOUND)
+
+add_library(nvcomp STATIC IMPORTED ${NVCOMP_LIB})
+
+###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
 include_directories("${THRUST_INCLUDE}"
                     "${CUB_INCLUDE}"
                     "${LIBCUDACXX_INCLUDE}"
                     "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
+                    "${NVCOMP_INCLUDE_DIR}"
                     "${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${SPDLOG_INCLUDE}"
@@ -270,6 +283,7 @@ set(SOURCE_FILES
     "src/CudaJni.cpp"
     "src/ColumnVectorJni.cpp"
     "src/HostMemoryBufferNativeUtilsJni.cpp"
+    "src/NvcompJni.cpp"
     "src/NvtxRangeJni.cpp"
     "src/RmmJni.cpp"
     "src/ScalarJni.cpp"
@@ -316,4 +330,4 @@ target_compile_definitions(cudfjni PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${LOG
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudfjni cudf ${ARROW_LIBRARY} ${CUDART_LIBRARY} cuda nvrtc)
+target_link_libraries(cudfjni cudf ${ARROW_LIBRARY} ${NVCOMP_LIB} ${CUDART_LIBRARY} cuda nvrtc)

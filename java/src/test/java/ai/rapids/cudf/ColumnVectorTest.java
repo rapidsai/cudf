@@ -2239,8 +2239,8 @@ public class ColumnVectorTest extends CudfTestBase {
   void testStringSplitRecord() {
       try (ColumnVector v = ColumnVector.fromStrings("Héllo there", "thésé", "null", "", "ARé some", "test strings");
            ColumnVector expected = ColumnVector.fromLists(
-                   new HostColumnVector.ColumnBuilder.ListType(true, 6,
-                           new HostColumnVector.ColumnBuilder.BasicType(true, 9, DType.STRING)),
+                   new HostColumnVector.ListType(true,
+                       new HostColumnVector.BasicType(true, DType.STRING)),
                    Arrays.asList("Héllo", "there"),
                    Arrays.asList("thésé"),
                    Arrays.asList("null"),
@@ -2619,9 +2619,9 @@ public class ColumnVectorTest extends CudfTestBase {
     List<Integer> list2 = Arrays.asList(6, 2, 4, 5);
     List<Integer> list3 = Arrays.asList(0, 7, 3, 4, 2);
 
-    try(ColumnVector res = ColumnVector.fromLists(new HostColumnVector.ColumnBuilder.ListType(true, 3,
-        new HostColumnVector.ColumnBuilder.BasicType(true, 13, DType.INT32)), list1, list2, list3);
-    HostColumnVector hcv = res.copyToHost()) {
+    try(ColumnVector res = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+        new HostColumnVector.BasicType(true, DType.INT32)), list1, list2, list3);
+        HostColumnVector hcv = res.copyToHost()) {
       List<Integer> ret1 = hcv.getList(0);
       List<Integer> ret2 = hcv.getList(1);
       List<Integer> ret3 = hcv.getList(2);
@@ -2637,9 +2637,9 @@ public class ColumnVectorTest extends CudfTestBase {
     List<Integer> list2 = Arrays.asList(6, 2, 4, 5);
     List<Integer> list3 = new ArrayList<>();
 
-    try(ColumnVector res = ColumnVector.fromLists(new HostColumnVector.ColumnBuilder.ListType(true, 3,
-        new HostColumnVector.ColumnBuilder.BasicType(true, 8, DType.INT32)), list1, list2, list3);
-    HostColumnVector hcv = res.copyToHost()) {
+    try(ColumnVector res = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+        new HostColumnVector.BasicType(true, DType.INT32)), list1, list2, list3);
+        HostColumnVector hcv = res.copyToHost()) {
       List<Integer> ret1 = hcv.getList(0);
       List<Integer> ret2 = hcv.getList(1);
       List<Integer> ret3 = hcv.getList(2);
@@ -2655,10 +2655,10 @@ public class ColumnVectorTest extends CudfTestBase {
     List<String> list2 = Arrays.asList("4", null, "6", null);
     List<String> list3 = null;
 
-    try(ColumnVector res = ColumnVector.fromLists(new HostColumnVector.ColumnBuilder.ListType(true, 3,
-        new HostColumnVector.ColumnBuilder.BasicType(true, 8, DType.STRING)), list1, list2, list3);
+    try(ColumnVector res = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+        new HostColumnVector.BasicType(true, DType.STRING)), list1, list2, list3);
 
-    HostColumnVector hcv = res.copyToHost()) {
+        HostColumnVector hcv = res.copyToHost()) {
       List<String> ret1 = hcv.getList(0);
       List<String> ret2 = hcv.getList(1);
       List<String> ret3 = hcv.getList(2);
@@ -2674,9 +2674,9 @@ public class ColumnVectorTest extends CudfTestBase {
     List<Double> list2 = Arrays.asList(6.7, 7.8, 8.9, 5.6);
     List<Double> list3 = Arrays.asList(0.1, 7.8, 3.4, 4.5, 2.3);
 
-    try(ColumnVector res = ColumnVector.fromLists(new HostColumnVector.ColumnBuilder.ListType(true, 3,
-        new HostColumnVector.ColumnBuilder.BasicType(true, 13, DType.FLOAT64)), list1, list2, list3);
-    HostColumnVector hcv = res.copyToHost()) {
+    try(ColumnVector res = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+        new HostColumnVector.BasicType(true, DType.FLOAT64)), list1, list2, list3);
+        HostColumnVector hcv = res.copyToHost()) {
       List<Double> ret1 = hcv.getList(0);
       List<Double> ret2 = hcv.getList(1);
       assertEquals(list1, ret1, "Lists don't match");
@@ -2690,8 +2690,8 @@ public class ColumnVectorTest extends CudfTestBase {
     List<Byte> list2 = Arrays.asList((byte)0, (byte)2, (byte)4, (byte)6);
     List<Byte> list3 = Arrays.asList((byte)1, (byte)4, (byte)9, (byte)0);
 
-    try(ColumnVector res = ColumnVector.fromLists(new HostColumnVector.ColumnBuilder.ListType(true, 3,
-        new HostColumnVector.ColumnBuilder.BasicType(true, 13, DType.INT8)), list1, list2, list3);
+    try(ColumnVector res = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+        new HostColumnVector.BasicType(true, DType.INT8)), list1, list2, list3);
         HostColumnVector hcv = res.copyToHost()) {
       List<Byte> ret1 = hcv.getList(0);
       List<Byte> ret2 = hcv.getList(1);
@@ -2706,8 +2706,8 @@ public class ColumnVectorTest extends CudfTestBase {
     List<Short> list2 = Arrays.asList((short)0, (short)2, (short)4, (short)6);
     List<Short> list3 = Arrays.asList((short)1, (short)4, (short)9, (short)0);
 
-    try(ColumnVector res = ColumnVector.fromLists(new HostColumnVector.ColumnBuilder.ListType(true, 3,
-        new HostColumnVector.ColumnBuilder.BasicType(true, 13, DType.INT16)), list1, list2, list3);
+    try(ColumnVector res = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+        new HostColumnVector.BasicType(true, DType.INT16)), list1, list2, list3);
         HostColumnVector hcv = res.copyToHost()) {
       List<Short> ret1 = hcv.getList(0);
       List<Short> ret2 = hcv.getList(1);
@@ -2722,8 +2722,8 @@ public class ColumnVectorTest extends CudfTestBase {
     List<Float> list2 = Arrays.asList(6.7F, 7.8F, 8.9F, 5.6F);
     List<Float> list3 = Arrays.asList(0.1F, 7.8F, 3.4F, 4.5F, 2.3F);
 
-    try(ColumnVector res = ColumnVector.fromLists(new HostColumnVector.ColumnBuilder.ListType(true, 3,
-        new HostColumnVector.ColumnBuilder.BasicType(true, 13, DType.FLOAT32)), list1, list2, list3);
+    try(ColumnVector res = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+        new HostColumnVector.BasicType(true, DType.FLOAT32)), list1, list2, list3);
         HostColumnVector hcv = res.copyToHost()) {
       List<Double> ret1 = hcv.getList(0);
       List<Double> ret2 = hcv.getList(1);
@@ -2738,8 +2738,8 @@ public class ColumnVectorTest extends CudfTestBase {
     List<Long> list2 = Arrays.asList(6L, 7L, 8L, 9L);
     List<Long> list3 = Arrays.asList(1L, 100L, 200L, 300L, 400L);
 
-    try(ColumnVector res = ColumnVector.fromLists(new HostColumnVector.ColumnBuilder.ListType(true, 3,
-        new HostColumnVector.ColumnBuilder.BasicType(true, 13, DType.INT64)), list1, list2, list3);
+    try(ColumnVector res = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+        new HostColumnVector.BasicType(true, DType.INT64)), list1, list2, list3);
         HostColumnVector hcv = res.copyToHost()) {
       List<Long> ret1 = hcv.getList(0);
       List<Long> ret2 = hcv.getList(1);
@@ -2754,8 +2754,8 @@ public class ColumnVectorTest extends CudfTestBase {
     List<Boolean> list2 = Arrays.asList(false, true, false, false);
     List<Boolean> list3 = Arrays.asList(true, true, true, true);
 
-    try(ColumnVector res = ColumnVector.fromLists(new HostColumnVector.ColumnBuilder.ListType(true, 3,
-        new HostColumnVector.ColumnBuilder.BasicType(true, 13, DType.BOOL8)), list1, list2, list3);
+    try(ColumnVector res = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+        new HostColumnVector.BasicType(true, DType.BOOL8)), list1, list2, list3);
         HostColumnVector hcv = res.copyToHost()) {
       List<Boolean> ret1 = hcv.getList(0);
       List<Boolean> ret2 = hcv.getList(1);
@@ -2777,9 +2777,8 @@ public class ColumnVectorTest extends CudfTestBase {
     mainList2.add(list3);
     mainList2.add(list4);
 
-    try(ColumnVector res = ColumnVector.fromLists(new HostColumnVector.ColumnBuilder.ListType(true, 2,
-        new HostColumnVector.ColumnBuilder.ListType(true, 4,
-            new HostColumnVector.ColumnBuilder.BasicType(true, 12, DType.INT32))),
+    try(ColumnVector res = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+            new HostColumnVector.ListType(true, new HostColumnVector.BasicType(true, DType.INT32))),
         mainList1, mainList2);
     HostColumnVector hcv = res.copyToHost()) {
       List<List<Integer>> ret1 = hcv.getList(0);
@@ -2802,10 +2801,10 @@ public class ColumnVectorTest extends CudfTestBase {
     mainList2.add(list3);
     mainList2.add(list4);
 
-    try(ColumnVector res = ColumnVector.fromLists(new HostColumnVector.ColumnBuilder.ListType(true, 2,
-        new HostColumnVector.ColumnBuilder.ListType(true, 4,
-            new HostColumnVector.ColumnBuilder.BasicType(true, 12, DType.STRING))), mainList1, mainList2);
-    HostColumnVector hcv = res.copyToHost()) {
+    try(ColumnVector res = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+        new HostColumnVector.ListType(true,
+            new HostColumnVector.BasicType(true, DType.STRING))), mainList1, mainList2);
+        HostColumnVector hcv = res.copyToHost()) {
       List<List<String>> ret1 = hcv.getList(0);
       List<List<String>> ret2 = hcv.getList(1);
       assertEquals(mainList1, ret1, "Lists don't match");
@@ -2824,9 +2823,9 @@ public class ColumnVectorTest extends CudfTestBase {
     List<List<Double>> mainList2 = new ArrayList<>();
     mainList2.add(list3);
 
-    try(ColumnVector res = ColumnVector.fromLists(new HostColumnVector.ColumnBuilder.ListType(true, 2,
-        new HostColumnVector.ColumnBuilder.ListType(true, 3, new HostColumnVector.ColumnBuilder.BasicType(true, 9, DType.FLOAT64))), mainList1, mainList2);
-    HostColumnVector hcv = res.copyToHost()) {
+    try(ColumnVector res = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+        new HostColumnVector.ListType(true, new HostColumnVector.BasicType(true, DType.FLOAT64))), mainList1, mainList2);
+        HostColumnVector hcv = res.copyToHost()) {
       List<List<Double>> ret1 = hcv.getList(0);
       List<List<Double>> ret2 = hcv.getList(1);
       assertEquals(mainList1, ret1, "Lists don't match");
@@ -2841,15 +2840,16 @@ public class ColumnVectorTest extends CudfTestBase {
     List<Integer> list3 = Arrays.asList(0, 7, 3, 4, 2);
     List<Integer> list4 = Arrays.asList(10, 11, 12, 13);
     List<Integer> list5 = Arrays.asList(16, 12, 14, 15);
-    List<Integer> list6 = Arrays.asList(100, 107, 103, 104, 200);
+    List<Integer> list6 = Arrays.asList(1, 10, 20, 30, 40);
 
-    try (ColumnVector res1 = ColumnVector.fromLists(new HostColumnVector.ColumnBuilder.ListType(true, 3,
-        new HostColumnVector.ColumnBuilder.BasicType(true, 13, DType.INT32)), list1, list2, list3);
-         ColumnVector res2 = ColumnVector.fromLists(new HostColumnVector.ColumnBuilder.ListType(true, 3,
-             new HostColumnVector.ColumnBuilder.BasicType(true, 13, DType.INT32)), list4, list5, list6);
-         ColumnVector v = ColumnVector.concatenate(res1, res2);
-         ColumnVector expected =  ColumnVector.fromLists(new HostColumnVector.ColumnBuilder.ListType(true, 6,
-             new HostColumnVector.ColumnBuilder.BasicType(true, 26, DType.INT32)), list1, list2, list3, list4, list5, list6)) {
+    try(ColumnVector res1 = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+        new HostColumnVector.BasicType(true, DType.INT32)), list1, list2, list3);
+    ColumnVector res2 = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+        new HostColumnVector.BasicType(true, DType.INT32)), list4, list5, list6);
+    ColumnVector v = ColumnVector.concatenate(res1, res2);
+    ColumnVector expected =  ColumnVector.fromLists(new HostColumnVector.ListType(true,
+        new HostColumnVector.BasicType(true, DType.INT32)), list1, list2, list3, list4, list5, list6)) {
+      assertEquals(expected.getRowCount(), 6L, "Expected column row count is incorrect");
       assertColumnsAreEqual(expected, v);
     }
   }
@@ -2860,13 +2860,13 @@ public class ColumnVectorTest extends CudfTestBase {
     List<String> list = Arrays.asList("0", "1", "2", "3");
     List<String> list2 = Arrays.asList("4", null, "6", null);
     List<String> list3 = null;
-    try (ColumnVector res1 = ColumnVector.fromLists(new HostColumnVector.ColumnBuilder.ListType(true, 2,
-        new HostColumnVector.ColumnBuilder.BasicType(true, 4, DType.STRING)), list, list3);
-         ColumnVector res2 = ColumnVector.fromLists(new HostColumnVector.ColumnBuilder.ListType(true, 1,
-             new HostColumnVector.ColumnBuilder.BasicType(true, 4, DType.STRING)), list2);
+    try (ColumnVector res1 = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+        new HostColumnVector.BasicType(true, DType.STRING)), list, list3);
+         ColumnVector res2 = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+             new HostColumnVector.BasicType(true, DType.STRING)), list2);
          ColumnVector v = ColumnVector.concatenate(res1, res2);
-         ColumnVector expected = ColumnVector.fromLists(new HostColumnVector.ColumnBuilder.ListType(true, 3,
-             new HostColumnVector.ColumnBuilder.BasicType(true, 8, DType.STRING)) , list, list3, list2)) {
+         ColumnVector expected = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+             new HostColumnVector.BasicType(true, DType.STRING)) , list, list3, list2)) {
       assert res1.getNullCount() == 1: "Null count is incorrect on input column";
       assert res1.getChildColumnViewAccess(0).getNullCount() == 0 : "Null count is incorrect on input column";
       assert res2.getNullCount() == 0 : "Null count is incorrect on input column";
@@ -2884,8 +2884,8 @@ public class ColumnVectorTest extends CudfTestBase {
     List<String> val5 = Arrays.asList("ARe", "some");
     List<String> val6 = Arrays.asList("test", "strings");
     try(ColumnVector expected = ColumnVector.fromLists(
-        new HostColumnVector.ColumnBuilder.ListType(true, 6,
-            new HostColumnVector.ColumnBuilder.BasicType(true, 7, DType.STRING)),
+        new HostColumnVector.ListType(true,
+            new HostColumnVector.BasicType(true, DType.STRING)),
         val1, val2, val3, val4, val5, val6);
         HostColumnVector hostColumnVector = expected.copyToHost()) {
       List<String> ret1 = hostColumnVector.getList(0);
@@ -2913,8 +2913,8 @@ public class ColumnVectorTest extends CudfTestBase {
     List<Integer> val5 = Arrays.asList(4444, 55555);
     List<Integer> val6 = Arrays.asList(666666, 7777777);
     try(ColumnVector expected = ColumnVector.fromLists(
-        new HostColumnVector.ColumnBuilder.ListType(true, 6,
-            new HostColumnVector.ColumnBuilder.BasicType(true, 8, DType.INT32)),
+        new HostColumnVector.ListType(true,
+            new HostColumnVector.BasicType(true, DType.INT32)),
         val1, val2, val3, val4, val5, val6);
         HostColumnVector hostColumnVector = expected.copyToHost()) {
       List<String> ret1 = hostColumnVector.getList(0);
@@ -2944,13 +2944,13 @@ public class ColumnVectorTest extends CudfTestBase {
     List<List<Integer>> mainList2 = new ArrayList<>();
     mainList2.add(list3);
     mainList2.add(list4);
-    try (ColumnVector res1 =  ColumnVector.fromLists(new HostColumnVector.ColumnBuilder.ListType(true, 1,
-        new HostColumnVector.ColumnBuilder.ListType(true, 2, new HostColumnVector.ColumnBuilder.BasicType(true, 6, DType.INT32))), mainList);
-         ColumnVector res2 = ColumnVector.fromLists(new HostColumnVector.ColumnBuilder.ListType(true, 1,
-             new HostColumnVector.ColumnBuilder.ListType(true, 2, new HostColumnVector.ColumnBuilder.BasicType(true, 6, DType.INT32))), mainList2);
+    try (ColumnVector res1 =  ColumnVector.fromLists(new HostColumnVector.ListType(true,
+        new HostColumnVector.ListType(true, new HostColumnVector.BasicType(true, DType.INT32))), mainList);
+         ColumnVector res2 = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+             new HostColumnVector.ListType(true, new HostColumnVector.BasicType(true, DType.INT32))), mainList2);
          ColumnVector v = ColumnVector.concatenate(res1, res2);
-         ColumnVector expected = ColumnVector.fromLists(new HostColumnVector.ColumnBuilder.ListType(true, 2,
-             new HostColumnVector.ColumnBuilder.ListType(true, 4, new HostColumnVector.ColumnBuilder.BasicType(true, 12, DType.INT32))), mainList, mainList2)) {
+         ColumnVector expected = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+             new HostColumnVector.ListType(true, new HostColumnVector.BasicType(true, DType.INT32))), mainList, mainList2)) {
       assertColumnsAreEqual(expected, v);
     }
   }
@@ -2966,25 +2966,27 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testHcvForStruct() {
-    HostColumnVector.ColumnBuilder.StructType type = new HostColumnVector.ColumnBuilder.StructType(true, 4);
-    type.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 4, DType.INT32));
-    type.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 4, DType.INT64));
+    List<HostColumnVector.DataType> children =
+        Arrays.asList(new HostColumnVector.BasicType(true, DType.INT32),
+            new HostColumnVector.BasicType(true, DType.INT64));
+    HostColumnVector.StructType type = new HostColumnVector.StructType(true, children);
     List data1 = Arrays.asList(10, 20L);
     List data2 = Arrays.asList(50, 60L);
     List data3 = Arrays.asList(null, 80L);
     List data4 = null;
-    HostColumnVector.ColumnBuilder.StructData structData1 = new HostColumnVector.ColumnBuilder.StructData(data1);
-    HostColumnVector.ColumnBuilder.StructData structData2 = new HostColumnVector.ColumnBuilder.StructData(data2);
-    HostColumnVector.ColumnBuilder.StructData structData3 = new HostColumnVector.ColumnBuilder.StructData(data3);
-    HostColumnVector.ColumnBuilder.StructData structData4 = new HostColumnVector.ColumnBuilder.StructData(data4);
+    HostColumnVector.StructData structData1 = new HostColumnVector.StructData(data1);
+    HostColumnVector.StructData structData2 = new HostColumnVector.StructData(data2);
+    HostColumnVector.StructData structData3 = new HostColumnVector.StructData(data3);
+    HostColumnVector.StructData structData4 = new HostColumnVector.StructData(data4);
     try (HostColumnVector hcv = HostColumnVector.fromStructs(type, Arrays.asList(structData1, structData2, structData3, structData4));
          ColumnVector columnVector = hcv.copyToDevice();
          HostColumnVector hcv1 = columnVector.copyToHost();
          ColumnVector expected = hcv1.copyToDevice()) {
-      HostColumnVector.ColumnBuilder.StructData retData1 = hcv1.getStruct(0, type);
-      HostColumnVector.ColumnBuilder.StructData retData2 = hcv1.getStruct(1, type);
-      HostColumnVector.ColumnBuilder.StructData retData3 = hcv1.getStruct(2, type);
-      HostColumnVector.ColumnBuilder.StructData retData4 = hcv1.getStruct(3, type);
+      assertEquals(expected.getRowCount(), 4L, "Expected column row count is incorrect");
+      HostColumnVector.StructData retData1 = hcv1.getStruct(0, type);
+      HostColumnVector.StructData retData2 = hcv1.getStruct(1, type);
+      HostColumnVector.StructData retData3 = hcv1.getStruct(2, type);
+      HostColumnVector.StructData retData4 = hcv1.getStruct(3, type);
       assertEquals(data1, retData1.dataRecord);
       assertEquals(data2, retData2.dataRecord);
       assertEquals(data3, retData3.dataRecord);
@@ -2995,17 +2997,18 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testStructChildValidity() {
-    HostColumnVector.ColumnBuilder.StructType type = new HostColumnVector.ColumnBuilder.StructType(true, 4);
-    type.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 4, DType.INT32));
-    type.addChild(new HostColumnVector.ColumnBuilder.BasicType(true, 4, DType.INT64));
+    List<HostColumnVector.DataType> children =
+        Arrays.asList(new HostColumnVector.BasicType(true, DType.INT32),
+            new HostColumnVector.BasicType(true, DType.INT64));
+    HostColumnVector.StructType type = new HostColumnVector.StructType(true, children);
     List data1 = Arrays.asList(1, 2L);
     List data2 = Arrays.asList(4, 5L);
     List data3 = null;
     List data4 = Arrays.asList(8, null);
-    HostColumnVector.ColumnBuilder.StructData structData1 = new HostColumnVector.ColumnBuilder.StructData(data1);
-    HostColumnVector.ColumnBuilder.StructData structData2 = new HostColumnVector.ColumnBuilder.StructData(data2);
-    HostColumnVector.ColumnBuilder.StructData structData3 = new HostColumnVector.ColumnBuilder.StructData(data3);
-    HostColumnVector.ColumnBuilder.StructData structData4 = new HostColumnVector.ColumnBuilder.StructData(data4);
+    HostColumnVector.StructData structData1 = new HostColumnVector.StructData(data1);
+    HostColumnVector.StructData structData2 = new HostColumnVector.StructData(data2);
+    HostColumnVector.StructData structData3 = new HostColumnVector.StructData(data3);
+    HostColumnVector.StructData structData4 = new HostColumnVector.StructData(data4);
     try (HostColumnVector hcv = HostColumnVector.fromStructs(type, Arrays.asList(structData1, structData2, structData3, structData4));
          ColumnVector columnVector = hcv.copyToDevice();
          HostColumnVector hcv1 = columnVector.copyToHost();
