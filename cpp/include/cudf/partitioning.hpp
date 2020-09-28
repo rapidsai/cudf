@@ -24,6 +24,8 @@ namespace cudf {
 /**
  * @addtogroup reorder_partition
  * @{
+ * @file
+ * @brief Column partitioning APIs
  */
 
 /**

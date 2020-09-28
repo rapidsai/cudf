@@ -259,44 +259,244 @@ def test_dataframe_basic():
     assert gdf["val"].isnull().all()
 
 
-def test_dataframe_drop_method():
-    df = gd.DataFrame()
-    data = np.asarray(range(10))
-    df["a"] = data
-    df["b"] = data
-    df["c"] = data
+@pytest.mark.parametrize(
+    "pdf",
+    [
+        pd.DataFrame({"a": range(10), "b": range(10, 20), "c": range(1, 11)}),
+        pd.DataFrame(
+            {"a": range(10), "b": range(10, 20), "d": ["a", "v"] * 5}
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "columns", [["a"], ["b"], "a", "b", ["a", "b"]],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_dataframe_drop_columns(pdf, columns, inplace):
+    pdf = pdf.copy()
+    gdf = gd.from_pandas(pdf)
 
-    assert tuple(df.columns) == ("a", "b", "c")
-    assert tuple(df.drop("a").columns) == ("b", "c")
-    assert tuple(df.drop("a", axis=1).columns) == ("b", "c")
-    assert tuple(df.columns) == ("a", "b", "c")
-    assert tuple(df.drop(["a", "b"]).columns) == ("c",)
-    assert tuple(df.drop(["a", "a", "b"]).columns) == ("c",)
-    assert tuple(df.columns) == ("a", "b", "c")
-    assert tuple(df.drop(["a", "b"]).columns) == ("c",)
-    assert tuple(df.columns) == ("a", "b", "c")
-    assert tuple(df.drop(columns=["a", "b"]).columns) == ("c",)
-    assert tuple(df.columns) == ("a", "b", "c")
-    assert tuple(df.drop(columns="a").columns) == ("b", "c")
-    assert tuple(df.columns) == ("a", "b", "c")
-    assert tuple(df.drop(columns=["a"]).columns) == ("b", "c")
-    assert tuple(df.columns) == ("a", "b", "c")
-    assert tuple(df.drop(columns=["a", "b", "c"]).columns) == tuple()
-    assert tuple(df.columns) == ("a", "b", "c")
+    expected = pdf.drop(columns=columns, inplace=inplace)
+    actual = gdf.drop(columns=columns, inplace=inplace)
 
-    # Test drop error
-    with pytest.raises(NameError) as raises:
-        df.drop("d")
-    raises.match("column 'd' does not exist")
-    with pytest.raises(NameError) as raises:
-        df.drop(["a", "d", "b"])
-    raises.match("column 'd' does not exist")
-    with pytest.raises(ValueError) as raises:
+    if inplace:
+        expected = pdf
+        actual = gdf
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "pdf",
+    [
+        pd.DataFrame({"a": range(10), "b": range(10, 20), "c": range(1, 11)}),
+        pd.DataFrame(
+            {"a": range(10), "b": range(10, 20), "d": ["a", "v"] * 5}
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "labels",
+    [[1], [0], 1, 5, [5, 9], pd.Index([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_dataframe_drop_labels_axis_0(pdf, labels, inplace):
+    pdf = pdf.copy()
+    gdf = gd.from_pandas(pdf)
+
+    expected = pdf.drop(labels=labels, axis=0, inplace=inplace)
+    actual = gdf.drop(labels=labels, axis=0, inplace=inplace)
+
+    if inplace:
+        expected = pdf
+        actual = gdf
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "pdf",
+    [
+        pd.DataFrame({"a": range(10), "b": range(10, 20), "c": range(1, 11)}),
+        pd.DataFrame(
+            {"a": range(10), "b": range(10, 20), "d": ["a", "v"] * 5}
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "index",
+    [[1], [0], 1, 5, [5, 9], pd.Index([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_dataframe_drop_index(pdf, index, inplace):
+    pdf = pdf.copy()
+    gdf = gd.from_pandas(pdf)
+
+    expected = pdf.drop(index=index, inplace=inplace)
+    actual = gdf.drop(index=index, inplace=inplace)
+
+    if inplace:
+        expected = pdf
+        actual = gdf
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "pdf",
+    [
+        pd.DataFrame(
+            {"a": range(10), "b": range(10, 20), "d": ["a", "v"] * 5},
+            index=pd.MultiIndex(
+                levels=[
+                    ["lama", "cow", "falcon"],
+                    ["speed", "weight", "length"],
+                ],
+                codes=[
+                    [0, 0, 0, 1, 1, 1, 2, 2, 2, 1],
+                    [0, 1, 2, 0, 1, 2, 0, 1, 2, 1],
+                ],
+            ),
+        )
+    ],
+)
+@pytest.mark.parametrize(
+    "index,level",
+    [
+        ("cow", 0),
+        ("lama", 0),
+        ("falcon", 0),
+        ("speed", 1),
+        ("weight", 1),
+        ("length", 1),
+        pytest.param(
+            "cow",
+            None,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/36293"
+            ),
+        ),
+        pytest.param(
+            "lama",
+            None,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/36293"
+            ),
+        ),
+        pytest.param(
+            "falcon",
+            None,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/36293"
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_dataframe_drop_multiindex(pdf, index, level, inplace):
+    pdf = pdf.copy()
+    gdf = gd.from_pandas(pdf)
+
+    expected = pdf.drop(index=index, inplace=inplace, level=level)
+    actual = gdf.drop(index=index, inplace=inplace, level=level)
+
+    if inplace:
+        expected = pdf
+        actual = gdf
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "pdf",
+    [
+        pd.DataFrame({"a": range(10), "b": range(10, 20), "c": range(1, 11)}),
+        pd.DataFrame(
+            {"a": range(10), "b": range(10, 20), "d": ["a", "v"] * 5}
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "labels", [["a"], ["b"], "a", "b", ["a", "b"]],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_dataframe_drop_labels_axis_1(pdf, labels, inplace):
+    pdf = pdf.copy()
+    gdf = gd.from_pandas(pdf)
+
+    expected = pdf.drop(labels=labels, axis=1, inplace=inplace)
+    actual = gdf.drop(labels=labels, axis=1, inplace=inplace)
+
+    if inplace:
+        expected = pdf
+        actual = gdf
+
+    assert_eq(expected, actual)
+
+
+def test_dataframe_drop_error():
+    df = gd.DataFrame({"a": [1], "b": [2], "c": [3]})
+    with pytest.raises(KeyError, match="column 'd' does not exist"):
+        df.drop(columns="d")
+
+    with pytest.raises(KeyError, match="column 'd' does not exist"):
+        df.drop(columns=["a", "d", "b"])
+
+    with pytest.raises(ValueError, match="Cannot specify both"):
         df.drop("a", axis=1, columns="a")
-    raises.match("Cannot specify both")
-    with pytest.raises(ValueError) as raises:
+
+    with pytest.raises(ValueError, match="Need to specify at least"):
         df.drop(axis=1)
-    raises.match("Need to specify at least")
+
+    with pytest.raises(KeyError, match="One or more values not found in axis"):
+        df.drop([2, 0])
+
+
+def test_dataframe_drop_raises():
+    df = gd.DataFrame(
+        {"a": [1, 2, 3], "c": [10, 20, 30]}, index=["x", "y", "z"]
+    )
+    pdf = df.to_pandas()
+    try:
+        pdf.drop("p")
+    except Exception as e:
+        with pytest.raises(
+            type(e), match="One or more values not found in axis"
+        ):
+            df.drop("p")
+    else:
+        raise AssertionError("Expected pdf.drop to fail")
+
+    expect = pdf.drop("p", errors="ignore")
+    actual = df.drop("p", errors="ignore")
+
+    assert_eq(actual, expect)
+
+    try:
+        pdf.drop(columns="p")
+    except Exception as e:
+        with pytest.raises(type(e), match="column 'p' does not exist"):
+            df.drop(columns="p")
+    else:
+        raise AssertionError("Expected pdf.drop to fail")
+
+    expect = pdf.drop(columns="p", errors="ignore")
+    actual = df.drop(columns="p", errors="ignore")
+
+    assert_eq(actual, expect)
+
+    try:
+        pdf.drop(labels="p", axis=1)
+    except Exception as e:
+        with pytest.raises(type(e), match="column 'p' does not exist"):
+            df.drop(labels="p", axis=1)
+    else:
+        raise AssertionError("Expected pdf.drop to fail")
+
+    expect = pdf.drop(labels="p", axis=1, errors="ignore")
+    actual = df.drop(labels="p", axis=1, errors="ignore")
+
+    assert_eq(actual, expect)
 
 
 def test_dataframe_column_add_drop_via_setitem():
@@ -2090,10 +2290,80 @@ def test_reset_index_inplace(pdf, gdf, drop):
     assert_eq(pdf, gdf)
 
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "a": [1, 2, 3, 4, 5],
+            "b": ["a", "b", "c", "d", "e"],
+            "c": [1.0, 2.0, 3.0, 4.0, 5.0],
+        }
+    ],
+)
+@pytest.mark.parametrize(
+    "index",
+    [
+        "a",
+        ["a", "b"],
+        pd.CategoricalIndex(["I", "II", "III", "IV", "V"]),
+        pd.Series(["h", "i", "k", "l", "m"]),
+        ["b", pd.Index(["I", "II", "III", "IV", "V"])],
+        ["c", [11, 12, 13, 14, 15]],
+        pd.MultiIndex(
+            levels=[
+                ["I", "II", "III", "IV", "V"],
+                ["one", "two", "three", "four", "five"],
+            ],
+            codes=[[0, 1, 2, 3, 4], [4, 3, 2, 1, 0]],
+            names=["col1", "col2"],
+        ),
+        pd.RangeIndex(0, 5),  # corner case
+        [pd.Series(["h", "i", "k", "l", "m"]), pd.RangeIndex(0, 5)],
+        [
+            pd.MultiIndex(
+                levels=[
+                    ["I", "II", "III", "IV", "V"],
+                    ["one", "two", "three", "four", "five"],
+                ],
+                codes=[[0, 1, 2, 3, 4], [4, 3, 2, 1, 0]],
+                names=["col1", "col2"],
+            ),
+            pd.RangeIndex(0, 5),
+        ],
+    ],
+)
 @pytest.mark.parametrize("drop", [True, False])
-def test_set_index(pdf, gdf, drop):
-    for col in pdf.columns:
-        assert_eq(pdf.set_index(col, drop=drop), gdf.set_index(col, drop=drop))
+@pytest.mark.parametrize("append", [True, False])
+@pytest.mark.parametrize("inplace", [True, False])
+def test_set_index(data, index, drop, append, inplace):
+    gdf = gd.DataFrame(data)
+    pdf = gdf.to_pandas()
+
+    expected = pdf.set_index(index, inplace=inplace, drop=drop, append=append)
+    actual = gdf.set_index(index, inplace=inplace, drop=drop, append=append)
+
+    if inplace:
+        expected = pdf
+        actual = gdf
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "a": [1, 1, 2, 2, 5],
+            "b": ["a", "b", "c", "d", "e"],
+            "c": [1.0, 2.0, 3.0, 4.0, 5.0],
+        }
+    ],
+)
+@pytest.mark.parametrize("index", ["a", pd.Index([1, 1, 2, 2, 3])])
+@pytest.mark.parametrize("verify_integrity", [True])
+@pytest.mark.xfail
+def test_set_index_verify_integrity(data, index, verify_integrity):
+    gdf = gd.DataFrame(data)
+    gdf.set_index(index, verify_integrity=verify_integrity)
 
 
 @pytest.mark.parametrize("drop", [True, False])
@@ -4308,39 +4578,199 @@ def test_df_constructor_dtype(dtype):
         gd.datasets.randomdata(
             nrows=10, dtypes={"a": bool, "b": int, "c": float, "d": str}
         ),
-        pytest.param(
-            gd.DataFrame(),
-            marks=[
-                pytest.mark.xfail(
-                    reason="_apply_support_method fails on empty dataframes."
-                )
-            ],
+        gd.DataFrame(),
+        gd.DataFrame({"a": [0, 1, 2], "b": [1, None, 3]}),
+        gd.DataFrame(
+            {
+                "a": [1, 2, 3, 4],
+                "b": [7, np.NaN, 9, 10],
+                "c": [np.NaN, np.NaN, np.NaN, np.NaN],
+                "d": gd.Series([None, None, None, None], dtype="int64"),
+                "e": [100, None, 200, None],
+                "f": gd.Series([10, None, np.NaN, 11], nan_as_null=False),
+            }
         ),
-        pytest.param(
-            gd.DataFrame({"a": [0, 1, 2], "b": [1, None, 3]}),
-            marks=[
-                pytest.mark.xfail(
-                    reason="Rowwise ops do not currently support nulls."
-                )
-            ],
+        gd.DataFrame(
+            {
+                "a": [10, 11, 12, 13, 14, 15],
+                "b": gd.Series(
+                    [10, None, np.NaN, 2234, None, np.NaN], nan_as_null=False
+                ),
+            }
         ),
     ],
 )
 @pytest.mark.parametrize(
     "op", ["max", "min", "sum", "product", "mean", "var", "std"]
 )
-def test_rowwise_ops(data, op):
+@pytest.mark.parametrize("skipna", [True, False])
+def test_rowwise_ops(data, op, skipna):
     gdf = data
     pdf = gdf.to_pandas()
 
     if op in ("var", "std"):
-        expected = getattr(pdf, op)(axis=1, ddof=0)
-        got = getattr(gdf, op)(axis=1, ddof=0)
+        expected = getattr(pdf, op)(axis=1, ddof=0, skipna=skipna)
+        got = getattr(gdf, op)(axis=1, ddof=0, skipna=skipna)
     else:
-        expected = getattr(pdf, op)(axis=1)
-        got = getattr(gdf, op)(axis=1)
+        expected = getattr(pdf, op)(axis=1, skipna=skipna)
+        got = getattr(gdf, op)(axis=1, skipna=skipna)
 
     assert_eq(expected, got, check_less_precise=7)
+
+
+@pytest.mark.parametrize(
+    "op", ["max", "min", "sum", "product", "mean", "var", "std"]
+)
+def test_rowwise_ops_nullable_dtypes_all_null(op):
+    gdf = gd.DataFrame(
+        {
+            "a": [1, 2, 3, 4],
+            "b": [7, np.NaN, 9, 10],
+            "c": [np.NaN, np.NaN, np.NaN, np.NaN],
+            "d": gd.Series([None, None, None, None], dtype="int64"),
+            "e": [100, None, 200, None],
+            "f": gd.Series([10, None, np.NaN, 11], nan_as_null=False),
+        }
+    )
+
+    expected = gd.Series([None, None, None, None], dtype="float64")
+
+    if op in ("var", "std"):
+        got = getattr(gdf, op)(axis=1, ddof=0, skipna=False)
+    else:
+        got = getattr(gdf, op)(axis=1, skipna=False)
+
+    assert_eq(got.null_count, expected.null_count)
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "op,expected",
+    [
+        (
+            "max",
+            gd.Series(
+                [10.0, None, np.NaN, 2234.0, None, np.NaN],
+                dtype="float64",
+                nan_as_null=False,
+            ),
+        ),
+        (
+            "min",
+            gd.Series(
+                [10.0, None, np.NaN, 13.0, None, np.NaN],
+                dtype="float64",
+                nan_as_null=False,
+            ),
+        ),
+        (
+            "sum",
+            gd.Series(
+                [20.0, None, np.NaN, 2247.0, None, np.NaN],
+                dtype="float64",
+                nan_as_null=False,
+            ),
+        ),
+        (
+            "product",
+            gd.Series(
+                [100.0, None, np.NaN, 29042.0, None, np.NaN],
+                dtype="float64",
+                nan_as_null=False,
+            ),
+        ),
+        (
+            "mean",
+            gd.Series(
+                [10.0, None, np.NaN, 1123.5, None, np.NaN],
+                dtype="float64",
+                nan_as_null=False,
+            ),
+        ),
+        (
+            "var",
+            gd.Series(
+                [0.0, None, np.NaN, 1233210.25, None, np.NaN],
+                dtype="float64",
+                nan_as_null=False,
+            ),
+        ),
+        (
+            "std",
+            gd.Series(
+                [0.0, None, np.NaN, 1110.5, None, np.NaN],
+                dtype="float64",
+                nan_as_null=False,
+            ),
+        ),
+    ],
+)
+def test_rowwise_ops_nullable_dtypes_partial_null(op, expected):
+    gdf = gd.DataFrame(
+        {
+            "a": [10, 11, 12, 13, 14, 15],
+            "b": gd.Series(
+                [10, None, np.NaN, 2234, None, np.NaN], nan_as_null=False,
+            ),
+        }
+    )
+
+    if op in ("var", "std"):
+        got = getattr(gdf, op)(axis=1, ddof=0, skipna=False)
+    else:
+        got = getattr(gdf, op)(axis=1, skipna=False)
+
+    assert_eq(got.null_count, expected.null_count)
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "op,expected",
+    [
+        ("max", gd.Series([10, None, None, 2234, None, 453], dtype="int64",),),
+        ("min", gd.Series([10, None, None, 13, None, 15], dtype="int64",),),
+        ("sum", gd.Series([20, None, None, 2247, None, 468], dtype="int64",),),
+        (
+            "product",
+            gd.Series([100, None, None, 29042, None, 6795], dtype="int64",),
+        ),
+        (
+            "mean",
+            gd.Series(
+                [10.0, None, None, 1123.5, None, 234.0], dtype="float32",
+            ),
+        ),
+        (
+            "var",
+            gd.Series(
+                [0.0, None, None, 1233210.25, None, 47961.0], dtype="float32",
+            ),
+        ),
+        (
+            "std",
+            gd.Series(
+                [0.0, None, None, 1110.5, None, 219.0], dtype="float32",
+            ),
+        ),
+    ],
+)
+def test_rowwise_ops_nullable_int_dtypes(op, expected):
+    gdf = gd.DataFrame(
+        {
+            "a": [10, 11, None, 13, None, 15],
+            "b": gd.Series(
+                [10, None, 323, 2234, None, 453], nan_as_null=False,
+            ),
+        }
+    )
+
+    if op in ("var", "std"):
+        got = getattr(gdf, op)(axis=1, ddof=0, skipna=False)
+    else:
+        got = getattr(gdf, op)(axis=1, skipna=False)
+
+    assert_eq(got.null_count, expected.null_count)
+    assert_eq(got, expected)
 
 
 @pytest.mark.parametrize(
@@ -7102,3 +7532,24 @@ def test_dataframe_mode(df, numeric_only, dropna):
     actual = df.mode(numeric_only=numeric_only, dropna=dropna)
 
     assert_eq(expected, actual, check_dtype=False)
+
+
+@pytest.mark.parametrize("lhs, rhs", [("a", "a"), ("a", "b"), (1, 1.0)])
+def test_equals_names(lhs, rhs):
+    lhs = gd.DataFrame({lhs: [1, 2]})
+    rhs = gd.DataFrame({rhs: [1, 2]})
+
+    got = lhs.equals(rhs)
+    expect = lhs.to_pandas().equals(rhs.to_pandas())
+
+    assert_eq(expect, got)
+
+
+def test_equals_dtypes():
+    lhs = gd.DataFrame({"a": [1, 2.0]})
+    rhs = gd.DataFrame({"a": [1, 2]})
+
+    got = lhs.equals(rhs)
+    expect = lhs.to_pandas().equals(rhs.to_pandas())
+
+    assert_eq(expect, got)

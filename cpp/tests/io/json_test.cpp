@@ -14,14 +14,13 @@
  * limitations under the License.
  */
 
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/cudf_gtest.hpp>
-#include <tests/utilities/type_lists.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/type_lists.hpp>
 
 #include <cudf/io/datasource.hpp>
-#include <cudf/io/functions.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
@@ -318,6 +317,41 @@ TEST_F(JsonReaderTest, Dates)
                                                        1126875750400,
                                                        2764800000},
                                                       validity});
+}
+
+TEST_F(JsonReaderTest, Durations)
+{
+  auto filepath = temp_env->get_temp_dir() + "Durations.json";
+  {
+    std::ofstream outfile(filepath, std::ofstream::out);
+    outfile << "[-2]\n[-1]\n[0]\n";
+    outfile << "[1 days]\n[0 days 23:01:00]\n[0 days 00:00:00.000000123]\n";
+    outfile << "[-2147483648]\n[2147483647]\n";
+  }
+
+  cudf_io::json_reader_options in_options =
+    cudf_io::json_reader_options::builder(cudf_io::source_info{filepath})
+      .dtypes({"timedelta64[ns]"})
+      .lines(true);
+  cudf_io::table_with_metadata result = cudf_io::read_json(in_options);
+
+  const auto view = result.tbl->view();
+  EXPECT_EQ(result.tbl->num_columns(), 1);
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::DURATION_NANOSECONDS);
+
+  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    result.tbl->get_column(0),
+    wrapper<cudf::duration_ns, cudf::duration_ns::rep>{{-2L,
+                                                        -1L,
+                                                        0L,
+                                                        1L * 60 * 60 * 24 * 1000000000L,
+                                                        (23 * 60 + 1) * 60 * 1000000000L,
+                                                        123L,
+                                                        -2147483648L,
+                                                        2147483647L},
+                                                       validity});
 }
 
 TEST_F(JsonReaderTest, JsonLinesDtypeInference)

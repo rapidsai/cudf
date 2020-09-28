@@ -24,6 +24,7 @@ namespace cudf {
 /**
  * @addtogroup column_quantiles
  * @{
+ * @file
  */
 
 /**

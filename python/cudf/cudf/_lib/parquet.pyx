@@ -37,10 +37,8 @@ from cudf._lib.cpp.io.parquet cimport (
     write_parquet_chunked_begin,
     write_parquet_chunked,
     write_parquet_chunked_end,
+    merge_rowgroup_metadata as parquet_merge_metadata,
     pq_chunked_state
-)
-from cudf._lib.cpp.io.functions cimport (
-    merge_rowgroup_metadata as parquet_merge_metadata
 )
 from cudf._lib.io.utils cimport (
     make_source_info,
@@ -233,9 +231,10 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                 column_names.remove(index_col)
 
         for col in column_names:
+            meta_dtype = cols_dtype_map.get(col, None)
             df._data[col] = cudf.core.column.column_empty(
                 row_count=0,
-                dtype=np.dtype(cols_dtype_map[col])
+                dtype=np.dtype(meta_dtype)
             )
 
     # Set the index column

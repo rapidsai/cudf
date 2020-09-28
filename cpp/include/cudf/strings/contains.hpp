@@ -23,6 +23,8 @@ namespace strings {
 /**
  * @addtogroup strings_contains
  * @{
+ * @file strings/contains.hpp
+ * @brief Strings APIs for regex contains, count, matches
  */
 
 /**
