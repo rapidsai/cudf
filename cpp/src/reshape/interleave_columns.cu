@@ -135,16 +135,22 @@ struct interleave_columns_functor {
     auto index_begin   = thrust::make_counting_iterator<size_type>(0);
     auto index_end     = thrust::make_counting_iterator<size_type>(output_size);
 
+    // TODO fix this hack to be a comprehensive fix
+    constexpr bool is_decimal32 = std::is_same<numeric::decimal32, T>();
+    using Type                  = std::conditional_t<cudf::is_fixed_point<T>(),
+                                    std::conditional_t<is_decimal32, int32_t, int64_t>,
+                                    T>;
+
     auto func_value = [input   = *device_input,
                        divisor = input.num_columns()] __device__(size_type idx) {
-      return input.column(idx % divisor).element<T>(idx / divisor);
+      return input.column(idx % divisor).element<Type>(idx / divisor);
     };
 
     if (not create_mask) {
       thrust::transform(rmm::exec_policy(stream)->on(stream),
                         index_begin,
                         index_end,
-                        device_output->data<T>(),
+                        device_output->begin<Type>(),
                         func_value);
 
       return output;
@@ -158,7 +164,7 @@ struct interleave_columns_functor {
     thrust::transform_if(rmm::exec_policy(stream)->on(stream),
                          index_begin,
                          index_end,
-                         device_output->data<T>(),
+                         device_output->begin<Type>(),
                          func_value,
                          func_validity);
 
@@ -185,7 +191,11 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
   auto const dtype = input.column(0).type();
 
   std::for_each(std::cbegin(input), std::cend(input), [dtype](auto const& col) {
-    CUDF_EXPECTS(dtype == col.type(), "DTYPE mismatch");
+    // TODO cleanup with a #helpterfunction
+    CUDF_EXPECTS(dtype == col.type() ||  //
+                   col.type() == cudf::data_type{cudf::type_id::DECIMAL32} ||
+                   col.type() == cudf::data_type{cudf::type_id::DECIMAL64},
+                 "DTYPE mismatch");
   });
 
   auto const output_needs_mask = std::any_of(
