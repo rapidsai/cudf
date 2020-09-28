@@ -549,7 +549,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReplace)
   auto const sz  = std::size_t{1000};
 
   auto mod2            = [&](auto e) { return e % 2 ? ONE : TWO; };
-  auto transform_begin = thrust::make_transform_iterator(thrust::counting_iterator<int>{}, mod2);
+  auto transform_begin = cudf::test::make_counting_transform_iterator(0, mod2);
   auto const vec1      = std::vector<decimalXX>(transform_begin, transform_begin + sz);
   auto const vec2      = std::vector<decimalXX>(sz, TWO);
 
