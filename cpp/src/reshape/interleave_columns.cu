@@ -21,6 +21,8 @@
 #include <cudf/types.hpp>
 #include <strings/utilities.cuh>
 
+#include <numeric>
+
 namespace cudf {
 namespace detail {
 namespace {
@@ -180,13 +182,14 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(input.num_columns() > 0, "input must have at least one column to determine dtype.");
 
-  auto dtype             = input.column(0).type();
-  auto output_needs_mask = false;
+  auto const dtype = input.column(0).type();
 
-  for (auto& col : input) {
+  std::for_each(std::cbegin(input), std::cend(input), [dtype](auto const& col) {
     CUDF_EXPECTS(dtype == col.type(), "DTYPE mismatch");
-    output_needs_mask |= col.nullable();
-  }
+  });
+
+  auto const output_needs_mask = std::any_of(
+    std::cbegin(input), std::cend(input), [](auto const& col) { return col.nullable(); });
 
   return type_dispatcher(dtype, detail::interleave_columns_functor{}, input, output_needs_mask, mr);
 }
