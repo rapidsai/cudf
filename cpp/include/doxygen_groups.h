@@ -14,6 +14,11 @@
  * limitations under the License.
  */
 
+/**
+ * @file
+ * @brief Doxygen group definitions
+ */
+
 // This header is only processed by doxygen and does
 // not need to be included in any source file.
 // Below are the main groups that doxygen uses to build
@@ -33,6 +38,7 @@
  *      @defgroup dictionary_classes Dictionary
  *      @defgroup timestamp_classes Timestamp
  *      @defgroup lists_classes Lists
+ *      @defgroup structs_classes Structs
  *   @}
  *   @defgroup table_classes Table
  *   @defgroup scalar_classes Scalar
@@ -47,10 +53,25 @@
  *   @{
  *     @defgroup copy_concatenate Concatenating
  *     @defgroup copy_gather Gathering
+ *     @{
+ *        @file cudf/copying.hpp
+ *     @}
  *     @defgroup copy_scatter Scattering
+ *     @{
+ *        @file cudf/copying.hpp
+ *     @}
  *     @defgroup copy_slice Slicing
+ *     @{
+ *        @file cudf/copying.hpp
+ *     @}
  *     @defgroup copy_split Splitting
+ *     @{
+ *        @file cudf/copying.hpp
+ *     @}
  *     @defgroup copy_shift Shifting
+ *     @{
+ *        @file cudf/copying.hpp
+ *     @}
  *   @}
  *   @defgroup column_nullmask Bitmask Operations
  *   @defgroup column_sort Sorting

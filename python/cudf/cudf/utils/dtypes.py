@@ -200,8 +200,6 @@ def cudf_dtype_from_pydata_dtype(dtype):
         return cudf.core.dtypes.CategoricalDtype
     elif dtype in cudf._lib.types.np_to_cudf_types:
         return dtype.type
-    elif np.issubdtype(dtype, np.datetime64):
-        dtype = np.datetime64
 
     return infer_dtype_from_object(dtype)
 
@@ -404,6 +402,16 @@ def min_column_type(x, expected_type):
         return np.promote_types(max_bound_dtype, min_bound_dtype)
 
     return x.dtype
+
+
+def get_min_float_dtype(col):
+    max_bound_dtype = np.min_scalar_type(float(col.max()))
+    min_bound_dtype = np.min_scalar_type(float(col.min()))
+    result_type = np.promote_types(max_bound_dtype, min_bound_dtype)
+    if result_type == np.dtype("float16"):
+        # cuDF does not support float16 dtype
+        result_type = np.dtype("float32")
+    return result_type
 
 
 def check_cast_unsupported_dtype(dtype):

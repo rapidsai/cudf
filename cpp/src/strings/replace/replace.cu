@@ -17,6 +17,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/replace.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -87,13 +88,12 @@ struct replace_fn {
 }  // namespace
 
 //
-std::unique_ptr<column> replace(
-  strings_column_view const& strings,
-  string_scalar const& target,
-  string_scalar const& repl,
-  int32_t maxrepl                     = -1,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+std::unique_ptr<column> replace(strings_column_view const& strings,
+                                string_scalar const& target,
+                                string_scalar const& repl,
+                                int32_t maxrepl,
+                                rmm::mr::device_memory_resource* mr,
+                                cudaStream_t stream)
 {
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_empty_strings_column(mr, stream);
@@ -176,13 +176,12 @@ struct replace_slice_fn {
 
 }  // namespace
 
-std::unique_ptr<column> replace_slice(
-  strings_column_view const& strings,
-  string_scalar const& repl,
-  size_type start,
-  size_type stop                      = -1,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+std::unique_ptr<column> replace_slice(strings_column_view const& strings,
+                                      string_scalar const& repl,
+                                      size_type start,
+                                      size_type stop,
+                                      rmm::mr::device_memory_resource* mr,
+                                      cudaStream_t stream)
 {
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_empty_strings_column(mr, stream);
@@ -281,12 +280,11 @@ struct replace_multi_fn {
 
 }  // namespace
 
-std::unique_ptr<column> replace(
-  strings_column_view const& strings,
-  strings_column_view const& targets,
-  strings_column_view const& repls,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+std::unique_ptr<column> replace(strings_column_view const& strings,
+                                strings_column_view const& targets,
+                                strings_column_view const& repls,
+                                rmm::mr::device_memory_resource* mr,
+                                cudaStream_t stream)
 {
   auto strings_count = strings.size();
   if (strings_count == 0) return make_empty_strings_column(mr, stream);
@@ -334,11 +332,10 @@ std::unique_ptr<column> replace(
                              mr);
 }
 
-std::unique_ptr<column> replace_nulls(
-  strings_column_view const& strings,
-  string_scalar const& repl           = string_scalar(""),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+std::unique_ptr<column> replace_nulls(strings_column_view const& strings,
+                                      string_scalar const& repl,
+                                      rmm::mr::device_memory_resource* mr,
+                                      cudaStream_t stream)
 {
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_empty_strings_column(mr, stream);

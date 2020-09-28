@@ -5,19 +5,18 @@ import random
 from glob import glob
 from io import BytesIO
 from string import ascii_letters
-from packaging import version
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+from packaging import version
 from pyarrow import parquet as pq
 
 import cudf
 from cudf.io.parquet import ParquetWriter, merge_parquet_filemetadata
+from cudf.tests import dataset_generator as dg
 from cudf.tests.utils import assert_eq
-
-import cudf.tests.dataset_generator as dg
 
 
 @pytest.fixture(scope="module")
@@ -206,9 +205,24 @@ def test_parquet_reader_basic(parquet_file, columns, engine):
         if "col_category" in expect.columns:
             expect = expect.drop(columns=["col_category"])
         if "col_category" in got.columns:
-            got = got.drop("col_category")
+            got = got.drop(columns=["col_category"])
 
     assert_eq(expect, got, check_categorical=False)
+
+
+@pytest.mark.filterwarnings("ignore:Using CPU")
+@pytest.mark.parametrize("engine", ["cudf"])
+def test_parquet_reader_empty_pandas_dataframe(tmpdir, engine):
+    df = pd.DataFrame()
+    fname = tmpdir.join("test_pq_reader_empty_pandas_dataframe.parquet")
+    df.to_parquet(fname)
+    assert os.path.exists(fname)
+    expect = pd.read_parquet(fname)
+    got = cudf.read_parquet(fname, engine=engine)
+    expect = expect.reset_index(drop=True)
+    got = got.reset_index(drop=True)
+
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("has_null", [False, True])
@@ -1104,8 +1118,9 @@ def test_parquet_writer_bytes_io(simple_gdf):
     assert_eq(cudf.read_parquet(output), cudf.concat([simple_gdf, simple_gdf]))
 
 
+@pytest.mark.parametrize("filename", ["myfile.parquet", None])
 @pytest.mark.parametrize("cols", [["b"], ["c", "b"]])
-def test_parquet_write_partitioned(tmpdir_factory, cols):
+def test_parquet_write_partitioned(tmpdir_factory, cols, filename):
     # Checks that write_to_dataset is wrapping to_parquet
     # as expected
     gdf_dir = str(tmpdir_factory.mktemp("gdf_dir"))
@@ -1120,12 +1135,20 @@ def test_parquet_write_partitioned(tmpdir_factory, cols):
     )
     pdf.to_parquet(pdf_dir, index=False, partition_cols=cols)
     gdf = cudf.from_pandas(pdf)
-    gdf.to_parquet(gdf_dir, index=False, partition_cols=cols)
+    gdf.to_parquet(
+        gdf_dir, index=False, partition_cols=cols, partition_file_name=filename
+    )
 
     # Use pandas since dataset may be partitioned
     expect = pd.read_parquet(pdf_dir)
     got = pd.read_parquet(gdf_dir)
     assert_eq(expect, got)
+
+    # If filename is specified, check that it is correct
+    if filename:
+        for _, _, files in os.walk(gdf_dir):
+            for fn in files:
+                assert fn == filename
 
 
 @pytest.mark.parametrize("cols", [None, ["b"]])

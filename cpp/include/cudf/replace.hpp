@@ -23,6 +23,7 @@ namespace cudf {
 /**
  * @addtogroup transformation_replace
  * @{
+ * @file
  */
 
 /**
@@ -224,12 +225,6 @@ std::unique_ptr<column> clamp(
   scalar const& lo,
   scalar const& hi,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/** @} */  // end of group
-/**
- * @addtogroup transformation_replace
- * @{
- */
 
 /**
  * @brief Copies from a column of floating-point elements and replaces `-NaN` and `-0.0` with `+NaN`

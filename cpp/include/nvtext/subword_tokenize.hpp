@@ -27,6 +27,7 @@ namespace nvtext {
 /**
  * @addtogroup nvtext_tokenize
  * @{
+ * @file
  */
 
 /**

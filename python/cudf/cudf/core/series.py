@@ -36,7 +36,7 @@ from cudf.core.groupby.groupby import SeriesGroupBy
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.core.window import Rolling
-from cudf.utils import cudautils, ioutils, utils
+from cudf.utils import cudautils, docutils, ioutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     can_convert_to_column,
@@ -186,6 +186,9 @@ class Series(Frame, Serializable):
 
         if not isinstance(data, column.ColumnBase):
             data = column.as_column(data, nan_as_null=nan_as_null, dtype=dtype)
+        else:
+            if dtype is not None:
+                data = data.astype(dtype)
 
         if index is not None and not isinstance(index, Index):
             index = as_index(index)
@@ -524,8 +527,8 @@ class Series(Frame, Serializable):
         """
         result = self._copy_construct()
         if deep:
-            result._column = self._column.copy(deep)
-            result.index = self.index.copy(deep)
+            result._column = self._column.copy(deep=deep)
+            result.index = self.index.copy(deep=deep)
         return result
 
     def __copy__(self, deep=True):
@@ -1481,42 +1484,6 @@ class Series(Frame, Serializable):
 
     def __eq__(self, other):
         return self._binaryop(other, "eq")
-
-    def equals(self, other):
-        """
-        Test whether two objects contain the same elements.
-        This function allows two Series or DataFrames to be compared against
-        each other to see if they have the same shape and elements. NaNs in
-        the same location are considered equal. The column headers do not
-        need to have the same type.
-
-        Parameters
-        ----------
-        other : Series or DataFrame
-            The other Series or DataFrame to be compared with the first.
-
-        Returns
-        -------
-        bool
-            True if all elements are the same in both objects, False
-            otherwise.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series([1, 2, 3])
-        >>> other = cudf.Series([1, 2, 3])
-        >>> s.equals(other)
-        True
-        >>> different = cudf.Series([1.5, 2, 3])
-        >>> s.equals(different)
-        False
-        """
-        if self is other:
-            return True
-        if other is None or len(self) != len(other):
-            return False
-        return self._binaryop(other, "eq").min()
 
     def ne(self, other, fill_value=None, axis=0):
         """Not equal to of series and other, element-wise
@@ -3834,42 +3801,15 @@ class Series(Frame, Serializable):
 
         return Series(result, index=index, name=self.name)
 
-    def describe(self, percentiles=None, include=None, exclude=None):
-        """Compute summary statistics of a Series. For numeric
-        data, the output includes the minimum, maximum, mean, median,
-        standard deviation, and various quantiles. For object data, the output
-        includes the count, number of unique values, the most common value, and
-        the number of occurrences of the most common value.
-
-        Parameters
-        ----------
-        percentiles : list-like, optional
-            The percentiles used to generate the output summary statistics.
-            If None, the default percentiles used are the 25th, 50th and 75th.
-            Values should be within the interval [0, 1].
-
-        Returns
-        -------
-        A DataFrame containing summary statistics of relevant columns from
-        the input DataFrame.
-
-        Examples
-        --------
-        Describing a ``Series`` containing numeric values.
-
-        >>> import cudf
-        >>> s = cudf.Series([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-        >>> print(s.describe())
-           stats   values
-        0  count     10.0
-        1   mean      5.5
-        2    std  3.02765
-        3    min      1.0
-        4    25%      2.5
-        5    50%      5.5
-        6    75%      7.5
-        7    max     10.0
-        """
+    @docutils.doc_describe()
+    def describe(
+        self,
+        percentiles=None,
+        include=None,
+        exclude=None,
+        datetime_is_numeric=False,
+    ):
+        """{docstring}"""
 
         def _prepare_percentiles(percentiles):
             percentiles = list(percentiles)
@@ -3892,9 +3832,9 @@ class Series(Frame, Serializable):
         def _format_stats_values(stats_data):
             return list(map(lambda x: round(x, 6), stats_data))
 
-        def describe_numeric(self):
+        def _describe_numeric(self):
             # mimicking pandas
-            names = (
+            index = (
                 ["count", "mean", "std", "min"]
                 + _format_percentile_names(percentiles)
                 + ["max"]
@@ -3907,13 +3847,90 @@ class Series(Frame, Serializable):
             data = _format_stats_values(data)
 
             return Series(
-                data=data, index=names, nan_as_null=False, name=self.name,
+                data=data, index=index, nan_as_null=False, name=self.name,
             )
 
-        def describe_categorical(self):
+        def _describe_timedelta(self):
+            # mimicking pandas
+            index = (
+                ["count", "mean", "std", "min"]
+                + _format_percentile_names(percentiles)
+                + ["max"]
+            )
+
+            data = (
+                [
+                    str(self.count()),
+                    str(self.mean()),
+                    str(self.std()),
+                    str(pd.Timedelta(self.min())),
+                ]
+                + self.quantile(percentiles)
+                .astype("str")
+                .to_array(fillna="pandas")
+                .tolist()
+                + [str(pd.Timedelta(self.max()))]
+            )
+
+            return Series(
+                data=data,
+                index=index,
+                dtype="str",
+                nan_as_null=False,
+                name=self.name,
+            )
+
+        def _describe_categorical(self):
             # blocked by StringColumn/DatetimeColumn support for
             # value_counts/unique
-            pass
+            index = ["count", "unique", "top", "freq"]
+            val_counts = self.value_counts(ascending=False)
+            data = [self.count(), self.unique().size]
+
+            if data[1] > 0:
+                top, freq = val_counts.index[0], val_counts.iloc[0]
+                data += [str(top), freq]
+            # If the DataFrame is empty, set 'top' and 'freq' to None
+            # to maintain output shape consistency
+            else:
+                data += [None, None]
+
+            return Series(
+                data=data,
+                dtype="str",
+                index=index,
+                nan_as_null=False,
+                name=self.name,
+            )
+
+        def _describe_timestamp(self):
+
+            index = (
+                ["count", "mean", "min"]
+                + _format_percentile_names(percentiles)
+                + ["max"]
+            )
+
+            data = (
+                [
+                    str(self.count()),
+                    str(self.mean().to_numpy().astype("datetime64[ns]")),
+                    str(pd.Timestamp(self.min().astype("datetime64[ns]"))),
+                ]
+                + self.quantile(percentiles)
+                .astype("str")
+                .to_array(fillna="pandas")
+                .tolist()
+                + [str(pd.Timestamp((self.max()).astype("datetime64[ns]")))]
+            )
+
+            return Series(
+                data=data,
+                dtype="str",
+                index=index,
+                nan_as_null=False,
+                name=self.name,
+            )
 
         if percentiles is not None:
             percentiles = _prepare_percentiles(percentiles)
@@ -3921,12 +3938,16 @@ class Series(Frame, Serializable):
             # pandas defaults
             percentiles = np.array([0.25, 0.5, 0.75])
 
-        if np.issubdtype(self.dtype, np.number):
-            return describe_numeric(self)
+        if pd.api.types.is_bool_dtype(self.dtype):
+            return _describe_categorical(self)
+        elif isinstance(self._column, cudf.core.column.NumericalColumn):
+            return _describe_numeric(self)
+        elif isinstance(self._column, cudf.core.column.TimeDeltaColumn):
+            return _describe_timedelta(self)
+        elif isinstance(self._column, cudf.core.column.DatetimeColumn):
+            return _describe_timestamp(self)
         else:
-            raise NotImplementedError(
-                "Describing non-numeric columns is not " "yet supported"
-            )
+            return _describe_categorical(self)
 
     def digitize(self, bins, right=False):
         """Return the indices of the bins to which each value in series belongs.
@@ -4240,6 +4261,8 @@ class Series(Frame, Serializable):
         StringIndex(['a' 'b' 'c'], dtype='object')
         """
         return self.index
+
+    _accessors = set()
 
 
 truediv_int_dtype_corrections = {
