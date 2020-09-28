@@ -117,7 +117,7 @@ public class HostColumnVectorCore implements AutoCloseable {
       int end = offHeap.offsets.getInt((rowIndex + 1) * DType.INT32.getSizeInBytes());
       for (int j = start; j < end; j++) {
         for (HostColumnVectorCore childHcv : children) {
-          retList.add(childHcv.getElement(j, null));
+          retList.add(childHcv.getElement(j, structType));
         }
       }
       return retList;
