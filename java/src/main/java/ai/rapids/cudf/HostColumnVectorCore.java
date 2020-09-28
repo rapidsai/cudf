@@ -116,37 +116,39 @@ public class HostColumnVectorCore implements AutoCloseable {
       int start = offHeap.offsets.getInt(rowIndex * DType.INT32.getSizeInBytes());
       int end = offHeap.offsets.getInt((rowIndex + 1) * DType.INT32.getSizeInBytes());
       for (int j = start; j < end; j++) {
-        retList.add(children.get(0).getElement(j, null));
+        for (HostColumnVectorCore childHcv : children) {
+          retList.add(childHcv.getElement(j, null));
+        }
       }
       return retList;
-    } else if (type == DType.STRING) {
-      int start = offHeap.offsets.getInt(rowIndex * DType.INT32.getSizeInBytes());
-      int end = offHeap.offsets.getInt((rowIndex + 1) * DType.INT32.getSizeInBytes());
-      int size = end - start;
-      byte[] rawData = new byte[size];
-      if (size > 0) {
-        offHeap.data.getBytes(rawData, 0, start, size);
-        return new String(rawData);
-      } else if (isNull(rowIndex)) {
-        return null;
-      } else {
-        return new String();
-      }
     } else if (type == DType.STRUCT) {
       return getStruct(rowIndex, structType);
     } else {
       if (isNull(rowIndex)) {
         return null;
       }
-      int start = rowIndex * type.getSizeInBytes();
-      return readValue(start);
+      return readValue(rowIndex);
+    }
+  }
+
+  private Object getString(int rowIndex) {
+    int start = offHeap.offsets.getInt(rowIndex * DType.INT32.getSizeInBytes());
+    int end = offHeap.offsets.getInt((rowIndex + 1) * DType.INT32.getSizeInBytes());
+    int size = end - start;
+    byte[] rawData = new byte[size];
+    if (size > 0) {
+      offHeap.data.getBytes(rawData, 0, start, size);
+      return new String(rawData);
+    } else if (isNull(rowIndex)) {
+      return null;
+    } else {
+      return new String();
     }
   }
 
   /**
    * WARNING: Strictly for test only. This call is not efficient for production.
    */
-
   HostColumnVector.StructData getStruct(int rowIndex, HostColumnVector.DataType mainType) {
     assert rowIndex < rows;
     assert type == DType.STRUCT;
@@ -196,12 +198,13 @@ public class HostColumnVectorCore implements AutoCloseable {
    * @return an object that would need to be casted to appropriate type based on this vector's data type
    */
   private Object readValue(int rowIndex) {
-    assert rowIndex < rows * type.getSizeInBytes();
+    assert rowIndex < rows;
+    int rowOffset = rowIndex * type.getSizeInBytes();
     switch (type) {
       case INT32: // fall through
       case UINT32: // fall through
       case TIMESTAMP_DAYS:
-      case DURATION_DAYS: return offHeap.data.getInt(rowIndex);
+      case DURATION_DAYS: return offHeap.data.getInt(rowOffset);
       case INT64: // fall through
       case UINT64: // fall through
       case DURATION_MICROSECONDS: // fall through
@@ -211,14 +214,15 @@ public class HostColumnVectorCore implements AutoCloseable {
       case TIMESTAMP_MICROSECONDS: // fall through
       case TIMESTAMP_MILLISECONDS: // fall through
       case TIMESTAMP_NANOSECONDS: // fall through
-      case TIMESTAMP_SECONDS: return offHeap.data.getLong(rowIndex);
-      case FLOAT32: return offHeap.data.getFloat(rowIndex);
-      case FLOAT64: return offHeap.data.getDouble(rowIndex);
+      case TIMESTAMP_SECONDS: return offHeap.data.getLong(rowOffset);
+      case FLOAT32: return offHeap.data.getFloat(rowOffset);
+      case FLOAT64: return offHeap.data.getDouble(rowOffset);
       case UINT8: // fall through
-      case INT8: return offHeap.data.getByte(rowIndex);
+      case INT8: return offHeap.data.getByte(rowOffset);
       case UINT16: // fall through
-      case INT16: return offHeap.data.getShort(rowIndex);
-      case BOOL8: return offHeap.data.getBoolean(rowIndex);
+      case INT16: return offHeap.data.getShort(rowOffset);
+      case BOOL8: return offHeap.data.getBoolean(rowOffset);
+      case STRING: return getString(rowIndex);
       default: throw new UnsupportedOperationException("Do not support " + type);
     }
   }
