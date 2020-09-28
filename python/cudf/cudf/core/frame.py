@@ -348,15 +348,8 @@ class Frame(libcudf.table.Table):
                         size=cols[name].size,
                     )
 
-        # Get a list of the unique table column names
-        names = [name for f in objs for name in f._column_names]
-        names = OrderedDict.fromkeys(names).keys()
-
-        indexes = [index for f in objs for index in (f._index._data.columns)]
-
         if join == "inner":
             old_indexe = []
-            indexes = []
             for obj in objs:
                 index = obj.columns
                 old_indexe.append(index)
@@ -367,7 +360,12 @@ class Frame(libcudf.table.Table):
             for obj in objs:
                 for col in obj.columns:
                     if col not in names:
-                        obj.drop(columns=[col])
+                        obj = obj.drop(columns=[col])
+
+        else:
+            # Get a list of the unique table column names
+            names = [name for f in objs for name in f._column_names]
+            names = OrderedDict.fromkeys(names).keys()
 
         try:
             if sort:
@@ -385,7 +383,11 @@ class Frame(libcudf.table.Table):
         # frames are empty and `ignore_index=True`.
 
         columns = [
-            ([] if (ignore_index and not empty_has_index) else indexes)
+            (
+                []
+                if (ignore_index and not empty_has_index)
+                else list(f._index._data.columns)
+            )
             + [f._data[name] if name in f._data else None for name in names]
             for i, f in enumerate(objs)
         ]
