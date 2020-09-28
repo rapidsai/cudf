@@ -16,29 +16,29 @@
 
 #pragma once
 
-#include <algorithm>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/concatenate.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+
 #include <rmm/device_buffer.hpp>
-#include <tests/utilities/cudf_gtest.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
+
+#include <algorithm>
 #include <iterator>
 #include <memory>
 #include <numeric>
-
-#include <cudf/concatenate.hpp>
-#include <cudf/copying.hpp>
-#include <tests/utilities/column_utilities.hpp>
-
-#include <cudf/lists/lists_column_view.hpp>
-#include "cudf/fixed_point/fixed_point.hpp"
 
 namespace cudf {
 namespace test {

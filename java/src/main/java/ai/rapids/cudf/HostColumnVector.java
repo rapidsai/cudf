@@ -18,11 +18,9 @@
 
 package ai.rapids.cudf;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -33,177 +31,16 @@ import java.util.function.Consumer;
  * to release it.  Call close to decrement the reference count when you are done with the column,
  * and call incRefCount to increment the reference count.
  */
-public final class HostColumnVector implements AutoCloseable {
+public final class HostColumnVector extends HostColumnVectorCore {
   /**
    * The size in bytes of an offset entry
    */
   static final int OFFSET_SIZE = DType.INT32.sizeInBytes;
-  private static final Logger log = LoggerFactory.getLogger(HostColumnVector.class);
-
   static {
     NativeDepsLoader.loadNativeDeps();
   }
 
-  protected static class NestedHostColumnVector implements AutoCloseable {
-
-    private HostMemoryBuffer data;
-    private HostMemoryBuffer offsets;
-    private HostMemoryBuffer validity;
-    private DType type;
-    private long rows;
-    private Optional<Long> nullCount = Optional.empty();
-    private List<NestedHostColumnVector> nestedChildren = new ArrayList<>();
-
-    public NestedHostColumnVector(DType type, long rows,
-                                  Optional<Long> nullCount, HostMemoryBuffer data, HostMemoryBuffer validity,
-                                  HostMemoryBuffer offsets, List<NestedHostColumnVector> nestedChildren) {
-      this.data = data;
-      this.offsets = offsets;
-      this.validity = validity;
-      this.type = type;
-      this.rows = rows;
-      this.nullCount = nullCount;
-      this.nestedChildren = nestedChildren;
-    }
-
-    @Override
-    public void close() {
-      for (NestedHostColumnVector child : nestedChildren) {
-        if (child != null) {
-          child.close();
-        }
-      }
-      if (data != null) {
-        data.close();
-      }
-      if (validity != null) {
-        validity.close();
-      }
-      if (offsets != null) {
-        offsets.close();
-      }
-    }
-
-    HostMemoryBuffer getData() {
-      return data;
-    }
-
-    HostMemoryBuffer getValidity() {
-      return validity;
-    }
-
-    DType getType() {
-      return type;
-    }
-
-    Optional<Long> getNullCount() {
-      return nullCount;
-    }
-
-    List<NestedHostColumnVector> getNestedChildren() {
-      return nestedChildren;
-    }
-
-    public HostMemoryBuffer getOffsets() {
-      return offsets;
-    }
-
-    public long getRows() {
-      return rows;
-    }
-
-
-    Object getElement(int rowIndex) {
-      if (type == DType.LIST) {
-        List retList = new ArrayList();
-        int start = offsets.getInt(rowIndex * DType.INT32.getSizeInBytes());
-        int end = offsets.getInt((rowIndex + 1) * DType.INT32.getSizeInBytes());
-        for (int j = start; j < end; j++) {
-          retList.add(nestedChildren.get(0).getElement(j));
-        }
-        return retList;
-      } else if (type == DType.STRING) {
-        int start = offsets.getInt(rowIndex * DType.INT32.getSizeInBytes());
-        int end = offsets.getInt((rowIndex + 1) * DType.INT32.getSizeInBytes());
-        int size = end - start;
-        byte[] rawData = new byte[size];
-        if (size > 0) {
-          data.getBytes(rawData, 0, start, size);
-          return new String(rawData);
-        } else if (isNull(rowIndex)) {
-          return null;
-        } else {
-          return new String();
-        }
-      } else {
-        if (isNull(rowIndex)) {
-          return null;
-        }
-        int start = rowIndex * type.getSizeInBytes();
-        return readValue(start);
-      }
-    }
-
-    public boolean isNull(long index) {
-      assert (index >= 0 && index < rows) : "index is out of range 0 <= " + index + " < " + rows;
-      if (validity != null) {
-        return BitVectorHelper.isNull(validity, index);
-      }
-      return false;
-    }
-
-    private Object readValue(int index){
-      assert index < rows * type.getSizeInBytes();
-      switch (type) {
-        case INT32: // fall through
-        case UINT32: // fall through
-        case TIMESTAMP_DAYS:
-        case DURATION_DAYS: return data.getInt(index);
-        case INT64: // fall through
-        case UINT64: // fall through
-        case DURATION_MICROSECONDS: // fall through
-        case DURATION_MILLISECONDS: // fall through
-        case DURATION_NANOSECONDS: // fall through
-        case DURATION_SECONDS: // fall through
-        case TIMESTAMP_MICROSECONDS: // fall through
-        case TIMESTAMP_MILLISECONDS: // fall through
-        case TIMESTAMP_NANOSECONDS: // fall through
-        case TIMESTAMP_SECONDS: return data.getLong(index);
-        case FLOAT32: return data.getFloat(index);
-        case FLOAT64: return data.getDouble(index);
-        case UINT8: // fall through
-        case INT8: return data.getByte(index);
-        case UINT16: // fall through
-        case INT16: return data.getShort(index);
-        case BOOL8: return data.getBoolean(index);
-        default: throw new UnsupportedOperationException("Do not support " + type);
-      }
-    }
-
-    public long getHostMemorySize() {
-      long totalSize = 0;
-      if (data != null) {
-        totalSize += data.length;
-      }
-      if (offsets != null) {
-        totalSize += offsets.length;
-      }
-      if (data != null) {
-        totalSize += validity.length;
-      }
-      for (NestedHostColumnVector nhcv : nestedChildren) {
-        totalSize += nhcv.getHostMemorySize();
-      }
-      return totalSize;
-    }
-  }
-
-  private final OffHeapState offHeap;
-  private final DType type;
-  private long rows;
-  private Optional<Long> nullCount = Optional.empty();
   private int refCount;
-  List<NestedHostColumnVector> children = new ArrayList<>();
 
   /**
    * Create a new column vector with data populated on the host.
@@ -225,19 +62,14 @@ public final class HostColumnVector implements AutoCloseable {
    * @param offsetBuffer       only valid for STRING this is the offsets into
    *                           the hostDataBuffer indicating the start and end of a string
    *                           entry. It should be (rows + 1) ints.
-   * @param nestedHcv          list of children NestedHostColumnVector(s) for complex types
+   * @param nestedHcv          list of child HostColumnVectorCore(s) for complex types
    */
 
   //Constructor for lists and struct
   HostColumnVector(DType type, long rows, Optional<Long> nullCount,
                    HostMemoryBuffer hostDataBuffer, HostMemoryBuffer hostValidityBuffer,
-                   HostMemoryBuffer offsetBuffer, List<NestedHostColumnVector> nestedHcv) {
-    this.offHeap = new OffHeapState(hostDataBuffer, hostValidityBuffer, offsetBuffer);
-    MemoryCleaner.register(this, offHeap);
-    this.rows = rows;
-    this.nullCount = nullCount;
-    this.type = type;
-    this.children = nestedHcv;
+                   HostMemoryBuffer offsetBuffer, List<HostColumnVectorCore> nestedHcv) {
+    super(type, rows, nullCount, hostDataBuffer, hostValidityBuffer, offsetBuffer, nestedHcv);
     refCount = 0;
     incRefCountInternal(true);
   }
@@ -245,6 +77,7 @@ public final class HostColumnVector implements AutoCloseable {
   HostColumnVector(DType type, long rows, Optional<Long> nullCount,
                    HostMemoryBuffer hostDataBuffer, HostMemoryBuffer hostValidityBuffer,
                    HostMemoryBuffer offsetBuffer) {
+    super(type, rows, nullCount, hostDataBuffer, hostValidityBuffer, offsetBuffer, new ArrayList<>());
     assert type != DType.LIST : "This constructor should not be used for list type";
     if (nullCount.isPresent() && nullCount.get() > 0 && hostValidityBuffer == null) {
       throw new IllegalStateException("Buffer cannot have a nullCount without a validity buffer");
@@ -252,12 +85,6 @@ public final class HostColumnVector implements AutoCloseable {
     if (type != DType.STRING && type != DType.LIST) {
       assert offsetBuffer == null : "offsets are only supported for STRING and LIST";
     }
-    offHeap = new OffHeapState(hostDataBuffer, hostValidityBuffer, offsetBuffer);
-    MemoryCleaner.register(this, offHeap);
-    this.rows = rows;
-    this.nullCount = nullCount;
-    this.type = type;
-
     refCount = 0;
     incRefCountInternal(true);
   }
@@ -281,7 +108,7 @@ public final class HostColumnVector implements AutoCloseable {
     offHeap.delRef();
     if (refCount == 0) {
       offHeap.clean(false);
-      for( NestedHostColumnVector child : children) {
+      for( HostColumnVectorCore child : children) {
         child.close();
       }
     } else if (refCount < 0) {
@@ -320,45 +147,6 @@ public final class HostColumnVector implements AutoCloseable {
     }
     refCount++;
     return this;
-  }
-
-  /**
-   * Returns the number of rows in this vector.
-   */
-  public long getRowCount() {
-    return rows;
-  }
-
-  /**
-   * Returns the amount of host memory used to store column/validity data (not metadata).
-   */
-  public long getHostMemorySize() {
-    long childTotalSize = 0;
-    if (!children.isEmpty()) {
-      for (NestedHostColumnVector nhcv : children) {
-        childTotalSize += nhcv.getHostMemorySize();
-      }
-    }
-    return offHeap.getHostMemorySize() + childTotalSize;
-  }
-
-  /**
-   * Returns the type of this vector.
-   */
-  public DType getType() {
-    return type;
-  }
-
-  /**
-   * Returns the number of nulls in the data. Note that this might end up
-   * being a very expensive operation because if the null count is not
-   * known it will be calculated.
-   */
-  public long getNullCount() {
-    if (!nullCount.isPresent()) {
-      throw new IllegalStateException("Calculating an unknown null count on the host is not currently supported");
-    }
-    return nullCount.get();
   }
 
   /**
@@ -458,7 +246,7 @@ public final class HostColumnVector implements AutoCloseable {
   /**
    * WARNING: Strictly for test only. This call is not efficient for production.
    */
-  ColumnBuilder.StructData getStruct(int rowIndex, ColumnBuilder.DataType mainType) {
+  StructData getStruct(int rowIndex, DataType mainType) {
     assert rowIndex < rows;
     assert type == DType.STRUCT;
     List<Object> retList = new ArrayList<>();
@@ -470,7 +258,7 @@ public final class HostColumnVector implements AutoCloseable {
     for (int k = 0; k < numChildren; k++) {
       retList.add(children.get(k).getElement(rowIndex));
     }
-    return new ColumnBuilder.StructData(retList);
+    return new StructData(retList);
   }
 
   /**
@@ -585,7 +373,8 @@ public final class HostColumnVector implements AutoCloseable {
    * Get the value at index.
    */
   public byte getByte(long index) {
-    assert type == DType.INT8 || type == DType.UINT8 || type == DType.BOOL8;
+    assert type == DType.INT8 || type == DType.UINT8 || type == DType.BOOL8 : type +
+            " is not stored as a byte.";
     assertsForGet(index);
     return offHeap.data.getByte(index * type.sizeInBytes);
   }
@@ -594,7 +383,7 @@ public final class HostColumnVector implements AutoCloseable {
    * Get the value at index.
    */
   public final short getShort(long index) {
-    assert type == DType.INT16 || type == DType.UINT16;
+    assert type == DType.INT16 || type == DType.UINT16 : type + " is not stored as a short.";
     assertsForGet(index);
     return offHeap.data.getShort(index * type.sizeInBytes);
   }
@@ -603,7 +392,7 @@ public final class HostColumnVector implements AutoCloseable {
    * Get the value at index.
    */
   public final int getInt(long index) {
-    assert type.isBackedByInt();
+    assert type.isBackedByInt() : type + " is not stored as a int.";
     assertsForGet(index);
     return offHeap.data.getInt(index * type.sizeInBytes);
   }
@@ -612,7 +401,7 @@ public final class HostColumnVector implements AutoCloseable {
    * Get the starting byte offset for the string at index
    */
   long getStartStringOffset(long index) {
-    assert type == DType.STRING;
+    assert type == DType.STRING: type + " is not a supported string type.";
     assert (index >= 0 && index < rows) : "index is out of range 0 <= " + index + " < " + rows;
     return offHeap.offsets.getInt(index * 4);
   }
@@ -621,7 +410,7 @@ public final class HostColumnVector implements AutoCloseable {
    * Get the ending byte offset for the string at index.
    */
   long getEndStringOffset(long index) {
-    assert type == DType.STRING;
+    assert type == DType.STRING : type + " is not a supported string type.";
     assert (index >= 0 && index < rows) : "index is out of range 0 <= " + index + " < " + rows;
     // The offsets has one more entry than there are rows.
     return offHeap.offsets.getInt((index + 1) * 4);
@@ -632,7 +421,7 @@ public final class HostColumnVector implements AutoCloseable {
    */
   public final long getLong(long index) {
     // Timestamps with time values are stored as longs
-    assert type.isBackedByLong();
+    assert type.isBackedByLong(): type + " is not stored as a long.";
     assertsForGet(index);
     return offHeap.data.getLong(index * type.sizeInBytes);
   }
@@ -641,7 +430,7 @@ public final class HostColumnVector implements AutoCloseable {
    * Get the value at index.
    */
   public final float getFloat(long index) {
-    assert type == DType.FLOAT32;
+    assert type == DType.FLOAT32 : type + " is not a supported float type.";
     assertsForGet(index);
     return offHeap.data.getFloat(index * type.sizeInBytes);
   }
@@ -650,7 +439,7 @@ public final class HostColumnVector implements AutoCloseable {
    * Get the value at index.
    */
   public final double getDouble(long index) {
-    assert type == DType.FLOAT64;
+    assert type == DType.FLOAT64 : type + " is not a supported double type.";
     assertsForGet(index);
     return offHeap.data.getDouble(index * type.sizeInBytes);
   }
@@ -659,7 +448,7 @@ public final class HostColumnVector implements AutoCloseable {
    * Get the boolean value at index
    */
   public final boolean getBoolean(long index) {
-    assert type == DType.BOOL8;
+    assert type == DType.BOOL8 : type + " is not a supported boolean type.";
     assertsForGet(index);
     return offHeap.data.getBoolean(index * type.sizeInBytes);
   }
@@ -669,7 +458,7 @@ public final class HostColumnVector implements AutoCloseable {
    * ideal because it is copying the data onto the heap.
    */
   public byte[] getUTF8(long index) {
-    assert type == DType.STRING;
+    assert type == DType.STRING : type + " is not a supported string type.";
     assertsForGet(index);
     int start = offHeap.offsets.getInt(index * OFFSET_SIZE);
     int size = offHeap.offsets.getInt((index + 1) * OFFSET_SIZE) - start;
@@ -689,90 +478,7 @@ public final class HostColumnVector implements AutoCloseable {
     return new String(rawData, StandardCharsets.UTF_8);
   }
 
-  /////////////////////////////////////////////////////////////////////////////
-  // HELPER CLASSES
-  /////////////////////////////////////////////////////////////////////////////
 
-  /**
-   * Holds the off heap state of the column vector so we can clean it up, even if it is leaked.
-   */
-  protected static final class OffHeapState extends MemoryCleaner.Cleaner {
-    public HostMemoryBuffer data;
-    public HostMemoryBuffer valid = null;
-    public HostMemoryBuffer offsets = null;
-
-    OffHeapState(HostMemoryBuffer data, HostMemoryBuffer valid, HostMemoryBuffer offsets) {
-      this.data = data;
-      this.valid = valid;
-      this.offsets = offsets;
-    }
-
-    @Override
-    protected boolean cleanImpl(boolean logErrorIfNotClean) {
-      boolean neededCleanup = false;
-      if (data != null || valid != null || offsets != null) {
-        try {
-          ColumnVector.closeBuffers(data);
-          ColumnVector.closeBuffers(offsets);
-          ColumnVector.closeBuffers(valid);
-        } finally {
-          // Always mark the resource as freed even if an exception is thrown.
-          // We cannot know how far it progressed before the exception, and
-          // therefore it is unsafe to retry.
-          data = null;
-          valid = null;
-          offsets = null;
-        }
-        neededCleanup = true;
-      }
-      if (neededCleanup && logErrorIfNotClean) {
-        log.error("A HOST COLUMN VECTOR WAS LEAKED (ID: " + id + ")");
-        logRefCountDebug("Leaked vector");
-      }
-      return neededCleanup;
-    }
-
-    @Override
-    public void noWarnLeakExpected() {
-      super.noWarnLeakExpected();
-      if (data != null) {
-        data.noWarnLeakExpected();
-      }
-      if (valid != null) {
-        valid.noWarnLeakExpected();
-      }
-      if (offsets != null) {
-        offsets.noWarnLeakExpected();
-      }
-    }
-
-    @Override
-    public boolean isClean() {
-      return data == null && valid == null && offsets == null;
-    }
-
-    /**
-     * This returns total memory allocated on the host for the ColumnVector.
-     */
-    public long getHostMemorySize() {
-      long total = 0;
-      if (valid != null) {
-        total += valid.length;
-      }
-      if (data != null) {
-        total += data.length;
-      }
-      if (offsets != null) {
-        total += offsets.length;
-      }
-      return total;
-    }
-
-    @Override
-    public String toString() {
-      return "(ID: " + id + ")";
-    }
-  }
 
   /////////////////////////////////////////////////////////////////////////////
   // BUILDER
@@ -823,15 +529,15 @@ public final class HostColumnVector implements AutoCloseable {
     }
   }
 
-  public static<T> HostColumnVector fromLists(ColumnBuilder.DataType dataType, List<T>... values) {
-    ColumnBuilder cb = new ColumnBuilder(dataType);
+  public static<T> HostColumnVector fromLists(DataType dataType, List<T>... values) {
+    ColumnBuilder cb = new ColumnBuilder(dataType, values.length);
     cb.appendLists(values);
     return cb.build();
   }
 
-  public static HostColumnVector fromStructs(ColumnBuilder.DataType dataType,
-                                                List<ColumnBuilder.StructData> values) {
-    ColumnBuilder cb = new ColumnBuilder(dataType);
+  public static HostColumnVector fromStructs(DataType dataType,
+                                             List<StructData> values) {
+    ColumnBuilder cb = new ColumnBuilder(dataType, values.size());
     cb.appendStructValues(values);
     return cb.build();
   }
@@ -1228,7 +934,6 @@ public final class HostColumnVector implements AutoCloseable {
 
   public static final class ColumnBuilder implements  AutoCloseable {
 
-    public static final int INIT_OFFSET_SIZE = 10;
     private DType type;
     private HostMemoryBuffer data;
     private HostMemoryBuffer valid;
@@ -1244,32 +949,32 @@ public final class HostColumnVector implements AutoCloseable {
     private int currentByteIndex = 0;
 
 
-    public ColumnBuilder(DataType type) {
+    public ColumnBuilder(HostColumnVector.DataType type, int rows) {
       this.type = type.getType();
       this.nullable = type.isNullable();
-      this.rows = type.getSize();
+      this.rows = rows;
       for (int i = 0; i < type.getNumChildren(); i++) {
-        childBuilders.add(new ColumnBuilder(type.getChild(i)));
+        // initially assume 0 rows and increment as we go
+        childBuilders.add(new ColumnBuilder(type.getChild(i), 0));
       }
     }
 
     public HostColumnVector build() {
-      List<NestedHostColumnVector> nestedHostColumnVectorList = new ArrayList<>();
+      List<HostColumnVectorCore> hostColumnVectorCoreList = new ArrayList<>();
       for (ColumnBuilder childBuilder : childBuilders) {
-        nestedHostColumnVectorList.add(childBuilder.buildNestedInternal());
+        hostColumnVectorCoreList.add(childBuilder.buildNestedInternal());
       }
       HostColumnVector hostColumnVector = new HostColumnVector(type, rows, Optional.of(nullCount), data, valid, offsets,
-          nestedHostColumnVectorList);
+          hostColumnVectorCoreList);
       return hostColumnVector;
     }
 
-    private NestedHostColumnVector buildNestedInternal() {
-      List<NestedHostColumnVector> nestedHostColumnVectorList = new ArrayList<>();
+    private HostColumnVectorCore buildNestedInternal() {
+      List<HostColumnVectorCore> hostColumnVectorCoreList = new ArrayList<>();
       for (ColumnBuilder childBuilder : childBuilders) {
-        nestedHostColumnVectorList.add(childBuilder.buildNestedInternal());
+        hostColumnVectorCoreList.add(childBuilder.buildNestedInternal());
       }
-      NestedHostColumnVector ret = new NestedHostColumnVector(type, rows, Optional.of(nullCount), data, valid, offsets, nestedHostColumnVectorList);
-      return ret;
+      return new HostColumnVectorCore(type, rows, Optional.of(nullCount), data, valid, offsets, hostColumnVectorCoreList);
     }
 
     private void allocateBitmaskAndSetDefaultValues() {
@@ -1296,7 +1001,7 @@ public final class HostColumnVector implements AutoCloseable {
 
     private void initAndResizeOffsetBuffer(int currentIndex) {
       if (this.offsets == null) {
-        offsets = HostMemoryBuffer.allocate(INIT_OFFSET_SIZE);
+        offsets = HostMemoryBuffer.allocate((rows + 1) * OFFSET_SIZE);
         offsets.setInt(0, 0);
       } else {
         if (offsets.length <= currentIndex * OFFSET_SIZE + OFFSET_SIZE) {
@@ -1327,9 +1032,10 @@ public final class HostColumnVector implements AutoCloseable {
     }
 
     public final ColumnBuilder appendNull() {
+      resizeDataBuffer(currentIndex * type.getSizeInBytes());
       setNullAt(currentIndex);
       currentIndex++;
-      if (type == DType.STRING) {
+      if (type == DType.STRING || type.isNestedType()) {
         initAndResizeOffsetBuffer(currentIndex);
         offsets.setInt(currentIndex * OFFSET_SIZE, currentByteIndex);
       }
@@ -1378,6 +1084,7 @@ public final class HostColumnVector implements AutoCloseable {
     }
 
     private void appendChildOrNull(ColumnBuilder childBuilder, Object listElement) {
+      childBuilder.rows += 1;
       if (listElement == null || (listElement instanceof StructData && ((StructData) listElement).dataRecord == null)) {
         childBuilder.appendNull();
       } else if (listElement instanceof Integer) {
@@ -1515,6 +1222,7 @@ public final class HostColumnVector implements AutoCloseable {
     private void resizeDataBuffer(int length) {
       // just for strings we want to throw a real exception if we would overrun the buffer
       if (data == null) {
+        // since rows can be updated as we go, make data buffer as big as that or the requested length
         data = HostMemoryBuffer.allocate(length);
         return;
       }
@@ -1560,147 +1268,6 @@ public final class HostColumnVector implements AutoCloseable {
           offsets = null;
         }
         built = true;
-      }
-    }
-
-    public static abstract class DataType {
-      abstract DType getType();
-      abstract boolean isNullable();
-      abstract long getSize();
-      abstract DataType getChild(int index);
-      abstract int getNumChildren();
-    }
-
-    public static class ListType extends DataType {
-      private boolean isNullable;
-      private long size;
-      private DataType child;
-
-      public ListType(boolean isNullable, long size, DataType child) {
-        this.isNullable = isNullable;
-        this.size = size;
-        this.child = child;
-      }
-
-      @Override
-      DType getType() {
-        return DType.LIST;
-      }
-
-      @Override
-      boolean isNullable() {
-        return isNullable;
-      }
-
-      @Override
-      long getSize() {
-        return size;
-      }
-
-      @Override
-      DataType getChild(int index) {
-        if (index > 0) {
-          return null;
-        }
-        return child;
-      }
-
-      @Override
-      int getNumChildren() {
-        return 1;
-      }
-    }
-
-    public static class StructData {
-      List<Object> dataRecord;
-
-      public StructData(List<Object> dataRecord) {
-        this.dataRecord = dataRecord;
-      }
-
-      public int getNumFields() {
-        if (dataRecord != null) {
-          return dataRecord.size();
-        } else {
-          return 0;
-        }
-      }
-    }
-
-    public static class StructType extends DataType {
-      private boolean isNullable;
-      private long size;
-      private List<DataType> children = new ArrayList<>();
-
-      public StructType(boolean isNullable, long size) {
-        this.isNullable = isNullable;
-        this.size = size;
-      }
-
-      @Override
-      DType getType() {
-        return DType.STRUCT;
-      }
-
-      @Override
-      boolean isNullable() {
-        return isNullable;
-      }
-
-      @Override
-      long getSize() {
-        return size;
-      }
-
-      @Override
-      DataType getChild(int index) {
-        return children.get(index);
-      }
-
-      @Override
-      int getNumChildren() {
-        return children.size();
-      }
-
-      void addChild(DataType childType) {
-        this.children.add(childType);
-      }
-    }
-
-    public static class BasicType extends DataType {
-      private DType type;
-      private boolean isNullable;
-      private long size;
-
-      public BasicType(boolean isNullable, long size, DType type) {
-        this.isNullable = isNullable;
-        this.size = size;
-        this.type = type;
-      }
-
-      @Override
-      DType getType() {
-        return type;
-      }
-
-      @Override
-      boolean isNullable() {
-        return isNullable;
-      }
-
-      @Override
-      long getSize() {
-        return size;
-      }
-
-      @Override
-      DataType getChild(int index) {
-        return null;
-      }
-
-      @Override
-      int getNumChildren() {
-        return 0;
       }
     }
   }
@@ -2172,6 +1739,131 @@ public final class HostColumnVector implements AutoCloseable {
           ", rows=" + rows +
           ", built=" + built +
           '}';
+    }
+  }
+
+  public static abstract class DataType {
+    abstract DType getType();
+    abstract boolean isNullable();
+    abstract DataType getChild(int index);
+    abstract int getNumChildren();
+  }
+
+  protected static class TableSchema {
+
+    List<HostColumnVector.DataType> types;
+
+    public TableSchema(HostColumnVector.DataType... types) {
+      this.types = Arrays.asList(types);
+    }
+  }
+
+  public static class ListType extends HostColumnVector.DataType {
+    private boolean isNullable;
+    private HostColumnVector.DataType child;
+
+    public ListType(boolean isNullable, DataType child) {
+      this.isNullable = isNullable;
+      this.child = child;
+    }
+
+    @Override
+    DType getType() {
+      return DType.LIST;
+    }
+
+    @Override
+    boolean isNullable() {
+      return isNullable;
+    }
+
+    @Override
+    HostColumnVector.DataType getChild(int index) {
+      if (index > 0) {
+        return null;
+      }
+      return child;
+    }
+
+    @Override
+    int getNumChildren() {
+      return 1;
+    }
+  }
+
+  public static class StructData {
+    List<Object> dataRecord;
+
+    public StructData(List<Object> dataRecord) {
+      this.dataRecord = dataRecord;
+    }
+
+    public int getNumFields() {
+      if (dataRecord != null) {
+        return dataRecord.size();
+      } else {
+        return 0;
+      }
+    }
+  }
+
+  public static class StructType extends HostColumnVector.DataType {
+    private boolean isNullable;
+    private List<HostColumnVector.DataType> children;
+
+    public StructType(boolean isNullable, List<HostColumnVector.DataType> children) {
+      this.isNullable = isNullable;
+      this.children = children;
+    }
+
+    @Override
+    DType getType() {
+      return DType.STRUCT;
+    }
+
+    @Override
+    boolean isNullable() {
+      return isNullable;
+    }
+
+    @Override
+    HostColumnVector.DataType getChild(int index) {
+      return children.get(index);
+    }
+
+    @Override
+    int getNumChildren() {
+      return children.size();
+    }
+  }
+
+  public static class BasicType extends HostColumnVector.DataType {
+    private DType type;
+    private boolean isNullable;
+
+    public BasicType(boolean isNullable, DType type) {
+      this.isNullable = isNullable;
+      this.type = type;
+    }
+
+    @Override
+    DType getType() {
+      return type;
+    }
+
+    @Override
+    boolean isNullable() {
+      return isNullable;
+    }
+
+    @Override
+    HostColumnVector.DataType getChild(int index) {
+      return null;
+    }
+
+    @Override
+    int getNumChildren() {
+      return 0;
     }
   }
 }
