@@ -18,6 +18,8 @@
 
 package ai.rapids.cudf;
 
+import ai.rapids.cudf.nvcomp.BatchedLZ4Decompressor;
+import ai.rapids.cudf.nvcomp.Decompressor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,7 +56,7 @@ import java.util.stream.StreamSupport;
  * ColumnVector's reference count reaches 0 and the resources are released. At some point
  * later the Cleaner itself will be released.
  */
-final class MemoryCleaner {
+public final class MemoryCleaner {
   private static final boolean REF_COUNT_DEBUG = Boolean.getBoolean("ai.rapids.refcount.debug");
   private static final Logger log = LoggerFactory.getLogger(MemoryCleaner.class);
   private static final AtomicLong idGen = new AtomicLong(0);
@@ -62,7 +64,7 @@ final class MemoryCleaner {
   /**
    * API that can be used to clean up the resources for a vector, even if there was a leak
    */
-  static abstract class Cleaner {
+  public static abstract class Cleaner {
     private final List<RefCountDebugItem> refCountDebug;
     public final long id = idGen.incrementAndGet();
     private boolean leakExpected = false;
@@ -237,6 +239,16 @@ final class MemoryCleaner {
   static void register(Cuda.Event event, Cleaner cleaner) {
     // It is now registered...
     all.add(new CleanerWeakReference(event, cleaner, collected, false));
+  }
+
+  public static void register(Decompressor.Metadata metadata, Cleaner cleaner) {
+    // It is now registered...
+    all.add(new CleanerWeakReference(metadata, cleaner, collected, false));
+  }
+
+  public static void register(BatchedLZ4Decompressor.BatchedMetadata metadata, Cleaner cleaner) {
+    // It is now registered...
+    all.add(new CleanerWeakReference(metadata, cleaner, collected, false));
   }
 
   /**
