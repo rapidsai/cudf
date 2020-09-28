@@ -19,6 +19,7 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/valid_if.cuh>
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -56,7 +57,13 @@ struct shift_functor {
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream)
   {
-    using ScalarType = cudf::scalar_type_t<T>;
+    // TODO fix this hack to be a comprehensive fix
+    constexpr bool is_decimal32 = std::is_same<numeric::decimal32, T>();
+    using Type                  = std::conditional_t<cudf::is_fixed_point<T>(),
+                                    std::conditional_t<is_decimal32, int32_t, int64_t>,
+                                    T>;
+
+    using ScalarType = cudf::scalar_type_t<Type>;
     auto& scalar     = static_cast<ScalarType const&>(fill_value);
 
     auto device_input = column_device_view::create(input);
@@ -83,7 +90,7 @@ struct shift_functor {
       output->set_null_count(std::get<1>(mask_pair));
     }
 
-    auto data = device_output->data<T>();
+    auto data = device_output->data<Type>();
 
     // avoid assigning elements we know to be invalid.
     if (not scalar.is_valid()) {
@@ -98,7 +105,7 @@ struct shift_functor {
     auto func_value =
       [size, offset, fill = scalar.data(), input = *device_input] __device__(size_type idx) {
         auto src_idx = idx - offset;
-        return out_of_bounds(size, src_idx) ? *fill : input.element<T>(src_idx);
+        return out_of_bounds(size, src_idx) ? *fill : input.element<Type>(src_idx);
       };
 
     thrust::transform(
