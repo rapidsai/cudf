@@ -79,7 +79,7 @@
 - PR #6265 Update JNI to use ORC options builder
 - PR #6273 Update JNI to use ORC options builder
 - PR #6287 Make java aggregate API follow C++ API
-- PR #6303 Use cudf test dtypes so timedelta tests are determinstic
+- PR #6303 Use cudf test dtypes so timedelta tests are deterministic
 
 ## Bug Fixes
 
@@ -118,7 +118,7 @@
 - PR #6294 Fix read parquet key error when reading empty pandas DataFrame with cudf
 - PR #6285 Removed unsafe `reinterpret_cast` and implicit pointer-to-bool casts
 - PR #6281 Fix unreachable code warning in datetime.cuh
-- PR #6286 Fix `read_csv` `int32` overflow 
+- PR #6286 Fix `read_csv` `int32` overflow
 - PR #6310 Replace a misspelled reference to `master` branch with `main` branch in a comment in changelog.sh
 - PR #6289 Revert #6206
 - PR #6291 Fix issue related to row-wise operations in `cudf.DataFrame`
