@@ -27,7 +27,7 @@
 #include <cudf/fixed_point/fixed_point.hpp>
 
 /**
- * @file type_dispatcher.hpp
+ * @file
  * @brief Defines the mapping between `cudf::type_id` runtime type information
  * and concrete C++ types.
  **/
@@ -35,6 +35,7 @@ namespace cudf {
 /**
  * @addtogroup utility_dispatcher
  * @{
+ * @file
  */
 
 /**

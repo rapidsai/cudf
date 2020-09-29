@@ -76,7 +76,7 @@ static const uint8_t *__device__ avro_decode_row(const schemadesc_s *schema,
   for (uint32_t i = 0; i < schema_len;) {
     uint32_t kind = schema[i].kind;
     int skip      = 0;
-    uint8_t *dataptr;
+
     if (kind == type_union) {
       int skip_after;
       if (cur >= end) break;
@@ -92,11 +92,12 @@ static const uint8_t *__device__ avro_decode_row(const schemadesc_s *schema,
       kind = schema[i].kind;
       skip = skip_after;
     }
-    dataptr = reinterpret_cast<uint8_t *>(schema[i].dataptr);
+
+    void *dataptr = schema[i].dataptr;
     switch (kind) {
       case type_null:
-        if (dataptr && row < max_rows) {
-          atomicAnd(reinterpret_cast<uint32_t *>(dataptr) + (row >> 5), ~(1 << (row & 0x1f)));
+        if (dataptr != nullptr && row < max_rows) {
+          atomicAnd(static_cast<uint32_t *>(dataptr) + (row >> 5), ~(1 << (row & 0x1f)));
           atomicAdd(&schema_g[i].count, 1);
         }
         break;
@@ -108,11 +109,11 @@ static const uint8_t *__device__ avro_decode_row(const schemadesc_s *schema,
       case type_enum: {
         int64_t v = avro_decode_zigzag_varint(cur, end);
         if (kind == type_int) {
-          if (dataptr && row < max_rows) {
-            reinterpret_cast<int32_t *>(dataptr)[row] = static_cast<int32_t>(v);
+          if (dataptr != nullptr && row < max_rows) {
+            static_cast<int32_t *>(dataptr)[row] = static_cast<int32_t>(v);
           }
         } else if (kind == type_long) {
-          if (dataptr && row < max_rows) { reinterpret_cast<int64_t *>(dataptr)[row] = v; }
+          if (dataptr != nullptr && row < max_rows) { static_cast<int64_t *>(dataptr)[row] = v; }
         } else {  // string or enum
           size_t count    = 0;
           const char *ptr = 0;
@@ -127,15 +128,15 @@ static const uint8_t *__device__ avro_decode_row(const schemadesc_s *schema,
             count = (size_t)v;
             cur += count;
           }
-          if (dataptr && row < max_rows) {
-            reinterpret_cast<nvstrdesc_s *>(dataptr)[row].ptr   = ptr;
-            reinterpret_cast<nvstrdesc_s *>(dataptr)[row].count = count;
+          if (dataptr != nullptr && row < max_rows) {
+            static_cast<nvstrdesc_s *>(dataptr)[row].ptr   = ptr;
+            static_cast<nvstrdesc_s *>(dataptr)[row].count = count;
           }
         }
       } break;
 
       case type_float:
-        if (dataptr && row < max_rows) {
+        if (dataptr != nullptr && row < max_rows) {
           uint32_t v;
           if (cur + 3 < end) {
             v = unaligned_load32(cur);
@@ -143,14 +144,14 @@ static const uint8_t *__device__ avro_decode_row(const schemadesc_s *schema,
           } else {
             v = 0;
           }
-          reinterpret_cast<uint32_t *>(dataptr)[row] = v;
+          static_cast<uint32_t *>(dataptr)[row] = v;
         } else {
           cur += 4;
         }
         break;
 
       case type_double:
-        if (dataptr && row < max_rows) {
+        if (dataptr != nullptr && row < max_rows) {
           uint64_t v;
           if (cur + 7 < end) {
             v = unaligned_load64(cur);
@@ -158,16 +159,16 @@ static const uint8_t *__device__ avro_decode_row(const schemadesc_s *schema,
           } else {
             v = 0;
           }
-          reinterpret_cast<uint64_t *>(dataptr)[row] = v;
+          static_cast<uint64_t *>(dataptr)[row] = v;
         } else {
           cur += 8;
         }
         break;
 
       case type_boolean:
-        if (dataptr && row < max_rows) {
-          uint8_t v                                 = (cur < end) ? *cur : 0;
-          reinterpret_cast<uint8_t *>(dataptr)[row] = (v) ? 1 : 0;
+        if (dataptr != nullptr && row < max_rows) {
+          uint8_t v                            = (cur < end) ? *cur : 0;
+          static_cast<uint8_t *>(dataptr)[row] = (v) ? 1 : 0;
         }
         cur++;
         break;
@@ -294,11 +295,11 @@ extern "C" __global__ void __launch_bounds__(NWARPS * 32, 2)
                             num_dictionary_entries);
     }
     if (nrows <= 1) {
-      cur = start + shuffle(static_cast<uint32_t>(cur - start));
+      cur = start + SHFL0(static_cast<uint32_t>(cur - start));
     } else {
       cur = start + nrows * min_row_size;
     }
-    __syncwarp();
+    SYNCWARP();
     cur_row += nrows;
     rows_remaining -= nrows;
   }

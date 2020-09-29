@@ -23,9 +23,12 @@ namespace cudf {
 /**
  * @addtogroup aggregation_reduction
  * @{
+ * @file
  */
 
-// @brief Enum to describe scan operation type
+/**
+ *  @brief Enum to describe scan operation type
+ */
 enum class scan_type : bool { INCLUSIVE, EXCLUSIVE };
 
 /**

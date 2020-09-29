@@ -113,10 +113,8 @@ struct probe_special_chars {
       constexpr char const quote_char = '\"';
 
       // count number of quotes "\""
-      size_type num_quotes =
-        thrust::count_if(thrust::seq, d_str.begin(), d_str.end(), [quote_char](char_utf8 chr) {
-          return chr == quote_char;
-        });
+      size_type num_quotes = thrust::count_if(
+        thrust::seq, d_str.begin(), d_str.end(), [](char_utf8 chr) { return chr == quote_char; });
       return d_str.size_bytes() + num_quotes + 2;
     } else {
       return d_str.size_bytes();
