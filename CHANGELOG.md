@@ -8,9 +8,11 @@
 - PR #5974 Use libcudf instead of cupy for `arange` or column creation from a scalar.
 - PR #6076 Add durations type support for csv writer, reader
 - PR #5874 Add `COLLECT` groupby aggregation
+- PR #6330 Add ability to query if PTDS is enabled
 - PR #6119 Add support for `dayofweek` property in `DateTimeIndex` and `DatetimeProperties`
 - PR #6171 Java and Jni support for Struct columns
 - PR #6125 Add support for `Series.mode` and `DataFrame.mode`
+- PR #6220 Add `list_topics()` to supply list of underlying Kafka connection topics
 - PR #6271 Add support to deep-copy struct columns from struct column-view
 - PR #6254 Add `cudf::make_dictionary_from_scalar` factory function
 - PR #6262 Add nth_element series aggregation with null handling
@@ -83,6 +85,7 @@
 - PR #6273 Update JNI to use ORC options builder
 - PR #6293 Replace shuffle warp reduce with cub calls
 - PR #6287 Make java aggregate API follow C++ API
+- PR #6306 Remove cpw macros from page encode kernels
 - PR #6303 Use cudf test dtypes so timedelta tests are determinstic
 - PR #6336 Add join functionality in cudf concat 
 
@@ -131,6 +134,7 @@
 - PR #6289 Revert #6206
 - PR #6291 Fix issue related to row-wise operations in `cudf.DataFrame`
 - PR #6304 Fix span_tests.cu includes
+- PR #6331 Avoids materializing `RangeIndex` during frame concatnation (when not needed)
 - PR #6278 Add filter tests for struct columns
 
 

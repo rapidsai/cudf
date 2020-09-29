@@ -587,3 +587,36 @@ def test_concat_dataframe_with_multiIndex(df1, df2):
     actual = pd.concat([pdf1, pdf2], axis=1)
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("ignore_index", [True, False])
+@pytest.mark.parametrize("sort", [True, False])
+def test_concat_inner_join(ignore_index, sort):
+    pdf1 = pd.DataFrame({"a": [1, 2], "b": [1, 2], "c": [1, 2]})
+    pdf2 = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
+
+    gdf1 = gd.from_pandas(pdf1)
+    gdf2 = gd.from_pandas(pdf2)
+
+    assert_eq(
+        pd.concat(
+            [pdf1, pdf2], sort=sort, join="inner", ignore_index=ignore_index
+        ),
+        gd.concat(
+            [gdf1, gdf2], sort=sort, join="inner", ignore_index=ignore_index
+        ),
+    )
+
+    s1 = gd.Series(["a", "b", "c"])
+    s2 = gd.Series(["a", "b"])
+    ps1 = s1.to_pandas()
+    ps2 = s2.to_pandas()
+
+    assert_eq(
+        gd.concat(
+            [s1, s2], sort=sort, join="inner", ignore_index=ignore_index
+        ),
+        pd.concat(
+            [ps1, ps2], sort=sort, join="inner", ignore_index=ignore_index
+        ),
+    )
