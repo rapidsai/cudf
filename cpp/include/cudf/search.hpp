@@ -159,7 +159,7 @@ bool contains(column_view const& col, scalar const& value);
  * @param mr        Device memory resource used to allocate the returned column's device memory
  *
  * @return A column of bool elements containing true if the corresponding entry in haystack
- * appears in needles and false if it is not.
+ * appears in needles and false if it does not.
  */
 std::unique_ptr<column> contains(
   column_view const& haystack,
