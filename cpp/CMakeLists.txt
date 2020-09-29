@@ -618,6 +618,7 @@ add_library(cudf
             src/aggregation/result_cache.cpp
             src/ast/transform.cu
             src/ast/linearizer.cpp
+            src/utilities/default_stream.cpp
 )
 
 # Override RPATH for cudf
