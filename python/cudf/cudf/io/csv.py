@@ -91,7 +91,7 @@ def read_csv(
 @ioutils.doc_to_csv()
 def to_csv(
     df,
-    path=None,
+    path_or_buf=None,
     sep=",",
     na_rep="",
     columns=None,
@@ -103,10 +103,10 @@ def to_csv(
 ):
     """{docstring}"""
 
-    if path is None:
+    return_as_string = False
+    if path_or_buf is None:
         path_or_buf = StringIO()
-    else:
-        path_or_buf = path
+        return_as_string = True
 
     path_or_buf = ioutils.get_writer_filepath_or_buffer(
         path_or_data=path_or_buf, mode="w", **kwargs
@@ -156,6 +156,6 @@ def to_csv(
             rows_per_chunk=rows_per_chunk,
         )
 
-    if path is None:
+    if return_as_string:
         path_or_buf.seek(0)
         return path_or_buf.read()
