@@ -150,21 +150,37 @@ int64_t kafka_consumer::get_committed_offset(std::string const &topic, int parti
                "Failed retrieve Kafka committed offsets");
 
   int64_t offset = toppar_list[0]->offset();
-  return offset > 0 ? offset : 0;
+  return offset > 0 ? offset : -1001;
 }
 
-std::map<std::string, std::vector<int32_t>> kafka_consumer::list_topics() const
+std::map<std::string, std::vector<int32_t>> kafka_consumer::list_topics(
+  std::string specific_topic) const
 {
+  printf("Specific Topic: '%s'\n", specific_topic.c_str());
   auto const md = [&]() {
+    std::string errstr;
+    RdKafka::Topic const *const spec_topic =
+      specific_topic.empty()
+        ? nullptr
+        : RdKafka::Topic::create(consumer.get(), specific_topic, nullptr, errstr);
+
     RdKafka::Metadata *md;
-    CUDF_EXPECTS(RdKafka::ERR_NO_ERROR == consumer->metadata(true, nullptr, &md, default_timeout),
-                 "Failed to list_topics in Kafka broker");
+    CUDF_EXPECTS(
+      RdKafka::ERR_NO_ERROR == consumer->metadata(true, spec_topic, &md, default_timeout),
+      "Failed to list_topics in Kafka broker");
     return std::unique_ptr<RdKafka::Metadata>{md};
   }();
   std::map<std::string, std::vector<int32_t>> topic_parts;
 
+  if (md->topics()->size() > 0) {
+    printf("Topics Available: %ld\n", md->topics()->size());
+  } else {
+    printf("Topics are not available ...... \n");
+  }
+
   for (auto const &topic :
        *(std::unique_ptr<const RdKafka::Metadata::TopicMetadataVector>{md->topics()})) {
+    printf("Inside of here ....\n");
     auto &part_ids    = topic_parts[topic->topic()];
     auto const &parts = *(topic->partitions());
     std::transform(
@@ -172,6 +188,8 @@ std::map<std::string, std::vector<int32_t>> kafka_consumer::list_topics() const
         return part->id();
       });
   }
+
+  printf("After for loop .... \n");
 
   return topic_parts;
 }

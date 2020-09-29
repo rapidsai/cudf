@@ -47,9 +47,9 @@ cdef class KafkaDatasource(Datasource):
         return (<kafka_consumer *> self.c_datasource.get()). \
             get_committed_offset(topic, partition)
 
-    cpdef map[string, vector[int32_t]] list_topics(self):
+    cpdef map[string, vector[int32_t]] list_topics(self, string topic):
         return (<kafka_consumer *> self.c_datasource.get()). \
-            list_topics()
+            list_topics(specific_topic)
 
     cpdef map[string, int64_t] get_watermark_offset(self, string topic,
                                                     int32_t partition,

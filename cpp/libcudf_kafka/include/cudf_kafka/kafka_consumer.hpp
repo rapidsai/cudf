@@ -149,9 +149,11 @@ class kafka_consumer : public cudf::io::datasource {
   /**
    * @brief Query the Kafka broker for the assigned topic Metadata
    *
+   * @param[in] Retrieves metadata for only a specific topic.
+   *
    * @return Map of Kafka topics with their corresponding topic partition values.
    */
-  std::map<std::string, std::vector<int32_t>> list_topics() const;
+  std::map<std::string, std::vector<int32_t>> list_topics(std::string specific_topic) const;
 
   /**
    * @brief Close the underlying socket connection to Kafka and clean up system resources
