@@ -65,7 +65,7 @@ cdef class KafkaDatasource(Datasource):
 
     cpdef int64_t get_committed_offset(self, string topic, int32_t partition)
 
-    cpdef map[string, vector[int32_t]] list_topics(self, string topic) except +
+    cpdef map[string, vector[int32_t]] list_topics(self, string tp) except +*
 
     cpdef map[string, int64_t] get_watermark_offset(self, string topic,
                                                     int32_t partition,
