@@ -156,7 +156,6 @@ std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf:
   rmm::mr::device_memory_resource* mr,
   cudaStream_t stream)
 {
-  // CUDF_FAIL("dictionary type not supported");
   // first, match the keys in source and target
   cudf::dictionary_column_view const dict_source(source);
   cudf::dictionary_column_view const dict_target(target);
@@ -180,8 +179,7 @@ std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf:
     dict_target.size(),
     target_indices->mutable_view().head(),
     static_cast<cudf::bitmask_type*>(target_contents.null_mask->data()),
-    dict_target.null_count(),
-    dict_target.offset());
+    dict_target.null_count());
   cudf::type_dispatcher(new_indices.type(),
                         in_place_copy_range_dispatch{source_indices, new_indices},
                         source_begin,
