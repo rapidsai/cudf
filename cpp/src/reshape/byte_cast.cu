@@ -27,21 +27,22 @@ struct byte_list_conversion {
   /**
    * @brief Function object for converting primitive types and string columns to lists of bytes.
    */
-  struct flip_endianness_lambda {
-    char* d_chars;
-    char const* d_data;
-    size_type mask;
-    __device__ void operator()(int index)
-    {
-      d_chars[index] = d_data[index + mask - ((index & mask) << 1)];
-    }
-  };
+  template <typename T>
+  std::enable_if_t<!std::is_integral<T>::value and !is_floating_point<T>(), std::unique_ptr<column>>
+  operator()(column_view const& input_column,
+             flip_endianness configuration,
+             rmm::mr::device_memory_resource* mr,
+             cudaStream_t stream) const
+  {
+    CUDF_FAIL("Unsupported non-numeric and non-string column");
+  }
 
   template <typename T>
-  std::unique_ptr<column> process(column_view const& input_column,
-                                  flip_endianness configuration,
-                                  rmm::mr::device_memory_resource* mr,
-                                  cudaStream_t stream) const
+  std::enable_if_t<is_floating_point<T>() or std::is_integral<T>::value, std::unique_ptr<column>>
+  operator()(column_view const& input_column,
+             flip_endianness configuration,
+             rmm::mr::device_memory_resource* mr,
+             cudaStream_t stream) const
   {
     size_type num_bytes = input_column.size() * sizeof(T);
     auto byte_column    = make_numeric_column(
@@ -55,7 +56,9 @@ struct byte_list_conversion {
       thrust::for_each(rmm::exec_policy(stream)->on(stream),
                        thrust::make_counting_iterator(0),
                        thrust::make_counting_iterator(num_bytes),
-                       flip_endianness_lambda{d_chars, d_data, mask});
+                       [d_chars, d_data, mask] __device__(auto index) {
+                         d_chars[index] = d_data[index + mask - ((index & mask) << 1)];
+                       });
     } else {
       thrust::copy_n(rmm::exec_policy(stream)->on(stream), d_data, num_bytes, d_chars);
     }
@@ -73,34 +76,6 @@ struct byte_list_conversion {
                              std::move(null_mask),
                              stream,
                              mr);
-  }
-
-  template <typename T,
-            std::enable_if_t<!std::is_integral<T>::value and !is_floating_point<T>()>* = nullptr>
-  std::unique_ptr<column> operator()(column_view const& input_column,
-                                     flip_endianness configuration,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) const
-  {
-    CUDF_FAIL("Unsupported non-numeric and non-string column");
-  }
-
-  template <typename T, std::enable_if_t<is_floating_point<T>()>* = nullptr>
-  std::unique_ptr<column> operator()(column_view const& input_column,
-                                     flip_endianness configuration,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) const
-  {
-    return process<T>(input_column, configuration, mr, stream);
-  }
-
-  template <typename T, std::enable_if_t<std::is_integral<T>::value>* = nullptr>
-  std::unique_ptr<column> operator()(column_view const& input_column,
-                                     flip_endianness configuration,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) const
-  {
-    return process<T>(input_column, configuration, mr, stream);
   }
 };
 

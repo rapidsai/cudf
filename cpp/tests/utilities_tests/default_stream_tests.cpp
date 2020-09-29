@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,23 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package ai.rapids.cudf;
 
-public class RmmAllocationMode {
-  /**
-   * Use cudaMalloc for allocation
-   */
-  public static final int CUDA_DEFAULT = 0x00000000;
-  /**
-   * Use pool suballocation strategy
-   */
-  public static final int POOL = 0x00000001;
-  /**
-   * Use cudaMallocManaged rather than cudaMalloc
-   */
-  public static final int CUDA_MANAGED_MEMORY = 0x00000002;
-  /**
-   * Use arena suballocation strategy
-   */
-  public static final int ARENA = 0x00000004;
-}
+#include <cudf/utilities/default_stream.hpp>
+
+#include <cudf_test/cudf_gtest.hpp>
+
+#ifdef CUDA_API_PER_THREAD_DEFAULT_STREAM
+TEST(DefaultStreamTest, PtdsIsEnabled) { EXPECT_TRUE(cudf::is_ptds_enabled()); }
+#else
+TEST(DefaultStreamTest, PtdsIsNotEnabled) { EXPECT_FALSE(cudf::is_ptds_enabled()); }
+#endif

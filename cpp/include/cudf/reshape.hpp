@@ -82,6 +82,12 @@ enum class flip_endianness : bool { NO, YES };
 /**
  * @brief Converts a column's elements to lists of bytes
  *
+ * ```
+ * input<int32>  = [8675, 309]
+ * configuration = flip_endianness::YES
+ * return        = [[0x00, 0x00, 0x21, 0xe3], [0x00, 0x00, 0x01, 0x35]]
+ * ```
+ *
  * @param input_column column to be converted to lists of bytes.
  * @param configuration configuration retain or flip the endianness of a row.
  * @param mr Device memory resource used to allocate the returned column's device memory.
