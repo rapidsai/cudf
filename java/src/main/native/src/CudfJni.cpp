@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 
-#include "jni_utils.hpp"
-
 #include <cudf/copying.hpp>
+#include <cudf/utilities/default_stream.hpp>
+
+#include "jni_utils.hpp"
 
 namespace {
 
@@ -35,6 +36,12 @@ private:
 
 namespace cudf {
 namespace jni {
+
+#ifdef CUDA_API_PER_THREAD_DEFAULT_STREAM
+constexpr bool is_ptds_enabled{true};
+#else
+constexpr bool is_ptds_enabled{false};
+#endif
 
 static jclass Contiguous_table_jclass;
 static jmethodID From_contiguous_column_views;
@@ -201,6 +208,11 @@ extern "C" {
 JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *) {
   JNIEnv *env;
   if (vm->GetEnv(reinterpret_cast<void **>(&env), cudf::jni::MINIMUM_JNI_VERSION) != JNI_OK) {
+    return JNI_ERR;
+  }
+
+  // make sure libcudf and the JNI library are built with the same PTDS mode
+  if (cudf::is_ptds_enabled() != cudf::jni::is_ptds_enabled) {
     return JNI_ERR;
   }
 
