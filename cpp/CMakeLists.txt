@@ -346,7 +346,7 @@ endif(PER_THREAD_DEFAULT_STREAM)
 
 if(BUILD_TESTS)
 
-  CPMAddPackage(
+  CPMFindPackage(
     NAME GTEST
     GITHUB_REPOSITORY google/googletest
     GIT_TAG release-1.10.0
@@ -370,7 +370,7 @@ message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
 
 if(BUILD_BENCHMARKS)
 
-  CPMAddPackage(
+  CPMFindPackage(
     NAME benchmark
     GITHUB_REPOSITORY google/benchmark
     VERSION 1.5.1
