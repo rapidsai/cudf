@@ -23,6 +23,7 @@ namespace nvtext {
 /**
  * @addtogroup nvtext_normalize
  * @{
+ * @file
  */
 
 /**

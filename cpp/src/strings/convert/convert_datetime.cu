@@ -36,6 +36,7 @@ namespace cudf {
 namespace strings {
 namespace detail {
 namespace {
+
 /**
  * @brief  Units for timestamp conversion.
  * These are defined since there are more than what cudf supports.
@@ -178,6 +179,18 @@ struct parse_datetime {
   timestamp_units units;
   int8_t subsecond_precision;
 
+  /**
+   * @brief Return power of ten value given an exponent.
+   *
+   * @return `1x10^exponent` for `0 <= exponent <= 9`
+   */
+  __device__ constexpr int64_t power_of_ten(int32_t exponent)
+  {
+    constexpr int64_t powers_of_ten[] = {
+      1L, 10L, 100L, 1000L, 10000L, 100000L, 1000000L, 10000000L, 100000000L, 1000000000L};
+    return powers_of_ten[exponent];
+  }
+
   //
   __device__ int32_t str2int(const char* str, size_type bytes)
   {
@@ -198,8 +211,9 @@ struct parse_datetime {
     auto ptr    = d_string.data();
     auto length = d_string.size_bytes();
     for (size_t idx = 0; idx < items_count; ++idx) {
-      auto item   = d_format_items[idx];
-      item.length = static_cast<int8_t>(std::min(static_cast<size_type>(item.length), length));
+      auto item = d_format_items[idx];
+      if (item.value != 'f')
+        item.length = static_cast<int8_t>(std::min(static_cast<size_type>(item.length), length));
       if (item.item_type == format_char_type::literal) {
         // static character we'll just skip;
         // consume item.length bytes from string
@@ -219,7 +233,12 @@ struct parse_datetime {
         case 'I': timeparts[TP_HOUR] = str2int(ptr, item.length); break;
         case 'M': timeparts[TP_MINUTE] = str2int(ptr, item.length); break;
         case 'S': timeparts[TP_SECOND] = str2int(ptr, item.length); break;
-        case 'f': timeparts[TP_SUBSECOND] = str2int(ptr, item.length); break;
+        case 'f': {
+          int32_t const read_size = std::min(static_cast<int32_t>(item.length), length);
+          int64_t const fraction  = str2int(ptr, read_size) * power_of_ten(item.length - read_size);
+          timeparts[TP_SUBSECOND] = static_cast<int32_t>(fraction);
+          break;
+        }
         case 'p': {
           string_view am_pm(ptr, 2);
           auto hour = timeparts[TP_HOUR];
@@ -283,10 +302,8 @@ struct parse_datetime {
       (days * 24L * 3600L) + (hour * 3600L) + (minute * 60L) + second + (tzadjust * 60);
     if (units == timestamp_units::seconds) return timestamp;
 
-    int64_t powers_of_ten[] = {
-      1L, 10L, 100L, 1000L, 10000L, 100000L, 1000000L, 10000000L, 100000000L, 1000000000L};
     int64_t subsecond =
-      timeparts[TP_SUBSECOND] * powers_of_ten[9 - subsecond_precision];  // normalize to nanoseconds
+      timeparts[TP_SUBSECOND] * power_of_ten(9 - subsecond_precision);  // normalize to nanoseconds
     if (units == timestamp_units::ms) {
       timestamp *= 1000L;
       subsecond = subsecond / 1000000L;

@@ -211,6 +211,19 @@ class UnsafeMemoryAccessor {
   }
 
   /**
+   * Copy out an array of longs.
+   * @param dst       where to write the data
+   * @param dstIndex  index into values to start writing at.
+   * @param address   src memory address
+   * @param count     the number of longs to copy
+   * @throws IndexOutOfBoundsException
+   */
+  public static void getLongs(long[] dst, long dstIndex, long address, int count) {
+    copyMemory(null, address,
+        dst, UnsafeMemoryAccessor.LONG_ARRAY_OFFSET + (dstIndex * 8), count * 8);
+  }
+
+  /**
    * Returns the Short value at this address
    * @param address - memory address
    * @return - value

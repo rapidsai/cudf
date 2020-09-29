@@ -431,6 +431,7 @@ add_library(cudf
             src/quantiles/quantile.cu
             src/quantiles/quantiles.cu
             src/reductions/reductions.cpp
+            src/reductions/nth_element.cu
             src/reductions/min.cu
             src/reductions/max.cu
             src/reductions/any.cu
@@ -615,6 +616,7 @@ add_library(cudf
             src/aggregation/aggregation.cpp
             src/aggregation/aggregation.cu
             src/aggregation/result_cache.cpp
+            src/utilities/default_stream.cpp
 )
 
 # Override RPATH for cudf
@@ -796,6 +798,9 @@ install(TARGETS cudf
         DESTINATION lib
         COMPONENT cudf)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf
+        DESTINATION include
+        COMPONENT cudf)
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf_test
         DESTINATION include
         COMPONENT cudf)
 

@@ -15,8 +15,8 @@
  */
 
 #include <cudf/utilities/traits.hpp>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/type_lists.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/type_lists.hpp>
 
 #include <gtest/gtest.h>
 

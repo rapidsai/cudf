@@ -375,9 +375,18 @@ set(UTILITIES_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/type_list_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_utilities_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_wrapper_tests.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/lists_column_wrapper_tests.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/lists_column_wrapper_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/default_stream_tests.cpp")
 
 ConfigureTest(UTILITIES_TEST "${UTILITIES_TEST_SRC}")
+
+###################################################################################################
+# - span tests -------------------------------------------------------------------------------
+
+set(SPAN_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/span_tests.cu")
+
+ConfigureTest(SPAN_TEST "${SPAN_TEST_SRC}")
 
 ###################################################################################################
 # - iterator tests --------------------------------------------------------------------------------
