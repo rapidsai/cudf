@@ -355,10 +355,10 @@ if(BUILD_TESTS)
       "INSTALL_GTEST OFF"
       "gtest_force_shared_crt"
   )
-  set(GTEST_INCLUDE_DIR GTEST)
   enable_testing()
   
-  include_directories(${GTEST_INCLUDE_DIR})
+  include_directories("${gtest_SOURCE_DIR}/include"
+                      "${gmock_SOURCE_DIR}/include")
   add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
 endif(BUILD_TESTS)
 
@@ -382,7 +382,7 @@ if(BUILD_BENCHMARKS)
     "RUN_HAVE_GNU_POSIX_REGEX 0" #
   )
   set(benchmark_INCLUDE_DIR benchmark)
-  include_directories(${benchmark_INCLUDE_DIR})
+  include_directories("${benchmark_INCLUDE_DIR}/include")
   add_subdirectory(${CMAKE_SOURCE_DIR}/benchmarks)
 
   endif(BUILD_BENCHMARKS)
@@ -421,7 +421,7 @@ endif(CONDA_INCLUDE_DIRS)
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
                  "${CMAKE_BINARY_DIR}/lib"
                  "${CMAKE_BINARY_DIR}"
-                 "${GTEST_LIBRARY_DIR}")
+                 "${gtest_BINARY_DIR}")
 
 if(CONDA_LINK_DIRS)
     link_directories("${CONDA_LINK_DIRS}")
