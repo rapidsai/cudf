@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "parquet.hpp"
 #include <io/parquet/parquet.hpp>
 
 #include <algorithm>
@@ -372,142 +371,101 @@ int CompactProtocolReader::WalkSchema(
  * @Brief Parquet CompactProtocolWriter class
  */
 
-#define CPW_BEGIN_STRUCT(st)                       \
-  size_t CompactProtocolWriter::write(const st *s) \
-  {                                                \
-    size_t struct_start_pos = m_buf->size();       \
-    int cur_fld             = 0;
-
-#define CPW_FLD_INT(f, m, t) \
-  put_fldh(f, cur_fld, t);   \
-  put_int(s->m);             \
-  cur_fld = f;
-
-#define CPW_FLD_INT32(id, m) CPW_FLD_INT(id, m, ST_FLD_I32)
-#define CPW_FLD_INT64(id, m) CPW_FLD_INT(id, m, ST_FLD_I64)
-
-#define CPW_FLD_STRUCT(id, m)           \
-  put_fldh(id, cur_fld, ST_FLD_STRUCT); \
-  write(&s->m);                         \
-  cur_fld = id;
-
-#define CPW_FLD_INT32_LIST(id, m)                                           \
-  put_fldh(id, cur_fld, ST_FLD_LIST);                                       \
-  putb((uint8_t)((std::min(s->m.size(), (size_t)0xfu) << 4) | ST_FLD_I32)); \
-  if (s->m.size() >= 0xf) put_uint(s->m.size());                            \
-  for (auto i = 0; i < s->m.size(); i++) { put_int(s->m[i]); }              \
-  cur_fld = id;
-
-#define CPW_FLD_STRING_LIST(id, m)                                                     \
-  put_fldh(id, cur_fld, ST_FLD_LIST);                                                  \
-  putb((uint8_t)((std::min(s->m.size(), (size_t)0xfu) << 4) | ST_FLD_BINARY));         \
-  if (s->m.size() >= 0xf) put_uint(s->m.size());                                       \
-  for (auto i = 0; i < s->m.size(); i++) {                                             \
-    put_uint(s->m[i].size());                                                          \
-    putb(reinterpret_cast<const uint8_t *>(s->m[i].data()), (uint32_t)s->m[i].size()); \
-  }                                                                                    \
-  cur_fld = id;
-
-#define CPW_FLD_STRUCT_LIST(id, m)                                             \
-  put_fldh(id, cur_fld, ST_FLD_LIST);                                          \
-  putb((uint8_t)((std::min(s->m.size(), (size_t)0xfu) << 4) | ST_FLD_STRUCT)); \
-  if (s->m.size() >= 0xf) put_uint(s->m.size());                               \
-  for (auto i = 0; i < s->m.size(); i++) { write(&s->m[i]); }                  \
-  cur_fld = id;
-
-#define CPW_FLD_STRUCT_BLOB(id, m)          \
-  put_fldh(id, cur_fld, ST_FLD_STRUCT);     \
-  putb(s->m.data(), (uint32_t)s->m.size()); \
-  putb(0);                                  \
-  cur_fld = id;
-
-#define CPW_FLD_STRING(id, m)                                                  \
-  put_fldh(id, cur_fld, ST_FLD_BINARY);                                        \
-  put_uint(s->m.size());                                                       \
-  putb(reinterpret_cast<const uint8_t *>(s->m.data()), (uint32_t)s->m.size()); \
-  cur_fld = id;
-
-#define CPW_END_STRUCT()                   \
-  putb(0);                                 \
-  return m_buf->size() - struct_start_pos; \
+size_t CompactProtocolWriter::write(const FileMetaData *f)
+{
+  CompactProtocolWriterBuilder c(this);
+  c.field_int(1, f->version);
+  c.field_struct_list(2, f->schema);
+  c.field_int(3, f->num_rows);
+  c.field_struct_list(4, f->row_groups);
+  if (f->key_value_metadata.size() != 0) { c.field_struct_list(5, f->key_value_metadata); }
+  if (f->created_by.size() != 0) { c.field_string(6, f->created_by); }
+  if (f->column_order_listsize != 0) {
+    // Dummy list of struct containing an empty field1 struct
+    put_fldh(7, c.get_field(), ST_FLD_LIST);
+    putb((uint8_t)((std::min(f->column_order_listsize, 0xfu) << 4) | ST_FLD_STRUCT));
+    if (f->column_order_listsize >= 0xf) put_uint(f->column_order_listsize);
+    for (uint32_t i = 0; i < f->column_order_listsize; i++) {
+      put_fldh(1, 0, ST_FLD_STRUCT);
+      putb(0);  // ColumnOrder.field1 struct end
+      putb(0);  // ColumnOrder struct end
+    }
+    c.set_field(7);
   }
+  return c.value();
+}
 
-CPW_BEGIN_STRUCT(FileMetaData)
-CPW_FLD_INT32(1, version)
-CPW_FLD_STRUCT_LIST(2, schema)
-CPW_FLD_INT64(3, num_rows)
-CPW_FLD_STRUCT_LIST(4, row_groups)
-if (s->key_value_metadata.size() != 0) { CPW_FLD_STRUCT_LIST(5, key_value_metadata) }
-if (s->created_by.size() != 0) { CPW_FLD_STRING(6, created_by) }
-if (s->column_order_listsize != 0) {
-  // Dummy list of struct containing an empty field1 struct
-  put_fldh(7, cur_fld, ST_FLD_LIST);
-  putb((uint8_t)((std::min(s->column_order_listsize, 0xfu) << 4) | ST_FLD_STRUCT));
-  if (s->column_order_listsize >= 0xf) put_uint(s->column_order_listsize);
-  for (uint32_t i = 0; i < s->column_order_listsize; i++) {
-    put_fldh(1, 0, ST_FLD_STRUCT);
-    putb(0);  // ColumnOrder.field1 struct end
-    putb(0);  // ColumnOrder struct end
+size_t CompactProtocolWriter::write(const SchemaElement *s)
+{
+  CompactProtocolWriterBuilder c(this);
+  if (s->type != UNDEFINED_TYPE) {
+    c.field_int(1, s->type);
+    if (s->type_length != 0) { c.field_int(2, s->type_length); }
   }
-  cur_fld = 7;
-}
-CPW_END_STRUCT()
+  if (s->repetition_type != NO_REPETITION_TYPE) { c.field_int(3, s->repetition_type); }
+  c.field_string(4, s->name);
 
-CPW_BEGIN_STRUCT(SchemaElement)
-if (s->type != UNDEFINED_TYPE) {
-  CPW_FLD_INT32(1, type)
-  if (s->type_length != 0) { CPW_FLD_INT32(2, type_length) }
-}
-if (s->repetition_type != NO_REPETITION_TYPE) { CPW_FLD_INT32(3, repetition_type) }
-CPW_FLD_STRING(4, name)
-if (s->type == UNDEFINED_TYPE) { CPW_FLD_INT32(5, num_children) }
-if (s->converted_type != UNKNOWN) {
-  CPW_FLD_INT32(6, converted_type)
-  if (s->converted_type == DECIMAL) {
-    CPW_FLD_INT32(7, decimal_scale)
-    CPW_FLD_INT32(8, decimal_precision)
+  if (s->type == UNDEFINED_TYPE) { c.field_int(5, s->num_children); }
+  if (s->converted_type != UNKNOWN) {
+    c.field_int(6, s->converted_type);
+    if (s->converted_type == DECIMAL) {
+      c.field_int(7, s->decimal_scale);
+      c.field_int(8, s->decimal_precision);
+    }
   }
+  return c.value();
 }
-CPW_END_STRUCT()
 
-CPW_BEGIN_STRUCT(RowGroup)
-CPW_FLD_STRUCT_LIST(1, columns)
-CPW_FLD_INT64(2, total_byte_size)
-CPW_FLD_INT64(3, num_rows)
-CPW_END_STRUCT()
-
-CPW_BEGIN_STRUCT(KeyValue)
-CPW_FLD_STRING(1, key)
-if (s->value.size() != 0) { CPW_FLD_STRING(2, value) }
-CPW_END_STRUCT()
-
-CPW_BEGIN_STRUCT(ColumnChunk)
-if (s->file_path.size() != 0) { CPW_FLD_STRING(1, file_path) }
-CPW_FLD_INT64(2, file_offset)
-CPW_FLD_STRUCT(3, meta_data)
-if (s->offset_index_length != 0) {
-  CPW_FLD_INT64(4, offset_index_offset)
-  CPW_FLD_INT32(5, offset_index_length)
+size_t CompactProtocolWriter::write(const RowGroup *r)
+{
+  CompactProtocolWriterBuilder c(this);
+  c.field_struct_list(1, r->columns);
+  c.field_int(2, r->total_byte_size);
+  c.field_int(3, r->num_rows);
+  return c.value();
 }
-if (s->column_index_length != 0) {
-  CPW_FLD_INT64(6, column_index_offset)
-  CPW_FLD_INT32(7, column_index_length)
-}
-CPW_END_STRUCT()
 
-CPW_BEGIN_STRUCT(ColumnChunkMetaData)
-CPW_FLD_INT32(1, type)
-CPW_FLD_INT32_LIST(2, encodings)
-CPW_FLD_STRING_LIST(3, path_in_schema)
-CPW_FLD_INT32(4, codec)
-CPW_FLD_INT64(5, num_values)
-CPW_FLD_INT64(6, total_uncompressed_size)
-CPW_FLD_INT64(7, total_compressed_size)
-CPW_FLD_INT64(9, data_page_offset)
-if (s->index_page_offset != 0) { CPW_FLD_INT64(10, index_page_offset) }
-if (s->dictionary_page_offset != 0) { CPW_FLD_INT64(11, dictionary_page_offset) }
-if (s->statistics_blob.size() != 0) { CPW_FLD_STRUCT_BLOB(12, statistics_blob); }
-CPW_END_STRUCT()
+size_t CompactProtocolWriter::write(const KeyValue *k)
+{
+  CompactProtocolWriterBuilder c(this);
+  c.field_string(1, k->key);
+  if (k->value.size() != 0) { c.field_string(2, k->value); }
+  return c.value();
+}
+
+size_t CompactProtocolWriter::write(const ColumnChunk *s)
+{
+  CompactProtocolWriterBuilder c(this);
+  if (s->file_path.size() != 0) { c.field_string(1, s->file_path); }
+  c.field_int(2, s->file_offset);
+  c.field_struct(3, s->meta_data);
+  if (s->offset_index_length != 0) {
+    c.field_int(4, s->offset_index_offset);
+    c.field_int(5, s->offset_index_length);
+  }
+  if (s->column_index_length != 0) {
+    c.field_int(6, s->column_index_offset);
+    c.field_int(7, s->column_index_length);
+  }
+  return c.value();
+}
+
+size_t CompactProtocolWriter::write(const ColumnChunkMetaData *s)
+{
+  CompactProtocolWriterBuilder c(this);
+  c.field_int(1, s->type);
+  c.field_int_list(2, s->encodings);
+  c.field_string_list(3, s->path_in_schema);
+  c.field_int(4, s->codec);
+  c.field_int(5, s->num_values);
+  c.field_int(6, s->total_uncompressed_size);
+  c.field_int(7, s->total_compressed_size);
+  c.field_int(9, s->data_page_offset);
+  if (s->index_page_offset != 0) { c.field_int(10, s->index_page_offset); }
+  if (s->dictionary_page_offset != 0) { c.field_int(11, s->dictionary_page_offset); }
+  if (s->statistics_blob.size() != 0) { c.field_struct_blob(12, s->statistics_blob); }
+  return c.value();
+}
 
 }  // namespace parquet
 }  // namespace io

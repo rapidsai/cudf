@@ -362,17 +362,111 @@ class CompactProtocolWriter {
   }
 
  public:
-#define DECL_CPW_STRUCT(st) size_t write(const st *)
-  DECL_CPW_STRUCT(FileMetaData);
-  DECL_CPW_STRUCT(SchemaElement);
-  DECL_CPW_STRUCT(RowGroup);
-  DECL_CPW_STRUCT(KeyValue);
-  DECL_CPW_STRUCT(ColumnChunk);
-  DECL_CPW_STRUCT(ColumnChunkMetaData);
-#undef DECL_CPW_STRUCT
+  size_t write(const FileMetaData *);
+  size_t write(const SchemaElement *);
+  size_t write(const RowGroup *);
+  size_t write(const KeyValue *);
+  size_t write(const ColumnChunk *);
+  size_t write(const ColumnChunkMetaData *);
 
  protected:
   std::vector<uint8_t> *m_buf;
+
+  friend class CompactProtocolWriterBuilder;
+};
+
+class CompactProtocolWriterBuilder {
+  CompactProtocolWriter *ptr;
+  size_t struct_start_pos;
+  int current_field;
+
+ public:
+  CompactProtocolWriterBuilder(CompactProtocolWriter *cpw_ptr)
+    : ptr(cpw_ptr), struct_start_pos(ptr->m_buf->size()), current_field(0)
+  {
+  }
+
+  inline void field_int(int field, int32_t val)
+  {
+    ptr->put_fldh(field, current_field, ST_FLD_I32);
+    ptr->put_int(val);
+    current_field = field;
+  }
+
+  inline void field_int(int field, int64_t val)
+  {
+    ptr->put_fldh(field, current_field, ST_FLD_I64);
+    ptr->put_int(val);
+    current_field = field;
+  }
+
+  template <typename Enum>
+  inline void field_int_list(int field, const std::vector<Enum> &val)
+  {
+    ptr->put_fldh(field, current_field, ST_FLD_LIST);
+    ptr->putb((uint8_t)((std::min(val.size(), (size_t)0xfu) << 4) | ST_FLD_I32));
+    if (val.size() >= 0xf) ptr->put_uint(val.size());
+    for (auto &v : val) { ptr->put_int(static_cast<int32_t>(v)); }
+    current_field = field;
+  }
+
+  template <typename T>
+  inline void field_struct(int field, const T &val)
+  {
+    ptr->put_fldh(field, current_field, ST_FLD_STRUCT);
+    ptr->write(&val);
+    current_field = field;
+  }
+
+  template <typename T>
+  inline void field_struct_list(int field, const std::vector<T> &val)
+  {
+    ptr->put_fldh(field, current_field, ST_FLD_LIST);
+    ptr->putb((uint8_t)((std::min(val.size(), (size_t)0xfu) << 4) | ST_FLD_STRUCT));
+    if (val.size() >= 0xf) ptr->put_uint(val.size());
+    for (auto &v : val) { ptr->write(&v); }
+    current_field = field;
+  }
+
+  inline size_t value(void)
+  {
+    ptr->putb(0);
+    return ptr->m_buf->size() - struct_start_pos;
+  }
+
+  inline void field_struct_blob(int field, const std::vector<uint8_t> &val)
+  {
+    ptr->put_fldh(field, current_field, ST_FLD_STRUCT);
+    ptr->putb(val.data(), (uint32_t)val.size());
+    ptr->putb(0);
+    current_field = field;
+  }
+
+  inline void field_string(int field, const std::string &val)
+  {
+    ptr->put_fldh(field, current_field, ST_FLD_BINARY);
+    ptr->put_uint(val.size());
+    // FIXME : replace reinterpret_cast
+    ptr->putb(reinterpret_cast<const uint8_t *>(val.data()), (uint32_t)val.size());
+    current_field = field;
+  }
+
+  inline void field_string_list(int field, const std::vector<std::string> &val)
+  {
+    ptr->put_fldh(field, current_field, ST_FLD_LIST);
+    ptr->putb((uint8_t)((std::min(val.size(), (size_t)0xfu) << 4) | ST_FLD_BINARY));
+    if (val.size() >= 0xf) ptr->put_uint(val.size());
+    for (auto &v : val) {
+      ptr->put_uint(v.size());
+      // FIXME : replace reinterpret_cast
+      ptr->putb(reinterpret_cast<const uint8_t *>(v.data()), (uint32_t)v.size());
+    }
+    current_field = field;
+  }
+
+  inline int get_field(void) { return current_field; }
+
+  inline void set_field(const int &field) { current_field = field; }
 };
 
 }  // namespace parquet
