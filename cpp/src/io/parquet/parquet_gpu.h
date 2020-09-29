@@ -395,7 +395,9 @@ std::pair<size_type, size_type> get_leaf_offset(column_device_view col,
  * Example:
  * ```
  * col            = {{1, 2, 3}, { }, {5, 6}}
- * dremel_offsets = { 0,         3,  4,    6}
+ * dremel_offsets = { 0,         3,   4,  6}
+ * rep_level      = { 0, 1, 1,   0,   0, 1}
+ * def_level      = { 1, 1, 1,   0,   1, 1}
  * ```
  * @param col Column of LIST type
  * @param stream CUDA stream used for device memory operations and kernel launches.
