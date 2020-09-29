@@ -1616,6 +1616,33 @@ def test_to_csv_empty_filename(df):
     assert actual == expected
 
 
+@pytest.mark.parametrize(
+    "df",
+    [
+        cudf.DataFrame({"vals": [1, 2, 3]}),
+        cudf.DataFrame(
+            {"vals1": [1, 2, 3], "vals2": ["hello", "rapids", "cudf"]}
+        ),
+        cudf.DataFrame(
+            {"vals1": [None, 2.0, 3.0], "vals2": ["hello", "rapids", None]}
+        ),
+    ],
+)
+def test_to_csv_StringIO(df):
+    cudf_io = StringIO()
+    pandas_io = StringIO()
+
+    pdf = df.to_pandas()
+
+    df.to_csv(cudf_io)
+    pdf.to_csv(pandas_io)
+
+    cudf_io.seek(0)
+    pandas_io.seek(0)
+
+    assert cudf_io.read() == pandas_io.read()
+
+
 def test_csv_writer_empty_dataframe(tmpdir):
 
     df_fname = tmpdir.join("gdf_df_5.csv")
