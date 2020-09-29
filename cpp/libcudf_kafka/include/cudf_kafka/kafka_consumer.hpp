@@ -147,6 +147,13 @@ class kafka_consumer : public cudf::io::datasource {
   int64_t get_committed_offset(std::string const &topic, int partition);
 
   /**
+   * @brief Query the Kafka broker for the assigned topic Metadata
+   *
+   * @return Map of Kafka topics with their corresponding topic partition values.
+   */
+  std::map<std::string, std::vector<int32_t>> list_topics() const;
+
+  /**
    * @brief Close the underlying socket connection to Kafka and clean up system resources
    *
    * @throws cudf::logic_error on failure to close the connection
