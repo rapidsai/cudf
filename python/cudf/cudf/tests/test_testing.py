@@ -32,7 +32,7 @@ def test_basic_assert_index_equal(
 
     kind = None
     try:
-        pd.testing.assert_index_equal(
+        pd.util.testing.assert_index_equal(
             p_left,
             p_right,
             exact=exact,
@@ -90,7 +90,7 @@ def test_basic_assert_series_equal(
 
     kind = None
     try:
-        pd.testing.assert_series_equal(
+        pd.util.testing.assert_series_equal(
             p_left,
             p_right,
             check_names=check_names,
@@ -157,7 +157,7 @@ def test_basic_assert_frame_equal(
 
     kind = None
     try:
-        pd.testing.assert_frame_equal(
+        pd.util.testing.assert_frame_equal(
             p_left,
             p_right,
             check_exact=check_exact,
@@ -200,7 +200,7 @@ def test_datetime_like_compaibility(rdata, check_datetimelike_compat):
 
     kind = None
     try:
-        pd.testing.assert_series_equal(
+        pd.util.testing.assert_series_equal(
             psr1, psr2, check_datetimelike_compat=check_datetimelike_compat
         )
     except BaseException as e:
@@ -235,7 +235,7 @@ def test_multiindex_equal(rdata):
 
     kind = None
     try:
-        pd.testing.assert_index_equal(pidx1, pidx2)
+        pd.util.testing.assert_index_equal(pidx1, pidx2)
     except BaseException as e:
         kind = type(e)
 
@@ -260,7 +260,7 @@ def test_series_different_type_cases(dtype, check_exact, check_dtype):
 
     kind = None
     try:
-        pd.testing.assert_series_equal(
+        pd.util.testing.assert_series_equal(
             psr1, psr2, check_exact=check_exact, check_dtype=check_dtype
         )
     except BaseException as e:
@@ -290,7 +290,7 @@ def test_range_index_and_int_index_eqaulity(index, exact):
 
     kind = None
     try:
-        pd.testing.assert_index_equal(pidx1, pidx2, exact=exact)
+        pd.util.testing.assert_index_equal(pidx1, pidx2, exact=exact)
     except BaseException as e:
         kind = type(e)
 

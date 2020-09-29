@@ -575,7 +575,7 @@ def assert_frame_equal(
         obj=f"{obj}.index",
     )
 
-    pd.testing.assert_index_equal(
+    pd.util.testing.assert_index_equal(
         left.columns,
         right.columns,
         exact=check_column_type,

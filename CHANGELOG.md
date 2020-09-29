@@ -55,6 +55,7 @@
 - PR #6163 Use `Column.full` instead of `scalar_broadcast_to` or `cupy.zeros`
 - PR #6176 Fix cmake warnings for GoogleTest, GoogleBenchmark, and Arrow external projects
 - PR #6149 Update to Arrow v1.0.1
+- PR #6349 Use `pandas.utils.testing`
 - PR #6201 Expose libcudf test utilities headers for external project use.
 - PR #6174 Data profile support in random data generator; Expand cuIO benchmarks
 - PR #6189 Avoid deprecated pyarrow.compat for parquet
