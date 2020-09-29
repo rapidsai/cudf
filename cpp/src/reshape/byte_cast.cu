@@ -27,58 +27,37 @@ struct byte_list_conversion {
   /**
    * @brief Function object for converting primitive types and string columns to lists of bytes.
    */
-  template <typename T>
-  struct normalize_lambda : public thrust::unary_function<T, T> {
-    __host__ __device__ T operator()(T input) const
-    {
-      if (isnan(input)) {
-        return std::numeric_limits<T>::quiet_NaN();
-      } else if (T{0.0} == input) {
-        return T{0.0};
-      } else
-        return input;
-    }
-  };
-
-  template <typename T, typename Iter>
   struct flip_endianness_lambda {
     char* d_chars;
-    Iter const d_data;
+    char const* d_data;
+    size_type mask;
     __device__ void operator()(int index)
     {
-      T value   = d_data[index];
-      char* val = reinterpret_cast<char*>(&value);
-      for (int i = 0; i < sizeof(T); i++) {
-        d_chars[index * sizeof(T) + i] = val[sizeof(T) - 1 - i];
-      }
+      d_chars[index] = d_data[index + mask - ((index & mask) << 1)];
     }
   };
 
-  template <typename T, typename Iter>
+  template <typename T>
   std::unique_ptr<column> process(column_view const& input_column,
-                                  Iter input_begin,
                                   flip_endianness configuration,
                                   rmm::mr::device_memory_resource* mr,
                                   cudaStream_t stream) const
   {
-    auto byte_column = make_numeric_column(data_type{type_id::UINT8},
-                                           input_column.size() * cudf::size_of(input_column.type()),
-                                           mask_state::UNALLOCATED,
-                                           stream,
-                                           mr);
+    size_type num_bytes = input_column.size() * sizeof(T);
+    auto byte_column    = make_numeric_column(
+      data_type{type_id::UINT8}, num_bytes, mask_state::UNALLOCATED, stream, mr);
+
+    char* d_chars      = reinterpret_cast<char*>(byte_column->mutable_view().data<uint8_t>());
+    char const* d_data = reinterpret_cast<char const*>(input_column.data<T>());
+    size_type mask     = sizeof(T) - 1;
 
     if (configuration == flip_endianness::YES) {
-      thrust::for_each(
-        rmm::exec_policy(stream)->on(stream),
-        thrust::make_counting_iterator(0),
-        thrust::make_counting_iterator(input_column.size()),
-        flip_endianness_lambda<T, Iter>{
-          reinterpret_cast<char*>(byte_column->mutable_view().data<T>()), input_begin});
+      thrust::for_each(rmm::exec_policy(stream)->on(stream),
+                       thrust::make_counting_iterator(0),
+                       thrust::make_counting_iterator(num_bytes),
+                       flip_endianness_lambda{d_chars, d_data, mask});
     } else {
-      thrust::copy(rmm::exec_policy(stream)->on(stream),
-                   input_begin,
-                   input_begin + input_column.size(),
-                   byte_column->mutable_view().begin<T>());
+      thrust::copy_n(rmm::exec_policy(stream)->on(stream), d_data, num_bytes, d_chars);
     }
 
     auto begin          = thrust::make_constant_iterator(cudf::size_of(input_column.type()));
@@ -112,12 +91,7 @@ struct byte_list_conversion {
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream) const
   {
-    return process<T, thrust::transform_iterator<normalize_lambda<T>, T const*>>(
-      input_column,
-      thrust::make_transform_iterator(input_column.data<T>(), normalize_lambda<T>{}),
-      configuration,
-      mr,
-      stream);
+    return process<T>(input_column, configuration, mr, stream);
   }
 
   template <typename T, std::enable_if_t<std::is_integral<T>::value>* = nullptr>
@@ -126,7 +100,7 @@ struct byte_list_conversion {
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream) const
   {
-    return process<T, T const*>(input_column, input_column.begin<T>(), configuration, mr, stream);
+    return process<T>(input_column, configuration, mr, stream);
   }
 };
 
