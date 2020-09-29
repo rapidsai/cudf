@@ -20,6 +20,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/type_lists.hpp>
 
 #include <vector>
 
@@ -64,6 +65,26 @@ TEST_F(DictionaryScatterTest, Scatter)
   EXPECT_EQ(0, decoded->size());
 }
 
+TEST_F(DictionaryScatterTest, ScatterScalar)
+{
+  cudf::test::strings_column_wrapper strings_target{
+    "eee", "aaa", "ddd", "ccc", "ccc", "ccc", "eee", "aaa"};
+  auto target = cudf::dictionary::encode(strings_target);
+  std::vector<std::unique_ptr<cudf::scalar>> source;
+  source.emplace_back(std::make_unique<cudf::string_scalar>("bbb"));
+  cudf::test::fixed_width_column_wrapper<int32_t> scatter_map{0, 2, 3, 7};
+
+  auto table_result =
+    cudf::scatter(source, cudf::column_view{scatter_map}, cudf::table_view({target->view()}))
+      ->release();
+  auto decoded =
+    cudf::dictionary::decode(cudf::dictionary_column_view(table_result.front()->view()));
+
+  cudf::test::strings_column_wrapper expected{
+    "bbb", "aaa", "bbb", "bbb", "ccc", "ccc", "eee", "bbb"};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, decoded->view());
+}
+
 TEST_F(DictionaryScatterTest, WithNulls)
 {
   cudf::test::fixed_width_column_wrapper<int64_t> data_source{{1, 5, 7, 9}, {0, 1, 1, 1}};
@@ -82,6 +103,27 @@ TEST_F(DictionaryScatterTest, WithNulls)
 
   cudf::test::fixed_width_column_wrapper<int64_t> expected{{1, 9, 5, 7, 7, 1, 4, 1},
                                                            {0, 1, 1, 1, 1, 1, 1, 0}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, decoded->view());
+}
+
+TEST_F(DictionaryScatterTest, ScalarWithNulls)
+{
+  cudf::test::fixed_width_column_wrapper<int64_t> data_target{{1, 5, 5, 3, 7, 1, 4, 2},
+                                                              {0, 1, 0, 1, 1, 1, 1, 1}};
+  auto target = cudf::dictionary::encode(data_target);
+  std::vector<std::unique_ptr<cudf::scalar>> source;
+  source.emplace_back(std::make_unique<cudf::numeric_scalar<int64_t>>(
+    cudf::test::make_type_param_scalar<int64_t>(100)));
+
+  cudf::test::fixed_width_column_wrapper<int32_t> scatter_map{7, 2, 3, 1, -3};
+  auto table_result =
+    cudf::scatter(source, scatter_map, cudf::table_view{{target->view()}})->release();
+
+  auto decoded =
+    cudf::dictionary::decode(cudf::dictionary_column_view(table_result.front()->view()));
+
+  cudf::test::fixed_width_column_wrapper<int64_t> expected{{1, 100, 100, 100, 7, 100, 4, 100},
+                                                           {0, 1, 1, 1, 1, 1, 1, 1}};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, decoded->view());
 }
 
