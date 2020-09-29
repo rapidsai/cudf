@@ -456,5 +456,10 @@ TEST_F(CopyRangeErrorTestFixture, DTypeMismatch)
   cudf::mutable_column_view target_view{target};
 
   EXPECT_THROW(cudf::copy_range_in_place(source, target_view, 0, 100, 0), cudf::logic_error);
-  EXPECT_THROW(auto p_ret = cudf::copy_range(source, target, 0, 100, 0), cudf::logic_error);
+  EXPECT_THROW(cudf::copy_range(source, target, 0, 100, 0), cudf::logic_error);
+
+  auto dict_target = cudf::dictionary::encode(target);
+  auto dict_source = cudf::dictionary::encode(source);
+  EXPECT_THROW(cudf::copy_range(dict_source->view(), dict_target->view(), 0, 100, 0),
+               cudf::logic_error);
 }
