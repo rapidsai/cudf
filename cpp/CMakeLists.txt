@@ -151,8 +151,6 @@ option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
 
 ###################################################################################################
 # - cudart options --------------------------------------------------------------------------------
-#set(CPM_SOURCE_CACHE "$ENV{HOME}/.cache/CPM")
-set(CPM_SOURCE_CACHE "$ENV{HOME}/compose/etc/.ccache/CPM") 
 include(cmake/CPM.cmake)
 
 ###################################################################################################
@@ -347,37 +345,29 @@ endif(PER_THREAD_DEFAULT_STREAM)
 # - add gtest -------------------------------------------------------------------------------------
 
 if(BUILD_TESTS)
-  find_package(GTEST QUIET)
 
-  # This method detects if it's local, but if it is not availible uses CPM to install the package.
-  # By default CPM does not add the standard variables that come with find package such as `GTEST_LIBRARY_DIR`.
-  # So we detect then use `CPMAddPackage` and set the library dir ourselves. 
-  # Possibly this is worth patching to support but I don't fully grok the design decision yet.
-
-  if (GTEST_FOUND)
-    message(STATUS "Google Test Framework Found.")
-  else()
-    CPMAddPackage(
-      NAME GTEST
-      GITHUB_REPOSITORY google/googletest
-      GIT_TAG release-1.10.0
-      VERSION 1.10.0
-      OPTIONS
-        "INSTALL_GTEST OFF"
-        "gtest_force_shared_crt"
-    )
-    set(GTEST_LIBRARIES GTEST)
-    enable_testing()
-  endif()
+  CPMAddPackage(
+    NAME GTEST
+    GITHUB_REPOSITORY google/googletest
+    GIT_TAG release-1.10.0
+    VERSION 1.10.0
+    OPTIONS
+      "INSTALL_GTEST OFF"
+      "gtest_force_shared_crt"
+  )
+  set(GTEST_INCLUDE_DIR GTEST)
+  enable_testing()
+  
+  include_directories(${GTEST_INCLUDE_DIR})
+  add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
 endif(BUILD_TESTS)
+
 
 message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
 
 ###################################################################################################
 # - add google benchmark --------------------------------------------------------------------------
 
-# TODO: Linking for the `benchmark` library is currently broken. To test `benchmarks` building with `build.sh`
-# you will need to change `BUILD_BENCHMARKS=OFF` to `ON` in the `build.sh`
 if(BUILD_BENCHMARKS)
 
   CPMAddPackage(
@@ -386,17 +376,19 @@ if(BUILD_BENCHMARKS)
     VERSION 1.5.1
     OPTIONS
     "BENCHMARK_ENABLE_TESTING Off"
+    # The REGEX feature test fails when gbench's cmake is run under CPM because it doesn't assume C++11
+    # Additionally, attempting to set the CMAKE_CXX_VERSION here doesn't propogate to the feature test build
+    # Therefore, we just disable the feature test and assume platforms we care about have a regex impl available
+    "RUN_HAVE_GNU_POSIX_REGEX 0" #
   )
-  set(benchmark_LIBRARIES benchmark)
-endif(BUILD_BENCHMARKS)
+  set(benchmark_INCLUDE_DIR benchmark)
+  include_directories(${benchmark_INCLUDE_DIR})
+  add_subdirectory(${CMAKE_SOURCE_DIR}/benchmarks)
 
-if(benchmark_ADDED)
-  target_include_directories(benchmark INTERFACE ${benchmark_SOURCE_DIR})
-endif()
+  endif(BUILD_BENCHMARKS)
 
 message(STATUS "benchmark_SOURCE_DIR: ${benchmark_SOURCE_DIR}")
 message(STATUS "BENCHMARK_LIST set to: ${BENCHMARK_LIST}")
-
 
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
@@ -859,10 +851,9 @@ add_custom_target(install_cudf
                   COMMAND "${CMAKE_COMMAND}" -DCOMPONENT=cudf -P "${CMAKE_BINARY_DIR}/cmake_install.cmake"
                   DEPENDS cudf)
 
-# This fails to be located with the addition of CPM
-#if(BUILD_TESTS)
-#    add_dependencies(install_cudf cudftestutil)
-#endif(BUILD_TESTS)
+if(BUILD_TESTS)
+    add_dependencies(install_cudf cudftestutil)
+endif(BUILD_TESTS)
 
 add_custom_target(build_tests_cudf
                   DEPENDS ${CUDF_TEST_LIST})
