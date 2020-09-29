@@ -4,6 +4,7 @@ from cpython.buffer cimport PyBUF_READ
 from cpython.memoryview cimport PyMemoryView_FromMemory
 from libcpp.map cimport map
 from libcpp.memory cimport unique_ptr
+from cudf._lib.move cimport move
 from libcpp.vector cimport vector
 from libcpp.pair cimport pair
 from libcpp.string cimport string
@@ -66,7 +67,7 @@ cdef source_info make_source_info(list src) except*:
     return source_info(c_host_buffers)
 
 # Converts the Python sink input to libcudf++ IO sink_info.
-cdef sink_info make_sink_info(src, unique_ptr[data_sink] * sink) except*:
+cdef sink_info make_sink_info(src, unique_ptr[data_sink] & sink) except*:
     if isinstance(src, io.StringIO):
         sink.reset(new iobase_data_sink(src))
         return sink_info(sink.get())
