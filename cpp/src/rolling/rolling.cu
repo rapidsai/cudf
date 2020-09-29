@@ -49,7 +49,7 @@ namespace cudf {
 namespace detail {
 namespace {  // anonymous
 /**
- * @brief Only count operation is executed and count is updated
+ * @brief Only COUNT_VALID operation is executed and count is updated
  *        depending on `min_periods` and returns true if it was
  *        valid, else false.
  */
@@ -58,7 +58,7 @@ template <typename InputType,
           typename agg_op,
           aggregation::Kind op,
           bool has_nulls>
-std::enable_if_t<op == aggregation::COUNT_VALID || op == aggregation::COUNT_ALL, bool> __device__
+std::enable_if_t<op == aggregation::COUNT_VALID, bool> __device__
 process_rolling_window(column_device_view input,
                        mutable_column_device_view output,
                        size_type start_index,
@@ -70,9 +70,41 @@ process_rolling_window(column_device_view input,
   // for CUDA 10.0 and below (fixed in CUDA 10.1)
   volatile cudf::size_type count = 0;
 
-  for (size_type j = start_index; j < end_index; j++) {
-    if (op == aggregation::COUNT_ALL || !has_nulls || input.is_valid(j)) { count++; }
+  if (!has_nulls) {
+    count = end_index - start_index;
+  } else {
+    for (size_type j = start_index; j < end_index; j++) {
+      if (input.is_valid(j)) { count++; }
+    }
   }
+
+  bool output_is_valid                      = ((end_index - start_index) >= min_periods);
+  output.element<OutputType>(current_index) = count;
+
+  return output_is_valid;
+}
+
+/**
+ * @brief Only COUNT_ALL operation is executed and count is updated
+ *        depending on `min_periods` and returns true if it was
+ *        valid, else false.
+ */
+template <typename InputType,
+          typename OutputType,
+          typename agg_op,
+          aggregation::Kind op,
+          bool has_nulls>
+std::enable_if_t<op == aggregation::COUNT_ALL, bool> __device__
+process_rolling_window(column_device_view input,
+                       mutable_column_device_view output,
+                       size_type start_index,
+                       size_type end_index,
+                       size_type current_index,
+                       size_type min_periods)
+{
+  // declare this as volatile to avoid some compiler optimizations that lead to incorrect results
+  // for CUDA 10.0 and below (fixed in CUDA 10.1)
+  volatile cudf::size_type count = end_index - start_index;
 
   bool output_is_valid                      = (count >= min_periods);
   output.element<OutputType>(current_index) = count;
