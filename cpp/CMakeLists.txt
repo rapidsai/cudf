@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #=============================================================================
-cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.17...3.18 FATAL_ERROR)
 
 project(CUDA_DATAFRAME VERSION 0.16.0 LANGUAGES C CXX CUDA)
 
@@ -150,7 +150,7 @@ option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
 
 ###################################################################################################
-# - cudart options --------------------------------------------------------------------------------
+# - CPM options --------------------------------------------------------------------------------
 include(cmake/CPM.cmake)
 
 ###################################################################################################
