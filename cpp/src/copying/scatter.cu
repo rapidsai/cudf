@@ -131,11 +131,7 @@ struct column_scalar_scatterer_impl {
     auto result      = std::make_unique<column>(target, stream, mr);
     auto result_view = result->mutable_view();
 
-    // TODO fix this hack to be a comprehensive fix
-    constexpr bool is_decimal32 = std::is_same<numeric::decimal32, Element>();
-    using Type                  = std::conditional_t<cudf::is_fixed_point<Element>(),
-                                    std::conditional_t<is_decimal32, int32_t, int64_t>,
-                                    Element>;
+    using Type = get_column_stored_type<Element>;
 
     // Use permutation iterator with constant index to dereference scalar data
     auto scalar_impl = static_cast<scalar_type_t<Type>*>(source.get());

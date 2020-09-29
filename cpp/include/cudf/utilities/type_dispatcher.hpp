@@ -82,6 +82,14 @@ struct id_to_type_impl {
 template <cudf::type_id Id>
 using id_to_type = typename id_to_type_impl<Id>::type;
 
+// TODO add docs
+// clang-format off
+template <typename T>
+using get_column_stored_type =
+  std::conditional_t<std::is_same<numeric::decimal32, T>::value, int32_t,
+  std::conditional_t<std::is_same<numeric::decimal64, T>::value, int64_t, T>>;
+// clang-format on
+
 /**
  * @brief Macro used to define a mapping between a concrete C++ type and a
  *`cudf::type_id` enum.

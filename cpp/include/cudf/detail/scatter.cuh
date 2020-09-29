@@ -87,11 +87,7 @@ struct column_scatterer_impl {
     auto result      = std::make_unique<column>(target, stream, mr);
     auto result_view = result->mutable_view();
 
-    // TODO fix this hack to be a comprehensive fix
-    constexpr bool is_decimal32 = std::is_same<numeric::decimal32, Element>();
-    using Type                  = std::conditional_t<cudf::is_fixed_point<Element>(),
-                                    std::conditional_t<is_decimal32, int32_t, int64_t>,
-                                    Element>;
+    using Type = get_column_stored_type<Element>;
 
     // NOTE use source.begin + scatter rows rather than source.end in case the
     // scatter map is smaller than the number of source rows

@@ -294,11 +294,7 @@ struct concatenate_dispatch {
     bool const has_nulls =
       std::any_of(views.cbegin(), views.cend(), [](auto const& col) { return col.has_nulls(); });
 
-    // TODO fix this hack to be a comprehensive fix
-    constexpr bool is_decimal32 = std::is_same<numeric::decimal32, T>();
-    using Type                  = std::conditional_t<cudf::is_fixed_point<T>(),
-                                    std::conditional_t<is_decimal32, int32_t, int64_t>,
-                                    T>;
+    using Type = get_column_stored_type<T>;
 
     // Use a heuristic to guess when the fused kernel will be faster
     if (use_fused_kernel_heuristic(has_nulls, views.size())) {

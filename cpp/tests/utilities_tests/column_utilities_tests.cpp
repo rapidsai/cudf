@@ -58,12 +58,6 @@ TYPED_TEST(ColumnUtilitiesTest, NonNullableToHost)
   std::vector<TypeParam> data(sequence, sequence + size);
   cudf::test::fixed_width_column_wrapper<TypeParam> col(data.begin(), data.end());
 
-  // TODO fix this hack to be a comprehensive fix
-  // constexpr bool is_decimal32 = std::is_same<numeric::decimal32, TypeParam>();
-  // using Type                  = std::conditional_t<cudf::is_fixed_point<TypeParam>(),
-  //                                 std::conditional_t<is_decimal32, int32_t, int64_t>,
-  //                                 TypeParam>;
-
   auto host_data = cudf::test::to_host<TypeParam>(col);
 
   EXPECT_TRUE(std::equal(data.begin(), data.end(), host_data.first.begin()));

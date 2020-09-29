@@ -270,11 +270,7 @@ struct column_merger {
     //
     p_merged_col->set_null_count(lcol.null_count() + rcol.null_count());
 
-    // TODO fix this hack to be a comprehensive fix
-    constexpr bool is_decimal32 = std::is_same<numeric::decimal32, Element>();
-    using Type                  = std::conditional_t<cudf::is_fixed_point<Element>(),
-                                    std::conditional_t<is_decimal32, int32_t, int64_t>,
-                                    Element>;
+    using Type = get_column_stored_type<Element>;
 
     // to resolve view.data()'s types use: Element
     //

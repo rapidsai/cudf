@@ -135,11 +135,7 @@ struct interleave_columns_functor {
     auto index_begin   = thrust::make_counting_iterator<size_type>(0);
     auto index_end     = thrust::make_counting_iterator<size_type>(output_size);
 
-    // TODO fix this hack to be a comprehensive fix
-    constexpr bool is_decimal32 = std::is_same<numeric::decimal32, T>();
-    using Type                  = std::conditional_t<cudf::is_fixed_point<T>(),
-                                    std::conditional_t<is_decimal32, int32_t, int64_t>,
-                                    T>;
+    using Type = get_column_stored_type<T>;
 
     auto func_value = [input   = *device_input,
                        divisor = input.num_columns()] __device__(size_type idx) {

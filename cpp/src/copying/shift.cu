@@ -57,12 +57,7 @@ struct shift_functor {
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream)
   {
-    // TODO fix this hack to be a comprehensive fix
-    constexpr bool is_decimal32 = std::is_same<numeric::decimal32, T>();
-    using Type                  = std::conditional_t<cudf::is_fixed_point<T>(),
-                                    std::conditional_t<is_decimal32, int32_t, int64_t>,
-                                    T>;
-
+    using Type       = get_column_stored_type<T>;
     using ScalarType = cudf::scalar_type_t<Type>;
     auto& scalar     = static_cast<ScalarType const&>(fill_value);
 

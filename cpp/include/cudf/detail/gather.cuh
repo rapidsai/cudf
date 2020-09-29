@@ -180,11 +180,7 @@ struct column_gatherer_impl {
     auto destination_column =
       cudf::detail::allocate_like(source_column, num_rows, policy, mr, stream);
 
-    // TODO fix this hack to be a comprehensive fix
-    constexpr bool is_decimal32 = std::is_same<numeric::decimal32, Element>();
-    using Type                  = std::conditional_t<cudf::is_fixed_point<Element>(),
-                                    std::conditional_t<is_decimal32, int32_t, int64_t>,
-                                    Element>;
+    using Type = get_column_stored_type<Element>;
 
     gather_helper(source_column.data<Type>(),
                   source_column.size(),
