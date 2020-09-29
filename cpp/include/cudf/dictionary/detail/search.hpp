@@ -33,6 +33,15 @@ std::unique_ptr<scalar> get_index(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
+/**
+ *
+ */
+std::unique_ptr<scalar> get_insert_index(
+  dictionary_column_view const& dictionary,
+  scalar const& key,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0);
+
 }  // namespace detail
 }  // namespace dictionary
 }  // namespace cudf
