@@ -75,15 +75,23 @@ cdef class Scalar:
         dtype = np.dtype(dtype)
 
         # Caching Mechanism
-        self._host_value = value
-        self._host_dtype = dtype
-        self._host_value_current = True
-        self._device_value_current = False
+        
+        self._initialize_cache(value, dtype)
         self.set_device_value(value, dtype)
 
+    def _initialize_cache(self, value, dtype):
+        self._host_value = value
+
+        # need to save the host dtype, because this determines
+        # the codepath for setting the device value later
+        self._host_dtype = dtype
+
+        # do not copy to device until needed
+        self._host_value_current = True
+        self._device_value_current = False
 
     def set_device_value(self, value, dtype):
-        valid = value is not None
+        valid = value not in  {None, cudf.NA}
 
         if pd.api.types.is_string_dtype(dtype):
             _set_string_from_np_string(self.c_value, value, valid)
@@ -180,6 +188,8 @@ cdef class Scalar:
         """
         cdef Scalar s = Scalar.__new__(Scalar)
         s.c_value = move(ptr)
+        s._device_value_current = True
+        s._host_value_current = False
         return s
 
 
