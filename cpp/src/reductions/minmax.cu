@@ -15,9 +15,11 @@
  */
 // The translation unit for reduction `minmax`
 
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform_reduce.h>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/reduction.hpp>
@@ -28,6 +30,22 @@ namespace cudf {
 namespace detail {
 
 namespace {
+
+/**
+ * @brief stores the minimum and maximum
+ * values that have been encountered so far
+ *
+ */
+template <typename T>
+struct minmax_pair {
+  T min_val;
+  T max_val;
+
+  __host__ __device__ minmax_pair()
+    : min_val(cudf::DeviceMin::identity<T>()), max_val(cudf::DeviceMax::identity<T>()){};
+  __host__ __device__ minmax_pair(T val) : min_val(val), max_val(val){};
+  __host__ __device__ minmax_pair(T min_val_, T max_val_) : min_val(min_val_), max_val(max_val_){};
+};
 
 /**
  * @brief Reduce the binary operation in device and return a device scalar.
@@ -41,15 +59,14 @@ namespace {
  * @param stream CUDA stream to run kernels on.
  * @return rmm::device_scalar<OutputType>
  */
-template <typename Op,
-          typename InputIterator,
-          typename OutputType = typename thrust::iterator_value<InputIterator>::type>
-// typename std::enable_if_t<is_fixed_width<OutputType>()>* = nullptr>
-rmm::device_scalar<OutputType> reduce_device(InputIterator d_in,
-                                             cudf::size_type num_items,
-                                             Op binary_op,
-                                             rmm::mr::device_memory_resource *mr,
-                                             cudaStream_t stream)
+template <typename T, typename Op, typename InputIterator, typename OutputType = minmax_pair<T>>
+// typename thrust::iterator_value<InputIterator>::type>
+// above produces compilation error where OutputType is somehow int
+auto reduce_device(InputIterator d_in,
+                   cudf::size_type num_items,
+                   Op binary_op,
+                   rmm::mr::device_memory_resource *mr,
+                   cudaStream_t stream)  //-> typename std::enable_if_t<std::is_same<T, int>::value, rmm::device_scalar<OutputType>>
 {
   OutputType identity{};
   rmm::device_scalar<OutputType> dev_result{identity, stream, mr};  // TODO remove mr
@@ -69,31 +86,20 @@ rmm::device_scalar<OutputType> reduce_device(InputIterator d_in,
                             binary_op,
                             identity,
                             stream);
+
+  // this works as expected and prints values from the input
+  /*
+  thrust::for_each(
+    rmm::exec_policy(stream)->on(stream), d_in, d_in + num_items, [] __device__(auto p) {
+      printf("%d/%d\n", p.min_val, p.max_val);
+    });
+  */
+
+  // dev_result is invalid and it appears no iterator access is happening via
+  // cub::DeviceReduce::Reduce. The return value is identity.
+
   return dev_result;
 }
-
-/**
- * @brief stores the minimum and maximum
- * values that have been encountered so far
- *
- */
-template <typename T>
-struct minmax_pair {
-  T min_val;
-  T max_val;
-  bool min_valid;
-  bool max_valid;
-
-  __host__ __device__ minmax_pair()
-    : min_val(cudf::DeviceMin::identity<T>()),
-      max_val(cudf::DeviceMax::identity<T>()),
-      min_valid(false),
-      max_valid(false){};
-  __host__ __device__ minmax_pair(T val, bool valid_)
-    : min_val(val), max_val(val), min_valid(valid_), max_valid(valid_){};
-  __host__ __device__ minmax_pair(T min_val_, bool min_valid_, T max_val_, bool max_valid_)
-    : min_val(min_val_), max_val(max_val_), min_valid(min_valid_), max_valid(max_valid_){};
-};
 
 /**
  * @brief functor that accepts two minmax_pairs and returns a
@@ -102,35 +108,16 @@ struct minmax_pair {
  * validity.
  *
  */
-template <typename T, bool has_nulls = true>
+template <typename T>
 struct minmax_binary_op
   : public thrust::binary_function<minmax_pair<T>, minmax_pair<T>, minmax_pair<T>> {
   __device__ minmax_pair<T> operator()(minmax_pair<T> const &lhs, minmax_pair<T> const &rhs) const
   {
-    T const x_min = (lhs.min_valid || !has_nulls) ? lhs.min_val : cudf::DeviceMin::identity<T>();
-    T const y_min = (rhs.min_valid || !has_nulls) ? rhs.min_val : cudf::DeviceMin::identity<T>();
-    T const x_max = (lhs.max_valid || !has_nulls) ? lhs.max_val : cudf::DeviceMax::identity<T>();
-    T const y_max = (rhs.max_valid || !has_nulls) ? rhs.max_val : cudf::DeviceMax::identity<T>();
-
-    // The only invalid situation is if we compare two invalid values.
-    // Otherwise, we are certain to select a valid value due to the
-    // identity functions above changing the comparison value.
-    bool const valid_min_result = !has_nulls || lhs.min_valid || rhs.min_valid;
-    bool const valid_max_result = !has_nulls || lhs.max_valid || rhs.max_valid;
-
-    return minmax_pair<T>{
-      thrust::min(x_min, y_min), valid_min_result, thrust::max(x_max, y_max), valid_max_result};
+    return minmax_pair<T>{thrust::min(lhs.min_val, rhs.min_val),
+                          thrust::max(lhs.max_val, rhs.max_val)};
   }
 };
 
-template <typename T>
-struct minmax_iterfunctor {
-  column_device_view d_col;
-  __device__ minmax_pair<T> operator()(size_type index)
-  {
-    return minmax_pair<T>(d_col.element<T>(index), d_col.is_valid(index));
-  };
-};
 /**
  * @brief functor that calls thrust::transform_reduce to produce a std::pair
  * of scalars that represent the minimum and maximum values of the input data
@@ -146,24 +133,41 @@ struct minmax_functor {
     auto device_col  = column_device_view::create(col, stream);
     using OutputType = minmax_pair<T>;
 
-    // compute minimum and maximum values
-    auto dev_result = [&]() -> rmm::device_scalar<OutputType> {
-      auto op = minmax_iterfunctor<T>{*device_col};
-      auto begin =
-        thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), op);
-
-      if (col.nullable()) {
-        auto binary_op = minmax_binary_op<T, true>{};
-        return reduce_device(begin, col.size(), binary_op, mr, stream);
-      } else {
-        auto binary_op = minmax_binary_op<T, false>{};
-        return reduce_device(begin, col.size(), binary_op, mr, stream);
-      }
-    }();
-
     using ScalarType = cudf::scalar_type_t<T>;
     auto min         = new ScalarType(T{}, false, stream, mr);
     auto max         = new ScalarType(T{}, false, stream, mr);
+
+    auto null_count = col.null_count();
+
+    if (null_count == col.size()) {
+      // all nulls, no computation needed
+      return {std::unique_ptr<scalar>(min), std::unique_ptr<scalar>(max)};
+    }
+
+    // compute minimum and maximum values
+    auto dev_result = [&]() -> rmm::device_scalar<OutputType> {
+      if (null_count > 0) {
+        auto pair = make_pair_iterator<T, true>(*device_col);
+        auto pair_to_minmax =
+          thrust::make_transform_iterator(pair, [] __device__(auto i) -> minmax_pair<T> {
+            return i.second ? minmax_pair<T>{i.first} : minmax_pair<T>{};
+          });
+
+        rmm::device_scalar<minmax_pair<T>> ret =
+          reduce_device<T>(pair_to_minmax, col.size(), minmax_binary_op<T>{}, mr, stream);
+        return ret;
+      } else {
+        auto col_to_minmax = thrust::make_transform_iterator(
+          thrust::make_counting_iterator(size_type{0}),
+          [dcol = *device_col] __device__(size_type i) -> minmax_pair<T> {
+            return minmax_pair<T>{dcol.element<T>(i)};
+          });
+
+        rmm::device_scalar<minmax_pair<T>> ret =
+          reduce_device<T>(col_to_minmax, col.size(), minmax_binary_op<T>{}, mr, stream);
+        return ret;
+      }
+    }();
 
     device_single_thread(
       [result    = dev_result.data(),
@@ -172,9 +176,9 @@ struct minmax_functor {
        max_data  = max->data(),
        max_valid = max->validity_data()] __device__() mutable {
         *min_data  = result->min_val;
-        *min_valid = result->min_valid;
+        *min_valid = true;
         *max_data  = result->max_val;
-        *max_valid = result->max_valid;
+        *max_valid = true;
       },
       stream);
     return {std::move(std::unique_ptr<scalar>(min)), std::move(std::unique_ptr<scalar>(max))};
