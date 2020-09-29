@@ -554,9 +554,9 @@ __global__ void __launch_bounds__(csvparse_block_dim)
                       device_span<char const> const data,
                       device_span<column_parse::flags const> const column_flags,
                       device_span<uint64_t const> const row_offsets,
-                      cudf::data_type *dtypes,
-                      void **columns,
-                      cudf::bitmask_type **valids)
+                      device_span<cudf::data_type const> const dtypes,
+                      device_span<void *> const columns,
+                      device_span<cudf::bitmask_type *> const valids)
 {
   auto raw_csv = data.data();
   // thread IDs range per block, so also need the block id.
@@ -967,8 +967,8 @@ __global__ void __launch_bounds__(rowofs_block_dim)
 }
 
 size_t __host__ count_blank_rows(const cudf::io::ParseOptions &opts,
-                                 device_span<char const> const &data,
-                                 device_span<uint64_t const> const &row_offsets,
+                                 device_span<char const> const data,
+                                 device_span<uint64_t const> const row_offsets,
                                  cudaStream_t stream)
 {
   const auto newline  = opts.skipblanklines ? opts.terminator : opts.comment;
@@ -985,7 +985,7 @@ size_t __host__ count_blank_rows(const cudf::io::ParseOptions &opts,
 }
 
 void __host__ remove_blank_rows(cudf::io::ParseOptions const &options,
-                                device_span<char const> const &data,
+                                device_span<char const> const data,
                                 rmm::device_vector<uint64_t> &row_offsets,
                                 cudaStream_t stream)
 {
@@ -1006,9 +1006,9 @@ void __host__ remove_blank_rows(cudf::io::ParseOptions const &options,
 
 thrust::host_vector<column_parse::stats> detect_column_types(
   cudf::io::ParseOptions const &options,
-  device_span<char const> const &data,
+  device_span<char const> const data,
   device_span<column_parse::flags const> const column_flags,
-  device_span<uint64_t const> const &row_starts,
+  device_span<uint64_t const> const row_starts,
   size_t const num_active_columns,
   cudaStream_t stream)
 {
@@ -1025,12 +1025,12 @@ thrust::host_vector<column_parse::stats> detect_column_types(
 }
 
 void __host__ decode_row_column_data(cudf::io::ParseOptions const &options,
-                                     device_span<char const> const &data,
-                                     device_span<column_parse::flags const> const &flags,
-                                     device_span<uint64_t const> const &row_offsets,
-                                     cudf::data_type *dtypes,
-                                     void **columns,
-                                     cudf::bitmask_type **valids,
+                                     device_span<char const> const data,
+                                     device_span<column_parse::flags const> const column_flags,
+                                     device_span<uint64_t const> const row_offsets,
+                                     device_span<cudf::data_type const> const dtypes,
+                                     device_span<void *> const columns,
+                                     device_span<cudf::bitmask_type *> const valids,
                                      cudaStream_t stream)
 {
   // Calculate actual block count to use based on records count
@@ -1039,13 +1039,13 @@ void __host__ decode_row_column_data(cudf::io::ParseOptions const &options,
   auto const grid_size  = (num_rows + block_size - 1) / block_size;
 
   convert_csv_to_cudf<<<grid_size, block_size, 0, stream>>>(
-    options, data, flags, row_offsets, dtypes, columns, valids);
+    options, data, column_flags, row_offsets, dtypes, columns, valids);
 }
 
 uint32_t __host__ gather_row_offsets(const ParseOptions &options,
                                      uint64_t *row_ctx,
-                                     device_span<uint64_t> const &offsets_out,
-                                     device_span<char const> const &data,
+                                     device_span<uint64_t> const offsets_out,
+                                     device_span<char const> const data,
                                      size_t chunk_size,
                                      size_t parse_pos,
                                      size_t start_offset,

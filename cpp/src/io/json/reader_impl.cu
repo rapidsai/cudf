@@ -134,8 +134,8 @@ col_map_ptr_type create_col_names_hash_map(column_view column_name_hashes, cudaS
  * @return std::unique_ptr<table> cudf table with three columns (offsets, lenghts, hashes)
  */
 std::unique_ptr<table> create_json_keys_info_table(const ParseOptions &options,
-                                                   device_span<char const> const &data,
-                                                   device_span<uint64_t const> const &row_offsets,
+                                                   device_span<char const> const data,
+                                                   device_span<uint64_t const> const row_offsets,
                                                    cudaStream_t stream)
 {
   // Count keys
@@ -581,9 +581,9 @@ table_with_metadata reader::impl::convert_data_to_table(cudaStream_t stream)
     rec_starts_,
     d_dtypes,
     get_column_map_device_ptr(),
-    d_data.data().get(),
-    d_valid.data().get(),
-    d_valid_counts.data().get(),
+    d_data,
+    d_valid,
+    d_valid_counts,
     stream);
 
   CUDA_TRY(cudaStreamSynchronize(stream));

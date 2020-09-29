@@ -371,7 +371,7 @@ table_with_metadata reader::impl::read(cudaStream_t stream)
   return {std::make_unique<table>(std::move(out_columns)), std::move(metadata)};
 }
 
-size_t reader::impl::find_first_row_start(host_span<char const> const &data)
+size_t reader::impl::find_first_row_start(host_span<char const> const data)
 {
   // For now, look for the first terminator (assume the first terminator isn't within a quote)
   // TODO: Attempt to infer this from the data
@@ -380,7 +380,7 @@ size_t reader::impl::find_first_row_start(host_span<char const> const &data)
   return std::min(pos + 1, data.size());
 }
 
-void reader::impl::gather_row_offsets(host_span<char const> const &data,
+void reader::impl::gather_row_offsets(host_span<char const> const data,
                                       size_t range_begin,
                                       size_t range_end,
                                       size_t skip_rows,
@@ -678,14 +678,8 @@ std::vector<column_buffer> reader::impl::decode_data(std::vector<data_type> cons
   rmm::device_vector<bitmask_type *> d_valid = h_valid;
   d_column_flags_                            = h_column_flags_;
 
-  cudf::io::csv::gpu::decode_row_column_data(opts,
-                                             data_,
-                                             d_column_flags_,
-                                             row_offsets_,
-                                             d_dtypes.data().get(),
-                                             d_data.data().get(),
-                                             d_valid.data().get(),
-                                             stream);
+  cudf::io::csv::gpu::decode_row_column_data(
+    opts, data_, d_column_flags_, row_offsets_, d_dtypes, d_data, d_valid, stream);
 
   CUDA_TRY(cudaStreamSynchronize(stream));
 
