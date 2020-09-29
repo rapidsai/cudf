@@ -17,6 +17,7 @@
 #include "cudf_kafka/kafka_consumer.hpp"
 #include <librdkafka/rdkafkacpp.h>
 #include <chrono>
+#include <iostream>
 #include <memory>
 
 namespace cudf {
@@ -156,7 +157,6 @@ int64_t kafka_consumer::get_committed_offset(std::string const &topic, int parti
 std::map<std::string, std::vector<int32_t>> kafka_consumer::list_topics(
   std::string specific_topic) const
 {
-  printf("Specific Topic: '%s'\n", specific_topic.c_str());
   auto const md = [&]() {
     std::string errstr;
     RdKafka::Topic const *const spec_topic =
@@ -172,15 +172,7 @@ std::map<std::string, std::vector<int32_t>> kafka_consumer::list_topics(
   }();
   std::map<std::string, std::vector<int32_t>> topic_parts;
 
-  if (md->topics()->size() > 0) {
-    printf("Topics Available: %ld\n", md->topics()->size());
-  } else {
-    printf("Topics are not available ...... \n");
-  }
-
-  for (auto const &topic :
-       *(std::unique_ptr<const RdKafka::Metadata::TopicMetadataVector>{md->topics()})) {
-    printf("Inside of here ....\n");
+  for (auto const &topic : *(md->topics())) {
     auto &part_ids    = topic_parts[topic->topic()];
     auto const &parts = *(topic->partitions());
     std::transform(
@@ -188,8 +180,6 @@ std::map<std::string, std::vector<int32_t>> kafka_consumer::list_topics(
         return part->id();
       });
   }
-
-  printf("After for loop .... \n");
 
   return topic_parts;
 }
