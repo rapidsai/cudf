@@ -17,7 +17,6 @@
 #include "cudf_kafka/kafka_consumer.hpp"
 #include <librdkafka/rdkafkacpp.h>
 #include <chrono>
-#include <iostream>
 #include <memory>
 
 namespace cudf {
