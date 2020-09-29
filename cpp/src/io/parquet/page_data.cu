@@ -23,7 +23,7 @@
 #include <cudf/utilities/bit.hpp>
 #include <io/utilities/block_utils.cuh>
 
-#include "parquet_gpu.h"
+#include <io/parquet/parquet_gpu.hpp>
 
 #define LOG2_NTHREADS (5 + 2)
 #define NTHREADS (1 << LOG2_NTHREADS)
