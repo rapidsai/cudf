@@ -37,6 +37,7 @@ namespace jni {
    * @param map_column The input "map" column to be searched. Must be of
    *                   type list_view<struct_view<string_view, string_view>>.
    * @param lookup_key The search key, whose value is to be returned for each list row
+   * @param has_nulls  Whether the input column might contain null list-rows, or null keys.
    * @param mr         The device memory resource to be used for allocations
    * @param stream     The CUDA stream
    * @return           A string_view column with the value from the first match in each list.
@@ -47,6 +48,7 @@ namespace jni {
   std::unique_ptr<column> map_lookup(
     column_view const& map_column,
     string_scalar lookup_key,
+    bool has_nulls                      = true,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
     cudaStream_t stream                 = 0);
 

@@ -30,51 +30,82 @@
 namespace cudf {
 namespace {
 
-void __device__ search_each_list(size_type list_index,
+/**
+ * @brief Device function that searches for the specified lookup_key
+ * in the list at index `row_index`, and writes out the index of the 
+ * first match to the output.
+ * 
+ * This function is called once per row of the `input` column
+ * If the lookup_key is not found, (-1) is returned for that list row.
+ */
+template <bool has_nulls>
+void __device__ search_each_list(size_type row_index,
                                  column_device_view input,
                                  mutable_column_device_view output,
                                  string_scalar_device_view lookup_key)
 {
-  if (input.is_null(list_index)) {               // List row is null.
-    output.element<size_type>(list_index) = -1;  // Not found.
+  if (has_nulls && input.is_null(row_index)) {  // List row is null.
+    output.element<size_type>(row_index) = -1;  // Not found.
     return;
   }
 
   auto offsets{input.child(0)};
-  auto start_index{offsets.element<size_type>(list_index)};
-  auto end_index{offsets.element<size_type>(list_index + 1)};
+  auto start_index{offsets.element<size_type>(row_index)};
+  auto end_index{offsets.element<size_type>(row_index + 1)};
 
   auto key_column{input.child(1).child(0)};
 
   for (size_type list_element_index{start_index}; list_element_index < end_index;
        ++list_element_index) {
-    if (!key_column.is_null(list_element_index) &&
-        key_column.element<string_view>(list_element_index) == lookup_key.value()) {
-      output.element<size_type>(list_index) = list_element_index;
+    if (has_nulls && key_column.is_null(list_element_index)) {
+      continue; // Skip the list-element with null-key.
+    }
+
+    // List element's key is not null. Check if it matches the lookup_key.
+    if (key_column.element<string_view>(list_element_index) == lookup_key.value()) {
+      output.element<size_type>(row_index) = list_element_index;
       return;
     }
   }
 
-  output.element<size_type>(list_index) = -1;  // Not found.
+  output.element<size_type>(row_index) = -1;  // Not found.
 }
 
-template <int block_size>
+/**
+ * @brief The map-lookup CUDA kernel, which searches for the specified `lookup_key`
+ * string in each list<string> row of the `input` column.
+ *
+ * The kernel writes the index (into the `input` list-column's child) where the `lookup_key`
+ * is found, to the `output` column. If the `lookup_key` is not found, (-1) is written instead. 
+ *
+ * The produces one output row per input, with no nulls. The output may then be used
+ * with `cudf::gather()`, to find the values corresponding to the `lookup_key`.
+ */
+template <int block_size, bool has_nulls>
 __launch_bounds__(block_size) __global__ void gpu_find_first(column_device_view input,
                                                              mutable_column_device_view output,
                                                              string_scalar_device_view lookup_key)
 {
-  size_type i      = blockIdx.x * block_size + threadIdx.x;
+  size_type tid      = blockIdx.x * block_size + threadIdx.x;
   size_type stride = block_size * gridDim.x;
 
-  auto active_threads = __ballot_sync(0xffffffff, i < input.size());
-
-  while (i < input.size()) {
-    search_each_list(i, input, output, lookup_key);
-    i += stride;
-    active_threads = __ballot_sync(active_threads, i < input.size());
+  // Each CUDA thread processes one row of `input`. Each row is a list<string>.
+  // So each thread searches for `lookup_key` in one row of the input column,
+  // and writes its index out to output.
+  while (tid < input.size()) {
+    search_each_list<has_nulls>(tid, input, output, lookup_key);
+    tid += stride;
   }
 }
 
+/**
+ * @brief Function to generate a gather-map, based on the location of the `lookup_key`
+ * string in each row of the input.
+ *
+ * The gather map may then be used to gather the values corresponding to the `lookup_key`
+ * for each row.
+ */
+template <bool has_nulls>
 std::unique_ptr<column> get_gather_map_for_map_values(column_view const& input,
                                                       string_scalar& lookup_key,
                                                       rmm::mr::device_memory_resource* mr,
@@ -89,7 +120,7 @@ std::unique_ptr<column> get_gather_map_for_map_values(column_view const& input,
     data_type{cudf::type_to_id<size_type>()}, input.size(), mask_state::ALL_VALID, stream, mr);
   auto output_view = mutable_column_device_view::create(gather_map->mutable_view(), stream);
 
-  gpu_find_first<block_size><<<grid.num_blocks, block_size, 0, stream>>>(
+  gpu_find_first<block_size, has_nulls><<<grid.num_blocks, block_size, 0, stream>>>(
     *input_device_view, *output_view, lookup_key_device_view);
 
   CHECK_CUDA(stream);
@@ -102,6 +133,7 @@ std::unique_ptr<column> get_gather_map_for_map_values(column_view const& input,
 namespace jni {
 std::unique_ptr<column> map_lookup(column_view const& map_column,
                                    string_scalar lookup_key,
+                                   bool has_nulls,
                                    rmm::mr::device_memory_resource* mr,
                                    cudaStream_t stream)
 {
@@ -121,9 +153,11 @@ std::unique_ptr<column> map_lookup(column_view const& map_column,
                "Expected LIST<STRUCT<key,value>>.");
 
   // Two-pass plan: construct gather map, and then gather() on structs_column.child(1). Plan A.
-  // Can do in one pass perhaps, but that's Plan B.
+  // (Can do in one pass perhaps, but that's Plan B.)
 
-  auto gather_map = get_gather_map_for_map_values(map_column, lookup_key, mr, stream);
+  auto gather_map = has_nulls? 
+     get_gather_map_for_map_values<true>(map_column, lookup_key, mr, stream)
+   : get_gather_map_for_map_values<false>(map_column, lookup_key, mr, stream);
 
   // Gather map is now available.
 
