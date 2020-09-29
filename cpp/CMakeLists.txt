@@ -151,6 +151,12 @@ option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
 
 ###################################################################################################
 # - cudart options --------------------------------------------------------------------------------
+#set(CPM_SOURCE_CACHE "$ENV{HOME}/.cache/CPM")
+set(CPM_SOURCE_CACHE "$ENV{HOME}/compose/etc/.ccache/CPM") 
+include(cmake/CPM.cmake)
+
+###################################################################################################
+# - cudart options --------------------------------------------------------------------------------
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
 
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
@@ -246,7 +252,20 @@ file(INSTALL ${LIBCXX_INCLUDE_DIR}     DESTINATION ${CMAKE_BINARY_DIR}/include/l
 ###################################################################################################
 # - find zlib -------------------------------------------------------------------------------------
 
-find_package(ZLIB REQUIRED)
+# To retain the variables from system detected packages, I am seperating the logic using find_package
+# then adding if not found.
+# https://github.com/TheLartians/CPM.cmake/issues/132#issuecomment-644955140
+find_package(ZLIB QUIET)
+
+if(NOT ZLIB_FOUND)
+  CPMFindPackage(
+    NAME ZLIB
+    GITHUB_REPOSITORY madler/zlib
+    VERSION 1.2.11
+    )
+
+  set(ZLIB_LIBRARIES ZLIB)
+endif()
 
 message(STATUS "ZLIB: ZLIB_LIBRARIES set to ${ZLIB_LIBRARIES}")
 message(STATUS "ZLIB: ZLIB_INCLUDE_DIRS set to ${ZLIB_INCLUDE_DIRS}")
@@ -263,10 +282,17 @@ endif(ZLIB_FOUND)
 # Don't look for a CMake configuration file
 set(Boost_NO_BOOST_CMAKE ON)
 
-find_package(
-    Boost REQUIRED MODULE
-    COMPONENTS filesystem
-)
+find_package(Boost COMPONENTS filesystem QUIET)
+
+if(NOT Boost_FOUND)
+  CPMAddPackage(
+    NAME Boost
+    GITHUB_REPOSITORY Element-0/boost-cmake
+    VERSION 1.72.0
+    FIND_PACKAGE_ARGUMENTS "COMPONENTS filesystem"
+  )
+  set(Boost_LIBRARIES Boost)
+endif()
 
 message(STATUS "BOOST: Boost_LIBRARIES set to ${Boost_LIBRARIES}")
 message(STATUS "BOOST: Boost_INCLUDE_DIRS set to ${Boost_INCLUDE_DIRS}")
@@ -321,16 +347,28 @@ endif(PER_THREAD_DEFAULT_STREAM)
 # - add gtest -------------------------------------------------------------------------------------
 
 if(BUILD_TESTS)
-    include(CTest)
-    include(ConfigureGoogleTest)
+  find_package(GTEST QUIET)
 
-    if(GTEST_FOUND)
-        message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
-        include_directories(${GTEST_INCLUDE_DIR})
-        add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
-    else()
-        message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
-    endif(GTEST_FOUND)
+  # This method detects if it's local, but if it is not availible uses CPM to install the package.
+  # By default CPM does not add the standard variables that come with find package such as `GTEST_LIBRARY_DIR`.
+  # So we detect then use `CPMAddPackage` and set the library dir ourselves. 
+  # Possibly this is worth patching to support but I don't fully grok the design decision yet.
+
+  if (GTEST_FOUND)
+    message(STATUS "Google Test Framework Found.")
+  else()
+    CPMAddPackage(
+      NAME GTEST
+      GITHUB_REPOSITORY google/googletest
+      GIT_TAG release-1.10.0
+      VERSION 1.10.0
+      OPTIONS
+        "INSTALL_GTEST OFF"
+        "gtest_force_shared_crt"
+    )
+    set(GTEST_LIBRARIES GTEST)
+    enable_testing()
+  endif()
 endif(BUILD_TESTS)
 
 message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
@@ -338,21 +376,27 @@ message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
 ###################################################################################################
 # - add google benchmark --------------------------------------------------------------------------
 
+# TODO: Linking for the `benchmark` library is currently broken. To test `benchmarks` building with `build.sh`
+# you will need to change `BUILD_BENCHMARKS=OFF` to `ON` in the `build.sh`
 if(BUILD_BENCHMARKS)
 
-  include(ConfigureGoogleBenchmark)
-
-  if(GBENCH_FOUND)
-    message(STATUS "Google C++ Benchmarking Framework (Google Benchmark) found in ${GBENCH_ROOT}")
-    include_directories(${GBENCH_INCLUDE_DIR})
-    add_subdirectory(${CMAKE_SOURCE_DIR}/benchmarks)
-  else()
-    message(AUTHOR_WARNING "Google C++ Benchmarking Framework (Google Benchmark) not found: automated tests are disabled.")
-  endif(GBENCH_FOUND)
-
+  CPMAddPackage(
+    NAME benchmark
+    GITHUB_REPOSITORY google/benchmark
+    VERSION 1.5.1
+    OPTIONS
+    "BENCHMARK_ENABLE_TESTING Off"
+  )
+  set(benchmark_LIBRARIES benchmark)
 endif(BUILD_BENCHMARKS)
 
+if(benchmark_ADDED)
+  target_include_directories(benchmark INTERFACE ${benchmark_SOURCE_DIR})
+endif()
+
+message(STATUS "benchmark_SOURCE_DIR: ${benchmark_SOURCE_DIR}")
 message(STATUS "BENCHMARK_LIST set to: ${BENCHMARK_LIST}")
+
 
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
@@ -787,7 +831,7 @@ target_compile_definitions(cudf PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${LOGGIN
 # - link libraries --------------------------------------------------------------------------------
 
 # link targets for cuDF
-target_link_libraries(cudf arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+target_link_libraries(cudf arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ZLIB::ZLIB Boost::filesystem)
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
@@ -815,9 +859,10 @@ add_custom_target(install_cudf
                   COMMAND "${CMAKE_COMMAND}" -DCOMPONENT=cudf -P "${CMAKE_BINARY_DIR}/cmake_install.cmake"
                   DEPENDS cudf)
 
-if(BUILD_TESTS)
-    add_dependencies(install_cudf cudftestutil)
-endif(BUILD_TESTS)
+# This fails to be located with the addition of CPM
+#if(BUILD_TESTS)
+#    add_dependencies(install_cudf cudftestutil)
+#endif(BUILD_TESTS)
 
 add_custom_target(build_tests_cudf
                   DEPENDS ${CUDF_TEST_LIST})
