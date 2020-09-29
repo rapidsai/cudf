@@ -823,7 +823,7 @@ target_compile_definitions(cudf PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${LOGGIN
 # - link libraries --------------------------------------------------------------------------------
 
 # link targets for cuDF
-target_link_libraries(cudf arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ZLIB::ZLIB Boost::filesystem)
+target_link_libraries(cudf arrow arrow_cuda nvrtc ${CUDART_LIBRARY} ZLIB::ZLIB Boost::filesystem)
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
