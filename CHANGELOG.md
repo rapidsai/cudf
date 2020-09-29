@@ -8,11 +8,15 @@
 - PR #5974 Use libcudf instead of cupy for `arange` or column creation from a scalar.
 - PR #6076 Add durations type support for csv writer, reader
 - PR #5874 Add `COLLECT` groupby aggregation
+- PR #6330 Add ability to query if PTDS is enabled
 - PR #6119 Add support for `dayofweek` property in `DateTimeIndex` and `DatetimeProperties`
 - PR #6171 Java and Jni support for Struct columns
 - PR #6125 Add support for `Series.mode` and `DataFrame.mode`
+- PR #6220 Add `list_topics()` to supply list of underlying Kafka connection topics
+- PR #6271 Add support to deep-copy struct columns from struct column-view
 - PR #6254 Add `cudf::make_dictionary_from_scalar` factory function
 - PR #6262 Add nth_element series aggregation with null handling
+- PR #6302 Add custom dataframe accessors
 - PR #6301 Add JNI bindings to nvcomp
 
 ## Improvements
@@ -79,8 +83,11 @@
 - PR #6268 Add file tags to libcudf doxygen
 - PR #6265 Update JNI to use ORC options builder
 - PR #6273 Update JNI to use ORC options builder
+- PR #6293 Replace shuffle warp reduce with cub calls
 - PR #6287 Make java aggregate API follow C++ API
+- PR #6306 Remove cpw macros from page encode kernels
 - PR #6303 Use cudf test dtypes so timedelta tests are determinstic
+- PR #6308 Add dictionary support to cudf::scatter with scalar
 - PR #6332 Add support to return csv as string when `path=None` in `to_csv`
 
 ## Bug Fixes
@@ -97,6 +104,7 @@
 - PR #6137 Fix issue where `np.nan` is being return instead of `NAT` for datetime/duration types
 - PR #6298 Fix gcc-9 compilation error in dictionary/remove_keys.cu
 - PR #6172 Fix slice issue with empty column
+- PR #6342 Fix array out-of-bound errors in Orc writer
 - PR #6154 Warnings on row-wise op only when non-numeric columns are found.
 - PR #6150 Fix issue related to inferring `datetime64` format with UTC timezone in string data
 - PR #6179 `make_elements` copies to `iterator` without adjusting `size`
@@ -117,6 +125,7 @@
 - PR #6259 Fix compilation error with GCC 8
 - PR #6258 Pin libcudf conda recipe to boost 1.72.0
 - PR #6264 Remove include statement for missing rmm/mr/device/default_memory_resource.hpp file
+- PR #6296 Handle double quote and escape character in json
 - PR #6294 Fix read parquet key error when reading empty pandas DataFrame with cudf
 - PR #6285 Removed unsafe `reinterpret_cast` and implicit pointer-to-bool casts
 - PR #6281 Fix unreachable code warning in datetime.cuh
@@ -125,7 +134,8 @@
 - PR #6289 Revert #6206
 - PR #6291 Fix issue related to row-wise operations in `cudf.DataFrame`
 - PR #6304 Fix span_tests.cu includes
-
+- PR #6331 Avoids materializing `RangeIndex` during frame concatnation (when not needed)
+- PR #6278 Add filter tests for struct columns
 
 
 # cuDF 0.15.0 (26 Aug 2020)

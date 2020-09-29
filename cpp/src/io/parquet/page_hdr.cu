@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
+#include <io/parquet/parquet_gpu.hpp>
 #include <io/utilities/block_utils.cuh>
-#include "parquet_gpu.h"
 
 namespace cudf {
 namespace io {
@@ -245,18 +245,18 @@ extern "C" __global__ void __launch_bounds__(128)
         bs->page.num_rows = 0;
         if (gpuParsePageHeader(bs) && bs->page.compressed_page_size >= 0) {
           switch (bs->page_type) {
-            case DATA_PAGE:
+            case PageType::DATA_PAGE:
               // this computation is only valid for flat schemas. for nested schemas,
               // they will be recomputed in the preprocess step by examining repetition and
               // definition levels
               bs->page.num_rows = bs->page.num_input_values;
-            case DATA_PAGE_V2:
+            case PageType::DATA_PAGE_V2:
               index_out = num_dict_pages + data_page_count;
               data_page_count++;
               bs->page.flags = 0;
               values_found += bs->page.num_input_values;
               break;
-            case DICTIONARY_PAGE:
+            case PageType::DICTIONARY_PAGE:
               index_out = dictionary_page_count;
               dictionary_page_count++;
               bs->page.flags = PAGEINFO_FLAGS_DICTIONARY;
