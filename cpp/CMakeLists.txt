@@ -375,7 +375,7 @@ if(BUILD_BENCHMARKS)
     GITHUB_REPOSITORY google/benchmark
     VERSION 1.5.1
     OPTIONS
-    "BENCHMARK_ENABLE_TESTING Off"
+    "BENCHMARK_ENABLE_TESTING OFF"
     # The REGEX feature test fails when gbench's cmake is run under CPM because it doesn't assume C++11
     # Additionally, attempting to set the CMAKE_CXX_VERSION here doesn't propogate to the feature test build
     # Therefore, we just disable the feature test and assume platforms we care about have a regex impl available
