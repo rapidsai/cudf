@@ -44,27 +44,20 @@ struct byte_list_conversion {
                                   cudaStream_t stream) const
   {
     size_type num_bytes = input_column.size() * sizeof(T);
-    auto byte_column = make_numeric_column(data_type{type_id::UINT8},
-                                           num_bytes,
-                                           mask_state::UNALLOCATED,
-                                           stream,
-                                           mr);
+    auto byte_column    = make_numeric_column(
+      data_type{type_id::UINT8}, num_bytes, mask_state::UNALLOCATED, stream, mr);
 
-    char* d_chars = reinterpret_cast<char*>(byte_column->mutable_view().data<uint8_t>());
+    char* d_chars      = reinterpret_cast<char*>(byte_column->mutable_view().data<uint8_t>());
     char const* d_data = reinterpret_cast<char const*>(input_column.data<T>());
-    size_type mask = sizeof(T)-1;
+    size_type mask     = sizeof(T) - 1;
 
-    if(configuration == flip_endianness::YES) {
-      thrust::for_each(
-        rmm::exec_policy(stream)->on(stream),
-        thrust::make_counting_iterator(0),
-        thrust::make_counting_iterator(num_bytes),
-        flip_endianness_lambda{d_chars, d_data, mask});
+    if (configuration == flip_endianness::YES) {
+      thrust::for_each(rmm::exec_policy(stream)->on(stream),
+                       thrust::make_counting_iterator(0),
+                       thrust::make_counting_iterator(num_bytes),
+                       flip_endianness_lambda{d_chars, d_data, mask});
     } else {
-      thrust::copy_n(rmm::exec_policy(stream)->on(stream),
-                     d_data,
-                     num_bytes,
-                     d_chars);
+      thrust::copy_n(rmm::exec_policy(stream)->on(stream), d_data, num_bytes, d_chars);
     }
 
     auto begin          = thrust::make_constant_iterator(cudf::size_of(input_column.type()));
