@@ -250,29 +250,21 @@ file(INSTALL ${LIBCXX_INCLUDE_DIR}     DESTINATION ${CMAKE_BINARY_DIR}/include/l
 ###################################################################################################
 # - find zlib -------------------------------------------------------------------------------------
 
-# To retain the variables from system detected packages, I am seperating the logic using find_package
-# then adding if not found.
-# https://github.com/TheLartians/CPM.cmake/issues/132#issuecomment-644955140
-find_package(ZLIB QUIET)
+CPMFindPackage(
+  NAME ZLIB
+  GITHUB_REPOSITORY madler/zlib
+  VERSION 1.2.11
+)
 
-if(NOT ZLIB_FOUND)
-  CPMFindPackage(
-    NAME ZLIB
-    GITHUB_REPOSITORY madler/zlib
-    VERSION 1.2.11
-    )
+message(STATUS "ZLIB: ZLIB_LIBRARY set to ${ZLIB_LIBRARY}")
+message(STATUS "ZLIB: ZLIB_INCLUDE_DIR set to ${ZLIB_INCLUDE_DIR}")
 
-  set(ZLIB_LIBRARIES ZLIB)
-endif()
-
-message(STATUS "ZLIB: ZLIB_LIBRARIES set to ${ZLIB_LIBRARIES}")
-message(STATUS "ZLIB: ZLIB_INCLUDE_DIRS set to ${ZLIB_INCLUDE_DIRS}")
-
-if(ZLIB_FOUND)
-    message(STATUS "ZLib found in ${ZLIB_INCLUDE_DIRS}")
+if(ZLIB_INCLUDE_DIR)
+    message(STATUS "ZLib found in ${ZLIB_INCLUDE_DIR}")
 else()
     message(FATAL_ERROR "ZLib not found, please check your settings.")
-endif(ZLIB_FOUND)
+endif(ZLIB_INCLUDE_DIR)
+
 
 ###################################################################################################
 # - find boost ------------------------------------------------------------------------------------
@@ -280,29 +272,24 @@ endif(ZLIB_FOUND)
 # Don't look for a CMake configuration file
 set(Boost_NO_BOOST_CMAKE ON)
 
-find_package(Boost COMPONENTS filesystem QUIET)
+CPMFindPackage(
+  NAME Boost
+  GITHUB_REPOSITORY Orphis/boost-cmake
+  VERSION 1.67.0
+  FIND_PACKAGE_ARGUMENTS "COMPONENTS filesystem"
+)
 
-if(NOT Boost_FOUND)
-  CPMAddPackage(
-    NAME Boost
-    GITHUB_REPOSITORY Element-0/boost-cmake
-    VERSION 1.72.0
-    FIND_PACKAGE_ARGUMENTS "COMPONENTS filesystem"
-  )
-  set(Boost_LIBRARIES Boost)
-endif()
+message(STATUS "BOOST: Boost_LIBRARY set to ${Boost_LIBRARY}")
+message(STATUS "BOOST: Boost_INCLUDE_DIR set to ${Boost_INCLUDE_DIR}")
 
-message(STATUS "BOOST: Boost_LIBRARIES set to ${Boost_LIBRARIES}")
-message(STATUS "BOOST: Boost_INCLUDE_DIRS set to ${Boost_INCLUDE_DIRS}")
-
-if(Boost_FOUND)
-    message(STATUS "Boost found in ${Boost_INCLUDE_DIRS}")
+if(Boost_INCLUDE_DIR)
+    message(STATUS "Boost found in ${Boost_INCLUDE_DIR}")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DBOOST_NO_CXX14_CONSTEXPR")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBOOST_NO_CXX14_CONSTEXPR")
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DBOOST_NO_CXX14_CONSTEXPR")
 else()
     message(FATAL_ERROR "Boost not found, please check your settings.")
-endif(Boost_FOUND)
+endif(Boost_INCLUDE_DIR)
 
 ###################################################################################################
 # - RMM -------------------------------------------------------------------------------------------
@@ -406,8 +393,8 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${ARROW_INCLUDE_DIR}"
-                    "${ZLIB_INCLUDE_DIRS}"
-                    "${Boost_INCLUDE_DIRS}"
+                    "${ZLIB_INCLUDE_DIR}"
+                    "${Boost_INCLUDE_DIR}"
                     "${RMM_INCLUDE}"
                     "${DLPACK_INCLUDE}")
 

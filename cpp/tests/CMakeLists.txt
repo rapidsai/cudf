@@ -74,8 +74,8 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${gtest_SOURCE_DIR}/include"
                     "${gmock_SOURCE_DIR}/include"
                     "${ARROW_INCLUDE_DIR}"
-                    "${ZLIB_INCLUDE_DIRS}"
-                    "${Boost_INCLUDE_DIRS}"
+                    "${ZLIB_INCLUDE_DIR}"
+                    "${Boost_INCLUDE_DIR}"
                     "${RMM_INCLUDE}")
 
 ###################################################################################################
