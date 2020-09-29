@@ -11,7 +11,7 @@ endif()
 if(NOT (EXISTS ${CPM_DOWNLOAD_LOCATION}))
   message(STATUS "Downloading CPM.cmake to ${CPM_DOWNLOAD_LOCATION}")
   file(DOWNLOAD
-       https://github.com/TheLartians/CPM.cmake/releases/download/v${CPM_DOWNLOAD_VERSION}/CPM.cmake
+       https://raw.githubusercontent.com/TheLartians/CPM.cmake/${CPM_DOWNLOAD_VERSION}/cmake/CPM.cmake
        ${CPM_DOWNLOAD_LOCATION}
   )
 endif()
