@@ -19,16 +19,21 @@
  * @brief cuDF-IO Avro reader class implementation
  **/
 
+#include "cudf/types.hpp"
+#include "io/avro/avro_gpu.h"
 #include "reader_impl.hpp"
 
 #include <io/comp/gpuinflate.h>
 
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <rmm/device_buffer.hpp>
+
+using cudf::detail::device_span;
 
 namespace cudf {
 namespace io {
@@ -237,15 +242,23 @@ rmm::device_buffer reader::impl::decompress_data(const rmm::device_buffer &comp_
   return decomp_block_data;
 }
 
-void reader::impl::decode_data(const rmm::device_buffer &block_data,
-                               const std::vector<std::pair<uint32_t, uint32_t>> &dict,
-                               hostdevice_vector<uint8_t> &global_dictionary,
-                               size_t total_dictionary_entries,
-                               size_t num_rows,
-                               std::vector<std::pair<int, std::string>> selection,
-                               std::vector<column_buffer> &out_buffers,
-                               cudaStream_t stream)
+std::vector<std::unique_ptr<cudf::column>> reader::impl::decode_data(
+  device_span<uint8_t const> const block_data,
+  const std::vector<std::pair<uint32_t, uint32_t>> &dict,
+  device_span<gpu::nvstrdesc_s const> global_dictionary,
+  size_t num_rows,
+  std::vector<std::pair<int, std::string>> selection,
+  std::vector<data_type> const &column_types,
+  cudaStream_t stream)
 {
+  std::vector<column_buffer> out_buffers;
+
+  for (size_t i = 0; i < column_types.size(); ++i) {
+    auto col_idx     = selection[i].first;
+    bool is_nullable = (_metadata->columns[col_idx].schema_null_idx >= 0);
+    out_buffers.emplace_back(column_types[i], num_rows, is_nullable, stream, _mr);
+  }
+
   // Build gpu schema
   hostdevice_vector<gpu::schemadesc_s> schema_desc(_metadata->schema.size());
   uint32_t min_row_data_size = 0;
@@ -305,24 +318,19 @@ void reader::impl::decode_data(const rmm::device_buffer &block_data,
   }
   rmm::device_buffer block_list(
     _metadata->block_list.data(), _metadata->block_list.size() * sizeof(block_desc_s), stream);
-  CUDA_TRY(cudaMemcpyAsync(schema_desc.device_ptr(),
-                           schema_desc.host_ptr(),
-                           schema_desc.memory_size(),
-                           cudaMemcpyHostToDevice,
-                           stream));
 
-  CUDA_TRY(
-    gpu::DecodeAvroColumnData(static_cast<block_desc_s *>(block_list.data()),
-                              schema_desc.device_ptr(),
-                              reinterpret_cast<gpu::nvstrdesc_s *>(global_dictionary.device_ptr()),
-                              static_cast<const uint8_t *>(block_data.data()),
-                              static_cast<uint32_t>(_metadata->block_list.size()),
-                              static_cast<uint32_t>(schema_desc.size()),
-                              static_cast<uint32_t>(total_dictionary_entries),
-                              _metadata->num_rows,
-                              _metadata->skip_rows,
-                              min_row_data_size,
-                              stream));
+  schema_desc.host_to_device(stream);
+
+  gpu::decode_avro_column_data(
+    device_span<block_desc_s const>(static_cast<block_desc_s const *>(block_list.data()),
+                                    _metadata->block_list.size()),
+    schema_desc,
+    global_dictionary,
+    block_data,
+    _metadata->num_rows,
+    _metadata->skip_rows,
+    min_row_data_size,
+    stream);
 
   // Copy valid bits that are shared between columns
   for (size_t i = 0; i < out_buffers.size(); i++) {
@@ -334,17 +342,22 @@ void reader::impl::decode_data(const rmm::device_buffer &block_data,
                                stream));
     }
   }
-  CUDA_TRY(cudaMemcpyAsync(schema_desc.host_ptr(),
-                           schema_desc.device_ptr(),
-                           schema_desc.memory_size(),
-                           cudaMemcpyDeviceToHost,
-                           stream));
-  CUDA_TRY(cudaStreamSynchronize(stream));
+
+  schema_desc.device_to_host(stream, true);
+
   for (size_t i = 0; i < out_buffers.size(); i++) {
     const auto col_idx          = selection[i].first;
     const auto schema_null_idx  = _metadata->columns[col_idx].schema_null_idx;
     out_buffers[i].null_count() = (schema_null_idx >= 0) ? schema_desc[schema_null_idx].count : 0;
   }
+
+  std::vector<std::unique_ptr<cudf::column>> out_columns;
+
+  for (size_t i = 0; i < column_types.size(); ++i) {
+    out_columns.emplace_back(make_column(out_buffers[i], stream, _mr));
+  }
+
+  return out_columns;
 }
 
 reader::impl::impl(std::unique_ptr<datasource> source,
@@ -407,8 +420,9 @@ table_with_metadata reader::impl::read(avro_reader_options const &options, cudaS
         for (const auto &sym : col_schema.symbols) { dictionary_data_size += sym.length(); }
       }
 
-      hostdevice_vector<uint8_t> global_dictionary(
-        total_dictionary_entries * sizeof(gpu::nvstrdesc_s) + dictionary_data_size);
+      hostdevice_vector<gpu::nvstrdesc_s> global_dictionary(total_dictionary_entries +
+                                                            dictionary_data_size);
+
       if (total_dictionary_entries > 0) {
         size_t dict_pos = total_dictionary_entries * sizeof(gpu::nvstrdesc_s);
         for (size_t i = 0; i < column_types.size(); ++i) {
@@ -425,40 +439,26 @@ table_with_metadata reader::impl::read(avro_reader_options const &options, cudaS
             dict_pos += len;
           }
         }
-        CUDA_TRY(cudaMemcpyAsync(global_dictionary.device_ptr(),
-                                 global_dictionary.host_ptr(),
-                                 global_dictionary.memory_size(),
-                                 cudaMemcpyHostToDevice,
-                                 stream));
+
+        global_dictionary.host_to_device(stream);
       }
 
-      std::vector<column_buffer> out_buffers;
-      for (size_t i = 0; i < column_types.size(); ++i) {
-        auto col_idx     = selected_columns[i].first;
-        bool is_nullable = (_metadata->columns[col_idx].schema_null_idx >= 0);
-        out_buffers.emplace_back(column_types[i], num_rows, is_nullable, stream, _mr);
-      }
+      auto block_data_span = device_span<uint8_t const>(  //
+        static_cast<uint8_t const *>(block_data.data()),
+        block_data.size());
 
-      decode_data(block_data,
-                  dict,
-                  global_dictionary,
-                  total_dictionary_entries,
-                  num_rows,
-                  selected_columns,
-                  out_buffers,
-                  stream);
-
-      for (size_t i = 0; i < column_types.size(); ++i) {
-        out_columns.emplace_back(make_column(out_buffers[i], stream, _mr));
-      }
+      out_columns = decode_data(
+        block_data_span, dict, global_dictionary, num_rows, selected_columns, column_types, stream);
     }
   }
 
   // Return column names (must match order of returned columns)
   metadata_out.column_names.resize(selected_columns.size());
+
   for (size_t i = 0; i < selected_columns.size(); i++) {
     metadata_out.column_names[i] = selected_columns[i].second;
   }
+
   // Return user metadata
   metadata_out.user_data = _metadata->user_data;
 

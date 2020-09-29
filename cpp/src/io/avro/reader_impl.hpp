@@ -93,14 +93,14 @@ class reader::impl {
    * @param out_buffers Output columns' device buffers
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  void decode_data(const rmm::device_buffer &block_data,
-                   const std::vector<std::pair<uint32_t, uint32_t>> &dict,
-                   hostdevice_vector<uint8_t> &global_dictionary,
-                   size_t total_dictionary_entries,
-                   size_t num_rows,
-                   std::vector<std::pair<int, std::string>> columns,
-                   std::vector<column_buffer> &out_buffers,
-                   cudaStream_t stream);
+  std::vector<std::unique_ptr<cudf::column>> decode_data(
+    device_span<uint8_t const> const block_data,
+    const std::vector<std::pair<uint32_t, uint32_t>> &dict,
+    device_span<gpu::nvstrdesc_s const> global_dictionary,
+    size_t num_rows,
+    std::vector<std::pair<int, std::string>> selection,
+    std::vector<data_type> const &column_types,
+    cudaStream_t stream);
 
  private:
   rmm::mr::device_memory_resource *_mr = nullptr;

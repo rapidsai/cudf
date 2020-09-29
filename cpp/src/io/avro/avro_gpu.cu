@@ -13,8 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <io/utilities/block_utils.cuh>
+
 #include "avro_gpu.h"
+
+#include <io/utilities/block_utils.cuh>
+
+#include <cudf/utilities/span.hpp>
+
+using cudf::detail::device_span;
 
 namespace cudf {
 namespace io {
@@ -61,7 +67,7 @@ static inline int64_t __device__ avro_decode_zigzag_varint(const uint8_t *&cur, 
  * @return data pointer at the end of the row (start of next row)
  *
  **/
-static const uint8_t *__device__ avro_decode_row(const schemadesc_s *schema,
+static const uint8_t *__device__ avro_decode_row(schemadesc_s const *schema,
                                                  schemadesc_s *schema_g,
                                                  uint32_t schema_len,
                                                  size_t row,
@@ -214,9 +220,9 @@ static const uint8_t *__device__ avro_decode_row(const schemadesc_s *schema,
  * @brief Decode column data
  *
  * @param[in] blocks Data block descriptions
- * @param[in] schema Schema description
  * @param[in] global_Dictionary Global dictionary entries
  * @param[in] avro_data Raw block data
+ * @param[in] schema Schema description
  * @param[in] num_blocks Number of blocks
  * @param[in] schema_len Number of entries in schema
  * @param[in] num_dictionary_entries Number of entries in global dictionary
@@ -227,19 +233,20 @@ static const uint8_t *__device__ avro_decode_row(const schemadesc_s *schema,
  **/
 // blockDim {32,NWARPS,1}
 extern "C" __global__ void __launch_bounds__(NWARPS * 32, 2)
-  gpuDecodeAvroColumnData(block_desc_s *blocks,
-                          schemadesc_s *schema_g,
-                          nvstrdesc_s *global_dictionary,
-                          const uint8_t *avro_data,
-                          uint32_t num_blocks,
-                          uint32_t schema_len,
-                          uint32_t num_dictionary_entries,
-                          uint32_t min_row_size,
-                          size_t max_rows,
-                          size_t first_row)
+  decode_avro_column_data_kernel(device_span<block_desc_s const> const blocks,
+                                 device_span<nvstrdesc_s const> const global_dictionary,
+                                 device_span<uint8_t const> const avro_data,
+                                 device_span<schemadesc_s> const schema_g,
+                                 uint32_t min_row_size,
+                                 size_t max_rows,
+                                 size_t first_row)
 {
   __shared__ __align__(8) schemadesc_s g_shared_schema[MAX_SHARED_SCHEMA_LEN];
   __shared__ __align__(8) block_desc_s blk_g[NWARPS];
+
+  uint32_t num_blocks             = blocks.size();
+  uint32_t schema_len             = schema_g.size();
+  uint32_t num_dictionary_entries = global_dictionary.size();
 
   schemadesc_s *schema;
   block_desc_s *const blk = &blk_g[threadIdx.y];
@@ -254,23 +261,22 @@ extern "C" __global__ void __launch_bounds__(NWARPS * 32, 2)
          i < schema_len * sizeof(schemadesc_s) / sizeof(uint32_t);
          i += NWARPS * 32) {
       reinterpret_cast<uint32_t *>(&g_shared_schema)[i] =
-        reinterpret_cast<const uint32_t *>(schema_g)[i];
+        reinterpret_cast<const uint32_t *>(schema_g.data())[i];
     }
     __syncthreads();
     schema = g_shared_schema;
   } else {
-    schema = schema_g;
+    schema = schema_g.data();
   }
   if (block_id < num_blocks && threadIdx.x < sizeof(block_desc_s) / sizeof(uint32_t)) {
-    reinterpret_cast<volatile uint32_t *>(blk)[threadIdx.x] =
-      reinterpret_cast<const uint32_t *>(&blocks[block_id])[threadIdx.x];
+    blk[threadIdx.x] = reinterpret_cast<block_desc_s const *>(&blocks[block_id])[threadIdx.x];
     __threadfence_block();
   }
   __syncthreads();
   if (block_id >= num_blocks) { return; }
   cur_row        = blk->first_row;
   rows_remaining = blk->num_rows;
-  cur            = avro_data + blk->offset;
+  cur            = avro_data.data() + blk->offset;
   end            = cur + blk->size;
   while (rows_remaining > 0 && cur < end) {
     uint32_t nrows;
@@ -285,13 +291,13 @@ extern "C" __global__ void __launch_bounds__(NWARPS * 32, 2)
     }
     if (threadIdx.x < nrows) {
       cur = avro_decode_row(schema,
-                            schema_g,
+                            schema_g.data(),
                             schema_len,
                             cur_row - first_row + threadIdx.x,
                             max_rows,
                             cur,
                             end,
-                            global_dictionary,
+                            global_dictionary.data(),
                             num_dictionary_entries);
     }
     if (nrows <= 1) {
@@ -309,12 +315,9 @@ extern "C" __global__ void __launch_bounds__(NWARPS * 32, 2)
  * @brief Launches kernel for decoding column data
  *
  * @param[in] blocks Data block descriptions
- * @param[in] schema Schema description
  * @param[in] global_dictionary Global dictionary entries
  * @param[in] avro_data Raw block data
- * @param[in] num_blocks Number of blocks
- * @param[in] schema_len Number of entries in schema
- * @param[in] num_dictionary_entries Number of entries in global dictionary
+ * @param[in] schema Schema description
  * @param[in] max_rows Maximum number of rows to load
  * @param[in] first_row Crop all rows below first_row
  * @param[in] min_row_size Minimum size in bytes of a row
@@ -322,32 +325,20 @@ extern "C" __global__ void __launch_bounds__(NWARPS * 32, 2)
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t __host__ DecodeAvroColumnData(block_desc_s *blocks,
-                                          schemadesc_s *schema,
-                                          nvstrdesc_s *global_dictionary,
-                                          const uint8_t *avro_data,
-                                          uint32_t num_blocks,
-                                          uint32_t schema_len,
-                                          uint32_t num_dictionary_entries,
-                                          size_t max_rows,
-                                          size_t first_row,
-                                          uint32_t min_row_size,
-                                          cudaStream_t stream)
+void __host__ decode_avro_column_data(device_span<block_desc_s const> const blocks,
+                                      device_span<nvstrdesc_s const> const global_dictionary,
+                                      device_span<uint8_t const> const avro_data,
+                                      device_span<schemadesc_s> const schema,
+                                      size_t max_rows,
+                                      size_t first_row,
+                                      uint32_t min_row_size,
+                                      cudaStream_t stream)
 {
   dim3 dim_block(32, NWARPS);  // NWARPS warps per threadblock
-  dim3 dim_grid((num_blocks + NWARPS - 1) / NWARPS,
+  dim3 dim_grid((blocks.size() + NWARPS - 1) / NWARPS,
                 1);  // 1 warp per datablock, NWARPS datablocks per threadblock
-  gpuDecodeAvroColumnData<<<dim_grid, dim_block, 0, stream>>>(blocks,
-                                                              schema,
-                                                              global_dictionary,
-                                                              avro_data,
-                                                              num_blocks,
-                                                              schema_len,
-                                                              num_dictionary_entries,
-                                                              min_row_size,
-                                                              max_rows,
-                                                              first_row);
-  return cudaSuccess;
+  decode_avro_column_data_kernel<<<dim_grid, dim_block, 0, stream>>>(
+    blocks, global_dictionary, avro_data, schema, min_row_size, max_rows, first_row);
 }
 
 }  // namespace gpu
