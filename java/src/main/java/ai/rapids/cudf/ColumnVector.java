@@ -3492,8 +3492,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
             // least one byte or it will not be interpreted correctly.
             dataLen = 1;
           }
-        } else if (type.isNestedType()) {
-          dataLen = dataBuffer.length;
         }
         data = DeviceMemoryBuffer.allocate(dataLen);
         data.copyFromHostBuffer(dataBuffer, 0, dataLen);
@@ -3549,7 +3547,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * This method is evolving, unstable and currently test only.
    * Please use with caution and expect it to change in the future.
    */
-  public static<T> ColumnVector fromLists(HostColumnVector.ColumnBuilder.DataType dataType, List<T>... lists) {
+  public static<T> ColumnVector fromLists(HostColumnVector.DataType dataType, List<T>... lists) {
     try (HostColumnVector host = HostColumnVector.fromLists(dataType, lists)) {
       return host.copyToDevice();
     }
@@ -3559,8 +3557,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * This method is evolving, unstable and currently test only.
    * Please use with caution and expect it to change in the future.
    */
-  public static ColumnVector fromStructs(HostColumnVector.ColumnBuilder.DataType dataType,
-                                            List<HostColumnVector.ColumnBuilder.StructData> lists) {
+  public static ColumnVector fromStructs(HostColumnVector.DataType dataType,
+                                         List<HostColumnVector.StructData> lists) {
     try (HostColumnVector host = HostColumnVector.fromStructs(dataType, lists)) {
       return host.copyToDevice();
     }

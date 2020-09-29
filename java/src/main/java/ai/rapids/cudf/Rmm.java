@@ -84,7 +84,8 @@ public class Rmm {
    * context of the calling thread after this returns.
    * @param allocationMode Allocation strategy to use. Bit set using
    *                       {@link RmmAllocationMode#CUDA_DEFAULT},
-   *                       {@link RmmAllocationMode#POOL} and
+   *                       {@link RmmAllocationMode#POOL},
+   *                       {@link RmmAllocationMode#ARENA} and
    *                       {@link RmmAllocationMode#CUDA_MANAGED_MEMORY}
    * @param enableLogging  Enable logging memory manager events
    * @param poolSize       The initial pool size in bytes
@@ -104,7 +105,8 @@ public class Rmm {
    * context of the calling thread after this returns.
    * @param allocationMode Allocation strategy to use. Bit set using
    *                       {@link RmmAllocationMode#CUDA_DEFAULT},
-   *                       {@link RmmAllocationMode#POOL} and
+   *                       {@link RmmAllocationMode#POOL},
+   *                       {@link RmmAllocationMode#ARENA} and
    *                       {@link RmmAllocationMode#CUDA_MANAGED_MEMORY}
    * @param enableLogging  Enable logging memory manager events
    * @param poolSize       The initial pool size in bytes
@@ -135,7 +137,8 @@ public class Rmm {
    * context of the calling thread after this returns.
    * @param allocationMode Allocation strategy to use. Bit set using
    *                       {@link RmmAllocationMode#CUDA_DEFAULT},
-   *                       {@link RmmAllocationMode#POOL} and
+   *                       {@link RmmAllocationMode#POOL},
+   *                       {@link RmmAllocationMode#ARENA} and
    *                       {@link RmmAllocationMode#CUDA_MANAGED_MEMORY}
    * @param logConf        How to do logging or null if you don't want to
    * @param poolSize       The initial pool size in bytes
@@ -155,7 +158,8 @@ public class Rmm {
    * context of the calling thread after this returns.
    * @param allocationMode Allocation strategy to use. Bit set using
    *                       {@link RmmAllocationMode#CUDA_DEFAULT},
-   *                       {@link RmmAllocationMode#POOL} and
+   *                       {@link RmmAllocationMode#POOL},
+   *                       {@link RmmAllocationMode#ARENA} and
    *                       {@link RmmAllocationMode#CUDA_MANAGED_MEMORY}
    * @param logConf        How to do logging or null if you don't want to
    * @param poolSize       The initial pool size in bytes
@@ -163,8 +167,9 @@ public class Rmm {
    *                       is <= 0 then the pool size will not be artificially limited.
    * @throws IllegalStateException if RMM has already been initialized
    * @throws IllegalArgumentException if a max pool size is specified but the allocation mode
-   *                                  is not {@link RmmAllocationMode#POOL} or the maximum pool
-   *                                  size is below the initial size.
+   *                                  is not {@link RmmAllocationMode#POOL} or
+   *                                  {@link RmmAllocationMode#ARENA}, or the maximum pool size is
+   *                                  below the initial size.
    */
   public static synchronized void initialize(int allocationMode, LogConf logConf, long poolSize,
       long maxPoolSize) throws RmmException {
@@ -172,8 +177,9 @@ public class Rmm {
       throw new IllegalStateException("RMM is already initialized");
     }
     if (maxPoolSize > 0) {
-      if (allocationMode != RmmAllocationMode.POOL) {
-        throw new IllegalArgumentException("Pool limit only supported in POOL allocation mode");
+      if (allocationMode != RmmAllocationMode.POOL && allocationMode != RmmAllocationMode.ARENA) {
+        throw new IllegalArgumentException(
+                "Pool limit only supported in POOL or ARENA allocation mode");
       }
       if (maxPoolSize < poolSize) {
         throw new IllegalArgumentException("Pool limit of " + maxPoolSize
@@ -314,7 +320,7 @@ public class Rmm {
    * @param stream The stream in which to synchronize this command.
    * @return Returned pointer to the allocated memory
    */
-  static DeviceMemoryBuffer alloc(long size, Cuda.Stream stream) {
+  public static DeviceMemoryBuffer alloc(long size, Cuda.Stream stream) {
     long s = stream == null ? 0 : stream.getStream();
     return new DeviceMemoryBuffer(allocInternal(size, s), size, stream);
   }

@@ -22,6 +22,7 @@ namespace cudf {
 /**
  * @addtogroup column_hash
  * @{
+ * @file
  */
 
 /**

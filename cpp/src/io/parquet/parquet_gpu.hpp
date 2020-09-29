@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-#ifndef __IO_PARQUET_GPU_H__
-#define __IO_PARQUET_GPU_H__
+#pragma once
 
 #include <cuda_runtime.h>
 #include <io/comp/gpuinflate.h>
 #include <io/statistics/column_stats.h>
+#include <io/parquet/parquet_common.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/column/column_device_view.cuh>
@@ -27,7 +27,6 @@
 
 #include <cudf/types.hpp>
 #include <vector>
-#include "parquet_common.h"
 
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
@@ -239,7 +238,7 @@ struct EncPage {
   uint8_t *page_data;        //!< Ptr to uncompressed page
   uint8_t *compressed_data;  //!< Ptr to compressed page
   uint16_t num_fragments;    //!< Number of fragments in page
-  uint8_t page_type;         //!< Page type (0=data, 2=dictionary)
+  PageType page_type;        //!< Page type
   uint8_t dict_bits_plus1;   //!< 0=plain, nonzero:bits to encoding dictionary indices + 1
   uint32_t chunk_id;         //!< Index in chunk array
   uint32_t hdr_size;         //!< Size of page header
@@ -571,5 +570,3 @@ cudaError_t BuildChunkDictionaries(EncColumnChunk *chunks,
 }  // namespace parquet
 }  // namespace io
 }  // namespace cudf
-
-#endif  // __IO_PARQUET_GPU_H__

@@ -19,16 +19,13 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 
-/**
- * @file encode.hpp
- * @brief Dictionary encode and decode APIs.
- */
-
 namespace cudf {
 namespace dictionary {
 /**
  * @addtogroup dictionary_encode
  * @{
+ * @file
+ * @brief Dictionary column encode and decode APIs
  */
 
 /**
