@@ -149,7 +149,7 @@ class kafka_consumer : public cudf::io::datasource {
   /**
    * @brief Query the Kafka broker for the assigned topic Metadata
    *
-   * @param[in] Retrieves metadata for only a specific topic.
+   * @param[in] specific_topic The name of the topic for which to retrieve metadata
    *
    * @return Map of Kafka topics with their corresponding topic partition values.
    */

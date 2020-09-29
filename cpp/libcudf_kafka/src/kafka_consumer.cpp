@@ -156,7 +156,7 @@ int64_t kafka_consumer::get_committed_offset(std::string const &topic, int parti
 std::map<std::string, std::vector<int32_t>> kafka_consumer::list_topics(
   std::string specific_topic) const
 {
-  auto const md = [&]() {
+  auto const metadata = [&]() {
     std::string errstr;
     RdKafka::Topic const *const spec_topic =
       specific_topic.empty()
@@ -172,7 +172,7 @@ std::map<std::string, std::vector<int32_t>> kafka_consumer::list_topics(
   }();
   std::map<std::string, std::vector<int32_t>> topic_parts;
 
-  for (auto const &topic : *(md->topics())) {
+  for (auto const &topic : *(metadata->topics())) {
     auto &part_ids    = topic_parts[topic->topic()];
     auto const &parts = *(topic->partitions());
     std::transform(
