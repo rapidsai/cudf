@@ -383,7 +383,7 @@ if(BUILD_BENCHMARKS)
   )
   set(benchmark_INCLUDE_DIR benchmark)
   include_directories("${benchmark_INCLUDE_DIR}/include")
-  add_subdirectory(${CMAKE_SOURCE_DIR}/benchmarks)
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/benchmarks)
 
   endif(BUILD_BENCHMARKS)
 
