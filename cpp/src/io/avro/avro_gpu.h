@@ -13,8 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef __IO_AVRO_GPU_H__
-#define __IO_AVRO_GPU_H__
+#pragma once
 
 #include "avro_common.h"
 
@@ -73,5 +72,3 @@ cudaError_t DecodeAvroColumnData(block_desc_s *blocks,
 }  // namespace avro
 }  // namespace io
 }  // namespace cudf
-
-#endif  // __IO_AVRO_GPU_H__

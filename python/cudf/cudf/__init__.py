@@ -69,6 +69,11 @@ from cudf.io import (
 )
 from cudf.utils.dtypes import _NA_REP
 from cudf.utils.utils import set_allocator
+from cudf.api.extensions import (
+    register_dataframe_accessor,
+    register_series_accessor,
+    register_index_accessor,
+)
 
 cuda.set_memory_manager(rmm.RMMNumbaManager)
 cupy.cuda.set_allocator(rmm.rmm_cupy_allocator)
