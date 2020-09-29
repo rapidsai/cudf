@@ -10,6 +10,7 @@ import warnings
 from collections import OrderedDict, defaultdict
 from collections.abc import Mapping, Sequence
 from types import GeneratorType
+from typing import Any, Set
 
 import cupy
 import numpy as np
@@ -7063,7 +7064,7 @@ class DataFrame(Frame, Serializable):
                 return False
         return super().equals(other)
 
-    _accessors = set()
+    _accessors = set()  # type: Set[Any]
 
 
 def from_pandas(obj, nan_as_null=None):

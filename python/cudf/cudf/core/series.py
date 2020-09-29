@@ -4,6 +4,7 @@ import warnings
 from collections import abc as abc
 from numbers import Number
 from shutil import get_terminal_size
+from typing import Any, Set
 from uuid import uuid4
 
 import cupy
@@ -4262,7 +4263,7 @@ class Series(Frame, Serializable):
         """
         return self.index
 
-    _accessors = set()
+    _accessors = set()  # type: Set[Any]
 
 
 truediv_int_dtype_corrections = {

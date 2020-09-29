@@ -3,6 +3,7 @@ from __future__ import division, print_function
 
 import pickle
 from numbers import Number
+from typing import Any, Set
 
 import cupy
 import numpy as np
@@ -1448,7 +1449,7 @@ class Index(Frame, Serializable):
         else:
             return as_index(table)
 
-    _accessors = set()
+    _accessors = set()  # type: Set[Any]
 
 
 class RangeIndex(Index):
