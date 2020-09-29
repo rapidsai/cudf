@@ -88,7 +88,7 @@
 - PR #6306 Remove cpw macros from page encode kernels
 - PR #6303 Use cudf test dtypes so timedelta tests are determinstic
 - PR #6308 Add dictionary support to cudf::scatter with scalar
-- PR #6532 Add specific Topic support for Kafka "list_topics()" metadata requests
+- PR #6352 Add specific Topic support for Kafka "list_topics()" metadata requests
 
 ## Bug Fixes
 
