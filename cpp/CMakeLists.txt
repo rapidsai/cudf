@@ -359,7 +359,7 @@ if(BUILD_TESTS)
   
   include_directories("${gtest_SOURCE_DIR}/include"
                       "${gmock_SOURCE_DIR}/include")
-  add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tests)
 endif(BUILD_TESTS)
 
 
