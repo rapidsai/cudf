@@ -492,9 +492,7 @@ __device__ field_descriptor next_field_descriptor(const char *begin,
  * @return The begin and end iterators of the row data.
  */
 __device__ std::pair<char const *, char const *> get_row_data_range(
-  device_span<char const> const &data,
-  device_span<uint64_t const> const &row_offsets,
-  size_type row)
+  device_span<char const> const data, device_span<uint64_t const> const row_offsets, size_type row)
 {
   auto const row_begin = data.begin() + row_offsets[row];
   auto const row_end =
@@ -522,9 +520,9 @@ __global__ void convert_data_to_columns_kernel(ParseOptions opts,
                                                device_span<uint64_t const> const row_offsets,
                                                device_span<data_type const> const column_types,
                                                col_map_type *col_map,
-                                               void *const *output_columns,
-                                               bitmask_type *const *valid_fields,
-                                               cudf::size_type *num_valid_fields)
+                                               device_span<void *const> const output_columns,
+                                               device_span<bitmask_type *const> const valid_fields,
+                                               device_span<cudf::size_type> const num_valid_fields)
 {
   const auto rec_id = threadIdx.x + (blockDim.x * blockIdx.x);
   if (rec_id >= row_offsets.size()) return;
@@ -593,7 +591,7 @@ __global__ void detect_data_types_kernel(ParseOptions const opts,
                                          device_span<uint64_t const> const row_offsets,
                                          col_map_type *col_map,
                                          int num_columns,
-                                         column_info *column_infos)
+                                         device_span<column_info> const column_infos)
 {
   auto const rec_id = threadIdx.x + (blockDim.x * blockIdx.x);
   if (rec_id >= row_offsets.size()) return;
@@ -773,13 +771,13 @@ __global__ void collect_keys_info_kernel(ParseOptions const options,
  * @copydoc cudf::io::json::gpu::convert_json_to_columns
  */
 void convert_json_to_columns(ParseOptions const &opts,
-                             device_span<char const> const &data,
-                             device_span<uint64_t const> const &row_offsets,
-                             device_span<data_type const> const &column_types,
+                             device_span<char const> const data,
+                             device_span<uint64_t const> const row_offsets,
+                             device_span<data_type const> const column_types,
                              col_map_type *col_map,
-                             void *const *output_columns,
-                             bitmask_type *const *valid_fields,
-                             cudf::size_type *num_valid_fields,
+                             device_span<void *const> const output_columns,
+                             device_span<bitmask_type *const> const valid_fields,
+                             device_span<cudf::size_type> num_valid_fields,
                              cudaStream_t stream)
 {
   int block_size;
@@ -801,8 +799,8 @@ void convert_json_to_columns(ParseOptions const &opts,
 
 std::vector<cudf::io::json::column_info> detect_data_types(
   const ParseOptions &options,
-  device_span<char const> const &data,
-  device_span<uint64_t const> const &row_offsets,
+  device_span<char const> const data,
+  device_span<uint64_t const> const row_offsets,
   bool do_set_null_count,
   int num_columns,
   col_map_type *col_map,
@@ -829,7 +827,7 @@ std::vector<cudf::io::json::column_info> detect_data_types(
   const int grid_size = (row_offsets.size() + block_size - 1) / block_size;
 
   detect_data_types_kernel<<<grid_size, block_size, 0, stream>>>(
-    options, data, row_offsets, col_map, num_columns, d_column_infos.data().get());
+    options, data, row_offsets, col_map, num_columns, d_column_infos);
 
   CUDA_TRY(cudaGetLastError());
 
@@ -844,8 +842,8 @@ std::vector<cudf::io::json::column_info> detect_data_types(
  * @copydoc cudf::io::json::gpu::gpu_collect_keys_info
  */
 void collect_keys_info(ParseOptions const &options,
-                       device_span<char const> const &data,
-                       device_span<uint64_t const> const &row_offsets,
+                       device_span<char const> const data,
+                       device_span<uint64_t const> const row_offsets,
                        unsigned long long int *keys_cnt,
                        thrust::optional<mutable_table_device_view> keys_info,
                        cudaStream_t stream)
