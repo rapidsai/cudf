@@ -66,9 +66,8 @@ parquet::Compression to_parquet_compression(compression_type compression)
 }
 
 /**
- * @brief Get the dtype of the leaf column
+ * @brief Get the leaf column
  *
- * Returns the dtype of the column.
  * Returns the dtype of the leaf column when `col` is a list column.
  */
 column_view get_leaf_col(column_view col)
@@ -650,6 +649,7 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
   if (state.md.version == 0) {
     state.md.version  = 1;
     state.md.num_rows = num_rows;
+    // Each level of nesting requires two levels of Schema. The leaf level needs one schema element
     state.md.schema.reserve(1 + num_columns + list_col_depths * 2);
     SchemaElement root{};
     root.type            = UNDEFINED_TYPE;
@@ -812,7 +812,7 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
   // compression/decompression performance).
   constexpr uint32_t fragment_size = 5000;
   static_assert(fragment_size <= MAX_PAGE_FRAGMENT_SIZE,
-                "fragmenst size cannot be greater than MAX_PAGE_FRAGMENT_SIZE");
+                "fragment size cannot be greater than MAX_PAGE_FRAGMENT_SIZE");
 
   uint32_t num_fragments = (uint32_t)((num_rows + fragment_size - 1) / fragment_size);
   hostdevice_vector<gpu::PageFragment> fragments(num_columns * num_fragments);
