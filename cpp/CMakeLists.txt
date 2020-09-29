@@ -359,7 +359,7 @@ if(BUILD_TESTS)
   
   include_directories("${gtest_SOURCE_DIR}/include"
                       "${gmock_SOURCE_DIR}/include")
-  add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tests)
 endif(BUILD_TESTS)
 
 
@@ -375,7 +375,7 @@ if(BUILD_BENCHMARKS)
     GITHUB_REPOSITORY google/benchmark
     VERSION 1.5.1
     OPTIONS
-    "BENCHMARK_ENABLE_TESTING Off"
+    "BENCHMARK_ENABLE_TESTING OFF"
     # The REGEX feature test fails when gbench's cmake is run under CPM because it doesn't assume C++11
     # Additionally, attempting to set the CMAKE_CXX_VERSION here doesn't propogate to the feature test build
     # Therefore, we just disable the feature test and assume platforms we care about have a regex impl available
@@ -383,7 +383,7 @@ if(BUILD_BENCHMARKS)
   )
   set(benchmark_INCLUDE_DIR benchmark)
   include_directories("${benchmark_INCLUDE_DIR}/include")
-  add_subdirectory(${CMAKE_SOURCE_DIR}/benchmarks)
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/benchmarks)
 
   endif(BUILD_BENCHMARKS)
 
@@ -823,7 +823,7 @@ target_compile_definitions(cudf PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${LOGGIN
 # - link libraries --------------------------------------------------------------------------------
 
 # link targets for cuDF
-target_link_libraries(cudf arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ZLIB::ZLIB Boost::filesystem)
+target_link_libraries(cudf arrow arrow_cuda nvrtc ${CUDART_LIBRARY} ZLIB::ZLIB Boost::filesystem)
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
