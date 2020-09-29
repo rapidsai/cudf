@@ -865,6 +865,12 @@ line_terminator : char, default '\\n'
 chunksize : int or None, default None
     Rows to write at a time
 
+Returns
+-------
+None or str
+    If `path_or_buf` is None, returns the resulting csv format as a string.
+    Otherwise returns None.
+
 Notes
 -----
 - Follows the standard of Pandas csv.QUOTE_NONNUMERIC for all output.

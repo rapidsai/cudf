@@ -1411,7 +1411,7 @@ def test_csv_writer_file_handle(tmpdir):
 
     gdf_df_fname = tmpdir.join("gdf_df_1.csv")
     with open(gdf_df_fname, "w") as f:
-        gdf.to_csv(path=f, index=False)
+        gdf.to_csv(path_or_buf=f, index=False)
     assert os.path.exists(gdf_df_fname)
 
     gdf2 = pd.read_csv(gdf_df_fname)
@@ -1454,8 +1454,8 @@ def test_csv_writer_numeric_data(dtype, nelem, tmpdir):
 
     df = make_numeric_dataframe(nelem, dtype)
     gdf = cudf.from_pandas(df)
-    df.to_csv(pdf_df_fname, index=False, line_terminator="\n")
-    gdf.to_csv(path=gdf_df_fname, index=False)
+    df.to_csv(path_or_buf=pdf_df_fname, index=False, line_terminator="\n")
+    gdf.to_csv(path_or_buf=gdf_df_fname, index=False)
 
     assert os.path.exists(pdf_df_fname)
     assert os.path.exists(gdf_df_fname)
@@ -1471,8 +1471,8 @@ def test_csv_writer_datetime_data(tmpdir):
 
     df = make_datetime_dataframe()
     gdf = cudf.from_pandas(df)
-    df.to_csv(pdf_df_fname, index=False, line_terminator="\n")
-    gdf.to_csv(path=gdf_df_fname, index=False)
+    df.to_csv(path_or_buf=pdf_df_fname, index=False, line_terminator="\n")
+    gdf.to_csv(path_or_buf=gdf_df_fname, index=False)
 
     assert os.path.exists(pdf_df_fname)
     assert os.path.exists(gdf_df_fname)
@@ -1519,7 +1519,7 @@ def test_csv_writer_mixed_data(
     df["Date"] = df["Date"].astype("datetime64")
     gdf = cudf.from_pandas(df)
     df.to_csv(
-        pdf_df_fname,
+        path_or_buf=pdf_df_fname,
         index=index,
         sep=sep,
         columns=columns,
@@ -1530,7 +1530,7 @@ def test_csv_writer_mixed_data(
         escapechar="\\",
     )
     gdf.to_csv(
-        path=gdf_df_fname,
+        path_or_buf=gdf_df_fname,
         index=index,
         sep=sep,
         columns=columns,
