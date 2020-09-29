@@ -48,8 +48,7 @@ THE SOFTWARE.
 
 */
 
-#ifndef __BROTLI_TABLES_H__
-#define __BROTLI_TABLES_H__
+#pragma once
 
 #ifndef CONSTANT
 #define CONSTANT static const
@@ -2672,5 +2671,3 @@ CONSTANT int kNumTransforms = (int)(sizeof(kTransformsData) / (3 * sizeof(kTrans
 /* result is const uint8_t*. */
 #define BROTLI_TRANSFORM_PREFIX(I) (&kPrefixSuffix[kPrefixSuffixMap[BROTLI_TRANSFORM_PREFIX_ID(I)]])
 #define BROTLI_TRANSFORM_SUFFIX(I) (&kPrefixSuffix[kPrefixSuffixMap[BROTLI_TRANSFORM_SUFFIX_ID(I)]])
-
-#endif  // __BROTLI_TABLES_H__
