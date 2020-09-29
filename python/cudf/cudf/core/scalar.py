@@ -115,13 +115,7 @@ class Scalar(libcudf.scalar.Scalar):
                             f"{self.dtype} and {other.dtype} scalars")
 
         if op == '__truediv__':
-            # todo - this doesn't work out quite right w.r.t numpy 
-            dtype_l = truediv_int_dtype_corrections.get(self.dtype.name, self.dtype.name)
-            dtype_r = truediv_int_dtype_corrections.get(other.dtype.name, other.dtype.name)
-
-            if dtype_l == 'float32' and dtype_r == 'float32':
-                return 'float32'
-            else:
+                # https://github.com/numpy/numpy/issues/9128
                 return 'float64'
 
         return find_common_type([self.dtype, other.dtype], [])

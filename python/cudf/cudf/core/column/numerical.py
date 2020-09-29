@@ -106,9 +106,10 @@ class NumericalColumn(column.ColumnBase):
         if other is None:
             return other
         if isinstance(other, cudf.Scalar):
-            other_dtype = other.dtype
-        else:
-            other_dtype = np.min_scalar_type(other)
+            # expensive device-host transfer just to
+            # adjust the dtype
+            other = other.value
+        other_dtype = np.min_scalar_type(other)
         if other_dtype.kind in {"b", "i", "u", "f"}:
             if isinstance(other, cudf.Scalar):
                 return other
