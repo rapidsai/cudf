@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef _GPUINFLATE_H_
-#define _GPUINFLATE_H_
+#pragma once
 
 #include <stdint.h>
 
@@ -132,5 +131,3 @@ cudaError_t gpu_snap(gpu_inflate_input_s *inputs,
 
 }  // namespace io
 }  // namespace cudf
-
-#endif  // _GPUINFLATE_H_

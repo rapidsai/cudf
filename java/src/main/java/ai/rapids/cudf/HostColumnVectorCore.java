@@ -32,7 +32,7 @@ import static ai.rapids.cudf.HostColumnVector.OFFSET_SIZE;
  * A class that holds Host side Column Vector APIs and the OffHeapState.
  * Any children of a HostColumnVector will be instantiated via this class.
  */
-public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> {
+public class HostColumnVectorCore implements AutoCloseable {
 
   private static final Logger log = LoggerFactory.getLogger(HostColumnVector.class);
 
@@ -82,38 +82,6 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
   }
 
   /**
-   * Returns the list of child host column vectors for a given host side column
-   */
-  List<HostColumnVectorCore> getNestedChildren() {
-    return children;
-  }
-
-  @Override
-  public long getColumnViewAddress() {
-    throw new IllegalStateException("getColumnViewAddress is not supported on Host side");
-  }
-
-  @Override
-  public ColumnViewAccess<HostMemoryBuffer> getChildColumnViewAccess(int childIndex) {
-    return getNestedChildren().get(childIndex);
-  }
-
-  @Override
-  public HostMemoryBuffer getDataBuffer() {
-    return offHeap.data;
-  }
-
-  @Override
-  public HostMemoryBuffer getOffsetBuffer() {
-    return offHeap.offsets;
-  }
-
-  @Override
-  public HostMemoryBuffer getValidityBuffer() {
-    return offHeap.valid;
-  }
-
-  /**
    * Returns the number of nulls in the data. Note that this might end up
    * being a very expensive operation because if the null count is not
    * known it will be calculated.
@@ -125,32 +93,23 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
     return nullCount.get();
   }
 
-  @Override
-  public DType getDataType() {
-    return type;
+  /**
+   * Returns the list of child host column vectors for a given host side column
+   */
+  List<HostColumnVectorCore> getNestedChildren() {
+    return children;
   }
 
   /**
    * Returns the number of rows for a given host side column vector
    */
-  @Override
   public long getRowCount() {
-    return rows;
-  }
-
-  /**
-   * Returns the number of rows for a given host side column vector, deprecated.
-   */
-  @Override
-  @Deprecated
-  public long getNumRows() {
     return rows;
   }
 
   /**
    * Returns the number of children for this column
    */
-  @Override
   public int getNumChildren() {
     return children.size();
   }
@@ -384,8 +343,10 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
     int start = offHeap.offsets.getInt(rowIndex * DType.INT32.getSizeInBytes());
     int end = offHeap.offsets.getInt((rowIndex + 1) * DType.INT32.getSizeInBytes());
     // check if null or empty
-    if (isNull(rowIndex)) {
-      return null;
+    if (start == end) {
+      if (isNull(rowIndex)) {
+        return null;
+      }
     }
     for(int j = start; j < end; j++) {
       for (HostColumnVectorCore childHcv : children) {
