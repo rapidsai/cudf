@@ -32,7 +32,7 @@ import static ai.rapids.cudf.HostColumnVector.OFFSET_SIZE;
  * A class that holds Host side Column Vector APIs and the OffHeapState.
  * Any children of a HostColumnVector will be instantiated via this class.
  */
-public class HostColumnVectorCore implements AutoCloseable {
+public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> {
 
   private static final Logger log = LoggerFactory.getLogger(HostColumnVector.class);
 
@@ -81,6 +81,31 @@ public class HostColumnVectorCore implements AutoCloseable {
     return offHeap.offsets;
   }
 
+  @Override
+  public long getColumnViewAddress() {
+    throw new IllegalStateException("getColumnViewAddress is not supported on Host side");
+  }
+
+  @Override
+  public ColumnViewAccess<HostMemoryBuffer> getChildColumnViewAccess(int childIndex) {
+    return getNestedChildren().get(childIndex);
+  }
+
+  @Override
+  public HostMemoryBuffer getDataBuffer() {
+    return offHeap.data;
+  }
+
+  @Override
+  public HostMemoryBuffer getOffsetBuffer() {
+    return offHeap.offsets;
+  }
+
+  @Override
+  public HostMemoryBuffer getValidityBuffer() {
+    return offHeap.valid;
+  }
+
   /**
    * Returns the number of nulls in the data. Note that this might end up
    * being a very expensive operation because if the null count is not
@@ -101,15 +126,35 @@ public class HostColumnVectorCore implements AutoCloseable {
   }
 
   /**
+   * Get the data type of this column
+   * @return DType of the column
+   */
+  @Override
+  public DType getDataType() {
+    return type;
+  }
+
+  /**
    * Returns the number of rows for a given host side column vector
    */
+  @Override
   public long getRowCount() {
+    return rows;
+  }
+
+  /**
+   * Returns the number of rows for a given host side column vector, deprecated.
+   */
+  @Override
+  @Deprecated
+  public long getNumRows() {
     return rows;
   }
 
   /**
    * Returns the number of children for this column
    */
+  @Override
   public int getNumChildren() {
     return children.size();
   }

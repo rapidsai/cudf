@@ -101,7 +101,13 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     }
 
     @Override
+    @Deprecated
     public long getNumRows() {
+      return offHeap.getNativeRowCount(viewHandle);
+    }
+
+    @Override
+    public long getRowCount() {
       return offHeap.getNativeRowCount(viewHandle);
     }
 
@@ -309,6 +315,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   /**
    * Returns the number of rows in this vector.
    */
+  @Override
   public long getRowCount() {
     return rows;
   }
@@ -382,7 +389,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     long currNullCount = 0l;
     boolean needsCleanup = true;
     try {
-      long currRows = deviceCvPointer.getNumRows();
+      long currRows = deviceCvPointer.getRowCount();
       DType currType = deviceCvPointer.getDataType();
       currData = deviceCvPointer.getDataBuffer();
       currOffsets = deviceCvPointer.getOffsetBuffer();
@@ -3047,6 +3054,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   }
 
   @Override
+  @Deprecated
   public long getNumRows() {
     return offHeap.getNativeRowCount();
   }
