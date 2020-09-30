@@ -482,6 +482,7 @@ ConfigureTest(SEARCH_TEST "${SEARCH_TEST_SRC}")
 # - reshape test ----------------------------------------------------------------------------------
 
 set(RESHAPE_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/reshape/byte_cast_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/reshape/interleave_columns_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/reshape/tile_tests.cpp")
 
