@@ -315,8 +315,6 @@ std::unique_ptr<column> dispatch_clamp::operator()<cudf::dictionary32>(
   rmm::mr::device_memory_resource* mr,
   cudaStream_t stream)
 {
-  // CUDF_FAIL("clamp for dictionary not supported");
-  auto dict_column = dictionary_column_view(input);
   // add lo_replace and hi_replace to keys
   auto matched_column = [&] {
     auto matched_view              = dictionary_column_view(input);
@@ -341,20 +339,22 @@ std::unique_ptr<column> dispatch_clamp::operator()<cudf::dictionary32>(
     return result;
   }();
   auto matched_view = dictionary_column_view(matched_column->view());
+
   // get the indexes for lo_replace and for hi_replace
   auto lo_replace_index = dictionary::detail::get_index(
     matched_view, lo_replace, rmm::mr::get_current_device_resource(), stream);
   auto hi_replace_index = dictionary::detail::get_index(
     matched_view, hi_replace, rmm::mr::get_current_device_resource(), stream);
+
   // get the closests indexes for lo and for hi
   auto lo_index = dictionary::detail::get_insert_index(
     matched_view, lo, rmm::mr::get_current_device_resource(), stream);
   auto hi_index = dictionary::detail::get_insert_index(
     matched_view, hi, rmm::mr::get_current_device_resource(), stream);
-  // get indices for matched column
+
+  // call clamp with the scalar indexes and the matched indices
   auto matched_indices = matched_view.get_indices_annotated();
-  // call clamp with scalar indexes and new indices
-  auto new_indices        = cudf::type_dispatcher(matched_indices.type(),
+  auto new_indices     = cudf::type_dispatcher(matched_indices.type(),
                                            dispatch_clamp{},
                                            matched_indices,
                                            *lo_index,
@@ -363,6 +363,7 @@ std::unique_ptr<column> dispatch_clamp::operator()<cudf::dictionary32>(
                                            *hi_replace_index,
                                            mr,
                                            stream);
+
   auto const indices_type = new_indices->type();
   auto const output_size  = new_indices->size();
   auto const null_count   = new_indices->null_count();
