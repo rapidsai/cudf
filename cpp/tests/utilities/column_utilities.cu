@@ -569,10 +569,9 @@ struct column_view_printer {
                   std::string const& indent)
   {
     auto const h_data = cudf::test::to_host<Element>(col);
-    out.resize(col.size());
-    std::transform(std::cbegin(h_data.first),  //
+    std::transform(std::cbegin(h_data.first),
                    std::cend(h_data.first),
-                   out.begin(),
+                   std::back_inserter(out),
                    [&](auto const& fp) { return std::to_string(static_cast<double>(fp)); });
   }
 
