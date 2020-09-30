@@ -798,4 +798,14 @@ TYPED_TEST(FixedPointTestBothReps, NoScaleOrWrongTypeID)
                cudf::logic_error);
 }
 
+TYPED_TEST(FixedPointTestBothReps, SimpleFixedPointColumnWrapper)
+{
+  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
+
+  auto const a = cudf::test::fixed_point_column_wrapper<int32_t>{{11, 22, 33}, scale_type{-1}};
+  auto const b = cudf::test::fixed_point_column_wrapper<int32_t>{{110, 220, 330}, scale_type{-2}};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(a, b);
+}
+
 CUDF_TEST_PROGRAM_MAIN()
