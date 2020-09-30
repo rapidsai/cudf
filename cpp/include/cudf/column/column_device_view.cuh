@@ -757,7 +757,7 @@ __device__ inline numeric::decimal32 const column_device_view::element<numeric::
 {
   using namespace numeric;
   auto const scale = scale_type{_type.scale()};
-  return decimal32{scaled_integer<int32_t>{10 * data<int32_t>()[element_index], scale}};
+  return decimal32{scaled_integer<int32_t>{data<int32_t>()[element_index], scale}};
 }
 
 // TODO add docs
