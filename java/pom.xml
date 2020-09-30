@@ -351,6 +351,7 @@
                                     <arg value="-DLOGGING_LEVEL=${LOGGING_LEVEL}" />
                                     <arg value="-DCMAKE_CXX_FLAGS=${cxx.flags}"/>
                                     <arg value="-DCMAKE_EXPORT_COMPILE_COMMANDS=${CMAKE_EXPORT_COMPILE_COMMANDS}"/>
+                                    <arg value="-DGPU_ARCHS=ALL"/>
                                 </exec>
                                 <exec dir="${native.build.path}"
                                       failonerror="true"
@@ -393,6 +394,14 @@
                                 pom.properties['native.cudf.path'] = cudfm.group(1)
                             } else {
                                 fail("Could not find cudf as a dependency of libcudfjni out> $sout err> $serr")
+                            }
+
+                            def libnvcomp = ~/libnvcomp\\.so\\s+=>\\s+(.*)libnvcomp.*\\.so\\s+.*/
+                            def nvcompm = libnvcomp.matcher(sout)
+                            if (nvcompm.find()) {
+                                pom.properties['native.nvcomp.path'] = nvcompm.group(1)
+                            } else {
+                                fail("Could not find nvcomp as a dependency of libcudfjni out> $sout err> $serr")
                             }
 
                             def libcudart = ~/libcudart\\.so\\.(.*)\\s+=>.*/
@@ -476,6 +485,13 @@
                                     <directory>${native.cudf.path}</directory>
                                     <includes>
                                         <include>libcudf.so</include>
+                                    </includes>
+                                </resource>
+                                <resource>
+                                    <!--Set by groovy script-->
+                                    <directory>${native.nvcomp.path}</directory>
+                                    <includes>
+                                        <include>libnvcomp.so</include>
                                     </includes>
                                 </resource>
                             </resources>

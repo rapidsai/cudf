@@ -25,8 +25,8 @@ from cudf.tests.utils import (
     NUMERIC_TYPES,
     OTHER_TYPES,
     SIGNED_INTEGER_TYPES,
-    UNSIGNED_TYPES,
     SIGNED_TYPES,
+    UNSIGNED_TYPES,
     assert_eq,
 )
 
@@ -1628,3 +1628,17 @@ def test_multiindex_from_arrow():
     pdi = pd.MultiIndex.from_frame(pdf)
 
     assert_eq(pdi, gdi)
+
+
+def test_index_equals_categories():
+    lhs = cudf.CategoricalIndex(
+        ["a", "b", "c", "b", "a"], categories=["a", "b", "c"]
+    )
+    rhs = cudf.CategoricalIndex(
+        ["a", "b", "c", "b", "a"], categories=["a", "b", "c", "_"]
+    )
+
+    got = lhs.equals(rhs)
+    expect = lhs.to_pandas().equals(rhs.to_pandas())
+
+    assert_eq(expect, got)

@@ -25,9 +25,11 @@
 #include <io/utilities/parsing_utils.cuh>
 #include <io/utilities/type_conversion.cuh>
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/trie.cuh>
 #include <cudf/groupby.hpp>
 #include <cudf/sorting.hpp>
+#include <cudf/strings/detail/replace.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -592,15 +594,26 @@ table_with_metadata reader::impl::convert_data_to_table(cudaStream_t stream)
   CUDA_TRY(cudaGetLastError());
 
   // postprocess columns
+  auto target = make_strings_column(
+    std::vector<char>{'\\', '"', '\\', '\\', '\\', 't', '\\', 'r', '\\', 'b'}, {0, 2, 4, 6, 8, 10});
+  auto repl = make_strings_column({'"', '\\', '\t', '\r', '\b'}, {0, 1, 2, 3, 4, 5});
+
   thrust::host_vector<cudf::size_type> h_valid_counts = d_valid_counts;
   std::vector<std::unique_ptr<column>> out_columns;
   for (size_t i = 0; i < num_columns; ++i) {
     out_buffers[i].null_count() = num_records - h_valid_counts[i];
 
-    out_columns.emplace_back(make_column(out_buffers[i]));
+    auto out_column = make_column(out_buffers[i], stream, mr_);
+    if (out_column->type().id() == type_id::STRING) {
+      // Need to remove escape character in case of '\"' and '\\'
+      out_columns.emplace_back(cudf::strings::detail::replace(
+        out_column->view(), target->view(), repl->view(), mr_, stream));
+    } else {
+      out_columns.emplace_back(std::move(out_column));
+    }
   }
 
-  CUDF_EXPECTS(!out_columns.empty(), "Error converting json input into gdf columns.\n");
+  CUDF_EXPECTS(!out_columns.empty(), "No columns created from json input");
 
   return table_with_metadata{std::make_unique<table>(std::move(out_columns)), metadata_};
 }
