@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef __IO_ORC_COMMON_H__
-#define __IO_ORC_COMMON_H__
+#pragma once
 
 namespace cudf {
 namespace io {
@@ -86,5 +85,3 @@ enum {  // Protobuf field types
 }  // namespace orc
 }  // namespace io
 }  // namespace cudf
-
-#endif  // __IO_ORC_COMMON_H__
