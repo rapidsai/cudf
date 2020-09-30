@@ -12,13 +12,17 @@
 - PR #6119 Add support for `dayofweek` property in `DateTimeIndex` and `DatetimeProperties`
 - PR #6171 Java and Jni support for Struct columns
 - PR #6125 Add support for `Series.mode` and `DataFrame.mode`
+- PR #6232 `Json` and `Avro` benchmarking in python
 - PR #6139 Add column conversion to big endian byte list.
 - PR #6220 Add `list_topics()` to supply list of underlying Kafka connection topics
 - PR #6271 Add support to deep-copy struct columns from struct column-view
 - PR #6254 Add `cudf::make_dictionary_from_scalar` factory function
 - PR #6262 Add nth_element series aggregation with null handling
+- PR #6315 Native code for string-map lookups, for cudf-java
 - PR #6302 Add custom dataframe accessors
 - PR #6301 Add JNI bindings to nvcomp
+- PR #6328 Java and JNI bindings for getMapValue/map_lookup
+- PR #6371 Use ColumnViewAccess on Host side
 
 ## Improvements
 
@@ -28,6 +32,7 @@
 - PR #5956 Add/Update tests for cuStreamz
 - PR #5953 Use stable sort when doing a sort groupby
 - PR #5973 Link to the Code of Conduct in CONTRIBUTING.md
+- PR #6354 Perform shallow clone of external projects
 - PR #5917 Just use `None` for `strides` in `Buffer`
 - PR #6015 Upgrade CUB/Thrust to the latest commit
 - PR #5971 Add cuStreamz README for basic installation and use
@@ -93,6 +98,7 @@
 - PR #6308 Add dictionary support to cudf::scatter with scalar
 - PR #6332 Add support to return csv as string when `path=None` in `to_csv`
 - PR #6369 Add dictionary support to `cudf::find_and_replace`
+- PR #6377 Update ci/local/README.md
 
 ## Bug Fixes
 
@@ -140,6 +146,7 @@
 - PR #6304 Fix span_tests.cu includes
 - PR #6331 Avoids materializing `RangeIndex` during frame concatnation (when not needed)
 - PR #6278 Add filter tests for struct columns
+- PR #6345 Fix ambiguous constructor compile error with devtoolset
 - PR #6335 Fix conda commands for outdated python version
 
 
