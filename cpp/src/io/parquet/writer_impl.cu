@@ -258,11 +258,16 @@ class parquet_column_view {
     size_type leaf_col_offset = col.offset();
     _data_count               = col.size();
     if (_list_type) {
-      auto d_col = column_device_view::create(col, stream);
-
       // Top level column's offsets are not applied to all children. Get the effective offset and
       // size of the leaf column
-      std::tie(leaf_col_offset, _data_count) = gpu::get_leaf_offset(*d_col, stream);
+      // Calculate row offset into dremel data (repetition/definition values) and the respective
+      // definition and repetition levels
+      gpu::dremel_data dremel = gpu::get_dremel_data(col, stream);
+      _dremel_offsets         = std::move(dremel.dremel_offsets);
+      _rep_level              = std::move(dremel.rep_level);
+      _def_level              = std::move(dremel.def_level);
+      leaf_col_offset         = dremel.leaf_col_offset;
+      _data_count             = dremel.leaf_data_size;
 
       _type_width = (is_fixed_width(_leaf_col.type())) ? cudf::size_of(_leaf_col.type()) : 0;
       _data       = (is_fixed_width(_leaf_col.type()))
@@ -279,9 +284,6 @@ class parquet_column_view {
       }
       _offsets_array = offsets_array;
 
-      // Calculate row offset into dremel data (repetition/definition values) and the respective
-      // definition and repetition levels
-      std::tie(_dremel_offsets, _rep_level, _def_level) = gpu::get_levels(col, stream);
       CUDA_TRY(cudaStreamSynchronize(stream));
     }
     if (_string_type && _data_count > 0) {

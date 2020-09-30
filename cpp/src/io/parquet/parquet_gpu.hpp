@@ -387,6 +387,20 @@ std::pair<size_type, size_type> get_leaf_offset(column_device_view col,
                                                 cudaStream_t stream = (cudaStream_t)0);
 
 /**
+ * @brief Dremel data that describes one nested type column
+ *
+ * @see get_dremel_data()
+ */
+struct dremel_data {
+  rmm::device_uvector<size_type> dremel_offsets;
+  rmm::device_uvector<uint8_t> rep_level;
+  rmm::device_uvector<uint8_t> def_level;
+
+  size_type leaf_col_offset;
+  size_type leaf_data_size;
+};
+
+/**
  * @brief Get the dremel offsets and repetition and definition levels for a LIST column
  *
  * Dremel offsets are the per row offsets into the repetition and definition level arrays for a
@@ -400,10 +414,10 @@ std::pair<size_type, size_type> get_leaf_offset(column_device_view col,
  * ```
  * @param col Column of LIST type
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ *
+ * @return A struct containing dremel data
  */
-std::
-  tuple<rmm::device_uvector<size_type>, rmm::device_uvector<uint8_t>, rmm::device_uvector<uint8_t>>
-  get_levels(column_view h_col, cudaStream_t stream = (cudaStream_t)0);
+dremel_data get_dremel_data(column_view h_col, cudaStream_t stream = (cudaStream_t)0);
 
 /**
  * @brief Launches kernel for initializing encoder page fragments

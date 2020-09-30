@@ -52,21 +52,6 @@ struct frag_init_state_s {
 #define RLE_BFRSZ (1 << LOG2_RLE_BFRSZ)
 #define RLE_MAX_LIT_RUN 0xfff8  // Maximum literal run for 2-byte run code
 
-__global__ void get_leaf_offset(column_device_view d_col, size_type *offset, size_type *end)
-{
-  column_device_view col_temp = d_col;
-  size_type off_temp          = *offset;
-  size_type end_temp          = *end;
-  // Apply offset recursively until we get offset of leaf data
-  while (col_temp.type().id() == type_id::LIST) {
-    off_temp = col_temp.child(lists_column_view::offsets_column_index).element<size_type>(off_temp);
-    end_temp = col_temp.child(lists_column_view::offsets_column_index).element<size_type>(end_temp);
-    col_temp = col_temp.child(lists_column_view::child_column_index);
-  }
-  *offset = off_temp;
-  *end    = end_temp;
-}
-
 struct page_enc_state_s {
   uint8_t *cur;          //!< current output ptr
   uint8_t *rle_out;      //!< current RLE write ptr
@@ -605,12 +590,13 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
           uint32_t def_level_bits = col_g.level_bits & 0xf;
           uint32_t rep_level_bits = col_g.level_bits >> 4;
           // Run length = 4, max(rle/bitpack header) = 5, add one byte per 256 values for overhead
+          // TODO (dm): Improve readability of these calculations.
           uint32_t def_level_size =
-            (def_level_bits)
+            (def_level_bits != 0)
               ? 4 + 5 + ((def_level_bits * page_g.num_values + 7) >> 3) + (page_g.num_values >> 8)
               : 0;
           uint32_t rep_level_size =
-            (rep_level_bits)
+            (rep_level_bits != 0)
               ? 4 + 5 + ((rep_level_bits * page_g.num_values + 7) >> 3) + (page_g.num_values >> 8)
               : 0;
           page_g.max_data_size = page_size + def_level_size + rep_level_size;
@@ -1597,20 +1583,6 @@ __global__ void __launch_bounds__(1024) gpuGatherPages(EncColumnChunk *chunks, c
   }
 }
 
-std::pair<size_type, size_type> get_leaf_offset(column_device_view col, cudaStream_t stream)
-{
-  CUDF_EXPECTS(col.type().id() == type_id::LIST, "Can only get leaf offset for LIST type column");
-  rmm::device_scalar<size_type> col_offset(col.offset(), stream);
-  rmm::device_scalar<size_type> end_offset(col.offset() + col.size(), stream);
-
-  get_leaf_offset<<<1, 1, 0, stream>>>(col, col_offset.data(), end_offset.data());
-
-  size_type leaf_col_offset = col_offset.value(stream);
-  size_type leaf_data_size  = end_offset.value(stream) - leaf_col_offset;
-
-  return std::make_pair(leaf_col_offset, leaf_data_size);
-}
-
 /**
  * @brief Get the dremel offsets and repetition and definition levels for a LIST column
  *
@@ -1678,9 +1650,7 @@ std::pair<size_type, size_type> get_leaf_offset(column_device_view col, cudaStre
  *
  * Similarly we merge up all the way till level 0 offsets
  */
-std::
-  tuple<rmm::device_uvector<size_type>, rmm::device_uvector<uint8_t>, rmm::device_uvector<uint8_t>>
-  get_levels(column_view h_col, cudaStream_t stream)
+dremel_data get_dremel_data(column_view h_col, cudaStream_t stream)
 {
   CUDF_EXPECTS(h_col.type().id() == type_id::LIST,
                "Can only get rep/def levels for LIST type column");
@@ -1702,8 +1672,9 @@ std::
                                       empties_idx_end,
                                       lcv.offsets().begin<size_type>(),
                                       empties.begin());
-    return std::make_tuple(
-      std::move(empties), std::move(empties_idx), empties_end - empties.begin());
+
+    auto empties_size = empties_end - empties.begin();
+    return std::make_tuple(std::move(empties), std::move(empties_idx), empties_size);
   };
 
   // Reverse the nesting in order to merge the deepest level with the leaf first and merge bottom
@@ -1781,23 +1752,27 @@ std::
 
     // Merge empty at deepest parent level with the rep, def level vals at leaf level
 
-    // Zip the input and output value iterators so that merge operation is done only once
-    auto input_parent_zip_it = thrust::make_zip_iterator(thrust::make_tuple(
-      thrust::make_constant_iterator(level),
-      thrust::make_transform_iterator(thrust::make_counting_iterator(0),
-                                      [idx            = empties_idx.data(),
-                                       mask           = lcv.null_mask(),
-                                       curr_def_level = def_at_level[level]] __device__(auto i) {
-                                        return curr_def_level +
-                                               ((mask && bit_is_set(mask, idx[i])) ? 1 : 0);
-                                      })));
+    auto input_parent_rep_it = thrust::make_constant_iterator(level);
+    auto input_parent_def_it = thrust::make_transform_iterator(
+      thrust::make_counting_iterator(0),
+      [idx            = empties_idx.data(),
+       mask           = lcv.null_mask(),
+       curr_def_level = def_at_level[level]] __device__(auto i) {
+        return curr_def_level + ((mask && bit_is_set(mask, idx[i])) ? 1 : 0);
+      });
 
-    auto input_child_zip_it = thrust::make_zip_iterator(thrust::make_tuple(
-      thrust::make_constant_iterator(nesting_levels.size()),
-      thrust::make_transform_iterator(
-        thrust::make_counting_iterator(column_offsets[level + 1]),
-        [mask = lcv.child().null_mask(), curr_def_level = def_at_level[level + 1]] __device__(
-          auto i) { return curr_def_level + ((mask && bit_is_set(mask, i)) ? 1 : 0); })));
+    auto input_child_rep_it = thrust::make_constant_iterator(nesting_levels.size());
+    auto input_child_def_it = thrust::make_transform_iterator(
+      thrust::make_counting_iterator(column_offsets[level + 1]),
+      [mask = lcv.child().null_mask(), curr_def_level = def_at_level[level + 1]] __device__(
+        auto i) { return curr_def_level + ((mask && bit_is_set(mask, i)) ? 1 : 0); });
+
+    // Zip the input and output value iterators so that merge operation is done only once
+    auto input_parent_zip_it =
+      thrust::make_zip_iterator(thrust::make_tuple(input_parent_rep_it, input_parent_def_it));
+
+    auto input_child_zip_it =
+      thrust::make_zip_iterator(thrust::make_tuple(input_child_rep_it, input_child_def_it));
 
     auto output_zip_it =
       thrust::make_zip_iterator(thrust::make_tuple(rep_level.begin(), def_level.begin()));
@@ -1863,23 +1838,25 @@ std::
     };
 
     // We will be reading from old rep_levels and writing again to rep_levels. Swap the current
-    // rep values into temp_rep_vals so that
+    // rep values into temp_rep_vals so it can become the input and rep_levels can again be output.
     std::swap(temp_rep_vals, rep_level);
     std::swap(temp_def_vals, def_level);
 
     // Merge empty at parent level with the rep, def level vals at current level
     auto transformed_empties = thrust::make_transform_iterator(empties.begin(), offset_transformer);
 
+    auto input_parent_rep_it = thrust::make_constant_iterator(level);
+    auto input_parent_def_it = thrust::make_transform_iterator(
+      thrust::make_counting_iterator(0),
+      [idx            = empties_idx.data(),
+       mask           = lcv.null_mask(),
+       curr_def_level = def_at_level[level]] __device__(auto i) {
+        return curr_def_level + ((mask && bit_is_set(mask, idx[i])) ? 1 : 0);
+      });
+
     // Zip the input and output value iterators so that merge operation is done only once
-    auto input_parent_zip_it = thrust::make_zip_iterator(thrust::make_tuple(
-      thrust::make_constant_iterator(level),
-      thrust::make_transform_iterator(thrust::make_counting_iterator(0),
-                                      [idx            = empties_idx.data(),
-                                       mask           = lcv.null_mask(),
-                                       curr_def_level = def_at_level[level]] __device__(auto i) {
-                                        return curr_def_level +
-                                               ((mask && bit_is_set(mask, idx[i])) ? 1 : 0);
-                                      })));
+    auto input_parent_zip_it =
+      thrust::make_zip_iterator(thrust::make_tuple(input_parent_rep_it, input_parent_def_it));
 
     auto input_child_zip_it =
       thrust::make_zip_iterator(thrust::make_tuple(temp_rep_vals.begin(), temp_def_vals.begin()));
@@ -1939,7 +1916,14 @@ std::
 
   CUDA_TRY(cudaStreamSynchronize(stream));
 
-  return std::make_tuple(std::move(new_offsets), std::move(rep_level), std::move(def_level));
+  size_type leaf_col_offset = column_offsets[column_offsets.size() - 1];
+  size_type leaf_data_size  = column_ends[column_ends.size() - 1] - leaf_col_offset;
+
+  return dremel_data{std::move(new_offsets),
+                     std::move(rep_level),
+                     std::move(def_level),
+                     leaf_col_offset,
+                     leaf_data_size};
 }
 
 /**
