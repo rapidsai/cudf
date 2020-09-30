@@ -530,6 +530,7 @@ add_library(cudf
             src/filling/fill.cu
             src/filling/repeat.cu
             src/filling/sequence.cu
+            src/reshape/byte_cast.cu
             src/reshape/tile.cu
             src/search/search.cu
             src/column/column.cu
@@ -639,6 +640,7 @@ add_library(cudf
             src/aggregation/aggregation.cpp
             src/aggregation/aggregation.cu
             src/aggregation/result_cache.cpp
+            src/utilities/default_stream.cpp
 )
 
 # Override RPATH for cudf
