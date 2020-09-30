@@ -259,6 +259,7 @@ gatherFloatColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Sto
       }
       if (v < vmin) { vmin = v; }
       if (v > vmax) { vmax = v; }
+      if (!isnan(v)) { vsum += v; }
     }
     nn_cnt += __syncthreads_count(is_valid);
   }
