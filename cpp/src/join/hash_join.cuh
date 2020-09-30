@@ -137,6 +137,9 @@ size_type estimate_join_output_size(table_device_view build_table,
       h_size_estimate = size_estimate.value();
     }
 
+    // Detect overflow
+    CUDF_EXPECTS(h_size_estimate >= 0, "Maximum join output size exceeded");
+
     // If the size estimate is non-zero, then we have a valid estimate and can break
     // If sample_probe_num_rows >= probe_table_num_rows, then we've sampled the entire
     // probe table, in which case the estimate is exact and we can break
