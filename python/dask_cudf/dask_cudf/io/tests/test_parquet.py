@@ -254,6 +254,8 @@ def test_roundtrip_from_dask_partitioned(tmpdir, parts, daskcudf, metadata):
     df_read = dd.read_parquet(tmpdir, engine="pyarrow")
     gdf_read = dask_cudf.read_parquet(tmpdir)
 
+    # TODO: Avoid column selection after `CudfEngine`
+    # can be aligned with dask/dask#6534
     columns = list(df_read.columns)
     assert set(df_read.columns) == set(gdf_read.columns)
     dd.assert_eq(
