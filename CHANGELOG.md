@@ -16,6 +16,7 @@
 - PR #6262 Add nth_element series aggregation with null handling
 - PR #6302 Add custom dataframe accessors
 - PR #6301 Add JNI bindings to nvcomp
+- PR #6381 TEST
 
 ## Improvements
 
