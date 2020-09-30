@@ -496,6 +496,8 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
                              numeric::scale_type scale)
     : column_wrapper{}
   {
+    CUDF_EXPECTS(numeric::is_supported_representation_type<Rep>(), "not valid representation type");
+
     auto const size         = cudf::distance(begin, end);
     auto const elements     = thrust::host_vector<Rep>(begin, end);
     auto const is_decimal32 = std::is_same<Rep, int32_t>::value;
