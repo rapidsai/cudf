@@ -78,7 +78,7 @@ class ParquetReader(IOFuzz):
 
     def write_data(self, file_name):
         if self._current_buffer is not None:
-            with open(file_name + ".parquet", "wb") as crash_dataset:
+            with open(file_name + "_crash.parquet", "wb") as crash_dataset:
                 crash_dataset.write(self._current_buffer)
 
     def get_rand_params(self, params):
@@ -91,6 +91,7 @@ class ParquetReader(IOFuzz):
                 )
             else:
                 params_dict[param] = np.random.choice(values)
+        self._current_params["test_kwargs"] = params_dict
         return params_dict
 
 
@@ -144,4 +145,4 @@ class ParquetWriter(IOFuzz):
 
     def write_data(self, file_name):
         if self._current_buffer is not None:
-            self._current_buffer.to_parquet(file_name + ".parquet")
+            self._current_buffer.to_parquet(file_name + "_crash.parquet")

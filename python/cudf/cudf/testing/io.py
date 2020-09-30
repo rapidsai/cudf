@@ -84,4 +84,5 @@ class IOFuzz(object):
         params_dict = {}
         for param, values in params.items():
             params_dict[param] = np.random.choice(values)
+        self._current_params["test_kwargs"] = params_dict
         return params_dict
