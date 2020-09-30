@@ -23,6 +23,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include "cudf/utilities/traits.hpp"
+#include "thrust/iterator/transform_iterator.h"
 
 namespace cudf {
 namespace test {
@@ -155,25 +156,23 @@ std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view
   return {host_data, bitmask_to_host(c)};
 }
 
+// TODO add docs
 template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
 std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view c)
 {
-  using RepType = typename T::representation_type;
+  using namespace numeric;
+  using Rep = typename T::representation_type;
 
-  auto host_fixed_points = thrust::host_vector<T>(c.size());
-  auto host_rep_types    = thrust::host_vector<RepType>(c.size());
+  auto host_rep_types = thrust::host_vector<Rep>(c.size());
 
   CUDA_TRY(cudaMemcpy(
-    host_rep_types.data(), c.begin<RepType>(), c.size() * sizeof(RepType), cudaMemcpyDeviceToHost));
+    host_rep_types.data(), c.begin<Rep>(), c.size() * sizeof(Rep), cudaMemcpyDeviceToHost));
 
-  std::transform(std::cbegin(host_rep_types),
-                 std::cend(host_rep_types),
-                 std::begin(host_fixed_points),
-                 [&](auto value) {
-                   return T{value, numeric::scale_type{c.type().scale()}};
-                 });
+  auto to_fp = [&](Rep val) { return T{scaled_integer<Rep>{val, scale_type{c.type().scale()}}}; };
+  auto begin = thrust::make_transform_iterator(std::cbegin(host_rep_types), to_fp);
+  auto const host_fixed_points = thrust::host_vector<T>(begin, begin + c.size());
 
-  return {host_rep_types, bitmask_to_host(c)};
+  return {host_fixed_points, bitmask_to_host(c)};
 }
 
 /**
