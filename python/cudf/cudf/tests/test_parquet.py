@@ -1286,3 +1286,22 @@ def test_parquet_writer_sliced(tmpdir):
 
     df_select.to_parquet(cudf_path)
     assert_eq(cudf.read_parquet(cudf_path), df_select.reset_index(drop=True))
+
+
+@pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
+def test_parquet_nullable_boolean(tmpdir, engine):
+    pandas_path = tmpdir.join("pandas_bools.parquet")
+
+    pdf = pd.DataFrame(
+        {
+            "a": pd.Series(
+                [True, False, None, True, False], dtype=pd.BooleanDtype()
+            )
+        }
+    )
+    expected_gdf = cudf.DataFrame({"a": [True, False, None, True, False]})
+
+    pdf.to_parquet(pandas_path)
+    actaul_gdf = cudf.read_parquet(pandas_path, engine=engine)
+
+    assert_eq(actaul_gdf, expected_gdf)
