@@ -139,6 +139,15 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
   }
 
   /**
+   * Returns the number of rows for a given host side column vector, deprecated.
+   */
+  @Override
+  @Deprecated
+  public long getNumRows() {
+    return rows;
+  }
+
+  /**
    * Returns the number of children for this column
    */
   @Override

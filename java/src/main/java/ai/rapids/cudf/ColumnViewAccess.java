@@ -44,6 +44,9 @@ public interface ColumnViewAccess<T> extends AutoCloseable {
 
   DType getDataType();
 
+  @Deprecated
+  long getNumRows();
+
   long getRowCount();
 
   int getNumChildren();

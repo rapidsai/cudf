@@ -101,6 +101,12 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     }
 
     @Override
+    @Deprecated
+    public long getNumRows() {
+      return offHeap.getNativeRowCount(viewHandle);
+    }
+
+    @Override
     public long getRowCount() {
       return offHeap.getNativeRowCount(viewHandle);
     }
@@ -3045,6 +3051,12 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   @Override
   public DType getDataType() {
     return offHeap.getNativeType();
+  }
+
+  @Override
+  @Deprecated
+  public long getNumRows() {
+    return offHeap.getNativeRowCount();
   }
 
   @Override
