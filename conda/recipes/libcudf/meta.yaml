@@ -145,6 +145,7 @@ test:
     - test -f $PREFIX/include/cudf/strings/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/strings/detail/converters.hpp
     - test -f $PREFIX/include/cudf/strings/detail/fill.hpp
+    - test -f $PREFIX/include/cudf/strings/detail/replace.hpp
     - test -f $PREFIX/include/cudf/strings/detail/utilities.hpp
     - test -f $PREFIX/include/cudf/strings/extract.hpp
     - test -f $PREFIX/include/cudf/strings/findall.hpp
@@ -174,6 +175,7 @@ test:
     - test -f $PREFIX/include/cudf/utilities/error.hpp
     - test -f $PREFIX/include/cudf/utilities/traits.hpp
     - test -f $PREFIX/include/cudf/utilities/type_dispatcher.hpp
+    - test -f $PREFIX/include/cudf/utilities/default_stream.hpp
     - test -f $PREFIX/include/cudf/wrappers/dictionary.hpp
     - test -f $PREFIX/include/cudf/wrappers/durations.hpp
     - test -f $PREFIX/include/cudf/wrappers/timestamps.hpp

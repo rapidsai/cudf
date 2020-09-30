@@ -52,21 +52,27 @@ namespace gpu {
  * @param[in] begin Beginning of the character string
  * @param[in] end End of the character string
  * @param[in] opts A set of parsing options
+ * @param[in] escape_char A boolean value to signify whether to consider `\` as escape character or
+ * just a character.
  *
  * @return Pointer to the last character in the field, including the
  *  delimiter(s) following the field data
  */
 __device__ __inline__ char const* seek_field_end(char const* begin,
                                                  char const* end,
-                                                 ParseOptions const& opts)
+                                                 ParseOptions const& opts,
+                                                 bool escape_char = false)
 {
-  bool quotation = false;
-  auto current   = begin;
+  bool quotation   = false;
+  auto current     = begin;
+  bool escape_next = false;
   while (true) {
     // Use simple logic to ignore control chars between any quote seq
     // Handles nominal cases including doublequotes within quotes, but
-    // may not output exact failures as PANDAS for malformed fields
-    if (*current == opts.quotechar) {
+    // may not output exact failures as PANDAS for malformed fields.
+    // Check for instances such as "a2\"bc" and "\\" if `escape_char` is true.
+
+    if (*current == opts.quotechar and not escape_next) {
       quotation = !quotation;
     } else if (!quotation) {
       if (*current == opts.delimiter) {
@@ -81,6 +87,16 @@ __device__ __inline__ char const* seek_field_end(char const* begin,
         break;
       }
     }
+
+    if (escape_char == true) {
+      // If a escape character is encountered, escape next character in next loop.
+      if (escape_next == false and *current == '\\') {
+        escape_next = true;
+      } else {
+        escape_next = false;
+      }
+    }
+
     if (current >= end) break;
     current++;
   }
