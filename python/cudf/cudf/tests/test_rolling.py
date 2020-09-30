@@ -47,15 +47,7 @@ def test_rollling_series_basic(data, index, agg, nulls, center):
             got = getattr(
                 gsr.rolling(window_size, min_periods, center), agg
             )().fillna(-1)
-            try:
-                assert_eq(expect, got, check_dtype=False, **kwargs)
-            except AssertionError as e:
-                if agg == "count" and data != []:
-                    pytest.xfail(
-                        reason="Differ from Pandas behavior for count"
-                    )
-                else:
-                    raise e
+            assert_eq(expect, got, check_dtype=False, **kwargs)
 
 
 @pytest.mark.parametrize(
@@ -97,13 +89,7 @@ def test_rolling_dataframe_basic(data, agg, nulls, center):
             got = getattr(
                 gdf.rolling(window_size, min_periods, center), agg
             )().fillna(-1)
-            try:
-                assert_eq(expect, got, check_dtype=False)
-            except AssertionError as e:
-                if agg == "count" and len(pdf) > 0:
-                    pytest.xfail(reason="Differ from pandas behavior here")
-                else:
-                    raise e
+            assert_eq(expect, got, check_dtype=False)
 
 
 @pytest.mark.parametrize(
@@ -122,11 +108,19 @@ def test_rolling_with_offset(agg):
         ],
     )
     gsr = cudf.from_pandas(psr)
-    assert_eq(
-        getattr(psr.rolling("2s"), agg)().fillna(-1),
-        getattr(gsr.rolling("2s"), agg)().fillna(-1),
-        check_dtype=False,
-    )
+    try:
+        assert_eq(
+            getattr(psr.rolling("2s"), agg)().fillna(-1),
+            getattr(gsr.rolling("2s"), agg)().fillna(-1),
+            check_dtype=False,
+        )
+    except AssertionError as e:
+        if agg == "count": 
+            # count for offset-columns does not follow similar conventions
+            # to non-offset-columns.
+            pytest.xfail(reason="Differs from pandas behaviour here") 
+        else:
+            raise e
 
 
 def test_rolling_getattr():

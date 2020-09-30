@@ -230,8 +230,6 @@ class Rolling:
         return result_df
 
     def _apply_agg(self, agg_name):
-        if agg_name == "count" and not self._time_window:
-            self.min_periods = 0
         if isinstance(self.obj, cudf.Series):
             return self._apply_agg_series(self.obj, agg_name)
         else:
@@ -388,6 +386,8 @@ class RollingGroupby(Rolling):
             )
 
     def _apply_agg(self, agg_name):
+        if agg_name == "count" and not self._time_window:
+            self.min_periods = 0
         index = cudf.MultiIndex.from_frame(
             cudf.DataFrame(
                 {
