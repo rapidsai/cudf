@@ -572,7 +572,7 @@ struct column_view_printer {
     std::transform(std::cbegin(h_data.first),
                    std::cend(h_data.first),
                    std::back_inserter(out),
-                   [&](auto const& fp) { return std::to_string(static_cast<double>(fp)); });
+                   [](auto const& fp) { return std::to_string(static_cast<double>(fp)); });
   }
 
   template <typename Element,
