@@ -39,6 +39,7 @@ namespace detail {
  * output size by using only a subset of the rows in the probe table.
  *
  * @throw cudf::logic_error if JoinKind is not INNER_JOIN or LEFT_JOIN
+ * @throw cudf::logic_error if the estimated size overflows cudf::size_type
  *
  * @tparam JoinKind The type of join to be performed
  * @tparam multimap_type The type of the hash table
