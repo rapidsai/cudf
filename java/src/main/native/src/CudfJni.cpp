@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <sstream>
+
 #include <cudf/copying.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
@@ -213,6 +215,11 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *) {
 
   // make sure libcudf and the JNI library are built with the same PTDS mode
   if (cudf::is_ptds_enabled() != cudf::jni::is_ptds_enabled) {
+    auto jcls = env->FindClass("java/lang/Exception");
+    std::ostringstream ss;
+    ss << "libcudf is_ptds_enabled=" << cudf::is_ptds_enabled()
+       << ", which does not match cudf jni is_ptds_enabled=" << cudf::jni::is_ptds_enabled;
+    env->ThrowNew(jcls, ss.str().c_str());
     return JNI_ERR;
   }
 
