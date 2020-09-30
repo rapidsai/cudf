@@ -29,6 +29,10 @@ FLAKE_RETVAL=$?
 FLAKE_CYTHON=`flake8 --config=python/.flake8.cython`
 FLAKE_CYTHON_RETVAL=$?
 
+# Run mypy and get results/return code
+MYPY_CUDF=`mypy --config=python/cudf/setup.cfg python/cudf/cudf`
+MYPY_CUDF_RETVAL=$?
+
 # Run clang-format and check for a consistent code format
 CLANG_FORMAT=`python cpp/scripts/run-clang-format.py 2>&1`
 CLANG_FORMAT_RETVAL=$?
@@ -64,6 +68,14 @@ if [ "$FLAKE_CYTHON_RETVAL" != "0" ]; then
   echo -e "\n\n>>>> FAILED: flake8-cython style check; end output\n\n"
 else
   echo -e "\n\n>>>> PASSED: flake8-cython style check\n\n"
+fi
+
+if [ "$MYPY_CUDF_RETVAL" != "0" ]; then
+  echo -e "\n\n>>>> FAILED: mypy style check; begin output\n\n"
+  echo -e "$MYPY_CUDF"
+  echo -e "\n\n>>>> FAILED: mypy style check; end output\n\n"
+else
+  echo -e "\n\n>>>> PASSED: mypy style check\n\n"
 fi
 
 if [ "$CLANG_FORMAT_RETVAL" != "0" ]; then
