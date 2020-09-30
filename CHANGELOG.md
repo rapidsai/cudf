@@ -144,6 +144,7 @@
 - PR #6304 Fix span_tests.cu includes
 - PR #6331 Avoids materializing `RangeIndex` during frame concatnation (when not needed)
 - PR #6278 Add filter tests for struct columns
+- PR #6345 Fix ambiguous constructor compile error with devtoolset
 - PR #6335 Fix conda commands for outdated python version
 
 
