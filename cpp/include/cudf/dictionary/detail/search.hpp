@@ -34,7 +34,23 @@ std::unique_ptr<scalar> get_index(
   cudaStream_t stream                 = 0);
 
 /**
+ * @brief Get the index for a key if it were added to the given dictionary.
  *
+ * The actual index is returned if the `key` is already part of the dictionary's key set.
+ *
+ * @code{.pseudo}
+ * d1 = {["a","c","d"],[2,0,1,0]}
+ * idx = get_insert_index(d1,"b")
+ * idx is 1
+ * @endcode{.pseudo}
+ *
+ * @throw cudf::logic_error if `key.type() != dictionary.keys().type()`
+ *
+ * @param dictionary The dictionary to search for the key.
+ * @param key The value to search for in the dictionary keyset.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @return Numeric scalar index value of the key within the dictionary
  */
 std::unique_ptr<scalar> get_insert_index(
   dictionary_column_view const& dictionary,
