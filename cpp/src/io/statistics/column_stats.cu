@@ -289,7 +289,8 @@ gatherFloatColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Sto
       warp_reduce(storage.float_stats[t / 32]).Reduce(s->warp_max[t & 0x1f].fp_val, cub::Max());
     if (!(t & 0x1f)) { s->ck.max_value.fp_val = (vmax != 0.0) ? vmax : CUDART_ZERO; }
   } else if (t < 32 * 3) {
-    vsum = warp_reduce(storage.float_stats[t / 32]).Reduce(vsum, IgnoreNaNSum());
+    vsum =
+      warp_reduce(storage.float_stats[t / 32]).Reduce(s->warp_sum[t & 0x1f].fp_val, IgnoreNaNSum());
     if (!(t & 0x1f)) {
       s->ck.sum.fp_val = vsum;
       s->ck.has_sum    = (has_minmax);  // Implies sum is valid as well
@@ -587,7 +588,8 @@ void __device__ mergeFloatColumnStats(merge_state_s *s,
       cub::WarpReduce<double>(storage.f64[t / 32]).Reduce(s->warp_max[t & 0x1f].fp_val, cub::Max());
     if (!(t & 0x1f)) { s->ck.max_value.fp_val = (vmax != 0.0) ? vmax : CUDART_ZERO; }
   } else if (t < 32 * 3) {
-    vsum = cub::WarpReduce<double>(storage.f64[t / 32]).Reduce(vsum, IgnoreNaNSum());
+    vsum = cub::WarpReduce<double>(storage.f64[t / 32])
+             .Reduce(s->warp_sum[t & 0x1f].fp_val, IgnoreNaNSum());
     if (!(t & 0x1f)) {
       s->ck.sum.fp_val = vsum;
       s->ck.has_sum    = (has_minmax);  // Implies sum is valid as well
