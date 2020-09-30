@@ -33,5 +33,22 @@ def json_writer_test(gdf):
     assert_eq(actual, expected)
 
 
+@pythonfuzz(data_handle=JSONWriter, params={
+    "compression": ["gzip", "bz2", "zip", "xz", None],
+    "index": [True, False, None],
+    "orient": ["columns", "records", "table", "split"]
+})
+def json_writer_test_params(gdf, compression, index, orient):
+    pdf = gdf.to_pandas()
+
+    pdf_buffer = pdf.to_json(lines=True, orient=orient, index=index, compression=compression)
+    gdf_buffer = gdf.to_json(lines=True, orient=orient, index=index, compression=compression)
+
+    compare_content(pdf_buffer, gdf_buffer)
+
+    actual = cudf.read_json(gdf_buffer, lines=True, orient="records")
+    expected = pd.read_json(pdf_buffer, lines=True, orient="records")
+    assert_eq(actual, expected)
+
 if __name__ == "__main__":
     run_test(globals(), sys.argv)
