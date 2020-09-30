@@ -96,7 +96,7 @@ cpdef write_orc(Table table,
 
     cdef table_metadata metadata_ = table_metadata()
     cdef unique_ptr[data_sink] data_sink_c
-    cdef sink_info sink_info_c = make_sink_info(path_or_buf, &data_sink_c)
+    cdef sink_info sink_info_c = make_sink_info(path_or_buf, data_sink_c)
 
     metadata_.column_names.reserve(len(table._column_names))
 
