@@ -49,13 +49,11 @@ struct merge_state_s {
 /**
  * Custom addition functor to ignore NaN inputs
  **/
-struct IgnoreNaNSum
-{
-  __device__ __forceinline__
-  double operator()(const double &a, const double &b)
+struct IgnoreNaNSum {
+  __device__ __forceinline__ double operator()(const double &a, const double &b)
   {
-    double aval = isnan(a)? 0 : a;
-    double bval = isnan(b)? 0 : b;
+    double aval = isnan(a) ? 0 : a;
+    double bval = isnan(b) ? 0 : b;
     return aval + bval;
   }
 };
