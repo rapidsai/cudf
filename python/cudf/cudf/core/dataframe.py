@@ -6719,10 +6719,10 @@ class DataFrame(Frame, Serializable):
 
         return dlpack.to_dlpack(self)
 
-    @ioutils.doc_to_csv()
+    @ioutils.doc_dataframe_to_csv()
     def to_csv(
         self,
-        path=None,
+        path_or_buf=None,
         sep=",",
         na_rep="",
         columns=None,
@@ -6736,14 +6736,14 @@ class DataFrame(Frame, Serializable):
 
         return csv.to_csv(
             self,
-            path,
-            sep,
-            na_rep,
-            columns,
-            header,
-            index,
-            line_terminator,
-            chunksize,
+            path_or_buf=path_or_buf,
+            sep=sep,
+            na_rep=na_rep,
+            columns=columns,
+            header=header,
+            index=index,
+            line_terminator=line_terminator,
+            chunksize=chunksize,
         )
 
     @ioutils.doc_to_orc()
