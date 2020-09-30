@@ -1,4 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
+import copy
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -166,12 +168,9 @@ def test_replace_strings():
     [pd.Series([0, 1, None, 2, None]), pd.Series([0, 1, np.nan, 2, np.nan])],
 )
 @pytest.mark.parametrize("data_dtype", NUMERIC_TYPES)
-@pytest.mark.parametrize("fill_dtype", NUMERIC_TYPES)
 @pytest.mark.parametrize("fill_value", [10, pd.Series([10, 20, 30, 40, 50])])
 @pytest.mark.parametrize("inplace", [True, False])
-def test_series_fillna_numerical(
-    psr, data_dtype, fill_dtype, fill_value, inplace
-):
+def test_series_fillna_numerical(psr, data_dtype, fill_value, inplace):
     # TODO: These tests should use Pandas' nullable int type
     # when we support a recent enough version of Pandas
     # https://pandas.pydata.org/pandas-docs/stable/user_guide/integer_na.html
@@ -183,7 +182,7 @@ def test_series_fillna_numerical(
     if isinstance(fill_value, pd.Series):
         fill_value_cudf = cudf.from_pandas(fill_value)
     else:
-        fill_value_cudf = fill_value
+        fill_value_cudf = copy.deepcopy(fill_value)
 
     expected = psr.fillna(fill_value, inplace=inplace)
     actual = gsr.fillna(fill_value_cudf, inplace=inplace)
@@ -381,21 +380,21 @@ def test_fillna_datetime(psr, fill_value, inplace):
 )
 @pytest.mark.parametrize("inplace", [True, False])
 def test_fillna_dataframe(df, value, inplace):
-    pdf = df
+    pdf = df.copy(deep=True)
     gdf = DataFrame.from_pandas(pdf)
 
-    fill_value_pd = value
+    fill_value_pd = copy.deepcopy(value)
     if isinstance(fill_value_pd, (pd.Series, pd.DataFrame)):
         fill_value_cudf = cudf.from_pandas(fill_value_pd)
     elif isinstance(fill_value_pd, dict):
         fill_value_cudf = {}
         for key in fill_value_pd:
             temp_val = fill_value_pd[key]
-            if isinstance(temp_val, cudf.Series):
+            if isinstance(temp_val, pd.Series):
                 temp_val = cudf.from_pandas(temp_val)
             fill_value_cudf[key] = temp_val
     else:
-        fill_value_cudf = value
+        fill_value_cudf = copy.deepcopy(value)
 
     expect = pdf.fillna(fill_value_pd, inplace=inplace)
     got = gdf.fillna(fill_value_cudf, inplace=inplace)
