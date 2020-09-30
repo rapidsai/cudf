@@ -633,15 +633,10 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   }
 }
 
-/*
- * Configures if single column hashing retains null rows
- */
- enum class retain_nulls : bool { HASH_NULLS, RETAIN_NULLS };
-
 std::unique_ptr<column> hash(table_view const& input,
                              hash_id hash_function,
                              std::vector<uint32_t> const& initial_hash,
-                             retain_nulls  policy,
+                             retain_nulls policy,
                              rmm::mr::device_memory_resource* mr,
                              cudaStream_t stream)
 {
@@ -671,7 +666,7 @@ std::unique_ptr<column> md5_hash(table_view const& input,
     std::all_of(input.begin(),
                 input.end(),
                 [](auto col) {
-                  return md5_type_check(col.type()) || (col.type().id() == type_id::LIST && md5_type_check(col.child(1).getType()));
+                  return md5_type_check(col.type()) || (col.type().id() == type_id::LIST && md5_type_check(col.child(1).type()));
                 }),
     "MD5 unsupported column type");
 

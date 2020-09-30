@@ -21,6 +21,7 @@
 #include <hash/hash_constants.hpp>
 
 #include "cudf/types.hpp"
+#include "cudf/utilities/error.hpp"
 #include "cudf/utilities/type_dispatcher.hpp"
 #include "thrust/for_each.h"
 
@@ -256,6 +257,8 @@ void CUDA_DEVICE_CALLABLE MD5Hash::operator()<list_view>(column_device_view col,
   column_device_view offsets = col.child(offsets_column_index);
   column_device_view data = col.child(data_column_index);
 
+  if(data.type().id() == type_id::LIST)
+    release_assert(false && "Nested list unsupported");
   for(int i = offsets.element<size_type>(row_index); i  < offsets.element<size_type>(row_index+1);  i++) {
     if(!data.is_null(i))
       cudf::type_dispatcher(data.type(),

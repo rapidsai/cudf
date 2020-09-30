@@ -18,11 +18,6 @@
 #include <cudf/hashing.hpp>
 
 namespace cudf {
-/*
- * Configures if single column hashing retains null rows
- */
- enum class retain_nulls : bool { HASH_NULLS, RETAIN_NULLS };
-
 namespace detail {
 /**
  * @copydoc cudf::hash_partition
@@ -44,7 +39,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
 std::unique_ptr<column> hash(
   table_view const& input,
   hash_id hash_function                     = hash_id::HASH_MURMUR3,
-  retain_nulls  policy                      = retain_nulls::HASH_NULLS,
+  retain_nulls policy                       = retain_nulls::HASH_NULLS,
   std::vector<uint32_t> const& initial_hash = {},
   rmm::mr::device_memory_resource* mr       = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                       = 0);

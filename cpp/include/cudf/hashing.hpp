@@ -19,6 +19,11 @@
 #include <cudf/table/table_view.hpp>
 
 namespace cudf {
+/*
+ * Configures if single column hashing retains null rows
+ */
+ enum class retain_nulls : bool { HASH_NULLS, RETAIN_NULLS };
+
 /**
  * @addtogroup column_hash
  * @{
@@ -38,6 +43,7 @@ namespace cudf {
 std::unique_ptr<column> hash(
   table_view const& input,
   hash_id hash_function                     = hash_id::HASH_MURMUR3,
+  retain_nulls policy                       = retain_nulls::HASH_NULLS,
   std::vector<uint32_t> const& initial_hash = {},
   rmm::mr::device_memory_resource* mr       = rmm::mr::get_current_device_resource());
 
