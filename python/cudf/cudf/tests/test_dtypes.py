@@ -110,3 +110,21 @@ def test_struct_dtype_eq():
     assert lhs != rhs
     lhs = StructDtype({"b": "int64", "a": "int32"})
     assert lhs != rhs
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {},
+        {"a": "int32"},
+        {"a": "object"},
+        {"a": "str"},
+        {"a": "datetime64[D]"},
+        {"a": "int32", "b": "int64"},
+        {"a": "int32", "b": StructDtype({"a": "int32", "b": "int64"})},
+    ],
+)
+def test_struct_dtype_fields(fields):
+    fields = {"a": "int32", "b": StructDtype({"c": "int64", "d": "int32"})}
+    dt = StructDtype(fields)
+    assert_eq(dt.fields, fields)

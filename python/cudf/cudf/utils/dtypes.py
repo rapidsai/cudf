@@ -235,7 +235,7 @@ def cudf_dtype_from_pa_type(typ):
     elif pa.types.is_struct(typ):
         return cudf.core.dtypes.StructDtype.from_arrow(typ)
     else:
-        return typ.to_pandas_dtype()
+        return pd.api.types.pandas_dtype(typ.to_pandas_dtype())
 
 
 def is_scalar(val):
