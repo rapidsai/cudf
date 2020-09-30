@@ -251,18 +251,14 @@ def test_roundtrip_from_dask_partitioned(tmpdir, parts, daskcudf, metadata):
             write_metadata_file=metadata,
             partition_on=parts,
         )
-    try:
-        # Preemptive change for dask/dask#6534.
-        # TODO: Update `CudfEngine` to leverage pyarrow.dataset
-        # API after dask/dask#6534 is merged.
-        df_read = dd.read_parquet(tmpdir, engine="pyarrow-legacy")
-    except ValueError:
-        df_read = dd.read_parquet(tmpdir, engine="pyarrow")
+    df_read = dd.read_parquet(tmpdir, engine="pyarrow")
     gdf_read = dask_cudf.read_parquet(tmpdir)
 
+    columns = list(df_read.columns)
+    assert set(df_read.columns) == set(gdf_read.columns)
     dd.assert_eq(
-        df_read.compute(scheduler=dask.get),
-        gdf_read.compute(scheduler=dask.get),
+        df_read.compute(scheduler=dask.get)[columns],
+        gdf_read.compute(scheduler=dask.get)[columns],
     )
 
     assert gdf_read.index.name == "index"
