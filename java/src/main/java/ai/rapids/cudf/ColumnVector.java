@@ -1702,7 +1702,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   /**
    * Cast to list of bytes - ColumnVector
    * This method converts the rows provided by the ColumnVector and casts each row to a list of bytes. Numeric and string types supported, but no timestamps.
-   * 
+   *
    * @return A new vector allocated on the GPU
    */
   public ColumnVector asByteList() {

@@ -24,7 +24,7 @@
 #include <cudf/datetime.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/hashing.hpp>
-#include <cudf/quantiles.hpp> 
+#include <cudf/quantiles.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/replace.hpp>
 #include <cudf/rolling.hpp>

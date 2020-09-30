@@ -1975,7 +1975,7 @@ public class ColumnVectorTest extends CudfTestBase {
         assertEquals(list6, ret6, "Lists don't match");
     }
   }
-  
+
   @Test
   void testCastFloatToByteList() {
     List<Byte> list1 = Arrays.asList((byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00);
