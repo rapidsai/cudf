@@ -1,4 +1,7 @@
 #!/bin/bash
+
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 set -e
 set -o pipefail
 
