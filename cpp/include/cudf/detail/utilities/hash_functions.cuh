@@ -56,7 +56,7 @@ void CUDA_DEVICE_CALLABLE uint32ToLowercaseHexString(uint32_t num, char* destina
  * @brief Core MD5 algorithm implementation. Processes a single 512-bit chunk,
  * updating the hash value so far. Does not zero out the buffer contents.
  */
-void __device__ md5_hash_step(md5_intermediate_data* hash_state)
+void CUDA_DEVICE_CALLABLE md5_hash_step(md5_intermediate_data* hash_state)
 {
   uint32_t A = hash_state->hash_value[0];
   uint32_t B = hash_state->hash_value[1];

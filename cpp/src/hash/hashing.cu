@@ -635,8 +635,8 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
 
 std::unique_ptr<column> hash(table_view const& input,
                              hash_id hash_function,
-                             std::vector<uint32_t> const& initial_hash,
                              retain_nulls policy,
+                             std::vector<uint32_t> const& initial_hash,
                              rmm::mr::device_memory_resource* mr,
                              cudaStream_t stream)
 {
