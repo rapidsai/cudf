@@ -31,7 +31,6 @@ def parquet_reader_test(parquet_buffer):
 def parquet_reader_columns_engine(
     parquet_buffer, columns, engine, use_pandas_metadata
 ):
-    print("PRAMS", columns, engine, use_pandas_metadata)
     pdf = pd.read_parquet(
         parquet_buffer,
         columns=columns,
@@ -78,7 +77,6 @@ def parquet_writer_test(gdf):
 def parquet_writer_test_rowgroup_index_compression(
     gdf, index, compression, row_group_size
 ):
-    print("PARAMS", index, compression, row_group_size)
     pd_file_name = "cpu_pdf.parquet"
     gd_file_name = "gpu_pdf.parquet"
 
