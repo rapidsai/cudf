@@ -238,13 +238,9 @@ class Frame(libcudf.table.Table):
                     empty_has_index = empty_has_index or len(obj) > 0
 
         if join == "inner":
-            old_index = []
-            for obj in objs:
-                index = obj.columns
-                old_index.append(index)
-            index = old_index[0]
-            for other in old_index[1:]:
-                index = index.intersection(other)
+            index = objs[0].columns if len(objs) > 0 else pd.Index([])
+            for other in objs[1:]:
+                index = index.intersection(other.columns)
             names = list(index)
             for obj in objs:
                 columns_to_drop = [
