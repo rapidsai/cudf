@@ -234,6 +234,13 @@ IO
 .. automodule:: cudf.io.hdf
     :members:
 
+Extending cuDF
+----------------
+.. currentmodule:: cudf.api.extensions
+
+.. automodule:: cudf.api.extensions.accessor
+    :members:
+
 GpuArrowReader
 --------------
 .. currentmodule:: cudf.comm.gpuarrow
