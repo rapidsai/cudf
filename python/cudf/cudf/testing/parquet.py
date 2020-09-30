@@ -1,9 +1,10 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 
-import io
 import logging
 import random
+
+import numpy as np
 
 import cudf
 from cudf.testing.io import IOFuzz
@@ -31,6 +32,7 @@ class ParquetReader(IOFuzz):
             max_columns=max_columns,
             max_string_length=max_string_length,
         )
+        self._df = None
 
     def generate_input(self):
         if self._regression:
@@ -61,11 +63,35 @@ class ParquetReader(IOFuzz):
         table = dg.rand_dataframe(dtypes_meta, num_rows, seed)
         df = pyarrow_to_pandas(table)
         logging.info(f"Shape of DataFrame generated: {table.shape}")
-        file = io.BytesIO()
-        df.to_parquet(file)
-        file.seek(0)
 
-        return file.read()
+        # TODO: Change this to write into
+        # a BytesIO object once below issue is fixed
+        # https://issues.apache.org/jira/browse/ARROW-10123
+
+        # file = io.BytesIO()
+        df.to_parquet("temp_file")
+        # file.seek(0)
+        # self._current_buffer = copy.copy(file.read())
+        # return self._current_buffer
+        self._df = df
+        return "temp_file"
+
+    def write_data(self, file_name):
+        if self._current_buffer is not None:
+            with open(file_name + ".parquet", "wb") as crash_dataset:
+                crash_dataset.write(self._current_buffer)
+
+    def get_rand_params(self, params):
+        params_dict = {}
+        for param, values in params.items():
+            if param == "columns" and values is None:
+                col_size = self._rand(len(self._df.columns))
+                params_dict[param] = list(
+                    np.unique(np.random.choice(self._df.columns, col_size))
+                )
+            else:
+                params_dict[param] = np.random.choice(values)
+        return params_dict
 
 
 class ParquetWriter(IOFuzz):
@@ -113,5 +139,9 @@ class ParquetWriter(IOFuzz):
             dg.rand_dataframe(dtypes_meta, num_rows, seed)
         )
         logging.info(f"Shape of DataFrame generated: {df.shape}")
-
+        self._current_buffer = df
         return df
+
+    def write_data(self, file_name):
+        if self._current_buffer is not None:
+            self._current_buffer.to_parquet(file_name + ".parquet")
