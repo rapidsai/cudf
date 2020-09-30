@@ -135,6 +135,7 @@
 - PR #6304 Fix span_tests.cu includes
 - PR #6331 Avoids materializing `RangeIndex` during frame concatnation (when not needed)
 - PR #6278 Add filter tests for struct columns
+- PR #6366 Fix Warp Reduce calls in cuio statistics calculation to account for NaNs
 
 
 # cuDF 0.15.0 (26 Aug 2020)
