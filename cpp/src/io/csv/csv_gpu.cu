@@ -550,13 +550,13 @@ struct decode_op {
  * @param[out] num_valid The numbers of valid fields in columns
  **/
 __global__ void __launch_bounds__(csvparse_block_dim)
-  convert_csv_to_cudf(cudf::io::ParseOptions const options,
-                      device_span<char const> const data,
-                      device_span<column_parse::flags const> const column_flags,
-                      device_span<uint64_t const> const row_offsets,
-                      device_span<cudf::data_type const> const dtypes,
-                      device_span<void *> const columns,
-                      device_span<cudf::bitmask_type *> const valids)
+  convert_csv_to_cudf(cudf::io::ParseOptions options,
+                      device_span<char const> data,
+                      device_span<column_parse::flags const> column_flags,
+                      device_span<uint64_t const> row_offsets,
+                      device_span<cudf::data_type const> dtypes,
+                      device_span<void *> columns,
+                      device_span<cudf::bitmask_type *> valids)
 {
   auto raw_csv = data.data();
   // thread IDs range per block, so also need the block id.
