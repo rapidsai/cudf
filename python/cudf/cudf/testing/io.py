@@ -81,8 +81,6 @@ class IOFuzz(object):
         return dtypes_meta, num_rows, num_cols, seed
 
     def get_rand_params(self, params):
-        params_dict = {}
-        for param, values in params.items():
-            params_dict[param] = np.random.choice(values)
+        params_dict = {param: np.random.choice(values) for param.values in params.items}
         self._current_params["test_kwargs"] = params_dict
         return params_dict
