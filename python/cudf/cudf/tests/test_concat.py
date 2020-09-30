@@ -592,11 +592,25 @@ def test_concat_dataframe_with_multiIndex(df1, df2):
 @pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize("sort", [True, False])
 def test_concat_inner_join(ignore_index, sort):
-    pdf1 = pd.DataFrame({"a": [1, 2], "b": [1, 2], "c": [1, 2]})
-    pdf2 = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
+    pdf1 = pd.DataFrame(
+        {
+            "x": range(10),
+            "y": list(map(float, range(10))),
+            "z": list("abcde") * 2,
+        }
+    )
+    pdf2 = pd.DataFrame(
+        {"x": range(10, 20), "y": list(map(float, range(10, 20)))}
+    )
+    pdf3 = pd.DataFrame({"v": [1, 2], "x": [1, 2], "y": [1, 2], "z": [1, 2]})
 
     gdf1 = gd.from_pandas(pdf1)
     gdf2 = gd.from_pandas(pdf2)
+    gdf3 = gd.from_pandas(pdf3)
+    # Make empty frame
+    gdf_empty1 = gdf2[:0]
+    assert len(gdf_empty1) == 0
+    pdf_empty1 = gdf_empty1.to_pandas()
 
     assert_eq(
         pd.concat(
@@ -607,16 +621,46 @@ def test_concat_inner_join(ignore_index, sort):
         ),
     )
 
+    assert_eq(
+        pd.concat(
+            [pdf1, pdf2, pdf3, pdf_empty1],
+            sort=sort,
+            join="inner",
+            ignore_index=ignore_index,
+        ),
+        gd.concat(
+            [gdf1, gdf2, gdf3, gdf_empty1],
+            sort=sort,
+            join="inner",
+            ignore_index=ignore_index,
+        ),
+    )
+
+    assert_eq(
+        pd.concat([pdf1], sort=sort, join="inner", ignore_index=ignore_index),
+        gd.concat([gdf1], sort=sort, join="inner", ignore_index=ignore_index),
+    )
+
     s1 = gd.Series(["a", "b", "c"])
     s2 = gd.Series(["a", "b"])
+    s3 = gd.Series(["a", "b", "c", "d"])
+    s4 = gd.Series()
     ps1 = s1.to_pandas()
     ps2 = s2.to_pandas()
+    ps3 = s3.to_pandas()
+    ps4 = s4.to_pandas()
 
     assert_eq(
         gd.concat(
-            [s1, s2], sort=sort, join="inner", ignore_index=ignore_index
+            [s1, s2, s3, s4],
+            sort=sort,
+            join="inner",
+            ignore_index=ignore_index,
         ),
         pd.concat(
-            [ps1, ps2], sort=sort, join="inner", ignore_index=ignore_index
+            [ps1, ps2, ps3, ps4],
+            sort=sort,
+            join="inner",
+            ignore_index=ignore_index,
         ),
     )
