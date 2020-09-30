@@ -162,17 +162,14 @@ class ColumnBase(Column, Serializable):
         else:
             return libcudf.replace.clip(self, lo, hi)
 
-    def equals(self, other):
+    def equals(self, other, check_dtypes=False):
         if self is other:
             return True
         if other is None or len(self) != len(other):
             return False
-        if len(self) == 1:
-            val = self[0] == other[0]
-            # when self is multiindex we need to checkall
-            if isinstance(val, np.ndarray):
-                return val.all()
-            return bool(val)
+        if check_dtypes:
+            if self.dtype != other.dtype:
+                return False
         return self.binary_operator("eq", other).min()
 
     def all(self):
@@ -418,7 +415,9 @@ class ColumnBase(Column, Serializable):
         ]
 
     def _get_mask_as_column(self):
-        return libcudf.transform.mask_to_bools(self)
+        return libcudf.transform.mask_to_bools(
+            self.base_mask, self.offset, self.offset + len(self)
+        )
 
     def _memory_usage(self, **kwargs):
         return self.__sizeof__()
