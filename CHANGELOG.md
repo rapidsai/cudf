@@ -20,6 +20,7 @@
 - PR #6315 Native code for string-map lookups, for cudf-java
 - PR #6302 Add custom dataframe accessors
 - PR #6301 Add JNI bindings to nvcomp
+- PR #6328 Java and JNI bindings for getMapValue/map_lookup
 
 ## Improvements
 

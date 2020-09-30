@@ -449,19 +449,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       BaseDeviceMemoryBuffer data = null;
       DType type = this.type;
       Long rows = this.rows;
-      // hardcoded for lists for now
-      ColumnViewAccess leafChildWithData = getChildColumnViewAccess(0);
-      // Data sits in the leaf column of the list, we get that data buffer for copying,
-      // identifying leaf column by the fact that its children is null
-      while (leafChildWithData != null && leafChildWithData.getNumChildren() != 0) {
-        ColumnViewAccess tmp = leafChildWithData.getChildColumnViewAccess(0);
-        leafChildWithData.close();
-        leafChildWithData = tmp;
-      }
-      if (leafChildWithData != null) {
-        data = (BaseDeviceMemoryBuffer) leafChildWithData.getDataBuffer();
-      } else if (type != DType.STRUCT) {
-        data = offHeap.getData();
+      if (!type.isNestedType()) {
+        data = getDataBuffer();
       }
       boolean needsCleanup = true;
       try {
@@ -514,9 +503,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
           return ret;
         }
       } finally {
-        if (leafChildWithData != null) {
-          leafChildWithData.close();
-        }
         if (data != null) {
           data.close();
         }
@@ -2601,6 +2587,20 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     return new Table(extractRe(this.getNativeView(), pattern));
   }
 
+  /** For a column of type List<Struct<String, String>> and a passed in String key, return a string column
+   * for all the values in the struct that match the key, null otherwise.
+   * @param key the String scalar to lookup in the column
+   * @return a string column of values or nulls based on the lookup result
+   */
+  public ColumnVector getMapValue(Scalar key) {
+
+    assert type == DType.LIST : "column type must be a LIST";
+    assert key != null : "target string may not be null";
+    assert key.getType() == DType.STRING : "target string must be a string scalar";
+
+    return new ColumnVector(mapLookup(getNativeView(), key.getScalarHandle()));
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
   /////////////////////////////////////////////////////////////////////////////
@@ -2814,6 +2814,14 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   private static native long stringConcatenation(long[] columnViews, long separator, long narep);
 
   /**
+   * Native method for map lookup over a column of List<Struct<String,String>>
+   * @param columnView the column view handle of the map
+   * @param key the string scalar that is the key for lookup
+   * @return a string column handle of the resultant
+   * @throws CudfException
+   */
+  private static native long mapLookup(long columnView, long key) throws CudfException;
+  /**
    * Native method to add zeros as padding to the left of each string.
    */
   private static native long zfill(long nativeHandle, int width);
@@ -3016,7 +3024,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
   @Override
   public BaseDeviceMemoryBuffer getDataBuffer() {
-    if (!type.isNestedType()) {
+    if (type.isNestedType()) {
       throw new IllegalStateException(" Lists and Structs at top level have no data");
     }
     return offHeap.getData();
