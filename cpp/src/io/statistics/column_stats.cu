@@ -258,7 +258,7 @@ gatherFloatColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Sto
   vmin = SHFL0(vmin);
   vmax = warp_reduce(storage.float_stats[t / 32]).Reduce(vmax, cub::Max());
   vmax = SHFL0(vmax);
-  vsum = warp_reduce(storage.float_stats[t / 32]).Sum(isnan(vsum)? 0 : vsum);
+  vsum = warp_reduce(storage.float_stats[t / 32]).Sum(isnan(vsum) ? 0 : vsum);
   if (!(t & 0x1f)) {
     s->warp_min[t >> 5].fp_val = vmin;
     s->warp_max[t >> 5].fp_val = vmax;
@@ -277,10 +277,7 @@ gatherFloatColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Sto
     if (!(t & 0x1f)) { s->ck.max_value.fp_val = (vmax != 0.0) ? vmax : CUDART_ZERO; }
   } else if (t < 32 * 3) {
     double val = s->warp_sum[t & 0x1f].fp_val;
-    if (isnan(val))
-    {
-      val = 0;
-    }
+    if (isnan(val)) { val = 0; }
     vsum = warp_reduce(storage.float_stats[t / 32]).Sum(val);
     if (!(t & 0x1f)) {
       s->ck.sum.fp_val = vsum;
@@ -558,7 +555,7 @@ void __device__ mergeFloatColumnStats(merge_state_s *s,
   __syncwarp();
   vmax = SHFL0(vmax);
 
-  vsum = cub::WarpReduce<double>(storage.f64[t / 32]).Sum(isnan(vsum)? 0 : vsum);
+  vsum = cub::WarpReduce<double>(storage.f64[t / 32]).Sum(isnan(vsum) ? 0 : vsum);
 
   if (!(t & 0x1f)) {
     s->warp_non_nulls[t >> 5]  = non_nulls;
@@ -580,10 +577,7 @@ void __device__ mergeFloatColumnStats(merge_state_s *s,
     if (!(t & 0x1f)) { s->ck.max_value.fp_val = (vmax != 0.0) ? vmax : CUDART_ZERO; }
   } else if (t < 32 * 3) {
     double val = s->warp_sum[t & 0x1f].fp_val;
-    if (isnan(val))
-    {
-      val = 0;
-    }
+    if (isnan(val)) { val = 0; }
     vsum = cub::WarpReduce<double>(storage.f64[t / 32]).Sum(val);
     if (!(t & 0x1f)) {
       s->ck.sum.fp_val = vsum;
