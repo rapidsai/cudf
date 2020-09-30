@@ -2,6 +2,7 @@
 
 import sys
 
+import numpy as np
 import pandas as pd
 
 import cudf
@@ -19,6 +20,34 @@ def parquet_reader_test(parquet_buffer):
     assert_eq(gdf, pdf)
 
 
+@pythonfuzz(
+    data_handle=ParquetReader,
+    params={
+        "columns": None,
+        "engine": ["pyarrow", None],
+        "use_pandas_metadata": [True, False],
+    },
+)
+def parquet_reader_columns_engine(
+    parquet_buffer, columns, engine, use_pandas_metadata
+):
+    print("PRAMS", columns, engine, use_pandas_metadata)
+    pdf = pd.read_parquet(
+        parquet_buffer,
+        columns=columns,
+        engine=engine,
+        use_pandas_metadata=use_pandas_metadata,
+    )
+    gdf = cudf.read_parquet(
+        parquet_buffer,
+        columns=columns,
+        engine=engine,
+        use_pandas_metadata=use_pandas_metadata,
+    )
+
+    assert_eq(gdf, pdf)
+
+
 @pythonfuzz(data_handle=ParquetWriter)
 def parquet_writer_test(gdf):
     pd_file_name = "cpu_pdf.parquet"
@@ -28,6 +57,45 @@ def parquet_writer_test(gdf):
 
     pdf.to_parquet(pd_file_name)
     gdf.to_parquet(gd_file_name)
+
+    actual = cudf.read_parquet(gd_file_name)
+    expected = pd.read_parquet(pd_file_name)
+    assert_eq(actual, expected)
+
+    actual = cudf.read_parquet(pd_file_name)
+    expected = pd.read_parquet(gd_file_name)
+    assert_eq(actual, expected)
+
+
+@pythonfuzz(
+    data_handle=ParquetWriter,
+    params={
+        "row_group_size": np.random.random_integers(0, 10000, 100),
+        "compression": ["snappy", None],
+        "index": [True, False, None],
+    },
+)
+def parquet_writer_test_rowgroup_index_compression(
+    gdf, index, compression, row_group_size
+):
+    print("PARAMS", index, compression, row_group_size)
+    pd_file_name = "cpu_pdf.parquet"
+    gd_file_name = "gpu_pdf.parquet"
+
+    pdf = gdf.to_pandas()
+
+    pdf.to_parquet(
+        pd_file_name,
+        index=index,
+        compression=compression,
+        row_group_size=row_group_size,
+    )
+    gdf.to_parquet(
+        gd_file_name,
+        index=index,
+        compression=compression,
+        row_group_size=row_group_size,
+    )
 
     actual = cudf.read_parquet(gd_file_name)
     expected = pd.read_parquet(pd_file_name)
