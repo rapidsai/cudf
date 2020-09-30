@@ -95,7 +95,7 @@
 - PR #6303 Use cudf test dtypes so timedelta tests are determinstic
 - PR #6308 Add dictionary support to cudf::scatter with scalar
 - PR #6332 Add support to return csv as string when `path=None` in `to_csv`
-- PR #6337 Update ci/local/README.md
+- PR #6377 Update ci/local/README.md
 
 ## Bug Fixes
 
