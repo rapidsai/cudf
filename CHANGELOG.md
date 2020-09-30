@@ -12,6 +12,7 @@
 - PR #6119 Add support for `dayofweek` property in `DateTimeIndex` and `DatetimeProperties`
 - PR #6171 Java and Jni support for Struct columns
 - PR #6125 Add support for `Series.mode` and `DataFrame.mode`
+- PR #6139 Add column conversion to big endian byte list.
 - PR #6220 Add `list_topics()` to supply list of underlying Kafka connection topics
 - PR #6271 Add support to deep-copy struct columns from struct column-view
 - PR #6254 Add `cudf::make_dictionary_from_scalar` factory function
@@ -55,6 +56,7 @@
 - PR #6163 Use `Column.full` instead of `scalar_broadcast_to` or `cupy.zeros`
 - PR #6176 Fix cmake warnings for GoogleTest, GoogleBenchmark, and Arrow external projects
 - PR #6149 Update to Arrow v1.0.1
+- PR #6357 Use `pandas.testing` in `dask-cudf`
 - PR #6201 Expose libcudf test utilities headers for external project use.
 - PR #6174 Data profile support in random data generator; Expand cuIO benchmarks
 - PR #6189 Avoid deprecated pyarrow.compat for parquet
@@ -88,6 +90,7 @@
 - PR #6306 Remove cpw macros from page encode kernels
 - PR #6303 Use cudf test dtypes so timedelta tests are determinstic
 - PR #6308 Add dictionary support to cudf::scatter with scalar
+- PR #6332 Add support to return csv as string when `path=None` in `to_csv`
 
 ## Bug Fixes
 
@@ -135,6 +138,7 @@
 - PR #6304 Fix span_tests.cu includes
 - PR #6331 Avoids materializing `RangeIndex` during frame concatnation (when not needed)
 - PR #6278 Add filter tests for struct columns
+- PR #6335 Fix conda commands for outdated python version
 
 
 # cuDF 0.15.0 (26 Aug 2020)
