@@ -243,7 +243,9 @@ class Frame(libcudf.table.Table):
                 index = index.intersection(other.columns)
             names = list(index)
             for obj in objs:
-                columns_to_drop = [col for col in obj.columns if col not in names]
+                columns_to_drop = [
+                    col for col in obj.columns if col not in names
+                ]
             obj = obj.drop(columns=columns_to_drop)
 
         else:
