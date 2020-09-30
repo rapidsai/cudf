@@ -424,7 +424,7 @@ cpdef write_csv(
     cdef string true_value_c = 'True'.encode()
     cdef string false_value_c = 'False'.encode()
     cdef unique_ptr[data_sink] data_sink_c
-    cdef sink_info sink_info_c = make_sink_info(path_or_buf, &data_sink_c)
+    cdef sink_info sink_info_c = make_sink_info(path_or_buf, data_sink_c)
 
     if header is True and table._column_names is not None:
         metadata_.column_names.reserve(len(table._column_names))
