@@ -247,9 +247,10 @@ class Frame(libcudf.table.Table):
                 index = index.intersection(other)
             names = list(index)
             for obj in objs:
-                for col in obj.columns:
-                    if col not in names:
-                        obj = obj.drop(columns=[col])
+                columns_to_drop = [
+                    col for col in obj.columns if col not in names
+                ]
+            obj = obj.drop(columns=columns_to_drop)
 
         else:
             # Get a list of the unique table column names
