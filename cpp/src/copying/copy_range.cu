@@ -156,13 +156,13 @@ std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf:
   rmm::mr::device_memory_resource* mr,
   cudaStream_t stream)
 {
-  // first, match the keys in source and target
+  // check the keys in the source and target
   cudf::dictionary_column_view const dict_source(source);
   cudf::dictionary_column_view const dict_target(target);
   CUDF_EXPECTS(dict_source.keys().type() == dict_target.keys().type(),
                "dictionary keys must be the same type");
 
-  // first combine keys so both dictionaries have the same set
+  // combine keys so both dictionaries have the same set
   auto target_matched =
     cudf::dictionary::detail::add_keys(dict_target, dict_source.keys(), mr, stream);
   auto const target_view = cudf::dictionary_column_view(target_matched->view());
@@ -170,7 +170,7 @@ std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf:
     dict_source, target_view.keys(), rmm::mr::get_current_device_resource(), stream);
   auto const source_view = cudf::dictionary_column_view(source_matched->view());
 
-  // now build the new indices by doing a copy_range on just the indices
+  // build the new indices by calling in_place_copy_range on just the indices
   auto const source_indices = source_view.get_indices_annotated();
   auto target_contents      = target_matched->release();
   auto target_indices(std::move(target_contents.children.front()));
