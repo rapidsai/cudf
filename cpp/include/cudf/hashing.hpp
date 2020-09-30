@@ -22,7 +22,7 @@ namespace cudf {
 /*
  * Configures if single column hashing retains null rows
  */
- enum class retain_nulls : bool { HASH_NULLS, RETAIN_NULLS };
+enum class retain_nulls : bool { HASH_NULLS, RETAIN_NULLS };
 
 /**
  * @addtogroup column_hash

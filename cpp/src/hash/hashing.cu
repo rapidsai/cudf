@@ -647,7 +647,8 @@ std::unique_ptr<column> hash(table_view const& input,
   }
 }
 
-bool md5_type_check(data_type d) {
+bool md5_type_check(data_type d)
+{
   return !is_chrono(d) && (is_fixed_width(d) || (d.id() == type_id::STRING));
 }
 
@@ -666,7 +667,8 @@ std::unique_ptr<column> md5_hash(table_view const& input,
     std::all_of(input.begin(),
                 input.end(),
                 [](auto col) {
-                  return md5_type_check(col.type()) || (col.type().id() == type_id::LIST && md5_type_check(col.child(1).type()));
+                  return md5_type_check(col.type()) ||
+                         (col.type().id() == type_id::LIST && md5_type_check(col.child(1).type()));
                 }),
     "MD5 unsupported column type");
 
@@ -683,7 +685,7 @@ std::unique_ptr<column> md5_hash(table_view const& input,
   auto d_chars    = chars_view.data<char>();
 
   rmm::device_buffer null_mask;
-  if(policy == retain_nulls::RETAIN_NULLS && input.num_columns() == 1)
+  if (policy == retain_nulls::RETAIN_NULLS && input.num_columns() == 1)
     null_mask = bitmask_and(input, mr, stream);
   else
     null_mask = rmm::device_buffer{0, stream, mr};
@@ -776,7 +778,7 @@ std::unique_ptr<column> murmur_hash3_32(table_view const& input,
 
 std::unique_ptr<column> hash(table_view const& input,
                              hash_id hash_function,
-                             retain_nulls  policy,
+                             retain_nulls policy,
                              std::vector<uint32_t> const& initial_hash,
                              rmm::mr::device_memory_resource* mr)
 {

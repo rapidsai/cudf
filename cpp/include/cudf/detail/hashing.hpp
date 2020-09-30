@@ -52,7 +52,7 @@ std::unique_ptr<column> murmur_hash3_32(
 
 std::unique_ptr<column> md5_hash(
   table_view const& input,
-  retain_nulls  policy                = retain_nulls::HASH_NULLS,
+  retain_nulls policy                 = retain_nulls::HASH_NULLS,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 

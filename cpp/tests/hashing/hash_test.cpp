@@ -337,8 +337,10 @@ TYPED_TEST(MD5HashTestFloatTyped, TestListExtremes)
   T nan   = std::numeric_limits<T>::quiet_NaN();
   T inf   = std::numeric_limits<T>::infinity();
 
-  lists_column_wrapper<T> const col1({{T(0.0)}, {T(100.0), T(-100.0)}, {min, max, nan}, {inf, -inf}});
-  lists_column_wrapper<T> const col2({{T(-0.0)}, {T(100.0), T(-100.0)}, {min, max, -nan}, {inf, -inf}});
+  lists_column_wrapper<T> const col1(
+    {{T(0.0)}, {T(100.0), T(-100.0)}, {min, max, nan}, {inf, -inf}});
+  lists_column_wrapper<T> const col2(
+    {{T(-0.0)}, {T(100.0), T(-100.0)}, {min, max, -nan}, {inf, -inf}});
 
   auto const input1 = cudf::table_view({col1});
   auto const input2 = cudf::table_view({col2});
@@ -362,8 +364,10 @@ TEST_F(MD5HashTest, StringListsWithNulls)
   lists_column_wrapper<cudf::string_view> strings_list_col(
     {{""},
      {"", "A 60 character string to test MD5's message padding algorithm"},
-     {"A very long (greater than 128 bytes/char string) to test a multi hash-step data point in the "
-     "MD5 hash function. This string needed to be longer.", " It needed to be even longer."},
+     {"A very long (greater than 128 bytes/char string) to test a multi hash-step data point in "
+      "the "
+      "MD5 hash function. This string needed to be longer.",
+      " It needed to be even longer."},
      {"All ", "work ", "and", " no", " play ", "makes Jack", " a dull boy"},
      {"!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`", "{|}~"}});
 
