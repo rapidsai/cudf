@@ -15,7 +15,6 @@ CUIO_BENCHMARK_DATASET_DATA="
 # 10GB File
 https://rapidsai-data.s3.us-east-2.amazonaws.com/cudf/benchmark/avro_json_datasets.zip
 cudf/benchmarks/cuio_data/
-# ~14s download
 "
 
 ################################################################################
@@ -28,20 +27,37 @@ function hasArg {
 }
 
 if hasArg -h || hasArg --help; then
-    echo "$0 [--subset | --benchmark]"
+    echo "$0 [--cuio_benchmark | -d dir_path| -u url]"
+    echo " "
+    echo "If --cuio_benchmark option is used, it will download standard dataset,"
+    echo "If you want to download different data-set, use -u along with url to get it."
+    echo "Similarly use -d set directory where this dataset needs to be stored."
+    echo " "
+    echo "Any predefined data-set options can't be used in conjunction with -d and -u options."
+
     exit 0
 fi
 
 # Select the datasets to install
 # Update this as and when new datasets and requirement arrive
-if hasArg "--cuio_benchmark"; then
-    DATASET_DATA="${CUIO_BENCHMARK_DATASET_DATA}"
+if hasArg "-d" && hasArg "-u"; then
+    while getopts 'd:u:' flag; do
+        case "${flag}" in
+            d) DESTDIRS="${OPTARG}" ;;
+            u) URLS="${OPTARG}" ;;
+            *) echo "${flag} option not found"
+               exit 1 ;;
+        esac
+    done
 else
-    DATASET_DATA="${CUIO_BENCHMARK_DATASET_DATA}"
+    if hasArg "--cuio_benchmark"; then
+        DATASET_DATA="${CUIO_BENCHMARK_DATASET_DATA}"
+    else
+        DATASET_DATA="${CUIO_BENCHMARK_DATASET_DATA}"
+    fi
+    URLS=($(echo "$DATASET_DATA"|awk '{if (NR%4 == 3) print $0}'))  # extract 3rd fields to a bash array
+    DESTDIRS=($(echo "$DATASET_DATA"|awk '{if (NR%4 == 0) print $0}'))  # extract 4th fields to a bash array
 fi
-
-URLS=($(echo "$DATASET_DATA"|awk '{if (NR%4 == 3) print $0}'))  # extract 3rd fields to a bash array
-DESTDIRS=($(echo "$DATASET_DATA"|awk '{if (NR%4 == 0) print $0}'))  # extract 4th fields to a bash array
 
 echo Downloading ...
 

@@ -25,4 +25,10 @@ pytest cudf/benchmarks/
 pytest --use_buffer True cudf/benchmarks/
 ```
 
+* If the datasets directory is different from default, it can be
+  provided with option "--dataset_dir directory_path" as shown below.
+```
+pytest --dataset_dir directory_path cudf/benchmarks/
+```
+
 

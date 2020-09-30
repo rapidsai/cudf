@@ -4,11 +4,16 @@ import pytest
 import cudf
 import glob
 import io
+from conftest import option
 
 
-@pytest.mark.parametrize(
-    "file_path", glob.glob("cudf/benchmarks/cuio_data/datasets/avro_*")
-)
+def get_dataset_dir():
+    if option.dataset_dir == "NONE":
+        return "cudf/benchmarks/cuio_data/datasets/"
+    return option.dataset_dir
+
+
+@pytest.mark.parametrize("file_path", glob.glob(get_dataset_dir() + "avro_*"))
 def bench_avro(benchmark, file_path, use_buffer):
 
     if use_buffer == "True":
@@ -17,9 +22,7 @@ def bench_avro(benchmark, file_path, use_buffer):
     benchmark(cudf.read_avro, file_path)
 
 
-@pytest.mark.parametrize(
-    "file_path", glob.glob("cudf/benchmarks/cuio_data/datasets/json_*")
-)
+@pytest.mark.parametrize("file_path", glob.glob(get_dataset_dir() + "json_*"))
 def bench_json(benchmark, file_path, use_buffer):
     if "bz2" in file_path:
         compression = "bz2"
