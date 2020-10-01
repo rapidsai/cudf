@@ -1304,4 +1304,4 @@ def test_parquet_nullable_boolean(tmpdir, engine):
     pdf.to_parquet(pandas_path)
     actual_gdf = cudf.read_parquet(pandas_path, engine=engine)
 
-    assert_eq(actaul_gdf, expected_gdf)
+    assert_eq(actual_gdf, expected_gdf)
