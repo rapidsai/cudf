@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 
-#include <io/parquet/parquet.hpp>
-
 #include <algorithm>
+#include <io/parquet/parquet.hpp>
 
 namespace cudf {
 namespace io {
