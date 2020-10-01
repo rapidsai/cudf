@@ -9,6 +9,44 @@ from cudf.core.index import Index
 
 class Scalar(libcudf.scalar.Scalar):
     def __init__(self, value, dtype=None):
+        """
+        A GPU-backed scalar object with NumPy scalar like properties
+        May be used in binary operations against other scalars, cuDF
+        Series, DataFrame, and Index objects. Designed to cache host
+        and device side values for the purpose of improving reuse of
+        instances across a workflow
+
+
+        Examples
+        --------
+        >>> import cudf
+        >>> cudf.Scalar(42, dtype='int64')
+        Scalar(42, dtype=int64)
+        >>> cudf.Scalar(42, dtype='int32') + cudf.Scalar(42, dtype='float64')
+        Scalar(84.0, dtype=float64)
+        >>> cudf.Scalar(42, dtype='int64') + np.int8(21)
+        Scalar(63, dtype=int64)
+        >>> cudf.Scalar(42, dtype='datetime64[s]') - cudf.Scalar(21, dtype='timedelta64[ns])
+        Scalar(1970-01-01T00:00:41.999999979, dtype=datetime64[ns])
+        >>> cudf.Series([1,2,3]) + cudf.Scalar(1)
+        0    2
+        1    3
+        2    4
+        dtype: int64
+        >>> cudf.DataFrame({'a':[1,2,3], 'b':[4.5, 5.5, 6.5]}) -  cudf.Scalar(10, dtype='uint8')
+        a    b
+        0 -9 -5.5
+        1 -8 -4.5
+        2 -7 -3.5
+
+        Parameters
+        ----------
+        value : Python, NumPy Scalar, or cuDF Scalar
+            The scalar value to be converted to a GPU backed scalar object
+        dtype : np.dtype or string specifier
+            The data type
+
+        """
         super().__init__(value, dtype=dtype)
 
     def __index__(self):
@@ -104,6 +142,9 @@ class Scalar(libcudf.scalar.Scalar):
 
     def __neg__(self):
         return self._scalar_unaop('__neg__')
+
+    def __repr__(self):
+        return f"Scalar({self.value}, dtype={self.dtype})"
 
     def _binop_result_dtype_or_error(self, other, op):
 
