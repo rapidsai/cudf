@@ -4,6 +4,7 @@ from enum import IntEnum
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
+from libcpp.utility cimport move
 import numpy as np
 
 from cudf._lib.column cimport Column
@@ -17,7 +18,6 @@ from cudf._lib.cpp.types cimport (
     data_type,
     type_id,
 )
-from cudf._lib.move cimport move
 from cudf._lib.column import np_to_cudf_types, cudf_to_np_types
 from cudf._lib.cpp.unary cimport (
     underlying_type_t_unary_op,

@@ -23,6 +23,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/dictionary/encode.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
@@ -184,10 +185,10 @@ TYPED_TEST(CopyRangeTypedTestFixture, CopyWithNullsNonzeroOffset)
   this->test(source_slice, expected_slice, target_slice, source_begin, source_end, target_begin);
 }
 
-class CopyRangeStringTestFixture : public cudf::test::BaseFixture {
+class CopyRangeTestFixture : public cudf::test::BaseFixture {
 };
 
-TEST_F(CopyRangeStringTestFixture, CopyWithNullsString)
+TEST_F(CopyRangeTestFixture, CopyWithNullsString)
 {
   cudf::size_type size{100};
   cudf::size_type source_begin{9};
@@ -226,7 +227,7 @@ TEST_F(CopyRangeStringTestFixture, CopyWithNullsString)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*p_ret, expected);
 }
 
-TEST_F(CopyRangeStringTestFixture, CopyNoNullsString)
+TEST_F(CopyRangeTestFixture, CopyNoNullsString)
 {
   cudf::size_type size{100};
   cudf::size_type source_begin{9};
@@ -254,7 +255,7 @@ TEST_F(CopyRangeStringTestFixture, CopyNoNullsString)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*p_ret, expected);
 }
 
-TEST_F(CopyRangeStringTestFixture, CopyWithNullsNonzeroOffsetString)
+TEST_F(CopyRangeTestFixture, CopyWithNullsNonzeroOffsetString)
 {
   cudf::size_type size{200};
   cudf::size_type source_offset{27};
@@ -305,6 +306,57 @@ TEST_F(CopyRangeStringTestFixture, CopyWithNullsNonzeroOffsetString)
 
   auto p_ret = cudf::copy_range(source_slice, target_slice, source_begin, source_end, target_begin);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*p_ret, expected_slice);
+}
+
+TEST_F(CopyRangeTestFixture, CopyDictionary)
+{
+  cudf::size_type source_begin{1};
+  cudf::size_type source_end{5};
+  cudf::size_type target_begin{3};
+
+  std::vector<std::string> source_elements({"e", "b", "a", "c", "c", "e", "b", "c", "e", "b"});
+  std::vector<std::string> target_elements({"a", "e", "d", "c", "c", "b", "b", "a", "f", "f"});
+  std::vector<std::string> expected_elements(target_elements);
+  std::copy(source_elements.begin() + source_begin,
+            source_elements.begin() + source_end,
+            expected_elements.begin() + target_begin);
+
+  {
+    auto source = cudf::dictionary::encode(
+      cudf::test::strings_column_wrapper(source_elements.begin(), source_elements.end()));
+    auto target = cudf::dictionary::encode(
+      cudf::test::strings_column_wrapper(target_elements.begin(), target_elements.end()));
+
+    auto result =
+      cudf::copy_range(source->view(), target->view(), source_begin, source_end, target_begin);
+    auto decoded = cudf::dictionary::decode(cudf::dictionary_column_view(result->view()));
+
+    auto expected =
+      cudf::test::strings_column_wrapper(expected_elements.begin(), expected_elements.end());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*decoded, expected);
+  }
+
+  auto source_validity = thrust::make_transform_iterator(
+    thrust::make_counting_iterator<cudf::size_type>(0), [](auto i) { return i != 3; });
+  auto target_validity = thrust::make_transform_iterator(
+    thrust::make_counting_iterator<cudf::size_type>(0), [](auto i) { return i != 3 && i != 9; });
+  auto expected_validity = thrust::make_transform_iterator(
+    thrust::make_counting_iterator<cudf::size_type>(0), [](auto i) { return i != 5 && i != 9; });
+  {
+    auto source = cudf::dictionary::encode(cudf::test::strings_column_wrapper(
+      source_elements.begin(), source_elements.end(), source_validity));
+    auto target = cudf::dictionary::encode(cudf::test::strings_column_wrapper(
+      target_elements.begin(), target_elements.end(), target_validity));
+
+    auto result =
+      cudf::copy_range(source->view(), target->view(), source_begin, source_end, target_begin);
+    auto decoded = cudf::dictionary::decode(cudf::dictionary_column_view(result->view()));
+
+    auto expected = cudf::test::strings_column_wrapper(
+      expected_elements.begin(), expected_elements.end(), expected_validity);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*decoded, expected);
+  }
 }
 
 class CopyRangeErrorTestFixture : public cudf::test::BaseFixture {
@@ -404,5 +456,10 @@ TEST_F(CopyRangeErrorTestFixture, DTypeMismatch)
   cudf::mutable_column_view target_view{target};
 
   EXPECT_THROW(cudf::copy_range_in_place(source, target_view, 0, 100, 0), cudf::logic_error);
-  EXPECT_THROW(auto p_ret = cudf::copy_range(source, target, 0, 100, 0), cudf::logic_error);
+  EXPECT_THROW(cudf::copy_range(source, target, 0, 100, 0), cudf::logic_error);
+
+  auto dict_target = cudf::dictionary::encode(target);
+  auto dict_source = cudf::dictionary::encode(source);
+  EXPECT_THROW(cudf::copy_range(dict_source->view(), dict_target->view(), 0, 100, 0),
+               cudf::logic_error);
 }
