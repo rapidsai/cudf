@@ -35,10 +35,14 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/replace.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/dictionary/detail/update_keys.hpp>
+#include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/replace.hpp>
 #include <cudf/strings/detail/utilities.cuh>
@@ -437,6 +441,49 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
                                    std::move(valid_bits),
                                    stream,
                                    mr);
+}
+
+template <>
+std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::dictionary32>(
+  cudf::column_view const& input_col,
+  cudf::column_view const& values_to_replace,
+  cudf::column_view const& replacement_values,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
+{
+  auto input        = cudf::dictionary_column_view(input_col);
+  auto values       = cudf::dictionary_column_view(values_to_replace);
+  auto replacements = cudf::dictionary_column_view(replacement_values);
+
+  auto matched_input = [&] {
+    auto new_keys = cudf::detail::concatenate(
+      {values.keys(), replacements.keys()}, rmm::mr::get_current_device_resource(), stream);
+    return cudf::dictionary::detail::add_keys(input, new_keys->view(), mr, stream);
+  }();
+  auto matched_view   = cudf::dictionary_column_view(matched_input->view());
+  auto matched_values = cudf::dictionary::detail::set_keys(
+    values, matched_view.keys(), rmm::mr::get_current_device_resource(), stream);
+  auto matched_replacements = cudf::dictionary::detail::set_keys(
+    replacements, matched_view.keys(), rmm::mr::get_current_device_resource(), stream);
+
+  auto indices_type = matched_view.indices().type();
+  auto new_indices  = cudf::type_dispatcher(
+    indices_type,
+    replace_kernel_forwarder{},
+    matched_view.get_indices_annotated(),
+    cudf::dictionary_column_view(matched_values->view()).indices(),
+    cudf::dictionary_column_view(matched_replacements->view()).get_indices_annotated(),
+    mr,
+    stream);
+  auto null_count     = new_indices->null_count();
+  auto contents       = new_indices->release();
+  auto indices_column = std::make_unique<cudf::column>(
+    indices_type, input.size(), *(contents.data.release()), rmm::device_buffer{0, stream, mr}, 0);
+  std::unique_ptr<cudf::column> keys_column(std::move(matched_input->release().children.back()));
+  return cudf::make_dictionary_column(std::move(keys_column),
+                                      std::move(indices_column),
+                                      std::move(*(contents.null_mask.release())),
+                                      null_count);
 }
 
 }  // end anonymous namespace
