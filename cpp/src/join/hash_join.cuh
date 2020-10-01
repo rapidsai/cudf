@@ -55,13 +55,15 @@ namespace detail {
  *
  * @return An estimate of the size of the output of the join operation
  */
-template <join_kind JoinKind, typename multimap_type, typename estimate_size_type>
+template <join_kind JoinKind, typename multimap_type>
 size_type estimate_join_output_size(table_device_view build_table,
                                     table_device_view probe_table,
                                     multimap_type const& hash_table,
                                     null_equality compare_nulls,
                                     cudaStream_t stream)
 {
+  using estimate_size_type = int64_t;  // use 64-bit size so we can detect overflow
+
   const size_type build_table_num_rows{build_table.num_rows()};
   const size_type probe_table_num_rows{probe_table.num_rows()};
 

@@ -248,8 +248,7 @@ std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>> probe_jo
   null_equality compare_nulls,
   cudaStream_t stream)
 {
-  using estimate_size_type = int64_t;
-  size_type estimated_size = estimate_join_output_size<JoinKind, multimap_type, estimate_size_type>(
+  size_type estimated_size = estimate_join_output_size<JoinKind, multimap_type>(
     build_table, probe_table, hash_table, compare_nulls, stream);
 
   // If the estimated output size is zero, return immediately
