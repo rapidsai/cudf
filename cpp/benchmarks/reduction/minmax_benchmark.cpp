@@ -17,10 +17,10 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/types.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_wrapper.hpp>
 #include <fixture/benchmark_fixture.hpp>
 #include <synchronization/synchronization.hpp>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_wrapper.hpp>
 
 #include <memory>
 #include <random>
