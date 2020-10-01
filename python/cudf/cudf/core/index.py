@@ -3,7 +3,7 @@ from __future__ import division, print_function
 
 import pickle
 from numbers import Number
-from typing import Any, Set
+from typing import Any, Dict, Set, Type
 
 import cupy
 import numpy as np
@@ -2651,7 +2651,7 @@ class StringIndex(GenericIndex):
             return self
 
 
-def as_index(arbitrary, **kwargs):
+def as_index(arbitrary, **kwargs) -> Index:
     """Create an Index from an arbitrary object
 
     Currently supported inputs are:
@@ -2721,7 +2721,7 @@ _dtype_to_index = {
     np.uint64: UInt64Index,
     np.float32: Float32Index,
     np.float64: Float64Index,
-}
+}  # type: Dict[Any, Type[Index]]
 
 _index_to_dtype = {
     Int8Index: np.int8,
