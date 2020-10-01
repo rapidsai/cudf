@@ -952,7 +952,7 @@ __global__ void __launch_bounds__(block_size)
     chunks[group_id * num_columns + col_id].strm_len[t] = s->strm_pos[t];
     if (!s->chunk.streams[t]) {
       chunks[group_id * num_columns + col_id].streams[t] =
-        reinterpret_cast<uint8_t *>(const_cast<void *>(s->chunk.column_data_base)) +
+        static_cast<uint8_t *>(const_cast<void *>(s->chunk.column_data_base)) +
         s->chunk.start_row * s->chunk.dtype_len;
     }
   }
@@ -999,7 +999,7 @@ __global__ void __launch_bounds__(block_size)
     s->nrows         = s->u.dict_stripe.num_strings;
     s->cur_row       = 0;
   }
-  str_desc  = reinterpret_cast<const nvstrdesc_s *>(s->u.dict_stripe.column_data_base);
+  str_desc  = static_cast<const nvstrdesc_s *>(s->u.dict_stripe.column_data_base);
   dict_data = s->u.dict_stripe.dict_data;
   __syncthreads();
   if (s->chunk.encoding_kind != DICTIONARY_V2) {
@@ -1204,13 +1204,13 @@ __global__ void __launch_bounds__(1024) gpuCompactCompressedBlocks(StripeStream 
       uint32_t blk_size24;
       if (dst_len >= src_len) {
         // Copy from uncompressed source
-        src                    = reinterpret_cast<const uint8_t *>(blk_in->srcDevice);
+        src                    = static_cast<const uint8_t *>(blk_in->srcDevice);
         blk_out->bytes_written = src_len;
         dst_len                = src_len;
         blk_size24             = dst_len * 2 + 1;
       } else {
         // Compressed block
-        src        = reinterpret_cast<const uint8_t *>(blk_in->dstDevice);
+        src        = static_cast<const uint8_t *>(blk_in->dstDevice);
         blk_size24 = dst_len * 2 + 0;
       }
       dst[0]     = static_cast<uint8_t>(blk_size24 >> 0);
