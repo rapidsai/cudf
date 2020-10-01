@@ -29,7 +29,7 @@ namespace cudf {
 //
 strings_column_view::strings_column_view(column_view strings_column) : column_view(strings_column)
 {
-  CUDF_EXPECTS(type().id() == STRING, "strings_column_view only supports strings");
+  CUDF_EXPECTS(type().id() == type_id::STRING, "strings_column_view only supports strings");
 }
 
 column_view strings_column_view::parent() const { return static_cast<column_view>(*this); }

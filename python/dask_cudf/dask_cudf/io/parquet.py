@@ -1,9 +1,9 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
-
 import warnings
 from functools import partial
+from io import BufferedWriter, IOBase
 
-import dask.dataframe as dd
+from dask import dataframe as dd
 from dask.dataframe.io.parquet.arrow import ArrowEngine
 
 import cudf
@@ -14,7 +14,7 @@ from cudf.io import write_to_dataset
 class CudfEngine(ArrowEngine):
     @staticmethod
     def read_metadata(*args, **kwargs):
-        meta, stats, parts = ArrowEngine.read_metadata(*args, **kwargs)
+        meta, stats, parts, index = ArrowEngine.read_metadata(*args, **kwargs)
 
         # If `strings_to_categorical==True`, convert objects to int32
         strings_to_cats = kwargs.get("strings_to_categorical", False)
@@ -28,7 +28,7 @@ class CudfEngine(ArrowEngine):
             else:
                 new_meta[col] = as_column(meta[col])
 
-        return (new_meta, stats, parts)
+        return (new_meta, stats, parts, index)
 
     @staticmethod
     def read_partition(
@@ -52,7 +52,7 @@ class CudfEngine(ArrowEngine):
                 path,
                 engine="cudf",
                 columns=columns,
-                row_group=row_group,
+                row_groups=row_group,
                 strings_to_categorical=strings_to_cats,
                 **kwargs.get("read", {}),
             )
@@ -62,15 +62,14 @@ class CudfEngine(ArrowEngine):
                     f,
                     engine="cudf",
                     columns=columns,
-                    row_group=row_group,
+                    row_groups=row_group,
                     strings_to_categorical=strings_to_cats,
                     **kwargs.get("read", {}),
                 )
 
         if index and (index[0] in df.columns):
             df = df.set_index(index[0])
-
-        if len(partition_keys) > 0:
+        if partition_keys:
             if partitions is None:
                 raise ValueError("Must pass partition sets")
             for i, (name, index2) in enumerate(partition_keys):
@@ -103,10 +102,15 @@ class CudfEngine(ArrowEngine):
         **kwargs,
     ):
         preserve_index = False
+        if set(index_cols).issubset(set(df.columns)):
+            df.index = df[index_cols].copy(deep=False)
+            df.drop(columns=index_cols, inplace=True)
+            preserve_index = True
         if partition_on:
             md = write_to_dataset(
                 df,
                 path,
+                filename=filename,
                 partition_cols=partition_on,
                 fs=fs,
                 preserve_index=preserve_index,
@@ -114,12 +118,15 @@ class CudfEngine(ArrowEngine):
                 **kwargs,
             )
         else:
-            md = df.to_parquet(
-                fs.sep.join([path, filename]),
-                compression=compression,
-                metadata_file_path=filename if return_metadata else None,
-                **kwargs,
-            )
+            with fs.open(fs.sep.join([path, filename]), mode="wb") as out_file:
+                if not isinstance(out_file, IOBase):
+                    out_file = BufferedWriter(out_file)
+                md = df.to_parquet(
+                    out_file,
+                    compression=compression,
+                    metadata_file_path=filename if return_metadata else None,
+                    **kwargs,
+                )
         # Return the schema needed to write the metadata
         if return_metadata:
             return [{"meta": md}]
@@ -141,15 +148,13 @@ class CudfEngine(ArrowEngine):
                 else _meta[0]
             )
             with fs.open(metadata_path, "wb") as fil:
-                _meta.tofile(fil)
+                fil.write(memoryview(_meta))
 
 
 def read_parquet(
     path,
     columns=None,
-    chunksize=None,
-    split_row_groups=True,
-    gather_statistics=None,
+    split_row_groups=None,
     row_groups_per_part=None,
     **kwargs,
 ):
@@ -174,41 +179,17 @@ def read_parquet(
         columns = [columns]
 
     if row_groups_per_part:
-        from .opt_parquet import parquet_reader
+        warnings.warn(
+            "row_groups_per_part is deprecated. "
+            "Pass an integer value to split_row_groups instead."
+        )
+        if split_row_groups is None:
+            split_row_groups = row_groups_per_part
 
-        warnings.warn(
-            "Using optimized read_parquet engine. This option does not "
-            "support partitioned datsets or filtering, and will not "
-            "result in known divisions. Do not use `row_groups_per_part` "
-            "if full support is needed."
-        )
-        if kwargs.get("filters", None):
-            raise ValueError(
-                "Cannot use `filters` with `row_groups_per_part=True`."
-            )
-        return parquet_reader(
-            path,
-            columns=columns,
-            row_groups_per_part=row_groups_per_part,
-            **kwargs,
-        )
-
-    if chunksize and gather_statistics is False:
-        warnings.warn(
-            "Setting chunksize parameter with gather_statistics=False. "
-            "Use gather_statistics=True to enable row-group aggregation."
-        )
-    if chunksize and split_row_groups is False:
-        warnings.warn(
-            "Setting chunksize parameter with split_row_groups=False. "
-            "Use split_row_groups=True to enable row-group aggregation."
-        )
     return dd.read_parquet(
         path,
         columns=columns,
-        chunksize=chunksize,
         split_row_groups=split_row_groups,
-        gather_statistics=gather_statistics,
         engine=CudfEngine,
         **kwargs,
     )

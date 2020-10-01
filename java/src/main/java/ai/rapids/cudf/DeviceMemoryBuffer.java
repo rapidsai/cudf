@@ -136,8 +136,7 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
   @Override
   public synchronized final DeviceMemoryBuffer slice(long offset, long len) {
     addressOutOfBoundsCheck(address + offset, len, "slice");
-    refCount++;
-    cleaner.addRef();
+    incRefCount();
     return new DeviceMemoryBuffer(getAddress() + offset, len, this);
   }
 
@@ -151,8 +150,7 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
       return null;
     }
     addressOutOfBoundsCheck(view.address, view.length, "sliceFrom");
-    refCount++;
-    cleaner.addRef();
+    incRefCount();
     return new DeviceMemoryBuffer(view.address, view.length, this);
   }
 }

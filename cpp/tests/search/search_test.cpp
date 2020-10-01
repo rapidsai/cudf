@@ -14,11 +14,14 @@
  * limitations under the License.
  */
 
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/type_lists.hpp>
 
-#include "cudf/search.hpp"
+#include <cudf/dictionary/encode.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/search.hpp>
 
 struct SearchTest : public cudf::test::BaseFixture {
 };
@@ -26,7 +29,6 @@ struct SearchTest : public cudf::test::BaseFixture {
 using cudf::numeric_scalar;
 using cudf::size_type;
 using cudf::string_scalar;
-using cudf::test::expect_columns_equal;
 using cudf::test::fixed_width_column_wrapper;
 
 TEST_F(SearchTest, empty_table)
@@ -44,7 +46,7 @@ TEST_F(SearchTest, empty_table)
                                              {cudf::order::ASCENDING},
                                              {cudf::null_order::BEFORE}));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, empty_values)
@@ -62,7 +64,7 @@ TEST_F(SearchTest, empty_values)
                                              {cudf::order::ASCENDING},
                                              {cudf::null_order::BEFORE}));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, non_null_column__find_first)
@@ -80,7 +82,7 @@ TEST_F(SearchTest, non_null_column__find_first)
                                              {cudf::order::ASCENDING},
                                              {cudf::null_order::BEFORE}));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, non_null_column__find_last)
@@ -98,7 +100,7 @@ TEST_F(SearchTest, non_null_column__find_last)
                                              {cudf::order::ASCENDING},
                                              {cudf::null_order::BEFORE}));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, non_null_column_desc__find_first)
@@ -116,7 +118,7 @@ TEST_F(SearchTest, non_null_column_desc__find_first)
                                              {cudf::order::DESCENDING},
                                              {cudf::null_order::BEFORE}));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, non_null_column_desc__find_last)
@@ -134,7 +136,7 @@ TEST_F(SearchTest, non_null_column_desc__find_last)
                                              {cudf::order::DESCENDING},
                                              {cudf::null_order::BEFORE}));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, nullable_column__find_last__nulls_as_smallest)
@@ -155,7 +157,7 @@ TEST_F(SearchTest, nullable_column__find_last__nulls_as_smallest)
                                              {cudf::order::ASCENDING},
                                              {cudf::null_order::BEFORE}));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, nullable_column__find_first__nulls_as_smallest)
@@ -176,7 +178,7 @@ TEST_F(SearchTest, nullable_column__find_first__nulls_as_smallest)
                                              {cudf::order::ASCENDING},
                                              {cudf::null_order::BEFORE}));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, nullable_column__find_last__nulls_as_largest)
@@ -196,7 +198,7 @@ TEST_F(SearchTest, nullable_column__find_last__nulls_as_largest)
                                              {cudf::order::ASCENDING},
                                              {cudf::null_order::AFTER}));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, nullable_column__find_first__nulls_as_largest)
@@ -216,7 +218,7 @@ TEST_F(SearchTest, nullable_column__find_first__nulls_as_largest)
                                              {cudf::order::ASCENDING},
                                              {cudf::null_order::AFTER}));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, table__find_first)
@@ -259,7 +261,7 @@ TEST_F(SearchTest, table__find_first)
   EXPECT_NO_THROW(result =
                     cudf::lower_bound(input_table, values_table, order_flags, null_order_flags));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, table__find_last)
@@ -302,7 +304,7 @@ TEST_F(SearchTest, table__find_last)
   EXPECT_NO_THROW(result =
                     cudf::upper_bound(input_table, values_table, order_flags, null_order_flags));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, table_partial_desc__find_first)
@@ -345,7 +347,7 @@ TEST_F(SearchTest, table_partial_desc__find_first)
   EXPECT_NO_THROW(result =
                     cudf::lower_bound(input_table, values_table, order_flags, null_order_flags));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, table_partial_desc__find_last)
@@ -388,7 +390,7 @@ TEST_F(SearchTest, table_partial_desc__find_last)
   EXPECT_NO_THROW(result =
                     cudf::upper_bound(input_table, values_table, order_flags, null_order_flags));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, table__find_first__nulls_as_smallest)
@@ -429,7 +431,7 @@ TEST_F(SearchTest, table__find_first__nulls_as_smallest)
   EXPECT_NO_THROW(result =
                     cudf::lower_bound(input_table, values_table, order_flags, null_order_flags));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, table__find_last__nulls_as_smallest)
@@ -470,7 +472,7 @@ TEST_F(SearchTest, table__find_last__nulls_as_smallest)
   EXPECT_NO_THROW(result =
                     cudf::upper_bound(input_table, values_table, order_flags, null_order_flags));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, table__find_first__nulls_as_largest)
@@ -511,7 +513,7 @@ TEST_F(SearchTest, table__find_first__nulls_as_largest)
   EXPECT_NO_THROW(result =
                     cudf::lower_bound(input_table, values_table, order_flags, null_order_flags));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, table__find_last__nulls_as_largest)
@@ -552,7 +554,7 @@ TEST_F(SearchTest, table__find_last__nulls_as_largest)
   EXPECT_NO_THROW(result =
                     cudf::upper_bound(input_table, values_table, order_flags, null_order_flags));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, contains_true)
@@ -667,7 +669,7 @@ TEST_F(SearchTest, empty_table_string)
                                              {cudf::order::ASCENDING},
                                              {cudf::null_order::BEFORE}));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, empty_values_string)
@@ -696,7 +698,7 @@ TEST_F(SearchTest, empty_values_string)
                                              {cudf::order::ASCENDING},
                                              {cudf::null_order::BEFORE}));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, non_null_column__find_first_string)
@@ -726,7 +728,7 @@ TEST_F(SearchTest, non_null_column__find_first_string)
                                              {cudf::order::ASCENDING},
                                              {cudf::null_order::BEFORE}));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, non_null_column__find_last_string)
@@ -756,7 +758,7 @@ TEST_F(SearchTest, non_null_column__find_last_string)
                                              {cudf::order::ASCENDING},
                                              {cudf::null_order::BEFORE}));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, non_null_column_desc__find_first_string)
@@ -786,7 +788,7 @@ TEST_F(SearchTest, non_null_column_desc__find_first_string)
                                              {cudf::order::DESCENDING},
                                              {cudf::null_order::BEFORE}));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, non_null_column_desc__find_last_string)
@@ -816,7 +818,7 @@ TEST_F(SearchTest, non_null_column_desc__find_last_string)
                                              {cudf::order::DESCENDING},
                                              {cudf::null_order::BEFORE}));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, nullable_column__find_last__nulls_as_smallest_string)
@@ -846,7 +848,7 @@ TEST_F(SearchTest, nullable_column__find_last__nulls_as_smallest_string)
                                              {cudf::order::ASCENDING},
                                              {cudf::null_order::BEFORE}));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, nullable_column__find_first__nulls_as_smallest_string)
@@ -876,7 +878,7 @@ TEST_F(SearchTest, nullable_column__find_first__nulls_as_smallest_string)
                                              {cudf::order::ASCENDING},
                                              {cudf::null_order::BEFORE}));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, nullable_column__find_last__nulls_as_largest_string)
@@ -906,7 +908,7 @@ TEST_F(SearchTest, nullable_column__find_last__nulls_as_largest_string)
                                              {cudf::order::ASCENDING},
                                              {cudf::null_order::AFTER}));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, non_null_column__nullable_values__find_last__nulls_as_largest_string)
@@ -925,7 +927,7 @@ TEST_F(SearchTest, non_null_column__nullable_values__find_last__nulls_as_largest
                                              {cudf::order::ASCENDING},
                                              {cudf::null_order::AFTER}));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, nullable_column__find_first__nulls_as_largest_string)
@@ -955,7 +957,7 @@ TEST_F(SearchTest, nullable_column__find_first__nulls_as_largest_string)
                                              {cudf::order::ASCENDING},
                                              {cudf::null_order::AFTER}));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, table__find_first_string)
@@ -1024,7 +1026,7 @@ TEST_F(SearchTest, table__find_first_string)
   EXPECT_NO_THROW(result =
                     cudf::lower_bound(input_table, values_table, order_flags, null_order_flags));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, table__find_last_string)
@@ -1093,7 +1095,7 @@ TEST_F(SearchTest, table__find_last_string)
   EXPECT_NO_THROW(result =
                     cudf::upper_bound(input_table, values_table, order_flags, null_order_flags));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, table_partial_desc__find_first_string)
@@ -1162,7 +1164,7 @@ TEST_F(SearchTest, table_partial_desc__find_first_string)
   EXPECT_NO_THROW(result =
                     cudf::lower_bound(input_table, values_table, order_flags, null_order_flags));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, table_partial_desc__find_last_string)
@@ -1232,7 +1234,7 @@ TEST_F(SearchTest, table_partial_desc__find_last_string)
   EXPECT_NO_THROW(result =
                     cudf::upper_bound(input_table, values_table, order_flags, null_order_flags));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, table__find_first__nulls_as_smallest_string)
@@ -1299,7 +1301,7 @@ TEST_F(SearchTest, table__find_first__nulls_as_smallest_string)
   EXPECT_NO_THROW(result =
                     cudf::lower_bound(input_table, values_table, order_flags, null_order_flags));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, table__find_last__nulls_as_smallest_string)
@@ -1366,7 +1368,7 @@ TEST_F(SearchTest, table__find_last__nulls_as_smallest_string)
   EXPECT_NO_THROW(result =
                     cudf::upper_bound(input_table, values_table, order_flags, null_order_flags));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, table__find_first__nulls_as_largest_string)
@@ -1433,7 +1435,7 @@ TEST_F(SearchTest, table__find_first__nulls_as_largest_string)
   EXPECT_NO_THROW(result =
                     cudf::lower_bound(input_table, values_table, order_flags, null_order_flags));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, table__find_last__nulls_as_largest_string)
@@ -1500,7 +1502,7 @@ TEST_F(SearchTest, table__find_last__nulls_as_largest_string)
   EXPECT_NO_THROW(result =
                     cudf::upper_bound(input_table, values_table, order_flags, null_order_flags));
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, contains_true_string)
@@ -1617,6 +1619,35 @@ TEST_F(SearchTest, contains_nullable_column_false_string)
   ASSERT_EQ(result, expect);
 }
 
+TEST_F(SearchTest, contains_dictionary)
+{
+  cudf::test::strings_column_wrapper column({"00", "00", "17", "17", "23", "23", "29"});
+  auto dict_col = cudf::dictionary::encode(column);
+  EXPECT_TRUE(cudf::contains(dict_col->view(), string_scalar{"23"}));
+  EXPECT_FALSE(cudf::contains(dict_col->view(), string_scalar{"28"}));
+
+  cudf::test::strings_column_wrapper needles({"00", "17", "23", "27"});
+  auto dict_needles = cudf::dictionary::encode(needles);
+  fixed_width_column_wrapper<bool> expect{1, 1, 1, 1, 1, 1, 0};
+  auto result = cudf::contains(dict_col->view(), dict_needles->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
+}
+
+TEST_F(SearchTest, contains_nullable_dictionary)
+{
+  cudf::test::fixed_width_column_wrapper<int64_t> column({0, 0, 17, 17, 23, 23, 29},
+                                                         {1, 0, 1, 1, 1, 1, 1});
+  auto dict_col = cudf::dictionary::encode(column);
+  EXPECT_TRUE(cudf::contains(dict_col->view(), numeric_scalar<int64_t>{23}));
+  EXPECT_FALSE(cudf::contains(dict_col->view(), numeric_scalar<int64_t>{28}));
+
+  cudf::test::fixed_width_column_wrapper<int64_t> needles({0, 17, 23, 27});
+  auto dict_needles = cudf::dictionary::encode(needles);
+  fixed_width_column_wrapper<bool> expect({1, 0, 1, 1, 1, 1, 0}, {1, 0, 1, 1, 1, 1, 1});
+  auto result = cudf::contains(dict_col->view(), dict_needles->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
+}
+
 TEST_F(SearchTest, multi_contains_some)
 {
   using element_type = int64_t;
@@ -1628,7 +1659,7 @@ TEST_F(SearchTest, multi_contains_some)
 
   auto result = cudf::contains(haystack, needles);
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, multi_contains_none)
@@ -1642,7 +1673,7 @@ TEST_F(SearchTest, multi_contains_none)
 
   auto result = cudf::contains(haystack, needles);
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, multi_contains_some_string)
@@ -1658,7 +1689,7 @@ TEST_F(SearchTest, multi_contains_some_string)
 
   auto result = cudf::contains(haystack, needles);
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, multi_contains_none_string)
@@ -1674,7 +1705,7 @@ TEST_F(SearchTest, multi_contains_none_string)
 
   auto result = cudf::contains(haystack, needles);
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, multi_contains_some_with_nulls)
@@ -1689,7 +1720,7 @@ TEST_F(SearchTest, multi_contains_some_with_nulls)
 
   auto result = cudf::contains(haystack, needles);
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, multi_contains_none_with_nulls)
@@ -1704,7 +1735,7 @@ TEST_F(SearchTest, multi_contains_none_with_nulls)
 
   auto result = cudf::contains(haystack, needles);
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, multi_contains_some_string_with_nulls)
@@ -1728,7 +1759,7 @@ TEST_F(SearchTest, multi_contains_some_string_with_nulls)
 
   auto result = cudf::contains(haystack, needles);
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, multi_contains_none_string_with_nulls)
@@ -1752,7 +1783,7 @@ TEST_F(SearchTest, multi_contains_none_string_with_nulls)
 
   auto result = cudf::contains(haystack, needles);
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, multi_contains_empty_column)
@@ -1766,7 +1797,7 @@ TEST_F(SearchTest, multi_contains_empty_column)
 
   auto result = cudf::contains(haystack, needles);
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, multi_contains_empty_column_string)
@@ -1782,7 +1813,7 @@ TEST_F(SearchTest, multi_contains_empty_column_string)
 
   auto result = cudf::contains(haystack, needles);
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, multi_contains_empty_input_set)
@@ -1796,7 +1827,7 @@ TEST_F(SearchTest, multi_contains_empty_input_set)
 
   auto result = cudf::contains(haystack, needles);
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, multi_contains_empty_input_set_string)
@@ -1812,7 +1843,61 @@ TEST_F(SearchTest, multi_contains_empty_input_set_string)
 
   auto result = cudf::contains(haystack, needles);
 
-  expect_columns_equal(*result, expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
+}
+
+template <typename T>
+struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+};
+
+TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointLowerBound)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+
+  auto vec = std::vector<decimalXX>(1000);
+  std::iota(std::begin(vec), std::end(vec), decimalXX{});
+
+  auto const values =
+    cudf::test::fixed_width_column_wrapper<decimalXX>{decimalXX{200, scale_type{0}},
+                                                      decimalXX{400, scale_type{0}},
+                                                      decimalXX{600, scale_type{0}},
+                                                      decimalXX{800, scale_type{0}}};
+  auto const expect = cudf::test::fixed_width_column_wrapper<cudf::size_type>{200, 400, 600, 800};
+  auto const column = cudf::test::fixed_width_column_wrapper<decimalXX>(vec.begin(), vec.end());
+
+  auto result = cudf::lower_bound({cudf::table_view{{column}}},
+                                  {cudf::table_view{{values}}},
+                                  {cudf::order::ASCENDING},
+                                  {cudf::null_order::BEFORE});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointUpperBound)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+
+  auto vec = std::vector<decimalXX>(1000);
+  std::iota(std::begin(vec), std::end(vec), decimalXX{});
+
+  auto const values =
+    cudf::test::fixed_width_column_wrapper<decimalXX>{decimalXX{200, scale_type{0}},
+                                                      decimalXX{400, scale_type{0}},
+                                                      decimalXX{600, scale_type{0}},
+                                                      decimalXX{800, scale_type{0}}};
+  auto const expect = cudf::test::fixed_width_column_wrapper<cudf::size_type>{201, 401, 601, 801};
+  auto const column = cudf::test::fixed_width_column_wrapper<decimalXX>(vec.begin(), vec.end());
+
+  auto result = cudf::upper_bound({cudf::table_view{{column}}},
+                                  {cudf::table_view{{values}}},
+                                  {cudf::order::ASCENDING},
+                                  {cudf::null_order::BEFORE});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

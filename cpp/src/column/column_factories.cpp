@@ -17,8 +17,10 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/fill.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/detail/fill.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -51,6 +53,8 @@ std::size_t size_of(data_type element_type)
 // Empty column of specified type
 std::unique_ptr<column> make_empty_column(data_type type)
 {
+  CUDF_EXPECTS(type.id() == type_id::EMPTY || !cudf::is_nested(type),
+               "make_empty_column is invalid to call on nested types");
   return std::make_unique<column>(type, 0, rmm::device_buffer{});
 }
 
@@ -162,7 +166,7 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stri
   // any of the children in the strings column which would otherwise cause an exception.
   auto null_mask = create_null_mask(size, mask_state::ALL_NULL, stream);
   column_view sc{
-    data_type{STRING}, size, nullptr, static_cast<bitmask_type*>(null_mask.data()), size};
+    data_type{type_id::STRING}, size, nullptr, static_cast<bitmask_type*>(null_mask.data()), size};
   auto sv = static_cast<scalar_type_t<cudf::string_view> const&>(value);
   // fill the column with the scalar
   auto output = strings::detail::fill(strings_column_view(sc), 0, size, sv, mr, stream);
@@ -190,6 +194,16 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::list
   CUDF_FAIL("TODO");
 }
 
+template <>
+std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::struct_view>(
+  scalar const& value,
+  size_type size,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream) const
+{
+  CUDF_FAIL("TODO. struct_view currently not supported.");
+}
+
 std::unique_ptr<column> make_column_from_scalar(scalar const& s,
                                                 size_type size,
                                                 rmm::mr::device_memory_resource* mr,
@@ -197,6 +211,20 @@ std::unique_ptr<column> make_column_from_scalar(scalar const& s,
 {
   if (size == 0) return make_empty_column(s.type());
   return type_dispatcher(s.type(), column_from_scalar_dispatch{}, s, size, mr, stream);
+}
+
+std::unique_ptr<column> make_dictionary_from_scalar(scalar const& s,
+                                                    size_type size,
+                                                    rmm::mr::device_memory_resource* mr,
+                                                    cudaStream_t stream)
+{
+  if (size == 0) return make_empty_column(data_type{type_id::DICTIONARY32});
+  CUDF_EXPECTS(s.is_valid(), "cannot create a dictionary with a null key");
+  return make_dictionary_column(
+    make_column_from_scalar(s, 1, mr, stream),
+    make_column_from_scalar(numeric_scalar<uint32_t>(0), size, mr, stream),
+    rmm::device_buffer{0, stream, mr},
+    0);
 }
 
 }  // namespace cudf

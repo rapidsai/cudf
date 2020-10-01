@@ -20,9 +20,9 @@
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <tests/strings/utilities.h>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
 
 #include <vector>
 
@@ -48,7 +48,7 @@ TEST_F(StringsCaseTest, ToLower)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsCaseTest, ToUpper)
@@ -70,7 +70,7 @@ TEST_F(StringsCaseTest, ToUpper)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsCaseTest, Swapcase)
@@ -92,12 +92,13 @@ TEST_F(StringsCaseTest, Swapcase)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsCaseTest, EmptyStringsColumn)
 {
-  cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+  cudf::column_view zero_size_strings_column(
+    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
   auto results      = cudf::strings::to_lower(strings_view);
   auto view         = results->view();
@@ -123,7 +124,7 @@ TEST_F(StringsCaseTest, Capitalize)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsCaseTest, Title)
@@ -145,7 +146,7 @@ TEST_F(StringsCaseTest, Title)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsCaseTest, MultiCharUpper)
@@ -157,7 +158,7 @@ TEST_F(StringsCaseTest, MultiCharUpper)
 
   auto results = cudf::strings::to_upper(strings_view);
 
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsCaseTest, MultiCharLower)
@@ -169,5 +170,5 @@ TEST_F(StringsCaseTest, MultiCharLower)
 
   auto results = cudf::strings::to_lower(strings_view);
 
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }

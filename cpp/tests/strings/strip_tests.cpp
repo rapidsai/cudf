@@ -18,9 +18,9 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/strip.hpp>
 
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
 #include "./utilities.h"
 
 #include <vector>
@@ -45,7 +45,7 @@ TEST_F(StringsStripTest, StripLeft)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsStripTest, StripRight)
@@ -66,7 +66,7 @@ TEST_F(StringsStripTest, StripRight)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsStripTest, StripBoth)
@@ -87,12 +87,13 @@ TEST_F(StringsStripTest, StripBoth)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsStripTest, EmptyStringsColumn)
 {
-  cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+  cudf::column_view zero_size_strings_column(
+    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
   auto results      = cudf::strings::strip(strings_view);
   auto view         = results->view();

@@ -17,9 +17,9 @@
 #include <tests/strings/utilities.h>
 #include <cudf/strings/convert/convert_ipv4.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
 
 #include <vector>
 
@@ -45,7 +45,7 @@ TEST_F(StringsConvertTest, IPv4ToIntegers)
     h_expected.cend(),
     thrust::make_transform_iterator(h_strings.begin(),
                                     [](auto const str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsConvertTest, IntegersToIPv4)
@@ -66,12 +66,12 @@ TEST_F(StringsConvertTest, IntegersToIPv4)
                                     [](auto const str) { return str != nullptr; }));
 
   auto results = cudf::strings::integers_to_ipv4(column);
-  cudf::test::expect_columns_equal(*results, strings);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings);
 }
 
 TEST_F(StringsConvertTest, ZeroSizeStringsColumnIPV4)
 {
-  cudf::column_view zero_size_column(cudf::data_type{cudf::INT64}, 0, nullptr, nullptr, 0);
+  cudf::column_view zero_size_column(cudf::data_type{cudf::type_id::INT64}, 0, nullptr, nullptr, 0);
   auto results = cudf::strings::integers_to_ipv4(zero_size_column);
   cudf::test::expect_strings_empty(results->view());
   results = cudf::strings::ipv4_to_integers(results->view());
@@ -80,6 +80,30 @@ TEST_F(StringsConvertTest, ZeroSizeStringsColumnIPV4)
 
 TEST_F(StringsConvertTest, IPv4Error)
 {
-  auto column = cudf::make_numeric_column(cudf::data_type{cudf::INT32}, 100);
+  auto column = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32}, 100);
   EXPECT_THROW(cudf::strings::integers_to_ipv4(column->view()), cudf::logic_error);
+}
+
+TEST_F(StringsConvertTest, IsIPv4)
+{
+  std::vector<const char*> h_strings{"",
+                                     "123.456.789.10",
+                                     nullptr,
+                                     "0.0.0.0",
+                                     ".111.211.113",
+                                     "127:0:0:1",
+                                     "255.255.255.255",
+                                     "192.168.0.",
+                                     "1...1",
+                                     "127.0.A.1",
+                                     "9.1.2.3.4",
+                                     "8.9"};
+  cudf::test::strings_column_wrapper strings(
+    h_strings.begin(),
+    h_strings.end(),
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+  cudf::test::fixed_width_column_wrapper<bool> expected({0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0},
+                                                        {1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1});
+  auto results = cudf::strings::is_ipv4(cudf::strings_column_view(strings));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }

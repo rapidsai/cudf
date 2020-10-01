@@ -15,10 +15,10 @@
  */
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/types.hpp>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/cudf_gtest.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
 
 struct ValidIfTest : public cudf::test::BaseFixture {
 };
@@ -57,7 +57,7 @@ TEST_F(ValidIfTest, OddsValid)
   auto expected = cudf::test::detail::make_null_mask(iter, iter + 10000);
   auto actual   = cudf::detail::valid_if(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(10000), odds_valid{});
-  cudf::test::expect_equal_buffers(expected.data(), actual.first.data(), expected.size());
+  CUDF_TEST_EXPECT_EQUAL_BUFFERS(expected.data(), actual.first.data(), expected.size());
   EXPECT_EQ(5000, actual.second);
 }
 
@@ -67,7 +67,7 @@ TEST_F(ValidIfTest, AllValid)
   auto expected = cudf::test::detail::make_null_mask(iter, iter + 10000);
   auto actual   = cudf::detail::valid_if(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(10000), all_valid{});
-  cudf::test::expect_equal_buffers(expected.data(), actual.first.data(), expected.size());
+  CUDF_TEST_EXPECT_EQUAL_BUFFERS(expected.data(), actual.first.data(), expected.size());
   EXPECT_EQ(0, actual.second);
 }
 
@@ -77,6 +77,6 @@ TEST_F(ValidIfTest, AllNull)
   auto expected = cudf::test::detail::make_null_mask(iter, iter + 10000);
   auto actual   = cudf::detail::valid_if(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(10000), all_null{});
-  cudf::test::expect_equal_buffers(expected.data(), actual.first.data(), expected.size());
+  CUDF_TEST_EXPECT_EQUAL_BUFFERS(expected.data(), actual.first.data(), expected.size());
   EXPECT_EQ(10000, actual.second);
 }

@@ -22,9 +22,9 @@
 #include <cudf/utilities/error.hpp>
 
 #include <tests/strings/utilities.h>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
 
 #include <vector>
 
@@ -51,7 +51,7 @@ TEST_F(StringsPadTest, Padding)
       h_expected.begin(),
       h_expected.end(),
       thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     auto results = cudf::strings::pad(strings_view, width, cudf::strings::pad_side::LEFT, phil);
@@ -62,7 +62,7 @@ TEST_F(StringsPadTest, Padding)
       h_expected.begin(),
       h_expected.end(),
       thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     auto results = cudf::strings::pad(strings_view, width, cudf::strings::pad_side::BOTH, phil);
@@ -73,7 +73,7 @@ TEST_F(StringsPadTest, Padding)
       h_expected.begin(),
       h_expected.end(),
       thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
 
@@ -86,18 +86,19 @@ TEST_F(StringsPadTest, PaddingBoth)
   {  // even width left justify
     auto results = cudf::strings::pad(strings_view, 6, cudf::strings::pad_side::BOTH, phil);
     cudf::test::strings_column_wrapper expected({"koala+", "+foxx+", "+fox++", "chameleon"});
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {  // odd width right justify
     auto results = cudf::strings::pad(strings_view, 7, cudf::strings::pad_side::BOTH, phil);
     cudf::test::strings_column_wrapper expected({"+koala+", "++foxx+", "++fox++", "chameleon"});
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
 
 TEST_F(StringsPadTest, ZeroSizeStringsColumn)
 {
-  cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+  cudf::column_view zero_size_strings_column(
+    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
   auto results      = cudf::strings::pad(strings_view, 5);
   cudf::test::expect_strings_empty(results->view());
@@ -124,7 +125,7 @@ TEST_P(StringsPadParmsTest, Padding)
   }
   cudf::test::strings_column_wrapper expected(h_expected.begin(), h_expected.end());
 
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 INSTANTIATE_TEST_CASE_P(StringsPadParmWidthTest,
@@ -151,7 +152,7 @@ TEST_F(StringsPadTest, ZFill)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsPadTest, Wrap1)
@@ -172,7 +173,7 @@ TEST_F(StringsPadTest, Wrap1)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsPadTest, Wrap2)
@@ -195,7 +196,7 @@ TEST_F(StringsPadTest, Wrap2)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsPadTest, WrapExpectFailure)

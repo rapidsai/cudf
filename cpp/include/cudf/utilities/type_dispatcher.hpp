@@ -24,8 +24,10 @@
 #include <cudf/wrappers/timestamps.hpp>
 #include <string>
 
+#include <cudf/fixed_point/fixed_point.hpp>
+
 /**
- * @file type_dispatcher.hpp
+ * @file
  * @brief Defines the mapping between `cudf::type_id` runtime type information
  * and concrete C++ types.
  **/
@@ -33,6 +35,7 @@ namespace cudf {
 /**
  * @addtogroup utility_dispatcher
  * @{
+ * @file
  */
 
 /**
@@ -52,7 +55,7 @@ namespace cudf {
 template <typename T>
 inline constexpr type_id type_to_id()
 {
-  return EMPTY;
+  return type_id::EMPTY;
 };
 
 struct type_to_name {
@@ -72,7 +75,7 @@ struct id_to_type_impl {
  *
  * Example:
  * ```
- * static_assert(std::is_same<int32_t, id_to_type<INT32>);
+ * static_assert(std::is_same<int32_t, id_to_type<id_type::INT32>);
  * ```
  * @tparam t The `cudf::type_id` to map
  **/
@@ -132,6 +135,9 @@ CUDF_TYPE_MAPPING(cudf::duration_us, type_id::DURATION_MICROSECONDS);
 CUDF_TYPE_MAPPING(cudf::duration_ns, type_id::DURATION_NANOSECONDS);
 CUDF_TYPE_MAPPING(dictionary32, type_id::DICTIONARY32);
 CUDF_TYPE_MAPPING(cudf::list_view, type_id::LIST);
+CUDF_TYPE_MAPPING(numeric::decimal32, type_id::DECIMAL32);
+CUDF_TYPE_MAPPING(numeric::decimal64, type_id::DECIMAL64);
+CUDF_TYPE_MAPPING(cudf::struct_view, type_id::STRUCT);
 
 template <typename T>
 struct type_to_scalar_type_impl {
@@ -171,6 +177,18 @@ struct type_to_scalar_type_impl<cudf::string_view> {
   using ScalarDeviceType = cudf::string_scalar_device_view;
 };
 
+template <>
+struct type_to_scalar_type_impl<numeric::decimal32> {
+  using ScalarType       = cudf::fixed_point_scalar<numeric::decimal32>;
+  using ScalarDeviceType = cudf::fixed_point_scalar_device_view<numeric::decimal32>;
+};
+
+template <>
+struct type_to_scalar_type_impl<numeric::decimal64> {
+  using ScalarType       = cudf::fixed_point_scalar<numeric::decimal64>;
+  using ScalarDeviceType = cudf::fixed_point_scalar_device_view<numeric::decimal64>;
+};
+
 template <>  // TODO: this is a temporary solution for make_pair_iterator
 struct type_to_scalar_type_impl<cudf::dictionary32> {
   using ScalarType       = cudf::numeric_scalar<int32_t>;
@@ -182,6 +200,12 @@ template <>  // TODO: this is to get compilation working. list scalars will be i
 struct type_to_scalar_type_impl<cudf::list_view> {
   using ScalarType = cudf::list_scalar;
   // using ScalarDeviceType = cudf::list_scalar_device_view;
+};
+
+template <>  // TODO: Ditto, likewise.
+struct type_to_scalar_type_impl<cudf::struct_view> {
+  using ScalarType = cudf::struct_scalar;
+  // using ScalarDeviceType = cudf::struct_scalar_device_view; // CALEB: TODO!
 };
 
 #ifndef MAP_TIMESTAMP_SCALAR
@@ -328,65 +352,87 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(cudf::data_ty
                                                                    Ts&&... args)
 {
   switch (dtype.id()) {
-    case BOOL8:
-      return f.template operator()<typename IdTypeMap<BOOL8>::type>(std::forward<Ts>(args)...);
-    case INT8:
-      return f.template operator()<typename IdTypeMap<INT8>::type>(std::forward<Ts>(args)...);
-    case INT16:
-      return f.template operator()<typename IdTypeMap<INT16>::type>(std::forward<Ts>(args)...);
-    case INT32:
-      return f.template operator()<typename IdTypeMap<INT32>::type>(std::forward<Ts>(args)...);
-    case INT64:
-      return f.template operator()<typename IdTypeMap<INT64>::type>(std::forward<Ts>(args)...);
-    case UINT8:
-      return f.template operator()<typename IdTypeMap<UINT8>::type>(std::forward<Ts>(args)...);
-    case UINT16:
-      return f.template operator()<typename IdTypeMap<UINT16>::type>(std::forward<Ts>(args)...);
-    case UINT32:
-      return f.template operator()<typename IdTypeMap<UINT32>::type>(std::forward<Ts>(args)...);
-    case UINT64:
-      return f.template operator()<typename IdTypeMap<UINT64>::type>(std::forward<Ts>(args)...);
-    case FLOAT32:
-      return f.template operator()<typename IdTypeMap<FLOAT32>::type>(std::forward<Ts>(args)...);
-    case FLOAT64:
-      return f.template operator()<typename IdTypeMap<FLOAT64>::type>(std::forward<Ts>(args)...);
-    case STRING:
-      return f.template operator()<typename IdTypeMap<STRING>::type>(std::forward<Ts>(args)...);
-    case TIMESTAMP_DAYS:
-      return f.template operator()<typename IdTypeMap<TIMESTAMP_DAYS>::type>(
+    case type_id::BOOL8:
+      return f.template operator()<typename IdTypeMap<type_id::BOOL8>::type>(
         std::forward<Ts>(args)...);
-    case TIMESTAMP_SECONDS:
-      return f.template operator()<typename IdTypeMap<TIMESTAMP_SECONDS>::type>(
+    case type_id::INT8:
+      return f.template operator()<typename IdTypeMap<type_id::INT8>::type>(
         std::forward<Ts>(args)...);
-    case TIMESTAMP_MILLISECONDS:
-      return f.template operator()<typename IdTypeMap<TIMESTAMP_MILLISECONDS>::type>(
+    case type_id::INT16:
+      return f.template operator()<typename IdTypeMap<type_id::INT16>::type>(
         std::forward<Ts>(args)...);
-    case TIMESTAMP_MICROSECONDS:
-      return f.template operator()<typename IdTypeMap<TIMESTAMP_MICROSECONDS>::type>(
+    case type_id::INT32:
+      return f.template operator()<typename IdTypeMap<type_id::INT32>::type>(
         std::forward<Ts>(args)...);
-    case TIMESTAMP_NANOSECONDS:
-      return f.template operator()<typename IdTypeMap<TIMESTAMP_NANOSECONDS>::type>(
+    case type_id::INT64:
+      return f.template operator()<typename IdTypeMap<type_id::INT64>::type>(
         std::forward<Ts>(args)...);
-    case DURATION_DAYS:
-      return f.template operator()<typename IdTypeMap<DURATION_DAYS>::type>(
+    case type_id::UINT8:
+      return f.template operator()<typename IdTypeMap<type_id::UINT8>::type>(
         std::forward<Ts>(args)...);
-    case DURATION_SECONDS:
-      return f.template operator()<typename IdTypeMap<DURATION_SECONDS>::type>(
+    case type_id::UINT16:
+      return f.template operator()<typename IdTypeMap<type_id::UINT16>::type>(
         std::forward<Ts>(args)...);
-    case DURATION_MILLISECONDS:
-      return f.template operator()<typename IdTypeMap<DURATION_MILLISECONDS>::type>(
+    case type_id::UINT32:
+      return f.template operator()<typename IdTypeMap<type_id::UINT32>::type>(
         std::forward<Ts>(args)...);
-    case DURATION_MICROSECONDS:
-      return f.template operator()<typename IdTypeMap<DURATION_MICROSECONDS>::type>(
+    case type_id::UINT64:
+      return f.template operator()<typename IdTypeMap<type_id::UINT64>::type>(
         std::forward<Ts>(args)...);
-    case DURATION_NANOSECONDS:
-      return f.template operator()<typename IdTypeMap<DURATION_NANOSECONDS>::type>(
+    case type_id::FLOAT32:
+      return f.template operator()<typename IdTypeMap<type_id::FLOAT32>::type>(
         std::forward<Ts>(args)...);
-    case DICTIONARY32:
-      return f.template operator()<typename IdTypeMap<DICTIONARY32>::type>(
+    case type_id::FLOAT64:
+      return f.template operator()<typename IdTypeMap<type_id::FLOAT64>::type>(
         std::forward<Ts>(args)...);
-    case LIST:
-      return f.template operator()<typename IdTypeMap<LIST>::type>(std::forward<Ts>(args)...);
+    case type_id::STRING:
+      return f.template operator()<typename IdTypeMap<type_id::STRING>::type>(
+        std::forward<Ts>(args)...);
+    case type_id::TIMESTAMP_DAYS:
+      return f.template operator()<typename IdTypeMap<type_id::TIMESTAMP_DAYS>::type>(
+        std::forward<Ts>(args)...);
+    case type_id::TIMESTAMP_SECONDS:
+      return f.template operator()<typename IdTypeMap<type_id::TIMESTAMP_SECONDS>::type>(
+        std::forward<Ts>(args)...);
+    case type_id::TIMESTAMP_MILLISECONDS:
+      return f.template operator()<typename IdTypeMap<type_id::TIMESTAMP_MILLISECONDS>::type>(
+        std::forward<Ts>(args)...);
+    case type_id::TIMESTAMP_MICROSECONDS:
+      return f.template operator()<typename IdTypeMap<type_id::TIMESTAMP_MICROSECONDS>::type>(
+        std::forward<Ts>(args)...);
+    case type_id::TIMESTAMP_NANOSECONDS:
+      return f.template operator()<typename IdTypeMap<type_id::TIMESTAMP_NANOSECONDS>::type>(
+        std::forward<Ts>(args)...);
+    case type_id::DURATION_DAYS:
+      return f.template operator()<typename IdTypeMap<type_id::DURATION_DAYS>::type>(
+        std::forward<Ts>(args)...);
+    case type_id::DURATION_SECONDS:
+      return f.template operator()<typename IdTypeMap<type_id::DURATION_SECONDS>::type>(
+        std::forward<Ts>(args)...);
+    case type_id::DURATION_MILLISECONDS:
+      return f.template operator()<typename IdTypeMap<type_id::DURATION_MILLISECONDS>::type>(
+        std::forward<Ts>(args)...);
+    case type_id::DURATION_MICROSECONDS:
+      return f.template operator()<typename IdTypeMap<type_id::DURATION_MICROSECONDS>::type>(
+        std::forward<Ts>(args)...);
+    case type_id::DURATION_NANOSECONDS:
+      return f.template operator()<typename IdTypeMap<type_id::DURATION_NANOSECONDS>::type>(
+        std::forward<Ts>(args)...);
+    case type_id::DICTIONARY32:
+      return f.template operator()<typename IdTypeMap<type_id::DICTIONARY32>::type>(
+        std::forward<Ts>(args)...);
+    case type_id::LIST:
+      return f.template operator()<typename IdTypeMap<type_id::LIST>::type>(
+        std::forward<Ts>(args)...);
+    case type_id::DECIMAL32:
+      return f.template operator()<typename IdTypeMap<type_id::DECIMAL32>::type>(
+        std::forward<Ts>(args)...);
+    case type_id::DECIMAL64:
+      return f.template operator()<typename IdTypeMap<type_id::DECIMAL64>::type>(
+        std::forward<Ts>(args)...);
+    case type_id::STRUCT:
+      return f.template operator()<typename IdTypeMap<type_id::STRUCT>::type>(
+        std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Unsupported type_id.");
@@ -404,6 +450,59 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(cudf::data_ty
 #endif
     }
   }
+}
+
+namespace detail {
+template <typename T1>
+struct double_type_dispatcher_second_type {
+#pragma nv_exec_check_disable
+  template <typename T2, typename F, typename... Ts>
+  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(F&& f, Ts&&... args) const
+  {
+    return f.template operator()<T1, T2>(std::forward<Ts>(args)...);
+  }
+};
+
+template <template <cudf::type_id> typename IdTypeMap>
+struct double_type_dispatcher_first_type {
+#pragma nv_exec_check_disable
+  template <typename T1, typename F, typename... Ts>
+  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(cudf::data_type type2,
+                                                      F&& f,
+                                                      Ts&&... args) const
+  {
+    return type_dispatcher<IdTypeMap>(type2,
+                                      detail::double_type_dispatcher_second_type<T1>{},
+                                      std::forward<F>(f),
+                                      std::forward<Ts>(args)...);
+  }
+};
+}  // namespace detail
+
+/**
+ * @brief Dispatches two type template parameters to a callable.
+ *
+ * This function expects a callable `f` with an `operator()` template accepting
+ * two typename template parameters `T1` and `T2`.
+ *
+ * @param type1 The `data_type` used to dispatch a type for the first template
+ * parameter of the callable `F`
+ * @param type2 The `data_type` used to dispatch a type for the second template
+ * parameter of the callable `F`
+ * @param args Parameter pack forwarded to the `operator()` invocation `F`.
+ */
+#pragma nv_exec_check_disable
+template <template <cudf::type_id> typename IdTypeMap = id_to_type_impl, typename F, typename... Ts>
+CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) double_type_dispatcher(cudf::data_type type1,
+                                                                          cudf::data_type type2,
+                                                                          F&& f,
+                                                                          Ts&&... args)
+{
+  return type_dispatcher<IdTypeMap>(type1,
+                                    detail::double_type_dispatcher_first_type<IdTypeMap>{},
+                                    type2,
+                                    std::forward<F>(f),
+                                    std::forward<Ts>(args)...);
 }
 
 /** @} */  // end of group

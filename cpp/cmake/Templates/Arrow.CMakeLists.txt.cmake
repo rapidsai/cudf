@@ -1,10 +1,12 @@
 cmake_minimum_required(VERSION 3.14)
+project(cudf-Arrow)
 
 include(ExternalProject)
 
 ExternalProject_Add(Arrow
     GIT_REPOSITORY    https://github.com/apache/arrow.git
-    GIT_TAG           apache-arrow-0.17.1
+    GIT_TAG           apache-arrow-1.0.1
+    GIT_SHALLOW       true
     SOURCE_DIR        "${ARROW_ROOT}/arrow"
     SOURCE_SUBDIR     "cpp"
     BINARY_DIR        "${ARROW_ROOT}/build"

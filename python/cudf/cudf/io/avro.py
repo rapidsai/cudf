@@ -1,6 +1,5 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
-
-import cudf._lib as libcudf
+from cudf import _lib as libcudf
 from cudf.utils import ioutils
 
 
@@ -18,7 +17,7 @@ def read_avro(
     from cudf import DataFrame
 
     filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
-        filepath_or_buffer, None, **kwargs
+        path_or_data=filepath_or_buffer, compression=None, **kwargs
     )
     if compression is not None:
         ValueError("URL content-encoding decompression is not supported")

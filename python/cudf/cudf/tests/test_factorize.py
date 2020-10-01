@@ -20,7 +20,7 @@ def test_factorize(ncats, nelem):
     assert isinstance(uvals, Series)
     assert isinstance(labels, Series)
 
-    encoder = dict((v, i) for i, v in enumerate(labels))
+    encoder = dict((labels[idx], idx) for idx in range(len(labels)))
     handcoded = [encoder[v] for v in arr]
     np.testing.assert_array_equal(uvals.to_array(), handcoded)
 

@@ -36,6 +36,7 @@ namespace cudf {
 namespace strings {
 namespace detail {
 namespace {
+
 /**
  * @brief  Units for timestamp conversion.
  * These are defined since there are more than what cudf supports.
@@ -178,6 +179,18 @@ struct parse_datetime {
   timestamp_units units;
   int8_t subsecond_precision;
 
+  /**
+   * @brief Return power of ten value given an exponent.
+   *
+   * @return `1x10^exponent` for `0 <= exponent <= 9`
+   */
+  __device__ constexpr int64_t power_of_ten(int32_t exponent)
+  {
+    constexpr int64_t powers_of_ten[] = {
+      1L, 10L, 100L, 1000L, 10000L, 100000L, 1000000L, 10000000L, 100000000L, 1000000000L};
+    return powers_of_ten[exponent];
+  }
+
   //
   __device__ int32_t str2int(const char* str, size_type bytes)
   {
@@ -199,8 +212,10 @@ struct parse_datetime {
     auto length = d_string.size_bytes();
     for (size_t idx = 0; idx < items_count; ++idx) {
       auto item = d_format_items[idx];
-      if (length < item.length) return 1;
-      if (item.item_type == format_char_type::literal) {  // static character we'll just skip;
+      if (item.value != 'f')
+        item.length = static_cast<int8_t>(std::min(static_cast<size_type>(item.length), length));
+      if (item.item_type == format_char_type::literal) {
+        // static character we'll just skip;
         // consume item.length bytes from string
         ptr += item.length;
         length -= item.length;
@@ -218,7 +233,12 @@ struct parse_datetime {
         case 'I': timeparts[TP_HOUR] = str2int(ptr, item.length); break;
         case 'M': timeparts[TP_MINUTE] = str2int(ptr, item.length); break;
         case 'S': timeparts[TP_SECOND] = str2int(ptr, item.length); break;
-        case 'f': timeparts[TP_SUBSECOND] = str2int(ptr, item.length); break;
+        case 'f': {
+          int32_t const read_size = std::min(static_cast<int32_t>(item.length), length);
+          int64_t const fraction  = str2int(ptr, read_size) * power_of_ten(item.length - read_size);
+          timeparts[TP_SUBSECOND] = static_cast<int32_t>(fraction);
+          break;
+        }
         case 'p': {
           string_view am_pm(ptr, 2);
           auto hour = timeparts[TP_HOUR];
@@ -282,10 +302,8 @@ struct parse_datetime {
       (days * 24L * 3600L) + (hour * 3600L) + (minute * 60L) + second + (tzadjust * 60);
     if (units == timestamp_units::seconds) return timestamp;
 
-    int64_t powers_of_ten[] = {
-      1L, 10L, 100L, 1000L, 10000L, 100000L, 1000000L, 10000000L, 100000000L, 1000000000L};
     int64_t subsecond =
-      timeparts[TP_SUBSECOND] * powers_of_ten[9 - subsecond_precision];  // normalize to nanoseconds
+      timeparts[TP_SUBSECOND] * power_of_ten(9 - subsecond_precision);  // normalize to nanoseconds
     if (units == timestamp_units::ms) {
       timestamp *= 1000L;
       subsecond = subsecond / 1000000L;
@@ -300,14 +318,15 @@ struct parse_datetime {
 
   __device__ T operator()(size_type idx)
   {
-    if (d_strings.is_null(idx)) return 0;
+    T epoch_time{typename T::duration{0}};
+    if (d_strings.is_null(idx)) return epoch_time;
     string_view d_str = d_strings.element<string_view>(idx);
-    if (d_str.empty()) return 0;
+    if (d_str.empty()) return epoch_time;
     //
-    int32_t timeparts[TP_ARRAYSIZE] = {0, 1, 1};       // month and day are 1-based
-    if (parse_into_parts(d_str, timeparts)) return 0;  // unexpected parse case
+    int32_t timeparts[TP_ARRAYSIZE] = {1970, 1, 1};             // month and day are 1-based
+    if (parse_into_parts(d_str, timeparts)) return epoch_time;  // unexpected parse case
     //
-    return static_cast<T>(timestamp_from_parts(timeparts, units));
+    return T{T::duration(timestamp_from_parts(timeparts, units))};
   }
 };
 
@@ -433,8 +452,24 @@ struct datetime_formatter {
   const int32_t* d_offsets;
   char* d_chars;
 
+  __device__ cudf::timestamp_D::duration convert_to_days(int64_t timestamp, timestamp_units units)
+  {
+    using namespace simt::std::chrono;
+    using minutes = duration<timestamp_s::rep, minutes::period>;
+    using hours   = duration<timestamp_s::rep, hours::period>;
+    switch (units) {
+      case timestamp_units::minutes: return floor<days>(minutes(timestamp));
+      case timestamp_units::seconds: return floor<days>(cudf::timestamp_s::duration(timestamp));
+      case timestamp_units::hours: return floor<days>(hours(timestamp));
+      case timestamp_units::ms: return floor<days>(cudf::timestamp_ms::duration(timestamp));
+      case timestamp_units::us: return floor<days>(cudf::timestamp_us::duration(timestamp));
+      case timestamp_units::ns: return floor<days>(cudf::timestamp_ns::duration(timestamp));
+      default: return cudf::timestamp_D::duration(timestamp);
+    }
+  }
+
   // divide timestamp integer into time components (year, month, day, etc)
-  // TODO call the simt::std::chrono methods here instead when the are ready
+  // TODO call the simt::std::chrono methods here instead when they are ready
   __device__ void dissect_timestamp(int64_t timestamp, int32_t* timeparts)
   {
     if (units == timestamp_units::years) {
@@ -473,69 +508,16 @@ struct datetime_formatter {
       return;
     }
 
-    // first, convert to days so we can handle months, leap years, etc.
-    int32_t days = static_cast<int32_t>(timestamp);  // default to days
-    if (units == timestamp_units::hours)
-      days = scale_time(timestamp, 24L);
-    else if (units == timestamp_units::minutes)
-      days = scale_time(timestamp, 1440L);  // 24*60
-    else if (units == timestamp_units::seconds)
-      days = scale_time(timestamp, 86400L);  // 24*60*60
-    else if (units == timestamp_units::ms)
-      days = scale_time(timestamp, 86400000L);
-    else if (units == timestamp_units::us)
-      days = scale_time(timestamp, 86400000000L);
-    else if (units == timestamp_units::ns)
-      days = scale_time(timestamp, 86400000000000L);
-    days = days + 719468;  // 719468 is days between 0000-00-00 and 1970-01-01
+    // first, convert to days so we can handle months, years, day of the year.
+    auto const days  = convert_to_days(timestamp, units);
+    auto const ymd   = simt::std::chrono::year_month_day(simt::std::chrono::sys_days(days));
+    auto const year  = static_cast<int32_t>(ymd.year());
+    auto const month = static_cast<unsigned>(ymd.month());
+    auto const day   = static_cast<unsigned>(ymd.day());
 
-    int32_t const daysInEra     = 146097;  // (400*365)+97
-    int32_t const daysInCentury = 36524;   // (100*365) + 24;
-    int32_t const daysIn4Years  = 1461;    // (4*365) + 1;
-    int32_t const daysInYear    = 365;
-
-    // code logic handles leap years in chunks: 400y,100y,4y,1y
-    int32_t year  = 400 * (days / daysInEra);
-    days          = days % daysInEra;
-    int32_t leapy = days / daysInCentury;
-    days          = days % daysInCentury;
-    if (leapy == 4) {  // landed exactly on a leap century
-      days += daysInCentury;
-      --leapy;
-    }
-    year += 100 * leapy;
-    year += 4 * (days / daysIn4Years);
-    days  = days % daysIn4Years;
-    leapy = days / daysInYear;
-    days  = days % daysInYear;
-    if (leapy == 4) {  // landed exactly on a leap year
-      days += daysInYear;
-      --leapy;
-    }
-    year += leapy;
-
-    // The months are shifted so that March is the starting month and February
-    // (with possible leap day in it) is the last month for the linear calculation.
-    // Day offsets for each month:   Mar Apr May June July Aug Sep  Oct  Nov  Dec  Jan  Feb
-    const int32_t monthDayOffset[] = {0, 31, 61, 92, 122, 153, 184, 214, 245, 275, 306, 337, 366};
-    // find month from days
-    int32_t month = [days, monthDayOffset] {
-      // find first offset that is bigger than days
-      auto itr = thrust::find_if(
-        thrust::seq, monthDayOffset, (monthDayOffset + 13), [days](auto d) { return days < d; });
-      return itr != (monthDayOffset + 13) ? thrust::distance(monthDayOffset, itr - 1) : 12;
-    }();
-
-    // compute day of the year and account for calculating with March being the first month
-    // for month >= 10, leap-day has been already been included
-    timeparts[TP_DAY_OF_YEAR] = (month >= 10)
-                                  ? days - monthDayOffset[10] + 1
-                                  : days + /*Jan=*/31 + /*Feb=*/28 + 1 +  // 2-month shift
-                                      ((year % 4 == 0) && ((year % 100 != 0) || (year % 400 == 0)));
-
-    int32_t const day = days - monthDayOffset[month] + 1;  // compute day of month
-    if (month >= 10) ++year;
-    month = ((month + 2) % 12) + 1;  // adjust Jan-Mar offset
+    int32_t const monthDayOffset[] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
+    timeparts[TP_DAY_OF_YEAR] =
+      day + monthDayOffset[month - 1] + (month > 2 and ymd.year().is_leap());
 
     timeparts[TP_YEAR]  = year;
     timeparts[TP_MONTH] = month;

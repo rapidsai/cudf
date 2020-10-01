@@ -15,7 +15,8 @@
  */
 
 #include <algorithm>
-#include <map>
+#include <array>
+#include <unordered_set>
 #include <vector>
 
 #include <cudf/utilities/error.hpp>
@@ -87,7 +88,7 @@ constexpr special_case_mapping_in codepoint_mapping_in[] = {
   {2, {1348, 1339, 0}, 0, {0, 0, 0}},   {2, {1358, 1350, 0}, 0, {0, 0, 0}},
   {2, {1348, 1341, 0}, 0, {0, 0, 0}},
 };
-constexpr uint16_t codepoints_in[] = {
+constexpr std::array<uint16_t, 107> codepoints_in = {
   223,   304,   329,   453,   456,   459,   496,   498,   912,   944,  1415, 7830,  7831,  7832,
   7833,  7834,  8016,  8018,  8020,  8022,  8064,  8065,  8066,  8067, 8068, 8069,  8070,  8071,
   8072,  8073,  8074,  8075,  8076,  8077,  8078,  8079,  8080,  8081, 8082, 8083,  8084,  8085,
@@ -97,7 +98,7 @@ constexpr uint16_t codepoints_in[] = {
   8162,  8163,  8164,  8166,  8167,  8178,  8179,  8180,  8182,  8183, 8188, 64256, 64257, 64258,
   64259, 64260, 64261, 64262, 64275, 64276, 64277, 64278, 64279,
 };
-constexpr uint16_t primes[] = {
+constexpr std::array<uint16_t, 269> primes = {
   227,  229,  233,  239,  241,  251,  257,  263,  269,  271,  277,  281,  283,  293,  307,  311,
   313,  317,  331,  337,  347,  349,  353,  359,  367,  373,  379,  383,  389,  397,  401,  409,
   419,  421,  431,  433,  439,  443,  449,  457,  461,  463,  467,  479,  487,  491,  499,  503,
@@ -120,16 +121,12 @@ constexpr uint16_t primes[] = {
 // find a prime number that generates no collisions for all possible input data
 uint16_t find_collision_proof_prime()
 {
-  size_t codepoints_in_size = std::end(codepoints_in) - std::begin(codepoints_in);
-
-  for (auto pitr = std::begin(primes); pitr < std::end(primes); ++pitr) {
-    std::map<uint16_t, uint16_t> keys;
-    std::for_each(std::begin(codepoints_in), std::end(codepoints_in), [&](uint16_t codepoint) {
-      int key = codepoint % *pitr;
-      if (keys.find(key) == keys.end()) { keys[key] = codepoint; }
-    });
-
-    if (keys.size() == codepoints_in_size) { return *pitr; }
+  for (auto const& prime : primes) {
+    std::unordered_set<uint16_t> keys;
+    std::for_each(std::cbegin(codepoints_in),
+                  std::cend(codepoints_in),
+                  [&](uint16_t const codepoint) { keys.insert(codepoint % prime); });
+    if (keys.size() == codepoints_in.size()) return prime;
   }
 
   // couldn't find a collision-proof prime

@@ -18,10 +18,10 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/type_lists.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/type_lists.hpp>
 
 template <typename T>
 struct NaNsToNullTest : public cudf::test::BaseFixture {
@@ -33,7 +33,7 @@ struct NaNsToNullTest : public cudf::test::BaseFixture {
 
     EXPECT_EQ(expected.null_count(), got_mask.second);
 
-    cudf::test::expect_columns_equal(expected, got.view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got.view());
   }
 
   std::unique_ptr<cudf::column> create_expected(std::vector<T> const& input,

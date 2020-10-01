@@ -1,8 +1,12 @@
+import datetime
+import datetime as dt
+
 import numpy as np
+import pandas as pd
 import pytest
 
 from cudf._lib.scalar import Scalar
-from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES
+from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, TIMEDELTA_TYPES
 
 
 @pytest.mark.parametrize(
@@ -85,11 +89,58 @@ from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES
 )
 def test_round_trip_scalar(value):
     s = Scalar(value)
+
     np.testing.assert_equal(s.value, value)
+    assert s.is_valid() is True
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES + ["object"])
+@pytest.mark.parametrize(
+    "dtype", NUMERIC_TYPES + DATETIME_TYPES + TIMEDELTA_TYPES + ["object"]
+)
 def test_null_scalar(dtype):
     s = Scalar(None, dtype=dtype)
     assert s.value is None
     assert s.dtype == np.dtype(dtype)
+    assert s.is_valid() is False
+
+
+@pytest.mark.parametrize(
+    "dtype", NUMERIC_TYPES + DATETIME_TYPES + TIMEDELTA_TYPES + ["object"]
+)
+def test_valid_scalar(dtype):
+    s = Scalar(1, dtype=dtype)
+
+    assert s.dtype == np.dtype(dtype)
+    assert s.is_valid() is True
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        datetime.timedelta(seconds=76),
+        datetime.timedelta(microseconds=7),
+        datetime.timedelta(minutes=47),
+        datetime.timedelta(hours=4427),
+        datetime.timedelta(weeks=7134),
+        pd.Timestamp(15133.5, unit="s"),
+        pd.Timestamp(15133.5, unit="D"),
+        pd.Timedelta(1513393355.5, unit="s"),
+        pd.Timedelta(34765, unit="D"),
+    ],
+)
+def test_date_duration_scalars(value):
+    s = Scalar(value)
+
+    actual = s.value
+
+    if isinstance(value, dt.datetime):
+        expected = np.datetime64(value)
+    elif isinstance(value, dt.timedelta):
+        expected = np.timedelta64(value)
+    elif isinstance(value, pd.Timestamp):
+        expected = value.to_datetime64()
+    elif isinstance(value, pd.Timedelta):
+        expected = value.to_timedelta64()
+
+    np.testing.assert_equal(actual, expected)
+    assert s.is_valid() is True

@@ -61,9 +61,9 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
     # cuDF's melt makes it Categorical because it doesn't support strings
     expect["variable"] = expect["variable"].astype("category")
 
-    pd.testing.assert_frame_equal(expect, got.to_pandas())
+    assert_eq(expect, got)
 
-    pd.testing.assert_frame_equal(expect, got_from_melt_method.to_pandas())
+    assert_eq(expect, got_from_melt_method)
 
 
 @pytest.mark.parametrize("num_cols", [1, 2, 10])
@@ -325,3 +325,103 @@ def test_series_merge_sorted(nparts, key, na_position, ascending):
     )
 
     assert_eq(expect.reset_index(drop=True), result.reset_index(drop=True))
+
+
+@pytest.mark.parametrize(
+    "index, column, data",
+    [
+        ([], [], []),
+        ([0], [0], [0]),
+        ([0, 0], [0, 1], [1, 2.0]),
+        ([0, 1], [0, 0], [1, 2.0]),
+        ([0, 1], [0, 1], [1, 2.0]),
+        (["a", "a", "b", "b"], ["c", "d", "c", "d"], [1, 2, 3, 4]),
+        (
+            ["a", "a", "b", "b", "a"],
+            ["c", "d", "c", "d", "e"],
+            [1, 2, 3, 4, 5],
+        ),
+    ],
+)
+def test_pivot_simple(index, column, data):
+    pdf = pd.DataFrame({"index": index, "column": column, "data": data})
+    gdf = cudf.DataFrame.from_pandas(pdf)
+
+    expect = pdf.pivot("index", "column")
+    got = gdf.pivot("index", "column")
+
+    check_index_and_columns = expect.shape != (0, 0)
+    assert_eq(
+        expect,
+        got,
+        check_dtype=False,
+        check_index_type=check_index_and_columns,
+        check_column_type=check_index_and_columns,
+    )
+
+
+def test_pivot_multi_values():
+    # from Pandas docs:
+    # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.pivot.html
+    pdf = pd.DataFrame(
+        {
+            "foo": ["one", "one", "one", "two", "two", "two"],
+            "bar": ["A", "B", "C", "A", "B", "C"],
+            "baz": [1, 2, 3, 4, 5, 6],
+            "zoo": ["x", "y", "z", "q", "w", "t"],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(
+        pdf.pivot(index="foo", columns="bar", values=["baz", "zoo"]),
+        gdf.pivot(index="foo", columns="bar", values=["baz", "zoo"]),
+        check_dtype=False,
+    )
+
+
+@pytest.mark.parametrize(
+    "level",
+    [
+        0,
+        1,
+        2,
+        "foo",
+        "bar",
+        "baz",
+        [],
+        [0, 1],
+        ["foo"],
+        ["foo", "bar"],
+        pytest.param(
+            [0, 1, 2],
+            marks=pytest.mark.xfail(reason="Pandas behaviour unclear"),
+        ),
+        pytest.param(
+            ["foo", "bar", "baz"],
+            marks=pytest.mark.xfail(reason="Pandas behaviour unclear"),
+        ),
+    ],
+)
+def test_unstack(level):
+    pdf = pd.DataFrame(
+        {
+            "foo": ["one", "one", "one", "two", "two", "two"],
+            "bar": ["A", "B", "C", "A", "B", "C"],
+            "baz": [1, 2, 3, 4, 5, 6],
+            "zoo": ["x", "y", "z", "q", "w", "t"],
+        }
+    ).set_index(["foo", "bar", "baz"])
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(
+        pdf.unstack(level=level), gdf.unstack(level=level), check_dtype=False,
+    )
+
+
+def test_pivot_duplicate_error():
+    gdf = cudf.DataFrame(
+        {"a": [0, 1, 2, 2], "b": [1, 2, 3, 3], "d": [1, 2, 3, 4]}
+    )
+    with pytest.raises(ValueError):
+        gdf.pivot(index="a", columns="b")
+    with pytest.raises(ValueError):
+        gdf.pivot(index="b", columns="a")

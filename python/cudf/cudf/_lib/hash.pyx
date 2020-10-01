@@ -4,11 +4,11 @@ from libc.stdint cimport uint32_t
 from libcpp cimport bool
 from libcpp.pair cimport pair
 from libcpp.memory cimport unique_ptr
+from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 from cudf._lib.column cimport Column
 from cudf._lib.table cimport Table
-from cudf._lib.move cimport move
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.table.table cimport table
@@ -64,6 +64,7 @@ def hash(Table source_table, object initial_hash_values=None):
         c_result = move(
             cpp_hash(
                 c_source_view,
+                libcudf_types.hash_id.HASH_MURMUR3,
                 c_initial_hash
             )
         )

@@ -67,7 +67,7 @@ std::unique_ptr<column> contains_util(
   strings_column_view const& strings,
   std::string const& pattern,
   bool beginning_only                 = false,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   auto strings_count  = strings.size();
@@ -79,7 +79,7 @@ std::unique_ptr<column> contains_util(
   auto d_prog = *prog;
 
   // create the output column
-  auto results   = make_numeric_column(data_type{BOOL8},
+  auto results   = make_numeric_column(data_type{type_id::BOOL8},
                                      strings_count,
                                      copy_bitmask(strings.parent(), stream, mr),
                                      strings.null_count(),
@@ -118,7 +118,7 @@ std::unique_ptr<column> contains_util(
 std::unique_ptr<column> contains_re(
   strings_column_view const& strings,
   std::string const& pattern,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   return contains_util(strings, pattern, false, mr, stream);
@@ -127,7 +127,7 @@ std::unique_ptr<column> contains_re(
 std::unique_ptr<column> matches_re(
   strings_column_view const& strings,
   std::string const& pattern,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   return contains_util(strings, pattern, true, mr, stream);
@@ -188,7 +188,7 @@ struct count_fn {
 std::unique_ptr<column> count_re(
   strings_column_view const& strings,
   std::string const& pattern,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   auto strings_count  = strings.size();
@@ -200,7 +200,7 @@ std::unique_ptr<column> count_re(
   auto d_prog = *prog;
 
   // create the output column
-  auto results   = make_numeric_column(data_type{INT32},
+  auto results   = make_numeric_column(data_type{type_id::INT32},
                                      strings_count,
                                      copy_bitmask(strings.parent(), stream, mr),
                                      strings.null_count(),

@@ -421,8 +421,8 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
                                          cudaStream_t stream)
 {
   // hard-coded to only work with cudf::string_view so we don't explode compile times
-  CUDF_EXPECTS(lhs.type().id() == cudf::STRING, "Invalid/Unsupported lhs datatype");
-  CUDF_EXPECTS(rhs.type().id() == cudf::STRING, "Invalid/Unsupported rhs datatype");
+  CUDF_EXPECTS(lhs.type().id() == cudf::type_id::STRING, "Invalid/Unsupported lhs datatype");
+  CUDF_EXPECTS(rhs.type().id() == cudf::type_id::STRING, "Invalid/Unsupported rhs datatype");
   if (null_using_binop(op)) {
     if (rhs.size() == 0) return cudf::make_empty_column(output_type);
     auto rhs_device_view = cudf::column_device_view::create(rhs, stream);
@@ -443,8 +443,8 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          cudaStream_t stream)
 {
   // hard-coded to only work with cudf::string_view so we don't explode compile times
-  CUDF_EXPECTS(lhs.type().id() == cudf::STRING, "Invalid/Unsupported lhs datatype");
-  CUDF_EXPECTS(rhs.type().id() == cudf::STRING, "Invalid/Unsupported rhs datatype");
+  CUDF_EXPECTS(lhs.type().id() == cudf::type_id::STRING, "Invalid/Unsupported lhs datatype");
+  CUDF_EXPECTS(rhs.type().id() == cudf::type_id::STRING, "Invalid/Unsupported rhs datatype");
   if (null_using_binop(op)) {
     if (lhs.size() == 0) return cudf::make_empty_column(output_type);
     auto lhs_device_view = cudf::column_device_view::create(lhs, stream);
@@ -464,8 +464,8 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          cudaStream_t stream)
 {
   // hard-coded to only work with cudf::string_view so we don't explode compile times
-  CUDF_EXPECTS(lhs.type().id() == cudf::STRING, "Invalid/Unsupported lhs datatype");
-  CUDF_EXPECTS(rhs.type().id() == cudf::STRING, "Invalid/Unsupported rhs datatype");
+  CUDF_EXPECTS(lhs.type().id() == cudf::type_id::STRING, "Invalid/Unsupported lhs datatype");
+  CUDF_EXPECTS(rhs.type().id() == cudf::type_id::STRING, "Invalid/Unsupported rhs datatype");
   if (null_using_binop(op)) {
     CUDF_EXPECTS(lhs.size() == rhs.size(), "Column sizes do not match");
     if (lhs.size() == 0) return cudf::make_empty_column(output_type);

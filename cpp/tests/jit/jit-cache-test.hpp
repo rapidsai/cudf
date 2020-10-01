@@ -18,13 +18,18 @@
 
 #include <boost/filesystem.hpp>
 
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
 
 #include <jit/cache.h>
 
-struct JitCacheTest : public cudf::test::BaseFixture, public cudf::jit::cudfJitCache {
+// Note that this test does not inherit from cudf::test::BaseFixture because
+// doing so would cause the CUDA context to be created before the fork in
+// the JitCacheMultiProcessTest, where we need it to be created after the fork
+// to ensure the forked child has a context. These tests do not need the
+// memory_resource member of BaseFixture.
+struct JitCacheTest : public ::testing::Test, public cudf::jit::cudfJitCache {
   JitCacheTest() : grid(1), block(1) {}
 
   virtual ~JitCacheTest() {}
@@ -49,8 +54,8 @@ struct JitCacheTest : public cudf::test::BaseFixture, public cudf::jit::cudfJitC
     // Prime up the cache so that the in-memory and file cache is populated
 
     // Single value column
-    auto column = cudf::test::fixed_width_column_wrapper<int>{{4, 0}};
-    auto expect = cudf::test::fixed_width_column_wrapper<int>{{64, 0}};
+    auto column = cudf::test::fixed_width_column_wrapper<int>({4, 0});
+    auto expect = cudf::test::fixed_width_column_wrapper<int>({64, 0});
 
     // make program
     auto program = getProgram("MemoryCacheTestProg", program_source);
@@ -60,7 +65,7 @@ struct JitCacheTest : public cudf::test::BaseFixture, public cudf::jit::cudfJitC
       .configure(grid, block)
       .launch(column.operator cudf::mutable_column_view().data<int>());
 
-    cudf::test::expect_columns_equal(expect, column);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, column);
   }
 
   const char* program_source =

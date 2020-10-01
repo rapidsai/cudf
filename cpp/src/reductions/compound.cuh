@@ -57,10 +57,9 @@ std::unique_ptr<scalar> compound_reduction(column_view const& col,
   Op compound_op{};
 
   if (col.has_nulls()) {
-    auto it =
-      thrust::make_transform_iterator(cudf::detail::make_null_replacement_iterator(
-                                        *dcol, compound_op.template get_identity<ElementType>()),
-                                      compound_op.template get_element_transformer<ResultType>());
+    auto it = thrust::make_transform_iterator(
+      dcol->pair_begin<ElementType, true>(),
+      compound_op.template get_null_replacing_element_transformer<ResultType>());
     result = detail::reduce<Op, decltype(it), ResultType>(
       it, col.size(), compound_op, valid_count, ddof, mr, stream);
   } else {

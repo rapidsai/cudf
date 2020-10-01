@@ -49,7 +49,7 @@ namespace {
 constexpr type_id to_type_id(const orc::SchemaType &schema,
                              bool use_np_dtypes,
                              type_id timestamp_type_id,
-                             bool decimals_as_float)
+                             bool decimals_as_float64)
 {
   switch (schema.kind) {
     case orc::BOOLEAN: return type_id::BOOL8;
@@ -73,7 +73,7 @@ constexpr type_id to_type_id(const orc::SchemaType &schema,
       return (use_np_dtypes) ? type_id::TIMESTAMP_MILLISECONDS : type_id::TIMESTAMP_DAYS;
     case orc::DECIMAL:
       // There isn't an arbitrary-precision type in cuDF, so map as float or int
-      return (decimals_as_float) ? type_id::FLOAT64 : type_id::INT64;
+      return (decimals_as_float64) ? type_id::FLOAT64 : type_id::INT64;
     default: break;
   }
 
@@ -158,41 +158,26 @@ class metadata {
   /**
    * @brief Filters and reads the info of only a selection of stripes
    *
-   * @param[in] stripe Index of the stripe to select
-   * @param[in] max_stripe_count Number of stripes to select for stripe-based selection
-   * @param[in] stripe_indices Indices of individual stripes [max_stripe_count]
+   * @param[in] stripes Indices of individual stripes
    * @param[in] row_start Starting row of the selection
    * @param[in,out] row_count Total number of rows selected
    *
    * @return List of stripe info and total number of selected rows
    **/
-  auto select_stripes(size_type stripe,
-                      size_type max_stripe_count,
-                      const size_type *stripe_indices,
+  auto select_stripes(const std::vector<size_type> &stripes,
                       size_type &row_start,
                       size_type &row_count)
   {
     std::vector<OrcStripeInfo> selection;
 
-    if (stripe_indices) {
+    if (!stripes.empty()) {
       size_t stripe_rows = 0;
-      for (auto i = 0; i < max_stripe_count; i++) {
-        auto stripe_idx = stripe_indices[i];
+      for (const auto &stripe_idx : stripes) {
         CUDF_EXPECTS(stripe_idx >= 0 && stripe_idx < get_num_stripes(), "Invalid stripe index");
         selection.emplace_back(&ff.stripes[stripe_idx], nullptr);
         stripe_rows += ff.stripes[stripe_idx].numberOfRows;
       }
       row_count = static_cast<size_type>(stripe_rows);
-    } else if (stripe != -1) {
-      CUDF_EXPECTS(stripe < get_num_stripes(), "Non-existent stripe");
-      size_t stripe_rows = 0;
-      do {
-        if (row_count >= 0 && stripe_rows >= (size_t)row_count) { break; }
-        selection.emplace_back(&ff.stripes[stripe], nullptr);
-        stripe_rows += ff.stripes[stripe].numberOfRows;
-      } while (--max_stripe_count > 0 && ++stripe < get_num_stripes());
-      row_count = (row_count < 0) ? static_cast<size_type>(stripe_rows)
-                                  : std::min(row_count, static_cast<size_type>(stripe_rows));
     } else {
       row_start = std::max(row_start, 0);
       if (row_count < 0) {
@@ -593,7 +578,7 @@ void reader::impl::decode_stream_data(hostdevice_vector<gpu::ColumnDesc> &chunks
 }
 
 reader::impl::impl(std::unique_ptr<datasource> source,
-                   reader_options const &options,
+                   orc_reader_options const &options,
                    rmm::mr::device_memory_resource *mr)
   : _source(std::move(source)), _mr(mr)
 {
@@ -601,35 +586,34 @@ reader::impl::impl(std::unique_ptr<datasource> source,
   _metadata = std::make_unique<metadata>(_source.get());
 
   // Select only columns required by the options
-  _selected_columns = _metadata->select_columns(options.columns, _has_timestamp_column);
+  _selected_columns = _metadata->select_columns(options.get_columns(), _has_timestamp_column);
 
   // Override output timestamp resolution if requested
-  if (options.timestamp_type.id() != EMPTY) { _timestamp_type = options.timestamp_type; }
+  if (options.get_timestamp_type().id() != type_id::EMPTY) {
+    _timestamp_type = options.get_timestamp_type();
+  }
 
   // Enable or disable attempt to use row index for parsing
-  _use_index = options.use_index;
+  _use_index = options.is_enabled_use_index();
 
   // Enable or disable the conversion to numpy-compatible dtypes
-  _use_np_dtypes = options.use_np_dtypes;
+  _use_np_dtypes = options.is_enabled_use_np_dtypes();
 
   // Control decimals conversion (float64 or int64 with optional scale)
-  _decimals_as_float     = options.decimals_as_float;
-  _decimals_as_int_scale = options.forced_decimals_scale;
+  _decimals_as_float64   = options.is_enabled_decimals_as_float64();
+  _decimals_as_int_scale = options.get_forced_decimals_scale();
 }
 
 table_with_metadata reader::impl::read(size_type skip_rows,
                                        size_type num_rows,
-                                       size_type stripe,
-                                       size_type max_stripe_count,
-                                       const size_type *stripe_indices,
+                                       const std::vector<size_type> &stripes,
                                        cudaStream_t stream)
 {
   std::vector<std::unique_ptr<column>> out_columns;
   table_metadata out_metadata;
 
   // Select only stripes required (aka row groups)
-  const auto selected_stripes =
-    _metadata->select_stripes(stripe, max_stripe_count, stripe_indices, skip_rows, num_rows);
+  const auto selected_stripes = _metadata->select_stripes(stripes, skip_rows, num_rows);
 
   // Association between each ORC column and its cudf::column
   std::vector<int32_t> orc_col_map(_metadata->get_num_columns(), -1);
@@ -638,7 +622,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   std::vector<data_type> column_types;
   for (const auto &col : _selected_columns) {
     auto col_type = to_type_id(
-      _metadata->ff.types[col], _use_np_dtypes, _timestamp_type.id(), _decimals_as_float);
+      _metadata->ff.types[col], _use_np_dtypes, _timestamp_type.id(), _decimals_as_float64);
     CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
     column_types.emplace_back(col_type);
 
@@ -721,7 +705,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         chunk.num_rows      = stripe_info->numberOfRows;
         chunk.encoding_kind = stripe_footer->columns[_selected_columns[j]].kind;
         chunk.type_kind     = _metadata->ff.types[_selected_columns[j]].kind;
-        if (_decimals_as_float) {
+        if (_decimals_as_float64) {
           chunk.decimal_scale =
             _metadata->ff.types[_selected_columns[j]].scale | ORC_DECIMAL2FLOAT64_SCALE;
         } else if (_decimals_as_int_scale < 0) {
@@ -813,8 +797,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                          stream);
 
       for (size_t i = 0; i < column_types.size(); ++i) {
-        out_columns.emplace_back(
-          make_column(column_types[i], num_rows, out_buffers[i], stream, _mr));
+        out_columns.emplace_back(make_column(out_buffers[i], stream, _mr));
       }
     }
   }
@@ -833,52 +816,32 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 }
 
 // Forward to implementation
-reader::reader(std::string filepath,
-               reader_options const &options,
+reader::reader(std::vector<std::string> const &filepaths,
+               orc_reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(filepath), options, mr))
 {
+  CUDF_EXPECTS(filepaths.size() == 1, "Only a single source is currently supported.");
+  _impl = std::make_unique<impl>(datasource::create(filepaths[0]), options, mr);
 }
 
 // Forward to implementation
-reader::reader(std::unique_ptr<cudf::io::datasource> source,
-               reader_options const &options,
+reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
+               orc_reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(std::move(source), options, mr))
 {
+  CUDF_EXPECTS(sources.size() == 1, "Only a single source is currently supported.");
+  _impl = std::make_unique<impl>(std::move(sources[0]), options, mr);
 }
 
 // Destructor within this translation unit
 reader::~reader() = default;
 
 // Forward to implementation
-table_with_metadata reader::read_all(cudaStream_t stream)
-{
-  return _impl->read(0, -1, -1, -1, nullptr, stream);
-}
-
-// Forward to implementation
-table_with_metadata reader::read_stripe(size_type stripe,
-                                        size_type stripe_count,
-                                        cudaStream_t stream)
-{
-  return _impl->read(0, -1, stripe, stripe_count, nullptr, stream);
-}
-
-// Forward to implementation
-table_with_metadata reader::read_stripes(const std::vector<size_type> &stripe_list,
-                                         cudaStream_t stream)
+table_with_metadata reader::read(orc_reader_options const &options, cudaStream_t stream)
 {
   return _impl->read(
-    0, -1, -1, static_cast<size_type>(stripe_list.size()), stripe_list.data(), stream);
+    options.get_skip_rows(), options.get_num_rows(), options.get_stripes(), stream);
 }
-
-// Forward to implementation
-table_with_metadata reader::read_rows(size_type skip_rows, size_type num_rows, cudaStream_t stream)
-{
-  return _impl->read(skip_rows, (num_rows != 0) ? num_rows : -1, -1, -1, nullptr, stream);
-}
-
 }  // namespace orc
 }  // namespace detail
 }  // namespace io

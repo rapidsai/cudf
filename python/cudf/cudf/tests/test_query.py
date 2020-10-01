@@ -9,7 +9,6 @@ from itertools import product
 import numpy as np
 import pandas as pd
 import pytest
-from pandas.util.testing import assert_frame_equal
 
 import cudf
 from cudf.core import DataFrame
@@ -142,7 +141,7 @@ def test_query_splitted_combine():
 
     # Should equal to just querying the original GDF
     expect = gdf.query(expr).to_pandas()
-    assert_frame_equal(got, expect)
+    assert_eq(got, expect)
 
 
 def test_query_empty_frames():
@@ -154,7 +153,7 @@ def test_query_empty_frames():
     expect = empty_pdf.query(expr)
 
     # assert equal results
-    assert_frame_equal(got, expect)
+    assert_eq(got, expect)
 
 
 @pytest.mark.parametrize(("a_val", "b_val", "c_val"), [(4, 3, 15)])

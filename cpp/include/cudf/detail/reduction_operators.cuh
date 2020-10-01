@@ -96,6 +96,22 @@ struct simple_op {
   }
 
   /**
+   * @brief Get transformer functor for transforming input column pair iterator
+   * which is used by reduction binary operator
+   *
+   * @tparam ResultType output type for element transformer
+   *
+   * @return element transformer functor object
+   */
+  template <typename ResultType>
+  auto get_null_replacing_element_transformer()
+  {
+    using element_transformer = typename Derived::transformer<ResultType>;
+    return null_replacing_transformer<ResultType, element_transformer>{get_identity<ResultType>(),
+                                                                       element_transformer{}};
+  }
+
+  /**
    * @brief get identity value of type `T` for binary reduction operator
    *
    * @tparam T data type of identity value
@@ -162,6 +178,17 @@ struct max : public simple_op<max> {
  */
 template <typename Derived>
 struct compound_op : public simple_op<Derived> {
+  /**
+   * @copydoc simple_op<Derived>::template get_null_replacing_element_transformer<ResultType>()
+   */
+  template <typename ResultType>
+  auto get_null_replacing_element_transformer() override
+  {
+    using element_transformer = typename Derived::transformer<ResultType>;
+    using OutputType          = typename Derived::intermediate<ResultType>::IntermediateType;
+    return null_replacing_transformer<OutputType, element_transformer>{
+      simple_op<Derived>::template get_identity<OutputType>(), element_transformer{}};
+  }
   /**
    * @brief  computes the transformed result from result of simple operator.
    *

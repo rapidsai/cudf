@@ -25,6 +25,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <strings/convert/utilities.cuh>
 #include <strings/utilities.cuh>
 
 #include <rmm/thrust_rmm_allocator.h>
@@ -43,34 +44,6 @@ namespace {
 template <typename IntegerType>
 struct string_to_integer_fn {
   const column_device_view strings_column;  // strings to convert
-
-  /**
-   * @brief Converts a single string into an integer.
-   *
-   * The '+' and '-' are allowed but only at the beginning of the string.
-   * The string is expected to contain base-10 [0-9] characters only.
-   * Any other character will end the parse.
-   * Overflow of the int64 type is not detected.
-   */
-  __device__ int64_t string_to_integer(string_view const& d_str)
-  {
-    int64_t value   = 0;
-    size_type bytes = d_str.size_bytes();
-    if (bytes == 0) return value;
-    const char* ptr = d_str.data();
-    int sign        = 1;
-    if (*ptr == '-' || *ptr == '+') {
-      sign = (*ptr == '-' ? -1 : 1);
-      ++ptr;
-      --bytes;
-    }
-    for (size_type idx = 0; idx < bytes; ++idx) {
-      char chr = *ptr++;
-      if (chr < '0' || chr > '9') break;
-      value = (value * 10) + static_cast<int64_t>(chr - '0');
-    }
-    return value * static_cast<int64_t>(sign);
-  }
 
   __device__ IntegerType operator()(size_type idx)
   {
@@ -166,60 +139,7 @@ struct integer_to_string_size_fn {
   {
     if (d_column.is_null(idx)) return 0;
     IntegerType value = d_column.element<IntegerType>(idx);
-    if (value == 0) return 1;
-    bool is_negative = std::is_signed<IntegerType>::value ? (value < 0) : false;
-    // abs(std::numeric_limits<IntegerType>::min()) is negative;
-    // for all integer types, the max() and min() values have the same number of digits
-    value = (value == std::numeric_limits<IntegerType>::min())
-              ? std::numeric_limits<IntegerType>::max()
-              : cudf::util::absolute_value(value);
-    // largest 8-byte unsigned value is 18446744073709551615 (20 digits)
-    size_type digits =
-      (value < 10
-         ? 1
-         : (value < 100
-              ? 2
-              : (value < 1000
-                   ? 3
-                   : (value < 10000
-                        ? 4
-                        : (value < 100000
-                             ? 5
-                             : (value < 1000000
-                                  ? 6
-                                  : (value < 10000000
-                                       ? 7
-                                       : (value < 100000000
-                                            ? 8
-                                            : (value < 1000000000
-                                                 ? 9
-                                                 : (value < 10000000000
-                                                      ? 10
-                                                      : (value < 100000000000
-                                                           ? 11
-                                                           : (value < 1000000000000
-                                                                ? 12
-                                                                : (value < 10000000000000
-                                                                     ? 13
-                                                                     : (value < 100000000000000
-                                                                          ? 14
-                                                                          : (value <
-                                                                                 1000000000000000
-                                                                               ? 15
-                                                                               : (value <
-                                                                                      10000000000000000
-                                                                                    ? 16
-                                                                                    : (value <
-                                                                                           100000000000000000
-                                                                                         ? 17
-                                                                                         : (value <
-                                                                                                1000000000000000000
-                                                                                              ? 18
-                                                                                              : (value <
-                                                                                                     10000000000000000000
-                                                                                                   ? 19
-                                                                                                   : 20)))))))))))))))))));
-    return digits + static_cast<size_type>(is_negative);
+    return count_digits(value);
   }
 };
 
@@ -241,26 +161,7 @@ struct integer_to_string_fn {
     if (d_column.is_null(idx)) return;
     IntegerType value = d_column.element<IntegerType>(idx);
     char* d_buffer    = d_chars + d_offsets[idx];
-    if (value == 0) {
-      *d_buffer = '0';
-      return;
-    }
-    bool is_negative = std::is_signed<IntegerType>::value ? (value < 0) : false;
-    //
-    constexpr IntegerType base = 10;
-    constexpr int MAX_DIGITS   = 20;  // largest 64-bit integer is 20 digits
-    char digits[MAX_DIGITS];          // place-holder for digit chars
-    int digits_idx = 0;
-    while (value != 0) {
-      assert(digits_idx < MAX_DIGITS);
-      digits[digits_idx++] = '0' + cudf::util::absolute_value(value % base);
-      // next digit
-      value = value / base;
-    }
-    char* ptr = d_buffer;
-    if (is_negative) *ptr++ = '-';
-    // digits are backwards, reverse the string into the output
-    while (digits_idx-- > 0) *ptr++ = digits[digits_idx];
+    integer_to_string(value, d_buffer);
   }
 };
 

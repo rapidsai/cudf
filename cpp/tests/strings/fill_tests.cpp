@@ -20,9 +20,9 @@
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <tests/strings/utilities.h>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
 
 #include <vector>
 
@@ -45,7 +45,7 @@ TEST_F(StringsFillTest, Fill)
       h_expected.begin(),
       h_expected.end(),
       thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     auto results = cudf::strings::detail::fill(view, 2, 4, cudf::string_scalar("", false));
@@ -55,29 +55,30 @@ TEST_F(StringsFillTest, Fill)
       h_expected.begin(),
       h_expected.end(),
       thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     auto results = cudf::strings::detail::fill(view, 5, 5, cudf::string_scalar("zz"));
-    cudf::test::expect_columns_equal(*results, view.parent());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, view.parent());
   }
   {
     auto results = cudf::strings::detail::fill(view, 0, 7, cudf::string_scalar(""));
     cudf::test::strings_column_wrapper expected({"", "", "", "", "", "", ""},
                                                 {1, 1, 1, 1, 1, 1, 1});
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     auto results = cudf::strings::detail::fill(view, 0, 7, cudf::string_scalar("", false));
     cudf::test::strings_column_wrapper expected({"", "", "", "", "", "", ""},
                                                 {0, 0, 0, 0, 0, 0, 0});
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
 
 TEST_F(StringsFillTest, ZeroSizeStringsColumns)
 {
-  cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+  cudf::column_view zero_size_strings_column(
+    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   auto results = cudf::strings::detail::fill(
     cudf::strings_column_view(zero_size_strings_column), 0, 1, cudf::string_scalar(""));
   cudf::test::expect_strings_empty(results->view());

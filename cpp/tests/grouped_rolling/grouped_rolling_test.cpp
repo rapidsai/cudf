@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/cudf_gtest.hpp>
-#include <tests/utilities/type_lists.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/type_lists.hpp>
 
 #include <cudf/aggregation.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
@@ -150,7 +150,7 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
     std::cout << "\n";
 #endif
 
-    cudf::test::expect_columns_equal(*output, *reference);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*output, *reference);
   }
 
   void run_test_col_agg(cudf::table_view const& keys,
@@ -192,43 +192,6 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
                  following_window,
                  min_periods,
                  cudf::make_max_aggregation());
-    run_test_col(keys,
-                 input,
-                 expected_grouping,
-                 preceding_window,
-                 following_window,
-                 min_periods,
-                 cudf::make_mean_aggregation());
-    run_test_col(keys,
-                 input,
-                 expected_grouping,
-                 preceding_window,
-                 following_window,
-                 min_periods,
-                 cudf::make_row_number_aggregation());
-
-    // >>> test UDFs <<<
-    if (input.type() == cudf::data_type{cudf::INT32} && !input.has_nulls()) {
-      auto cuda_udf_agg =
-        cudf::make_udf_aggregation(cudf::udf_type::CUDA, cuda_func, cudf::data_type{cudf::INT64});
-      run_test_col(keys,
-                   input,
-                   expected_grouping,
-                   preceding_window,
-                   following_window,
-                   min_periods,
-                   cuda_udf_agg);
-
-      auto ptx_udf_agg =
-        cudf::make_udf_aggregation(cudf::udf_type::PTX, ptx_func, cudf::data_type{cudf::INT64});
-      run_test_col(keys,
-                   input,
-                   expected_grouping,
-                   preceding_window,
-                   following_window,
-                   min_periods,
-                   ptx_udf_agg);
-    }
 
     if (!cudf::is_timestamp(input.type())) {
       run_test_col(keys,
@@ -238,6 +201,43 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
                    following_window,
                    min_periods,
                    cudf::make_sum_aggregation());
+      run_test_col(keys,
+                   input,
+                   expected_grouping,
+                   preceding_window,
+                   following_window,
+                   min_periods,
+                   cudf::make_mean_aggregation());
+    }
+    run_test_col(keys,
+                 input,
+                 expected_grouping,
+                 preceding_window,
+                 following_window,
+                 min_periods,
+                 cudf::make_row_number_aggregation());
+
+    // >>> test UDFs <<<
+    if (input.type() == cudf::data_type{cudf::type_id::INT32} && !input.has_nulls()) {
+      auto cuda_udf_agg = cudf::make_udf_aggregation(
+        cudf::udf_type::CUDA, cuda_func, cudf::data_type{cudf::type_id::INT64});
+      run_test_col(keys,
+                   input,
+                   expected_grouping,
+                   preceding_window,
+                   following_window,
+                   min_periods,
+                   cuda_udf_agg);
+
+      auto ptx_udf_agg = cudf::make_udf_aggregation(
+        cudf::udf_type::PTX, ptx_func, cudf::data_type{cudf::type_id::INT64});
+      run_test_col(keys,
+                   input,
+                   expected_grouping,
+                   preceding_window,
+                   following_window,
+                   min_periods,
+                   ptx_udf_agg);
     }
   }
 
@@ -503,16 +503,16 @@ TEST_F(GroupedRollingErrorTest, EmptyInput)
 TEST_F(GroupedRollingErrorTest, SumTimestampNotSupported)
 {
   constexpr size_type size{10};
-  fixed_width_column_wrapper<cudf::timestamp_D> input_D(thrust::make_counting_iterator(0),
-                                                        thrust::make_counting_iterator(size));
-  fixed_width_column_wrapper<cudf::timestamp_s> input_s(thrust::make_counting_iterator(0),
-                                                        thrust::make_counting_iterator(size));
-  fixed_width_column_wrapper<cudf::timestamp_ms> input_ms(thrust::make_counting_iterator(0),
-                                                          thrust::make_counting_iterator(size));
-  fixed_width_column_wrapper<cudf::timestamp_us> input_us(thrust::make_counting_iterator(0),
-                                                          thrust::make_counting_iterator(size));
-  fixed_width_column_wrapper<cudf::timestamp_ns> input_ns(thrust::make_counting_iterator(0),
-                                                          thrust::make_counting_iterator(size));
+  fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> input_D(
+    thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
+  fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep> input_s(
+    thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
+  fixed_width_column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep> input_ms(
+    thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
+  fixed_width_column_wrapper<cudf::timestamp_us, cudf::timestamp_us::rep> input_us(
+    thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
+  fixed_width_column_wrapper<cudf::timestamp_ns, cudf::timestamp_ns::rep> input_ns(
+    thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
 
   // Construct table-view of grouping keys.
   std::vector<size_type> grouping_keys_vec(size, 0);  // `size` elements, each == 0.
@@ -536,26 +536,26 @@ TEST_F(GroupedRollingErrorTest, SumTimestampNotSupported)
     cudf::logic_error);
 }
 
-TYPED_TEST_CASE(GroupedRollingTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_CASE(GroupedRollingTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(GroupedRollingTest, SimplePartitionedStaticWindowsWithGroupKeys)
 {
-  const auto col_data =
-    cudf::test::make_type_param_vector<TypeParam>({0, 10, 20, 30, 40, 50, 60, 70, 80, 90});
+  const auto col_data = {0, 10, 20, 30, 40, 50, 60, 70, 80, 90};
   const size_type DATA_SIZE{static_cast<size_type>(col_data.size())};
   const std::vector<bool> col_mask(DATA_SIZE, true);
-  fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
+  fixed_width_column_wrapper<TypeParam, int32_t> input(
+    col_data.begin(), col_data.end(), col_mask.begin());
 
   // 2 grouping keys, with effectively 3 groups of at most 4 rows each:
   //   1. key_0 {0, 0, 0, ...0}
   //   2. key_1 {0, 0, 0, 0, 1, 1, 1, 1, 2, 2}
-  std::vector<TypeParam> key_0_vec(DATA_SIZE, 0);
-  std::vector<TypeParam> key_1_vec;
+  std::vector<int64_t> key_0_vec(DATA_SIZE, 0);
+  std::vector<int64_t> key_1_vec;
   int i{0};
   std::generate_n(
     std::back_inserter(key_1_vec), DATA_SIZE, [&i]() { return i++ / 4; });  // Groups of 4.
-  const fixed_width_column_wrapper<TypeParam> key_0(key_0_vec.begin(), key_0_vec.end());
-  const fixed_width_column_wrapper<TypeParam> key_1(key_1_vec.begin(), key_1_vec.end());
+  const fixed_width_column_wrapper<TypeParam, int64_t> key_0(key_0_vec.begin(), key_0_vec.end());
+  const fixed_width_column_wrapper<TypeParam, int64_t> key_1(key_1_vec.begin(), key_1_vec.end());
   const cudf::table_view grouping_keys{std::vector<cudf::column_view>{key_0, key_1}};
 
   size_type preceding_window = 2;
@@ -596,13 +596,13 @@ TYPED_TEST(GroupedRollingTest, AllInvalid)
   // 2 grouping keys, with effectively 3 groups of at most 4 rows each:
   //   1. key_0 {0, 0, 0, ...0}
   //   2. key_1 {0, 0, 0, 0, 1, 1, 1, 1, 2, 2}
-  std::vector<TypeParam> key_0_vec(DATA_SIZE, 0);
-  std::vector<TypeParam> key_1_vec;
+  std::vector<int64_t> key_0_vec(DATA_SIZE, 0);
+  std::vector<int64_t> key_1_vec;
   int i{0};
   std::generate_n(
     std::back_inserter(key_1_vec), DATA_SIZE, [&i]() { return i++ / 4; });  // Groups of 4.
-  const fixed_width_column_wrapper<TypeParam> key_0(key_0_vec.begin(), key_0_vec.end());
-  const fixed_width_column_wrapper<TypeParam> key_1(key_1_vec.begin(), key_1_vec.end());
+  const fixed_width_column_wrapper<TypeParam, int64_t> key_0(key_0_vec.begin(), key_0_vec.end());
+  const fixed_width_column_wrapper<TypeParam, int64_t> key_1(key_1_vec.begin(), key_1_vec.end());
   const cudf::table_view grouping_keys{std::vector<cudf::column_view>{key_0, key_1}};
 
   size_type preceding_window = 2;
@@ -616,22 +616,22 @@ TYPED_TEST(GroupedRollingTest, AllInvalid)
 // window = following_window = 0
 TYPED_TEST(GroupedRollingTest, ZeroWindow)
 {
-  const auto col_data =
-    cudf::test::make_type_param_vector<TypeParam>({0, 10, 20, 30, 40, 50, 60, 70, 80, 90});
+  const auto col_data = {0, 10, 20, 30, 40, 50, 60, 70, 80, 90};
   const size_type DATA_SIZE{static_cast<size_type>(col_data.size())};
   const std::vector<bool> col_mask(DATA_SIZE, true);
-  fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
+  fixed_width_column_wrapper<TypeParam, int32_t> input(
+    col_data.begin(), col_data.end(), col_mask.begin());
 
   // 2 grouping keys, with effectively 3 groups of at most 4 rows each:
   //   1. key_0 {0, 0, 0, ...0}
   //   2. key_1 {0, 0, 0, 0, 1, 1, 1, 1, 2, 2}
-  std::vector<TypeParam> key_0_vec(DATA_SIZE, 0);
-  std::vector<TypeParam> key_1_vec;
+  std::vector<int64_t> key_0_vec(DATA_SIZE, 0);
+  std::vector<int64_t> key_1_vec;
   int i{0};
   std::generate_n(
     std::back_inserter(key_1_vec), DATA_SIZE, [&i]() { return i++ / 4; });  // Groups of 4.
-  const fixed_width_column_wrapper<TypeParam> key_0(key_0_vec.begin(), key_0_vec.end());
-  const fixed_width_column_wrapper<TypeParam> key_1(key_1_vec.begin(), key_1_vec.end());
+  const fixed_width_column_wrapper<TypeParam, int64_t> key_0(key_0_vec.begin(), key_0_vec.end());
+  const fixed_width_column_wrapper<TypeParam, int64_t> key_1(key_1_vec.begin(), key_1_vec.end());
   const cudf::table_view grouping_keys{std::vector<cudf::column_view>{key_0, key_1}};
 
   size_type preceding_window = 0;
@@ -711,7 +711,7 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
     std::cout << "\n";
 #endif
 
-    cudf::test::expect_columns_equal(*output, *reference);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*output, *reference);
   }
 
   void run_test_col_agg(cudf::table_view const& keys,
@@ -763,25 +763,6 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
                  following_window_in_days,
                  min_periods,
                  cudf::make_max_aggregation());
-    run_test_col(keys,
-                 timestamp_column,
-                 timestamp_order,
-                 input,
-                 expected_grouping,
-                 preceding_window_in_days,
-                 following_window_in_days,
-                 min_periods,
-                 cudf::make_mean_aggregation());
-    run_test_col(keys,
-                 timestamp_column,
-                 timestamp_order,
-                 input,
-                 expected_grouping,
-                 preceding_window_in_days,
-                 following_window_in_days,
-                 min_periods,
-                 cudf::make_row_number_aggregation());
-
     if (!cudf::is_timestamp(input.type())) {
       run_test_col(keys,
                    timestamp_column,
@@ -792,7 +773,25 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
                    following_window_in_days,
                    min_periods,
                    cudf::make_sum_aggregation());
+      run_test_col(keys,
+                   timestamp_column,
+                   timestamp_order,
+                   input,
+                   expected_grouping,
+                   preceding_window_in_days,
+                   following_window_in_days,
+                   min_periods,
+                   cudf::make_mean_aggregation());
     }
+    run_test_col(keys,
+                 timestamp_column,
+                 timestamp_order,
+                 input,
+                 expected_grouping,
+                 preceding_window_in_days,
+                 following_window_in_days,
+                 min_periods,
+                 cudf::make_row_number_aggregation());
   }
 
  private:
@@ -809,7 +808,7 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
     size_type const& following_window_in_days,
     size_type min_periods)
   {
-    assert(timestamp_column.type().id() == cudf::TIMESTAMP_DAYS);  // Testing with DAYS.
+    assert(timestamp_column.type().id() == cudf::type_id::TIMESTAMP_DAYS);  // Testing with DAYS.
 
     auto timestamp_vec = cudf::test::to_host<int32_t>(timestamp_column).first;
 
@@ -880,7 +879,7 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
     size_type const& following_window_in_days,
     size_type min_periods)
   {
-    assert(timestamp_column.type().id() == cudf::TIMESTAMP_DAYS);  // Testing with DAYS.
+    assert(timestamp_column.type().id() == cudf::type_id::TIMESTAMP_DAYS);  // Testing with DAYS.
 
     auto timestamp_vec = cudf::test::to_host<int32_t>(timestamp_column).first;
 
@@ -954,7 +953,7 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
                                                         size_type const& following_window_in_days,
                                                         size_type min_periods)
   {
-    assert(timestamp_column.type().id() == cudf::TIMESTAMP_DAYS);  // Testing with DAYS.
+    assert(timestamp_column.type().id() == cudf::type_id::TIMESTAMP_DAYS);  // Testing with DAYS.
 
     auto timestamp_vec = cudf::test::to_host<int32_t>(timestamp_column).first;
 
@@ -1126,26 +1125,27 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
   }
 };
 
-TYPED_TEST_CASE(GroupedTimeRangeRollingTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_CASE(GroupedTimeRangeRollingTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(GroupedTimeRangeRollingTest,
            SimplePartitionedStaticWindowsWithGroupKeysAndTimeRangesAscending)
 {
   const size_type DATA_SIZE{static_cast<size_type>(18)};
-  const std::vector<TypeParam> col_data(DATA_SIZE, 1);
+  const std::vector<int> col_data(DATA_SIZE, 1);
   const std::vector<bool> col_mask(DATA_SIZE, true);
-  fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
+  fixed_width_column_wrapper<TypeParam, int> input(
+    col_data.begin(), col_data.end(), col_mask.begin());
 
   // 2 grouping keys, with effectively 3 groups of at most 6 rows each:
   //   1. key_0 {0, 0, 0, ...0}
   //   2. key_1 {0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2}
-  std::vector<TypeParam> key_0_vec(DATA_SIZE, 0);
-  std::vector<TypeParam> key_1_vec;
+  std::vector<int64_t> key_0_vec(DATA_SIZE, 0);
+  std::vector<int64_t> key_1_vec;
   int i{0};
   std::generate_n(
     std::back_inserter(key_1_vec), DATA_SIZE, [&i]() { return i++ / 6; });  // Groups of 6.
-  const fixed_width_column_wrapper<TypeParam> key_0(key_0_vec.begin(), key_0_vec.end());
-  const fixed_width_column_wrapper<TypeParam> key_1(key_1_vec.begin(), key_1_vec.end());
+  const fixed_width_column_wrapper<TypeParam, int64_t> key_0(key_0_vec.begin(), key_0_vec.end());
+  const fixed_width_column_wrapper<TypeParam, int64_t> key_1(key_1_vec.begin(), key_1_vec.end());
   const cudf::table_view grouping_keys{std::vector<cudf::column_view>{key_0, key_1}};
 
   size_type preceding_window_in_days = 1;
@@ -1154,8 +1154,8 @@ TYPED_TEST(GroupedTimeRangeRollingTest,
 
   // Timestamp column.
   std::vector<int32_t> timestamp_days_vec{0, 2, 3, 4, 5, 7, 0, 0, 1, 2, 3, 3, 0, 1, 2, 3, 3, 3};
-  fixed_width_column_wrapper<cudf::timestamp_D> timestamp_days_ascending(timestamp_days_vec.begin(),
-                                                                         timestamp_days_vec.end());
+  fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> timestamp_days_ascending(
+    timestamp_days_vec.begin(), timestamp_days_vec.end());
 
   this->run_test_col_agg(grouping_keys,
                          timestamp_days_ascending,
@@ -1171,20 +1171,21 @@ TYPED_TEST(GroupedTimeRangeRollingTest,
            SimplePartitionedStaticWindowsWithGroupKeysAndTimeRangesDescending)
 {
   const size_type DATA_SIZE{static_cast<size_type>(18)};
-  const std::vector<TypeParam> col_data(DATA_SIZE, 1);
+  const std::vector<int> col_data(DATA_SIZE, 1);
   const std::vector<bool> col_mask(DATA_SIZE, true);
-  fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
+  fixed_width_column_wrapper<TypeParam, int> input(
+    col_data.begin(), col_data.end(), col_mask.begin());
 
   // 2 grouping keys, with effectively 3 groups of at most 6 rows each:
   //   1. key_0 {0, 0, 0, ...0}
   //   2. key_1 {0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2}
-  std::vector<TypeParam> key_0_vec(DATA_SIZE, 0);
-  std::vector<TypeParam> key_1_vec;
+  std::vector<int64_t> key_0_vec(DATA_SIZE, 0);
+  std::vector<int64_t> key_1_vec;
   int i{0};
   std::generate_n(
     std::back_inserter(key_1_vec), DATA_SIZE, [&i]() { return i++ / 6; });  // Groups of 6.
-  const fixed_width_column_wrapper<TypeParam> key_0(key_0_vec.begin(), key_0_vec.end());
-  const fixed_width_column_wrapper<TypeParam> key_1(key_1_vec.begin(), key_1_vec.end());
+  const fixed_width_column_wrapper<TypeParam, int64_t> key_0(key_0_vec.begin(), key_0_vec.end());
+  const fixed_width_column_wrapper<TypeParam, int64_t> key_1(key_1_vec.begin(), key_1_vec.end());
   const cudf::table_view grouping_keys{std::vector<cudf::column_view>{key_0, key_1}};
 
   size_type preceding_window_in_days = 1;
@@ -1193,7 +1194,7 @@ TYPED_TEST(GroupedTimeRangeRollingTest,
 
   // Timestamp column.
   std::vector<int32_t> timestamp_days_vec{0, 2, 3, 4, 5, 7, 0, 0, 1, 2, 3, 3, 0, 1, 2, 3, 3, 3};
-  fixed_width_column_wrapper<cudf::timestamp_D> timestamp_days_descending(
+  fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> timestamp_days_descending(
     timestamp_days_vec.rbegin(), timestamp_days_vec.rend());
   this->run_test_col_agg(grouping_keys,
                          timestamp_days_descending,
@@ -1208,9 +1209,10 @@ TYPED_TEST(GroupedTimeRangeRollingTest,
 TYPED_TEST(GroupedTimeRangeRollingTest, SimplePartitionedStaticWindowsWithNoGroupingKeys)
 {
   const size_type DATA_SIZE{static_cast<size_type>(6)};
-  const std::vector<TypeParam> col_data(DATA_SIZE, 1);
+  const std::vector<int> col_data(DATA_SIZE, 1);
   const std::vector<bool> col_mask(DATA_SIZE, true);
-  fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
+  fixed_width_column_wrapper<TypeParam, int> input(
+    col_data.begin(), col_data.end(), col_mask.begin());
 
   const cudf::table_view grouping_keys{std::vector<cudf::column_view>{}};
 
@@ -1220,8 +1222,8 @@ TYPED_TEST(GroupedTimeRangeRollingTest, SimplePartitionedStaticWindowsWithNoGrou
 
   // Timestamp column.
   std::vector<int32_t> timestamp_days_vec{0, 2, 3, 4, 5, 7};
-  fixed_width_column_wrapper<cudf::timestamp_D> timestamp_days_ascending(timestamp_days_vec.begin(),
-                                                                         timestamp_days_vec.end());
+  fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> timestamp_days_ascending(
+    timestamp_days_vec.begin(), timestamp_days_vec.end());
 
   this->run_test_col_agg(grouping_keys,
                          timestamp_days_ascending,

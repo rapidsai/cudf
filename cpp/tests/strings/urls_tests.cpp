@@ -17,9 +17,9 @@
 #include <tests/strings/utilities.h>
 #include <cudf/strings/convert/convert_urls.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
 
 #include <vector>
 
@@ -60,7 +60,7 @@ TEST_F(StringsConvertTest, UrlEncode)
     h_expected.cend(),
     thrust::make_transform_iterator(h_expected.cbegin(),
                                     [](auto const str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsConvertTest, UrlDecode)
@@ -95,12 +95,13 @@ TEST_F(StringsConvertTest, UrlDecode)
     h_expected.cend(),
     thrust::make_transform_iterator(h_expected.cbegin(),
                                     [](auto const str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsConvertTest, ZeroSizeUrlStringsColumn)
 {
-  cudf::column_view zero_size_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+  cudf::column_view zero_size_column(
+    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   auto results = cudf::strings::url_encode(zero_size_column);
   cudf::test::expect_strings_empty(results->view());
   results = cudf::strings::url_decode(zero_size_column);

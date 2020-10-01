@@ -17,12 +17,12 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy_if_else.cuh>
 #include <cudf/detail/iterator.cuh>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/cudf_gtest.hpp>
-#include <tests/utilities/type_lists.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/type_lists.hpp>
 
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -32,7 +32,7 @@ template <typename T>
 struct CopyTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(CopyTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_CASE(CopyTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 #define wrapper cudf::test::fixed_width_column_wrapper
 
@@ -42,12 +42,12 @@ TYPED_TEST(CopyTest, CopyIfElseTestShort)
 
   cudf::test::fixed_width_column_wrapper<bool> mask_w{1, 0, 0, 0};
 
-  wrapper<T> lhs_w{{5, 5, 5, 5}, {1, 1, 1, 1}};
-  wrapper<T> rhs_w{{6, 6, 6, 6}, {1, 1, 1, 1}};
-  wrapper<T> expected_w{5, 6, 6, 6};
+  wrapper<T, int32_t> lhs_w({5, 5, 5, 5}, {1, 1, 1, 1});
+  wrapper<T, int32_t> rhs_w({6, 6, 6, 6}, {1, 1, 1, 1});
+  wrapper<T, int32_t> expected_w({5, 6, 6, 6});
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
-  cudf::test::expect_columns_equal(out->view(), expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
 }
 
 TYPED_TEST(CopyTest, CopyIfElseTestManyNulls)
@@ -56,12 +56,12 @@ TYPED_TEST(CopyTest, CopyIfElseTestManyNulls)
 
   cudf::test::fixed_width_column_wrapper<bool> mask_w{{1, 0, 0, 0, 0, 0, 1}, {1, 1, 1, 1, 1, 1, 0}};
 
-  wrapper<T> lhs_w{{5, 5, 5, 5, 5, 5, 5}, {1, 1, 1, 1, 1, 1, 1}};
-  wrapper<T> rhs_w{{6, 6, 6, 6, 6, 6, 6}, {1, 0, 0, 0, 0, 0, 1}};
-  wrapper<T> expected_w{{5, 6, 6, 6, 6, 6, 6}, {1, 0, 0, 0, 0, 0, 1}};
+  wrapper<T, int32_t> lhs_w({5, 5, 5, 5, 5, 5, 5}, {1, 1, 1, 1, 1, 1, 1});
+  wrapper<T, int32_t> rhs_w({6, 6, 6, 6, 6, 6, 6}, {1, 0, 0, 0, 0, 0, 1});
+  wrapper<T, int32_t> expected_w({5, 6, 6, 6, 6, 6, 6}, {1, 0, 0, 0, 0, 0, 1});
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
-  cudf::test::expect_columns_equal(out->view(), expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
 }
 
 struct copy_if_else_tiny_grid_functor {
@@ -115,7 +115,7 @@ std::unique_ptr<cudf::column> tiny_grid_launch(cudf::column_view const& lhs,
                                lhs,
                                rhs,
                                filter,
-                               rmm::mr::get_default_resource(),
+                               rmm::mr::get_current_device_resource(),
                                (cudaStream_t)0);
 }
 
@@ -131,24 +131,21 @@ TYPED_TEST(CopyTest, CopyIfElseTestTinyGrid)
                  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
   cudf::test::fixed_width_column_wrapper<bool> mask_w(mask, mask + num_els);
 
-  T lhs[] = {5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
-             5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
-             5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5};
-  wrapper<T> lhs_w(lhs, lhs + num_els);
+  wrapper<T, int32_t> lhs_w({5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+                             5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+                             5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5});
 
-  T rhs[] = {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-             6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-             6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6};
-  wrapper<T> rhs_w(rhs, rhs + num_els);
+  wrapper<T, int32_t> rhs_w({6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+                             6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+                             6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6});
 
-  T expected[] = {5, 6, 5, 6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6,
-                  6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 5, 5, 5, 5, 5, 5, 5, 5,
-                  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5};
-  wrapper<T> expected_w(expected, expected + num_els);
+  wrapper<T, int32_t> expected_w({5, 6, 5, 6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6,
+                                  6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 5, 5, 5, 5, 5, 5, 5, 5,
+                                  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5});
 
   auto out = tiny_grid_launch(lhs_w, rhs_w, mask_w);
 
-  cudf::test::expect_columns_equal(out->view(), expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
 }
 
 TYPED_TEST(CopyTest, CopyIfElseTestLong)
@@ -163,32 +160,32 @@ TYPED_TEST(CopyTest, CopyIfElseTestLong)
                  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
   cudf::test::fixed_width_column_wrapper<bool> mask_w(mask, mask + num_els);
 
-  T lhs[]      = {5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
-             5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
-             5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5};
   bool lhs_v[] = {1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
                   1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
                   1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-  wrapper<T> lhs_w(lhs, lhs + num_els, lhs_v);
+  wrapper<T, int32_t> lhs_w({5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+                             5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+                             5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5},
+                            lhs_v);
 
-  T rhs[]      = {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-             6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-             6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6};
   bool rhs_v[] = {1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
                   1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
                   1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-  wrapper<T> rhs_w(rhs, rhs + num_els, rhs_v);
+  wrapper<T, int32_t> rhs_w({6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+                             6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+                             6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+                            rhs_v);
 
-  T expected[] = {5, 6, 5, 6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6,
-                  6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 5, 5, 5, 5, 5, 5, 5, 5,
-                  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5};
   bool exp_v[] = {1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
                   1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
                   1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-  wrapper<T> expected_w(expected, expected + num_els, exp_v);
+  wrapper<T, int32_t> expected_w({5, 6, 5, 6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6,
+                                  6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 5, 5, 5, 5, 5, 5, 5, 5,
+                                  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5},
+                                 exp_v);
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
-  cudf::test::expect_columns_equal(out->view(), expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
 }
 
 TYPED_TEST(CopyTest, CopyIfElseTestEmptyInputs)
@@ -202,7 +199,7 @@ TYPED_TEST(CopyTest, CopyIfElseTestEmptyInputs)
   wrapper<T> expected_w{};
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
-  cudf::test::expect_columns_equal(out->view(), expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
 }
 
 TYPED_TEST(CopyTest, CopyIfElseMixedInputValidity)
@@ -211,12 +208,12 @@ TYPED_TEST(CopyTest, CopyIfElseMixedInputValidity)
 
   cudf::test::fixed_width_column_wrapper<bool> mask_w{1, 0, 1, 1};
 
-  wrapper<T> lhs_w{{5, 5, 5, 5}, {1, 1, 1, 0}};
-  wrapper<T> rhs_w{{6, 6, 6, 6}, {1, 0, 1, 1}};
-  wrapper<T> expected_w{{5, 6, 5, 5}, {1, 0, 1, 0}};
+  wrapper<T, int32_t> lhs_w({5, 5, 5, 5}, {1, 1, 1, 0});
+  wrapper<T, int32_t> rhs_w({6, 6, 6, 6}, {1, 0, 1, 1});
+  wrapper<T, int32_t> expected_w({5, 6, 5, 5}, {1, 0, 1, 0});
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
-  cudf::test::expect_columns_equal(out->view(), expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
 }
 
 TYPED_TEST(CopyTest, CopyIfElseMixedInputValidity2)
@@ -225,12 +222,12 @@ TYPED_TEST(CopyTest, CopyIfElseMixedInputValidity2)
 
   cudf::test::fixed_width_column_wrapper<bool> mask_w{1, 0, 1, 1};
 
-  wrapper<T> lhs_w{{5, 5, 5, 5}, {1, 1, 1, 0}};
-  wrapper<T> rhs_w{{6, 6, 6, 6}};
-  wrapper<T> expected_w{{5, 6, 5, 5}, {1, 1, 1, 0}};
+  wrapper<T, int32_t> lhs_w({5, 5, 5, 5}, {1, 1, 1, 0});
+  wrapper<T, int32_t> rhs_w({6, 6, 6, 6});
+  wrapper<T, int32_t> expected_w({5, 6, 5, 5}, {1, 1, 1, 0});
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
-  cudf::test::expect_columns_equal(out->view(), expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
 }
 
 TYPED_TEST(CopyTest, CopyIfElseMixedInputValidity3)
@@ -239,12 +236,12 @@ TYPED_TEST(CopyTest, CopyIfElseMixedInputValidity3)
 
   cudf::test::fixed_width_column_wrapper<bool> mask_w{1, 0, 1, 1};
 
-  wrapper<T> lhs_w{{5, 5, 5, 5}};
-  wrapper<T> rhs_w{{6, 6, 6, 6}, {1, 0, 1, 1}};
-  wrapper<T> expected_w{{5, 6, 5, 5}, {1, 0, 1, 1}};
+  wrapper<T, int32_t> lhs_w({5, 5, 5, 5});
+  wrapper<T, int32_t> rhs_w({6, 6, 6, 6}, {1, 0, 1, 1});
+  wrapper<T, int32_t> expected_w({5, 6, 5, 5}, {1, 0, 1, 1});
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
-  cudf::test::expect_columns_equal(out->view(), expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
 }
 
 TYPED_TEST(CopyTest, CopyIfElseMixedInputValidity4)
@@ -253,12 +250,12 @@ TYPED_TEST(CopyTest, CopyIfElseMixedInputValidity4)
 
   cudf::test::fixed_width_column_wrapper<bool> mask_w{1, 0, 1, 1};
 
-  wrapper<T> lhs_w{{5, 5, 5, 5}};
-  wrapper<T> rhs_w{{6, 6, 6, 6}};
-  wrapper<T> expected_w{{5, 6, 5, 5}};
+  wrapper<T, int32_t> lhs_w({5, 5, 5, 5});
+  wrapper<T, int32_t> rhs_w({6, 6, 6, 6});
+  wrapper<T, int32_t> expected_w({5, 6, 5, 5});
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
-  cudf::test::expect_columns_equal(out->view(), expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
 }
 
 TYPED_TEST(CopyTest, CopyIfElseBadInputLength)
@@ -269,8 +266,8 @@ TYPED_TEST(CopyTest, CopyIfElseBadInputLength)
   {
     cudf::test::fixed_width_column_wrapper<bool> mask_w{1, 1, 1};
 
-    wrapper<T> lhs_w{{5, 5, 5, 5}};
-    wrapper<T> rhs_w{{6, 6, 6, 6}};
+    wrapper<T, int32_t> lhs_w({5, 5, 5, 5});
+    wrapper<T, int32_t> rhs_w({6, 6, 6, 6});
 
     EXPECT_THROW(cudf::copy_if_else(lhs_w, rhs_w, mask_w), cudf::logic_error);
   }
@@ -279,8 +276,8 @@ TYPED_TEST(CopyTest, CopyIfElseBadInputLength)
   {
     cudf::test::fixed_width_column_wrapper<bool> mask_w{1, 1, 1, 1};
 
-    wrapper<T> lhs_w{{5, 5, 5}};
-    wrapper<T> rhs_w{{6, 6, 6, 6}};
+    wrapper<T, int32_t> lhs_w({5, 5, 5});
+    wrapper<T, int32_t> rhs_w({6, 6, 6, 6});
 
     EXPECT_THROW(cudf::copy_if_else(lhs_w, rhs_w, mask_w), cudf::logic_error);
   }
@@ -302,15 +299,15 @@ TYPED_TEST(CopyTestNumeric, CopyIfElseTestScalarColumn)
 
   cudf::numeric_scalar<T> lhs_w(5);
 
-  T rhs[]      = {6, 6, 6, 6};
-  bool rhs_v[] = {1, 0, 1, 1};
-  wrapper<T> rhs_w(rhs, rhs + num_els, rhs_v);
+  const auto rhs = cudf::test::make_type_param_vector<T>({6, 6, 6, 6});
+  bool rhs_v[]   = {1, 0, 1, 1};
+  wrapper<T> rhs_w(rhs.begin(), rhs.end(), rhs_v);
 
-  T expected[] = {5, 6, 6, 5};
-  wrapper<T> expected_w(expected, expected + num_els, rhs_v);
+  const auto expected = cudf::test::make_type_param_vector<T>({5, 6, 6, 5});
+  wrapper<T> expected_w(expected.begin(), expected.end(), rhs_v);
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
-  cudf::test::expect_columns_equal(out->view(), expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
 }
 
 TYPED_TEST(CopyTestNumeric, CopyIfElseTestColumnScalar)
@@ -323,17 +320,17 @@ TYPED_TEST(CopyTestNumeric, CopyIfElseTestColumnScalar)
   bool mask_v[] = {1, 1, 1, 0};
   cudf::test::fixed_width_column_wrapper<bool> mask_w(mask, mask + num_els, mask_v);
 
-  T lhs[]      = {5, 5, 5, 5};
-  bool lhs_v[] = {0, 1, 1, 1};
-  wrapper<T> lhs_w(lhs, lhs + num_els, lhs_v);
+  const auto lhs = cudf::test::make_type_param_vector<T>({5, 5, 5, 5});
+  bool lhs_v[]   = {0, 1, 1, 1};
+  wrapper<T> lhs_w(lhs.begin(), lhs.end(), lhs_v);
 
   cudf::numeric_scalar<T> rhs_w(6);
 
-  T expected[] = {5, 6, 6, 6};
-  wrapper<T> expected_w(expected, expected + num_els, lhs_v);
+  const auto expected = cudf::test::make_type_param_vector<T>({5, 6, 6, 6});
+  wrapper<T> expected_w(expected.begin(), expected.end(), lhs_v);
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
-  cudf::test::expect_columns_equal(out->view(), expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
 }
 
 TYPED_TEST(CopyTestNumeric, CopyIfElseTestScalarScalar)
@@ -348,19 +345,40 @@ TYPED_TEST(CopyTestNumeric, CopyIfElseTestScalarScalar)
   cudf::numeric_scalar<T> lhs_w(5);
   cudf::numeric_scalar<T> rhs_w(6, false);
 
-  T expected[] = {5, 6, 6, 5};
-  wrapper<T> expected_w(expected, expected + num_els, mask);
+  const auto expected = cudf::test::make_type_param_vector<T>({5, 6, 6, 5});
+  wrapper<T> expected_w(expected.begin(), expected.end(), mask);
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
-  cudf::test::expect_columns_equal(out->view(), expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
 }
 
 template <typename T>
-struct CopyTestTimestamp : public cudf::test::BaseFixture {
+struct create_chrono_scalar {
+  template <typename ChronoT = T, typename... Args>
+  typename std::enable_if_t<
+    std::is_same<typename cudf::is_timestamp_t<ChronoT>::type, std::true_type>::value,
+    cudf::timestamp_scalar<ChronoT>>
+  operator()(Args&&... args) const
+  {
+    return cudf::timestamp_scalar<T>(std::forward<Args>(args)...);
+  }
+
+  template <typename ChronoT = T, typename... Args>
+  typename std::enable_if_t<
+    std::is_same<typename cudf::is_duration_t<ChronoT>::type, std::true_type>::value,
+    cudf::duration_scalar<ChronoT>>
+  operator()(Args&&... args) const
+  {
+    return cudf::duration_scalar<T>(std::forward<Args>(args)...);
+  }
 };
-TYPED_TEST_CASE(CopyTestTimestamp, cudf::test::TimestampTypes);
 
-TYPED_TEST(CopyTestTimestamp, CopyIfElseTestScalarColumn)
+template <typename T>
+struct CopyTestChrono : public cudf::test::BaseFixture {
+};
+TYPED_TEST_CASE(CopyTestChrono, cudf::test::ChronoTypes);
+
+TYPED_TEST(CopyTestChrono, CopyIfElseTestScalarColumn)
 {
   using T = TypeParam;
 
@@ -369,20 +387,18 @@ TYPED_TEST(CopyTestTimestamp, CopyIfElseTestScalarColumn)
   bool mask[] = {1, 0, 0, 1};
   cudf::test::fixed_width_column_wrapper<bool> mask_w(mask, mask + num_els);
 
-  cudf::timestamp_scalar<T> lhs_w(5);
+  auto lhs_w = create_chrono_scalar<T>{}(cudf::test::make_type_param_scalar<T>(5), true);
 
-  T rhs[]      = {6, 6, 6, 6};
   bool rhs_v[] = {1, 0, 1, 1};
-  wrapper<T> rhs_w(rhs, rhs + num_els, rhs_v);
+  wrapper<T, int32_t> rhs_w({6, 6, 6, 6}, rhs_v);
 
-  T expected[] = {5, 6, 6, 5};
-  wrapper<T> expected_w(expected, expected + num_els, rhs_v);
+  wrapper<T, int32_t> expected_w({5, 6, 6, 5}, rhs_v);
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
-  cudf::test::expect_columns_equal(out->view(), expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
 }
 
-TYPED_TEST(CopyTestTimestamp, CopyIfElseTestColumnScalar)
+TYPED_TEST(CopyTestChrono, CopyIfElseTestColumnScalar)
 {
   using T = TypeParam;
 
@@ -391,20 +407,18 @@ TYPED_TEST(CopyTestTimestamp, CopyIfElseTestColumnScalar)
   bool mask[] = {1, 0, 0, 1};
   cudf::test::fixed_width_column_wrapper<bool> mask_w(mask, mask + num_els);
 
-  T lhs[]      = {5, 5, 5, 5};
   bool lhs_v[] = {0, 1, 1, 1};
-  wrapper<T> lhs_w(lhs, lhs + num_els, lhs_v);
+  wrapper<T, int32_t> lhs_w({5, 5, 5, 5}, lhs_v);
 
-  cudf::timestamp_scalar<T> rhs_w(6);
+  auto rhs_w = create_chrono_scalar<T>{}(cudf::test::make_type_param_scalar<T>(6), true);
 
-  T expected[] = {5, 6, 6, 5};
-  wrapper<T> expected_w(expected, expected + num_els, lhs_v);
+  wrapper<T, int32_t> expected_w({5, 6, 6, 5}, lhs_v);
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
-  cudf::test::expect_columns_equal(out->view(), expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
 }
 
-TYPED_TEST(CopyTestTimestamp, CopyIfElseTestScalarScalar)
+TYPED_TEST(CopyTestChrono, CopyIfElseTestScalarScalar)
 {
   using T = TypeParam;
 
@@ -413,14 +427,13 @@ TYPED_TEST(CopyTestTimestamp, CopyIfElseTestScalarScalar)
   bool mask[] = {1, 0, 0, 1};
   cudf::test::fixed_width_column_wrapper<bool> mask_w(mask, mask + num_els);
 
-  cudf::timestamp_scalar<T> lhs_w(5);
-  cudf::timestamp_scalar<T> rhs_w(6, false);
+  auto lhs_w = create_chrono_scalar<T>{}(cudf::test::make_type_param_scalar<T>(5), true);
+  auto rhs_w = create_chrono_scalar<T>{}(cudf::test::make_type_param_scalar<T>(6), false);
 
-  T expected[] = {5, 6, 6, 5};
-  wrapper<T> expected_w(expected, expected + num_els, mask);
+  wrapper<T, int32_t> expected_w({5, 6, 6, 5}, mask);
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
-  cudf::test::expect_columns_equal(out->view(), expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
 }
 
 struct CopyTestUntyped : public cudf::test::BaseFixture {
@@ -463,7 +476,7 @@ TEST_F(StringsCopyIfElseTest, CopyIfElse)
       h_expected.push_back(h_strings2[idx]);
   }
   cudf::test::strings_column_wrapper expected(h_expected.begin(), h_expected.end(), valids);
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsCopyIfElseTest, CopyIfElseScalarColumn)
@@ -491,7 +504,7 @@ TEST_F(StringsCopyIfElseTest, CopyIfElseScalarColumn)
     }
   }
   cudf::test::strings_column_wrapper expected(h_expected.begin(), h_expected.end(), valids);
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsCopyIfElseTest, CopyIfElseColumnScalar)
@@ -518,7 +531,7 @@ TEST_F(StringsCopyIfElseTest, CopyIfElseColumnScalar)
     }
   }
   cudf::test::strings_column_wrapper expected(h_expected.begin(), h_expected.end(), valids);
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsCopyIfElseTest, CopyIfElseScalarScalar)
@@ -546,5 +559,5 @@ TEST_F(StringsCopyIfElseTest, CopyIfElseScalarScalar)
     }
   }
   cudf::test::strings_column_wrapper expected(h_expected.begin(), h_expected.end(), valids);
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }

@@ -17,15 +17,12 @@
 #include <cudf/partitioning.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/table_utilities.hpp>
-#include <tests/utilities/type_lists.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/table_utilities.hpp>
+#include <cudf_test/type_lists.hpp>
 
-using cudf::test::expect_columns_equal;
-using cudf::test::expect_table_properties_equal;
-using cudf::test::expect_tables_equal;
 using cudf::test::fixed_width_column_wrapper;
 using cudf::test::strings_column_wrapper;
 
@@ -80,7 +77,7 @@ TEST_F(HashPartition, ZeroRows)
 {
   fixed_width_column_wrapper<float> floats({});
   fixed_width_column_wrapper<int16_t> integers({});
-  strings_column_wrapper strings({});
+  strings_column_wrapper strings;
   auto input = cudf::table_view({floats, integers, strings});
 
   auto columns_to_hash = std::vector<cudf::size_type>({2});
@@ -133,10 +130,10 @@ TEST_F(HashPartition, MixedColumnTypes)
   EXPECT_EQ(offsets1.size(), offsets2.size());
 
   // Expect output to have same shape as input
-  expect_table_properties_equal(input, output1->view());
+  CUDF_TEST_EXPECT_TABLE_PROPERTIES_EQUAL(input, output1->view());
 
   // Expect deterministic result from hashing the same input
-  expect_tables_equal(output1->view(), output2->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(output1->view(), output2->view());
 }
 
 TEST_F(HashPartition, NullableStrings)
@@ -179,18 +176,19 @@ TEST_F(HashPartition, ColumnsToHash)
     first_offsets.begin(), first_offsets.end(), second_offsets.begin(), second_offsets.end()));
 
   // Expect same result for the hashed columns
-  expect_columns_equal(first_result->get_column(0).view(), second_result->get_column(0).view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(first_result->get_column(0).view(),
+                                 second_result->get_column(0).view());
 }
 
 template <typename T>
 class HashPartitionFixedWidth : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(HashPartitionFixedWidth, cudf::test::FixedWidthTypes);
+TYPED_TEST_CASE(HashPartitionFixedWidth, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(HashPartitionFixedWidth, NullableFixedWidth)
 {
-  fixed_width_column_wrapper<TypeParam> fixed({1, 2, 3, 4}, {1, 1, 1, 1});
+  fixed_width_column_wrapper<TypeParam, int32_t> fixed({1, 2, 3, 4}, {1, 1, 1, 1});
   cudf::table_view input({fixed});
 
   std::vector<cudf::size_type> const columns_to_hash({0});
@@ -210,17 +208,18 @@ void run_fixed_width_test(size_t cols,
                           cudf::size_type num_partitions,
                           bool has_nulls = false)
 {
-  std::vector<fixed_width_column_wrapper<T>> columns(cols);
+  std::vector<fixed_width_column_wrapper<T, int32_t>> columns;
+  columns.reserve(cols);
   if (has_nulls) {
-    std::generate(columns.begin(), columns.end(), [rows]() {
+    std::generate_n(std::back_inserter(columns), cols, [rows]() {
       auto iter   = thrust::make_counting_iterator(0);
       auto valids = thrust::make_transform_iterator(iter, [](auto i) { return i % 4 != 0; });
-      return fixed_width_column_wrapper<T>(iter, iter + rows, valids);
+      return fixed_width_column_wrapper<T, int32_t>(iter, iter + rows, valids);
     });
   } else {
-    std::generate(columns.begin(), columns.end(), [rows]() {
+    std::generate_n(std::back_inserter(columns), cols, [rows]() {
       auto iter = thrust::make_counting_iterator(0);
-      return fixed_width_column_wrapper<T>(iter, iter + rows);
+      return fixed_width_column_wrapper<T, int32_t>(iter, iter + rows);
     });
   }
   auto input = cudf::table_view(make_view_vector(columns));
@@ -238,8 +237,8 @@ void run_fixed_width_test(size_t cols,
   EXPECT_TRUE(std::equal(offsets1.begin(), offsets1.end(), offsets2.begin()));
 
   // Expect output to have same shape as input
-  expect_table_properties_equal(input, output1->view());
-  expect_table_properties_equal(output1->view(), output2->view());
+  CUDF_TEST_EXPECT_TABLE_PROPERTIES_EQUAL(input, output1->view());
+  CUDF_TEST_EXPECT_TABLE_PROPERTIES_EQUAL(output1->view(), output2->view());
 
   // Compute number of rows in each partition
   EXPECT_EQ(0, offsets1[0]);
@@ -254,7 +253,7 @@ void run_fixed_width_test(size_t cols,
   });
 
   // Make a table view of the partition numbers
-  constexpr cudf::data_type dtype{cudf::INT32};
+  constexpr cudf::data_type dtype{cudf::type_id::INT32};
   rmm::device_vector<cudf::size_type> d_partitions(partitions);
   cudf::column_view partitions_col(dtype, rows, d_partitions.data().get());
   cudf::table_view partitions_table({partitions_col});
@@ -270,7 +269,7 @@ void run_fixed_width_test(size_t cols,
 
   // After sorting by row hashes, the corresponding partition numbers should be
   // equal
-  expect_tables_equal(sorted_partitions1->view(), sorted_partitions2->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(sorted_partitions1->view(), sorted_partitions2->view());
 }
 
 TYPED_TEST(HashPartitionFixedWidth, MorePartitionsThanRows)

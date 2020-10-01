@@ -23,6 +23,7 @@ namespace strings {
 /**
  * @addtogroup strings_find
  * @{
+ * @file
  */
 
 /**
@@ -51,7 +52,7 @@ namespace strings {
 std::unique_ptr<column> find_multiple(
   strings_column_view const& strings,
   strings_column_view const& targets,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings

@@ -109,7 +109,7 @@ std::unique_ptr<column> slice_strings(
   numeric_scalar<size_type> const& start = numeric_scalar<size_type>(0, false),
   numeric_scalar<size_type> const& stop  = numeric_scalar<size_type>(0, false),
   numeric_scalar<size_type> const& step  = numeric_scalar<size_type>(1),
-  rmm::mr::device_memory_resource* mr    = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                    = 0)
 {
   size_type strings_count = strings.size();
@@ -351,7 +351,7 @@ std::unique_ptr<column> slice_strings(
   strings_column_view const& strings,
   column_view const& starts_column,
   column_view const& stops_column,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   size_type strings_count = strings.size();
@@ -364,7 +364,7 @@ std::unique_ptr<column> slice_strings(
                "Parameters starts and stops must be of the same type.");
   CUDF_EXPECTS(starts_column.null_count() == 0, "Parameter starts must not contain nulls.");
   CUDF_EXPECTS(stops_column.null_count() == 0, "Parameter stops must not contain nulls.");
-  CUDF_EXPECTS(starts_column.type().id() != data_type{BOOL8}.id(),
+  CUDF_EXPECTS(starts_column.type().id() != data_type{type_id::BOOL8}.id(),
                "Positions values must not be bool type.");
   CUDF_EXPECTS(is_fixed_width(starts_column.type()), "Positions values must be fixed width type.");
 

@@ -1,5 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 
 from cudf._lib.cpp.column.column cimport column
@@ -9,4 +10,9 @@ cdef extern from "nvtext/normalize.hpp" namespace "nvtext" nogil:
 
     cdef unique_ptr[column] normalize_spaces(
         const column_view & strings
+    ) except +
+
+    cdef unique_ptr[column] normalize_characters(
+        const column_view & strings,
+        bool do_lower_case
     ) except +

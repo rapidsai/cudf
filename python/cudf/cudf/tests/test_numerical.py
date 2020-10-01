@@ -1,6 +1,9 @@
 import numpy as np
+import pandas as pd
+import pytest
 
 from cudf import Series
+from cudf.tests.utils import assert_eq
 
 
 def test_can_cast_safely_same_kind():
@@ -62,6 +65,34 @@ def test_can_cast_safely_mixed_kind():
     # float out of int range
     data = Series([1.0, 2.0, 1.0 * (2 ** 31)], dtype="float32")._column
     assert not data.can_cast_safely(to_dtype)
+
+
+@pytest.mark.xfail(
+    reason="cuDF null <-> pd.NA compatibility not yet supported"
+)
+def test_to_pandas_nullable_integer():
+    gsr_not_null = Series([1, 2, 3])
+    gsr_has_null = Series([1, 2, None])
+
+    psr_not_null = pd.Series([1, 2, 3], dtype="int64")
+    psr_has_null = pd.Series([1, 2, None], dtype="Int64")
+
+    assert_eq(gsr_not_null.to_pandas(), psr_not_null)
+    assert_eq(gsr_has_null.to_pandas(), psr_has_null)
+
+
+@pytest.mark.xfail(
+    reason="cuDF null <-> pd.NA compatibility not yet supported"
+)
+def test_to_pandas_nullable_bool():
+    gsr_not_null = Series([True, False, True])
+    gsr_has_null = Series([True, False, None])
+
+    psr_not_null = pd.Series([True, False, True], dtype="bool")
+    psr_has_null = pd.Series([True, False, None], dtype="boolean")
+
+    assert_eq(gsr_not_null.to_pandas(), psr_not_null)
+    assert_eq(gsr_has_null.to_pandas(), psr_has_null)
 
 
 def test_can_cast_safely_has_nulls():

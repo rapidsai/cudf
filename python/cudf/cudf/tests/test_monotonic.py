@@ -227,7 +227,7 @@ def test_multiindex_tuples(testarr):
     ],
 )
 @pytest.mark.parametrize("side", ["left", "right"])
-@pytest.mark.parametrize("kind", ["ix", "loc", "getitem", None])
+@pytest.mark.parametrize("kind", ["loc", "getitem", None])
 def test_get_slice_bound(testlist, side, kind):
     index = GenericIndex(testlist)
     index_pd = pd.Index(testlist)
@@ -243,7 +243,7 @@ def test_get_slice_bound(testlist, side, kind):
     [[-1, 0, 5, 10, 11], [-1, 0, 1, 2], [2, 3, 4, 5], [-1, 0, 1], [2, 3, 4]],
 )
 @pytest.mark.parametrize("side", ["left", "right"])
-@pytest.mark.parametrize("kind", ["getitem", "loc", "ix"])
+@pytest.mark.parametrize("kind", ["getitem", "loc"])
 def test_rangeindex_get_slice_bound(bounds, indices, side, kind):
     start, stop = bounds
     pd_index = pd.RangeIndex(start, stop)
@@ -256,7 +256,7 @@ def test_rangeindex_get_slice_bound(bounds, indices, side, kind):
 
 @pytest.mark.parametrize("label", [1, 3, 5, 7, 9, 11])
 @pytest.mark.parametrize("side", ["left", "right"])
-@pytest.mark.parametrize("kind", ["ix", "loc", "getitem", None])
+@pytest.mark.parametrize("kind", ["loc", "getitem", None])
 def test_get_slice_bound_missing(label, side, kind):
     mylist = [2, 4, 6, 8, 10]
     index = GenericIndex(mylist)

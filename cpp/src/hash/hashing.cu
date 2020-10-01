@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include <cudf/column/column_factories.hpp>
+#include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/hashing.hpp>
@@ -24,6 +25,7 @@
 #include <cudf/partitioning.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/types.hpp>
 
 #include <thrust/tabulate.h>
 
@@ -432,8 +434,8 @@ struct copy_block_partitions_dispatcher {
                            gather_map.begin(),
                            gather_map.end(),
                            false,
-                           mr,
-                           stream);
+                           stream,
+                           mr);
   }
 };
 
@@ -634,13 +636,91 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
 }
 
 std::unique_ptr<column> hash(table_view const& input,
+                             hash_id hash_function,
                              std::vector<uint32_t> const& initial_hash,
                              rmm::mr::device_memory_resource* mr,
                              cudaStream_t stream)
 {
+  switch (hash_function) {
+    case (hash_id::HASH_MURMUR3): return murmur_hash3_32(input, initial_hash, mr, stream);
+    case (hash_id::HASH_MD5): return md5_hash(input, mr, stream);
+    default: return nullptr;
+  }
+}
+
+std::unique_ptr<column> md5_hash(table_view const& input,
+                                 rmm::mr::device_memory_resource* mr,
+                                 cudaStream_t stream)
+{
+  if (input.num_columns() == 0 || input.num_rows() == 0) {
+    const string_scalar string_128bit("d41d8cd98f00b204e9orig98ecf8427e");
+    auto output = make_column_from_scalar(string_128bit, input.num_rows(), mr, stream);
+    return output;
+  }
+
+  CUDF_EXPECTS(
+    std::all_of(input.begin(),
+                input.end(),
+                [](auto col) {
+                  return !is_chrono(col.type()) &&
+                         (is_fixed_width(col.type()) || (col.type().id() == type_id::STRING));
+                }),
+    "MD5 unsupported column type");
+
+  // Result column allocation and creation
+  auto begin = thrust::make_constant_iterator(32);
+  auto offsets_column =
+    cudf::strings::detail::make_offsets_child_column(begin, begin + input.num_rows(), mr, stream);
+  auto offsets_view  = offsets_column->view();
+  auto d_new_offsets = offsets_view.data<int32_t>();
+
+  auto chars_column = strings::detail::create_chars_child_column(
+    input.num_rows(), 0, input.num_rows() * 32, mr, stream);
+  auto chars_view = chars_column->mutable_view();
+  auto d_chars    = chars_view.data<char>();
+
+  rmm::device_buffer null_mask{0, stream, mr};
+
+  bool const nullable     = has_nulls(input);
+  auto const device_input = table_device_view::create(input, stream);
+
+  // Hash each row, hashing each element sequentially left to right
+  thrust::for_each(
+    rmm::exec_policy(stream)->on(stream),
+    thrust::make_counting_iterator(0),
+    thrust::make_counting_iterator(input.num_rows()),
+    [d_chars, device_input = *device_input, has_nulls = nullable] __device__(auto row_index) {
+      md5_intermediate_data hash_state;
+      MD5Hash hasher = MD5Hash{};
+      for (int col_index = 0; col_index < device_input.num_columns(); col_index++) {
+        if (device_input.column(col_index).is_valid(row_index)) {
+          cudf::type_dispatcher(device_input.column(col_index).type(),
+                                hasher,
+                                device_input.column(col_index),
+                                row_index,
+                                &hash_state);
+        }
+      }
+      hasher.finalize(&hash_state, d_chars + (row_index * 32));
+    });
+
+  return make_strings_column(input.num_rows(),
+                             std::move(offsets_column),
+                             std::move(chars_column),
+                             0,
+                             std::move(null_mask),
+                             stream,
+                             mr);
+}
+
+std::unique_ptr<column> murmur_hash3_32(table_view const& input,
+                                        std::vector<uint32_t> const& initial_hash,
+                                        rmm::mr::device_memory_resource* mr,
+                                        cudaStream_t stream)
+{
   // TODO this should be UINT32
-  auto output =
-    make_numeric_column(data_type(INT32), input.num_rows(), mask_state::UNALLOCATED, stream, mr);
+  auto output = make_numeric_column(
+    data_type(type_id::INT32), input.num_rows(), mask_state::UNALLOCATED, stream, mr);
 
   // Return early if there's nothing to hash
   if (input.num_columns() == 0 || input.num_rows() == 0) { return output; }
@@ -688,11 +768,20 @@ std::unique_ptr<column> hash(table_view const& input,
 }  // namespace detail
 
 std::unique_ptr<column> hash(table_view const& input,
+                             hash_id hash_function,
                              std::vector<uint32_t> const& initial_hash,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::hash(input, initial_hash, mr);
+  return detail::hash(input, hash_function, initial_hash, mr);
+}
+
+std::unique_ptr<column> murmur_hash3_32(table_view const& input,
+                                        std::vector<uint32_t> const& initial_hash,
+                                        rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::murmur_hash3_32(input, initial_hash, mr);
 }
 
 }  // namespace cudf

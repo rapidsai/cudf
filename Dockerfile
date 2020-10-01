@@ -1,5 +1,5 @@
-# An integration test & dev container which builds and installs cuDF from master
-ARG CUDA_VERSION=10.0
+# An integration test & dev container which builds and installs cuDF from main
+ARG CUDA_VERSION=10.1
 ARG CUDA_SHORT_VERSION=${CUDA_VERSION}
 ARG LINUX_VERSION=ubuntu16.04
 FROM nvidia/cuda:${CUDA_VERSION}-devel-${LINUX_VERSION}
@@ -45,7 +45,7 @@ ARG CMAKE_VERSION
 ENV CMAKE_VERSION=$CMAKE_VERSION
 ARG CUDF_REPO=https://github.com/rapidsai/cudf
 ENV CUDF_REPO=$CUDF_REPO
-ARG CUDF_BRANCH=master
+ARG CUDF_BRANCH=main
 ENV CUDF_BRANCH=$CUDF_BRANCH
 
 # Add everything from the local build context

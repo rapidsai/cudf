@@ -23,6 +23,7 @@
 
 #include <memory>
 
+#include <cudf/io/types.hpp>
 #include <cudf/utilities/error.hpp>
 
 namespace cudf {
@@ -71,10 +72,9 @@ class datasource {
   /**
    * @brief Creates a source from a memory buffer.
    *
-   * @param[in] data Pointer to the input data host buffer
-   * @param[in] size Size of the buffer in bytes
+   * @param[in] buffer Host buffer object
    */
-  static std::unique_ptr<datasource> create(const char* data, size_t size);
+  static std::unique_ptr<datasource> create(host_buffer const& buffer);
 
   /**
    * @brief Creates a source from a from an Arrow file.
@@ -90,6 +90,22 @@ class datasource {
    * @param[in] source Non-owning pointer to the datasource object
    */
   static std::unique_ptr<datasource> create(datasource* source);
+
+  /**
+   * @brief Creates a vector of datasources, one per element in the input vector.
+   *
+   * @param[in] args vector of parameters
+   */
+  template <typename T>
+  static std::vector<std::unique_ptr<datasource>> create(std::vector<T> const& args)
+  {
+    std::vector<std::unique_ptr<datasource>> sources;
+    sources.reserve(args.size());
+    std::transform(args.cbegin(), args.cend(), std::back_inserter(sources), [](auto const& arg) {
+      return datasource::create(arg);
+    });
+    return sources;
+  }
 
   /**
    * @brief Base class destructor
@@ -177,6 +193,86 @@ class datasource {
    * @return bool True if there is data, False otherwise
    */
   virtual bool is_empty() const { return size() == 0; }
+
+  /**
+   * @brief Implementation for non owning buffer where datasource holds buffer until destruction.
+   */
+  class non_owning_buffer : public buffer {
+   public:
+    non_owning_buffer() : _data(0), _size(0) {}
+
+    non_owning_buffer(uint8_t* data, size_t size) : _data(data), _size(size) {}
+
+    size_t size() const override { return _size; }
+
+    const uint8_t* data() const override { return _data; }
+
+   private:
+    uint8_t* const _data;
+    size_t const _size;
+  };
+};
+
+/**
+ * @brief Implementation class for reading from an Apache Arrow file. The file
+ * could be a memory-mapped file or other implementation supported by Arrow.
+ */
+class arrow_io_source : public datasource {
+  /**
+   * @brief Implementation for an owning buffer where `arrow::Buffer` holds the data.
+   */
+  class arrow_io_buffer : public buffer {
+    std::shared_ptr<arrow::Buffer> arrow_buffer;
+
+   public:
+    explicit arrow_io_buffer(std::shared_ptr<arrow::Buffer> arrow_buffer)
+      : arrow_buffer(arrow_buffer)
+    {
+    }
+    size_t size() const override { return arrow_buffer->size(); }
+    const uint8_t* data() const override { return arrow_buffer->data(); }
+  };
+
+ public:
+  /**
+   * @brief Constructs an object from an `arrow` source object.
+   *
+   * @param file The `arrow` object from which the data is read
+   */
+  explicit arrow_io_source(std::shared_ptr<arrow::io::RandomAccessFile> file) : arrow_file(file) {}
+
+  /**
+   * @brief Returns a buffer with a subset of data from the `arrow` source.
+   */
+  std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
+  {
+    auto result = arrow_file->ReadAt(offset, size);
+    CUDF_EXPECTS(result.ok(), "Cannot read file data");
+    return std::make_unique<arrow_io_buffer>(result.ValueOrDie());
+  }
+
+  /**
+   * @brief Reads a selected range from the `arrow` source into a preallocated buffer.
+   */
+  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
+  {
+    auto result = arrow_file->ReadAt(offset, size, dst);
+    CUDF_EXPECTS(result.ok(), "Cannot read file data");
+    return result.ValueOrDie();
+  }
+
+  /**
+   * @brief Returns the size of the data in the `arrow` source.
+   */
+  size_t size() const override
+  {
+    auto result = arrow_file->GetSize();
+    CUDF_EXPECTS(result.ok(), "Cannot get file size");
+    return result.ValueOrDie();
+  }
+
+ private:
+  std::shared_ptr<arrow::io::RandomAccessFile> arrow_file;
 };
 
 }  // namespace io

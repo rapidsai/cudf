@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef __IO_ORC_GPU_H__
-#define __IO_ORC_GPU_H__
+#pragma once
 
 #include <io/comp/gpuinflate.h>
 #include <io/statistics/column_stats.h>
@@ -143,7 +142,7 @@ struct StripeStream {
   uint32_t num_chunks;      // Number of chunks in the stripe
   uint32_t column_id;       // column index
   uint32_t first_block;     // First compressed block
-  uint8_t strm_type;        // Stream index type
+  uint8_t stream_type;      // Stream index type
   uint8_t pad[3];
 };
 
@@ -450,5 +449,3 @@ cudaError_t orc_encode_statistics(uint8_t *blob_bfr,
 }  // namespace orc
 }  // namespace io
 }  // namespace cudf
-
-#endif  // __IO_ORC_GPU_H__

@@ -35,6 +35,6 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" \
                                            duplicate_keep_option keep,
                                            null_equality nulls_equal) except +
 
-    cdef size_type unique_count(column_view source_table,
-                                null_policy null_handling,
-                                nan_policy nan_handling) except +
+    cdef size_type distinct_count(column_view source_table,
+                                  null_policy null_handling,
+                                  nan_policy nan_handling) except +

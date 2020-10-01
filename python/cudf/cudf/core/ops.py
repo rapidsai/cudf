@@ -1,9 +1,9 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
-
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 from numbers import Number
 
 import numpy as np
 
+from cudf.core.frame import Frame
 
 """ Global __array_ufunc__ methods
 """
@@ -96,12 +96,52 @@ def logical_or(lhs, rhs):
 def remainder(lhs, rhs):
     if isinstance(lhs, Number) and isinstance(rhs, Number):
         return np.mod(lhs, rhs)
-    else:
+    elif isinstance(lhs, Frame):
         return getattr(lhs, "remainder")(rhs)
+    else:
+        return getattr(rhs, "__rmod__")(lhs)
 
 
 def floor_divide(lhs, rhs):
     if isinstance(lhs, Number) and isinstance(rhs, Number):
         return np.floor_divide(lhs, rhs)
-    else:
+    elif isinstance(lhs, Frame):
         return getattr(lhs, "floordiv")(rhs)
+    else:
+        return getattr(rhs, "__rfloordiv__")(lhs)
+
+
+def subtract(lhs, rhs):
+    if isinstance(lhs, Number) and isinstance(rhs, Number):
+        return np.subtract(lhs, rhs)
+    elif isinstance(lhs, Frame):
+        return getattr(lhs, "__sub__")(rhs)
+    else:
+        return getattr(rhs, "__rsub__")(lhs)
+
+
+def add(lhs, rhs):
+    if isinstance(lhs, Number) and isinstance(rhs, Number):
+        return np.add(lhs, rhs)
+    elif isinstance(rhs, Frame):
+        return getattr(rhs, "__radd__")(lhs)
+    else:
+        return getattr(lhs, "__add__")(rhs)
+
+
+def true_divide(lhs, rhs):
+    if isinstance(lhs, Number) and isinstance(rhs, Number):
+        return np.true_divide(lhs, rhs)
+    elif isinstance(rhs, Frame):
+        return getattr(rhs, "__rtruediv__")(lhs)
+    else:
+        return getattr(lhs, "__truediv__")(rhs)
+
+
+def multiply(lhs, rhs):
+    if isinstance(lhs, Number) and isinstance(rhs, Number):
+        return np.multiply(lhs, rhs)
+    elif isinstance(rhs, Frame):
+        return getattr(rhs, "__rmul__")(lhs)
+    else:
+        return getattr(lhs, "__mul__")(rhs)

@@ -1,18 +1,12 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
-
 from functools import lru_cache
 
 import cupy
 import numpy as np
 from numba import cuda
 
-from cudf.utils.utils import (
-    check_equals_float,
-    check_equals_int,
-    mask_bitsize,
-    mask_get,
-    rint,
-)
+import cudf
+from cudf.utils.utils import check_equals_float, check_equals_int, rint
 
 try:
     # Numba >= 0.49
@@ -47,27 +41,6 @@ def full(size, value, dtype):
 
     out = cupy.full(size, value, cupy_dtype)
     return cuda.as_cuda_array(out).view(dtype)
-
-
-@cuda.jit
-def gpu_expand_mask_bits(bits, out):
-    """Expand each bits in bitmask *bits* into an element in out.
-    This is a flexible kernel that can be launch with any number of blocks
-    and threads.
-    """
-    for i in range(cuda.grid(1), out.size, cuda.gridsize(1)):
-        if i < bits.size * mask_bitsize:
-            out[i] = mask_get(bits, i)
-
-
-def expand_mask_bits(size, bits):
-    """Expand bit-mask into byte-mask
-    """
-    expanded_mask = full(size, 0, dtype=np.bool_)
-    numtasks = min(1024, expanded_mask.size)
-    if numtasks > 0:
-        gpu_expand_mask_bits.forall(numtasks)(bits, expanded_mask)
-    return expanded_mask
 
 
 #
@@ -132,7 +105,12 @@ def gpu_mark_found_int(arr, val, out, not_found):
 def gpu_mark_found_float(arr, val, out, not_found):
     i = cuda.grid(1)
     if i < arr.size:
-        if check_equals_float(arr[i], val):
+        # TODO: Remove val typecast to float(val)
+        # once numba minimum version is pinned
+        # at 0.51.1, this will have a very slight
+        # performance improvement. Related
+        # discussion in : https://github.com/rapidsai/cudf/pull/6073
+        if check_equals_float(arr[i], float(val)):
             out[i] = i
         else:
             out[i] = not_found
@@ -158,19 +136,20 @@ def gpu_mark_lt(arr, val, out, not_found):
             out[i] = not_found
 
 
-def find_first(arr, val, compare="eq"):
+def find_index_of_val(arr, val, mask=None, compare="eq"):
     """
-    Returns the index of the first occurrence of *val* in *arr*..
-    Or the first occurrence of *arr* *compare* *val*, if *compare* is not eq
-    Otherwise, returns -1.
+    Returns the indices of the occurrence of *val* in *arr*
+    as per *compare*, if not found it will be filled with
+    size of *arr*
 
     Parameters
     ----------
     arr : device array
     val : scalar
+    mask : mask of the array
     compare: str ('gt', 'lt', or 'eq' (default))
     """
-    found = cuda.device_array_like(arr)
+    found = cuda.device_array(shape=(arr.shape), dtype="int32")
     if found.size > 0:
         if compare == "gt":
             gpu_mark_gt.forall(found.size)(arr, val, found, arr.size)
@@ -185,17 +164,32 @@ def find_first(arr, val, compare="eq"):
                 gpu_mark_found_int.forall(found.size)(
                     arr, val, found, arr.size
                 )
-    from cudf.core.column import as_column
 
-    found_col = as_column(found)
+    return cudf.core.column.column.as_column(found).set_mask(mask)
+
+
+def find_first(arr, val, mask=None, compare="eq"):
+    """
+    Returns the index of the first occurrence of *val* in *arr*..
+    Or the first occurrence of *arr* *compare* *val*, if *compare* is not eq
+    Otherwise, returns -1.
+
+    Parameters
+    ----------
+    arr : device array
+    val : scalar
+    mask : mask of the array
+    compare: str ('gt', 'lt', or 'eq' (default))
+    """
+
+    found_col = find_index_of_val(arr, val, mask=mask, compare=compare)
+    found_col = found_col.find_and_replace([arr.size], [None], True)
+
     min_index = found_col.min()
-    if min_index == arr.size:
-        return -1
-    else:
-        return min_index
+    return -1 if min_index is None or np.isnan(min_index) else min_index
 
 
-def find_last(arr, val, compare="eq"):
+def find_last(arr, val, mask=None, compare="eq"):
     """
     Returns the index of the last occurrence of *val* in *arr*.
     Or the last occurrence of *arr* *compare* *val*, if *compare* is not eq
@@ -205,24 +199,15 @@ def find_last(arr, val, compare="eq"):
     ----------
     arr : device array
     val : scalar
+    mask : mask of the array
     compare: str ('gt', 'lt', or 'eq' (default))
     """
-    found = cuda.device_array_like(arr)
-    if found.size > 0:
-        if compare == "gt":
-            gpu_mark_gt.forall(found.size)(arr, val, found, -1)
-        elif compare == "lt":
-            gpu_mark_lt.forall(found.size)(arr, val, found, -1)
-        else:
-            if arr.dtype in ("float32", "float64"):
-                gpu_mark_found_float.forall(found.size)(arr, val, found, -1)
-            else:
-                gpu_mark_found_int.forall(found.size)(arr, val, found, -1)
-    from cudf.core.column import as_column
 
-    found_col = as_column(found)
+    found_col = find_index_of_val(arr, val, mask=mask, compare=compare)
+    found_col = found_col.find_and_replace([arr.size], [None], True)
+
     max_index = found_col.max()
-    return max_index
+    return -1 if max_index is None or np.isnan(max_index) else max_index
 
 
 @cuda.jit

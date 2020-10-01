@@ -20,11 +20,11 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/table_utilities.hpp>
-#include <tests/utilities/type_lists.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/table_utilities.hpp>
+#include <cudf_test/type_lists.hpp>
 #include <tuple>
 #include <vector>
 
@@ -48,7 +48,7 @@ void run_rank_test(table_view input,
       cudf::test::print(got_rank_column->view());
       std::cout << "\n";
     }
-    expect_columns_equal(expected.column(i), got_rank_column->view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected.column(i), got_rank_column->view());
     i++;
   }
 }

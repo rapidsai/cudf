@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 import dask
-import dask.dataframe as dd
+from dask import dataframe as dd
 
 import cudf
 
@@ -116,3 +116,25 @@ def test_read_csv_compression_file_list(tmp_path):
     ddf_gpu = dask_cudf.read_csv(files, compression="gzip").compute()
 
     dd.assert_eq(ddf_cpu, ddf_gpu)
+
+
+@pytest.mark.parametrize("size", [0, 3, 20])
+@pytest.mark.parametrize("compression", ["gzip", "infer"])
+def test_read_csv_chunksize_none(tmp_path, compression, size):
+    df = pd.DataFrame(dict(x=np.arange(size), y=np.arange(size)))
+
+    path = (
+        tmp_path / "data.csv.gz"
+        if compression == "gzip"
+        else tmp_path / "data.csv"
+    )
+
+    # Types need to be specified for empty csv files
+    if size == 0:
+        typ = {"x": df.x.dtype, "y": df.y.dtype}
+    else:
+        typ = None
+
+    df.to_csv(path, index=False)
+    df2 = dask_cudf.read_csv(path, chunksize=None, dtype=typ)
+    dd.assert_eq(df, df2)

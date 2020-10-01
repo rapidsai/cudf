@@ -488,6 +488,29 @@ def test_different_shapes_and_columns_with_unaligned_indices(binop):
     utils.assert_eq(cd_frame, pd_frame)
 
 
+@pytest.mark.parametrize(
+    "df2",
+    [
+        cudf.DataFrame({"a": [3, 2, 1]}, index=[3, 2, 1]),
+        cudf.DataFrame([3, 2]),
+    ],
+)
+@pytest.mark.parametrize("binop", [operator.eq, operator.ne])
+def test_df_different_index_shape(df2, binop):
+    df1 = cudf.DataFrame([1, 2, 3], index=[1, 2, 3])
+
+    pdf1 = df1.to_pandas()
+    pdf2 = df2.to_pandas()
+
+    try:
+        binop(pdf1, pdf2)
+    except Exception as e:
+        with pytest.raises(type(e), match=e.__str__()):
+            binop(df1, df2)
+    else:
+        raise AssertionError(f"Expected {binop} to fail for {pdf1} and {pdf2}")
+
+
 @pytest.mark.parametrize("op", [operator.eq, operator.ne])
 def test_boolean_scalar_binop(op):
     psr = pd.Series(np.random.choice([True, False], 10))
@@ -705,17 +728,36 @@ def test_vector_to_none_binops(dtype):
     utils.assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("lhs", [pd.Series([0, 10, 20, 30, 3, 4, 5, 6, 2])])
+@pytest.mark.parametrize(
+    "lhs",
+    [
+        1,
+        3,
+        4,
+        pd.Series([5, 6, 2]),
+        pd.Series([0, 10, 20, 30, 3, 4, 5, 6, 2]),
+        6,
+    ],
+)
 @pytest.mark.parametrize("rhs", [1, 3, 4, pd.Series([5, 6, 2])])
 @pytest.mark.parametrize(
     "ops",
-    [(np.remainder, cudf.remainder), (np.floor_divide, cudf.floor_divide)],
+    [
+        (np.remainder, cudf.remainder),
+        (np.floor_divide, cudf.floor_divide),
+        (np.subtract, cudf.subtract),
+        (np.add, cudf.add),
+        (np.true_divide, cudf.true_divide),
+        (np.multiply, cudf.multiply),
+    ],
 )
 def test_ufunc_ops(lhs, rhs, ops):
     np_op, cu_op = ops
 
     if isinstance(lhs, pd.Series):
         culhs = cudf.from_pandas(lhs)
+    else:
+        culhs = lhs
 
     if isinstance(rhs, pd.Series):
         curhs = cudf.from_pandas(rhs)
@@ -724,6 +766,9 @@ def test_ufunc_ops(lhs, rhs, ops):
 
     expect = np_op(lhs, rhs)
     got = cu_op(culhs, curhs)
-    utils.assert_eq(
-        expect.fillna(got._column.default_na_value()), got, check_dtype=False
-    )
+    if np.isscalar(expect):
+        assert got == expect
+    else:
+        utils.assert_eq(
+            expect, got,
+        )

@@ -1,14 +1,11 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
-
 import functools
 
-import cupy
 from numba import cuda
 
 import cudf
-import cudf._lib as libcudf
+from cudf import _lib as libcudf
 from cudf.core.column import column
-from cudf.core.series import Series
 from cudf.utils import utils
 from cudf.utils.docutils import docfmt_partial
 
@@ -177,7 +174,9 @@ class ApplyKernelCompilerBase(object):
         # Prepare output frame
         outdf = df.copy()
         for k in sorted(self.outcols):
-            outdf[k] = Series(outputs[k], index=outdf.index, nan_as_null=False)
+            outdf[k] = cudf.Series(
+                outputs[k], index=outdf.index, nan_as_null=False
+            )
             if out_mask is not None:
                 outdf[k] = outdf[k].set_mask(out_mask.data_array_view)
 
@@ -217,7 +216,7 @@ class ApplyChunksCompiler(ApplyKernelCompilerBase):
     def normalize_chunks(self, size, chunks):
         if isinstance(chunks, int):
             # *chunks* is the chunksize
-            return cupy.arange(0, size, chunks)
+            return column.arange(0, size, chunks).data_array_view
         else:
             # *chunks* is an array of chunk leading offset
             chunks = column.as_column(chunks)

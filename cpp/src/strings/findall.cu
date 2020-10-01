@@ -111,7 +111,7 @@ struct findall_count_fn : public findall_fn<stack_size> {
 std::unique_ptr<table> findall_re(
   strings_column_view const& strings,
   std::string const& pattern,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   auto strings_count  = strings.size();
@@ -154,7 +154,7 @@ std::unique_ptr<table> findall_re(
   // boundary case: if no columns, return all nulls column (issue #119)
   if (columns == 0)
     results.emplace_back(
-      std::make_unique<column>(data_type{STRING},
+      std::make_unique<column>(data_type{type_id::STRING},
                                strings_count,
                                rmm::device_buffer{0, stream, mr},  // no data
                                create_null_mask(strings_count, mask_state::ALL_NULL, stream, mr),

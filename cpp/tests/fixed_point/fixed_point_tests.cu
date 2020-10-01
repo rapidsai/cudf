@@ -14,14 +14,16 @@
  * limitations under the License.
  */
 
-#include <algorithm>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/type_lists.hpp>
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
+#include <algorithm>
 #include <limits>
 #include <numeric>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/type_lists.hpp>
 #include <type_traits>
 #include <vector>
 
@@ -331,6 +333,26 @@ TYPED_TEST(FixedPointTestBothReps, DecimalXXThrust)
   });
 
   EXPECT_EQ(vec2, vec3);
+}
+
+TYPED_TEST(FixedPointTestBothReps, BoolConversion)
+{
+  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
+
+  decimalXX truthy_value{1.234567, scale_type{0}};
+  decimalXX falsy_value{0, scale_type{0}};
+
+  // Test explicit conversions
+  EXPECT_EQ(static_cast<bool>(truthy_value), true);
+  EXPECT_EQ(static_cast<bool>(falsy_value), false);
+
+  // These operators also *explicitly* convert to bool
+  EXPECT_EQ(truthy_value && true, true);
+  EXPECT_EQ(true && truthy_value, true);
+  EXPECT_EQ(falsy_value || false, false);
+  EXPECT_EQ(false || falsy_value, false);
+  EXPECT_EQ(!truthy_value, false);
+  EXPECT_EQ(!falsy_value, true);
 }
 
 TEST_F(FixedPointTest, OverflowDecimal32)

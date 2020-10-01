@@ -23,6 +23,7 @@ namespace strings {
 /**
  * @addtogroup strings_convert
  * @{
+ * @file
  */
 
 /**
@@ -42,7 +43,7 @@ namespace strings {
  */
 std::unique_ptr<column> url_encode(
   strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Encodes each string using URL encoding.
@@ -63,7 +64,7 @@ std::unique_ptr<column> url_encode(
  */
 std::unique_ptr<column> url_decode(
   strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings

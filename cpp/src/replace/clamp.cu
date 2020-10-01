@@ -239,16 +239,30 @@ std::enable_if_t<std::is_same<T, list_view>::value, std::unique_ptr<cudf::column
   CUDF_FAIL("list_view type not supported");
 }
 
+template <typename T, typename ScalarIterator>
+std::enable_if_t<std::is_same<T, cudf::struct_view>::value, std::unique_ptr<cudf::column>> clamper(
+  column_view const& input,
+  ScalarIterator const& lo_itr,
+  ScalarIterator const& lo_replace_itr,
+  ScalarIterator const& hi_itr,
+  ScalarIterator const& hi_replace_itr,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
+{
+  CUDF_FAIL("struct_view type not supported");
+}
+
 }  // namespace
 
 template <typename T, typename ScalarIterator>
-std::unique_ptr<column> clamp(column_view const& input,
-                              ScalarIterator const& lo_itr,
-                              ScalarIterator const& lo_replace_itr,
-                              ScalarIterator const& hi_itr,
-                              ScalarIterator const& hi_replace_itr,
-                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                              cudaStream_t stream                 = 0)
+std::unique_ptr<column> clamp(
+  column_view const& input,
+  ScalarIterator const& lo_itr,
+  ScalarIterator const& lo_replace_itr,
+  ScalarIterator const& hi_itr,
+  ScalarIterator const& hi_replace_itr,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0)
 {
   return clamper<T>(input, lo_itr, lo_replace_itr, hi_itr, hi_replace_itr, mr, stream);
 }
@@ -261,7 +275,7 @@ struct dispatch_clamp {
     scalar const& lo_replace,
     scalar const& hi,
     scalar const& hi_replace,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
     cudaStream_t stream                 = 0)
   {
     auto lo_itr         = make_pair_iterator<T>(lo);
@@ -286,6 +300,44 @@ std::unique_ptr<column> dispatch_clamp::operator()<cudf::list_view>(
   CUDF_FAIL("clamp for list_view not supported");
 }
 
+template <>
+std::unique_ptr<column> dispatch_clamp::operator()<numeric::decimal32>(
+  column_view const& input,
+  scalar const& lo,
+  scalar const& lo_replace,
+  scalar const& hi,
+  scalar const& hi_replace,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
+{
+  CUDF_FAIL("clamp for decimal32 not supported");
+}
+
+template <>
+std::unique_ptr<column> dispatch_clamp::operator()<numeric::decimal64>(
+  column_view const& input,
+  scalar const& lo,
+  scalar const& lo_replace,
+  scalar const& hi,
+  scalar const& hi_replace,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
+{
+  CUDF_FAIL("clamp for decimal32 not supported");
+}
+
+template <>
+std::unique_ptr<column> dispatch_clamp::operator()<struct_view>(column_view const& input,
+                                                                scalar const& lo,
+                                                                scalar const& lo_replace,
+                                                                scalar const& hi,
+                                                                scalar const& hi_replace,
+                                                                rmm::mr::device_memory_resource* mr,
+                                                                cudaStream_t stream)
+{
+  CUDF_FAIL("clamp for struct_view not supported");
+}
+
 /**
  * @copydoc cudf::clamp(column_view const& input,
                                       scalar const& lo,
@@ -296,13 +348,14 @@ std::unique_ptr<column> dispatch_clamp::operator()<cudf::list_view>(
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> clamp(column_view const& input,
-                              scalar const& lo,
-                              scalar const& lo_replace,
-                              scalar const& hi,
-                              scalar const& hi_replace,
-                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                              cudaStream_t stream                 = 0)
+std::unique_ptr<column> clamp(
+  column_view const& input,
+  scalar const& lo,
+  scalar const& lo_replace,
+  scalar const& hi,
+  scalar const& hi_replace,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0)
 {
   CUDF_EXPECTS(lo.type() == hi.type(), "mismatching types of limit scalars");
   CUDF_EXPECTS(lo_replace.type() == hi_replace.type(), "mismatching types of replace scalars");

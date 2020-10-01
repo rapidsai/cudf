@@ -29,12 +29,13 @@
 namespace cudf {
 namespace strings {
 namespace detail {
-std::unique_ptr<column> fill(strings_column_view const& strings,
-                             size_type begin,
-                             size_type end,
-                             string_scalar const& value,
-                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                             cudaStream_t stream                 = 0)
+std::unique_ptr<column> fill(
+  strings_column_view const& strings,
+  size_type begin,
+  size_type end,
+  string_scalar const& value,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0)
 {
   auto strings_count = strings.size();
   if (strings_count == 0) return detail::make_empty_strings_column(mr, stream);

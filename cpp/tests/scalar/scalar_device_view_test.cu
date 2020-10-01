@@ -18,10 +18,10 @@
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/cudf_gtest.hpp>
-#include <tests/utilities/type_list_utilities.hpp>
-#include <tests/utilities/type_lists.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/type_list_utilities.hpp>
+#include <cudf_test/type_lists.hpp>
 
 #include <thrust/sequence.h>
 #include <random>
@@ -30,7 +30,7 @@ template <typename T>
 struct TypedScalarDeviceViewTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(TypedScalarDeviceViewTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_CASE(TypedScalarDeviceViewTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 template <typename ScalarDeviceViewType>
 __global__ void test_set_value(ScalarDeviceViewType s, ScalarDeviceViewType s1)
@@ -47,7 +47,7 @@ __global__ void test_value(ScalarDeviceViewType s, ScalarDeviceViewType s1, bool
 
 TYPED_TEST(TypedScalarDeviceViewTest, Value)
 {
-  TypeParam value{7};
+  TypeParam value = cudf::test::make_type_param_scalar<TypeParam>(7);
   cudf::scalar_type_t<TypeParam> s(value);
   cudf::scalar_type_t<TypeParam> s1;
 
@@ -75,7 +75,7 @@ __global__ void test_null(ScalarDeviceViewType s, bool* result)
 
 TYPED_TEST(TypedScalarDeviceViewTest, ConstructNull)
 {
-  TypeParam value = 5;
+  TypeParam value = cudf::test::make_type_param_scalar<TypeParam>(5);
   cudf::scalar_type_t<TypeParam> s(value, false);
   auto scalar_device_view = cudf::get_scalar_device_view(s);
   rmm::device_scalar<bool> result;

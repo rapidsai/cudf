@@ -1,5 +1,4 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
-
 from copy import copy, deepcopy
 
 import numpy as np
@@ -9,7 +8,6 @@ from numba import cuda
 
 from cudf.core.dataframe import DataFrame
 from cudf.tests.utils import ALL_TYPES, assert_eq
-
 
 """
 DataFrame copy expectations

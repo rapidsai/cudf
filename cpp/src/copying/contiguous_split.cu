@@ -360,7 +360,7 @@ thrust::host_vector<column_split_info> preprocess_string_column_info(
   // collect only string columns
   size_type column_index = 0;
   std::for_each(t.begin(), t.end(), [&offset_columns, &column_index](cudf::column_view const& c) {
-    if (c.type().id() == STRING) {
+    if (c.type().id() == type_id::STRING) {
       cudf::column_device_view cdv((strings_column_view(c)).offsets(), 0, 0);
       offset_columns.push_back(
         column_preprocess_info{column_index, c.offset(), c.size(), c.has_nulls(), cdv});

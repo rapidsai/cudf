@@ -25,6 +25,8 @@ namespace cudf {
 /**
  * @addtogroup copy_concatenate
  * @{
+ * @file
+ * @brief Concatenate columns APIs
  */
 
 /**
@@ -41,7 +43,7 @@ namespace cudf {
  */
 rmm::device_buffer concatenate_masks(
   std::vector<column_view> const& views,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Concatenates multiple columns into a single column.
@@ -57,7 +59,7 @@ rmm::device_buffer concatenate_masks(
  */
 std::unique_ptr<column> concatenate(
   std::vector<column_view> const& columns_to_concat,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Columns of `tables_to_concat` are concatenated vertically to return a
@@ -88,7 +90,7 @@ std::unique_ptr<column> concatenate(
  */
 std::unique_ptr<table> concatenate(
   std::vector<table_view> const& tables_to_concat,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace cudf

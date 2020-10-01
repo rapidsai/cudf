@@ -14,3 +14,8 @@ cdef extern from "nvtext/generate_ngrams.hpp" namespace "nvtext" nogil:
         size_type ngrams,
         const string_scalar & separator
     ) except +
+
+    cdef unique_ptr[column] generate_character_ngrams(
+        const column_view &strings,
+        size_type ngrams
+    ) except +

@@ -40,7 +40,9 @@ using named_prog = std::pair<std::string, std::shared_ptr<Tv>>;
  * This function returns a path to the cache directory, creating it if it
  * doesn't exist.
  *
- * The default cache directory `$TEMPDIR/cudf_$CUDF_VERSION`.
+ * The default cache directory is `$HOME/.cudf/$CUDF_VERSION`. If no overrides
+ * are used and if $HOME is not defined, returns an empty path and file
+ * caching is not used.
  **/
 boost::filesystem::path getCacheDir();
 

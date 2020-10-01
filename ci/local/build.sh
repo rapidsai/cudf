@@ -1,6 +1,9 @@
 #!/bin/bash
 
-DOCKER_IMAGE="gpuci/rapidsai-base:cuda10.0-ubuntu16.04-gcc5-py3.6"
+GIT_DESCRIBE_TAG=`git describe --tags`
+MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
+
+DOCKER_IMAGE="gpuci/rapidsai:${MINOR_VERSION}-cuda10.1-devel-ubuntu16.04-py3.7"
 REPO_PATH=${PWD}
 RAPIDS_DIR_IN_CONTAINER="/rapids"
 CPP_BUILD_DIR="cpp/build"

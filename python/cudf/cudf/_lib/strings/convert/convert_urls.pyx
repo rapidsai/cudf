@@ -1,7 +1,7 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
-from cudf._lib.move cimport move
+from libcpp.utility cimport move
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
@@ -16,8 +16,8 @@ def url_decode(Column source_strings):
     """
     Decode each string in column. No format checking is performed.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type string
 
     Returns
@@ -44,8 +44,8 @@ def url_encode(Column source_strings):
     and these characters: ‘.’,’_’,’-‘,’~’. Encoding converts to
     hex using UTF-8 encoded bytes.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_col : input column of type string
 
     Returns

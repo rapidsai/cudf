@@ -79,9 +79,8 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             identity,
                             stream);
 
-  using ScalarType = cudf::scalar_type_t<OutputType>;
-  auto s           = new ScalarType(
-    std::move(dev_result), true, stream, mr);  // only for string_view, data is copied
+  // only for string_view, data is copied
+  auto s = new cudf::scalar_type_t<OutputType>(std::move(dev_result), true, stream, mr);
   return std::unique_ptr<scalar>(s);
 }
 

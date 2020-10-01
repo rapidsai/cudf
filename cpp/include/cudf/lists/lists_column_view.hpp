@@ -18,10 +18,15 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 
+/**
+ * @file
+ * @brief Class definition for cudf::lists_column_view
+ */
+
 namespace cudf {
 
 /**
- * @ingroup lists_classes
+ * @addtogroup lists_classes
  * @{
  */
 
@@ -41,7 +46,10 @@ class lists_column_view : private column_view {
   static constexpr size_type offsets_column_index{0};
   static constexpr size_type child_column_index{1};
 
+  using column_view::child_begin;
+  using column_view::child_end;
   using column_view::has_nulls;
+  using column_view::is_empty;
   using column_view::null_count;
   using column_view::null_mask;
   using column_view::offset;
@@ -65,6 +73,18 @@ class lists_column_view : private column_view {
    * @throw cudf::logic error if this is an empty column
    */
   column_view child() const;
+
+  /**
+   * @brief Returns the internal child column, applying any offset from the root.
+   *
+   * Slice/split offset values are only stored at the root level of a list column.
+   * So when doing computations on them, we need to apply that offset to
+   * the child columns when recursing.  Most functions operating in a recursive manner
+   * on lists columns should be using `get_sliced_child()` instead of `child()`.
+   *
+   * @throw cudf::logic error if this is an empty column
+   */
+  column_view get_sliced_child(cudaStream_t stream) const;
 };
 /** @} */  // end of group
 }  // namespace cudf

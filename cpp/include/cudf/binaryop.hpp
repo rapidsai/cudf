@@ -26,6 +26,8 @@ namespace cudf {
 /**
  * @addtogroup transformation_binaryops
  * @{
+ * @file
+ * @brief Column APIs for binary ops
  */
 
 /**
@@ -96,7 +98,7 @@ std::unique_ptr<column> binary_operation(
   column_view const& rhs,
   binary_operator op,
   data_type output_type,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Performs a binary operation between a column and a scalar.
@@ -121,7 +123,7 @@ std::unique_ptr<column> binary_operation(
   scalar const& rhs,
   binary_operator op,
   data_type output_type,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Performs a binary operation between two columns.
@@ -145,7 +147,7 @@ std::unique_ptr<column> binary_operation(
   column_view const& rhs,
   binary_operator op,
   data_type output_type,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Performs a binary operation between two columns using a
@@ -174,7 +176,7 @@ std::unique_ptr<column> binary_operation(
   column_view const& rhs,
   std::string const& ptx,
   data_type output_type,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace cudf

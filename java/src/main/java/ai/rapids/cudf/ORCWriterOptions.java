@@ -18,7 +18,7 @@
 
 package ai.rapids.cudf;
 
-public class ORCWriterOptions extends WriterOptions {
+public class ORCWriterOptions extends CompressedMetadataWriterOptions {
 
   public static ORCWriterOptions DEFAULT = new ORCWriterOptions(new Builder());
 
@@ -30,7 +30,7 @@ public class ORCWriterOptions extends WriterOptions {
     return new Builder();
   }
 
-  public static class Builder extends WriterBuilder<Builder> {
+  public static class Builder extends CMWriterBuilder<Builder> {
     public ORCWriterOptions build() {
       return new ORCWriterOptions(this);
     }

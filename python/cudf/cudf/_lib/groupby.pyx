@@ -6,12 +6,12 @@ import numpy as np
 
 from libcpp.pair cimport pair
 from libcpp.memory cimport unique_ptr
+from libcpp.utility cimport move
 from libcpp.vector cimport vector
 from libcpp cimport bool
 
 from cudf._lib.column cimport Column
 from cudf._lib.table cimport Table
-from cudf._lib.move cimport move
 from cudf._lib.aggregation cimport make_aggregation, Aggregation
 
 from cudf._lib.cpp.table.table cimport table, table_view
@@ -35,6 +35,7 @@ _GROUPBY_AGGS = {
     "median",
     "nunique",
     "nth",
+    "collect"
 }
 
 _CATEGORICAL_AGGS = {
@@ -45,12 +46,16 @@ _CATEGORICAL_AGGS = {
 
 _STRING_AGGS = {
     "count",
+    "size",
     "max",
     "min",
     "nunique",
     "nth",
 }
 
+_LIST_AGGS = {
+    "collect"
+}
 
 cdef class GroupBy:
     cdef unique_ptr[libcudf_groupby.groupby] c_obj
@@ -70,7 +75,7 @@ cdef class GroupBy:
             self.c_obj.reset(
                 new libcudf_groupby.groupby(
                     keys_view,
-                    c_null_handling
+                    c_null_handling,
                 )
             )
 
@@ -175,12 +180,19 @@ def _drop_unsupported_aggs(Table values, aggs):
 
     from cudf.utils.dtypes import (
         is_categorical_dtype,
-        is_string_dtype
+        is_string_dtype,
+        is_list_dtype
     )
     result = aggs.copy()
 
     for col_name in aggs:
         if (
+            is_list_dtype(values._data[col_name].dtype)
+        ):
+            for i, agg_name in enumerate(aggs[col_name]):
+                if Aggregation(agg_name).kind not in _LIST_AGGS:
+                    del result[col_name][i]
+        elif (
             is_string_dtype(values._data[col_name].dtype)
         ):
             for i, agg_name in enumerate(aggs[col_name]):

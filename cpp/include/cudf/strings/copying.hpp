@@ -45,13 +45,13 @@ namespace detail {
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column of size (end-start)/step.
  */
-std::unique_ptr<cudf::column> slice(
+std::unique_ptr<cudf::column> copy_slice(
   strings_column_view const& strings,
   size_type start,
   size_type end                       = -1,
   size_type step                      = 1,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
 }  // namespace strings

@@ -49,41 +49,58 @@ namespace gpu {
  * Also iterates over (one or more) delimiter characters after the field.
  * Function applies to formats with field delimiters and line terminators.
  *
- * @param data The entire plain text data to read
- * @param opts A set of parsing options
- * @param pos Offset to start the seeking from
- * @param stop Offset of the end of the row
+ * @param[in] begin Beginning of the character string
+ * @param[in] end End of the character string
+ * @param[in] opts A set of parsing options
+ * @param[in] escape_char A boolean value to signify whether to consider `\` as escape character or
+ * just a character.
  *
- * @return long The position of the last character in the field, including the
+ * @return Pointer to the last character in the field, including the
  *  delimiter(s) following the field data
  */
-__device__ __inline__ long seek_field_end(const char* data,
-                                          ParseOptions const& opts,
-                                          long pos,
-                                          long stop)
+__device__ __inline__ char const* seek_field_end(char const* begin,
+                                                 char const* end,
+                                                 ParseOptions const& opts,
+                                                 bool escape_char = false)
 {
-  bool quotation = false;
+  bool quotation   = false;
+  auto current     = begin;
+  bool escape_next = false;
   while (true) {
     // Use simple logic to ignore control chars between any quote seq
     // Handles nominal cases including doublequotes within quotes, but
-    // may not output exact failures as PANDAS for malformed fields
-    if (data[pos] == opts.quotechar) {
+    // may not output exact failures as PANDAS for malformed fields.
+    // Check for instances such as "a2\"bc" and "\\" if `escape_char` is true.
+
+    if (*current == opts.quotechar and not escape_next) {
       quotation = !quotation;
-    } else if (quotation == false) {
-      if (data[pos] == opts.delimiter) {
-        while (opts.multi_delimiter && pos < stop && data[pos + 1] == opts.delimiter) { ++pos; }
+    } else if (!quotation) {
+      if (*current == opts.delimiter) {
+        while (opts.multi_delimiter && current < end && *(current + 1) == opts.delimiter) {
+          ++current;
+        }
         break;
-      } else if (data[pos] == opts.terminator) {
+      } else if (*current == opts.terminator) {
         break;
-      } else if (data[pos] == '\r' && (pos + 1 < stop && data[pos + 1] == '\n')) {
-        stop--;
+      } else if (*current == '\r' && (current + 1 < end && *(current + 1) == '\n')) {
+        --end;
         break;
       }
     }
-    if (pos >= stop) break;
-    pos++;
+
+    if (escape_char == true) {
+      // If a escape character is encountered, escape next character in next loop.
+      if (escape_next == false and *current == '\\') {
+        escape_next = true;
+      } else {
+        escape_next = false;
+      }
+    }
+
+    if (current >= end) break;
+    current++;
   }
-  return pos;
+  return current;
 }
 
 /**
@@ -127,71 +144,97 @@ __device__ __forceinline__ uint8_t decode_digit(char c, bool* valid_flag)
   return 0;
 }
 
+// Converts character to lowercase.
+__inline__ __device__ char to_lower(char const c)
+{
+  return c >= 'A' && c <= 'Z' ? c + ('a' - 'A') : c;
+}
+
+/**
+ * @brief Check if string is infinity, case insensitive with/without sign
+ * Valid infinity strings are inf, +inf, -inf, infinity, +infinity, -infinity
+ * String comparison is case insensitive.
+ *
+ * @param start The pointer to character array to start parsing from
+ * @param end The pointer to character array to end parsing
+ * @return true if string is valid infinity, else false.
+ */
+__inline__ __device__ bool is_infinity(char const* start, char const* end)
+{
+  if (*start == '-' || *start == '+') start++;
+  char const* cinf = "infinity";
+  auto index       = start;
+  while (index <= end) {
+    if (*cinf != to_lower(*index)) break;
+    index++;
+    cinf++;
+  }
+  return ((index == start + 3 || index == start + 8) && index > end);
+}
+
 /**
  * @brief Parses a character string and returns its numeric value.
  *
- * @param data The character string for parse
- * @param start The index within data to start parsing from
- * @param end The end index within data to end parsing
- * @param opts The global parsing behavior options
- * @param base Base (radix) to use for conversion
+ * @param[in] begin Beginning of the character string
+ * @param[in] end End of the character string
+ * @param[in] opts The global parsing behavior options
+ * @tparam base Base (radix) to use for conversion
  *
  * @return The parsed and converted value
  */
 template <typename T, int base = 10>
-__inline__ __device__ T
-parse_numeric(const char* data, long start, long end, ParseOptions const& opts)
+__inline__ __device__ T parse_numeric(const char* begin, const char* end, ParseOptions const& opts)
 {
-  T value               = 0;
+  T value{};
   bool all_digits_valid = true;
 
   // Handle negative values if necessary
-  int32_t sign = 1;
-  if (data[start] == '-') {
-    sign = -1;
-    start++;
+  int32_t sign = (*begin == '-') ? -1 : 1;
+
+  // Handle infinity
+  if (std::is_floating_point<T>::value && is_infinity(begin, end)) {
+    return sign * std::numeric_limits<T>::infinity();
   }
+  if (*begin == '-' || *begin == '+') begin++;
 
   // Skip over the "0x" prefix for hex notation
-  if (base == 16 && start + 2 <= end && data[start] == '0' && data[start + 1] == 'x') {
-    start += 2;
-  }
+  if (base == 16 && begin + 2 <= end && *begin == '0' && *(begin + 1) == 'x') { begin += 2; }
 
   // Handle the whole part of the number
-  long index = start;
-  while (index <= end) {
-    if (data[index] == opts.decimal) {
-      ++index;
+  // auto index = begin;
+  while (begin <= end) {
+    if (*begin == opts.decimal) {
+      ++begin;
       break;
-    } else if (base == 10 && (data[index] == 'e' || data[index] == 'E')) {
+    } else if (base == 10 && (*begin == 'e' || *begin == 'E')) {
       break;
-    } else if (data[index] != opts.thousands && data[index] != '+') {
-      value = (value * base) + decode_digit<T>(data[index], &all_digits_valid);
+    } else if (*begin != opts.thousands && *begin != '+') {
+      value = (value * base) + decode_digit<T>(*begin, &all_digits_valid);
     }
-    ++index;
+    ++begin;
   }
 
   if (std::is_floating_point<T>::value) {
     // Handle fractional part of the number if necessary
     double divisor = 1;
-    while (index <= end) {
-      if (data[index] == 'e' || data[index] == 'E') {
-        ++index;
+    while (begin <= end) {
+      if (*begin == 'e' || *begin == 'E') {
+        ++begin;
         break;
-      } else if (data[index] != opts.thousands && data[index] != '+') {
+      } else if (*begin != opts.thousands && *begin != '+') {
         divisor /= base;
-        value += decode_digit<T>(data[index], &all_digits_valid) * divisor;
+        value += decode_digit<T>(*begin, &all_digits_valid) * divisor;
       }
-      ++index;
+      ++begin;
     }
 
     // Handle exponential part of the number if necessary
-    if (index <= end) {
-      const int32_t exponent_sign = data[index] == '-' ? -1 : 1;
-      if (data[index] == '-' || data[index] == '+') { ++index; }
+    if (begin <= end) {
+      const int32_t exponent_sign = *begin == '-' ? -1 : 1;
+      if (*begin == '-' || *begin == '+') { ++begin; }
       int32_t exponent = 0;
-      while (index <= end) {
-        exponent = (exponent * 10) + decode_digit<T>(data[index++], &all_digits_valid);
+      while (begin <= end) {
+        exponent = (exponent * 10) + decode_digit<T>(*(begin++), &all_digits_valid);
       }
       if (exponent != 0) { value *= exp10(double(exponent * exponent_sign)); }
     }

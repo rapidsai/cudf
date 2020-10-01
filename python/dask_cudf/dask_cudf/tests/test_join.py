@@ -4,11 +4,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import dask.dataframe as dd
-
-import cudf
+from dask import dataframe as dd
 
 import dask_cudf as dgd
+
+import cudf
 
 param_nrows = [5, 10, 50, 100]
 

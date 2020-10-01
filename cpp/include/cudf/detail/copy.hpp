@@ -81,7 +81,7 @@ std::vector<column_view> slice(column_view const& input,
 std::vector<contiguous_split_result> contiguous_split(
   cudf::table_view const& input,
   std::vector<size_type> const& splits,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 /**
@@ -94,7 +94,7 @@ std::unique_ptr<column> allocate_like(
   column_view const& input,
   size_type size,
   mask_allocation_policy mask_alloc   = mask_allocation_policy::RETAIN,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 /**
@@ -107,7 +107,7 @@ std::unique_ptr<column> copy_if_else(
   column_view const& lhs,
   column_view const& rhs,
   column_view const& boolean_mask,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 /**
@@ -120,7 +120,7 @@ std::unique_ptr<column> copy_if_else(
   scalar const& lhs,
   column_view const& rhs,
   column_view const& boolean_mask,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 /**
@@ -133,7 +133,7 @@ std::unique_ptr<column> copy_if_else(
   column_view const& lhs,
   scalar const& rhs,
   column_view const& boolean_mask,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 /**
@@ -146,7 +146,20 @@ std::unique_ptr<column> copy_if_else(
   scalar const& lhs,
   scalar const& rhs,
   column_view const& boolean_mask,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0);
+
+/**
+ * @copydoc cudf::sample
+ *
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<table> sample(
+  table_view const& input,
+  size_type const n,
+  sample_with_replacement replacement = sample_with_replacement::FALSE,
+  int64_t const seed                  = 0,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 }  // namespace detail

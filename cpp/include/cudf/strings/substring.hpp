@@ -24,6 +24,7 @@ namespace strings {
 /**
  * @addtogroup strings_substring
  * @{
+ * @file
  */
 
 /**
@@ -59,7 +60,7 @@ std::unique_ptr<column> slice_strings(
   numeric_scalar<size_type> const& start = numeric_scalar<size_type>(0, false),
   numeric_scalar<size_type> const& stop  = numeric_scalar<size_type>(0, false),
   numeric_scalar<size_type> const& step  = numeric_scalar<size_type>(1),
-  rmm::mr::device_memory_resource* mr    = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a new strings column that contains substrings of the
@@ -102,7 +103,7 @@ std::unique_ptr<column> slice_strings(
   strings_column_view const& strings,
   column_view const& starts,
   column_view const& stops,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Slices a column of strings by using a delimiter as a slice point.
@@ -145,7 +146,7 @@ std::unique_ptr<column> slice_strings(
   strings_column_view const& strings,
   string_scalar const& delimiter,
   size_type count,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Slices a column of strings by using a delimiter column as slice points.
@@ -194,7 +195,7 @@ std::unique_ptr<column> slice_strings(
   strings_column_view const& strings,
   strings_column_view const& delimiter_strings,
   size_type count,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings

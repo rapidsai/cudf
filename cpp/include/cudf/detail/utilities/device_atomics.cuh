@@ -446,7 +446,7 @@ genericAtomicOperation(T* address, T const& update_value, BinaryOp op)
   // Use the underlying representation's type to apply operation for the cudf::detail::timestamp
   auto update_value_rep = update_value.time_since_epoch().count();
   auto fun              = cudf::detail::genericAtomicOperationImpl<R, BinaryOp>{};
-  return T(fun(reinterpret_cast<R*>(address), update_value_rep, op));
+  return T{T::duration(fun(reinterpret_cast<R*>(address), update_value_rep, op))};
 }
 
 // specialization for cudf::detail::duration types

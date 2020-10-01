@@ -35,7 +35,7 @@ namespace detail {
 std::unique_ptr<cudf::column> tokenize(
   cudf::strings_column_view const& strings,
   cudf::string_scalar const& delimiter = cudf::string_scalar{""},
-  rmm::mr::device_memory_resource* mr  = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                  = 0);
 
 /**
@@ -51,7 +51,7 @@ std::unique_ptr<cudf::column> tokenize(
 std::unique_ptr<cudf::column> tokenize(
   cudf::strings_column_view const& strings,
   cudf::strings_column_view const& delimiters,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 /**
@@ -68,7 +68,7 @@ std::unique_ptr<cudf::column> tokenize(
 std::unique_ptr<cudf::column> count_tokens(
   cudf::strings_column_view const& strings,
   cudf::string_scalar const& delimiter = cudf::string_scalar{""},
-  rmm::mr::device_memory_resource* mr  = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                  = 0);
 
 /**
@@ -84,7 +84,7 @@ std::unique_ptr<cudf::column> count_tokens(
 std::unique_ptr<cudf::column> count_tokens(
   cudf::strings_column_view const& strings,
   cudf::strings_column_view const& delimiters,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 }  // namespace detail

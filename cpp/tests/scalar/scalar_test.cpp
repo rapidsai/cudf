@@ -17,10 +17,10 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/cudf_gtest.hpp>
-#include <tests/utilities/type_list_utilities.hpp>
-#include <tests/utilities/type_lists.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/type_list_utilities.hpp>
+#include <cudf_test/type_lists.hpp>
 
 #include <thrust/sequence.h>
 #include <random>
@@ -33,7 +33,7 @@ TYPED_TEST_CASE(TypedScalarTest, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(TypedScalarTest, DefaultValidity)
 {
-  TypeParam value = 7;
+  TypeParam value = cudf::test::make_type_param_scalar<TypeParam>(7);
   cudf::scalar_type_t<TypeParam> s(value);
 
   EXPECT_TRUE(s.is_valid());
@@ -42,7 +42,7 @@ TYPED_TEST(TypedScalarTest, DefaultValidity)
 
 TYPED_TEST(TypedScalarTest, ConstructNull)
 {
-  TypeParam value = 5;
+  TypeParam value = cudf::test::make_type_param_scalar<TypeParam>(5);
   cudf::scalar_type_t<TypeParam> s(value, false);
 
   EXPECT_FALSE(s.is_valid());
@@ -50,7 +50,7 @@ TYPED_TEST(TypedScalarTest, ConstructNull)
 
 TYPED_TEST(TypedScalarTest, SetValue)
 {
-  TypeParam value = 9;
+  TypeParam value = cudf::test::make_type_param_scalar<TypeParam>(9);
   cudf::scalar_type_t<TypeParam> s;
   s.set_value(value);
 
@@ -60,7 +60,7 @@ TYPED_TEST(TypedScalarTest, SetValue)
 
 TYPED_TEST(TypedScalarTest, SetNull)
 {
-  TypeParam value = 6;
+  TypeParam value = cudf::test::make_type_param_scalar<TypeParam>(6);
   cudf::scalar_type_t<TypeParam> s;
   s.set_value(value);
   s.set_valid(false);
@@ -70,7 +70,7 @@ TYPED_TEST(TypedScalarTest, SetNull)
 
 TYPED_TEST(TypedScalarTest, CopyConstructor)
 {
-  TypeParam value = 8;
+  TypeParam value = cudf::test::make_type_param_scalar<TypeParam>(8);
   cudf::scalar_type_t<TypeParam> s(value);
   auto s2 = s;
 
@@ -80,7 +80,7 @@ TYPED_TEST(TypedScalarTest, CopyConstructor)
 
 TYPED_TEST(TypedScalarTest, MoveConstructor)
 {
-  TypeParam value = 8;
+  TypeParam value = cudf::test::make_type_param_scalar<TypeParam>(8);
   cudf::scalar_type_t<TypeParam> s(value);
   auto data_ptr = s.data();
   auto mask_ptr = s.validity_data();

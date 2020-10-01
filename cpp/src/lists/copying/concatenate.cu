@@ -19,7 +19,9 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/concatenate.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/detail/concatenate.cuh>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <memory>
 
@@ -49,7 +51,7 @@ std::unique_ptr<column> merge_offsets(std::vector<lists_column_view> const& colu
 {
   // outgoing offsets
   auto merged_offsets = cudf::make_fixed_width_column(
-    data_type{INT32}, total_list_count + 1, mask_state::UNALLOCATED, stream, mr);
+    data_type{type_id::INT32}, total_list_count + 1, mask_state::UNALLOCATED, stream, mr);
   mutable_column_device_view d_merged_offsets(*merged_offsets, 0, 0);
 
   // merge offsets
@@ -58,14 +60,20 @@ std::unique_ptr<column> merge_offsets(std::vector<lists_column_view> const& colu
   size_type count = 0;
   std::for_each(columns.begin(), columns.end(), [&](lists_column_view const& c) {
     if (c.size() > 0) {
+      // handle sliced columns
+      int const local_shift =
+        shift -
+        (c.offset() > 0 ? cudf::detail::get_value<size_type>(c.offsets(), c.offset(), stream) : 0);
       column_device_view offsets(c.offsets(), 0, 0);
-      thrust::transform(rmm::exec_policy(stream)->on(stream),
-                        offsets.begin<size_type>(),
-                        offsets.end<size_type>(),
-                        d_merged_offsets.begin<size_type>() + count,
-                        [shift] __device__(size_type offset) { return offset + shift; });
-      shift += c.child().size();
-      count += offsets.size() - 1;
+      thrust::transform(
+        rmm::exec_policy(stream)->on(stream),
+        offsets.begin<size_type>() + c.offset(),
+        offsets.begin<size_type>() + c.offset() + c.size() + 1,
+        d_merged_offsets.begin<size_type>() + count,
+        [local_shift] __device__(size_type offset) { return offset + local_shift; });
+
+      shift += c.get_sliced_child(stream).size();
+      count += c.size();
     }
   });
 
@@ -81,7 +89,7 @@ std::unique_ptr<column> merge_offsets(std::vector<lists_column_view> const& colu
 std::unique_ptr<column> concatenate(
   std::vector<column_view> const& columns,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   std::vector<lists_column_view> lists_columns;
   lists_columns.reserve(columns.size());
@@ -94,16 +102,13 @@ std::unique_ptr<column> concatenate(
   std::vector<column_view> children;
   children.reserve(columns.size());
   size_type total_list_count = 0;
-  std::transform(lists_columns.begin(),
-                 lists_columns.end(),
-                 std::back_inserter(children),
-                 [&total_list_count, &children](lists_column_view const& l) {
-                   // count total # of lists
-                   total_list_count += l.size();
-                   // child column. could be a leaf type (string, float, int, etc) or more nested
-                   // lists
-                   return l.child();
-                 });
+  std::for_each(lists_columns.begin(),
+                lists_columns.end(),
+                [&total_list_count, &children, stream](lists_column_view const& l) {
+                  // count total # of lists
+                  total_list_count += l.size();
+                  children.push_back(l.get_sliced_child(stream));
+                });
   auto data = cudf::detail::concatenate(children, mr, stream);
 
   // merge offsets

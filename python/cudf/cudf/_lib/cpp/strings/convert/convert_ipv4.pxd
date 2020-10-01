@@ -12,3 +12,7 @@ cdef extern from "cudf/strings/convert/convert_ipv4.hpp" namespace \
 
     cdef unique_ptr[column] integers_to_ipv4(
         column_view input_col) except +
+
+    cdef unique_ptr[column] is_ipv4(
+        column_view source_strings
+    ) except +

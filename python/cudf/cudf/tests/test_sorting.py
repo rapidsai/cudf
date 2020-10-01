@@ -38,6 +38,32 @@ def test_dataframe_sort_values(nelem, dtype):
     assert_eq(sorted_df["b"].values, bb[sorted_index])
 
 
+@pytest.mark.parametrize("ignore_index", [True, False])
+@pytest.mark.parametrize("index", ["a", "b", ["a", "b"]])
+def test_dataframe_sort_values_ignore_index(index, ignore_index):
+    gdf = DataFrame(
+        {"a": [1, 3, 5, 2, 4], "b": [1, 1, 2, 2, 3], "c": [9, 7, 7, 7, 1]}
+    )
+    gdf = gdf.set_index(index)
+
+    pdf = gdf.to_pandas()
+
+    expect = pdf.sort_values(list(pdf.columns), ignore_index=ignore_index)
+    got = gdf.sort_values((gdf.columns), ignore_index=ignore_index)
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("ignore_index", [True, False])
+def test_series_sort_values_ignore_index(ignore_index):
+    gsr = Series([1, 3, 5, 2, 4])
+    psr = gsr.to_pandas()
+
+    expect = psr.sort_values(ignore_index=ignore_index)
+    got = gsr.sort_values(ignore_index=ignore_index)
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize(
     "nelem,sliceobj", list(product([10, 100], sort_slice_args))
 )

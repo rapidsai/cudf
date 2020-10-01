@@ -16,9 +16,9 @@
 
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/encode.hpp>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
 
 #include <vector>
 
@@ -33,7 +33,7 @@ TEST_F(DictionaryDecodeTest, StringColumn)
   auto dictionary = cudf::dictionary::encode(strings);
   auto output     = cudf::dictionary::decode(cudf::dictionary_column_view(dictionary->view()));
 
-  cudf::test::expect_columns_equal(strings, *output);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(strings, *output);
 }
 
 TEST_F(DictionaryDecodeTest, FloatColumn)
@@ -43,7 +43,7 @@ TEST_F(DictionaryDecodeTest, FloatColumn)
   auto dictionary = cudf::dictionary::encode(input);
   auto output     = cudf::dictionary::decode(cudf::dictionary_column_view(dictionary->view()));
 
-  cudf::test::expect_columns_equal(input, *output);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(input, *output);
 }
 
 TEST_F(DictionaryDecodeTest, ColumnWithNull)
@@ -54,7 +54,7 @@ TEST_F(DictionaryDecodeTest, ColumnWithNull)
   auto dictionary = cudf::dictionary::encode(input);
   auto output     = cudf::dictionary::decode(cudf::dictionary_column_view(dictionary->view()));
 
-  cudf::test::expect_columns_equal(input, *output);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(input, *output);
 }
 
 TEST_F(DictionaryDecodeTest, EmptyColumn)

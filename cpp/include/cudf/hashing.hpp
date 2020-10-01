@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ namespace cudf {
 /**
  * @addtogroup column_hash
  * @{
+ * @file
  */
 
 /**
@@ -34,9 +35,11 @@ namespace cudf {
  *
  * @returns A column where each row is the hash of a column from the input
  */
-std::unique_ptr<column> hash(table_view const& input,
-                             std::vector<uint32_t> const& initial_hash = {},
-                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> hash(
+  table_view const& input,
+  hash_id hash_function                     = hash_id::HASH_MURMUR3,
+  std::vector<uint32_t> const& initial_hash = {},
+  rmm::mr::device_memory_resource* mr       = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace cudf

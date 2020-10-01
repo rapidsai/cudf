@@ -65,7 +65,7 @@ std::unique_ptr<column> find_fn(strings_column_view const& strings,
   auto d_strings      = *strings_column;
   auto strings_count  = strings.size();
   // create output column
-  auto results      = make_numeric_column(data_type{INT32},
+  auto results      = make_numeric_column(data_type{type_id::INT32},
                                      strings_count,
                                      copy_bitmask(strings.parent(), stream, mr),
                                      strings.null_count(),
@@ -91,12 +91,13 @@ std::unique_ptr<column> find_fn(strings_column_view const& strings,
 
 }  // namespace
 
-std::unique_ptr<column> find(strings_column_view const& strings,
-                             string_scalar const& target,
-                             size_type start                     = 0,
-                             size_type stop                      = -1,
-                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                             cudaStream_t stream                 = 0)
+std::unique_ptr<column> find(
+  strings_column_view const& strings,
+  string_scalar const& target,
+  size_type start                     = 0,
+  size_type stop                      = -1,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0)
 {
   auto pfn = [] __device__(
                string_view d_string, string_view d_target, size_type start, size_type stop) {
@@ -110,12 +111,13 @@ std::unique_ptr<column> find(strings_column_view const& strings,
   return find_fn(strings, target, start, stop, pfn, mr, stream);
 }
 
-std::unique_ptr<column> rfind(strings_column_view const& strings,
-                              string_scalar const& target,
-                              size_type start                     = 0,
-                              size_type stop                      = -1,
-                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                              cudaStream_t stream                 = 0)
+std::unique_ptr<column> rfind(
+  strings_column_view const& strings,
+  string_scalar const& target,
+  size_type start                     = 0,
+  size_type stop                      = -1,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0)
 {
   auto pfn = [] __device__(
                string_view d_string, string_view d_target, size_type start, size_type stop) {
@@ -178,7 +180,7 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
                                     cudaStream_t stream)
 {
   auto strings_count = strings.size();
-  if (strings_count == 0) return make_empty_column(data_type{BOOL8});
+  if (strings_count == 0) return make_empty_column(data_type{type_id::BOOL8});
 
   CUDF_EXPECTS(target.is_valid(), "Parameter target must be valid.");
   if (target.size() == 0)  // empty target string returns true
@@ -193,7 +195,7 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
   // create output column
-  auto results      = make_numeric_column(data_type{BOOL8},
+  auto results      = make_numeric_column(data_type{type_id::BOOL8},
                                      strings_count,
                                      copy_bitmask(strings.parent(), stream, mr),
                                      strings.null_count(),
@@ -238,7 +240,7 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
                                     cudaStream_t stream)
 {
   auto strings_count = strings.size();
-  if (strings_count == 0) return make_empty_column(data_type{BOOL8});
+  if (strings_count == 0) return make_empty_column(data_type{type_id::BOOL8});
 
   auto targets_count = targets.size();
   CUDF_EXPECTS(targets_count > 0, "Must include at least one search target");
@@ -248,7 +250,7 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
   // create output column
-  auto results      = make_numeric_column(data_type{BOOL8},
+  auto results      = make_numeric_column(data_type{type_id::BOOL8},
                                      strings_count,
                                      copy_bitmask(strings.parent(), stream, mr),
                                      strings.null_count(),
@@ -281,7 +283,7 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
 std::unique_ptr<column> contains(
   strings_column_view const& strings,
   string_scalar const& target,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
@@ -293,7 +295,7 @@ std::unique_ptr<column> contains(
 std::unique_ptr<column> starts_with(
   strings_column_view const& strings,
   string_scalar const& target,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
@@ -305,7 +307,7 @@ std::unique_ptr<column> starts_with(
 std::unique_ptr<column> starts_with(
   strings_column_view const& strings,
   strings_column_view const& targets,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
@@ -317,7 +319,7 @@ std::unique_ptr<column> starts_with(
 std::unique_ptr<column> ends_with(
   strings_column_view const& strings,
   string_scalar const& target,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
@@ -333,7 +335,7 @@ std::unique_ptr<column> ends_with(
 std::unique_ptr<column> ends_with(
   strings_column_view const& strings,
   strings_column_view const& targets,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   auto pfn = [] __device__(string_view d_string, string_view d_target) {

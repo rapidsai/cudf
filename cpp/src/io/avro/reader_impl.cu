@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -348,16 +348,19 @@ void reader::impl::decode_data(const rmm::device_buffer &block_data,
 }
 
 reader::impl::impl(std::unique_ptr<datasource> source,
-                   reader_options const &options,
+                   avro_reader_options const &options,
                    rmm::mr::device_memory_resource *mr)
-  : _source(std::move(source)), _mr(mr), _columns(options.columns)
+  : _source(std::move(source)), _mr(mr), _columns(options.get_columns())
 {
   // Open the source Avro dataset metadata
   _metadata = std::make_unique<metadata>(_source.get());
 }
 
-table_with_metadata reader::impl::read(int skip_rows, int num_rows, cudaStream_t stream)
+table_with_metadata reader::impl::read(avro_reader_options const &options, cudaStream_t stream)
 {
+  auto skip_rows = options.get_skip_rows();
+  auto num_rows  = options.get_num_rows();
+  num_rows       = (num_rows != 0) ? num_rows : -1;
   std::vector<std::unique_ptr<column>> out_columns;
   table_metadata metadata_out;
 
@@ -446,8 +449,7 @@ table_with_metadata reader::impl::read(int skip_rows, int num_rows, cudaStream_t
                   stream);
 
       for (size_t i = 0; i < column_types.size(); ++i) {
-        out_columns.emplace_back(
-          make_column(column_types[i], num_rows, out_buffers[i], stream, _mr));
+        out_columns.emplace_back(make_column(out_buffers[i], stream, _mr));
       }
     }
   }
@@ -464,33 +466,31 @@ table_with_metadata reader::impl::read(int skip_rows, int num_rows, cudaStream_t
 }
 
 // Forward to implementation
-reader::reader(std::string filepath,
-               reader_options const &options,
+reader::reader(std::vector<std::string> const &filepaths,
+               avro_reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(filepath), options, mr))
 {
+  CUDF_EXPECTS(filepaths.size() == 1, "Only a single source is currently supported.");
+  _impl = std::make_unique<impl>(datasource::create(filepaths[0]), options, mr);
 }
 
 // Forward to implementation
-reader::reader(std::unique_ptr<cudf::io::datasource> source,
-               reader_options const &options,
+reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
+               avro_reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(std::move(source), options, mr))
 {
+  CUDF_EXPECTS(sources.size() == 1, "Only a single source is currently supported.");
+  _impl = std::make_unique<impl>(std::move(sources[0]), options, mr);
 }
 
 // Destructor within this translation unit
 reader::~reader() = default;
 
 // Forward to implementation
-table_with_metadata reader::read_all(cudaStream_t stream) { return _impl->read(0, -1, stream); }
-
-// Forward to implementation
-table_with_metadata reader::read_rows(size_type skip_rows, size_type num_rows, cudaStream_t stream)
+table_with_metadata reader::read(avro_reader_options const &options, cudaStream_t stream)
 {
-  return _impl->read(skip_rows, (num_rows != 0) ? num_rows : -1, stream);
+  return _impl->read(options, stream);
 }
-
 }  // namespace avro
 }  // namespace detail
 }  // namespace io

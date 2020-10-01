@@ -15,10 +15,11 @@
  */
 #pragma once
 
+#include <memory>
+#include <vector>
+
 #include <jni.h>
 
-#include <cudf/copying.hpp>
-#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/utilities/error.hpp>
 
 namespace cudf {
@@ -282,24 +283,41 @@ typedef native_jArray<jboolean, jbooleanArray, native_jbooleanArray_accessor> na
 template <typename T> class native_jpointerArray {
 private:
   native_jlongArray wrapped;
+  JNIEnv *const env;
 
 public:
   native_jpointerArray(native_jpointerArray const &) = delete;
   native_jpointerArray &operator=(native_jpointerArray const &) = delete;
 
-  native_jpointerArray(JNIEnv *const env, jlongArray orig) : wrapped(env, orig) {}
+  native_jpointerArray(JNIEnv *const env, jlongArray orig) : wrapped(env, orig), env(env) {}
 
-  native_jpointerArray(JNIEnv *const env, int len) : wrapped(env, len) {}
+  native_jpointerArray(JNIEnv *const env, int len) : wrapped(env, len), env(env) {}
 
-  native_jpointerArray(JNIEnv *const env, T *arr, int len) : wrapped(env, arr, len) {}
+  native_jpointerArray(JNIEnv *const env, T *arr, int len) : wrapped(env, arr, len), env(env) {}
 
   bool is_null() const noexcept { return wrapped.is_null(); }
 
   int size() const noexcept { return wrapped.size(); }
 
-  T *operator[](int index) const { return data()[index]; }
+  T *operator[](int index) const { 
+    if (data() == NULL) {
+      throw_java_exception(env, NPE_CLASS, "pointer is NULL");
+    }
+    if (index < 0 || index >= wrapped.size()) {
+      throw_java_exception(env, INDEX_OOB_CLASS, "NOT IN BOUNDS");
+    }
+    return data()[index];
+  }
 
-  T *&operator[](int index) { return data()[index]; }
+  T *&operator[](int index) {
+    if (data() == NULL) {
+      throw_java_exception(env, NPE_CLASS, "pointer is NULL");
+    }
+    if (index < 0 || index >= wrapped.size()) {
+      throw_java_exception(env, INDEX_OOB_CLASS, "NOT IN BOUNDS");
+    }
+    return data()[index];
+  }
 
   T *const *data() const { return reinterpret_cast<T **>(wrapped.data()); }
 
@@ -657,43 +675,6 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
   }
 }
 
-jobject contiguous_table_from(JNIEnv *env, cudf::contiguous_split_result &split);
-
-native_jobjectArray<jobject> contiguous_table_array(JNIEnv *env, jsize length);
-
-std::unique_ptr<cudf::aggregation> map_jni_aggregation(jint op);
-
-jlongArray convert_table_for_return(JNIEnv *env, std::unique_ptr<cudf::table> &table_result);
-
-/**
- * Allocate a HostMemoryBuffer
- */
-jobject allocate_host_buffer(JNIEnv *env, jlong amount, jboolean prefer_pinned);
-
-/**
- * Get the address of a HostMemoryBuffer
- */
-jlong get_host_buffer_address(JNIEnv *env, jobject buffer);
-
-/**
- * Get the length of a HostMemoryBuffer
- */
-jlong get_host_buffer_length(JNIEnv *env, jobject buffer);
-
-// Get the JNI environment, attaching the current thread to the JVM if necessary. If the thread
-// needs to be attached, the thread will automatically detach when the thread terminates.
-JNIEnv *get_jni_env(JavaVM *jvm);
-
-/** Set the device to use for cudf */
-void set_cudf_device(int device);
-
-/**
- * If the current thread has not set the CUDA device via Cuda.setDevice then this could
- * set the device, throw an exception, or do nothing depending on how the application has
- * configured it via Cuda.setAutoSetDeviceMode.
- */
-void auto_set_device(JNIEnv *env);
-
 } // namespace jni
 } // namespace cudf
 
@@ -751,15 +732,20 @@ void auto_set_device(JNIEnv *env);
     }                                                                                              \
   }
 
-#define CATCH_STD(env, ret_val)                                                                    \
+#define CATCH_STD_CLASS(env, class_name, ret_val)                                                  \
   catch (const std::bad_alloc &e) {                                                                \
     /* In some cases a cuda exception can be the cause so peek and clear if needed*/               \
     if (cudaErrorMemoryAllocation == cudaPeekAtLastError()) {                                      \
       cudaGetLastError();                                                                          \
     }                                                                                              \
-    JNI_CHECK_THROW_NEW(env, cudf::jni::OOM_CLASS, "Could not allocate native memory", ret_val);   \
+    auto what = std::string("Could not allocate native memory: ") +                                \
+      (e.what() == nullptr ? "" : e.what());                                                       \
+    JNI_CHECK_THROW_NEW(env, cudf::jni::OOM_CLASS, what.c_str(), ret_val);                         \
   }                                                                                                \
   catch (const std::exception &e) {                                                                \
     /* If jni_exception caught then a Java exception is pending and this will not overwrite it. */ \
-    JNI_CHECK_THROW_NEW(env, cudf::jni::CUDF_ERROR_CLASS, e.what(), ret_val);                      \
+    JNI_CHECK_THROW_NEW(env, class_name, e.what(), ret_val);                                       \
   }
+
+#define CATCH_STD(env, ret_val)                                                                    \
+    CATCH_STD_CLASS(env, cudf::jni::CUDF_ERROR_CLASS, ret_val)

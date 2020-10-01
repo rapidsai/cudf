@@ -8,6 +8,7 @@ from numpy.testing import assert_array_equal
 
 import cudf
 from cudf.core import DataFrame, Series
+from cudf.core._compat import PANDAS_GE_110
 from cudf.tests.utils import assert_eq
 
 _now = np.datetime64("now")
@@ -198,7 +199,7 @@ def test_groupby_cats():
     df["cats"] = pd.Categorical(list("aabaacaab"))
     df["vals"] = np.random.random(len(df))
 
-    cats = np.asarray(list(df["cats"]))
+    cats = df["cats"].values_host
     vals = df["vals"].to_array()
 
     grouped = df.groupby(["cats"], as_index=False).mean()
@@ -207,10 +208,9 @@ def test_groupby_cats():
 
     got_cats = grouped["cats"]
 
-    for c, v in zip(got_cats, got_vals):
-        print(c, v)
-        expect = vals[cats == c].mean()
-        np.testing.assert_almost_equal(v, expect)
+    for i in range(len(got_vals)):
+        expect = vals[cats == got_cats[i]].mean()
+        np.testing.assert_almost_equal(got_vals[i], expect)
 
 
 def test_groupby_iterate_groups():
@@ -289,7 +289,7 @@ def test_groupby_apply_grouped():
     expect = expect_grpby.apply(emulate)
     expect = expect.sort_values(["key1", "key2"])
 
-    pd.util.testing.assert_frame_equal(expect, got)
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("nelem", [100, 500])
@@ -1010,6 +1010,8 @@ def test_groupby_median(agg, by):
 @pytest.mark.parametrize("agg", [lambda x: x.nunique(), "nunique"])
 @pytest.mark.parametrize("by", ["a", ["a", "b"], ["a", "c"]])
 def test_groupby_nunique(agg, by):
+    if not PANDAS_GE_110:
+        pytest.xfail("pandas >= 1.1 required")
     pdf = pd.DataFrame(
         {"a": [1, 1, 1, 2, 3], "b": [1, 2, 2, 2, 1], "c": [1, 2, None, 4, 5]}
     )
@@ -1047,15 +1049,13 @@ def test_raise_data_error():
     pdf = pd.DataFrame({"a": [1, 2, 3, 4], "b": ["a", "b", "c", "d"]})
     gdf = cudf.from_pandas(pdf)
 
-    # we have to test that Pandas does this too:
     try:
         pdf.groupby("a").mean()
     except Exception as e:
-        typ = type(e)
-        msg = str(e)
-
-    with pytest.raises(typ, match=msg):
-        gdf.groupby("a").mean()
+        with pytest.raises(type(e), match=e.__str__()):
+            gdf.groupby("a").mean()
+    else:
+        raise AssertionError("Expected pandas groupby to fail")
 
 
 def test_drop_unsupported_multi_agg():
@@ -1119,4 +1119,149 @@ def test_reset_index_after_empty_groupby():
     assert_eq(
         pdf.groupby("a").sum().reset_index(),
         gdf.groupby("a").sum().reset_index(),
+    )
+
+
+def test_groupby_attribute_error():
+    err_msg = "Test error message"
+
+    class TestGroupBy(cudf.core.groupby.GroupBy):
+        @property
+        def _groupby(self):
+            raise AttributeError("Test error message")
+
+    a = cudf.DataFrame({"a": [1, 2], "b": [2, 3]})
+    gb = TestGroupBy(a, a["a"])
+
+    with pytest.raises(AttributeError, match=err_msg):
+        gb.sum()
+
+
+@pytest.mark.parametrize(
+    "by",
+    [
+        "a",
+        "b",
+        ["a"],
+        ["b"],
+        ["a", "b"],
+        ["b", "a"],
+        np.array([0, 0, 0, 1, 1, 1, 2]),
+    ],
+)
+def test_groupby_groups(by):
+    pdf = pd.DataFrame(
+        {"a": [1, 2, 1, 2, 1, 2, 3], "b": [1, 2, 3, 4, 5, 6, 7]}
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    pdg = pdf.groupby(by)
+    gdg = gdf.groupby(by)
+
+    for key in pdg.groups:
+        assert key in gdg.groups
+        assert_eq(pdg.groups[key], gdg.groups[key])
+
+
+@pytest.mark.parametrize(
+    "by",
+    [
+        "a",
+        "b",
+        ["a"],
+        ["b"],
+        ["a", "b"],
+        ["b", "a"],
+        ["a", "c"],
+        ["a", "b", "c"],
+    ],
+)
+def test_groupby_groups_multi(by):
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 2, 1, 2, 1, 2, 3],
+            "b": ["a", "b", "a", "b", "b", "c", "c"],
+            "c": [1, 2, 3, 4, 5, 6, 7],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    pdg = pdf.groupby(by)
+    gdg = gdf.groupby(by)
+
+    for key in pdg.groups:
+        assert key in gdg.groups
+        assert_eq(pdg.groups[key], gdg.groups[key])
+
+
+def test_groupby_nunique_series():
+    pdf = pd.DataFrame({"a": [1, 1, 1, 2, 2, 2], "b": [1, 2, 3, 1, 1, 2]})
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.groupby("a")["b"].nunique(),
+        gdf.groupby("a")["b"].nunique(),
+        check_dtype=False,
+    )
+
+
+@pytest.mark.parametrize("list_agg", [list, "collect"])
+def test_groupby_list_simple(list_agg):
+    pdf = pd.DataFrame({"a": [1, 1, 1, 2, 2, 2], "b": [1, 2, None, 4, 5, 6]})
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.groupby("a").agg({"b": list}),
+        gdf.groupby("a").agg({"b": list_agg}),
+        check_dtype=False,
+    )
+
+
+@pytest.mark.parametrize("list_agg", [list, "collect"])
+def test_groupby_list_of_lists(list_agg):
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 1, 2, 2, 2],
+            "b": [[1, 2], [3, None, 5], None, [], [7, 8], [9]],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.groupby("a").agg({"b": list}),
+        gdf.groupby("a").agg({"b": list_agg}),
+        check_dtype=False,
+    )
+
+
+@pytest.mark.parametrize("list_agg", [list, "collect"])
+def test_groupby_list_single_element(list_agg):
+    pdf = pd.DataFrame({"a": [1, 2], "b": [3, None]})
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.groupby("a").agg({"b": list}),
+        gdf.groupby("a").agg({"b": list_agg}),
+        check_dtype=False,
+    )
+
+
+def test_groupby_list_columns_excluded():
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 2, 2],
+            "b": [1, 2, 3, 4],
+            "c": [[1, 2], [3, 4], [5, 6], [7, 8]],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.groupby("a").mean(), gdf.groupby("a").mean(), check_dtype=False
+    )
+
+    assert_eq(
+        pdf.groupby("a").agg("mean"),
+        gdf.groupby("a").agg("mean"),
+        check_dtype=False,
     )

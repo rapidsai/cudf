@@ -23,6 +23,7 @@ namespace nvtext {
 /**
  * @addtogroup nvtext_ngrams
  * @{
+ * @file
  */
 
 /**
@@ -42,6 +43,10 @@ namespace nvtext {
  *
  * All null row entries are ignored and the output contains all valid rows.
  *
+ * @throw cudf::logic_error if `ngrams < 2`
+ * @throw cudf::logic_error if `separator` is invalid
+ * @throw cudf::logic_error if there are not enough strings to generate any ngrams
+ *
  * @param strings Strings column to tokenize and produce ngrams from.
  * @param ngrams The ngram number to generate.
  *               Default is 2 = bigram.
@@ -54,7 +59,36 @@ std::unique_ptr<cudf::column> generate_ngrams(
   cudf::strings_column_view const& strings,
   cudf::size_type ngrams               = 2,
   cudf::string_scalar const& separator = cudf::string_scalar{"_"},
-  rmm::mr::device_memory_resource* mr  = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Generates ngrams of characters within each string.
+ *
+ * Each character of a string used to build ngrams.
+ * Ngrams are not created across strings.
+ *
+ * ```
+ * ["ab", "cde", "fgh"] would generate bigrams as ["ab", "cd", "de", "fg", "gh"]
+ * ```
+ *
+ * The size of the output column will be the total number of ngrams generated from
+ * the input strings column.
+ *
+ * All null row entries are ignored and the output contains all valid rows.
+ *
+ * @throw cudf::logic_error if `ngrams < 2`
+ * @throw cudf::logic_error if there are not enough characters to generate any ngrams
+ *
+ * @param strings Strings column to produce ngrams from.
+ * @param ngrams The ngram number to generate.
+ *               Default is 2 = bigram.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return New strings columns of tokens.
+ */
+std::unique_ptr<cudf::column> generate_character_ngrams(
+  cudf::strings_column_view const& strings,
+  cudf::size_type ngrams              = 2,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace nvtext

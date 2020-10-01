@@ -88,7 +88,7 @@ public class Cuda {
       streamWaitEvent(getStream(), event.getEvent());
     }
 
-    long getStream() {
+    public long getStream() {
       return cleaner == null ? 0 : cleaner.stream;
     }
 
@@ -259,28 +259,52 @@ public class Cuda {
   static native void freePinned(long ptr) throws CudaException;
 
   /**
-   * Copies count bytes from the memory area pointed to by src to the memory area pointed to by
-   * dst.
-   * Calling cudaMemcpy() with dst and src pointers that do not
-   * match the direction of the copy results in an undefined behavior.
+   * Copies bytes between buffers using the default CUDA stream.
+   * The copy has completed when this returns, but the memory copy could overlap with
+   * operations occurring on other streams.
+   * Specifying pointers that do not match the copy direction results in undefined behavior.
    * @param dst   - Destination memory address
    * @param src   - Source memory address
    * @param count - Size in bytes to copy
    * @param kind  - Type of transfer. {@link CudaMemcpyKind}
    */
   static void memcpy(long dst, long src, long count, CudaMemcpyKind kind) {
-    memcpy(dst, src, count, kind.getValue());
+    memcpy(dst, src, count, kind, DEFAULT_STREAM);
   }
 
-  private static native void memcpy(long dst, long src, long count, int kind) throws CudaException;
+  /**
+   * Copies bytes between buffers using the default CUDA stream.
+   * The copy has not necessarily completed when this returns, but the memory copy could
+   * overlap with operations occurring on other streams.
+   * Specifying pointers that do not match the copy direction results in undefined behavior.
+   * @param dst   - Destination memory address
+   * @param src   - Source memory address
+   * @param count - Size in bytes to copy
+   * @param kind  - Type of transfer. {@link CudaMemcpyKind}
+   */
+  static void asyncMemcpy(long dst, long src, long count, CudaMemcpyKind kind) {
+    asyncMemcpy(dst, src, count, kind, DEFAULT_STREAM);
+  }
 
   /**
    * Sets count bytes starting at the memory area pointed to by dst, with value.
+   * The operation has completed when this returns, but it could overlap with operations occurring
+   * on other streams.
    * @param dst   - Destination memory address
    * @param value - Byte value to set dst with
    * @param count - Size in bytes to set
    */
   public static native void memset(long dst, byte value, long count) throws CudaException;
+
+  /**
+   * Sets count bytes starting at the memory area pointed to by dst, with value.
+   * The operation has not necessarily completed when this returns, but it could overlap with
+   * operations occurring on other streams.
+   * @param dst   - Destination memory address
+   * @param value - Byte value to set dst with
+   * @param count - Size in bytes to set
+   */
+  public static native void asyncMemset(long dst, byte value, long count) throws CudaException;
 
   /**
    * Get the id of the current device.
@@ -305,6 +329,16 @@ public class Cuda {
    * @throws CudaException on any error
    */
   public static native void setDevice(int device) throws CudaException, CudfException;
+
+  /**
+   * Set the device for this thread to the appropriate one. Java loves threads, but cuda requires
+   * each thread to have the device set explicitly or it falls back to CUDA_VISIBLE_DEVICES. Most
+   * JNI calls through the cudf API will do this for you, but if you are writing your own JNI
+   * calls that extend cudf you might want to call this before calling into your JNI APIs to
+   * ensure that the device is set correctly.
+   * @throws CudaException on any error
+   */
+  public static native void autoSetDevice() throws CudaException;
 
   /**
    * Calls cudaFree(0). This can be used to initialize the GPU after a setDevice()

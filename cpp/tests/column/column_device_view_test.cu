@@ -20,10 +20,10 @@
 #include <cudf/copying.hpp>
 #include <cudf/types.hpp>
 
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/cudf_gtest.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
 
 struct ColumnDeviceViewTest : public cudf::test::BaseFixture {
 };
@@ -43,7 +43,7 @@ TEST_F(ColumnDeviceViewTest, Sample)
                                input_device_view->end<T>(),
                                output_device_view->begin<T>()));
 
-  cudf::test::expect_columns_equal(input, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(input, output->view());
 }
 
 TEST_F(ColumnDeviceViewTest, MismatchingType)

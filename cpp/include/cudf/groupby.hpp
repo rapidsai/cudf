@@ -36,6 +36,7 @@ class sort_groupby_helper;
 /**
  * @addtogroup aggregation_groupby
  * @{
+ * @file
  */
 
 /**
@@ -162,7 +163,7 @@ class groupby {
    */
   std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> aggregate(
     std::vector<aggregation_request> const& requests,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief The grouped data corresponding to a groupby operation on a set of values.
@@ -191,7 +192,7 @@ class groupby {
    * @return A `groups` object representing grouped keys and values
    */
   groups get_groups(cudf::table_view values             = {},
-                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+                    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
  private:
   table_view _keys;                                      ///< Keys that determine grouping

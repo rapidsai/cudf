@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,14 +21,15 @@
 
 #pragma once
 
-#include "parquet.h"
-#include "parquet_gpu.h"
+#include <io/parquet/parquet.hpp>
+#include <io/parquet/parquet_gpu.hpp>
 
 #include <io/utilities/column_buffer.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/io/datasource.hpp>
-#include <cudf/io/readers.hpp>
+#include <cudf/io/detail/parquet.hpp>
+#include <cudf/io/parquet.hpp>
 
 #include <memory>
 #include <string>
@@ -43,7 +44,7 @@ using namespace cudf::io::parquet;
 using namespace cudf::io;
 
 // Forward declarations
-class metadata;
+class aggregate_metadata;
 
 /**
  * @brief Implementation for Parquet reader
@@ -51,14 +52,14 @@ class metadata;
 class reader::impl {
  public:
   /**
-   * @brief Constructor from a dataset source with reader options.
+   * @brief Constructor from an array of dataset sources with reader options.
    *
-   * @param source Dataset source
+   * @param sources Dataset sources
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit impl(std::unique_ptr<datasource> source,
-                reader_options const &options,
+  explicit impl(std::vector<std::unique_ptr<datasource>> &&sources,
+                parquet_reader_options const &options,
                 rmm::mr::device_memory_resource *mr);
 
   /**
@@ -66,18 +67,14 @@ class reader::impl {
    *
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows Number of rows to read
-   * @param row_group Row group index to select
-   * @param max_rowgroup_count Max number of consecutive row groups if greater than 0
-   * @param row_group_indices if non-null, indices of rowgroups to read [max_rowgroup_count]
+   * @param row_group_indices TODO
    * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with metadata
    */
   table_with_metadata read(size_type skip_rows,
                            size_type num_rows,
-                           size_type row_group,
-                           size_type max_rowgroup_count,
-                           const size_type *row_group_indices,
+                           std::vector<std::vector<size_type>> const &row_group_indices,
                            cudaStream_t stream);
 
  private:
@@ -97,6 +94,7 @@ class reader::impl {
                           size_t begin_chunk,
                           size_t end_chunk,
                           const std::vector<size_t> &column_chunk_offsets,
+                          std::vector<size_type> const &chunk_source_map,
                           cudaStream_t stream);
 
   /**
@@ -134,28 +132,78 @@ class reader::impl {
                                           cudaStream_t stream);
 
   /**
+   * @brief Allocate nesting information storage for all pages and set pointers
+   *        to it.
+   *
+   * One large contiguous buffer of PageNestingInfo structs is allocated and
+   * distributed among the PageInfo structs.
+   *
+   * Note that this gets called even in the flat schema case so that we have a
+   * consistent place to store common information such as value counts, etc.
+   *
+   * @param chunks List of column chunk descriptors
+   * @param pages List of page information
+   * @param page_nesting_info The allocated nesting info structs.
+   * @param col_nesting_info Per-column, per-nesting level size and nullability information.
+   * @param num_columns Number of columns in the output
+   * @param stream CUDA stream used for device memory operations and kernel launches.
+   */
+  void allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc> const &chunks,
+                             hostdevice_vector<gpu::PageInfo> &pages,
+                             hostdevice_vector<gpu::PageNestingInfo> &page_nesting_info,
+                             std::vector<std::vector<std::pair<int, bool>>> &col_nesting_info,
+                             int num_columns,
+                             cudaStream_t stream);
+
+  /**
+   * @brief Preprocess column information for nested schemas.
+   *
+   * There are several pieces of information we can't compute directly from row counts in
+   * the parquet headers when dealing with nested schemas.
+   * - The total sizes of all output columns at all nesting levels
+   * - The starting output buffer offset for each page, for each nesting level
+   *
+   * For flat schemas, these values are computed during header decoding (see gpuDecodePageHeaders)
+   *
+   * @param[in,out] chunks All chunks to be decoded
+   * @param[in,out] pages All pages to be decoded
+   * @param[in,out] page_nesting info Per column-chunk nesting information
+   * @param[in,out] nested_info Per-output column nesting information (size, nullability)
+   * @param[in] num_rows Maximum number of rows to read
+   * @param[in] min_rows crop all rows below min_row
+   * @param[in] stream Cuda stream
+   */
+  void preprocess_nested_columns(hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
+                                 hostdevice_vector<gpu::PageInfo> &pages,
+                                 hostdevice_vector<gpu::PageNestingInfo> &page_nesting_info,
+                                 std::vector<std::vector<std::pair<size_type, bool>>> &nested_info,
+                                 size_t min_row,
+                                 size_t total_rows,
+                                 cudaStream_t stream);
+
+  /**
    * @brief Converts the page data and outputs to columns.
    *
    * @param chunks List of column chunk descriptors
    * @param pages List of page information
+   * @param page_nesting Page nesting array
    * @param min_row Minimum number of rows from start
    * @param total_rows Number of rows to output
-   * @param chunk_map Mapping between chunk and column
    * @param out_buffers Output columns' device buffers
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   void decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
                         hostdevice_vector<gpu::PageInfo> &pages,
+                        hostdevice_vector<gpu::PageNestingInfo> &page_nesting,
                         size_t min_row,
                         size_t total_rows,
-                        const std::vector<int> &chunk_map,
                         std::vector<column_buffer> &out_buffers,
                         cudaStream_t stream);
 
  private:
   rmm::mr::device_memory_resource *_mr = nullptr;
-  std::unique_ptr<datasource> _source;
-  std::unique_ptr<metadata> _metadata;
+  std::vector<std::unique_ptr<datasource>> _sources;
+  std::unique_ptr<aggregate_metadata> _metadata;
 
   std::vector<std::pair<int, std::string>> _selected_columns;
   bool _strings_to_categorical = false;

@@ -18,10 +18,10 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/types.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_wrapper.hpp>
 #include <fixture/benchmark_fixture.hpp>
 #include <synchronization/synchronization.hpp>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_wrapper.hpp>
 
 #include <memory>
 #include <random>
@@ -32,19 +32,19 @@ class Reduction : public cudf::benchmark {
 template <typename type>
 void BM_reduction(benchmark::State& state, std::unique_ptr<cudf::aggregation> const& agg)
 {
-  using wrapper = cudf::test::fixed_width_column_wrapper<type>;
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
 
   cudf::test::UniformRandomGenerator<long> rand_gen(0, 100);
   auto data_it = cudf::test::make_counting_transform_iterator(
     0, [&rand_gen](cudf::size_type row) { return rand_gen.generate(); });
-  wrapper values(data_it, data_it + column_size);
+  cudf::test::fixed_width_column_wrapper<type, typename decltype(data_it)::value_type> values(
+    data_it, data_it + column_size);
 
   auto input_column = cudf::column_view(values);
   cudf::data_type output_dtype =
     (agg->kind == cudf::aggregation::MEAN || agg->kind == cudf::aggregation::VARIANCE ||
      agg->kind == cudf::aggregation::STD)
-      ? cudf::data_type{cudf::FLOAT64}
+      ? cudf::data_type{cudf::type_id::FLOAT64}
       : input_column.type();
 
   for (auto _ : state) {
@@ -82,10 +82,15 @@ void BM_reduction(benchmark::State& state, std::unique_ptr<cudf::aggregation> co
   REDUCE_BENCHMARK_DEFINE(double, aggregation);
 
 REDUCE_BENCHMARK_NUMERIC(sum);
-REDUCE_BENCHMARK_NUMERIC(product);
-REDUCE_BENCHMARK_NUMERIC(min);
+REDUCE_BENCHMARK_DEFINE(int32_t, product);
+REDUCE_BENCHMARK_DEFINE(float, product);
+REDUCE_BENCHMARK_DEFINE(int64_t, min);
+REDUCE_BENCHMARK_DEFINE(double, min);
 using cudf::timestamp_ms;
 REDUCE_BENCHMARK_DEFINE(timestamp_ms, min);
-REDUCE_BENCHMARK_NUMERIC(mean);
-REDUCE_BENCHMARK_NUMERIC(variance);
-REDUCE_BENCHMARK_NUMERIC(std);
+REDUCE_BENCHMARK_DEFINE(int8_t, mean);
+REDUCE_BENCHMARK_DEFINE(float, mean);
+REDUCE_BENCHMARK_DEFINE(int32_t, variance);
+REDUCE_BENCHMARK_DEFINE(double, variance);
+REDUCE_BENCHMARK_DEFINE(int64_t, std);
+REDUCE_BENCHMARK_DEFINE(float, std);

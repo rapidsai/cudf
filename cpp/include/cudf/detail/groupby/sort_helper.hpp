@@ -92,7 +92,7 @@ struct sort_groupby_helper {
    */
   std::unique_ptr<column> sorted_values(
     column_view const& values,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
     cudaStream_t stream                 = 0);
 
   /**
@@ -107,7 +107,7 @@ struct sort_groupby_helper {
    */
   std::unique_ptr<column> grouped_values(
     column_view const& values,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
     cudaStream_t stream                 = 0);
 
   /**
@@ -116,7 +116,8 @@ struct sort_groupby_helper {
    * @return a new table in which each row is a unique row in the sorted key table.
    */
   std::unique_ptr<table> unique_keys(
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(), cudaStream_t stream = 0);
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+    cudaStream_t stream                 = 0);
 
   /**
    * @brief Get a table of sorted keys
@@ -124,7 +125,8 @@ struct sort_groupby_helper {
    * @return a new table containing the sorted keys.
    */
   std::unique_ptr<table> sorted_keys(
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(), cudaStream_t stream = 0);
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+    cudaStream_t stream                 = 0);
 
   /**
    * @brief Get the number of groups in `keys`

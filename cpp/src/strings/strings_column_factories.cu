@@ -146,7 +146,7 @@ std::unique_ptr<column> make_strings_column(const rmm::device_vector<char>& stri
 
   // build offsets column -- this is the number of strings + 1
   auto offsets_column =
-    make_numeric_column(data_type{INT32}, num_strings + 1, mask_state::UNALLOCATED, stream, mr);
+    make_numeric_column(data_type{type_id::INT32}, num_strings + 1, mask_state::UNALLOCATED, stream, mr);
   auto offsets_view = offsets_column->mutable_view();
   CUDA_TRY(cudaMemcpyAsync(offsets_view.data<int32_t>(),
                            offsets.data().get(),
@@ -209,7 +209,7 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
   std::vector<std::unique_ptr<column>> children;
   children.emplace_back(std::move(offsets_column));
   children.emplace_back(std::move(chars_column));
-  return std::make_unique<column>(data_type{STRING},
+  return std::make_unique<column>(data_type{type_id::STRING},
                                   num_strings,
                                   rmm::device_buffer{0, stream, mr},
                                   null_mask,

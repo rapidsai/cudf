@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cassert>
 #include <cudf/types.hpp>
 
 /**
@@ -51,6 +52,7 @@ constexpr CUDA_HOST_DEVICE_CALLABLE std::size_t size_in_bits()
 /**
  * @addtogroup utility_bitmask
  * @{
+ * @file
  */
 
 /**
@@ -96,7 +98,7 @@ CUDA_HOST_DEVICE_CALLABLE void set_bit_unsafe(bitmask_type* bitmask, size_type b
 CUDA_HOST_DEVICE_CALLABLE void clear_bit_unsafe(bitmask_type* bitmask, size_type bit_index)
 {
   assert(nullptr != bitmask);
-  bitmask[word_index(bit_index)] |= ~(bitmask_type{1} << intra_word_index(bit_index));
+  bitmask[word_index(bit_index)] &= ~(bitmask_type{1} << intra_word_index(bit_index));
 }
 
 /**

@@ -1,5 +1,4 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
-
 import itertools
 import warnings
 
@@ -7,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 import cudf
-import cudf._lib as libcudf
+from cudf import _lib as libcudf
 from cudf._lib.join import compute_result_col_names
 from cudf.core.dtypes import CategoricalDtype
 
@@ -176,8 +175,12 @@ class Merge(object):
             lsuffix, rsuffix = suffixes
         for name in same_named_columns:
             if name not in no_suffix_cols:
-                self.lhs.rename({name: f"{name}{lsuffix}"}, inplace=True)
-                self.rhs.rename({name: f"{name}{rsuffix}"}, inplace=True)
+                self.lhs.rename(
+                    {name: f"{name}{lsuffix}"}, inplace=True, axis=1
+                )
+                self.rhs.rename(
+                    {name: f"{name}{rsuffix}"}, inplace=True, axis=1
+                )
                 if left_on and name in left_on:
                     left_on[left_on.index(name)] = f"{name}{lsuffix}"
                 if right_on and name in right_on:
@@ -509,6 +512,10 @@ class Merge(object):
                     output._index._data[
                         index_col_lbl
                     ] = self._build_output_col(index_col, index_dtype)
+            # reconstruct the Index object as the underlying data types
+            # have changed:
+            output._index = cudf.core.index.Index._from_table(output._index)
+
         for data_col_lbl, data_col in output._data.items():
             data_dtype = data_dtypes[data_col_lbl]
             if data_dtype:

@@ -24,6 +24,8 @@ namespace cudf {
 /**
  * @addtogroup transformation_transform
  * @{
+ * @file
+ * @brief Column APIs for transforming rows
  */
 
 /**
@@ -49,7 +51,7 @@ std::unique_ptr<column> transform(
   std::string const& unary_udf,
   data_type output_type,
   bool is_ptx,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Creates a null_mask from `input` by converting `NaN` to null and
@@ -63,7 +65,8 @@ std::unique_ptr<column> transform(
  * null count obtained by replacing `NaN` in `input` with null.
  **/
 std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
-  column_view const& input, rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  column_view const& input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Creates a bitmask from a column of boolean elements.
@@ -81,7 +84,63 @@ std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
  * `false` represent `invalid`/`0`.
  **/
 std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
-  column_view const& input, rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  column_view const& input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Encode the rows of the given table as integers
+ *
+ * The encoded values are integers in the range [0, n), where `n`
+ * is the number of distinct rows in the input table.
+ * The result table is such that `keys[result[i]] == input[i]`,
+ * where `keys` is a table containing the distinct rows  in `input` in
+ * sorted ascending order. Nulls, if any, are sorted to the end of
+ * the `keys` table.
+ *
+ * Examples:
+ * @code{.pseudo}
+ * input: [{'a', 'b', 'b', 'a'}]
+ * output: [{'a', 'b'}], {0, 1, 1, 0}
+ *
+ * input: [{1, 3, 1, 2, 9}, {1, 2, 1, 3, 5}]
+ * output: [{1, 2, 3, 9}, {1, 3, 2, 5}], {0, 2, 0, 1, 3}
+ * @endcode
+ *
+ * @param input Table containing values to be encoded
+ * @param mr Device memory resource used to allocate the returned table's device memory
+ * @return A pair containing the distinct row of the input table in sorter order,
+ * and a column of integer indices representing the encoded rows.
+ */
+std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>> encode(
+  cudf::table_view const& input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Creates a boolean column from given bitmask.
+ *
+ * Returns a `bool` for each bit in `[begin_bit, end_bit)`. If bit `i` in least-significant bit
+ * numbering is set (1), then element `i` in the output is `true`, otherwise `false`.
+ *
+ * @throws cudf::logic_error if `bitmask` is null and end_bit-begin_bit > 0
+ * @throws cudf::logic_error if begin_bit > end_bit
+ *
+ * Examples:
+ * @code{.pseudo}
+ * input: {0b10101010}
+ * output: [{false, true, false, true, false, true, false, true}]
+ * @endcode
+ *
+ * @param bitmask A device pointer to the bitmask which needs to be converted
+ * @param begin_bit position of the bit from which the conversion should start
+ * @param end_bit position of the bit before which the conversion should stop
+ * @param mr Device memory resource used to allocate the returned columns's device memory
+ * @return A boolean column representing the given mask from [begin_bit, end_bit).
+ */
+std::unique_ptr<column> mask_to_bools(
+  bitmask_type const* bitmask,
+  size_type begin_bit,
+  size_type end_bit,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace cudf

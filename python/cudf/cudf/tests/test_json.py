@@ -36,7 +36,7 @@ def pdf(request):
         nrows=nrows, ncols=ncols, data_gen_f=lambda r, c: r, r_idx_type="i"
     )
     # Delete the name of the column index, and rename the row index
-    del test_pdf.columns.name
+    test_pdf.columns.name = None
     test_pdf.index.name = "test_index"
 
     # Cast all the column dtypes to objects, rename them, and then cast to
@@ -133,7 +133,14 @@ def test_json_writer(tmpdir, pdf, gdf):
         assert os.path.exists(pdf_series_fname)
         assert os.path.exists(gdf_series_fname)
 
-        expect_series = pd.read_json(pdf_series_fname, typ="series")
+        try:
+            # xref 'https://github.com/pandas-dev/pandas/pull/33373')
+            expect_series = pd.read_json(pdf_series_fname, typ="series")
+        except TypeError as e:
+            if str(e) == "<class 'bool'> is not convertible to datetime":
+                continue
+            else:
+                raise e
         got_series = pd.read_json(gdf_series_fname, typ="series")
 
         assert_eq(expect_series, got_series)
@@ -241,8 +248,7 @@ def test_json_lines_compression(tmpdir, ext, out_comp, in_comp):
     cu_df = cudf.read_json(
         str(fname), compression=in_comp, lines=True, dtype=["int", "int"]
     )
-
-    pd.util.testing.assert_frame_equal(pd_df, cu_df.to_pandas())
+    assert_eq(pd_df, cu_df)
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
@@ -288,7 +294,13 @@ def test_json_bool_values():
 
 
 @pytest.mark.parametrize(
-    "buffer", ["[null,]\n[1.0, ]", '{"0":null,"1":}\n{"0":1.0,"1": }']
+    "buffer",
+    [
+        "[1.0,]\n[null, ]",
+        '{"0":1.0,"1":}\n{"0":null,"1": }',
+        '{ "0" : 1.0 , "1" : }\n{ "0" : null , "1" : }',
+        '{"0":1.0}\n{"1":}',
+    ],
 )
 def test_json_null_literal(buffer):
     df = cudf.read_json(buffer, lines=True)
@@ -297,7 +309,7 @@ def test_json_null_literal(buffer):
     # second column contains only empty fields, type should be set to int8
     np.testing.assert_array_equal(df.dtypes, ["float64", "int8"])
     np.testing.assert_array_equal(
-        df["0"].to_array(fillna=np.nan), [np.nan, 1.0]
+        df["0"].to_array(fillna=np.nan), [1.0, np.nan]
     )
     np.testing.assert_array_equal(
         df["1"].to_array(fillna=np.nan),
@@ -306,3 +318,60 @@ def test_json_null_literal(buffer):
             df["1"]._column.default_na_value(),
         ],
     )
+
+
+def test_json_bad_protocol_string():
+    test_string = '{"field": "s3://path"}'
+
+    expect = pd.DataFrame([{"field": "s3://path"}])
+    got = cudf.read_json(test_string, lines=True)
+
+    assert_eq(expect, got)
+
+
+def test_json_corner_case_with_escape_and_double_quote_char_with_pandas(
+    tmpdir,
+):
+    fname = tmpdir.mkdir("gdf_json").join("tmp_json_escape_double_quote")
+
+    pdf = pd.DataFrame(
+        {
+            "a": ['ab"cd', "\\\b", "\r\\", "'"],
+            "b": ["a\tb\t", "\\", '\\"', "\t"],
+            "c": ["aeiou", "try", "json", "cudf"],
+        }
+    )
+    pdf.to_json(fname, compression="infer", lines=True, orient="records")
+
+    df = cudf.read_json(
+        fname, compression="infer", lines=True, orient="records"
+    )
+    pdf = pd.read_json(
+        fname, compression="infer", lines=True, orient="records"
+    )
+
+    assert_eq(cudf.DataFrame(pdf), df)
+
+
+def test_json_corner_case_with_escape_and_double_quote_char_with_strings():
+    str_buffer = StringIO(
+        """{"a":"ab\\"cd","b":"a\\tb\\t","c":"aeiou"}
+           {"a":"\\\\\\b","b":"\\\\","c":"try"}
+           {"a":"\\r\\\\","b":"\\\\\\"","c":"json"}
+           {"a":"\'","b":"\\t","c":"cudf"}"""
+    )
+
+    df = cudf.read_json(
+        str_buffer, compression="infer", lines=True, orient="records"
+    )
+
+    expected = {
+        "a": ['ab"cd', "\\\b", "\r\\", "'"],
+        "b": ["a\tb\t", "\\", '\\"', "\t"],
+        "c": ["aeiou", "try", "json", "cudf"],
+    }
+
+    num_rows = df.shape[0]
+    for col_name in df._data:
+        for i in range(num_rows):
+            assert expected[col_name][i] == df[col_name][i]

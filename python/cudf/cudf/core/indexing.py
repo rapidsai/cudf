@@ -1,6 +1,4 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
-
-import cupy
 import numpy as np
 import pandas as pd
 
@@ -8,6 +6,8 @@ import cudf
 from cudf._lib.nvtx import annotate
 from cudf.utils.dtypes import (
     is_categorical_dtype,
+    is_column_like,
+    is_list_like,
     is_scalar,
     to_cudf_compatible_scalar,
 )
@@ -33,8 +33,8 @@ def indices_from_labels(obj, labels):
     # join is not guaranteed to maintain the index ordering
     # so we will sort it with its initial ordering which is stored
     # in column "__"
-    lhs = cudf.DataFrame({"__": cupy.arange(len(labels))}, index=labels)
-    rhs = cudf.DataFrame({"_": cupy.arange(len(obj))}, index=obj.index)
+    lhs = cudf.DataFrame({"__": column.arange(len(labels))}, index=labels)
+    rhs = cudf.DataFrame({"_": column.arange(len(obj))}, index=obj.index)
     return lhs.join(rhs).sort_values("__")["_"]
 
 
@@ -72,9 +72,9 @@ class _SeriesIlocIndexer(object):
         if isinstance(arg, tuple):
             arg = list(arg)
         data = self._sr._column[arg]
-        index = self._sr.index.take(arg)
         if is_scalar(data) or data is None:
             return data
+        index = self._sr.index.take(arg)
         return self._sr._copy_construct(data=data, index=index)
 
     def __setitem__(self, key, value):
@@ -121,6 +121,9 @@ class _SeriesLocIndexer(object):
 
     def __setitem__(self, key, value):
         key = self._loc_to_iloc(key)
+        if isinstance(value, (pd.Series, cudf.Series)):
+            value = cudf.Series(value)
+            value = value._align_to_index(self._sr.index, how="right")
         self._sr.iloc[key] = value
 
     def _loc_to_iloc(self, arg):
@@ -196,8 +199,10 @@ class _DataFrameIndexer(object):
             if type(arg[0]) is slice:
                 if not is_scalar(arg[1]):
                     return False
-            elif pd.api.types.is_list_like(arg[0]) and (
-                pd.api.types.is_list_like(arg[1]) or type(arg[1]) is slice
+            elif (is_list_like(arg[0]) or is_column_like(arg[0])) and (
+                is_list_like(arg[1])
+                or is_column_like(arg[0])
+                or type(arg[1]) is slice
             ):
                 return False
             else:
@@ -218,7 +223,7 @@ class _DataFrameIndexer(object):
                 # Multiindex indexing with a slice
                 if any(isinstance(v, slice) for v in arg):
                     return False
-            if not pd.api.types.is_list_like(arg[1]):
+            if not (is_list_like(arg[1]) or is_column_like(arg[1])):
                 return True
         return False
 
@@ -266,11 +271,12 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
 
     @annotate("LOC_GETITEM", color="blue", domain="cudf_python")
     def _getitem_tuple_arg(self, arg):
-        from cudf.core.dataframe import DataFrame
-        from cudf.core.column import column
-        from cudf.core.index import as_index
-        from cudf import MultiIndex
         from uuid import uuid4
+
+        from cudf import MultiIndex
+        from cudf.core.column import column
+        from cudf.core.dataframe import DataFrame
+        from cudf.core.index import as_index
 
         # Step 1: Gather columns
         if isinstance(arg, tuple):
@@ -289,7 +295,10 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 return columns_df.take(indices)
 
             else:
-                return columns_df.index._get_row_major(columns_df, arg[0])
+                if isinstance(arg, tuple):
+                    return columns_df.index._get_row_major(columns_df, arg[0])
+                else:
+                    return columns_df.index._get_row_major(columns_df, arg)
         else:
             if isinstance(arg[0], slice):
                 out = get_label_range_or_mask(
@@ -315,7 +324,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 else:
                     tmp_col_name = str(uuid4())
                     other_df = DataFrame(
-                        {tmp_col_name: cupy.arange(len(tmp_arg[0]))},
+                        {tmp_col_name: column.arange(len(tmp_arg[0]))},
                         index=as_index(tmp_arg[0]),
                     )
                     df = other_df.join(columns_df, how="inner")
@@ -323,7 +332,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     # update it over here
                     df.index.name = columns_df.index.name
                     df = df.sort_values(tmp_col_name)
-                    df.drop([tmp_col_name], inplace=True)
+                    df.drop(columns=[tmp_col_name], inplace=True)
                     # There were no indices found
                     if len(df) == 0:
                         raise IndexError
@@ -425,11 +434,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             return self._downcast_to_series(df, arg)
 
         if df.shape[0] == 0 and df.shape[1] == 0 and isinstance(arg[0], slice):
-            from cudf.core.index import RangeIndex
-
-            slice_len = len(self._df)
-            start, stop, step = arg[0].indices(slice_len)
-            df._index = RangeIndex(start, stop)
+            df._index = as_index(self._df.index[arg[0]])
         return df
 
     @annotate("ILOC_SETITEM", color="blue", domain="cudf_python")

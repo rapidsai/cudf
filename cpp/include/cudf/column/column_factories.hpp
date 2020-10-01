@@ -22,8 +22,10 @@
 
 namespace cudf {
 /**
- * @ingroup column_factories Factories
+ * @addtogroup column_factories
  * @{
+ * @file
+ * @brief Column factory APIs
  */
 
 /**
@@ -58,7 +60,7 @@ std::unique_ptr<column> make_numeric_column(
   size_type size,
   mask_state state                    = mask_state::UNALLOCATED,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Construct column with sufficient uninitialized storage
@@ -84,9 +86,9 @@ std::unique_ptr<column> make_numeric_column(
   B&& null_mask,
   size_type null_count                = cudf::UNKNOWN_NULL_COUNT,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  CUDF_EXPECTS(is_numeric(type), "Invalid, non-numeric type.");
+  CUDF_EXPECTS(is_numeric(type) || is_fixed_point(type), "Invalid, non-numeric type.");
   return std::make_unique<column>(type,
                                   size,
                                   rmm::device_buffer{size * cudf::size_of(type), stream, mr},
@@ -116,7 +118,7 @@ std::unique_ptr<column> make_timestamp_column(
   size_type size,
   mask_state state                    = mask_state::UNALLOCATED,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Construct column with sufficient uninitialized storage
@@ -142,7 +144,7 @@ std::unique_ptr<column> make_timestamp_column(
   B&& null_mask,
   size_type null_count                = cudf::UNKNOWN_NULL_COUNT,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(is_timestamp(type), "Invalid, non-timestamp type.");
   return std::make_unique<column>(type,
@@ -174,7 +176,7 @@ std::unique_ptr<column> make_duration_column(
   size_type size,
   mask_state state                    = mask_state::UNALLOCATED,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Construct column with sufficient uninitialized storage
@@ -200,7 +202,7 @@ std::unique_ptr<column> make_duration_column(
   B&& null_mask,
   size_type null_count                = cudf::UNKNOWN_NULL_COUNT,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(is_duration(type), "Invalid, non-duration type.");
   return std::make_unique<column>(type,
@@ -232,7 +234,7 @@ std::unique_ptr<column> make_fixed_width_column(
   size_type size,
   mask_state state                    = mask_state::UNALLOCATED,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Construct column with sufficient uninitialized storage
@@ -258,7 +260,7 @@ std::unique_ptr<column> make_fixed_width_column(
   B&& null_mask,
   size_type null_count                = cudf::UNKNOWN_NULL_COUNT,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(is_fixed_width(type), "Invalid, non-fixed-width type.");
   if (is_timestamp(type)) {
@@ -294,7 +296,7 @@ std::unique_ptr<column> make_fixed_width_column(
 std::unique_ptr<column> make_strings_column(
   const rmm::device_vector<thrust::pair<const char*, size_type>>& strings,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Construct STRING type column given a device vector of string_view.
@@ -326,7 +328,7 @@ std::unique_ptr<column> make_strings_column(
   const rmm::device_vector<string_view>& string_views,
   const string_view null_placeholder,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Construct STRING type column given a device vector of chars
@@ -366,7 +368,7 @@ std::unique_ptr<column> make_strings_column(
   const rmm::device_vector<bitmask_type>& null_mask = {},
   size_type null_count                              = cudf::UNKNOWN_NULL_COUNT,
   cudaStream_t stream                               = 0,
-  rmm::mr::device_memory_resource* mr               = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr               = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Construct STRING type column given a host vector of chars
@@ -406,7 +408,7 @@ std::unique_ptr<column> make_strings_column(
   const std::vector<bitmask_type>& null_mask = {},
   size_type null_count                       = cudf::UNKNOWN_NULL_COUNT,
   cudaStream_t stream                        = 0,
-  rmm::mr::device_memory_resource* mr        = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr        = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Constructs a STRING type column given offsets column, chars columns,
@@ -435,7 +437,7 @@ std::unique_ptr<column> make_strings_column(
   size_type null_count,
   rmm::device_buffer&& null_mask,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Constructs a LIST type column given offsets column, child column,
@@ -500,7 +502,38 @@ std::unique_ptr<cudf::column> make_lists_column(
   size_type null_count,
   rmm::device_buffer&& null_mask,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Constructs a STRUCT column using specified child columns as members.
+ *
+ * Specified child/member columns and null_mask are adopted by resultant
+ * struct column.
+ *
+ * A struct column requires that all specified child columns have the same
+ * number of rows. A struct column's row count equals that of any/all
+ * of its child columns. A single struct row at any index is comprised of
+ * all the individual child column values at the same index, in the order
+ * specified in the list of child columns.
+ *
+ * The specified null mask governs which struct row has a null value. This
+ * is orthogonal to the null values of individual child columns.
+ *
+ * @param num_rows The number of struct values in the struct column.
+ * @param child_columns The list of child/members that the struct is comprised of.
+ * @param null_count The number of null values in the struct column.
+ * @param null_mask The bits specifying the null struct values in the column.
+ * @param stream Optional stream for use with all memory allocation and device kernels.
+ * @param mr Optional resource to use for device memory allocation.
+ *
+ */
+std::unique_ptr<cudf::column> make_structs_column(
+  size_type num_rows,
+  std::vector<std::unique_ptr<column>>&& child_columns,
+  size_type null_count,
+  rmm::device_buffer&& null_mask,
+  cudaStream_t stream                 = 0,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Return a column with size elements that are all equal to the
@@ -518,7 +551,27 @@ std::unique_ptr<cudf::column> make_lists_column(
 std::unique_ptr<column> make_column_from_scalar(
   scalar const& s,
   size_type size,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0);
+
+/**
+ * @brief Return a dictionary column with size elements that are all equal to the
+ * given scalar.
+ *
+ * The output column will have keys of type `s.type()`
+ * The output column will be empty if `size==0`.
+ *
+ * @throw cudf::logic_error if `s.is_valid()==false`
+ *
+ * @param s The scalar to use for values in the column.
+ * @param size The number of rows for the output column.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ */
+std::unique_ptr<column> make_dictionary_from_scalar(
+  scalar const& s,
+  size_type size,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 /** @} */  // end of group

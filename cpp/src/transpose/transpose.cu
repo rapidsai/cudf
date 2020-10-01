@@ -21,7 +21,6 @@
 #include <cudf/reshape.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/transpose.hpp>
-#include <cudf/utilities/nvtx_utils.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -42,8 +41,6 @@ std::pair<std::unique_ptr<column>, table_view> transpose(table_view const& input
     std::all_of(
       input.begin(), input.end(), [dtype](auto const& col) { return dtype == col.type(); }),
     "Column type mismatch");
-
-  nvtx::range_push("CUDF_TRANSPOSE", nvtx::color::GREEN);
 
   auto output_column = cudf::interleave_columns(input, mr);
   auto one_iter      = thrust::make_counting_iterator<size_type>(1);

@@ -28,7 +28,7 @@
 #include <cstdint>
 
 /**
- * @file types.hpp
+ * @file
  * @brief Type declarations for libcudf.
  *
  **/
@@ -47,7 +47,7 @@ namespace rmm {
 class device_buffer;
 namespace mr {
 class device_memory_resource;
-device_memory_resource* get_default_resource();
+device_memory_resource* get_current_device_resource();
 }  // namespace mr
 
 }  // namespace rmm
@@ -59,10 +59,15 @@ class column_view;
 class mutable_column_view;
 class string_view;
 class list_view;
+class struct_view;
 
 class scalar;
 template <typename T>
 class numeric_scalar;
+
+template <typename T>
+class fixed_point_scalar;
+
 class string_scalar;
 template <typename T>
 class timestamp_scalar;
@@ -71,6 +76,10 @@ class duration_scalar;
 
 template <typename T>
 class numeric_scalar_device_view;
+
+template <typename T>
+class fixed_point_scalar_device_view;
+
 class string_scalar_device_view;
 template <typename T>
 class timestamp_scalar_device_view;
@@ -79,6 +88,8 @@ class duration_scalar_device_view;
 
 class list_scalar;
 
+class struct_scalar;
+
 class table;
 class table_view;
 class mutable_table_view;
@@ -86,6 +97,7 @@ class mutable_table_view;
 /**
  * @addtogroup utility_types
  * @{
+ * @file
  */
 
 using size_type    = int32_t;
@@ -167,8 +179,6 @@ enum class mask_state : int32_t {
 /**
  * @brief Interpolation method to use when the desired quantile lies between
  * two data points i and j
- *
- * @ingroup utility_types
  */
 enum class interpolation : int32_t {
   LINEAR,    ///< Linear interpolation between i and j
@@ -181,8 +191,8 @@ enum class interpolation : int32_t {
 /**
  * @brief Identifies a column's logical element type
  **/
-enum type_id {
-  EMPTY = 0,               ///< Always null with no underlying data
+enum class type_id : int32_t {
+  EMPTY,                   ///< Always null with no underlying data
   INT8,                    ///< 1 byte signed integer
   INT16,                   ///< 2 byte signed integer
   INT32,                   ///< 4 byte signed integer
@@ -207,6 +217,9 @@ enum type_id {
   DICTIONARY32,            ///< Dictionary type using int32 indices
   STRING,                  ///< String elements
   LIST,                    ///< List elements
+  DECIMAL32,               ///< Fixed-point type with int32_t
+  DECIMAL64,               ///< Fixed-point type with int64_t
+  STRUCT,                  ///< Struct elements
   // `NUM_TYPE_IDS` must be last!
   NUM_TYPE_IDS  ///< Total number of type ids
 };
@@ -239,7 +252,7 @@ class data_type {
   CUDA_HOST_DEVICE_CALLABLE type_id id() const noexcept { return _id; }
 
  private:
-  type_id _id{EMPTY};
+  type_id _id{type_id::EMPTY};
   // Store additional type specific metadata, timezone, decimal precision and
   // scale, etc.
 };
@@ -268,6 +281,15 @@ inline bool operator==(data_type const& lhs, data_type const& rhs) { return lhs.
  * @return Size in bytes of an element of the specified `data_type`
  */
 std::size_t size_of(data_type t);
+
+/**
+ *  @brief Identifies the hash function to be used
+ */
+enum class hash_id {
+  HASH_IDENTITY = 0,  ///< Identity hash function that simply returns the key to be hashed
+  HASH_MURMUR3,       ///< Murmur3 hash function
+  HASH_MD5            ///< MD5 hash function
+};
 
 /** @} */
 }  // namespace cudf

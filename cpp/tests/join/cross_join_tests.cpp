@@ -20,14 +20,14 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/table_utilities.hpp>
-#include <tests/utilities/type_lists.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/table_utilities.hpp>
+#include <cudf_test/type_lists.hpp>
 
-template <typename T>
-using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
+template <typename T, typename SourceT = T>
+using column_wrapper = cudf::test::fixed_width_column_wrapper<T, SourceT>;
 
 template <typename T>
 class CrossJoinTypeTests : public cudf::test::BaseFixture {
@@ -39,17 +39,17 @@ TYPED_TEST(CrossJoinTypeTests, CrossJoin)
 {
   auto a_0 = column_wrapper<int32_t>{10, 20, 20, 50};
   auto a_1 = column_wrapper<float>{5.0, .5, .5, .7};
-  auto a_2 = column_wrapper<TypeParam>{0, 0, 0, 0};
+  auto a_2 = column_wrapper<TypeParam, int32_t>{0, 0, 0, 0};
   auto a_3 = cudf::test::strings_column_wrapper({"quick", "accénted", "turtlé", "composéd"});
 
   auto b_0 = column_wrapper<int32_t>{10, 20, 20};
   auto b_1 = column_wrapper<float>{5.0, .7, .7};
-  auto b_2 = column_wrapper<TypeParam>{0, 0, 0};
+  auto b_2 = column_wrapper<TypeParam, int32_t>{0, 0, 0};
   auto b_3 = cudf::test::strings_column_wrapper({"result", "", "words"});
 
   auto expect_0 = column_wrapper<int32_t>{10, 10, 10, 20, 20, 20, 20, 20, 20, 50, 50, 50};
   auto expect_1 = column_wrapper<float>{5.0, 5.0, 5.0, .5, .5, .5, .5, .5, .5, .7, .7, .7};
-  auto expect_2 = column_wrapper<TypeParam>{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  auto expect_2 = column_wrapper<TypeParam, int32_t>({0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0});
   auto expect_3 = cudf::test::strings_column_wrapper({"quick",
                                                       "quick",
                                                       "quick",
@@ -64,7 +64,7 @@ TYPED_TEST(CrossJoinTypeTests, CrossJoin)
                                                       "composéd"});
   auto expect_4 = column_wrapper<int32_t>{10, 20, 20, 10, 20, 20, 10, 20, 20, 10, 20, 20};
   auto expect_5 = column_wrapper<float>{5.0, .7, .7, 5.0, .7, .7, 5.0, .7, .7, 5.0, .7, .7};
-  auto expect_6 = column_wrapper<TypeParam>{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  auto expect_6 = column_wrapper<TypeParam, int32_t>{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
   auto expect_7 = cudf::test::strings_column_wrapper(
     {"result", "", "words", "result", "", "words", "result", "", "words", "result", "", "words"});
 
@@ -77,7 +77,7 @@ TYPED_TEST(CrossJoinTypeTests, CrossJoin)
 
   EXPECT_EQ(join_table->num_columns(), table_a.num_columns() + table_b.num_columns());
   EXPECT_EQ(join_table->num_rows(), table_a.num_rows() * table_b.num_rows());
-  cudf::test::expect_tables_equal(join_table->view(), table_expect);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(join_table->view(), table_expect);
 }
 
 class CrossJoinInvalidInputs : public cudf::test::BaseFixture {
@@ -138,7 +138,7 @@ TEST_F(CrossJoinEmptyResult, NoRows)
 
   EXPECT_EQ(join_table->num_columns(), table_a.num_columns() + table_b.num_columns());
   EXPECT_EQ(join_table->num_rows(), 0);
-  cudf::test::expect_tables_equal(join_table->view(), table_expect);
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(join_table->view(), table_expect);
   EXPECT_EQ(join_table_reverse->num_columns(), table_a.num_columns() + table_b.num_columns());
   EXPECT_EQ(join_table_reverse->num_rows(), 0);
 }

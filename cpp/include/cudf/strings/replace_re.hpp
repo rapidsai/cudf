@@ -24,6 +24,7 @@ namespace strings {
 /**
  * @addtogroup strings_replace
  * @{
+ * @file
  */
 
 /**
@@ -47,7 +48,7 @@ std::unique_ptr<column> replace_re(
   std::string const& pattern,
   string_scalar const& repl           = string_scalar(""),
   size_type maxrepl                   = -1,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief For each string, replaces any character sequence matching the given patterns
@@ -67,7 +68,7 @@ std::unique_ptr<column> replace_re(
   strings_column_view const& strings,
   std::vector<std::string> const& patterns,
   strings_column_view const& repls,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief For each string, replaces any character sequence matching the given pattern
@@ -87,7 +88,7 @@ std::unique_ptr<column> replace_with_backrefs(
   strings_column_view const& strings,
   std::string const& pattern,
   std::string const& repl,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace strings
 }  // namespace cudf

@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
 
 project(CUDF_BENCHS LANGUAGES C CXX CUDA)
 
+add_library(cudf_datagen STATIC
+                   "${CMAKE_SOURCE_DIR}/benchmarks/common/generate_benchmark_input.cpp"
+)
+
 ###################################################################################################
 # - compiler function -----------------------------------------------------------------------------
 
@@ -13,7 +17,7 @@ function(ConfigureBench CMAKE_BENCH_NAME CMAKE_BENCH_SRC)
                    "${CMAKE_CURRENT_SOURCE_DIR}/synchronization/synchronization.cpp"
                    "${CMAKE_SOURCE_DIR}/tests/utilities/base_fixture.cpp")
     set_target_properties(${CMAKE_BENCH_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
-    target_link_libraries(${CMAKE_BENCH_NAME} benchmark benchmark_main pthread cudf )
+    target_link_libraries(${CMAKE_BENCH_NAME} benchmark benchmark_main pthread cudf_datagen cudf)
     set_target_properties(${CMAKE_BENCH_NAME} PROPERTIES
                             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gbenchmarks")
     set(BENCHMARK_LIST ${BENCHMARK_LIST} ${CMAKE_BENCH_NAME} CACHE INTERNAL "BENCHMARK_LIST")
@@ -22,8 +26,7 @@ endfunction(ConfigureBench)
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
-include_directories("${CUB_INCLUDE_DIR}"
-                    "${THRUST_INCLUDE_DIR}"
+include_directories("${THRUST_INCLUDE_DIR}"
                     "${JITIFY_INCLUDE_DIR}"
                     "${LIBCUDACXX_INCLUDE_DIR}")
 
@@ -132,6 +135,13 @@ set(SEARCH_BENCH_SRC
 
 ConfigureBench(SEARCH_BENCH "${SEARCH_BENCH_SRC}")
 
+###################################################################################################
+# - sort benchmark --------------------------------------------------------------------------------
+
+set(SORT_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/sort/sort_benchmark.cu")
+
+ConfigureBench(SORT_BENCH "${SORT_BENCH_SRC}")
 
 ###################################################################################################
 # - type_dispatcher benchmark ---------------------------------------------------------------------
@@ -191,6 +201,30 @@ set(PARQUET_WRITER_CHUNKS_BENCH_SRC
 ConfigureBench(PARQUET_WRITER_CHUNKS_BENCH "${PARQUET_WRITER_CHUNKS_BENCH_SRC}")
 
 ###################################################################################################
+# - parquet reader benchmark ----------------------------------------------------------------------
+
+set(PARQUET_READER_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/io/parquet/parquet_reader_benchmark.cpp")
+
+ConfigureBench(PARQUET_READER_BENCH "${PARQUET_READER_BENCH_SRC}")
+
+###################################################################################################
+# - orc reader benchmark --------------------------------------------------------------------------
+
+set(ORC_READER_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/io/orc/orc_reader_benchmark.cpp")
+
+ConfigureBench(ORC_READER_BENCH "${ORC_READER_BENCH_SRC}")
+
+###################################################################################################
+# - csv reader benchmark --------------------------------------------------------------------------
+
+set(CSV_READER_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/io/csv/csv_reader_benchmark.cpp")
+
+ConfigureBench(CSV_READER_BENCH "${CSV_READER_BENCH_SRC}")
+
+###################################################################################################
 # - parquet writer benchmark -----------------------------------------------------------------------------
 
 set(PARQUET_WRITER_BENCH_SRC
@@ -213,3 +247,19 @@ set(CSV_WRITER_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/io/csv/csv_writer_benchmark.cpp")
 
 ConfigureBench(CSV_WRITER_BENCH "${CSV_WRITER_BENCH_SRC}")
+
+###################################################################################################
+# - subword tokenizer benchmark -------------------------------------------------------------------
+
+set(SUBWORD_TOKENIZER_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/text/subword_benchmark.cpp")
+
+ConfigureBench(SUBWORD_TOKENIZER_BENCH "${SUBWORD_TOKENIZER_BENCH_SRC}")
+
+###################################################################################################
+# - convert to string benchmark -------------------------------------------------------------------
+
+set(DURATION_TO_STRING_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/string/convert_durations_benchmark.cpp")
+
+ConfigureBench(DURATION_TO_STRING_BENCH "${DURATION_TO_STRING_BENCH_SRC}")

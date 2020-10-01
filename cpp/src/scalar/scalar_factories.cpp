@@ -27,7 +27,7 @@ struct scalar_construction_helper {
   std::enable_if_t<is_fixed_width<T>(), std::unique_ptr<scalar>> operator()(
     cudaStream_t stream, rmm::mr::device_memory_resource* mr) const
   {
-    auto s = new ScalarType(0, false, stream, mr);
+    auto s = new ScalarType(T{}, false, stream, mr);
     return std::unique_ptr<scalar>(s);
   }
 
@@ -99,6 +99,12 @@ template <>
 std::unique_ptr<cudf::scalar> default_scalar_functor::operator()<list_view>()
 {
   CUDF_FAIL("list_view type not supported");
+}
+
+template <>
+std::unique_ptr<cudf::scalar> default_scalar_functor::operator()<struct_view>()
+{
+  CUDF_FAIL("struct_view type not supported");
 }
 
 }  // namespace

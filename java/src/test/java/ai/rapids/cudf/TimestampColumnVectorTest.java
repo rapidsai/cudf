@@ -32,17 +32,17 @@ public class TimestampColumnVectorTest extends CudfTestBase {
                                   -1528,    //1965-10-26
                                   17716};   //2018-07-04 
 
-  static final long[] TIMES_S = {-131968728L,   //'1965-10-26 14:01:12'
-                                 1530705600L,   //'2018-07-04 12:00:00'
-                                 1674631932L,   //'2023-01-25 07:32:12'
-                                 -131968728L,   //'1965-10-26 14:01:12'
-                                 1530705600L};  //'2018-07-04 12:00:00'
+  static final long[] TIMES_S = {-131968728L,   //'1965-10-26 14:01:12' Tuesday
+                                 1530705600L,   //'2018-07-04 12:00:00' Wednesday
+                                 1674631932L,   //'2023-01-25 07:32:12' Wednesday
+                                 -131968728L,   //'1965-10-26 14:01:12' Tuesday
+                                 1530705600L};  //'2018-07-04 12:00:00' Wednesday
 
-  static final long[] TIMES_MS = {-131968727762L,   //'1965-10-26 14:01:12.238'
-                                  1530705600115L,   //'2018-07-04 12:00:00.115'
-                                  1674631932929L,   //'2023-01-25 07:32:12.929'
-                                  -131968727762L,   //'1965-10-26 14:01:12.238'
-                                  1530705600115L};  //'2018-07-04 12:00:00.115'
+  static final long[] TIMES_MS = {-131968727762L,   //'1965-10-26 14:01:12.238' Tuesday
+                                  1530705600115L,   //'2018-07-04 12:00:00.115' Wednesday
+                                  1674631932929L,   //'2023-01-25 07:32:12.929' Wednesday
+                                  -131968727762L,   //'1965-10-26 14:01:12.238' Tuesday
+                                  1530705600115L};  //'2018-07-04 12:00:00.115' Wednesday
 
   static final long[] TIMES_US = {-131968727761703L,   //'1965-10-26 14:01:12.238297'
                                   1530705600115254L,   //'2018-07-04 12:00:00.115254'
@@ -234,6 +234,80 @@ public class TimestampColumnVectorTest extends CudfTestBase {
       assertEquals(12, result.getShort(0));
       assertEquals(0, result.getShort(1));
       assertEquals(12, result.getShort(2));
+    }
+  }
+
+  @Test
+  public void testWeekDay() {
+    try (ColumnVector timestampColumnVector = ColumnVector.timestampMilliSecondsFromLongs(TIMES_MS);
+         ColumnVector result = timestampColumnVector.weekDay();
+         ColumnVector expected = ColumnVector.fromBoxedShorts(
+                 (short)2, (short)3, (short)3, (short)2, (short)3)) {
+      assertColumnsAreEqual(expected, result);
+    }
+
+    try (ColumnVector timestampColumnVector = ColumnVector.timestampSecondsFromLongs(TIMES_S);
+         ColumnVector result = timestampColumnVector.weekDay();
+         ColumnVector expected = ColumnVector.fromBoxedShorts(
+                 (short)2, (short)3, (short)3, (short)2, (short)3)) {
+      assertColumnsAreEqual(expected, result);
+    }
+
+    try (ColumnVector timestampColumnVector = ColumnVector.timestampDaysFromBoxedInts(
+            17713, 17714, 17715, 17716, 17717, 17718, 17719, 17720);
+         ColumnVector result = timestampColumnVector.weekDay();
+         ColumnVector expected = ColumnVector.fromBoxedShorts(
+                 (short)7, (short)1, (short)2, (short)3, (short)4, (short)5, (short)6, (short)7)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  public void testLastDayOfMonth() {
+    int[] EXPECTED = new int[]{
+            -1523,    //1965-10-31
+            17743,    //2018-07-31
+            19388,    //2023-01-31
+            -1523,    //1965-10-31
+            17743};   //2018-07-31
+    try (ColumnVector timestampColumnVector = ColumnVector.timestampMilliSecondsFromLongs(TIMES_MS);
+         ColumnVector result = timestampColumnVector.lastDayOfMonth();
+         ColumnVector expected = ColumnVector.daysFromInts(EXPECTED)) {
+      assertColumnsAreEqual(expected, result);
+    }
+
+    try (ColumnVector timestampColumnVector = ColumnVector.timestampSecondsFromLongs(TIMES_S);
+         ColumnVector result = timestampColumnVector.lastDayOfMonth();
+         ColumnVector expected = ColumnVector.daysFromInts(EXPECTED)) {
+      assertColumnsAreEqual(expected, result);
+    }
+
+    try (ColumnVector timestampColumnVector = ColumnVector.daysFromInts(TIMES_DAY);
+         ColumnVector result = timestampColumnVector.lastDayOfMonth();
+         ColumnVector expected = ColumnVector.daysFromInts(EXPECTED)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  public void testDayOfYear() {
+    short[] EXPECTED = new short[]{299, 185, 25, 299, 185};
+    try (ColumnVector timestampColumnVector = ColumnVector.timestampMilliSecondsFromLongs(TIMES_MS);
+         ColumnVector result = timestampColumnVector.dayOfYear();
+         ColumnVector expected = ColumnVector.fromShorts(EXPECTED)) {
+      assertColumnsAreEqual(expected, result);
+    }
+
+    try (ColumnVector timestampColumnVector = ColumnVector.timestampSecondsFromLongs(TIMES_S);
+         ColumnVector result = timestampColumnVector.dayOfYear();
+         ColumnVector expected = ColumnVector.fromShorts(EXPECTED)) {
+      assertColumnsAreEqual(expected, result);
+    }
+
+    try (ColumnVector timestampColumnVector = ColumnVector.daysFromInts(TIMES_DAY);
+         ColumnVector result = timestampColumnVector.dayOfYear();
+         ColumnVector expected = ColumnVector.fromShorts(EXPECTED)) {
+      assertColumnsAreEqual(expected, result);
     }
   }
 

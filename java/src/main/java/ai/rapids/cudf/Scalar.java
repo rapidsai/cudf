@@ -73,6 +73,13 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       return new Scalar(type, makeTimestampTimeScalar(type.nativeId, 0, false));
     case STRING:
       return new Scalar(type, makeStringScalar(null, false));
+    case DURATION_DAYS:
+      return new Scalar(type, makeDurationDaysScalar(0, false));
+    case DURATION_MICROSECONDS:
+    case DURATION_MILLISECONDS:
+    case DURATION_NANOSECONDS:
+    case DURATION_SECONDS:
+      return new Scalar(type, makeDurationTimeScalar(type.nativeId, 0, false));
     default:
       throw new IllegalArgumentException("Unexpected type: " + type);
     }
@@ -131,6 +138,27 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       return Scalar.fromNull(DType.UINT16);
     }
     return Scalar.fromUnsignedShort(value.shortValue());
+  }
+
+  /**
+   * Returns a DURATION_DAYS scalar
+   * @param value - days
+   * @return - Scalar value
+   */
+  public static Scalar durationDaysFromInt(int value) {
+    return new Scalar(DType.DURATION_DAYS, makeDurationDaysScalar(value, true));
+  }
+
+  /**
+   * Returns a DURATION_DAYS scalar
+   * @param value - days
+   * @return - Scalar value
+   */
+  public static Scalar durationDaysFromInt(Integer value) {
+    if (value == null) {
+      return Scalar.fromNull(DType.DURATION_DAYS);
+    }
+    return Scalar.durationDaysFromInt(value.intValue());
   }
 
   public static Scalar fromInt(int value) {
@@ -210,6 +238,41 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     return Scalar.timestampDaysFromInt(value.intValue());
   }
 
+  /**
+   * Returns a duration scalar based on the type parameter.
+   * @param type - dtype of scalar to be returned
+   * @param value - corresponding value for the scalar
+   * @return - Scalar of the respective type
+   */
+  public static Scalar durationFromLong(DType type, long value) {
+    if (type.isDurationType()) {
+      if (type == DType.DURATION_DAYS) {
+        int intValue = (int)value;
+        if (value != intValue) {
+          throw new IllegalArgumentException("value too large for type " + type + ": " + value);
+        }
+        return durationDaysFromInt(intValue);
+      } else {
+        return new Scalar(type, makeDurationTimeScalar(type.nativeId, value, true));
+      }
+    } else {
+      throw new IllegalArgumentException("type is not a timestamp: " + type);
+    }
+  }
+
+  /**
+   * Returns a duration scalar based on the type parameter.
+   * @param type - dtype of scalar to be returned
+   * @param value - corresponding value for the scalar
+   * @return - Scalar of the respective type
+   */
+  public static Scalar durationFromLong(DType type, Long value) {
+    if (value == null) {
+      return Scalar.fromNull(type);
+    }
+    return Scalar.durationFromLong(type, value.longValue());
+  }
+
   public static Scalar timestampFromLong(DType type, long value) {
     if (type.isTimestamp()) {
       if (type == DType.TIMESTAMP_DAYS) {
@@ -261,6 +324,8 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   private static native long makeFloat32Scalar(float value, boolean isValid);
   private static native long makeFloat64Scalar(double value, boolean isValid);
   private static native long makeStringScalar(byte[] value, boolean isValid);
+  private static native long makeDurationDaysScalar(int value, boolean isValid);
+  private static native long makeDurationTimeScalar(int dtype, long value, boolean isValid);
   private static native long makeTimestampDaysScalar(int value, boolean isValid);
   private static native long makeTimestampTimeScalar(int dtypeNativeId, long value, boolean isValid);
 

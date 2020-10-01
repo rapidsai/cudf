@@ -1,9 +1,13 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 import os
 from contextlib import contextmanager
 from io import BytesIO
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
+import pyarrow.orc
 import pytest
 
 import cudf
@@ -31,7 +35,7 @@ def ensure_safe_environment_variables():
 
 
 @contextmanager
-def s3_context(bucket, files):
+def s3_context(bucket, files={}):
     with ensure_safe_environment_variables():
         # temporary workaround as moto fails for botocore >= 1.11 otherwise,
         # see https://github.com/spulec/moto/issues/1924 & 1952
@@ -48,6 +52,7 @@ def s3_context(bucket, files):
 
             for f, data in files.items():
                 try:
+
                     client.delete_object(Bucket=bucket, Key=f)
                 except Exception:
                     pass
@@ -69,7 +74,7 @@ def pdf(scope="module"):
 
 def test_read_csv(pdf):
     # Write to buffer
-    fname = "file.csv"
+    fname = "test_csv_reader.csv"
     bname = "csv"
     buffer = pdf.to_csv(index=False)
     with s3_context(bname, {fname: buffer}):
@@ -78,20 +83,28 @@ def test_read_csv(pdf):
     assert_eq(pdf, got)
 
 
-def test_write_csv(pdf):
+@pytest.mark.parametrize("chunksize", [None, 3])
+def test_write_csv(pdf, chunksize):
     # Write to buffer
-    fname = "file.csv"
+    fname = "test_csv_writer.csv"
     bname = "csv"
     gdf = cudf.from_pandas(pdf)
-    with pytest.raises(RuntimeError, match="Cannot open output file"):
-        gdf.to_csv("s3://{}/{}".format(bname, fname))
+    with s3_context(bname) as s3fs:
+        gdf.to_csv(
+            "s3://{}/{}".format(bname, fname), index=False, chunksize=chunksize
+        )
+        assert s3fs.exists("s3://{}/{}".format(bname, fname))
+
+        got = pd.read_csv("s3://{}/{}".format(bname, fname))
+
+    assert_eq(pdf, got)
 
 
-def test_parquet(pdf):
-    fname = "file.parq"
-    bname = "parq"
+def test_read_parquet(pdf):
+    fname = "test_parquet_reader.parquet"
+    bname = "parquet"
     buffer = BytesIO()
-    pdf.to_parquet(fname=buffer)
+    pdf.to_parquet(path=buffer)
     buffer.seek(0)
     with s3_context(bname, {fname: buffer}):
         got = cudf.read_parquet("s3://{}/{}".format(bname, fname))
@@ -99,8 +112,21 @@ def test_parquet(pdf):
     assert_eq(pdf, got)
 
 
-def test_json():
-    fname = "file.json"
+def test_write_parquet(pdf):
+    fname = "test_parquet_writer.parquet"
+    bname = "parquet"
+    gdf = cudf.from_pandas(pdf)
+    with s3_context(bname) as s3fs:
+        gdf.to_parquet("s3://{}/{}".format(bname, fname))
+        assert s3fs.exists("s3://{}/{}".format(bname, fname))
+
+        got = pd.read_parquet("s3://{}/{}".format(bname, fname))
+
+    assert_eq(pdf, got)
+
+
+def test_read_json():
+    fname = "test_json_reader.json"
     bname = "json"
     buffer = (
         b'{"amount": 100, "name": "Alice"}\n'
@@ -119,3 +145,32 @@ def test_json():
 
     expect = pd.read_json(buffer, lines=True)
     assert_eq(expect, got)
+
+
+def test_read_orc(datadir):
+    source_file = str(datadir / "orc" / "TestOrcFile.testSnappy.orc")
+    fname = "test_orc_reader.orc"
+    bname = "orc"
+    expect = pa.orc.ORCFile(source_file).read().to_pandas()
+
+    with open(source_file, "rb") as f:
+        buffer = f.read()
+
+    with s3_context(bname, {fname: buffer}):
+        got = cudf.read_orc("s3://{}/{}".format(bname, fname))
+
+    assert_eq(expect, got)
+
+
+def test_write_orc(pdf):
+    fname = "test_orc_writer.orc"
+    bname = "orc"
+    gdf = cudf.from_pandas(pdf)
+    with s3_context(bname) as s3fs:
+        gdf.to_orc("s3://{}/{}".format(bname, fname))
+        assert s3fs.exists("s3://{}/{}".format(bname, fname))
+
+        with s3fs.open("s3://{}/{}".format(bname, fname)) as f:
+            got = pa.orc.ORCFile(f).read().to_pandas()
+
+    assert_eq(pdf, got)

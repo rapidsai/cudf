@@ -24,17 +24,17 @@ import org.junit.jupiter.api.BeforeEach;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-class CudfTestBase {
+public class CudfTestBase {
   static final long RMM_POOL_SIZE_DEFAULT = 512 * 1024 * 1024;
 
   final int rmmAllocationMode;
   final long rmmPoolSize;
 
-  CudfTestBase() {
+  public CudfTestBase() {
     this(RmmAllocationMode.POOL, RMM_POOL_SIZE_DEFAULT);
   }
 
-  CudfTestBase(int allocationMode, long poolSize) {
+  public CudfTestBase(int allocationMode, long poolSize) {
     this.rmmAllocationMode = allocationMode;
     this.rmmPoolSize = poolSize;
   }

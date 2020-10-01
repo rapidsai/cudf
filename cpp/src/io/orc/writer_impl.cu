@@ -158,7 +158,7 @@ class orc_column_view {
       _indexes = rmm::device_buffer(_data_count * sizeof(gpu::nvstrdesc_s), stream);
       stringdata_to_nvstrdesc<<<((_data_count - 1) >> 8) + 1, 256, 0, stream>>>(
         reinterpret_cast<gpu::nvstrdesc_s *>(_indexes.data()),
-        view.offsets().data<size_type>(),
+        view.offsets().data<size_type>() + view.offset(),
         view.chars().data<char>(),
         _nulls,
         _data_count);
@@ -673,7 +673,7 @@ std::vector<StripeInformation> writer::impl::gather_stripes(
           ss->first_chunk_id = (group * num_columns + i);
           ss->num_chunks     = (stripe_group_end - group);
           ss->column_id      = i;
-          ss->strm_type      = k;
+          ss->stream_type    = k;
         }
       }
     }
@@ -866,9 +866,9 @@ void writer::impl::write_index_stream(int32_t stripe_id,
     if (record[0] >= 0) {
       record[0] += chunk.strm_len[type];
       while ((record[1] >= 0) && (static_cast<size_t>(record[0]) >= compression_blocksize_) &&
-             (record[3] + 3 + comp_out[record[1]].bytes_written < static_cast<size_t>(record[4]))) {
+             (record[2] + 3 + comp_out[record[1]].bytes_written < static_cast<size_t>(record[3]))) {
         record[0] -= compression_blocksize_;
-        record[3] += 3 + comp_out[record[1]].bytes_written;
+        record[2] += 3 + comp_out[record[1]].bytes_written;
         record[1] += 1;
       }
     }
@@ -921,10 +921,10 @@ void writer::impl::write_data_stream(gpu::StripeStream const &strm_desc,
                                      std::vector<Stream> &streams,
                                      cudaStream_t stream)
 {
-  const auto length                                  = strm_desc.stream_size;
-  streams[chunk.strm_id[strm_desc.strm_type]].length = length;
+  const auto length                                    = strm_desc.stream_size;
+  streams[chunk.strm_id[strm_desc.stream_type]].length = length;
   if (length != 0) {
-    const auto *stream_in = (compression_kind_ == NONE) ? chunk.streams[strm_desc.strm_type]
+    const auto *stream_in = (compression_kind_ == NONE) ? chunk.streams[strm_desc.stream_type]
                                                         : (compressed_data + strm_desc.bfr_offset);
     CUDA_TRY(cudaMemcpyAsync(stream_out, stream_in, length, cudaMemcpyDeviceToHost, stream));
     CUDA_TRY(cudaStreamSynchronize(stream));
@@ -955,10 +955,10 @@ void writer::impl::add_uncompressed_block_headers(std::vector<uint8_t> &v)
 }
 
 writer::impl::impl(std::unique_ptr<data_sink> sink,
-                   writer_options const &options,
+                   orc_writer_options const &options,
                    rmm::mr::device_memory_resource *mr)
-  : compression_kind_(to_orc_compression(options.compression)),
-    enable_statistics_(options.enable_statistics),
+  : compression_kind_(to_orc_compression(options.get_compression())),
+    enable_statistics_(options.enable_statistics()),
     out_sink_(std::move(sink)),
     _mr(mr)
 {
@@ -974,7 +974,7 @@ void writer::impl::write(table_view const &table,
   state.single_write_mode = true;
 
   write_chunked_begin(state);
-  write_chunked(table, state);
+  write_chunk(table, state);
   write_chunked_end(state);
 }
 
@@ -984,7 +984,7 @@ void writer::impl::write_chunked_begin(orc_chunked_state &state)
   out_sink_->host_write(MAGIC, std::strlen(MAGIC));
 }
 
-void writer::impl::write_chunked(table_view const &table, orc_chunked_state &state)
+void writer::impl::write_chunk(table_view const &table, orc_chunked_state &state)
 {
   size_type num_columns = table.num_columns();
   size_type num_rows    = 0;
@@ -1299,10 +1299,10 @@ void writer::impl::write_chunked(table_view const &table, orc_chunked_state &sta
   } else {
     // verify the user isn't passing mismatched tables
     CUDF_EXPECTS(state.ff.types.size() == 1 + orc_columns.size(),
-                 "Mismatch in table structure between multiple calls to write_chunked");
+                 "Mismatch in table structure between multiple calls to write_chunk");
     for (auto i = 0; i < num_columns; i++) {
       CUDF_EXPECTS(state.ff.types[1 + i].kind == orc_columns[i].orc_kind(),
-                   "Mismatch in column types between multiple calls to write_chunked");
+                   "Mismatch in column types between multiple calls to write_chunk");
     }
   }
   state.ff.stripes.insert(state.ff.stripes.end(),
@@ -1352,7 +1352,7 @@ void writer::impl::write_chunked_end(orc_chunked_state &state)
 
 // Forward to implementation
 writer::writer(std::unique_ptr<data_sink> sink,
-               writer_options const &options,
+               orc_writer_options const &options,
                rmm::mr::device_memory_resource *mr)
   : _impl(std::make_unique<impl>(std::move(sink), options, mr))
 {
@@ -1362,7 +1362,7 @@ writer::writer(std::unique_ptr<data_sink> sink,
 writer::~writer() = default;
 
 // Forward to implementation
-void writer::write_all(table_view const &table, const table_metadata *metadata, cudaStream_t stream)
+void writer::write(table_view const &table, const table_metadata *metadata, cudaStream_t stream)
 {
   _impl->write(table, metadata, stream);
 }
@@ -1371,9 +1371,9 @@ void writer::write_all(table_view const &table, const table_metadata *metadata, 
 void writer::write_chunked_begin(orc_chunked_state &state) { _impl->write_chunked_begin(state); }
 
 // Forward to implementation
-void writer::write_chunked(table_view const &table, orc_chunked_state &state)
+void writer::write_chunk(table_view const &table, orc_chunked_state &state)
 {
-  _impl->write_chunked(table, state);
+  _impl->write_chunk(table, state);
 }
 
 // Forward to implementation

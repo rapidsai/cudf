@@ -263,7 +263,7 @@ struct scalar_pair_accessor : public scalar_value_accessor<Element> {
   const value_type operator()(size_type) const
   {
 #if defined(__CUDA_ARCH__)
-    return {super_t::dscalar.value(), super_t::dscalar.is_valid()};
+    return {Element(super_t::dscalar.value()), super_t::dscalar.is_valid()};
 #else
     CUDF_FAIL("unsupported device scalar iterator operation");
 #endif

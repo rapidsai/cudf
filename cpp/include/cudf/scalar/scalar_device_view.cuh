@@ -19,6 +19,11 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 
+/**
+ * @file scalar_device_view.cuh
+ * @brief Scalar device view class definitons
+ */
+
 namespace cudf {
 namespace detail {
 /**
@@ -50,9 +55,9 @@ class scalar_device_view_base {
   __device__ void set_valid(bool is_valid) noexcept { *_is_valid = is_valid; }
 
  protected:
-  data_type _type{EMPTY};  ///< Value data type
-  bool* _is_valid{};       ///< Pointer to device memory containing
-                           ///< boolean representing validity of the value.
+  data_type _type{type_id::EMPTY};  ///< Value data type
+  bool* _is_valid{};                ///< Pointer to device memory containing
+                                    ///< boolean representing validity of the value.
 
   scalar_device_view_base(data_type type, bool* is_valid) : _type(type), _is_valid(is_valid) {}
 
@@ -117,6 +122,18 @@ template <typename T>
 class numeric_scalar_device_view : public detail::fixed_width_scalar_device_view<T> {
  public:
   numeric_scalar_device_view(data_type type, T* data, bool* is_valid)
+    : detail::fixed_width_scalar_device_view<T>(type, data, is_valid)
+  {
+  }
+};
+
+/**
+ * @brief A type of scalar_device_view that stores a pointer to a fixed_point value
+ */
+template <typename T>
+class fixed_point_scalar_device_view : public detail::fixed_width_scalar_device_view<T> {
+ public:
+  fixed_point_scalar_device_view(data_type type, T* data, bool* is_valid)
     : detail::fixed_width_scalar_device_view<T>(type, data, is_valid)
   {
   }

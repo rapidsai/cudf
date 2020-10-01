@@ -66,12 +66,11 @@ fi
 
 conda install "rmm=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
               "rapids-build-env=$MINOR_VERSION.*" \
-              "rapids-notebook-env=$MINOR_VERSION.*"
+              "rapids-notebook-env=$MINOR_VERSION.*" \
+              "dask-cuda=${MINOR_VERSION}" \
+              "ucx-py=${MINOR_VERSION}" \
 
-# Temporary for testing the compile_to_ptx_for_current_device PR
-conda update -c numba numba
-
-# https://docs.rapids.ai/maintainers/depmgmt/ 
+# https://docs.rapids.ai/maintainers/depmgmt/
 # conda remove -f rapids-build-env rapids-notebook-env
 # conda install "your-pkg=1.0.0"
 
@@ -90,14 +89,14 @@ $CXX --version
 conda list
 
 ################################################################################
-# BUILD - Build libcudf, cuDF and dask_cudf from source
+# BUILD - Build libcudf, cuDF, libcudf_kafka, and dask_cudf from source
 ################################################################################
 
 logger "Build libcudf..."
 if [[ ${BUILD_MODE} == "pull-request" ]]; then
-    $WORKSPACE/build.sh clean libcudf cudf dask_cudf benchmarks tests
+    $WORKSPACE/build.sh clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests --ptds
 else
-    $WORKSPACE/build.sh clean libcudf cudf dask_cudf benchmarks tests -l
+    $WORKSPACE/build.sh clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests -l --ptds
 fi
 
 ################################################################################
@@ -120,7 +119,6 @@ else
         ${gt} --gtest_output=xml:${WORKSPACE}/test-results/
     done
 
-
     # set environment variable for numpy 1.16
     # will be enabled for later versions by default
     np_ver=$(python -c "import numpy; print('.'.join(numpy.__version__.split('.')[:-1]))")
@@ -131,15 +129,15 @@ else
 
     cd $WORKSPACE/python/cudf
     logger "Python py.test for cuDF..."
-    py.test --cache-clear --junitxml=${WORKSPACE}/junit-cudf.xml -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:${WORKSPACE}/python/cudf/cudf-coverage.xml --cov-report term
+    py.test --cache-clear --basetemp=${WORKSPACE}/cudf-cuda-tmp --junitxml=${WORKSPACE}/junit-cudf.xml -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:${WORKSPACE}/python/cudf/cudf-coverage.xml --cov-report term
 
     cd $WORKSPACE/python/dask_cudf
     logger "Python py.test for dask-cudf..."
-    py.test --cache-clear --junitxml=${WORKSPACE}/junit-dask-cudf.xml -v --cov-config=.coveragerc --cov=dask_cudf --cov-report=xml:${WORKSPACE}/python/dask_cudf/dask-cudf-coverage.xml --cov-report term
+    py.test --cache-clear --basetemp=${WORKSPACE}/dask-cudf-cuda-tmp --junitxml=${WORKSPACE}/junit-dask-cudf.xml -v --cov-config=.coveragerc --cov=dask_cudf --cov-report=xml:${WORKSPACE}/python/dask_cudf/dask-cudf-coverage.xml --cov-report term
 
     cd $WORKSPACE/python/custreamz
     logger "Python py.test for cuStreamz..."
-    py.test --cache-clear --junitxml=${WORKSPACE}/junit-custreamz.xml -v --cov-config=.coveragerc --cov=custreamz --cov-report=xml:${WORKSPACE}/python/custreamz/custreamz-coverage.xml --cov-report term
+    py.test --cache-clear --basetemp=${WORKSPACE}/custreamz-cuda-tmp --junitxml=${WORKSPACE}/junit-custreamz.xml -v --cov-config=.coveragerc --cov=custreamz --cov-report=xml:${WORKSPACE}/python/custreamz/custreamz-coverage.xml --cov-report term
 
     ${WORKSPACE}/ci/gpu/test-notebooks.sh 2>&1 | tee nbtest.log
     python ${WORKSPACE}/ci/utils/nbtestlog2junitxml.py nbtest.log

@@ -1,17 +1,17 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
-
 import datetime as dt
+import re
+from numbers import Number
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 
-import cudf._lib as libcudf
+import cudf
+from cudf import _lib as libcudf
 from cudf._lib.nvtx import annotate
-from cudf.core.buffer import Buffer
-from cudf.core.column import column
-from cudf.utils import utils
-from cudf.utils.dtypes import is_scalar, np_to_pa_dtype
+from cudf._lib.scalar import Scalar, as_scalar
+from cudf.core.column import column, string
+from cudf.utils.dtypes import is_scalar
 
 # nanoseconds per time_unit
 _numpy_to_pandas_conversion = {
@@ -21,7 +21,14 @@ _numpy_to_pandas_conversion = {
     "s": 1000000000,
     "m": 60000000000,
     "h": 3600000000000,
-    "D": 1000000000 * 86400,
+    "D": 86400000000000,
+}
+
+_dtype_to_format_conversion = {
+    "datetime64[ns]": "%Y-%m-%d %H:%M:%S.%9f",
+    "datetime64[us]": "%Y-%m-%d %H:%M:%S.%6f",
+    "datetime64[ms]": "%Y-%m-%d %H:%M:%S.%3f",
+    "datetime64[s]": "%Y-%m-%d %H:%M:%S",
 }
 
 
@@ -53,16 +60,21 @@ class DatetimeColumn(column.ColumnBase):
             offset=offset,
             null_count=null_count,
         )
-        assert self.dtype.type is np.datetime64
+
+        if not (self.dtype.type is np.datetime64):
+            raise TypeError(f"{self.dtype} is not a supported datetime type")
+
         self._time_unit, _ = np.datetime_data(self.dtype)
 
     def __contains__(self, item):
-        # Handles improper item types
         try:
             item = np.datetime64(item, self._time_unit)
-        except Exception:
+        except ValueError:
+            # If item cannot be converted to datetime type
+            # np.datetime64 raises ValueError, hence `item`
+            # cannot exist in `self`.
             return False
-        return item.astype("int_") in self.as_numerical
+        return item.astype("int64") in self.as_numerical
 
     @property
     def time_unit(self):
@@ -102,29 +114,35 @@ class DatetimeColumn(column.ColumnBase):
     def normalize_binop_value(self, other):
         if isinstance(other, dt.datetime):
             other = np.datetime64(other)
+        elif isinstance(other, dt.timedelta):
+            other = np.timedelta64(other)
+        elif isinstance(other, pd.Timestamp):
+            other = other.to_datetime64()
+        elif isinstance(other, pd.Timedelta):
+            other = other.to_timedelta64()
 
-        if isinstance(other, pd.Timestamp):
-            m = _numpy_to_pandas_conversion[self.time_unit]
-            ary = utils.scalar_broadcast_to(
-                other.value * m, size=len(self), dtype=self.dtype
-            )
-        elif isinstance(other, np.datetime64):
+        if isinstance(other, np.datetime64):
+            if np.isnat(other):
+                return as_scalar(val=None, dtype=self.dtype)
+
             other = other.astype(self.dtype)
-            ary = utils.scalar_broadcast_to(
-                other, size=len(self), dtype=self.dtype
-            )
-        else:
-            raise TypeError("cannot broadcast {}".format(type(other)))
+            return as_scalar(other)
+        elif isinstance(other, np.timedelta64):
+            other_time_unit = cudf.utils.dtypes.get_time_unit(other)
 
-        return column.build_column(
-            data=Buffer(ary.data_array_view.view("|u1")), dtype=self.dtype
-        )
+            if other_time_unit not in ("s", "ms", "ns", "us"):
+                other = other.astype("timedelta64[s]")
+
+            if np.isnat(other):
+                return as_scalar(val=None, dtype=other.dtype)
+
+            return as_scalar(other)
+        else:
+            raise TypeError("cannot normalize {}".format(type(other)))
 
     @property
     def as_numerical(self):
-        from cudf.core.column import build_column
-
-        return build_column(
+        return column.build_column(
             data=self.base_data,
             dtype=np.int64,
             mask=self.base_mask,
@@ -138,12 +156,21 @@ class DatetimeColumn(column.ColumnBase):
             return self
         return libcudf.unary.cast(self, dtype=dtype)
 
+    def as_timedelta_column(self, dtype, **kwargs):
+        raise TypeError(
+            f"cannot astype a datetimelike from [{self.dtype}] to [{dtype}]"
+        )
+
     def as_numerical_column(self, dtype, **kwargs):
         return self.as_numerical.astype(dtype)
 
     def as_string_column(self, dtype, **kwargs):
-        from cudf.core.column import string
 
+        if not kwargs.get("format"):
+            fmt = _dtype_to_format_conversion.get(
+                self.dtype.name, "%Y-%m-%d %H:%M:%S"
+            )
+            kwargs["format"] = fmt
         if len(self) > 0:
             return string._numeric_to_str_typecast_functions[
                 np.dtype(self.dtype)
@@ -151,76 +178,93 @@ class DatetimeColumn(column.ColumnBase):
         else:
             return column.column_empty(0, dtype="object", masked=False)
 
-    def to_pandas(self, index=None):
-        return pd.Series(
-            self.to_array(fillna="pandas").astype(self.dtype), index=index
-        )
-
-    def to_arrow(self):
-        mask = None
-        if self.nullable:
-            mask = pa.py_buffer(self.mask_array_view.copy_to_host())
-        data = pa.py_buffer(self.as_numerical.data_array_view.copy_to_host())
-        pa_dtype = np_to_pa_dtype(self.dtype)
-        return pa.Array.from_buffers(
-            type=pa_dtype,
-            length=len(self),
-            buffers=[mask, data],
-            null_count=self.null_count,
-        )
-
     def default_na_value(self):
         """Returns the default NA value for this column
         """
-        dkind = self.dtype.kind
-        if dkind == "M":
-            return np.datetime64("nat", self.time_unit)
-        else:
-            raise TypeError(
-                "datetime column of {} has no NaN value".format(self.dtype)
-            )
+        return np.datetime64("nat", self.time_unit)
+
+    def mean(self, skipna=None, dtype=np.float64):
+        return pd.Timestamp(
+            self.as_numerical.mean(skipna=skipna, dtype=dtype),
+            unit=self.time_unit,
+        )
+
+    def quantile(self, q, interpolation, exact):
+        result = self.as_numerical.quantile(
+            q=q, interpolation=interpolation, exact=exact
+        )
+        if isinstance(q, Number):
+            return pd.Timestamp(result, unit=self.time_unit)
+
+        result = result.binary_operator(
+            "mul", as_scalar(_numpy_to_pandas_conversion[self.time_unit])
+        )
+
+        return result.astype("datetime64[ns]")
 
     def binary_operator(self, op, rhs, reflect=False):
         lhs, rhs = self, rhs
-
         if op in ("eq", "ne", "lt", "gt", "le", "ge"):
             out_dtype = np.bool
+        elif op == "add" and pd.api.types.is_timedelta64_dtype(rhs.dtype):
+            out_dtype = cudf.core.column.timedelta._timedelta_binary_op_add(
+                rhs, lhs
+            )
+        elif op == "sub" and pd.api.types.is_timedelta64_dtype(rhs.dtype):
+            out_dtype = cudf.core.column.timedelta._timedelta_binary_op_sub(
+                rhs if reflect else lhs, lhs if reflect else rhs
+            )
+        elif op == "sub" and pd.api.types.is_datetime64_dtype(rhs.dtype):
+            units = ["s", "ms", "us", "ns"]
+            lhs_time_unit = cudf.utils.dtypes.get_time_unit(lhs)
+            lhs_unit = units.index(lhs_time_unit)
+            rhs_time_unit = cudf.utils.dtypes.get_time_unit(rhs)
+            rhs_unit = units.index(rhs_time_unit)
+            out_dtype = np.dtype(
+                f"timedelta64[{units[max(lhs_unit, rhs_unit)]}]"
+            )
         else:
             raise TypeError(
                 f"Series of dtype {self.dtype} cannot perform "
                 f" the operation {op}"
             )
+
+        if reflect:
+            lhs, rhs = rhs, lhs
+
         return binop(lhs, rhs, op=op, out_dtype=out_dtype)
 
     def fillna(self, fill_value):
         if is_scalar(fill_value):
-            fill_value = np.datetime64(fill_value, self.time_unit)
+            if not isinstance(fill_value, Scalar):
+                fill_value = np.datetime64(fill_value, self.time_unit)
         else:
             fill_value = column.as_column(fill_value, nan_as_null=False)
 
         result = libcudf.replace.replace_nulls(self, fill_value)
-        result = column.build_column(
-            result.base_data,
-            result.dtype,
-            mask=None,
-            offset=result.offset,
-            size=result.size,
-        )
+        if isinstance(fill_value, np.datetime64) and np.isnat(fill_value):
+            # If the value we are filling is np.datetime64("NAT")
+            # we set the same mask as current column.
+            # However where there are "<NA>" in the
+            # columns, their corresponding locations
+            # in base_data will contain min(int64) values.
 
+            return column.build_column(
+                data=result.base_data,
+                dtype=result.dtype,
+                mask=self.base_mask,
+                size=result.size,
+                offset=result.offset,
+                children=result.base_children,
+            )
         return result
-
-    def min(self, dtype=None):
-        return libcudf.reduce.reduce("min", self, dtype=dtype)
-
-    def max(self, dtype=None):
-        return libcudf.reduce.reduce("max", self, dtype=dtype)
 
     def find_first_value(self, value, closest=False):
         """
         Returns offset of first value that matches
         """
         value = pd.to_datetime(value)
-        value = column.as_column(value).as_numerical[0]
+        value = column.as_column(value, dtype=self.dtype).as_numerical[0]
         return self.as_numerical.find_first_value(value, closest=closest)
 
     def find_last_value(self, value, closest=False):
@@ -228,7 +272,7 @@ class DatetimeColumn(column.ColumnBase):
         Returns offset of last value that matches
         """
         value = pd.to_datetime(value)
-        value = column.as_column(value).as_numerical[0]
+        value = column.as_column(value, dtype=self.dtype).as_numerical[0]
         return self.as_numerical.find_last_value(value, closest=closest)
 
     @property
@@ -243,8 +287,12 @@ class DatetimeColumn(column.ColumnBase):
 
             max_int = np.iinfo(np.dtype("int64")).max
 
-            max_dist = self.max().astype(np.timedelta64, copy=False)
-            min_dist = self.min().astype(np.timedelta64, copy=False)
+            max_dist = np.timedelta64(
+                self.max().astype(np.dtype("int64"), copy=False), self_res
+            )
+            min_dist = np.timedelta64(
+                self.min().astype(np.dtype("int64"), copy=False), self_res
+            )
 
             self_delta_dtype = np.timedelta64(0, self_res).dtype
 
@@ -273,7 +321,6 @@ def infer_format(element, **kwargs):
     """
     Infers datetime format from a string, also takes cares for `ms` and `ns`
     """
-    import re
 
     fmt = pd.core.tools.datetimes._guess_datetime_format(element, **kwargs)
 
@@ -282,7 +329,7 @@ def infer_format(element, **kwargs):
 
     element_parts = element.split(".")
     if len(element_parts) != 2:
-        raise ValueError("Unable to infer the timestamp format from the data")
+        raise ValueError("Given date string not likely a datetime.")
 
     # There is possibility that the element is of following format
     # '00:00:03.333333 2016-01-01'
@@ -302,9 +349,18 @@ def infer_format(element, **kwargs):
         raise ValueError("Unable to infer the timestamp format from the data")
 
     if len(second_part) > 1:
-        second_part = pd.core.tools.datetimes._guess_datetime_format(
-            "".join(second_part[1:]), **kwargs
-        )
+        # "Z" indicates Zulu time(widely used in aviation) - Which is
+        # UTC timezone that currently cudf only supports. Having any other
+        # unsuppported timezone will let the code fail below
+        # with a ValueError.
+        second_part.remove("Z")
+        second_part = "".join(second_part[1:])
+
+        if len(second_part) > 1:
+            # Only infer if second_part is not an empty string.
+            second_part = pd.core.tools.datetimes._guess_datetime_format(
+                second_part, **kwargs
+            )
     else:
         second_part = ""
 

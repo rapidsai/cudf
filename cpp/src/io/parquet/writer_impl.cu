@@ -134,6 +134,26 @@ class parquet_column_view {
         _physical_type = Type::INT64;
         _stats_dtype   = statistics_dtype::dtype_int64;
         break;
+      case cudf::type_id::UINT8:
+        _physical_type  = Type::INT32;
+        _converted_type = ConvertedType::UINT_8;
+        _stats_dtype    = statistics_dtype::dtype_int8;
+        break;
+      case cudf::type_id::UINT16:
+        _physical_type  = Type::INT32;
+        _converted_type = ConvertedType::UINT_16;
+        _stats_dtype    = statistics_dtype::dtype_int16;
+        break;
+      case cudf::type_id::UINT32:
+        _physical_type  = Type::INT32;
+        _converted_type = ConvertedType::UINT_32;
+        _stats_dtype    = statistics_dtype::dtype_int32;
+        break;
+      case cudf::type_id::UINT64:
+        _physical_type  = Type::INT64;
+        _converted_type = ConvertedType::UINT_64;
+        _stats_dtype    = statistics_dtype::dtype_int64;
+        break;
       case cudf::type_id::FLOAT32:
         _physical_type = Type::FLOAT;
         _stats_dtype   = statistics_dtype::dtype_float32;
@@ -145,6 +165,35 @@ class parquet_column_view {
       case cudf::type_id::BOOL8:
         _physical_type = Type::BOOLEAN;
         _stats_dtype   = statistics_dtype::dtype_bool;
+        break;
+      // unsupported outside cudf for parquet 1.0.
+      case cudf::type_id::DURATION_DAYS:
+        _physical_type  = Type::INT32;
+        _converted_type = ConvertedType::TIME_MILLIS;
+        _stats_dtype    = statistics_dtype::dtype_int64;
+        break;
+      case cudf::type_id::DURATION_SECONDS:
+        _physical_type  = Type::INT64;
+        _converted_type = ConvertedType::TIME_MILLIS;
+        _stats_dtype    = statistics_dtype::dtype_int64;
+        _ts_scale       = 1000;
+        break;
+      case cudf::type_id::DURATION_MILLISECONDS:
+        _physical_type  = Type::INT64;
+        _converted_type = ConvertedType::TIME_MILLIS;
+        _stats_dtype    = statistics_dtype::dtype_int64;
+        break;
+      case cudf::type_id::DURATION_MICROSECONDS:
+        _physical_type  = Type::INT64;
+        _converted_type = ConvertedType::TIME_MICROS;
+        _stats_dtype    = statistics_dtype::dtype_int64;
+        break;
+      // unsupported outside cudf for parquet 1.0.
+      case cudf::type_id::DURATION_NANOSECONDS:
+        _physical_type  = Type::INT64;
+        _converted_type = ConvertedType::TIME_MICROS;
+        _stats_dtype    = statistics_dtype::dtype_int64;
+        _ts_scale       = -1000;  // negative value indicates division by absolute value
         break;
       case cudf::type_id::TIMESTAMP_DAYS:
         _physical_type  = Type::INT32;
@@ -171,12 +220,12 @@ class parquet_column_view {
         _physical_type  = Type::INT64;
         _converted_type = ConvertedType::TIMESTAMP_MICROS;
         _stats_dtype    = statistics_dtype::dtype_timestamp64;
-        _ts_scale       = -1000;
+        _ts_scale       = -1000;  // negative value indicates division by absolute value
         break;
       case cudf::type_id::STRING:
-        _physical_type = Type::BYTE_ARRAY;
-        //_converted_type = ConvertedType::UTF8; // TBD
-        _stats_dtype = statistics_dtype::dtype_string;
+        _physical_type  = Type::BYTE_ARRAY;
+        _converted_type = ConvertedType::UTF8;
+        _stats_dtype    = statistics_dtype::dtype_string;
         break;
       default:
         _physical_type = UNDEFINED_TYPE;
@@ -188,7 +237,7 @@ class parquet_column_view {
       _indexes = rmm::device_buffer(_data_count * sizeof(gpu::nvstrdesc_s), stream);
       stringdata_to_nvstrdesc<<<((_data_count - 1) >> 8) + 1, 256, 0, stream>>>(
         reinterpret_cast<gpu::nvstrdesc_s *>(_indexes.data()),
-        view.offsets().data<size_type>(),
+        view.offsets().data<size_type>() + view.offset(),
         view.chars().data<char>(),
         _nulls,
         _data_count);
@@ -427,26 +476,27 @@ void writer::impl::encode_pages(hostdevice_vector<gpu::EncColumnChunk> &chunks,
 }
 
 writer::impl::impl(std::unique_ptr<data_sink> sink,
-                   writer_options const &options,
+                   parquet_writer_options const &options,
                    rmm::mr::device_memory_resource *mr)
   : _mr(mr),
-    compression_(to_parquet_compression(options.compression)),
-    stats_granularity_(options.stats_granularity),
+    compression_(to_parquet_compression(options.get_compression())),
+    stats_granularity_(options.get_stats_level()),
     out_sink_(std::move(sink))
 {
 }
 
-std::unique_ptr<std::vector<uint8_t>> writer::impl::write(table_view const &table,
-                                                          const table_metadata *metadata,
-                                                          bool return_filemetadata,
-                                                          const std::string &metadata_out_file_path,
-                                                          cudaStream_t stream)
+std::unique_ptr<std::vector<uint8_t>> writer::impl::write(
+  table_view const &table,
+  const table_metadata *metadata,
+  bool return_filemetadata,
+  const std::string &column_chunks_file_path,
+  cudaStream_t stream)
 {
   pq_chunked_state state{metadata, SingleWriteMode::YES, stream};
 
   write_chunked_begin(state);
-  write_chunked(table, state);
-  return write_chunked_end(state, return_filemetadata, metadata_out_file_path);
+  write_chunk(table, state);
+  return write_chunked_end(state, return_filemetadata, column_chunks_file_path);
 }
 
 void writer::impl::write_chunked_begin(pq_chunked_state &state)
@@ -458,7 +508,7 @@ void writer::impl::write_chunked_begin(pq_chunked_state &state)
   state.current_chunk_offset = sizeof(file_header_s);
 }
 
-void writer::impl::write_chunked(table_view const &table, pq_chunked_state &state)
+void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
 {
   size_type num_columns = table.num_columns();
   size_type num_rows    = 0;
@@ -484,7 +534,7 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
                  "be specified");
   }
 
-  // first call. setup metadata. num_rows will get incremented as write_chunked is
+  // first call. setup metadata. num_rows will get incremented as write_chunk is
   // called multiple times.
   if (state.md.version == 0) {
     state.md.version  = 1;
@@ -509,8 +559,8 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
       state.md.schema[1 + i].type           = col.physical_type();
       state.md.schema[1 + i].converted_type = col.converted_type();
       // because the repetition type is global (in the sense of, not per-rowgroup or per
-      // write_chunked() call) we cannot know up front if the user is going to end up passing tables
-      // with nulls/no nulls in the multiple write_chunked() case.  so we'll do some special
+      // write_chunk() call) we cannot know up front if the user is going to end up passing tables
+      // with nulls/no nulls in the multiple write_chunk() case.  so we'll do some special
       // handling.
       //
       // if the user is explicitly saying "I am only calling this once", fall back to the original
@@ -535,11 +585,11 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
   } else {
     // verify the user isn't passing mismatched tables
     CUDF_EXPECTS(state.md.schema[0].num_children == num_columns,
-                 "Mismatch in table structure between multiple calls to write_chunked");
+                 "Mismatch in table structure between multiple calls to write_chunk");
     for (auto i = 0; i < num_columns; i++) {
       auto &col = parquet_columns[i];
       CUDF_EXPECTS(state.md.schema[1 + i].type == col.physical_type(),
-                   "Mismatch in column types between multiple calls to write_chunked");
+                   "Mismatch in column types between multiple calls to write_chunk");
     }
 
     // increment num rows
@@ -550,7 +600,7 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
   hostdevice_vector<gpu::EncColumnDesc> col_desc(num_columns);
 
   // setup gpu column description.
-  // applicable to only this _write_chunked() call
+  // applicable to only this _write_chunk() call
   for (auto i = 0; i < num_columns; i++) {
     auto &col = parquet_columns[i];
     // GPU column description
@@ -877,7 +927,7 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
 }
 
 std::unique_ptr<std::vector<uint8_t>> writer::impl::write_chunked_end(
-  pq_chunked_state &state, bool return_filemetadata, const std::string &metadata_out_file_path)
+  pq_chunked_state &state, bool return_filemetadata, const std::string &column_chunks_file_path)
 {
   CompactProtocolWriter cpw(&buffer_);
   file_ender_s fendr;
@@ -896,7 +946,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write_chunked_end(
                    reinterpret_cast<const uint8_t *>(&fhdr),
                    reinterpret_cast<const uint8_t *>(&fhdr) + sizeof(fhdr));
     for (auto &rowgroup : state.md.row_groups) {
-      for (auto &col : rowgroup.columns) { col.file_path = metadata_out_file_path; }
+      for (auto &col : rowgroup.columns) { col.file_path = column_chunks_file_path; }
     }
     fendr.footer_len = static_cast<uint32_t>(cpw.write(&state.md));
     buffer_.insert(buffer_.end(),
@@ -910,7 +960,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write_chunked_end(
 
 // Forward to implementation
 writer::writer(std::unique_ptr<data_sink> sink,
-               writer_options const &options,
+               parquet_writer_options const &options,
                rmm::mr::device_memory_resource *mr)
   : _impl(std::make_unique<impl>(std::move(sink), options, mr))
 {
@@ -920,13 +970,13 @@ writer::writer(std::unique_ptr<data_sink> sink,
 writer::~writer() = default;
 
 // Forward to implementation
-std::unique_ptr<std::vector<uint8_t>> writer::write_all(table_view const &table,
-                                                        const table_metadata *metadata,
-                                                        bool return_filemetadata,
-                                                        const std::string metadata_out_file_path,
-                                                        cudaStream_t stream)
+std::unique_ptr<std::vector<uint8_t>> writer::write(table_view const &table,
+                                                    const table_metadata *metadata,
+                                                    bool return_filemetadata,
+                                                    const std::string column_chunks_file_path,
+                                                    cudaStream_t stream)
 {
-  return _impl->write(table, metadata, return_filemetadata, metadata_out_file_path, stream);
+  return _impl->write(table, metadata, return_filemetadata, column_chunks_file_path, stream);
 }
 
 // Forward to implementation
@@ -936,13 +986,17 @@ void writer::write_chunked_begin(pq_chunked_state &state)
 }
 
 // Forward to implementation
-void writer::write_chunked(table_view const &table, pq_chunked_state &state)
+void writer::write_chunk(table_view const &table, pq_chunked_state &state)
 {
-  _impl->write_chunked(table, state);
+  _impl->write_chunk(table, state);
 }
 
 // Forward to implementation
-void writer::write_chunked_end(pq_chunked_state &state) { _impl->write_chunked_end(state); }
+std::unique_ptr<std::vector<uint8_t>> writer::write_chunked_end(
+  pq_chunked_state &state, bool return_filemetadata, const std::string &column_chunks_file_path)
+{
+  return _impl->write_chunked_end(state, return_filemetadata, column_chunks_file_path);
+}
 
 std::unique_ptr<std::vector<uint8_t>> writer::merge_rowgroup_metadata(
   const std::vector<std::unique_ptr<std::vector<uint8_t>>> &metadata_list)

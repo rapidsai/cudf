@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 
 import dask
-import dask.dataframe as dd
+from dask import dataframe as dd
 
 import cudf
 
@@ -281,9 +281,13 @@ def test_groupby_multiindex_reset_index(npartitions):
     pddf = dd.from_pandas(df.to_pandas(), npartitions=npartitions)
     gr = ddf.groupby(["a", "c"]).agg({"b": ["count"]}).reset_index()
     pr = pddf.groupby(["a", "c"]).agg({"b": ["count"]}).reset_index()
+
+    # CuDF uses "int32" for count. Pandas uses "int64"
+    gr_out = gr.compute().sort_values(by=["a", "c"]).reset_index(drop=True)
+    gr_out[("b", "count")] = gr_out[("b", "count")].astype("int64")
+
     dd.assert_eq(
-        gr.compute().sort_values(by=["a", "c"]).reset_index(drop=True),
-        pr.compute().sort_values(by=["a", "c"]).reset_index(drop=True),
+        gr_out, pr.compute().sort_values(by=["a", "c"]).reset_index(drop=True),
     )
 
 
@@ -423,3 +427,79 @@ def test_groupby_categorical_key():
         .compute()
     )
     dd.assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("as_index", [True, False])
+@pytest.mark.parametrize("split_out", [None, 1, 2])
+@pytest.mark.parametrize("split_every", [False, 4])
+@pytest.mark.parametrize("npartitions", [1, 10])
+def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
+    df = cudf.datasets.randomdata(
+        nrows=150, dtypes={"name": str, "a": int, "b": int, "c": float},
+    )
+    df["a"] = [0, 1, 2] * 50
+    ddf = dask_cudf.from_cudf(df, npartitions)
+    pddf = dd.from_pandas(df.to_pandas(), npartitions)
+
+    agg_dict = {
+        "a": "sum",
+        "b": ["min", "max", "mean"],
+        "c": ["mean", "std", "var"],
+    }
+
+    # Check `sort=True` behavior
+    if split_out == 1:
+        gf = (
+            ddf.groupby(["name", "a"], sort=True, as_index=as_index)
+            .aggregate(agg_dict, split_every=split_every, split_out=split_out,)
+            .compute()
+        )
+        if as_index:
+            # Groupby columns became the index.
+            # Sorting the index should not change anything.
+            dd.assert_eq(gf.index, gf.sort_index().index)
+        else:
+            # Groupby columns are did NOT become the index.
+            # Sorting by these columns should not change anything.
+            sort_cols = [("name", ""), ("a", "")]
+            dd.assert_eq(
+                gf[sort_cols],
+                gf[sort_cols].sort_values(sort_cols),
+                check_index=False,
+            )
+
+    # Full check (`sort=False`)
+    gr = ddf.groupby(["name", "a"], sort=False, as_index=as_index).aggregate(
+        agg_dict, split_every=split_every, split_out=split_out,
+    )
+    pr = pddf.groupby(["name", "a"], sort=False).agg(
+        agg_dict, split_every=split_every, split_out=split_out,
+    )
+
+    # Test `as_index` argument
+    if as_index:
+        # Groupby columns should NOT be in columns
+        assert ("name", "") not in gr.columns and ("a", "") not in gr.columns
+    else:
+        # Groupby columns SHOULD be in columns
+        assert ("name", "") in gr.columns and ("a", "") in gr.columns
+
+    # Check `split_out` argument
+    assert gr.npartitions == (split_out or 1)
+
+    # Compute for easier multiindex handling
+    gf = gr.compute()
+    pf = pr.compute()
+
+    # Reset index and sort by groupby columns
+    if as_index:
+        gf = gf.reset_index(drop=False)
+    sort_cols = [("name", ""), ("a", ""), ("c", "mean")]
+    gf = gf.sort_values(sort_cols).reset_index(drop=True)
+    pf = (
+        pf.reset_index(drop=False)
+        .sort_values(sort_cols)
+        .reset_index(drop=True)
+    )
+
+    dd.assert_eq(gf, pf)

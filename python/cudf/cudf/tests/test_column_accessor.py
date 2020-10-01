@@ -100,16 +100,16 @@ def test_column_size_mismatch():
         _ = ColumnAccessor({"a": [1], "b": [1, 2]})
 
 
-def test_get_by_label_simple():
+def test_select_by_label_simple():
     """
     Test getting a column by label
     """
     ca = ColumnAccessor({"a": [1, 2, 3], "b": [2, 3, 4]})
-    check_ca_equal(ca.get_by_label("a"), ColumnAccessor({"a": [1, 2, 3]}))
-    check_ca_equal(ca.get_by_label("b"), ColumnAccessor({"b": [2, 3, 4]}))
+    check_ca_equal(ca.select_by_label("a"), ColumnAccessor({"a": [1, 2, 3]}))
+    check_ca_equal(ca.select_by_label("b"), ColumnAccessor({"b": [2, 3, 4]}))
 
 
-def test_get_by_label_multiindex():
+def test_select_by_label_multiindex():
     """
     Test getting column(s) by label with MultiIndex
     """
@@ -127,33 +127,33 @@ def test_get_by_label_multiindex():
         {("b", "c"): [1, 2, 3], ("b", "e"): [2, 3, 4], ("d", "e"): [3, 4, 5]},
         multiindex=True,
     )
-    got = ca.get_by_label("a")
+    got = ca.select_by_label("a")
     check_ca_equal(expect, got)
 
     expect = ColumnAccessor({"c": [1, 2, 3], "e": [2, 3, 4]}, multiindex=False)
-    got = ca.get_by_label(("a", "b"))
+    got = ca.select_by_label(("a", "b"))
     check_ca_equal(expect, got)
 
     expect = ColumnAccessor(
         {("b", "c"): [1, 2, 3], ("b", "e"): [2, 3, 4], ("d", "e"): [3, 4, 5]},
         multiindex=True,
     )
-    got = ca.get_by_label("a")
+    got = ca.select_by_label("a")
     check_ca_equal(expect, got)
 
     expect = ColumnAccessor({"c": [1, 2, 3], "e": [2, 3, 4]}, multiindex=False)
-    got = ca.get_by_label(("a", "b"))
+    got = ca.select_by_label(("a", "b"))
     check_ca_equal(expect, got)
 
 
-def test_get_by_label_simple_slice():
+def test_select_by_label_simple_slice():
     ca = ColumnAccessor({"a": [1, 2, 3], "b": [2, 3, 4], "c": [3, 4, 5]})
     expect = ColumnAccessor({"b": [2, 3, 4], "c": [3, 4, 5]})
-    got = ca.get_by_label(slice("b", "c"))
+    got = ca.select_by_label(slice("b", "c"))
     check_ca_equal(expect, got)
 
 
-def test_get_by_label_multiindex_slice():
+def test_select_by_label_multiindex_slice():
     ca = ColumnAccessor(
         {
             ("a", "b", "c"): [1, 2, 3],
@@ -164,7 +164,7 @@ def test_get_by_label_multiindex_slice():
         multiindex=True,
     )  # pandas needs columns to be sorted to do slicing with multiindex
     expect = ca
-    got = ca.get_by_label(slice(None, None))
+    got = ca.select_by_label(slice(None, None))
     check_ca_equal(expect, got)
 
     expect = ColumnAccessor(
@@ -175,29 +175,29 @@ def test_get_by_label_multiindex_slice():
         },
         multiindex=True,
     )
-    got = ca.get_by_label(slice(("a", "b", "e"), ("b", "x", "")))
+    got = ca.select_by_label(slice(("a", "b", "e"), ("b", "x", "")))
     check_ca_equal(expect, got)
 
 
 def test_by_label_list():
     ca = ColumnAccessor({"a": [1, 2, 3], "b": [2, 3, 4], "c": [3, 4, 5]})
     expect = ColumnAccessor({"b": [2, 3, 4], "c": [3, 4, 5]})
-    got = ca.get_by_label(["b", "c"])
+    got = ca.select_by_label(["b", "c"])
     check_ca_equal(expect, got)
 
 
-def test_get_by_index_simple():
+def test_select_by_index_simple():
     """
     Test getting a column by label
     """
     ca = ColumnAccessor({"a": [1, 2, 3], "b": [2, 3, 4]})
-    check_ca_equal(ca.get_by_index(0), ColumnAccessor({"a": [1, 2, 3]}))
-    check_ca_equal(ca.get_by_index(1), ColumnAccessor({"b": [2, 3, 4]}))
-    check_ca_equal(ca.get_by_index([0, 1]), ca)
-    check_ca_equal(ca.get_by_index(slice(0, None)), ca)
+    check_ca_equal(ca.select_by_index(0), ColumnAccessor({"a": [1, 2, 3]}))
+    check_ca_equal(ca.select_by_index(1), ColumnAccessor({"b": [2, 3, 4]}))
+    check_ca_equal(ca.select_by_index([0, 1]), ca)
+    check_ca_equal(ca.select_by_index(slice(0, None)), ca)
 
 
-def test_get_by_index_multiindex():
+def test_select_by_index_multiindex():
     """
     Test getting column(s) by label with MultiIndex
     """
@@ -219,7 +219,7 @@ def test_get_by_index_multiindex():
         },
         multiindex=True,
     )
-    got = ca.get_by_index(slice(0, 3))
+    got = ca.select_by_index(slice(0, 3))
     check_ca_equal(expect, got)
 
     expect = ColumnAccessor(
@@ -230,11 +230,11 @@ def test_get_by_index_multiindex():
         },
         multiindex=True,
     )
-    got = ca.get_by_index([0, 1, 3])
+    got = ca.select_by_index([0, 1, 3])
     check_ca_equal(expect, got)
 
 
-def test_get_by_index_empty():
+def test_select_by_index_empty():
     ca = ColumnAccessor(
         {
             ("a", "b", "c"): [1, 2, 3],
@@ -247,8 +247,8 @@ def test_get_by_index_empty():
     expect = ColumnAccessor(
         {}, multiindex=True, level_names=((None, None, None))
     )
-    got = ca.get_by_index(slice(None, 0))
+    got = ca.select_by_index(slice(None, 0))
     check_ca_equal(expect, got)
 
-    got = ca.get_by_index([])
+    got = ca.select_by_index([])
     check_ca_equal(expect, got)

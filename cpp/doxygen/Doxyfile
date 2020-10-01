@@ -38,7 +38,7 @@ PROJECT_NAME           = "libcudf"
 # could be handy for archiving the generated documentation or if some version
 # control system is used.
 
-PROJECT_NUMBER         = 0.14
+PROJECT_NUMBER         = 0.16
 
 # Using the PROJECT_BRIEF tag one can provide an optional one line description
 # for a project that appears at the top of each page and should give viewer a
@@ -817,7 +817,8 @@ WARN_LOGFILE           =
 INPUT                  = main_page.md \
                          regex.md \
                          unicode.md \
-                         ../include
+                         ../include \
+                         ../libcudf_kafka/include
 
 # This tag can be used to specify the character encoding of the source files
 # that doxygen parses. Internally doxygen uses the UTF-8 encoding. Doxygen uses
@@ -986,7 +987,7 @@ USE_MDFILE_AS_MAINPAGE = main_page.md
 # also VERBATIM_HEADERS is set to NO.
 # The default value is: NO.
 
-SOURCE_BROWSER         = NO
+SOURCE_BROWSER         = YES
 
 # Setting the INLINE_SOURCES tag to YES will include the body of functions,
 # classes and enums directly into the documentation.

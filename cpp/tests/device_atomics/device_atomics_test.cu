@@ -20,9 +20,9 @@
 
 #include <cudf/detail/utilities/device_atomics.cuh>
 
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/timestamp_utilities.cuh>
-#include <tests/utilities/type_lists.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/timestamp_utilities.cuh>
+#include <cudf_test/type_lists.hpp>
 
 template <typename T>
 __global__ void gpu_atomic_test(T* result, T* data, size_t size)
@@ -41,6 +41,22 @@ __global__ void gpu_atomic_test(T* result, T* data, size_t size)
 }
 
 template <typename T, typename BinaryOp>
+constexpr inline bool is_timestamp_sum()
+{
+  return cudf::is_timestamp<T>() && std::is_same<BinaryOp, cudf::DeviceSum>::value;
+}
+// Disable SUM of TIMESTAMP types
+template <typename T,
+          typename BinaryOp,
+          typename std::enable_if_t<is_timestamp_sum<T, BinaryOp>()>* = nullptr>
+__device__ T atomic_op(T* addr, T const& value, BinaryOp op)
+{
+  return {};
+}
+
+template <typename T,
+          typename BinaryOp,
+          typename std::enable_if_t<!is_timestamp_sum<T, BinaryOp>()>* = nullptr>
 __device__ T atomic_op(T* addr, T const& value, BinaryOp op)
 {
   T old_value = *addr;
@@ -84,7 +100,7 @@ typename std::enable_if_t<cudf::is_timestamp<T>(), T> accumulate(std::vector<T> 
   auto ys = std::vector<typename T::rep>(xs.size());
   std::transform(
     xs.begin(), xs.end(), ys.begin(), [](T const& ts) { return ts.time_since_epoch().count(); });
-  return T{std::accumulate(ys.begin(), ys.end(), 0)};
+  return T{typename T::duration{std::accumulate(ys.begin(), ys.end(), 0)}};
 }
 
 template <typename T>
@@ -99,7 +115,7 @@ struct AtomicsTest : public cudf::test::BaseFixture {
     // use transform from std::vector<int> instead.
     std::vector<T> v(vec_size);
     std::transform(v_input.begin(), v_input.end(), v.begin(), [](int x) {
-      T t(x);
+      T t = cudf::test::make_type_param_scalar<T>(x);
       return t;
     });
 
@@ -109,7 +125,7 @@ struct AtomicsTest : public cudf::test::BaseFixture {
     exact[2] = *(std::max_element(v.begin(), v.end()));
 
     std::vector<T> result_init(9);  // +3 padding for int8 tests
-    result_init[0] = T{0};
+    result_init[0] = cudf::test::make_type_param_scalar<T>(0);
     result_init[1] = std::numeric_limits<T>::max();
     result_init[2] = std::numeric_limits<T>::min();
     result_init[3] = result_init[0];
@@ -133,16 +149,20 @@ struct AtomicsTest : public cudf::test::BaseFixture {
     CUDA_TRY(cudaDeviceSynchronize());
     CHECK_CUDA(0);
 
-    EXPECT_EQ(host_result[0], exact[0]) << "atomicAdd test failed";
+    if (!is_timestamp_sum<T, cudf::DeviceSum>()) {
+      EXPECT_EQ(host_result[0], exact[0]) << "atomicAdd test failed";
+    }
     EXPECT_EQ(host_result[1], exact[1]) << "atomicMin test failed";
     EXPECT_EQ(host_result[2], exact[2]) << "atomicMax test failed";
-    EXPECT_EQ(host_result[3], exact[0]) << "atomicAdd test(2) failed";
+    if (!is_timestamp_sum<T, cudf::DeviceSum>()) {
+      EXPECT_EQ(host_result[3], exact[0]) << "atomicAdd test(2) failed";
+    }
     EXPECT_EQ(host_result[4], exact[1]) << "atomicMin test(2) failed";
     EXPECT_EQ(host_result[5], exact[2]) << "atomicMax test(2) failed";
   }
 };
 
-TYPED_TEST_CASE(AtomicsTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_CASE(AtomicsTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 // tests for atomicAdd/Min/Max
 TYPED_TEST(AtomicsTest, atomicOps)

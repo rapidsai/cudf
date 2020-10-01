@@ -18,9 +18,9 @@
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
 #include "./utilities.h"
 
 #include <vector>
@@ -59,7 +59,7 @@ TEST_F(StringsReplaceTest, Replace)
       h_expected.begin(),
       h_expected.end(),
       thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     // only remove the first occurrence of 'the '
@@ -76,7 +76,7 @@ TEST_F(StringsReplaceTest, Replace)
       h_expected.begin(),
       h_expected.end(),
       thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
 
@@ -98,7 +98,7 @@ TEST_F(StringsReplaceTest, ReplaceSlice)
       h_expected.begin(),
       h_expected.end(),
       thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     auto results = cudf::strings::replace_slice(strings_view, cudf::string_scalar("||"), 3, 3);
@@ -108,7 +108,7 @@ TEST_F(StringsReplaceTest, ReplaceSlice)
       h_expected.begin(),
       h_expected.end(),
       thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     auto results = cudf::strings::replace_slice(strings_view, cudf::string_scalar("x"), -1, -1);
@@ -118,7 +118,7 @@ TEST_F(StringsReplaceTest, ReplaceSlice)
       h_expected.begin(),
       h_expected.end(),
       thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
 
@@ -171,7 +171,7 @@ TEST_F(StringsReplaceTest, ReplaceMulti)
       h_expected.begin(),
       h_expected.end(),
       thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 
   {
@@ -192,7 +192,7 @@ TEST_F(StringsReplaceTest, ReplaceMulti)
       h_expected.begin(),
       h_expected.end(),
       thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
 
@@ -210,19 +210,20 @@ TEST_F(StringsReplaceTest, ReplaceNulls)
     auto results = cudf::strings::replace_nulls(strings_view, cudf::string_scalar("___"));
     std::vector<const char*> h_expected{"Héllo", "thesé", "___", "ARE THE", "tést strings", ""};
     cudf::test::strings_column_wrapper expected(h_expected.begin(), h_expected.end());
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     auto results = cudf::strings::replace_nulls(strings_view);
     std::vector<const char*> h_expected{"Héllo", "thesé", "", "ARE THE", "tést strings", ""};
     cudf::test::strings_column_wrapper expected(h_expected.begin(), h_expected.end());
-    cudf::test::expect_columns_equal(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
 
 TEST_F(StringsReplaceTest, EmptyStringsColumn)
 {
-  cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+  cudf::column_view zero_size_strings_column(
+    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
   auto results      = cudf::strings::replace(
     strings_view, cudf::string_scalar("not"), cudf::string_scalar("pertinent"));

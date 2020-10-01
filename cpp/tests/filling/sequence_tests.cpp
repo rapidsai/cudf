@@ -16,11 +16,11 @@
 
 #include <cudf/scalar/scalar.hpp>
 
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/cudf_gtest.hpp>
-#include <tests/utilities/type_lists.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/type_lists.hpp>
 
 #include <cudf/filling.hpp>
 
@@ -52,7 +52,7 @@ TYPED_TEST(SequenceTypedTestFixture, Incrementing)
 
   auto result = cudf::sequence(num_els, init, step);
 
-  expect_columns_equal(*result, expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
 }
 
 TYPED_TEST(SequenceTypedTestFixture, Decrementing)
@@ -69,7 +69,7 @@ TYPED_TEST(SequenceTypedTestFixture, Decrementing)
 
   auto result = cudf::sequence(num_els, init, step);
 
-  expect_columns_equal(*result, expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
 }
 
 TYPED_TEST(SequenceTypedTestFixture, EmptyOutput)
@@ -86,7 +86,7 @@ TYPED_TEST(SequenceTypedTestFixture, EmptyOutput)
 
   auto result = cudf::sequence(num_els, init, step);
 
-  expect_columns_equal(*result, expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
 }
 
 TEST_F(SequenceTestFixture, BadTypes)
@@ -99,8 +99,8 @@ TEST_F(SequenceTestFixture, BadTypes)
   numeric_scalar<bool> bool_step(false);
   EXPECT_THROW(cudf::sequence(10, bool_init, bool_step), cudf::logic_error);
 
-  timestamp_scalar<timestamp_s> ts_init(10);
-  timestamp_scalar<timestamp_s> ts_step(10);
+  timestamp_scalar<timestamp_s> ts_init(duration_s{10}, true);
+  timestamp_scalar<timestamp_s> ts_step(duration_s{10}, true);
   EXPECT_THROW(cudf::sequence(10, ts_init, ts_step), cudf::logic_error);
 }
 
@@ -132,5 +132,5 @@ TYPED_TEST(SequenceTypedTestFixture, DefaultStep)
 
   auto result = cudf::sequence(num_els, init);
 
-  expect_columns_equal(*result, expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
 }

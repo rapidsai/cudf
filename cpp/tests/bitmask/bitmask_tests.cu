@@ -18,10 +18,10 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/cudf_gtest.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
 
 #include <thrust/device_ptr.h>
 #include <thrust/device_vector.h>
@@ -412,7 +412,7 @@ TEST_F(CopyBitmaskTest, TestZeroOffset)
 
   cleanEndWord(splice_mask, begin_bit, end_bit);
   auto number_of_bits = end_bit - begin_bit;
-  cudf::test::expect_equal_buffers(
+  CUDF_TEST_EXPECT_EQUAL_BUFFERS(
     gold_splice_mask.data(), splice_mask.data(), number_of_bits / CHAR_BIT);
 }
 
@@ -432,7 +432,7 @@ TEST_F(CopyBitmaskTest, TestNonZeroOffset)
 
   cleanEndWord(splice_mask, begin_bit, end_bit);
   auto number_of_bits = end_bit - begin_bit;
-  cudf::test::expect_equal_buffers(
+  CUDF_TEST_EXPECT_EQUAL_BUFFERS(
     gold_splice_mask.data(), splice_mask.data(), number_of_bits / CHAR_BIT);
 }
 
@@ -467,7 +467,7 @@ TEST_F(CopyBitmaskTest, TestCopyColumnViewVectorContiguous)
   std::vector<cudf::column_view> views    = cudf::slice(original, indices);
   rmm::device_buffer concatenated_bitmask = cudf::concatenate_masks(views);
   cleanEndWord(concatenated_bitmask, 0, num_elements);
-  cudf::test::expect_equal_buffers(
+  CUDF_TEST_EXPECT_EQUAL_BUFFERS(
     concatenated_bitmask.data(), gold_mask.data(), num_elements / CHAR_BIT);
 }
 
@@ -492,7 +492,7 @@ TEST_F(CopyBitmaskTest, TestCopyColumnViewVectorDiscontiguous)
   }
   rmm::device_buffer concatenated_bitmask = cudf::concatenate_masks(views);
   cleanEndWord(concatenated_bitmask, 0, num_elements);
-  cudf::test::expect_equal_buffers(
+  CUDF_TEST_EXPECT_EQUAL_BUFFERS(
     concatenated_bitmask.data(), gold_mask.data(), num_elements / CHAR_BIT);
 }
 

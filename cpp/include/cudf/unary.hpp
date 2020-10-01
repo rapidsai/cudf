@@ -23,6 +23,8 @@ namespace cudf {
 /**
  * @addtogroup transformation_unaryops
  * @{
+ * @file
+ * @brief Column APIs for unary ops
  */
 
 enum class unary_op : int32_t {
@@ -62,35 +64,35 @@ enum class unary_op : int32_t {
 std::unique_ptr<cudf::column> unary_operation(
   cudf::column_view const& input,
   cudf::unary_op op,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Creates a column of `BOOL8` elements where for every element in `input` `true`
+ * @brief Creates a column of `type_id::BOOL8` elements where for every element in `input` `true`
  * indicates the value is null and `false` indicates the value is valid.
  *
  * @param input A `column_view` as input
  * @param mr Device memory resource used to allocate the returned column's device memory
  *
- * @returns A non-nullable column of `BOOL8` elements with `true`
+ * @returns A non-nullable column of `type_id::BOOL8` elements with `true`
  * representing `null` values.
  */
 std::unique_ptr<cudf::column> is_null(
   cudf::column_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Creates a column of `BOOL8` elements where for every element in `input` `true`
+ * @brief Creates a column of `type_id::BOOL8` elements where for every element in `input` `true`
  * indicates the value is valid and `false` indicates the value is null.
  *
  * @param input A `column_view` as input
  * @param mr Device memory resource used to allocate the returned column's device memory
  *
- * @returns A non-nullable column of `BOOL8` elements with `false`
+ * @returns A non-nullable column of `type_id::BOOL8` elements with `false`
  * representing `null` values.
  */
 std::unique_ptr<cudf::column> is_valid(
   cudf::column_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief  Casts data from dtype specified in input to dtype specified in output.
@@ -103,12 +105,13 @@ std::unique_ptr<cudf::column> is_valid(
  * @returns Column of same size as `input` containing result of the cast operation
  * @throw cudf::logic_error if `out_type` is not a fixed-width type
  */
-std::unique_ptr<column> cast(column_view const& input,
-                             data_type out_type,
-                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> cast(
+  column_view const& input,
+  data_type out_type,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Creates a column of `BOOL8` elements indicating the presence of `NaN` values
+ * @brief Creates a column of `type_id::BOOL8` elements indicating the presence of `NaN` values
  * in a column of floating point values.
  * The output element at row `i` is `true` if the element in `input` at row i is `NAN`, else `false`
  *
@@ -117,14 +120,14 @@ std::unique_ptr<column> cast(column_view const& input,
  * @param input A column of floating-point elements
  * @param mr Device memory resource used to allocate the returned column's device memory.
  *
- * @returns A non-nullable column of `BOOL8` elements with `true` representing `NAN` values
+ * @returns A non-nullable column of `type_id::BOOL8` elements with `true` representing `NAN` values
  */
 std::unique_ptr<column> is_nan(
   cudf::column_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Creates a column of `BOOL8` elements indicating the absence of `NaN` values
+ * @brief Creates a column of `type_id::BOOL8` elements indicating the absence of `NaN` values
  * in a column of floating point values.
  * The output element at row `i` is `false` if the element in `input` at row i is `NAN`, else `true`
  *
@@ -133,11 +136,12 @@ std::unique_ptr<column> is_nan(
  * @param input A column of floating-point elements
  * @param mr Device memory resource used to allocate the returned column's device memory.
  *
- * @returns A non-nullable column of `BOOL8` elements with `false` representing `NAN` values
+ * @returns A non-nullable column of `type_id::BOOL8` elements with `false` representing `NAN`
+ * values
  */
 std::unique_ptr<column> is_not_nan(
   cudf::column_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace cudf

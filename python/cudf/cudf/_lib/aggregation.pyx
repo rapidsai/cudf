@@ -8,13 +8,14 @@ import numpy as np
 from libcpp.string cimport string
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
+from libcpp.utility cimport move
 from cudf.utils import cudautils
 
 from cudf._lib.types import np_to_cudf_types, cudf_to_np_types, NullHandling
-from cudf._lib.move cimport move
 from cudf._lib.types cimport (
     underlying_type_t_interpolation,
-    underlying_type_t_null_policy
+    underlying_type_t_null_policy,
+    underlying_type_t_type_id,
 )
 from cudf._lib.types import Interpolation
 
@@ -48,6 +49,7 @@ class AggregationKind(Enum):
     ARGMIN = libcudf_aggregation.aggregation.Kind.ARGMIN
     NUNIQUE = libcudf_aggregation.aggregation.Kind.NUNIQUE
     NTH = libcudf_aggregation.aggregation.Kind.NTH_ELEMENT
+    COLLECT = libcudf_aggregation.aggregation.Kind.COLLECT
     PTX = libcudf_aggregation.aggregation.Kind.PTX
     CUDA = libcudf_aggregation.aggregation.Kind.CUDA
 
@@ -85,7 +87,9 @@ cdef unique_ptr[aggregation] make_aggregation(op, kwargs={}) except *:
     if isinstance(op, str):
         agg = getattr(_AggregationFactory, op)(**kwargs)
     elif callable(op):
-        if "dtype" in kwargs:
+        if op is list:
+            agg = _AggregationFactory.collect()
+        elif "dtype" in kwargs:
             agg = _AggregationFactory.from_udf(op, **kwargs)
         else:
             agg = op(_AggregationFactory)
@@ -123,9 +127,17 @@ cdef class _AggregationFactory:
         return agg
 
     @classmethod
-    def count(cls):
+    def count(cls, dropna=True):
+        cdef libcudf_types.null_policy c_null_handling
+        if dropna:
+            c_null_handling = libcudf_types.null_policy.EXCLUDE
+        else:
+            c_null_handling = libcudf_types.null_policy.INCLUDE
+
         cdef Aggregation agg = Aggregation.__new__(Aggregation)
-        agg.c_obj = move(libcudf_aggregation.make_count_aggregation())
+        agg.c_obj = move(libcudf_aggregation.make_count_aggregation(
+            c_null_handling
+        ))
         return agg
 
     @classmethod
@@ -215,6 +227,12 @@ cdef class _AggregationFactory:
         return agg
 
     @classmethod
+    def collect(cls):
+        cdef Aggregation agg = Aggregation.__new__(Aggregation)
+        agg.c_obj = move(libcudf_aggregation.make_collect_aggregation())
+        return agg
+
+    @classmethod
     def from_udf(cls, op, *args, **kwargs):
         cdef Aggregation agg = Aggregation.__new__(Aggregation)
 
@@ -233,8 +251,13 @@ cdef class _AggregationFactory:
                 "Result of window function has unsupported dtype {}"
                 .format(op[1])
             )
-        tid = np_to_cudf_types[output_np_dtype]
-
+        tid = (
+            <libcudf_types.type_id> (
+                <underlying_type_t_type_id> (
+                    np_to_cudf_types[output_np_dtype]
+                )
+            )
+        )
         out_dtype = libcudf_types.data_type(tid)
 
         agg.c_obj = move(libcudf_aggregation.make_udf_aggregation(

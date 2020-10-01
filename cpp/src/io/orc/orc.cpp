@@ -439,10 +439,10 @@ PBW_END_STRUCT()
 /* ----------------------------------------------------------------------------*/
 
 OrcDecompressor::OrcDecompressor(CompressionKind kind, uint32_t blockSize)
-  : m_kind(kind), m_log2MaxRatio(24), m_blockSize(blockSize), m_decompressor(nullptr)
+  : m_kind(kind), m_blockSize(blockSize)
 {
   if (kind != NONE) {
-    int stream_type;
+    int stream_type = IO_UNCOMP_STREAM_TYPE_INFER;  // Will be treated as invalid
     switch (kind) {
       case ZLIB:
         stream_type    = IO_UNCOMP_STREAM_TYPE_INFLATE;
@@ -455,19 +455,11 @@ OrcDecompressor::OrcDecompressor(CompressionKind kind, uint32_t blockSize)
       case LZO: stream_type = IO_UNCOMP_STREAM_TYPE_LZO; break;
       case LZ4: stream_type = IO_UNCOMP_STREAM_TYPE_LZ4; break;
       case ZSTD: stream_type = IO_UNCOMP_STREAM_TYPE_ZSTD; break;
-      default: stream_type = IO_UNCOMP_STREAM_TYPE_INFER;  // Will be treated as invalid
     }
-    m_decompressor = (stream_type != IO_UNCOMP_STREAM_TYPE_INFER)
-                       ? HostDecompressor::Create(stream_type)
-                       : nullptr;
+    m_decompressor = HostDecompressor::Create(stream_type);
   } else {
     m_log2MaxRatio = 0;
   }
-}
-
-OrcDecompressor::~OrcDecompressor()
-{
-  if (m_decompressor) { delete m_decompressor; }
 }
 
 /* --------------------------------------------------------------------------*/
@@ -489,58 +481,52 @@ const uint8_t *OrcDecompressor::Decompress(const uint8_t *srcBytes, size_t srcLe
     *dstLen = srcLen;
     return srcBytes;
   }
-  *dstLen = 0;
-  if (m_decompressor) {
-    // First, scan the input for the number of blocks and worst-case output size
-    size_t max_dst_length = 0, dst_length;
-    uint32_t num_blocks   = 0;
-    uint8_t *dst;
-    for (size_t i = 0; i + 3 < srcLen;) {
-      uint32_t block_len       = srcBytes[i] | (srcBytes[i + 1] << 8) | (srcBytes[i + 2] << 16);
-      uint32_t is_uncompressed = block_len & 1;
-      i += 3;
-      block_len >>= 1;
-      if (is_uncompressed) {
-        // Uncompressed block
-        max_dst_length += block_len;
-      } else {
-        max_dst_length += m_blockSize;
-      }
-      i += block_len;
-      if (i > srcLen || block_len > m_blockSize) { return nullptr; }
+  // First, scan the input for the number of blocks and worst-case output size
+  size_t max_dst_length = 0;
+  for (size_t i = 0; i + 3 < srcLen;) {
+    uint32_t block_len       = srcBytes[i] | (srcBytes[i + 1] << 8) | (srcBytes[i + 2] << 16);
+    uint32_t is_uncompressed = block_len & 1;
+    i += 3;
+    block_len >>= 1;
+    if (is_uncompressed) {
+      // Uncompressed block
+      max_dst_length += block_len;
+    } else {
+      max_dst_length += m_blockSize;
     }
-    // Check if we have a single uncompressed block, or no blocks
-    if (max_dst_length < m_blockSize) {
-      if (srcLen < 3) {
-        // Total size is less than the 3-byte header
-        return nullptr;
-      }
-      *dstLen = srcLen - 3;
-      return srcBytes + 3;
-    }
-    m_buf.resize(max_dst_length);
-    dst        = m_buf.data();
-    dst_length = 0;
-    for (size_t i = 0; i + 3 < srcLen;) {
-      uint32_t block_len       = srcBytes[i] | (srcBytes[i + 1] << 8) | (srcBytes[i + 2] << 16);
-      uint32_t is_uncompressed = block_len & 1;
-      i += 3;
-      block_len >>= 1;
-      if (is_uncompressed) {
-        // Uncompressed block
-        memcpy(dst + dst_length, srcBytes + i, block_len);
-        dst_length += block_len;
-      } else {
-        // Compressed block
-        dst_length +=
-          m_decompressor->Decompress(dst + dst_length, m_blockSize, srcBytes + i, block_len);
-      }
-      i += block_len;
-    }
-    *dstLen = dst_length;
-    return m_buf.data();
+    i += block_len;
+    if (i > srcLen || block_len > m_blockSize) { return nullptr; }
   }
-  return nullptr;
+  // Check if we have a single uncompressed block, or no blocks
+  if (max_dst_length < m_blockSize) {
+    if (srcLen < 3) {
+      // Total size is less than the 3-byte header
+      return nullptr;
+    }
+    *dstLen = srcLen - 3;
+    return srcBytes + 3;
+  }
+  m_buf.resize(max_dst_length);
+  auto dst          = m_buf.data();
+  size_t dst_length = 0;
+  for (size_t i = 0; i + 3 < srcLen;) {
+    uint32_t block_len       = srcBytes[i] | (srcBytes[i + 1] << 8) | (srcBytes[i + 2] << 16);
+    uint32_t is_uncompressed = block_len & 1;
+    i += 3;
+    block_len >>= 1;
+    if (is_uncompressed) {
+      // Uncompressed block
+      memcpy(dst + dst_length, srcBytes + i, block_len);
+      dst_length += block_len;
+    } else {
+      // Compressed block
+      dst_length +=
+        m_decompressor->Decompress(dst + dst_length, m_blockSize, srcBytes + i, block_len);
+    }
+    i += block_len;
+  }
+  *dstLen = dst_length;
+  return m_buf.data();
 }
 
 }  // namespace orc

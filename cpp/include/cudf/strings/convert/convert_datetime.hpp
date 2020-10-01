@@ -23,6 +23,7 @@ namespace strings {
 /**
  * @addtogroup strings_convert
  * @{
+ * @file
  */
 
 /**
@@ -33,18 +34,18 @@ namespace strings {
  *
  * | Specifier | Description |
  * | :-------: | ----------- |
- * | %%d | Day of the month: 01-31 |
- * | %%m | Month of the year: 01-12 |
- * | %%y | Year without century: 00-99 |
- * | %%Y | Year with century: 0001-9999 |
- * | %%H | 24-hour of the day: 00-23 |
- * | %%I | 12-hour of the day: 01-12 |
- * | %%M | Minute of the hour: 00-59|
- * | %%S | Second of the minute: 00-59 |
- * | %%f | 6-digit microsecond: 000000-999999 |
- * | %%z | UTC offset with format ±HHMM Example +0500 |
- * | %%j | Day of the year: 001-366 |
- * | %%p | Only 'AM', 'PM' or 'am', 'pm' are recognized |
+ * | \%d | Day of the month: 01-31 |
+ * | \%m | Month of the year: 01-12 |
+ * | \%y | Year without century: 00-99 |
+ * | \%Y | Year with century: 0001-9999 |
+ * | \%H | 24-hour of the day: 00-23 |
+ * | \%I | 12-hour of the day: 01-12 |
+ * | \%M | Minute of the hour: 00-59|
+ * | \%S | Second of the minute: 00-59 |
+ * | \%f | 6-digit microsecond: 000000-999999 |
+ * | \%z | UTC offset with format ±HHMM Example +0500 |
+ * | \%j | Day of the year: 001-366 |
+ * | \%p | Only 'AM', 'PM' or 'am', 'pm' are recognized |
  *
  * Other specifiers are not currently supported.
  *
@@ -71,7 +72,7 @@ std::unique_ptr<column> to_timestamps(
   strings_column_view const& strings,
   data_type timestamp_type,
   std::string const& format,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a new strings column converting a timestamp column into
@@ -81,19 +82,19 @@ std::unique_ptr<column> to_timestamps(
  *
  * | Specifier | Description |
  * | :-------: | ----------- |
- * | %%d | Day of the month: 01-31 |
- * | %%m | Month of the year: 01-12 |
- * | %%y | Year without century: 00-99 |
- * | %%Y | Year with century: 0001-9999 |
- * | %%H | 24-hour of the day: 00-23 |
- * | %%I | 12-hour of the day: 01-12 |
- * | %%M | Minute of the hour: 00-59|
- * | %%S | Second of the minute: 00-59 |
- * | %%f | 6-digit microsecond: 000000-999999 |
- * | %%z | Always outputs "+0000" |
- * | %%Z | Always outputs "UTC" |
- * | %%j | Day of the year: 001-366 |
- * | %%p | Only 'AM' or 'PM' |
+ * | \%d | Day of the month: 01-31 |
+ * | \%m | Month of the year: 01-12 |
+ * | \%y | Year without century: 00-99 |
+ * | \%Y | Year with century: 0001-9999 |
+ * | \%H | 24-hour of the day: 00-23 |
+ * | \%I | 12-hour of the day: 01-12 |
+ * | \%M | Minute of the hour: 00-59|
+ * | \%S | Second of the minute: 00-59 |
+ * | \%f | 6-digit microsecond: 000000-999999 |
+ * | \%z | Always outputs "+0000" |
+ * | \%Z | Always outputs "UTC" |
+ * | \%j | Day of the year: 001-366 |
+ * | \%p | Only 'AM' or 'PM' |
  *
  * No checking is done for invalid formats or invalid timestamp values.
  * All timestamps values are formatted to UTC.
@@ -120,7 +121,7 @@ std::unique_ptr<column> to_timestamps(
 std::unique_ptr<column> from_timestamps(
   column_view const& timestamps,
   std::string const& format           = "%Y-%m-%dT%H:%M:%SZ",
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings

@@ -33,14 +33,14 @@ std::unique_ptr<column> decode(dictionary_column_view const& source,
                                rmm::mr::device_memory_resource* mr,
                                cudaStream_t stream)
 {
-  if (source.size() == 0) return make_empty_column(data_type{EMPTY});
+  if (source.size() == 0) return make_empty_column(data_type{type_id::EMPTY});
 
-  column_view indices{cudf::data_type{cudf::INT32},
+  column_view indices{source.indices().type(),
                       source.size(),
-                      source.indices().head<int32_t>(),
-                      nullptr,
+                      source.indices().head(),
+                      nullptr,  // no nulls for gather indices
                       0,
-                      source.offset()};  // no nulls for gather indices
+                      source.offset()};
   // use gather to create the output column -- use ignore_out_of_bounds=true
   auto table_column = cudf::detail::gather(table_view{{source.keys()}},
                                            indices,

@@ -23,16 +23,15 @@
 
 #include <simt/chrono>
 
-/**
- * @file durations.hpp
- * @brief Concrete type definitions for int32_t and int64_t durations in varying resolutions.
- **/
 namespace cudf {
 
 /**
- * @addtogroup duration_classes Duration
+ * @addtogroup timestamp_classes Timestamp
  * @{
+ * @file durations.hpp
+ * @brief Concrete type definitions for int32_t and int64_t durations in varying resolutions.
  */
+
 /**
  * @brief Type alias representing an int32_t duration of days.
  **/

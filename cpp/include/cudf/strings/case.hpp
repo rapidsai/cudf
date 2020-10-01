@@ -23,6 +23,7 @@ namespace strings {
 /**
  * @addtogroup strings_case
  * @{
+ * @file
  */
 
 /**
@@ -40,7 +41,7 @@ namespace strings {
  */
 std::unique_ptr<column> to_lower(
   strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Converts a column of strings to upper case.
@@ -57,7 +58,7 @@ std::unique_ptr<column> to_lower(
  */
 std::unique_ptr<column> to_upper(
   strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a column of strings converting lower case characters to
@@ -75,7 +76,7 @@ std::unique_ptr<column> to_upper(
  */
 std::unique_ptr<column> swapcase(
   strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings

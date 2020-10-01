@@ -22,7 +22,8 @@
 namespace cudf {
 namespace detail {
 /**
- * @brief Creates a column of `BOOL8` elements by applying a predicate to every element between
+ * @brief Creates a column of `type_id::BOOL8` elements by applying a predicate to every element
+ * between
  * [`begin, `end`) `true` indicates the value is satisfies the predicate and `false` indicates it
  * doesn't.
  *
@@ -34,7 +35,7 @@ namespace detail {
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @param stream CUDA stream used for device memory operations and kernel launches.
  *
- * @returns A column of type `BOOL8,` with `true` representing predicate is satisfied.
+ * @returns A column of type `type_id::BOOL8,` with `true` representing predicate is satisfied.
  */
 
 template <typename InputIterator, typename Predicate>
@@ -43,10 +44,11 @@ std::unique_ptr<column> true_if(
   InputIterator end,
   size_type size,
   Predicate p,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
-  auto output = make_numeric_column(data_type(BOOL8), size, mask_state::UNALLOCATED, stream, mr);
+  auto output =
+    make_numeric_column(data_type(type_id::BOOL8), size, mask_state::UNALLOCATED, stream, mr);
   auto output_mutable_view = output->mutable_view();
   auto output_data         = output_mutable_view.data<bool>();
 
@@ -63,7 +65,7 @@ std::unique_ptr<column> true_if(
 std::unique_ptr<cudf::column> unary_operation(
   cudf::column_view const& input,
   cudf::unary_op op,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 /**
@@ -71,10 +73,11 @@ std::unique_ptr<cudf::column> unary_operation(
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> cast(column_view const& input,
-                             data_type type,
-                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                             cudaStream_t stream                 = 0);
+std::unique_ptr<column> cast(
+  column_view const& input,
+  data_type type,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
  * @copydoc cudf::is_nan
@@ -83,7 +86,7 @@ std::unique_ptr<column> cast(column_view const& input,
  */
 std::unique_ptr<column> is_nan(
   cudf::column_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 /**
@@ -93,7 +96,7 @@ std::unique_ptr<column> is_nan(
  */
 std::unique_ptr<column> is_not_nan(
   cudf::column_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 }  // namespace detail

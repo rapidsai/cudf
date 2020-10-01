@@ -1,4 +1,4 @@
-# Copyright (c) 2018-20, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 import csv
 import gzip
@@ -34,6 +34,7 @@ def make_datetime_dataframe(include_non_standard=False):
             "18/10/1990",
             "1/1/1970",
             "2016-04-30T01:02:03.000",
+            "2038-01-19 03:14:07",
         ]
     )
     df["col2"] = np.array(
@@ -44,6 +45,7 @@ def make_datetime_dataframe(include_non_standard=False):
             "16/09/2005",
             "2/2/1970",
             "2007-4-30 1:6:40.000PM",
+            "2038-01-19 03:14:08",
         ]
     )
     if include_non_standard:
@@ -56,6 +58,7 @@ def make_datetime_dataframe(include_non_standard=False):
                 "31-01-2000",
                 "1-1-1996",
                 "15-May-2009",
+                "21-Dec-3262",
             ]
         )
     return df
@@ -125,6 +128,46 @@ def make_all_numeric_dataframe():
     )
 
 
+def make_all_numeric_extremes_dataframe():
+    # integers 0,+1,-1,min,max
+    # float 0.0, -0.0,+1,-1,min,max, nan, esp, espneg, tiny, [-ve values]
+    df, gdf_dtypes, pdf_dtypes = make_all_numeric_dataframe()
+    df = pd.DataFrame()
+
+    for gdf_dtype in gdf_dtypes:
+        np_type = pdf_dtypes[gdf_dtype]
+        if np.issubdtype(np_type, np.integer):
+            itype = np.iinfo(np_type)
+            extremes = [0, +1, -1, itype.min, itype.max]
+            df[gdf_dtype] = np.array(extremes * 4, dtype=np_type)[:20]
+        else:
+            ftype = np.finfo(np_type)
+            extremes = [
+                0.0,
+                -0.0,
+                +1,
+                -1,
+                np.nan,
+                -np.nan,
+                # ftype.min, # TODO enable after fixing truncation issue #6235
+                # ftype.max, # TODO enable after fixing truncation issue #6235
+                np_type(np.inf),
+                -np_type(np.inf),
+                ftype.eps,
+                ftype.epsneg,
+                ftype.tiny,
+                -ftype.eps,
+                -ftype.epsneg,
+                -ftype.tiny,
+            ]
+            df[gdf_dtype] = np.array(extremes * 4, dtype=np_type)[:20]
+    return (
+        df,
+        gdf_dtypes,
+        pdf_dtypes,
+    )
+
+
 @pytest.fixture
 def path_or_buf(tmpdir):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_path_or_buf.csv")
@@ -168,7 +211,7 @@ def test_csv_reader_numeric_data(dtype, nelem, tmpdir):
     out = read_csv(str(fname), names=list(df.columns.values), dtype=dtypes)
 
     assert len(out.columns) == len(df.columns)
-    pd.util.testing.assert_frame_equal(df, out.to_pandas())
+    assert_eq(df, out)
 
 
 @pytest.mark.parametrize("parse_dates", [["date2"], [0], ["date1", 1, "bad"]])
@@ -273,6 +316,21 @@ def test_csv_reader_dtype_dict(use_names):
     assert_eq(gdf, pdf)
 
 
+@pytest.mark.parametrize("use_names", [True])
+def test_csv_reader_dtype_extremes(use_names):
+    # Save with the column header if not explicitly specifying a list of names
+    df, gdf_dtypes, pdf_dtypes = make_all_numeric_extremes_dataframe()
+    buffer = df.to_csv(index=False, header=(not use_names))
+
+    gdf_names = list(gdf_dtypes.keys()) if use_names else None
+    pdf_names = list(pdf_dtypes.keys()) if use_names else None
+
+    gdf = read_csv(StringIO(buffer), dtype=gdf_dtypes, names=gdf_names)
+    pdf = pd.read_csv(StringIO(buffer), dtype=pdf_dtypes, names=pdf_names)
+
+    assert_eq(gdf, pdf)
+
+
 def test_csv_reader_skiprows_skipfooter(tmpdir):
 
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file5.csv")
@@ -303,7 +361,7 @@ def test_csv_reader_skiprows_skipfooter(tmpdir):
 
     assert len(out.columns) == len(df_out.columns)
     assert len(out) == len(df_out)
-    pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
+    assert_eq(df_out, out)
 
 
 def test_csv_reader_negative_vals(tmpdir):
@@ -402,9 +460,7 @@ def test_csv_reader_usecols_int_char(tmpdir):
 
     assert len(out.columns) == len(df_out.columns)
     assert len(out) == len(df_out)
-    pd.util.testing.assert_frame_equal(
-        df_out, out.to_pandas(), check_names=False
-    )
+    assert_eq(df_out, out, check_names=False)
 
 
 def test_csv_reader_mangle_dupe_cols(tmpdir):
@@ -413,7 +469,7 @@ def test_csv_reader_mangle_dupe_cols(tmpdir):
     # Default: mangle_dupe_cols=True
     pd_df = pd.read_csv(StringIO(buffer))
     cu_df = read_csv(StringIO(buffer))
-    pd.util.testing.assert_frame_equal(cu_df.to_pandas(), pd_df)
+    assert_eq(cu_df, pd_df)
 
     # Pandas does not support mangle_dupe_cols=False
     cu_df = read_csv(StringIO(buffer), mangle_dupe_cols=False)
@@ -495,7 +551,7 @@ def test_csv_reader_NaN_values():
         na_values=custom_na_values,
     )
     assert df_int8.dtypes[0] == "int8"
-    assert all(val is None for val in df_int8["0"])
+    assert all(df_int8["0"][idx] is None for idx in range(len(df_int8["0"])))
 
     # data type detection should evaluate the column to object;
     # for data type detection, cells need to be completely empty,
@@ -657,7 +713,7 @@ def test_csv_reader_bools(tmpdir, names, dtypes, data, trues, falses):
         false_values=falses,
     )
 
-    pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
+    assert_eq(df_out, out)
 
 
 def test_csv_quotednumbers(tmpdir):
@@ -967,6 +1023,20 @@ def test_csv_reader_byte_range(tmpdir, segment_bytes):
     assert list(df["int2"]) == list(ref_df["int2"])
 
 
+def test_csv_reader_byte_range_type_corner_case(tmpdir):
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file17.csv")
+
+    cudf.datasets.timeseries(
+        start="2000-01-01",
+        end="2000-01-02",
+        dtypes={"name": str, "id": int, "x": float, "y": float},
+    ).to_csv(fname, chunksize=100000)
+
+    byte_range = (2_147_483_648, 0)
+    with pytest.raises(RuntimeError, match="Offset is past end of file"):
+        cudf.read_csv(fname, byte_range=byte_range, header=None)
+
+
 @pytest.mark.parametrize("segment_bytes", [10, 19, 31, 36])
 def test_csv_reader_byte_range_strings(segment_bytes):
     names = ["strings"]
@@ -1056,7 +1126,7 @@ def test_csv_reader_delim_whitespace():
     # with header row
     cu_df = read_csv(StringIO(buffer), delim_whitespace=True)
     pd_df = pd.read_csv(StringIO(buffer), delim_whitespace=True)
-    pd.util.testing.assert_frame_equal(pd_df, cu_df.to_pandas())
+    assert_eq(pd_df, cu_df)
 
     # without header row
     cu_df = read_csv(StringIO(buffer), delim_whitespace=True, header=None)
@@ -1087,7 +1157,7 @@ def test_csv_reader_header_quotation():
     cu_df = read_csv(StringIO(buffer))
     pd_df = pd.read_csv(StringIO(buffer))
     assert cu_df.shape == (1, 3)
-    pd.util.testing.assert_frame_equal(pd_df, cu_df.to_pandas())
+    assert_eq(pd_df, cu_df)
 
     # test cases that fail with pandas
     buffer_pd_fail = '"1,one," , ",2,two" ,3\n4,5,6'
@@ -1112,19 +1182,24 @@ def test_csv_reader_index_col():
     # using a column name
     cu_df = read_csv(StringIO(buffer), names=names, index_col="int1")
     pd_df = pd.read_csv(StringIO(buffer), names=names, index_col="int1")
-    pd.util.testing.assert_frame_equal(pd_df, cu_df.to_pandas())
+    assert_eq(pd_df, cu_df)
 
     # using a column index
     cu_df = read_csv(StringIO(buffer), header=None, index_col=0)
     pd_df = pd.read_csv(StringIO(buffer), header=None, index_col=0)
-    for cu_idx, pd_idx in zip(cu_df.index, pd_df.index):
-        assert str(cu_idx) == str(pd_idx)
+    assert_eq(cu_df.index, pd_df.index)
+
+    # using a column index with names
+    cu_df = read_csv(StringIO(buffer), header=None, index_col=0, names=names)
+    pd_df = pd.read_csv(
+        StringIO(buffer), header=None, index_col=0, names=names
+    )
+    assert_eq(cu_df.index, pd_df.index)
 
     # passing False to avoid using a column as index (no-op in cuDF)
     cu_df = read_csv(StringIO(buffer), header=None, index_col=False)
     pd_df = pd.read_csv(StringIO(buffer), header=None, index_col=False)
-    for cu_idx, pd_idx in zip(cu_df.index, pd_df.index):
-        assert str(cu_idx) == str(pd_idx)
+    assert_eq(cu_df.index, pd_df.index)
 
 
 @pytest.mark.parametrize(
@@ -1336,7 +1411,7 @@ def test_csv_writer_file_handle(tmpdir):
 
     gdf_df_fname = tmpdir.join("gdf_df_1.csv")
     with open(gdf_df_fname, "w") as f:
-        gdf.to_csv(path=f, index=False)
+        gdf.to_csv(path_or_buf=f, index=False)
     assert os.path.exists(gdf_df_fname)
 
     gdf2 = pd.read_csv(gdf_df_fname)
@@ -1379,8 +1454,8 @@ def test_csv_writer_numeric_data(dtype, nelem, tmpdir):
 
     df = make_numeric_dataframe(nelem, dtype)
     gdf = cudf.from_pandas(df)
-    df.to_csv(pdf_df_fname, index=False, line_terminator="\n")
-    gdf.to_csv(path=gdf_df_fname, index=False)
+    df.to_csv(path_or_buf=pdf_df_fname, index=False, line_terminator="\n")
+    gdf.to_csv(path_or_buf=gdf_df_fname, index=False)
 
     assert os.path.exists(pdf_df_fname)
     assert os.path.exists(gdf_df_fname)
@@ -1396,8 +1471,8 @@ def test_csv_writer_datetime_data(tmpdir):
 
     df = make_datetime_dataframe()
     gdf = cudf.from_pandas(df)
-    df.to_csv(pdf_df_fname, index=False, line_terminator="\n")
-    gdf.to_csv(path=gdf_df_fname, index=False)
+    df.to_csv(path_or_buf=pdf_df_fname, index=False, line_terminator="\n")
+    gdf.to_csv(path_or_buf=gdf_df_fname, index=False)
 
     assert os.path.exists(pdf_df_fname)
     assert os.path.exists(gdf_df_fname)
@@ -1444,7 +1519,7 @@ def test_csv_writer_mixed_data(
     df["Date"] = df["Date"].astype("datetime64")
     gdf = cudf.from_pandas(df)
     df.to_csv(
-        pdf_df_fname,
+        path_or_buf=pdf_df_fname,
         index=index,
         sep=sep,
         columns=columns,
@@ -1455,7 +1530,7 @@ def test_csv_writer_mixed_data(
         escapechar="\\",
     )
     gdf.to_csv(
-        path=gdf_df_fname,
+        path_or_buf=gdf_df_fname,
         index=index,
         sep=sep,
         columns=columns,
@@ -1520,13 +1595,52 @@ def test_csv_writer_chunksize(chunksize, tmpdir):
     assert_eq(expect, got)
 
 
-def test_to_csv_empty_filename():
-    df = cudf.DataFrame({"vals": [1, 2, 3]})
+@pytest.mark.parametrize(
+    "df",
+    [
+        cudf.DataFrame({"vals": [1, 2, 3]}),
+        cudf.DataFrame(
+            {"vals1": [1, 2, 3], "vals2": ["hello", "rapids", "cudf"]}
+        ),
+        cudf.DataFrame(
+            {"vals1": [None, 2.0, 3.0], "vals2": ["hello", "rapids", None]}
+        ),
+    ],
+)
+def test_to_csv_empty_filename(df):
+    pdf = df.to_pandas()
 
-    exception = pytest.raises(ValueError, match="path/filename not provided")
+    actual = df.to_csv()
+    expected = pdf.to_csv()
 
-    with exception:
-        df.to_csv()
+    assert actual == expected
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        cudf.DataFrame({"vals": [1, 2, 3]}),
+        cudf.DataFrame(
+            {"vals1": [1, 2, 3], "vals2": ["hello", "rapids", "cudf"]}
+        ),
+        cudf.DataFrame(
+            {"vals1": [None, 2.0, 3.0], "vals2": ["hello", "rapids", None]}
+        ),
+    ],
+)
+def test_to_csv_StringIO(df):
+    cudf_io = StringIO()
+    pandas_io = StringIO()
+
+    pdf = df.to_pandas()
+
+    df.to_csv(cudf_io)
+    pdf.to_csv(pandas_io)
+
+    cudf_io.seek(0)
+    pandas_io.seek(0)
+
+    assert cudf_io.read() == pandas_io.read()
 
 
 def test_csv_writer_empty_dataframe(tmpdir):
@@ -1542,3 +1656,16 @@ def test_csv_writer_empty_dataframe(tmpdir):
 
     assert df.shape == (0, 2)
     assert all(df.dtypes == ["object", "object"])
+
+
+def test_csv_write_chunksize_corner_case(tmpdir):
+    # With this num of rows and chunksize
+    # libcudf splits table such a way that it
+    # will end up creating an empty table slice
+    # which caused the issue 5588.
+    df_fname = tmpdir.join("gdf_df_17.csv")
+    df = cudf.DataFrame({"a": np.arange(10_000)})
+    df.to_csv(df_fname, chunksize=1000, index=False)
+    got = cudf.read_csv(df_fname)
+
+    assert_eq(df, got)

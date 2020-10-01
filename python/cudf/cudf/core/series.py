@@ -1,21 +1,26 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 import pickle
 import warnings
+from collections import abc as abc
 from numbers import Number
+from shutil import get_terminal_size
+from uuid import uuid4
 
 import cupy
 import numpy as np
 import pandas as pd
+from pandas._config import get_option
 from pandas.api.types import is_dict_like
 
 import cudf
-import cudf._lib as libcudf
+from cudf import _lib as libcudf
 from cudf._lib.nvtx import annotate
 from cudf._lib.transform import bools_to_mask
 from cudf.core.abc import Serializable
 from cudf.core.column import (
     ColumnBase,
     DatetimeColumn,
+    TimeDeltaColumn,
     as_column,
     column,
     column_empty_like,
@@ -23,23 +28,25 @@ from cudf.core.column import (
 from cudf.core.column.categorical import (
     CategoricalAccessor as CategoricalAccessor,
 )
-from cudf.core.column.string import StringMethods as StringMethods
+from cudf.core.column.lists import ListMethods
+from cudf.core.column.string import StringMethods
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.groupby.groupby import SeriesGroupBy
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.core.window import Rolling
-from cudf.utils import cudautils, ioutils, utils
+from cudf.utils import cudautils, docutils, ioutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     can_convert_to_column,
-    is_categorical_dtype,
-    is_datetime_dtype,
+    is_list_dtype,
     is_list_like,
+    is_mixed_with_object_dtype,
     is_scalar,
     is_string_dtype,
     min_scalar_type,
+    numeric_normalize_types,
 )
 
 
@@ -56,9 +63,7 @@ class Series(Frame, Serializable):
 
     @property
     def _constructor_expanddim(self):
-        from cudf import DataFrame
-
-        return DataFrame
+        return cudf.DataFrame
 
     @classmethod
     def from_categorical(cls, categorical, codes=None):
@@ -66,9 +71,9 @@ class Series(Frame, Serializable):
 
         If ``codes`` is defined, use it instead of ``categorical.codes``
         """
-        from cudf.core.column.categorical import pandas_categorical_as_column
-
-        col = pandas_categorical_as_column(categorical, codes=codes)
+        col = cudf.core.column.categorical.pandas_categorical_as_column(
+            categorical, codes=codes
+        )
         return Series(data=col)
 
     @classmethod
@@ -108,9 +113,10 @@ class Series(Frame, Serializable):
         automatically exclude missing data (currently represented
         as null/NaN).
 
-        Operations between Series (+, -, /, , *) align values based on their
-        associated index values– they need not be the same length. The
-        result index will be the sorted union of the two indexes.
+        Operations between Series (`+`, `-`, `/`, `*`, `**`) align
+        values based on their associated index values-– they need
+        not be the same length. The result index will be the
+        sorted union of the two indexes.
 
         ``Series`` objects are used as columns of ``DataFrame``.
 
@@ -142,8 +148,6 @@ class Series(Frame, Serializable):
             if name is None:
                 name = data.name
             if isinstance(data.index, pd.MultiIndex):
-                import cudf
-
                 index = cudf.from_pandas(data.index)
             else:
                 index = as_index(data.index)
@@ -166,11 +170,25 @@ class Series(Frame, Serializable):
             if dtype is not None:
                 data = data.astype(dtype)
 
+        if isinstance(data, dict):
+            index = data.keys()
+            data = column.as_column(
+                data.values(), nan_as_null=nan_as_null, dtype=dtype
+            )
+
         if data is None:
-            data = {}
+            if index is not None:
+                data = column.column_empty(
+                    row_count=len(index), dtype=None, masked=True
+                )
+            else:
+                data = {}
 
         if not isinstance(data, column.ColumnBase):
             data = column.as_column(data, nan_as_null=nan_as_null, dtype=dtype)
+        else:
+            if dtype is not None:
+                data = data.astype(dtype)
 
         if index is not None and not isinstance(index, Index):
             index = as_index(index)
@@ -262,19 +280,7 @@ class Series(Frame, Serializable):
         >>> type(ser.values)
         <class 'cupy.core.core.ndarray'>
         """
-
-        if is_categorical_dtype(self.dtype) or np.issubdtype(
-            self.dtype, np.dtype("object")
-        ):
-            raise TypeError("Data must be numeric")
-
-        if len(self) == 0:
-            return cupy.asarray([], dtype=self.dtype)
-
-        if self.has_nulls:
-            raise ValueError("Column must have no nulls.")
-
-        return cupy.asarray(self._column.data_array_view)
+        return self._column.values
 
     @property
     def values_host(self):
@@ -294,49 +300,10 @@ class Series(Frame, Serializable):
         >>> ser = cudf.Series([1, -10, 100, 20])
         >>> ser.values_host
         array([  1, -10, 100,  20])
-        >>> type(ser.values)
+        >>> type(ser.values_host)
         <class 'numpy.ndarray'>
         """
-        if self.dtype == np.dtype("object"):
-            return self._column.to_array()
-        elif is_categorical_dtype(self.dtype):
-            return self._column.to_pandas().values
-        else:
-            return self._column.data_array_view.copy_to_host()
-
-    @classmethod
-    def from_arrow(cls, s):
-        """Convert from a PyArrow Array.
-
-        Parameters
-        ----------
-        s : PyArrow Object
-            PyArrow Object which has to be converted to cudf Series.
-
-        Raises
-        ------
-        TypeError for invalid input type.
-
-        Examples
-        --------
-        >>> import pyarrow as pa
-        >>> import cudf
-        >>> import pyarrow as pa
-        >>> data = pa.array([1, 2, 3])
-        >>> data
-        <pyarrow.lib.Int64Array object at 0x7f67007e07c0>
-        [
-        1,
-        2,
-        3
-        ]
-        >>> cudf.Series.from_arrow(data)
-        0    1
-        1    2
-        2    3
-        dtype: int64
-        """
-        return cls(s)
+        return self._column.values_host
 
     def serialize(self):
         header = {}
@@ -379,6 +346,8 @@ class Series(Frame, Serializable):
         """
         if isinstance(self._column, DatetimeColumn):
             return DatetimeProperties(self)
+        elif isinstance(self._column, TimeDeltaColumn):
+            return TimedeltaProperties(self)
         else:
             raise AttributeError(
                 "Can only use .dt accessor with datetimelike values"
@@ -403,7 +372,6 @@ class Series(Frame, Serializable):
 
     @classmethod
     def deserialize(cls, header, frames):
-
         index_nframes = header["index_frame_count"]
         idx_typ = pickle.loads(header["index"]["type-serialized"])
         index = idx_typ.deserialize(header["index"], frames[:index_nframes])
@@ -427,6 +395,59 @@ class Series(Frame, Serializable):
         cls = type(self)
         params.update(kwargs)
         return cls(**params)
+
+    @classmethod
+    def from_arrow(cls, array):
+        """
+        Convert from PyArrow Array/ChunkedArray to Series.
+
+        Parameters
+        ----------
+        array : PyArrow Array/ChunkedArray
+            PyArrow Object which has to be converted to cudf Series.
+
+        Raises
+        ------
+        TypeError for invalid input type.
+
+        Returns
+        -------
+        cudf Series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pyarrow as pa
+        >>> cudf.Series.from_arrow(pa.array(["a", "b", None]))
+        0       a
+        1       b
+        2    <NA>
+        dtype: object
+        """
+
+        return cls(cudf.core.column.ColumnBase.from_arrow(array))
+
+    def to_arrow(self):
+        """
+        Convert Series to a PyArrow Array.
+
+        Returns
+        -------
+        PyArrow Array
+
+        Examples
+        --------
+        >>> import cudf
+        >>> sr = cudf.Series(["a", "b", None])
+        >>> sr.to_arrow()
+        <pyarrow.lib.StringArray object at 0x7f796b0e7600>
+        [
+          "a",
+          "b",
+          null
+        ]
+        """
+        return self._column.to_arrow()
 
     def copy(self, deep=True):
         """
@@ -506,45 +527,103 @@ class Series(Frame, Serializable):
         """
         result = self._copy_construct()
         if deep:
-            result._column = self._column.copy(deep)
-            result.index = self.index.copy(deep)
+            result._column = self._column.copy(deep=deep)
+            result.index = self.index.copy(deep=deep)
         return result
 
     def __copy__(self, deep=True):
         return self.copy(deep)
 
-    def __deepcopy__(self):
+    def __deepcopy__(self, memo=None):
+        if memo is None:
+            memo = {}
         return self.copy()
 
-    def append(self, other, ignore_index=False):
+    def append(self, to_append, ignore_index=False, verify_integrity=False):
         """Append values from another ``Series`` or array-like object.
         If ``ignore_index=True``, the index is reset.
 
         Parameters
         ----------
-        other : ``Series`` or array-like object
-        ignore_index : boolean, default False. If true, the index is reset.
+        to_append : Series or list/tuple of Series
+            Series to append with self.
+        ignore_index : boolean, default False.
+            If True, do not use the index.
+        verify_integrity : bool, default False
+            This Parameter is currently not supported.
 
         Returns
         -------
-        A new Series equivalent to self concatenated with other
+        Series
+            A new concatenated series
+
+        See Also
+        --------
+        cudf.concat : General function to concatenate DataFrame or
+            Series objects.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s1 = cudf.Series([1, 2, 3])
+        >>> s2 = cudf.Series([4, 5, 6])
+        >>> s1
+        0    1
+        1    2
+        2    3
+        dtype: int64
+        >>> s2
+        0    4
+        1    5
+        2    6
+        dtype: int64
+        >>> s1.append(s2)
+        0    1
+        1    2
+        2    3
+        0    4
+        1    5
+        2    6
+        dtype: int64
+
+        >>> s3 = cudf.Series([4, 5, 6], index=[3, 4, 5])
+        >>> s3
+        3    4
+        4    5
+        5    6
+        dtype: int64
+        >>> s1.append(s3)
+        0    1
+        1    2
+        2    3
+        3    4
+        4    5
+        5    6
+        dtype: int64
+
+        With `ignore_index` set to True:
+
+        >>> s1.append(s2, ignore_index=True)
+        0    1
+        1    2
+        2    3
+        3    4
+        4    5
+        5    6
+        dtype: int64
         """
-        this = self
-        other = Series(other)
+        if verify_integrity not in (None, False):
+            raise NotImplementedError(
+                "verify_integrity parameter is not supported yet."
+            )
 
-        from cudf.core.column import numerical
-        from cudf.utils.dtypes import numeric_normalize_types
-
-        if isinstance(this._column, numerical.NumericalColumn):
-            if self.dtype != other.dtype:
-                this, other = numeric_normalize_types(this, other)
-
-        if ignore_index:
-            index = None
+        if is_list_like(to_append):
+            to_concat = [self]
+            to_concat.extend(to_append)
         else:
-            index = True
+            to_concat = [self, to_append]
 
-        return Series._concat([this, other], index=index)
+        return cudf.concat(to_concat, ignore_index=ignore_index)
 
     def reindex(self, index=None, copy=True):
         """Return a Series that conforms to a new index
@@ -621,8 +700,6 @@ class Series(Frame, Serializable):
             cudf DataFrame
         """
 
-        from cudf import DataFrame
-
         if name is not None:
             col = name
         elif self.name is None:
@@ -630,7 +707,7 @@ class Series(Frame, Serializable):
         else:
             col = self.name
 
-        return DataFrame({col: self._column}, index=self.index)
+        return cudf.DataFrame({col: self._column}, index=self.index)
 
     def set_mask(self, mask, null_count=None):
         """Create new Series by setting a mask array.
@@ -678,7 +755,8 @@ class Series(Frame, Serializable):
 
         See Also
         --------
-        cudf.DataFrame.memory_usage : Bytes consumed by a DataFrame.
+        cudf.core.dataframe.DataFrame.memory_usage : Bytes consumed by
+            a DataFrame.
 
         Examples
         --------
@@ -703,8 +781,6 @@ class Series(Frame, Serializable):
         return len(self._column)
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        import cudf
-
         if method == "__call__" and hasattr(cudf, ufunc.__name__):
             func = getattr(cudf, ufunc.__name__)
             return func(*inputs)
@@ -739,25 +815,25 @@ class Series(Frame, Serializable):
         else:
             return NotImplemented
 
-    @property
-    def empty(self):
-        """
-        Indicator whether Series is empty.
-
-        True if Series is entirely empty (no items).
-
-        Returns
-        -------
-        out : bool
-            If Series is empty, return True, if not return False.
-        """
-        return not len(self)
-
     def __getitem__(self, arg):
         if isinstance(arg, slice):
             return self.iloc[arg]
         else:
             return self.loc[arg]
+
+    def __iter__(self):
+        cudf.utils.utils.raise_iteration_error(obj=self)
+
+    iteritems = __iter__
+
+    items = __iter__
+
+    def to_dict(self, into=dict):
+        raise TypeError(
+            "cuDF does not support conversion to host memory "
+            "via `to_dict()` method. Consider using "
+            "`.to_pandas().to_dict()` to construct a Python dictionary."
+        )
 
     def __setitem__(self, key, value):
         if isinstance(key, slice):
@@ -792,14 +868,14 @@ class Series(Frame, Serializable):
         return out
 
     def tolist(self):
-        """
-        Return a list type from series data.
 
-        Returns
-        -------
-        list
-        """
-        return self.to_arrow().to_pylist()
+        raise TypeError(
+            "cuDF does not support conversion to host memory "
+            "via `tolist()` method. Consider using "
+            "`.to_arrow().to_pylist()` to construct a Python list."
+        )
+
+    to_list = tolist
 
     def head(self, n=5):
         """
@@ -826,7 +902,8 @@ class Series(Frame, Serializable):
 
         Examples
         --------
-        >>> ser = cudf.Series(['alligator', 'bee', 'falcon', 'lion', 'monkey', 'parrot', 'shark', 'whale', 'zebra'])        # noqa E501
+        >>> ser = cudf.Series(['alligator', 'bee', 'falcon',
+        ... 'lion', 'monkey', 'parrot', 'shark', 'whale', 'zebra'])
         >>> ser
         0    alligator
         1          bee
@@ -900,36 +977,60 @@ class Series(Frame, Serializable):
         return self.to_string()
 
     def __repr__(self):
-        mr = pd.options.display.max_rows
-        if len(self) > mr and mr != 0:
-            top = self.head(int(mr / 2 + 1))
-            bottom = self.tail(int(mr / 2 + 1))
-            from cudf import concat
+        width, height = get_terminal_size()
+        max_rows = (
+            height
+            if get_option("display.max_rows") == 0
+            else get_option("display.max_rows")
+        )
 
-            preprocess = concat([top, bottom])
+        if len(self) > max_rows and max_rows != 0:
+            top = self.head(int(max_rows / 2 + 1))
+            bottom = self.tail(int(max_rows / 2 + 1))
+
+            preprocess = cudf.concat([top, bottom])
         else:
-            preprocess = self
+            preprocess = self.copy()
+
+        preprocess.index = preprocess.index._clean_nulls_from_index()
         if (
             preprocess.nullable
-            and not preprocess.dtype == "O"
-            and not is_categorical_dtype(preprocess.dtype)
-            and not is_datetime_dtype(preprocess.dtype)
+            and not isinstance(
+                preprocess._column, cudf.core.column.CategoricalColumn
+            )
+            and not is_list_dtype(preprocess.dtype)
+        ) or isinstance(
+            preprocess._column, cudf.core.column.timedelta.TimeDeltaColumn
         ):
             output = (
-                preprocess.astype("O").fillna("null").to_pandas().__repr__()
+                preprocess.astype("O")
+                .fillna(cudf._NA_REP)
+                .to_pandas()
+                .__repr__()
+            )
+        elif isinstance(
+            preprocess._column, cudf.core.column.CategoricalColumn
+        ):
+            min_rows = (
+                height
+                if get_option("display.max_rows") == 0
+                else get_option("display.min_rows")
+            )
+            show_dimensions = get_option("display.show_dimensions")
+            output = preprocess.to_pandas().to_string(
+                name=self.name,
+                dtype=self.dtype,
+                min_rows=min_rows,
+                max_rows=max_rows,
+                length=show_dimensions,
+                na_rep=cudf._NA_REP,
             )
         else:
             output = preprocess.to_pandas().__repr__()
+
         lines = output.split("\n")
-        if is_categorical_dtype(preprocess.dtype):
-            for idx, value in enumerate(preprocess):
-                if value is None:
-                    lines[idx] = lines[idx].replace(" NaN", "null")
-        if is_datetime_dtype(preprocess.dtype):
-            for idx, value in enumerate(preprocess):
-                if value is None:
-                    lines[idx] = lines[idx].replace(" NaT", "null")
-        if is_categorical_dtype(preprocess.dtype):
+
+        if isinstance(preprocess._column, cudf.core.column.CategoricalColumn):
             category_memory = lines[-1]
             lines = lines[:-1]
         if len(lines) > 1:
@@ -950,7 +1051,7 @@ class Series(Frame, Serializable):
         else:
             lines = output.split(",")
             return lines[0] + ", dtype: %s)" % self.dtype
-        if is_categorical_dtype(preprocess.dtype):
+        if isinstance(preprocess._column, cudf.core.column.CategoricalColumn):
             lines.append(category_memory)
         return "\n".join(lines)
 
@@ -963,9 +1064,7 @@ class Series(Frame, Serializable):
 
         If ``reflect`` is ``True``, swap the order of the operands.
         """
-        from cudf import DataFrame
-
-        if isinstance(other, DataFrame):
+        if isinstance(other, cudf.DataFrame):
             # TODO: fn is not the same as arg expected by _apply_op
             # e.g. for fn = 'and', _apply_op equivalent is '__and__'
             return other._apply_op(self, fn)
@@ -1216,6 +1315,44 @@ class Series(Frame, Serializable):
         fill_value : None or value
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
+
+        Returns
+        -------
+        Series
+            Result of the arithmetic operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([1, 2, 10, 17])
+        >>> s
+        0     1
+        1     2
+        2    10
+        3    17
+        dtype: int64
+        >>> s.rfloordiv(100)
+        0    100
+        1     50
+        2     10
+        3      5
+        dtype: int64
+        >>> s = cudf.Series([10, 20, None])
+        >>> s
+        0      10
+        1      20
+        2    null
+        dtype: int64
+        >>> s.rfloordiv(200)
+        0      20
+        1      10
+        2    null
+        dtype: int64
+        >>> s.rfloordiv(200, fill_value=2)
+        0     20
+        1     10
+        2    100
+        dtype: int64
         """
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
@@ -1348,42 +1485,6 @@ class Series(Frame, Serializable):
     def __eq__(self, other):
         return self._binaryop(other, "eq")
 
-    def equals(self, other):
-        """
-        Test whether two objects contain the same elements.
-        This function allows two Series or DataFrames to be compared against
-        each other to see if they have the same shape and elements. NaNs in
-        the same location are considered equal. The column headers do not
-        need to have the same type.
-
-        Parameters
-        ----------
-        other : Series or DataFrame
-            The other Series or DataFrame to be compared with the first.
-
-        Returns
-        -------
-        bool
-            True if all elements are the same in both objects, False
-            otherwise.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series([1, 2, 3])
-        >>> other = cudf.Series([1, 2, 3])
-        >>> s.equals(other)
-        True
-        >>> different = cudf.Series([1.5, 2, 3])
-        >>> s.equals(different)
-        False
-        """
-        if self is other:
-            return True
-        if other is None or len(self) != len(other):
-            return False
-        return self._binaryop(other, "eq").min()
-
     def ne(self, other, fill_value=None, axis=0):
         """Not equal to of series and other, element-wise
         (binary operator ne).
@@ -1499,12 +1600,17 @@ class Series(Frame, Serializable):
     @copy_docstring(CategoricalAccessor.__init__)
     @property
     def cat(self):
-        return self._column.cat(parent=self)
+        return CategoricalAccessor(column=self._column, parent=self)
 
     @copy_docstring(StringMethods.__init__)
     @property
     def str(self):
-        return self._column.str(parent=self)
+        return StringMethods(column=self._column, parent=self)
+
+    @copy_docstring(ListMethods.__init__)
+    @property
+    def list(self):
+        return ListMethods(column=self._column, parent=self)
 
     @property
     def dtype(self):
@@ -1515,10 +1621,8 @@ class Series(Frame, Serializable):
     def _concat(cls, objs, axis=0, index=True):
         # Concatenate index if not provided
         if index is True:
-            from cudf.core.multiindex import MultiIndex
-
-            if isinstance(objs[0].index, MultiIndex):
-                index = MultiIndex._concat([o.index for o in objs])
+            if isinstance(objs[0].index, cudf.MultiIndex):
+                index = cudf.MultiIndex._concat([o.index for o in objs])
             else:
                 index = Index._concat([o.index for o in objs])
 
@@ -1527,6 +1631,45 @@ class Series(Frame, Serializable):
             [name] = names
         else:
             name = None
+
+        if len(objs) > 1:
+            dtype_mismatch = False
+            for obj in objs[1:]:
+                if (
+                    obj.null_count == len(obj)
+                    or len(obj) == 0
+                    or isinstance(
+                        obj._column, cudf.core.column.CategoricalColumn
+                    )
+                    or isinstance(
+                        objs[0]._column, cudf.core.column.CategoricalColumn
+                    )
+                ):
+                    continue
+
+                if (
+                    not dtype_mismatch
+                    and (
+                        not isinstance(
+                            objs[0]._column, cudf.core.column.CategoricalColumn
+                        )
+                        and not isinstance(
+                            obj._column, cudf.core.column.CategoricalColumn
+                        )
+                    )
+                    and objs[0].dtype != obj.dtype
+                ):
+                    dtype_mismatch = True
+
+                if is_mixed_with_object_dtype(objs[0], obj):
+                    raise TypeError(
+                        "cudf does not support mixed types, please type-cast "
+                        "both series to same dtypes."
+                    )
+
+            if dtype_mismatch:
+                objs = numeric_normalize_types(*objs)
+
         col = ColumnBase._concat([o._column for o in objs])
         return cls(data=col, index=index, name=name)
 
@@ -1558,63 +1701,116 @@ class Series(Frame, Serializable):
         """
         return self._column.has_nulls
 
-    def dropna(self):
+    def dropna(self, axis=0, inplace=False, how=None):
         """
         Return a Series with null values removed.
+
+        Parameters
+        ----------
+        axis : {0 or ‘index’}, default 0
+            There is only one axis to drop values from.
+        inplace : bool, default False
+            If True, do operation inplace and return None.
+        how : str, optional
+            Not in use. Kept for compatibility.
+
+        Returns
+        -------
+        Series
+            Series with null entries dropped from it.
+
+        See Also
+        --------
+        Series.isna : Indicate null values.
+
+        Series.notna : Indicate non-null values.
+
+        Series.fillna : Replace null values.
+
+        cudf.core.dataframe.DataFrame.dropna : Drop rows or columns which
+            contain null values.
+
+        cudf.core.index.Index.dropna : Drop null indices.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series([1, 2, None])
+        >>> ser
+        0       1
+        1       2
+        2    null
+        dtype: int64
+
+        Drop null values from a Series.
+
+        >>> ser.dropna()
+        0    1
+        1    2
+        dtype: int64
+
+        Keep the Series with valid entries in the same variable.
+
+        >>> ser.dropna(inplace=True)
+        >>> ser
+        0    1
+        1    2
+        dtype: int64
+
+        Empty strings are not considered null values.
+        `None` is considered a null value.
+
+        >>> ser = cudf.Series(['', None, 'abc'])
+        >>> ser
+        0
+        1    None
+        2     abc
+        dtype: object
+        >>> ser.dropna()
+        0
+        2    abc
+        dtype: object
         """
-        return super().dropna(subset=[self.name])
+        if axis not in (0, "index"):
+            raise ValueError(
+                "Series.dropna supports only one axis to drop values from"
+            )
+
+        result = super().dropna(axis=axis)
+
+        return self._mimic_inplace(result, inplace=inplace)
 
     def drop_duplicates(self, keep="first", inplace=False, ignore_index=False):
         """
         Return Series with duplicate values removed
         """
-        result = super().drop_duplicates(
-            subset=[self.name], keep=keep, ignore_index=ignore_index
-        )
+        result = super().drop_duplicates(keep=keep, ignore_index=ignore_index)
 
         return self._mimic_inplace(result, inplace=inplace)
-
-    def _mimic_inplace(self, result, inplace=False):
-        if inplace:
-            self._column._mimic_inplace(result._column, inplace=True)
-            self.index._mimic_inplace(result.index, inplace=True)
-            self._size = len(self._index)
-            self.name = result.name
-        else:
-            return result
 
     def fill(self, fill_value, begin=0, end=-1, inplace=False):
         return self._fill([fill_value], begin, end, inplace)
 
     def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
-        """Fill null values with ``value`` without changing the series' type.
+        if isinstance(value, pd.Series):
+            value = Series.from_pandas(value)
 
-        Parameters
-        ----------
-        value : scalar or Series-like
-            Value to use to fill nulls. If `value`'s dtype differs from the
-            series, the fill value will be cast to the column's dtype before
-            applying the fill. If Series-like, null values are filled with the
-            values in corresponding indices of the given Series.
+        if not (is_scalar(value) or isinstance(value, (abc.Mapping, Series))):
+            raise TypeError(
+                f'"value" parameter must be a scalar, dict '
+                f"or Series, but you passed a "
+                f'"{type(value).__name__}"'
+            )
 
-        Returns
-        -------
-        result : Series
-            Copy with nulls filled.
-        """
-        if method is not None:
-            raise NotImplementedError("The method keyword is not supported")
-        if limit is not None:
-            raise NotImplementedError("The limit keyword is not supported")
-        if axis:
-            raise NotImplementedError("The axis keyword is not supported")
+        if isinstance(value, (abc.Mapping, Series)):
+            value = Series(value)
+            if not self.index.equals(value.index):
+                value = value.reindex(self.index)
+            value = value._column
 
-        data = self._column.fillna(value)
-
-        if inplace:
-            self._column._mimic_inplace(data, inplace=True)
-        else:
-            return self._copy_construct(data=data)
+        return super().fillna(
+            value=value, method=method, axis=axis, inplace=inplace, limit=limit
+        )
 
     def to_array(self, fillna=None):
         """Get a dense numpy array for the data.
@@ -1638,12 +1834,8 @@ class Series(Frame, Serializable):
         """
         Convert nans (if any) to nulls
         """
-        if self.dtype.kind == "f":
-            sr = self.fillna(np.nan)
-            newmask = libcudf.transform.nans_to_nulls(sr._column)
-            return self.set_mask(newmask)
-        else:
-            return self
+        result_col = self._column.nans_to_nulls()
+        return self._copy_construct(data=result_col)
 
     def all(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
         """
@@ -1764,7 +1956,7 @@ class Series(Frame, Serializable):
         """
         return self._column.to_gpu_array(fillna=fillna)
 
-    def to_pandas(self, index=True):
+    def to_pandas(self, index=True, **kwargs):
         """
         Convert to a Pandas Series.
 
@@ -1789,30 +1981,12 @@ class Series(Frame, Serializable):
         >>> type(pds)
         <class 'pandas.core.series.Series'>
         """
+
         if index is True:
             index = self.index.to_pandas()
         s = self._column.to_pandas(index=index)
         s.name = self.name
         return s
-
-    def to_arrow(self):
-        """
-        Convert Series to a PyArrow Array.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([-3, 10, 15, 20])
-        >>> ser.to_arrow()
-        <pyarrow.lib.Int64Array object at 0x7f5e769499f0>
-        [
-        -3,
-        10,
-        15,
-        20
-        ]
-        """
-        return self._column.to_arrow()
 
     @property
     def data(self):
@@ -1837,7 +2011,7 @@ class Series(Frame, Serializable):
 
         See also
         --------
-        cudf.core.dataframe.Dataframe.loc
+        cudf.core.dataframe.DataFrame.loc
         """
         return _SeriesLocIndexer(self)
 
@@ -1848,7 +2022,7 @@ class Series(Frame, Serializable):
 
         See also
         --------
-        cudf.core.dataframe.Dataframe.iloc
+        cudf.core.dataframe.DataFrame.iloc
         """
         return _SeriesIlocIndexer(self)
 
@@ -1867,7 +2041,7 @@ class Series(Frame, Serializable):
         """
         return self._column.as_mask()
 
-    def astype(self, dtype, copy=False, errors="raise", **kwargs):
+    def astype(self, dtype, copy=False, errors="raise"):
         """
         Cast the Series to the given dtype
 
@@ -1884,13 +2058,11 @@ class Series(Frame, Serializable):
             values then may propagate to other cudf objects.
         errors : {'raise', 'ignore', 'warn'}, default 'raise'
             Control raising of exceptions on invalid data for provided dtype.
-
-            -   ``raise`` : allow exceptions to be raised
-            -   ``ignore`` : suppress exceptions. On error return original
-                object.
-            -   ``warn`` : prints last exceptions as warnings and
-                return original object.
-        **kwargs : extra arguments to pass on to the constructor
+            - ``raise`` : allow exceptions to be raised
+            - ``ignore`` : suppress exceptions. On error return original
+            object.
+            - ``warn`` : prints last exceptions as warnings and
+            return original object.
 
         Returns
         -------
@@ -1912,7 +2084,7 @@ class Series(Frame, Serializable):
         if pd.api.types.is_dtype_equal(dtype, self.dtype):
             return self.copy(deep=copy)
         try:
-            data = self._column.astype(dtype, **kwargs)
+            data = self._column.astype(dtype)
 
             return self._copy_construct(
                 data=data.copy(deep=True) if copy else data, index=self.index
@@ -1947,7 +2119,15 @@ class Series(Frame, Serializable):
         inds = self.index.argsort(ascending=ascending)
         return self.take(inds)
 
-    def sort_values(self, ascending=True, na_position="last"):
+    def sort_values(
+        self,
+        axis=0,
+        ascending=True,
+        inplace=False,
+        kind="quicksort",
+        na_position="last",
+        ignore_index=False,
+    ):
         """
         Sort by the values.
 
@@ -1959,6 +2139,8 @@ class Series(Frame, Serializable):
             If True, sort values in ascending order, otherwise descending.
         na_position : {‘first’, ‘last’}, default ‘last’
             'first' puts nulls at the beginning, 'last' puts nulls at the end.
+        ignore_index : bool, default False
+            If True, index will not be sorted.
 
         Returns
         -------
@@ -1980,10 +2162,21 @@ class Series(Frame, Serializable):
         3    4
         1    5
         """
+
+        if inplace:
+            raise NotImplementedError("`inplace` not currently implemented.")
+        if kind != "quicksort":
+            raise NotImplementedError("`kind` not currently implemented.")
+        if axis != 0:
+            raise NotImplementedError("`axis` not currently implemented.")
+
         if len(self) == 0:
             return self
         vals, inds = self._sort(ascending=ascending, na_position=na_position)
-        index = self.index.take(inds)
+        if not ignore_index:
+            index = self.index.take(inds)
+        else:
+            index = self.index
         return vals.set_index(index)
 
     def _n_largest_or_smallest(self, largest, n, keep):
@@ -2087,7 +2280,7 @@ class Series(Frame, Serializable):
     def reverse(self):
         """Reverse the Series
         """
-        rinds = cupy.arange((self._column.size - 1), -1, -1, dtype=np.int32)
+        rinds = column.arange((self._column.size - 1), -1, -1, dtype=np.int32)
         col = self._column[rinds]
         index = self.index._values[rinds]
         return self._copy_construct(data=col, index=index)
@@ -2108,12 +2301,21 @@ class Series(Frame, Serializable):
             A sequence of new series for each category. Its length is
             determined by the length of ``cats``.
         """
-        if hasattr(cats, "to_pandas"):
+        if hasattr(cats, "to_arrow"):
             cats = cats.to_pandas()
         else:
-            cats = pd.Series(cats)
+            cats = pd.Series(cats, dtype="object")
         dtype = np.dtype(dtype)
-        return ((self == cat).fillna(False).astype(dtype) for cat in cats)
+
+        def encode(cat):
+            if cat is None:
+                return self.isnull()
+            elif np.issubdtype(type(cat), np.floating) and np.isnan(cat):
+                return self.__class__(libcudf.unary.is_nan(self._column))
+            else:
+                return (self == cat).fillna(False)
+
+        return [encode(cat).astype(dtype) for cat in cats]
 
     def label_encoding(self, cats, dtype=None, na_sentinel=-1):
         """Perform label encoding
@@ -2121,45 +2323,82 @@ class Series(Frame, Serializable):
         Parameters
         ----------
         values : sequence of input values
-        dtype: numpy.dtype; optional
-               Specifies the output dtype.  If `None` is given, the
-               smallest possible integer dtype (starting with np.int8)
-               is used.
-        na_sentinel : number
+        dtype : numpy.dtype; optional
+            Specifies the output dtype.  If `None` is given, the
+            smallest possible integer dtype (starting with np.int8)
+            is used.
+        na_sentinel : number, default -1
             Value to indicate missing category.
 
         Returns
         -------
         A sequence of encoded labels with value between 0 and n-1 classes(cats)
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([1, 2, 3, 4, 10])
+        >>> s.label_encoding([2, 3])
+        0   -1
+        1    0
+        2    1
+        3   -1
+        4   -1
+        dtype: int8
+
+        `na_sentinel` parameter can be used to
+        control the value when there is no encoding.
+
+        >>> s.label_encoding([2, 3], na_sentinel=10)
+        0    10
+        1     0
+        2     1
+        3    10
+        4    10
+        dtype: int8
+
+        When none of `cats` values exist in s, entire
+        Series will be `na_sentinel`.
+
+        >>> s.label_encoding(['a', 'b', 'c'])
+        0   -1
+        1   -1
+        2   -1
+        3   -1
+        4   -1
+        dtype: int8
         """
-        from cudf import DataFrame
 
-        if dtype is None:
-            dtype = min_scalar_type(len(cats), 8)
-
-        cats = column.as_column(cats)
-        try:
-            # Where there is a type-cast from string to numeric types,
-            # there is a possibility for ValueError when strings
-            # are having non-numeric values, in such cases we have
-            # to catch the exception and return encoded labels
-            # with na_sentinel values as there would be no corresponding
-            # encoded values of cats in self.
-            cats = cats.astype(self.dtype)
-        except ValueError:
+        def _return_sentinel_series():
             return Series(
-                utils.scalar_broadcast_to(
-                    na_sentinel, size=len(self), dtype=dtype
+                cudf.core.column.full(
+                    size=len(self), fill_value=na_sentinel, dtype=dtype
                 ),
                 index=self.index,
                 name=None,
             )
 
-        order = column.as_column(cupy.arange(len(self)))
-        codes = column.as_column(cupy.arange(len(cats), dtype=dtype))
+        if dtype is None:
+            dtype = min_scalar_type(max(len(cats), na_sentinel), 8)
 
-        value = DataFrame({"value": cats, "code": codes})
-        codes = DataFrame(
+        cats = column.as_column(cats)
+        if is_mixed_with_object_dtype(self, cats):
+            return _return_sentinel_series()
+
+        try:
+            # Where there is a type-cast failure, we have
+            # to catch the exception and return encoded labels
+            # with na_sentinel values as there would be no corresponding
+            # encoded values of cats in self.
+            cats = cats.astype(self.dtype)
+        except ValueError:
+            return _return_sentinel_series()
+
+        order = column.arange(len(self))
+        codes = column.arange(len(cats), dtype=dtype)
+
+        value = cudf.DataFrame({"value": cats, "code": codes})
+        codes = cudf.DataFrame(
             {"value": self._data.columns[0].copy(deep=False), "order": order}
         )
 
@@ -2182,11 +2421,26 @@ class Series(Frame, Serializable):
             - *labels* contains the encoded values
             - *cats* contains the categories in order that the N-th
               item corresponds to the (N-1) code.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['a', 'a', 'c'])
+        >>> codes, uniques = s.factorize()
+        >>> codes
+        0    0
+        1    0
+        2    1
+        dtype: int8
+        >>> uniques
+        0    a
+        1    c
+        dtype: object
         """
-        cats = self.unique().astype(self.dtype)
+        cats = self.dropna().unique().astype(self.dtype)
 
         name = self.name  # label_encoding mutates self.name
-        labels = self.label_encoding(cats=cats)
+        labels = self.label_encoding(cats=cats, na_sentinel=na_sentinel)
         self.name = name
 
         return labels, cats
@@ -2301,8 +2555,8 @@ class Series(Frame, Serializable):
         4    105
         dtype: int64
         """
-        if is_string_dtype(self._column.dtype) or is_categorical_dtype(
-            self._column.dtype
+        if is_string_dtype(self._column.dtype) or isinstance(
+            self._column, cudf.core.column.CategoricalColumn
         ):
             raise TypeError(
                 "User defined functions are currently not "
@@ -2392,19 +2646,7 @@ class Series(Frame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        skipna = True if skipna is None else skipna
-
-        if skipna:
-            result_series = self.nans_to_nulls()
-            if result_series.has_nulls:
-                result_series = result_series.dropna()
-        else:
-            if self.has_nulls:
-                return np.nan
-
-            result_series = self
-
-        return result_series._column.min(dtype=dtype)
+        return self._column.min(skipna=skipna, dtype=dtype)
 
     def max(
         self,
@@ -2454,19 +2696,7 @@ class Series(Frame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        skipna = True if skipna is None else skipna
-
-        if skipna:
-            result_series = self.nans_to_nulls()
-            if result_series.has_nulls:
-                result_series = result_series.dropna()
-        else:
-            if self.has_nulls:
-                return np.nan
-
-            result_series = self
-
-        return result_series._column.max(dtype=dtype)
+        return self._column.max(skipna=skipna, dtype=dtype)
 
     def sum(
         self,
@@ -2525,27 +2755,9 @@ class Series(Frame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        skipna = True if skipna is None else skipna
-
-        if skipna:
-            result_series = self.nans_to_nulls()
-            if result_series.has_nulls:
-                result_series = result_series.dropna()
-        else:
-            if self.has_nulls:
-                return np.nan
-
-            result_series = self
-
-        if min_count > 0:
-            valid_count = len(result_series) - result_series.null_count
-            if valid_count < min_count:
-                return np.nan
-        elif min_count < 0:
-            msg = "min_count value cannot be negative({0}), will default to 0."
-            warnings.warn(msg.format(min_count))
-
-        return result_series._column.sum(dtype=dtype)
+        return self._column.sum(
+            skipna=skipna, dtype=dtype, min_count=min_count
+        )
 
     def product(
         self,
@@ -2604,27 +2816,9 @@ class Series(Frame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        skipna = True if skipna is None else skipna
-
-        if skipna:
-            result_series = self.nans_to_nulls()
-            if result_series.has_nulls:
-                result_series = result_series.dropna()
-        else:
-            if self.has_nulls:
-                return np.nan
-
-            result_series = self
-
-        if min_count > 0:
-            valid_count = len(result_series) - result_series.null_count
-            if valid_count < min_count:
-                return np.nan
-        elif min_count < 0:
-            msg = "min_count value cannot be negative({0}), will default to 0."
-            warnings.warn(msg.format(min_count))
-
-        return result_series._column.product(dtype=dtype)
+        return self._column.product(
+            skipna=skipna, dtype=dtype, min_count=min_count
+        )
 
     def prod(
         self,
@@ -2949,19 +3143,7 @@ class Series(Frame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        skipna = True if skipna is None else skipna
-
-        if skipna:
-            result_series = self.nans_to_nulls()
-            if result_series.has_nulls:
-                result_series = result_series.dropna()
-        else:
-            if self.has_nulls:
-                return np.nan
-
-            result_series = self
-
-        return result_series._column.mean()
+        return self._column.mean(skipna=skipna)
 
     def std(
         self,
@@ -2976,7 +3158,7 @@ class Series(Frame, Serializable):
         Return sample standard deviation of the Series.
 
         Normalized by N-1 by default. This can be changed using
-        the ddof argument
+        the `ddof` argument
 
         Parameters
         ----------
@@ -3010,19 +3192,7 @@ class Series(Frame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        skipna = True if skipna is None else skipna
-
-        if skipna:
-            result_series = self.nans_to_nulls()
-            if result_series.has_nulls:
-                result_series = result_series.dropna()
-        else:
-            if self.has_nulls:
-                return np.nan
-
-            result_series = self
-
-        return result_series._column.std(ddof=ddof)
+        return self._column.std(skipna=skipna, ddof=ddof)
 
     def var(
         self,
@@ -3071,30 +3241,127 @@ class Series(Frame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        skipna = True if skipna is None else skipna
-
-        if skipna:
-            result_series = self.nans_to_nulls()
-            if result_series.has_nulls:
-                result_series = result_series.dropna()
-        else:
-            if self.has_nulls:
-                return np.nan
-
-            result_series = self
-
-        return result_series._column.var(ddof=ddof)
+        return self._column.var(skipna=skipna, ddof=ddof)
 
     def sum_of_squares(self, dtype=None):
         return self._column.sum_of_squares(dtype=dtype)
 
-    def median(self, skipna=True):
-        """Compute the median of the series
+    def median(
+        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
+    ):
         """
-        if not skipna and self.has_nulls:
-            return np.nan
-        # enforce linear in case the default ever changes
-        return self.quantile(0.5, interpolation="linear", exact=True)
+        Return the median of the values for the requested axis.
+
+        Parameters
+        ----------
+
+        skipna : bool, default True
+            Exclude NA/null values when computing the result.
+
+        Returns
+        -------
+        scalar
+
+        Notes
+        -----
+        Parameters currently not supported are `axis`, `level` and
+        `numeric_only`
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series([10, 25, 3, 25, 24, 6])
+        >>> ser
+        0    10
+        1    25
+        2     3
+        3    25
+        4    24
+        5     6
+        dtype: int64
+        >>> ser.median()
+        17.0
+        """
+        if axis not in (None, 0):
+            raise NotImplementedError("axis parameter is not implemented yet")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not implemented yet")
+
+        if numeric_only not in (None, True):
+            raise NotImplementedError(
+                "numeric_only parameter is not implemented yet"
+            )
+
+        return self._column.median(skipna=skipna)
+
+    def mode(self, dropna=True):
+        """
+        Return the mode(s) of the dataset.
+
+        Always returns Series even if only one value is returned.
+
+        Parameters
+        ----------
+        dropna : bool, default True
+            Don't consider counts of NA/NaN/NaT.
+
+        Returns
+        -------
+        Series
+            Modes of the Series in sorted order.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([7, 6, 5, 4, 3, 2, 1])
+        >>> series
+        0    7
+        1    6
+        2    5
+        3    4
+        4    3
+        5    2
+        6    1
+        dtype: int64
+        >>> series.mode()
+        0    1
+        1    2
+        2    3
+        3    4
+        4    5
+        5    6
+        6    7
+        dtype: int64
+
+        We can include ``<NA>`` values in mode by
+        passing ``dropna=False``.
+
+        >>> series = cudf.Series([7, 4, 3, 3, 7, None, None])
+        >>> series
+        0       7
+        1       4
+        2       3
+        3       3
+        4       7
+        5    <NA>
+        6    <NA>
+        dtype: int64
+        >>> series.mode()
+        0    3
+        1    7
+        dtype: int64
+        >>> series.mode(dropna=False)
+        0       3
+        1       7
+        2    <NA>
+        dtype: int64
+        """
+        val_counts = self.value_counts(ascending=False, dropna=dropna)
+        if len(val_counts) > 0:
+            val_counts = val_counts[val_counts == val_counts.iloc[0]]
+
+        return Series(val_counts.index.sort_values(), name=self.name)
 
     def round(self, decimals=0):
         """Round a Series to a configurable number of decimal places.
@@ -3141,29 +3408,7 @@ class Series(Frame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        skipna = True if skipna is None else skipna
-
-        if self.empty or (not skipna and self.has_nulls):
-            return np.nan
-
-        self = self.nans_to_nulls().dropna()
-
-        if len(self) < 4:
-            return np.nan
-
-        n = len(self)
-        miu = self.mean()
-        m4_numerator = ((self - miu) ** 4).sum()
-        V = self.var()
-
-        if V == 0:
-            return 0
-
-        term_one_section_one = (n * (n + 1)) / ((n - 1) * (n - 2) * (n - 3))
-        term_one_section_two = m4_numerator / (V ** 2)
-        term_two = ((n - 1) ** 2) / ((n - 2) * (n - 3))
-        kurt = term_one_section_one * term_one_section_two - 3 * term_two
-        return kurt
+        return self._column.kurtosis(skipna=skipna)
 
     # Alias for kurtosis.
     kurt = kurtosis
@@ -3200,27 +3445,7 @@ class Series(Frame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        skipna = True if skipna is None else skipna
-
-        if self.empty or (not skipna and self.has_nulls):
-            return np.nan
-
-        self = self.nans_to_nulls().dropna()
-
-        if len(self) < 3:
-            return np.nan
-
-        n = len(self)
-        miu = self.mean()
-        m3 = ((self - miu) ** 3).sum() / n
-        m2 = self.var(ddof=0)
-
-        if m2 == 0:
-            return 0
-
-        unbiased_coef = ((n * (n - 1)) ** 0.5) / (n - 2)
-        skew = unbiased_coef * m3 / (m2 ** (3 / 2))
-        return skew
+        return self._column.skew(skipna=skipna)
 
     def cov(self, other, min_periods=None):
         """
@@ -3256,19 +3481,14 @@ class Series(Frame, Serializable):
             )
 
         if self.empty or other.empty:
-            return np.nan
+            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
         lhs = self.nans_to_nulls().dropna()
         rhs = other.nans_to_nulls().dropna()
 
         lhs, rhs = _align_indices([lhs, rhs], how="inner")
 
-        if lhs.empty or rhs.empty or (len(lhs) == 1 and len(rhs) == 1):
-            return np.nan
-
-        result = (lhs - lhs.mean()) * (rhs - rhs.mean())
-        cov_sample = result.sum() / (len(lhs) - 1)
-        return cov_sample
+        return lhs._column.cov(rhs._column)
 
     def corr(self, other, method="pearson", min_periods=None):
         """Calculates the sample correlation between two Series,
@@ -3286,21 +3506,13 @@ class Series(Frame, Serializable):
         assert method in ("pearson",) and min_periods in (None,)
 
         if self.empty or other.empty:
-            return np.nan
+            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
         lhs = self.nans_to_nulls().dropna()
         rhs = other.nans_to_nulls().dropna()
         lhs, rhs = _align_indices([lhs, rhs], how="inner")
 
-        if lhs.empty or rhs.empty:
-            return np.nan
-
-        cov = lhs.cov(rhs)
-        lhs_std, rhs_std = lhs.std(), rhs.std()
-
-        if not cov or lhs_std == 0 or rhs_std == 0:
-            return np.nan
-        return cov / lhs_std / rhs_std
+        return lhs._column.corr(rhs._column)
 
     def isin(self, values):
         """Check whether values are contained in Series.
@@ -3345,11 +3557,11 @@ class Series(Frame, Serializable):
         and exact version to be moved to libgdf
         """
         if method != "sort":
-            msg = "non sort based unique_count() not implemented yet"
+            msg = "non sort based distinct_count() not implemented yet"
             raise NotImplementedError(msg)
         if self.null_count == len(self):
             return 0
-        return self._column.unique_count(method, dropna)
+        return self._column.distinct_count(method, dropna)
 
     def value_counts(
         self,
@@ -3368,9 +3580,8 @@ class Series(Frame, Serializable):
         Parameters
         ----------
         normalize : bool, default False
-            If True then the object returned will contain the
-            relative frequencies of the unique values. normalize == True
-            is not supported.
+            If True then the object returned will contain
+            the relative frequencies of the unique values.
 
         sort : bool, default True
             Sort by frequencies.
@@ -3380,46 +3591,99 @@ class Series(Frame, Serializable):
 
         bins : int, optional
             Rather than count values, group them into half-open bins,
-            works with numeric data. Not yet supported.
+            works with numeric data. This Parameter is not yet supported.
 
         dropna : bool, default True
             Don’t include counts of NaN and None.
-            dropna == False is not supported
 
         Returns
         -------
         result : Series contanining counts of unique values.
 
+        See also
+        --------
+        Series.count
+            Number of non-NA elements in a Series.
+
+        cudf.core.dataframe.DataFrame.count
+            Number of non-NA elements in a DataFrame.
+
         Examples
         --------
         >>> import cudf
         >>> sr = cudf.Series([1.0, 2.0, 2.0, 3.0, 3.0, 3.0, None])
+        >>> sr
+        0     1.0
+        1     2.0
+        2     2.0
+        3     3.0
+        4     3.0
+        5     3.0
+        6    <NA>
+        dtype: float64
+        >>> sr.value_counts()
+        3.0    3
+        2.0    2
+        1.0    1
+        dtype: int32
+
+        The order of the counts can be changed by passing ``ascending=True``:
+
         >>> sr.value_counts(ascending=True)
         1.0    1
         2.0    2
         3.0    3
         dtype: int32
+
+        With ``normalize`` set to True, returns the relative frequency
+        by dividing all values by the sum of values.
+
+        >>> sr.value_counts(normalize=True)
+        3.0    0.500000
+        2.0    0.333333
+        1.0    0.166667
+        dtype: float64
+
+        To include ``NA`` value counts, pass ``dropna=False``:
+
+        >>> sr = cudf.Series([1.0, 2.0, 2.0, 3.0, None, 3.0, 3.0, None])
+        >>> sr
+        0     1.0
+        1     2.0
+        2     2.0
+        3     3.0
+        4    <NA>
+        5     3.0
+        6     3.0
+        7    <NA>
+        dtype: float64
+        >>> sr.value_counts(dropna=False)
+        3.0     3
+        2.0     2
+        <NA>    2
+        1.0     1
+        dtype: int32
         """
 
-        if normalize is not False:
-            raise NotImplementedError(
-                "Only normalize == False is currently supported"
-            )
-        if dropna is not True:
-            raise NotImplementedError(
-                "Only dropna == True is currently supported"
-            )
         if bins is not None:
             raise NotImplementedError("bins is not yet supported")
 
-        if self.null_count == len(self):
-            return Series(np.array([], dtype=np.int32), name=self.name)
+        if dropna and self.null_count == len(self):
+            return Series(
+                [],
+                dtype=np.int32,
+                name=self.name,
+                index=cudf.Index([], dtype=self.dtype),
+            )
 
-        res = self.groupby(self).count()
+        res = self.groupby(self, dropna=dropna).count(dropna=dropna)
         res.index.name = None
 
         if sort:
-            return res.sort_values(ascending=ascending)
+            res = res.sort_values(ascending=ascending)
+
+        if normalize:
+            res = res / float(res._column.sum())
         return res
 
     def scale(self):
@@ -3515,81 +3779,37 @@ class Series(Frame, Serializable):
 
         Returns
         -------
-
-        DataFrame
+        float or Series
+            If ``q`` is an array, a Series will be returned where the
+            index is ``q`` and the values are the quantiles, otherwise
+            a float will be returned.
         """
 
-        if isinstance(q, Number) or is_list_like(q):
-            np_array_q = np.asarray(q)
-            if np.logical_or(np_array_q < 0, np_array_q > 1).any():
-                raise ValueError(
-                    "percentiles should all \
-                             be in the interval [0, 1]"
-                )
-
-        # Beyond this point, q either being scalar or list-like
-        # will only have values in range [0, 1]
+        result = self._column.quantile(q, interpolation, exact)
 
         if isinstance(q, Number):
-            res = self._column.quantile(q, interpolation, exact)
-            res = res[0]
-            return np.nan if res is None else res
+            return result
 
-        if not quant_index:
-            return Series(
-                self._column.quantile(q, interpolation, exact), name=self.name
-            )
-        else:
-            from cudf.core.column import column_empty_like
-
-            np_array_q = np.asarray(q)
+        if quant_index:
+            index = np.asarray(q)
             if len(self) == 0:
                 result = column_empty_like(
-                    np_array_q,
-                    dtype=self.dtype,
-                    masked=True,
-                    newsize=len(np_array_q),
+                    index, dtype=self.dtype, masked=True, newsize=len(index),
                 )
-            else:
-                result = self._column.quantile(q, interpolation, exact)
-            return Series(result, index=as_index(np_array_q), name=self.name)
+        else:
+            index = None
 
-    def describe(self, percentiles=None, include=None, exclude=None):
-        """Compute summary statistics of a Series. For numeric
-        data, the output includes the minimum, maximum, mean, median,
-        standard deviation, and various quantiles. For object data, the output
-        includes the count, number of unique values, the most common value, and
-        the number of occurrences of the most common value.
+        return Series(result, index=index, name=self.name)
 
-        Parameters
-        ----------
-        percentiles : list-like, optional
-            The percentiles used to generate the output summary statistics.
-            If None, the default percentiles used are the 25th, 50th and 75th.
-            Values should be within the interval [0, 1].
-
-        Returns
-        -------
-        A DataFrame containing summary statistics of relevant columns from
-        the input DataFrame.
-
-        Examples
-        --------
-        Describing a ``Series`` containing numeric values.
-
-        >>> import cudf
-        >>> s = cudf.Series([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-        >>> print(s.describe())
-           stats   values
-        0  count     10.0
-        1   mean      5.5
-        2    std  3.02765
-        3    min      1.0
-        4    25%      2.5
-        5    50%      5.5
-        6    75%      7.5
-        7    max     10.0
-        """
+    @docutils.doc_describe()
+    def describe(
+        self,
+        percentiles=None,
+        include=None,
+        exclude=None,
+        datetime_is_numeric=False,
+    ):
+        """{docstring}"""
 
         def _prepare_percentiles(percentiles):
             percentiles = list(percentiles)
@@ -3612,9 +3832,9 @@ class Series(Frame, Serializable):
         def _format_stats_values(stats_data):
             return list(map(lambda x: round(x, 6), stats_data))
 
-        def describe_numeric(self):
+        def _describe_numeric(self):
             # mimicking pandas
-            names = (
+            index = (
                 ["count", "mean", "std", "min"]
                 + _format_percentile_names(percentiles)
                 + ["max"]
@@ -3627,13 +3847,90 @@ class Series(Frame, Serializable):
             data = _format_stats_values(data)
 
             return Series(
-                data=data, index=names, nan_as_null=False, name=self.name
+                data=data, index=index, nan_as_null=False, name=self.name,
             )
 
-        def describe_categorical(self):
+        def _describe_timedelta(self):
+            # mimicking pandas
+            index = (
+                ["count", "mean", "std", "min"]
+                + _format_percentile_names(percentiles)
+                + ["max"]
+            )
+
+            data = (
+                [
+                    str(self.count()),
+                    str(self.mean()),
+                    str(self.std()),
+                    str(pd.Timedelta(self.min())),
+                ]
+                + self.quantile(percentiles)
+                .astype("str")
+                .to_array(fillna="pandas")
+                .tolist()
+                + [str(pd.Timedelta(self.max()))]
+            )
+
+            return Series(
+                data=data,
+                index=index,
+                dtype="str",
+                nan_as_null=False,
+                name=self.name,
+            )
+
+        def _describe_categorical(self):
             # blocked by StringColumn/DatetimeColumn support for
             # value_counts/unique
-            pass
+            index = ["count", "unique", "top", "freq"]
+            val_counts = self.value_counts(ascending=False)
+            data = [self.count(), self.unique().size]
+
+            if data[1] > 0:
+                top, freq = val_counts.index[0], val_counts.iloc[0]
+                data += [str(top), freq]
+            # If the DataFrame is empty, set 'top' and 'freq' to None
+            # to maintain output shape consistency
+            else:
+                data += [None, None]
+
+            return Series(
+                data=data,
+                dtype="str",
+                index=index,
+                nan_as_null=False,
+                name=self.name,
+            )
+
+        def _describe_timestamp(self):
+
+            index = (
+                ["count", "mean", "min"]
+                + _format_percentile_names(percentiles)
+                + ["max"]
+            )
+
+            data = (
+                [
+                    str(self.count()),
+                    str(self.mean().to_numpy().astype("datetime64[ns]")),
+                    str(pd.Timestamp(self.min().astype("datetime64[ns]"))),
+                ]
+                + self.quantile(percentiles)
+                .astype("str")
+                .to_array(fillna="pandas")
+                .tolist()
+                + [str(pd.Timestamp((self.max()).astype("datetime64[ns]")))]
+            )
+
+            return Series(
+                data=data,
+                dtype="str",
+                index=index,
+                nan_as_null=False,
+                name=self.name,
+            )
 
         if percentiles is not None:
             percentiles = _prepare_percentiles(percentiles)
@@ -3641,12 +3938,16 @@ class Series(Frame, Serializable):
             # pandas defaults
             percentiles = np.array([0.25, 0.5, 0.75])
 
-        if np.issubdtype(self.dtype, np.number):
-            return describe_numeric(self)
+        if pd.api.types.is_bool_dtype(self.dtype):
+            return _describe_categorical(self)
+        elif isinstance(self._column, cudf.core.column.NumericalColumn):
+            return _describe_numeric(self)
+        elif isinstance(self._column, cudf.core.column.TimeDeltaColumn):
+            return _describe_timedelta(self)
+        elif isinstance(self._column, cudf.core.column.DatetimeColumn):
+            return _describe_timestamp(self)
         else:
-            raise NotImplementedError(
-                "Describing non-numeric columns is not " "yet supported"
-            )
+            return _describe_categorical(self)
 
     def digitize(self, bins, right=False):
         """Return the indices of the bins to which each value in series belongs.
@@ -3666,9 +3967,9 @@ class Series(Frame, Serializable):
         -------
         A new Series containing the indices.
         """
-        from cudf.core.column import numerical
-
-        return Series(numerical.digitize(self._column, bins, right))
+        return Series(
+            cudf.core.column.numerical.digitize(self._column, bins, right)
+        )
 
     def diff(self, periods=1):
         """Calculate the difference between values at positions i and i - N in
@@ -3748,23 +4049,22 @@ class Series(Frame, Serializable):
     @ioutils.doc_to_json()
     def to_json(self, path_or_buf=None, *args, **kwargs):
         """{docstring}"""
-        import cudf.io.json as json
 
-        return json.to_json(self, path_or_buf=path_or_buf, *args, **kwargs)
+        return cudf.io.json.to_json(
+            self, path_or_buf=path_or_buf, *args, **kwargs
+        )
 
     @ioutils.doc_to_hdf()
     def to_hdf(self, path_or_buf, key, *args, **kwargs):
         """{docstring}"""
-        import cudf.io.hdf as hdf
 
-        hdf.to_hdf(path_or_buf, key, self, *args, **kwargs)
+        cudf.io.hdf.to_hdf(path_or_buf, key, self, *args, **kwargs)
 
     @ioutils.doc_to_dlpack()
     def to_dlpack(self):
         """{docstring}"""
-        import cudf.io.dlpack as dlpack
 
-        return dlpack.to_dlpack(self)
+        return cudf.io.dlpack.to_dlpack(self)
 
     def rename(self, index=None, copy=True):
         """
@@ -3850,7 +4150,6 @@ class Series(Frame, Serializable):
         """
         Align to the given Index. See _align_indices below.
         """
-        from uuid import uuid4
 
         index = as_index(index)
         if self.index.equals(index):
@@ -3864,10 +4163,10 @@ class Series(Frame, Serializable):
         rhs = cudf.DataFrame(index=as_index(index))
         if how == "left":
             tmp_col_id = str(uuid4())
-            lhs[tmp_col_id] = cupy.arange(len(lhs))
+            lhs[tmp_col_id] = column.arange(len(lhs))
         elif how == "right":
             tmp_col_id = str(uuid4())
-            rhs[tmp_col_id] = cupy.arange(len(rhs))
+            rhs[tmp_col_id] = column.arange(len(rhs))
         result = lhs.join(rhs, how=how, sort=sort)
         if how == "left" or how == "right":
             result = result.sort_values(tmp_col_id)[0]
@@ -3920,6 +4219,51 @@ class Series(Frame, Serializable):
 
         return result
 
+    def keys(self):
+        """
+        Return alias for index.
+
+        Returns
+        -------
+        Index
+            Index of the Series.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> sr = cudf.Series([10, 11, 12, 13, 14, 15])
+        >>> sr
+        0    10
+        1    11
+        2    12
+        3    13
+        4    14
+        5    15
+        dtype: int64
+
+        >>> sr.keys()
+        RangeIndex(start=0, stop=6)
+        >>> sr = cudf.Series(['a', 'b', 'c'])
+        >>> sr
+        0    a
+        1    b
+        2    c
+        dtype: object
+        >>> sr.keys()
+        RangeIndex(start=0, stop=3)
+        >>> sr = cudf.Series([1, 2, 3], index=['a', 'b', 'c'])
+        >>> sr
+        a    1
+        b    2
+        c    3
+        dtype: int64
+        >>> sr.keys()
+        StringIndex(['a' 'b' 'c'], dtype='object')
+        """
+        return self.index
+
+    _accessors = set()
+
 
 truediv_int_dtype_corrections = {
     "int8": "float32",
@@ -3936,39 +4280,607 @@ truediv_int_dtype_corrections = {
 
 
 class DatetimeProperties(object):
+    """
+    Accessor object for datetimelike properties of the Series values.
+
+    Returns
+    -------
+    Returns a Series indexed like the original Series.
+
+    Examples
+    --------
+    >>> import cudf
+    >>> import pandas as pd
+    >>> seconds_series = cudf.Series(pd.date_range("2000-01-01", periods=3,
+    ...     freq="s"))
+    >>> seconds_series
+    0   2000-01-01 00:00:00
+    1   2000-01-01 00:00:01
+    2   2000-01-01 00:00:02
+    dtype: datetime64[ns]
+    >>> seconds_series.dt.second
+    0    0
+    1    1
+    2    2
+    dtype: int16
+    >>> hours_series = cudf.Series(pd.date_range("2000-01-01", periods=3,
+    ...     freq="h"))
+    >>> hours_series
+    0   2000-01-01 00:00:00
+    1   2000-01-01 01:00:00
+    2   2000-01-01 02:00:00
+    dtype: datetime64[ns]
+    >>> hours_series.dt.hour
+    0    0
+    1    1
+    2    2
+    dtype: int16
+    >>> weekday_series = cudf.Series(pd.date_range("2000-01-01", periods=3,
+    ...     freq="q"))
+    >>> weekday_series
+    0   2000-03-31
+    1   2000-06-30
+    2   2000-09-30
+    dtype: datetime64[ns]
+    >>> weekday_series.dt.weekday
+    0    4
+    1    4
+    2    5
+    dtype: int16
+    """
+
     def __init__(self, series):
         self.series = series
 
     @property
     def year(self):
+        """
+        The year of the datetime.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pandas as pd
+        >>> datetime_series = cudf.Series(pd.date_range("2000-01-01",
+        ...         periods=3, freq="Y"))
+        >>> datetime_series
+        0   2000-12-31
+        1   2001-12-31
+        2   2002-12-31
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.year
+        0    2000
+        1    2001
+        2    2002
+        dtype: int16
+        """
         return self._get_dt_field("year")
 
     @property
     def month(self):
+        """
+        The month as January=1, December=12.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_series = cudf.Series(pd.date_range("2000-01-01",
+        ...         periods=3, freq="M"))
+        >>> datetime_series
+        0   2000-01-31
+        1   2000-02-29
+        2   2000-03-31
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.month
+        0    1
+        1    2
+        2    3
+        dtype: int16
+        """
         return self._get_dt_field("month")
 
     @property
     def day(self):
+        """
+        The day of the datetime.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_series = cudf.Series(pd.date_range("2000-01-01",
+        ...         periods=3, freq="D"))
+        >>> datetime_series
+        0   2000-01-01
+        1   2000-01-02
+        2   2000-01-03
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.day
+        0    1
+        1    2
+        2    3
+        dtype: int16
+        """
         return self._get_dt_field("day")
 
     @property
     def hour(self):
+        """
+        The hours of the datetime.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_series = cudf.Series(pd.date_range("2000-01-01",
+        ...         periods=3, freq="h"))
+        >>> datetime_series
+        0   2000-01-01 00:00:00
+        1   2000-01-01 01:00:00
+        2   2000-01-01 02:00:00
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.hour
+        0    0
+        1    1
+        2    2
+        dtype: int16
+        """
         return self._get_dt_field("hour")
 
     @property
     def minute(self):
+        """
+        The minutes of the datetime.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_series = cudf.Series(pd.date_range("2000-01-01",
+        ...         periods=3, freq="T"))
+        >>> datetime_series
+        0   2000-01-01 00:00:00
+        1   2000-01-01 00:01:00
+        2   2000-01-01 00:02:00
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.minute
+        0    0
+        1    1
+        2    2
+        dtype: int16
+        """
         return self._get_dt_field("minute")
 
     @property
     def second(self):
+        """
+        The seconds of the datetime.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_series = cudf.Series(pd.date_range("2000-01-01",
+        ...         periods=3, freq="s"))
+        >>> datetime_series
+        0   2000-01-01 00:00:00
+        1   2000-01-01 00:00:01
+        2   2000-01-01 00:00:02
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.second
+        0    0
+        1    1
+        2    2
+        dtype: int16
+        """
         return self._get_dt_field("second")
 
     @property
     def weekday(self):
+        """
+        The day of the week with Monday=0, Sunday=6.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_series = cudf.Series(pd.date_range('2016-12-31',
+        ...     '2017-01-08', freq='D'))
+        >>> datetime_series
+        0   2016-12-31
+        1   2017-01-01
+        2   2017-01-02
+        3   2017-01-03
+        4   2017-01-04
+        5   2017-01-05
+        6   2017-01-06
+        7   2017-01-07
+        8   2017-01-08
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.weekday
+        0    5
+        1    6
+        2    0
+        3    1
+        4    2
+        5    3
+        6    4
+        7    5
+        8    6
+        dtype: int16
+        """
+        return self._get_dt_field("weekday")
+
+    @property
+    def dayofweek(self):
+        """
+        The day of the week with Monday=0, Sunday=6.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_series = cudf.Series(pd.date_range('2016-12-31',
+        ...     '2017-01-08', freq='D'))
+        >>> datetime_series
+        0   2016-12-31
+        1   2017-01-01
+        2   2017-01-02
+        3   2017-01-03
+        4   2017-01-04
+        5   2017-01-05
+        6   2017-01-06
+        7   2017-01-07
+        8   2017-01-08
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.dayofweek
+        0    5
+        1    6
+        2    0
+        3    1
+        4    2
+        5    3
+        6    4
+        7    5
+        8    6
+        dtype: int16
+        """
         return self._get_dt_field("weekday")
 
     def _get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)
+        return Series(
+            data=out_column, index=self.series._index, name=self.series.name
+        )
+
+    def strftime(self, date_format, *args, **kwargs):
+        """
+        Convert to Series using specified ``date_format``.
+
+        Return a Series of formatted strings specified by ``date_format``,
+        which supports the same string format as the python standard library.
+        Details of the string format can be found in `python string format doc
+        <https://docs.python.org/3/library/datetime.html#strftime-and-strptime-behavior>`_.
+
+        Parameters
+        ----------
+        date_format : str
+            Date format string (e.g. “%Y-%m-%d”).
+
+        Returns
+        -------
+        Series
+            Series of formatted strings.
+
+        Notes
+        -----
+
+        The following date format identifiers are not yet supported: ``%a``,
+        ``%A``, ``%w``, ``%b``, ``%B``, ``%U``, ``%W``, ``%c``, ``%x``,
+        ``%X``, ``%G``, ``%u``, ``%V``
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pandas as pd
+        >>> weekday_series = cudf.Series(pd.date_range("2000-01-01", periods=3,
+        ...      freq="q"))
+        >>> weekday_series.dt.strftime("%Y-%m-%d")
+        >>> weekday_series
+        0   2000-03-31
+        1   2000-06-30
+        2   2000-09-30
+        dtype: datetime64[ns]
+        0    2000-03-31
+        1    2000-06-30
+        2    2000-09-30
+        dtype: object
+        >>> weekday_series.dt.strftime("%Y %d %m")
+        0    2000 31 03
+        1    2000 30 06
+        2    2000 30 09
+        dtype: object
+        >>> weekday_series.dt.strftime("%Y / %d / %m")
+        0    2000 / 31 / 03
+        1    2000 / 30 / 06
+        2    2000 / 30 / 09
+        dtype: object
+        """
+
+        if not isinstance(date_format, str):
+            raise TypeError(
+                f"'date_format' must be str, not {type(date_format)}"
+            )
+
+        # TODO: Remove following validations
+        # once https://github.com/rapidsai/cudf/issues/5991
+        # is implemented
+        not_implemented_formats = {
+            "%a",
+            "%A",
+            "%w",
+            "%b",
+            "%B",
+            "%U",
+            "%W",
+            "%c",
+            "%x",
+            "%X",
+            "%G",
+            "%u",
+            "%V",
+        }
+        for d_format in not_implemented_formats:
+            if d_format in date_format:
+                raise NotImplementedError(
+                    f"{d_format} date-time format is not "
+                    f"supported yet, Please follow this issue "
+                    f"https://github.com/rapidsai/cudf/issues/5991 "
+                    f"for tracking purposes."
+                )
+
+        str_col = self.series._column.as_string_column(
+            dtype="str", format=date_format
+        )
+        return Series(
+            data=str_col, index=self.series._index, name=self.series.name
+        )
+
+
+class TimedeltaProperties(object):
+    """
+    Accessor object for timedeltalike properties of the Series values.
+
+    Returns
+    -------
+    Returns a Series indexed like the original Series.
+
+    Examples
+    --------
+    >>> import cudf
+    >>> seconds_series = cudf.Series([1, 2, 3], dtype='timedelta64[s]')
+    >>> seconds_series
+    0    00:00:01
+    1    00:00:02
+    2    00:00:03
+    dtype: timedelta64[s]
+    >>> seconds_series.dt.seconds
+    0    1
+    1    2
+    2    3
+    dtype: int64
+    >>> series = cudf.Series([12231312123, 1231231231, 1123236768712, 2135656,
+    ...     3244334234], dtype='timedelta64[ms]')
+    >>> series
+    0      141 days 13:35:12.123
+    1       14 days 06:00:31.231
+    2    13000 days 10:12:48.712
+    3        0 days 00:35:35.656
+    4       37 days 13:12:14.234
+    dtype: timedelta64[ms]
+    >>> series.dt.components
+        days  hours  minutes  seconds  milliseconds  microseconds  nanoseconds
+    0    141     13       35       12           123             0            0
+    1     14      6        0       31           231             0            0
+    2  13000     10       12       48           712             0            0
+    3      0      0       35       35           656             0            0
+    4     37     13       12       14           234             0            0
+    >>> series.dt.days
+    0      141
+    1       14
+    2    13000
+    3        0
+    4       37
+    dtype: int64
+    >>> series.dt.seconds
+    0    48912
+    1    21631
+    2    36768
+    3     2135
+    4    47534
+    dtype: int64
+    >>> series.dt.microseconds
+    0    123000
+    1    231000
+    2    712000
+    3    656000
+    4    234000
+    dtype: int64
+    >>> s.dt.nanoseconds
+    0    0
+    1    0
+    2    0
+    3    0
+    4    0
+    dtype: int64
+    """
+
+    def __init__(self, series):
+        self.series = series
+
+    @property
+    def days(self):
+        """
+        Number of days.
+
+        Returns
+        -------
+        Series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([12231312123, 1231231231, 1123236768712, 2135656,
+        ...     3244334234], dtype='timedelta64[ms]')
+        >>> s
+        0      141 days 13:35:12.123
+        1       14 days 06:00:31.231
+        2    13000 days 10:12:48.712
+        3        0 days 00:35:35.656
+        4       37 days 13:12:14.234
+        dtype: timedelta64[ms]
+        >>> s.dt.days
+        0      141
+        1       14
+        2    13000
+        3        0
+        4       37
+        dtype: int64
+        """
+        return self._get_td_field("days")
+
+    @property
+    def seconds(self):
+        """
+        Number of seconds (>= 0 and less than 1 day).
+
+        Returns
+        -------
+        Series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([12231312123, 1231231231, 1123236768712, 2135656,
+        ...     3244334234], dtype='timedelta64[ms]')
+        >>> s
+        0      141 days 13:35:12.123
+        1       14 days 06:00:31.231
+        2    13000 days 10:12:48.712
+        3        0 days 00:35:35.656
+        4       37 days 13:12:14.234
+        dtype: timedelta64[ms]
+        >>> s.dt.seconds
+        0    48912
+        1    21631
+        2    36768
+        3     2135
+        4    47534
+        dtype: int64
+        >>> s.dt.microseconds
+        0    123000
+        1    231000
+        2    712000
+        3    656000
+        4    234000
+        dtype: int64
+        """
+        return self._get_td_field("seconds")
+
+    @property
+    def microseconds(self):
+        """
+        Number of microseconds (>= 0 and less than 1 second).
+
+        Returns
+        -------
+        Series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([12231312123, 1231231231, 1123236768712, 2135656,
+        ...     3244334234], dtype='timedelta64[ms]')
+        >>> s
+        0      141 days 13:35:12.123
+        1       14 days 06:00:31.231
+        2    13000 days 10:12:48.712
+        3        0 days 00:35:35.656
+        4       37 days 13:12:14.234
+        dtype: timedelta64[ms]
+        >>> s.dt.microseconds
+        0    123000
+        1    231000
+        2    712000
+        3    656000
+        4    234000
+        dtype: int64
+        """
+        return self._get_td_field("microseconds")
+
+    @property
+    def nanoseconds(self):
+        """
+        Return the number of nanoseconds (n), where 0 <= n < 1 microsecond.
+
+        Returns
+        -------
+        Series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([12231312123, 1231231231, 1123236768712, 2135656,
+        ...     3244334234], dtype='timedelta64[ns]')
+        >>> s
+        0    00:00:12.231312123
+        1    00:00:01.231231231
+        2    00:18:43.236768712
+        3    00:00:00.002135656
+        4    00:00:03.244334234
+        dtype: timedelta64[ns]
+        >>> s.dt.nanoseconds
+        0    123
+        1    231
+        2    712
+        3    656
+        4    234
+        dtype: int64
+        """
+        return self._get_td_field("nanoseconds")
+
+    @property
+    def components(self):
+        """
+        Return a Dataframe of the components of the Timedeltas.
+
+        Returns
+        -------
+        DataFrame
+
+        Examples
+        --------
+        >>> s = cudf.Series([12231312123, 1231231231, 1123236768712, 2135656, 3244334234], dtype='timedelta64[ms]')
+        >>> s
+        0      141 days 13:35:12.123
+        1       14 days 06:00:31.231
+        2    13000 days 10:12:48.712
+        3        0 days 00:35:35.656
+        4       37 days 13:12:14.234
+        dtype: timedelta64[ms]
+        >>> s.dt.components
+            days  hours  minutes  seconds  milliseconds  microseconds  nanoseconds
+        0    141     13       35       12           123             0            0
+        1     14      6        0       31           231             0            0
+        2  13000     10       12       48           712             0            0
+        3      0      0       35       35           656             0            0
+        4     37     13       12       14           234             0            0
+        """  # noqa: E501
+        return self.series._column.components(index=self.series._index)
+
+    def _get_td_field(self, field):
+        out_column = getattr(self.series._column, field)
         return Series(
             data=out_column, index=self.series._index, name=self.series.name
         )
@@ -4052,17 +4964,17 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
 
     Parameters
     ----------
-        a : list-like, array-like or cudf.Series
-            Input sequence to compare.
-        b : list-like, array-like or cudf.Series
-            Input sequence to compare.
-        rtol : float
-            The relative tolerance.
-        atol : float
-            The absolute tolerance.
-        equal_nan : bool
-            If ``True``, null's in ``a`` will be considered equal
-            to null's in ``b``.
+    a : list-like, array-like or cudf.Series
+        Input sequence to compare.
+    b : list-like, array-like or cudf.Series
+        Input sequence to compare.
+    rtol : float
+        The relative tolerance.
+    atol : float
+        The absolute tolerance.
+    equal_nan : bool
+        If ``True``, null's in ``a`` will be considered equal
+        to null's in ``b``.
 
     Returns
     -------
@@ -4070,8 +4982,8 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
 
     See Also
     --------
-        np.isclose : Returns a boolean array where two arrays are element-wise
-            equal within a tolerance.
+    np.isclose : Returns a boolean array where two arrays are element-wise
+        equal within a tolerance.
 
     Examples
     --------
