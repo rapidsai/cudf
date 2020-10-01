@@ -36,8 +36,8 @@ requirements:
 test:
   requires:
     - cudatoolkit {{ cuda_version }}.*
-  commands:
-    - python -c "import custreamz"
+  imports:
+    - custreamz
 
 about:
   home: http://rapids.ai/
