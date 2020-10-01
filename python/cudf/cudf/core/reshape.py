@@ -155,7 +155,8 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     Combine ``DataFrame`` objects with overlapping columns
     and return only those that are shared by passing ``inner`` to
     the ``join`` keyword argument.
-    >>> pd.concat([df1, df3], join="inner")
+
+    >>> cudf.concat([df1, df3], join="inner")
       letter  number
     0      a       1
     1      b       2
