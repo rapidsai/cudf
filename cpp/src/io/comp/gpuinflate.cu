@@ -1158,8 +1158,8 @@ __global__ void __launch_bounds__(1024) copy_uncompressed_kernel(gpu_inflate_inp
   uint32_t len, src_align_bytes, src_align_bits, dst_align_bytes;
 
   if (!t) {
-    src        = reinterpret_cast<const uint8_t *>(inputs[z].srcDevice);
-    dst        = reinterpret_cast<uint8_t *>(inputs[z].dstDevice);
+    src        = static_cast<const uint8_t *>(inputs[z].srcDevice);
+    dst        = static_cast<uint8_t *>(inputs[z].dstDevice);
     len        = min((uint32_t)inputs[z].srcSize, (uint32_t)inputs[z].dstSize);
     src_g      = src;
     dst_g      = dst;
