@@ -31,7 +31,7 @@ gpuci_logger "Check environment variables"
 env
 
 gpuci_logger "Activate conda env"
-source activate rapids
+conda activate rapids
 
 gpuci_logger "Check compiler versions"
 python --version

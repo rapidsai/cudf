@@ -64,7 +64,7 @@ gpuci_logger "Check GPU usage"
 nvidia-smi
 
 gpuci_logger "Activate conda env"
-source activate rapids
+conda activate rapids
 
 conda install "rmm=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
               "rapids-build-env=$MINOR_VERSION.*" \
