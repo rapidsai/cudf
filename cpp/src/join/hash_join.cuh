@@ -27,6 +27,8 @@
 #include "join_common_utils.hpp"
 #include "join_kernels.cuh"
 
+#include <limits>
+
 namespace cudf {
 namespace detail {
 /**
@@ -53,7 +55,7 @@ namespace detail {
  *
  * @return An estimate of the size of the output of the join operation
  */
-template <join_kind JoinKind, typename multimap_type>
+template <join_kind JoinKind, typename multimap_type, typename estimate_size_type>
 size_type estimate_join_output_size(table_device_view build_table,
                                     table_device_view probe_table,
                                     multimap_type const& hash_table,
@@ -90,8 +92,8 @@ size_type estimate_join_output_size(table_device_view build_table,
   if (probe_to_build_ratio > MAX_RATIO) { sample_probe_num_rows = build_table_num_rows; }
 
   // Allocate storage for the counter used to get the size of the join output
-  size_type h_size_estimate{0};
-  rmm::device_scalar<size_type> size_estimate(0, stream);
+  estimate_size_type h_size_estimate{0};
+  rmm::device_scalar<estimate_size_type> size_estimate(0, stream);
 
   CHECK_CUDA(stream);
 
@@ -99,7 +101,10 @@ size_type estimate_join_output_size(table_device_view build_table,
   int numBlocks{-1};
 
   CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
-    &numBlocks, compute_join_output_size<JoinKind, multimap_type, block_size>, block_size, 0));
+    &numBlocks,
+    compute_join_output_size<JoinKind, multimap_type, estimate_size_type, block_size>,
+    block_size,
+    0));
 
   int dev_id{-1};
   CUDA_TRY(cudaGetDevice(&dev_id));
@@ -119,7 +124,7 @@ size_type estimate_join_output_size(table_device_view build_table,
     row_equality equality{probe_table, build_table, compare_nulls == null_equality::EQUAL};
     // Probe the hash table without actually building the output to simply
     // find what the size of the output will be.
-    compute_join_output_size<JoinKind, multimap_type, block_size>
+    compute_join_output_size<JoinKind, multimap_type, estimate_size_type, block_size>
       <<<numBlocks * num_sms, block_size, 0, stream>>>(hash_table,
                                                        build_table,
                                                        probe_table,
@@ -139,7 +144,9 @@ size_type estimate_join_output_size(table_device_view build_table,
     }
 
     // Detect overflow
-    CUDF_EXPECTS(h_size_estimate >= 0, "Maximum join output size exceeded");
+    CUDF_EXPECTS(h_size_estimate <
+                   static_cast<estimate_size_type>(std::numeric_limits<cudf::size_type>::max()),
+                 "Maximum join output size exceeded");
 
     // If the size estimate is non-zero, then we have a valid estimate and can break
     // If sample_probe_num_rows >= probe_table_num_rows, then we've sampled the entire
@@ -158,7 +165,7 @@ size_type estimate_join_output_size(table_device_view build_table,
 
   } while (true);
 
-  return h_size_estimate;
+  return static_cast<cudf::size_type>(h_size_estimate);
 }
 
 /**

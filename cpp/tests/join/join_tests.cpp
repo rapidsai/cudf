@@ -494,8 +494,8 @@ TEST_F(JoinTest, InnerJoinSizeOverflow)
   static_cast<cudf::scalar_type_t<int32_t> *>(zero.get())->set_value(0);
 
   // Should cause size overflow, raise exception
-  int32_t left  = 45000;
-  int32_t right = 450000;
+  int32_t left  = 4;
+  int32_t right = 1073741825;
 
   auto col0_0 = cudf::make_column_from_scalar(*zero, left);
   auto col1_0 = cudf::make_column_from_scalar(*zero, right);
