@@ -324,9 +324,9 @@ std::vector<std::unique_ptr<cudf::column>> reader::impl::decode_data(
   gpu::decode_avro_column_data(
     device_span<block_desc_s const>(static_cast<block_desc_s const *>(block_list.data()),
                                     _metadata->block_list.size()),
-    schema_desc,
     global_dictionary,
     block_data,
+    schema_desc,
     _metadata->num_rows,
     _metadata->skip_rows,
     min_row_data_size,
