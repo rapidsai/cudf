@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 
-#ifndef __IO_PARQUET_H__
-#define __IO_PARQUET_H__
+#pragma once
 
-#include "parquet_common.h"
+#include <io/parquet/parquet_common.hpp>
 
 #include <stddef.h>
 #include <stdint.h>
@@ -186,7 +185,8 @@ struct DictionaryPageHeader {
  * skipped during reading.
  **/
 struct PageHeader {
-  PageType type = DATA_PAGE;  // the type of the page: indicates which of the *_header fields is set
+  PageType type =
+    PageType::DATA_PAGE;  // the type of the page: indicates which of the *_header fields is set
   int32_t uncompressed_page_size = 0;  // Uncompressed page size in bytes (not including the header)
   int32_t compressed_page_size   = 0;  // Compressed page size in bytes (not including the header)
   DataPageHeader data_page_header;
@@ -378,5 +378,3 @@ class CompactProtocolWriter {
 }  // namespace parquet
 }  // namespace io
 }  // namespace cudf
-
-#endif  // __IO_PARQUET_H__

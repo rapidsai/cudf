@@ -9,7 +9,7 @@ from libcpp.string cimport string
 from libcpp cimport bool
 
 from libcpp.memory cimport unique_ptr, shared_ptr
-from cudf._lib.move cimport move
+from libcpp.utility cimport move
 
 from cpython cimport pycapsule
 

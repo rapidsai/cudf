@@ -4,11 +4,11 @@ import pandas as pd
 
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
+from libcpp.utility cimport move
 from libcpp cimport bool
 
 from cudf._lib.column cimport Column
 from cudf._lib.table cimport Table
-from cudf._lib.move cimport move
 
 from cudf._lib.cpp.types cimport (
     size_type, null_policy, nan_policy, null_equality
