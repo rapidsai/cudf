@@ -93,12 +93,14 @@ def test_rolling_dataframe_basic(data, agg, nulls, center):
 
 
 @pytest.mark.parametrize(
-    "agg", ["sum", 
-            pytest.param("min"), 
-            pytest.param("max"), 
-            "mean", 
-            pytest.param("count", # Does not follow similar conventions as with non-offset columns
-                         marks=pytest.mark.xfail(reason="Differs from pandas behaviour here"))]
+    "agg", ["sum",
+            pytest.param("min"),
+            pytest.param("max"),
+            "mean",
+            pytest.param("count",  # Does not follow similar conventions as
+                                   # with non-offset columns
+                         marks=pytest.mark.xfail(
+                             reason="Differs from pandas behaviour here"))]
 )
 def test_rolling_with_offset(agg):
     psr = pd.Series(
