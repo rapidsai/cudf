@@ -4,6 +4,7 @@ from libcpp cimport bool, int
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
+from libcpp.utility cimport move
 from cudf._lib.cpp.column.column cimport column
 
 from cudf._lib.cpp.io.orc cimport (
@@ -25,7 +26,6 @@ from cudf._lib.cpp.types cimport (
 )
 
 from cudf._lib.io.utils cimport make_source_info, make_sink_info
-from cudf._lib.move cimport move
 from cudf._lib.table cimport Table
 from cudf._lib.types import np_to_cudf_types
 from cudf._lib.types cimport underlying_type_t_type_id

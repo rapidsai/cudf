@@ -689,14 +689,16 @@ TEST_F(ParquetWriterTest, MultipleMismatchedSources)
   auto const int5file = create_parquet_file<int>(5);
   {
     auto const float5file = create_parquet_file<float>(5);
+    std::vector<std::string> files{int5file, float5file};
     cudf_io::parquet_reader_options const read_opts =
-      cudf_io::parquet_reader_options::builder(cudf_io::source_info{{int5file, float5file}});
+      cudf_io::parquet_reader_options::builder(cudf_io::source_info{files});
     EXPECT_THROW(cudf_io::read_parquet(read_opts), cudf::logic_error);
   }
   {
     auto const int10file = create_parquet_file<int>(10);
+    std::vector<std::string> files{int5file, int10file};
     cudf_io::parquet_reader_options const read_opts =
-      cudf_io::parquet_reader_options::builder(cudf_io::source_info{{int5file, int10file}});
+      cudf_io::parquet_reader_options::builder(cudf_io::source_info{files});
     EXPECT_THROW(cudf_io::read_parquet(read_opts), cudf::logic_error);
   }
 }

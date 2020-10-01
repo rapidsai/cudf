@@ -8,10 +8,10 @@ import numpy as np
 from libcpp.string cimport string
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
+from libcpp.utility cimport move
 from cudf.utils import cudautils
 
 from cudf._lib.types import np_to_cudf_types, cudf_to_np_types, NullHandling
-from cudf._lib.move cimport move
 from cudf._lib.types cimport (
     underlying_type_t_interpolation,
     underlying_type_t_null_policy,
