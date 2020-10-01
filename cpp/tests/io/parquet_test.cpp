@@ -1030,7 +1030,7 @@ class custom_test_memmap_sink : public cudf::io::data_sink {
     CUDA_TRY(cudaMallocHost(&ptr, size));
     CUDA_TRY(cudaMemcpyAsync(ptr, gpu_data, size, cudaMemcpyDeviceToHost, stream));
     CUDA_TRY(cudaStreamSynchronize(stream));
-    mm_writer->host_write(reinterpret_cast<char const*>(ptr), size);
+    mm_writer->host_write(ptr, size);
     CUDA_TRY(cudaFreeHost(ptr));
   }
 
