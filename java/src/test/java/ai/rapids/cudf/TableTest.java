@@ -95,7 +95,7 @@ public class TableTest extends CudfTestBase {
    * @param colName The name of the column
    */
   public static void assertColumnsAreEqual(ColumnVector expected, ColumnVector cv, String colName) {
-    assertPartialColumnsAreEqual(expected, 0, expected.getRowCount(), cv, colName, true, null);
+    assertPartialColumnsAreEqual(expected, 0, expected.getRowCount(), cv, colName, true);
   }
 
   /**
@@ -105,18 +105,16 @@ public class TableTest extends CudfTestBase {
    * @param colName The name of the host column
    */
   public static void assertColumnsAreEqual(HostColumnVector expected, HostColumnVector cv, String colName) {
-    assertPartialColumnsAreEqual(expected, 0, expected.getRowCount(), cv, colName, true, null);
+    assertPartialColumnsAreEqual(expected, 0, expected.getRowCount(), cv, colName, true);
   }
 
   /**
    * Checks and asserts that passed in Struct columns match
    * @param expected The expected result Struct column
    * @param cv The input Struct column
-   * @param schema The StructType dataType schema for comparison
    */
-  public static void assertStructColumnsAreEqual(ColumnVector expected, ColumnVector cv,
-                                                 HostColumnVector.DataType schema) {
-    assertPartialStructColumnsAreEqual(expected, 0, expected.getRowCount(), cv, "unnamed", true, schema);
+  public static void assertStructColumnsAreEqual(ColumnVector expected, ColumnVector cv) {
+    assertPartialStructColumnsAreEqual(expected, 0, expected.getRowCount(), cv, "unnamed", true);
   }
 
   /**
@@ -127,15 +125,12 @@ public class TableTest extends CudfTestBase {
    * @param cv The input Struct column
    * @param colName The name of the column
    * @param enableNullCheck Whether to check for nulls in the Struct column
-   * @param schema The StructType dataType schema for comparison
    */
   public static void assertPartialStructColumnsAreEqual(ColumnVector expected, long rowOffset, long length,
-                                                        ColumnVector cv, String colName, boolean enableNullCheck,
-                                                        HostColumnVector.DataType schema) {
+                                                        ColumnVector cv, String colName, boolean enableNullCheck) {
     try (HostColumnVector hostExpected = expected.copyToHost();
          HostColumnVector hostcv = cv.copyToHost()) {
-      assertPartialColumnsAreEqual(hostExpected, rowOffset, length, hostcv, colName, enableNullCheck,
-          schema);
+      assertPartialColumnsAreEqual(hostExpected, rowOffset, length, hostcv, colName, enableNullCheck);
     }
   }
 
@@ -145,28 +140,26 @@ public class TableTest extends CudfTestBase {
    * @param cv The input column
    * @param colName The name of the column
    * @param enableNullCheck Whether to check for nulls in the column
-   * @param schema The schema or the StructDataType for struct column if present
    */
   public static void assertPartialColumnsAreEqual(ColumnVector expected, long rowOffset, long length,
-                                                  ColumnVector cv, String colName, boolean enableNullCheck,
-                                                  HostColumnVector.DataType schema) {
+                                                  ColumnVector cv, String colName, boolean enableNullCheck) {
     try (HostColumnVector hostExpected = expected.copyToHost();
          HostColumnVector hostcv = cv.copyToHost()) {
-      assertPartialColumnsAreEqual(hostExpected, rowOffset, length, hostcv, colName, enableNullCheck, schema);
+      assertPartialColumnsAreEqual(hostExpected, rowOffset, length, hostcv, colName, enableNullCheck);
     }
   }
 
   /**
    * Checks and asserts that passed in host columns match
    * @param expected The expected result host column
+   * @param rowOffset start row index
+   * @param length  number of rows from starting offset
    * @param cv The input host column
    * @param colName The name of the host column
    * @param enableNullCheck Whether to check for nulls in the host column
-   * @param schema The schema or the StructDataType for struct host column if present
    */
-  public static void assertPartialColumnsAreEqual(HostColumnVector expected, long rowOffset, long length,
-                                                  HostColumnVector cv, String colName, boolean enableNullCheck,
-                                                  HostColumnVector.DataType schema) {
+  public static void assertPartialColumnsAreEqual(HostColumnVectorCore expected, long rowOffset, long length,
+                                                  HostColumnVectorCore cv, String colName, boolean enableNullCheck) {
     assertEquals(expected.getType(), cv.getType(), "Type For Column " + colName);
     assertEquals(length, cv.getRowCount(), "Row Count For Column " + colName);
     if (enableNullCheck) {
@@ -228,79 +221,7 @@ public class TableTest extends CudfTestBase {
             assertListColumnsEquals(expected, cv, colName, enableNullCheck);
             break;
           case STRUCT:
-            assertStructColumnsEquals(expected, cv, colName, enableNullCheck, schema);
-            break;
-          default:
-            throw new IllegalArgumentException(type + " is not supported yet");
-        }
-      }
-    }
-  }
-
-  /**
-   * Checks and asserts that passed in columns match
-   * @param expected The expected result column
-   * @param cv The input column
-   * @param colName The name of the column
-   * @param enableNullCheck Whether to check for nulls in the column
-   */
-  public static void assertPartialColumnsAreEqual(HostColumnVectorCore expected,
-                                                  HostColumnVectorCore cv,
-                                                  String colName, boolean enableNullCheck) {
-    assertEquals(expected.getType(), cv.getType(), "Type For Column " + colName);
-    assertEquals(expected.getRowCount(), cv.getRowCount(), "Row Count For Column " + colName);
-    if (enableNullCheck) {
-      assertEquals(expected.getNullCount(), cv.getNullCount(), "Null Count For Column " + colName);
-    } else {
-      // TODO add in a proper check when null counts are supported by serializing a partitioned column
-    }
-    DType type = expected.getType();
-    for (int expectedRow = 0; expectedRow < expected.getRowCount(); expectedRow++) {
-      assertEquals(expected.isNull(expectedRow), cv.isNull(expectedRow),
-          "NULL for Column " + colName + " Row " + expectedRow);
-      if (!expected.isNull(expectedRow)) {
-        switch (type) {
-          case BOOL8: // fall through
-          case INT8: // fall through
-          case UINT8: // fall through
-          case INT16: // fall through
-          case UINT16: // fall through
-          case INT32: // fall through
-          case UINT32: // fall through
-          case TIMESTAMP_DAYS: // fall through
-          case DURATION_DAYS: // fall through
-          case INT64: // fall through
-          case UINT64: // fall through
-          case DURATION_MICROSECONDS: // fall through
-          case DURATION_MILLISECONDS: // fall through
-          case DURATION_NANOSECONDS: // fall through
-          case DURATION_SECONDS: // fall through
-          case TIMESTAMP_MICROSECONDS: // fall through
-          case TIMESTAMP_MILLISECONDS: // fall through
-          case TIMESTAMP_NANOSECONDS: // fall through
-          case TIMESTAMP_SECONDS:
-            assertEquals(expected.getElement(expectedRow), cv.getElement(expectedRow),
-                "Column " + colName + " Row " + expectedRow);
-            break;
-          case FLOAT32:
-            assertEqualsWithinPercentage((float)expected.getElement(expectedRow), (float)cv.getElement(expectedRow), 0.0001,
-                "Column " + colName + " Row " + expectedRow);
-            break;
-          case FLOAT64:
-            assertEqualsWithinPercentage((double)expected.getElement(expectedRow), (double)cv.getElement(expectedRow), 0.0001,
-                "Column " + colName + " Row " + expectedRow);
-            break;
-          case STRING:
-            assertArrayEquals(((String)expected.getElement(expectedRow)).getBytes(), ((String)cv.getElement(expectedRow)).getBytes(),
-                "Column " + colName + " Row " + expectedRow);
-            break;
-          case LIST:
-          case STRUCT:
-            assertEquals(expected.getNestedChildren().size(),
-                cv.getNestedChildren().size(), " num children don't match");
-            for (int k = 0; k < expected.getNestedChildren().size(); k++)
-              assertPartialColumnsAreEqual(expected.getNestedChildren().get(k),
-                  cv.getNestedChildren().get(k), colName, enableNullCheck);
+            assertStructColumnsEquals(expected, cv, colName, enableNullCheck);
             break;
           default:
             throw new IllegalArgumentException(type + " is not supported yet");
@@ -316,17 +237,23 @@ public class TableTest extends CudfTestBase {
    * @param colName The name of the column
    * @param enableNullCheck Whether to check for nulls in this column or not
    */
-  private static void assertListColumnsEquals(HostColumnVector expected, HostColumnVector input,
+  private static void assertListColumnsEquals(HostColumnVectorCore expected, HostColumnVectorCore input,
                                               String colName, boolean enableNullCheck) {
+    assertTrue(expected.getType() == DType.LIST);
+    assertTrue(input.getData() == null);
+    assertTrue(expected.getData() == null);
     for (int rowIndex = 0; rowIndex < expected.getRowCount(); rowIndex++) {
       assertEquals(expected.isNull(rowIndex), input.isNull(rowIndex));
-      if (expected.getList(rowIndex) != null) {
+      // lists have one child
+      if (expected.getList(rowIndex) != null && expected.getNestedChildren().get(0).children.isEmpty()) {
+        // check for only basic type children
         assertArrayEquals(expected.getList(rowIndex).toString().getBytes(),
-          input.getList(rowIndex).toString().getBytes());
+            input.getList(rowIndex).toString().getBytes());
       }
     }
     for (int j = 0; j < expected.children.size(); j++) {
-      assertPartialColumnsAreEqual(expected.children.get(j), input.children.get(j), colName, enableNullCheck);
+      assertPartialColumnsAreEqual(expected.children.get(j), 0, expected.children.get(j).getRowCount(),
+          input.children.get(j), colName, enableNullCheck);
     }
   }
 
@@ -336,42 +263,28 @@ public class TableTest extends CudfTestBase {
    * @param input The input Struct column which is compared against the expected column
    * @param colName The name of the column
    * @param enableNullCheck Whether to check for nulls in this column or not
-   * @param schema The schema for the Struct column
    */
-  private static void assertStructColumnsEquals(HostColumnVector expected, HostColumnVector input,
-                                                String colName, boolean enableNullCheck,
-                                                HostColumnVector.DataType schema) {
+  private static void assertStructColumnsEquals(HostColumnVectorCore expected, HostColumnVectorCore input,
+                                                String colName, boolean enableNullCheck) {
+    assertTrue(expected.getType() == DType.STRUCT);
+    assertTrue(expected.getData() == null);
+    assertTrue(input.getData() == null);
+    boolean hasNestedTypeChildren = false;
+    for (HostColumnVectorCore expectedChild : expected.getNestedChildren()) {
+      if (expectedChild.type.isNestedType()) {
+        hasNestedTypeChildren = true;
+      }
+    }
     for (int rowIndex = 0; rowIndex < expected.getRowCount(); rowIndex++) {
       assertEquals(expected.isNull(rowIndex), input.isNull(rowIndex));
-      if (expected.getStruct(rowIndex, schema) != null) {
-        assertArrayEquals(expected.getStruct(rowIndex, schema).dataRecord.toString().getBytes(),
-            input.getStruct(rowIndex, schema).dataRecord.toString().getBytes());
+      if (expected.getStruct(rowIndex) != null && !hasNestedTypeChildren) {
+        assertArrayEquals(expected.getStruct(rowIndex).dataRecord.toString().getBytes(),
+            input.getStruct(rowIndex).dataRecord.toString().getBytes());
       }
     }
     for (int j = 0; j < expected.children.size(); j++) {
-      assertPartialColumnsAreEqual(expected.children.get(j), input.children.get(j), colName, enableNullCheck);
-    }
-  }
-
-  /**
-   * Checks and asserts that the two tables from a given rowindex match
-   * @param expected the expected result table
-   * @param rowOffset the row number to start checking from
-   * @param length the number of rows to check
-   * @param table the input table to compare against expected
-   * @param enableNullCheck whether to check for nulls or not
-   */
-  public static void assertPartialTablesAreEqual(Table expected, long rowOffset, long length, Table table, boolean enableNullCheck) {
-    assertEquals(expected.getNumberOfColumns(), table.getNumberOfColumns());
-    assertEquals(length, table.getRowCount(), "ROW COUNT");
-    for (int col = 0; col < expected.getNumberOfColumns(); col++) {
-      ColumnVector expect = expected.getColumn(col);
-      ColumnVector cv = table.getColumn(col);
-      String name = String.valueOf(col);
-      if (rowOffset != 0 || length != expected.getRowCount()) {
-        name = name + " PART " + rowOffset + "-" + (rowOffset + length - 1);
-      }
-      assertPartialColumnsAreEqual(expect, rowOffset, length, cv, name, enableNullCheck, null);
+      assertPartialColumnsAreEqual(expected.children.get(j), 0, expected.getRowCount(),
+          input.children.get(j), colName, enableNullCheck);
     }
   }
 
@@ -382,10 +295,9 @@ public class TableTest extends CudfTestBase {
    * @param length the number of rows to check
    * @param table the input table to compare against expected
    * @param enableNullCheck whether to check for nulls or not
-   * @param tableSchema the table schema as a list of DataType(s)
    */
   public static void assertPartialTablesAreEqual(Table expected, long rowOffset, long length, Table table,
-                                                 boolean enableNullCheck, HostColumnVector.TableSchema tableSchema) {
+                                                 boolean enableNullCheck) {
     assertEquals(expected.getNumberOfColumns(), table.getNumberOfColumns());
     assertEquals(length, table.getRowCount(), "ROW COUNT");
     for (int col = 0; col < expected.getNumberOfColumns(); col++) {
@@ -395,7 +307,7 @@ public class TableTest extends CudfTestBase {
       if (rowOffset != 0 || length != expected.getRowCount()) {
         name = name + " PART " + rowOffset + "-" + (rowOffset + length - 1);
       }
-      assertPartialColumnsAreEqual(expect, rowOffset, length, cv, name, enableNullCheck, tableSchema.types.get(col));
+      assertPartialColumnsAreEqual(expect, rowOffset, length, cv, name, enableNullCheck);
     }
   }
 
@@ -406,16 +318,6 @@ public class TableTest extends CudfTestBase {
    */
   public static void assertTablesAreEqual(Table expected, Table table) {
     assertPartialTablesAreEqual(expected, 0, expected.getRowCount(), table, true);
-  }
-
-  /**
-   * Checks and asserts that the two tables match
-   * @param expected the expected result table
-   * @param table the input table to compare against expected
-   * @param tableSchema The list of DataType(s) as schema for comparison
-   */
-  public static void assertTablesAreEqual(Table expected, Table table, HostColumnVector.TableSchema tableSchema) {
-    assertPartialTablesAreEqual(expected, 0, expected.getRowCount(), table, true, tableSchema);
   }
 
   void assertTablesHaveSameValues(HashMap<Object, Integer>[] expectedTable, Table table) {
@@ -3614,7 +3516,7 @@ public class TableTest extends CudfTestBase {
          Table filteredTable = input.filter(mask);
          ColumnVector expectedStructs = ColumnVector.fromStructs(expectedType, Arrays.asList(structData1, structData3));
          Table expected = new Table(expectedStructs)) {
-      assertTablesAreEqual(expected, filteredTable, new HostColumnVector.TableSchema(expectedType));
+      assertTablesAreEqual(expected, filteredTable);
     }
   }
 
@@ -3640,7 +3542,7 @@ public class TableTest extends CudfTestBase {
          ColumnVector expectedStructs = ColumnVector.fromStructs(expectedType, Arrays.asList(structData1, structData3, structData4));
          Table expected = new Table(expectedStructs)) {
       assertEquals(expected.getRowCount(), 3L, "Expected column row count is incorrect");
-      assertTablesAreEqual(expected, filteredTable, new HostColumnVector.TableSchema(expectedType));
+      assertTablesAreEqual(expected, filteredTable);
     }
   }
 }

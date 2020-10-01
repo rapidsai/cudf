@@ -4,7 +4,7 @@ from cpython.buffer cimport PyBUF_READ
 from cpython.memoryview cimport PyMemoryView_FromMemory
 from libcpp.map cimport map
 from libcpp.memory cimport unique_ptr
-from cudf._lib.move cimport move
+from libcpp.utility cimport move
 from libcpp.vector cimport vector
 from libcpp.pair cimport pair
 from libcpp.string cimport string
