@@ -531,10 +531,10 @@ inline __device__ void gpuOutputString(volatile page_state_s *s, int src_pos, vo
   }
   if (s->dtype_len == 4) {
     // Output hash
-    *reinterpret_cast<uint32_t *>(dstv) = device_str2hash32(ptr, len);
+    *static_cast<uint32_t *>(dstv) = device_str2hash32(ptr, len);
   } else {
     // Output string descriptor
-    nvstrdesc_s *dst = reinterpret_cast<nvstrdesc_s *>(dstv);
+    nvstrdesc_s *dst = static_cast<nvstrdesc_s *>(dstv);
     dst->ptr         = ptr;
     dst->count       = len;
   }
@@ -1034,7 +1034,7 @@ static __device__ bool setupLocalPageInfo(page_state_s *const s,
           uint32_t len = idx < max_depth ? sizeof(cudf::size_type) : s->dtype_len;
 
           pni->data_out =
-            reinterpret_cast<uint8_t *>(s->col.column_data_base[idx]) + (output_offset * len);
+            static_cast<uint8_t *>(s->col.column_data_base[idx]) + (output_offset * len);
           pni->valid_map = s->col.valid_map_base[idx];
           if (pni->valid_map != nullptr) {
             pni->valid_map += output_offset >> 5;
@@ -1642,7 +1642,7 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
 
         uint32_t dtype_len = s->dtype_len;
         void *dst          = s->page.nesting[leaf_level_index].data_out +
-                       static_cast<size_t>(output_value_idx) * dtype_len;
+                    static_cast<size_t>(output_value_idx) * dtype_len;
         if (dtype == BYTE_ARRAY)
           gpuOutputString(s, src_pos, dst);
         else if (dtype == BOOLEAN)
