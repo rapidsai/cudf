@@ -153,7 +153,7 @@
 - PR #6304 Fix span_tests.cu includes
 - PR #6331 Avoids materializing `RangeIndex` during frame concatnation (when not needed)
 - PR #6278 Add filter tests for struct columns
-- PR #XXXX Fix `build.sh` when `PARALLEL_LEVEL` environment variable isn't set
+- PR #6397 Fix `build.sh` when `PARALLEL_LEVEL` environment variable isn't set
 - PR #6345 Fix ambiguous constructor compile error with devtoolset
 - PR #6335 Fix conda commands for outdated python version
 - PR #6380 Avoid problematic column-index check in dask_cudf.read_parquet test
