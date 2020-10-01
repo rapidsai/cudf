@@ -175,7 +175,7 @@ inline __device__ void skipbits(inflate_state_s *s, uint32_t n)
   if (bitpos >= 32) {
     uint8_t *cur = s->cur + 8;
     s->bitbuf.x  = s->bitbuf.y;
-    s->bitbuf.y  = (cur < s->end) ? *(uint32_t *)cur : 0;
+    s->bitbuf.y  = (cur < s->end) ? *reinterpret_cast<uint32_t *>(cur) : 0;
     s->cur       = cur - 4;
     bitpos &= 0x1f;
   }
@@ -889,18 +889,18 @@ __device__ void copy_stored(inflate_state_s *s, int t)
     // Fast copy 16 bytes at a time
     for (int i = t * 16; i < fast_bytes; i += NUMTHREADS * 16) {
       uint4 u;
-      u.x = *(const uint32_t *)(cur4 + i + 0 * 4);
-      u.y = *(const uint32_t *)(cur4 + i + 1 * 4);
-      u.z = *(const uint32_t *)(cur4 + i + 2 * 4);
-      u.w = *(const uint32_t *)(cur4 + i + 3 * 4);
+      u.x = *reinterpret_cast<const uint32_t *>(cur4 + i + 0 * 4);
+      u.y = *reinterpret_cast<const uint32_t *>(cur4 + i + 1 * 4);
+      u.z = *reinterpret_cast<const uint32_t *>(cur4 + i + 2 * 4);
+      u.w = *reinterpret_cast<const uint32_t *>(cur4 + i + 3 * 4);
       if (bitpos != 0) {
-        uint32_t v = (bitpos != 0) ? *(const uint32_t *)(cur4 + i + 4 * 4) : 0;
+        uint32_t v = (bitpos != 0) ? *reinterpret_cast<const uint32_t *>(cur4 + i + 4 * 4) : 0;
         u.x        = __funnelshift_rc(u.x, u.y, bitpos);
         u.y        = __funnelshift_rc(u.y, u.z, bitpos);
         u.z        = __funnelshift_rc(u.z, u.w, bitpos);
         u.w        = __funnelshift_rc(u.w, v, bitpos);
       }
-      *(uint4 *)(out + i) = u;
+      *reinterpret_cast<uint4 *>(out + i) = u;
     }
   }
   cur += fast_bytes;
