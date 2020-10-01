@@ -26,6 +26,7 @@
 
 ## Improvements
 
+- PR #6393 Fix some misspelled words
 - PR #6292 Remove individual size tracking from JNI tracking resource adaptor
 - PR #5946 Add cython and python support for libcudf `to_arrow` and `from_arrow`
 - PR #5919 Remove max_strings and max_chars from nvtext::subword_tokenize
