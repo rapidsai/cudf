@@ -570,9 +570,9 @@ inline __device__ void gpuStoreOutput(uint32_t *dst,
   src8 -= ofs;  // align to 32-bit boundary
   ofs <<= 3;    // bytes -> bits
   if (dict_pos < dict_size) {
-    bytebuf = *(const uint32_t *)(src8 + dict_pos);
+    bytebuf = *reinterpret_cast<const uint32_t *>(src8 + dict_pos);
     if (ofs) {
-      uint32_t bytebufnext = *(const uint32_t *)(src8 + dict_pos + 4);
+      uint32_t bytebufnext = *reinterpret_cast<const uint32_t *>(src8 + dict_pos + 4);
       bytebuf              = __funnelshift_r(bytebuf, bytebufnext, ofs);
     }
   } else {
@@ -599,10 +599,10 @@ inline __device__ void gpuStoreOutput(uint2 *dst,
   src8 -= ofs;  // align to 32-bit boundary
   ofs <<= 3;    // bytes -> bits
   if (dict_pos < dict_size) {
-    v.x = *(const uint32_t *)(src8 + dict_pos + 0);
-    v.y = *(const uint32_t *)(src8 + dict_pos + 4);
+    v.x = *reinterpret_cast<const uint32_t *>(src8 + dict_pos + 0);
+    v.y = *reinterpret_cast<const uint32_t *>(src8 + dict_pos + 4);
     if (ofs) {
-      uint32_t next = *(const uint32_t *)(src8 + dict_pos + 8);
+      uint32_t next = *reinterpret_cast<const uint32_t *>(src8 + dict_pos + 8);
       v.x           = __funnelshift_r(v.x, v.y, ofs);
       v.y           = __funnelshift_r(v.y, next, ofs);
     }
@@ -641,11 +641,11 @@ inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s *s, int src
   if (dict_pos + 4 < dict_size) {
     uint3 v;
     int64_t nanos, secs, days;
-    v.x = *(const uint32_t *)(src8 + dict_pos + 0);
-    v.y = *(const uint32_t *)(src8 + dict_pos + 4);
-    v.z = *(const uint32_t *)(src8 + dict_pos + 8);
+    v.x = *reinterpret_cast<const uint32_t *>(src8 + dict_pos + 0);
+    v.y = *reinterpret_cast<const uint32_t *>(src8 + dict_pos + 4);
+    v.z = *reinterpret_cast<const uint32_t *>(src8 + dict_pos + 8);
     if (ofs) {
-      uint32_t next = *(const uint32_t *)(src8 + dict_pos + 12);
+      uint32_t next = *reinterpret_cast<const uint32_t *>(src8 + dict_pos + 12);
       v.x           = __funnelshift_r(v.x, v.y, ofs);
       v.y           = __funnelshift_r(v.y, v.z, ofs);
       v.z           = __funnelshift_r(v.z, next, ofs);
@@ -698,10 +698,10 @@ inline __device__ void gpuOutputInt64Timestamp(volatile page_state_s *s, int src
     uint2 v;
     int64_t val;
     int32_t ts_scale;
-    v.x = *(const uint32_t *)(src8 + dict_pos + 0);
-    v.y = *(const uint32_t *)(src8 + dict_pos + 4);
+    v.x = *reinterpret_cast<const uint32_t *>(src8 + dict_pos + 0);
+    v.y = *reinterpret_cast<const uint32_t *>(src8 + dict_pos + 4);
     if (ofs) {
-      uint32_t next = *(const uint32_t *)(src8 + dict_pos + 8);
+      uint32_t next = *reinterpret_cast<const uint32_t *>(src8 + dict_pos + 8);
       v.x           = __funnelshift_r(v.x, v.y, ofs);
       v.y           = __funnelshift_r(v.y, next, ofs);
     }
@@ -876,16 +876,16 @@ static __device__ void gpuOutputGeneric(volatile page_state_s *s,
     for (unsigned int i = 0; i < len; i += 4) {
       uint32_t bytebuf;
       if (dict_pos < dict_size) {
-        bytebuf = *(const uint32_t *)(src8 + dict_pos);
+        bytebuf = *reinterpret_cast<const uint32_t *>(src8 + dict_pos);
         if (ofs) {
-          uint32_t bytebufnext = *(const uint32_t *)(src8 + dict_pos + 4);
+          uint32_t bytebufnext = *reinterpret_cast<const uint32_t *>(src8 + dict_pos + 4);
           bytebuf              = __funnelshift_r(bytebuf, bytebufnext, ofs);
         }
       } else {
         bytebuf = 0;
       }
       dict_pos += 4;
-      *(uint32_t *)(dst8 + i) = bytebuf;
+      *reinterpret_cast<uint32_t *>(dst8 + i) = bytebuf;
     }
   }
 }
@@ -913,7 +913,7 @@ static __device__ bool setupLocalPageInfo(page_state_s *const s,
   // Fetch page info
   // NOTE: Assumes that sizeof(PageInfo) <= 256 (and is padded to 4 bytes)
   if (t < sizeof(PageInfo) / sizeof(uint32_t)) {
-    ((uint32_t *)&s->page)[t] = ((const uint32_t *)p)[t];
+    reinterpret_cast<uint32_t *>(&s->page)[t] = reinterpret_cast<const uint32_t *>(p)[t];
   }
   __syncthreads();
   if (s->page.flags & PAGEINFO_FLAGS_DICTIONARY) { return false; }
@@ -922,7 +922,8 @@ static __device__ bool setupLocalPageInfo(page_state_s *const s,
   if ((uint32_t)chunk_idx < (uint32_t)num_chunks) {
     // NOTE: Assumes that sizeof(ColumnChunkDesc) <= 256 (and is padded to 4 bytes)
     if (t < sizeof(ColumnChunkDesc) / sizeof(uint32_t)) {
-      ((uint32_t *)&s->col)[t] = ((const uint32_t *)&chunks[chunk_idx])[t];
+      reinterpret_cast<uint32_t *>(&s->col)[t] =
+        reinterpret_cast<const uint32_t *>(&chunks[chunk_idx])[t];
     }
   }
 
