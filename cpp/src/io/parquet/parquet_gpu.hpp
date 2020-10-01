@@ -378,15 +378,6 @@ cudaError_t DecodePageData(hostdevice_vector<PageInfo> &pages,
                            cudaStream_t stream = (cudaStream_t)0);
 
 /**
- * @brief Get the offset and size of data in the leaf column from a LIST type column with offset
- *
- * @param col Column of LIST type
- * @param stream CUDA stream used for device memory operations and kernel launches.
- */
-std::pair<size_type, size_type> get_leaf_offset(column_device_view col,
-                                                cudaStream_t stream = (cudaStream_t)0);
-
-/**
  * @brief Dremel data that describes one nested type column
  *
  * @see get_dremel_data()
