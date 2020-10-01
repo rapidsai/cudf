@@ -153,20 +153,19 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
       len = dtype_len;
       if (dtype != BOOLEAN) {
         if (dtype == BYTE_ARRAY) {
-          const char *ptr = reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base)[row].ptr;
+          const char *ptr = static_cast<const nvstrdesc_s *>(s->col.column_data_base)[row].ptr;
           uint32_t count =
             (uint32_t) reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base)[row].count;
           len += count;
           hash = nvstr_init_hash(reinterpret_cast<const uint8_t *>(ptr), count);
         } else if (dtype_len_in == 8) {
-          hash = uint64_init_hash(reinterpret_cast<const uint64_t *>(s->col.column_data_base)[row]);
+          hash = uint64_init_hash(static_cast<const uint64_t *>(s->col.column_data_base)[row]);
         } else {
           hash = uint32_init_hash(
             (dtype_len_in == 4)
-              ? reinterpret_cast<const uint32_t *>(s->col.column_data_base)[row]
-              : (dtype_len_in == 2)
-                  ? reinterpret_cast<const uint16_t *>(s->col.column_data_base)[row]
-                  : reinterpret_cast<const uint8_t *>(s->col.column_data_base)[row]);
+              ? static_cast<const uint32_t *>(s->col.column_data_base)[row]
+              : (dtype_len_in == 2) ? static_cast<const uint16_t *>(s->col.column_data_base)[row]
+                                    : static_cast<const uint8_t *>(s->col.column_data_base)[row]);
         }
       }
     } else {
@@ -286,7 +285,7 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
         ck_row_ref = start_row + (s->dict[(hash > 0) ? s->map.u16[hash - 1] : 0] >> INIT_HASH_BITS);
         if (ck_row_ref != ck_row) {
           if (dtype == BYTE_ARRAY) {
-            const nvstrdesc_s *ck_data = reinterpret_cast<const nvstrdesc_s *>(col_data);
+            const nvstrdesc_s *ck_data = static_cast<const nvstrdesc_s *>(col_data);
             const char *str1           = ck_data[ck_row].ptr;
             uint32_t len1              = (uint32_t)ck_data[ck_row].count;
             const char *str2           = ck_data[ck_row_ref].ptr;
@@ -295,21 +294,21 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
             dupe_data_size += (is_dupe) ? 4 + len1 : 0;
           } else {
             if (dtype_len_in == 8) {
-              uint64_t v1 = reinterpret_cast<const uint64_t *>(col_data)[ck_row];
-              uint64_t v2 = reinterpret_cast<const uint64_t *>(col_data)[ck_row_ref];
+              uint64_t v1 = static_cast<const uint64_t *>(col_data)[ck_row];
+              uint64_t v2 = static_cast<const uint64_t *>(col_data)[ck_row_ref];
               is_dupe     = (v1 == v2);
               dupe_data_size += (is_dupe) ? 8 : 0;
             } else {
               uint32_t v1, v2;
               if (dtype_len_in == 4) {
-                v1 = reinterpret_cast<const uint32_t *>(col_data)[ck_row];
-                v2 = reinterpret_cast<const uint32_t *>(col_data)[ck_row_ref];
+                v1 = static_cast<const uint32_t *>(col_data)[ck_row];
+                v2 = static_cast<const uint32_t *>(col_data)[ck_row_ref];
               } else if (dtype_len_in == 2) {
-                v1 = reinterpret_cast<const uint16_t *>(col_data)[ck_row];
-                v2 = reinterpret_cast<const uint16_t *>(col_data)[ck_row_ref];
+                v1 = static_cast<const uint16_t *>(col_data)[ck_row];
+                v2 = static_cast<const uint16_t *>(col_data)[ck_row_ref];
               } else {
-                v1 = reinterpret_cast<const uint8_t *>(col_data)[ck_row];
-                v2 = reinterpret_cast<const uint8_t *>(col_data)[ck_row_ref];
+                v1 = static_cast<const uint8_t *>(col_data)[ck_row];
+                v2 = static_cast<const uint8_t *>(col_data)[ck_row_ref];
               }
               is_dupe = (v1 == v2);
               dupe_data_size += (is_dupe) ? 4 : 0;
