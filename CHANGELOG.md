@@ -103,6 +103,7 @@
 - PR #6347 Add dictionary support to cudf::copy_range
 - PR #6332 Add support to return csv as string when `path=None` in `to_csv`
 - PR #6358 Add Parquet fuzz tests with varying function parameters
+- PR #6369 Add dictionary support to `cudf::find_and_replace`
 - PR #6377 Update ci/local/README.md
 - PR #6383 Removed `move.pxd`, use standard library `move`
 
@@ -156,6 +157,7 @@
 - PR #6278 Add filter tests for struct columns
 - PR #6345 Fix ambiguous constructor compile error with devtoolset
 - PR #6335 Fix conda commands for outdated python version
+- PR #6378 Fix index handling in `fillna` and incorrect pytests
 - PR #6380 Avoid problematic column-index check in dask_cudf.read_parquet test
 
 
