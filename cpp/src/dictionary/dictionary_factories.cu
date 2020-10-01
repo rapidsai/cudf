@@ -132,6 +132,8 @@ std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys,
                                                rmm::mr::device_memory_resource* mr,
                                                cudaStream_t stream)
 {
+  CUDF_EXPECTS(!keys->has_nulls(), "keys column must not have nulls");
+
   // signed integer data can be used directly in the unsigned indices column
   auto const indices_type = cudf::type_dispatcher(indices->type(), signed_to_unsigned_type_fn{});
   auto const indices_size = indices->size();        // these need to be saved
