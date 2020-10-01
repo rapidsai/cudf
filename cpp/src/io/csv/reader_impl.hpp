@@ -104,7 +104,7 @@ class reader::impl {
    * @param load_whole_file Hint that the entire data will be needed on gpu
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  void gather_row_offsets(host_span<char const> const data,
+  void gather_row_offsets(host_span<char const> data,
                           size_t range_begin,
                           size_t range_end,
                           size_t skip_rows,
@@ -119,7 +119,7 @@ class reader::impl {
    *
    * @return Byte position of the first row
    */
-  size_t find_first_row_start(host_span<char const> const data);
+  size_t find_first_row_start(host_span<char const> data);
 
   /**
    * @brief Returns a detected or parsed list of column dtypes.
