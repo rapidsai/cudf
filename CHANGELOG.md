@@ -97,9 +97,8 @@
 - PR #6287 Make java aggregate API follow C++ API
 - PR #6327 Add dictionary specialization to `cudf::replace_nulls`
 - PR #6306 Remove cpw macros from page encode kernels
-- PR #6303 Use cudf test dtypes so timedelta tests are deterministic
 - PR #6375 Parallelize Cython compilation in addition to Cythonization
-- PR #6303 Use cudf test dtypes so timedelta tests are determinstic
+- PR #6303 Use cudf test dtypes so timedelta tests are deterministic
 - PR #6308 Add dictionary support to cudf::scatter with scalar
 - PR #6312 Conda recipe dependency cleanup
 - PR #6347 Add dictionary support to cudf::copy_range
