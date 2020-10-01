@@ -96,8 +96,10 @@
 - PR #6293 Replace shuffle warp reduce with cub calls
 - PR #6287 Make java aggregate API follow C++ API
 - PR #6306 Remove cpw macros from page encode kernels
+- PR #6375 Parallelize Cython compilation in addition to Cythonization
 - PR #6303 Use cudf test dtypes so timedelta tests are determinstic
 - PR #6308 Add dictionary support to cudf::scatter with scalar
+- PR #6312 Conda recipe dependency cleanup
 - PR #6347 Add dictionary support to cudf::copy_range
 - PR #6332 Add support to return csv as string when `path=None` in `to_csv`
 - PR #6377 Update ci/local/README.md
@@ -121,6 +123,7 @@
 - PR #6154 Warnings on row-wise op only when non-numeric columns are found.
 - PR #6150 Fix issue related to inferring `datetime64` format with UTC timezone in string data
 - PR #6179 `make_elements` copies to `iterator` without adjusting `size`
+- PR #6387 Remove extra `std::move` call in java/src/main/native/src/map_lookup.cu
 - PR #6182 Fix cmake build of arrow
 - PR #6288 Fix gcc-9 compilation error with `ColumnVectorJni.cpp`
 - PR #6173 Fix normalize_characters offset logic on sliced strings column
@@ -129,6 +132,7 @@
 - PR #6207 Remove shared libs from Java sources jar
 - PR #6217 Fixed missing bounds checking when storing validity in parquet reader
 - PR #6212 Update codeowners file
+- PR #6389 Fix RMM logging level so that it can be turned off from the command line
 - PR #6157 Fix issue related to `Series.concat` to concat a non-empty and empty series.
 - PR #6226 Add in some JNI checks for null handles
 - PR #6183 Fix issues related to `Series.acos` for consistent output regardless of dtype
@@ -152,6 +156,7 @@
 - PR #6345 Fix ambiguous constructor compile error with devtoolset
 - PR #6335 Fix conda commands for outdated python version
 - PR #6372 Fix issue related to reading a nullable boolean column in `read_parquet` when `engine=pyarrow`
+- PR #6378 Fix index handling in `fillna` and incorrect pytests
 - PR #6380 Avoid problematic column-index check in dask_cudf.read_parquet test
 
 
