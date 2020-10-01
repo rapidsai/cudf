@@ -169,9 +169,9 @@ __device__ void initbits(debrotli_state_s *s, const uint8_t *base, size_t len, s
   s->base     = base;
   s->end      = base + len;
   s->cur      = p;
-  s->bitbuf.x = (p < s->end) ? *(const uint32_t *)p : 0;
+  s->bitbuf.x = (p < s->end) ? *reinterpret_cast<const uint32_t *>(p) : 0;
   p += 4;
-  s->bitbuf.y = (p < s->end) ? *(const uint32_t *)p : 0;
+  s->bitbuf.y = (p < s->end) ? *reinterpret_cast<const uint32_t *>(p) : 0;
   s->bitpos   = prefix_bytes * 8;
 }
 
@@ -194,7 +194,7 @@ inline __device__ void skipbits(debrotli_state_s *s, uint32_t n)
   if (bitpos >= 32) {
     const uint8_t *cur = s->cur + 8;
     s->bitbuf.x        = s->bitbuf.y;
-    s->bitbuf.y        = (cur < s->end) ? *(const uint32_t *)cur : 0;
+    s->bitbuf.y        = (cur < s->end) ? *reinterpret_cast<const uint32_t *>(cur) : 0;
     s->cur             = cur - 4;
     bitpos &= 0x1f;
   }
@@ -275,7 +275,7 @@ static __device__ uint8_t *local_alloc(debrotli_state_s *s, uint32_t bytes)
   int heap_used = s->heap_used;
   int len       = (bytes + 7) >> 3;
   if (heap_used + len <= s->heap_limit) {
-    uint8_t *ptr = (uint8_t *)&s->heap[heap_used];
+    uint8_t *ptr = reinterpret_cast<uint8_t *>(&s->heap[heap_used]);
     s->heap_used = (uint16_t)(heap_used + len);
     return ptr;
   } else {
@@ -293,7 +293,7 @@ static __device__ uint8_t *local_heap_shrink(debrotli_state_s *s, uint32_t bytes
   if (heap_limit - len >= heap_used) {
     heap_limit -= len;
     s->heap_limit = (uint16_t)heap_limit;
-    return (uint8_t *)&s->heap[heap_limit];
+    return reinterpret_cast<uint8_t *>(&s->heap[heap_limit]);
   } else {
     return nullptr;
   }
@@ -312,7 +312,7 @@ static __device__ uint8_t *ext_heap_alloc(uint32_t bytes,
                                           uint32_t ext_heap_size)
 {
   uint32_t len                = (bytes + 0xf) & ~0xf;
-  volatile uint32_t *heap_ptr = (volatile uint32_t *)ext_heap_base;
+  volatile uint32_t *heap_ptr = reinterpret_cast<volatile uint32_t *>(ext_heap_base);
   uint32_t first_free_block   = ~0;
   for (;;) {
     uint32_t blk_next, blk_prev;
@@ -387,7 +387,7 @@ static __device__ void ext_heap_free(void *ptr,
   uint32_t len                = (bytes + 0xf) & ~0xf;
   volatile uint32_t *heap_ptr = (volatile uint32_t *)ext_heap_base;
   uint32_t first_free_block   = ~0;
-  uint32_t cur_blk            = (uint32_t)((uint8_t *)ptr - ext_heap_base);
+  uint32_t cur_blk            = static_cast<uint32_t>(static_cast<uint8_t *>(ptr) - ext_heap_base);
   for (;;) {
     first_free_block = atomicExch((unsigned int *)heap_ptr, first_free_block);
     if (first_free_block != ~0) { break; }
@@ -1214,8 +1214,8 @@ static __device__ void DecodeHuffmanTables(debrotli_state_s *s)
       uint16_t *vlctab;
       maxtblsz = kMaxHuffmanTableSize[(alphabet_size + 31) >> 5];
       maxtblsz = (maxtblsz > BROTLI_HUFFMAN_MAX_SIZE_258) ? BROTLI_HUFFMAN_MAX_SIZE_258 : maxtblsz;
-      vlctab =
-        (uint16_t *)local_alloc(s, (BROTLI_HUFFMAN_MAX_SIZE_26 + maxtblsz) * sizeof(uint16_t));
+      vlctab   = reinterpret_cast<uint16_t *>(
+        local_alloc(s, (BROTLI_HUFFMAN_MAX_SIZE_26 + maxtblsz) * sizeof(uint16_t)));
       s->block_type_vlc[b] = vlctab;
       DecodeHuffmanTree(s, alphabet_size, alphabet_size, vlctab + BROTLI_HUFFMAN_MAX_SIZE_26);
       alphabet_size = 26;
@@ -1258,7 +1258,7 @@ static __device__ void InverseMoveToFrontTransform(debrotli_state_s *s, uint8_t 
   uint32_t i           = 1;
   uint32_t upper_bound = s->mtf_upper_bound;
   uint32_t *mtf        = &s->mtf[1];  // Make mtf[-1] addressable.
-  uint8_t *mtf_u8      = (uint8_t *)mtf;
+  uint8_t *mtf_u8      = reinterpret_cast<uint8_t *>(mtf);
   uint32_t pattern     = 0x03020100;  // Little-endian
 
   // Initialize list using 4 consequent values pattern.
@@ -1377,12 +1377,12 @@ static __device__ debrotli_huff_tree_group_s *HuffmanTreeGroupInit(debrotli_stat
                                                                    uint32_t max_symbol,
                                                                    uint32_t ntrees)
 {
-  debrotli_huff_tree_group_s *group = (debrotli_huff_tree_group_s *)local_alloc(
-    s, sizeof(debrotli_huff_tree_group_s) + ntrees * sizeof(uint16_t *) - sizeof(uint16_t *));
-  group->alphabet_size = (uint16_t)alphabet_size;
-  group->max_symbol    = (uint16_t)max_symbol;
-  group->num_htrees    = (uint16_t)ntrees;
-  group->htrees[0]     = nullptr;
+  debrotli_huff_tree_group_s *group = reinterpret_cast<debrotli_huff_tree_group_s *>(local_alloc(
+    s, sizeof(debrotli_huff_tree_group_s) + ntrees * sizeof(uint16_t *) - sizeof(uint16_t *)));
+  group->alphabet_size              = (uint16_t)alphabet_size;
+  group->max_symbol                 = (uint16_t)max_symbol;
+  group->num_htrees                 = (uint16_t)ntrees;
+  group->htrees[0]                  = nullptr;
   return group;
 }
 
@@ -1393,9 +1393,9 @@ static __device__ void HuffmanTreeGroupAlloc(debrotli_state_s *s, debrotli_huff_
     uint32_t ntrees         = group->num_htrees;
     uint32_t max_table_size = kMaxHuffmanTableSize[(alphabet_size + 31) >> 5];
     uint32_t code_size      = sizeof(uint16_t) * ntrees * max_table_size;
-    group->htrees[0]        = (uint16_t *)local_alloc(s, code_size);
+    group->htrees[0]        = reinterpret_cast<uint16_t *>(local_alloc(s, code_size));
     if (!group->htrees[0]) {
-      if (s->fb_base) { group->htrees[0] = (uint16_t *)(s->fb_base + s->fb_size); }
+      if (s->fb_base) { group->htrees[0] = reinterpret_cast<uint16_t *>(s->fb_base + s->fb_size); }
       s->fb_size += (code_size + 3) & ~3;
     }
   }
@@ -1434,8 +1434,8 @@ static __device__ void DecodeHuffmanTreeGroups(debrotli_state_s *s,
   nbltypesl                    = s->num_block_types[0];
   s->context_modes             = local_alloc(s, nbltypesl);
   for (uint32_t i = 0; i < nbltypesl; i++) { s->context_modes[i] = getbits(s, 2); }
-  context_map_vlc =
-    (uint16_t *)local_heap_shrink(s, BROTLI_HUFFMAN_MAX_SIZE_272 * sizeof(uint16_t));
+  context_map_vlc = reinterpret_cast<uint16_t *>(
+    local_heap_shrink(s, BROTLI_HUFFMAN_MAX_SIZE_272 * sizeof(uint16_t)));
   context_map_size   = nbltypesl << 6;
   s->context_map     = local_alloc(s, context_map_size);
   num_literal_htrees = DecodeContextMap(s, s->context_map, context_map_size, context_map_vlc);
@@ -1590,8 +1590,8 @@ static __device__ void ProcessCommands(debrotli_state_s *s, const brotli_diction
   const uint8_t *context_map_slice, *dist_context_map_slice;
   int dist_rb_idx;
   uint32_t blen_L, blen_I, blen_D;
-  uint8_t *const dict_scratch =
-    (uint8_t *)&s->hs;  // 24+13 bytes (max length of a dictionary word including prefix & suffix)
+  uint8_t *const dict_scratch = reinterpret_cast<uint8_t *>(
+    &s->hs);  // 24+13 bytes (max length of a dictionary word including prefix & suffix)
   int context_mode;
 
   if (!t) {
@@ -1873,11 +1873,11 @@ extern "C" __global__ void __launch_bounds__(NUMTHREADS, 2)
   if (z >= count) { return; }
   // Thread0: initializes shared state and decode stream header
   if (!t) {
-    uint8_t *src    = (uint8_t *)inputs[z].srcDevice;
-    size_t src_size = inputs[z].srcSize;
+    uint8_t const *src = static_cast<uint8_t const *>(inputs[z].srcDevice);
+    size_t src_size    = inputs[z].srcSize;
     if (src && src_size >= 8) {
       s->error = 0;
-      s->out = s->outbase = (uint8_t *)inputs[z].dstDevice;
+      s->out = s->outbase = static_cast<uint8_t *>(inputs[z].dstDevice);
       s->bytes_left       = inputs[z].dstSize;
       s->mtf_upper_bound  = 63;
       s->dist_rb[0]       = 16;
@@ -1937,7 +1937,9 @@ extern "C" __global__ void __launch_bounds__(NUMTHREADS, 2)
           __syncthreads();
           if (!s->error) {
             // Warp0: Decode compressed block, warps 1..7 are all idle (!)
-            if (t < 32) ProcessCommands(s, (brotli_dictionary_s *)(scratch + scratch_size), t);
+            if (t < 32)
+              ProcessCommands(
+                s, reinterpret_cast<brotli_dictionary_s *>(scratch + scratch_size), t);
             __syncthreads();
           }
           // Free any allocated memory
@@ -2027,7 +2029,7 @@ cudaError_t __host__ gpu_debrotli(gpu_inflate_input_s *inputs,
 {
   uint32_t count32 = (count > 0) ? count : 0;
   uint32_t fb_heap_size;
-  uint8_t *scratch_u8 = (uint8_t *)scratch;
+  uint8_t *scratch_u8 = static_cast<uint8_t *>(scratch);
   dim3 dim_block(NUMTHREADS, 1);
   dim3 dim_grid(count32, 1);  // TODO: Check max grid dimensions vs max expected count
 
