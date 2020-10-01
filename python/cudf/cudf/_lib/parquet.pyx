@@ -18,6 +18,7 @@ from libcpp.memory cimport shared_ptr, unique_ptr, make_unique
 from libcpp.string cimport string
 from libcpp.map cimport map
 from libcpp.vector cimport vector
+from libcpp.utility cimport move
 from libcpp cimport bool
 
 from cudf._lib.cpp.types cimport data_type, size_type
@@ -26,7 +27,6 @@ from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport (
     table_view
 )
-from cudf._lib.move cimport move
 from cudf._lib.cpp.io.parquet cimport (
     read_parquet as parquet_reader,
     parquet_reader_options,
