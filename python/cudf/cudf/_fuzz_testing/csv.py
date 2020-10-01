@@ -5,8 +5,8 @@ import logging
 import random
 
 import cudf
-from cudf.testing.io import IOFuzz
-from cudf.testing.utils import _generate_rand_meta, pyarrow_to_pandas
+from cudf._fuzz_testing.io import IOFuzz
+from cudf._fuzz_testing.utils import _generate_rand_meta, pyarrow_to_pandas
 from cudf.tests import dataset_generator as dg
 
 logging.basicConfig(

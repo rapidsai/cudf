@@ -1,6 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from cudf.testing import fuzzer
+from cudf._fuzz_testing import fuzzer
 
 
 class PythonFuzz(object):
