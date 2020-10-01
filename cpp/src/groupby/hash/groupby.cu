@@ -24,6 +24,7 @@
 #include <cudf/detail/aggregation/aggregation.cuh>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/aggregation/result_cache.hpp>
+#include <cudf/detail/binaryop.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/groupby.hpp>
@@ -58,7 +59,8 @@ namespace {
 constexpr std::array<aggregation::Kind, 7> hash_aggregations{
     aggregation::SUM, aggregation::MIN, aggregation::MAX,
     aggregation::COUNT_VALID, aggregation::COUNT_ALL,
-    aggregation::ARGMIN, aggregation::ARGMAX};
+    aggregation::ARGMIN, aggregation::ARGMAX,
+    aggregation::MEAN};
 
 template <class T, size_t N>
 constexpr bool array_contains(std::array<T, N> const& haystack, T needle) {
@@ -84,7 +86,7 @@ bool constexpr is_hash_aggregation(aggregation::Kind t)
   // return array_contains(hash_aggregations, t);
   return (t == aggregation::SUM) or (t == aggregation::MIN) or (t == aggregation::MAX) or
          (t == aggregation::COUNT_VALID) or (t == aggregation::COUNT_ALL) or
-         (t == aggregation::ARGMIN) or (t == aggregation::ARGMAX);
+         (t == aggregation::ARGMIN) or (t == aggregation::ARGMAX) or (t == aggregation::MEAN);
 }
 
 // flatten aggs to filter in single pass aggs
@@ -109,7 +111,12 @@ flatten_single_pass_aggs(std::vector<aggregation_request> const& requests)
       if (is_hash_aggregation(agg->kind)) {
         if (is_fixed_width(request.values.type()) or agg->kind == aggregation::COUNT_VALID or
             agg->kind == aggregation::COUNT_ALL) {
-          insert_agg(agg->kind);
+          if (agg->kind == aggregation::MEAN) {
+            insert_agg(aggregation::SUM);
+            insert_agg(aggregation::COUNT_VALID);
+          } else {
+            insert_agg(agg->kind);
+          }
         } else if (request.values.type().id() == type_id::STRING) {
           // For string type, only ARGMIN, ARGMAX, MIN, and MAX are supported
           if (agg->kind == aggregation::ARGMIN or agg->kind == aggregation::ARGMAX) {
@@ -307,6 +314,33 @@ void compute_single_pass_aggs(table_view const& keys,
   }
 }
 
+void compute_multi_pass_aggs(std::vector<aggregation_request> const& requests,
+                             cudf::detail::result_cache* sparse_results,
+                             cudaStream_t stream)
+{
+  for (size_t i = 0; i < requests.size(); i++) {
+    auto const& agg_v  = requests[i].aggregations;
+    auto const& values = requests[i].values;
+
+    for (auto&& agg : agg_v) {
+      if (is_fixed_width(values.type()) and agg->kind == aggregation::MEAN) {
+        auto count_agg    = std::make_unique<aggregation>(aggregation::COUNT_VALID);
+        auto count_result = sparse_results->get_result(i, *count_agg);
+        auto sum_agg      = std::make_unique<aggregation>(aggregation::SUM);
+        auto sum_result   = sparse_results->get_result(i, *sum_agg);
+        auto result       = cudf::detail::binary_operation(
+          sum_result,
+          count_result,
+          binary_operator::DIV,
+          cudf::detail::target_type(values.type(), aggregation::MEAN),
+          rmm::mr::get_current_device_resource(),
+          stream);
+        sparse_results->add_result(i, *agg, std::move(result));
+      }
+    }
+  }
+}
+
 /**
  * @brief Computes and returns a device vector containing all populated keys in
  * `map`.
@@ -383,7 +417,7 @@ std::unique_ptr<table> groupby_null_templated(table_view const& keys,
     keys, requests, &sparse_results, *map, include_null_keys, stream);
 
   // Now continue with remaining multi-pass aggs
-  // <placeholder>
+  compute_multi_pass_aggs(requests, &sparse_results, stream);
 
   // Extract the populated indices from the hash map and create a gather map.
   // Gathering using this map from sparse results will give dense results.
