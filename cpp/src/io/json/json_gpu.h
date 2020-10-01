@@ -50,13 +50,13 @@ using col_map_type = concurrent_unordered_map<uint32_t, cudf::size_type>;
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 void convert_json_to_columns(ParseOptions const &options,
-                             device_span<char const> const data,
-                             device_span<uint64_t const> const row_offsets,
-                             device_span<data_type const> const column_types,
+                             device_span<char const> data,
+                             device_span<uint64_t const> row_offsets,
+                             device_span<data_type const> column_types,
                              col_map_type *col_map,
-                             device_span<void *const> const output_columns,
-                             device_span<bitmask_type *const> const valid_fields,
-                             device_span<cudf::size_type> const num_valid_fields,
+                             device_span<void *const> output_columns,
+                             device_span<bitmask_type *const> valid_fields,
+                             device_span<cudf::size_type> num_valid_fields,
                              cudaStream_t stream = 0);
 
 /**
@@ -72,14 +72,13 @@ void convert_json_to_columns(ParseOptions const &options,
  *
  * @returns The count for each column data type
  */
-std::vector<cudf::io::json::column_info> detect_data_types(
-  ParseOptions const &options,
-  device_span<char const> const data,
-  device_span<uint64_t const> const row_offsets,
-  bool do_set_null_count,
-  int num_columns,
-  col_map_type *col_map,
-  cudaStream_t stream = 0);
+std::vector<cudf::io::json::column_info> detect_data_types(ParseOptions const &options,
+                                                           device_span<char const> data,
+                                                           device_span<uint64_t const> row_offsets,
+                                                           bool do_set_null_count,
+                                                           int num_columns,
+                                                           col_map_type *col_map,
+                                                           cudaStream_t stream = 0);
 
 /**
  * @brief Collects information about JSON object keys in the file.
@@ -92,8 +91,8 @@ std::vector<cudf::io::json::column_info> detect_data_types(
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 void collect_keys_info(ParseOptions const &options,
-                       device_span<char const> const data,
-                       device_span<uint64_t const> const row_offsets,
+                       device_span<char const> data,
+                       device_span<uint64_t const> row_offsets,
                        unsigned long long int *keys_cnt,
                        thrust::optional<mutable_table_device_view> keys_info,
                        cudaStream_t stream = 0);

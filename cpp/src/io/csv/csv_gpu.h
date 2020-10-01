@@ -153,8 +153,8 @@ inline __host__ __device__ rowctx64_t select_row_context(rowctx64_t sel_ctx,
  **/
 uint32_t gather_row_offsets(cudf::io::ParseOptions const &options,
                             uint64_t *row_ctx,
-                            device_span<uint64_t> const offsets_out,
-                            device_span<char const> const data,
+                            device_span<uint64_t> offsets_out,
+                            device_span<char const> data,
                             size_t chunk_size,
                             size_t parse_pos,
                             size_t start_offset,
@@ -174,8 +174,8 @@ uint32_t gather_row_offsets(cudf::io::ParseOptions const &options,
  *
  **/
 size_t count_blank_rows(cudf::io::ParseOptions const &options,
-                        device_span<char const> const data,
-                        device_span<uint64_t const> const row_offsets,
+                        device_span<char const> data,
+                        device_span<uint64_t const> row_offsets,
                         cudaStream_t stream = 0);
 
 /**
@@ -188,7 +188,7 @@ size_t count_blank_rows(cudf::io::ParseOptions const &options,
  *
  **/
 void remove_blank_rows(const cudf::io::ParseOptions &options,
-                       device_span<char const> const data,
+                       device_span<char const> data,
                        rmm::device_vector<uint64_t> &row_offsets,
                        cudaStream_t stream = 0);
 
@@ -205,9 +205,9 @@ void remove_blank_rows(const cudf::io::ParseOptions &options,
  **/
 thrust::host_vector<column_parse::stats> detect_column_types(
   cudf::io::ParseOptions const &options,
-  device_span<char const> const data,
-  device_span<column_parse::flags const> const column_flags,
-  device_span<uint64_t const> const row_offsets,
+  device_span<char const> data,
+  device_span<column_parse::flags const> column_flags,
+  device_span<uint64_t const> row_offsets,
   size_t const num_active_columns,
   cudaStream_t stream = 0);
 
@@ -224,12 +224,12 @@ thrust::host_vector<column_parse::stats> detect_column_types(
  * @param[in] stream CUDA stream to use, default 0
  **/
 void decode_row_column_data(cudf::io::ParseOptions const &options,
-                            device_span<char const> const data,
-                            device_span<column_parse::flags const> const column_flags,
-                            device_span<uint64_t const> const row_offsets,
-                            device_span<cudf::data_type const> const dtypes,
-                            device_span<void *> const columns,
-                            device_span<cudf::bitmask_type *> const valids,
+                            device_span<char const> data,
+                            device_span<column_parse::flags const> column_flags,
+                            device_span<uint64_t const> row_offsets,
+                            device_span<cudf::data_type const> dtypes,
+                            device_span<void *> columns,
+                            device_span<cudf::bitmask_type *> valids,
                             cudaStream_t stream = 0);
 
 }  // namespace gpu
