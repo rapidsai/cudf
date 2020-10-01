@@ -52,6 +52,7 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
+#include <map_lookup.hpp>
 
 #include "cudf_jni_apis.hpp"
 
@@ -1070,6 +1071,22 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringReplace(JNIEnv *e
     cudf::string_scalar *ss_replace = reinterpret_cast<cudf::string_scalar *>(replace);
 
     std::unique_ptr<cudf::column> result = cudf::strings::replace(scv, *ss_target, *ss_replace);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_mapLookup(JNIEnv *env, jclass,
+                                                                       jlong map_column_view,
+                                                                       jlong lookup_key) {
+  JNI_NULL_CHECK(env, map_column_view, "column is null", 0);
+  JNI_NULL_CHECK(env, lookup_key, "target string scalar is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(map_column_view);
+    cudf::string_scalar *ss_key = reinterpret_cast<cudf::string_scalar *>(lookup_key);
+
+    std::unique_ptr<cudf::column> result = cudf::jni::map_lookup(*cv, *ss_key);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);

@@ -1,13 +1,13 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
+from libcpp.utility cimport move
 
 from cudf.utils.dtypes import is_scalar
 
 from cudf._lib.column cimport Column
 from cudf._lib.scalar import as_scalar
 from cudf._lib.scalar cimport Scalar
-from cudf._lib.move cimport move
 
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.column.column cimport column
