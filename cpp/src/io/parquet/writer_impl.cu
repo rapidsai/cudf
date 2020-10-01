@@ -806,8 +806,8 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
   rmm::device_vector<gpu::EncPage> pages(num_pages);
   rmm::device_vector<statistics_chunk> page_stats(num_stats_bfr);
   for (uint32_t b = 0, r = 0; b < (uint32_t)batch_list.size(); b++) {
-    uint8_t *bfr   = reinterpret_cast<uint8_t *>(uncomp_bfr.data());
-    uint8_t *bfr_c = reinterpret_cast<uint8_t *>(comp_bfr.data());
+    uint8_t *bfr   = static_cast<uint8_t *>(uncomp_bfr.data());
+    uint8_t *bfr_c = static_cast<uint8_t *>(comp_bfr.data());
     for (uint32_t j = 0; j < batch_list[b]; j++, r++) {
       for (int i = 0; i < num_columns; i++) {
         gpu::EncColumnChunk *ck = &chunks[r * num_columns + i];
