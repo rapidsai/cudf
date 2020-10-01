@@ -33,6 +33,7 @@
 - PR #5953 Use stable sort when doing a sort groupby
 - PR #5973 Link to the Code of Conduct in CONTRIBUTING.md
 - PR #6354 Perform shallow clone of external projects
+- PR #6388 Add documentation for building `libboost_filesystem.a` from source
 - PR #5917 Just use `None` for `strides` in `Buffer`
 - PR #6015 Upgrade CUB/Thrust to the latest commit
 - PR #5971 Add cuStreamz README for basic installation and use
@@ -45,6 +46,7 @@
 - PR #6051 Add builder API for cuIO `parquet_writer_options` and `parquet_reader_options`
 - PR #6067 Added compute codes for aarch64 devices
 - PR #6083 Small cleanup
+- PR #6355 Make sure PTDS mode is compatible between libcudf and JNI
 - PR #6120 Consolidate functionality in NestedHostColumnVector and HostColumnVector
 - PR #6092 Add `name` and `dtype` field to `Index.copy`
 - PR #5984 Support gather() on CUDF struct columns
@@ -96,7 +98,11 @@
 - PR #6327 Add dictionary specialization to `cudf::replace_nulls`
 - PR #6306 Remove cpw macros from page encode kernels
 - PR #6303 Use cudf test dtypes so timedelta tests are deterministic
+- PR #6375 Parallelize Cython compilation in addition to Cythonization
+- PR #6303 Use cudf test dtypes so timedelta tests are determinstic
 - PR #6308 Add dictionary support to cudf::scatter with scalar
+- PR #6312 Conda recipe dependency cleanup
+- PR #6347 Add dictionary support to cudf::copy_range
 - PR #6332 Add support to return csv as string when `path=None` in `to_csv`
 - PR #6377 Update ci/local/README.md
 - PR #6383 Removed `move.pxd`, use standard library `move`
@@ -127,6 +133,7 @@
 - PR #6207 Remove shared libs from Java sources jar
 - PR #6217 Fixed missing bounds checking when storing validity in parquet reader
 - PR #6212 Update codeowners file
+- PR #6389 Fix RMM logging level so that it can be turned off from the command line
 - PR #6157 Fix issue related to `Series.concat` to concat a non-empty and empty series.
 - PR #6226 Add in some JNI checks for null handles
 - PR #6183 Fix issues related to `Series.acos` for consistent output regardless of dtype
