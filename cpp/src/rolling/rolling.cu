@@ -1027,6 +1027,14 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   CUDF_EXPECTS(default_outputs.type().id() == input.type().id(),
                "Defaults column type must match input column.");  // Because LEAD/LAG.
 
+  if (agg->kind == aggregation::LEAD || agg->kind == aggregation::LAG) {
+    // For LEAD(0)/LAG(0), no computation need be performed.
+    // Return copy of input.
+    if (0 == static_cast<cudf::detail::lead_lag_aggregation*>(agg.get())->row_offset) {
+      return std::make_unique<column>(input, static_cast<cudaStream_t>(0), mr);
+    }
+  }
+
   if (agg->kind == aggregation::CUDA || agg->kind == aggregation::PTX) {
     return cudf::detail::rolling_window_udf(input,
                                             preceding_window,
@@ -1139,6 +1147,14 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
 
   CUDF_EXPECTS(default_outputs.type().id() == input.type().id(),
                "Defaults column type must match input column.");  // Because LEAD/LAG.
+
+  if (aggr->kind == aggregation::LEAD || aggr->kind == aggregation::LAG) {
+    // For LEAD(0)/LAG(0), no computation need be performed.
+    // Return copy of input.
+    if (0 == static_cast<cudf::detail::lead_lag_aggregation*>(aggr.get())->row_offset) {
+      return std::make_unique<column>(input, static_cast<cudaStream_t>(0), mr);
+    }
+  }
 
   if (group_keys.num_columns() == 0) {
     // No Groupby columns specified. Treat as one big group.
