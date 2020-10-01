@@ -561,7 +561,7 @@ void reader::impl::read_column_chunks(
     if (io_size != 0) {
       auto buffer         = _sources[chunk_source_map[chunk]]->host_read(io_offset, io_size);
       page_data[chunk]    = rmm::device_buffer(buffer->data(), buffer->size(), stream);
-      uint8_t *d_compdata = reinterpret_cast<uint8_t *>(page_data[chunk].data());
+      uint8_t *d_compdata = static_cast<uint8_t *>(page_data[chunk].data());
       do {
         chunks[chunk].compressed_data = d_compdata;
         d_compdata += chunks[chunk].compressed_size;
