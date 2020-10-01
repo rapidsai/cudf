@@ -252,7 +252,7 @@ class data_type {
    * @param id The `fixed_point`'s identifier
    * @param scale The `fixed_point`'s scale (see `fixed_poit::_scale`)
    **/
-  explicit data_type(type_id id, int32_t scale) : _id{id}, _scale{scale}
+  explicit data_type(type_id id, int32_t scale) : _id{id}, _fixed_point_scale{scale}
   {
     assert(id == type_id::DECIMAL32 || id == type_id::DECIMAL64);
   }
@@ -265,12 +265,14 @@ class data_type {
   /**
    * @brief Returns the scale (for fixed_point types)
    **/
-  CUDA_HOST_DEVICE_CALLABLE int32_t scale() const noexcept { return _scale; }
+  CUDA_HOST_DEVICE_CALLABLE int32_t scale() const noexcept { return _fixed_point_scale; }
 
  private:
   type_id _id{type_id::EMPTY};
-  // Store additional type specific metadata, timezone, decimal precision and scale, etc.
-  int32_t _scale{};  // numeric::scale_type not available here, use int32_t
+
+  // Below is additional type specific metadata. Currently, only _fixed_point_scale is stored.
+
+  int32_t _fixed_point_scale{};  // numeric::scale_type not available here, use int32_t
 };
 
 /**
