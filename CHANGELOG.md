@@ -148,6 +148,7 @@
 - PR #6278 Add filter tests for struct columns
 - PR #6345 Fix ambiguous constructor compile error with devtoolset
 - PR #6335 Fix conda commands for outdated python version
+- PR #6380 Avoid problematic column-index check in dask_cudf.read_parquet test
 
 
 # cuDF 0.15.0 (26 Aug 2020)
