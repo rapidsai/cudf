@@ -48,11 +48,11 @@ def parquet_reader_columns_engine(
 
 
 @pythonfuzz(data_handle=ParquetWriter)
-def parquet_writer_test(gdf):
+def parquet_writer_test(pdf):
     pd_file_name = "cpu_pdf.parquet"
     gd_file_name = "gpu_pdf.parquet"
 
-    pdf = gdf.to_pandas()
+    gdf = cudf.from_pandas(pdf)
 
     pdf.to_parquet(pd_file_name)
     gdf.to_parquet(gd_file_name)
@@ -75,12 +75,12 @@ def parquet_writer_test(gdf):
     },
 )
 def parquet_writer_test_rowgroup_index_compression(
-    gdf, index, compression, row_group_size
+    pdf, index, compression, row_group_size
 ):
     pd_file_name = "cpu_pdf.parquet"
     gd_file_name = "gpu_pdf.parquet"
 
-    pdf = gdf.to_pandas()
+    gdf = cudf.from_pandas(pdf)
 
     pdf.to_parquet(
         pd_file_name,

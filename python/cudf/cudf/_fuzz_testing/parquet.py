@@ -136,9 +136,10 @@ class ParquetWriter(IOFuzz):
             f"Generating DataFrame with rows: {num_rows} "
             f"and columns: {num_cols}"
         )
-        df = cudf.DataFrame.from_arrow(
-            dg.rand_dataframe(dtypes_meta, num_rows, seed)
-        )
+
+        table = dg.rand_dataframe(dtypes_meta, num_rows, seed)
+        df = pyarrow_to_pandas(table)
+
         logging.info(f"Shape of DataFrame generated: {df.shape}")
         self._current_buffer = df
         return df
