@@ -1641,25 +1641,25 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
         int leaf_level_index = s->col.max_level[level_type::REPETITION];
 
         uint32_t dtype_len = s->dtype_len;
-        uint8_t *dst       = s->page.nesting[leaf_level_index].data_out +
+        void *dst          = s->page.nesting[leaf_level_index].data_out +
                        static_cast<size_t>(output_value_idx) * dtype_len;
         if (dtype == BYTE_ARRAY)
           gpuOutputString(s, src_pos, dst);
         else if (dtype == BOOLEAN)
-          gpuOutputBoolean(s, src_pos, dst);
+          gpuOutputBoolean(s, src_pos, static_cast<uint8_t *>(dst));
         else if (s->col.converted_type == DECIMAL)
-          gpuOutputDecimal(s, src_pos, reinterpret_cast<double *>(dst), dtype);
+          gpuOutputDecimal(s, src_pos, static_cast<double *>(dst), dtype);
         else if (dtype == INT96)
-          gpuOutputInt96Timestamp(s, src_pos, reinterpret_cast<int64_t *>(dst));
+          gpuOutputInt96Timestamp(s, src_pos, static_cast<int64_t *>(dst));
         else if (dtype_len == 8) {
           if (s->ts_scale)
-            gpuOutputInt64Timestamp(s, src_pos, reinterpret_cast<int64_t *>(dst));
+            gpuOutputInt64Timestamp(s, src_pos, static_cast<int64_t *>(dst));
           else
-            gpuOutputFast(s, src_pos, reinterpret_cast<uint2 *>(dst));
+            gpuOutputFast(s, src_pos, static_cast<uint2 *>(dst));
         } else if (dtype_len == 4)
-          gpuOutputFast(s, src_pos, reinterpret_cast<uint32_t *>(dst));
+          gpuOutputFast(s, src_pos, static_cast<uint32_t *>(dst));
         else
-          gpuOutputGeneric(s, src_pos, dst, dtype_len);
+          gpuOutputGeneric(s, src_pos, static_cast<uint8_t *>(dst), dtype_len);
       }
 
       if (t == out_thread0) { *(volatile int32_t *)&s->out_pos = target_pos; }
