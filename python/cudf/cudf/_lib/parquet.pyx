@@ -18,6 +18,7 @@ from libcpp.memory cimport shared_ptr, unique_ptr, make_unique
 from libcpp.string cimport string
 from libcpp.map cimport map
 from libcpp.vector cimport vector
+from libcpp.utility cimport move
 from libcpp cimport bool
 
 from cudf._lib.cpp.types cimport data_type, size_type
@@ -26,7 +27,6 @@ from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport (
     table_view
 )
-from cudf._lib.move cimport move
 from cudf._lib.cpp.io.parquet cimport (
     read_parquet as parquet_reader,
     parquet_reader_options,
@@ -274,7 +274,7 @@ cpdef write_parquet(
     cdef map[string, string] user_data
     cdef table_view tv = table.data_view()
     cdef unique_ptr[cudf_io_types.data_sink] _data_sink
-    cdef cudf_io_types.sink_info sink = make_sink_info(path, &_data_sink)
+    cdef cudf_io_types.sink_info sink = make_sink_info(path, _data_sink)
 
     if index is not False:
         tv = table.view()
@@ -349,7 +349,7 @@ cdef class ParquetWriter:
 
     def __cinit__(self, object path, object index=None,
                   object compression=None, str statistics="ROWGROUP"):
-        self.sink = make_sink_info(path, &self._data_sink)
+        self.sink = make_sink_info(path, self._data_sink)
         self.stat_freq = _get_stat_freq(statistics)
         self.comp_type = _get_comp_type(compression)
         self.index = index
