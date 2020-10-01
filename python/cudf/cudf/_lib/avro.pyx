@@ -7,11 +7,11 @@ from cudf._lib.cpp.io.avro cimport (
 
 from libcpp.string cimport string
 from libcpp.vector cimport vector
+from libcpp.utility cimport move
 
 from cudf._lib.cpp.io.types cimport table_with_metadata
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.io.utils cimport make_source_info
-from cudf._lib.move cimport move
 from cudf._lib.table cimport Table
 
 

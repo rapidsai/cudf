@@ -4,6 +4,7 @@ from libcpp cimport bool
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
+from libcpp.utility cimport move
 
 import cudf
 
@@ -37,7 +38,6 @@ from cudf._lib.cpp.io.types cimport (
     table_with_metadata
 )
 from cudf._lib.io.utils cimport make_source_info, make_sink_info
-from cudf._lib.move cimport move
 from cudf._lib.table cimport Table
 from cudf._lib.cpp.table.table_view cimport table_view
 
@@ -424,7 +424,7 @@ cpdef write_csv(
     cdef string true_value_c = 'True'.encode()
     cdef string false_value_c = 'False'.encode()
     cdef unique_ptr[data_sink] data_sink_c
-    cdef sink_info sink_info_c = make_sink_info(path_or_buf, &data_sink_c)
+    cdef sink_info sink_info_c = make_sink_info(path_or_buf, data_sink_c)
 
     if header is True and table._column_names is not None:
         metadata_.column_names.reserve(len(table._column_names))

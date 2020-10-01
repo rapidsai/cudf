@@ -18,19 +18,19 @@ Build and test your local repository using a base gpuCI Docker image
 where:
     -H   Show this help text
     -r   Path to repository (defaults to working directory)
-    -i   Use Docker image (default is gpuci/rapidsai-base:cuda10.0-ubuntu16.04-gcc5-py3.6)
+    -i   Use Docker image (default is gpuci/rapidsai:${NIGHTLY_VERSION}-cuda10.1-devel-ubuntu16.04-py3.7)
     -s   Skip building and testing and start an interactive shell in a container of the Docker image
 ```
 
 Example Usage:
-`bash build.sh -r ~/rapids/cudf -i gpuci/rapidsai-base:cuda10.1-ubuntu16.04-gcc5-py3.6`
+`bash build.sh -r ~/rapids/cudf -i gpuci/rapidsai:0.16-cuda10.2-devel-ubuntu16.04-py3.7`
 
-For a full list of available gpuCI docker images, visit our [DockerHub](https://hub.docker.com/r/gpuci/rapidsai-base/tags) page.
+For a full list of available gpuCI docker images, visit our [DockerHub](https://hub.docker.com/r/gpuci/rapidsai/tags) page.
 
 Style Check:
 ```bash
 $ bash ci/local/build.sh -r ~/rapids/cudf -s
-$ source activate gdf    #Activate gpuCI conda environment
+$ source activate rapids    # Activate gpuCI conda environment
 $ cd rapids
 $ flake8 python
 ```
@@ -42,7 +42,7 @@ There are some caveats to be aware of when using this script, especially if you 
 
 ### Docker Image Build Repository
 
-The docker image will generate build artifacts in a folder on your machine located in the `root` directory of the repository you passed to the script. For the above example, the directory is named `~/rapids/cudf/build_rapidsai-base_cuda10.1-ubuntu16.04-gcc5-py3.6/`. Feel free to remove this directory after the script is finished.
+The docker image will generate build artifacts in a folder on your machine located in the `root` directory of the repository you passed to the script. For the above example, the directory is named `~/rapids/cudf/build_rapidsai_cuda10.1-ubuntu16.04-py3.7/`. Feel free to remove this directory after the script is finished.
 
 *Note*: The script *will not* override your local build repository. Your local environment stays in tact.
 
