@@ -16,6 +16,8 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/unary.hpp>
+#include <cudf/dictionary/detail/encode.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -87,6 +89,73 @@ std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys_colu
                                   std::move(null_mask),
                                   null_count,
                                   std::move(children));
+}
+
+namespace {
+
+/**
+ * @brief This functor maps signed type_ids to unsigned counterparts.
+ */
+struct signed_to_unsigned_type_fn {
+  template <typename T>
+  __device__ constexpr cudf::type_id operator()()
+  {
+    return cudf::type_to_id<T>();
+  }
+};
+
+template <>
+constexpr cudf::type_id signed_to_unsigned_type_fn::operator()<int8_t>()
+{
+  return cudf::type_id::UINT8;
+}
+template <>
+constexpr cudf::type_id signed_to_unsigned_type_fn::operator()<int16_t>()
+{
+  return cudf::type_id::UINT16;
+}
+template <>
+constexpr cudf::type_id signed_to_unsigned_type_fn::operator()<int32_t>()
+{
+  return cudf::type_id::UINT32;
+}
+template <>
+constexpr cudf::type_id signed_to_unsigned_type_fn::operator()<int64_t>()
+{
+  return cudf::type_id::UINT64;
+}
+
+}  // namespace
+
+std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys,
+                                               std::unique_ptr<column> indices,
+                                               rmm::mr::device_memory_resource* mr,
+                                               cudaStream_t stream)
+{
+  // signed integer data can be used directly in the unsigned indices column
+  auto const indices_type = cudf::type_dispatcher(indices->type(), signed_to_unsigned_type_fn{});
+  auto const indices_size = indices->size();        // these need to be saved
+  auto const null_count   = indices->null_count();  // before calling release()
+  auto contents           = indices->release();
+  // compute the indices type using the size of the key set
+  auto const new_type = dictionary::detail::get_indices_type_for_size(keys->size());
+
+  // create the dictionary indices: convert to unsigned and remove nulls
+  auto indices_column = [&] {
+    // If the types match, then just commandeer the column's data buffer.
+    if (new_type.id() == indices_type) {
+      return std::make_unique<column>(
+        new_type, indices_size, *(contents.data.release()), rmm::device_buffer{0, stream, mr}, 0);
+    }
+    // If the new type does not match, then convert the data.
+    cudf::column_view cast_view{cudf::data_type{indices_type}, indices_size, contents.data->data()};
+    return cudf::detail::cast(cast_view, new_type, mr, stream);
+  }();
+
+  return make_dictionary_column(std::move(keys),
+                                std::move(indices_column),
+                                std::move(*(contents.null_mask.release())),
+                                null_count);
 }
 
 }  // namespace cudf
