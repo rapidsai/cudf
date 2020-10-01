@@ -1726,39 +1726,35 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
           void *data_out = s->chunk.column_data_base;
           switch (s->chunk.type_kind) {
             case FLOAT:
-            case INT:
-              reinterpret_cast<uint32_t *>(data_out)[row] = s->vals.u32[t + vals_skipped];
-              break;
+            case INT: static_cast<uint32_t *>(data_out)[row] = s->vals.u32[t + vals_skipped]; break;
             case DOUBLE:
             case LONG:
             case DECIMAL:
-              reinterpret_cast<uint64_t *>(data_out)[row] = s->vals.u64[t + vals_skipped];
+              static_cast<uint64_t *>(data_out)[row] = s->vals.u64[t + vals_skipped];
               break;
             case SHORT:
-              reinterpret_cast<uint16_t *>(data_out)[row] =
+              static_cast<uint16_t *>(data_out)[row] =
                 static_cast<uint16_t>(s->vals.u32[t + vals_skipped]);
               break;
-            case BYTE:
-              reinterpret_cast<uint8_t *>(data_out)[row] = s->vals.u8[t + vals_skipped];
-              break;
+            case BYTE: static_cast<uint8_t *>(data_out)[row] = s->vals.u8[t + vals_skipped]; break;
             case BOOLEAN:
-              reinterpret_cast<uint8_t *>(data_out)[row] =
+              static_cast<uint8_t *>(data_out)[row] =
                 (s->vals.u8[(t + vals_skipped) >> 3] >> ((~t) & 7)) & 1;
               break;
             case DATE:
               if (s->chunk.dtype_len == 8) {
                 // Convert from days to milliseconds by multiplying by 24*3600*1000
-                reinterpret_cast<int64_t *>(data_out)[row] =
+                static_cast<int64_t *>(data_out)[row] =
                   86400000ll * (int64_t)s->vals.i32[t + vals_skipped];
               } else {
-                reinterpret_cast<uint32_t *>(data_out)[row] = s->vals.u32[t + vals_skipped];
+                static_cast<uint32_t *>(data_out)[row] = s->vals.u32[t + vals_skipped];
               }
               break;
             case STRING:
             case BINARY:
             case VARCHAR:
             case CHAR: {
-              nvstrdesc_s *strdesc = &reinterpret_cast<nvstrdesc_s *>(data_out)[row];
+              nvstrdesc_s *strdesc = &static_cast<nvstrdesc_s *>(data_out)[row];
               const uint8_t *ptr;
               uint32_t count;
               if (IS_DICTIONARY(s->chunk.encoding_kind)) {
@@ -1792,12 +1788,12 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
               if (tz_len > 0) { seconds = ConvertToUTC(&s->top.data, tz_table, seconds); }
               if (seconds < 0 && nanos != 0) { seconds -= 1; }
               if (s->chunk.ts_clock_rate)
-                reinterpret_cast<int64_t *>(data_out)[row] =
+                static_cast<int64_t *>(data_out)[row] =
                   seconds * s->chunk.ts_clock_rate +
                   (nanos + (499999999 / s->chunk.ts_clock_rate)) /
                     (1000000000 / s->chunk.ts_clock_rate);  // Output to desired clock rate
               else
-                reinterpret_cast<int64_t *>(data_out)[row] = seconds * 1000000000 + nanos;
+                static_cast<int64_t *>(data_out)[row] = seconds * 1000000000 + nanos;
               break;
             }
           }
