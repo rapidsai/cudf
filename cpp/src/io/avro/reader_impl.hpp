@@ -53,12 +53,13 @@ class reader::impl {
   /**
    * @brief Constructor from a dataset source with reader options.
    *
-   * @param source Dataset source
    * @param options Settings for controlling reading behavior
+   * @param source Dataset source
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit impl(std::unique_ptr<datasource> source,
-                avro_reader_options const &options,
+  explicit impl(avro_reader_options const &options,
+                std::unique_ptr<datasource> source,
+
                 rmm::mr::device_memory_resource *mr);
 
   /**
@@ -80,7 +81,7 @@ class reader::impl {
    *
    * @return Device buffer to decompressed block data
    */
-  rmm::device_buffer decompress_data(const rmm::device_buffer &comp_block_data,
+  rmm::device_buffer decompress_data(rmm::device_buffer const &comp_block_data,
                                      cudaStream_t stream);
 
   /**
@@ -89,13 +90,11 @@ class reader::impl {
    * @param block_data Uncompressed block data
    * @param dict Dictionary entries
    * @param global_dictionary Dictionary allocation
-   * @param total_dictionary_entries Number of dictionary entries
-   * @param out_buffers Output columns' device buffers
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   std::vector<std::unique_ptr<cudf::column>> decode_data(
-    device_span<uint8_t const> const block_data,
-    const std::vector<std::pair<uint32_t, uint32_t>> &dict,
+    device_span<uint8_t const> block_data,
+    std::vector<std::pair<uint32_t, uint32_t>> const &dict,
     device_span<gpu::nvstrdesc_s const> global_dictionary,
     size_t num_rows,
     std::vector<std::pair<int, std::string>> selection,

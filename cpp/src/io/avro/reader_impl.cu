@@ -19,13 +19,13 @@
  * @brief cuDF-IO Avro reader class implementation
  **/
 
-#include "cudf/types.hpp"
-#include "io/avro/avro_gpu.h"
 #include "reader_impl.hpp"
 
+#include <io/avro/avro_gpu.h>
 #include <io/comp/gpuinflate.h>
 
 #include <cudf/table/table.hpp>
+#include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -360,10 +360,10 @@ std::vector<std::unique_ptr<cudf::column>> reader::impl::decode_data(
   return out_columns;
 }
 
-reader::impl::impl(std::unique_ptr<datasource> source,
-                   avro_reader_options const &options,
+reader::impl::impl(avro_reader_options const &options,
+                   std::unique_ptr<datasource> source,
                    rmm::mr::device_memory_resource *mr)
-  : _source(std::move(source)), _mr(mr), _columns(options.get_columns())
+  : _mr(mr), _source(std::move(source)), _columns(options.get_columns())
 {
   // Open the source Avro dataset metadata
   _metadata = std::make_unique<metadata>(_source.get());
@@ -471,7 +471,7 @@ reader::reader(std::vector<std::string> const &filepaths,
                rmm::mr::device_memory_resource *mr)
 {
   CUDF_EXPECTS(filepaths.size() == 1, "Only a single source is currently supported.");
-  _impl = std::make_unique<impl>(datasource::create(filepaths[0]), options, mr);
+  _impl = std::make_unique<impl>(options, datasource::create(filepaths[0]), mr);
 }
 
 // Forward to implementation
@@ -480,7 +480,7 @@ reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                rmm::mr::device_memory_resource *mr)
 {
   CUDF_EXPECTS(sources.size() == 1, "Only a single source is currently supported.");
-  _impl = std::make_unique<impl>(std::move(sources[0]), options, mr);
+  _impl = std::make_unique<impl>(options, std::move(sources[0]), mr);
 }
 
 // Destructor within this translation unit

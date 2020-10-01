@@ -29,7 +29,7 @@ namespace gpu {
  * @brief Struct to describe the output of a string datatype
  **/
 struct nvstrdesc_s {
-  const char *ptr;
+  char const *ptr;
   size_t count;
 };
 
@@ -55,10 +55,10 @@ struct schemadesc_s {
  * @param[in] min_row_size Minimum size in bytes of a row
  * @param[in] stream CUDA stream to use, default 0
  **/
-void decode_avro_column_data(device_span<block_desc_s const> const blocks,
-                             device_span<nvstrdesc_s const> const global_dictionary,
-                             device_span<uint8_t const> const avro_data,
-                             device_span<schemadesc_s> const schema,
+void decode_avro_column_data(device_span<block_desc_s const> blocks,
+                             device_span<nvstrdesc_s const> global_dictionary,
+                             device_span<uint8_t const> avro_data,
+                             device_span<schemadesc_s> schema,
                              size_t max_rows,
                              size_t first_row,
                              uint32_t min_row_size,
