@@ -22,25 +22,17 @@ def parquet_reader_test(parquet_buffer):
 
 @pythonfuzz(
     data_handle=ParquetReader,
-    params={
-        "columns": None,
-        "engine": ["pyarrow", None],
-        "use_pandas_metadata": [True, False],
-    },
+    params={"columns": None, "use_pandas_metadata": [True, False]},
 )
-def parquet_reader_columns_engine(
-    parquet_buffer, columns, engine, use_pandas_metadata
-):
+def parquet_reader_columns(parquet_buffer, columns, use_pandas_metadata):
     pdf = pd.read_parquet(
         parquet_buffer,
         columns=columns,
-        engine=engine,
         use_pandas_metadata=use_pandas_metadata,
     )
     gdf = cudf.read_parquet(
         parquet_buffer,
         columns=columns,
-        engine=engine,
         use_pandas_metadata=use_pandas_metadata,
     )
 
