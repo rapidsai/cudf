@@ -125,7 +125,7 @@ std::unique_ptr<column> get_gather_map_for_map_values(column_view const& input,
 
   CHECK_CUDA(stream);
 
-  return std::move(gather_map);
+  return gather_map;
 }
 
 }  // namespace
