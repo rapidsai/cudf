@@ -319,23 +319,19 @@ std::unique_ptr<column> dispatch_clamp::operator()<cudf::dictionary32>(
   auto matched_column = [&] {
     auto matched_view              = dictionary_column_view(input);
     std::unique_ptr<column> result = nullptr;
-    if (lo.is_valid()) {
-      result = dictionary::detail::add_keys(
-        matched_view,
-        make_column_from_scalar(lo_replace, 1, rmm::mr::get_current_device_resource(), stream)
-          ->view(),
-        mr,
-        stream);
-      matched_view = dictionary_column_view(result->view());
-    }
-    if (hi.is_valid()) {
-      result = dictionary::detail::add_keys(
-        matched_view,
-        make_column_from_scalar(hi_replace, 1, rmm::mr::get_current_device_resource(), stream)
-          ->view(),
-        mr,
-        stream);
-    }
+    auto add_scalar_key            = [&](scalar const& key, scalar const& key_replace) {
+      if (key.is_valid()) {
+        result = dictionary::detail::add_keys(
+          matched_view,
+          make_column_from_scalar(key_replace, 1, rmm::mr::get_current_device_resource(), stream)
+            ->view(),
+          mr,
+          stream);
+        matched_view = dictionary_column_view(result->view());
+      }
+    };
+    add_scalar_key(lo, lo_replace);
+    add_scalar_key(hi, hi_replace);
     return result;
   }();
   auto matched_view = dictionary_column_view(matched_column->view());
@@ -346,7 +342,7 @@ std::unique_ptr<column> dispatch_clamp::operator()<cudf::dictionary32>(
   auto hi_replace_index = dictionary::detail::get_index(
     matched_view, hi_replace, rmm::mr::get_current_device_resource(), stream);
 
-  // get the closests indexes for lo and for hi
+  // get the closest indexes for lo and for hi
   auto lo_index = dictionary::detail::get_insert_index(
     matched_view, lo, rmm::mr::get_current_device_resource(), stream);
   auto hi_index = dictionary::detail::get_insert_index(
@@ -370,7 +366,7 @@ std::unique_ptr<column> dispatch_clamp::operator()<cudf::dictionary32>(
   auto contents           = new_indices->release();
   auto indices_column     = std::make_unique<column>(indices_type,
                                                  static_cast<size_type>(output_size),
-                                                 std::move(*(contents.data.release())),
+                                                 *(contents.data.release()),
                                                  rmm::device_buffer{0, stream, mr},
                                                  0);
 
