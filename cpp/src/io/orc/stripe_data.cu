@@ -1038,8 +1038,8 @@ static __device__ int Decode_Decimals(orc_bytestream_s *bs,
     uint32_t lastpos = bs->pos;
     uint32_t n;
     for (n = 0; n < numvals; n++) {
-      uint32_t pos                  = lastpos;
-      *(volatile int32_t *)&vals[n] = lastpos;
+      uint32_t pos                                    = lastpos;
+      *reinterpret_cast<volatile int32_t *>(&vals[n]) = lastpos;
       pos += varint_length<uint4>(bs, pos);
       if (pos > maxpos) break;
       lastpos = pos;
@@ -1050,7 +1050,7 @@ static __device__ int Decode_Decimals(orc_bytestream_s *bs,
   __syncthreads();
   numvals = scratch->num_vals;
   if (t < numvals) {
-    int pos    = *(volatile int32_t *)&vals[t];
+    int pos    = *reinterpret_cast<volatile int32_t *>(&vals[t]);
     int128_s v = decode_varint128(bs, pos);
 
     if (col_scale & ORC_DECIMAL2FLOAT64_SCALE) {
@@ -1244,9 +1244,9 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
     if ((encoding_kind == DICTIONARY || encoding_kind == DICTIONARY_V2) &&
         (s->chunk.dict_len > 0)) {
       if (t == 0) {
-        s->top.dict.dict_len = s->chunk.dict_len;
-        s->top.dict.local_dict =
-          (uint2 *)(global_dictionary + s->chunk.dictionary_start);  // Local dictionary
+        s->top.dict.dict_len   = s->chunk.dict_len;
+        s->top.dict.local_dict = reinterpret_cast<uint2 *>(
+          global_dictionary + s->chunk.dictionary_start);  // Local dictionary
         s->top.dict.dict_pos = 0;
         // CI_DATA2 contains the LENGTH stream coding the length of individual dictionary entries
         bytestream_init(&s->bs, s->chunk.streams[CI_DATA2], s->chunk.strm_len[CI_DATA2]);
