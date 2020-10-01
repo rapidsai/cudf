@@ -121,44 +121,6 @@ std::unique_ptr<column> replace_indices(column_view const& input,
                                     stream);
 }
 
-std::unique_ptr<column> create_dictionary_helper(std::unique_ptr<column> matched_column,
-                                                 std::unique_ptr<column> new_indices,
-                                                 rmm::mr::device_memory_resource* mr,
-                                                 cudaStream_t stream)
-{
-  auto const matched_view = dictionary_column_view(matched_column->view());
-  auto const indices_type = new_indices->type();
-  auto const indices_size = new_indices->size();
-  auto const null_count   = new_indices->null_count();
-  auto contents           = new_indices->release();
-  auto const new_type     = get_indices_type_for_size(matched_view.keys().size());
-
-  // create the dictionary indices: convert to unsigned and remove nulls
-  auto indices_column = [&] {
-    // The copy-if-else always returns INT32 type.
-    // If the new-type is UINT32 then we can just commandeer the data buffer.
-    if (new_type.id() == cudf::type_id::UINT32) {
-      return std::make_unique<column>(cudf::data_type{cudf::type_id::UINT32},
-                                      indices_size,
-                                      *(contents.data.release()),
-                                      rmm::device_buffer{0, stream, mr},
-                                      0);
-    }
-    // If the new type is not UINT32, then we need to convert the data.
-    cudf::column_view cast_view{indices_type, indices_size, contents.data->data()};
-    return cudf::detail::cast(cast_view, new_type, mr, stream);
-  }();
-
-  // use the keys from the matched column
-  std::unique_ptr<column> keys_column(std::move(matched_column->release().children.back()));
-
-  // create column with keys_column and indices_column
-  return make_dictionary_column(std::move(keys_column),
-                                std::move(indices_column),
-                                std::move(*(contents.null_mask.release())),
-                                null_count);
-}
-
 }  // namespace
 
 /**
@@ -188,7 +150,9 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
       : replace_indices(
           input_indices, make_nullable_index_iterator<false>(repl_indices), mr, stream);
 
-  return create_dictionary_helper(std::move(matched.front()), std::move(new_indices), mr, stream);
+  // auto keys_column = ;
+  return make_dictionary_column(
+    std::move(matched.front()->release().children.back()), std::move(new_indices), mr, stream);
 }
 
 /**
@@ -219,7 +183,8 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
     replace_indices(input_indices, make_scalar_iterator(*scalar_index), mr, stream);
   new_indices->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);
 
-  return create_dictionary_helper(std::move(input_matched), std::move(new_indices), mr, stream);
+  return make_dictionary_column(
+    std::move(input_matched->release().children.back()), std::move(new_indices), mr, stream);
 }
 
 }  // namespace detail
