@@ -920,9 +920,9 @@ __device__ void copy_stored(inflate_state_s *s, int t)
     uint32_t prefix_bytes = (uint32_t)(((size_t)p) & 3);
     p -= prefix_bytes;
     s->cur      = p;
-    s->bitbuf.x = (p < s->end) ? *(uint32_t *)p : 0;
+    s->bitbuf.x = (p < s->end) ? *reinterpret_cast<uint32_t *>(p) : 0;
     p += 4;
-    s->bitbuf.y = (p < s->end) ? *(uint32_t *)p : 0;
+    s->bitbuf.y = (p < s->end) ? *reinterpret_cast<uint32_t *>(p) : 0;
     s->bitpos   = prefix_bytes * 8;
     s->out      = out;
   }
@@ -947,7 +947,7 @@ __device__ void prefetch_warp(volatile inflate_state_s *s, int t)
       SHFL0((t == 0) ? (cur_lo - *(volatile int32_t *)&s->cur < PREFETCH_SIZE - 32 * 4 - 4) : 0);
     if (do_pref) {
       const uint8_t *p             = cur_p + 4 * t;
-      *PREFETCH_ADDR32(s->pref, p) = (p < end) ? *(const uint32_t *)p : 0;
+      *PREFETCH_ADDR32(s->pref, p) = (p < end) ? *reinterpret_cast<const uint32_t *>(p) : 0;
       cur_p += 4 * 32;
       __threadfence_block();
       SYNCWARP();
@@ -1035,7 +1035,7 @@ __global__ void __launch_bounds__(NUMTHREADS)
   inflate_state_s *state = &state_g;
 
   if (!t) {
-    uint8_t *p      = (uint8_t *)inputs[z].srcDevice;
+    uint8_t *p      = const_cast<uint8_t *>(static_cast<uint8_t const *>(inputs[z].srcDevice));
     size_t src_size = inputs[z].srcSize;
     uint32_t prefix_bytes;
     // Parse header if needed
@@ -1051,16 +1051,16 @@ __global__ void __launch_bounds__(NUMTHREADS)
       }
     }
     // Initialize shared state
-    state->out     = (uint8_t *)inputs[z].dstDevice;
+    state->out     = const_cast<uint8_t *>(static_cast<uint8_t const *>(inputs[z].dstDevice));
     state->outbase = state->out;
     state->outend  = state->out + inputs[z].dstSize;
     state->end     = p + src_size;
     prefix_bytes   = (uint32_t)(((size_t)p) & 3);
     p -= prefix_bytes;
     state->cur      = p;
-    state->bitbuf.x = (p < state->end) ? *(uint32_t *)p : 0;
+    state->bitbuf.x = (p < state->end) ? *reinterpret_cast<uint32_t *>(p) : 0;
     p += 4;
-    state->bitbuf.y = (p < state->end) ? *(uint32_t *)p : 0;
+    state->bitbuf.y = (p < state->end) ? *reinterpret_cast<uint32_t *>(p) : 0;
     state->bitpos   = prefix_bytes * 8;
   }
   __syncthreads();
