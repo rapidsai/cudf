@@ -1214,7 +1214,7 @@ class DataFrame(Frame, Serializable):
             # entire sequence/Index is to be printed.
             # Note : Pandas truncates the dimensions at the end of
             # the resulting dataframe when `display.show_dimensions`
-            # is set to truncate. Hence to display the dimentions we
+            # is set to truncate. Hence to display the dimensions we
             # need to extract maximum of `max_seq_items` and `nrows`
             # and have 1 extra value for ... to show up in the output
             # string.
