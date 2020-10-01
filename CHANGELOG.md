@@ -129,7 +129,7 @@
 - PR #6291 Fix issue related to row-wise operations in `cudf.DataFrame`
 - PR #6304 Fix span_tests.cu includes
 - PR #6278 Add filter tests for struct columns
-
+- PR #6386 Removed c-style pointer casts and redundant `reinterpret_cast`s in cudf::io
 
 
 # cuDF 0.15.0 (26 Aug 2020)
