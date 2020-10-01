@@ -66,15 +66,15 @@ nvidia-smi
 gpuci_logger "Activate conda env"
 conda activate rapids
 
-conda install "rmm=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
+gpuci_conda_retry install "rmm=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
               "rapids-build-env=$MINOR_VERSION.*" \
               "rapids-notebook-env=$MINOR_VERSION.*" \
               "dask-cuda=${MINOR_VERSION}" \
               "ucx-py=${MINOR_VERSION}" \
 
 # https://docs.rapids.ai/maintainers/depmgmt/
-# conda remove --force rapids-build-env rapids-notebook-env
-# conda install "your-pkg=1.0.0"
+# gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
+# gpuci_conda_retry install "your-pkg=1.0.0"
 
 # Install the master version of dask, distributed, and streamz
 gpuci_logger "Install the master version of dask, distributed, and streamz"
