@@ -216,7 +216,7 @@ struct metadata : public FileMetaData {
     const auto ender_buffer  = source->host_read(len - ender_len, ender_len);
     const auto ender         = (const file_ender_s *)ender_buffer->data();
     CUDF_EXPECTS(len > header_len + ender_len, "Incorrect data source");
-    CUDF_EXPECTS(header->magic == PARQUET_MAGIC && ender->magic == PARQUET_MAGIC,
+    CUDF_EXPECTS(header->magic == parquet_magic && ender->magic == parquet_magic,
                  "Corrupted header or footer");
     CUDF_EXPECTS(ender->footer_len != 0 && ender->footer_len <= (len - header_len - ender_len),
                  "Incorrect footer length");

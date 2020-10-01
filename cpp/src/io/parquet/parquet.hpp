@@ -22,12 +22,13 @@
 #include <stdint.h>
 #include <algorithm>
 #include <string>
+#include <tuple>
 #include <vector>
 
 namespace cudf {
 namespace io {
 namespace parquet {
-#define PARQUET_MAGIC (('P' << 0) | ('A' << 8) | ('R' << 16) | ('1' << 24))
+constexpr uint32_t parquet_magic = (('P' << 0) | ('A' << 8) | ('R' << 16) | ('1' << 24));
 
 /**
  * @brief Struct that describes the Parquet file data header
@@ -162,17 +163,17 @@ struct FileMetaData {
  **/
 struct DataPageHeader {
   int32_t num_values                 = 0;  // Number of values, including NULLs, in this data page.
-  Encoding encoding                  = PLAIN;  // Encoding used for this data page
-  Encoding definition_level_encoding = PLAIN;  // Encoding used for definition levels
-  Encoding repetition_level_encoding = PLAIN;  // Encoding used for repetition levels
+  Encoding encoding                  = Encoding::PLAIN;  // Encoding used for this data page
+  Encoding definition_level_encoding = Encoding::PLAIN;  // Encoding used for definition levels
+  Encoding repetition_level_encoding = Encoding::PLAIN;  // Encoding used for repetition levels
 };
 
 /**
  * @brief Thrift-derived struct describing the header for a dictionary page
  **/
 struct DictionaryPageHeader {
-  int32_t num_values = 0;      // Number of values in the dictionary
-  Encoding encoding  = PLAIN;  // Encoding using this dictionary page
+  int32_t num_values = 0;                // Number of values in the dictionary
+  Encoding encoding  = Encoding::PLAIN;  // Encoding using this dictionary page
 };
 
 /**
@@ -288,17 +289,15 @@ class CompactProtocolReader {
 
  public:
   // Generate Thrift structure parsing routines
-#define DECL_PARQUET_STRUCT(st) bool read(st *)
-  DECL_PARQUET_STRUCT(FileMetaData);
-  DECL_PARQUET_STRUCT(SchemaElement);
-  DECL_PARQUET_STRUCT(RowGroup);
-  DECL_PARQUET_STRUCT(ColumnChunk);
-  DECL_PARQUET_STRUCT(ColumnChunkMetaData);
-  DECL_PARQUET_STRUCT(PageHeader);
-  DECL_PARQUET_STRUCT(DataPageHeader);
-  DECL_PARQUET_STRUCT(DictionaryPageHeader);
-  DECL_PARQUET_STRUCT(KeyValue);
-#undef DECL_PARQUET_STRUCT
+  bool read(FileMetaData *f);
+  bool read(SchemaElement *s);
+  bool read(RowGroup *r);
+  bool read(ColumnChunk *c);
+  bool read(ColumnChunkMetaData *c);
+  bool read(PageHeader *p);
+  bool read(DataPageHeader *d);
+  bool read(DictionaryPageHeader *d);
+  bool read(KeyValue *k);
 
  public:
   static int NumRequiredBits(uint32_t max_level) noexcept
@@ -318,6 +317,234 @@ class CompactProtocolReader {
   const uint8_t *m_base = nullptr;
   const uint8_t *m_cur  = nullptr;
   const uint8_t *m_end  = nullptr;
+
+  friend class ParquetFieldInt32;
+  friend class ParquetFieldInt64;
+  template <typename T>
+  friend class ParquetFieldStructListFunctor;
+  friend class ParquetFieldString;
+  template <typename T>
+  friend class ParquetFieldStructFunctor;
+  template <typename T>
+  friend class ParquetFieldEnum;
+  template <typename T>
+  friend class ParquetFieldEnumListFunctor;
+  friend class ParquetFieldStringList;
+  friend class ParquetFieldStructBlob;
+};
+
+class ParquetFieldInt32 {
+  int field_val;
+  int32_t &val;
+
+ public:
+  ParquetFieldInt32(int f, int32_t &v) : field_val(f), val(v) {}
+
+  inline bool operator()(CompactProtocolReader *cpr, int *c, int t)
+  {
+    val = cpr->get_i32();
+    if (t != ST_FLD_I32)
+      return true;
+    else
+      return false;
+  }
+
+  int &field(void) { return field_val; }
+};
+
+class ParquetFieldInt64 {
+  int field_val;
+  int64_t &val;
+
+ public:
+  ParquetFieldInt64(int f, int64_t &v) : field_val(f), val(v) {}
+
+  inline bool operator()(CompactProtocolReader *cpr, int *c, int t)
+  {
+    val = cpr->get_i64();
+    if (t < ST_FLD_I16 || t > ST_FLD_I64)
+      return true;
+    else
+      return false;
+  }
+
+  int &field(void) { return field_val; }
+};
+
+template <typename T>
+class ParquetFieldStructListFunctor {
+  int field_val;
+  std::vector<T> &val;
+
+ public:
+  ParquetFieldStructListFunctor(int f, std::vector<T> &v) : field_val(f), val(v) {}
+
+  inline bool operator()(CompactProtocolReader *cpr, int *c, int t)
+  {
+    if (t != ST_FLD_LIST) return true;
+
+    int n;
+    (*c) = cpr->getb();
+    if (((*c) & 0xf) != ST_FLD_STRUCT) return true;
+    n = (*c) >> 4;
+    if (n == 0xf) n = cpr->get_u32();
+    val.resize(n);
+    for (int32_t i = 0; i < n; i++) {
+      if (!(cpr->read(&val[i]))) { return true; }
+    }
+
+    return false;
+  }
+
+  int &field(void) { return field_val; }
+};
+
+template <typename T>
+ParquetFieldStructListFunctor<T> ParquetFieldStructList(int f, std::vector<T> &v)
+{
+  return ParquetFieldStructListFunctor<T>(f, v);
+}
+
+class ParquetFieldString {
+  int field_val;
+  std::string &val;
+
+ public:
+  ParquetFieldString(int f, std::string &v) : field_val(f), val(v) {}
+
+  inline bool operator()(CompactProtocolReader *cpr, int *c, int t)
+  {
+    if (t != ST_FLD_BINARY) return true;
+    uint32_t n = cpr->get_u32();
+    if (n < (size_t)(cpr->m_end - cpr->m_cur)) {
+      val.assign((const char *)cpr->m_cur, n);
+      cpr->m_cur += n;
+    } else
+      return true;
+    return false;
+  }
+
+  int &field(void) { return field_val; }
+};
+
+template <typename T>
+class ParquetFieldStructFunctor {
+  int field_val;
+  T &val;
+
+ public:
+  ParquetFieldStructFunctor(int f, T &v) : field_val(f), val(v) {}
+
+  inline bool operator()(CompactProtocolReader *cpr, int *c, int t)
+  {
+    if (t != ST_FLD_STRUCT || !(cpr->read(&val)))
+      return true;
+    else
+      return false;
+  }
+
+  int &field(void) { return field_val; }
+};
+
+template <typename T>
+ParquetFieldStructFunctor<T> ParquetFieldStruct(int f, T &v)
+{
+  return ParquetFieldStructFunctor<T>(f, v);
+}
+
+template <typename Enum>
+class ParquetFieldEnum {
+  int field_val;
+  Enum &val;
+
+ public:
+  ParquetFieldEnum(int f, Enum &v) : field_val(f), val(v) {}
+  inline bool operator()(CompactProtocolReader *cpr, int *c, int t)
+  {
+    val = static_cast<Enum>(cpr->get_i32());
+    if (t != ST_FLD_I32)
+      return true;
+    else
+      return false;
+  }
+
+  int &field(void) { return field_val; }
+};
+
+template <typename Enum>
+class ParquetFieldEnumListFunctor {
+  int field_val;
+  std::vector<Enum> &val;
+
+ public:
+  ParquetFieldEnumListFunctor(int f, std::vector<Enum> &v) : field_val(f), val(v) {}
+  inline bool operator()(CompactProtocolReader *cpr, int *c, int t)
+  {
+    if (t != ST_FLD_LIST) return true;
+    int n;
+    (*c) = cpr->getb();
+    if (((*c) & 0xf) != ST_FLD_I32) return true;
+    n = (*c) >> 4;
+    if (n == 0xf) n = cpr->get_u32();
+    val.resize(n);
+    for (int32_t i = 0; i < n; i++) { val[i] = static_cast<Enum>(cpr->get_i32()); }
+    return false;
+  }
+
+  int &field(void) { return field_val; }
+};
+
+template <typename T>
+ParquetFieldEnumListFunctor<T> ParquetFieldEnumList(int field, std::vector<T> &v)
+{
+  return ParquetFieldEnumListFunctor<T>(field, v);
+}
+
+class ParquetFieldStringList {
+  int field_val;
+  std::vector<std::string> &val;
+
+ public:
+  ParquetFieldStringList(int f, std::vector<std::string> &v) : field_val(f), val(v) {}
+  inline bool operator()(CompactProtocolReader *cpr, int *c, int t)
+  {
+    if (t != ST_FLD_LIST) return true;
+    int n;
+    (*c) = cpr->getb();
+    if (((*c) & 0xf) != ST_FLD_BINARY) return true;
+    n = (*c) >> 4;
+    if (n == 0xf) n = cpr->get_u32();
+    val.resize(n);
+    for (int32_t i = 0; i < n; i++) {
+      uint32_t l = cpr->get_u32();
+      if (l < (size_t)(cpr->m_end - cpr->m_cur)) {
+        val[i].assign((const char *)cpr->m_cur, l);
+        cpr->m_cur += l;
+      } else
+        return true;
+    }
+    return false;
+  }
+
+  int &field(void) { return field_val; }
+};
+
+class ParquetFieldStructBlob {
+  int field_val;
+  std::vector<uint8_t> &val;
+
+ public:
+  ParquetFieldStructBlob(int f, std::vector<uint8_t> &v) : field_val(f), val(v) {}
+  inline bool operator()(CompactProtocolReader *cpr, int *c, int t)
+  {
+    if (t != ST_FLD_STRUCT) return true;
+    const uint8_t *start = cpr->m_cur;
+    cpr->skip_struct_field(t);
+    if (cpr->m_cur > start) { val.assign(start, cpr->m_cur - 1); }
+    return false;
+  }
+
+  int &field(void) { return field_val; }
 };
 
 /**
