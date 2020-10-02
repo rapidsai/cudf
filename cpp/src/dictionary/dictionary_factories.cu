@@ -97,36 +97,17 @@ namespace {
  * @brief This functor maps signed type_ids to unsigned counterparts.
  */
 struct make_unsigned_fn {
-  /**
-   * @brief This lets all other types just pass through
-   */
-  template <typename T>
-  __device__ constexpr cudf::type_id operator()()
+  template <typename T, std::enable_if_t<is_index_type<T>()>* = nullptr>
+  cudf::type_id operator()()
   {
-    return cudf::type_to_id<T>();
+    return cudf::type_to_id<std::make_unsigned_t<T>>();
+  }
+  template <typename T, std::enable_if_t<not is_index_type<T>()>* = nullptr>
+  cudf::type_id operator()()
+  {
+    CUDF_FAIL("only index types are supported");
   }
 };
-
-template <>
-constexpr cudf::type_id make_unsigned_fn::operator()<int8_t>()
-{
-  return cudf::type_id::UINT8;
-}
-template <>
-constexpr cudf::type_id make_unsigned_fn::operator()<int16_t>()
-{
-  return cudf::type_id::UINT16;
-}
-template <>
-constexpr cudf::type_id make_unsigned_fn::operator()<int32_t>()
-{
-  return cudf::type_id::UINT32;
-}
-template <>
-constexpr cudf::type_id make_unsigned_fn::operator()<int64_t>()
-{
-  return cudf::type_id::UINT64;
-}
 
 }  // namespace
 
