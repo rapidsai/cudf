@@ -254,6 +254,7 @@
 
 ## Improvements
 
+- PR #5492 compile_udf: compile straight to PTX instead of using @jit
 - PR #5605 Automatically flush RMM allocate/free logs in JNI
 - PR #5632 Switch JNI code to use `pool_memory_resource` instead of CNMeM
 - PR #5486 Link Boost libraries statically in the Java build
