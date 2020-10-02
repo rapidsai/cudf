@@ -5,8 +5,8 @@ import logging
 import random
 
 import cudf
-from cudf.testing.io import IOFuzz
-from cudf.testing.utils import _generate_rand_meta, pyarrow_to_pandas
+from cudf._fuzz_testing.io import IOFuzz
+from cudf._fuzz_testing.utils import _generate_rand_meta, pyarrow_to_pandas
 from cudf.tests import dataset_generator as dg
 
 logging.basicConfig(
@@ -16,7 +16,7 @@ logging.basicConfig(
 )
 
 
-class CSVReader(IOFuzz):
+class JSONReader(IOFuzz):
     def __init__(
         self,
         dirs=None,
@@ -47,6 +47,7 @@ class CSVReader(IOFuzz):
                 self, dtypes_list
             )
             self._current_params["dtypes_meta"] = dtypes_meta
+            self._current_params["file_name"] = self._file_name
             self._current_params["seed"] = seed
             self._current_params["num_rows"] = num_rows
             self._current_params["num_columns"] = num_cols
@@ -59,10 +60,10 @@ class CSVReader(IOFuzz):
 
         logging.info(f"Shape of DataFrame generated: {df.shape}")
 
-        return df.to_csv()
+        return df.to_json()
 
 
-class CSVWriter(IOFuzz):
+class JSONWriter(IOFuzz):
     def __init__(
         self,
         dirs=None,
