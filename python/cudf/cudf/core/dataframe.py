@@ -1214,7 +1214,7 @@ class DataFrame(Frame, Serializable):
             # entire sequence/Index is to be printed.
             # Note : Pandas truncates the dimensions at the end of
             # the resulting dataframe when `display.show_dimensions`
-            # is set to truncate. Hence to display the dimentions we
+            # is set to truncate. Hence to display the dimensions we
             # need to extract maximum of `max_seq_items` and `nrows`
             # and have 1 extra value for ... to show up in the output
             # string.
@@ -7309,7 +7309,7 @@ def _get_union_of_indices(indexes):
 def _get_union_of_series_names(series_list):
     names_list = []
     unnamed_count = 0
-    for idx, series in enumerate(series_list):
+    for series in series_list:
         if series.name is None:
             names_list.append(f"Unnamed {unnamed_count}")
             unnamed_count += 1
