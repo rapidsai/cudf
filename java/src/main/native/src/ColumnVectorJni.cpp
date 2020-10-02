@@ -52,6 +52,7 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
+#include <map_lookup.hpp>
 
 #include "cudf_jni_apis.hpp"
 
@@ -282,15 +283,17 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_ifElseSS(JNIEnv *env, j
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_reduce(JNIEnv *env, jclass,
-                                                                jlong j_col_view, jint agg_type,
+                                                                jlong j_col_view,
+                                                                jlong j_agg,
                                                                 jint j_dtype) {
   JNI_NULL_CHECK(env, j_col_view, "column view is null", 0);
+  JNI_NULL_CHECK(env, j_agg, "aggregation is null", 0);
   try {
     cudf::jni::auto_set_device(env);
     auto col = reinterpret_cast<cudf::column_view *>(j_col_view);
-    auto agg = cudf::jni::map_jni_aggregation(agg_type);
+    auto agg = reinterpret_cast<cudf::aggregation *>(j_agg);
     cudf::data_type out_dtype{static_cast<cudf::type_id>(j_dtype)};
-    std::unique_ptr<cudf::scalar> result = cudf::reduce(*col, agg, out_dtype);
+    std::unique_ptr<cudf::scalar> result = cudf::reduce(*col, agg->clone(), out_dtype);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
@@ -316,23 +319,25 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_quantile(JNIEnv *env, j
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_rollingWindow(
-    JNIEnv *env, jclass clazz, jlong input_col, jint min_periods, jint agg_type, jint preceding,
+    JNIEnv *env, jclass clazz, jlong input_col, jint min_periods, jlong agg_ptr, jint preceding,
     jint following, jlong preceding_col, jlong following_col) {
 
   JNI_NULL_CHECK(env, input_col, "native handle is null", 0);
+  JNI_NULL_CHECK(env, agg_ptr, "aggregation handle is null", 0);
   try {
     cudf::jni::auto_set_device(env);
     cudf::column_view *n_input_col = reinterpret_cast<cudf::column_view *>(input_col);
     cudf::column_view *n_preceding_col = reinterpret_cast<cudf::column_view *>(preceding_col);
     cudf::column_view *n_following_col = reinterpret_cast<cudf::column_view *>(following_col);
-    auto agg = cudf::jni::map_jni_aggregation(agg_type);
+    cudf::aggregation * agg = reinterpret_cast<cudf::aggregation *>(agg_ptr);
 
     std::unique_ptr<cudf::column> ret;
     if (n_preceding_col != nullptr && n_following_col != nullptr) {
-      ret =
-          cudf::rolling_window(*n_input_col, *n_preceding_col, *n_following_col, min_periods, agg);
+      ret = cudf::rolling_window(*n_input_col, *n_preceding_col, *n_following_col,
+              min_periods, agg->clone());
     } else {
-      ret = cudf::rolling_window(*n_input_col, preceding, following, min_periods, agg);
+      ret = cudf::rolling_window(*n_input_col, preceding, following, min_periods,
+              agg->clone());
     }
     return reinterpret_cast<jlong>(ret.release());
   }
@@ -1071,6 +1076,22 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringReplace(JNIEnv *e
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_mapLookup(JNIEnv *env, jclass,
+                                                                       jlong map_column_view,
+                                                                       jlong lookup_key) {
+  JNI_NULL_CHECK(env, map_column_view, "column is null", 0);
+  JNI_NULL_CHECK(env, lookup_key, "target string scalar is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(map_column_view);
+    cudf::string_scalar *ss_key = reinterpret_cast<cudf::string_scalar *>(lookup_key);
+
+    std::unique_ptr<cudf::column> result = cudf::jni::map_lookup(*cv, *ss_key);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringReplaceWithBackrefs(
     JNIEnv *env,
     jclass,
@@ -1365,6 +1386,8 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_ColumnVector_getNativeNumChildren(JNI
         return static_cast<jint>(column->num_children() - 1);
       } else if (column->type().id() == cudf::type_id::STRUCT) {
         return static_cast<jint>(column->num_children());
+      } else {
+        return 0;
       }
     }
     CATCH_STD(env, 0);

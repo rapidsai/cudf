@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/cudf_gtest.hpp>
-#include <tests/utilities/type_lists.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/type_lists.hpp>
 
 #include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
@@ -689,14 +689,16 @@ TEST_F(ParquetWriterTest, MultipleMismatchedSources)
   auto const int5file = create_parquet_file<int>(5);
   {
     auto const float5file = create_parquet_file<float>(5);
+    std::vector<std::string> files{int5file, float5file};
     cudf_io::parquet_reader_options const read_opts =
-      cudf_io::parquet_reader_options::builder(cudf_io::source_info{{int5file, float5file}});
+      cudf_io::parquet_reader_options::builder(cudf_io::source_info{files});
     EXPECT_THROW(cudf_io::read_parquet(read_opts), cudf::logic_error);
   }
   {
     auto const int10file = create_parquet_file<int>(10);
+    std::vector<std::string> files{int5file, int10file};
     cudf_io::parquet_reader_options const read_opts =
-      cudf_io::parquet_reader_options::builder(cudf_io::source_info{{int5file, int10file}});
+      cudf_io::parquet_reader_options::builder(cudf_io::source_info{files});
     EXPECT_THROW(cudf_io::read_parquet(read_opts), cudf::logic_error);
   }
 }

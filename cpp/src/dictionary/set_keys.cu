@@ -16,10 +16,12 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/valid_if.cuh>
+#include <cudf/dictionary/detail/encode.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/stream_compaction.hpp>
@@ -58,15 +60,21 @@ struct dispatch_compute_indices {
           return static_cast<size_type>(d_dictionary.element<dictionary32>(idx));
         }));
     auto new_keys_view = column_device_view::create(new_keys, stream);
-    auto result        = make_numeric_column(
-      data_type{type_id::UINT32}, input.size(), mask_state::UNALLOCATED, stream, mr);
-    auto d_result = result->mutable_view().data<uint32_t>();
+
+    // create output indices column
+    auto result = make_numeric_column(get_indices_type_for_size(new_keys.size()),
+                                      input.size(),
+                                      mask_state::UNALLOCATED,
+                                      stream,
+                                      mr);
+    auto result_itr =
+      cudf::detail::indexalator_factory::make_output_iterator(result->mutable_view());
     thrust::lower_bound(rmm::exec_policy(stream)->on(stream),
                         new_keys_view->begin<Element>(),
                         new_keys_view->end<Element>(),
                         dictionary_itr,
                         dictionary_itr + input.size(),
-                        d_result,
+                        result_itr,
                         thrust::less<Element>());
     result->set_null_count(0);
     return result;
@@ -108,17 +116,18 @@ std::unique_ptr<column> set_keys(
   std::unique_ptr<column> keys_column(std::move(table_keys.front()));
 
   // compute the new nulls
-  auto matches     = cudf::detail::contains(keys, keys_column->view(), mr, stream);
-  auto d_matches   = matches->view().data<bool>();
-  auto d_indices   = dictionary_column.indices().data<uint32_t>();
+  auto matches   = cudf::detail::contains(keys, keys_column->view(), mr, stream);
+  auto d_matches = matches->view().data<bool>();
+  auto indices_itr =
+    cudf::detail::indexalator_factory::make_input_iterator(dictionary_column.indices());
   auto d_null_mask = dictionary_column.null_mask();
   auto new_nulls   = cudf::detail::valid_if(
     thrust::make_counting_iterator<size_type>(dictionary_column.offset()),
     thrust::make_counting_iterator<size_type>(dictionary_column.offset() +
                                               dictionary_column.size()),
-    [d_null_mask, d_indices, d_matches] __device__(size_type idx) {
+    [d_null_mask, indices_itr, d_matches] __device__(size_type idx) {
       if (d_null_mask && !bit_is_set(d_null_mask, idx)) return false;
-      return d_matches[d_indices[idx]];
+      return d_matches[indices_itr[idx]];
     },
     stream,
     mr);

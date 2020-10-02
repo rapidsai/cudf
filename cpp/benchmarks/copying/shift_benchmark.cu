@@ -9,8 +9,8 @@
 #include <cudf/copying.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf_test/column_wrapper.hpp>
 #include <memory>
-#include <tests/utilities/column_wrapper.hpp>
 
 template <typename T, typename ScalarType = cudf::scalar_type_t<T>>
 std::unique_ptr<cudf::scalar> make_scalar(

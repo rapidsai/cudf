@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 class SerialTrieNode;
 
 namespace cudf {
