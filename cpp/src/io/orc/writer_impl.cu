@@ -1088,7 +1088,7 @@ void writer::impl::write_chunk(table_view const &table, orc_chunked_state &state
                                chunks,
                                state.stream);
 
-  // Assemble individual desparate column chunks into contiguous data streams
+  // Assemble individual disparate column chunks into contiguous data streams
   const auto num_index_streams  = (num_columns + 1);
   const auto num_data_streams   = streams.size() - num_index_streams;
   const auto num_stripe_streams = stripe_list.size() * num_data_streams;
@@ -1250,7 +1250,7 @@ void writer::impl::write_chunk(table_view const &table, orc_chunked_state &state
 
   if (column_stats.size() != 0) {
     // File-level statistics
-    // NOTE: Excluded from chunked write mode to avoid the need for merging stats accross calls
+    // NOTE: Excluded from chunked write mode to avoid the need for merging stats across calls
     if (state.single_write_mode) {
       state.ff.statistics.resize(1 + num_columns);
       // First entry contains total number of rows

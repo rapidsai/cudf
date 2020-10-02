@@ -440,9 +440,9 @@ class fixed_point {
   /**
    * @brief operator - (for subtracting two `fixed_point` numbers)
    *
-   * If `_scale`s are equal, `_value`s are substracted <br>
+   * If `_scale`s are equal, `_value`s are subtracted <br>
    * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
-   * greater `_scale`, and then `_value`s are substracted
+   * greater `_scale`, and then `_value`s are subtracted
    *
    * @tparam Rep1 Representation type of number being added to `this`
    * @tparam Rad1 Radix (base) type of number being added to `this`
@@ -468,7 +468,7 @@ class fixed_point {
   /**
    * @brief operator / (for dividing two `fixed_point` numbers)
    *
-   * `_scale`s are substracted and `_value`s are divided
+   * `_scale`s are subtracted and `_value`s are divided
    *
    * @tparam Rep1 Representation type of number being added to `this`
    * @tparam Rad1 Radix (base) type of number being added to `this`
