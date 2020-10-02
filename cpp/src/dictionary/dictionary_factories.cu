@@ -96,7 +96,7 @@ namespace {
 /**
  * @brief This functor maps signed type_ids to unsigned counterparts.
  */
-struct signed_to_unsigned_type_fn {
+struct make_unsigned_fn {
   /**
    * @brief This lets all other types just pass through
    */
@@ -108,22 +108,22 @@ struct signed_to_unsigned_type_fn {
 };
 
 template <>
-constexpr cudf::type_id signed_to_unsigned_type_fn::operator()<int8_t>()
+constexpr cudf::type_id make_unsigned_fn::operator()<int8_t>()
 {
   return cudf::type_id::UINT8;
 }
 template <>
-constexpr cudf::type_id signed_to_unsigned_type_fn::operator()<int16_t>()
+constexpr cudf::type_id make_unsigned_fn::operator()<int16_t>()
 {
   return cudf::type_id::UINT16;
 }
 template <>
-constexpr cudf::type_id signed_to_unsigned_type_fn::operator()<int32_t>()
+constexpr cudf::type_id make_unsigned_fn::operator()<int32_t>()
 {
   return cudf::type_id::UINT32;
 }
 template <>
-constexpr cudf::type_id signed_to_unsigned_type_fn::operator()<int64_t>()
+constexpr cudf::type_id make_unsigned_fn::operator()<int64_t>()
 {
   return cudf::type_id::UINT64;
 }
@@ -138,7 +138,7 @@ std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys,
   CUDF_EXPECTS(!keys->has_nulls(), "keys column must not have nulls");
 
   // signed integer data can be used directly in the unsigned indices column
-  auto const indices_type = cudf::type_dispatcher(indices->type(), signed_to_unsigned_type_fn{});
+  auto const indices_type = cudf::type_dispatcher(indices->type(), make_unsigned_fn{});
   auto const indices_size = indices->size();        // these need to be saved
   auto const null_count   = indices->null_count();  // before calling release()
   auto contents           = indices->release();
