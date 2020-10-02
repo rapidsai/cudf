@@ -61,7 +61,7 @@ def parquet_writer_test(pdf):
 @pythonfuzz(
     data_handle=ParquetWriter,
     params={
-        "row_group_size": np.random.random_integers(0, 10000, 100),
+        "row_group_size": np.random.random_integers(1, 10000, 100),
         "compression": ["snappy", None],
     },
 )
