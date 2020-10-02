@@ -54,8 +54,17 @@ Build the native code first, and make sure the a JDK is installed and available.
 
 When building libcudf, make sure you install boost first:
 ```bash
-# Install Boost C++ for Ubuntu 16.04/18.04
-$ sudo apt install libboost-filesystem-dev
+# Install Boost C++ for Ubuntu 16.04/18.04/20.04
+sudo apt install libboost-filesystem-dev
+```
+or for a smaller installation footprint (Boost is a large library), build it from the source:
+```bash
+wget https://dl.bintray.com/boostorg/release/1.74.0/source/boost_1_74_0.tar.bz2
+tar xvf boost_1_74_0.tar.bz2
+cd boost_1_74_0
+./bootstrap.sh --with-libraries=filesystem
+./b2 cxxflags=-fPIC link=static
+sudo cp stage/lib/libboost_filesystem.a /usr/local/lib/
 ```
 and pass in the cmake options
 `-DARROW_STATIC_LIB=ON -DBoost_USE_STATIC_LIBS=ON` so that Apache Arrow and Boost libraries are

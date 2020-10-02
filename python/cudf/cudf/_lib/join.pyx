@@ -4,12 +4,12 @@ from collections import OrderedDict
 from itertools import chain
 
 from libcpp.memory cimport unique_ptr
+from libcpp.utility cimport move
 from libcpp.vector cimport vector
 from libcpp.pair cimport pair
 from libcpp cimport bool
 
 from cudf._lib.table cimport Table, columns_from_ptr
-from cudf._lib.move cimport move
 
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view

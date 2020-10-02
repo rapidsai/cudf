@@ -1328,6 +1328,13 @@ class Frame(libcudf.table.Table):
                 value = value
         elif not isinstance(value, abc.Mapping):
             value = {name: copy.deepcopy(value) for name in self._data.names}
+        elif isinstance(value, abc.Mapping):
+            value = {
+                key: value.reindex(self.index)
+                if isinstance(value, cudf.Series)
+                else value
+                for key, value in value.items()
+            }
 
         copy_data = self._data.copy(deep=True)
 

@@ -2,7 +2,7 @@
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
-from cudf._lib.move cimport move
+from libcpp.utility cimport move
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
