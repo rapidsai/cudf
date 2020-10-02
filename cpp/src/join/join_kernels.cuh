@@ -100,7 +100,10 @@ __global__ void build_hash_table(multimap_type multi_map,
  * @param[in] probe_table_num_rows The number of rows in the probe table
  * @param[out] output_size The resulting output size
  */
-template <join_kind JoinKind, typename multimap_type, typename estimate_size_type, int block_size>
+template <join_kind JoinKind,
+          typename multimap_type,
+          int block_size,
+          typename estimate_size_type = int64_t>
 __global__ void compute_join_output_size(multimap_type multi_map,
                                          table_device_view build_table,
                                          table_device_view probe_table,
