@@ -170,10 +170,7 @@ def _generate_column(column_params, num_rows):
 
 
 def generate(
-    path,
-    parameters,
-    format=None,
-    use_threads=True,
+    path, parameters, format=None, use_threads=True,
 ):
     """
     Generate dataset using given parameters and write to given format

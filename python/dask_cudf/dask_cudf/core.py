@@ -127,6 +127,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
 
     def apply_rows(self, func, incols, outcols, kwargs=None, cache_key=None):
         import uuid
+
         if kwargs is None:
             kwargs = {}
 
