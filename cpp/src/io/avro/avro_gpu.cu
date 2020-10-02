@@ -13,8 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <io/utilities/block_utils.cuh>
+
 #include "avro_gpu.h"
+
+#include <io/utilities/block_utils.cuh>
+
+#include <cudf/utilities/span.hpp>
+
+using cudf::detail::device_span;
 
 namespace cudf {
 namespace io {
@@ -61,19 +67,17 @@ static inline int64_t __device__ avro_decode_zigzag_varint(const uint8_t *&cur, 
  * @return data pointer at the end of the row (start of next row)
  *
  **/
-static const uint8_t *__device__ avro_decode_row(const schemadesc_s *schema,
-                                                 schemadesc_s *schema_g,
-                                                 uint32_t schema_len,
+static const uint8_t *__device__ avro_decode_row(device_span<schemadesc_s const> schema,
+                                                 device_span<schemadesc_s> schema_g,
                                                  size_t row,
                                                  size_t max_rows,
-                                                 const uint8_t *cur,
-                                                 const uint8_t *end,
-                                                 const nvstrdesc_s *global_dictionary,
-                                                 uint32_t num_dictionary_entries)
+                                                 uint8_t const *cur,
+                                                 uint8_t const *end,
+                                                 device_span<nvstrdesc_s const> global_dictionary)
 {
   uint32_t array_start = 0, array_repeat_count = 0;
   int array_children = 0;
-  for (uint32_t i = 0; i < schema_len;) {
+  for (uint32_t i = 0; i < schema.size();) {
     uint32_t kind = schema[i].kind;
     int skip      = 0;
 
@@ -83,12 +87,12 @@ static const uint8_t *__device__ avro_decode_row(const schemadesc_s *schema,
       skip       = (*cur++) >> 1;  // NOTE: Assumes 1-byte union member
       skip_after = schema[i].count - skip - 1;
       ++i;
-      while (skip > 0 && i < schema_len) {
+      while (skip > 0 && i < schema.size()) {
         if (schema[i].kind >= type_record) { skip += schema[i].count; }
         ++i;
         --skip;
       }
-      if (i >= schema_len || skip_after < 0) break;
+      if (i >= schema.size() || skip_after < 0) break;
       kind = schema[i].kind;
       skip = skip_after;
     }
@@ -119,7 +123,7 @@ static const uint8_t *__device__ avro_decode_row(const schemadesc_s *schema,
           const char *ptr = 0;
           if (kind == type_enum) {  // dictionary
             size_t idx = schema[i].count + v;
-            if (idx < num_dictionary_entries) {
+            if (idx < global_dictionary.size()) {
               ptr   = global_dictionary[idx].ptr;
               count = global_dictionary[idx].count;
             }
@@ -192,7 +196,7 @@ static const uint8_t *__device__ avro_decode_row(const schemadesc_s *schema,
       if (schema[i].kind >= type_record) { array_children += schema[i].count; }
     }
     i++;
-    while (skip > 0 && i < schema_len) {
+    while (skip > 0 && i < schema.size()) {
       if (schema[i].kind >= type_record) { skip += schema[i].count; }
       ++i;
       --skip;
@@ -214,9 +218,9 @@ static const uint8_t *__device__ avro_decode_row(const schemadesc_s *schema,
  * @brief Decode column data
  *
  * @param[in] blocks Data block descriptions
- * @param[in] schema Schema description
  * @param[in] global_Dictionary Global dictionary entries
  * @param[in] avro_data Raw block data
+ * @param[in] schema Schema description
  * @param[in] num_blocks Number of blocks
  * @param[in] schema_len Number of entries in schema
  * @param[in] num_dictionary_entries Number of entries in global dictionary
@@ -227,50 +231,49 @@ static const uint8_t *__device__ avro_decode_row(const schemadesc_s *schema,
  **/
 // blockDim {32,NWARPS,1}
 extern "C" __global__ void __launch_bounds__(NWARPS * 32, 2)
-  gpuDecodeAvroColumnData(block_desc_s *blocks,
-                          schemadesc_s *schema_g,
-                          nvstrdesc_s *global_dictionary,
-                          const uint8_t *avro_data,
-                          uint32_t num_blocks,
-                          uint32_t schema_len,
-                          uint32_t num_dictionary_entries,
-                          uint32_t min_row_size,
-                          size_t max_rows,
-                          size_t first_row)
+  decode_avro_column_data_kernel(device_span<block_desc_s const> blocks,
+                                 device_span<nvstrdesc_s const> global_dictionary,
+                                 device_span<uint8_t const> avro_data,
+                                 device_span<schemadesc_s> schema_g,
+                                 uint32_t min_row_size,
+                                 size_t max_rows,
+                                 size_t first_row)
 {
   __shared__ __align__(8) schemadesc_s g_shared_schema[MAX_SHARED_SCHEMA_LEN];
   __shared__ __align__(8) block_desc_s blk_g[NWARPS];
 
-  schemadesc_s *schema;
+  uint32_t num_blocks             = blocks.size();
+  uint32_t num_dictionary_entries = global_dictionary.size();
+
+  device_span<schemadesc_s const> schema;
   block_desc_s *const blk = &blk_g[threadIdx.y];
   uint32_t block_id       = blockIdx.x * NWARPS + threadIdx.y;
   size_t cur_row;
   uint32_t rows_remaining;
-  const uint8_t *cur, *end;
+  uint8_t const *cur;
+  uint8_t const *end;
 
   // Fetch schema into shared mem if possible
-  if (schema_len <= MAX_SHARED_SCHEMA_LEN) {
+  if (schema_g.size() <= MAX_SHARED_SCHEMA_LEN) {
     for (int i = threadIdx.y * 32 + threadIdx.x;
-         i < schema_len * sizeof(schemadesc_s) / sizeof(uint32_t);
+         i < schema_g.size() * sizeof(schemadesc_s) / sizeof(uint32_t);
          i += NWARPS * 32) {
-      reinterpret_cast<uint32_t *>(&g_shared_schema)[i] =
-        reinterpret_cast<const uint32_t *>(schema_g)[i];
+      g_shared_schema[i] = schema_g[i];
     }
     __syncthreads();
-    schema = g_shared_schema;
+    schema = device_span<schemadesc_s const>(g_shared_schema, schema_g.size());
   } else {
-    schema = schema_g;
+    schema = device_span<schemadesc_s const>(schema_g.data(), schema_g.size());
   }
   if (block_id < num_blocks && threadIdx.x < sizeof(block_desc_s) / sizeof(uint32_t)) {
-    reinterpret_cast<volatile uint32_t *>(blk)[threadIdx.x] =
-      reinterpret_cast<const uint32_t *>(&blocks[block_id])[threadIdx.x];
+    blk[threadIdx.x] = reinterpret_cast<block_desc_s const *>(&blocks[block_id])[threadIdx.x];
     __threadfence_block();
   }
   __syncthreads();
   if (block_id >= num_blocks) { return; }
   cur_row        = blk->first_row;
   rows_remaining = blk->num_rows;
-  cur            = avro_data + blk->offset;
+  cur            = avro_data.data() + blk->offset;
   end            = cur + blk->size;
   while (rows_remaining > 0 && cur < end) {
     uint32_t nrows;
@@ -284,15 +287,8 @@ extern "C" __global__ void __launch_bounds__(NWARPS * 32, 2)
       nrows = 1;
     }
     if (threadIdx.x < nrows) {
-      cur = avro_decode_row(schema,
-                            schema_g,
-                            schema_len,
-                            cur_row - first_row + threadIdx.x,
-                            max_rows,
-                            cur,
-                            end,
-                            global_dictionary,
-                            num_dictionary_entries);
+      cur = avro_decode_row(
+        schema, schema_g, cur_row - first_row + threadIdx.x, max_rows, cur, end, global_dictionary);
     }
     if (nrows <= 1) {
       cur = start + SHFL0(static_cast<uint32_t>(cur - start));
@@ -309,12 +305,9 @@ extern "C" __global__ void __launch_bounds__(NWARPS * 32, 2)
  * @brief Launches kernel for decoding column data
  *
  * @param[in] blocks Data block descriptions
- * @param[in] schema Schema description
  * @param[in] global_dictionary Global dictionary entries
  * @param[in] avro_data Raw block data
- * @param[in] num_blocks Number of blocks
- * @param[in] schema_len Number of entries in schema
- * @param[in] num_dictionary_entries Number of entries in global dictionary
+ * @param[in] schema Schema description
  * @param[in] max_rows Maximum number of rows to load
  * @param[in] first_row Crop all rows below first_row
  * @param[in] min_row_size Minimum size in bytes of a row
@@ -322,32 +315,20 @@ extern "C" __global__ void __launch_bounds__(NWARPS * 32, 2)
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t __host__ DecodeAvroColumnData(block_desc_s *blocks,
-                                          schemadesc_s *schema,
-                                          nvstrdesc_s *global_dictionary,
-                                          const uint8_t *avro_data,
-                                          uint32_t num_blocks,
-                                          uint32_t schema_len,
-                                          uint32_t num_dictionary_entries,
-                                          size_t max_rows,
-                                          size_t first_row,
-                                          uint32_t min_row_size,
-                                          cudaStream_t stream)
+void __host__ decode_avro_column_data(device_span<block_desc_s const> const blocks,
+                                      device_span<nvstrdesc_s const> const global_dictionary,
+                                      device_span<uint8_t const> const avro_data,
+                                      device_span<schemadesc_s> const schema,
+                                      size_t max_rows,
+                                      size_t first_row,
+                                      uint32_t min_row_size,
+                                      cudaStream_t stream)
 {
   dim3 dim_block(32, NWARPS);  // NWARPS warps per threadblock
-  dim3 dim_grid((num_blocks + NWARPS - 1) / NWARPS,
+  dim3 dim_grid((blocks.size() + NWARPS - 1) / NWARPS,
                 1);  // 1 warp per datablock, NWARPS datablocks per threadblock
-  gpuDecodeAvroColumnData<<<dim_grid, dim_block, 0, stream>>>(blocks,
-                                                              schema,
-                                                              global_dictionary,
-                                                              avro_data,
-                                                              num_blocks,
-                                                              schema_len,
-                                                              num_dictionary_entries,
-                                                              min_row_size,
-                                                              max_rows,
-                                                              first_row);
-  return cudaSuccess;
+  decode_avro_column_data_kernel<<<dim_grid, dim_block, 0, stream>>>(
+    blocks, global_dictionary, avro_data, schema, min_row_size, max_rows, first_row);
 }
 
 }  // namespace gpu

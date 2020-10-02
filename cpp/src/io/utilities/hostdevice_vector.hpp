@@ -19,6 +19,10 @@
 #include <rmm/device_buffer.hpp>
 
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
+
+using cudf::detail::device_span;
+using cudf::detail::host_span;
 
 /**
  * @brief A helper class that wraps fixed-length device memory for the GPU, and
@@ -98,6 +102,12 @@ class hostdevice_vector {
     cudaMemcpyAsync(h_data, d_data.data(), memory_size(), cudaMemcpyDeviceToHost, stream);
     if (synchronize) { cudaStreamSynchronize(stream); }
   }
+
+  operator device_span<T>() { return device_span<T>(device_ptr(), size()); }
+  operator host_span<T>() { return host_span<T>(host_ptr(), size()); }
+
+  operator device_span<T const>() const { return device_span<T const>(device_ptr(), size()); }
+  operator host_span<T const>() const { return host_span<T const>(host_ptr(), size()); }
 
  private:
   void move(hostdevice_vector &&v)

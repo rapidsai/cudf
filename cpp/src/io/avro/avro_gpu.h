@@ -17,6 +17,10 @@
 
 #include "avro_common.h"
 
+#include <cudf/utilities/span.hpp>
+
+using cudf::detail::device_span;
+
 namespace cudf {
 namespace io {
 namespace avro {
@@ -25,7 +29,7 @@ namespace gpu {
  * @brief Struct to describe the output of a string datatype
  **/
 struct nvstrdesc_s {
-  const char *ptr;
+  char const *ptr;
   size_t count;
 };
 
@@ -43,30 +47,22 @@ struct schemadesc_s {
  * @brief Launches kernel for decoding column data
  *
  * @param[in] blocks Data block descriptions
- * @param[in] schema Schema description
  * @param[in] global_dictionary Global dictionary entries
  * @param[in] avro_data Raw block data
- * @param[in] num_blocks Number of blocks
- * @param[in] schema_len Number of entries in schema
- * @param[in] num_dictionary_entries Number of entries in global dictionary
+ * @param[in] schema Schema description
  * @param[in] max_rows Maximum number of rows to load
  * @param[in] first_row Crop all rows below first_row
  * @param[in] min_row_size Minimum size in bytes of a row
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t DecodeAvroColumnData(block_desc_s *blocks,
-                                 schemadesc_s *schema,
-                                 nvstrdesc_s *global_dictionary,
-                                 const uint8_t *avro_data,
-                                 uint32_t num_blocks,
-                                 uint32_t schema_len,
-                                 uint32_t num_dictionary_entries,
-                                 size_t max_rows       = ~0,
-                                 size_t first_row      = 0,
-                                 uint32_t min_row_size = 0,
-                                 cudaStream_t stream   = (cudaStream_t)0);
+void decode_avro_column_data(device_span<block_desc_s const> blocks,
+                             device_span<nvstrdesc_s const> global_dictionary,
+                             device_span<uint8_t const> avro_data,
+                             device_span<schemadesc_s> schema,
+                             size_t max_rows,
+                             size_t first_row,
+                             uint32_t min_row_size,
+                             cudaStream_t stream);
 
 }  // namespace gpu
 }  // namespace avro

@@ -16,13 +16,14 @@
 
 #pragma once
 
+#include "avro_common.h"
+
 #include <stddef.h>
 #include <stdint.h>
 #include <algorithm>
 #include <map>
 #include <string>
 #include <vector>
-#include "avro_common.h"
 
 namespace cudf {
 namespace io {
@@ -80,16 +81,16 @@ class schema_parser {
 
  public:
   schema_parser() {}
-  bool parse(std::vector<schema_entry> &schema, const std::string &str);
+  bool parse(std::vector<schema_entry> &schema, std::string const &str);
 
  protected:
   bool more_data() const { return (m_cur < m_end); }
   std::string get_str();
 
  protected:
-  const char *m_base;
-  const char *m_cur;
-  const char *m_end;
+  char const *m_base;
+  char const *m_cur;
+  char const *m_end;
 };
 
 /**
@@ -98,8 +99,8 @@ class schema_parser {
 class container {
  public:
   container() { m_base = m_cur = m_end = nullptr; }
-  container(const uint8_t *base, size_t len) { init(base, len); }
-  void init(const uint8_t *base, size_t len)
+  container(uint8_t const *base, size_t len) { init(base, len); }
+  void init(uint8_t const *base, size_t len)
   {
     m_base = m_cur = base;
     m_end          = base + len;
@@ -122,21 +123,21 @@ class container {
   }
   std::string get_str()
   {
-    const char *s;
+    char const *s;
     size_t len = get_u64();
     len        = ((len & 1) || (m_cur >= m_end)) ? 0 : std::min(len >> 1, (size_t)(m_end - m_cur));
-    s          = reinterpret_cast<const char *>(m_cur);
+    s          = reinterpret_cast<char const *>(m_cur);
     m_cur += len;
     return std::string(s, len);
   }
 
  public:
-  bool parse(file_metadata *md, size_t max_num_rows = 0x7fffffff, size_t first_row = 0);
+  bool parse(file_metadata &md, size_t max_num_rows = 0x7fffffff, size_t first_row = 0);
 
  protected:
-  const uint8_t *m_base;
-  const uint8_t *m_cur;
-  const uint8_t *m_end;
+  uint8_t const *m_base;
+  uint8_t const *m_cur;
+  uint8_t const *m_end;
 };
 
 }  // namespace avro
