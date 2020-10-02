@@ -8,8 +8,9 @@ import pandas as pd
 import pytest
 
 import cudf
-import cudf.tests.utils as utils
+from cudf.tests import utils as utils
 from cudf.tests.utils import assert_eq
+from cudf.utils import dtypes as dtypeutils
 
 _TIMEDELTA_DATA = [
     [1000000, 200000, 3000000],
@@ -445,16 +446,26 @@ def test_timedelta_dataframe_ops(df, op):
         ),
     ],
 )
-@pytest.mark.parametrize('use_cudf_scalar', [False, True])
-def test_timedelta_series_ops_with_scalars(data, other_scalars, dtype, op, use_cudf_scalar):
-    if isinstance(other_scalars, np.timedelta64) and other_scalars.dtype not in dtypeutils.TIMEDELTA_TYPES and use_cudf_scalar:
+@pytest.mark.parametrize("use_cudf_scalar", [False, True])
+def test_timedelta_series_ops_with_scalars(
+    data, other_scalars, dtype, op, use_cudf_scalar
+):
+    if (
+        isinstance(other_scalars, np.timedelta64)
+        and other_scalars.dtype not in dtypeutils.TIMEDELTA_TYPES
+        and use_cudf_scalar
+    ):
         pytest.skip()
 
     gsr = cudf.Series(data=data, dtype=dtype)
     psr = gsr.to_pandas()
 
     cpu_other_scalars = other_scalars
-    gpu_other_scalars = cudf.Scalar(other_scalars) if use_cudf_scalar is True else other_scalars
+    gpu_other_scalars = (
+        cudf.Scalar(other_scalars)
+        if use_cudf_scalar is True
+        else other_scalars
+    )
 
     if op == "add":
         expected = psr + cpu_other_scalars
@@ -716,17 +727,27 @@ def test_timedelta_datetime_index_ops_misc(
         ),
     ],
 )
-@pytest.mark.parametrize('use_cudf_scalar', [False, True])
-def test_timedelta_index_ops_with_scalars(data, other_scalars, dtype, op, use_cudf_scalar):
+@pytest.mark.parametrize("use_cudf_scalar", [False, True])
+def test_timedelta_index_ops_with_scalars(
+    data, other_scalars, dtype, op, use_cudf_scalar
+):
 
-    if isinstance(other_scalars, np.timedelta64) and other_scalars.dtype not in dtypeutils.TIMEDELTA_TYPES and use_cudf_scalar:
+    if (
+        isinstance(other_scalars, np.timedelta64)
+        and other_scalars.dtype not in dtypeutils.TIMEDELTA_TYPES
+        and use_cudf_scalar
+    ):
         pytest.skip()
 
     gtdi = cudf.Index(data=data, dtype=dtype)
     ptdi = gtdi.to_pandas()
 
     cpu_other_scalars = other_scalars
-    gpu_other_scalars = cudf.Scalar(other_scalars) if use_cudf_scalar is True else other_scalars
+    gpu_other_scalars = (
+        cudf.Scalar(other_scalars)
+        if use_cudf_scalar is True
+        else other_scalars
+    )
 
     if op == "add":
         expected = ptdi + cpu_other_scalars

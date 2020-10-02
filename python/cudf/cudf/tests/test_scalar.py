@@ -1,15 +1,20 @@
 import datetime
 import datetime as dt
+import re
 
 import numpy as np
 import pandas as pd
 import pytest
 
-from cudf._lib.scalar import Scalar
-from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, TIMEDELTA_TYPES, ALL_TYPES
-import operator
-import re
 import cudf
+from cudf._lib.scalar import Scalar
+from cudf.tests.utils import (
+    ALL_TYPES,
+    DATETIME_TYPES,
+    NUMERIC_TYPES,
+    TIMEDELTA_TYPES,
+)
+
 
 @pytest.mark.parametrize(
     "value",
@@ -89,19 +94,18 @@ import cudf
         np.object_("asdf"),
     ],
 )
-@pytest.mark.parametrize('constructor', [Scalar, cudf.Scalar])
+@pytest.mark.parametrize("constructor", [Scalar, cudf.Scalar])
 def test_round_trip_scalar(value, constructor):
     s = constructor(value)
 
     np.testing.assert_equal(s.value, value)
     assert s.is_valid() is True
-    
 
 
 @pytest.mark.parametrize(
     "dtype", NUMERIC_TYPES + DATETIME_TYPES + TIMEDELTA_TYPES + ["object"]
 )
-@pytest.mark.parametrize('constructor', [Scalar, cudf.Scalar])
+@pytest.mark.parametrize("constructor", [Scalar, cudf.Scalar])
 def test_null_scalar(dtype, constructor):
     s = constructor(None, dtype=dtype)
     assert s.value is None
@@ -112,7 +116,7 @@ def test_null_scalar(dtype, constructor):
 @pytest.mark.parametrize(
     "dtype", NUMERIC_TYPES + DATETIME_TYPES + TIMEDELTA_TYPES + ["object"]
 )
-@pytest.mark.parametrize('constructor', [Scalar, cudf.Scalar])
+@pytest.mark.parametrize("constructor", [Scalar, cudf.Scalar])
 def test_valid_scalar(dtype, constructor):
     s = constructor(1, dtype=dtype)
 
@@ -134,7 +138,7 @@ def test_valid_scalar(dtype, constructor):
         pd.Timedelta(34765, unit="D"),
     ],
 )
-@pytest.mark.parametrize('constructor', [Scalar, cudf.Scalar])
+@pytest.mark.parametrize("constructor", [Scalar, cudf.Scalar])
 def test_date_duration_scalars(value, constructor):
     s = constructor(value)
 
@@ -152,6 +156,7 @@ def test_date_duration_scalars(value, constructor):
     np.testing.assert_equal(actual, expected)
     assert s.is_valid() is True
 
+
 def test_scalar_implicit_bool_conversion():
     assert cudf.Scalar(True)
     assert not cudf.Scalar(False)
@@ -160,7 +165,7 @@ def test_scalar_implicit_bool_conversion():
     assert cudf.Scalar(1) <= 2
 
 
-@pytest.mark.parametrize('value', [1, -1, 1.5, 0, '1.5', '1', True, False])
+@pytest.mark.parametrize("value", [1, -1, 1.5, 0, "1.5", "1", True, False])
 def test_scalar_implicit_float_conversion(value):
     expect = float(value)
     got = float(cudf.Scalar(value))
@@ -168,7 +173,8 @@ def test_scalar_implicit_float_conversion(value):
     assert expect == got
     assert type(expect) == type(got)
 
-@pytest.mark.parametrize('value', [1, -1, 1.5, 0, '1', True, False])
+
+@pytest.mark.parametrize("value", [1, -1, 1.5, 0, "1", True, False])
 def test_scalar_implicit_int_conversion(value):
     expect = int(value)
     got = int(cudf.Scalar(value))
@@ -176,15 +182,20 @@ def test_scalar_implicit_int_conversion(value):
     assert expect == got
     assert type(expect) == type(got)
 
-@pytest.mark.parametrize('cls', [int, float, bool])
-@pytest.mark.parametrize('dtype', set(ALL_TYPES) - {'category'})
+
+@pytest.mark.parametrize("cls", [int, float, bool])
+@pytest.mark.parametrize("dtype", set(ALL_TYPES) - {"category"})
 def test_scalar_invalid_implicit_conversion(cls, dtype):
 
     try:
         cls(pd.NA)
     except TypeError as e:
 
-        error = str(e).replace('NAType', 'cudf_NA_type').replace(' NA ', " cudf.NA ")
+        error = (
+            str(e)
+            .replace("NAType", "cudf_NA_type")
+            .replace(" NA ", " cudf.NA ")
+        )
         with pytest.raises(TypeError, match=re.escape(str(error))):
             slr = cudf.Scalar(None, dtype=dtype)
             cls(slr)

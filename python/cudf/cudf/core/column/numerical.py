@@ -82,7 +82,9 @@ class NumericalColumn(column.ColumnBase):
         tmp = rhs
         if reflect:
             tmp = self
-        if isinstance(rhs, (NumericalColumn, (Scalar, cudf.Scalar))) or np.isscalar(rhs):
+        if isinstance(
+            rhs, (NumericalColumn, (Scalar, cudf.Scalar))
+        ) or np.isscalar(rhs):
             out_dtype = np.result_type(self.dtype, rhs.dtype)
             if binop in ["mod", "floordiv"]:
                 if (tmp.dtype in int_dtypes) and (
@@ -429,7 +431,10 @@ class NumericalColumn(column.ColumnBase):
         """
         Fill null values with *fill_value*
         """
-        if isinstance(fill_value, cudf.Scalar) and fill_value.dtype == self.dtype:
+        if (
+            isinstance(fill_value, cudf.Scalar)
+            and fill_value.dtype == self.dtype
+        ):
             return libcudf.replace.replace_nulls(self, fill_value)
         if np.isscalar(fill_value):
             # castsafely to the same dtype as self

@@ -1,7 +1,7 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from libcpp.memory cimport unique_ptr
 from libcpp cimport bool
+from libcpp.memory cimport unique_ptr
 
 from cudf._lib.cpp.scalar.scalar cimport scalar
 

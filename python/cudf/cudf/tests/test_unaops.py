@@ -1,5 +1,8 @@
 from __future__ import division
 
+import itertools
+import operator
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -7,16 +10,9 @@ import pytest
 import cudf
 from cudf.core import Series
 from cudf.tests import utils
-import itertools
-import operator
 
-_unaops = [
-    operator.abs,
-    operator.invert,
-    operator.neg,
-    np.ceil,
-    np.floor
-]
+_unaops = [operator.abs, operator.invert, operator.neg, np.ceil, np.floor]
+
 
 @pytest.mark.parametrize("dtype", utils.NUMERIC_TYPES)
 def test_series_abs(dtype):
@@ -111,7 +107,7 @@ def test_series_pandas_methods_empty(mth):
     psr = pd.Series(arr)
     np.testing.assert_equal(getattr(sr, mth)(), getattr(psr, mth)())
 
-    
+
 def generate_valid_scalar_unaop_combos():
     results = []
 
@@ -127,19 +123,22 @@ def generate_valid_scalar_unaop_combos():
     float_ops = [op for op in _unaops if op is not operator.invert]
     results += list(itertools.product(float_values, float_dtypes, float_ops))
 
-    string_values = ['a', 'abc']
-    string_dtypes = ['object']
+    string_values = ["a", "abc"]
+    string_dtypes = ["object"]
     string_ops = [operator.not_]
-    results += list(itertools.product(string_values, string_dtypes, string_ops))
+    results += list(
+        itertools.product(string_values, string_dtypes, string_ops)
+    )
 
     bool_values = [True, False]
-    bool_dtypes = ['bool']
+    bool_dtypes = ["bool"]
     bool_ops = _unaops
     results += list(itertools.product(bool_values, bool_dtypes, bool_ops))
 
     return results
 
-@pytest.mark.parametrize('slr,dtype,op', generate_valid_scalar_unaop_combos())
+
+@pytest.mark.parametrize("slr,dtype,op", generate_valid_scalar_unaop_combos())
 def test_scalar_unary_operations(slr, dtype, op):
     slr_host = np.dtype(dtype).type(slr)
     slr_device = cudf.Scalar(slr, dtype=dtype)

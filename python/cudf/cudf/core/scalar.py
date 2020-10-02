@@ -1,11 +1,15 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
-import cudf._lib as libcudf
-from cudf.utils.dtypes import to_cudf_compatible_scalar, get_allowed_combinations_for_operator
-from numpy import find_common_type
 import numpy as np
-from cudf.core.series import Series, truediv_int_dtype_corrections
+
+from cudf import _lib as libcudf
 from cudf.core.column.column import ColumnBase
 from cudf.core.index import Index
+from cudf.core.series import Series
+from cudf.utils.dtypes import (
+    get_allowed_combinations_for_operator,
+    to_cudf_compatible_scalar,
+)
+
 
 class Scalar(libcudf.scalar.Scalar):
     def __init__(self, value, dtype=None):
@@ -26,14 +30,18 @@ class Scalar(libcudf.scalar.Scalar):
         Scalar(84.0, dtype=float64)
         >>> cudf.Scalar(42, dtype='int64') + np.int8(21)
         Scalar(63, dtype=int64)
-        >>> cudf.Scalar(42, dtype='datetime64[s]') - cudf.Scalar(21, dtype='timedelta64[ns])
+        >>> x = cudf.Scalar(42, dtype='datetime64[s]')
+        >>> y = cudf.Scalar(21, dtype='timedelta64[ns])
+        >>> x - y
         Scalar(1970-01-01T00:00:41.999999979, dtype=datetime64[ns])
         >>> cudf.Series([1,2,3]) + cudf.Scalar(1)
         0    2
         1    3
         2    4
         dtype: int64
-        >>> cudf.DataFrame({'a':[1,2,3], 'b':[4.5, 5.5, 6.5]}) -  cudf.Scalar(10, dtype='uint8')
+        >>> df = cudf.DataFrame({'a':[1,2,3], 'b':[4.5, 5.5, 6.5]})
+        >>> slr = cudf.Scalar(10, dtype='uint8')
+        >>> df - slr
         a    b
         0 -9 -5.5
         1 -8 -4.5
@@ -50,13 +58,13 @@ class Scalar(libcudf.scalar.Scalar):
         super().__init__(value, dtype=dtype)
 
     def __index__(self):
-        if not self.dtype.kind in {'u', 'i'}:
+        if self.dtype.kind not in {"u", "i"}:
             raise TypeError("Only Integer typed scalars may be used in slices")
         return int(self)
 
     def __int__(self):
         return int(self.value)
-    
+
     def __float__(self):
         return float(self.value)
 
@@ -68,7 +76,7 @@ class Scalar(libcudf.scalar.Scalar):
         return self._scalar_binop(other, "__add__")
 
     def __radd__(self, other):
-        return self._scalar_binop(other, '__radd__')
+        return self._scalar_binop(other, "__radd__")
 
     def __sub__(self, other):
         return self._scalar_binop(other, "__sub__")
@@ -84,9 +92,9 @@ class Scalar(libcudf.scalar.Scalar):
 
     def __truediv__(self, other):
         return self._scalar_binop(other, "__truediv__")
-    
+
     def __floordiv__(self, other):
-        return self._scalar_binop(other, '__floordiv__')
+        return self._scalar_binop(other, "__floordiv__")
 
     def __rtruediv__(self, other):
         return self._scalar_binop(other, "__rtruediv__")
@@ -119,47 +127,53 @@ class Scalar(libcudf.scalar.Scalar):
         return self._scalar_binop(other, "__le__")
 
     def __eq__(self, other):
-        return self._scalar_binop(other, '__eq__')
+        return self._scalar_binop(other, "__eq__")
 
     def __ne__(self, other):
         return self._scalar_binop(other, "__ne__")
 
     def __round__(self, n):
-        return self._scalar_binop(n, '__round__')
+        return self._scalar_binop(n, "__round__")
 
     # Scalar Unary Operations
     def __abs__(self):
-        return self._scalar_unaop('__abs__')
+        return self._scalar_unaop("__abs__")
 
     def __ceil__(self):
-        return self._scalar_unaop('__ceil__')
+        return self._scalar_unaop("__ceil__")
 
     def __floor__(self):
-        return self._scalar_unaop('__floor__')
+        return self._scalar_unaop("__floor__")
 
     def __invert__(self):
-        return self._scalar_unaop('__invert__')
+        return self._scalar_unaop("__invert__")
 
     def __neg__(self):
-        return self._scalar_unaop('__neg__')
+        return self._scalar_unaop("__neg__")
 
     def __repr__(self):
         return f"Scalar({self.value}, dtype={self.dtype})"
 
     def _binop_result_dtype_or_error(self, other, op):
-
+        # import pdb
+        # pdb.set_trace()
         if op in ["__eq__", "__ne__", "__lt__", "__gt__", "__le__", "__ge__"]:
             return np.bool
 
-        if not get_allowed_combinations_for_operator(self.dtype, other.dtype, op):
-            raise TypeError(f"{op} not supported between "\
-                            f"{self.dtype} and {other.dtype} scalars")
+        out_dtype = get_allowed_combinations_for_operator(
+            self.dtype, other.dtype, op
+        )
 
-        if op == '__truediv__':
-                # https://github.com/numpy/numpy/issues/9128
-                return 'float64'
+        # datetime handling
+        if out_dtype in "Mm":
+            if self.dtype.char in "Mm" and other.dtype.char not in "Mm":
+                return self.dtype
+            elif other.dtype.char in "Mm" and self.dtype.char not in "Mm":
+                return other.dtype
+            else:
+                return np.result_type(self.dtype, other.dtype)
 
-        return find_common_type([self.dtype, other.dtype], [])
+        return np.dtype(out_dtype)
 
     def _scalar_binop(self, other, op):
         if isinstance(other, (ColumnBase, Series, Index, np.ndarray)):
@@ -182,11 +196,13 @@ class Scalar(libcudf.scalar.Scalar):
         return getattr(self.value, op)(other)
 
     def _unaop_result_type_or_error(self, op):
-        if op == '__neg__' and self.dtype == 'bool':
-            raise TypeError("Boolean scalars in cuDF, do not support" \
-                            "negation, use logical not")
-        if op in {'__ceil__', '__floor__'} and self.dtype == 'int8':
-            return np.dtype('float32')
+        if op == "__neg__" and self.dtype == "bool":
+            raise TypeError(
+                "Boolean scalars in cuDF, do not support"
+                "negation, use logical not"
+            )
+        if op in {"__ceil__", "__floor__"} and self.dtype == "int8":
+            return np.dtype("float32")
         else:
             return self.dtype
 
@@ -199,18 +215,22 @@ class Scalar(libcudf.scalar.Scalar):
             return Scalar(result, dtype=out_dtype)
 
     def _dispatch_scalar_unaop(self, op):
-        if op == '__floor__':
+        if op == "__floor__":
             return np.floor(self.value)
-        if op == '__ceil__':
+        if op == "__ceil__":
             return np.ceil(self.value)
         return getattr(self.value, op)()
+
 
 class cudf_NA_type(object):
     def __init__(self):
         pass
+
     def __repr__(self):
         return "<NA>"
+
     def __bool__(self):
         raise TypeError("boolean value of cudf.NA is ambiguous")
+
 
 NA = cudf_NA_type()

@@ -2,7 +2,7 @@ import datetime as dt
 import numbers
 from collections import namedtuple
 from collections.abc import Sequence
-import itertools
+
 import cupy as cp
 import numpy as np
 import pandas as pd
@@ -12,7 +12,6 @@ from pandas.core.dtypes.dtypes import CategoricalDtype, CategoricalDtypeType
 
 import cudf
 from cudf._lib.scalar import Scalar
-from itertools import product
 
 _NA_REP = "<NA>"
 _np_pa_dtypes = {
@@ -473,39 +472,132 @@ def _get_nan_for_dtype(dtype):
 def get_allowed_combinations_for_operator(dtype_l, dtype_r, op):
 
     to_numpy_ops = {
-        "__add__": np.add,
-        "__sub__": np.subtract,
-        "__mul__": np.multiply,
-        "__floordiv__": np.floor_divide,
-        "__truediv__": np.true_divide,
-        "__pow__": np.power,
-        "__mod__": np.remainder,
-        '__or__': np.logical_or,
-        '__and__': np.logical_and,
-        '__not__': np.logical_not,
-        '__xor__': np.logical_xor
+        "__add__": _ADD_TYPES,
+        "__sub__": _SUB_TYPES,
+        "__mul__": _MUL_TYPES,
+        "__floordiv__": _FLOORDIV_TYPES,
+        "__truediv__": _TRUEDIV_TYPES,
+        "__mod__": _MOD_TYPES,
+        "__pow__": _POW_TYPES,
     }
-    op = to_numpy_ops.get(op, op)
+    allowed = to_numpy_ops.get(op, op)
 
     # special rules for string
-    if dtype_l == 'object' or dtype_r == 'object':
-        if (dtype_l == dtype_r == 'object') and op == np.add:
+    if dtype_l == "object" or dtype_r == "object":
+        if (dtype_l == dtype_r == "object") and op == np.add:
             return True
         else:
             return False
 
-    # Look for a numpy ufunc loop 
-    typ = dtype_l.char + dtype_r.char
-    allowed = set(t.split("->")[0] for t in op.types)
-    allowed.discard("OO")
-    if typ in allowed:
-        return True
-    else:
-        # if no loop found, numpy would check if operands can be 
-        # cast to something it does have a loop implemented for
-        for l_cast_to, r_cast_to in (list(pair) for pair in allowed):
-            if np.can_cast(dtype_l.char, l_cast_to) and np.can_cast(
-                dtype_r.char, r_cast_to
-            ):
-                return True
-    return False
+    # Check if we can directly operate
+
+    for valid_combo in allowed:
+        ltype, rtype, outtype = valid_combo
+        if np.can_cast(dtype_l.char, ltype) and np.can_cast(
+            dtype_r.char, rtype
+        ):
+            return outtype
+
+    raise TypeError(
+        f"{op} not supported between " f"{dtype_l} and {dtype_r} scalars"
+    )
+
+
+_ADD_TYPES = [
+    "BBB",
+    "HHH",
+    "III",
+    "LLL",
+    "bbb",
+    "hhh",
+    "iii",
+    "lll",
+    "fff",
+    "ddd",
+    "???",
+    "mMM",
+    "MmM",
+    "mmm",
+    "LMM",
+    "MLM",
+    "Lmm",
+    "mLm",
+]
+_SUB_TYPES = [
+    "BBB",
+    "HHH",
+    "III",
+    "LLL",
+    "bbb",
+    "hhh",
+    "iii",
+    "lll",
+    "fff",
+    "ddd",
+    "???",
+    "MMm",
+    "mmm",
+    "MmM",
+    "MLM",
+    "mLm",
+    "Lmm",
+]
+_MUL_TYPES = [
+    "BBB",
+    "HHH",
+    "III",
+    "LLL",
+    "bbb",
+    "hhh",
+    "iii",
+    "lll",
+    "fff",
+    "ddd",
+    "???",
+    "mLm",
+    "Lmm",
+    "mlm",
+    "lmm",
+]
+_FLOORDIV_TYPES = [
+    "BBB",
+    "HHH",
+    "III",
+    "LLL",
+    "bbb",
+    "hhh",
+    "iii",
+    "lll",
+    "fff",
+    "ddd",
+    "???",
+    "mqm",
+    "mdm",
+    "mmq",
+]
+_TRUEDIV_TYPES = ["fff", "ddd", "mqm", "mmd", "mLm"]
+_MOD_TYPES = [
+    "bbb",
+    "BBB",
+    "hhh",
+    "HHH",
+    "iii",
+    "III",
+    "lll",
+    "LLL",
+    "fff",
+    "ddd",
+    "mmm",
+]
+_POW_TYPES = [
+    "bbb",
+    "BBB",
+    "hhh",
+    "HHH",
+    "iii",
+    "III",
+    "lll",
+    "LLL",
+    "fff",
+    "ddd",
+]
