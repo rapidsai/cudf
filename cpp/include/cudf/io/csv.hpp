@@ -374,7 +374,8 @@ class csv_reader_options {
   {
     if ((size != 0) and ((_skiprows != 0) or (_skipfooter != 0) or (_nrows != -1))) {
       CUDF_FAIL(
-        "If the value of any of skiprows, skipfooter or nrows is valid, range size cannot be non-zero.");
+        "If the value of any of skiprows, skipfooter or nrows is valid, range size cannot be "
+        "non-zero.");
     }
     _byte_range_size = size;
   }
