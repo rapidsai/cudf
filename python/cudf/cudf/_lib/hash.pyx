@@ -55,7 +55,7 @@ def hash_partition(Table source_table, object columns_to_hash,
 
         ),
         list(c_result.second) if c_result.second.size()
-        else list(vector[libcudf_types.size_type](num_partitions, 0))
+        else [0] * num_partitions
     )
 
 
