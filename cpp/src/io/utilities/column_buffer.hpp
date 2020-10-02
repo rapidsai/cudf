@@ -102,6 +102,7 @@ struct column_buffer {
     size        = col.size;
     children    = std::move(col.children);
     is_nullable = col.is_nullable;
+    name        = std::move(col.name);
   }
 
   // instantiate a column of known type with a specified size.  Allows deferred creation for
@@ -149,6 +150,7 @@ struct column_buffer {
   size_type size{0};
   std::vector<column_buffer> children;
   uint32_t user_data{0};  // arbitrary user data
+  std::string name;
 };
 
 namespace {

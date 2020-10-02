@@ -8,13 +8,13 @@ from libc.stdint cimport uintptr_t
 
 from libcpp.string cimport string
 from libcpp.memory cimport unique_ptr
+from libcpp.utility cimport move
 from libcpp.pair cimport pair
 
 from cudf._lib.column cimport Column
 from cudf._lib.table cimport Table
 from rmm._lib.device_buffer cimport device_buffer, DeviceBuffer
 from cudf.core.buffer import Buffer
-from cudf._lib.move cimport move
 
 from cudf._lib.cpp.types cimport (
     bitmask_type,

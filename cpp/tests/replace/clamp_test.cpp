@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/dictionary/encode.hpp>
 #include <cudf/replace.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 
@@ -506,6 +507,83 @@ TEST_F(ClampStringTest, WithReplaceString)
   auto got = cudf::clamp(input, *lo, *lo_replace, *hi, *hi_replace);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
+}
+
+struct ClampDictionaryTest : public cudf::test::BaseFixture {
+};
+
+TEST_F(ClampDictionaryTest, WithNullableColumn)
+{
+  cudf::test::strings_column_wrapper input_s({"a", "b", "c", "d", "", "d", "c", "b", "a"},
+                                             {1, 1, 1, 1, 0, 1, 1, 1, 1});
+  auto input = cudf::dictionary::encode(input_s);
+
+  auto results = cudf::clamp(input->view(), cudf::string_scalar("b"), cudf::string_scalar("c"));
+  auto decoded = cudf::dictionary::decode(results->view());
+
+  cudf::test::strings_column_wrapper expected({"b", "b", "c", "c", "", "c", "c", "b", "b"},
+                                              {1, 1, 1, 1, 0, 1, 1, 1, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, decoded->view());
+}
+
+TEST_F(ClampDictionaryTest, WithNonNullableColumn)
+{
+  cudf::test::fixed_width_column_wrapper<int8_t> input_s({3, 3, 1, 1, 2, 2, 4, 4});
+  auto input = cudf::dictionary::encode(input_s);
+
+  auto results =
+    cudf::clamp(input->view(), cudf::numeric_scalar<int8_t>(2), cudf::numeric_scalar<int8_t>(3));
+  auto decoded = cudf::dictionary::decode(results->view());
+
+  cudf::test::fixed_width_column_wrapper<int8_t> expected({3, 3, 2, 2, 2, 2, 3, 3});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, decoded->view());
+}
+
+TEST_F(ClampDictionaryTest, NullLowHi)
+{
+  cudf::test::fixed_width_column_wrapper<int16_t> input_s({200, 100, 0, 300, 300, 400, 100, 200, 0},
+                                                          {1, 1, 0, 1, 1, 1, 1, 1, 0});
+  auto input = cudf::dictionary::encode(input_s);
+  {
+    auto results = cudf::clamp(
+      input->view(), cudf::numeric_scalar<int16_t>(0, false), cudf::numeric_scalar<int16_t>(300));
+    auto decoded = cudf::dictionary::decode(results->view());
+    cudf::test::fixed_width_column_wrapper<int16_t> expected(
+      {200, 100, 0, 300, 300, 300, 100, 200, 0}, {1, 1, 0, 1, 1, 1, 1, 1, 0});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, decoded->view());
+  }
+  {
+    auto results = cudf::clamp(
+      input->view(), cudf::numeric_scalar<int16_t>(200), cudf::numeric_scalar<int16_t>(0, false));
+    auto decoded = cudf::dictionary::decode(results->view());
+    cudf::test::fixed_width_column_wrapper<int16_t> expected(
+      {200, 200, 0, 300, 300, 400, 200, 200, 0}, {1, 1, 0, 1, 1, 1, 1, 1, 0});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, decoded->view());
+  }
+  {
+    auto results = cudf::clamp(input->view(),
+                               cudf::numeric_scalar<int16_t>(0, false),
+                               cudf::numeric_scalar<int16_t>(0, false));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(input->view(), results->view());
+  }
+}
+
+TEST_F(ClampDictionaryTest, WithReplace)
+{
+  cudf::test::fixed_width_column_wrapper<int64_t> input_s({1, 2, 3, 4, 0, 4, 3, 2, 1},
+                                                          {1, 1, 1, 1, 0, 1, 1, 1, 1});
+  auto input = cudf::dictionary::encode(input_s);
+
+  auto results = cudf::clamp(input->view(),
+                             cudf::numeric_scalar<int64_t>(2),
+                             cudf::numeric_scalar<int64_t>(2000),
+                             cudf::numeric_scalar<int64_t>(3),
+                             cudf::numeric_scalar<int64_t>(3000));
+  auto decoded = cudf::dictionary::decode(results->view());
+
+  cudf::test::fixed_width_column_wrapper<int64_t> expected({2000, 2, 3, 3000, 0, 3000, 3, 2, 2000},
+                                                           {1, 1, 1, 1, 0, 1, 1, 1, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, decoded->view());
 }
 
 CUDF_TEST_PROGRAM_MAIN()
