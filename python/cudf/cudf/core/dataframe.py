@@ -4177,8 +4177,8 @@ class DataFrame(Frame, Serializable):
         # can't use `annotate` decorator here as we inspect the calling
         # environment.
         with annotate("QUERY", color="purple", domain="cudf_python"):
-            if local_dir is None:
-                local_dir = {}
+            if local_dict is None:
+                local_dict = {}
 
             if self.empty:
                 return self.copy()
