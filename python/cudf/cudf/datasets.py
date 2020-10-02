@@ -12,7 +12,7 @@ def timeseries(
     start="2000-01-01",
     end="2000-01-31",
     freq="1s",
-    dtypes={"name": "category", "id": int, "x": float, "y": float},
+    dtypes=None,
     seed=None,
 ):
     """ Create timeseries dataframe with random data
@@ -25,7 +25,9 @@ def timeseries(
         End of time series
     dtypes : dict
         Mapping of column names to types.
-        Valid types include {float, int, str, 'category'}
+        Valid types include {float, int, str, 'category'}.
+        If none is provided, this defaults to
+        ``{"name": "category", "id": int, "x": float, "y": float}``
     freq : string
         String like '2s' or '1H' or '12W' for the time series frequency
     seed : int (optional)
@@ -43,6 +45,7 @@ def timeseries(
     2000-01-01 00:00:03  1016   Yvonne  0.620456  0.767270
     2000-01-01 00:00:04   998   Ursula  0.684902 -0.463278
     """
+    dtypes = dtypes or {"name": "category", "id": int, "x": float, "y": float}
 
     index = pd.DatetimeIndex(
         pd.date_range(start, end, freq=freq, name="timestamp")
@@ -58,7 +61,7 @@ def timeseries(
 
 
 def randomdata(
-    nrows=10, dtypes={"id": int, "x": float, "y": float}, seed=None
+    nrows=10, dtypes=None, seed=None
 ):
     """ Create a dataframe with random data
 
@@ -69,6 +72,8 @@ def randomdata(
     dtypes : dict
         Mapping of column names to types.
         Valid types include {float, int, str, 'category'}
+        If none is provided, this defaults to
+        ``{"id": int, "x": float, "y": float}``
     seed : int (optional)
         Randomstate seed
 
@@ -84,6 +89,7 @@ def randomdata(
     3  1002 0.9280495300010041  0.5137701393017848
     4   976 0.9089527839187654  0.9881063385586304
     """
+    dtypes = dtypes or {"id": int, "x": float, "y": float}
     state = np.random.RandomState(seed)
     columns = dict((k, make[dt](nrows, state)) for k, dt in dtypes.items())
     df = pd.DataFrame(columns, columns=sorted(columns))

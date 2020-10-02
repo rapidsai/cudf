@@ -483,7 +483,7 @@ def get_dummies(
     prefix_sep="_",
     dummy_na=False,
     columns=None,
-    cats={},
+    cats=None,
     sparse=False,
     drop_first=False,
     dtype="uint8",
@@ -552,6 +552,7 @@ def get_dummies(
     2      0      0      1       0
     3      0      0      0       1
     """
+    cats = cats or {}
     if sparse:
         raise NotImplementedError("sparse is not supported yet")
 
