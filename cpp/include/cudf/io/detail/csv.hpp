@@ -26,9 +26,10 @@ namespace csv {
  * @brief Class to read CSV dataset data into columns.
  */
 class reader {
- private:
-  class impl;
-  std::unique_ptr<impl> _impl;
+  rmm::mr::device_memory_resource *_mr;
+  std::unique_ptr<datasource> _source;
+  std::string _filepath;
+  csv_reader_options _reader_options;
 
  public:
   /**
