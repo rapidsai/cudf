@@ -1,7 +1,7 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
-from cudf._lib.move cimport move
+from libcpp.utility cimport move
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.scalar.scalar cimport string_scalar
 from cudf._lib.cpp.types cimport size_type
@@ -127,7 +127,7 @@ def rjust(Column source_strings,
           fill_char):
     """
     Returns a Column by filling left side of strings in `source_strings`
-    with additional character, `fill_char` upto the given `width`.
+    with additional character, `fill_char` up to the given `width`.
     """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()

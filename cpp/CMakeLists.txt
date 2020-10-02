@@ -508,6 +508,7 @@ add_library(cudf
             src/filling/fill.cu
             src/filling/repeat.cu
             src/filling/sequence.cu
+            src/reshape/byte_cast.cu
             src/reshape/tile.cu
             src/search/search.cu
             src/column/column.cu
@@ -597,6 +598,7 @@ add_library(cudf
             src/dictionary/decode.cu
             src/dictionary/encode.cu
             src/dictionary/remove_keys.cu
+            src/dictionary/replace.cu
             src/dictionary/search.cu
             src/dictionary/set_keys.cu
             src/groupby/groupby.cu
@@ -769,21 +771,16 @@ if(HT_DEFAULT_ALLOCATOR)
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DHT_DEFAULT_ALLOCATOR")
 endif(HT_DEFAULT_ALLOCATOR)
 
-# Set a default logging level if none was specified
-set(DEFAULT_LOGGING_LEVEL INFO)
+###################################################################################################
+# - rmm logging level -----------------------------------------------------------------------------
 
-if(NOT LOGGING_LEVEL)
-    message(STATUS "Setting logging level to '${DEFAULT_LOGGING_LEVEL}' since none specified.")
-    set(LOGGING_LEVEL "${DEFAULT_LOGGING_LEVEL}" CACHE
-      STRING "Choose the logging level." FORCE)
-    # Set the possible values of build type for cmake-gui
-    set_property(CACHE LOGGING_LEVEL PROPERTY STRINGS
+set(RMM_LOGGING_LEVEL "INFO" CACHE STRING "Choose the logging level.")
+# Set the possible values of build type for cmake-gui
+set_property(CACHE RMM_LOGGING_LEVEL PROPERTY STRINGS
         "TRACE" "DEBUG" "INFO" "WARN" "ERROR" "CRITICAL" "OFF")
-else()
-    message(STATUS "Setting logging level to '${LOGGING_LEVEL}'")
-endif(NOT LOGGING_LEVEL)
+message(STATUS "RMM_LOGGING_LEVEL = '${RMM_LOGGING_LEVEL}'.")
 
-target_compile_definitions(cudf PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${LOGGING_LEVEL})
+target_compile_definitions(cudf PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${RMM_LOGGING_LEVEL})
 
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------

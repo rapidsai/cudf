@@ -31,7 +31,7 @@ namespace strings {
 namespace detail {
 namespace {
 /**
- * @brief Utility to return integer column indicating the postion of
+ * @brief Utility to return integer column indicating the position of
  * target string within each string in a strings column.
  *
  * Null string entries return corresponding null output column entries.
