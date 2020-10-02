@@ -97,6 +97,9 @@ namespace {
  * @brief This functor maps signed type_ids to unsigned counterparts.
  */
 struct signed_to_unsigned_type_fn {
+  /**
+   * @brief This lets all other types just pass through
+   */
   template <typename T>
   __device__ constexpr cudf::type_id operator()()
   {

@@ -86,7 +86,7 @@ auto make_scalar_iterator(scalar const& input)
 }
 
 /**
- * @brief This tility uses `copy_if_else` to replace null entries using the input bitmask as a
+ * @brief This utility uses `copy_if_else` to replace null entries using the input bitmask as a
  * predicate.
  *
  * The predicate identifies which column row to copy from and the bitmask specifies which rows
