@@ -42,6 +42,9 @@ def hash_partition(Table source_table, object columns_to_hash,
             )
         )
 
+    # Note that the offsets (`c_result.second`) may be empty when
+    # the original table (`source_table`) is empty. We need to
+    # return a list of zeros in this case.
     return (
         Table.from_unique_ptr(
             move(c_result.first),
@@ -51,7 +54,8 @@ def hash_partition(Table source_table, object columns_to_hash,
             else None
 
         ),
-        list(c_result.second)
+        list(c_result.second) if c_result.second.size()
+        else list(vector[libcudf_types.size_type](num_partitions, 0))
     )
 
 

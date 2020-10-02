@@ -489,9 +489,6 @@ class Frame(libcudf.table.Table):
         )
         output = self.__class__._from_table(output)
         output._copy_categories(self, include_index=keep_index)
-        # Convert empty offsets to list of zeros.
-        # This is needed when `self` is an empty Frame.
-        offsets = offsets or [0] * num_partitions
         return output, offsets
 
     def _as_column(self):
