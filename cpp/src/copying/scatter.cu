@@ -19,11 +19,13 @@
 #include <cudf/detail/fill.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/gather.hpp>
+#include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/scatter.cuh>
 #include <cudf/detail/scatter.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/dictionary/detail/search.hpp>
 #include <cudf/lists/list_view.cuh>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/strings/detail/scatter.cuh>
@@ -128,6 +130,8 @@ struct column_scalar_scatterer_impl {
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream) const
   {
+    CUDF_EXPECTS(source->type() == target.type(), "scalar and column types must match");
+
     auto result      = std::make_unique<column>(target, stream, mr);
     auto result_view = result->mutable_view();
 
@@ -155,24 +159,13 @@ struct column_scalar_scatterer_impl<string_view, MapIterator> {
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream) const
   {
+    CUDF_EXPECTS(source->type() == target.type(), "scalar and column types must match");
+
     auto const scalar_impl = static_cast<string_scalar*>(source.get());
     auto const source_view = string_view(scalar_impl->data(), scalar_impl->size());
     auto const begin       = thrust::make_constant_iterator(source_view);
     auto const end         = begin + scatter_rows;
     return strings::detail::scatter(begin, end, scatter_iter, target, mr, stream);
-  }
-};
-
-template <typename MapIterator>
-struct column_scalar_scatterer_impl<dictionary32, MapIterator> {
-  std::unique_ptr<column> operator()(std::unique_ptr<scalar> const& source,
-                                     MapIterator scatter_iter,
-                                     size_type scatter_rows,
-                                     column_view const& target,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) const
-  {
-    CUDF_FAIL("scatter scalar to dictionary not implemented");
   }
 };
 
@@ -199,6 +192,52 @@ struct column_scalar_scatterer_impl<struct_view, MapIterator> {
                                      cudaStream_t stream) const
   {
     CUDF_FAIL("scatter scalar to struct_view not implemented");
+  }
+};
+
+template <typename MapIterator>
+struct column_scalar_scatterer_impl<dictionary32, MapIterator> {
+  std::unique_ptr<column> operator()(std::unique_ptr<scalar> const& source,
+                                     MapIterator scatter_iter,
+                                     size_type scatter_rows,
+                                     column_view const& target,
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream) const
+  {
+    auto dict_target = dictionary::detail::add_keys(
+      dictionary_column_view(target),
+      make_column_from_scalar(*source, 1, rmm::mr::get_current_device_resource(), stream)->view(),
+      mr,
+      stream);
+    auto dict_view    = dictionary_column_view(dict_target->view());
+    auto scalar_index = dictionary::detail::get_index(
+      dict_view, *source, rmm::mr::get_current_device_resource(), stream);
+    auto scalar_iter = thrust::make_permutation_iterator(
+      indexalator_factory::make_input_iterator(*scalar_index), thrust::make_constant_iterator(0));
+    auto new_indices = std::make_unique<column>(dict_view.get_indices_annotated(), stream, mr);
+    auto target_iter = indexalator_factory::make_output_iterator(new_indices->mutable_view());
+    thrust::scatter(rmm::exec_policy(stream)->on(stream),
+                    scalar_iter,
+                    scalar_iter + scatter_rows,
+                    scatter_iter,
+                    target_iter);
+    // build the dictionary indices column from the result
+    auto const indices_type = new_indices->type();
+    auto const output_size  = new_indices->size();
+    auto const null_count   = new_indices->null_count();
+    auto contents           = new_indices->release();
+    auto indices_column     = std::make_unique<column>(indices_type,
+                                                   static_cast<size_type>(output_size),
+                                                   *(contents.data.release()),
+                                                   rmm::device_buffer{0, stream, mr},
+                                                   0);
+    // use the keys from the matched column
+    std::unique_ptr<column> keys_column(std::move(dict_target->release().children.back()));
+    // create the output column
+    return make_dictionary_column(std::move(keys_column),
+                                  std::move(indices_column),
+                                  std::move(*(contents.null_mask.release())),
+                                  null_count);
   }
 };
 
@@ -252,7 +291,7 @@ struct scatter_scalar_impl {
                    target.begin(),
                    result.begin(),
                    [=](auto const& source_scalar, auto const& target_col) {
-                     return type_dispatcher(source_scalar->type(),
+                     return type_dispatcher(target_col.type(),
                                             scatter_functor,
                                             source_scalar,
                                             scatter_iter,
@@ -319,13 +358,6 @@ std::unique_ptr<table> scatter(std::vector<std::unique_ptr<scalar>> const& sourc
 {
   CUDF_EXPECTS(source.size() == static_cast<size_t>(target.num_columns()),
                "Number of columns in source and target not equal");
-  CUDF_EXPECTS(std::equal(source.begin(),
-                          source.end(),
-                          target.begin(),
-                          [](auto const& scalar, auto const& col) {
-                            return scalar->type().id() == col.type().id();
-                          }),
-               "Column types do not match between source and target");
   CUDF_EXPECTS(indices.has_nulls() == false, "indices contains nulls");
 
   if (indices.size() == 0) { return std::make_unique<table>(target, stream, mr); }

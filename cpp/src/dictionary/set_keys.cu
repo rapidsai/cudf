@@ -118,7 +118,6 @@ std::unique_ptr<column> set_keys(
   // compute the new nulls
   auto matches   = cudf::detail::contains(keys, keys_column->view(), mr, stream);
   auto d_matches = matches->view().data<bool>();
-  // auto d_indices   = dictionary_column.indices().data<uint32_t>();
   auto indices_itr =
     cudf::detail::indexalator_factory::make_input_iterator(dictionary_column.indices());
   auto d_null_mask = dictionary_column.null_mask();
