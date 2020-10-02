@@ -112,6 +112,7 @@
 - PR #6312 Conda recipe dependency cleanup
 - PR #6347 Add dictionary support to cudf::copy_range
 - PR #6332 Add support to return csv as string when `path=None` in `to_csv`
+- PR #6358 Add Parquet fuzz tests with varying function parameters
 - PR #6369 Add dictionary support to `cudf::find_and_replace`
 - PR #6373 Add dictionary support to `cudf::clamp`
 - PR #6377 Update ci/local/README.md
@@ -262,6 +263,7 @@
 
 ## Improvements
 
+- PR #5492 compile_udf: compile straight to PTX instead of using @jit
 - PR #5605 Automatically flush RMM allocate/free logs in JNI
 - PR #5632 Switch JNI code to use `pool_memory_resource` instead of CNMeM
 - PR #5486 Link Boost libraries statically in the Java build
