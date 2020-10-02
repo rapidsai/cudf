@@ -28,4 +28,8 @@ public class RmmAllocationMode {
    * Use cudaMallocManaged rather than cudaMalloc
    */
   public static final int CUDA_MANAGED_MEMORY = 0x00000002;
+  /**
+   * Use arena suballocation strategy
+   */
+  public static final int ARENA = 0x00000004;
 }

@@ -210,6 +210,21 @@ def test_parquet_reader_basic(parquet_file, columns, engine):
     assert_eq(expect, got, check_categorical=False)
 
 
+@pytest.mark.filterwarnings("ignore:Using CPU")
+@pytest.mark.parametrize("engine", ["cudf"])
+def test_parquet_reader_empty_pandas_dataframe(tmpdir, engine):
+    df = pd.DataFrame()
+    fname = tmpdir.join("test_pq_reader_empty_pandas_dataframe.parquet")
+    df.to_parquet(fname)
+    assert os.path.exists(fname)
+    expect = pd.read_parquet(fname)
+    got = cudf.read_parquet(fname, engine=engine)
+    expect = expect.reset_index(drop=True)
+    got = got.reset_index(drop=True)
+
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize("has_null", [False, True])
 @pytest.mark.parametrize("strings_to_categorical", [False, True, None])
 def test_parquet_reader_strings(tmpdir, strings_to_categorical, has_null):
@@ -1271,3 +1286,39 @@ def test_parquet_writer_sliced(tmpdir):
 
     df_select.to_parquet(cudf_path)
     assert_eq(cudf.read_parquet(cudf_path), df_select.reset_index(drop=True))
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [
+            {"a": 1, "b": 2},
+            {"a": 10, "b": 20},
+            {"a": None, "b": 22},
+            {"a": None, "b": None},
+            {"a": 15, "b": None},
+        ],
+        [
+            {"a": 1, "b": 2, "c": [1, 2, 3]},
+            {"a": 10, "b": 20, "c": [4, 5]},
+            {"a": None, "b": 22, "c": [6]},
+            {"a": None, "b": None, "c": None},
+            {"a": 15, "b": None, "c": [-1, -2]},
+            None,
+            {"a": 100, "b": 200, "c": [-10, None, -20]},
+        ],
+        [
+            [{"a": 1, "b": 2}, {"a": 2, "b": 3}, {"a": 4, "b": 5}],
+            None,
+            [{"a": 10, "b": 20}],
+            [{"a": 100, "b": 200}, {"a": None, "b": 300}, None],
+        ],
+    ],
+)
+def test_parquet_structs(tmpdir, data):
+    expect = pa.Table.from_pydict({"whee": data})
+    fname = tmpdir.join("test_parquet_reader_struct_basic.parquet")
+    pa.parquet.write_table(expect, fname)
+    assert os.path.exists(fname)
+    got = cudf.read_parquet(fname)
+    expect.equals(got.to_arrow())

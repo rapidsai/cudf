@@ -45,6 +45,7 @@ from cudf.utils.dtypes import (
     is_list_like,
     is_scalar,
     is_string_dtype,
+    is_struct_dtype,
     numeric_normalize_types,
 )
 from cudf.utils.utils import OrderedColumnDict
@@ -90,6 +91,17 @@ def _reverse_op(fn):
         "__truediv__": "__rtruediv__",
         "__rtruediv__": "__truediv__",
     }[fn]
+
+
+_cupy_nan_methods_map = {
+    "min": "nanmin",
+    "max": "nanmax",
+    "sum": "nansum",
+    "prod": "nanprod",
+    "mean": "nanmean",
+    "std": "nanstd",
+    "var": "nanvar",
+}
 
 
 class DataFrame(Frame, Serializable):
@@ -1164,7 +1176,7 @@ class DataFrame(Frame, Serializable):
         filling with `<NA>` values.
         """
         for col in df._data:
-            if is_list_dtype(df._data[col]):
+            if is_list_dtype(df._data[col]) or is_struct_dtype(df._data[col]):
                 # TODO we need to handle this
                 pass
             elif df._data[col].has_nulls:
@@ -5499,15 +5511,18 @@ class DataFrame(Frame, Serializable):
     #
     # Stats
     #
-    def _prepare_for_rowwise_op(self):
+    def _prepare_for_rowwise_op(self, method, skipna):
         """Prepare a DataFrame for CuPy-based row-wise operations.
         """
 
-        if any([col.nullable for col in self._columns]):
+        if method not in _cupy_nan_methods_map and any(
+            col.nullable for col in self._columns
+        ):
             msg = (
-                "Row-wise operations do not currently support columns with "
-                "null values. Consider removing them with .dropna() "
-                "or using .fillna()."
+                f"Row-wise operations to calculate '{method}' is not "
+                f"currently support columns with null values. "
+                f"Consider removing them with .dropna() "
+                f"or using .fillna()."
             )
             raise ValueError(msg)
 
@@ -5519,8 +5534,22 @@ class DataFrame(Frame, Serializable):
                 "and bool dtypes. Non numeric columns are ignored."
             )
             warnings.warn(msg)
+
+        if not skipna and any(col.nullable for col in filtered._columns):
+            mask = cudf.DataFrame(
+                {
+                    name: filtered._data[name]._get_mask_as_column()
+                    if filtered._data[name].nullable
+                    else column.full(len(filtered._data[name]), True)
+                    for name in filtered._data.names
+                }
+            )
+            mask = mask.all(axis=1)
+        else:
+            mask = None
+
         coerced = filtered.astype(common_dtype)
-        return coerced
+        return coerced, mask, common_dtype
 
     def count(self, axis=0, level=None, numeric_only=False, **kwargs):
         """
@@ -5584,7 +5613,7 @@ class DataFrame(Frame, Serializable):
 
         Notes
         -----
-        Parameters currently not supported are `axis`, `level`, `numeric_only`.
+        Parameters currently not supported are `level`, `numeric_only`.
 
         Examples
         --------
@@ -5629,7 +5658,7 @@ class DataFrame(Frame, Serializable):
 
         Notes
         -----
-        Parameters currently not supported are `axis`, `level`, `numeric_only`.
+        Parameters currently not supported are `level`, `numeric_only`.
 
         Examples
         --------
@@ -5665,12 +5694,12 @@ class DataFrame(Frame, Serializable):
         Parameters
         ----------
 
+        axis: {index (0), columns(1)}
+            Axis for the function to be applied on.
         skipna: bool, default True
             Exclude NA/null values when computing the result.
-
         dtype: data type
             Data type to cast the result to.
-
         min_count: int, default 0
             The required number of valid values to perform the operation.
             If fewer than min_count non-NA values are present the result
@@ -5685,7 +5714,7 @@ class DataFrame(Frame, Serializable):
 
         Notes
         -----
-        Parameters currently not supported are `axis`, `level`, `numeric_only`.
+        Parameters currently not supported are `level`, `numeric_only`.
 
         Examples
         --------
@@ -5723,12 +5752,12 @@ class DataFrame(Frame, Serializable):
         Parameters
         ----------
 
+        axis: {index (0), columns(1)}
+            Axis for the function to be applied on.
         skipna: bool, default True
             Exclude NA/null values when computing the result.
-
         dtype: data type
             Data type to cast the result to.
-
         min_count: int, default 0
             The required number of valid values to perform the operation.
             If fewer than min_count non-NA values are present the result
@@ -5743,7 +5772,7 @@ class DataFrame(Frame, Serializable):
 
         Notes
         -----
-        Parameters currently not supported are `axis`, `level`, `numeric_only`.
+        Parameters currently not supported are level`, `numeric_only`.
 
         Examples
         --------
@@ -5781,12 +5810,12 @@ class DataFrame(Frame, Serializable):
         Parameters
         ----------
 
+        axis: {index (0), columns(1)}
+            Axis for the function to be applied on.
         skipna: bool, default True
             Exclude NA/null values when computing the result.
-
         dtype: data type
             Data type to cast the result to.
-
         min_count: int, default 0
             The required number of valid values to perform the operation.
             If fewer than min_count non-NA values are present the result
@@ -5801,7 +5830,7 @@ class DataFrame(Frame, Serializable):
 
         Notes
         -----
-        Parameters currently not supported are `axis`, `level`, `numeric_only`.
+        Parameters currently not supported are `level`, `numeric_only`.
 
         Examples
         --------
@@ -6121,10 +6150,11 @@ class DataFrame(Frame, Serializable):
         Parameters
         ----------
 
+        axis: {index (0), columns(1)}
+            Axis for the function to be applied on.
         skipna: bool, default True
             Exclude NA/null values. If an entire row/column is NA, the result
             will be NA.
-
         ddof: int, default 1
             Delta Degrees of Freedom. The divisor used in calculations
             is N - ddof, where N represents the number of elements.
@@ -6135,7 +6165,7 @@ class DataFrame(Frame, Serializable):
 
         Notes
         -----
-        Parameters currently not supported are `axis`, `level` and
+        Parameters currently not supported are `level` and
         `numeric_only`
 
         Examples
@@ -6176,10 +6206,11 @@ class DataFrame(Frame, Serializable):
         Parameters
         ----------
 
+        axis: {index (0), columns(1)}
+            Axis for the function to be applied on.
         skipna: bool, default True
             Exclude NA/null values. If an entire row/column is NA, the result
             will be NA.
-
         ddof: int, default 1
             Delta Degrees of Freedom. The divisor used in calculations is
             N - ddof, where N represents the number of elements.
@@ -6190,7 +6221,7 @@ class DataFrame(Frame, Serializable):
 
         Notes
         -----
-        Parameters currently not supported are `axis`, `level` and
+        Parameters currently not supported are `level` and
         `numeric_only`
 
         Examples
@@ -6425,10 +6456,15 @@ class DataFrame(Frame, Serializable):
         elif axis == 1:
             # for dask metadata compatibility
             skipna = kwargs.pop("skipna", None)
-            if skipna not in (None, True, 1):
-                msg = "Row-wise operations currently do not "
-                "support `skipna=False`."
-                raise NotImplementedError(msg)
+            if method not in _cupy_nan_methods_map and skipna not in (
+                None,
+                True,
+                1,
+            ):
+                raise NotImplementedError(
+                    f"Row-wise operation to calculate '{method}'"
+                    f" currently do not support `skipna=False`."
+                )
 
             level = kwargs.pop("level", None)
             if level not in (None,):
@@ -6454,13 +6490,51 @@ class DataFrame(Frame, Serializable):
                 "support `bool_only`."
                 raise NotImplementedError(msg)
 
-            prepared = self._prepare_for_rowwise_op()
+            prepared, mask, common_dtype = self._prepare_for_rowwise_op(
+                method, skipna
+            )
+            for col in prepared._data.names:
+                if prepared._data[col].nullable:
+                    prepared._data[col] = (
+                        prepared._data[col]
+                        .astype(
+                            cudf.utils.dtypes.get_min_float_dtype(
+                                prepared._data[col]
+                            )
+                        )
+                        .fillna(np.nan)
+                    )
             arr = cupy.asarray(prepared.as_gpu_matrix())
 
-            result = getattr(arr, method)(axis=1, **kwargs)
+            if skipna is not False and method in _cupy_nan_methods_map:
+                method = _cupy_nan_methods_map[method]
 
-            if len(result.shape) == 1:
-                return Series(result, index=self.index)
+            result = getattr(cupy, method)(arr, axis=1, **kwargs)
+
+            if result.ndim == 1:
+                result = column.as_column(result)
+                if mask is not None:
+                    result = result.set_mask(
+                        cudf._lib.transform.bools_to_mask(mask._column)
+                    )
+                return Series(
+                    result,
+                    index=self.index,
+                    dtype=common_dtype
+                    if method
+                    in {
+                        "count",
+                        "min",
+                        "max",
+                        "sum",
+                        "prod",
+                        "cummin",
+                        "cummax",
+                        "cumsum",
+                        "cumprod",
+                    }
+                    else None,
+                )
             else:
                 result_df = DataFrame.from_gpu_matrix(result).set_index(
                     self.index
@@ -6646,10 +6720,10 @@ class DataFrame(Frame, Serializable):
 
         return dlpack.to_dlpack(self)
 
-    @ioutils.doc_to_csv()
+    @ioutils.doc_dataframe_to_csv()
     def to_csv(
         self,
-        path=None,
+        path_or_buf=None,
         sep=",",
         na_rep="",
         columns=None,
@@ -6663,14 +6737,14 @@ class DataFrame(Frame, Serializable):
 
         return csv.to_csv(
             self,
-            path,
-            sep,
-            na_rep,
-            columns,
-            header,
-            index,
-            line_terminator,
-            chunksize,
+            path_or_buf=path_or_buf,
+            sep=sep,
+            na_rep=na_rep,
+            columns=columns,
+            header=header,
+            index=index,
+            line_terminator=line_terminator,
+            chunksize=chunksize,
         )
 
     @ioutils.doc_to_orc()
@@ -6991,6 +7065,8 @@ class DataFrame(Frame, Serializable):
             if self_name != other_name:
                 return False
         return super().equals(other)
+
+    _accessors = set()
 
 
 def from_pandas(obj, nan_as_null=None):

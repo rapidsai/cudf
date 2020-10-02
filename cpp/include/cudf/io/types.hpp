@@ -98,8 +98,8 @@ enum statistics_freq {
 struct column_name_info {
   std::string name;
   std::vector<column_name_info> children;
-
   column_name_info(std::string const& _name) : name(_name) {}
+  column_name_info() = default;
 };
 
 /**

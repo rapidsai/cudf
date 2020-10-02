@@ -46,6 +46,7 @@ class CategoricalDtype(ExtensionDtype):
         )
 
     def to_pandas(self):
+        breakpoint()
         if self.categories is None:
             categories = None
         else:
@@ -53,6 +54,7 @@ class CategoricalDtype(ExtensionDtype):
         return pd.CategoricalDtype(categories=categories, ordered=self.ordered)
 
     def _init_categories(self, categories):
+        breakpoint()
         if categories is None:
             return categories
         if len(categories) == 0:
@@ -117,8 +119,8 @@ class ListDtype(ExtensionDtype):
         if isinstance(element_type, ListDtype):
             self._typ = pa.list_(element_type._typ)
         else:
-            element_type = cudf.utils.dtypes.np_to_pa_dtype(
-                np.dtype(element_type)
+            element_type = cudf.utils.dtypes.cudf_dtype_to_pa_type(
+                element_type
             )
             self._typ = pa.list_(element_type)
 
@@ -151,9 +153,6 @@ class ListDtype(ExtensionDtype):
     def to_arrow(self):
         return self._typ
 
-    def to_pandas(self):
-        super().to_pandas(integer_object_nulls=True)
-
     def __eq__(self, other):
         if isinstance(other, str):
             return other == self.name
@@ -166,3 +165,54 @@ class ListDtype(ExtensionDtype):
             return f"ListDtype({self.element_type.__repr__()})"
         else:
             return f"ListDtype({self.element_type})"
+
+    def __str__(self):
+        return "object"
+
+
+class StructDtype(ExtensionDtype):
+
+    name = "struct"
+
+    def __init__(self, fields):
+        """
+        fields : dict
+            A mapping of field names to dtypes
+        """
+        pa_fields = {
+            k: cudf.utils.dtypes.cudf_dtype_to_pa_type(v)
+            for k, v in fields.items()
+        }
+        self._typ = pa.struct(pa_fields)
+
+    @property
+    def fields(self):
+        return {
+            field.name: cudf.utils.dtypes.cudf_dtype_from_pa_type(field.type)
+            for field in self._typ
+        }
+
+    @property
+    def type(self):
+        # TODO: we should change this to return something like a
+        # StructDtypeType, once we figure out what that should look like
+        return dict
+
+    @classmethod
+    def from_arrow(cls, typ):
+        obj = object.__new__(cls)
+        obj._typ = typ
+        return obj
+
+    def to_arrow(self):
+        return self._typ
+
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return other == self.name
+        if type(other) is not StructDtype:
+            return False
+        return self._typ.equals(other._typ)
+
+    def __repr__(self):
+        return f"StructDtype({self.fields})"
