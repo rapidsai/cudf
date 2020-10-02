@@ -22,6 +22,7 @@ dependencies:
   - cython>=0.29,<0.30
   - fsspec>=0.6.0
   - pytest
+  - pytest-benchmark
   - sphinx
   - sphinx_rtd_theme
   - sphinxcontrib-websupport

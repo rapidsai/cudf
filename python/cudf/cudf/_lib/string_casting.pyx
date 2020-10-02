@@ -3,7 +3,6 @@
 import numpy as np
 
 from cudf._lib.column cimport Column
-from cudf._lib.move cimport move
 from cudf._lib.scalar import as_scalar
 from cudf._lib.scalar cimport Scalar
 from cudf._lib.types import np_to_cudf_types
@@ -51,6 +50,7 @@ from cudf._lib.cpp.types cimport (
 )
 
 from libcpp.memory cimport unique_ptr
+from libcpp.utility cimport move
 from libcpp.string cimport string
 
 

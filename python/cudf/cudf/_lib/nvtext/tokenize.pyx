@@ -1,7 +1,7 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
-from cudf._lib.move cimport move
+from libcpp.utility cimport move
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.scalar.scalar cimport string_scalar

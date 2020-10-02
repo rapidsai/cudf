@@ -17,6 +17,7 @@ from libcpp.pair cimport pair
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr, make_unique
 from libcpp.vector cimport vector
+from libcpp.utility cimport move
 from cudf._lib.cpp.strings.convert.convert_integers cimport (
     from_integers as cpp_from_integers
 )
@@ -29,7 +30,6 @@ from cudf._lib.types cimport (
     dtype_from_column_view
 )
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
-from cudf._lib.move cimport move
 
 from cudf._lib.cpp.column.column cimport column, column_contents
 from cudf._lib.cpp.column.column_view cimport column_view

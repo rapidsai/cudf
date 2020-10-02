@@ -1,8 +1,8 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from cudf._lib.move cimport move
 from cudf._lib.cpp.column.column_view cimport column_view
 from libcpp.memory cimport unique_ptr
+from libcpp.utility cimport move
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.cpp.column.column cimport column
