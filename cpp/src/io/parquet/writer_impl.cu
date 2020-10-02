@@ -832,19 +832,12 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
                        state.stream);
   }
 
-  auto host_bfr = [&]() {
-    // if the writer supports device_write(), we don't need this scratch space
-    if (out_sink_->supports_device_write()) {
-      return pinned_buffer<uint8_t>{nullptr, cudaFreeHost};
-    } else {
-      return pinned_buffer<uint8_t>{[](size_t size) {
+  auto host_bfr = pinned_buffer<uint8_t>{[](size_t size) {
                                       uint8_t *ptr = nullptr;
                                       CUDA_TRY(cudaMallocHost(&ptr, size));
                                       return ptr;
                                     }(max_chunk_bfr_size),
                                     cudaFreeHost};
-    }
-  }();
 
   // Encode row groups in batches
   for (uint32_t b = 0, r = 0, global_r = global_rowgroup_base; b < (uint32_t)batch_list.size();
@@ -880,7 +873,7 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
           dev_bfr = ck->uncompressed_bfr;
         }
 
-        if (out_sink_->supports_device_write()) {
+        if (out_sink_->is_device_write_preferred(ck->compressed_size)) {
           // let the writer do what it wants to retrieve the data from the gpu.
           out_sink_->device_write(dev_bfr + ck->ck_stat_size, ck->compressed_size, state.stream);
           // we still need to do a (much smaller) memcpy for the statistics.

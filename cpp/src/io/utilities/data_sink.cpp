@@ -49,6 +49,11 @@ class file_sink : public data_sink {
 
   bool supports_device_write() const override { return true; }
 
+  bool is_device_write_preferred(size_t size) const override
+  {
+    return _gds_file.is_gds_io_preferred(size);
+  }
+
   void device_write(void const* gpu_data, size_t size, cudaStream_t stream) override
   {
     _gds_file.write(gpu_data, bytes_written_, size);

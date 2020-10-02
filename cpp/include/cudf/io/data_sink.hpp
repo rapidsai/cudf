@@ -105,6 +105,8 @@ class data_sink {
    **/
   virtual bool supports_device_write() const { return false; }
 
+  virtual bool is_device_write_preferred(size_t size) const { return supports_device_write(); }
+
   /**
    * @brief Append the buffer content to the sink from a gpu address
    *

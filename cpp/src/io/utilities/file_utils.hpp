@@ -44,28 +44,44 @@ struct cf_file_wrapper {
   ~cf_file_wrapper();
 };
 
-class gds_input {
+class gds_io_base {
+ public:
+  gds_io_base(std::string const &filepath, int flags) : file(filepath, flags), cf_file{file.desc()}
+  {
+  }
+  gds_io_base(std::string const &filepath, int flags, mode_t mode)
+    : file(filepath, flags, mode), cf_file{file.desc()}
+  {
+  }
+
+  static bool is_gds_io_preferred(size_t size) { return size > op_size_threshold; }
+
+ protected:
+  /**
+   * @brief The read/write size above which GDS is faster then host read + copy
+   *
+   * This may not be the optimal threshold for all systems. `is_gds_io_preferred` can use a
+   * different logic based on the system config.
+   */
+  static constexpr size_t op_size_threshold = 128 << 10;
+  file_wrapper const file;
+  cf_file_wrapper const cf_file;
+};
+
+class gds_input : public gds_io_base {
  public:
   gds_input(std::string const &filepath);
 
   std::unique_ptr<datasource::buffer> read(size_t offset, size_t size);
 
   size_t read(size_t offset, size_t size, uint8_t *dst);
-
- private:
-  file_wrapper const file;
-  cf_file_wrapper const cf_file;
 };
 
-class gds_output {
+class gds_output : public gds_io_base {
  public:
   gds_output(std::string const &filepath);
 
   void write(void const *data, size_t offset, size_t size);
-
- private:
-  file_wrapper const file;
-  cf_file_wrapper const cf_file;
 };
 
 };  // namespace io

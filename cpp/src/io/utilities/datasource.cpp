@@ -83,6 +83,8 @@ class memory_mapped_source : public datasource {
 
   bool supports_device_read() const override { return true; }
 
+  bool is_device_read_preferred(size_t size) const { return _gds_file.is_gds_io_preferred(size); }
+
   std::unique_ptr<datasource::buffer> device_read(size_t offset, size_t size) override
   {
     auto const read_size = std::min(size, map_size_ - (offset - map_offset_));

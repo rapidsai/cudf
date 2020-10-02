@@ -560,12 +560,12 @@ void reader::impl::read_column_chunks(
     }
     if (io_size != 0) {
       auto &source = _sources[chunk_source_map[chunk]];
-      if (!source->supports_device_read()) {
+      if (source->is_device_read_preferred(io_size)) {
+        page_data[chunk] = source->device_read(io_offset, io_size);
+      } else {
         auto const buffer = source->host_read(io_offset, io_size);
         page_data[chunk] =
           datasource::buffer::create(rmm::device_buffer(buffer->data(), buffer->size(), stream));
-      } else {
-        page_data[chunk] = source->device_read(io_offset, io_size);
       }
       uint8_t const *d_compdata = page_data[chunk]->data();
       do {

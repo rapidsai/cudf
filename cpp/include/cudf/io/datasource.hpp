@@ -150,6 +150,8 @@ class datasource {
    */
   virtual bool supports_device_read() const { return false; }
 
+  virtual bool is_device_read_preferred(size_t size) const { return supports_device_read(); }
+
   /**
    * @brief Returns a device buffer with a subset of data from the source.
    *

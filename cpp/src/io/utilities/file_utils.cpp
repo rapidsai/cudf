@@ -72,10 +72,7 @@ cf_file_wrapper::cf_file_wrapper(int fd)
 
 cf_file_wrapper::~cf_file_wrapper() { cuFileHandleDeregister(handle); }
 
-gds_input::gds_input(std::string const &filepath)
-  : file(filepath, O_RDONLY | O_DIRECT), cf_file{file.desc()}
-{
-}
+gds_input::gds_input(std::string const &filepath) : gds_io_base(filepath, O_RDONLY | O_DIRECT) {}
 
 std::unique_ptr<datasource::buffer> gds_input::read(size_t offset, size_t size)
 {
@@ -95,7 +92,7 @@ size_t gds_input::read(size_t offset, size_t size, uint8_t *dst)
 }
 
 gds_output::gds_output(std::string const &filepath)
-  : file(filepath, O_CREAT | O_RDWR | O_DIRECT, 0664), cf_file(file.desc())
+  : gds_io_base(filepath, O_CREAT | O_RDWR | O_DIRECT, 0664)
 {
 }
 
