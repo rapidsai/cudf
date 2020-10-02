@@ -711,12 +711,13 @@ def test_dataframe_to_string():
     densearray = masked.to_array()
     np.testing.assert_equal(data[validids], densearray)
     # valid position is corret
+
     for i in validids:
         assert data[i] == values[i]
     # null position is correct
     for i in range(len(values)):
         if i not in validids:
-            assert values[i] is None
+            assert values[i] is gd.NA
 
     pd.options.display.max_rows = 10
     got = df.to_string()
