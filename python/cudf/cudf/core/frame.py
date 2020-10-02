@@ -254,7 +254,8 @@ class Frame(libcudf.table.Table):
             names = OrderedDict.fromkeys(names).keys()
         else:
             raise ValueError(
-                "Only can inner (intersect) or outer (union) join the other axis"
+                "Only can inner (intersect) or outer (union) when joining"
+                "the other axis"
             )
 
         try:
