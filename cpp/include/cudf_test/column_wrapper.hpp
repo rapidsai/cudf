@@ -148,16 +148,14 @@ struct fixed_width_type_converter {
 };
 
 /**
- * @brief Creates a `device_buffer` containing the elements in the range
- * `[begin,end)`.
+ * @brief Creates a `device_buffer` containing the elements in the range `[begin,end)`.
  *
- * @tparam ElementTo The type of element that is being created
- * @tparam ElementFrom The type of element that is used to create elements of type `ElementTo`
+ * @tparam ElementTo The element type that is being created (non-`fixed_point`)
+ * @tparam ElementFrom The element type used to create elements of type `ElementTo`
  * @tparam InputIterator Iterator type for `begin` and `end`
  * @param begin Begining of the sequence of elements
  * @param end End of the sequence of elements
- * @return rmm::device_buffer Buffer containing all elements in the range
- *`[begin,end)`
+ * @return rmm::device_buffer Buffer containing all elements in the range `[begin,end)`
  **/
 template <typename ElementTo,
           typename ElementFrom,
@@ -173,7 +171,17 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
   return rmm::device_buffer{elements.data(), size * sizeof(ElementTo)};
 }
 
-// TODO add docs
+/**
+ * @brief Creates a `device_buffer` containing the elements in the range `[begin,end)`.
+ *
+ * @tparam ElementTo The element type that is being created (`fixed_point` specialization)
+ * @tparam ElementFrom The element type used to create elements of type `ElementTo`
+ * (non-`fixed-point`)
+ * @tparam InputIterator Iterator type for `begin` and `end`
+ * @param begin Begining of the sequence of elements
+ * @param end End of the sequence of elements
+ * @return rmm::device_buffer Buffer containing all elements in the range `[begin,end)`
+ **/
 template <typename ElementTo,
           typename ElementFrom,
           typename InputIterator,
@@ -181,8 +189,6 @@ template <typename ElementTo,
                                     cudf::is_fixed_point<ElementTo>()>* = nullptr>
 rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 {
-  // TODO clean this function up
-
   using RepType        = typename ElementTo::representation_type;
   auto transformer     = fixed_width_type_converter<ElementFrom, RepType>{};
   auto transform_begin = thrust::make_transform_iterator(begin, transformer);
@@ -191,7 +197,16 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
   return rmm::device_buffer{elements.data(), size * sizeof(RepType)};
 }
 
-// TODO add docs
+/**
+ * @brief Creates a `device_buffer` containing the elements in the range `[begin,end)`.
+ *
+ * @tparam ElementTo The element type that is being created (`fixed_point` specialization)
+ * @tparam ElementFrom The element type used to create elements of type `ElementTo` (`fixed_point`)
+ * @tparam InputIterator Iterator type for `begin` and `end`
+ * @param begin Begining of the sequence of elements
+ * @param end End of the sequence of elements
+ * @return rmm::device_buffer Buffer containing all elements in the range `[begin,end)`
+ **/
 template <typename ElementTo,
           typename ElementFrom,
           typename InputIterator,
