@@ -90,15 +90,16 @@
 - PR #6248 Optimize groupby-agg in dask_cudf
 - PR #6243 Move `equals()` logic to `Frame`
 - PR #6245 Split up replace.cu into multiple source files
-- PR #6218 increase visiblity/consistency for cuio reader writer private member variable names.
+- PR #6218 increase visibility/consistency for cuio reader writer private member variable names.
 - PR #6268 Add file tags to libcudf doxygen
 - PR #6265 Update JNI to use ORC options builder
 - PR #6273 Update JNI to use ORC options builder
 - PR #6293 Replace shuffle warp reduce with cub calls
 - PR #6287 Make java aggregate API follow C++ API
+- PR #6327 Add dictionary specialization to `cudf::replace_nulls`
 - PR #6306 Remove cpw macros from page encode kernels
 - PR #6375 Parallelize Cython compilation in addition to Cythonization
-- PR #6303 Use cudf test dtypes so timedelta tests are determinstic
+- PR #6303 Use cudf test dtypes so timedelta tests are deterministic
 - PR #6326 Simplify interal csv/json kernel parameters
 - PR #6308 Add dictionary support to cudf::scatter with scalar
 - PR #6312 Conda recipe dependency cleanup
@@ -167,6 +168,7 @@
 - PR #6378 Fix index handling in `fillna` and incorrect pytests
 - PR #6380 Avoid problematic column-index check in dask_cudf.read_parquet test
 - PR #6408 Avoid empty offset list in Frame._hash_partition output
+- PR #6402 Update JNI build to pull fixed nvcomp commit
 
 
 # cuDF 0.15.0 (26 Aug 2020)
