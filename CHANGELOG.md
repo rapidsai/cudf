@@ -8,8 +8,6 @@
 
 ## Bug Fixes
 
-
-
 # cuDF 0.16.0 (Date TBD)
 
 ## New Features
@@ -173,6 +171,7 @@
 - PR #6304 Fix span_tests.cu includes
 - PR #6331 Avoids materializing `RangeIndex` during frame concatnation (when not needed)
 - PR #6278 Add filter tests for struct columns
+- PR #6353 Rename `skip_rows` parameter to `skiprows` in `read_parquet`, `read_avro` and `read_orc`
 - PR #6361 Detect overflow in hash join
 - PR #6397 Fix `build.sh` when `PARALLEL_LEVEL` environment variable isn't set
 - PR #6366 Fix Warp Reduce calls in cuio statistics calculation to account for NaNs
