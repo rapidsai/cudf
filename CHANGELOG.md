@@ -1,3 +1,15 @@
+# cuDF 0.17.0 (Date TBD)
+
+## New Features
+
+## Improvements
+
+- PR #6413 Replace nvtx package with official source
+
+## Bug Fixes
+
+
+
 # cuDF 0.16.0 (Date TBD)
 
 ## New Features
@@ -112,7 +124,6 @@
 - PR #6383 Removed `move.pxd`, use standard library `move`
 - PR #6400 Removed unused variables
 - PR #6407 Add RMM_LOGGING_LEVEL flag to Java docker build
-- PR #6413 Replace nvtx package with official source
 
 ## Bug Fixes
 
