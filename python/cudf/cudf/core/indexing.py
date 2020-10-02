@@ -72,7 +72,8 @@ class _SeriesIlocIndexer(object):
         if isinstance(arg, tuple):
             arg = list(arg)
         data = self._sr._column[arg]
-        if is_scalar(data) or data is None:
+
+        if is_scalar(data) or data in {None, cudf.NA}:
             return data
         index = self._sr.index.take(arg)
         return self._sr._copy_construct(data=data, index=index)
