@@ -22,6 +22,7 @@
 #pragma once
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/io/types.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -168,21 +169,36 @@ namespace {
 std::unique_ptr<column> make_column(
   column_buffer& buffer,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  column_name_info* schema_info       = nullptr)
 {
   using str_pair = thrust::pair<const char*, size_type>;
 
+  if (schema_info != nullptr) { schema_info->name = buffer.name; }
+
   switch (buffer.type.id()) {
-    case type_id::STRING: return make_strings_column(buffer._strings, stream, mr);
+    case type_id::STRING:
+      if (schema_info != nullptr) {
+        schema_info->children.push_back(column_name_info{"offsets"});
+        schema_info->children.push_back(column_name_info{"chars"});
+      }
+      return make_strings_column(buffer._strings, stream, mr);
 
     case type_id::LIST: {
       // make offsets column
       auto offsets =
         std::make_unique<column>(data_type{type_id::INT32}, buffer.size, std::move(buffer._data));
 
+      column_name_info* child_info = nullptr;
+      if (schema_info != nullptr) {
+        schema_info->children.push_back(column_name_info{"offsets"});
+        schema_info->children.push_back(column_name_info{""});
+        child_info = &schema_info->children.back();
+      }
+
       // make child column
       CUDF_EXPECTS(buffer.children.size() > 0, "Encountered malformed column_buffer");
-      auto child = make_column(buffer.children[0], stream, mr);
+      auto child = make_column(buffer.children[0], stream, mr, child_info);
 
       // make the final list column (note : size is the # of offsets, so our actual # of rows is 1
       // less)
@@ -201,7 +217,14 @@ std::unique_ptr<column> make_column(
       std::transform(buffer.children.begin(),
                      buffer.children.end(),
                      std::back_inserter(output_children),
-                     [&](column_buffer& col) { return make_column(col, stream, mr); });
+                     [&](column_buffer& col) {
+                       column_name_info* child_info = nullptr;
+                       if (schema_info != nullptr) {
+                         schema_info->children.push_back(column_name_info{""});
+                         child_info = &schema_info->children.back();
+                       }
+                       return make_column(col, stream, mr, child_info);
+                     });
 
       return make_structs_column(buffer.size,
                                  std::move(output_children),
