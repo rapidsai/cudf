@@ -9,12 +9,12 @@ from uuid import uuid4
 import cupy
 import numpy as np
 import pandas as pd
+from nvtx import annotate
 from pandas._config import get_option
 from pandas.api.types import is_dict_like
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.nvtx import annotate
 from cudf._lib.transform import bools_to_mask
 from cudf.core.abc import Serializable
 from cudf.core.column import (

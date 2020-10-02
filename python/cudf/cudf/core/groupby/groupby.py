@@ -5,10 +5,10 @@ import pickle
 import warnings
 
 import pandas as pd
+from nvtx import annotate
 
 import cudf
 from cudf._lib import groupby as libgroupby
-from cudf._lib.nvtx import annotate
 from cudf.core.abc import Serializable
 from cudf.utils.utils import cached_property
 

@@ -8,11 +8,11 @@ import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from nvtx import annotate
 from pandas.api.types import is_dict_like, is_dtype_equal
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.nvtx import annotate
 from cudf.core.column import as_column, build_categorical_column, column_empty
 from cudf.utils import utils
 from cudf.utils.dtypes import (

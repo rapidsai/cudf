@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from numba import cuda
+from nvtx import annotate
 from pandas._config import get_option
 from pandas.api.types import is_dict_like
 from pandas.io.formats import console
@@ -24,7 +25,6 @@ from pandas.io.formats.printing import pprint_thing
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.null_mask import MaskState, create_null_mask
-from cudf._lib.nvtx import annotate
 from cudf.core import column, reshape
 from cudf.core.abc import Serializable
 from cudf.core.column import as_column, column_empty
