@@ -633,20 +633,17 @@ class aggregate_metadata {
                         timestamp_type_id);
     }
 
-    return std::tuple<std::vector<input_column_info>,
-                      std::vector<column_buffer>,
-                      std::vector<column_name_info>,
-                      std::vector<int>>{std::move(input_columns),
-                                        std::move(output_columns),
-                                        std::move(output_column_info),
-                                        std::move(output_column_schemas)};
+    return std::make_tuple(std::move(input_columns),
+                           std::move(output_columns),
+                           std::move(output_column_info),
+                           std::move(output_column_schemas));
   }
 };
 
 /**
  * @brief Generate depth remappings for repetition and definition levels.
  *
- * When dealing with columns that contain lists, we must examing incoming
+ * When dealing with columns that contain lists, we must examine incoming
  * repetition and definition level pairs to determine what range of output nesting
  * is indicated when adding new values.  This function generates the mappings of
  * the R/D levels to those start/end bounds
@@ -691,10 +688,9 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
   //       list          0 / 3     3
   //         element     1 / 4     4
   //
-  // incoming R/D : 0, 0  -> add values from depth 0 to 3   (definition level 0 always maps to depth
-  // 0) incoming R/D : 0, 1  -> add values from depth 0 to 3 incoming R/D : 0, 2  -> add values from
-  // depth 0 to 3
-  //
+  // incoming R/D : 0, 0  -> add values from depth 0 to 3   (def level 0 always maps to depth 0)
+  // incoming R/D : 0, 1  -> add values from depth 0 to 3
+  // incoming R/D : 0, 2  -> add values from depth 0 to 3
   // incoming R/D : 1, 4  -> add values from depth 4 to 4
   //
   // Note : the -validity- of values is simply checked by comparing the incoming D value against the
@@ -1210,7 +1206,7 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
         valids[idx] = out_buf.null_mask();
         data[idx]   = out_buf.data();
         out_buf.user_data |=
-          static_cast<uint16_t>(input_col.schema_idx) & PARQUET_COLUMN_BUFFER_SCHEMA_MASK;
+          static_cast<uint32_t>(input_col.schema_idx) & PARQUET_COLUMN_BUFFER_SCHEMA_MASK;
       } else {
         valids[idx] = nullptr;
         data[idx]   = nullptr;
@@ -1326,7 +1322,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   const auto selected_row_groups =
     _metadata->select_row_groups(row_group_list, skip_rows, num_rows);
 
-  // actual output cudf columns
+  // output cudf columns as determined by the top level schema
   std::vector<std::unique_ptr<column>> out_columns;
   out_columns.reserve(_output_columns.size());
 

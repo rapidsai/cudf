@@ -337,11 +337,10 @@ class CompactProtocolReader {
 
  protected:
   int WalkSchema(FileMetaData *md,
-                 int idx                                               = 0,
-                 int parent_idx                                        = 0,
-                 int max_def_level                                     = 0,
-                 int max_rep_level                                     = 0,
-                 std::vector<std::string> const &parent_path_in_schema = {});
+                 int idx           = 0,
+                 int parent_idx    = 0,
+                 int max_def_level = 0,
+                 int max_rep_level = 0);
 
  protected:
   const uint8_t *m_base = nullptr;

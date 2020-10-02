@@ -330,16 +330,11 @@ bool CompactProtocolReader::InitSchema(FileMetaData *md)
  * @param[in] parent_idx Parent node index
  * @param[in] max_def_level Max definition level
  * @param[in] max_rep_level Max repetition level
- * @param[out] parent_path_in_schema The path in the schema up to my parent column
  *
  * @return The node index that was populated
  */
-int CompactProtocolReader::WalkSchema(FileMetaData *md,
-                                      int idx,
-                                      int parent_idx,
-                                      int max_def_level,
-                                      int max_rep_level,
-                                      std::vector<std::string> const &parent_path_in_schema)
+int CompactProtocolReader::WalkSchema(
+  FileMetaData *md, int idx, int parent_idx, int max_def_level, int max_rep_level)
 {
   if (idx >= 0 && (size_t)idx < md->schema.size()) {
     SchemaElement *e = &md->schema[idx];
@@ -353,16 +348,12 @@ int CompactProtocolReader::WalkSchema(FileMetaData *md,
     e->max_repetition_level = max_rep_level;
     e->parent_idx           = parent_idx;
 
-    std::vector<std::string> path_in_schema = parent_path_in_schema;
-    // ignore the root schema element
-    if (idx > 0) { path_in_schema.push_back(e->name); }
-
     parent_idx = idx;
     ++idx;
     if (e->num_children > 0) {
       for (int i = 0; i < e->num_children; i++) {
         int idx_old = idx;
-        idx         = WalkSchema(md, idx, parent_idx, max_def_level, max_rep_level, path_in_schema);
+        idx         = WalkSchema(md, idx, parent_idx, max_def_level, max_rep_level);
         if (idx <= idx_old) break;  // Error
       }
     }

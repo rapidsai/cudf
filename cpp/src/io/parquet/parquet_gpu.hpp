@@ -20,8 +20,8 @@
 #include <io/comp/gpuinflate.h>
 #include <io/statistics/column_stats.h>
 #include <cudf/types.hpp>
-#include <io/utilities/column_buffer.hpp>
 #include <io/parquet/parquet_common.hpp>
+#include <io/utilities/column_buffer.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 #include <vector>
 
