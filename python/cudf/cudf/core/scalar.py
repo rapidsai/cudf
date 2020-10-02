@@ -155,8 +155,6 @@ class Scalar(libcudf.scalar.Scalar):
         return f"Scalar({self.value}, dtype={self.dtype})"
 
     def _binop_result_dtype_or_error(self, other, op):
-        # import pdb
-        # pdb.set_trace()
         if op in ["__eq__", "__ne__", "__lt__", "__gt__", "__le__", "__ge__"]:
             return np.bool
 
