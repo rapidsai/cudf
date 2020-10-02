@@ -334,7 +334,37 @@ TYPED_TEST(MD5HashTestTyped, EqualityNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
-TYPED_TEST(MD5HashTestTyped, TestListsWithNulls)
+TEST_F(MD5HashTest, TestBoolListsWithNulls)
+{
+  fixed_width_column_wrapper<bool> const col1({0, 255, 255, 16, 27, 18, 100, 1, 2},
+                                              {1, 0, 0, 0, 1, 1, 1, 0, 0});
+  fixed_width_column_wrapper<bool> const col2({0, 255, 255, 32, 81, 68, 3, 101, 4},
+                                              {1, 0, 0, 1, 0, 1, 0, 1, 0});
+  fixed_width_column_wrapper<bool> const col3({0, 255, 255, 64, 49, 42, 5, 6, 102},
+                                              {1, 0, 0, 1, 1, 0, 0, 0, 1});
+
+  auto validity = make_counting_transform_iterator(0, [](auto i) { return i != 1; });
+  lists_column_wrapper<bool> const list_col(
+    {{0, 0, 0}, {1}, {}, {{1, 1, 1}, validity}, {1, 1}, {1, 1}, {1}, {1}, {1}}, validity);
+
+  auto const input1 = cudf::table_view({col1, col2, col3});
+  auto const input2 = cudf::table_view({list_col});
+
+  auto const output1 = cudf::hash(input1, cudf::hash_id::HASH_MD5);
+  auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_MD5);
+
+  EXPECT_EQ(input1.num_rows(), output1->size());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
+}
+
+template <typename T>
+class MD5HashListTestTyped : public cudf::test::BaseFixture {
+};
+
+using NumericTypesNoBools = Concat<IntegralTypesNotBool, FloatingPointTypes>;
+TYPED_TEST_CASE(MD5HashListTestTyped, NumericTypesNoBools);
+
+TYPED_TEST(MD5HashListTestTyped, TestListsWithNulls)
 {
   using T = TypeParam;
 
