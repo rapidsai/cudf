@@ -147,4 +147,9 @@ def test_scalar_unary_operations(slr, dtype, op):
     got = op(slr_device)
 
     assert expect == got.value
-    assert expect.dtype == got.dtype
+
+    # f16 for small ints with ceil and float
+    if expect.dtype == np.dtype('float16'):
+        assert(got.dtype == np.dtype('float32'))
+    else:
+        assert expect.dtype == got.dtype

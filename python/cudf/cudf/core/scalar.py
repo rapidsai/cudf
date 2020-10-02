@@ -171,6 +171,9 @@ class Scalar(libcudf.scalar.Scalar):
             elif other.dtype.char in "Mm" and self.dtype.char not in "Mm":
                 return other.dtype
             else:
+                if op == '__sub__' and self.dtype.char == other.dtype.char == 'M':
+                    res, _ = np.datetime_data(max(self.dtype, other.dtype))
+                    return np.dtype('m8'+f"[{res}]")
                 return np.result_type(self.dtype, other.dtype)
 
         return np.dtype(out_dtype)
@@ -201,10 +204,13 @@ class Scalar(libcudf.scalar.Scalar):
                 "Boolean scalars in cuDF, do not support"
                 "negation, use logical not"
             )
-        if op in {"__ceil__", "__floor__"} and self.dtype == "int8":
-            return np.dtype("float32")
-        else:
-            return self.dtype
+
+        if op in {"__ceil__", "__floor__"}:
+            if self.dtype.char in 'bBhHf':
+                return np.dtype("float32")
+            else:
+                return np.dtype('float64')
+        return self.dtype
 
     def _scalar_unaop(self, op):
         out_dtype = self._unaop_result_type_or_error(op)

@@ -108,7 +108,7 @@ def test_round_trip_scalar(value, constructor):
 @pytest.mark.parametrize("constructor", [Scalar, cudf.Scalar])
 def test_null_scalar(dtype, constructor):
     s = constructor(None, dtype=dtype)
-    assert s.value is None
+    assert s.value is cudf.NA
     assert s.dtype == np.dtype(dtype)
     assert s.is_valid() is False
 
