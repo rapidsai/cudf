@@ -1297,8 +1297,7 @@ def test_parquet_writer_list_basic(tmpdir):
     gdf.to_parquet(fname)
     assert os.path.exists(fname)
 
-    # TODO: This is currently unreadable by pandas. fix it
-    got = cudf.read_parquet(fname)
+    got = pd.read_parquet(fname)
     assert_eq(expect, got)
 
 
@@ -1311,7 +1310,7 @@ def test_parquet_writer_list_large(tmpdir):
     gdf.to_parquet(fname)
     assert os.path.exists(fname)
 
-    got = cudf.read_parquet(fname)
+    got = pd.read_parquet(fname)
     assert_eq(expect, got)
 
 
@@ -1330,5 +1329,5 @@ def test_parquet_writer_list_large_mixed(tmpdir):
     gdf.to_parquet(fname)
     assert os.path.exists(fname)
 
-    got = cudf.read_parquet(fname)
+    got = pd.read_parquet(fname)
     assert_eq(expect, got)

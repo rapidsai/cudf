@@ -166,3 +166,6 @@ class ListDtype(ExtensionDtype):
             return f"ListDtype({self.element_type.__repr__()})"
         else:
             return f"ListDtype({self.element_type})"
+
+    def __str__(self):
+        return "object"
