@@ -70,7 +70,7 @@ type_id to_type_id(const avro::schema_entry *col)
  **/
 class metadata : public file_metadata {
  public:
-  explicit metadata(datasource *const src) : source(src) {}
+  explicit metadata(datasource &src) : source(src) {}
 
   /**
    * @brief Initializes the parser and filters down to a subset of rows
@@ -80,9 +80,9 @@ class metadata : public file_metadata {
    **/
   void init_and_select_rows(int &row_start, int &row_count)
   {
-    const auto buffer = source->host_read(0, source->size());
+    const auto buffer = source.host_read(0, source.size());
     avro::container pod(buffer->data(), buffer->size());
-    CUDF_EXPECTS(pod.parse(this, row_count, row_start), "Cannot parse metadata");
+    CUDF_EXPECTS(pod.parse(*this, row_count, row_start), "Cannot parse metadata");
     row_start = skip_rows;
     row_count = num_rows;
   }
@@ -136,7 +136,7 @@ class metadata : public file_metadata {
   }
 
  private:
-  datasource *const source;
+  datasource &source;
 };
 
 rmm::device_buffer reader::impl::decompress_data(const rmm::device_buffer &comp_block_data,
@@ -366,7 +366,7 @@ reader::impl::impl(avro_reader_options const &options,
   : _mr(mr), _source(std::move(source)), _columns(options.get_columns())
 {
   // Open the source Avro dataset metadata
-  _metadata = std::make_unique<metadata>(_source.get());
+  _metadata = std::make_unique<metadata>(*_source.get());
 }
 
 table_with_metadata reader::impl::read(avro_reader_options const &options, cudaStream_t stream)

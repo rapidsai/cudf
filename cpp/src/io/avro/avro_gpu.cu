@@ -67,19 +67,17 @@ static inline int64_t __device__ avro_decode_zigzag_varint(const uint8_t *&cur, 
  * @return data pointer at the end of the row (start of next row)
  *
  **/
-static const uint8_t *__device__ avro_decode_row(schemadesc_s const *schema,
-                                                 schemadesc_s *schema_g,
-                                                 uint32_t schema_len,
+static const uint8_t *__device__ avro_decode_row(device_span<schemadesc_s const> schema,
+                                                 device_span<schemadesc_s> schema_g,
                                                  size_t row,
                                                  size_t max_rows,
-                                                 const uint8_t *cur,
-                                                 const uint8_t *end,
-                                                 const nvstrdesc_s *global_dictionary,
-                                                 uint32_t num_dictionary_entries)
+                                                 uint8_t const *cur,
+                                                 uint8_t const *end,
+                                                 device_span<nvstrdesc_s const> global_dictionary)
 {
   uint32_t array_start = 0, array_repeat_count = 0;
   int array_children = 0;
-  for (uint32_t i = 0; i < schema_len;) {
+  for (uint32_t i = 0; i < schema.size();) {
     uint32_t kind = schema[i].kind;
     int skip      = 0;
 
@@ -89,12 +87,12 @@ static const uint8_t *__device__ avro_decode_row(schemadesc_s const *schema,
       skip       = (*cur++) >> 1;  // NOTE: Assumes 1-byte union member
       skip_after = schema[i].count - skip - 1;
       ++i;
-      while (skip > 0 && i < schema_len) {
+      while (skip > 0 && i < schema.size()) {
         if (schema[i].kind >= type_record) { skip += schema[i].count; }
         ++i;
         --skip;
       }
-      if (i >= schema_len || skip_after < 0) break;
+      if (i >= schema.size() || skip_after < 0) break;
       kind = schema[i].kind;
       skip = skip_after;
     }
@@ -125,7 +123,7 @@ static const uint8_t *__device__ avro_decode_row(schemadesc_s const *schema,
           const char *ptr = 0;
           if (kind == type_enum) {  // dictionary
             size_t idx = schema[i].count + v;
-            if (idx < num_dictionary_entries) {
+            if (idx < global_dictionary.size()) {
               ptr   = global_dictionary[idx].ptr;
               count = global_dictionary[idx].count;
             }
@@ -198,7 +196,7 @@ static const uint8_t *__device__ avro_decode_row(schemadesc_s const *schema,
       if (schema[i].kind >= type_record) { array_children += schema[i].count; }
     }
     i++;
-    while (skip > 0 && i < schema_len) {
+    while (skip > 0 && i < schema.size()) {
       if (schema[i].kind >= type_record) { skip += schema[i].count; }
       ++i;
       --skip;
@@ -233,10 +231,10 @@ static const uint8_t *__device__ avro_decode_row(schemadesc_s const *schema,
  **/
 // blockDim {32,NWARPS,1}
 extern "C" __global__ void __launch_bounds__(NWARPS * 32, 2)
-  decode_avro_column_data_kernel(device_span<block_desc_s const> const blocks,
-                                 device_span<nvstrdesc_s const> const global_dictionary,
-                                 device_span<uint8_t const> const avro_data,
-                                 device_span<schemadesc_s> const schema_g,
+  decode_avro_column_data_kernel(device_span<block_desc_s const> blocks,
+                                 device_span<nvstrdesc_s const> global_dictionary,
+                                 device_span<uint8_t const> avro_data,
+                                 device_span<schemadesc_s> schema_g,
                                  uint32_t min_row_size,
                                  size_t max_rows,
                                  size_t first_row)
@@ -245,28 +243,27 @@ extern "C" __global__ void __launch_bounds__(NWARPS * 32, 2)
   __shared__ __align__(8) block_desc_s blk_g[NWARPS];
 
   uint32_t num_blocks             = blocks.size();
-  uint32_t schema_len             = schema_g.size();
   uint32_t num_dictionary_entries = global_dictionary.size();
 
-  schemadesc_s *schema;
+  device_span<schemadesc_s const> schema;
   block_desc_s *const blk = &blk_g[threadIdx.y];
   uint32_t block_id       = blockIdx.x * NWARPS + threadIdx.y;
   size_t cur_row;
   uint32_t rows_remaining;
-  const uint8_t *cur, *end;
+  uint8_t const *cur;
+  uint8_t const *end;
 
   // Fetch schema into shared mem if possible
-  if (schema_len <= MAX_SHARED_SCHEMA_LEN) {
+  if (schema_g.size() <= MAX_SHARED_SCHEMA_LEN) {
     for (int i = threadIdx.y * 32 + threadIdx.x;
-         i < schema_len * sizeof(schemadesc_s) / sizeof(uint32_t);
+         i < schema_g.size() * sizeof(schemadesc_s) / sizeof(uint32_t);
          i += NWARPS * 32) {
-      reinterpret_cast<uint32_t *>(&g_shared_schema)[i] =
-        reinterpret_cast<const uint32_t *>(schema_g.data())[i];
+      g_shared_schema[i] = schema_g[i];
     }
     __syncthreads();
-    schema = g_shared_schema;
+    schema = device_span<schemadesc_s const>(g_shared_schema, schema_g.size());
   } else {
-    schema = schema_g.data();
+    schema = device_span<schemadesc_s const>(schema_g.data(), schema_g.size());
   }
   if (block_id < num_blocks && threadIdx.x < sizeof(block_desc_s) / sizeof(uint32_t)) {
     blk[threadIdx.x] = reinterpret_cast<block_desc_s const *>(&blocks[block_id])[threadIdx.x];
@@ -290,15 +287,8 @@ extern "C" __global__ void __launch_bounds__(NWARPS * 32, 2)
       nrows = 1;
     }
     if (threadIdx.x < nrows) {
-      cur = avro_decode_row(schema,
-                            schema_g.data(),
-                            schema_len,
-                            cur_row - first_row + threadIdx.x,
-                            max_rows,
-                            cur,
-                            end,
-                            global_dictionary.data(),
-                            num_dictionary_entries);
+      cur = avro_decode_row(
+        schema, schema_g, cur_row - first_row + threadIdx.x, max_rows, cur, end, global_dictionary);
     }
     if (nrows <= 1) {
       cur = start + SHFL0(static_cast<uint32_t>(cur - start));
