@@ -4174,11 +4174,12 @@ class DataFrame(Frame, Serializable):
                         datetimes
         1 2018-10-08T00:00:00.000
         """
-        if local_dir is None:
-            local_dir = {}
         # can't use `annotate` decorator here as we inspect the calling
         # environment.
         with annotate("QUERY", color="purple", domain="cudf_python"):
+            if local_dir is None:
+                local_dir = {}
+
             if self.empty:
                 return self.copy()
 
