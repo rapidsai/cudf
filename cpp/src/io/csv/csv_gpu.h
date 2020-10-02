@@ -19,8 +19,11 @@
 #include <io/utilities/parsing_utils.cuh>
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
+
+using cudf::detail::device_span;
 
 namespace cudf {
 namespace io {
@@ -133,9 +136,10 @@ inline __host__ __device__ rowctx64_t select_row_context(rowctx64_t sel_ctx,
  * Row parsing context will be updated after phase 2 such that the value contains
  * the number of rows starting at byte_range_end or beyond.
  *
+ * @param options Options that control parsing of individual fields
  * @param row_ctx Row parsing context (output of phase 1 or input to phase 2)
  * @param offsets_out Row offsets (nullptr for phase1, non-null indicates phase 2)
- * @param start Base pointer of character data (all row offsets are relative to this)
+ * @param data Base pointer of character data (all row offsets are relative to this)
  * @param chunk_size Total number of characters to parse
  * @param parse_pos Current parsing position in the file
  * @param start_offset Position of the start of the character buffer in the file
@@ -143,15 +147,14 @@ inline __host__ __device__ rowctx64_t select_row_context(rowctx64_t sel_ctx,
  * @param byte_range_start Ignore rows starting before this position in the file
  * @param byte_range_end In phase 2, store the number of rows beyond range in row_ctx
  * @param skip_rows Number of rows to skip (ignored in phase 1)
- * @param num_row_offsets Number of entries in offsets_out array
- * @param options Options that control parsing of individual fields
  * @param stream CUDA stream used for device memory operations and kernel launches.
  *
  * @return Number of row contexts
  **/
-uint32_t gather_row_offsets(uint64_t *row_ctx,
-                            uint64_t *offsets_out,
-                            const char *start,
+uint32_t gather_row_offsets(cudf::io::ParseOptions const &options,
+                            uint64_t *row_ctx,
+                            device_span<uint64_t> offsets_out,
+                            device_span<char const> data,
                             size_t chunk_size,
                             size_t parse_pos,
                             size_t start_offset,
@@ -159,87 +162,75 @@ uint32_t gather_row_offsets(uint64_t *row_ctx,
                             size_t byte_range_start,
                             size_t byte_range_end,
                             size_t skip_rows,
-                            size_t num_row_offsets,
-                            const cudf::io::ParseOptions &options,
                             cudaStream_t stream = 0);
 
 /**
  * Count the number of blank rows in the given row offset array
  *
- * @param row_offsets Row offsets in the character data buffer
- * @param d_data Character data buffer
  * @param options Options that control parsing of individual fields
+ * @param data Character data buffer
+ * @param row_offsets Row offsets in the character data buffer
  * @param stream CUDA stream used for device memory operations and kernel launches.
  *
  **/
-size_t count_blank_rows(rmm::device_vector<uint64_t> const &row_offsets,
-                        rmm::device_vector<char> const &d_data,
-                        const cudf::io::ParseOptions &options,
+size_t count_blank_rows(cudf::io::ParseOptions const &options,
+                        device_span<char const> data,
+                        device_span<uint64_t const> row_offsets,
                         cudaStream_t stream = 0);
 
 /**
  * Remove blank rows in the given row offset array
  *
- * @param row_offsets Row offsets in the character data buffer
- * @param d_data Character data buffer
  * @param options Options that control parsing of individual fields
+ * @param data Character data buffer
+ * @param row_offsets Row offsets in the character data buffer
  * @param stream CUDA stream used for device memory operations and kernel launches.
  *
  **/
-void remove_blank_rows(rmm::device_vector<uint64_t> &row_offsets,
-                       rmm::device_vector<char> const &d_data,
-                       const cudf::io::ParseOptions &options,
+void remove_blank_rows(const cudf::io::ParseOptions &options,
+                       device_span<char const> data,
+                       rmm::device_vector<uint64_t> &row_offsets,
                        cudaStream_t stream = 0);
 
 /**
  * @brief Launches kernel for detecting possible dtype of each column of data
  *
- * @param[in] data The row-column data
- * @param[in] row_starts List of row data start positions (offsets)
- * @param[in] num_rows Number of rows
- * @param[in] num_columns Number of columns
  * @param[in] options Options that control individual field data conversion
- * @param[in,out] flags Flags that control individual column parsing
+ * @param[in] data The row-column data
+ * @param[in] column_flags Flags that control individual column parsing
+ * @param[in] row_offsets List of row data start positions (offsets)
  * @param[in] stream CUDA stream to use, default 0
  *
  * @return stats Histogram of each dtypes' occurrence for each column
  **/
-thrust::host_vector<column_parse::stats> detect_column_types(const char *data,
-                                                             const uint64_t *row_starts,
-                                                             size_t num_rows,
-                                                             size_t num_actual_columns,
-                                                             size_t num_active_columns,
-                                                             const cudf::io::ParseOptions &options,
-                                                             column_parse::flags *flags,
-                                                             cudaStream_t stream = (cudaStream_t)0);
+thrust::host_vector<column_parse::stats> detect_column_types(
+  cudf::io::ParseOptions const &options,
+  device_span<char const> data,
+  device_span<column_parse::flags const> column_flags,
+  device_span<uint64_t const> row_offsets,
+  size_t const num_active_columns,
+  cudaStream_t stream = 0);
 
 /**
  * @brief Launches kernel for decoding row-column data
  *
- * @param[in] data The row-column data
- * @param[in] row_starts List of row data start positions (offsets)
- * @param[in] num_rows Number of rows
- * @param[in] num_columns Number of columns
  * @param[in] options Options that control individual field data conversion
- * @param[in] flags Flags that control individual column parsing
+ * @param[in] data The row-column data
+ * @param[in] column_flags Flags that control individual column parsing
+ * @param[in] row_offsets List of row data start positions (offsets)
  * @param[in] dtypes List of dtype corresponding to each column
  * @param[out] columns Device memory output of column data
  * @param[out] valids Device memory output of column valids bitmap data
- * @param[out] num_valid Number of valid fields in each column
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t DecodeRowColumnData(const char *data,
-                                const uint64_t *row_starts,
-                                size_t num_rows,
-                                size_t num_columns,
-                                const cudf::io::ParseOptions &options,
-                                const column_parse::flags *flags,
-                                cudf::data_type *dtypes,
-                                void **columns,
-                                cudf::bitmask_type **valids,
-                                cudaStream_t stream = (cudaStream_t)0);
+void decode_row_column_data(cudf::io::ParseOptions const &options,
+                            device_span<char const> data,
+                            device_span<column_parse::flags const> column_flags,
+                            device_span<uint64_t const> row_offsets,
+                            device_span<cudf::data_type const> dtypes,
+                            device_span<void *> columns,
+                            device_span<cudf::bitmask_type *> valids,
+                            cudaStream_t stream = 0);
 
 }  // namespace gpu
 }  // namespace csv

@@ -67,7 +67,7 @@ class GroupBy(Serializable):
             raise
 
     def __iter__(self):
-        group_names, offsets, grouped_keys, grouped_values = self._grouped()
+        group_names, offsets, _, grouped_values = self._grouped()
         if isinstance(group_names, cudf.Index):
             group_names = group_names.to_pandas()
         for i, name in enumerate(group_names):

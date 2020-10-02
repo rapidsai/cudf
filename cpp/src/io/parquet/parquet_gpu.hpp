@@ -107,7 +107,7 @@ struct PageInfo {
   int skipped_values;
   int skipped_leaf_values;
 
-  // nesting infomation (input/output) for each page
+  // nesting information (input/output) for each page
   int num_nesting_levels;
   PageNestingInfo *nesting;
 };

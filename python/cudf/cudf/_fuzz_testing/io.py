@@ -7,6 +7,8 @@ import os
 import random
 import sys
 
+import numpy as np
+
 logging.basicConfig(
     format="%(asctime)s %(levelname)-8s %(message)s",
     level=logging.INFO,
@@ -44,6 +46,7 @@ class IOFuzz(object):
         self._regression = True if self._inputs else False
         self._idx = 0
         self._current_params = {}
+        self._current_buffer = None
 
     def _load_params(self, path):
         with open(path, "r") as f:
@@ -76,3 +79,10 @@ class IOFuzz(object):
         self._idx += 1
         self._current_params = copy.copy(param)
         return dtypes_meta, num_rows, num_cols, seed
+
+    def get_rand_params(self, params):
+        params_dict = {
+            param: np.random.choice(values) for param, values in params.items()
+        }
+        self._current_params["test_kwargs"] = params_dict
+        return params_dict
