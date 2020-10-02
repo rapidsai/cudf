@@ -293,7 +293,7 @@ class NumericalColumn(column.ColumnBase):
             result = result[0]
             return (
                 cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-                if result is None
+                if result is cudf.NA
                 else result
             )
         return result
