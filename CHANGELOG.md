@@ -105,6 +105,7 @@
 - PR #6347 Add dictionary support to cudf::copy_range
 - PR #6332 Add support to return csv as string when `path=None` in `to_csv`
 - PR #6369 Add dictionary support to `cudf::find_and_replace`
+- PR #6373 Add dictionary support to `cudf::clamp`
 - PR #6377 Update ci/local/README.md
 - PR #6383 Removed `move.pxd`, use standard library `move`
 
