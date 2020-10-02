@@ -495,6 +495,7 @@ class aggregate_metadata {
    * incremented as the function recurses.
    * @param[out] input_columns Input column information (source data in the file)
    * @param[out] output_columns Output column structure (resulting cudf columns)
+   * @param[out] output_schema_info Output schema name information for the table_metadata structure
    * @param[in,out] nesting A stack keeping track of child column indices so we can
    * reproduce the linear list of output columns that correspond to an input column.
    * @param[in] strings_to_categorical Type conversion parameter
@@ -504,6 +505,7 @@ class aggregate_metadata {
   void build_column_info(int &schema_idx,
                          std::vector<input_column_info> &input_columns,
                          std::vector<column_buffer> &output_columns,
+                         std::vector<column_name_info> &output_schema_info,
                          std::deque<int> &nesting,
                          bool strings_to_categorical,
                          type_id timestamp_type_id) const
@@ -519,6 +521,7 @@ class aggregate_metadata {
       build_column_info(schema_idx,
                         input_columns,
                         output_columns,
+                        output_schema_info,
                         nesting,
                         strings_to_categorical,
                         timestamp_type_id);
@@ -533,11 +536,16 @@ class aggregate_metadata {
       schema.repetition_type == OPTIONAL ? true : false);
     column_buffer &output_col = output_columns.back();
 
+    // output info
+    output_schema_info.emplace_back(schema.name);
+    column_name_info &output_info = output_schema_info.back();
+
     // build each child
     for (int idx = 0; idx < schema.num_children; idx++) {
       build_column_info(schema_idx,
                         input_columns,
                         output_col.children,
+                        output_info.children,
                         nesting,
                         strings_to_categorical,
                         timestamp_type_id);
@@ -610,6 +618,8 @@ class aggregate_metadata {
     // construct input and output output column info
     std::vector<column_buffer> output_columns;
     output_columns.reserve(output_column_schemas.size());
+    std::vector<column_name_info> output_column_info;
+    output_column_info.reserve(output_column_schemas.size());
     std::vector<input_column_info> input_columns;
     std::deque<int> nesting;
     for (size_t idx = 0; idx < output_column_schemas.size(); idx++) {
@@ -617,13 +627,19 @@ class aggregate_metadata {
       build_column_info(schema_index,
                         input_columns,
                         output_columns,
+                        output_column_info,
                         nesting,
                         strings_to_categorical,
                         timestamp_type_id);
     }
 
-    return std::tuple<std::vector<input_column_info>, std::vector<column_buffer>, std::vector<int>>{
-      std::move(input_columns), std::move(output_columns), std::move(output_column_schemas)};
+    return std::tuple<std::vector<input_column_info>,
+                      std::vector<column_buffer>,
+                      std::vector<column_name_info>,
+                      std::vector<int>>{std::move(input_columns),
+                                        std::move(output_columns),
+                                        std::move(output_column_info),
+                                        std::move(output_column_schemas)};
   }
 };
 
@@ -1294,7 +1310,7 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>> &&sources,
   _strings_to_categorical = options.is_enabled_convert_strings_to_categories();
 
   // Select only columns required by the options
-  std::tie(_input_columns, _output_columns, _output_column_schemas) =
+  std::tie(_input_columns, _output_columns, _schema_info, _output_column_schemas) =
     _metadata->select_columns(options.get_columns(),
                               options.is_enabled_use_pandas_metadata(),
                               _strings_to_categorical,
@@ -1487,6 +1503,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     auto const &schema           = _metadata->get_schema(_output_column_schemas[i]);
     out_metadata.column_names[i] = schema.name;
   }
+
+  out_metadata.schema_info = std::move(_schema_info);
 
   // Return user metadata
   out_metadata.user_data = _metadata->get_key_value_metadata();
