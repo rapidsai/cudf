@@ -23,7 +23,7 @@ class SerialTrieNode;
 namespace cudf {
 namespace io {
 namespace json {
-struct ColumnInfo {
+struct column_info {
   cudf::size_type float_count;
   cudf::size_type datetime_count;
   cudf::size_type string_count;

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/dictionary/detail/search.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/dictionary/search.hpp>
@@ -42,9 +43,13 @@ TEST_F(DictionarySearchTest, StringsColumn)
   auto n_result = dynamic_cast<cudf::numeric_scalar<uint32_t>*>(result.get());
   EXPECT_EQ(3, n_result->value());
 
-  cudf::string_scalar no_key("zzz");
+  cudf::string_scalar no_key("eee");
   result = cudf::dictionary::get_index(cudf::dictionary_column_view(dictionary->view()), no_key);
   EXPECT_FALSE(result->is_valid());
+  result = cudf::dictionary::detail::get_insert_index(
+    cudf::dictionary_column_view(dictionary->view()), no_key);
+  n_result = dynamic_cast<cudf::numeric_scalar<uint32_t>*>(result.get());
+  EXPECT_EQ(5, n_result->value());
 }
 
 TEST_F(DictionarySearchTest, WithNulls)
@@ -58,9 +63,13 @@ TEST_F(DictionarySearchTest, WithNulls)
   auto n_result = dynamic_cast<cudf::numeric_scalar<uint32_t>*>(result.get());
   EXPECT_EQ(0, n_result->value());
 
-  cudf::numeric_scalar<int64_t> no_key(9);
+  cudf::numeric_scalar<int64_t> no_key(5);
   result = cudf::dictionary::get_index(cudf::dictionary_column_view(dictionary->view()), no_key);
   EXPECT_FALSE(result->is_valid());
+  result = cudf::dictionary::detail::get_insert_index(
+    cudf::dictionary_column_view(dictionary->view()), no_key);
+  n_result = dynamic_cast<cudf::numeric_scalar<uint32_t>*>(result.get());
+  EXPECT_EQ(1, n_result->value());
 }
 
 TEST_F(DictionarySearchTest, EmptyColumn)
@@ -70,6 +79,9 @@ TEST_F(DictionarySearchTest, EmptyColumn)
   cudf::numeric_scalar<int64_t> key(7);
   auto result = cudf::dictionary::get_index(cudf::dictionary_column_view(dictionary->view()), key);
   EXPECT_FALSE(result->is_valid());
+  result = cudf::dictionary::detail::get_insert_index(
+    cudf::dictionary_column_view(dictionary->view()), key);
+  EXPECT_FALSE(result->is_valid());
 }
 
 TEST_F(DictionarySearchTest, Errors)
@@ -78,5 +90,8 @@ TEST_F(DictionarySearchTest, Errors)
   auto dictionary = cudf::dictionary::encode(input);
   cudf::numeric_scalar<double> key(7);
   EXPECT_THROW(cudf::dictionary::get_index(cudf::dictionary_column_view(dictionary->view()), key),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::dictionary::detail::get_insert_index(
+                 cudf::dictionary_column_view(dictionary->view()), key),
                cudf::logic_error);
 }
