@@ -4174,7 +4174,8 @@ class DataFrame(Frame, Serializable):
                         datetimes
         1 2018-10-08T00:00:00.000
         """
-        local_dir = local_dir or {}
+        if local_dir is None:
+            local_dir = {}
         # can't use `annotate` decorator here as we inspect the calling
         # environment.
         with annotate("QUERY", color="purple", domain="cudf_python"):
@@ -4329,7 +4330,8 @@ class DataFrame(Frame, Serializable):
         --------
         DataFrame.apply_rows
         """
-        kwargs = kwargs or {}
+        if kwargs is None:
+            kwargs = {}
         if chunks is None:
             raise ValueError("*chunks* must be defined")
         return applyutils.apply_chunks(

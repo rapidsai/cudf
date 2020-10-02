@@ -75,7 +75,9 @@ class Parameters:
         self, num_rows=2048, column_parameters=None, seed=None,
     ):
         self.num_rows = num_rows
-        self.column_parameters = column_parameters or []
+        if column_parameters is None:
+            column_parameters = []
+        self.column_parameters = column_parameters
         self.seed = seed
 
 
@@ -185,7 +187,8 @@ def generate(
     format : Dict
         Format to write
     """
-    format = format or {"name": "parquet", "row_group_size": 64}
+    if format is None:
+        format = {"name": "parquet", "row_group_size": 64}
     df = get_dataframe(parameters, use_threads)
 
     # Write

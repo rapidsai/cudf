@@ -552,7 +552,8 @@ def get_dummies(
     2      0      0      1       0
     3      0      0      0       1
     """
-    cats = cats or {}
+    if cats is None:
+        cats = {}
     if sparse:
         raise NotImplementedError("sparse is not supported yet")
 

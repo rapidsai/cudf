@@ -27,7 +27,8 @@ class ColumnAccessor(MutableMapping):
             For a non-hierarchical index, a tuple of size 1
             may be passe.
         """
-        data = data or {}
+        if data is None:
+            data = {}
         # TODO: we should validate the keys of `data`
         if isinstance(data, ColumnAccessor):
             multiindex = multiindex or data.multiindex

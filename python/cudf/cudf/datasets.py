@@ -45,7 +45,8 @@ def timeseries(
     2000-01-01 00:00:03  1016   Yvonne  0.620456  0.767270
     2000-01-01 00:00:04   998   Ursula  0.684902 -0.463278
     """
-    dtypes = dtypes or {"name": "category", "id": int, "x": float, "y": float}
+    if dtypes is None:
+        dtypes = {"name": "category", "id": int, "x": float, "y": float}
 
     index = pd.DatetimeIndex(
         pd.date_range(start, end, freq=freq, name="timestamp")
@@ -89,7 +90,8 @@ def randomdata(
     3  1002 0.9280495300010041  0.5137701393017848
     4   976 0.9089527839187654  0.9881063385586304
     """
-    dtypes = dtypes or {"id": int, "x": float, "y": float}
+    if dtypes is None:
+        dtypes = {"id": int, "x": float, "y": float}
     state = np.random.RandomState(seed)
     columns = dict((k, make[dt](nrows, state)) for k, dt in dtypes.items())
     df = pd.DataFrame(columns, columns=sorted(columns))
