@@ -166,6 +166,7 @@
 - PR #6335 Fix conda commands for outdated python version
 - PR #6378 Fix index handling in `fillna` and incorrect pytests
 - PR #6380 Avoid problematic column-index check in dask_cudf.read_parquet test
+- PR #6410 Fix uses of dangerous default values in Python code
 
 
 # cuDF 0.15.0 (26 Aug 2020)
