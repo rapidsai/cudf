@@ -41,6 +41,7 @@
 #include <memory>
 #include <numeric>
 #include <type_traits>
+#include "thrust/functional.h"
 
 namespace cudf {
 namespace test {
@@ -1009,12 +1010,13 @@ class lists_column_wrapper : public detail::column_wrapper {
       cudf::test::fixed_width_column_wrapper<size_type>(offsetv.begin(), offsetv.end()).release();
 
     // concatenate them together, skipping children that are null.
-    // TODO use thrust::transform_if here
     std::vector<column_view> children;
-    for (size_t idx = 0; idx < cols.size(); idx++) {
-      if (!valids[idx]) { continue; }
-      children.push_back(cols[idx]);
-    }
+    thrust::copy_if(std::cbegin(cols),
+                    std::cend(cols),
+                    valids,  // stencil
+                    std::back_inserter(children),
+                    thrust::identity<bool>{});
+
     auto data = children.empty() ? cudf::empty_like(expected_hierarchy) : concatenate(children);
 
     // increment depth
