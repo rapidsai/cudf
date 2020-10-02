@@ -297,6 +297,17 @@ endif(Boost_INCLUDE_DIR)
 find_path(RMM_INCLUDE "rmm"
           HINTS "$ENV{RMM_ROOT}/include")
 
+# RMM fails to provide the RMM_SOURCE_DIR variable when installed with CPM. This does not work.
+if(NOT RMM_INCLUDE)
+  CPMFindPackage(
+    NAME RMM
+    GITHUB_REPOSITORY rapidsai/rmm
+    VERSION 0.16.0a
+  )
+
+  set(RMM_INCLUDE "${RMM_SOURCE_DIR}")
+endif(NOT RMM_INCLUDE)
+
 message(STATUS "RMM: RMM_INCLUDE set to ${RMM_INCLUDE}")
 
 ###################################################################################################
@@ -306,6 +317,16 @@ find_path(
     DLPACK_INCLUDE "dlpack"
     HINTS "$ENV{DLPACK_ROOT}/include"
 )
+
+if(NOT DLPACK_INCLUDE)
+  CPMFindPackage(
+    NAME DLPACK
+    GITHUB_REPOSITORY dmlc/dlpack
+    VERSION 0.3
+  )
+
+  set(DLPACK_INCLUDE "${DLPACK_SOURCE_DIR}")
+endif(NOT DLPACK_INCLUDE)
 
 message(STATUS "DLPACK: DLPACK_INCLUDE set to ${DLPACK_INCLUDE}")
 
