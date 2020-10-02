@@ -248,10 +248,14 @@ class Frame(libcudf.table.Table):
                 ]
             obj = obj.drop(columns=columns_to_drop)
 
-        else:
+        elif join == "outer":
             # Get a list of the unique table column names
             names = [name for f in objs for name in f._column_names]
             names = OrderedDict.fromkeys(names).keys()
+        else:
+            raise ValueError(
+                "Only can inner (intersect) or outer (union) join the other axis"
+            )
 
         try:
             if sort:
