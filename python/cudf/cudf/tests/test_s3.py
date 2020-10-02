@@ -36,7 +36,8 @@ def ensure_safe_environment_variables():
 
 @contextmanager
 def s3_context(bucket, files=None):
-    files = files or {}
+    if files is None:
+        files = {}
     with ensure_safe_environment_variables():
         # temporary workaround as moto fails for botocore >= 1.11 otherwise,
         # see https://github.com/spulec/moto/issues/1924 & 1952
