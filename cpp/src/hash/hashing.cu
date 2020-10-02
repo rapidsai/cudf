@@ -607,6 +607,12 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
   }
 }
 
+// MD5 supported leaf data type check
+bool md5_type_check(data_type dt)
+{
+  return !is_chrono(dt) && (is_fixed_width(dt) || (dt.id() == type_id::STRING));
+}
+
 }  // namespace
 
 namespace detail {
@@ -635,25 +641,18 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
 
 std::unique_ptr<column> hash(table_view const& input,
                              hash_id hash_function,
-                             retain_nulls policy,
                              std::vector<uint32_t> const& initial_hash,
                              rmm::mr::device_memory_resource* mr,
                              cudaStream_t stream)
 {
   switch (hash_function) {
     case (hash_id::HASH_MURMUR3): return murmur_hash3_32(input, initial_hash, mr, stream);
-    case (hash_id::HASH_MD5): return md5_hash(input, policy, mr, stream);
+    case (hash_id::HASH_MD5): return md5_hash(input, mr, stream);
     default: return nullptr;
   }
 }
 
-bool md5_type_check(data_type d)
-{
-  return !is_chrono(d) && (is_fixed_width(d) || (d.id() == type_id::STRING));
-}
-
 std::unique_ptr<column> md5_hash(table_view const& input,
-                                 retain_nulls policy,
                                  rmm::mr::device_memory_resource* mr,
                                  cudaStream_t stream)
 {
@@ -663,6 +662,7 @@ std::unique_ptr<column> md5_hash(table_view const& input,
     return output;
   }
 
+  // Accepts string and fixed width columns, or single layer list columns holding those types
   CUDF_EXPECTS(
     std::all_of(input.begin(),
                 input.end(),
@@ -684,34 +684,28 @@ std::unique_ptr<column> md5_hash(table_view const& input,
   auto chars_view = chars_column->mutable_view();
   auto d_chars    = chars_view.data<char>();
 
-  rmm::device_buffer null_mask;
-  if (policy == retain_nulls::RETAIN_NULLS && input.num_columns() == 1)
-    null_mask = bitmask_and(input, mr, stream);
-  else
-    null_mask = rmm::device_buffer{0, stream, mr};
+  rmm::device_buffer null_mask{0, stream, mr};
 
-  bool const nullable     = has_nulls(input);
   auto const device_input = table_device_view::create(input, stream);
 
   // Hash each row, hashing each element sequentially left to right
-  thrust::for_each(
-    rmm::exec_policy(stream)->on(stream),
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(input.num_rows()),
-    [d_chars, device_input = *device_input, has_nulls = nullable] __device__(auto row_index) {
-      md5_intermediate_data hash_state;
-      MD5Hash hasher = MD5Hash{};
-      for (int col_index = 0; col_index < device_input.num_columns(); col_index++) {
-        if (device_input.column(col_index).is_valid(row_index)) {
-          cudf::type_dispatcher(device_input.column(col_index).type(),
-                                hasher,
-                                device_input.column(col_index),
-                                row_index,
-                                &hash_state);
-        }
-      }
-      hasher.finalize(&hash_state, d_chars + (row_index * 32));
-    });
+  thrust::for_each(rmm::exec_policy(stream)->on(stream),
+                   thrust::make_counting_iterator(0),
+                   thrust::make_counting_iterator(input.num_rows()),
+                   [d_chars, device_input = *device_input] __device__(auto row_index) {
+                     md5_intermediate_data hash_state;
+                     MD5Hash hasher = MD5Hash{};
+                     for (int col_index = 0; col_index < device_input.num_columns(); col_index++) {
+                       if (device_input.column(col_index).is_valid(row_index)) {
+                         cudf::type_dispatcher(device_input.column(col_index).type(),
+                                               hasher,
+                                               device_input.column(col_index),
+                                               row_index,
+                                               &hash_state);
+                       }
+                     }
+                     hasher.finalize(&hash_state, d_chars + (row_index * 32));
+                   });
 
   return make_strings_column(input.num_rows(),
                              std::move(offsets_column),
@@ -778,12 +772,11 @@ std::unique_ptr<column> murmur_hash3_32(table_view const& input,
 
 std::unique_ptr<column> hash(table_view const& input,
                              hash_id hash_function,
-                             retain_nulls policy,
                              std::vector<uint32_t> const& initial_hash,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::hash(input, hash_function, policy, initial_hash, mr);
+  return detail::hash(input, hash_function, initial_hash, mr);
 }
 
 std::unique_ptr<column> murmur_hash3_32(table_view const& input,
