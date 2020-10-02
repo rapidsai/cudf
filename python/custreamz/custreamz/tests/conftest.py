@@ -9,7 +9,7 @@ from custreamz import kafka
 @pytest.fixture(scope="session")
 def kafka_client():
 
-    # Check for the existance of a kafka broker
+    # Check for the existence of a kafka broker
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         s.connect_ex(("localhost", 9092))
