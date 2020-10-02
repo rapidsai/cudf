@@ -36,7 +36,7 @@ namespace detail {
  *
  * @tparam block_size The number of threads in the block
  * @param[out] output The output bitmask
- * @param[in] begin The begining of the sequence of elements
+ * @param[in] begin The beginning of the sequence of elements
  * @param[in] size The number of elements
  * @param[in] p The predicate to apply to each element
  * @param[out] valid_count The count of set bits in the output bitmask
