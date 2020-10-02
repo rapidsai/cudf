@@ -591,7 +591,8 @@ def test_concat_dataframe_with_multiIndex(df1, df2):
 
 @pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize("sort", [True, False])
-def test_concat_inner_join(ignore_index, sort):
+@pytest.mark.parametrize("join", ["inner", "outer"])
+def test_concat_join(ignore_index, sort, join):
     pdf1 = pd.DataFrame(
         {
             "x": range(10),
@@ -614,10 +615,10 @@ def test_concat_inner_join(ignore_index, sort):
 
     assert_eq(
         pd.concat(
-            [pdf1, pdf2], sort=sort, join="inner", ignore_index=ignore_index
+            [pdf1, pdf2], sort=sort, join=join, ignore_index=ignore_index
         ),
         gd.concat(
-            [gdf1, gdf2], sort=sort, join="inner", ignore_index=ignore_index
+            [gdf1, gdf2], sort=sort, join=join, ignore_index=ignore_index
         ),
     )
 
@@ -625,20 +626,20 @@ def test_concat_inner_join(ignore_index, sort):
         pd.concat(
             [pdf1, pdf2, pdf3, pdf_empty1],
             sort=sort,
-            join="inner",
+            join=join,
             ignore_index=ignore_index,
         ),
         gd.concat(
             [gdf1, gdf2, gdf3, gdf_empty1],
             sort=sort,
-            join="inner",
+            join=join,
             ignore_index=ignore_index,
         ),
     )
 
     assert_eq(
-        pd.concat([pdf1], sort=sort, join="inner", ignore_index=ignore_index),
-        gd.concat([gdf1], sort=sort, join="inner", ignore_index=ignore_index),
+        pd.concat([pdf1], sort=sort, join=join, ignore_index=ignore_index),
+        gd.concat([gdf1], sort=sort, join=join, ignore_index=ignore_index),
     )
 
     s1 = gd.Series(["a", "b", "c"])
@@ -654,13 +655,13 @@ def test_concat_inner_join(ignore_index, sort):
         gd.concat(
             [s1, s2, s3, s4],
             sort=sort,
-            join="inner",
+            join=join,
             ignore_index=ignore_index,
         ),
         pd.concat(
             [ps1, ps2, ps3, ps4],
             sort=sort,
-            join="inner",
+            join=join,
             ignore_index=ignore_index,
         ),
     )
