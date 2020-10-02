@@ -98,7 +98,7 @@ def write_to_dataset(
             raise ValueError("No data left to save outside partition columns")
 
         #  Loop through the partition groups
-        for i, sub_df in enumerate(
+        for _, sub_df in enumerate(
             _get_partition_groups(
                 df, partition_cols, preserve_index=preserve_index
             )

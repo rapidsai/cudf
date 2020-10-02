@@ -101,7 +101,13 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     }
 
     @Override
+    @Deprecated
     public long getNumRows() {
+      return offHeap.getNativeRowCount(viewHandle);
+    }
+
+    @Override
+    public long getRowCount() {
       return offHeap.getNativeRowCount(viewHandle);
     }
 
@@ -309,6 +315,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   /**
    * Returns the number of rows in this vector.
    */
+  @Override
   public long getRowCount() {
     return rows;
   }
@@ -382,7 +389,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     long currNullCount = 0l;
     boolean needsCleanup = true;
     try {
-      long currRows = deviceCvPointer.getNumRows();
+      long currRows = deviceCvPointer.getRowCount();
       DType currType = deviceCvPointer.getDataType();
       currData = deviceCvPointer.getDataBuffer();
       currOffsets = deviceCvPointer.getOffsetBuffer();
@@ -449,19 +456,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       BaseDeviceMemoryBuffer data = null;
       DType type = this.type;
       Long rows = this.rows;
-      // hardcoded for lists for now
-      ColumnViewAccess leafChildWithData = getChildColumnViewAccess(0);
-      // Data sits in the leaf column of the list, we get that data buffer for copying,
-      // identifying leaf column by the fact that its children is null
-      while (leafChildWithData != null && leafChildWithData.getNumChildren() != 0) {
-        ColumnViewAccess tmp = leafChildWithData.getChildColumnViewAccess(0);
-        leafChildWithData.close();
-        leafChildWithData = tmp;
-      }
-      if (leafChildWithData != null) {
-        data = (BaseDeviceMemoryBuffer) leafChildWithData.getDataBuffer();
-      } else if (type != DType.STRUCT) {
-        data = offHeap.getData();
+      if (!type.isNestedType()) {
+        data = getDataBuffer();
       }
       boolean needsCleanup = true;
       try {
@@ -514,9 +510,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
           return ret;
         }
       } finally {
-        if (leafChildWithData != null) {
-          leafChildWithData.close();
-        }
         if (data != null) {
           data.close();
         }
@@ -2601,6 +2594,20 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     return new Table(extractRe(this.getNativeView(), pattern));
   }
 
+  /** For a column of type List<Struct<String, String>> and a passed in String key, return a string column
+   * for all the values in the struct that match the key, null otherwise.
+   * @param key the String scalar to lookup in the column
+   * @return a string column of values or nulls based on the lookup result
+   */
+  public ColumnVector getMapValue(Scalar key) {
+
+    assert type == DType.LIST : "column type must be a LIST";
+    assert key != null : "target string may not be null";
+    assert key.getType() == DType.STRING : "target string must be a string scalar";
+
+    return new ColumnVector(mapLookup(getNativeView(), key.getScalarHandle()));
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
   /////////////////////////////////////////////////////////////////////////////
@@ -2814,6 +2821,14 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   private static native long stringConcatenation(long[] columnViews, long separator, long narep);
 
   /**
+   * Native method for map lookup over a column of List<Struct<String,String>>
+   * @param columnView the column view handle of the map
+   * @param key the string scalar that is the key for lookup
+   * @return a string column handle of the resultant
+   * @throws CudfException
+   */
+  private static native long mapLookup(long columnView, long key) throws CudfException;
+  /**
    * Native method to add zeros as padding to the left of each string.
    */
   private static native long zfill(long nativeHandle, int width);
@@ -2921,7 +2936,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   /**
    * Native method to normalize the various bitwise representations of NAN and zero.
    * 
-   * All occurences of -NaN are converted to NaN. Likewise, all -0.0 are converted to 0.0.
+   * All occurrences of -NaN are converted to NaN. Likewise, all -0.0 are converted to 0.0.
    * 
    * @param viewHandle `long` representation of pointer to input column_view.
    * @return Pointer to a new `column` of normalized values.
@@ -3016,7 +3031,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
   @Override
   public BaseDeviceMemoryBuffer getDataBuffer() {
-    if (!type.isNestedType()) {
+    if (type.isNestedType()) {
       throw new IllegalStateException(" Lists and Structs at top level have no data");
     }
     return offHeap.getData();
@@ -3039,6 +3054,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   }
 
   @Override
+  @Deprecated
   public long getNumRows() {
     return offHeap.getNativeRowCount();
   }

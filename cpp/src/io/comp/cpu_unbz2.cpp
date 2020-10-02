@@ -509,7 +509,7 @@ static void bzUnRLE(unbz_state_s *s)
     if (!mask) {
       int run;
       if (--rle_cnt < 0) {
-        printf("run split accross blocks! (unsupported)\n");
+        printf("run split across blocks! (unsupported)\n");
         break;
       }
       pos = tt[pos];
