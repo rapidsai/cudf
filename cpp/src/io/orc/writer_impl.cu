@@ -866,9 +866,9 @@ void writer::impl::write_index_stream(int32_t stripe_id,
     if (record[0] >= 0) {
       record[0] += chunk.strm_len[type];
       while ((record[1] >= 0) && (static_cast<size_t>(record[0]) >= compression_blocksize_) &&
-             (record[3] + 3 + comp_out[record[1]].bytes_written < static_cast<size_t>(record[4]))) {
+             (record[2] + 3 + comp_out[record[1]].bytes_written < static_cast<size_t>(record[3]))) {
         record[0] -= compression_blocksize_;
-        record[3] += 3 + comp_out[record[1]].bytes_written;
+        record[2] += 3 + comp_out[record[1]].bytes_written;
         record[1] += 1;
       }
     }

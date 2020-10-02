@@ -101,7 +101,13 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     }
 
     @Override
+    @Deprecated
     public long getNumRows() {
+      return offHeap.getNativeRowCount(viewHandle);
+    }
+
+    @Override
+    public long getRowCount() {
       return offHeap.getNativeRowCount(viewHandle);
     }
 
@@ -309,6 +315,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   /**
    * Returns the number of rows in this vector.
    */
+  @Override
   public long getRowCount() {
     return rows;
   }
@@ -367,7 +374,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   // DATA MOVEMENT
   /////////////////////////////////////////////////////////////////////////////
 
-  private final static HostColumnVector.NestedHostColumnVector copyToHostNestedHelper(
+  private final static HostColumnVectorCore copyToHostNestedHelper(
       ColumnViewAccess<BaseDeviceMemoryBuffer> deviceCvPointer) {
     if (deviceCvPointer == null) {
       return null;
@@ -375,14 +382,14 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     HostMemoryBuffer hostOffsets = null;
     HostMemoryBuffer hostValid = null;
     HostMemoryBuffer hostData = null;
-    List<HostColumnVector.NestedHostColumnVector> children = new ArrayList<>();
+    List<HostColumnVectorCore> children = new ArrayList<>();
     BaseDeviceMemoryBuffer currData = null;
     BaseDeviceMemoryBuffer currOffsets = null;
     BaseDeviceMemoryBuffer currValidity = null;
     long currNullCount = 0l;
     boolean needsCleanup = true;
     try {
-      long currRows = deviceCvPointer.getNumRows();
+      long currRows = deviceCvPointer.getRowCount();
       DType currType = deviceCvPointer.getDataType();
       currData = deviceCvPointer.getDataBuffer();
       currOffsets = deviceCvPointer.getOffsetBuffer();
@@ -407,8 +414,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       }
       currNullCount = deviceCvPointer.getNullCount();
       Optional<Long> nullCount = Optional.of(currNullCount);
-      HostColumnVector.NestedHostColumnVector ret =
-          new HostColumnVector.NestedHostColumnVector(currType, currRows, nullCount, hostData,
+      HostColumnVectorCore ret =
+          new HostColumnVectorCore(currType, currRows, nullCount, hostData,
           hostValid, hostOffsets, children);
       needsCleanup = false;
       return ret;
@@ -449,19 +456,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       BaseDeviceMemoryBuffer data = null;
       DType type = this.type;
       Long rows = this.rows;
-      // hardcoded for lists for now
-      ColumnViewAccess leafChildWithData = getChildColumnViewAccess(0);
-      // Data sits in the leaf column of the list, we get that data buffer for copying,
-      // identifying leaf column by the fact that its children is null
-      while (leafChildWithData != null && leafChildWithData.getNumChildren() != 0) {
-        ColumnViewAccess tmp = leafChildWithData.getChildColumnViewAccess(0);
-        leafChildWithData.close();
-        leafChildWithData = tmp;
-      }
-      if (leafChildWithData != null) {
-        data = (BaseDeviceMemoryBuffer) leafChildWithData.getDataBuffer();
-      } else if (type != DType.STRUCT) {
-        data = offHeap.getData();
+      if (!type.isNestedType()) {
+        data = getDataBuffer();
       }
       boolean needsCleanup = true;
       try {
@@ -503,7 +499,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
             hOffset = HostMemoryBuffer.allocate(offsets.getLength());
             hOffset.copyFromDeviceBuffer(offsets);
           }
-          List<HostColumnVector.NestedHostColumnVector> children = new ArrayList<>();
+          List<HostColumnVectorCore> children = new ArrayList<>();
           for (int i = 0; i < getNumChildren(); i++) {
             try (ColumnViewAccess childDevPtr = getChildColumnViewAccess(i)) {
               children.add(copyToHostNestedHelper(childDevPtr));
@@ -514,9 +510,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
           return ret;
         }
       } finally {
-        if (leafChildWithData != null) {
-          leafChildWithData.close();
-        }
         if (data != null) {
           data.close();
         }
@@ -1352,7 +1345,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * of the specified type.
    */
   public Scalar sum(DType outType) {
-    return reduce(AggregateOp.SUM, outType);
+    return reduce(Aggregation.sum(), outType);
   }
 
   /**
@@ -1368,7 +1361,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * of the specified type.
    */
   public Scalar min(DType outType) {
-    return reduce(AggregateOp.MIN, outType);
+    return reduce(Aggregation.min(), outType);
   }
 
   /**
@@ -1384,7 +1377,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * of the specified type.
    */
   public Scalar max(DType outType) {
-    return reduce(AggregateOp.MAX, outType);
+    return reduce(Aggregation.max(), outType);
   }
 
   /**
@@ -1400,7 +1393,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * of the specified type.
    */
   public Scalar product(DType outType) {
-    return reduce(AggregateOp.PRODUCT, outType);
+    return reduce(Aggregation.product(), outType);
   }
 
   /**
@@ -1416,7 +1409,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * scalar of the specified type.
    */
   public Scalar sumOfSquares(DType outType) {
-    return reduce(AggregateOp.SUMOFSQUARES, outType);
+    return reduce(Aggregation.sumOfSquares(), outType);
   }
 
   /**
@@ -1438,7 +1431,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * Null values are skipped.
    */
   public Scalar mean(DType outType) {
-    return reduce(AggregateOp.MEAN, outType);
+    return reduce(Aggregation.mean(), outType);
   }
 
   /**
@@ -1460,7 +1453,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * Null values are skipped.
    */
   public Scalar variance(DType outType) {
-    return reduce(AggregateOp.VAR, outType);
+    return reduce(Aggregation.variance(), outType);
   }
 
   /**
@@ -1483,7 +1476,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * an element of the column when calculating the standard deviation.
    */
   public Scalar standardDeviation(DType outType) {
-    return reduce(AggregateOp.STD, outType);
+    return reduce(Aggregation.standardDeviation(), outType);
   }
 
   /**
@@ -1502,7 +1495,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * Null values are skipped.
    */
   public Scalar any(DType outType) {
-    return reduce(AggregateOp.ANY, outType);
+    return reduce(Aggregation.any(), outType);
   }
 
   /**
@@ -1521,7 +1514,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * Null values are skipped.
    */
   public Scalar all(DType outType) {
-    return reduce(AggregateOp.ALL, outType);
+    return reduce(Aggregation.all(), outType);
   }
 
   /**
@@ -1529,13 +1522,13 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * Overflows in reductions are not detected. Specifying a higher precision
    * output type may prevent overflow. Only the MIN and MAX ops are
    * The null values are skipped for the operation.
-   * @param op The reduction operation to perform
+   * @param aggregation The reduction aggregation to perform
    * @return The scalar result of the reduction operation. If the column is
    * empty or the reduction operation fails then the
    * {@link Scalar#isValid()} method of the result will return false.
    */
-  public Scalar reduce(AggregateOp op) {
-    return reduce(op, type);
+  public Scalar reduce(Aggregation aggregation) {
+    return reduce(aggregation, type);
   }
 
   /**
@@ -1544,14 +1537,19 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * output type may prevent overflow. Only the MIN and MAX ops are
    * supported for reduction of non-arithmetic types (TIMESTAMP...)
    * The null values are skipped for the operation.
-   * @param op      The reduction operation to perform
+   * @param aggregation The reduction aggregation to perform
    * @param outType The type of scalar value to return
    * @return The scalar result of the reduction operation. If the column is
    * empty or the reduction operation fails then the
    * {@link Scalar#isValid()} method of the result will return false.
    */
-  public Scalar reduce(AggregateOp op, DType outType) {
-    return new Scalar(outType, reduce(getNativeView(), op.nativeId, outType.nativeId));
+  public Scalar reduce(Aggregation aggregation, DType outType) {
+    long nativeId = aggregation.createNativeInstance();
+    try {
+      return new Scalar(outType, reduce(getNativeView(), nativeId, outType.nativeId));
+    } finally {
+      Aggregation.close(nativeId);
+    }
   }
 
   /**
@@ -1574,21 +1572,26 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * @return Column containing aggregate function result.
    * @throws IllegalArgumentException if unsupported window specification * (i.e. other than {@link FrameType#ROWS} is used.
    */
-  public ColumnVector rollingWindow(AggregateOp op, WindowOptions options) {
+  public ColumnVector rollingWindow(Aggregation op, WindowOptions options) {
     // Check that only row-based windows are used.
     if (!options.getFrameType().equals(FrameType.ROWS)) {
       throw new IllegalArgumentException("Expected ROWS-based window specification. Unexpected window type: "
             + options.getFrameType());
     }
 
-    return new ColumnVector(
-        rollingWindow(this.getNativeView(),
-            options.getMinPeriods(),
-            op.nativeId,
-            options.getPreceding(),
-            options.getFollowing(),
-            options.getPrecedingCol() == null ? 0 : options.getPrecedingCol().getNativeView(),
-            options.getFollowingCol() == null ? 0 : options.getFollowingCol().getNativeView()));
+    long nativePtr = op.createNativeInstance();
+    try {
+      return new ColumnVector(
+              rollingWindow(this.getNativeView(),
+                      options.getMinPeriods(),
+                      nativePtr,
+                      options.getPreceding(),
+                      options.getFollowing(),
+                      options.getPrecedingCol() == null ? 0 : options.getPrecedingCol().getNativeView(),
+                      options.getFollowingCol() == null ? 0 : options.getFollowingCol().getNativeView()));
+    } finally {
+      Aggregation.close(nativePtr);
+    }
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -2591,6 +2594,20 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     return new Table(extractRe(this.getNativeView(), pattern));
   }
 
+  /** For a column of type List<Struct<String, String>> and a passed in String key, return a string column
+   * for all the values in the struct that match the key, null otherwise.
+   * @param key the String scalar to lookup in the column
+   * @return a string column of values or nulls based on the lookup result
+   */
+  public ColumnVector getMapValue(Scalar key) {
+
+    assert type == DType.LIST : "column type must be a LIST";
+    assert key != null : "target string may not be null";
+    assert key.getType() == DType.STRING : "target string must be a string scalar";
+
+    return new ColumnVector(mapLookup(getNativeView(), key.getScalarHandle()));
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
   /////////////////////////////////////////////////////////////////////////////
@@ -2804,6 +2821,14 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   private static native long stringConcatenation(long[] columnViews, long separator, long narep);
 
   /**
+   * Native method for map lookup over a column of List<Struct<String,String>>
+   * @param columnView the column view handle of the map
+   * @param key the string scalar that is the key for lookup
+   * @return a string column handle of the resultant
+   * @throws CudfException
+   */
+  private static native long mapLookup(long columnView, long key) throws CudfException;
+  /**
    * Native method to add zeros as padding to the left of each string.
    */
   private static native long zfill(long nativeHandle, int width);
@@ -2844,7 +2869,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
   private static native long quantile(long cudfColumnHandle, int quantileMethod, double[] quantiles) throws CudfException;
 
-  private static native long rollingWindow(long viewHandle, int min_periods, int agg_type,
+  private static native long rollingWindow(long viewHandle, int min_periods, long aggPtr,
                                            int preceding, int following,
                                            long preceding_col, long following_col);
 
@@ -2868,7 +2893,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
   private static native long ifElseSS(long predVec, long trueScalar, long falseScalar) throws CudfException;
 
-  private static native long reduce(long viewHandle, int reduceOp, int dtype) throws CudfException;
+  private static native long reduce(long viewHandle, long aggregation, int dtype) throws CudfException;
 
   private static native long isNullNative(long viewHandle);
 
@@ -3006,7 +3031,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
   @Override
   public BaseDeviceMemoryBuffer getDataBuffer() {
-    if (!type.isNestedType()) {
+    if (type.isNestedType()) {
       throw new IllegalStateException(" Lists and Structs at top level have no data");
     }
     return offHeap.getData();
@@ -3029,6 +3054,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   }
 
   @Override
+  @Deprecated
   public long getNumRows() {
     return offHeap.getNativeRowCount();
   }
@@ -3333,7 +3359,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   }
 
   public static ColumnVector createNestedColumnVector(DType type, int rows, HostMemoryBuffer data, HostMemoryBuffer valid, HostMemoryBuffer offsets,
-                                                      Optional<Long> nullCount, List<HostColumnVector.NestedHostColumnVector> child) {
+                                                      Optional<Long> nullCount, List<HostColumnVectorCore> child) {
     return NestedColumnVector.createColumnVector(type, rows, data, valid, offsets, nullCount, child);
   }
 
@@ -3367,14 +3393,13 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
      * @param valid validity buffer
      * @param offsets offsets buffer
      * @param nullCount nullCount for the LIST column
-     * @param child the host side nested column vector
+     * @param child the host side nested column vector list
      * @return new ColumnVector of type LIST at the moment
      */
     static ColumnVector createColumnVector(DType type, int rows, HostMemoryBuffer data,
-        HostMemoryBuffer valid, HostMemoryBuffer offsets,
-        Optional<Long> nullCount, List<HostColumnVector.NestedHostColumnVector> child) {
+        HostMemoryBuffer valid, HostMemoryBuffer offsets, Optional<Long> nullCount, List<HostColumnVectorCore> child) {
       List<NestedColumnVector> devChildren = new ArrayList<>();
-      for (HostColumnVector.NestedHostColumnVector c : child) {
+      for (HostColumnVectorCore c : child) {
         devChildren.add(createNewNestedColumnVector(c));
       }
       int mainColRows = rows;
@@ -3405,19 +3430,19 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     }
 
     private static NestedColumnVector createNewNestedColumnVector(
-        HostColumnVector.NestedHostColumnVector nestedChildren) {
+        HostColumnVectorCore nestedChildren) {
       if (nestedChildren == null) {
         return null;
       }
       DType colType = nestedChildren.getType();
-      Optional<Long> nullCount = nestedChildren.getNullCount();
-      long colRows = nestedChildren.getRows();
+      Optional<Long> nullCount = Optional.of(nestedChildren.getNullCount());
+      long colRows = nestedChildren.getRowCount();
       HostMemoryBuffer colData = nestedChildren.getNestedChildren().isEmpty() ? nestedChildren.getData() : null;
       HostMemoryBuffer colValid = nestedChildren.getValidity();
       HostMemoryBuffer colOffsets = nestedChildren.getOffsets();
 
       List<NestedColumnVector> children = new ArrayList<>();
-      for (HostColumnVector.NestedHostColumnVector nhcv : nestedChildren.getNestedChildren()) {
+      for (HostColumnVectorCore nhcv : nestedChildren.getNestedChildren()) {
         children.add(createNewNestedColumnVector(nhcv));
       }
       return createNestedColumnVector(colType, colRows, nullCount, colData, colValid, colOffsets,
@@ -3483,8 +3508,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
             // least one byte or it will not be interpreted correctly.
             dataLen = 1;
           }
-        } else if (type.isNestedType()) {
-          dataLen = dataBuffer.length;
         }
         data = DeviceMemoryBuffer.allocate(dataLen);
         data.copyFromHostBuffer(dataBuffer, 0, dataLen);
@@ -3540,7 +3563,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * This method is evolving, unstable and currently test only.
    * Please use with caution and expect it to change in the future.
    */
-  public static<T> ColumnVector fromLists(HostColumnVector.ColumnBuilder.DataType dataType, List<T>... lists) {
+  public static<T> ColumnVector fromLists(HostColumnVector.DataType dataType, List<T>... lists) {
     try (HostColumnVector host = HostColumnVector.fromLists(dataType, lists)) {
       return host.copyToDevice();
     }
@@ -3550,8 +3573,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * This method is evolving, unstable and currently test only.
    * Please use with caution and expect it to change in the future.
    */
-  public static ColumnVector fromStructs(HostColumnVector.ColumnBuilder.DataType dataType,
-                                            List<HostColumnVector.ColumnBuilder.StructData> lists) {
+  public static ColumnVector fromStructs(HostColumnVector.DataType dataType,
+                                         List<HostColumnVector.StructData> lists) {
     try (HostColumnVector host = HostColumnVector.fromStructs(dataType, lists)) {
       return host.copyToDevice();
     }

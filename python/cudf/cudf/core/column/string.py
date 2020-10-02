@@ -4767,13 +4767,13 @@ class StringColumn(column.ColumnBase):
         lhs = self
         if reflect:
             lhs, rhs = rhs, lhs
-        if isinstance(rhs, StringColumn) and op == "add":
-            return lhs.str().cat(others=rhs)
-        elif op in ("eq", "ne", "gt", "lt", "ge", "le"):
-            return _string_column_binop(self, rhs, op=op, out_dtype="bool")
-        else:
-            msg = "{!r} operator not supported between {} and {}"
-            raise TypeError(msg.format(op, type(self), type(rhs)))
+        if isinstance(rhs, (StringColumn, str)):
+            if op == "add":
+                return lhs.str().cat(others=rhs)
+            elif op in ("eq", "ne", "gt", "lt", "ge", "le"):
+                return _string_column_binop(self, rhs, op=op, out_dtype="bool")
+        msg = "{!r} operator not supported between {} and {}"
+        raise TypeError(msg.format(op, type(self), type(rhs)))
 
     @property
     def is_unique(self):

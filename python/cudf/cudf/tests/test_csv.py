@@ -1023,6 +1023,20 @@ def test_csv_reader_byte_range(tmpdir, segment_bytes):
     assert list(df["int2"]) == list(ref_df["int2"])
 
 
+def test_csv_reader_byte_range_type_corner_case(tmpdir):
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file17.csv")
+
+    cudf.datasets.timeseries(
+        start="2000-01-01",
+        end="2000-01-02",
+        dtypes={"name": str, "id": int, "x": float, "y": float},
+    ).to_csv(fname, chunksize=100000)
+
+    byte_range = (2_147_483_648, 0)
+    with pytest.raises(RuntimeError, match="Offset is past end of file"):
+        cudf.read_csv(fname, byte_range=byte_range, header=None)
+
+
 @pytest.mark.parametrize("segment_bytes", [10, 19, 31, 36])
 def test_csv_reader_byte_range_strings(segment_bytes):
     names = ["strings"]
@@ -1397,7 +1411,7 @@ def test_csv_writer_file_handle(tmpdir):
 
     gdf_df_fname = tmpdir.join("gdf_df_1.csv")
     with open(gdf_df_fname, "w") as f:
-        gdf.to_csv(path=f, index=False)
+        gdf.to_csv(path_or_buf=f, index=False)
     assert os.path.exists(gdf_df_fname)
 
     gdf2 = pd.read_csv(gdf_df_fname)
@@ -1440,8 +1454,8 @@ def test_csv_writer_numeric_data(dtype, nelem, tmpdir):
 
     df = make_numeric_dataframe(nelem, dtype)
     gdf = cudf.from_pandas(df)
-    df.to_csv(pdf_df_fname, index=False, line_terminator="\n")
-    gdf.to_csv(path=gdf_df_fname, index=False)
+    df.to_csv(path_or_buf=pdf_df_fname, index=False, line_terminator="\n")
+    gdf.to_csv(path_or_buf=gdf_df_fname, index=False)
 
     assert os.path.exists(pdf_df_fname)
     assert os.path.exists(gdf_df_fname)
@@ -1457,8 +1471,8 @@ def test_csv_writer_datetime_data(tmpdir):
 
     df = make_datetime_dataframe()
     gdf = cudf.from_pandas(df)
-    df.to_csv(pdf_df_fname, index=False, line_terminator="\n")
-    gdf.to_csv(path=gdf_df_fname, index=False)
+    df.to_csv(path_or_buf=pdf_df_fname, index=False, line_terminator="\n")
+    gdf.to_csv(path_or_buf=gdf_df_fname, index=False)
 
     assert os.path.exists(pdf_df_fname)
     assert os.path.exists(gdf_df_fname)
@@ -1505,7 +1519,7 @@ def test_csv_writer_mixed_data(
     df["Date"] = df["Date"].astype("datetime64")
     gdf = cudf.from_pandas(df)
     df.to_csv(
-        pdf_df_fname,
+        path_or_buf=pdf_df_fname,
         index=index,
         sep=sep,
         columns=columns,
@@ -1516,7 +1530,7 @@ def test_csv_writer_mixed_data(
         escapechar="\\",
     )
     gdf.to_csv(
-        path=gdf_df_fname,
+        path_or_buf=gdf_df_fname,
         index=index,
         sep=sep,
         columns=columns,
@@ -1581,13 +1595,52 @@ def test_csv_writer_chunksize(chunksize, tmpdir):
     assert_eq(expect, got)
 
 
-def test_to_csv_empty_filename():
-    df = cudf.DataFrame({"vals": [1, 2, 3]})
+@pytest.mark.parametrize(
+    "df",
+    [
+        cudf.DataFrame({"vals": [1, 2, 3]}),
+        cudf.DataFrame(
+            {"vals1": [1, 2, 3], "vals2": ["hello", "rapids", "cudf"]}
+        ),
+        cudf.DataFrame(
+            {"vals1": [None, 2.0, 3.0], "vals2": ["hello", "rapids", None]}
+        ),
+    ],
+)
+def test_to_csv_empty_filename(df):
+    pdf = df.to_pandas()
 
-    exception = pytest.raises(ValueError, match="path/filename not provided")
+    actual = df.to_csv()
+    expected = pdf.to_csv()
 
-    with exception:
-        df.to_csv()
+    assert actual == expected
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        cudf.DataFrame({"vals": [1, 2, 3]}),
+        cudf.DataFrame(
+            {"vals1": [1, 2, 3], "vals2": ["hello", "rapids", "cudf"]}
+        ),
+        cudf.DataFrame(
+            {"vals1": [None, 2.0, 3.0], "vals2": ["hello", "rapids", None]}
+        ),
+    ],
+)
+def test_to_csv_StringIO(df):
+    cudf_io = StringIO()
+    pandas_io = StringIO()
+
+    pdf = df.to_pandas()
+
+    df.to_csv(cudf_io)
+    pdf.to_csv(pandas_io)
+
+    cudf_io.seek(0)
+    pandas_io.seek(0)
+
+    assert cudf_io.read() == pandas_io.read()
 
 
 def test_csv_writer_empty_dataframe(tmpdir):

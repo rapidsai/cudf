@@ -31,12 +31,10 @@ requirements:
     - cudatoolkit {{ cuda_version }}.*
     - arrow-cpp 1.0.1.*
     - arrow-cpp-proc * cuda
-    - flatbuffers
     - boost-cpp 1.72.0
     - dlpack
   run:
     - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
-    - dlpack
     - arrow-cpp-proc * cuda
     - {{ pin_compatible('boost-cpp', max_pin='x.x.x') }}
 
@@ -146,6 +144,7 @@ test:
     - test -f $PREFIX/include/cudf/strings/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/strings/detail/converters.hpp
     - test -f $PREFIX/include/cudf/strings/detail/fill.hpp
+    - test -f $PREFIX/include/cudf/strings/detail/replace.hpp
     - test -f $PREFIX/include/cudf/strings/detail/utilities.hpp
     - test -f $PREFIX/include/cudf/strings/extract.hpp
     - test -f $PREFIX/include/cudf/strings/findall.hpp
@@ -171,12 +170,25 @@ test:
     - test -f $PREFIX/include/cudf/types.hpp
     - test -f $PREFIX/include/cudf/unary.hpp
     - test -f $PREFIX/include/cudf/utilities/bit.hpp
+    - test -f $PREFIX/include/cudf/utilities/span.hpp
     - test -f $PREFIX/include/cudf/utilities/error.hpp
     - test -f $PREFIX/include/cudf/utilities/traits.hpp
     - test -f $PREFIX/include/cudf/utilities/type_dispatcher.hpp
+    - test -f $PREFIX/include/cudf/utilities/default_stream.hpp
     - test -f $PREFIX/include/cudf/wrappers/dictionary.hpp
     - test -f $PREFIX/include/cudf/wrappers/durations.hpp
     - test -f $PREFIX/include/cudf/wrappers/timestamps.hpp
+    - test -f $PREFIX/include/cudf_test/detail/column_utilities.hpp
+    - test -f $PREFIX/include/cudf_test/base_fixture.hpp
+    - test -f $PREFIX/include/cudf_test/column_utilities.hpp
+    - test -f $PREFIX/include/cudf_test/column_wrapper.hpp
+    - test -f $PREFIX/include/cudf_test/cudf_gtest.hpp
+    - test -f $PREFIX/include/cudf_test/cxxopts.hpp
+    - test -f $PREFIX/include/cudf_test/scalar_utilities.hpp
+    - test -f $PREFIX/include/cudf_test/table_utilities.hpp
+    - test -f $PREFIX/include/cudf_test/timestamp_utilities.cuh
+    - test -f $PREFIX/include/cudf_test/type_list_utilities.hpp
+    - test -f $PREFIX/include/cudf_test/type_lists.hpp
 
 about:
   home: http://rapids.ai/

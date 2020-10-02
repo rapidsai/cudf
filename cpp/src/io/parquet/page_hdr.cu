@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
+#include <io/parquet/parquet_gpu.hpp>
 #include <io/utilities/block_utils.cuh>
-#include "parquet_gpu.h"
 
 namespace cudf {
 namespace io {
@@ -233,7 +233,7 @@ extern "C" __global__ void __launch_bounds__(128)
     num_dict_pages = bs->ck.num_dict_pages;
     max_num_pages  = (page_info) ? bs->ck.max_num_pages : 0;
     values_found   = 0;
-    __syncwarp();
+    SYNCWARP();
     while (values_found < num_values && bs->cur < bs->end) {
       int index_out = -1;
 
@@ -245,18 +245,18 @@ extern "C" __global__ void __launch_bounds__(128)
         bs->page.num_rows = 0;
         if (gpuParsePageHeader(bs) && bs->page.compressed_page_size >= 0) {
           switch (bs->page_type) {
-            case DATA_PAGE:
+            case PageType::DATA_PAGE:
               // this computation is only valid for flat schemas. for nested schemas,
               // they will be recomputed in the preprocess step by examining repetition and
               // definition levels
               bs->page.num_rows = bs->page.num_input_values;
-            case DATA_PAGE_V2:
+            case PageType::DATA_PAGE_V2:
               index_out = num_dict_pages + data_page_count;
               data_page_count++;
               bs->page.flags = 0;
               values_found += bs->page.num_input_values;
               break;
-            case DICTIONARY_PAGE:
+            case PageType::DICTIONARY_PAGE:
               index_out = dictionary_page_count;
               dictionary_page_count++;
               bs->page.flags = PAGEINFO_FLAGS_DICTIONARY;
@@ -269,15 +269,15 @@ extern "C" __global__ void __launch_bounds__(128)
           bs->cur = bs->end;
         }
       }
-      index_out = shuffle(index_out);
+      index_out = SHFL0(index_out);
       if (index_out >= 0 && index_out < max_num_pages) {
         // NOTE: Assumes that sizeof(PageInfo) <= 128
         if (t < sizeof(PageInfo) / sizeof(uint32_t)) {
           ((uint32_t *)(page_info + index_out))[t] = ((const uint32_t *)&bs->page)[t];
         }
       }
-      num_values = shuffle(num_values);
-      __syncwarp();
+      num_values = SHFL0(num_values);
+      SYNCWARP();
     }
     if (t == 0) {
       chunks[chunk].num_data_pages = data_page_count;
