@@ -98,14 +98,14 @@ namespace {
  */
 struct make_unsigned_fn {
   template <typename T, std::enable_if_t<is_index_type<T>()>* = nullptr>
-  cudf::type_id operator()()
+  constexpr cudf::type_id operator()()
   {
     return cudf::type_to_id<std::make_unsigned_t<T>>();
   }
   template <typename T, std::enable_if_t<not is_index_type<T>()>* = nullptr>
-  cudf::type_id operator()()
+  constexpr cudf::type_id operator()()
   {
-    CUDF_FAIL("only index types are supported");
+    return cudf::type_to_id<T>();
   }
 };
 
