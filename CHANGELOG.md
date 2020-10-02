@@ -99,7 +99,7 @@
 - PR #6375 Parallelize Cython compilation in addition to Cythonization
 - PR #6303 Use cudf test dtypes so timedelta tests are determinstic
 - PR #6326 Simplify interal csv/json kernel parameters
-- PR #6368 Simplify interal avro kernel parameters
+- PR #6399 Simplify interal avro kernel parameters
 - PR #6308 Add dictionary support to cudf::scatter with scalar
 - PR #6312 Conda recipe dependency cleanup
 - PR #6347 Add dictionary support to cudf::copy_range
