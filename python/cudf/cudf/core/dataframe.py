@@ -7309,7 +7309,7 @@ def _get_union_of_indices(indexes):
 def _get_union_of_series_names(series_list):
     names_list = []
     unnamed_count = 0
-    for idx, series in enumerate(series_list):
+    for series in series_list:
         if series.name is None:
             names_list.append(f"Unnamed {unnamed_count}")
             unnamed_count += 1
