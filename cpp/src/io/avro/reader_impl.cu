@@ -82,7 +82,7 @@ class metadata : public file_metadata {
   {
     const auto buffer = source.host_read(0, source.size());
     avro::container pod(buffer->data(), buffer->size());
-    CUDF_EXPECTS(pod.parse(*this, row_count, row_start), "Cannot parse metadata");
+    CUDF_EXPECTS(pod.parse(this, row_count, row_start), "Cannot parse metadata");
     row_start = skip_rows;
     row_count = num_rows;
   }

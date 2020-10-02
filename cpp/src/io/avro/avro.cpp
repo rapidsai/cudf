@@ -30,7 +30,7 @@ namespace avro {
  *
  * @returns true if successful, false if error
  */
-bool container::parse(file_metadata &md, size_t max_num_rows, size_t first_row)
+bool container::parse(file_metadata *md, size_t max_num_rows, size_t first_row)
 {
   uint32_t sig4, max_block_size;
   size_t total_object_count;
@@ -47,19 +47,19 @@ bool container::parse(file_metadata &md, size_t max_num_rows, size_t first_row)
       std::string key   = get_str();
       std::string value = get_str();
       if (key == "avro.codec") {
-        md.codec = value;
+        md->codec = value;
       } else if (key == "avro.schema") {
         schema_parser sp;
-        if (!sp.parse(md.schema, value)) { return false; }
+        if (!sp.parse(md->schema, value)) { return false; }
       } else {
         // printf("\"%s\" = \"%s\"\n", key.c_str(), value.c_str());
-        md.user_data.emplace(key, value);
+        md->user_data.emplace(key, value);
       }
     }
   }
-  for (int i = 0; i < 16; i++) { (reinterpret_cast<uint8_t *>(&md.sync_marker[0]))[i] = getb(); }
-  md.metadata_size   = m_cur - m_base;
-  md.skip_rows       = 0;
+  for (int i = 0; i < 16; i++) { (reinterpret_cast<uint8_t *>(&md->sync_marker[0]))[i] = getb(); }
+  md->metadata_size  = m_cur - m_base;
+  md->skip_rows      = 0;
   max_block_size     = 0;
   total_object_count = 0;
   while (m_cur + 18 < m_end && total_object_count < max_num_rows) {
@@ -70,61 +70,61 @@ bool container::parse(file_metadata &md, size_t max_num_rows, size_t first_row)
       uint32_t block_row = static_cast<uint32_t>(total_object_count);
       max_block_size     = std::max(max_block_size, block_size);
       total_object_count += object_count;
-      if (!md.block_list.size()) {
-        md.skip_rows = static_cast<uint32_t>(first_row);
+      if (!md->block_list.size()) {
+        md->skip_rows = static_cast<uint32_t>(first_row);
         total_object_count -= first_row;
         first_row = 0;
       }
-      md.block_list.emplace_back(m_cur - m_base, block_size, block_row, object_count);
+      md->block_list.emplace_back(m_cur - m_base, block_size, block_row, object_count);
     } else {
       first_row -= object_count;
     }
     m_cur += block_size;
     m_cur += 16;  // TODO: Validate sync marker
   }
-  md.max_block_size  = max_block_size;
-  md.num_rows        = total_object_count;
-  md.total_data_size = m_cur - (m_base + md.metadata_size);
+  md->max_block_size  = max_block_size;
+  md->num_rows        = total_object_count;
+  md->total_data_size = m_cur - (m_base + md->metadata_size);
   // Extract columns
-  for (size_t i = 0; i < md.schema.size(); i++) {
-    type_kind_e kind = md.schema[i].kind;
+  for (size_t i = 0; i < md->schema.size(); i++) {
+    type_kind_e kind = md->schema[i].kind;
     if (kind > type_null && kind < type_record) {
       // Primitive type column
       column_desc col;
-      int parent_idx       = md.schema[i].parent_idx;
+      int parent_idx       = md->schema[i].parent_idx;
       col.schema_data_idx  = (int32_t)i;
       col.schema_null_idx  = -1;
       col.parent_union_idx = -1;
-      col.name             = md.schema[i].name;
+      col.name             = md->schema[i].name;
       if (parent_idx >= 0) {
         while (parent_idx >= 0) {
-          if (md.schema[parent_idx].kind == type_union) {
+          if (md->schema[parent_idx].kind == type_union) {
             int pos = parent_idx + 1;
-            for (int num_children = md.schema[parent_idx].num_children; num_children > 0;
+            for (int num_children = md->schema[parent_idx].num_children; num_children > 0;
                  --num_children) {
               int skip = 1;
               if (pos == i) {
-                col.parent_union_idx = md.schema[parent_idx].num_children - num_children;
-              } else if (md.schema[pos].kind == type_null) {
+                col.parent_union_idx = md->schema[parent_idx].num_children - num_children;
+              } else if (md->schema[pos].kind == type_null) {
                 col.schema_null_idx = pos;
                 break;
               }
               do {
-                skip = skip + md.schema[pos].num_children - 1;
+                skip = skip + md->schema[pos].num_children - 1;
                 pos++;
               } while (skip != 0);
             }
           }
           // Ignore the root or array entries
-          if ((parent_idx != 0 && md.schema[parent_idx].kind != type_array) ||
+          if ((parent_idx != 0 && md->schema[parent_idx].kind != type_array) ||
               col.name.length() == 0) {
             if (col.name.length() > 0) { col.name.insert(0, 1, '.'); }
-            col.name.insert(0, md.schema[parent_idx].name);
+            col.name.insert(0, md->schema[parent_idx].name);
           }
-          parent_idx = md.schema[parent_idx].parent_idx;
+          parent_idx = md->schema[parent_idx].parent_idx;
         }
       }
-      md.columns.emplace_back(std::move(col));
+      md->columns.emplace_back(std::move(col));
     }
   }
   return true;

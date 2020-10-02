@@ -57,7 +57,6 @@ static inline int64_t __device__ avro_decode_zigzag_varint(const uint8_t *&cur, 
  *
  * @param[in] schema Schema description
  * @param[in] schema_g Global schema in device mem
- * @param[in] schema_len Number of schema entries
  * @param[in] row Current row
  * @param[in] max_rows Total number of rows
  * @param[in] cur Current input data pointer
@@ -221,9 +220,6 @@ static const uint8_t *__device__ avro_decode_row(device_span<schemadesc_s const>
  * @param[in] global_Dictionary Global dictionary entries
  * @param[in] avro_data Raw block data
  * @param[in] schema Schema description
- * @param[in] num_blocks Number of blocks
- * @param[in] schema_len Number of entries in schema
- * @param[in] num_dictionary_entries Number of entries in global dictionary
  * @param[in] min_row_size Minimum size in bytes of a row
  * @param[in] max_rows Maximum number of rows to load
  * @param[in] first_row Crop all rows below first_row
