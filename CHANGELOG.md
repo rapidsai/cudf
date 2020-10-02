@@ -100,7 +100,6 @@
 - PR #6306 Remove cpw macros from page encode kernels
 - PR #6375 Parallelize Cython compilation in addition to Cythonization
 - PR #6303 Use cudf test dtypes so timedelta tests are deterministic
-- PR #6303 Use cudf test dtypes so timedelta tests are determinstic
 - PR #6326 Simplify interal csv/json kernel parameters
 - PR #6308 Add dictionary support to cudf::scatter with scalar
 - PR #6312 Conda recipe dependency cleanup
