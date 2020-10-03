@@ -34,6 +34,7 @@
 #include <cudf/datetime.hpp>  // replace eventually
 
 #include "compiled/binary_ops.hpp"
+#include "cudf/types.hpp"
 
 #include <bit.hpp.jit>
 #include <durations.hpp.jit>
@@ -336,6 +337,32 @@ int32_t apply_scale_binop(binary_operator op, int32_t left_scale, int32_t right_
   return std::min(left_scale, right_scale);
 }
 
+std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
+                                                     column_view const& rhs,
+                                                     binary_operator op,
+                                                     rmm::mr::device_memory_resource* mr,
+                                                     cudaStream_t stream)
+{
+  CUDF_EXPECTS(lhs.type().id() == rhs.type().id(),
+               "Both columns must be of the same fixed_point type");
+
+  auto const scale       = apply_scale_binop(op, lhs.type().scale(), rhs.type().scale());
+  auto const output_type = data_type{lhs.type().id(), scale};
+  auto out = make_fixed_width_column_for_output(lhs, rhs, op, output_type, mr, stream);
+
+  // Check for 0 sized data
+  if (lhs.size() == 0 || rhs.size() == 0) return out;
+
+  // Adjust columns so they have they same scale
+  if (lhs.type().scale() != rhs.type().scale()) {
+    // TODO
+  }
+
+  auto out_view = out->mutable_view();
+  binops::jit::binary_operation(out_view, lhs, rhs, op, stream);
+  return out;
+}
+
 std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          column_view const& rhs,
                                          binary_operator op,
@@ -348,26 +375,8 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   if (lhs.type().id() == type_id::STRING && rhs.type().id() == type_id::STRING)
     return binops::compiled::binary_operation(lhs, rhs, op, output_type, mr, stream);
 
-  // TODO extract this out into it's own function / cleanup
-  if (lhs.type().id() == type_id::DECIMAL32 || rhs.type().id() == type_id::DECIMAL32 ||
-      lhs.type().id() == type_id::DECIMAL64 || rhs.type().id() == type_id::DECIMAL64) {
-    CUDF_EXPECTS(lhs.type().id() == rhs.type().id(),
-                 "Both columns must be of the same fixed_point type");
-
-    if (lhs.type().scale() == rhs.type().scale()) {
-      auto const scale            = apply_scale_binop(op, lhs.type().scale(), rhs.type().scale());
-      auto const true_output_type = data_type{lhs.type().id(), scale};
-      auto out = make_fixed_width_column_for_output(lhs, rhs, op, true_output_type, mr, stream);
-
-      // Check for 0 sized data
-      if (lhs.size() == 0 || rhs.size() == 0) return out;
-
-      auto out_view = out->mutable_view();
-      binops::jit::binary_operation(out_view, lhs, rhs, op, stream);
-      return out;
-    }
-    // TODO complete other operations
-  }
+  if (is_fixed_point_type_id(lhs.type().id()) || is_fixed_point_type_id(rhs.type().id()))
+    return fixed_point_binary_operation(lhs, rhs, op, mr, stream);
 
   // Check for datatype
   CUDF_EXPECTS(is_fixed_width(output_type), "Invalid/Unsupported output datatype");
