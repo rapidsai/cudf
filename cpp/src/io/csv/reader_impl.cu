@@ -122,7 +122,7 @@ string removeQuotes(string str, char quotechar)
  * @brief Parse the first row to set the column names in the raw_csv parameter.
  * The first row can be either the header row, or the first data row
  */
-std::vector<std::string> setColumnNames(ParseOptions const &parse_options,
+std::vector<std::string> setColumnNames(parse_options_view const &parse_options,
                                         std::vector<char> const &header,
                                         int header_row,
                                         std::string prefix)
@@ -186,11 +186,11 @@ std::vector<std::string> setColumnNames(ParseOptions const &parse_options,
   }
 
   return col_names;
-}
+}  // namespace csv
 
 std::vector<data_type> gather_column_types(
   csv_reader_options const &reader_options,
-  ParseOptions const &parse_options,
+  parse_options_view const &parse_options,
   device_span<char const> data_,
   thrust::host_vector<column_parse::flags> &h_column_flags_,
   std::vector<std::string> &col_names_,
@@ -310,7 +310,7 @@ std::vector<data_type> gather_column_types(
 }
 
 void gather_row_offsets(csv_reader_options const &reader_options,
-                        ParseOptions const &parse_options,
+                        parse_options_view const &parse_options,
                         rmm::device_vector<char> &data_,
                         rmm::device_vector<uint64_t> &row_offsets_,
                         std::vector<char> &header_,
@@ -464,7 +464,7 @@ void gather_row_offsets(csv_reader_options const &reader_options,
   if (num_rows >= 0) { row_offsets_.resize(std::min<size_t>(row_offsets_.size(), num_rows + 1)); }
 }
 
-std::vector<column_buffer> decode_data(ParseOptions const &parse_options,
+std::vector<column_buffer> decode_data(parse_options_view const &parse_options,
                                        device_span<char const> data_,
                                        host_span<data_type const> column_types,
                                        device_span<uint64_t const> row_offsets_,
@@ -519,7 +519,8 @@ std::vector<column_buffer> decode_data(ParseOptions const &parse_options,
   return out_buffers;
 }
 
-size_t find_first_row_start(ParseOptions const &parse_options, host_span<char const> const data)
+size_t find_first_row_start(parse_options_view const &parse_options,
+                            host_span<char const> const data)
 {
   // For now, look for the first terminator (assume the first terminator isn't within a quote)
   // TODO: Attempt to infer this from the data
@@ -528,9 +529,9 @@ size_t find_first_row_start(ParseOptions const &parse_options, host_span<char co
   return std::min(pos + 1, data.size());
 }
 
-ParseOptions make_parser_options(csv_reader_options const &reader_options_)
+parse_options make_parser_options(csv_reader_options const &reader_options_)
 {
-  auto parser_options_ = ParseOptions{};
+  auto parser_options_ = parse_options{};
 
   if (reader_options_.is_enabled_delim_whitespace()) {
     parser_options_.delimiter       = ' ';
@@ -565,6 +566,23 @@ ParseOptions make_parser_options(csv_reader_options const &reader_options_)
   CUDF_EXPECTS(parser_options_.thousands != parser_options_.delimiter,
                "Thousands separator cannot be the same as the delimiter");
 
+  // Handle user-defined false values, whereby field data is substituted with a
+  // boolean true or numeric `1` value
+  if (reader_options_.get_true_values().size() != 0) {
+    parser_options_.trie_true = createSerializedTrie(reader_options_.get_true_values());
+  }
+
+  // Handle user-defined false values, whereby field data is substituted with a
+  // boolean false or numeric `0` value
+  if (reader_options_.get_false_values().size() != 0) {
+    parser_options_.trie_false = createSerializedTrie(reader_options_.get_false_values());
+  }
+
+  // Handle user-defined N/A values, whereby field data is treated as null
+  if (reader_options_.get_na_values().size() != 0) {
+    parser_options_.trie_na = createSerializedTrie(reader_options_.get_na_values());
+  }
+
   return parser_options_;
 }
 
@@ -576,31 +594,7 @@ table_with_metadata read(std::unique_ptr<datasource> &source_,
 {
   int num_actual_cols_ = reader_options_.get_names().size();
 
-  ParseOptions parser_options_ = make_parser_options(reader_options_);
-
-  // Handle user-defined false values, whereby field data is substituted with a
-  // boolean true or numeric `1` value
-  rmm::device_vector<SerialTrieNode> d_trie_true_;
-  rmm::device_vector<SerialTrieNode> d_trie_false_;
-  rmm::device_vector<SerialTrieNode> d_trie_na_;
-
-  if (reader_options_.get_true_values().size() != 0) {
-    d_trie_true_                   = createSerializedTrie(reader_options_.get_true_values());
-    parser_options_.trueValuesTrie = d_trie_true_.data().get();
-  }
-
-  // Handle user-defined false values, whereby field data is substituted with a
-  // boolean false or numeric `0` value
-  if (reader_options_.get_false_values().size() != 0) {
-    d_trie_false_                   = createSerializedTrie(reader_options_.get_false_values());
-    parser_options_.falseValuesTrie = d_trie_false_.data().get();
-  }
-
-  // Handle user-defined N/A values, whereby field data is treated as null
-  if (reader_options_.get_na_values().size() != 0) {
-    d_trie_na_                   = createSerializedTrie(reader_options_.get_na_values());
-    parser_options_.naValuesTrie = d_trie_na_.data().get();
-  }
+  parse_options parser_options_ = make_parser_options(reader_options_);
 
   auto const range_offset = reader_options_.get_byte_range_offset();
   auto const range_size   = reader_options_.get_byte_range_size();
@@ -639,6 +633,8 @@ table_with_metadata read(std::unique_ptr<datasource> &source_,
   rmm::device_vector<uint64_t> row_offsets_{};
   std::vector<char> header_;
 
+  auto const parser_options_view = parser_options_.view();
+
   // Transfer source data to GPU
   if (not source_->is_empty()) {
     auto data_size = (map_range_size != 0) ? map_range_size : source_->size();
@@ -664,7 +660,7 @@ table_with_metadata read(std::unique_ptr<datasource> &source_,
 
     // With byte range, find the start of the first data row
     size_t const data_start_offset =
-      (range_offset != 0) ? find_first_row_start(parser_options_, h_data) : 0;
+      (range_offset != 0) ? find_first_row_start(parser_options_view, h_data) : 0;
 
     // TODO: Allow parsing the header outside the mapped range
     CUDF_EXPECTS((range_offset == 0 || reader_options_.get_header() < 0),
@@ -672,7 +668,7 @@ table_with_metadata read(std::unique_ptr<datasource> &source_,
 
     // Gather row offsets
     gather_row_offsets(reader_options_,
-                       parser_options_,
+                       parser_options_view,
                        data_,
                        row_offsets_,
                        header_,
@@ -700,7 +696,7 @@ table_with_metadata read(std::unique_ptr<datasource> &source_,
     col_names_ = reader_options_.get_names();
   } else {
     col_names_ = setColumnNames(
-      parser_options_, header_, reader_options_.get_header(), reader_options_.get_prefix());
+      parser_options_view, header_, reader_options_.get_header(), reader_options_.get_prefix());
 
     num_actual_cols_ = num_active_cols_ = col_names_.size();
 
@@ -778,7 +774,7 @@ table_with_metadata read(std::unique_ptr<datasource> &source_,
   auto metadata     = table_metadata{};
   auto out_columns  = std::vector<std::unique_ptr<cudf::column>>();
   auto column_types = gather_column_types(reader_options_,
-                                          parser_options_,
+                                          parser_options_view,
                                           data_,
                                           h_column_flags_,
                                           col_names_,
@@ -804,7 +800,7 @@ table_with_metadata read(std::unique_ptr<datasource> &source_,
     return {std::make_unique<table>(std::move(out_columns)), std::move(metadata)};
   }
 
-  auto out_buffers = decode_data(parser_options_,
+  auto out_buffers = decode_data(parser_options_view,
                                  data_,
                                  column_types,
                                  row_offsets_,
