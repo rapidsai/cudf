@@ -22,52 +22,21 @@ namespace cudf {
 namespace io {
 namespace detail {
 namespace csv {
+
 /**
- * @brief Class to read CSV dataset data into columns.
+ * @brief Reads the entire dataset.
+ *
+ * @param filepaths Paths to the files containing the input dataset
+ * @param options Settings for controlling reading behavior
+ * @param mr Device memory resource to use for device memory allocation
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ *
+ * @return The set of columns along with table metadata
  */
-class reader {
-  rmm::mr::device_memory_resource *_mr;
-  std::unique_ptr<datasource> _source;
-  std::string _filepath;
-  csv_reader_options _reader_options;
-
- public:
-  /**
-   * @brief Constructor from an array of file paths
-   *
-   * @param filepaths Paths to the files containing the input dataset
-   * @param options Settings for controlling reading behavior
-   * @param mr Device memory resource to use for device memory allocation
-   */
-  explicit reader(std::vector<std::string> const &filepaths,
-                  csv_reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
-
-  /**
-   * @brief Constructor from an array of datasources
-   *
-   * @param sources Input `datasource` objects to read the dataset from
-   * @param options Settings for controlling reading behavior
-   * @param mr Device memory resource to use for device memory allocation
-   */
-  explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
-                  csv_reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
-
-  /**
-   * @brief Destructor explicitly-declared to avoid inlined in header
-   */
-  ~reader();
-
-  /**
-   * @brief Reads the entire dataset.
-   *
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   *
-   * @return The set of columns along with table metadata
-   */
-  table_with_metadata read(cudaStream_t stream = 0);
-};
+table_with_metadata read(
+  csv_reader_options const &options,
+  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0);
 
 class writer {
  public:

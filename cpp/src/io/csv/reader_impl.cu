@@ -22,6 +22,7 @@
 #include "csv_common.h"
 #include "csv_gpu.h"
 #include "cudf/io/csv.hpp"
+#include "cudf/types.hpp"
 #include "thrust/iterator/transform_iterator.h"
 
 #include <io/comp/io_uncomp.h>
@@ -68,7 +69,7 @@ using namespace cudf::io::csv;
  *
  * @return Estimated maximum size of a row, in bytes
  **/
-constexpr size_t calculateMaxRowSize(int num_columns = 0) noexcept
+constexpr size_t calculator_max_row_size(int num_columns = 0) noexcept
 {
   constexpr size_t max_row_bytes = 16 * 1024;  // 16KB
   constexpr size_t column_bytes  = 64;
@@ -107,7 +108,7 @@ std::tuple<data_type, column_parse::flags> get_dtype_info(const std::string &dty
 /**
  * @brief Removes the first and Last quote in the string
  */
-string removeQuotes(string str, char quotechar)
+string remove_quotes(string str, char quotechar)
 {
   // Exclude first and last quotation char
   const size_t first_quote = str.find(quotechar);
@@ -122,10 +123,10 @@ string removeQuotes(string str, char quotechar)
  * @brief Parse the first row to set the column names in the raw_csv parameter.
  * The first row can be either the header row, or the first data row
  */
-std::vector<std::string> setColumnNames(parse_options_view const &parse_options,
-                                        std::vector<char> const &header,
-                                        int header_row,
-                                        std::string prefix)
+std::vector<std::string> set_column_names(parse_options_view const &parse_options,
+                                          std::vector<char> const &header,
+                                          int header_row,
+                                          std::string prefix)
 {
   std::vector<std::string> col_names;
 
@@ -134,59 +135,65 @@ std::vector<std::string> setColumnNames(parse_options_view const &parse_options,
 
   std::vector<char> first_row = header;
   int num_cols                = 0;
+  bool quotation              = false;
 
-  bool quotation = false;
   for (size_t pos = 0, prev = 0; pos < first_row.size(); ++pos) {
     // Flip the quotation flag if current character is a quotechar
     if (first_row[pos] == parse_options.quotechar) {
       quotation = !quotation;
+      continue;
     }
+
     // Check if end of a column/row
-    else if (pos == first_row.size() - 1 ||
-             (!quotation && first_row[pos] == parse_options.terminator) ||
-             (!quotation && first_row[pos] == parse_options.delimiter)) {
-      // This is the header, add the column name
-      if (header_row >= 0) {
-        // Include the current character, in case the line is not terminated
-        int col_name_len = pos - prev + 1;
-        // Exclude the delimiter/terminator is present
-        if (first_row[pos] == parse_options.delimiter ||
-            first_row[pos] == parse_options.terminator) {
-          --col_name_len;
-        }
-        // Also exclude '\r' character at the end of the column name if it's
-        // part of the terminator
-        if (col_name_len > 0 && parse_options.terminator == '\n' && first_row[pos] == '\n' &&
-            first_row[pos - 1] == '\r') {
-          --col_name_len;
-        }
+    auto const is_end_of_column_or_row =
+      pos == first_row.size() - 1 ||
+      (not quotation && first_row[pos] == parse_options.terminator) ||
+      (not quotation && first_row[pos] == parse_options.delimiter);
 
-        const string new_col_name(first_row.data() + prev, col_name_len);
-        col_names.push_back(removeQuotes(new_col_name, parse_options.quotechar));
+    if (not is_end_of_column_or_row) { continue; }
 
-        // Stop parsing when we hit the line terminator; relevant when there is
-        // a blank line following the header. In this case, first_row includes
-        // multiple line terminators at the end, as the new recStart belongs to
-        // a line that comes after the blank line(s)
-        if (!quotation && first_row[pos] == parse_options.terminator) { break; }
-      } else {
-        // This is the first data row, add the automatically generated name
-        col_names.push_back(prefix + std::to_string(num_cols));
+    // This is the header, add the column name
+    if (header_row < 0) {
+      // This is the first data row, add the automatically generated name
+      col_names.push_back(prefix + std::to_string(num_cols));
+    } else {
+      // Include the current character, in case the line is not terminated
+      int col_name_len = pos - prev + 1;
+      // Exclude the delimiter/terminator is present
+      if (first_row[pos] == parse_options.delimiter || first_row[pos] == parse_options.terminator) {
+        --col_name_len;
       }
-      num_cols++;
-
-      // Skip adjacent delimiters if delim_whitespace is set
-      while (parse_options.multi_delimiter && pos < first_row.size() &&
-             first_row[pos] == parse_options.delimiter &&
-             first_row[pos + 1] == parse_options.delimiter) {
-        ++pos;
+      // Also exclude '\r' character at the end of the column name if it's
+      // part of the terminator
+      if (col_name_len > 0 && parse_options.terminator == '\n' && first_row[pos] == '\n' &&
+          first_row[pos - 1] == '\r') {
+        --col_name_len;
       }
-      prev = pos + 1;
+
+      const string new_col_name(first_row.data() + prev, col_name_len);
+      col_names.push_back(remove_quotes(new_col_name, parse_options.quotechar));
+
+      // Stop parsing when we hit the line terminator; relevant when there is
+      // a blank line following the header. In this case, first_row includes
+      // multiple line terminators at the end, as the new recStart belongs to
+      // a line that comes after the blank line(s)
+      if (!quotation && first_row[pos] == parse_options.terminator) { break; }
     }
+
+    num_cols++;
+
+    // Skip adjacent delimiters if delim_whitespace is set
+    while (parse_options.multi_delimiter && pos < first_row.size() &&
+           first_row[pos] == parse_options.delimiter &&
+           first_row[pos + 1] == parse_options.delimiter) {
+      ++pos;
+    }
+
+    prev = pos + 1;
   }
 
   return col_names;
-}  // namespace csv
+}
 
 std::vector<data_type> gather_column_types(
   csv_reader_options const &reader_options,
@@ -301,10 +308,10 @@ std::vector<data_type> gather_column_types(
     }
   }
 
-  for (size_t i = 0; i < dtypes.size(); i++) {
-    // Replace EMPTY dtype with STRING
-    if (dtypes[i].id() == type_id::EMPTY) { dtypes[i] = data_type{type_id::STRING}; }
-  }
+  // for (size_t i = 0; i < dtypes.size(); i++) {
+  //   // Replace EMPTY dtype with STRING
+  //   if (dtypes[i].id() == type_id::EMPTY) { dtypes[i] = data_type{type_id::STRING}; }
+  // }
 
   return dtypes;
 }
@@ -586,7 +593,7 @@ parse_options make_parser_options(csv_reader_options const &reader_options_)
   return parser_options_;
 }
 
-table_with_metadata read(std::unique_ptr<datasource> &source_,
+table_with_metadata read(std::unique_ptr<datasource> source_,
                          std::string const &filepath_,
                          csv_reader_options const &reader_options_,
                          cudaStream_t stream_,
@@ -613,7 +620,7 @@ table_with_metadata read(std::unique_ptr<datasource> &source_,
   if (range_size != 0) {
     const auto num_columns =
       std::max(reader_options_.get_names().size(), reader_options_.get_dtypes().size());
-    map_range_size = range_size + calculateMaxRowSize(num_columns);
+    map_range_size = range_size + calculator_max_row_size(num_columns);
   }
 
   // Support delayed opening of the file if using memory mapping datasource
@@ -692,10 +699,10 @@ table_with_metadata read(std::unique_ptr<datasource> &source_,
 
   // Check if the user gave us a list of column names
   if (not reader_options_.get_names().empty()) {
-    h_column_flags_.resize(reader_options_.get_names().size(), column_parse::enabled);
     col_names_ = reader_options_.get_names();
+    h_column_flags_.resize(reader_options_.get_names().size(), column_parse::enabled);
   } else {
-    col_names_ = setColumnNames(
+    col_names_ = set_column_names(
       parser_options_view, header_, reader_options_.get_header(), reader_options_.get_prefix());
 
     num_actual_cols_ = num_active_cols_ = col_names_.size();
@@ -729,19 +736,20 @@ table_with_metadata read(std::unique_ptr<datasource> &source_,
 
     // Update the number of columns to be processed, if some might have been
     // removed
-    if (!reader_options_.is_enabled_mangle_dupe_cols()) {
+    if (not reader_options_.is_enabled_mangle_dupe_cols()) {
       num_active_cols_ = col_names_histogram.size();
     }
   }
 
   // User can specify which columns should be parsed
-  if (!reader_options_.get_use_cols_indexes().empty() ||
-      !reader_options_.get_use_cols_names().empty()) {
+  if (not reader_options_.get_use_cols_indexes().empty() ||
+      not reader_options_.get_use_cols_names().empty()) {
     std::fill(h_column_flags_.begin(), h_column_flags_.end(), column_parse::disabled);
 
     for (const auto index : reader_options_.get_use_cols_indexes()) {
       h_column_flags_[index] = column_parse::enabled;
     }
+
     num_active_cols_ = reader_options_.get_use_cols_indexes().size();
 
     for (const auto &name : reader_options_.get_use_cols_names()) {
@@ -754,8 +762,8 @@ table_with_metadata read(std::unique_ptr<datasource> &source_,
   }
 
   // User can specify which columns should be inferred as datetime
-  if (!reader_options_.get_infer_date_indexes().empty() ||
-      !reader_options_.get_infer_date_names().empty()) {
+  if (not reader_options_.get_infer_date_indexes().empty() ||
+      not reader_options_.get_infer_date_names().empty()) {
     for (const auto index : reader_options_.get_infer_date_indexes()) {
       h_column_flags_[index] |= column_parse::as_datetime;
     }
@@ -836,36 +844,30 @@ table_with_metadata read(std::unique_ptr<datasource> &source_,
 }
 
 // Forward to implementation
-reader::reader(std::vector<std::string> const &filepaths,
-               csv_reader_options const &options,
-               rmm::mr::device_memory_resource *mr)
+table_with_metadata read(csv_reader_options const &options,
+                         rmm::mr::device_memory_resource *mr,
+                         cudaStream_t stream)
 {
-  CUDF_EXPECTS(filepaths.size() == 1, "Only a single source is currently supported.");
-  _source         = nullptr;
-  _filepath       = filepaths[0];
-  _reader_options = options;
-  _mr             = mr;
-}
-
-// Forward to implementation
-reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
-               csv_reader_options const &options,
-               rmm::mr::device_memory_resource *mr)
-{
-  CUDF_EXPECTS(sources.size() == 1, "Only a single source is currently supported.");
-  _source         = std::move(sources[0]);
-  _filepath       = "";
-  _reader_options = options;
-  _mr             = mr;
-}
-
-// Destructor within this translation unit
-reader::~reader() = default;
-
-// Forward to implementation
-table_with_metadata reader::read(cudaStream_t stream)
-{
-  return cudf::io::detail::csv::read(_source, _filepath, _reader_options, stream, _mr);
+  auto src_info = options.get_source();
+  switch (options.get_source().type) {
+    case io_type::FILEPATH: {
+      CUDF_EXPECTS(src_info.filepaths.size() == 1, "Only a single source is currently supported.");
+      return cudf::io::detail::csv::read(nullptr, src_info.filepaths[0], options, stream, mr);
+    }
+    case io_type::HOST_BUFFER: {
+      auto data_sources = cudf::io::datasource::create(src_info.buffers);
+      CUDF_EXPECTS(data_sources.size() == 1, "Only a single source is currently supported.");
+      return cudf::io::detail::csv::read(std::move(data_sources[0]), "", options, stream, mr);
+    }
+    case io_type::USER_IMPLEMENTED: {
+      auto data_sources = cudf::io::datasource::create(src_info.user_sources);
+      CUDF_EXPECTS(data_sources.size() == 1, "Only a single source is currently supported.");
+      return cudf::io::detail::csv::read(std::move(data_sources[0]), "", options, stream, mr);
+    }
+    default: {
+      CUDF_FAIL("Unsupported source type");
+    }
+  }
 }
 
 }  // namespace csv

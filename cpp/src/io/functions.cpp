@@ -171,12 +171,8 @@ table_with_metadata read_json(json_reader_options const& opts, rmm::mr::device_m
 // Freeform API wraps the detail reader class API
 table_with_metadata read_csv(csv_reader_options const& options, rmm::mr::device_memory_resource* mr)
 {
-  namespace csv = cudf::io::detail::csv;
-
   CUDF_FUNC_RANGE();
-  auto reader = make_reader<csv::reader>(options.get_source(), options, mr);
-
-  return reader->read();
+  return cudf::io::detail::csv::read(options, mr);
 }
 
 // Freeform API wraps the detail writer class API
