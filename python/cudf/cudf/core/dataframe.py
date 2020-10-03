@@ -40,6 +40,7 @@ from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     cudf_dtype_from_pydata_dtype,
     is_categorical_dtype,
+    is_datetime_dtype,
     is_column_like,
     is_list_dtype,
     is_list_like,
@@ -3418,7 +3419,12 @@ class DataFrame(Frame, Serializable):
             for c in cols
         ):
             raise TypeError("non-numeric data not yet supported")
-        dtype = np.find_common_type(cols, [])
+        
+        if all([is_datetime_dtype(col.dtype) for col in cols]):
+            # np bug: https://github.com/numpy/numpy/issues/17428
+            dtype = np.dtype("datetime64[ms]")
+        else:
+            dtype = np.find_common_type(cols, [])
         for k, c in self._data.items():
             if c.has_nulls:
                 errmsg = (
@@ -5524,9 +5530,13 @@ class DataFrame(Frame, Serializable):
                 f"or using .fillna()."
             )
             raise ValueError(msg)
-
-        filtered = self.select_dtypes(include=[np.number, np.bool])
-        common_dtype = np.find_common_type(filtered.dtypes, [])
+        
+        if all([is_datetime_dtype(dt) for dt in self.dtypes]):
+            filtered = self.copy(deep=False)
+            common_dtype = np.dtype("datetime64[ms]")
+        else:
+            filtered = self.select_dtypes(include=[np.number, np.bool])
+            common_dtype = np.find_common_type(filtered.dtypes, [])
         if filtered._num_columns < self._num_columns:
             msg = (
                 "Row-wise operations currently only support int, float "
