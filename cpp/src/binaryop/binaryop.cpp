@@ -320,11 +320,10 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          rmm::mr::device_memory_resource* mr,
                                          cudaStream_t stream)
 {
-  CUDF_EXPECTS((lhs.size() == rhs.size()), "Column sizes don't match");
+  CUDF_EXPECTS(lhs.size() == rhs.size(), "Column sizes don't match");
 
-  if ((lhs.type().id() == type_id::STRING) && (rhs.type().id() == type_id::STRING)) {
+  if (lhs.type().id() == type_id::STRING && rhs.type().id() == type_id::STRING)
     return binops::compiled::binary_operation(lhs, rhs, op, output_type, mr, stream);
-  }
 
   // Check for datatype
   CUDF_EXPECTS(is_fixed_width(output_type), "Invalid/Unsupported output datatype");
@@ -343,7 +342,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   }();
 
   // Check for 0 sized data
-  if (lhs.size() == 0 || rhs.size() == 0) { return out; }
+  if (lhs.size() == 0 || rhs.size() == 0) return out;
 
   auto out_view = out->mutable_view();
   binops::jit::binary_operation(out_view, lhs, rhs, op, stream);
@@ -359,7 +358,8 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
 {
   // Check for datatype
   auto is_type_supported_ptx = [](data_type type) -> bool {
-    return is_fixed_width(type) and type.id() != type_id::INT8;  // Numba PTX doesn't support int8
+    return is_fixed_width(type) and not is_fixed_point(type) and
+           type.id() != type_id::INT8;  // Numba PTX doesn't support int8
   };
 
   CUDF_EXPECTS(is_type_supported_ptx(lhs.type()), "Invalid/Unsupported lhs datatype");
