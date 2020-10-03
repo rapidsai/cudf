@@ -313,6 +313,29 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   return out;
 }
 
+std::unique_ptr<column> make_fixed_width_column_for_output(column_view const& lhs,
+                                                           column_view const& rhs,
+                                                           binary_operator op,
+                                                           data_type output_type,
+                                                           rmm::mr::device_memory_resource* mr,
+                                                           cudaStream_t stream)
+{
+  if (binops::null_using_binop(op)) {
+    return make_fixed_width_column(output_type, rhs.size(), mask_state::ALL_VALID, stream, mr);
+  } else {
+    auto new_mask = bitmask_and(table_view({lhs, rhs}), mr, stream);
+    return make_fixed_width_column(
+      output_type, lhs.size(), std::move(new_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
+  }
+};
+
+int32_t apply_scale_binop(binary_operator op, int32_t left_scale, int32_t right_scale)
+{
+  if (op == binary_operator::MUL) return left_scale + right_scale;
+  if (op == binary_operator::DIV) return left_scale - right_scale;
+  return std::min(left_scale, right_scale);
+}
+
 std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          column_view const& rhs,
                                          binary_operator op,
@@ -325,21 +348,33 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   if (lhs.type().id() == type_id::STRING && rhs.type().id() == type_id::STRING)
     return binops::compiled::binary_operation(lhs, rhs, op, output_type, mr, stream);
 
+  // TODO extract this out into it's own function / cleanup
+  if (lhs.type().id() == type_id::DECIMAL32 || rhs.type().id() == type_id::DECIMAL32 ||
+      lhs.type().id() == type_id::DECIMAL64 || rhs.type().id() == type_id::DECIMAL64) {
+    CUDF_EXPECTS(lhs.type().id() == rhs.type().id(),
+                 "Both columns must be of the same fixed_point type");
+
+    if (lhs.type().scale() == rhs.type().scale()) {
+      auto const scale            = apply_scale_binop(op, lhs.type().scale(), rhs.type().scale());
+      auto const true_output_type = data_type{lhs.type().id(), scale};
+      auto out = make_fixed_width_column_for_output(lhs, rhs, op, true_output_type, mr, stream);
+
+      // Check for 0 sized data
+      if (lhs.size() == 0 || rhs.size() == 0) return out;
+
+      auto out_view = out->mutable_view();
+      binops::jit::binary_operation(out_view, lhs, rhs, op, stream);
+      return out;
+    }
+    // TODO complete other operations
+  }
+
   // Check for datatype
   CUDF_EXPECTS(is_fixed_width(output_type), "Invalid/Unsupported output datatype");
-
   CUDF_EXPECTS(is_fixed_width(lhs.type()), "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(is_fixed_width(rhs.type()), "Invalid/Unsupported rhs datatype");
 
-  std::unique_ptr<column> out = [&] {
-    if (binops::null_using_binop(op)) {
-      return make_fixed_width_column(output_type, rhs.size(), mask_state::ALL_VALID, stream, mr);
-    } else {
-      auto new_mask = bitmask_and(table_view({lhs, rhs}), mr, stream);
-      return make_fixed_width_column(
-        output_type, lhs.size(), std::move(new_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
-    }
-  }();
+  auto out = make_fixed_width_column_for_output(lhs, rhs, op, output_type, mr, stream);
 
   // Check for 0 sized data
   if (lhs.size() == 0 || rhs.size() == 0) return out;
