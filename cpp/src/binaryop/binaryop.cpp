@@ -56,7 +56,7 @@ rmm::device_buffer scalar_col_valid_mask_and(column_view const& col,
                                              cudaStream_t stream,
                                              rmm::mr::device_memory_resource* mr)
 {
-  if (col.size() == 0) { return rmm::device_buffer{0, stream, mr}; }
+  if (col.is_empty()) return rmm::device_buffer{0, stream, mr};
 
   if (not s.is_valid()) {
     return create_null_mask(col.size(), mask_state::ALL_NULL, stream, mr);
@@ -274,7 +274,7 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
       output_type, rhs.size(), std::move(new_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
   }
 
-  if (rhs.size() == 0) { return out; }
+  if (rhs.is_empty()) return out;
 
   auto out_view = out->mutable_view();
   binops::jit::binary_operation(out_view, lhs, rhs, op, stream);
@@ -307,7 +307,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
       output_type, lhs.size(), std::move(new_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
   }
 
-  if (lhs.size() == 0) { return out; }
+  if (lhs.is_empty()) return out;
 
   auto out_view = out->mutable_view();
   binops::jit::binary_operation(out_view, lhs, rhs, op, stream);
@@ -351,7 +351,7 @@ std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
   auto out = make_fixed_width_column_for_output(lhs, rhs, op, output_type, mr, stream);
 
   // Check for 0 sized data
-  if (lhs.size() == 0 || rhs.size() == 0) return out;
+  if (lhs.is_empty() || rhs.is_empty()) return out;
 
   // Adjust columns so they have they same scale
   if (lhs.type().scale() != rhs.type().scale()) {
@@ -386,7 +386,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   auto out = make_fixed_width_column_for_output(lhs, rhs, op, output_type, mr, stream);
 
   // Check for 0 sized data
-  if (lhs.size() == 0 || rhs.size() == 0) return out;
+  if (lhs.is_empty() || rhs.is_empty()) return out;
 
   auto out_view = out->mutable_view();
   binops::jit::binary_operation(out_view, lhs, rhs, op, stream);
@@ -417,7 +417,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
     output_type, lhs.size(), std::move(new_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
 
   // Check for 0 sized data
-  if (lhs.size() == 0 || rhs.size() == 0) { return out; }
+  if (lhs.is_empty() || rhs.is_empty()) return out;
 
   auto out_view = out->mutable_view();
   binops::jit::binary_operation(out_view, lhs, rhs, ptx, stream);
