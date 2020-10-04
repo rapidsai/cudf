@@ -83,6 +83,22 @@ std::unique_ptr<column> set_keys(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
+/**
+ * @brief Create new dictionaries that have keys merged from the input dictionaries.
+ *
+ * This will concatenate the keys for each dictionary and then call `set_keys` on each.
+ * The result is a vector of new dictionaries with a common set of keys.
+ *
+ * @param input Dictionary columns to match keys.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @return New dictionary column.
+ */
+std::vector<std::unique_ptr<column>> match_dictionaries(
+  std::vector<dictionary_column_view> input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0);
+
 }  // namespace detail
 }  // namespace dictionary
 }  // namespace cudf
