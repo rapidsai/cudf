@@ -13,7 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#pragma once
 
+#include <cudf/column/column.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 
@@ -22,39 +24,39 @@ namespace dictionary {
 namespace detail {
 
 /**
- * @copydoc cudf::dictionary::get_index(dictionary_column_view const&,scalar
- * const&,rmm::mr::device_memory_resource*)
+ * @brief Create a new dictionary column by replacing nulls with values
+ * from a second dictionary.
  *
+ * @throw cudf::logic_error if the keys type of both dictionaries do not match.
+ * @throw cudf::logic_error if the column sizes do not match.
+ *
+ * @param input Column with nulls to replace.
+ * @param replacement Column with values to use for replacing.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @return New dictionary column with null rows replaced.
  */
-std::unique_ptr<scalar> get_index(
-  dictionary_column_view const& dictionary,
-  scalar const& key,
+std::unique_ptr<column> replace_nulls(
+  dictionary_column_view const& input,
+  dictionary_column_view const& replacement,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 /**
- * @brief Get the index for a key if it were added to the given dictionary.
+ * @brief Create a new dictionary column by replacing nulls with a
+ * specified scalar.
  *
- * The actual index is returned if the `key` is already part of the dictionary's key set.
+ * @throw cudf::logic_error if the keys type does not match the replacement type.
  *
- * @code{.pseudo}
- * d1 = {["a","c","d"],[2,0,1,0]}
- * idx = get_insert_index(d1,"b")
- * idx is 1
- * @endcode{.pseudo}
- *
- * @throw cudf::logic_error if `key.type() != dictionary.keys().type()`
- *
- * @param dictionary The dictionary to search for the key.
- * @param key The value to search for in the dictionary keyset.
+ * @param input Column with nulls to replace.
+ * @param replacement Value to use for replacing.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
- * @return Numeric scalar index value of the key within the dictionary
+ * @return New dictionary column with null rows replaced.
  */
-std::unique_ptr<scalar> get_insert_index(
-  dictionary_column_view const& dictionary,
-  scalar const& key,
+std::unique_ptr<column> replace_nulls(
+  dictionary_column_view const& input,
+  scalar const& replacement,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
