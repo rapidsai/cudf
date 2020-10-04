@@ -6,9 +6,9 @@ from io import StringIO
 import pandas as pd
 
 import cudf
-from cudf.testing.csv import CSVReader, CSVWriter
-from cudf.testing.main import pythonfuzz
-from cudf.testing.utils import compare_content, run_test
+from cudf._fuzz_testing.csv import CSVReader, CSVWriter
+from cudf._fuzz_testing.main import pythonfuzz
+from cudf._fuzz_testing.utils import compare_content, run_test
 from cudf.tests.utils import assert_eq
 
 
@@ -34,22 +34,26 @@ def csv_writer_test(gdf):
     assert_eq(actual, expected)
 
 
-@pythonfuzz(data_handle=CSVWriter, params={
-    "sep": None,
-    "header": [True, False],
-    "index": [True, False, None],
-})
+@pythonfuzz(
+    data_handle=CSVWriter,
+    params={
+        "sep": None,
+        "header": [True, False],
+        "index": [True, False, None],
+    },
+)
 def csv_writer_test_params(gdf, sep, header, index):
     pdf = gdf.to_pandas()
 
     pd_buffer = pdf.to_csv(sep=sep, header=header, index=index)
-    gd_buffer = gdf.to_csv(sep=sep, header=header, index)
+    gd_buffer = gdf.to_csv(sep=sep, header=header, index=index)
 
     compare_content(pd_buffer, gd_buffer)
 
     actual = cudf.read_csv(StringIO(gd_buffer))
     expected = pd.read_csv(StringIO(pd_buffer))
     assert_eq(actual, expected)
+
 
 if __name__ == "__main__":
     run_test(globals(), sys.argv)
