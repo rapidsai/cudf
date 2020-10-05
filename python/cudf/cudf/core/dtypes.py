@@ -46,7 +46,6 @@ class CategoricalDtype(ExtensionDtype):
         )
 
     def to_pandas(self):
-        breakpoint()
         if self.categories is None:
             categories = None
         else:
@@ -54,7 +53,6 @@ class CategoricalDtype(ExtensionDtype):
         return pd.CategoricalDtype(categories=categories, ordered=self.ordered)
 
     def _init_categories(self, categories):
-        breakpoint()
         if categories is None:
             return categories
         if len(categories) == 0:
