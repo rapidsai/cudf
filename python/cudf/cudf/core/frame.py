@@ -1065,7 +1065,7 @@ class Frame(libcudf.table.Table):
             frame._copy_categories(self, include_index=keep_index)
 
         if npartitions:
-            for i in range(npartitions - len(result)):
+            for _ in range(npartitions - len(result)):
                 result.append(self._empty_like(keep_index))
 
         return result
@@ -1339,7 +1339,7 @@ class Frame(libcudf.table.Table):
 
         copy_data = self._data.copy(deep=True)
 
-        for name, col in copy_data.items():
+        for name in copy_data.keys():
             if name in value and value[name] is not None:
                 copy_data[name] = copy_data[name].fillna(value[name],)
 

@@ -464,7 +464,7 @@ def melt(
 
     # Step 2: add variable
     var_cols = []
-    for i, var in enumerate(value_vars):
+    for i, _ in enumerate(value_vars):
         var_cols.append(
             cudf.Series(cudf.core.column.full(N, i, dtype=np.int8))
         )
@@ -500,7 +500,7 @@ def get_dummies(
     prefix_sep="_",
     dummy_na=False,
     columns=None,
-    cats={},
+    cats=None,
     sparse=False,
     drop_first=False,
     dtype="uint8",
@@ -569,6 +569,8 @@ def get_dummies(
     2      0      0      1       0
     3      0      0      0       1
     """
+    if cats is None:
+        cats = {}
     if sparse:
         raise NotImplementedError("sparse is not supported yet")
 

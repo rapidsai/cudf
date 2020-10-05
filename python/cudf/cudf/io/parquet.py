@@ -98,7 +98,7 @@ def write_to_dataset(
             raise ValueError("No data left to save outside partition columns")
 
         #  Loop through the partition groups
-        for i, sub_df in enumerate(
+        for _, sub_df in enumerate(
             _get_partition_groups(
                 df, partition_cols, preserve_index=preserve_index
             )
@@ -177,7 +177,7 @@ def read_parquet(
     columns=None,
     filters=None,
     row_groups=None,
-    skip_rows=None,
+    skiprows=None,
     num_rows=None,
     strings_to_categorical=False,
     use_pandas_metadata=True,
@@ -244,7 +244,7 @@ def read_parquet(
             filepaths_or_buffers,
             columns=columns,
             row_groups=row_groups,
-            skip_rows=skip_rows,
+            skiprows=skiprows,
             num_rows=num_rows,
             strings_to_categorical=strings_to_categorical,
             use_pandas_metadata=use_pandas_metadata,
