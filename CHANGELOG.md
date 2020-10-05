@@ -112,6 +112,7 @@
 - PR #6383 Removed `move.pxd`, use standard library `move`
 - PR #6400 Removed unused variables
 - PR #6407 Add RMM_LOGGING_LEVEL flag to Java docker build
+- PR #6425 Factor out csv parse_options creation to pure function
 
 ## Bug Fixes
 
