@@ -928,7 +928,7 @@ def make_valid_scalar_add_data():
     # to any string, we may add any other string
     valid |= {("str", "str")}
 
-    return valid
+    return sorted(list(valid))
 
 
 def make_invalid_scalar_add_data():
@@ -949,7 +949,7 @@ def make_invalid_scalar_add_data():
     # can not add a timedelta to a float
     invalid |= set(product(FLOAT_TYPES, TIMEDELTA_TYPES))
 
-    return invalid
+    return sorted(list(invalid))
 
 
 @pytest.mark.parametrize("dtype_l,dtype_r", make_valid_scalar_add_data())
@@ -1017,7 +1017,7 @@ def make_scalar_difference_data():
         product(BOOL_TYPES, INTEGER_TYPES | FLOAT_TYPES | TIMEDELTA_TYPES)
     )
 
-    return valid
+    return sorted(list(valid))
 
 
 def make_scalar_difference_data_invalid():
@@ -1038,7 +1038,7 @@ def make_scalar_difference_data_invalid():
     # we can't subtract a datetime or bool from a bool
     invalid |= set(product(BOOL_TYPES, BOOL_TYPES | DATETIME_TYPES))
 
-    return invalid
+    return sorted(list(invalid))
 
 
 @pytest.mark.parametrize("dtype_l,dtype_r", make_scalar_difference_data())
@@ -1090,7 +1090,7 @@ def make_scalar_product_data():
         product(FLOAT_TYPES, INTEGER_TYPES | FLOAT_TYPES | BOOL_TYPES)
     )
 
-    return valid
+    return sorted(list(valid))
 
 
 def make_scalar_product_data_invalid():
@@ -1124,7 +1124,7 @@ def make_scalar_product_data_invalid():
     # can't multiply timedeltas by timedeltas
     invalid |= set(product(TIMEDELTA_TYPES, TIMEDELTA_TYPES))
 
-    return invalid
+    return sorted(list(invalid))
 
 
 @pytest.mark.parametrize("dtype_l,dtype_r", make_scalar_product_data())
@@ -1174,7 +1174,7 @@ def make_scalar_floordiv_data():
     # we can divide bools by ints, floats or bools
     valid |= set(product(BOOL_TYPES, INTEGER_TYPES | FLOAT_TYPES | BOOL_TYPES))
 
-    return valid
+    return sorted(list(valid))
 
 
 def make_scalar_floordiv_data_invalid():
@@ -1203,7 +1203,7 @@ def make_scalar_floordiv_data_invalid():
     # we can't divide timedeltas into bools, or datetimes
     invalid |= set(product(TIMEDELTA_TYPES, BOOL_TYPES | DATETIME_TYPES))
 
-    return invalid
+    return sorted(list(invalid))
 
 
 @pytest.mark.parametrize("dtype_l,dtype_r", make_scalar_floordiv_data())
@@ -1251,7 +1251,7 @@ def make_scalar_truediv_data():
     # we can true divide timedeltas by ints floats or timedeltas
     valid |= set(product(TIMEDELTA_TYPES, INTEGER_TYPES | TIMEDELTA_TYPES))
 
-    return valid
+    return sorted(list(valid))
 
 
 def make_scalar_truediv_data_invalid():
@@ -1283,7 +1283,7 @@ def make_scalar_truediv_data_invalid():
         product(TIMEDELTA_TYPES, DATETIME_TYPES | BOOL_TYPES | FLOAT_TYPES)
     )
 
-    return invalid
+    return sorted(list(invalid))
 
 
 @pytest.mark.parametrize("dtype_l,dtype_r", make_scalar_truediv_data())
@@ -1328,7 +1328,7 @@ def make_scalar_remainder_data():
     # can mod timedeltas by other timedeltas
     valid |= set(product(TIMEDELTA_TYPES, TIMEDELTA_TYPES))
 
-    return valid
+    return sorted(list(valid))
 
 
 def make_scalar_remainder_data_invalid():
@@ -1356,7 +1356,7 @@ def make_scalar_remainder_data_invalid():
     # timedeltas cant mod with datetimes
     invalid |= set(product(TIMEDELTA_TYPES, DATETIME_TYPES))
 
-    return invalid
+    return sorted(list(invalid))
 
 
 @pytest.mark.parametrize("dtype_l,dtype_r", make_scalar_remainder_data())
@@ -1391,7 +1391,7 @@ def test_scalar_remainder_invalid(dtype_l, dtype_r):
 
 def make_scalar_power_data():
     # only numeric values form valid operands for power
-    return set(
+    return sorted(
         product(
             INTEGER_TYPES | FLOAT_TYPES | BOOL_TYPES,
             INTEGER_TYPES | FLOAT_TYPES | BOOL_TYPES,
@@ -1427,7 +1427,7 @@ def make_scalar_power_data_invalid():
         )
     )
 
-    return invalid
+    return sorted(list(invalid))
 
 
 @pytest.mark.parametrize("dtype_l,dtype_r", make_scalar_power_data())
