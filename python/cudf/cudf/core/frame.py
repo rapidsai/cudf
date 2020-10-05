@@ -474,7 +474,6 @@ class Frame(libcudf.table.Table):
             )
         )
         result._postprocess_columns(self)
-        result._copy_struct_names(self)
         if keep_index and self._index is not None:
             result._index.names = self._index.names
         return result
@@ -2159,9 +2158,7 @@ class Frame(libcudf.table.Table):
                     (cudf.core.index.CategoricalIndex, cudf.MultiIndex),
                 )
             ):
-                self._index._postprocess_columns(
-                    other._index, include_index=False
-                )
+                self._index._copy_categories(other._index, include_index=False)
                 # When other._index is a CategoricalIndex, there is
                 # possibility that corresposing self._index be GenericIndex
                 # with codes. So to update even the class signature, we
