@@ -1051,7 +1051,7 @@ def test_scalar_difference(dtype_l, dtype_r):
     lval_gpu = cudf.Scalar(test_value, dtype=dtype_l)
     rval_gpu = cudf.Scalar(test_value, dtype=dtype_r)
 
-    expect = np.subtract(lval_host, rval_host)
+    expect = lval_host - rval_host
     got = lval_gpu - rval_gpu
 
     assert expect == got.value
@@ -1137,7 +1137,7 @@ def test_scalar_product(dtype_l, dtype_r):
     lval_gpu = cudf.Scalar(test_value, dtype=dtype_l)
     rval_gpu = cudf.Scalar(test_value, dtype=dtype_r)
 
-    expect = np.multiply(lval_host, rval_host)
+    expect = lval_host * rval_host
     got = lval_gpu * rval_gpu
 
     assert expect == got.value
@@ -1216,7 +1216,7 @@ def test_scalar_floordiv(dtype_l, dtype_r):
     lval_gpu = cudf.Scalar(test_value, dtype=dtype_l)
     rval_gpu = cudf.Scalar(test_value, dtype=dtype_r)
 
-    expect = np.floor_divide(lval_host, rval_host)
+    expect = lval_host // rval_host
     got = lval_gpu // rval_gpu
 
     assert expect == got.value
@@ -1369,7 +1369,7 @@ def test_scalar_remainder(dtype_l, dtype_r):
     lval_gpu = cudf.Scalar(test_value, dtype=dtype_l)
     rval_gpu = cudf.Scalar(test_value, dtype=dtype_r)
 
-    expect = np.remainder(lval_host, rval_host)
+    expect = lval_host % rval_host
     got = lval_gpu % rval_gpu
 
     assert expect == got.value
@@ -1440,7 +1440,7 @@ def test_scalar_power(dtype_l, dtype_r):
     lval_gpu = cudf.Scalar(test_value, dtype=dtype_l)
     rval_gpu = cudf.Scalar(test_value, dtype=dtype_r)
 
-    expect = np.power(lval_host, rval_host)
+    expect = lval_host ** rval_host
     got = lval_gpu ** rval_gpu
 
     assert expect == got.value
