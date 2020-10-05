@@ -20,6 +20,10 @@
 #include <string>
 #include <vector>
 
+#include <cudf/utilities/span.hpp>
+
+using cudf::detail::host_span;
+
 namespace cudf {
 namespace io {
 enum {
@@ -36,17 +40,15 @@ enum {
   IO_UNCOMP_STREAM_TYPE_ZSTD    = 10,
 };
 
-std::vector<char> io_uncompress_single_h2d(const void* src, size_t src_size, int stream_type);
+std::vector<char> io_uncompress_single_h2d(void const* src, size_t src_size, int stream_type);
 
-std::vector<char> getUncompressedHostData(const char* h_data,
-                                          size_t num_bytes,
-                                          const std::string& compression);
+std::vector<char> get_uncompressed_data(host_span<char const> data, std::string const& compression);
 
 class HostDecompressor {
  public:
   virtual size_t Decompress(uint8_t* dstBytes,
                             size_t dstLen,
-                            const uint8_t* srcBytes,
+                            uint8_t const* srcBytes,
                             size_t srcLen) = 0;
   virtual ~HostDecompressor() {}
 
