@@ -688,6 +688,61 @@ std::vector<column_buffer> reader::impl::decode_data(std::vector<data_type> cons
   return out_buffers;
 }
 
+parse_options make_parse_options(csv_reader_options const &reader_opts)
+{
+  auto parse_opts = parse_options{};
+
+  if (reader_opts.is_enabled_delim_whitespace()) {
+    parse_opts.delimiter       = ' ';
+    parse_opts.multi_delimiter = true;
+  } else {
+    parse_opts.delimiter       = reader_opts.get_delimiter();
+    parse_opts.multi_delimiter = false;
+  }
+
+  parse_opts.terminator = reader_opts.get_lineterminator();
+
+  if (reader_opts.get_quotechar() != '\0' && reader_opts.get_quoting() != quote_style::NONE) {
+    parse_opts.quotechar   = reader_opts.get_quotechar();
+    parse_opts.keepquotes  = false;
+    parse_opts.doublequote = reader_opts.is_enabled_doublequote();
+  } else {
+    parse_opts.quotechar   = '\0';
+    parse_opts.keepquotes  = true;
+    parse_opts.doublequote = false;
+  }
+
+  parse_opts.skipblanklines = reader_opts.is_enabled_skip_blank_lines();
+  parse_opts.comment        = reader_opts.get_comment();
+  parse_opts.dayfirst       = reader_opts.is_enabled_dayfirst();
+  parse_opts.decimal        = reader_opts.get_decimal();
+  parse_opts.thousands      = reader_opts.get_thousands();
+
+  CUDF_EXPECTS(parse_opts.decimal != parse_opts.delimiter,
+               "Decimal point cannot be the same as the delimiter");
+  CUDF_EXPECTS(parse_opts.thousands != parse_opts.delimiter,
+               "Thousands separator cannot be the same as the delimiter");
+
+  // Handle user-defined false values, whereby field data is substituted with a
+  // boolean true or numeric `1` value
+  if (reader_opts.get_true_values().size() != 0) {
+    parse_opts.trie_true = createSerializedTrie(reader_opts.get_true_values());
+  }
+
+  // Handle user-defined false values, whereby field data is substituted with a
+  // boolean false or numeric `0` value
+  if (reader_opts.get_false_values().size() != 0) {
+    parse_opts.trie_false = createSerializedTrie(reader_opts.get_false_values());
+  }
+
+  // Handle user-defined N/A values, whereby field data is treated as null
+  if (reader_opts.get_na_values().size() != 0) {
+    parse_opts.trie_na = createSerializedTrie(reader_opts.get_na_values());
+  }
+
+  return parse_opts;
+}
+
 reader::impl::impl(std::unique_ptr<datasource> source,
                    std::string filepath,
                    csv_reader_options const &options,
@@ -697,53 +752,12 @@ reader::impl::impl(std::unique_ptr<datasource> source,
   num_actual_cols_ = opts_.get_names().size();
   num_active_cols_ = num_actual_cols_;
 
-  if (opts_.is_enabled_delim_whitespace()) {
-    opts.delimiter       = ' ';
-    opts.multi_delimiter = true;
-  } else {
-    opts.delimiter       = opts_.get_delimiter();
-    opts.multi_delimiter = false;
-  }
-  opts.terminator = opts_.get_lineterminator();
-  if (opts_.get_quotechar() != '\0' && opts_.get_quoting() != quote_style::NONE) {
-    opts.quotechar   = opts_.get_quotechar();
-    opts.keepquotes  = false;
-    opts.doublequote = opts_.is_enabled_doublequote();
-  } else {
-    opts.quotechar   = '\0';
-    opts.keepquotes  = true;
-    opts.doublequote = false;
-  }
-  opts.skipblanklines = opts_.is_enabled_skip_blank_lines();
-  opts.comment        = opts_.get_comment();
-  opts.dayfirst       = opts_.is_enabled_dayfirst();
-  opts.decimal        = opts_.get_decimal();
-  opts.thousands      = opts_.get_thousands();
-  CUDF_EXPECTS(opts.decimal != opts.delimiter, "Decimal point cannot be the same as the delimiter");
-  CUDF_EXPECTS(opts.thousands != opts.delimiter,
-               "Thousands separator cannot be the same as the delimiter");
-
   compression_type_ =
     infer_compression_type(opts_.get_compression(),
                            filepath,
                            {{"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}});
 
-  // Handle user-defined false values, whereby field data is substituted with a
-  // boolean true or numeric `1` value
-  if (opts_.get_true_values().size() != 0) {
-    opts.trie_true = createSerializedTrie(opts_.get_true_values());
-  }
-
-  // Handle user-defined false values, whereby field data is substituted with a
-  // boolean false or numeric `0` value
-  if (opts_.get_false_values().size() != 0) {
-    opts.trie_false = createSerializedTrie(opts_.get_false_values());
-  }
-
-  // Handle user-defined N/A values, whereby field data is treated as null
-  if (opts_.get_na_values().size() != 0) {
-    opts.trie_na = createSerializedTrie(opts_.get_na_values());
-  }
+  opts = make_parse_options(options);
 }
 
 // Forward to implementation
