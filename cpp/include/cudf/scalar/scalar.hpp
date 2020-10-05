@@ -259,11 +259,13 @@ class numeric_scalar : public detail::fixed_width_scalar<T> {
  * @tparam T the data type of the fixed_point number
  */
 template <typename T>
-class fixed_point_scalar : public detail::fixed_width_scalar<T> {
+class fixed_point_scalar : public scalar {
   static_assert(is_fixed_point<T>(), "Unexpected non-fixed_point type.");
 
  public:
-  fixed_point_scalar()                                = default;
+  using rep_type = typename T::representation_type;
+
+  fixed_point_scalar() : scalar(data_type(type_to_id<T>())){};
   ~fixed_point_scalar()                               = default;
   fixed_point_scalar(fixed_point_scalar&& other)      = default;
   fixed_point_scalar(fixed_point_scalar const& other) = default;
@@ -278,11 +280,13 @@ class fixed_point_scalar : public detail::fixed_width_scalar<T> {
    * @param[in] stream CUDA stream used for device memory operations.
    * @param[in] mr Device memory resource to use for device memory allocation
    */
-  fixed_point_scalar(T value,
+  fixed_point_scalar(rep_type value,
+                     numeric::scale_type scale,
                      bool is_valid                       = true,
                      cudaStream_t stream                 = 0,
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-    : detail::fixed_width_scalar<T>(value, is_valid, stream, mr)
+    : scalar{data_type{type_to_id<T>(), static_cast<int32_t>(scale)}, is_valid, stream, mr},
+      _data{value}
   {
   }
 
@@ -294,13 +298,34 @@ class fixed_point_scalar : public detail::fixed_width_scalar<T> {
    * @param[in] stream CUDA stream used for device memory operations.
    * @param[in] mr Device memory resource to use for device memory allocation
    */
-  fixed_point_scalar(rmm::device_scalar<T>&& data,
+  fixed_point_scalar(rmm::device_scalar<rep_type>&& data,
                      bool is_valid                       = true,
                      cudaStream_t stream                 = 0,
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-    : detail::fixed_width_scalar<T>(std::forward<rmm::device_scalar<T>>(data), is_valid, stream, mr)
+    : scalar{data_type{type_to_id<T>()}, is_valid, stream, mr},  // note that scale is ignored here
+      _data{std::forward<rmm::device_scalar<rep_type>>(data)}
   {
   }
+
+  /**
+   * @brief Get the value of the scalar
+   *
+   * @param stream CUDA stream used for device memory operations.
+   */
+  rep_type value(cudaStream_t stream = 0) const { return _data.value(stream); }
+
+  /**
+   * @brief Returns a raw pointer to the value in device memory
+   */
+  rep_type* data() { return _data.data(); }
+
+  /**
+   * @brief Returns a const raw pointer to the value in device memory
+   */
+  rep_type const* data() const { return _data.data(); }
+
+ protected:
+  rmm::device_scalar<rep_type> _data{};  ///< device memory containing the value
 };
 
 /**
