@@ -27,6 +27,8 @@
 #include "join_common_utils.hpp"
 #include "join_kernels.cuh"
 
+#include <limits>
+
 namespace cudf {
 namespace detail {
 /**
@@ -39,6 +41,7 @@ namespace detail {
  * output size by using only a subset of the rows in the probe table.
  *
  * @throw cudf::logic_error if JoinKind is not INNER_JOIN or LEFT_JOIN
+ * @throw cudf::logic_error if the estimated size overflows cudf::size_type
  *
  * @tparam JoinKind The type of join to be performed
  * @tparam multimap_type The type of the hash table
@@ -59,6 +62,8 @@ size_type estimate_join_output_size(table_device_view build_table,
                                     null_equality compare_nulls,
                                     cudaStream_t stream)
 {
+  using estimate_size_type = int64_t;  // use 64-bit size so we can detect overflow
+
   const size_type build_table_num_rows{build_table.num_rows()};
   const size_type probe_table_num_rows{probe_table.num_rows()};
 
@@ -89,8 +94,8 @@ size_type estimate_join_output_size(table_device_view build_table,
   if (probe_to_build_ratio > MAX_RATIO) { sample_probe_num_rows = build_table_num_rows; }
 
   // Allocate storage for the counter used to get the size of the join output
-  size_type h_size_estimate{0};
-  rmm::device_scalar<size_type> size_estimate(0, stream);
+  estimate_size_type h_size_estimate{0};
+  rmm::device_scalar<estimate_size_type> size_estimate(0, stream);
 
   CHECK_CUDA(stream);
 
@@ -137,6 +142,11 @@ size_type estimate_join_output_size(table_device_view build_table,
       h_size_estimate = size_estimate.value();
     }
 
+    // Detect overflow
+    CUDF_EXPECTS(h_size_estimate <
+                   static_cast<estimate_size_type>(std::numeric_limits<cudf::size_type>::max()),
+                 "Maximum join output size exceeded");
+
     // If the size estimate is non-zero, then we have a valid estimate and can break
     // If sample_probe_num_rows >= probe_table_num_rows, then we've sampled the entire
     // probe table, in which case the estimate is exact and we can break
@@ -154,7 +164,7 @@ size_type estimate_join_output_size(table_device_view build_table,
 
   } while (true);
 
-  return h_size_estimate;
+  return static_cast<cudf::size_type>(h_size_estimate);
 }
 
 /**

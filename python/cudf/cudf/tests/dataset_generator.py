@@ -72,9 +72,11 @@ class Parameters:
     """
 
     def __init__(
-        self, num_rows=2048, column_parameters=[], seed=None,
+        self, num_rows=2048, column_parameters=None, seed=None,
     ):
         self.num_rows = num_rows
+        if column_parameters is None:
+            column_parameters = []
         self.column_parameters = column_parameters
         self.seed = seed
 
@@ -168,10 +170,7 @@ def _generate_column(column_params, num_rows):
 
 
 def generate(
-    path,
-    parameters,
-    format={"name": "parquet", "row_group_size": 64},
-    use_threads=True,
+    path, parameters, format=None, use_threads=True,
 ):
     """
     Generate dataset using given parameters and write to given format
@@ -185,7 +184,8 @@ def generate(
     format : Dict
         Format to write
     """
-
+    if format is None:
+        format = {"name": "parquet", "row_group_size": 64}
     df = get_dataframe(parameters, use_threads)
 
     # Write
