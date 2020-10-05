@@ -4,6 +4,7 @@ from libcpp cimport bool
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
+from libcpp.utility cimport move
 
 import cudf
 
@@ -37,7 +38,6 @@ from cudf._lib.cpp.io.types cimport (
     table_with_metadata
 )
 from cudf._lib.io.utils cimport make_source_info, make_sink_info
-from cudf._lib.move cimport move
 from cudf._lib.table cimport Table
 from cudf._lib.cpp.table.table_view cimport table_view
 

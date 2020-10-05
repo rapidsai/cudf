@@ -2936,7 +2936,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   /**
    * Native method to normalize the various bitwise representations of NAN and zero.
    * 
-   * All occurences of -NaN are converted to NaN. Likewise, all -0.0 are converted to 0.0.
+   * All occurrences of -NaN are converted to NaN. Likewise, all -0.0 are converted to 0.0.
    * 
    * @param viewHandle `long` representation of pointer to input column_view.
    * @return Pointer to a new `column` of normalized values.
