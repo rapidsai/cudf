@@ -53,7 +53,7 @@ class ListColumn(ColumnBase):
     def to_arrow(self):
         offsets = self.offsets.to_arrow()
         elements = self.elements.to_arrow()
-        pa_type = self.dtype.to_arrow()
+        pa_type = pa.list_(elements.type)
 
         if len(elements) == elements.null_count:
             elements = pa.NullArray.from_pandas([None] * len(elements))
