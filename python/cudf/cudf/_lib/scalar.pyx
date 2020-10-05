@@ -152,7 +152,7 @@ cdef class Scalar:
             self._host_value_current = True
             return result
 
-    def sync(self):
+    def _sync(self):
         """
         If the cache is not synched, copy either the device or host value
         to the host or device respectively. If cache is valid, do nothing
