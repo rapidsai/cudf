@@ -4,6 +4,8 @@
 
 ## Improvements
 
+- PR #6431 Add dictionary support to `cudf::upper_bound` and `cudf::lower_bound`
+
 ## Bug Fixes
 
 # cuDF 0.16.0 (Date TBD)

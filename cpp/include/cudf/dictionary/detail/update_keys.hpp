@@ -17,6 +17,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/table/table_view.hpp>
 
 namespace cudf {
 namespace dictionary {
@@ -96,6 +97,23 @@ std::unique_ptr<column> set_keys(
  */
 std::vector<std::unique_ptr<column>> match_dictionaries(
   std::vector<dictionary_column_view> input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0);
+
+/**
+ * @brief Create new dictionaries that have keys merged from dictionary columns
+ * found in the provided tables.
+ *
+ * The result includes a vector of new dictionary columns along with a
+ * vector of table_views with appropriately updated column_views.
+ *
+ * @param input Vector of cudf::table_views in which to match dictionary columns.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @return New dictionary columns and updated cudf::table_views.
+ */
+std::pair<std::vector<std::unique_ptr<column>>, std::vector<table_view>> match_dictionaries(
+  std::vector<table_view> tables,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
