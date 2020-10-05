@@ -49,11 +49,10 @@ class Scalar(libcudf.scalar.Scalar):
 
         Parameters
         ----------
-        value : Python, NumPy Scalar, or cuDF Scalar
+        value : Python Scalar, NumPy Scalar, or cuDF Scalar
             The scalar value to be converted to a GPU backed scalar object
         dtype : np.dtype or string specifier
             The data type
-
         """
         super().__init__(value, dtype=dtype)
 
@@ -155,7 +154,7 @@ class Scalar(libcudf.scalar.Scalar):
         return f"Scalar({self.value}, dtype={self.dtype})"
 
     def _binop_result_dtype_or_error(self, other, op):
-        if op in ["__eq__", "__ne__", "__lt__", "__gt__", "__le__", "__ge__"]:
+        if op in {"__eq__", "__ne__", "__lt__", "__gt__", "__le__", "__ge__"}:
             return np.bool
 
         out_dtype = get_allowed_combinations_for_operator(
