@@ -166,8 +166,9 @@ std::map<std::string, std::vector<int32_t>> kafka_consumer::list_topics(
     RdKafka::Metadata *md;
     CUDF_EXPECTS(
       RdKafka::ERR_NO_ERROR ==
-        consumer->metadata(specific_topic.empty() ? true : false, spec_topic, &md, default_timeout),
+        consumer->metadata(spec_topic == nullptr ? true : false, spec_topic, &md, default_timeout),
       "Failed to list_topics in Kafka broker");
+    delete spec_topic;
     return std::unique_ptr<RdKafka::Metadata>{md};
   }();
   std::map<std::string, std::vector<int32_t>> topic_parts;
