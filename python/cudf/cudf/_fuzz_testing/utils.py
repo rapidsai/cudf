@@ -1,9 +1,12 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
-
 import random
 
+import numpy as np
 import pandas as pd
 import pyarrow as pa
+
+import cudf
+from cudf.tests.utils import assert_eq
 
 pyarrow_dtypes_to_pandas_dtypes = {
     pa.uint8(): pd.UInt8Dtype(),
@@ -16,6 +19,19 @@ pyarrow_dtypes_to_pandas_dtypes = {
     pa.int64(): pd.Int64Dtype(),
     pa.bool_(): pd.BooleanDtype(),
     pa.string(): pd.StringDtype(),
+}
+
+pandas_dtypes_to_cudf_dtypes = {
+    pd.UInt8Dtype(): np.dtype("uint8"),
+    pd.UInt16Dtype(): np.dtype("uint16"),
+    pd.UInt32Dtype(): np.dtype("uint32"),
+    pd.UInt64Dtype(): np.dtype("uint64"),
+    pd.Int8Dtype(): np.dtype("int8"),
+    pd.Int16Dtype(): np.dtype("int16"),
+    pd.Int32Dtype(): np.dtype("int32"),
+    pd.Int64Dtype(): np.dtype("int64"),
+    pd.BooleanDtype(): np.dtype("bool_"),
+    pd.StringDtype(): np.dtype("object"),
 }
 
 
@@ -90,6 +106,18 @@ def pyarrow_to_pandas(table):
     return df
 
 
+def cudf_to_pandas(df):
+    pdf = df.to_pandas()
+    for col in pdf.columns:
+        if df[col].dtype in cudf.utils.dtypes.cudf_dtypes_to_pandas_dtypes:
+            pdf[col] = pdf[col].astype(
+                cudf.utils.dtypes.cudf_dtypes_to_pandas_dtypes[df[col].dtype]
+            )
+        elif cudf.utils.dtypes.is_categorical_dtype(df[col].dtype):
+            pdf[col] = pdf[col].astyep(pd.CategoricalDtype())
+    return pdf
+
+
 def compare_content(a, b):
     if a == b:
         return
@@ -97,3 +125,18 @@ def compare_content(a, b):
         raise ValueError(
             f"Contents of two files are different:\n left: {a} \n right: {b}"
         )
+
+
+def compare_dataframe(left, right, nullable=True):
+    if nullable and isinstance(left, cudf.DataFrame):
+        left = cudf_to_pandas(left)
+    if nullable and isinstance(right, cudf.DataFrame):
+        right = cudf_to_pandas(right)
+
+    return assert_eq(
+        left,
+        right,
+        check_index_type=False
+        if (len(left.index) == 0 and len(right.index) == 0)
+        else True,
+    )
