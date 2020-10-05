@@ -48,9 +48,6 @@ class CSVReader(IOFuzz):
             seed = random.randint(0, 2 ** 32 - 1)
             random.seed(seed)
             dtypes_list = list(cudf.utils.dtypes.ALL_TYPES)
-            # - {'str'}
-            # - cudf.utils.dtypes.TIMEDELTA_TYPES
-            # - cudf.utils.dtypes.DATETIME_TYPES)
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
                 self, dtypes_list
             )
@@ -150,12 +147,6 @@ class CSVWriter(IOFuzz):
             seed = random.randint(0, 2 ** 32 - 1)
             random.seed(seed)
             dtypes_list = list(cudf.utils.dtypes.ALL_TYPES)
-            #     - {'str'}
-            #     # TODO: Remove after following bug:
-            #     # https://github.com/rapidsai/cudf/issues/6227 is fixed
-            #     - cudf.utils.dtypes.DATETIME_TYPES
-            #     - cudf.utils.dtypes.TIMEDELTA_TYPES
-            # )
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
                 self, dtypes_list
             )
