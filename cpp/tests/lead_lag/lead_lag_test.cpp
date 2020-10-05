@@ -418,9 +418,9 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithNoGrouping)
     fixed_width_column_wrapper<T>{{99, 99, 0, 1, -1, 3}, {1, 1, 1, 1, 0, 1}}.release()->view());
 }
 
-TEST_F(LeadLagWindowTest, TestLeadLagWithAllNullInput)
+TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithAllNullInput)
 {
-  using T = int32_t;
+  using T = TypeParam;
 
   auto const input_col = fixed_width_column_wrapper<T>{
     {0, 1, 2, 3, 4, 5, 0, 10, 20, 30, 40, 50}, make_counting_transform_iterator(0, [](auto i) {
@@ -466,6 +466,83 @@ TEST_F(LeadLagWindowTest, TestLeadLagWithAllNullInput)
                                   {1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0}}
       .release()
       ->view());
+}
+
+TYPED_TEST(TypedLeadLagWindowTest, DefaultValuesWithoutLeadLag)
+{
+  // Test that passing default values for window-functions
+  // other than lead/lag lead to cudf::logic_error.
+
+  using T = TypeParam;
+
+  auto const input_col = fixed_width_column_wrapper<T>{
+    {0, 1, 2, 3, 4, 5},
+    make_counting_transform_iterator(0, [](auto i) {
+      return true;
+    })}.release();
+  auto const input_size   = input_col->size();
+  auto const grouping_key = fixed_width_column_wrapper<int32_t>{0, 0, 0, 0, 0, 0};
+  auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grouping_key}};
+
+  auto const default_value =
+    cudf::make_fixed_width_scalar(detail::fixed_width_type_converter<int32_t, T>{}(99));
+  auto const default_outputs = cudf::make_column_from_scalar(*default_value, input_col->size());
+
+  auto const preceding   = 4;
+  auto const following   = 3;
+  auto const min_periods = 1;
+
+  auto const assert_aggregation_fails = [&](auto && aggr) {
+    EXPECT_THROW(
+      cudf::grouped_rolling_window(
+        grouping_keys,
+        input_col->view(),
+        default_outputs->view(),
+        preceding,
+        following,
+        min_periods,
+        cudf::make_count_aggregation()
+      ),
+      cudf::logic_error
+    );
+  };
+
+  auto aggs = {cudf::make_count_aggregation(), cudf::make_min_aggregation()};
+  std::for_each(aggs.begin(), aggs.end(), [&](auto& agg) { assert_aggregation_fails(std::move(agg)); });
+}
+
+TEST_F(LeadLagWindowTest, LeadLagWithoutFixedWidthInput)
+{
+  // Check that Lead/Lag aren't supported for non-fixed-width types.
+
+  auto const input_col = strings_column_wrapper{
+    {"0", "1", "2", "3", "4", "5"},
+    make_counting_transform_iterator(0, [](auto i) {
+      return false;
+    })}.release();
+  auto const input_size   = input_col->size();
+  auto const grouping_key = fixed_width_column_wrapper<int32_t>{0, 0, 0, 0, 0, 0};
+  auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grouping_key}};
+
+  auto const default_value = cudf::make_string_scalar("99");
+  auto const default_outputs = cudf::make_column_from_scalar(*default_value, input_col->size());
+
+  auto const preceding   = 4;
+  auto const following   = 3;
+  auto const min_periods = 1;
+
+  EXPECT_THROW(
+    cudf::grouped_rolling_window(
+      grouping_keys,
+      input_col->view(),
+      default_outputs->view(),
+      preceding,
+      following,
+      min_periods,
+      cudf::make_lead_aggregation(4)
+    ),
+    cudf::logic_error
+  );
 }
 
 CUDF_TEST_PROGRAM_MAIN()
