@@ -172,6 +172,7 @@
 - PR #6408 Avoid empty offset list in hash_partition output
 - PR #6402 Update JNI build to pull fixed nvcomp commit
 - PR #6410 Fix uses of dangerous default values in Python code
+- PR #6424 Check for null data in close for ColumnBuilder
 
 # cuDF 0.15.0 (26 Aug 2020)
 
