@@ -1230,7 +1230,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_normalizeNANsAndZeros(J
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_hash(JNIEnv *env,
                                                                   jobject j_object,
                                                                   jlongArray column_handles,
-                                                                  jint hash_function_id) {
+                                                                  jint hash_function_id,
+                                                                  jint null_config) {
   JNI_NULL_CHECK(env, column_handles, "array of column handles is null", 0);
 
   try {
@@ -1242,6 +1243,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_hash(JNIEnv *env,
     cudf::table_view *input_table = new cudf::table_view(column_views);
 
     std::unique_ptr<cudf::column> result = cudf::hash(*input_table, static_cast<cudf::hash_id>(hash_function_id));
+    if(null_config == 1) {
+      result->set_null_mask(bitmask_and(*input_table, rmm::mr::get_current_device_resource()));
+    }
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);

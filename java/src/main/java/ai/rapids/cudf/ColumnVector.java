@@ -973,10 +973,11 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   /**
    * Create a new vector containing the MD5 hash of each row in the table.
    *
+   * @param nullConfig null hashing policy, a 1 represents an and of each column per row.
    * @param columns array of columns to hash, must have identical number of rows.
    * @return the new ColumnVector of 32 character hex strings representing each row's hash value.
    */
-  public static ColumnVector md5Hash(ColumnVector... columns) {
+  public static ColumnVector md5Hash(int nullConfig, ColumnVector... columns) {
     if (columns.length < 1) {
       throw new IllegalArgumentException("MD5 hashing requires at least 1 column of input");
     }
@@ -988,10 +989,20 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       assert columns[i].getRowCount() == size : "Row count mismatch, all columns must have the same number of rows";
       assert !columns[i].getType().isDurationType() : "Unsupported column type Duration";
       assert !columns[i].getType().isTimestamp() : "Unsupported column type Timestamp";
+      if(column.getType() == DType.LIST) {
+        assert columns[i].getNumChildren() == 2 : "Unrecognized list column format";
+        ColumnViewAccess listDataColumn = getChildColumnViewAccess(1);
+        assert !listDataColumn.getDataType().isDurationType() : "Unsupported column type List of Durations";
+        assert !listDataColumn.getDataType().isTimestamp() : "Unsupported column type List of Timestamp";
+        assert listDataColumn.getDataType() != DType.LIST : "Unsupported column type List of Lists";
+        listDataColumn.close();
+      } else {
+        assert !columns[i].getType().isNestedType() : "Unsupported nested type column";
+      }
       column_views[i] = columns[i].getNativeView();
     }
 
-    return new ColumnVector(hash(column_views, HashType.HASH_MD5.getNativeId()));
+    return new ColumnVector(hash(column_views, HashType.HASH_MD5.getNativeId(), nullConfig));
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -2957,9 +2968,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    *
    * @param viewHandles array of native handles to the cudf::column_view columns being operated on.
    * @param hashId integer native ID of the hashing function identifier HashType
+   * @param nullConfig null hashing policy, a 1 represents an and of each column per row.
    * @return native handle of the resulting cudf column containing the hex-string hashing results.
    */
-  private static native long hash(long[] viewHandles, int hashId) throws CudfException;
+  private static native long hash(long[] viewHandles, int hashId, int nullConfig) throws CudfException;
 
   /**
    * Get the number of bytes needed to allocate a validity buffer for the given number of rows.
