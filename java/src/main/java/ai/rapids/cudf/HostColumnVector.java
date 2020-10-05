@@ -1000,8 +1000,10 @@ public final class HostColumnVector extends HostColumnVectorCore {
     @Override
     public void close() throws Exception {
       if (!built) {
-        data.close();
-        data = null;
+        if (data != null) {
+          data.close();
+          data = null;
+        }
         if (valid != null) {
           valid.close();
           valid = null;
