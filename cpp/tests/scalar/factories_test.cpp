@@ -125,7 +125,7 @@ TYPED_TEST(FixedWidthScalarFactory, ValueProvided)
   TypeParam value = cudf::test::make_type_param_scalar<TypeParam>(54);
 
   std::unique_ptr<cudf::scalar> s =
-    cudf::make_fixed_width_scalar<TypeParam>(value, true, this->stream(), this->mr());
+    cudf::make_fixed_width_scalar<TypeParam>(value, this->stream(), this->mr());
 
   auto numeric_s = static_cast<cudf::scalar_type_t<TypeParam>*>(s.get());
 

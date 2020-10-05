@@ -89,7 +89,6 @@ struct reduce_dispatch_functor {
         return make_fixed_width_scalar(
           detail::distinct_count(
             col, nunique_agg->_null_handling, nan_policy::NAN_IS_VALID, stream),
-          true,
           stream,
           mr);
       } break;
