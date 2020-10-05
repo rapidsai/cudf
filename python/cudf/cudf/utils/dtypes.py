@@ -471,6 +471,10 @@ def _get_nan_for_dtype(dtype):
 
 def get_allowed_combinations_for_operator(dtype_l, dtype_r, op):
 
+    error = TypeError(
+        f"{op} not supported between " f"{dtype_l} and {dtype_r} scalars"
+    )
+
     to_numpy_ops = {
         "__add__": _ADD_TYPES,
         "__sub__": _SUB_TYPES,
@@ -484,10 +488,10 @@ def get_allowed_combinations_for_operator(dtype_l, dtype_r, op):
 
     # special rules for string
     if dtype_l == "object" or dtype_r == "object":
-        if (dtype_l == dtype_r == "object") and op == np.add:
-            return True
+        if (dtype_l == dtype_r == "object") and op == '__add__':
+            return 'str'
         else:
-            return False
+            raise error
 
     # Check if we can directly operate
 
@@ -498,9 +502,7 @@ def get_allowed_combinations_for_operator(dtype_l, dtype_r, op):
         ):
             return outtype
 
-    raise TypeError(
-        f"{op} not supported between " f"{dtype_l} and {dtype_r} scalars"
-    )
+    raise error
 
 
 _ADD_TYPES = [

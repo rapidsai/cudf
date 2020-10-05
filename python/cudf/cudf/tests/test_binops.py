@@ -876,6 +876,8 @@ def test_ufunc_ops(lhs, rhs, ops):
 
 
 def dtype_scalar(val, dtype):
+    if dtype == 'str':
+        return str(val)
     dtype = np.dtype(dtype)
     if dtype.type in {np.datetime64, np.timedelta64}:
         res, _ = np.datetime_data(dtype)
@@ -960,11 +962,13 @@ def test_scalar_add(dtype_l, dtype_r):
     lval_gpu = cudf.Scalar(test_value, dtype=dtype_l)
     rval_gpu = cudf.Scalar(test_value, dtype=dtype_r)
 
-    expect = np.add(lval_host, rval_host)
+    #expect = np.add(lval_host, rval_host)
+    expect = lval_host + rval_host
     got = lval_gpu + rval_gpu
 
     assert expect == got.value
-    assert expect.dtype == got.dtype
+    if not dtype_l == dtype_r == 'str':
+        assert expect.dtype == got.dtype
 
 
 @pytest.mark.parametrize("dtype_l,dtype_r", make_invalid_scalar_add_data())
