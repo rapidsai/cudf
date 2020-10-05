@@ -168,7 +168,7 @@ __device__ inline void set_bit(bitmask_type* bitmask, size_type bit_index)
  * @brief Sets the specified bit to `0`
  *
  * @note This operation requires a global atomic operation. Therefore, it is
- * not reccomended to use this function in performance critical regions. When
+ * not recommended to use this function in performance critical regions. When
  * possible, it is more efficient to compute and update an entire element at
  * once using `set_element`.
 

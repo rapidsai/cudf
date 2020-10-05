@@ -14,9 +14,12 @@
  * limitations under the License.
  */
 
-#include "jni_utils.hpp"
+#include <sstream>
 
 #include <cudf/copying.hpp>
+#include <cudf/utilities/default_stream.hpp>
+
+#include "jni_utils.hpp"
 
 namespace {
 
@@ -35,6 +38,12 @@ private:
 
 namespace cudf {
 namespace jni {
+
+#ifdef CUDA_API_PER_THREAD_DEFAULT_STREAM
+constexpr bool is_ptds_enabled{true};
+#else
+constexpr bool is_ptds_enabled{false};
+#endif
 
 static jclass Contiguous_table_jclass;
 static jmethodID From_contiguous_column_views;
@@ -204,12 +213,30 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *) {
     return JNI_ERR;
   }
 
+  // make sure libcudf and the JNI library are built with the same PTDS mode
+  if (cudf::is_ptds_enabled() != cudf::jni::is_ptds_enabled) {
+    std::ostringstream ss;
+    ss << "Libcudf is_ptds_enabled=" << cudf::is_ptds_enabled()
+       << ", which does not match cudf jni is_ptds_enabled=" << cudf::jni::is_ptds_enabled
+       << ". They need to be built with the same per-thread default stream flag.";
+    env->ThrowNew(env->FindClass("java/lang/RuntimeException"), ss.str().c_str());
+    return JNI_ERR;
+  }
+
   // cache any class objects and method IDs here
   if (!cudf::jni::cache_contiguous_table_jni(env)) {
+    if (!env->ExceptionCheck()) {
+      env->ThrowNew(env->FindClass("java/lang/RuntimeException"),
+                    "Unable to locate contiguous table methods needed by JNI");
+    }
     return JNI_ERR;
   }
 
   if (!cudf::jni::cache_host_memory_buffer_jni(env)) {
+    if (!env->ExceptionCheck()) {
+      env->ThrowNew(env->FindClass("java/lang/RuntimeException"),
+                    "Unable to locate host memory buffer methods needed by JNI");
+    }
     return JNI_ERR;
   }
 

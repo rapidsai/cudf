@@ -31,12 +31,10 @@ requirements:
     - cudatoolkit {{ cuda_version }}.*
     - arrow-cpp 1.0.1.*
     - arrow-cpp-proc * cuda
-    - flatbuffers
     - boost-cpp 1.72.0
     - dlpack
   run:
     - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
-    - dlpack
     - arrow-cpp-proc * cuda
     - {{ pin_compatible('boost-cpp', max_pin='x.x.x') }}
 
@@ -82,6 +80,7 @@ test:
     - test -f $PREFIX/include/cudf/detail/utilities/int_fastdiv.h
     - test -f $PREFIX/include/cudf/dictionary/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/dictionary/detail/encode.hpp
+    - test -f $PREFIX/include/cudf/dictionary/detail/replace.hpp
     - test -f $PREFIX/include/cudf/dictionary/detail/search.hpp
     - test -f $PREFIX/include/cudf/dictionary/detail/update_keys.hpp
     - test -f $PREFIX/include/cudf/dictionary/dictionary_column_view.hpp

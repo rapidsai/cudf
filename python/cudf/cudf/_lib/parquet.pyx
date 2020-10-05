@@ -18,6 +18,7 @@ from libcpp.memory cimport shared_ptr, unique_ptr, make_unique
 from libcpp.string cimport string
 from libcpp.map cimport map
 from libcpp.vector cimport vector
+from libcpp.utility cimport move
 from libcpp cimport bool
 
 from cudf._lib.cpp.types cimport data_type, size_type
@@ -26,7 +27,6 @@ from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport (
     table_view
 )
-from cudf._lib.move cimport move
 from cudf._lib.cpp.io.parquet cimport (
     read_parquet as parquet_reader,
     parquet_reader_options,
@@ -150,7 +150,7 @@ cpdef generate_pandas_metadata(Table table, index):
     return json_str
 
 cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
-                   skip_rows=None, num_rows=None, strings_to_categorical=False,
+                   skiprows=None, num_rows=None, strings_to_categorical=False,
                    use_pandas_metadata=True):
     """
     Cython function to call into libcudf API, see `read_parquet`.
@@ -167,7 +167,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     cdef vector[string] cpp_columns
     cdef bool cpp_strings_to_categorical = strings_to_categorical
     cdef bool cpp_use_pandas_metadata = use_pandas_metadata
-    cdef size_type cpp_skip_rows = skip_rows if skip_rows is not None else 0
+    cdef size_type cpp_skiprows = skiprows if skiprows is not None else 0
     cdef size_type cpp_num_rows = num_rows if num_rows is not None else -1
     cdef vector[vector[size_type]] cpp_row_groups
     cdef data_type cpp_timestamp_type = cudf_types.data_type(
@@ -189,7 +189,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         .row_groups(cpp_row_groups)
         .convert_strings_to_categories(cpp_strings_to_categorical)
         .use_pandas_metadata(cpp_use_pandas_metadata)
-        .skip_rows(cpp_skip_rows)
+        .skip_rows(cpp_skiprows)
         .num_rows(cpp_num_rows)
         .timestamp_type(cpp_timestamp_type)
         .build()
