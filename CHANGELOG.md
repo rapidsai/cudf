@@ -143,6 +143,7 @@
 - PR #6331 Avoids materializing `RangeIndex` during frame concatnation (when not needed)
 - PR #6278 Add filter tests for struct columns
 - PR #6335 Fix conda commands for outdated python version
+- PR #6424 Check for null data in close for ColumnBuilder
 
 
 # cuDF 0.15.0 (26 Aug 2020)
