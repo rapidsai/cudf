@@ -202,8 +202,6 @@ class reader::impl {
   std::vector<input_column_info> _input_columns;
   // output columns to be generated
   std::vector<column_buffer> _output_columns;
-  // output schema info (propagated to table_with_metadata)
-  std::vector<column_name_info> _schema_info;
   // _output_columns associated schema indices
   std::vector<int> _output_column_schemas;
 

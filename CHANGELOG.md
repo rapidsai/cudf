@@ -16,22 +16,30 @@
 - PR #6262 Add nth_element series aggregation with null handling
 - PR #6318 Add support for reading Struct and map types from Parquet files
 - PR #6316 Add StructColumn to Python API
+- PR #6232 `Json` and `Avro` benchmarking in python
 - PR #6139 Add column conversion to big endian byte list.
 - PR #6220 Add `list_topics()` to supply list of underlying Kafka connection topics
 - PR #6271 Add support to deep-copy struct columns from struct column-view
 - PR #6254 Add `cudf::make_dictionary_from_scalar` factory function
 - PR #6262 Add nth_element series aggregation with null handling
+- PR #6318 Add support for reading Struct and map types from Parquet files
+- PR #6315 Native code for string-map lookups, for cudf-java
 - PR #6302 Add custom dataframe accessors
 - PR #6301 Add JNI bindings to nvcomp
+- PR #6328 Java and JNI bindings for getMapValue/map_lookup
+- PR #6371 Use ColumnViewAccess on Host side
 
 ## Improvements
 
+- PR #6393 Fix some misspelled words
 - PR #6292 Remove individual size tracking from JNI tracking resource adaptor
 - PR #5946 Add cython and python support for libcudf `to_arrow` and `from_arrow`
 - PR #5919 Remove max_strings and max_chars from nvtext::subword_tokenize
 - PR #5956 Add/Update tests for cuStreamz
 - PR #5953 Use stable sort when doing a sort groupby
 - PR #5973 Link to the Code of Conduct in CONTRIBUTING.md
+- PR #6354 Perform shallow clone of external projects
+- PR #6388 Add documentation for building `libboost_filesystem.a` from source
 - PR #5917 Just use `None` for `strides` in `Buffer`
 - PR #6015 Upgrade CUB/Thrust to the latest commit
 - PR #5971 Add cuStreamz README for basic installation and use
@@ -44,6 +52,7 @@
 - PR #6051 Add builder API for cuIO `parquet_writer_options` and `parquet_reader_options`
 - PR #6067 Added compute codes for aarch64 devices
 - PR #6083 Small cleanup
+- PR #6355 Make sure PTDS mode is compatible between libcudf and JNI
 - PR #6120 Consolidate functionality in NestedHostColumnVector and HostColumnVector
 - PR #6092 Add `name` and `dtype` field to `Index.copy`
 - PR #5984 Support gather() on CUDF struct columns
@@ -93,9 +102,19 @@
 - PR #6293 Replace shuffle warp reduce with cub calls
 - PR #6287 Make java aggregate API follow C++ API
 - PR #6306 Remove cpw macros from page encode kernels
+- PR #6375 Parallelize Cython compilation in addition to Cythonization
 - PR #6303 Use cudf test dtypes so timedelta tests are determinstic
+- PR #6326 Simplify interal csv/json kernel parameters
 - PR #6308 Add dictionary support to cudf::scatter with scalar
+- PR #6312 Conda recipe dependency cleanup
+- PR #6347 Add dictionary support to cudf::copy_range
 - PR #6332 Add support to return csv as string when `path=None` in `to_csv`
+- PR #6358 Add Parquet fuzz tests with varying function parameters
+- PR #6369 Add dictionary support to `cudf::find_and_replace`
+- PR #6373 Add dictionary support to `cudf::clamp`
+- PR #6377 Update ci/local/README.md
+- PR #6383 Removed `move.pxd`, use standard library `move`
+- PR #6400 Removed unused variables
 
 ## Bug Fixes
 
@@ -115,6 +134,7 @@
 - PR #6154 Warnings on row-wise op only when non-numeric columns are found.
 - PR #6150 Fix issue related to inferring `datetime64` format with UTC timezone in string data
 - PR #6179 `make_elements` copies to `iterator` without adjusting `size`
+- PR #6387 Remove extra `std::move` call in java/src/main/native/src/map_lookup.cu
 - PR #6182 Fix cmake build of arrow
 - PR #6288 Fix gcc-9 compilation error with `ColumnVectorJni.cpp`
 - PR #6173 Fix normalize_characters offset logic on sliced strings column
@@ -123,6 +143,7 @@
 - PR #6207 Remove shared libs from Java sources jar
 - PR #6217 Fixed missing bounds checking when storing validity in parquet reader
 - PR #6212 Update codeowners file
+- PR #6389 Fix RMM logging level so that it can be turned off from the command line
 - PR #6157 Fix issue related to `Series.concat` to concat a non-empty and empty series.
 - PR #6226 Add in some JNI checks for null handles
 - PR #6183 Fix issues related to `Series.acos` for consistent output regardless of dtype
@@ -143,7 +164,13 @@
 - PR #6304 Fix span_tests.cu includes
 - PR #6331 Avoids materializing `RangeIndex` during frame concatnation (when not needed)
 - PR #6278 Add filter tests for struct columns
+- PR #6361 Detect overflow in hash join
+- PR #6397 Fix `build.sh` when `PARALLEL_LEVEL` environment variable isn't set
+- PR #6366 Fix Warp Reduce calls in cuio statistics calculation to account for NaNs
+- PR #6345 Fix ambiguous constructor compile error with devtoolset
 - PR #6335 Fix conda commands for outdated python version
+- PR #6378 Fix index handling in `fillna` and incorrect pytests
+- PR #6380 Avoid problematic column-index check in dask_cudf.read_parquet test
 
 
 # cuDF 0.15.0 (26 Aug 2020)
@@ -233,6 +260,7 @@
 
 ## Improvements
 
+- PR #5492 compile_udf: compile straight to PTX instead of using @jit
 - PR #5605 Automatically flush RMM allocate/free logs in JNI
 - PR #5632 Switch JNI code to use `pool_memory_resource` instead of CNMeM
 - PR #5486 Link Boost libraries statically in the Java build
@@ -1613,7 +1641,7 @@
 - PR #2817 Dask-cudf: `read_parquet` support for remote filesystems
 - PR #2823 improve java data movement debugging
 - PR #2806 CSV Reader: Clean-up row offset operations
-- PR #2640 Add dask wait/persist exmaple to 10 minute guide
+- PR #2640 Add dask wait/persist example to 10 minute guide
 - PR #2828 Optimizations of kernel launch configuration for `DataFrame.apply_rows` and `DataFrame.apply_chunks`
 - PR #2831 Add `column` argument to `DataFrame.drop`
 - PR #2775 Various optimizations to improve __getitem__ and __setitem__ performance
@@ -2168,7 +2196,7 @@
 - PR #1522 Use latest release version in update-version CI script
 - PR #1533 Remove stale join CFFI, fix memory leaks in join Cython
 - PR #1521 Added `row_bitmask` to compute bitmask for rows of a table. Merged `valids_ops.cu` and `bitmask_ops.cu`
-- PR #1553 Overload `hash_row` to avoid using intial hash values. Updated `gdf_hash` to select between overloads
+- PR #1553 Overload `hash_row` to avoid using initial hash values. Updated `gdf_hash` to select between overloads
 - PR #1585 Updated `cudf::table` to maintain own copy of wrapped `gdf_column*`s
 - PR #1559 Add `except +` to all Cython function definitions to catch C++ exceptions properly
 - PR #1617 `has_nulls` and `column_dtypes` for `cudf::table`
@@ -2484,7 +2512,7 @@
 - PR #545 Temporarily disable csv reader thousands test to prevent segfault (test re-enabled in PR #501)
 - PR #559 Fix Assertion error while using `applymap` to change the output dtype
 - PR #575 Update `print_env.sh` script to better handle missing commands
-- PR #612 Prevent an exception from occuring with true division on integer series.
+- PR #612 Prevent an exception from occurring with true division on integer series.
 - PR #630 Fix deprecation warning for `pd.core.common.is_categorical_dtype`
 - PR #622 Fix Series.append() behaviour when appending values with different numeric dtype
 - PR #603 Fix error while creating an empty column using None.

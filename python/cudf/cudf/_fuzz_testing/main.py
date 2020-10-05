@@ -1,10 +1,10 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from cudf.testing import fuzzer
+from cudf._fuzz_testing import fuzzer
 
 
 class PythonFuzz(object):
-    def __init__(self, func, data_handle=None, **kwargs):
+    def __init__(self, func, params=None, data_handle=None, **kwargs):
         self.function = func
         self.data_handler_class = data_handle
         self.fuzz_worker = fuzzer.Fuzzer(
@@ -17,6 +17,7 @@ class PythonFuzz(object):
             max_cols_size=kwargs.get("max_cols_size", 1000),
             runs=kwargs.get("runs", -1),
             max_string_length=kwargs.get("max_string_length", None),
+            params=params,
         )
 
     def __call__(self, *args, **kwargs):
@@ -24,13 +25,13 @@ class PythonFuzz(object):
 
 
 # wrap PythonFuzz to allow for deferred calling
-def pythonfuzz(function=None, data_handle=None, **kwargs):
+def pythonfuzz(function=None, data_handle=None, params=None, **kwargs):
     if function:
-        return PythonFuzz(function, **kwargs)
+        return PythonFuzz(function, params, **kwargs)
     else:
 
         def wrapper(function):
-            return PythonFuzz(function, data_handle, **kwargs)
+            return PythonFuzz(function, params, data_handle, **kwargs)
 
         return wrapper
 

@@ -447,7 +447,7 @@ def melt(
 
     # Step 2: add variable
     var_cols = []
-    for i, var in enumerate(value_vars):
+    for i, _ in enumerate(value_vars):
         var_cols.append(
             cudf.Series(cudf.core.column.full(N, i, dtype=np.int8))
         )

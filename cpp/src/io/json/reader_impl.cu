@@ -32,11 +32,14 @@
 #include <cudf/strings/detail/replace.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <rmm/device_scalar.hpp>
 
 #include <thrust/optional.h>
+
+using cudf::detail::host_span;
 
 namespace cudf {
 namespace io {
@@ -123,30 +126,22 @@ col_map_ptr_type create_col_names_hash_map(column_view column_name_hashes, cudaS
  *
  * The columns contain name offsets in the file, name lengths and name hashes, respectively.
  *
+ * @param[in] options Parsing options (e.g. delimiter and quotation character)
  * @param[in] data Input JSON device data
- * @param[in] record_starts Device array of row start locations in the input buffer
- * @param[in] opts Parsing options (e.g. delimiter and quotation character)
+ * @param[in] row_offsets Device array of row start locations in the input buffer
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  *
  * @return std::unique_ptr<table> cudf table with three columns (offsets, lenghts, hashes)
  */
-std::unique_ptr<table> create_json_keys_info_table(
-  rmm::device_buffer const &data,
-  rmm::device_vector<uint64_t> const &record_starts,
-  const ParseOptions &opts,
-  cudaStream_t stream)
+std::unique_ptr<table> create_json_keys_info_table(const ParseOptions &options,
+                                                   device_span<char const> const data,
+                                                   device_span<uint64_t const> const row_offsets,
+                                                   cudaStream_t stream)
 {
   // Count keys
   rmm::device_scalar<unsigned long long int> key_counter(0, stream);
-  auto const data_ptr = static_cast<const char *>(data.data());
-  cudf::io::json::gpu::collect_keys_info(data_ptr,
-                                         data.size(),
-                                         opts,
-                                         record_starts.data().get(),
-                                         record_starts.size(),
-                                         key_counter.data(),
-                                         {},
-                                         stream);
+  cudf::io::json::gpu::collect_keys_info(
+    options, data, row_offsets, key_counter.data(), {}, stream);
 
   // Allocate columns to store hash value, length, and offset of each JSON object key in the input
   auto const num_keys = key_counter.value();
@@ -161,14 +156,8 @@ std::unique_ptr<table> create_json_keys_info_table(
   // Reset the key counter - now used for indexing
   key_counter.set_value(0, stream);
   // Fill the allocated columns
-  cudf::io::json::gpu::collect_keys_info(data_ptr,
-                                         data.size(),
-                                         opts,
-                                         record_starts.data().get(),
-                                         record_starts.size(),
-                                         key_counter.data(),
-                                         {*info_table_mdv},
-                                         stream);
+  cudf::io::json::gpu::collect_keys_info(
+    options, data, row_offsets, key_counter.data(), {*info_table_mdv}, stream);
   return info_table;
 }
 
@@ -219,7 +208,12 @@ auto sort_keys_info_by_offset(std::unique_ptr<table> info)
 std::pair<std::vector<std::string>, col_map_ptr_type> reader::impl::get_json_object_keys_hashes(
   cudaStream_t stream)
 {
-  auto info            = create_json_keys_info_table(data_, rec_starts_, opts_, stream);
+  auto info = create_json_keys_info_table(
+    opts_,
+    device_span<char const>(static_cast<char const *>(data_.data()), data_.size()),
+    rec_starts_,
+    stream);
+
   auto aggregated_info = aggregate_keys_info(std::move(info));
   auto sorted_info     = sort_keys_info_by_offset(std::move(aggregated_info));
 
@@ -276,8 +270,12 @@ void reader::impl::decompress_input(cudaStream_t stream)
     uncomp_data_ = reinterpret_cast<const char *>(buffer_->data());
     uncomp_size_ = buffer_->size();
   } else {
-    uncomp_data_owner_ = getUncompressedHostData(
-      reinterpret_cast<const char *>(buffer_->data()), buffer_->size(), compression_type);
+    uncomp_data_owner_ = get_uncompressed_data(  //
+      host_span<char const>(                     //
+        reinterpret_cast<const char *>(buffer_->data()),
+        buffer_->size()),
+      compression_type);
+
     uncomp_data_ = uncomp_data_owner_.data();
     uncomp_size_ = uncomp_data_owner_.size();
   }
@@ -509,16 +507,14 @@ void reader::impl::set_data_types(cudaStream_t stream)
     auto const num_columns       = metadata_.column_names.size();
     auto const do_set_null_count = key_to_col_idx_map_ != nullptr;
 
-    auto const h_column_infos =
-      cudf::io::json::gpu::detect_data_types(static_cast<const char *>(data_.data()),
-                                             data_.size(),
-                                             opts_,
-                                             do_set_null_count,
-                                             get_column_map_device_ptr(),
-                                             num_columns,
-                                             rec_starts_.data().get(),
-                                             rec_starts_.size(),
-                                             stream);
+    auto const h_column_infos = cudf::io::json::gpu::detect_data_types(
+      opts_,
+      device_span<char const>(static_cast<char const *>(data_.data()), data_.size()),
+      rec_starts_,
+      do_set_null_count,
+      num_columns,
+      get_column_map_device_ptr(),
+      stream);
 
     auto get_type_id = [&](auto const &cinfo) {
       if (cinfo.null_count == static_cast<int>(rec_starts_.size())) {
@@ -579,17 +575,17 @@ table_with_metadata reader::impl::convert_data_to_table(cudaStream_t stream)
   rmm::device_vector<cudf::bitmask_type *> d_valid = h_valid;
   rmm::device_vector<cudf::size_type> d_valid_counts(num_columns, 0);
 
-  cudf::io::json::gpu::convert_json_to_columns(data_,
-                                               d_dtypes.data().get(),
-                                               d_data.data().get(),
-                                               num_records,
-                                               num_columns,
-                                               rec_starts_.data().get(),
-                                               d_valid.data().get(),
-                                               d_valid_counts.data().get(),
-                                               opts_,
-                                               get_column_map_device_ptr(),
-                                               stream);
+  cudf::io::json::gpu::convert_json_to_columns(
+    opts_,
+    device_span<char const>(static_cast<char const *>(data_.data()), data_.size()),
+    rec_starts_,
+    d_dtypes,
+    get_column_map_device_ptr(),
+    d_data,
+    d_valid,
+    d_valid_counts,
+    stream);
+
   CUDA_TRY(cudaStreamSynchronize(stream));
   CUDA_TRY(cudaGetLastError());
 
