@@ -592,7 +592,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * valid
    *
    * @note This operation requires a global atomic operation. Therefore, it is
-   * not reccomended to use this function in performance critical regions. When
+   * not recommended to use this function in performance critical regions. When
    * possible, it is more efficient to compute and update an entire word at
    * once using `set_mask_word`.
    *
@@ -610,7 +610,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * @brief Updates the null mask to indicate that the specified element is null
    *
    * @note This operation requires a global atomic operation. Therefore, it is
-   * not reccomended to use this function in performance critical regions. When
+   * not recommended to use this function in performance critical regions. When
    * possible, it is more efficient to compute and update an entire word at
    * once using `set_mask_word`.
    *
