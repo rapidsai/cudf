@@ -320,7 +320,9 @@ class ColumnBase(Column, Serializable):
                 out_indices, out_dictionary, ordered=self.ordered,
             )
 
-        if self.null_count == len(self):
+        if isinstance(self, cudf.core.column.StringColumn) and (
+            self.null_count == len(self)
+        ):
             return pa.NullArray.from_buffers(
                 pa.null(), len(self), [pa.py_buffer((b""))]
             )
