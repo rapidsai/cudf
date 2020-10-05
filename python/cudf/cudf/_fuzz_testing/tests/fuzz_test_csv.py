@@ -38,7 +38,16 @@ def csv_writer_test(pdf):
     params={
         "sep": list([","]),
         "header": [True, False],
-        "na_rep": ["", "<NA>", "NA", "_NA_", "__"],
+        "na_rep": [
+            "",
+            "<NA>",
+            "NA",
+            "_NA_",
+            "__",
+            "<<<<>>>>>",
+            "--<>--",
+            "-+><+-",
+        ],
         "columns": None,
         "index": [True, False],
         "line_terminator": ["\n", "\r"],
