@@ -99,13 +99,17 @@ cdef void dlmanaged_tensor_pycapsule_deleter(object pycap_obj):
     dlpack_tensor.deleter(dlpack_tensor)
 
 
-def to_arrow(Table input_table, object column_names, bool keep_index=True):
+def to_arrow(Table input_table,
+             object column_names,
+             object field_names=None,
+             bool keep_index=True):
     """Convert from cudf Table to PyArrow Table.
 
     Parameters
     ----------
     input_table : cudf table
     column_names : names for the pyarrow arrays
+    field_names : field names for nested type arrays
     keep_index : whether index needs to be part of arrow table
 
     Returns
@@ -114,6 +118,7 @@ def to_arrow(Table input_table, object column_names, bool keep_index=True):
     """
 
     cdef vector[string] cpp_column_names
+    cdef vector[vector[string]] cpp_field_names
     cdef table_view input = (
         input_table.view() if keep_index else input_table.data_view()
     )
@@ -121,9 +126,18 @@ def to_arrow(Table input_table, object column_names, bool keep_index=True):
     for name in column_names:
         cpp_column_names.push_back(str.encode(str(name)))
 
+    if field_names is not None:
+        cpp_column_names.reserve(len(field_names))
+        for i, fields in enumerate(field_names):
+            cpp_field_names[i].reserve(len(fields))
+            for name in fields:
+                cpp_field_names[i].push_back(str.encode(str(name)))
+
     cdef shared_ptr[CTable] cpp_arrow_table
     with nogil:
-        cpp_arrow_table = cpp_to_arrow(input, cpp_column_names)
+        cpp_arrow_table = cpp_to_arrow(
+            input, cpp_column_names, cpp_field_names
+        )
 
     return pyarrow_wrap_table(cpp_arrow_table)
 

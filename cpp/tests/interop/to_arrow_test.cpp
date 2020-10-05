@@ -195,6 +195,60 @@ TEST_F(ToArrowTest, NestedList)
   ASSERT_TRUE(expected_arrow_table->Equals(*got_arrow_table, true));
 }
 
+TEST_F(ToArrowTest, StructColumn)
+{
+  using vector_of_columns = std::vector<std::unique_ptr<cudf::column>>;
+
+  auto nested_type_field_names =
+    std::vector<std::vector<std::string>>{{"string", "integral", "bool"}};
+  auto str_col =
+    cudf::test::strings_column_wrapper{
+      "Samuel Vimes", "Carrot Ironfoundersson", "Angua von Uberwald"}
+      .release();
+  int num_rows{str_col->size()};
+  auto int_col  = cudf::test::fixed_width_column_wrapper<int32_t, int32_t>{{48, 27, 25}}.release();
+  auto bool_col = cudf::test::fixed_width_column_wrapper<bool>{{true, true, false}}.release();
+  vector_of_columns cols;
+  cols.push_back(std::move(str_col));
+  cols.push_back(std::move(int_col));
+  cols.push_back(std::move(bool_col));
+
+  auto struct_col = cudf::make_structs_column(num_rows, std::move(cols), 0, {});
+  cudf::table_view input_view({struct_col->view()});
+
+  std::vector<std::string> str{"Samuel Vimes", "Carrot Ironfoundersson", "Angua von Uberwald"};
+  auto str_array  = get_arrow_array<cudf::string_view>(str);
+  auto int_array  = get_arrow_array<int32_t>({48, 27, 25});
+  auto bool_array = get_arrow_array<bool>({true, true, false});
+
+  std::vector<std::shared_ptr<arrow::Array>> child_arrays({str_array, int_array, bool_array});
+  std::vector<std::shared_ptr<arrow::Field>> fields;
+  std::transform(child_arrays.cbegin(),
+                 child_arrays.cend(),
+                 nested_type_field_names[0].cbegin(),
+                 std::back_inserter(fields),
+                 [](auto const array, auto const name) {
+                   return std::make_shared<arrow::Field>(
+                     name, array->type(), array->null_count() > 0);
+                 });
+  auto dtype = std::make_shared<arrow::StructType>(fields);
+
+  auto struct_array = std::make_shared<arrow::StructArray>(
+    dtype, static_cast<int64_t>(input_view.num_rows()), child_arrays);
+  std::vector<std::shared_ptr<arrow::Field>> schema_vector(
+    {arrow::field("a", struct_array->type())});
+  auto schema = std::make_shared<arrow::Schema>(schema_vector);
+
+  auto expected_arrow_table = arrow::Table::Make(schema, {struct_array});
+
+  auto got_arrow_table = cudf::to_arrow(input_view, {"a"}, nested_type_field_names);
+
+  std::cout<<"RGSL : Expected\n"<<expected_arrow_table->ToString()<<std::endl;
+  std::cout<<"RGSL : got\n"<<got_arrow_table->ToString()<<std::endl;
+
+  ASSERT_TRUE(expected_arrow_table->Equals(*got_arrow_table, true));
+}
+
 struct ToArrowTestSlice
   : public ToArrowTest,
     public ::testing::WithParamInterface<std::tuple<cudf::size_type, cudf::size_type>> {
