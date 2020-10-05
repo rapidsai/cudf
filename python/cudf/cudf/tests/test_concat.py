@@ -597,7 +597,7 @@ def test_concat_join(ignore_index, sort, join):
         {
             "x": range(10),
             "y": list(map(float, range(10))),
-            "z": list("abcde") * 2,
+            "z": [1,2,3,4,5,6,7,8,9,10],
         }
     )
     pdf2 = pd.DataFrame(
