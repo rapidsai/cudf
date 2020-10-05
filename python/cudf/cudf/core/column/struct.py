@@ -40,12 +40,17 @@ class StructColumn(ColumnBase):
         )
 
     def to_arrow(self):
-        pa_type = self.dtype.to_arrow()
-
         children = list(col.to_arrow() for col in self.children)
         for i, child in enumerate(children):
             if len(child) == child.null_count:
                 children[i] = pa.NullArray.from_pandas([None] * len(child))
+
+        pa_type = pa.struct(
+            {
+                field: child.type
+                for field, child in zip(self.dtype.fields, children)
+            }
+        )
 
         if self.nullable:
             nbuf = self.mask.to_host_array().view("int8")
