@@ -1,3 +1,11 @@
+# cuDF 0.17.0 (Date TBD)
+
+## New Features
+
+## Improvements
+
+## Bug Fixes
+
 # cuDF 0.16.0 (Date TBD)
 
 ## New Features
@@ -168,11 +176,13 @@
 - PR #6366 Fix Warp Reduce calls in cuio statistics calculation to account for NaNs
 - PR #6345 Fix ambiguous constructor compile error with devtoolset
 - PR #6335 Fix conda commands for outdated python version
+- PR #6372 Fix issue related to reading a nullable boolean column in `read_parquet` when `engine=pyarrow`
 - PR #6378 Fix index handling in `fillna` and incorrect pytests
 - PR #6380 Avoid problematic column-index check in dask_cudf.read_parquet test
 - PR #6408 Avoid empty offset list in hash_partition output
 - PR #6402 Update JNI build to pull fixed nvcomp commit
 - PR #6410 Fix uses of dangerous default values in Python code
+- PR #6424 Check for null data in close for ColumnBuilder
 
 # cuDF 0.15.0 (26 Aug 2020)
 
