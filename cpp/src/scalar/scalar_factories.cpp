@@ -23,15 +23,27 @@
 namespace cudf {
 namespace {
 struct scalar_construction_helper {
-  template <typename T, typename ScalarType = scalar_type_t<T>>
-  std::enable_if_t<is_fixed_width<T>(), std::unique_ptr<scalar>> operator()(
-    cudaStream_t stream, rmm::mr::device_memory_resource* mr) const
+  template <typename T,
+            typename ScalarType = scalar_type_t<T>,
+            typename std::enable_if_t<is_fixed_width<T>() and not is_fixed_point<T>()>* = nullptr>
+  std::unique_ptr<scalar> operator()(cudaStream_t stream, rmm::mr::device_memory_resource* mr) const
   {
-    auto s = new ScalarType(T{}, false, stream, mr);
+    using Type = get_column_stored_type<T>;
+    auto s     = new ScalarType(Type{}, false, stream, mr);
     return std::unique_ptr<scalar>(s);
   }
 
-  template <typename T, typename... Args>
+  template <typename T,
+            typename ScalarType                             = scalar_type_t<T>,
+            typename std::enable_if_t<is_fixed_point<T>()>* = nullptr>
+  std::unique_ptr<scalar> operator()(cudaStream_t stream, rmm::mr::device_memory_resource* mr) const
+  {
+    using Type = get_column_stored_type<T>;
+    auto s     = new ScalarType(Type{}, numeric::scale_type{0}, false, stream, mr);
+    return std::unique_ptr<scalar>(s);
+  }
+
+  template <typename T, typename... Args>  // TODO reformat
   std::enable_if_t<not is_fixed_width<T>(), std::unique_ptr<scalar>> operator()(Args... args) const
   {
     CUDF_FAIL("Invalid type.");
