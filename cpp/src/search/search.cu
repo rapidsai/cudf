@@ -25,6 +25,7 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <thrust/binary_search.h>
 #include <hash/unordered_multiset.cuh>
@@ -143,24 +144,25 @@ struct contains_scalar_dispatch {
   {
     CUDF_EXPECTS(col.type() == value.type(), "scalar and column types must match");
 
+    using Type       = get_column_stored_type<Element>;
     using ScalarType = cudf::scalar_type_t<Element>;
     auto d_col       = column_device_view::create(col, stream);
     auto s           = static_cast<const ScalarType*>(&value);
 
     if (col.has_nulls()) {
       auto found_iter = thrust::find(rmm::exec_policy(stream)->on(stream),
-                                     d_col->pair_begin<Element, true>(),
-                                     d_col->pair_end<Element, true>(),
+                                     d_col->pair_begin<Type, true>(),
+                                     d_col->pair_end<Type, true>(),
                                      thrust::make_pair(s->value(), true));
 
-      return found_iter != d_col->pair_end<Element, true>();
+      return found_iter != d_col->pair_end<Type, true>();
     } else {
-      auto found_iter = thrust::find(rmm::exec_policy(stream)->on(stream),
-                                     d_col->begin<Element>(),
-                                     d_col->end<Element>(),
+      auto found_iter = thrust::find(rmm::exec_policy(stream)->on(stream),  //
+                                     d_col->begin<Type>(),
+                                     d_col->end<Type>(),
                                      s->value());
 
-      return found_iter != d_col->end<Element>();
+      return found_iter != d_col->end<Type>();
     }
   }
 };
