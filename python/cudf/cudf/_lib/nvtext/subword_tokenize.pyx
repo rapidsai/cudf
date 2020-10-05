@@ -2,11 +2,11 @@
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
+from libcpp.utility cimport move
 from libcpp.string cimport string
 from libc.stdint cimport uint32_t
 from libc.stdint cimport uintptr_t
 
-from cudf._lib.move cimport move
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.nvtext.subword_tokenize cimport (

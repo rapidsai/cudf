@@ -25,9 +25,9 @@ requirements:
     - cmake >=3.17.0
   host:
     - libcudf {{ version }}
-    - librdkafka=1.4.0
+    - librdkafka 1.5
   run:
-    - librdkafka=1.4.0 #TODO: librdkafka should be automatically included here by run_exports but is not
+    - {{ pin_compatible('librdkafka', max_pin='x.x') }} #TODO: librdkafka should be automatically included here by run_exports but is not
 
 test:
   commands:
