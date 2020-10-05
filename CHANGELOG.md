@@ -12,6 +12,7 @@
 - PR #6119 Add support for `dayofweek` property in `DateTimeIndex` and `DatetimeProperties`
 - PR #6171 Java and Jni support for Struct columns
 - PR #6125 Add support for `Series.mode` and `DataFrame.mode`
+- PR #6247 Add `minmax` reduction function
 - PR #6232 `Json` and `Avro` benchmarking in python
 - PR #6139 Add column conversion to big endian byte list.
 - PR #6220 Add `list_topics()` to supply list of underlying Kafka connection topics
@@ -111,6 +112,7 @@
 - PR #6377 Update ci/local/README.md
 - PR #6383 Removed `move.pxd`, use standard library `move`
 - PR #6400 Removed unused variables
+- PR #6409 Allow CuPy 8.x
 - PR #6407 Add RMM_LOGGING_LEVEL flag to Java docker build
 
 ## Bug Fixes
@@ -167,12 +169,14 @@
 - PR #6366 Fix Warp Reduce calls in cuio statistics calculation to account for NaNs
 - PR #6345 Fix ambiguous constructor compile error with devtoolset
 - PR #6335 Fix conda commands for outdated python version
+- PR #6372 Fix issue related to reading a nullable boolean column in `read_parquet` when `engine=pyarrow`
 - PR #6378 Fix index handling in `fillna` and incorrect pytests
 - PR #6380 Avoid problematic column-index check in dask_cudf.read_parquet test
 - PR #6408 Avoid empty offset list in hash_partition output
 - PR #6402 Update JNI build to pull fixed nvcomp commit
 - PR #6410 Fix uses of dangerous default values in Python code
 - PR #6424 Check for null data in close for ColumnBuilder
+- PR #6426 Fix `RuntimeError` when `np.bool_` is passed as `header` in `to_csv`
 
 # cuDF 0.15.0 (26 Aug 2020)
 
