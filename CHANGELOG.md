@@ -175,6 +175,7 @@
 - PR #6366 Fix Warp Reduce calls in cuio statistics calculation to account for NaNs
 - PR #6345 Fix ambiguous constructor compile error with devtoolset
 - PR #6335 Fix conda commands for outdated python version
+- PR #6372 Fix issue related to reading a nullable boolean column in `read_parquet` when `engine=pyarrow`
 - PR #6378 Fix index handling in `fillna` and incorrect pytests
 - PR #6380 Avoid problematic column-index check in dask_cudf.read_parquet test
 - PR #6408 Avoid empty offset list in hash_partition output
