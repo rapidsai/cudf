@@ -15,6 +15,7 @@
 - PR #6271 Add support to deep-copy struct columns from struct column-view
 - PR #6262 Add nth_element series aggregation with null handling
 - PR #6316 Add StructColumn to Python API
+- PR #6247 Add `minmax` reduction function
 - PR #6232 `Json` and `Avro` benchmarking in python
 - PR #6139 Add column conversion to big endian byte list.
 - PR #6220 Add `list_topics()` to supply list of underlying Kafka connection topics
@@ -175,6 +176,7 @@
 - PR #6402 Update JNI build to pull fixed nvcomp commit
 - PR #6410 Fix uses of dangerous default values in Python code
 - PR #6424 Check for null data in close for ColumnBuilder
+- PR #6426 Fix `RuntimeError` when `np.bool_` is passed as `header` in `to_csv`
 
 # cuDF 0.15.0 (26 Aug 2020)
 
