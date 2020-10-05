@@ -313,27 +313,11 @@ class ColumnBase(Column, Serializable):
             codes = self.codes.astype(signed_type)
             categories = self.categories
 
-            out_indices = libcudf.interop.to_arrow(
-                libcudf.table.Table(
-                    cudf.core.column_accessor.ColumnAccessor({"None": codes})
-                ),
-                ["None"],
-                keep_index=False,
-            )
-            out_dictionary = libcudf.interop.to_arrow(
-                libcudf.table.Table(
-                    cudf.core.column_accessor.ColumnAccessor(
-                        {"None": categories}
-                    )
-                ),
-                ["None"],
-                keep_index=False,
-            )
+            out_indices = codes.to_arrow()
+            out_dictionary = categories.to_arrow()
 
             return pa.DictionaryArray.from_arrays(
-                out_indices["None"].chunk(0),
-                out_dictionary["None"].chunk(0),
-                ordered=self.ordered,
+                out_indices, out_dictionary, ordered=self.ordered,
             )
 
         elif isinstance(self, cudf.core.column.StringColumn) and (
