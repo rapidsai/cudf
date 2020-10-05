@@ -33,11 +33,11 @@ from cudf.tests.utils import assert_eq
             {"x": ["a", "bb", "ccc"], "y": [1.0, None, 3.0]},
             index=[1, None, 3],
         ),
-        pd.util.testing.makeTimeDataFrame,
-        pd.util.testing.makeMixedDataFrame,
-        pd.util.testing.makeTimeDataFrame,
-        # pd.util.testing.makeMissingDataframe, # Problem in distributed
-        # pd.util.testing.makeMultiIndex, # Indices not serialized on device
+        pd.testing.makeTimeDataFrame,
+        pd.testing.makeMixedDataFrame,
+        pd.testing.makeTimeDataFrame,
+        # pd.testing.makeMissingDataframe, # Problem in distributed
+        # pd.testing.makeMultiIndex, # Indices not serialized on device
     ],
 )
 @pytest.mark.parametrize("to_host", [True, False])

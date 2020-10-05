@@ -4,7 +4,7 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
-from pandas.util import testing as tm
+from pandas import testing as tm
 
 import dask
 from dask import dataframe as dd
