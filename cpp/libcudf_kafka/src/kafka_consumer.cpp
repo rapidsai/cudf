@@ -158,17 +158,14 @@ std::map<std::string, std::vector<int32_t>> kafka_consumer::list_topics(
 {
   auto const metadata = [&]() {
     std::string errstr;
-    RdKafka::Topic const *const spec_topic =
-      specific_topic.empty()
-        ? nullptr
-        : RdKafka::Topic::create(consumer.get(), specific_topic, nullptr, errstr);
+    auto spec_topic = std::unique_ptr<RdKafka::Topic>(
+      RdKafka::Topic::create(consumer.get(), specific_topic, nullptr, errstr));
 
     RdKafka::Metadata *md;
-    CUDF_EXPECTS(
-      RdKafka::ERR_NO_ERROR ==
-        consumer->metadata(spec_topic == nullptr ? true : false, spec_topic, &md, default_timeout),
-      "Failed to list_topics in Kafka broker");
-    delete spec_topic;
+    CUDF_EXPECTS(RdKafka::ERR_NO_ERROR ==
+                   consumer->metadata(
+                     spec_topic == nullptr ? true : false, spec_topic.get(), &md, default_timeout),
+                 "Failed to list_topics in Kafka broker");
     return std::unique_ptr<RdKafka::Metadata>{md};
   }();
   std::map<std::string, std::vector<int32_t>> topic_parts;
