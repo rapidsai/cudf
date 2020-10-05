@@ -70,17 +70,20 @@ struct find_index_fn {
     if (input.size() == 0) return std::make_unique<numeric_scalar<uint32_t>>(0, false, stream, mr);
     CUDF_EXPECTS(input.keys().type() == key.type(),
                  "search key type must match dictionary keys type");
-    auto keys_view = column_device_view::create(input.keys(), stream);
-    auto find_key  = static_cast<scalar_type_t<Element> const&>(key).value(stream);
+
+    using Type       = get_column_stored_type<Element>;
+    using ScalarType = cudf::scalar_type_t<Element>;
+    auto find_key    = static_cast<ScalarType const&>(key).value(stream);
+    auto keys_view   = column_device_view::create(input.keys(), stream);
     auto iter =
       thrust::equal_range(thrust::device,  // segfaults: rmm::exec_policy(stream)->on(stream) and
                                            // thrust::cuda::par.on(stream)
-                          keys_view->begin<Element>(),
-                          keys_view->end<Element>(),
+                          keys_view->begin<Type>(),
+                          keys_view->end<Type>(),
                           find_key);
     return type_dispatcher(input.indices().type(),
                            dispatch_scalar_index{},
-                           thrust::distance(keys_view->begin<Element>(), iter.first),
+                           thrust::distance(keys_view->begin<Type>(), iter.first),
                            (thrust::distance(iter.first, iter.second) > 0),
                            stream,
                            mr);
