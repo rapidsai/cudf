@@ -112,6 +112,7 @@
 - PR #6383 Removed `move.pxd`, use standard library `move`
 - PR #6400 Removed unused variables
 - PR #6407 Add RMM_LOGGING_LEVEL flag to Java docker build
+- PR #6384 Add CSV fuzz tests with varying function parameters
 
 ## Bug Fixes
 
