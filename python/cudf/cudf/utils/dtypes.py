@@ -504,7 +504,13 @@ def get_allowed_combinations_for_operator(dtype_l, dtype_r, op):
 
     raise error
 
-
+# Type dispatch loops similar to what are found in `np.add.types`
+# In NumPy, whether or not an op can be performed between two 
+# operands is determined by checking to see if NumPy has a c/c++
+# loop specifically for adding those two operands built in. If 
+# not it will search lists like these for a loop for types that
+# the operands can be safely cast to. These are those lookups,
+# modified slightly for cuDF's rules
 _ADD_TYPES = [
     "BBB",
     "HHH",
