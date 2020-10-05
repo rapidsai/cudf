@@ -8,6 +8,7 @@ from cudf.core.series import Series
 from cudf.utils.dtypes import (
     get_allowed_combinations_for_operator,
     to_cudf_compatible_scalar,
+    is_datetime_dtype
 )
 
 
@@ -16,10 +17,7 @@ class Scalar(libcudf.scalar.Scalar):
         """
         A GPU-backed scalar object with NumPy scalar like properties
         May be used in binary operations against other scalars, cuDF
-        Series, DataFrame, and Index objects. Designed to cache host
-        and device side values for the purpose of improving reuse of
-        instances across a workflow
-
+        Series, DataFrame, and Index objects.
 
         Examples
         --------
@@ -163,9 +161,9 @@ class Scalar(libcudf.scalar.Scalar):
 
         # datetime handling
         if out_dtype in "Mm":
-            if self.dtype.char in "Mm" and other.dtype.char not in "Mm":
+            if is_datetime_dtype(self.dtype) and not is_datetime_dtype(other.dtype):
                 return self.dtype
-            elif other.dtype.char in "Mm" and self.dtype.char not in "Mm":
+            if is_datetime_dtype(other.dtype) and not is_datetime_dtype(self.dtype):
                 return other.dtype
             else:
                 if op == '__sub__' and self.dtype.char == other.dtype.char == 'M':
