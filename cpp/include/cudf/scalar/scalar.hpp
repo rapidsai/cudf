@@ -19,6 +19,8 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <cudf/fixed_point/fixed_point.hpp>
+
 #include <rmm/thrust_rmm_allocator.h>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
@@ -273,9 +275,10 @@ class fixed_point_scalar : public scalar {
   fixed_point_scalar& operator=(fixed_point_scalar&& other) = delete;
 
   /**
-   * @brief Construct a new fixed_point scalar object
+   * @brief Construct a new fixed_point scalar object from already shifted value and scale
    *
-   * @param[in] value The initial value of the scalar
+   * @param[in] value The initial shifted value of the fixed_point scalar
+   * @param[in] numeric::scale_type The scale of the fixed_point scalar
    * @param[in] is_valid Whether the value held by the scalar is valid
    * @param[in] stream CUDA stream used for device memory operations.
    * @param[in] mr Device memory resource to use for device memory allocation
@@ -288,6 +291,41 @@ class fixed_point_scalar : public scalar {
     : scalar{data_type{type_to_id<T>(), static_cast<int32_t>(scale)}, is_valid, stream, mr},
       _data{value}
   {
+  }
+
+  /**
+   * @brief Construct a new fixed_point scalar object from a value and default 0-scale
+   *
+   * @param[in] value The initial value of the fixed_point scalar
+   * @param[in] is_valid Whether the value held by the scalar is valid
+   * @param[in] stream CUDA stream used for device memory operations.
+   * @param[in] mr Device memory resource to use for device memory allocation
+   */
+  fixed_point_scalar(rep_type value,
+                     bool is_valid                       = true,
+                     cudaStream_t stream                 = 0,
+                     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+    : scalar{data_type{type_to_id<T>(), 0}, is_valid, stream, mr}, _data{value}
+  {
+  }
+
+  /**
+   * @brief Construct a new fixed_point scalar object from a fixed_point number
+   *
+   * @param[in] value The fixed_point number from which the fixed_point scalar will be initialized
+   * @param[in] is_valid Whether the value held by the scalar is valid
+   * @param[in] stream CUDA stream used for device memory operations.
+   * @param[in] mr Device memory resource to use for device memory allocation
+   */
+  fixed_point_scalar(T value,
+                     bool is_valid                       = true,
+                     cudaStream_t stream                 = 0,
+                     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+    : scalar{data_type{type_to_id<T>(), 0}, is_valid, stream, mr},
+      _data{numeric::scaled_integer<rep_type>{value}.value}
+  {
+    CUDF_EXPECTS(value == (T{_data.value(), numeric::scale_type{0}}),
+                 "scale of fixed_point value should be zero");
   }
 
   /**

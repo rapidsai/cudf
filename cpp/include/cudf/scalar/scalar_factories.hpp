@@ -20,6 +20,8 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include "scalar.hpp"
 
+#include <type_traits>
+
 namespace cudf {
 /**
  * @addtogroup scalar_factories
