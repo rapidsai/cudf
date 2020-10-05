@@ -146,4 +146,4 @@ class ParquetWriter(IOFuzz):
 
     def write_data(self, file_name):
         if self._current_buffer is not None:
-            self._current_buffer.to_parquet(file_name + "_crash.parquet")
+            self._current_buffer.to_parquet(file_name + "_crash.csv")
