@@ -4,7 +4,7 @@
 
 ## Improvements
 
-- PR #6431 Add dictionary support to `cudf::upper_bound` and `cudf::lower_bound`
+- PR #6432 Add dictionary support to `cudf::upper_bound` and `cudf::lower_bound`
 
 ## Bug Fixes
 
