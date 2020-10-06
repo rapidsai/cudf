@@ -191,6 +191,7 @@
 - PR #6424 Check for null data in close for ColumnBuilder
 - PR #6426 Fix `RuntimeError` when `np.bool_` is passed as `header` in `to_csv`
 - PR #6443 Make java apis getList and getStruct public
+- PR #6445 Add `dlpack` to run section of libcudf conda recipe to fix downstream build issues
 - PR #6450 Make java Column Builder row agnostic
 
 
