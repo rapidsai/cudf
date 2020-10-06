@@ -33,7 +33,7 @@ requirements:
   run:
     - python
     - pandas >=1.0,<1.2.0dev0
-    - cupy >=6.6.0,<8.0.0a0,!=7.1.0
+    - cupy >7.1.0,<9.0.0a0
     - numba >=0.49.0
     - numpy
     - {{ pin_compatible('pyarrow', max_pin='x.x.x') }}
