@@ -1044,7 +1044,7 @@ def test_parquet_reader_struct_basic(tmpdir, data):
     pa.parquet.write_table(expect, fname)
     assert os.path.exists(fname)
     got = cudf.read_parquet(fname)
-    expect.equals(got.to_arrow())
+    assert expect.equals(got.to_arrow())
 
 
 def test_parquet_reader_struct_los_large(tmpdir):
