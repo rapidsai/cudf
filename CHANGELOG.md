@@ -115,6 +115,7 @@
 - PR #6400 Removed unused variables
 - PR #6409 Allow CuPy 8.x
 - PR #6407 Add RMM_LOGGING_LEVEL flag to Java docker build
+- PR #6442 Remove deprecated `DataFrame.from_gpu_matrix` and `DataFrame.to_gpu_matrix` APIs
 
 ## Bug Fixes
 
