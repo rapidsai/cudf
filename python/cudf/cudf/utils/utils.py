@@ -367,3 +367,15 @@ def raise_iteration_error(obj):
         f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
         f"if you wish to iterate over the values."
     )
+
+
+def pa_mask_buffer_to_mask(mask_buf, size):
+    """
+    Convert PyArrow mask buffer to cuDF mask buffer
+    """
+    mask_size = cudf._lib.null_mask.bitmask_allocation_size_bytes(size)
+    if mask_buf.size < mask_size:
+        dbuf = rmm.DeviceBuffer(size=mask_size)
+        dbuf.copy_from_host(np.asarray(mask_buf).view("u1"))
+        return Buffer(dbuf)
+    return Buffer(mask_buf)
