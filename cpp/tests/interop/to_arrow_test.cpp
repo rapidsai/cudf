@@ -30,6 +30,8 @@
 #include <cudf_test/type_lists.hpp>
 #include <tests/interop/arrow_utils.hpp>
 
+using vector_of_columns = std::vector<std::unique_ptr<cudf::column>>;
+
 std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_tables(
   cudf::size_type length)
 {
@@ -38,6 +40,7 @@ std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_table
   std::vector<std::string> string_data(length);
   std::vector<uint8_t> validity(length);
   std::vector<bool> bool_validity(length);
+  std::vector<uint8_t> bool_data_validity;
 
   std::vector<std::unique_ptr<cudf::column>> columns;
 
@@ -57,6 +60,11 @@ std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_table
     return rand() % 7 != 0 ? true : false;
   });
 
+  std::transform(bool_validity.cbegin(),
+                 bool_validity.cend(),
+                 std::back_inserter(bool_data_validity),
+                 [](auto val) { return static_cast<uint8_t>(val); });
+
   columns.emplace_back(cudf::test::fixed_width_column_wrapper<int64_t>(
                          int64_data.begin(), int64_data.end(), validity.begin())
                          .release());
@@ -70,8 +78,23 @@ std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_table
   columns.emplace_back(cudf::test::fixed_width_column_wrapper<bool>(
                          bool_data.begin(), bool_data.end(), bool_validity.begin())
                          .release());
+  auto int_column = cudf::test::fixed_width_column_wrapper<int64_t>(
+                      int64_data.begin(), int64_data.end(), validity.begin())
+                      .release();
 
-  auto int64array   = get_arrow_array<int64_t>(int64_data, validity);
+  auto str_column =
+    cudf::test::strings_column_wrapper(string_data.begin(), string_data.end(), validity.begin())
+      .release();
+  vector_of_columns cols;
+  cols.push_back(move(int_column));
+  cols.push_back(move(str_column));
+  auto mask = cudf::bools_to_mask(cudf::test::fixed_width_column_wrapper<bool>(
+    bool_data_validity.begin(), bool_data_validity.end()));
+  columns.emplace_back(cudf::make_structs_column(
+    length, std::move(cols), cudf::UNKNOWN_NULL_COUNT, std::move(*(mask.first))));
+
+  auto int64array = get_arrow_array<int64_t>(int64_data, validity);
+
   auto string_array = get_arrow_array<cudf::string_view>(string_data, validity);
   cudf::dictionary_column_view view(dict_col->view());
   auto keys       = cudf::test::to_host<int64_t>(view.keys()).first;
@@ -81,17 +104,29 @@ std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_table
                                          validity);
   auto boolarray  = get_arrow_array<bool>(bool_data, bool_validity);
 
+  arrow::ArrayVector child_arrays({int64array, string_array});
+  std::vector<std::shared_ptr<arrow::Field>> fields = {
+    arrow::field("integral", int64array->type(), int64array->null_count() > 0),
+    arrow::field("string", string_array->type(), string_array->null_count() > 0)};
+  auto dtype = std::make_shared<arrow::StructType>(fields);
+  std::shared_ptr<arrow::Buffer> mask_buffer =
+    arrow::internal::BytesToBits(static_cast<std::vector<uint8_t>>(bool_data_validity))
+      .ValueOrDie();
+  auto struct_array =
+    std::make_shared<arrow::StructArray>(dtype, length, child_arrays, mask_buffer);
+
   std::vector<std::shared_ptr<arrow::Field>> schema_vector = {
     arrow::field("a", int64array->type()),
     arrow::field("b", string_array->type()),
     arrow::field("c", dict_array->type()),
-    arrow::field("d", boolarray->type())};
+    arrow::field("d", boolarray->type()),
+    arrow::field("e", struct_array->type())};
 
   auto schema = std::make_shared<arrow::Schema>(schema_vector);
 
   return std::make_pair(
     std::make_unique<cudf::table>(std::move(columns)),
-    arrow::Table::Make(schema, {int64array, string_array, dict_array, boolarray}));
+    arrow::Table::Make(schema, {int64array, string_array, dict_array, boolarray, struct_array}));
 }
 
 struct ToArrowTest : public cudf::test::BaseFixture {
@@ -109,8 +144,10 @@ TEST_F(ToArrowTest, EmptyTable)
 
   auto cudf_table_view      = tables.first->view();
   auto expected_arrow_table = tables.second;
+  auto struct_meta          = cudf::column_metadata{"e"};
+  struct_meta.children_meta = {{"integral"}, {"string"}};
 
-  auto got_arrow_table = cudf::to_arrow(cudf_table_view, {{"a"}, {"b"}, {"c"}, {"d"}});
+  auto got_arrow_table = cudf::to_arrow(cudf_table_view, {{"a"}, {"b"}, {"c"}, {"d"}, struct_meta});
 
   ASSERT_EQ(expected_arrow_table->Equals(*got_arrow_table, true), true);
 }
@@ -197,8 +234,6 @@ TEST_F(ToArrowTest, NestedList)
 
 TEST_F(ToArrowTest, StructColumn)
 {
-  using vector_of_columns = std::vector<std::unique_ptr<cudf::column>>;
-
   // Create cudf table
   auto nested_type_field_names =
     std::vector<std::vector<std::string>>{{"string", "integral", "bool", "nested_list", "struct"}};
@@ -296,7 +331,10 @@ TEST_P(ToArrowTestSlice, SliceTest)
 
   auto sliced_cudf_table    = cudf::slice(cudf_table_view, {start, end})[0];
   auto expected_arrow_table = arrow_table->Slice(start, end - start);
-  auto got_arrow_table      = cudf::to_arrow(sliced_cudf_table, {{"a"}, {"b"}, {"c"}, {"d"}});
+  auto struct_meta          = cudf::column_metadata{"e"};
+  struct_meta.children_meta = {{"integral"}, {"string"}};
+  auto got_arrow_table =
+    cudf::to_arrow(sliced_cudf_table, {{"a"}, {"b"}, {"c"}, {"d"}, struct_meta});
 
   ASSERT_EQ(expected_arrow_table->Equals(*got_arrow_table, true), true);
 }
@@ -306,7 +344,6 @@ INSTANTIATE_TEST_CASE_P(ToArrowTest,
                         ::testing::Values(std::make_tuple(0, 10000),
                                           std::make_tuple(100, 3000),
                                           std::make_tuple(0, 0),
-                                          std::make_tuple(0, 3000),
-                                          std::make_tuple(10000, 10000)));
+                                          std::make_tuple(0, 3000)));
 
 CUDF_TEST_PROGRAM_MAIN()

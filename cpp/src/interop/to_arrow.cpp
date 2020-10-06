@@ -206,6 +206,7 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::struct_view>(
   CUDF_EXPECTS(metadata.children_meta.size() == input.num_children(),
                "Number of field names and number of children doesn't match\n");
   std::unique_ptr<column> tmp_column = nullptr;
+
   if (input.offset() != 0) { tmp_column = std::make_unique<cudf::column>(input); }
 
   column_view input_view = (tmp_column != nullptr) ? tmp_column->view() : input;

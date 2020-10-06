@@ -67,8 +67,13 @@ std::enable_if_t<std::is_same<T, bool>::value, std::shared_ptr<arrow::Array>> ge
   std::shared_ptr<arrow::BooleanArray> boolean_array;
   arrow::BooleanBuilder boolean_builder;
 
-  CUDF_EXPECTS(boolean_builder.AppendValues(data, mask).ok(),
-               "Failed to append values to boolean builder");
+  if (mask.empty()) {
+    CUDF_EXPECTS(boolean_builder.AppendValues(data).ok(),
+                 "Failed to append values to boolean builder");
+  } else {
+    CUDF_EXPECTS(boolean_builder.AppendValues(data, mask).ok(),
+                 "Failed to append values to boolean builder");
+  }
   CUDF_EXPECTS(boolean_builder.Finish(&boolean_array).ok(), "Failed to create arrow boolean array");
 
   return boolean_array;
