@@ -322,7 +322,9 @@ def to_flat_dict(d):
     with tuple keys.
     """
 
-    def _inner(d, parents=[]):
+    def _inner(d, parents=None):
+        if parents is None:
+            parents = []
         for k, v in d.items():
             if not isinstance(v, d.__class__):
                 if parents:
