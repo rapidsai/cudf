@@ -63,12 +63,12 @@ class CSVReader(IOFuzz):
         df = pyarrow_to_pandas(table)
 
         logging.info(f"Shape of DataFrame generated: {df.shape}")
-        self._df = df
+        self._current_buffer = df
         return df.to_csv()
 
     def write_data(self, file_name):
-        if self._df is not None:
-            self._df.to_csv(file_name + "_crash.csv")
+        if self._current_buffer is not None:
+            self._current_buffer.to_csv(file_name + "_crash.csv")
 
     def get_rand_params(self, params):
         params_dict = {}
