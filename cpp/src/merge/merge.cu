@@ -268,7 +268,7 @@ struct column_merger {
 
     // set the null count:
     //
-    p_merged_col->set_null_count(lcol.null_count() + rcol.null_count());
+    merged_col->set_null_count(lcol.null_count() + rcol.null_count());
 
     using Type = get_column_stored_type<Element>;
 
