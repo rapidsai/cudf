@@ -84,7 +84,7 @@ DLManagedTensor* to_dlpack(
  */
 
 /**
- * @brief Detailed meta data information of arrow array.
+ * @brief Detailed meta data information for arrow array.
  *
  * As of now this contains only name in the hierarchy of children of cudf column,
  * but in future this can be updated as per requirement.

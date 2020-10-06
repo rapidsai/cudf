@@ -299,7 +299,7 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
                                        cudaStream_t stream)
 {
   CUDF_EXPECTS((metadata.size() == input.num_columns()),
-               "column names should be empty or should be equal to number of columns in table");
+               "columns' metadata should be equal to number of columns in table");
 
   std::vector<std::shared_ptr<arrow::Array>> arrays;
   std::vector<std::shared_ptr<arrow::Field>> fields;
