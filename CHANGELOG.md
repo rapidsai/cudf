@@ -73,6 +73,7 @@
 - PR #6163 Use `Column.full` instead of `scalar_broadcast_to` or `cupy.zeros`
 - PR #6176 Fix cmake warnings for GoogleTest, GoogleBenchmark, and Arrow external projects
 - PR #6149 Update to Arrow v1.0.1
+- PR #6421 Use `pandas.testing` in `cudf`
 - PR #6357 Use `pandas.testing` in `dask-cudf`
 - PR #6201 Expose libcudf test utilities headers for external project use.
 - PR #6174 Data profile support in random data generator; Expand cuIO benchmarks
@@ -120,6 +121,7 @@
 - PR #6377 Update ci/local/README.md
 - PR #6383 Removed `move.pxd`, use standard library `move`
 - PR #6400 Removed unused variables
+- PR #6409 Allow CuPy 8.x
 - PR #6407 Add RMM_LOGGING_LEVEL flag to Java docker build
 
 ## Bug Fixes
