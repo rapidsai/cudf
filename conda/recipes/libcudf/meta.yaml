@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
 {% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
@@ -43,6 +43,11 @@ test:
     - test -f $PREFIX/lib/libcudf.so
     - test -f $PREFIX/lib/libcudftestutil.a
     - test -f $PREFIX/include/cudf/aggregation.hpp
+    - test -f $PREFIX/include/cudf/ast/transform.hpp
+    - test -f $PREFIX/include/cudf/ast/detail/linearizer.hpp
+    - test -f $PREFIX/include/cudf/ast/detail/operators.hpp
+    - test -f $PREFIX/include/cudf/ast/linearizer.hpp
+    - test -f $PREFIX/include/cudf/ast/operators.hpp
     - test -f $PREFIX/include/cudf/binaryop.hpp
     - test -f $PREFIX/include/cudf/column/column_factories.hpp
     - test -f $PREFIX/include/cudf/column/column.hpp
