@@ -153,9 +153,15 @@ cpdef generate_pandas_metadata(Table table, index):
         types,
     )
 
-    md = metadata[b'pandas']
-    json_str = md.decode("utf-8")
-    return json_str
+    md_dict = json.loads(metadata[b"pandas"])
+
+    # correct metadata for list and struct types
+    for col_meta in md_dict["columns"]:
+        if col_meta["numpy_type"] in ("list", "struct"):
+            col_meta["numpy_type"] = "object"
+
+    return json.dumps(md_dict)
+
 
 cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                    skiprows=None, num_rows=None, strings_to_categorical=False,

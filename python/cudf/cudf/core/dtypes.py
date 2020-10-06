@@ -164,9 +164,6 @@ class ListDtype(ExtensionDtype):
         else:
             return f"ListDtype({self.element_type})"
 
-    def __str__(self):
-        return "object"
-
 
 class StructDtype(ExtensionDtype):
 
