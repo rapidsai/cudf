@@ -115,6 +115,7 @@ cdef vector[column_metadata] gather_metadata(object metadata) except +:
             if len(val) == 2:
                 cpp_metadata[i].children_meta = gather_metadata(val[1])
 
+        return cpp_metadata
     else:
         raise ValueError("Malformed metadata has been encountered")
 
