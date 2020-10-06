@@ -1665,13 +1665,13 @@ TEST_F(SearchTest, search_table_dictionary)
   cudf::table_view values({values_0, values_1, values_2});
 
   std::vector<cudf::order> order_flags{
-    {cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::ASCENDING}};
+    {cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::DESCENDING}};
   std::vector<cudf::null_order> null_order_flags{
     {cudf::null_order::AFTER, cudf::null_order::AFTER, cudf::null_order::AFTER}};
 
   {
     auto result = cudf::lower_bound(input, values, order_flags, null_order_flags);
-    fixed_width_column_wrapper<size_type> expect{1, 10, 4};
+    fixed_width_column_wrapper<size_type> expect{1, 10, 2};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
   }
   {
