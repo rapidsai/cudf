@@ -2061,7 +2061,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpAdd)
   using namespace numeric;
   using decimalXX = TypeParam;
 
-  auto const sz = std::size_t{10};
+  auto const sz = std::size_t{1000};
 
   auto vec1       = std::vector<decimalXX>(sz);
   auto const vec2 = std::vector<decimalXX>(sz, decimalXX{2, scale_type{0}});
@@ -2089,7 +2089,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpMultiply)
   using namespace numeric;
   using decimalXX = TypeParam;
 
-  auto const sz = std::size_t{10};
+  auto const sz = std::size_t{1000};
 
   auto vec1       = std::vector<decimalXX>(sz);
   auto const vec2 = std::vector<decimalXX>(sz, decimalXX{2, scale_type{0}});

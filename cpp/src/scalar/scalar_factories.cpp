@@ -43,8 +43,10 @@ struct scalar_construction_helper {
     return std::unique_ptr<scalar>(s);
   }
 
-  template <typename T, typename... Args>  // TODO reformat
-  std::enable_if_t<not is_fixed_width<T>(), std::unique_ptr<scalar>> operator()(Args... args) const
+  template <typename T,
+            typename... Args,
+            typename std::enable_if_t<not is_fixed_width<T>()>* = nullptr>
+  std::unique_ptr<scalar> operator()(Args... args) const
   {
     CUDF_FAIL("Invalid type.");
   }
