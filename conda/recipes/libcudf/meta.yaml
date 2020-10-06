@@ -29,9 +29,9 @@ requirements:
   host:
     - librmm {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
-    - arrow-cpp 1.0.1.*
+    - arrow-cpp 1.0.1
     - arrow-cpp-proc * cuda
-    - boost-cpp 1.72.0.*
+    - boost-cpp 1.72.0
     - dlpack
   run:
     - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
