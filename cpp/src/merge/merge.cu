@@ -236,7 +236,7 @@ struct column_merger {
     index_vector const& row_order,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
     cudaStream_t stream                 = nullptr)
-    : dv_row_order_(row_order), mr_(mr), stream_(stream)
+    : row_order_(row_order), mr_(mr), stream_(stream)
   {
   }
 
@@ -245,17 +245,17 @@ struct column_merger {
   template <typename Element>  // required: column type
   std::unique_ptr<column> operator()(column_view const& lcol, column_view const& rcol) const
   {
-    auto lsz          = lcol.size();
-    auto merged_size  = lsz + rcol.size();
-    auto type         = lcol.type();
-    auto merged_col = lcol.has_nulls() ? cudf::allocate_like(lcol, merged_size)
-                                         : cudf::allocate_like(rcol, merged_size);
+    auto lsz         = lcol.size();
+    auto merged_size = lsz + rcol.size();
+    auto type        = lcol.type();
+    auto merged_col  = lcol.has_nulls() ? cudf::allocate_like(lcol, merged_size)
+                                       : cudf::allocate_like(rcol, merged_size);
 
-    //"gather" data from lcol, rcol according to dv_row_order_ "map"
+    //"gather" data from lcol, rcol according to row_order_ "map"
     //(directly calling gather() won't work because
     // lcol, rcol indices overlap!)
     //
-    cudf::mutable_column_view merged_view = p_merged_col->mutable_view();
+    cudf::mutable_column_view merged_view = merged_col->mutable_view();
 
     // initialize null_mask to all valid:
     //
@@ -300,14 +300,14 @@ struct column_merger {
     if (lcol.has_nulls() || rcol.has_nulls()) {
       // resolve null mask:
       //
-      materialize_bitmask(lcol, rcol, merged_view, dv_row_order_.data().get(), stream_);
+      materialize_bitmask(lcol, rcol, merged_view, row_order_.data().get(), stream_);
     }
 
-    return p_merged_col;
+    return merged_col;
   }
 
  private:
-  index_vector const& dv_row_order_;
+  index_vector const& row_order_;
   rmm::mr::device_memory_resource* mr_;
   cudaStream_t stream_;
 };
@@ -319,13 +319,13 @@ std::unique_ptr<column> column_merger::operator()<cudf::string_view>(column_view
 {
   auto column = strings::detail::merge<index_type>(strings_column_view(lcol),
                                                    strings_column_view(rcol),
-                                                   dv_row_order_.begin(),
-                                                   dv_row_order_.end(),
+                                                   row_order_.begin(),
+                                                   row_order_.end(),
                                                    mr_,
                                                    stream_);
   if (lcol.has_nulls() || rcol.has_nulls()) {
     auto merged_view = column->mutable_view();
-    materialize_bitmask(lcol, rcol, merged_view, dv_row_order_.data().get(), stream_);
+    materialize_bitmask(lcol, rcol, merged_view, row_order_.data().get(), stream_);
   }
   return column;
 }
