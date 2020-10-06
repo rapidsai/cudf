@@ -272,10 +272,16 @@ endif(ZLIB_INCLUDE_DIR)
 # Don't look for a CMake configuration file
 set(Boost_NO_BOOST_CMAKE ON)
 
+get_cmake_property(_variableNames VARIABLES)
+list (SORT _variableNames)
+foreach (_variableName ${_variableNames})
+    message(STATUS "${_variableName}=${${_variableName}}")
+endforeach()
+
 CPMFindPackage(
   NAME Boost
-  GITHUB_REPOSITORY Orphis/boost-cmake
-  VERSION 1.67.0
+  GITHUB_REPOSITORY Orphis/boost-cmake@60fb5fa
+  VERSION 1.70.0
   FIND_PACKAGE_ARGUMENTS "COMPONENTS filesystem"
 )
 
@@ -294,18 +300,18 @@ endif(Boost_INCLUDE_DIR)
 ###################################################################################################
 # - RMM -------------------------------------------------------------------------------------------
 
-find_path(RMM_INCLUDE "rmm"
-          HINTS "$ENV{RMM_ROOT}/include")
+#find_path(RMM_INCLUDE "rmm"
+#          HINTS "$ENV{RMM_ROOT}/include")
 
 # RMM fails to provide the RMM_SOURCE_DIR variable when installed with CPM. This does not work.
-if(NOT RMM_INCLUDE)
-  CPMFindPackage(
-    NAME RMM
-    GITHUB_REPOSITORY rapidsai/rmm
-    VERSION 0.16.0a
-  )
 
-  set(RMM_INCLUDE "${RMM_SOURCE_DIR}")
+CPMFindPackage(
+  NAME RMM
+  GITHUB_REPOSITORY rapidsai/rmm
+  VERSION 0.16.0a
+)
+
+set(RMM_INCLUDE "${RMM_SOURCE_DIR}")
 endif(NOT RMM_INCLUDE)
 
 message(STATUS "RMM: RMM_INCLUDE set to ${RMM_INCLUDE}")
