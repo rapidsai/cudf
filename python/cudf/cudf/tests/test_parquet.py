@@ -865,210 +865,6 @@ def list_gen(
     ]
 
 
-def struct_gen(gen, skip_rows, num_rows, include_validity=False):
-    """
-    Generate a struct column based on input parameters.
-
-    Args:
-        gen: A array of callables which generate an individual row based on an
-            absolute index.
-        skip_rows : Generate the column as if it had started at 'skip_rows'
-            instead of 0. The intent here is to emulate the skip_rows
-            parameter of the parquet reader.
-        num_fields : Number of fields in the struct.
-        include_validity : Whether or not to include nulls as part of the
-            column. If true, it will add a selection of nulls at both the
-            field level and at the value level.
-
-    Returns:
-        The generated struct column.
-    """
-
-    def R(first_val, num_fields):
-        return {
-            "col"
-            + str(f): (gen[f](first_val, first_val) if f % 4 != 0 else None)
-            if include_validity
-            else (gen[f](first_val, first_val))
-            for f in range(len(gen))
-        }
-
-    return [
-        (R((i + skip_rows), len(gen)) if (i + skip_rows) % 4 != 0 else None)
-        if include_validity
-        else R((i + skip_rows), len(gen))
-        for i in range(num_rows)
-    ]
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        # struct
-        [
-            {"a": 1, "b": 2},
-            {"a": 10, "b": 20},
-            {"a": None, "b": 22},
-            {"a": None, "b": None},
-            {"a": 15, "b": None},
-        ],
-        # struct-of-list
-        [
-            {"a": 1, "b": 2, "c": [1, 2, 3]},
-            {"a": 10, "b": 20, "c": [4, 5]},
-            {"a": None, "b": 22, "c": [6]},
-            {"a": None, "b": None, "c": None},
-            {"a": 15, "b": None, "c": [-1, -2]},
-            None,
-            {"a": 100, "b": 200, "c": [-10, None, -20]},
-        ],
-        # list-of-struct
-        [
-            [{"a": 1, "b": 2}, {"a": 2, "b": 3}, {"a": 4, "b": 5}],
-            None,
-            [{"a": 10, "b": 20}],
-            [{"a": 100, "b": 200}, {"a": None, "b": 300}, None],
-        ],
-        # struct-of-struct
-        [
-            {"a": 1, "b": {"inner_a": 10, "inner_b": 20}, "c": 2},
-            {"a": 3, "b": {"inner_a": 30, "inner_b": 40}, "c": 4},
-            {"a": 5, "b": {"inner_a": 50, "inner_b": None}, "c": 6},
-            {"a": 7, "b": None, "c": 8},
-            {"a": None, "b": {"inner_a": None, "inner_b": None}, "c": None},
-            None,
-            {"a": None, "b": {"inner_a": None, "inner_b": 100}, "c": 10},
-        ],
-    ],
-)
-def test_parquet_reader_struct_basic(tmpdir, data):
-    expect = pa.Table.from_pydict({"struct": data})
-    fname = tmpdir.join("test_parquet_reader_struct_basic.parquet")
-    pa.parquet.write_table(expect, fname)
-    assert os.path.exists(fname)
-    got = cudf.read_parquet(fname)
-    expect.equals(got.to_arrow())
-
-
-def test_parquet_reader_struct_los_large(tmpdir):
-    num_rows = 256
-    list_size = 64
-    data = [
-        struct_gen([string_gen, int_gen, string_gen], 0, list_size, False)
-        if i % 2 == 0
-        else None
-        for i in range(num_rows)
-    ]
-    print(data)
-    expect = pa.Table.from_pydict({"los": data})
-    fname = tmpdir.join("test_parquet_reader_struct_los_large.parquet")
-    pa.parquet.write_table(expect, fname)
-    assert os.path.exists(fname)
-    got = cudf.read_parquet(fname)
-    assert expect.equals(got.to_arrow())
-
-
-def test_parquet_reader_struct_sol_table(tmpdir):
-    # Struct<List<List>>
-    list_per_row = 3
-    list_size = 4
-
-    def list_gen_wrapped(x, y):
-        return list_row_gen(
-            int_gen, x * list_size * list_per_row, list_size, list_per_row
-        )
-
-    def string_list_gen_wrapped(x, y):
-        return list_row_gen(
-            string_gen,
-            x * list_size * list_per_row,
-            list_size,
-            list_per_row,
-            False,
-        )
-
-    data = struct_gen(
-        [int_gen, string_gen, list_gen_wrapped, string_list_gen_wrapped],
-        0,
-        32,
-        False,
-    )
-    expect = pa.Table.from_pydict({"sol": data})
-    fname = tmpdir.join("test_parquet_reader_struct_sol_table.parquet")
-    pa.parquet.write_table(expect, fname)
-    assert os.path.exists(fname)
-    got = cudf.read_parquet(fname)
-    assert expect.equals(got.to_arrow())
-
-
-def test_parquet_reader_struct_sol_table_nulls(tmpdir):
-    # Struct<List<List>>
-    list_per_row = 3
-    list_size = 4
-
-    def list_gen_wrapped(x, y):
-        return list_row_gen(
-            int_gen, x * list_size * list_per_row, list_size, list_per_row
-        )
-
-    def string_list_gen_wrapped(x, y):
-        return list_row_gen(
-            string_gen,
-            x * list_size * list_per_row,
-            list_size,
-            list_per_row,
-            True,
-        )
-
-    data = struct_gen(
-        [int_gen, string_gen, list_gen_wrapped, string_list_gen_wrapped],
-        0,
-        32,
-        True,
-    )
-    expect = pa.Table.from_pydict({"sol": data})
-    fname = tmpdir.join("test_parquet_reader_struct_sol_table_nulls.parquet")
-    pa.parquet.write_table(expect, fname)
-    assert os.path.exists(fname)
-    got = cudf.read_parquet(fname)
-    assert expect.equals(got.to_arrow())
-
-
-def test_parquet_reader_struct_sol_table_nulls_large(tmpdir):
-    # Struct<List<List>>
-    list_per_row = 100
-    list_size = 25
-
-    def list_gen_wrapped(x, y):
-        return list_row_gen(
-            int_gen, x * list_size * list_per_row, list_size, list_per_row
-        )
-
-    def string_list_gen_wrapped(x, y):
-        return list_row_gen(
-            string_gen,
-            x * list_size * list_per_row,
-            list_size,
-            list_per_row,
-            True,
-        )
-
-    data = struct_gen(
-        [int_gen, string_gen, list_gen_wrapped, string_list_gen_wrapped],
-        0,
-        256,
-        True,
-    )
-    expect = pa.Table.from_pydict({"sol": data})
-    fname = tmpdir.join(
-        "test_parquet_reader_struct_sol_table_nulls_large.parquet"
-    )
-    pa.parquet.write_table(expect, fname)
-    assert os.path.exists(fname)
-    got = cudf.read_parquet(fname)
-    assert expect.equals(got.to_arrow())
-
-
 def test_parquet_reader_list_large(tmpdir):
     expect = pd.DataFrame({"a": list_gen(int_gen, 0, 256, 80, 50)})
     fname = tmpdir.join("test_parquet_reader_list_large.parquet")
@@ -1164,6 +960,146 @@ def test_parquet_reader_list_num_rows(skip, tmpdir):
     )
     got = cudf.read_parquet(fname, skiprows=skip, num_rows=rows_to_read)
     assert_eq(expect, got, check_dtype=False)
+
+
+def struct_gen(gen, skip_rows, num_rows, include_validity=False):
+    """
+    Generate a struct column based on input parameters.
+
+    Args:
+        gen: A array of callables which generate an individual row based on an
+            absolute index.
+        skip_rows : Generate the column as if it had started at 'skip_rows'
+            instead of 0. The intent here is to emulate the skip_rows
+            parameter of the parquet reader.
+        num_fields : Number of fields in the struct.
+        include_validity : Whether or not to include nulls as part of the
+            column. If true, it will add a selection of nulls at both the
+            field level and at the value level.
+
+    Returns:
+        The generated struct column.
+    """
+
+    def R(first_val, num_fields):
+        return {
+            "col"
+            + str(f): (gen[f](first_val, first_val) if f % 4 != 0 else None)
+            if include_validity
+            else (gen[f](first_val, first_val))
+            for f in range(len(gen))
+        }
+
+    return [
+        (R((i + skip_rows), len(gen)) if (i + skip_rows) % 4 != 0 else None)
+        if include_validity
+        else R((i + skip_rows), len(gen))
+        for i in range(num_rows)
+    ]
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        # struct
+        [
+            {"a": 1, "b": 2},
+            {"a": 10, "b": 20},
+            {"a": None, "b": 22},
+            {"a": None, "b": None},
+            {"a": 15, "b": None},
+        ],
+        # struct-of-list
+        [
+            {"a": 1, "b": 2, "c": [1, 2, 3]},
+            {"a": 10, "b": 20, "c": [4, 5]},
+            {"a": None, "b": 22, "c": [6]},
+            {"a": None, "b": None, "c": None},
+            {"a": 15, "b": None, "c": [-1, -2]},
+            None,
+            {"a": 100, "b": 200, "c": [-10, None, -20]},
+        ],
+        # list-of-struct
+        [
+            [{"a": 1, "b": 2}, {"a": 2, "b": 3}, {"a": 4, "b": 5}],
+            None,
+            [{"a": 10, "b": 20}],
+            [{"a": 100, "b": 200}, {"a": None, "b": 300}, None],
+        ],
+        # struct-of-struct
+        [
+            {"a": 1, "b": {"inner_a": 10, "inner_b": 20}, "c": 2},
+            {"a": 3, "b": {"inner_a": 30, "inner_b": 40}, "c": 4},
+            {"a": 5, "b": {"inner_a": 50, "inner_b": None}, "c": 6},
+            {"a": 7, "b": None, "c": 8},
+            {"a": None, "b": {"inner_a": None, "inner_b": None}, "c": None},
+            None,
+            {"a": None, "b": {"inner_a": None, "inner_b": 100}, "c": 10},
+        ],
+    ],
+)
+def test_parquet_reader_struct_basic(tmpdir, data):
+    expect = pa.Table.from_pydict({"struct": data})
+    fname = tmpdir.join("test_parquet_reader_struct_basic.parquet")
+    pa.parquet.write_table(expect, fname)
+    assert os.path.exists(fname)
+    got = cudf.read_parquet(fname)
+    expect.equals(got.to_arrow())
+
+
+def test_parquet_reader_struct_los_large(tmpdir):
+    num_rows = 256
+    list_size = 64
+    data = [
+        struct_gen([string_gen, int_gen, string_gen], 0, list_size, False)
+        if i % 2 == 0
+        else None
+        for i in range(num_rows)
+    ]
+    expect = pa.Table.from_pydict({"los": data})
+    fname = tmpdir.join("test_parquet_reader_struct_los_large.parquet")
+    pa.parquet.write_table(expect, fname)
+    assert os.path.exists(fname)
+    got = cudf.read_parquet(fname)
+    assert expect.equals(got.to_arrow())
+
+
+@pytest.mark.parametrize(
+    "params", [[3, 4, 32, False], [3, 4, 32, True], [100, 25, 256, True]]
+)
+def test_parquet_reader_struct_sol_table(tmpdir, params):
+    # Struct<List<List>>
+    lists_per_row = params[0]
+    list_size = params[1]
+    num_rows = params[2]
+    include_validity = params[3]
+
+    def list_gen_wrapped(x, y):
+        return list_row_gen(
+            int_gen, x * list_size * lists_per_row, list_size, lists_per_row
+        )
+
+    def string_list_gen_wrapped(x, y):
+        return list_row_gen(
+            string_gen,
+            x * list_size * lists_per_row,
+            list_size,
+            lists_per_row,
+            include_validity,
+        )
+
+    data = struct_gen(
+        [int_gen, string_gen, list_gen_wrapped, string_list_gen_wrapped],
+        0,
+        num_rows,
+        include_validity,
+    )
+    expect = pa.Table.from_pydict({"sol": data})
+    fname = tmpdir.join("test_parquet_reader_struct_sol_table.parquet")
+    pa.parquet.write_table(expect, fname)
+    assert os.path.exists(fname)
+    got = cudf.read_parquet(fname)
+    assert expect.equals(got.to_arrow())
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
