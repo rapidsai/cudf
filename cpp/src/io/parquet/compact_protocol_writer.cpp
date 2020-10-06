@@ -114,11 +114,11 @@ size_t CompactProtocolWriter::write(const ColumnChunkMetaData &s)
   return value();
 }
 
-void CompactProtocolWriter::putb(uint8_t v) { m_buf->push_back(v); }
+void CompactProtocolWriter::putb(uint8_t v) { m_buf.push_back(v); }
 
 void CompactProtocolWriter::putb(const uint8_t *raw, uint32_t len)
 {
-  for (uint32_t i = 0; i < len; i++) m_buf->push_back(raw[i]);
+  for (uint32_t i = 0; i < len; i++) m_buf.push_back(raw[i]);
 }
 
 uint32_t CompactProtocolWriter::put_uint(uint64_t v)
@@ -194,7 +194,7 @@ inline void CompactProtocolWriter::field_struct_list(int field, const std::vecto
 inline size_t CompactProtocolWriter::value()
 {
   putb(0);
-  return m_buf->size() - struct_start_pos;
+  return m_buf.size() - struct_start_pos;
 }
 
 inline void CompactProtocolWriter::field_struct_blob(int field, const std::vector<uint8_t> &val)

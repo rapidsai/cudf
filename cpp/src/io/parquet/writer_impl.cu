@@ -19,8 +19,8 @@
  * @brief cuDF-IO parquet writer class implementation
  */
 
-#include "writer_impl.hpp"
 #include <io/parquet/compact_protocol_writer.hpp>
+#include "writer_impl.hpp"
 
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -930,7 +930,7 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
 std::unique_ptr<std::vector<uint8_t>> writer::impl::write_chunked_end(
   pq_chunked_state &state, bool return_filemetadata, const std::string &column_chunks_file_path)
 {
-  CompactProtocolWriter cpw(&buffer_);
+  CompactProtocolWriter cpw(buffer_);
   file_ender_s fendr;
   buffer_.resize(0);
   fendr.footer_len = static_cast<uint32_t>(cpw.write(state.md));
@@ -1003,7 +1003,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::merge_rowgroup_metadata(
   const std::vector<std::unique_ptr<std::vector<uint8_t>>> &metadata_list)
 {
   std::vector<uint8_t> output;
-  CompactProtocolWriter cpw(&output);
+  CompactProtocolWriter cpw(output);
   FileMetaData md;
 
   md.row_groups.reserve(metadata_list.size());

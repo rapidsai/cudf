@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include <io/parquet/parquet_common.hpp>
 #include <io/parquet/parquet.hpp>
+#include <io/parquet/parquet_common.hpp>
 
 #include <stddef.h>
 #include <stdint.h>
@@ -37,8 +37,10 @@ namespace parquet {
  **/
 class CompactProtocolWriter {
  public:
-  CompactProtocolWriter() { m_buf = nullptr; }
-  CompactProtocolWriter(std::vector<uint8_t> *output) { m_buf = output; }
+  CompactProtocolWriter(std::vector<uint8_t> &output)
+    : m_buf(output), struct_start_pos(m_buf.size()), current_field_value(0)
+  {
+  }
 
   size_t write(const FileMetaData &);
   size_t write(const SchemaElement &);
@@ -48,7 +50,7 @@ class CompactProtocolWriter {
   size_t write(const ColumnChunkMetaData &);
 
  protected:
-  std::vector<uint8_t> *m_buf;
+  std::vector<uint8_t> &m_buf;
   size_t struct_start_pos;
   int current_field_value;
 
