@@ -20,6 +20,7 @@
  */
 
 #include "writer_impl.hpp"
+#include <io/parquet/compact_protocol_writer.hpp>
 
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
