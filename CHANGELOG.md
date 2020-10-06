@@ -4,7 +4,7 @@
 
 ## Improvements
 
-- PR #6413 Replace nvtx package with official source
+- PR #6413 Replace Python NVTX package with official source
 
 ## Bug Fixes
 
