@@ -43,6 +43,8 @@
 #include <thrust/binary_search.h>
 #include <rmm/device_scalar.hpp>
 
+#include <thrust/detail/execution_policy.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <memory>
 
 namespace cudf {
@@ -76,9 +78,10 @@ process_rolling_window(column_device_view input,
     if (!has_nulls) {
       count = end_index - start_index;
     } else {
-      for (size_type j = start_index; j < end_index; j++) {
-        if (input.is_valid(j)) { count++; }
-      }
+      count = thrust::count_if(thrust::seq,
+                               thrust::make_counting_iterator(start_index),
+                               thrust::make_counting_iterator(end_index),
+                               [&input](auto i) { return input.is_valid(i); });
     }
     output.element<OutputType>(current_index) = count;
   }

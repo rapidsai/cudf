@@ -21,7 +21,7 @@ from cudf.tests.utils import assert_eq
 @pytest.mark.parametrize("agg", ["sum", "min", "max", "mean", "count"])
 @pytest.mark.parametrize("nulls", ["none", "one", "some", "all"])
 @pytest.mark.parametrize("center", [True, False])
-def test_rollling_series_basic(data, index, agg, nulls, center):
+def test_rolling_series_basic(data, index, agg, nulls, center):
     if PANDAS_GE_110:
         kwargs = {"check_freq": False}
     else:
