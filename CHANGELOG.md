@@ -6,7 +6,6 @@
 
 - PR #6384 Add CSV fuzz tests with varying function parameters
 
-
 ## Bug Fixes
 
 # cuDF 0.16.0 (Date TBD)
