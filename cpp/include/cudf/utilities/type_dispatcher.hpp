@@ -100,7 +100,7 @@ using get_column_stored_type =
 // clang-format on
 
 /**
- * @brief Checks if `fixed_point`-like types have template type `T` matching the to the columns
+ * @brief Checks if `fixed_point`-like types have template type `T` matching the column's
  * stored type id
  *
  * @tparam T The type that is stored on the device
