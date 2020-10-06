@@ -15,6 +15,8 @@
  */
 #pragma once
 
+#include <cstdint>
+
 //
 // 8-bit flag for each code-point.
 //

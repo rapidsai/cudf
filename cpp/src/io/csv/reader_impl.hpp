@@ -26,11 +26,14 @@
 #include <cudf/io/csv.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/csv.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
+
+using cudf::detail::host_span;
 
 namespace cudf {
 namespace io {
@@ -93,8 +96,7 @@ class reader::impl {
    * the start of the input data).
    * A row is actually the data/offset between two termination symbols.
    *
-   * @param h_data Uncompressed input data in host memory
-   * @param h_size Number of bytes of uncompressed input data
+   * @param data Uncompressed input data in host memory
    * @param range_begin Only include rows starting after this position
    * @param range_end Only include rows starting before this position
    * @param skip_rows Number of rows to skip from the start
@@ -102,8 +104,7 @@ class reader::impl {
    * @param load_whole_file Hint that the entire data will be needed on gpu
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  void gather_row_offsets(const char *h_data,
-                          size_t h_size,
+  void gather_row_offsets(host_span<char const> data,
                           size_t range_begin,
                           size_t range_end,
                           size_t skip_rows,
@@ -115,11 +116,10 @@ class reader::impl {
    * @brief Find the start position of the first data row
    *
    * @param h_data Uncompressed input data in host memory
-   * @param h_size Number of bytes of uncompressed input data
    *
    * @return Byte position of the first row
    */
-  size_t find_first_row_start(const char *h_data, size_t h_size);
+  size_t find_first_row_start(host_span<char const> data);
 
   /**
    * @brief Returns a detected or parsed list of column dtypes.
@@ -131,15 +131,15 @@ class reader::impl {
   std::vector<data_type> gather_column_types(cudaStream_t stream);
 
   /**
-   * @brief Converts the row-column data and outputs to columns.
+   * @brief Converts the row-column data and outputs to column bufferrs.
    *
    * @param column_types Column types
-   * @param out_buffers Output columns' device buffers
    * @param stream CUDA stream used for device memory operations and kernel launches.
+   *
+   * @return list of column buffers of decoded data, or ptr/size in the case of strings.
    */
-  void decode_data(std::vector<data_type> const &column_types,
-                   std::vector<column_buffer> &out_buffers,
-                   cudaStream_t stream);
+  std::vector<column_buffer> decode_data(std::vector<data_type> const &column_types,
+                                         cudaStream_t stream);
 
  private:
   rmm::mr::device_memory_resource *mr_ = nullptr;

@@ -91,4 +91,18 @@ std::unique_ptr<column> scan(
   rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
+
+/**
+ * @brief Determines the minimum and maximum values of a column.
+ *
+ *
+ * @param col column to compute minmax
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return A std::pair of scalars with the first scalar being the minimum value
+ *         and the second scalar being the maximum value of the input column.
+ */
+std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax(
+  column_view const &col,
+  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
+
 }  // namespace cudf

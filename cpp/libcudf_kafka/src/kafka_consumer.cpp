@@ -153,6 +153,29 @@ int64_t kafka_consumer::get_committed_offset(std::string const &topic, int parti
   return offset > 0 ? offset : 0;
 }
 
+std::map<std::string, std::vector<int32_t>> kafka_consumer::list_topics() const
+{
+  auto const md = [&]() {
+    RdKafka::Metadata *md;
+    CUDF_EXPECTS(RdKafka::ERR_NO_ERROR == consumer->metadata(true, nullptr, &md, default_timeout),
+                 "Failed to list_topics in Kafka broker");
+    return std::unique_ptr<RdKafka::Metadata>{md};
+  }();
+  std::map<std::string, std::vector<int32_t>> topic_parts;
+
+  for (auto const &topic :
+       *(std::unique_ptr<const RdKafka::Metadata::TopicMetadataVector>{md->topics()})) {
+    auto &part_ids    = topic_parts[topic->topic()];
+    auto const &parts = *(topic->partitions());
+    std::transform(
+      parts.cbegin(), parts.cend(), std::back_inserter(part_ids), [](auto const &part) {
+        return part->id();
+      });
+  }
+
+  return topic_parts;
+}
+
 std::map<std::string, int64_t> kafka_consumer::get_watermark_offset(std::string const &topic,
                                                                     int partition,
                                                                     int timeout,

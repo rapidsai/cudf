@@ -17,6 +17,7 @@ build:
   string: cuda_{{ cuda_version }}_py{{ py_version }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
   script_env:
     - VERSION_SUFFIX
+    - PARALLEL_LEVEL
 
 requirements:
   build:
@@ -25,28 +26,27 @@ requirements:
     - setuptools
     - numba >=0.49.0
     - dlpack
-    - pyarrow 1.0.1.*
+    - pyarrow 1.0.1
     - libcudf {{ version }}
-    - rmm {{ minor_version }}.*
-    - cudatoolkit {{ cuda_version }}.*
+    - rmm {{ minor_version }}
+    - cudatoolkit {{ cuda_version }}
   run:
     - python
     - pandas >=1.0,<1.2.0dev0
-    - cupy >=6.6.0,<8.0.0a0,!=7.1.0
+    - cupy >7.1.0,<9.0.0a0
     - numba >=0.49.0
     - numpy
-    - pyarrow 1.0.1.*
+    - {{ pin_compatible('pyarrow', max_pin='x.x.x') }}
     - fastavro >=0.22.0
-    - rmm {{ minor_version }}.*
-    - dlpack
+    - {{ pin_compatible('rmm', max_pin='x.x') }}
     - fsspec>=0.6.0
     - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
 
 test:
   requires:
     - cudatoolkit {{ cuda_version }}.*
-  commands:
-    - python -c "import cudf"
+  imports:
+    - cudf
 
 about:
   home: http://rapids.ai/
