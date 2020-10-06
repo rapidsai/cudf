@@ -20,6 +20,10 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/dictionary/detail/search.hpp>
+#include <cudf/dictionary/detail/update_keys.hpp>
+#include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/replace.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
@@ -213,45 +217,6 @@ std::enable_if_t<std::is_same<T, string_view>::value, std::unique_ptr<cudf::colu
   return clamp_string_column(input, lo_itr, lo_replace_itr, hi_itr, hi_replace_itr, mr, stream);
 }
 
-template <typename T, typename ScalarIterator>
-std::enable_if_t<std::is_same<T, dictionary32>::value, std::unique_ptr<cudf::column>> clamper(
-  column_view const& input,
-  ScalarIterator const& lo_itr,
-  ScalarIterator const& lo_replace_itr,
-  ScalarIterator const& hi_itr,
-  ScalarIterator const& hi_replace_itr,
-  rmm::mr::device_memory_resource* mr,
-  cudaStream_t stream)
-{
-  CUDF_FAIL("dictionary type not supported");
-}
-
-template <typename T, typename ScalarIterator>
-std::enable_if_t<std::is_same<T, list_view>::value, std::unique_ptr<cudf::column>> clamper(
-  column_view const& input,
-  ScalarIterator const& lo_itr,
-  ScalarIterator const& lo_replace_itr,
-  ScalarIterator const& hi_itr,
-  ScalarIterator const& hi_replace_itr,
-  rmm::mr::device_memory_resource* mr,
-  cudaStream_t stream)
-{
-  CUDF_FAIL("list_view type not supported");
-}
-
-template <typename T, typename ScalarIterator>
-std::enable_if_t<std::is_same<T, cudf::struct_view>::value, std::unique_ptr<cudf::column>> clamper(
-  column_view const& input,
-  ScalarIterator const& lo_itr,
-  ScalarIterator const& lo_replace_itr,
-  ScalarIterator const& hi_itr,
-  ScalarIterator const& hi_replace_itr,
-  rmm::mr::device_memory_resource* mr,
-  cudaStream_t stream)
-{
-  CUDF_FAIL("struct_view type not supported");
-}
-
 }  // namespace
 
 template <typename T, typename ScalarIterator>
@@ -278,6 +243,8 @@ struct dispatch_clamp {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
     cudaStream_t stream                 = 0)
   {
+    CUDF_EXPECTS(lo.type() == input.type(), "mismatching types of scalar and input");
+
     auto lo_itr         = make_pair_iterator<T>(lo);
     auto hi_itr         = make_pair_iterator<T>(hi);
     auto lo_replace_itr = make_pair_iterator<T>(lo_replace);
@@ -338,6 +305,81 @@ std::unique_ptr<column> dispatch_clamp::operator()<struct_view>(column_view cons
   CUDF_FAIL("clamp for struct_view not supported");
 }
 
+template <>
+std::unique_ptr<column> dispatch_clamp::operator()<cudf::dictionary32>(
+  column_view const& input,
+  scalar const& lo,
+  scalar const& lo_replace,
+  scalar const& hi,
+  scalar const& hi_replace,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
+{
+  // add lo_replace and hi_replace to keys
+  auto matched_column = [&] {
+    auto matched_view              = dictionary_column_view(input);
+    std::unique_ptr<column> result = nullptr;
+    auto add_scalar_key            = [&](scalar const& key, scalar const& key_replace) {
+      if (key.is_valid()) {
+        result = dictionary::detail::add_keys(
+          matched_view,
+          make_column_from_scalar(key_replace, 1, rmm::mr::get_current_device_resource(), stream)
+            ->view(),
+          mr,
+          stream);
+        matched_view = dictionary_column_view(result->view());
+      }
+    };
+    add_scalar_key(lo, lo_replace);
+    add_scalar_key(hi, hi_replace);
+    return result;
+  }();
+  auto matched_view = dictionary_column_view(matched_column->view());
+
+  // get the indexes for lo_replace and for hi_replace
+  auto lo_replace_index = dictionary::detail::get_index(
+    matched_view, lo_replace, rmm::mr::get_current_device_resource(), stream);
+  auto hi_replace_index = dictionary::detail::get_index(
+    matched_view, hi_replace, rmm::mr::get_current_device_resource(), stream);
+
+  // get the closest indexes for lo and for hi
+  auto lo_index = dictionary::detail::get_insert_index(
+    matched_view, lo, rmm::mr::get_current_device_resource(), stream);
+  auto hi_index = dictionary::detail::get_insert_index(
+    matched_view, hi, rmm::mr::get_current_device_resource(), stream);
+
+  // call clamp with the scalar indexes and the matched indices
+  auto matched_indices = matched_view.get_indices_annotated();
+  auto new_indices     = cudf::type_dispatcher(matched_indices.type(),
+                                           dispatch_clamp{},
+                                           matched_indices,
+                                           *lo_index,
+                                           *lo_replace_index,
+                                           *hi_index,
+                                           *hi_replace_index,
+                                           mr,
+                                           stream);
+
+  auto const indices_type = new_indices->type();
+  auto const output_size  = new_indices->size();
+  auto const null_count   = new_indices->null_count();
+  auto contents           = new_indices->release();
+  auto indices_column     = std::make_unique<column>(indices_type,
+                                                 static_cast<size_type>(output_size),
+                                                 *(contents.data.release()),
+                                                 rmm::device_buffer{0, stream, mr},
+                                                 0);
+
+  // take the keys from the matched column allocated using mr
+  std::unique_ptr<column> keys_column(std::move(matched_column->release().children.back()));
+
+  // create column with keys_column and indices_column
+  return make_dictionary_column(std::move(keys_column),
+                                std::move(indices_column),
+                                std::move(*(contents.null_mask.release())),
+                                null_count);
+}
+
 /**
  * @copydoc cudf::clamp(column_view const& input,
                                       scalar const& lo,
@@ -360,7 +402,6 @@ std::unique_ptr<column> clamp(
   CUDF_EXPECTS(lo.type() == hi.type(), "mismatching types of limit scalars");
   CUDF_EXPECTS(lo_replace.type() == hi_replace.type(), "mismatching types of replace scalars");
   CUDF_EXPECTS(lo.type() == lo_replace.type(), "mismatching types of limit and replace scalars");
-  CUDF_EXPECTS(lo.type() == input.type(), "mismatching types of scalar and input");
 
   if ((not lo.is_valid(stream) and not hi.is_valid(stream)) or (input.is_empty())) {
     // There will be no change

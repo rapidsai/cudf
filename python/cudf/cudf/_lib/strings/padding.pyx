@@ -127,7 +127,7 @@ def rjust(Column source_strings,
           fill_char):
     """
     Returns a Column by filling left side of strings in `source_strings`
-    with additional character, `fill_char` upto the given `width`.
+    with additional character, `fill_char` up to the given `width`.
     """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()

@@ -15,19 +15,22 @@
  */
 
 #include <cudf/column/column.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/join.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
-#include "cudf/types.hpp"
+#include "cudf/utilities/error.hpp"
 
 template <typename T>
 using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
@@ -482,6 +485,29 @@ TEST_F(JoinTest, LeftJoinOnNulls)
   sorted_gold     = cudf::gather(gold_nulls_unequal.view(), *gold_sort_order);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*sorted_gold, *sorted_result);
+}
+
+TEST_F(JoinTest, InnerJoinSizeOverflow)
+{
+  auto zero = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
+  zero->set_valid(true);
+  static_cast<cudf::scalar_type_t<int32_t> *>(zero.get())->set_value(0);
+
+  // Should cause size overflow, raise exception
+  int32_t left  = 4;
+  int32_t right = 1073741825;
+
+  auto col0_0 = cudf::make_column_from_scalar(*zero, left);
+  auto col1_0 = cudf::make_column_from_scalar(*zero, right);
+
+  CVector cols0, cols1;
+  cols0.push_back(std::move(col0_0));
+  cols1.push_back(std::move(col1_0));
+
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
+
+  EXPECT_THROW(cudf::inner_join(t0, t1, {0}, {0}, {{0, 0}}), cudf::logic_error);
 }
 
 TEST_F(JoinTest, InnerJoinNoNulls)
