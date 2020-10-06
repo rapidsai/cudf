@@ -688,7 +688,7 @@ def merge_sorted(
             na_position=na_position,
         )
     )
-    result._copy_categories(objs[0])
+    result._postprocess_columns(objs[0])
     return result
 
 
