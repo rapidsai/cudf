@@ -184,12 +184,14 @@
 - PR #6372 Fix issue related to reading a nullable boolean column in `read_parquet` when `engine=pyarrow`
 - PR #6378 Fix index handling in `fillna` and incorrect pytests
 - PR #6380 Avoid problematic column-index check in dask_cudf.read_parquet test
+- PR #6403 Fix error handling in notebook tests
 - PR #6408 Avoid empty offset list in hash_partition output
 - PR #6402 Update JNI build to pull fixed nvcomp commit
 - PR #6410 Fix uses of dangerous default values in Python code
 - PR #6424 Check for null data in close for ColumnBuilder
 - PR #6426 Fix `RuntimeError` when `np.bool_` is passed as `header` in `to_csv`
 - PR #6443 Make java apis getList and getStruct public
+
 
 # cuDF 0.15.0 (26 Aug 2020)
 
