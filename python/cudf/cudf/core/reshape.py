@@ -215,6 +215,8 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
 
     allowed_typs = {cudf.Series, cudf.DataFrame}
 
+    typ = list(typs)[0]
+
     param_axis = _axis_map.get(axis, None)
     if param_axis is None:
         raise ValueError(
@@ -227,6 +229,12 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
 
     # when axis is 1 (column) we can concat with Series and Dataframes
     if axis == 1:
+
+        if join == 'inner' and typ is cudf.Series:
+            for i, obj in enumerate(objs):
+                obj.name = i
+            new_objs = objs[0].to_frame().join(objs[1].to_frame(), how="inner", sort="True")
+            return new_objs
 
         assert typs.issubset(allowed_typs)
         df = cudf.DataFrame()
@@ -260,8 +268,6 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             return df.sort_index()
         else:
             return df
-
-    typ = list(typs)[0]
 
     if len(typs) > 1:
         if allowed_typs == typs:
