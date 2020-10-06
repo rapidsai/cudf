@@ -31,12 +31,13 @@ requirements:
     - cudatoolkit {{ cuda_version }}.*
     - arrow-cpp 1.0.1.*
     - arrow-cpp-proc * cuda
-    - boost-cpp 1.72.0
+    - boost-cpp 1.72.0.*
     - dlpack
   run:
     - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
     - arrow-cpp-proc * cuda
     - {{ pin_compatible('boost-cpp', max_pin='x.x.x') }}
+    - {{ pin_compatible('dlpack', max_pin='x.x') }}
 
 test:
   commands:
