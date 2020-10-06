@@ -3,7 +3,7 @@ from contextlib import contextmanager
 import cupy
 import numpy as np
 import pandas as pd
-from pandas.util import testing as tm
+from pandas import testing as tm
 
 import cudf
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
