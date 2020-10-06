@@ -60,8 +60,8 @@ inline rmm::device_buffer create_data(
 }
 
 /**
- * @brief Class for holding device memory buffers to column data that will be
- * eventually used create to create a column.
+ * @brief Class for holding device memory buffers to column data that eventually
+ * will be used to create a column.
  */
 struct column_buffer {
   // there is a potential bug here.  In the decoding step, the buffer of
