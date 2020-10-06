@@ -6,19 +6,21 @@
 - PR #5975 Add strings `filter_characters` API
 - PR #5843 Add `filters` parameter to Python `read_parquet` function for filtering row groups
 - PR #5974 Use libcudf instead of cupy for `arange` or column creation from a scalar.
+- PR #5494 Add Abstract Syntax Tree (AST) evaluator.
 - PR #6076 Add durations type support for csv writer, reader
 - PR #5874 Add `COLLECT` groupby aggregation
 - PR #6330 Add ability to query if PTDS is enabled
 - PR #6119 Add support for `dayofweek` property in `DateTimeIndex` and `DatetimeProperties`
 - PR #6171 Java and Jni support for Struct columns
 - PR #6125 Add support for `Series.mode` and `DataFrame.mode`
+- PR #6271 Add support to deep-copy struct columns from struct column-view
+- PR #6262 Add nth_element series aggregation with null handling
+- PR #6316 Add StructColumn to Python API
 - PR #6247 Add `minmax` reduction function
 - PR #6232 `Json` and `Avro` benchmarking in python
 - PR #6139 Add column conversion to big endian byte list.
 - PR #6220 Add `list_topics()` to supply list of underlying Kafka connection topics
-- PR #6271 Add support to deep-copy struct columns from struct column-view
 - PR #6254 Add `cudf::make_dictionary_from_scalar` factory function
-- PR #6262 Add nth_element series aggregation with null handling
 - PR #6315 Native code for string-map lookups, for cudf-java
 - PR #6302 Add custom dataframe accessors
 - PR #6301 Add JNI bindings to nvcomp
@@ -115,6 +117,7 @@
 - PR #6400 Removed unused variables
 - PR #6409 Allow CuPy 8.x
 - PR #6407 Add RMM_LOGGING_LEVEL flag to Java docker build
+- PR #6438 Fetch nvcomp v1.1.0 for JNI build
 - PR #6442 Remove deprecated `DataFrame.from_gpu_matrix` and `DataFrame.to_gpu_matrix` APIs
 
 ## Bug Fixes
