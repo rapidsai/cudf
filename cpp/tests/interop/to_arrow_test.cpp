@@ -27,6 +27,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 #include <tests/interop/arrow_utils.hpp>
 
@@ -214,13 +215,20 @@ TYPED_TEST(ToArrowTestDurationsTest, DurationTable)
 
 TEST_F(ToArrowTest, NestedList)
 {
-  auto col = cudf::test::lists_column_wrapper<int64_t>({{{1, 2}, {3, 4}, {5}}, {{6}, {7, 8, 9}}});
+  auto valids = cudf::test::make_counting_transform_iterator(
+    0, [](auto i) { return i % 3 != 0 ? true : false; });
+  auto col = cudf::test::lists_column_wrapper<int64_t>(
+    {{{{{1, 2}, valids}, {{3, 4}, valids}, {5}}, {{6}, {{7, 8, 9}, valids}}}, valids});
   cudf::table_view input_view({col});
 
-  auto list_arr = get_arrow_list_array<int64_t>({1, 2, 3, 4, 5, 6, 7, 8, 9}, {0, 2, 4, 5, 6, 9});
-  std::vector<int32_t> offset{0, 3, 5};
-  auto nested_list_arr = std::make_shared<arrow::ListArray>(
-    arrow::list(list(arrow::int64())), offset.size() - 1, arrow::Buffer::Wrap(offset), list_arr);
+  auto list_arr = get_arrow_list_array<int64_t>({6, 7, 8, 9}, {0, 1, 4}, {1, 0, 1, 1});
+  std::vector<int32_t> offset{0, 0, 2};
+  auto mask_buffer     = arrow::internal::BytesToBits({0, 1}).ValueOrDie();
+  auto nested_list_arr = std::make_shared<arrow::ListArray>(arrow::list(list(arrow::int64())),
+                                                            offset.size() - 1,
+                                                            arrow::Buffer::Wrap(offset),
+                                                            list_arr,
+                                                            mask_buffer);
 
   std::vector<std::shared_ptr<arrow::Field>> schema_vector(
     {arrow::field("a", nested_list_arr->type())});
@@ -241,10 +249,12 @@ TEST_F(ToArrowTest, StructColumn)
     cudf::test::strings_column_wrapper{
       "Samuel Vimes", "Carrot Ironfoundersson", "Angua von Uberwald"}
       .release();
-  auto str_col2 = cudf::test::strings_column_wrapper{"CUDF", "ROCKS", "EVERYWHERE"}.release();
+  auto str_col2 =
+    cudf::test::strings_column_wrapper{{"CUDF", "ROCKS", "EVERYWHERE"}, {0, 1, 0}}.release();
   int num_rows{str_col->size()};
-  auto int_col  = cudf::test::fixed_width_column_wrapper<int32_t, int32_t>{{48, 27, 25}}.release();
-  auto int_col2 = cudf::test::fixed_width_column_wrapper<int32_t, int32_t>{{12, 24, 47}}.release();
+  auto int_col = cudf::test::fixed_width_column_wrapper<int32_t, int32_t>{{48, 27, 25}}.release();
+  auto int_col2 =
+    cudf::test::fixed_width_column_wrapper<int32_t, int32_t>{{12, 24, 47}, {1, 0, 1}}.release();
   auto bool_col = cudf::test::fixed_width_column_wrapper<bool>{{true, true, false}}.release();
   auto list_col =
     cudf::test::lists_column_wrapper<int64_t>({{{1, 2}, {3, 4}, {5}}, {{{6}}}, {{7}, {8, 9}}})
@@ -252,7 +262,10 @@ TEST_F(ToArrowTest, StructColumn)
   vector_of_columns cols2;
   cols2.push_back(std::move(str_col2));
   cols2.push_back(std::move(int_col2));
-  auto sub_struct_col = cudf::make_structs_column(num_rows, std::move(cols2), 0, {});
+  auto mask =
+    cudf::bools_to_mask(cudf::test::fixed_width_column_wrapper<bool>{{true, true, false}});
+  auto sub_struct_col = cudf::make_structs_column(
+    num_rows, std::move(cols2), cudf::UNKNOWN_NULL_COUNT, std::move(*(mask.first)));
   vector_of_columns cols;
   cols.push_back(std::move(str_col));
   cols.push_back(std::move(int_col));
@@ -274,8 +287,8 @@ TEST_F(ToArrowTest, StructColumn)
   std::vector<std::string> str2{"CUDF", "ROCKS", "EVERYWHERE"};
   auto str_array  = get_arrow_array<cudf::string_view>(str);
   auto int_array  = get_arrow_array<int32_t>({48, 27, 25});
-  auto str2_array = get_arrow_array<cudf::string_view>(str2);
-  auto int2_array = get_arrow_array<int32_t>({12, 24, 47});
+  auto str2_array = get_arrow_array<cudf::string_view>(str2, {0, 1, 0});
+  auto int2_array = get_arrow_array<int32_t>({12, 24, 47}, {1, 0, 1});
   auto bool_array = get_arrow_array<bool>({true, true, false});
   auto list_arr = get_arrow_list_array<int64_t>({1, 2, 3, 4, 5, 6, 7, 8, 9}, {0, 2, 4, 5, 6, 7, 9});
   std::vector<int32_t> offset{0, 3, 4, 6};
@@ -286,9 +299,10 @@ TEST_F(ToArrowTest, StructColumn)
   auto fields2 = std::vector<std::shared_ptr<arrow::Field>>{
     std::make_shared<arrow::Field>("string2", str2_array->type(), str2_array->null_count() > 0),
     std::make_shared<arrow::Field>("integral2", int2_array->type(), int2_array->null_count() > 0)};
-  auto dtype2        = std::make_shared<arrow::StructType>(fields2);
-  auto struct_array2 = std::make_shared<arrow::StructArray>(
-    dtype2, static_cast<int64_t>(input_view.num_rows()), child_arrays2);
+  auto dtype2                                = std::make_shared<arrow::StructType>(fields2);
+  std::shared_ptr<arrow::Buffer> mask_buffer = arrow::internal::BytesToBits({1, 1, 0}).ValueOrDie();
+  auto struct_array2                         = std::make_shared<arrow::StructArray>(
+    dtype2, static_cast<int64_t>(input_view.num_rows()), child_arrays2, mask_buffer);
 
   std::vector<std::shared_ptr<arrow::Array>> child_arrays(
     {str_array, int_array, bool_array, nested_list_arr, struct_array2});
@@ -313,7 +327,7 @@ TEST_F(ToArrowTest, StructColumn)
 
   auto got_arrow_table = cudf::to_arrow(input_view, {metadata});
 
-  ASSERT_TRUE(expected_arrow_table->Equals(*got_arrow_table, false));
+  ASSERT_TRUE(expected_arrow_table->Equals(*got_arrow_table, true));
 }
 
 struct ToArrowTestSlice
