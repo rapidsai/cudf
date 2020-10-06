@@ -291,7 +291,7 @@ struct column_merger {
                         // When C++17, use structure bindings
                         auto side  = thrust::get<0>(index_pair);
                         auto index = thrust::get<1>(index_pair);
-                        return side == side::LEFT ? p_d_lcol[index] : p_d_rcol[index];
+                        return side == side::LEFT ? d_lcol[index] : d_rcol[index];
                       });
 
     // CAVEAT: conditional call below is erroneous without
