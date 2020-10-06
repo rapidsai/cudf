@@ -77,7 +77,7 @@ cdef class Scalar:
         # Caching Mechanism
         
         self._initialize_cache(value, dtype)
-        self.set_device_value(value, dtype)
+        #self.set_device_value(value, dtype)
 
     def _initialize_cache(self, value, dtype):
         self._host_value = value
@@ -133,7 +133,7 @@ cdef class Scalar:
         The NumPy dtype corresponding to the data type of the underlying
         device scalar.
         """
-        cdef libcudf_types.data_type cdtype = self.c_value.get()[0].type()
+        cdef libcudf_types.data_type cdtype = self.get_c_value()[0].type()
         return cudf_to_np_types[<underlying_type_t_type_id>(cdtype.id())]
 
     @property
@@ -177,7 +177,7 @@ cdef class Scalar:
         """
         Returns if the Scalar is valid or not(i.e., <NA>).
         """
-        return self.c_value.get()[0].is_valid()
+        return self.get_c_value()[0].is_valid()
 
     def __repr__(self):
         if self.value is cudf.NA:
