@@ -50,6 +50,7 @@ struct stats {
   uint32_t countInt32;
   uint32_t countInt64;
   uint32_t countNULL;
+  uint32_t negative_integer_instance;
 };
 }  // namespace column_parse
 

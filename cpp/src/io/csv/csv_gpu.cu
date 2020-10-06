@@ -282,6 +282,10 @@ __global__ void __launch_bounds__(csvparse_block_dim)
             atomicAdd(&d_columnData[actual_col].countString, 1);
           }
         } else if (countNumber == int_req_number_cnt) {
+          if (raw_csv[start] == '-')
+          {
+            d_columnData[actual_col].negative_integer_instance = 1;
+          }
           atomicAdd(&d_columnData[actual_col].countInt64, 1);
         } else if (is_floatingpoint(
                      field_len, countNumber, countDecimal, countDash + countPlus, countExponent)) {
@@ -296,6 +300,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
     start = pos;
     col++;
   }
+
 }
 
 template <typename T, int base>

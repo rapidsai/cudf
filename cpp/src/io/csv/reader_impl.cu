@@ -564,9 +564,12 @@ std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream)
           // PANDAS which states that a column of integers with
           // a single NULL record need to be treated as floats.
           dtypes.emplace_back(cudf::type_id::FLOAT64);
-        } else {
+        } else if (column_stats[col].negative_integer_instance) {
           // All other integers are stored as 64-bit to conform to PANDAS
           dtypes.emplace_back(cudf::type_id::INT64);
+        } else {
+          // All other integers are stored as 64-bit to conform to PANDAS
+          dtypes.emplace_back(cudf::type_id::UINT64);
         }
       }
     }
