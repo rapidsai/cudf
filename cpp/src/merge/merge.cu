@@ -284,8 +284,8 @@ struct column_merger {
     // from lcol or rcol, depending on side;
     //
     thrust::transform(exe_pol->on(stream_),
-                      dv_row_order_.begin(),
-                      dv_row_order_.end(),
+                      row_order_.begin(),
+                      row_order_.end(),
                       merged_view.begin<Type>(),
                       [p_d_lcol, p_d_rcol] __device__(index_type const& index_pair) {
                         // When C++17, use structure bindings
