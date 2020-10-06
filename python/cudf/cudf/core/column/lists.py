@@ -52,12 +52,13 @@ class ListColumn(ColumnBase):
 
     def to_arrow(self):
         offsets = self.offsets.to_arrow()
-        elements = self.elements.to_arrow()
+        elements = (
+            pa.nulls(len(self.elements))
+            if len(self.elements) == self.elements.null_count
+            else self.elements.to_arrow()
+        )
         pa_type = pa.list_(elements.type)
 
-        if len(elements) == elements.null_count:
-            elements = pa.nulls(len(elements))
-            pa_type = pa.list_(elements.type)
         if self.nullable:
             nbuf = self.mask.to_host_array().view("int8")
             nbuf = pa.py_buffer(nbuf)
