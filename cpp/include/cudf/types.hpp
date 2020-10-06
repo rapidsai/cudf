@@ -272,6 +272,20 @@ class data_type {
 inline bool operator==(data_type const& lhs, data_type const& rhs) { return lhs.id() == rhs.id(); }
 
 /**
+ * @brief Compares two `data_type` objects for inequality.
+ *
+ * // TODO Define exactly what it means for two `data_type`s to be equal. e.g.,
+ * are two timestamps with different resolutions equal? How about decimals with
+ * different scale/precision?
+ *
+ * @param lhs The first `data_type` to compare
+ * @param rhs The second `data_type` to compare
+ * @return true `lhs` is not equal to `rhs`
+ * @return false `lhs` is equal to `rhs`
+ */
+inline bool operator!=(data_type const& lhs, data_type const& rhs) { return !(lhs == rhs); }
+
+/**
  * @brief Returns the size in bytes of elements of the specified `data_type`
  *
  * @note Only fixed-width types are supported
