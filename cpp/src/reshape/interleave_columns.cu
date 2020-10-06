@@ -186,9 +186,10 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
 
   auto const dtype = input.column(0).type();
 
-  std::for_each(std::cbegin(input), std::cend(input), [dtype](auto const& col) {
-    CUDF_EXPECTS(dtype == col.type(), "DTYPE mismatch");
-  });
+  CUDF_EXPECTS(std::all_of(std::cbegin(input),
+                           std::cend(input),
+                           [dtype](auto const& col) { return dtype == col.type(); }),
+               "DTYPE mismatch");
 
   auto const output_needs_mask = std::any_of(
     std::cbegin(input), std::cend(input), [](auto const& col) { return col.nullable(); });
