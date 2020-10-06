@@ -73,6 +73,7 @@ data_type arrow_to_cudf_type(arrow::DataType const& arrow_type)
     case arrow::Type::STRING: return data_type(type_id::STRING);
     case arrow::Type::DICTIONARY: return data_type(type_id::DICTIONARY32);
     case arrow::Type::LIST: return data_type(type_id::LIST);
+    case arrow::Type::STRUCT: return data_type(type_id::STRUCT);
     default: CUDF_FAIL("Unsupported type_id conversion to cudf");
   }
 }
@@ -264,6 +265,39 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::dictionary32>(
 }
 
 template <>
+std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::struct_view>(
+  arrow::Array const& array,
+  data_type type,
+  bool skip_mask,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
+{
+  auto struct_array = static_cast<arrow::StructArray const*>(&array);
+  std::vector<std::unique_ptr<column>> child_columns;
+  // Offsets have already been applied to child
+  arrow::ArrayVector array_children = struct_array->fields();
+  std::transform(array_children.cbegin(),
+                 array_children.cend(),
+                 std::back_inserter(child_columns),
+                 [&mr, &stream](auto const& child_array) {
+                   auto type = arrow_to_cudf_type(*(child_array->type()));
+                   return get_column(*child_array, type, false, mr, stream);
+                 });
+
+  auto out_mask = *(get_mask_buffer(array, mr, stream));
+  if (struct_array->null_bitmap_data() != nullptr) {
+    out_mask = copy_bitmask(static_cast<bitmask_type*>(out_mask.data()),
+                            array.offset(),
+                            array.offset() + array.length(),
+                            stream,
+                            mr);
+  }
+
+  return make_structs_column(
+    array.length(), move(child_columns), UNKNOWN_NULL_COUNT, std::move(out_mask), stream, mr);
+}
+
+template <>
 std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::list_view>(
   arrow::Array const& array,
   data_type type,
@@ -285,7 +319,9 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::list_view>(
                                    std::move(offsets_column),
                                    std::move(child_column),
                                    UNKNOWN_NULL_COUNT,
-                                   std::move(*get_mask_buffer(array, mr, stream)));
+                                   std::move(*get_mask_buffer(array, mr, stream)),
+                                   stream,
+                                   mr);
 
   return num_rows == array.length() ? std::move(out_col)
                                     : std::make_unique<column>(cudf::detail::slice(

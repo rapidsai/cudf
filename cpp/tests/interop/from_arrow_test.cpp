@@ -151,6 +151,85 @@ TEST_F(FromArrowTest, NestedList)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table_view, got_cudf_table->view());
 }
 
+TEST_F(FromArrowTest, StructColumn)
+{
+  using vector_of_columns = std::vector<std::unique_ptr<cudf::column>>;
+
+  // Create cudf table
+  auto nested_type_field_names =
+    std::vector<std::vector<std::string>>{{"string", "integral", "bool", "nested_list", "struct"}};
+  auto str_col =
+    cudf::test::strings_column_wrapper{
+      "Samuel Vimes", "Carrot Ironfoundersson", "Angua von Uberwald"}
+      .release();
+  auto str_col2 = cudf::test::strings_column_wrapper{"CUDF", "ROCKS", "EVERYWHERE"}.release();
+  int num_rows{str_col->size()};
+  auto int_col  = cudf::test::fixed_width_column_wrapper<int32_t, int32_t>{{48, 27, 25}}.release();
+  auto int_col2 = cudf::test::fixed_width_column_wrapper<int32_t, int32_t>{{12, 24, 47}}.release();
+  auto bool_col = cudf::test::fixed_width_column_wrapper<bool>{{true, true, false}}.release();
+  auto list_col =
+    cudf::test::lists_column_wrapper<int64_t>({{{1, 2}, {3, 4}, {5}}, {{{6}}}, {{7}, {8, 9}}})
+      .release();
+  vector_of_columns cols2;
+  cols2.push_back(std::move(str_col2));
+  cols2.push_back(std::move(int_col2));
+  auto sub_struct_col = cudf::make_structs_column(num_rows, std::move(cols2), 0, {});
+  vector_of_columns cols;
+  cols.push_back(std::move(str_col));
+  cols.push_back(std::move(int_col));
+  cols.push_back(std::move(bool_col));
+  cols.push_back(std::move(list_col));
+  cols.push_back(std::move(sub_struct_col));
+
+  auto struct_col = cudf::make_structs_column(num_rows, std::move(cols), 0, {});
+  cudf::table_view expected_cudf_table({struct_col->view()});
+
+  // Create Arrow table
+  std::vector<std::string> str{"Samuel Vimes", "Carrot Ironfoundersson", "Angua von Uberwald"};
+  std::vector<std::string> str2{"CUDF", "ROCKS", "EVERYWHERE"};
+  auto str_array  = get_arrow_array<cudf::string_view>(str);
+  auto int_array  = get_arrow_array<int32_t>({48, 27, 25});
+  auto str2_array = get_arrow_array<cudf::string_view>(str2);
+  auto int2_array = get_arrow_array<int32_t>({12, 24, 47});
+  auto bool_array = get_arrow_array<bool>({true, true, false});
+  auto list_arr = get_arrow_list_array<int64_t>({1, 2, 3, 4, 5, 6, 7, 8, 9}, {0, 2, 4, 5, 6, 7, 9});
+  std::vector<int32_t> offset{0, 3, 4, 6};
+  auto nested_list_arr = std::make_shared<arrow::ListArray>(
+    arrow::list(list(arrow::int64())), offset.size() - 1, arrow::Buffer::Wrap(offset), list_arr);
+
+  std::vector<std::shared_ptr<arrow::Array>> child_arrays2({str2_array, int2_array});
+  auto fields2 = std::vector<std::shared_ptr<arrow::Field>>{
+    std::make_shared<arrow::Field>("string2", str2_array->type(), str2_array->null_count() > 0),
+    std::make_shared<arrow::Field>("integral2", int2_array->type(), int2_array->null_count() > 0)};
+  auto dtype2        = std::make_shared<arrow::StructType>(fields2);
+  auto struct_array2 = std::make_shared<arrow::StructArray>(
+    dtype2, static_cast<int64_t>(expected_cudf_table.num_rows()), child_arrays2);
+
+  std::vector<std::shared_ptr<arrow::Array>> child_arrays(
+    {str_array, int_array, bool_array, nested_list_arr, struct_array2});
+  std::vector<std::shared_ptr<arrow::Field>> fields;
+  std::transform(child_arrays.cbegin(),
+                 child_arrays.cend(),
+                 nested_type_field_names[0].cbegin(),
+                 std::back_inserter(fields),
+                 [](auto const array, auto const name) {
+                   return std::make_shared<arrow::Field>(
+                     name, array->type(), array->null_count() > 0);
+                 });
+  auto dtype = std::make_shared<arrow::StructType>(fields);
+
+  auto struct_array = std::make_shared<arrow::StructArray>(
+    dtype, static_cast<int64_t>(expected_cudf_table.num_rows()), child_arrays);
+  std::vector<std::shared_ptr<arrow::Field>> schema_vector(
+    {arrow::field("a", struct_array->type())});
+  auto schema = std::make_shared<arrow::Schema>(schema_vector);
+  auto input  = arrow::Table::Make(schema, {struct_array});
+
+  auto got_cudf_table = cudf::from_arrow(*input);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_cudf_table, got_cudf_table->view());
+}
+
 TEST_F(FromArrowTest, DictionaryIndicesType)
 {
   auto array1 =
