@@ -710,7 +710,7 @@ struct rolling_window_launcher {
     if (input.is_empty()) return empty_like(input);
 
     CUDF_EXPECTS(default_outputs.type().id() == input.type().id(),
-                "Defaults column type must match input column.");  // Because LEAD/LAG.
+                 "Defaults column type must match input column.");  // Because LEAD/LAG.
 
     // For LEAD(0)/LAG(0), no computation need be performed.
     // Return copy of input.
@@ -719,7 +719,7 @@ struct rolling_window_launcher {
     }
 
     auto output = make_fixed_width_column(
-          target_type(input.type(), op), input.size(), mask_state::UNINITIALIZED, stream, mr);
+      target_type(input.type(), op), input.size(), mask_state::UNINITIALIZED, stream, mr);
 
     cudf::mutable_column_view output_view = output->mutable_view();
     auto valid_count =
@@ -758,7 +758,8 @@ struct rolling_window_launcher {
          rmm::mr::device_memory_resource* mr,
          cudaStream_t stream)
   {
-    CUDF_FAIL("Aggregation operator and/or input type combination is invalid: "
+    CUDF_FAIL(
+      "Aggregation operator and/or input type combination is invalid: "
       "LEAD/LAG supported only on fixed-width types");
   }
 
@@ -776,8 +777,8 @@ struct rolling_window_launcher {
              rmm::mr::device_memory_resource* mr,
              cudaStream_t stream)
   {
-    CUDF_EXPECTS(default_outputs.is_empty() || op == aggregation::LEAD || op == aggregation::LAG, 
-      "Only LEAD/LAG window functions support default values.");
+    CUDF_EXPECTS(default_outputs.is_empty() || op == aggregation::LEAD || op == aggregation::LAG,
+                 "Only LEAD/LAG window functions support default values.");
 
     return launch<InputType,
                   typename corresponding_operator<op>::type,
