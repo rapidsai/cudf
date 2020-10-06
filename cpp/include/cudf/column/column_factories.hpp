@@ -104,7 +104,7 @@ std::unique_ptr<column> make_numeric_column(
  * @note The column's null count is determined by the requested null mask `state`.
  *
  * @throws std::bad_alloc if device memory allocation fails
- * @throws cudf::logic_error if `type` is not a `fixed_point` type
+ * @throws cudf::logic_error if `type` is not a `fixed_point` type.
  *
  * @param[in] type The desired `fixed_point` element type
  * @param[in] size The number of elements in the column
