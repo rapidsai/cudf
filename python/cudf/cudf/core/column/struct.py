@@ -12,7 +12,7 @@ class StructColumn(ColumnBase):
         if not self.base_children:
             return 0
         else:
-            return len(self.base_children[0]) - 1
+            return len(self.base_children[0])
 
     @classmethod
     def from_arrow(self, data):
