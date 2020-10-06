@@ -22,11 +22,12 @@
 
 #include <cudf/binaryop.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
-#include "cudf_test/column_wrapper.hpp"
 
 namespace cudf {
 namespace test {
@@ -2139,6 +2140,20 @@ TEST_F(BinaryOperationIntegrationTest, FixedPointBinaryOpMultiply3)
 
   auto const result = cudf::binary_operation(
     lhs, rhs, cudf::binary_operator::MUL, static_cast<cudf::column_view>(lhs).type());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TEST_F(BinaryOperationIntegrationTest, FixedPointBinaryOpMultiplySalar)
+{
+  using namespace numeric;
+
+  auto const lhs      = fp_wrapper{{11, 22, 33, 44, 55}, scale_type{-1}};
+  auto const rhs      = make_fixed_point_scalar<decimal32>(100, scale_type{-1});
+  auto const expected = fp_wrapper{{1100, 2200, 3300, 4400, 5500}, scale_type{-2}};
+
+  auto const result = cudf::binary_operation(
+    lhs, *rhs, cudf::binary_operator::MUL, static_cast<cudf::column_view>(lhs).type());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }

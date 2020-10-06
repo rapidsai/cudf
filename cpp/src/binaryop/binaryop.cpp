@@ -60,7 +60,7 @@ rmm::device_buffer scalar_col_valid_mask_and(column_view const& col,
 
   if (not s.is_valid()) {
     return create_null_mask(col.size(), mask_state::ALL_NULL, stream, mr);
-  } else if (s.is_valid() && col.nullable()) {
+  } else if (s.is_valid() and col.nullable()) {
     return copy_bitmask(col, stream, mr);
   } else {
     return rmm::device_buffer{0, stream, mr};
@@ -248,72 +248,81 @@ void binary_operation(mutable_column_view& out,
 
 namespace detail {
 
-std::unique_ptr<column> binary_operation(scalar const& lhs,
-                                         column_view const& rhs,
-                                         binary_operator op,
-                                         data_type output_type,
-                                         rmm::mr::device_memory_resource* mr,
-                                         cudaStream_t stream)
+// There are 3 overloads of each of the following functions:
+// - `make_fixed_width_column_for_output`
+// - `fixed_point_binary_operation`
+// - `binary_operation`
+
+// The overloads are overloaded on the first two parameters of each function:
+// - scalar      const& lhs, column_view const& rhs,
+// - column_view const& lhs, scalar      const& rhs
+// - column_view const& lhs, column_view const& rhs,
+
+/**
+ * @brief Helper function for making output column for binary operation
+ *
+ * @param lhs Left-hand side `scalar` used in the binary operation
+ * @param rhs Right-hand side `column_view` used in the binary operation
+ * @param op `binary_operator` to be used to combine `lhs` and `rhs`
+ * @param output_type `data_type` of the output column
+ * @param mr Device memory resource to use for device memory allocation
+ * @param stream CUDA stream used for device memory operations
+ * @return std::unique_ptr<column> Output column used for binary operation
+ */
+std::unique_ptr<column> make_fixed_width_column_for_output(scalar const& lhs,
+                                                           column_view const& rhs,
+                                                           binary_operator op,
+                                                           data_type output_type,
+                                                           rmm::mr::device_memory_resource* mr,
+                                                           cudaStream_t stream)
 {
-  if ((lhs.type().id() == type_id::STRING) && (rhs.type().id() == type_id::STRING)) {
-    return binops::compiled::binary_operation(lhs, rhs, op, output_type, mr, stream);
-  }
-
-  // Check for datatype
-  CUDF_EXPECTS(is_fixed_width(output_type), "Invalid/Unsupported output datatype");
-
-  CUDF_EXPECTS(is_fixed_width(lhs.type()), "Invalid/Unsupported lhs datatype");
-  CUDF_EXPECTS(is_fixed_width(rhs.type()), "Invalid/Unsupported rhs datatype");
-
-  std::unique_ptr<column> out;
   if (binops::is_null_dependent(op)) {
-    out = make_fixed_width_column(output_type, rhs.size(), mask_state::ALL_VALID, stream, mr);
+    return make_fixed_width_column(output_type, rhs.size(), mask_state::ALL_VALID, stream, mr);
   } else {
     auto new_mask = binops::detail::scalar_col_valid_mask_and(rhs, lhs, stream, mr);
-    out           = make_fixed_width_column(
+    return make_fixed_width_column(
       output_type, rhs.size(), std::move(new_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
   }
+};
 
-  if (rhs.is_empty()) return out;
-
-  auto out_view = out->mutable_view();
-  binops::jit::binary_operation(out_view, lhs, rhs, op, stream);
-  return out;
-}
-
-std::unique_ptr<column> binary_operation(column_view const& lhs,
-                                         scalar const& rhs,
-                                         binary_operator op,
-                                         data_type output_type,
-                                         rmm::mr::device_memory_resource* mr,
-                                         cudaStream_t stream)
+/**
+ * @brief Helper function for making output column for binary operation
+ *
+ * @param lhs Left-hand side `column_view` used in the binary operation
+ * @param rhs Right-hand side `scalar` used in the binary operation
+ * @param op `binary_operator` to be used to combine `lhs` and `rhs`
+ * @param output_type `data_type` of the output column
+ * @param mr Device memory resource to use for device memory allocation
+ * @param stream CUDA stream used for device memory operations
+ * @return std::unique_ptr<column> Output column used for binary operation
+ */
+std::unique_ptr<column> make_fixed_width_column_for_output(column_view const& lhs,
+                                                           scalar const& rhs,
+                                                           binary_operator op,
+                                                           data_type output_type,
+                                                           rmm::mr::device_memory_resource* mr,
+                                                           cudaStream_t stream)
 {
-  if ((lhs.type().id() == type_id::STRING) && (rhs.type().id() == type_id::STRING)) {
-    return binops::compiled::binary_operation(lhs, rhs, op, output_type, mr, stream);
-  }
-
-  // Check for datatype
-  CUDF_EXPECTS(is_fixed_width(output_type), "Invalid/Unsupported output datatype");
-
-  CUDF_EXPECTS(is_fixed_width(lhs.type()), "Invalid/Unsupported lhs datatype");
-  CUDF_EXPECTS(is_fixed_width(rhs.type()), "Invalid/Unsupported rhs datatype");
-
-  std::unique_ptr<column> out;
   if (binops::is_null_dependent(op)) {
-    out = make_fixed_width_column(output_type, lhs.size(), mask_state::ALL_VALID, stream, mr);
+    return make_fixed_width_column(output_type, lhs.size(), mask_state::ALL_VALID, stream, mr);
   } else {
     auto new_mask = binops::detail::scalar_col_valid_mask_and(lhs, rhs, stream, mr);
-    out           = make_fixed_width_column(
+    return make_fixed_width_column(
       output_type, lhs.size(), std::move(new_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
   }
+};
 
-  if (lhs.is_empty()) return out;
-
-  auto out_view = out->mutable_view();
-  binops::jit::binary_operation(out_view, lhs, rhs, op, stream);
-  return out;
-}
-
+/**
+ * @brief Helper function for making output column for binary operation
+ *
+ * @param lhs Left-hand side `column_view` used in the binary operation
+ * @param rhs Right-hand side `column_view` used in the binary operation
+ * @param op `binary_operator` to be used to combine `lhs` and `rhs`
+ * @param output_type `data_type` of the output column
+ * @param mr Device memory resource to use for device memory allocation
+ * @param stream CUDA stream used for device memory operations
+ * @return std::unique_ptr<column> Output column used for binary operation
+ */
 std::unique_ptr<column> make_fixed_width_column_for_output(column_view const& lhs,
                                                            column_view const& rhs,
                                                            binary_operator op,
@@ -345,6 +354,86 @@ int32_t compute_scale_for_binop(binary_operator op, int32_t left_scale, int32_t 
   return std::min(left_scale, right_scale);
 }
 
+/**
+ * @brief Function to compute binary operation of one `column_view` and one `scalar`
+ *
+ * @param lhs Left-hand side `scalar` used in the binary operation
+ * @param rhs Right-hand side `column_view` used in the binary operation
+ * @param op `binary_operator` to be used to combine `lhs` and `rhs`
+ * @param mr Device memory resource to use for device memory allocation
+ * @param stream CUDA stream used for device memory operations
+ * @return std::unique_ptr<column> Resulting output column from the binary operation
+ */
+std::unique_ptr<column> fixed_point_binary_operation(scalar const& lhs,
+                                                     column_view const& rhs,
+                                                     binary_operator op,
+                                                     rmm::mr::device_memory_resource* mr,
+                                                     cudaStream_t stream)
+{
+  CUDF_EXPECTS(lhs.type().id() == rhs.type().id(),
+               "Both columns must be of the same fixed_point type");
+
+  auto const scale       = compute_scale_for_binop(op, lhs.type().scale(), rhs.type().scale());
+  auto const output_type = data_type{lhs.type().id(), scale};
+  auto out = make_fixed_width_column_for_output(lhs, rhs, op, output_type, mr, stream);
+
+  if (rhs.is_empty()) return out;
+
+  // Adjust columns so they have they same scale
+  if (lhs.type().scale() != rhs.type().scale()) {
+    // TODO
+  }
+
+  auto out_view = out->mutable_view();
+  binops::jit::binary_operation(out_view, lhs, rhs, op, stream);
+  return out;
+}
+
+/**
+ * @brief Function to compute binary operation of one `column_view` and one `scalar`
+ *
+ * @param lhs Left-hand side `column_view` used in the binary operation
+ * @param rhs Right-hand side `scalar` used in the binary operation
+ * @param op `binary_operator` to be used to combine `lhs` and `rhs`
+ * @param mr Device memory resource to use for device memory allocation
+ * @param stream CUDA stream used for device memory operations
+ * @return std::unique_ptr<column> Resulting output column from the binary operation
+ */
+std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
+                                                     scalar const& rhs,
+                                                     binary_operator op,
+                                                     rmm::mr::device_memory_resource* mr,
+                                                     cudaStream_t stream)
+{
+  CUDF_EXPECTS(lhs.type().id() == rhs.type().id(),
+               "Both columns must be of the same fixed_point type");
+
+  auto const scale       = compute_scale_for_binop(op, lhs.type().scale(), rhs.type().scale());
+  auto const output_type = data_type{lhs.type().id(), scale};
+  auto out = make_fixed_width_column_for_output(lhs, rhs, op, output_type, mr, stream);
+
+  if (lhs.is_empty()) return out;
+
+  // Adjust columns so they have they same scale
+  if (lhs.type().scale() != rhs.type().scale()) {
+    // TODO
+  }
+
+  auto out_view = out->mutable_view();
+  binops::jit::binary_operation(out_view, lhs, rhs, op, stream);
+  return out;
+}
+
+/**
+ * @brief Function to compute binary operation of two `column_view`s
+ *
+ * @param lhs Left-hand side `column_view` used in the binary operation
+ * @param rhs Right-hand side `column_view` used in the binary operation
+ * @param op `binary_operator` to be used to combine `lhs` and `rhs`
+ * @param mr Device memory resource to use for device memory allocation
+ * @param stream CUDA stream used for device memory operations
+ * @return std::unique_ptr<column> Resulting output column from the binary operation
+ */
 std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
                                                      column_view const& rhs,
                                                      binary_operator op,
@@ -358,13 +447,66 @@ std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
   auto const output_type = data_type{lhs.type().id(), scale};
   auto out = make_fixed_width_column_for_output(lhs, rhs, op, output_type, mr, stream);
 
-  // Check for 0 sized data
-  if (lhs.is_empty() || rhs.is_empty()) return out;
+  if (lhs.is_empty() or rhs.is_empty()) return out;
 
   // Adjust columns so they have they same scale
   if (lhs.type().scale() != rhs.type().scale()) {
     // TODO
   }
+
+  auto out_view = out->mutable_view();
+  binops::jit::binary_operation(out_view, lhs, rhs, op, stream);
+  return out;
+}
+
+std::unique_ptr<column> binary_operation(scalar const& lhs,
+                                         column_view const& rhs,
+                                         binary_operator op,
+                                         data_type output_type,
+                                         rmm::mr::device_memory_resource* mr,
+                                         cudaStream_t stream)
+{
+  if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING)
+    return binops::compiled::binary_operation(lhs, rhs, op, output_type, mr, stream);
+
+  if (is_fixed_point_type_id(lhs.type().id()) or is_fixed_point_type_id(rhs.type().id()))
+    return fixed_point_binary_operation(lhs, rhs, op, mr, stream);
+
+  // Check for datatype
+  CUDF_EXPECTS(is_fixed_width(output_type), "Invalid/Unsupported output datatype");
+  CUDF_EXPECTS(is_fixed_width(lhs.type()), "Invalid/Unsupported lhs datatype");
+  CUDF_EXPECTS(is_fixed_width(rhs.type()), "Invalid/Unsupported rhs datatype");
+
+  auto out = make_fixed_width_column_for_output(lhs, rhs, op, output_type, mr, stream);
+
+  if (rhs.is_empty()) return out;
+
+  auto out_view = out->mutable_view();
+  binops::jit::binary_operation(out_view, lhs, rhs, op, stream);
+  return out;
+}
+
+std::unique_ptr<column> binary_operation(column_view const& lhs,
+                                         scalar const& rhs,
+                                         binary_operator op,
+                                         data_type output_type,
+                                         rmm::mr::device_memory_resource* mr,
+                                         cudaStream_t stream)
+{
+  if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING)
+    return binops::compiled::binary_operation(lhs, rhs, op, output_type, mr, stream);
+
+  if (is_fixed_point_type_id(lhs.type().id()) or is_fixed_point_type_id(rhs.type().id()))
+    return fixed_point_binary_operation(lhs, rhs, op, mr, stream);
+
+  // Check for datatype
+  CUDF_EXPECTS(is_fixed_width(output_type), "Invalid/Unsupported output datatype");
+  CUDF_EXPECTS(is_fixed_width(lhs.type()), "Invalid/Unsupported lhs datatype");
+  CUDF_EXPECTS(is_fixed_width(rhs.type()), "Invalid/Unsupported rhs datatype");
+
+  auto out = make_fixed_width_column_for_output(lhs, rhs, op, output_type, mr, stream);
+
+  if (lhs.is_empty()) return out;
 
   auto out_view = out->mutable_view();
   binops::jit::binary_operation(out_view, lhs, rhs, op, stream);
@@ -380,10 +522,10 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
 {
   CUDF_EXPECTS(lhs.size() == rhs.size(), "Column sizes don't match");
 
-  if (lhs.type().id() == type_id::STRING && rhs.type().id() == type_id::STRING)
+  if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING)
     return binops::compiled::binary_operation(lhs, rhs, op, output_type, mr, stream);
 
-  if (is_fixed_point_type_id(lhs.type().id()) || is_fixed_point_type_id(rhs.type().id()))
+  if (is_fixed_point_type_id(lhs.type().id()) or is_fixed_point_type_id(rhs.type().id()))
     return fixed_point_binary_operation(lhs, rhs, op, mr, stream);
 
   // Check for datatype
@@ -393,8 +535,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
 
   auto out = make_fixed_width_column_for_output(lhs, rhs, op, output_type, mr, stream);
 
-  // Check for 0 sized data
-  if (lhs.is_empty() || rhs.is_empty()) return out;
+  if (lhs.is_empty() or rhs.is_empty()) return out;
 
   auto out_view = out->mutable_view();
   binops::jit::binary_operation(out_view, lhs, rhs, op, stream);
@@ -425,7 +566,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
     output_type, lhs.size(), std::move(new_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
 
   // Check for 0 sized data
-  if (lhs.is_empty() || rhs.is_empty()) return out;
+  if (lhs.is_empty() or rhs.is_empty()) return out;
 
   auto out_view = out->mutable_view();
   binops::jit::binary_operation(out_view, lhs, rhs, ptx, stream);
