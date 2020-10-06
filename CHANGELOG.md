@@ -184,6 +184,7 @@
 - PR #6410 Fix uses of dangerous default values in Python code
 - PR #6424 Check for null data in close for ColumnBuilder
 - PR #6426 Fix `RuntimeError` when `np.bool_` is passed as `header` in `to_csv`
+- PR #6443 Make java apis getList and getStruct public
 
 # cuDF 0.15.0 (26 Aug 2020)
 
