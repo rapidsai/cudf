@@ -932,7 +932,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write_chunked_end(
   CompactProtocolWriter cpw(&buffer_);
   file_ender_s fendr;
   buffer_.resize(0);
-  fendr.footer_len = static_cast<uint32_t>(cpw.write(&state.md));
+  fendr.footer_len = static_cast<uint32_t>(cpw.write(state.md));
   fendr.magic      = PARQUET_MAGIC;
   out_sink_->host_write(buffer_.data(), buffer_.size());
   out_sink_->host_write(&fendr, sizeof(fendr));
@@ -948,7 +948,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write_chunked_end(
     for (auto &rowgroup : state.md.row_groups) {
       for (auto &col : rowgroup.columns) { col.file_path = column_chunks_file_path; }
     }
-    fendr.footer_len = static_cast<uint32_t>(cpw.write(&state.md));
+    fendr.footer_len = static_cast<uint32_t>(cpw.write(state.md));
     buffer_.insert(buffer_.end(),
                    reinterpret_cast<const uint8_t *>(&fendr),
                    reinterpret_cast<const uint8_t *>(&fendr) + sizeof(fendr));
@@ -1037,7 +1037,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::merge_rowgroup_metadata(
   output.insert(output.end(),
                 reinterpret_cast<const uint8_t *>(&fhdr),
                 reinterpret_cast<const uint8_t *>(&fhdr) + sizeof(fhdr));
-  fendr.footer_len = static_cast<uint32_t>(cpw.write(&md));
+  fendr.footer_len = static_cast<uint32_t>(cpw.write(md));
   fendr.magic      = PARQUET_MAGIC;
   output.insert(output.end(),
                 reinterpret_cast<const uint8_t *>(&fendr),

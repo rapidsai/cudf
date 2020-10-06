@@ -330,11 +330,26 @@ class CompactProtocolWriter {
  public:
   CompactProtocolWriter() { m_buf = nullptr; }
   CompactProtocolWriter(std::vector<uint8_t> *output) { m_buf = output; }
+
+  size_t write(const FileMetaData &);
+  size_t write(const SchemaElement &);
+  size_t write(const RowGroup &);
+  size_t write(const KeyValue &);
+  size_t write(const ColumnChunk &);
+  size_t write(const ColumnChunkMetaData &);
+
+ protected:
+  std::vector<uint8_t> *m_buf;
+  size_t struct_start_pos;
+  int current_field_value;
+
   void putb(uint8_t v) { m_buf->push_back(v); }
+
   void putb(const uint8_t *raw, uint32_t len)
   {
     for (uint32_t i = 0; i < len; i++) m_buf->push_back(raw[i]);
   }
+
   uint32_t put_uint(uint64_t v)
   {
     int l = 1;
@@ -346,11 +361,13 @@ class CompactProtocolWriter {
     putb(static_cast<uint8_t>(v));
     return l;
   }
+
   uint32_t put_int(int64_t v)
   {
     int64_t s = (v < 0);
     return put_uint(((v ^ -s) << 1) + s);
   }
+
   void put_fldh(int f, int cur, int t)
   {
     if (f > cur && f <= cur + 15)
@@ -361,112 +378,87 @@ class CompactProtocolWriter {
     }
   }
 
- public:
-  size_t write(const FileMetaData *);
-  size_t write(const SchemaElement *);
-  size_t write(const RowGroup *);
-  size_t write(const KeyValue *);
-  size_t write(const ColumnChunk *);
-  size_t write(const ColumnChunkMetaData *);
-
- protected:
-  std::vector<uint8_t> *m_buf;
-
-  friend class CompactProtocolWriterBuilder;
-};
-
-class CompactProtocolWriterBuilder {
-  CompactProtocolWriter *ptr;
-  size_t struct_start_pos;
-  int current_field;
-
- public:
-  CompactProtocolWriterBuilder(CompactProtocolWriter *cpw_ptr)
-    : ptr(cpw_ptr), struct_start_pos(ptr->m_buf->size()), current_field(0)
-  {
-  }
-
   inline void field_int(int field, int32_t val)
   {
-    ptr->put_fldh(field, current_field, ST_FLD_I32);
-    ptr->put_int(val);
-    current_field = field;
+    put_fldh(field, current_field_value, ST_FLD_I32);
+    put_int(val);
+    current_field_value = field;
   }
 
   inline void field_int(int field, int64_t val)
   {
-    ptr->put_fldh(field, current_field, ST_FLD_I64);
-    ptr->put_int(val);
-    current_field = field;
+    put_fldh(field, current_field_value, ST_FLD_I64);
+    put_int(val);
+    current_field_value = field;
   }
 
   template <typename Enum>
   inline void field_int_list(int field, const std::vector<Enum> &val)
   {
-    ptr->put_fldh(field, current_field, ST_FLD_LIST);
-    ptr->putb((uint8_t)((std::min(val.size(), (size_t)0xfu) << 4) | ST_FLD_I32));
-    if (val.size() >= 0xf) ptr->put_uint(val.size());
-    for (auto &v : val) { ptr->put_int(static_cast<int32_t>(v)); }
-    current_field = field;
+    put_fldh(field, current_field_value, ST_FLD_LIST);
+    putb((uint8_t)((std::min(val.size(), (size_t)0xfu) << 4) | ST_FLD_I32));
+    if (val.size() >= 0xf) put_uint(val.size());
+    for (auto &v : val) { put_int(static_cast<int32_t>(v)); }
+    current_field_value = field;
   }
 
   template <typename T>
   inline void field_struct(int field, const T &val)
   {
-    ptr->put_fldh(field, current_field, ST_FLD_STRUCT);
-    ptr->write(&val);
-    current_field = field;
+    put_fldh(field, current_field_value, ST_FLD_STRUCT);
+    write(val);
+    current_field_value = field;
   }
 
   template <typename T>
   inline void field_struct_list(int field, const std::vector<T> &val)
   {
-    ptr->put_fldh(field, current_field, ST_FLD_LIST);
-    ptr->putb((uint8_t)((std::min(val.size(), (size_t)0xfu) << 4) | ST_FLD_STRUCT));
-    if (val.size() >= 0xf) ptr->put_uint(val.size());
-    for (auto &v : val) { ptr->write(&v); }
-    current_field = field;
+    put_fldh(field, current_field_value, ST_FLD_LIST);
+    putb((uint8_t)((std::min(val.size(), (size_t)0xfu) << 4) | ST_FLD_STRUCT));
+    if (val.size() >= 0xf) put_uint(val.size());
+    for (auto &v : val) { write(v); }
+    current_field_value = field;
   }
 
-  inline size_t value(void)
+  inline size_t value()
   {
-    ptr->putb(0);
-    return ptr->m_buf->size() - struct_start_pos;
+    putb(0);
+    return m_buf->size() - struct_start_pos;
   }
 
   inline void field_struct_blob(int field, const std::vector<uint8_t> &val)
   {
-    ptr->put_fldh(field, current_field, ST_FLD_STRUCT);
-    ptr->putb(val.data(), (uint32_t)val.size());
-    ptr->putb(0);
-    current_field = field;
+    put_fldh(field, current_field_value, ST_FLD_STRUCT);
+    putb(val.data(), (uint32_t)val.size());
+    putb(0);
+    current_field_value = field;
   }
 
   inline void field_string(int field, const std::string &val)
   {
-    ptr->put_fldh(field, current_field, ST_FLD_BINARY);
-    ptr->put_uint(val.size());
+    put_fldh(field, current_field_value, ST_FLD_BINARY);
+    put_uint(val.size());
     // FIXME : replace reinterpret_cast
-    ptr->putb(reinterpret_cast<const uint8_t *>(val.data()), (uint32_t)val.size());
-    current_field = field;
+    putb(reinterpret_cast<const uint8_t *>(val.data()), (uint32_t)val.size());
+    current_field_value = field;
   }
 
   inline void field_string_list(int field, const std::vector<std::string> &val)
   {
-    ptr->put_fldh(field, current_field, ST_FLD_LIST);
-    ptr->putb((uint8_t)((std::min(val.size(), (size_t)0xfu) << 4) | ST_FLD_BINARY));
-    if (val.size() >= 0xf) ptr->put_uint(val.size());
+    put_fldh(field, current_field_value, ST_FLD_LIST);
+    putb((uint8_t)((std::min(val.size(), (size_t)0xfu) << 4) | ST_FLD_BINARY));
+    if (val.size() >= 0xf) put_uint(val.size());
     for (auto &v : val) {
-      ptr->put_uint(v.size());
+      put_uint(v.size());
       // FIXME : replace reinterpret_cast
-      ptr->putb(reinterpret_cast<const uint8_t *>(v.data()), (uint32_t)v.size());
+      putb(reinterpret_cast<const uint8_t *>(v.data()), (uint32_t)v.size());
     }
-    current_field = field;
+    current_field_value = field;
   }
 
-  inline int get_field(void) { return current_field; }
+  inline int current_field() { return current_field_value; }
 
-  inline void set_field(const int &field) { current_field = field; }
+  inline void set_current_field(const int &field) { current_field_value = field; }
 };
 
 }  // namespace parquet
