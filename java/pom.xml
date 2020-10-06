@@ -146,7 +146,7 @@
         <CMAKE_EXPORT_COMPILE_COMMANDS>OFF</CMAKE_EXPORT_COMPILE_COMMANDS>
         <CUDA_STATIC_RUNTIME>OFF</CUDA_STATIC_RUNTIME>
         <PER_THREAD_DEFAULT_STREAM>OFF</PER_THREAD_DEFAULT_STREAM>
-        <LOGGING_LEVEL>INFO</LOGGING_LEVEL>
+        <RMM_LOGGING_LEVEL>INFO</RMM_LOGGING_LEVEL>
         <native.build.path>${project.build.directory}/cmake-build</native.build.path>
         <slf4j.version>1.7.30</slf4j.version>
     </properties>
@@ -348,9 +348,10 @@
                                     <arg value="${basedir}/src/main/native"/>
                                     <arg value="-DCUDA_STATIC_RUNTIME=${CUDA_STATIC_RUNTIME}" />
                                     <arg value="-DPER_THREAD_DEFAULT_STREAM=${PER_THREAD_DEFAULT_STREAM}" />
-                                    <arg value="-DLOGGING_LEVEL=${LOGGING_LEVEL}" />
+                                    <arg value="-DRMM_LOGGING_LEVEL=${RMM_LOGGING_LEVEL}" />
                                     <arg value="-DCMAKE_CXX_FLAGS=${cxx.flags}"/>
                                     <arg value="-DCMAKE_EXPORT_COMPILE_COMMANDS=${CMAKE_EXPORT_COMPILE_COMMANDS}"/>
+                                    <arg value="-DGPU_ARCHS=ALL"/>
                                 </exec>
                                 <exec dir="${native.build.path}"
                                       failonerror="true"

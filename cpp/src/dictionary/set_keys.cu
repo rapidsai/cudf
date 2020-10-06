@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
@@ -118,7 +119,6 @@ std::unique_ptr<column> set_keys(
   // compute the new nulls
   auto matches   = cudf::detail::contains(keys, keys_column->view(), mr, stream);
   auto d_matches = matches->view().data<bool>();
-  // auto d_indices   = dictionary_column.indices().data<uint32_t>();
   auto indices_itr =
     cudf::detail::indexalator_factory::make_input_iterator(dictionary_column.indices());
   auto d_null_mask = dictionary_column.null_mask();
@@ -147,6 +147,22 @@ std::unique_ptr<column> set_keys(
                                 std::move(new_nulls.first),
                                 new_nulls.second);
 }
+
+std::vector<std::unique_ptr<column>> match_dictionaries(std::vector<dictionary_column_view> input,
+                                                        rmm::mr::device_memory_resource* mr,
+                                                        cudaStream_t stream)
+{
+  std::vector<column_view> keys(input.size());
+  std::transform(input.begin(), input.end(), keys.begin(), [](auto& col) { return col.keys(); });
+  auto new_keys  = cudf::detail::concatenate(keys, rmm::mr::get_current_device_resource(), stream);
+  auto keys_view = new_keys->view();
+  std::vector<std::unique_ptr<column>> result(input.size());
+  std::transform(input.begin(), input.end(), result.begin(), [keys_view, mr, stream](auto& col) {
+    return set_keys(col, keys_view, mr, stream);
+  });
+  return result;
+}
+
 }  // namespace detail
 
 // external API

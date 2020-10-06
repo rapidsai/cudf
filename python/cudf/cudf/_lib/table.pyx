@@ -10,8 +10,8 @@ from cython.operator cimport dereference
 from libc.stdint cimport uintptr_t
 from libcpp.vector cimport vector
 from libcpp.memory cimport unique_ptr
+from libcpp.utility cimport move
 
-from cudf._lib.move cimport move
 from cudf._lib.column cimport Column
 
 from cudf._lib.cpp.types cimport size_type

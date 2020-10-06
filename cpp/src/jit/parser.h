@@ -159,7 +159,7 @@ class ptx_parser {
   static std::string register_type_to_contraint(const std::string& src);
 
   /**
-   * @brief Replace any non-alphanumeric charactors that are not underscore with
+   * @brief Replace any non-alphanumeric characters that are not underscore with
    * underscore. The leading `[` and trailing `]` are exempted, e.g.
    *
    *  "[t$5]" --> "[t_5]"
