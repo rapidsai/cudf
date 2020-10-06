@@ -143,15 +143,18 @@ struct find_insert_index_fn {
       return type_dispatcher(input.indices().type(), dispatch_scalar_index{}, 0, false, stream, mr);
     CUDF_EXPECTS(input.keys().type() == key.type(),
                  "search key type must match dictionary keys type");
-    auto keys_view = column_device_view::create(input.keys(), stream);
-    auto find_key  = static_cast<scalar_type_t<Element> const&>(key).value(stream);
-    auto iter      = thrust::lower_bound(rmm::exec_policy(stream)->on(stream),
-                                    keys_view->begin<Element>(),
-                                    keys_view->end<Element>(),
+
+    using Type       = get_column_stored_type<Element>;
+    using ScalarType = cudf::scalar_type_t<Element>;
+    auto find_key    = static_cast<ScalarType const&>(key).value(stream);
+    auto keys_view   = column_device_view::create(input.keys(), stream);
+    auto iter        = thrust::lower_bound(rmm::exec_policy(stream)->on(stream),
+                                    keys_view->begin<Type>(),
+                                    keys_view->end<Type>(),
                                     find_key);
     return type_dispatcher(input.indices().type(),
                            dispatch_scalar_index{},
-                           thrust::distance(keys_view->begin<Element>(), iter),
+                           thrust::distance(keys_view->begin<Type>(), iter),
                            true,
                            stream,
                            mr);
