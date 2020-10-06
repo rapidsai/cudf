@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import sys
+import traceback
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)-8s %(message)s",
@@ -25,6 +26,7 @@ class Fuzzer(object):
         max_cols_size=1000,
         runs=-1,
         max_string_length=None,
+        params=None,
     ):
 
         self._target = target
@@ -40,6 +42,7 @@ class Fuzzer(object):
         self._regression = regression
         self._start_time = None
         self.runs = runs
+        self.params = params
 
     def log_stats(self):
         end_time = datetime.datetime.now()
@@ -71,6 +74,8 @@ class Fuzzer(object):
             f.write(str(error))
         logging.info(f"Crash exception was written to {crash_log_path}")
 
+        self._data_handler.write_data(error_file_name)
+
     def start(self):
 
         while True:
@@ -78,7 +83,12 @@ class Fuzzer(object):
             file_name = self._data_handler.generate_input()
             try:
                 self._start_time = datetime.datetime.now()
-                self._target(file_name)
+                if self.params is None:
+                    self._target(file_name)
+                else:
+                    kwargs = self._data_handler.get_rand_params(self.params)
+                    logging.info("Parameters passed: ", kwargs)
+                    self._target(file_name, **kwargs)
             except KeyboardInterrupt:
                 logging.info(
                     f"Keyboard Interrupt encountered, stopping after "
@@ -87,7 +97,7 @@ class Fuzzer(object):
                 sys.exit(0)
             except Exception as e:
                 logging.exception(e)
-                self.write_crash(e)
+                self.write_crash(traceback.format_exc())
             self.log_stats()
             if self.runs != -1 and self._total_executions >= self.runs:
                 logging.info(f"Completed {self.runs}, stopping now.")

@@ -80,7 +80,7 @@ struct compute_single_pass_aggs {
    * of the hash map
    * @param output_values Table that stores the results of aggregating rows of
    * `input_values`.
-   * @param aggs The set of aggregation operations to perform accross the
+   * @param aggs The set of aggregation operations to perform across the
    * columns of the `input_values` rows
    * @param row_bitmask Bitmask where bit `i` indicates the presence of a null
    * value in row `i` of input keys. Only used if `skip_rows_with_nulls` is `true`

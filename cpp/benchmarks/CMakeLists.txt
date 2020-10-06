@@ -155,7 +155,8 @@ ConfigureBench(TYPE_DISPATCHER_BENCH "${TD_BENCH_SRC}")
 # - reduction benchmark ---------------------------------------------------------------------------
 
 set(REDUCTION_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/reduction/reduce_benchmark.cpp")
+  "${CMAKE_CURRENT_SOURCE_DIR}/reduction/reduce_benchmark.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/reduction/minmax_benchmark.cpp")
 
 ConfigureBench(REDUCTION_BENCH "${REDUCTION_BENCH_SRC}")
 

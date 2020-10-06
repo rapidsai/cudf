@@ -112,6 +112,7 @@ struct column_buffer {
   data_type type{type_id::EMPTY};
   size_type size{0};
   std::vector<column_buffer> children;
+  std::string name;
 };
 
 namespace {

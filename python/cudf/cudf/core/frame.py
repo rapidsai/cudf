@@ -1047,7 +1047,7 @@ class Frame(libcudf.table.Table):
             frame._copy_categories(self, include_index=keep_index)
 
         if npartitions:
-            for i in range(npartitions - len(result)):
+            for _ in range(npartitions - len(result)):
                 result.append(self._empty_like(keep_index))
 
         return result
@@ -1321,7 +1321,7 @@ class Frame(libcudf.table.Table):
 
         copy_data = self._data.copy(deep=True)
 
-        for name, col in copy_data.items():
+        for name in copy_data.keys():
             if name in value and value[name] is not None:
                 copy_data[name] = copy_data[name].fillna(value[name],)
 
@@ -1925,7 +1925,7 @@ class Frame(libcudf.table.Table):
         else:
             result = cudf_category_frame
 
-        # In a scenarion where column is of type list/other non
+        # In a scenario where column is of type list/other non
         # pandas types, there will be no pandas metadata associated with
         # given arrow table as those types can only originate from
         # arrow.
@@ -1933,6 +1933,8 @@ class Frame(libcudf.table.Table):
             for name in result._data.names:
                 if pandas_dtypes[name] == "categorical":
                     dtype = "category"
+                elif pandas_dtypes[name] == "bool":
+                    dtype = pandas_dtypes[name]
                 else:
                     dtype = np_dtypes[name]
 
