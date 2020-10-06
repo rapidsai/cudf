@@ -4018,7 +4018,6 @@ class DataFrame(Frame, Serializable):
         squeeze=False,
         observed=False,
         dropna=True,
-        # method=None,
     ):
         if axis not in (0, "index"):
             raise NotImplementedError("axis parameter is not yet implemented")
