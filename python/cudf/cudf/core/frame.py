@@ -841,7 +841,7 @@ class Frame(libcudf.table.Table):
 
         if isinstance(self, cudf.DataFrame):
             if hasattr(cond, "__cuda_array_interface__"):
-                cond = self.from_gpu_matrix(
+                cond = cudf.DataFrame(
                     cond, columns=self._data.names, index=self.index
                 )
             elif not isinstance(cond, cudf.DataFrame):
