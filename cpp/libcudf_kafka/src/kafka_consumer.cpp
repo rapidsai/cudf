@@ -153,8 +153,7 @@ int64_t kafka_consumer::get_committed_offset(std::string const &topic, int parti
   return offset > 0 ? offset : -1001;
 }
 
-std::map<std::string, std::vector<int32_t>> kafka_consumer::list_topics(
-  std::string specific_topic) const
+std::map<std::string, std::vector<int32_t>> kafka_consumer::list_topics(std::string specific_topic)
 {
   auto const metadata = [&]() {
     std::string errstr;
