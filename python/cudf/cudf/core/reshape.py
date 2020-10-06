@@ -230,10 +230,14 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     # when axis is 1 (column) we can concat with Series and Dataframes
     if axis == 1:
 
-        if join == 'inner' and typ is cudf.Series:
+        if join == "inner" and typ is cudf.Series:
             for i, obj in enumerate(objs):
                 obj.name = i
-            new_objs = objs[0].to_frame().join(objs[1].to_frame(), how="inner", sort="True")
+            new_objs = (
+                objs[0]
+                .to_frame()
+                .join(objs[1].to_frame(), how="inner", sort="True")
+            )
             return new_objs
 
         assert typs.issubset(allowed_typs)
