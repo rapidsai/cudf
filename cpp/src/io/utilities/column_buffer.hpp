@@ -76,10 +76,7 @@ struct column_buffer {
 
   // construct without a known size. call create() later to actually
   // allocate memory
-  column_buffer(data_type _type, bool _is_nullable)
-    : type(_type), is_nullable(_is_nullable), _null_count(0)
-  {
-  }
+  column_buffer(data_type _type, bool _is_nullable) : type(_type), is_nullable(_is_nullable) {}
 
   // construct with a known size. allocates memory
   column_buffer(data_type _type,
@@ -93,7 +90,14 @@ struct column_buffer {
   }
 
   // move constructor
-  column_buffer(column_buffer&& col)
+  column_buffer(column_buffer&& col) = default;
+
+  // copy constructors
+  column_buffer(column_buffer& col)       = delete;
+  column_buffer(column_buffer const& col) = delete;
+
+  /*
+
   {
     _strings    = std::move(col._strings);
     _data       = std::move(col._data);
@@ -105,6 +109,7 @@ struct column_buffer {
     is_nullable = col.is_nullable;
     name        = std::move(col.name);
   }
+  */
 
   // instantiate a column of known type with a specified size.  Allows deferred creation for
   // preprocessing steps such as in the Parquet reader

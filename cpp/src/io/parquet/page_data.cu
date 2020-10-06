@@ -1197,7 +1197,8 @@ static __device__ void store_validity(PageNestingInfo *pni,
  *
  * @param[out] start_depth The start nesting depth
  * @param[out] end_depth The end nesting depth (inclusive)
- * @param[out] d The definition level up to which added values are not-null.
+ * @param[out] d The definition level up to which added values are not-null. if t is out of bounds,
+ * d will be -1
  * @param[in] s Local page information
  * @param[in] input_value_count The current count of input level values we have processed
  * @param[in] target_input_value_count The desired # of input level values we want to process
@@ -1806,10 +1807,10 @@ cudaError_t PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
   for (size_t idx = 0; idx < input_columns.size(); idx++) {
     auto const &input_col = input_columns[idx];
     auto src_col_schema   = input_col.schema_idx;
-    size_t max_depth      = input_col.nesting.size();
+    size_t max_depth      = input_col.nesting_depth();
 
     auto *cols = &output_columns;
-    for (size_t l_idx = 0; l_idx < input_col.nesting.size(); l_idx++) {
+    for (size_t l_idx = 0; l_idx < input_col.nesting_depth(); l_idx++) {
       auto &out_buf = (*cols)[input_col.nesting[l_idx]];
       cols          = &out_buf.children;
 

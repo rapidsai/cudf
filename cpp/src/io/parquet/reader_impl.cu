@@ -654,11 +654,11 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
                "Attempting to remap a schema more than once");
   auto inserted =
     remap.insert(std::pair<int, std::pair<std::vector<int>, std::vector<int>>>{src_col_schema, {}});
-  auto iter = inserted.first;
+  auto &depth_remap = inserted.first->second;
 
-  std::vector<int> &rep_depth_remap = (iter->second.first);
+  std::vector<int> &rep_depth_remap = (depth_remap.first);
   rep_depth_remap.resize(schema.max_repetition_level + 1);
-  std::vector<int> &def_depth_remap = (iter->second.second);
+  std::vector<int> &def_depth_remap = (depth_remap.second);
   def_depth_remap.resize(schema.max_definition_level + 1);
 
   // the key:
@@ -961,7 +961,7 @@ void reader::impl::allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc>
   // buffer to keep it to a single gpu allocation
   size_t const total_page_nesting_infos = std::accumulate(
     chunks.host_ptr(), chunks.host_ptr() + chunks.size(), 0, [&](int total, auto &chunk) {
-      // the leaf schema represents the bottom of the nested hierarchy
+      // the schema of the input column
       auto const &schema                    = _metadata->get_schema(chunk.src_col_schema);
       auto const per_page_nesting_info_size = max(
         schema.max_definition_level + 1, _metadata->get_output_nesting_depth(chunk.src_col_schema));
@@ -1002,7 +1002,7 @@ void reader::impl::allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc>
   for (size_t idx = 0; idx < chunks.size(); idx++) {
     int src_col_schema = chunks[idx].src_col_schema;
 
-    // the leaf schema represents the bottom of the nested hierarchy
+    // schema of the input column
     auto &schema = _metadata->get_schema(src_col_schema);
     // real depth of the output cudf column hierarchy (1 == no nesting, 2 == 1 level, etc)
     int max_depth = _metadata->get_output_nesting_depth(src_col_schema);
@@ -1231,7 +1231,7 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
     input_column_info const &input_col = _input_columns[idx];
 
     auto *cols = &_output_columns;
-    for (size_t l_idx = 0; l_idx < input_col.nesting.size(); l_idx++) {
+    for (size_t l_idx = 0; l_idx < input_col.nesting_depth(); l_idx++) {
       auto &out_buf = (*cols)[input_col.nesting[l_idx]];
       cols          = &out_buf.children;
 
@@ -1239,7 +1239,7 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
           (out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED)) {
         continue;
       }
-      CUDF_EXPECTS(l_idx < input_col.nesting.size() - 1, "Encountered a leaf list column");
+      CUDF_EXPECTS(l_idx < input_col.nesting_depth() - 1, "Encountered a leaf list column");
       auto &child = (*cols)[input_col.nesting[l_idx + 1]];
 
       // the final offset for a list at level N is the size of it's child
@@ -1264,7 +1264,7 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
     gpu::PageNestingInfo *pni = &page_nesting[index];
 
     auto *cols = &_output_columns;
-    for (size_t l_idx = 0; l_idx < input_col.nesting.size(); l_idx++) {
+    for (size_t l_idx = 0; l_idx < input_col.nesting_depth(); l_idx++) {
       auto &out_buf = (*cols)[input_col.nesting[l_idx]];
       cols          = &out_buf.children;
 

@@ -29,6 +29,18 @@ namespace cudf {
 namespace io {
 namespace parquet {
 
+/**
+ * @brief Struct representing an input column in the file.
+ */
+struct input_column_info {
+  int schema_idx;
+  std::string name;
+  // size == nesting depth. the associated real output
+  // buffer index in the dest column for each level of nesting.
+  std::vector<int> nesting;
+  auto nesting_depth() const { return nesting.size(); }
+};
+
 namespace gpu {
 
 /**
