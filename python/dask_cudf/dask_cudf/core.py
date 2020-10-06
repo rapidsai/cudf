@@ -18,10 +18,10 @@ from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import cull, fuse
 from dask.utils import M, OperatorMethodMixin, derived_from, funcname
 
+from dask_cudf import sorting
+
 import cudf
 from cudf import _lib as libcudf
-
-from dask_cudf import sorting
 
 DASK_VERSION = LooseVersion(dask.__version__)
 
@@ -316,27 +316,6 @@ class DataFrame(_Frame, dd.core.DataFrame):
             if isinstance(self, DataFrame):
                 result.divisions = (min(self.columns), max(self.columns))
             return handle_out(out, result)
-
-    def repartition(self, *args, **kwargs):
-        """ Wraps dask.dataframe DataFrame.repartition method.
-        Uses DataFrame.shuffle if `columns=` is specified.
-        """
-        columns = kwargs.pop("columns", None)
-        if columns:
-            warnings.warn(
-                "The column argument will be removed from repartition in "
-                " future versions of dask_cudf. Use DataFrame.shuffle().",
-                DeprecationWarning,
-            )
-            warnings.warn(
-                "Rearranging data by column hash. Divisions will lost. "
-                "Set ignore_index=False to preserve Index values."
-            )
-            ignore_index = kwargs.pop("ignore_index", True)
-            return self.shuffle(
-                on=columns, ignore_index=ignore_index, **kwargs
-            )
-        return super().repartition(*args, **kwargs)
 
     def shuffle(self, *args, **kwargs):
         """ Wraps dask.dataframe DataFrame.shuffle method

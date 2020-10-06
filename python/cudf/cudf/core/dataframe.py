@@ -3842,7 +3842,6 @@ class DataFrame(Frame, Serializable):
         sort=False,
         lsuffix=None,
         rsuffix=None,
-        type="",
         method="hash",
         indicator=False,
         suffixes=("_x", "_y"),
@@ -3933,14 +3932,6 @@ class DataFrame(Frame, Serializable):
         else:
             lsuffix, rsuffix = suffixes
 
-        if type != "":
-            warnings.warn(
-                'type="' + type + '" parameter is deprecated.'
-                'Use method="' + type + '" instead.',
-                DeprecationWarning,
-            )
-            method = type
-
         lhs = self.copy(deep=False)
         rhs = right.copy(deep=False)
 
@@ -3971,7 +3962,6 @@ class DataFrame(Frame, Serializable):
         lsuffix="",
         rsuffix="",
         sort=False,
-        type="",
         method="hash",
     ):
         """Join columns with other DataFrame on index or on a key column.
@@ -3998,14 +3988,6 @@ class DataFrame(Frame, Serializable):
         - *other* must be a single DataFrame for now.
         - *on* is not supported yet due to lack of multi-index support.
         """
-        # Outer joins still use the old implementation
-        if type != "":
-            warnings.warn(
-                'type="' + type + '" parameter is deprecated.'
-                'Use method="' + type + '" instead.',
-                DeprecationWarning,
-            )
-            method = type
 
         lhs = self
         rhs = other
@@ -4036,7 +4018,7 @@ class DataFrame(Frame, Serializable):
         squeeze=False,
         observed=False,
         dropna=True,
-        method=None,
+        # method=None,
     ):
         if axis not in (0, "index"):
             raise NotImplementedError("axis parameter is not yet implemented")
@@ -4060,11 +4042,6 @@ class DataFrame(Frame, Serializable):
                 "groupby() requires either by or level to be" "specified."
             )
 
-        if method is not None:
-            warnings.warn(
-                "The 'method' argument is deprecated and will be unused",
-                DeprecationWarning,
-            )
         return DataFrameGroupBy(
             self,
             by=by,
