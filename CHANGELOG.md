@@ -118,7 +118,7 @@
 - PR #6409 Allow CuPy 8.x
 - PR #6407 Add RMM_LOGGING_LEVEL flag to Java docker build
 - PR #6438 Fetch nvcomp v1.1.0 for JNI build
-- PR #6442 Remove deprecated `DataFrame.from_gpu_matrix` and `DataFrame.to_gpu_matrix` APIs
+- PR 6442 Remove deprecated `DataFrame.from_gpu_matrix`, `DataFrame.to_gpu_matrix`, `DataFrame.add_column`, `dask_cudf.DataFrame.repartition` APIs and method parameters
 
 ## Bug Fixes
 
