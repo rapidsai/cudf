@@ -274,8 +274,8 @@ struct column_merger {
 
     // to resolve view.data()'s types use: Element
     //
-    auto const p_d_lcol = lcol.data<Type>();
-    auto const p_d_rcol = rcol.data<Type>();
+    auto const d_lcol = lcol.data<Type>();
+    auto const d_rcol = rcol.data<Type>();
 
     auto exe_pol = rmm::exec_policy(stream_);
 
