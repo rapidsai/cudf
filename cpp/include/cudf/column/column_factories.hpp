@@ -97,21 +97,19 @@ std::unique_ptr<column> make_numeric_column(
 }
 
 /**
- * @brief Construct column with sufficient uninitialized storage
- * to hold `size` elements of the specified `fixed_point` `data_type` with an optional
- * null mask.
+ * @brief Construct column with sufficient uninitialized storage to hold `size` elements of the
+ * specified `fixed_point` `data_type` with an optional null mask.
  *
  * @note The column's null count is determined by the requested null mask `state`.
  *
- * @throws std::bad_alloc if device memory allocation fails
  * @throws cudf::logic_error if `type` is not a `fixed_point` type.
  *
- * @param[in] type The desired `fixed_point` element type
- * @param[in] size The number of elements in the column
- * @param[in] state Optional, controls allocation/initialization of the
+ * @param[in] type The desired `fixed_point` element type.
+ * @param[in] size The number of elements in the column.
+ * @param[in] state Optional, controls allocation/initialization of the.
  * column's null mask. By default, no null mask is allocated.
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
- * @param[in] mr Device memory resource used to allocate the returned column's device memory
+ * @param[in] mr Device memory resource used to allocate the returned column's device memory.
  */
 std::unique_ptr<column> make_fixed_point_column(
   data_type type,
@@ -121,21 +119,19 @@ std::unique_ptr<column> make_fixed_point_column(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Construct column with sufficient uninitialized storage
- * to hold `size` elements of the specified `fixed_point` `data_type` with a
- * null mask.
+ * @brief Construct column with sufficient uninitialized storage to hold `size` elements of the
+ * specified `fixed_point` `data_type` with a null mask.
  *
  * @note null_count is optional and will be computed if not provided.
  *
- * @throws std::bad_alloc if device memory allocation fails
- * @throws cudf::logic_error if `type` is not a `fixed_point` type
+ * @throws cudf::logic_error if `type` is not a `fixed_point` type.
  *
- * @param[in] type The desired `fixed_point` element type
- * @param[in] size The number of elements in the column
+ * @param[in] type The desired `fixed_point` element type.
+ * @param[in] size The number of elements in the column.
  * @param[in] null_mask Null mask to use for this column.
  * @param[in] null_count Optional number of nulls in the null_mask.
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
- * @param[in] mr Device memory resource used to allocate the returned column's device memory
+ * @param[in] mr Device memory resource used to allocate the returned column's device memory.
  */
 template <typename B>
 std::unique_ptr<column> make_fixed_point_column(

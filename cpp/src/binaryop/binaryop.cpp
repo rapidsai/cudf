@@ -103,7 +103,7 @@ void binary_operation(mutable_column_view& out,
                       binary_operator op,
                       cudaStream_t stream)
 {
-  if (null_using_binop(op)) {
+  if (is_null_dependent(op)) {
     cudf::jit::launcher(
       hash, code::kernel, header_names, cudf::jit::compiler_flags, headers_code, stream)
       .set_kernel_inst("kernel_v_s_with_validity",             // name of the kernel we are
@@ -142,7 +142,7 @@ void binary_operation(mutable_column_view& out,
                       binary_operator op,
                       cudaStream_t stream)
 {
-  if (null_using_binop(op)) {
+  if (is_null_dependent(op)) {
     cudf::jit::launcher(
       hash, code::kernel, header_names, cudf::jit::compiler_flags, headers_code, stream)
       .set_kernel_inst("kernel_v_s_with_validity",             // name of the kernel we are
@@ -181,7 +181,7 @@ void binary_operation(mutable_column_view& out,
                       binary_operator op,
                       cudaStream_t stream)
 {
-  if (null_using_binop(op)) {
+  if (is_null_dependent(op)) {
     cudf::jit::launcher(
       hash, code::kernel, header_names, cudf::jit::compiler_flags, headers_code, stream)
       .set_kernel_inst("kernel_v_v_with_validity",             // name of the kernel we are
@@ -266,7 +266,7 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
   CUDF_EXPECTS(is_fixed_width(rhs.type()), "Invalid/Unsupported rhs datatype");
 
   std::unique_ptr<column> out;
-  if (binops::null_using_binop(op)) {
+  if (binops::is_null_dependent(op)) {
     out = make_fixed_width_column(output_type, rhs.size(), mask_state::ALL_VALID, stream, mr);
   } else {
     auto new_mask = binops::detail::scalar_col_valid_mask_and(rhs, lhs, stream, mr);
@@ -299,7 +299,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   CUDF_EXPECTS(is_fixed_width(rhs.type()), "Invalid/Unsupported rhs datatype");
 
   std::unique_ptr<column> out;
-  if (binops::null_using_binop(op)) {
+  if (binops::is_null_dependent(op)) {
     out = make_fixed_width_column(output_type, lhs.size(), mask_state::ALL_VALID, stream, mr);
   } else {
     auto new_mask = binops::detail::scalar_col_valid_mask_and(lhs, rhs, stream, mr);
@@ -321,7 +321,7 @@ std::unique_ptr<column> make_fixed_width_column_for_output(column_view const& lh
                                                            rmm::mr::device_memory_resource* mr,
                                                            cudaStream_t stream)
 {
-  if (binops::null_using_binop(op)) {
+  if (binops::is_null_dependent(op)) {
     return make_fixed_width_column(output_type, rhs.size(), mask_state::ALL_VALID, stream, mr);
   } else {
     auto new_mask = bitmask_and(table_view({lhs, rhs}), mr, stream);
@@ -330,7 +330,15 @@ std::unique_ptr<column> make_fixed_width_column_for_output(column_view const& lh
   }
 };
 
-int32_t apply_scale_binop(binary_operator op, int32_t left_scale, int32_t right_scale)
+/**
+ * @brief Computes the scale for a `fixed_point` number based on given binary operator `op`
+ *
+ * @param op The binary_operator used for two `fixed_point` numbers
+ * @param left_scale Scale of left `fixed_point` number
+ * @param right_scale Scale of right `fixed_point` number
+ * @return int32_t The resulting `scale` of the computed `fixed_point` number
+ */
+int32_t compute_scale_for_binop(binary_operator op, int32_t left_scale, int32_t right_scale)
 {
   if (op == binary_operator::MUL) return left_scale + right_scale;
   if (op == binary_operator::DIV) return left_scale - right_scale;
@@ -346,7 +354,7 @@ std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
   CUDF_EXPECTS(lhs.type().id() == rhs.type().id(),
                "Both columns must be of the same fixed_point type");
 
-  auto const scale       = apply_scale_binop(op, lhs.type().scale(), rhs.type().scale());
+  auto const scale       = compute_scale_for_binop(op, lhs.type().scale(), rhs.type().scale());
   auto const output_type = data_type{lhs.type().id(), scale};
   auto out = make_fixed_width_column_for_output(lhs, rhs, op, output_type, mr, stream);
 

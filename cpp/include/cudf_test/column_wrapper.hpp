@@ -41,7 +41,6 @@
 #include <memory>
 #include <numeric>
 #include <type_traits>
-#include "thrust/functional.h"
 
 namespace cudf {
 namespace test {

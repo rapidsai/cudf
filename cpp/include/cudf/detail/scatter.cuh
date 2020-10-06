@@ -93,7 +93,7 @@ struct column_scatterer_impl {
     // scatter map is smaller than the number of source rows
     thrust::scatter(rmm::exec_policy(stream)->on(stream),
                     source.begin<Type>(),
-                    source.begin<Type>() + std::distance(scatter_map_begin, scatter_map_end),
+                    source.begin<Type>() + cudf::distance(scatter_map_begin, scatter_map_end),
                     scatter_map_begin,
                     result_view.begin<Type>());
 
