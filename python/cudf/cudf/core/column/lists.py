@@ -56,7 +56,7 @@ class ListColumn(ColumnBase):
         pa_type = pa.list_(elements.type)
 
         if len(elements) == elements.null_count:
-            elements = pa.NullArray.from_pandas([None] * len(elements))
+            elements = pa.nulls(len(elements))
             pa_type = pa.list_(elements.type)
         if self.nullable:
             nbuf = self.mask.to_host_array().view("int8")
