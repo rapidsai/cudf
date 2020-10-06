@@ -59,14 +59,14 @@ template <typename InputType,
           typename OutputType,
           typename agg_op,
           aggregation::Kind op,
-          bool has_nulls>
-std::enable_if_t<op == aggregation::COUNT_VALID, bool> __device__
-process_rolling_window(column_device_view input,
-                       mutable_column_device_view output,
-                       size_type start_index,
-                       size_type end_index,
-                       size_type current_index,
-                       size_type min_periods)
+          bool has_nulls,
+          std::enable_if_t<op == aggregation::COUNT_VALID>* = nullptr>
+bool __device__ process_rolling_window(column_device_view input,
+                                       mutable_column_device_view output,
+                                       size_type start_index,
+                                       size_type end_index,
+                                       size_type current_index,
+                                       size_type min_periods)
 {
   // declare this as volatile to avoid some compiler optimizations that lead to incorrect results
   // for CUDA 10.0 and below (fixed in CUDA 10.1)
@@ -98,14 +98,14 @@ template <typename InputType,
           typename OutputType,
           typename agg_op,
           aggregation::Kind op,
-          bool has_nulls>
-std::enable_if_t<op == aggregation::COUNT_ALL, bool> __device__
-process_rolling_window(column_device_view input,
-                       mutable_column_device_view output,
-                       size_type start_index,
-                       size_type end_index,
-                       size_type current_index,
-                       size_type min_periods)
+          bool has_nulls,
+          std::enable_if_t<op == aggregation::COUNT_ALL>* = nullptr>
+bool __device__ process_rolling_window(column_device_view input,
+                                       mutable_column_device_view output,
+                                       size_type start_index,
+                                       size_type end_index,
+                                       size_type current_index,
+                                       size_type min_periods)
 {
   cudf::size_type count = end_index - start_index;
 
@@ -124,14 +124,14 @@ template <typename InputType,
           typename OutputType,
           typename agg_op,
           aggregation::Kind op,
-          bool has_nulls>
-std::enable_if_t<op == aggregation::ROW_NUMBER, bool> __device__
-process_rolling_window(column_device_view input,
-                       mutable_column_device_view output,
-                       size_type start_index,
-                       size_type end_index,
-                       size_type current_index,
-                       size_type min_periods)
+          bool has_nulls,
+          std::enable_if_t<op == aggregation::ROW_NUMBER>* = nullptr>
+bool __device__ process_rolling_window(column_device_view input,
+                                       mutable_column_device_view output,
+                                       size_type start_index,
+                                       size_type end_index,
+                                       size_type current_index,
+                                       size_type min_periods)
 {
   bool output_is_valid                      = ((end_index - start_index) >= min_periods);
   output.element<OutputType>(current_index) = ((current_index - start_index) + 1);
@@ -148,16 +148,15 @@ template <typename InputType,
           typename OutputType,
           typename agg_op,
           aggregation::Kind op,
-          bool has_nulls>
-std::enable_if_t<(op == aggregation::ARGMIN or op == aggregation::ARGMAX) and
-                   std::is_same<InputType, cudf::string_view>::value,
-                 bool>
-  __device__ process_rolling_window(column_device_view input,
-                                    mutable_column_device_view output,
-                                    size_type start_index,
-                                    size_type end_index,
-                                    size_type current_index,
-                                    size_type min_periods)
+          bool has_nulls,
+          std::enable_if_t<(op == aggregation::ARGMIN or op == aggregation::ARGMAX) and
+                           std::is_same<InputType, cudf::string_view>::value>* = nullptr>
+bool __device__ process_rolling_window(column_device_view input,
+                                       mutable_column_device_view output,
+                                       size_type start_index,
+                                       size_type end_index,
+                                       size_type current_index,
+                                       size_type min_periods)
 {
   // declare this as volatile to avoid some compiler optimizations that lead to incorrect results
   // for CUDA 10.0 and below (fixed in CUDA 10.1)
@@ -192,17 +191,16 @@ template <typename InputType,
           typename OutputType,
           typename agg_op,
           aggregation::Kind op,
-          bool has_nulls>
-std::enable_if_t<!std::is_same<InputType, cudf::string_view>::value and
-                   !(op == aggregation::COUNT_VALID || op == aggregation::COUNT_ALL ||
-                     op == aggregation::ROW_NUMBER),
-                 bool>
-  __device__ process_rolling_window(column_device_view input,
-                                    mutable_column_device_view output,
-                                    size_type start_index,
-                                    size_type end_index,
-                                    size_type current_index,
-                                    size_type min_periods)
+          bool has_nulls,
+          std::enable_if_t<!std::is_same<InputType, cudf::string_view>::value and
+                           !(op == aggregation::COUNT_VALID || op == aggregation::COUNT_ALL ||
+                             op == aggregation::ROW_NUMBER)>* = nullptr>
+bool __device__ process_rolling_window(column_device_view input,
+                                       mutable_column_device_view output,
+                                       size_type start_index,
+                                       size_type end_index,
+                                       size_type current_index,
+                                       size_type min_periods)
 {
   // declare this as volatile to avoid some compiler optimizations that lead to incorrect results
   // for CUDA 10.0 and below (fixed in CUDA 10.1)
