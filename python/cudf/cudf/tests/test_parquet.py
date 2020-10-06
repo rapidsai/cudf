@@ -48,7 +48,7 @@ def simple_pdf(request):
     nrows = request.param
 
     # Create a pandas dataframe with random data of mixed types
-    test_pdf = pd.util.testing.makeCustomDataframe(
+    test_pdf = pd._testing.makeCustomDataframe(
         nrows=nrows, ncols=ncols, data_gen_f=lambda r, c: r, r_idx_type="i"
     )
     # Delete the name of the column index, and rename the row index
@@ -93,7 +93,7 @@ def pdf(request):
     nrows = request.param
 
     # Create a pandas dataframe with random data of mixed types
-    test_pdf = pd.util.testing.makeCustomDataframe(
+    test_pdf = pd._testing.makeCustomDataframe(
         nrows=nrows, ncols=ncols, data_gen_f=lambda r, c: r, r_idx_type="i"
     )
     # Delete the name of the column index, and rename the row index
@@ -133,7 +133,7 @@ def rdg_seed():
 
 
 def make_pdf(nrows, ncolumns=1, nvalids=0, dtype=np.int64):
-    test_pdf = pd.util.testing.makeCustomDataframe(
+    test_pdf = pd._testing.makeCustomDataframe(
         nrows=nrows,
         ncols=1,
         data_gen_f=lambda r, c: r,
@@ -1286,3 +1286,22 @@ def test_parquet_writer_sliced(tmpdir):
 
     df_select.to_parquet(cudf_path)
     assert_eq(cudf.read_parquet(cudf_path), df_select.reset_index(drop=True))
+
+
+@pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
+def test_parquet_nullable_boolean(tmpdir, engine):
+    pandas_path = tmpdir.join("pandas_bools.parquet")
+
+    pdf = pd.DataFrame(
+        {
+            "a": pd.Series(
+                [True, False, None, True, False], dtype=pd.BooleanDtype()
+            )
+        }
+    )
+    expected_gdf = cudf.DataFrame({"a": [True, False, None, True, False]})
+
+    pdf.to_parquet(pandas_path)
+    actual_gdf = cudf.read_parquet(pandas_path, engine=engine)
+
+    assert_eq(actual_gdf, expected_gdf)
