@@ -23,8 +23,11 @@ from cudf._lib.table cimport Table
 cimport cudf._lib.cpp.io.types as cudf_io_types
 
 
-cpdef read_json(filepath_or_buffer, dtype,
-                lines, compression, byte_range):
+cpdef read_json(object filepath_or_buffer,
+                object dtype,
+                bool lines,
+                object compression,
+                object byte_range):
     """
     Cython function to call into libcudf API, see `read_json`.
 

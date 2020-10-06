@@ -1925,7 +1925,7 @@ class Frame(libcudf.table.Table):
         else:
             result = cudf_category_frame
 
-        # In a scenarion where column is of type list/other non
+        # In a scenario where column is of type list/other non
         # pandas types, there will be no pandas metadata associated with
         # given arrow table as those types can only originate from
         # arrow.
@@ -1933,6 +1933,8 @@ class Frame(libcudf.table.Table):
             for name in result._data.names:
                 if pandas_dtypes[name] == "categorical":
                     dtype = "category"
+                elif pandas_dtypes[name] == "bool":
+                    dtype = pandas_dtypes[name]
                 else:
                     dtype = np_dtypes[name]
 

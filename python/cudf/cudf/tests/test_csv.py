@@ -1506,8 +1506,12 @@ def test_csv_writer_datetime_data(tmpdir):
         None,
     ],
 )
-@pytest.mark.parametrize("header", [True, False])
-@pytest.mark.parametrize("index", [True, False])
+@pytest.mark.parametrize(
+    "header", [True, False, np.bool_(True), np.bool_(False)]
+)
+@pytest.mark.parametrize(
+    "index", [True, False, np.bool_(True), np.bool_(False)]
+)
 @pytest.mark.parametrize("line_terminator", ["\r", "\n", "NEWLINE", "<<<<<"])
 def test_csv_writer_mixed_data(
     sep, columns, header, index, line_terminator, tmpdir

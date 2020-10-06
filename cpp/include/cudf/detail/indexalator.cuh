@@ -435,7 +435,7 @@ struct indexalator_factory {
               std::enable_if_t<not is_index_type<IndexType>()>* = nullptr>
     input_indexalator operator()(Args&&... args)
     {
-      CUDF_FAIL("indices must be an index type");
+      CUDF_FAIL("scalar must be an index type");
     }
   };
 
@@ -466,9 +466,9 @@ struct indexalator_factory {
   }
 
   /**
-   * @brief Create an indexalator over a scalar of index type.
+   * @brief Create an input indexalator instance from an index scalar.
    */
-  static input_indexalator make_input_iterator(scalar const& index)
+  static input_indexalator make_input_iterator(cudf::scalar const& index)
   {
     return type_dispatcher(index.type(), input_indexalator_scalar_fn{}, index);
   }
