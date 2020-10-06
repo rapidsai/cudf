@@ -6,7 +6,11 @@ import cudf
 import errno
 import os
 import pyarrow as pa
-import json
+
+try:
+    import ujson as json
+except ImportError:
+    import json
 
 from cython.operator import dereference
 import numpy as np
