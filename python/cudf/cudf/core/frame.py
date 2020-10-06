@@ -473,7 +473,10 @@ class Frame(libcudf.table.Table):
             )
         )
         result._postprocess_columns(self)
+<<<<<<< HEAD
         result._copy_struct_names(self)
+=======
+>>>>>>> branch-0.16
         if keep_index and self._index is not None:
             result._index.names = self._index.names
         return result

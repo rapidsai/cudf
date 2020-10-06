@@ -189,6 +189,14 @@ cdef dtype_from_structs_column_view(column_view cv):
     return StructDtype(fields)
 
 
+cdef dtype_from_structs_column_view(column_view cv):
+    cdef column_view child
+    fields = {}
+    for i in range(cv.num_children()):
+        fields[str(i)] = dtype_from_column_view(cv.child(i))
+    return StructDtype(fields)
+
+
 cdef dtype_from_column_view(column_view cv):
     cdef libcudf_types.type_id tid = cv.type().id()
     if tid == libcudf_types.type_id.LIST:

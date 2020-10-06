@@ -154,7 +154,7 @@ class ListDtype(ExtensionDtype):
     def __eq__(self, other):
         if isinstance(other, str):
             return other == self.name
-        if type(other) is not ListDtype:
+        if not isinstance(other, ListDtype):
             return False
         return self._typ.equals(other._typ)
 
@@ -164,9 +164,12 @@ class ListDtype(ExtensionDtype):
         else:
             return f"ListDtype({self.element_type})"
 
+<<<<<<< HEAD
     def __str__(self):
         return "object"
 
+=======
+>>>>>>> branch-0.16
 
 class StructDtype(ExtensionDtype):
 
@@ -208,7 +211,11 @@ class StructDtype(ExtensionDtype):
     def __eq__(self, other):
         if isinstance(other, str):
             return other == self.name
+<<<<<<< HEAD
         if type(other) is not StructDtype:
+=======
+        if not isinstance(other, StructDtype):
+>>>>>>> branch-0.16
             return False
         return self._typ.equals(other._typ)
 
