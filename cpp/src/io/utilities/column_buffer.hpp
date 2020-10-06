@@ -91,25 +91,11 @@ struct column_buffer {
 
   // move constructor
   column_buffer(column_buffer&& col) = default;
+  column_buffer& operator=(column_buffer&& col) = default;
 
-  // copy constructors
-  column_buffer(column_buffer& col)       = delete;
+  // copy constructor
   column_buffer(column_buffer const& col) = delete;
-
-  /*
-
-  {
-    _strings    = std::move(col._strings);
-    _data       = std::move(col._data);
-    _null_mask  = std::move(col._null_mask);
-    _null_count = col._null_count;
-    type        = col.type;
-    size        = col.size;
-    children    = std::move(col.children);
-    is_nullable = col.is_nullable;
-    name        = std::move(col.name);
-  }
-  */
+  column_buffer& operator=(column_buffer const& col) = delete;
 
   // instantiate a column of known type with a specified size.  Allows deferred creation for
   // preprocessing steps such as in the Parquet reader

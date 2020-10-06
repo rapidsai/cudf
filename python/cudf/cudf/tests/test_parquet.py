@@ -865,103 +865,6 @@ def list_gen(
     ]
 
 
-def test_parquet_reader_list_large(tmpdir):
-    expect = pd.DataFrame({"a": list_gen(int_gen, 0, 256, 80, 50)})
-    fname = tmpdir.join("test_parquet_reader_list_large.parquet")
-    expect.to_parquet(fname)
-    assert os.path.exists(fname)
-    got = cudf.read_parquet(fname)
-    assert_eq(expect, got, check_dtype=False)
-
-
-def test_parquet_reader_list_validity(tmpdir):
-    expect = pd.DataFrame(
-        {"a": list_gen(int_gen, 0, 256, 80, 50, include_validity=True)}
-    )
-    fname = tmpdir.join("test_parquet_reader_list_validity.parquet")
-    expect.to_parquet(fname)
-    assert os.path.exists(fname)
-    got = cudf.read_parquet(fname)
-    assert_eq(expect, got, check_dtype=False)
-
-
-def test_parquet_reader_list_large_mixed(tmpdir):
-    expect = pd.DataFrame(
-        {
-            "a": list_gen(string_gen, 0, 128, 80, 50),
-            "b": list_gen(int_gen, 0, 128, 80, 50),
-            "c": list_gen(int_gen, 0, 128, 80, 50, include_validity=True),
-            "d": list_gen(string_gen, 0, 128, 80, 50, include_validity=True),
-        }
-    )
-    fname = tmpdir.join("test_parquet_reader_list_large_mixed.parquet")
-    expect.to_parquet(fname)
-    assert os.path.exists(fname)
-    got = cudf.read_parquet(fname)
-    assert_eq(expect, got, check_dtype=False)
-
-
-@pytest.mark.parametrize("skip", range(0, 128))
-def test_parquet_reader_list_skiprows(skip, tmpdir):
-    num_rows = 128
-    src = pd.DataFrame(
-        {
-            "a": list_gen(int_gen, 0, num_rows, 80, 50),
-            "b": list_gen(string_gen, 0, num_rows, 80, 50),
-            "c": list_gen(int_gen, 0, num_rows, 80, 50, include_validity=True),
-        }
-    )
-    fname = tmpdir.join("test_parquet_reader_list_skiprows.parquet")
-    src.to_parquet(fname)
-    assert os.path.exists(fname)
-
-    expect = pd.DataFrame(
-        {
-            "a": list_gen(int_gen, skip, num_rows - skip, 80, 50),
-            "b": list_gen(string_gen, skip, num_rows - skip, 80, 50),
-            "c": list_gen(
-                int_gen, skip, num_rows - skip, 80, 50, include_validity=True
-            ),
-        }
-    )
-    got = cudf.read_parquet(fname, skiprows=skip)
-    assert_eq(expect, got, check_dtype=False)
-
-
-@pytest.mark.parametrize("skip", range(0, 128))
-def test_parquet_reader_list_num_rows(skip, tmpdir):
-    num_rows = 128
-    src = pd.DataFrame(
-        {
-            "a": list_gen(int_gen, 0, num_rows, 80, 50),
-            "b": list_gen(string_gen, 0, num_rows, 80, 50),
-            "c": list_gen(int_gen, 0, num_rows, 80, 50, include_validity=True),
-            "d": list_gen(
-                string_gen, 0, num_rows, 80, 50, include_validity=True
-            ),
-        }
-    )
-    fname = tmpdir.join("test_parquet_reader_list_num_rows.parquet")
-    src.to_parquet(fname)
-    assert os.path.exists(fname)
-
-    rows_to_read = min(3, num_rows - skip)
-    expect = pd.DataFrame(
-        {
-            "a": list_gen(int_gen, skip, rows_to_read, 80, 50),
-            "b": list_gen(string_gen, skip, rows_to_read, 80, 50),
-            "c": list_gen(
-                int_gen, skip, rows_to_read, 80, 50, include_validity=True
-            ),
-            "d": list_gen(
-                string_gen, skip, rows_to_read, 80, 50, include_validity=True
-            ),
-        }
-    )
-    got = cudf.read_parquet(fname, skiprows=skip, num_rows=rows_to_read)
-    assert_eq(expect, got, check_dtype=False)
-
-
 def struct_gen(gen, skip_rows, num_rows, include_validity=False):
     """
     Generate a struct column based on input parameters.
@@ -1164,6 +1067,103 @@ def test_parquet_reader_struct_sol_table_nulls_large(tmpdir):
     assert os.path.exists(fname)
     got = cudf.read_parquet(fname)
     assert expect.equals(got.to_arrow())
+
+
+def test_parquet_reader_list_large(tmpdir):
+    expect = pd.DataFrame({"a": list_gen(int_gen, 0, 256, 80, 50)})
+    fname = tmpdir.join("test_parquet_reader_list_large.parquet")
+    expect.to_parquet(fname)
+    assert os.path.exists(fname)
+    got = cudf.read_parquet(fname)
+    assert_eq(expect, got, check_dtype=False)
+
+
+def test_parquet_reader_list_validity(tmpdir):
+    expect = pd.DataFrame(
+        {"a": list_gen(int_gen, 0, 256, 80, 50, include_validity=True)}
+    )
+    fname = tmpdir.join("test_parquet_reader_list_validity.parquet")
+    expect.to_parquet(fname)
+    assert os.path.exists(fname)
+    got = cudf.read_parquet(fname)
+    assert_eq(expect, got, check_dtype=False)
+
+
+def test_parquet_reader_list_large_mixed(tmpdir):
+    expect = pd.DataFrame(
+        {
+            "a": list_gen(string_gen, 0, 128, 80, 50),
+            "b": list_gen(int_gen, 0, 128, 80, 50),
+            "c": list_gen(int_gen, 0, 128, 80, 50, include_validity=True),
+            "d": list_gen(string_gen, 0, 128, 80, 50, include_validity=True),
+        }
+    )
+    fname = tmpdir.join("test_parquet_reader_list_large_mixed.parquet")
+    expect.to_parquet(fname)
+    assert os.path.exists(fname)
+    got = cudf.read_parquet(fname)
+    assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize("skip", range(0, 128))
+def test_parquet_reader_list_skiprows(skip, tmpdir):
+    num_rows = 128
+    src = pd.DataFrame(
+        {
+            "a": list_gen(int_gen, 0, num_rows, 80, 50),
+            "b": list_gen(string_gen, 0, num_rows, 80, 50),
+            "c": list_gen(int_gen, 0, num_rows, 80, 50, include_validity=True),
+        }
+    )
+    fname = tmpdir.join("test_parquet_reader_list_skiprows.parquet")
+    src.to_parquet(fname)
+    assert os.path.exists(fname)
+
+    expect = pd.DataFrame(
+        {
+            "a": list_gen(int_gen, skip, num_rows - skip, 80, 50),
+            "b": list_gen(string_gen, skip, num_rows - skip, 80, 50),
+            "c": list_gen(
+                int_gen, skip, num_rows - skip, 80, 50, include_validity=True
+            ),
+        }
+    )
+    got = cudf.read_parquet(fname, skiprows=skip)
+    assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize("skip", range(0, 128))
+def test_parquet_reader_list_num_rows(skip, tmpdir):
+    num_rows = 128
+    src = pd.DataFrame(
+        {
+            "a": list_gen(int_gen, 0, num_rows, 80, 50),
+            "b": list_gen(string_gen, 0, num_rows, 80, 50),
+            "c": list_gen(int_gen, 0, num_rows, 80, 50, include_validity=True),
+            "d": list_gen(
+                string_gen, 0, num_rows, 80, 50, include_validity=True
+            ),
+        }
+    )
+    fname = tmpdir.join("test_parquet_reader_list_num_rows.parquet")
+    src.to_parquet(fname)
+    assert os.path.exists(fname)
+
+    rows_to_read = min(3, num_rows - skip)
+    expect = pd.DataFrame(
+        {
+            "a": list_gen(int_gen, skip, rows_to_read, 80, 50),
+            "b": list_gen(string_gen, skip, rows_to_read, 80, 50),
+            "c": list_gen(
+                int_gen, skip, rows_to_read, 80, 50, include_validity=True
+            ),
+            "d": list_gen(
+                string_gen, skip, rows_to_read, 80, 50, include_validity=True
+            ),
+        }
+    )
+    got = cudf.read_parquet(fname, skiprows=skip, num_rows=rows_to_read)
+    assert_eq(expect, got, check_dtype=False)
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")

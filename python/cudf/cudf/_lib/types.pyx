@@ -181,13 +181,6 @@ cdef dtype_from_lists_column_view(column_view cv):
             dtype_from_column_view(child)
         )
 
-cdef dtype_from_structs_column_view(column_view cv):
-    cdef column_view child
-    fields = {}
-    for i in range(cv.num_children()):
-        fields[str(i)] = dtype_from_column_view(cv.child(i))
-    return StructDtype(fields)
-
 
 cdef dtype_from_structs_column_view(column_view cv):
     cdef column_view child

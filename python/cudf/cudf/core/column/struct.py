@@ -40,11 +40,12 @@ class StructColumn(ColumnBase):
         )
 
     def to_arrow(self):
-<<<<<<< HEAD
-        children = list(col.to_arrow() for col in self.children)
-        for i, child in enumerate(children):
-            if len(child) == child.null_count:
-                children[i] = pa.NullArray.from_pandas([None] * len(child))
+        children = [
+            pa.nulls(len(child))
+            if len(child) == child.null_count
+            else child.to_arrow()
+            for child in self.children
+        ]
 
         pa_type = pa.struct(
             {
@@ -52,16 +53,6 @@ class StructColumn(ColumnBase):
                 for field, child in zip(self.dtype.fields, children)
             }
         )
-=======
-        pa_type = self.dtype.to_arrow()
-
-        children = [
-            pa.nulls(len(child))
-            if len(child) == child.null_count
-            else child.to_arrow()
-            for child in self.children
-        ]
->>>>>>> branch-0.16
 
         if self.nullable:
             nbuf = self.mask.to_host_array().view("int8")
@@ -90,19 +81,10 @@ class StructColumn(ColumnBase):
         )
         return StructColumn(
             data=None,
-<<<<<<< HEAD
-            size=self.size,
-            dtype=dtype,
-            mask=self.mask,
-            offset=self.offset,
-            null_count=self.null_count,
-            children=self.children,
-=======
             size=self.base_size,
             dtype=dtype,
             mask=self.base_mask,
             offset=self.offset,
             null_count=self.null_count,
             children=self.base_children,
->>>>>>> branch-0.16
         )
