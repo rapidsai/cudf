@@ -14,7 +14,7 @@ from cudf._lib.types cimport (
 )
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
-from cudf.core.dtypes import ListDtype
+from cudf.core.dtypes import ListDtype, StructDtype
 
 cimport cudf._lib.cpp.types as libcudf_types
 
@@ -182,10 +182,20 @@ cdef dtype_from_lists_column_view(column_view cv):
         )
 
 
+cdef dtype_from_structs_column_view(column_view cv):
+    cdef column_view child
+    fields = {}
+    for i in range(cv.num_children()):
+        fields[str(i)] = dtype_from_column_view(cv.child(i))
+    return StructDtype(fields)
+
+
 cdef dtype_from_column_view(column_view cv):
     cdef libcudf_types.type_id tid = cv.type().id()
     if tid == libcudf_types.type_id.LIST:
         dtype = dtype_from_lists_column_view(cv)
+    elif tid == libcudf_types.type_id.STRUCT:
+        dtype = dtype_from_structs_column_view(cv)
     else:
         dtype = cudf_to_np_types[<underlying_type_t_type_id>(tid)]
     return dtype

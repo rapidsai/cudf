@@ -48,7 +48,7 @@ def simple_pdf(request):
     nrows = request.param
 
     # Create a pandas dataframe with random data of mixed types
-    test_pdf = pd.util.testing.makeCustomDataframe(
+    test_pdf = pd._testing.makeCustomDataframe(
         nrows=nrows, ncols=ncols, data_gen_f=lambda r, c: r, r_idx_type="i"
     )
     # Delete the name of the column index, and rename the row index
@@ -93,7 +93,7 @@ def pdf(request):
     nrows = request.param
 
     # Create a pandas dataframe with random data of mixed types
-    test_pdf = pd.util.testing.makeCustomDataframe(
+    test_pdf = pd._testing.makeCustomDataframe(
         nrows=nrows, ncols=ncols, data_gen_f=lambda r, c: r, r_idx_type="i"
     )
     # Delete the name of the column index, and rename the row index
@@ -133,7 +133,7 @@ def rdg_seed():
 
 
 def make_pdf(nrows, ncolumns=1, nvalids=0, dtype=np.int64):
-    test_pdf = pd.util.testing.makeCustomDataframe(
+    test_pdf = pd._testing.makeCustomDataframe(
         nrows=nrows,
         ncols=1,
         data_gen_f=lambda r, c: r,
@@ -508,11 +508,11 @@ def test_parquet_read_rows(tmpdir, pdf, row_group_size):
     total_rows, row_groups, col_names = cudf.io.read_parquet_metadata(fname)
 
     num_rows = total_rows // 4
-    skip_rows = (total_rows - num_rows) // 2
-    gdf = cudf.read_parquet(fname, skip_rows=skip_rows, num_rows=num_rows)
+    skiprows = (total_rows - num_rows) // 2
+    gdf = cudf.read_parquet(fname, skiprows=skiprows, num_rows=num_rows)
 
     for row in range(num_rows):
-        assert gdf["col_int32"].iloc[row] == row + skip_rows
+        assert gdf["col_int32"].iloc[row] == row + skiprows
 
 
 def test_parquet_reader_spark_timestamps(datadir):
@@ -585,7 +585,7 @@ def test_parquet_chunked_skiprows(tmpdir):
     out_df.to_pandas().to_parquet(fname)
 
     for i in range(10):
-        chunk = cudf.read_parquet(fname, skip_rows=processed, num_rows=batch)
+        chunk = cudf.read_parquet(fname, skiprows=processed, num_rows=batch)
         expect = out_df[processed : processed + batch].reset_index(drop=True)
         assert_eq(chunk.reset_index(drop=True), expect)
         processed += batch
@@ -771,7 +771,7 @@ def string_gen(first_val, i):
 
 
 def list_gen(
-    gen, skip_rows, num_rows, lists_per_row, list_size, include_validity=False
+    gen, skiprows, num_rows, lists_per_row, list_size, include_validity=False
 ):
     """
     Generate a list column based on input parameters.
@@ -779,8 +779,8 @@ def list_gen(
     Args:
         gen: A callable which generates an individual leaf element based on an
             absolute index.
-        skip_rows : Generate the column as if it had started at 'skip_rows'
-            instead of 0. The intent here is to emulate the skip_rows
+        skiprows : Generate the column as if it had started at 'skiprows'
+            instead of 0. The intent here is to emulate the skiprows
             parameter of the parquet reader.
         num_rows : Number of rows to generate.  Again, this is to emulate the
             'num_rows' parameter of the parquet reader.
@@ -811,16 +811,16 @@ def list_gen(
     return [
         (
             R(
-                lists_per_row * list_size * (i + skip_rows),
+                lists_per_row * list_size * (i + skiprows),
                 lists_per_row,
                 list_size,
             )
-            if (i + skip_rows) % 2 == 0
+            if (i + skiprows) % 2 == 0
             else None
         )
         if include_validity
         else R(
-            lists_per_row * list_size * (i + skip_rows),
+            lists_per_row * list_size * (i + skiprows),
             lists_per_row,
             list_size,
         )
@@ -887,7 +887,7 @@ def test_parquet_reader_list_skiprows(skip, tmpdir):
             ),
         }
     )
-    got = cudf.read_parquet(fname, skip_rows=skip)
+    got = cudf.read_parquet(fname, skiprows=skip)
     assert_eq(expect, got, check_dtype=False)
 
 
@@ -921,7 +921,7 @@ def test_parquet_reader_list_num_rows(skip, tmpdir):
             ),
         }
     )
-    got = cudf.read_parquet(fname, skip_rows=skip, num_rows=rows_to_read)
+    got = cudf.read_parquet(fname, skiprows=skip, num_rows=rows_to_read)
     assert_eq(expect, got, check_dtype=False)
 
 
@@ -1331,3 +1331,22 @@ def test_parquet_writer_list_large_mixed(tmpdir):
 
     got = pd.read_parquet(fname)
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
+def test_parquet_nullable_boolean(tmpdir, engine):
+    pandas_path = tmpdir.join("pandas_bools.parquet")
+
+    pdf = pd.DataFrame(
+        {
+            "a": pd.Series(
+                [True, False, None, True, False], dtype=pd.BooleanDtype()
+            )
+        }
+    )
+    expected_gdf = cudf.DataFrame({"a": [True, False, None, True, False]})
+
+    pdf.to_parquet(pandas_path)
+    actual_gdf = cudf.read_parquet(pandas_path, engine=engine)
+
+    assert_eq(actual_gdf, expected_gdf)

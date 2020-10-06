@@ -35,6 +35,7 @@ from cudf.utils.dtypes import (
     is_numerical_dtype,
     is_scalar,
     is_string_dtype,
+    is_struct_dtype,
     min_signed_type,
     min_unsigned_type,
     np_to_pa_dtype,
@@ -406,6 +407,8 @@ class ColumnBase(Column, Serializable):
                 size=codes.size,
                 ordered=array.type.ordered,
             )
+        elif isinstance(array.type, pa.StructType):
+            return cudf.core.column.StructColumn.from_arrow(array)
 
         return libcudf.interop.from_arrow(data, data.column_names)._data[
             "None"
@@ -1415,6 +1418,15 @@ def build_column(
             dtype=dtype,
             mask=mask,
             offset=offset,
+            null_count=null_count,
+            children=children,
+        )
+    elif is_struct_dtype(dtype):
+        return cudf.core.column.StructColumn(
+            data=data,
+            size=size,
+            dtype=dtype,
+            mask=mask,
             null_count=null_count,
             children=children,
         )

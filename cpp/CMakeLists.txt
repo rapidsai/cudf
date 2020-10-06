@@ -434,6 +434,7 @@ add_library(cudf
             src/reductions/nth_element.cu
             src/reductions/min.cu
             src/reductions/max.cu
+            src/reductions/minmax.cu
             src/reductions/any.cu
             src/reductions/all.cu
             src/reductions/sum.cu
@@ -597,6 +598,7 @@ add_library(cudf
             src/dictionary/decode.cu
             src/dictionary/encode.cu
             src/dictionary/remove_keys.cu
+            src/dictionary/replace.cu
             src/dictionary/search.cu
             src/dictionary/set_keys.cu
             src/groupby/groupby.cu
@@ -617,6 +619,8 @@ add_library(cudf
             src/aggregation/aggregation.cpp
             src/aggregation/aggregation.cu
             src/aggregation/result_cache.cpp
+            src/ast/transform.cu
+            src/ast/linearizer.cpp
             src/utilities/default_stream.cpp
 )
 
