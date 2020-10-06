@@ -316,7 +316,7 @@ class ColumnBase(Column, Serializable):
                 libcudf.table.Table(
                     cudf.core.column_accessor.ColumnAccessor({"None": codes})
                 ),
-                ["None"],
+                [["None"]],
                 keep_index=False,
             )
             out_dictionary = libcudf.interop.to_arrow(
@@ -325,7 +325,7 @@ class ColumnBase(Column, Serializable):
                         {"None": categories}
                     )
                 ),
-                ["None"],
+                [["None"]],
                 keep_index=False,
             )
 
@@ -346,7 +346,7 @@ class ColumnBase(Column, Serializable):
             libcudf.table.Table(
                 cudf.core.column_accessor.ColumnAccessor({"None": self})
             ),
-            ["None"],
+            [["None"]],
             keep_index=False,
         )["None"].chunk(0)
 

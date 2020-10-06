@@ -21,6 +21,7 @@ from cudf._lib.cpp.interop cimport (
     from_arrow as cpp_from_arrow,
     from_dlpack as cpp_from_dlpack,
     to_dlpack as cpp_to_dlpack,
+    column_metadata,
     DLManagedTensor
 )
 
@@ -99,9 +100,27 @@ cdef void dlmanaged_tensor_pycapsule_deleter(object pycap_obj):
     dlpack_tensor.deleter(dlpack_tensor)
 
 
+cdef vector[column_metadata] gather_metadata(object metadata) except +:
+    """
+    Metadata is stored as lists, and expected format is as follows,
+    [["a", [["b"], ["c"], ["d"]]],       [["e"]],        ["f", ["", ""]]].
+    First value signifies name of the main parent column,
+    and adjacent list will signify child column.
+    """
+    cdef vector[column_metadata] cpp_metadata
+    if isinstance(metadata, list):
+        cpp_metadata.reserve(len(metadata))
+        for i, val in enumerate(metadata):
+            cpp_metadata.push_back(column_metadata(str.encode(str(val[0]))))
+            if len(val) == 2:
+                cpp_metadata[i].children_meta = gather_metadata(val[1])
+
+    else:
+        raise ValueError("Malformed metadata has been encountered")
+
+
 def to_arrow(Table input_table,
-             object column_names,
-             object field_names=None,
+             object metadata,
              bool keep_index=True):
     """Convert from cudf Table to PyArrow Table.
 
@@ -117,26 +136,15 @@ def to_arrow(Table input_table,
     pyarrow table
     """
 
-    cdef vector[string] cpp_column_names
-    cdef vector[vector[string]] cpp_field_names
+    cdef vector[column_metadata] cpp_metadata = gather_metadata(metadata)
     cdef table_view input = (
         input_table.view() if keep_index else input_table.data_view()
     )
-    cpp_column_names.reserve(len(column_names))
-    for name in column_names:
-        cpp_column_names.push_back(str.encode(str(name)))
-
-    if field_names is not None:
-        cpp_column_names.reserve(len(field_names))
-        for i, fields in enumerate(field_names):
-            cpp_field_names[i].reserve(len(fields))
-            for name in fields:
-                cpp_field_names[i].push_back(str.encode(str(name)))
 
     cdef shared_ptr[CTable] cpp_arrow_table
     with nogil:
         cpp_arrow_table = cpp_to_arrow(
-            input, cpp_column_names, cpp_field_names
+            input, cpp_metadata
         )
 
     return pyarrow_wrap_table(cpp_arrow_table)

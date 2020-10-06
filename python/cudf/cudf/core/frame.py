@@ -2000,14 +2000,16 @@ class Frame(libcudf.table.Table):
 
         out_table = pa.table([])
         if data._num_columns > 0:
+            names_meta = [[name] for name in data._data.names]
             out_table = libcudf.interop.to_arrow(
-                data, data._data.names, keep_index=False
+                data, names_meta, keep_index=False
             )
 
         if len(codes) > 0:
             codes_table = libcudf.table.Table(codes)
+            names_meta = [[name] for name in codes_table._data.names]
             indices = libcudf.interop.to_arrow(
-                codes_table, codes_table._data.names, keep_index=False
+                codes_table, names_meta, keep_index=False
             )
             dictionaries = dict(
                 (name, categories[name].to_arrow())

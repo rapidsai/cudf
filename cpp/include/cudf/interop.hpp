@@ -84,6 +84,20 @@ DLManagedTensor* to_dlpack(
  */
 
 /**
+ * @brief Detailed meta data information of arrow array.
+ *
+ * As of now this contains only name in the hierarchy of children of cudf column,
+ * but in future this can be updated as per requirement.
+ */
+struct column_metadata {
+  std::string name;
+  std::vector<column_metadata> children_meta;
+
+  column_metadata(std::string const& _name) : name(_name) {}
+  column_metadata() = default;
+};
+
+/**
  * @brief Create `arrow::Table` from cudf table `input`
  *
  * Converts the `cudf::table_view` to `arrow::Table` with the provided
@@ -92,17 +106,13 @@ DLManagedTensor* to_dlpack(
  * @throws cudf::logic_error if `column_names` size doesn't match with number of columns.
  *
  * @param input table_view that needs to be converted to arrow Table
- * @param column_names Vector of column names for metadata of arrow Table
- * @param nested_type_field_names Vector of a String vector representing field names in a nested
- *type, each vector of string corresponds to one nested array.
+ * @param metadata Contains hierarchy of names of columns and children
  * @param ar_mr arrow memory pool to allocate memory for arrow Table
  * @return arrow Table generated from `input`
  **/
-std::shared_ptr<arrow::Table> to_arrow(
-  table_view input,
-  std::vector<std::string> const& column_names                         = {},
-  std::vector<std::vector<std::string>> const& nested_type_field_names = {},
-  arrow::MemoryPool* ar_mr = arrow::default_memory_pool());
+std::shared_ptr<arrow::Table> to_arrow(table_view input,
+                                       std::vector<column_metadata> const& metadata = {},
+                                       arrow::MemoryPool* ar_mr = arrow::default_memory_pool());
 
 /**
  * @brief Create `cudf::table` from given arrow Table input

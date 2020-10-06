@@ -110,7 +110,7 @@ TEST_F(ToArrowTest, EmptyTable)
   auto cudf_table_view      = tables.first->view();
   auto expected_arrow_table = tables.second;
 
-  auto got_arrow_table = cudf::to_arrow(cudf_table_view, {"a", "b", "c", "d"});
+  auto got_arrow_table = cudf::to_arrow(cudf_table_view, {{"a"}, {"b"}, {"c"}, {"d"}});
 
   ASSERT_EQ(expected_arrow_table->Equals(*got_arrow_table, true), true);
 }
@@ -136,7 +136,7 @@ TEST_F(ToArrowTest, DateTimeTable)
 
   auto expected_arrow_table = arrow::Table::Make(schema, {arr});
 
-  auto got_arrow_table = cudf::to_arrow(input_view, {"a"});
+  auto got_arrow_table = cudf::to_arrow(input_view, {{"a"}});
 
   ASSERT_EQ(expected_arrow_table->Equals(*got_arrow_table, true), true);
 }
@@ -170,7 +170,7 @@ TYPED_TEST(ToArrowTestDurationsTest, DurationTable)
 
   auto expected_arrow_table = arrow::Table::Make(schema, {arr});
 
-  auto got_arrow_table = cudf::to_arrow(input_view, {"a"});
+  auto got_arrow_table = cudf::to_arrow(input_view, {{"a"}});
 
   ASSERT_EQ(expected_arrow_table->Equals(*got_arrow_table, true), true);
 }
@@ -190,7 +190,7 @@ TEST_F(ToArrowTest, NestedList)
   auto schema = std::make_shared<arrow::Schema>(schema_vector);
 
   auto expected_arrow_table = arrow::Table::Make(schema, {nested_list_arr});
-  auto got_arrow_table      = cudf::to_arrow(input_view, {"a"});
+  auto got_arrow_table      = cudf::to_arrow(input_view, {{"a"}});
 
   ASSERT_TRUE(expected_arrow_table->Equals(*got_arrow_table, true));
 }
@@ -199,29 +199,64 @@ TEST_F(ToArrowTest, StructColumn)
 {
   using vector_of_columns = std::vector<std::unique_ptr<cudf::column>>;
 
+  // Create cudf table
   auto nested_type_field_names =
-    std::vector<std::vector<std::string>>{{"string", "integral", "bool"}};
+    std::vector<std::vector<std::string>>{{"string", "integral", "bool", "nested_list", "struct"}};
   auto str_col =
     cudf::test::strings_column_wrapper{
       "Samuel Vimes", "Carrot Ironfoundersson", "Angua von Uberwald"}
       .release();
+  auto str_col2 = cudf::test::strings_column_wrapper{"CUDF", "ROCKS", "EVERYWHERE"}.release();
   int num_rows{str_col->size()};
   auto int_col  = cudf::test::fixed_width_column_wrapper<int32_t, int32_t>{{48, 27, 25}}.release();
+  auto int_col2 = cudf::test::fixed_width_column_wrapper<int32_t, int32_t>{{12, 24, 47}}.release();
   auto bool_col = cudf::test::fixed_width_column_wrapper<bool>{{true, true, false}}.release();
+  auto list_col =
+    cudf::test::lists_column_wrapper<int64_t>({{{1, 2}, {3, 4}, {5}}, {{{6}}}, {{7}, {8, 9}}})
+      .release();
+  vector_of_columns cols2;
+  cols2.push_back(std::move(str_col2));
+  cols2.push_back(std::move(int_col2));
+  auto sub_struct_col = cudf::make_structs_column(num_rows, std::move(cols2), 0, {});
   vector_of_columns cols;
   cols.push_back(std::move(str_col));
   cols.push_back(std::move(int_col));
   cols.push_back(std::move(bool_col));
+  cols.push_back(std::move(list_col));
+  cols.push_back(std::move(sub_struct_col));
 
   auto struct_col = cudf::make_structs_column(num_rows, std::move(cols), 0, {});
   cudf::table_view input_view({struct_col->view()});
 
+  // Create name metadata
+  auto sub_metadata          = cudf::column_metadata{"struct"};
+  sub_metadata.children_meta = {{"string2"}, {"integral2"}};
+  auto metadata              = cudf::column_metadata{"a"};
+  metadata.children_meta     = {{"string"}, {"integral"}, {"bool"}, {"nested_list"}, sub_metadata};
+
+  // Create Arrow table
   std::vector<std::string> str{"Samuel Vimes", "Carrot Ironfoundersson", "Angua von Uberwald"};
+  std::vector<std::string> str2{"CUDF", "ROCKS", "EVERYWHERE"};
   auto str_array  = get_arrow_array<cudf::string_view>(str);
   auto int_array  = get_arrow_array<int32_t>({48, 27, 25});
+  auto str2_array = get_arrow_array<cudf::string_view>(str2);
+  auto int2_array = get_arrow_array<int32_t>({12, 24, 47});
   auto bool_array = get_arrow_array<bool>({true, true, false});
+  auto list_arr = get_arrow_list_array<int64_t>({1, 2, 3, 4, 5, 6, 7, 8, 9}, {0, 2, 4, 5, 6, 7, 9});
+  std::vector<int32_t> offset{0, 3, 4, 6};
+  auto nested_list_arr = std::make_shared<arrow::ListArray>(
+    arrow::list(list(arrow::int64())), offset.size() - 1, arrow::Buffer::Wrap(offset), list_arr);
 
-  std::vector<std::shared_ptr<arrow::Array>> child_arrays({str_array, int_array, bool_array});
+  std::vector<std::shared_ptr<arrow::Array>> child_arrays2({str2_array, int2_array});
+  auto fields2 = std::vector<std::shared_ptr<arrow::Field>>{
+    std::make_shared<arrow::Field>("string2", str2_array->type(), str2_array->null_count() > 0),
+    std::make_shared<arrow::Field>("integral2", int2_array->type(), int2_array->null_count() > 0)};
+  auto dtype2        = std::make_shared<arrow::StructType>(fields2);
+  auto struct_array2 = std::make_shared<arrow::StructArray>(
+    dtype2, static_cast<int64_t>(input_view.num_rows()), child_arrays2);
+
+  std::vector<std::shared_ptr<arrow::Array>> child_arrays(
+    {str_array, int_array, bool_array, nested_list_arr, struct_array2});
   std::vector<std::shared_ptr<arrow::Field>> fields;
   std::transform(child_arrays.cbegin(),
                  child_arrays.cend(),
@@ -241,12 +276,9 @@ TEST_F(ToArrowTest, StructColumn)
 
   auto expected_arrow_table = arrow::Table::Make(schema, {struct_array});
 
-  auto got_arrow_table = cudf::to_arrow(input_view, {"a"}, nested_type_field_names);
+  auto got_arrow_table = cudf::to_arrow(input_view, {metadata});
 
-  std::cout<<"RGSL : Expected\n"<<expected_arrow_table->ToString()<<std::endl;
-  std::cout<<"RGSL : got\n"<<got_arrow_table->ToString()<<std::endl;
-
-  ASSERT_TRUE(expected_arrow_table->Equals(*got_arrow_table, true));
+  ASSERT_TRUE(expected_arrow_table->Equals(*got_arrow_table, false));
 }
 
 struct ToArrowTestSlice
@@ -264,7 +296,7 @@ TEST_P(ToArrowTestSlice, SliceTest)
 
   auto sliced_cudf_table    = cudf::slice(cudf_table_view, {start, end})[0];
   auto expected_arrow_table = arrow_table->Slice(start, end - start);
-  auto got_arrow_table      = cudf::to_arrow(sliced_cudf_table, {"a", "b", "c", "d"});
+  auto got_arrow_table      = cudf::to_arrow(sliced_cudf_table, {{"a"}, {"b"}, {"c"}, {"d"}});
 
   ASSERT_EQ(expected_arrow_table->Equals(*got_arrow_table, true), true);
 }
