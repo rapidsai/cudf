@@ -2,11 +2,11 @@
 
 from libcpp.vector cimport vector
 from libcpp.memory cimport unique_ptr
+from libcpp.utility cimport move
 from libcpp cimport bool
 
 from cudf._lib.column cimport Column
 from cudf._lib.table cimport Table
-from cudf._lib.move cimport move
 
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view

@@ -11,6 +11,7 @@ import os
 from libcpp cimport bool
 from libcpp.string cimport string
 from libcpp.vector cimport vector
+from libcpp.utility cimport move
 
 from cudf._lib.cpp.io.json cimport (
     read_json as libcudf_read_json,
@@ -18,13 +19,15 @@ from cudf._lib.cpp.io.json cimport (
 )
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.io.utils cimport make_source_info
-from cudf._lib.move cimport move
 from cudf._lib.table cimport Table
 cimport cudf._lib.cpp.io.types as cudf_io_types
 
 
-cpdef read_json(filepath_or_buffer, dtype,
-                lines, compression, byte_range):
+cpdef read_json(object filepath_or_buffer,
+                object dtype,
+                bool lines,
+                object compression,
+                object byte_range):
     """
     Cython function to call into libcudf API, see `read_json`.
 

@@ -19,8 +19,9 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/dictionary/encode.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
-#include "cudf/search.hpp"
+#include <cudf/search.hpp>
 
 struct SearchTest : public cudf::test::BaseFixture {
 };
@@ -1616,6 +1617,35 @@ TEST_F(SearchTest, contains_nullable_column_false_string)
   result = cudf::contains(column, scalar);
 
   ASSERT_EQ(result, expect);
+}
+
+TEST_F(SearchTest, contains_dictionary)
+{
+  cudf::test::strings_column_wrapper column({"00", "00", "17", "17", "23", "23", "29"});
+  auto dict_col = cudf::dictionary::encode(column);
+  EXPECT_TRUE(cudf::contains(dict_col->view(), string_scalar{"23"}));
+  EXPECT_FALSE(cudf::contains(dict_col->view(), string_scalar{"28"}));
+
+  cudf::test::strings_column_wrapper needles({"00", "17", "23", "27"});
+  auto dict_needles = cudf::dictionary::encode(needles);
+  fixed_width_column_wrapper<bool> expect{1, 1, 1, 1, 1, 1, 0};
+  auto result = cudf::contains(dict_col->view(), dict_needles->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
+}
+
+TEST_F(SearchTest, contains_nullable_dictionary)
+{
+  cudf::test::fixed_width_column_wrapper<int64_t> column({0, 0, 17, 17, 23, 23, 29},
+                                                         {1, 0, 1, 1, 1, 1, 1});
+  auto dict_col = cudf::dictionary::encode(column);
+  EXPECT_TRUE(cudf::contains(dict_col->view(), numeric_scalar<int64_t>{23}));
+  EXPECT_FALSE(cudf::contains(dict_col->view(), numeric_scalar<int64_t>{28}));
+
+  cudf::test::fixed_width_column_wrapper<int64_t> needles({0, 17, 23, 27});
+  auto dict_needles = cudf::dictionary::encode(needles);
+  fixed_width_column_wrapper<bool> expect({1, 0, 1, 1, 1, 1, 0}, {1, 0, 1, 1, 1, 1, 1});
+  auto result = cudf::contains(dict_col->view(), dict_needles->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 TEST_F(SearchTest, multi_contains_some)
