@@ -67,6 +67,7 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         DICTIONARY32 "cudf::type_id::DICTIONARY32"
         STRING "cudf::type_id::STRING"
         LIST "cudf::type_id::LIST"
+        STRUCT "cudf::type_id::STRUCT"
         NUM_TYPE_IDS "cudf::type_id::NUM_TYPE_IDS"
         DURATION_SECONDS "cudf::type_id::DURATION_SECONDS"
         DURATION_MILLISECONDS "cudf::type_id::DURATION_MILLISECONDS"

@@ -4110,7 +4110,7 @@ class DataFrame(Frame, Serializable):
             win_type=win_type,
         )
 
-    def query(self, expr, local_dict={}):
+    def query(self, expr, local_dict=None):
         """
         Query with a boolean expression using Numba to compile a GPU kernel.
 
@@ -4177,6 +4177,9 @@ class DataFrame(Frame, Serializable):
         # can't use `annotate` decorator here as we inspect the calling
         # environment.
         with annotate("QUERY", color="purple", domain="cudf_python"):
+            if local_dict is None:
+                local_dict = {}
+
             if self.empty:
                 return self.copy()
 
@@ -4282,7 +4285,7 @@ class DataFrame(Frame, Serializable):
         func,
         incols,
         outcols,
-        kwargs={},
+        kwargs=None,
         pessimistic_nulls=True,
         chunks=None,
         blkct=None,
@@ -4328,6 +4331,8 @@ class DataFrame(Frame, Serializable):
         --------
         DataFrame.apply_rows
         """
+        if kwargs is None:
+            kwargs = {}
         if chunks is None:
             raise ValueError("*chunks* must be defined")
         return applyutils.apply_chunks(
