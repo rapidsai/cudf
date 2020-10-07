@@ -5,9 +5,9 @@ import pytest
 import dask
 from dask import dataframe as dd
 
-import cudf
-
 import dask_cudf
+
+import cudf
 
 
 @pytest.mark.parametrize("aggregation", ["sum", "mean", "count", "min", "max"])
@@ -71,6 +71,27 @@ def test_groupby_agg(func):
     b.name = None
 
     dd.assert_eq(a, b)
+
+
+@pytest.mark.parametrize("split_out", [1, 3])
+def test_groupby_agg_empty_partition(tmpdir, split_out):
+
+    # Write random and empty cudf DataFrames
+    # to two distinct files.
+    df = cudf.datasets.randomdata()
+    df.to_parquet(str(tmpdir.join("f0.parquet")))
+    cudf.DataFrame(
+        columns=["id", "x", "y"],
+        dtype={"id": "int64", "x": "float64", "y": "float64"},
+    ).to_parquet(str(tmpdir.join("f1.parquet")))
+
+    # Read back our two partitions as a single
+    # dask_cudf DataFrame (one partition is now empty)
+    ddf = dask_cudf.read_parquet(str(tmpdir))
+    gb = ddf.groupby(["id"]).agg({"x": ["sum"]}, split_out=split_out)
+
+    expect = df.groupby(["id"]).agg({"x": ["sum"]}).sort_index()
+    dd.assert_eq(gb.compute().sort_index(), expect)
 
 
 @pytest.mark.xfail(reason="cudf issues")
