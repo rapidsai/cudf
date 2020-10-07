@@ -17,7 +17,10 @@
 #pragma once
 
 #include <cudf/column/column_view.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/traits.hpp>
+
+#include <thrust/iterator/constant_iterator.h>
 
 namespace cudf {
 namespace detail {
@@ -417,6 +420,26 @@ struct indexalator_factory {
   };
 
   /**
+   * @brief Use this class to create an indexalator to a scalar index.
+   */
+  struct input_indexalator_scalar_fn {
+    template <typename IndexType, std::enable_if_t<is_index_type<IndexType>()>* = nullptr>
+    input_indexalator operator()(scalar const& index)
+    {
+      // note: using static_cast<scalar_type_t<IndexType> const&>(index) creates a copy
+      auto const scalar_impl = static_cast<scalar_type_t<IndexType> const*>(&index);
+      return input_indexalator(scalar_impl->data(), sizeof(IndexType), index.type());
+    }
+    template <typename IndexType,
+              typename... Args,
+              std::enable_if_t<not is_index_type<IndexType>()>* = nullptr>
+    input_indexalator operator()(Args&&... args)
+    {
+      CUDF_FAIL("scalar must be an index type");
+    }
+  };
+
+  /**
    * @brief A type_dispatcher functor to create an output iterator from an indices column.
    */
   struct output_indexalator_fn {
@@ -440,6 +463,14 @@ struct indexalator_factory {
   static input_indexalator make_input_iterator(column_view const& indices)
   {
     return type_dispatcher(indices.type(), input_indexalator_fn{}, indices);
+  }
+
+  /**
+   * @brief Create an input indexalator instance from an index scalar.
+   */
+  static input_indexalator make_input_iterator(cudf::scalar const& index)
+  {
+    return type_dispatcher(index.type(), input_indexalator_scalar_fn{}, index);
   }
 
   /**

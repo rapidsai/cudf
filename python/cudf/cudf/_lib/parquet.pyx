@@ -11,14 +11,20 @@ import json
 from cython.operator import dereference
 import numpy as np
 
-from cudf.utils.dtypes import np_to_pa_dtype, is_categorical_dtype
+from cudf.utils.dtypes import (
+    np_to_pa_dtype,
+    is_categorical_dtype,
+    is_struct_dtype
+)
 from libc.stdlib cimport free
 from libc.stdint cimport uint8_t
 from libcpp.memory cimport shared_ptr, unique_ptr, make_unique
 from libcpp.string cimport string
 from libcpp.map cimport map
 from libcpp.vector cimport vector
+from libcpp.utility cimport move
 from libcpp cimport bool
+
 
 from cudf._lib.cpp.types cimport data_type, size_type
 from cudf._lib.table cimport Table
@@ -26,7 +32,6 @@ from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport (
     table_view
 )
-from cudf._lib.move cimport move
 from cudf._lib.cpp.io.parquet cimport (
     read_parquet as parquet_reader,
     parquet_reader_options,
@@ -40,6 +45,7 @@ from cudf._lib.cpp.io.parquet cimport (
     merge_rowgroup_metadata as parquet_merge_metadata,
     pq_chunked_state
 )
+from cudf._lib.column cimport Column
 from cudf._lib.io.utils cimport (
     make_source_info,
     make_sink_info
@@ -150,7 +156,7 @@ cpdef generate_pandas_metadata(Table table, index):
     return json_str
 
 cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
-                   skip_rows=None, num_rows=None, strings_to_categorical=False,
+                   skiprows=None, num_rows=None, strings_to_categorical=False,
                    use_pandas_metadata=True):
     """
     Cython function to call into libcudf API, see `read_parquet`.
@@ -167,7 +173,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     cdef vector[string] cpp_columns
     cdef bool cpp_strings_to_categorical = strings_to_categorical
     cdef bool cpp_use_pandas_metadata = use_pandas_metadata
-    cdef size_type cpp_skip_rows = skip_rows if skip_rows is not None else 0
+    cdef size_type cpp_skiprows = skiprows if skiprows is not None else 0
     cdef size_type cpp_num_rows = num_rows if num_rows is not None else -1
     cdef vector[vector[size_type]] cpp_row_groups
     cdef data_type cpp_timestamp_type = cudf_types.data_type(
@@ -189,7 +195,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         .row_groups(cpp_row_groups)
         .convert_strings_to_categories(cpp_strings_to_categorical)
         .use_pandas_metadata(cpp_use_pandas_metadata)
-        .skip_rows(cpp_skip_rows)
+        .skip_rows(cpp_skiprows)
         .num_rows(cpp_num_rows)
         .timestamp_type(cpp_timestamp_type)
         .build()
@@ -220,6 +226,8 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         )
     )
 
+    _update_struct_field_names(df, c_out_table.metadata.schema_info)
+
     if df.empty and meta is not None:
         cols_dtype_map = {}
         for col in meta['columns']:
@@ -231,9 +239,10 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                 column_names.remove(index_col)
 
         for col in column_names:
+            meta_dtype = cols_dtype_map.get(col, None)
             df._data[col] = cudf.core.column.column_empty(
                 row_count=0,
-                dtype=np.dtype(cols_dtype_map[col])
+                dtype=np.dtype(meta_dtype)
             )
 
     # Set the index column
@@ -252,11 +261,11 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
 
 cpdef write_parquet(
         Table table,
-        path,
-        index=None,
-        compression=None,
-        statistics="ROWGROUP",
-        metadata_file_path=None):
+        object path,
+        object index=None,
+        object compression=None,
+        str statistics="ROWGROUP",
+        object metadata_file_path=None):
     """
     Cython function to call into libcudf API, see `write_parquet`.
 
@@ -273,7 +282,7 @@ cpdef write_parquet(
     cdef map[string, string] user_data
     cdef table_view tv = table.data_view()
     cdef unique_ptr[cudf_io_types.data_sink] _data_sink
-    cdef cudf_io_types.sink_info sink = make_sink_info(path, &_data_sink)
+    cdef cudf_io_types.sink_info sink = make_sink_info(path, _data_sink)
 
     if index is not False:
         tv = table.view()
@@ -348,7 +357,7 @@ cdef class ParquetWriter:
 
     def __cinit__(self, object path, object index=None,
                   object compression=None, str statistics="ROWGROUP"):
-        self.sink = make_sink_info(path, &self._data_sink)
+        self.sink = make_sink_info(path, self._data_sink)
         self.stat_freq = _get_stat_freq(statistics)
         self.comp_type = _get_comp_type(compression)
         self.index = index
@@ -425,7 +434,7 @@ cdef class ParquetWriter:
             self.state = write_parquet_chunked_begin(args)
 
 
-cpdef merge_filemetadata(filemetadata_list):
+cpdef merge_filemetadata(object filemetadata_list):
     """
     Cython function to call into libcudf API, see `merge_rowgroup_metadata`.
 
@@ -483,3 +492,37 @@ cdef vector[string] _get_column_names(Table table, object index):
         column_names.push_back(str.encode(col_name))
 
     return column_names
+
+
+cdef _update_struct_field_names(
+    Table table,
+    vector[cudf_io_types.column_name_info]& schema_info
+):
+    for i, (name, col) in enumerate(table._data.items()):
+        table._data[name] = _update_column_struct_field_names(
+            col, schema_info[i]
+        )
+
+cdef Column _update_column_struct_field_names(
+    Column col,
+    cudf_io_types.column_name_info& info
+):
+    cdef vector[string] field_names
+
+    if is_struct_dtype(col):
+        field_names.reserve(len(col.base_children))
+        for i in range(info.children.size()):
+            field_names.push_back(info.children[i].name)
+        col = col._rename_fields(
+            field_names
+        )
+
+    if col.children:
+        children = list(col.children)
+        for i, child in enumerate(children):
+            children[i] = _update_column_struct_field_names(
+                child,
+                info.children[i]
+            )
+        col.set_base_children(tuple(children))
+    return col

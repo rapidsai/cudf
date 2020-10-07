@@ -286,8 +286,10 @@ public class HostMemoryBuffer extends MemoryBuffer {
 
   /**
    * Copy a set of bytes to an array from the buffer starting at offset.
-   * @param dstOffset the offset from the address to start copying to
-   * @param dst       the data to be copied.
+   * @param dst       destination byte array
+   * @param dstOffset starting offset within the destination array
+   * @param srcOffset starting offset within this buffer
+   * @param len       number of bytes to copy
    */
   public final void getBytes(byte[] dst, long dstOffset, long srcOffset, long len) {
     assert len >= 0;
@@ -404,6 +406,22 @@ public class HostMemoryBuffer extends MemoryBuffer {
     long requestedAddress = this.address + offset;
     addressOutOfBoundsCheck(requestedAddress, 8, "getLong");
     UnsafeMemoryAccessor.setLong(requestedAddress, value);
+  }
+
+  /**
+   * Copy a set of longs to an array from the buffer starting at offset.
+   * @param dst       destination long array
+   * @param dstIndex  starting index within the destination array
+   * @param srcOffset starting offset within this buffer
+   * @param count     number of longs to copy
+   */
+  public final void getLongs(long[] dst, long dstIndex, long srcOffset, int count) {
+    assert count >= 0;
+    assert count <= dst.length - dstIndex;
+    assert srcOffset >= 0;
+    long requestedAddress = this.address + srcOffset;
+    addressOutOfBoundsCheck(requestedAddress, count * 8L, "getLongs");
+    UnsafeMemoryAccessor.getLongs(dst, dstIndex, requestedAddress, count);
   }
 
   /**

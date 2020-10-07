@@ -4,7 +4,6 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
-from pandas.util import testing as tm
 
 import dask
 from dask import dataframe as dd
@@ -335,11 +334,11 @@ def test_setitem_scalar_datetime():
 @pytest.mark.parametrize(
     "func",
     [
-        lambda: tm.makeDataFrame().reset_index(),
-        tm.makeDataFrame,
-        tm.makeMixedDataFrame,
-        tm.makeObjectSeries,
-        tm.makeTimeSeries,
+        lambda: pd._testing.makeDataFrame().reset_index(),
+        pd._testing.makeDataFrame,
+        pd._testing.makeMixedDataFrame,
+        pd._testing.makeObjectSeries,
+        pd._testing.makeTimeSeries,
     ],
 )
 def test_repr(func):

@@ -14,13 +14,13 @@ from libc.stdint cimport (
     uint64_t,
 )
 from libcpp.memory cimport unique_ptr
+from libcpp.utility cimport move
 from libcpp cimport bool
 
 import cudf
 from cudf._lib.types import cudf_to_np_types, duration_unit_map
 from cudf._lib.types import datetime_unit_map
 from cudf._lib.types cimport underlying_type_t_type_id
-from cudf._lib.move cimport move
 
 from cudf._lib.cpp.wrappers.timestamps cimport (
     timestamp_s,

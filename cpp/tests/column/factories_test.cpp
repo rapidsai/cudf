@@ -440,3 +440,21 @@ TEST_F(ColumnFactoryTest, FromStringScalarWithZeroSize)
   EXPECT_FALSE(column->nullable());
   EXPECT_FALSE(column->has_nulls());
 }
+
+TEST_F(ColumnFactoryTest, DictionaryFromStringScalar)
+{
+  cudf::string_scalar value("hello");
+  auto column = cudf::make_dictionary_from_scalar(value, 1);
+  EXPECT_EQ(1, column->size());
+  EXPECT_EQ(column->type(), cudf::data_type{cudf::type_id::DICTIONARY32});
+  EXPECT_EQ(0, column->null_count());
+  EXPECT_EQ(2, column->num_children());
+  EXPECT_FALSE(column->nullable());
+  EXPECT_FALSE(column->has_nulls());
+}
+
+TEST_F(ColumnFactoryTest, DictionaryFromStringScalarError)
+{
+  cudf::string_scalar value("hello", false);
+  EXPECT_THROW(cudf::make_dictionary_from_scalar(value, 1), cudf::logic_error);
+}

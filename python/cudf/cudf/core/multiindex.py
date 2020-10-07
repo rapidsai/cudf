@@ -680,7 +680,7 @@ class MultiIndex(Index):
             # Pandas returns an empty Series with a tuple as name
             # the one expected result column
             series_name = []
-            for idx, code in enumerate(index._source_data.columns):
+            for code in index._source_data.columns:
                 series_name.append(index._source_data[code][0])
             result = cudf.Series([])
             result.name = tuple(series_name)
@@ -734,13 +734,6 @@ class MultiIndex(Index):
 
     def __len__(self):
         return self._data.nrows
-
-    def equals(self, other):
-        if self is other:
-            return True
-        if len(self) != len(other):
-            return False
-        return self == other
 
     def __eq__(self, other):
         if not hasattr(other, "_levels"):
