@@ -12,7 +12,7 @@ class StructColumn(ColumnBase):
         if not self.base_children:
             return 0
         else:
-            return len(self.base_children[0]) - 1
+            return len(self.base_children[0])
 
     @classmethod
     def from_arrow(self, data):
@@ -40,14 +40,19 @@ class StructColumn(ColumnBase):
         )
 
     def to_arrow(self):
-        pa_type = self.dtype.to_arrow()
-
         children = [
             pa.nulls(len(child))
             if len(child) == child.null_count
             else child.to_arrow()
             for child in self.children
         ]
+
+        pa_type = pa.struct(
+            {
+                field: child.type
+                for field, child in zip(self.dtype.fields, children)
+            }
+        )
 
         if self.nullable:
             nbuf = self.mask.to_host_array().view("int8")

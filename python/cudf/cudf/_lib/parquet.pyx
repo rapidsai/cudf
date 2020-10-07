@@ -19,6 +19,7 @@ from cudf.utils.dtypes import (
     np_to_pa_dtype,
     is_categorical_dtype,
     is_list_dtype
+    is_struct_dtype
 )
 from libc.stdlib cimport free
 from libc.stdint cimport uint8_t
@@ -28,6 +29,7 @@ from libcpp.map cimport map
 from libcpp.vector cimport vector
 from libcpp.utility cimport move
 from libcpp cimport bool
+
 
 from cudf._lib.cpp.types cimport data_type, size_type
 from cudf._lib.table cimport Table
@@ -48,6 +50,7 @@ from cudf._lib.cpp.io.parquet cimport (
     merge_rowgroup_metadata as parquet_merge_metadata,
     pq_chunked_state
 )
+from cudf._lib.column cimport Column
 from cudf._lib.io.utils cimport (
     make_source_info,
     make_sink_info
@@ -237,6 +240,8 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
             column_names=column_names
         )
     )
+
+    _update_struct_field_names(df, c_out_table.metadata.schema_info)
 
     if df.empty and meta is not None:
         cols_dtype_map = {}
@@ -502,3 +507,37 @@ cdef vector[string] _get_column_names(Table table, object index):
         column_names.push_back(str.encode(col_name))
 
     return column_names
+
+
+cdef _update_struct_field_names(
+    Table table,
+    vector[cudf_io_types.column_name_info]& schema_info
+):
+    for i, (name, col) in enumerate(table._data.items()):
+        table._data[name] = _update_column_struct_field_names(
+            col, schema_info[i]
+        )
+
+cdef Column _update_column_struct_field_names(
+    Column col,
+    cudf_io_types.column_name_info& info
+):
+    cdef vector[string] field_names
+
+    if is_struct_dtype(col):
+        field_names.reserve(len(col.base_children))
+        for i in range(info.children.size()):
+            field_names.push_back(info.children[i].name)
+        col = col._rename_fields(
+            field_names
+        )
+
+    if col.children:
+        children = list(col.children)
+        for i, child in enumerate(children):
+            children[i] = _update_column_struct_field_names(
+                child,
+                info.children[i]
+            )
+        col.set_base_children(tuple(children))
+    return col

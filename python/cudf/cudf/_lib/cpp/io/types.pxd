@@ -41,11 +41,16 @@ cdef extern from "cudf/io/types.hpp" \
         STATISTICS_ROWGROUP = 1,
         STATISTICS_PAGE = 2,
 
+    cdef cppclass column_name_info:
+        string name
+        vector[column_name_info] children
+
     cdef cppclass table_metadata:
         table_metadata() except +
 
         vector[string] column_names
         map[string, string] user_data
+        vector[column_name_info] schema_info
 
     cdef cppclass table_metadata_with_nullability(table_metadata):
         table_metadata_with_nullability() except +
