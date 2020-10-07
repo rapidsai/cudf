@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #=============================================================================
-cmake_minimum_required(VERSION 3.17...3.18 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.18 FATAL_ERROR)
 
 project(CUDA_DATAFRAME VERSION 0.16.0 LANGUAGES C CXX CUDA)
 
@@ -176,6 +176,12 @@ include(CheckIncludeFiles)
 include(CheckLibraryExists)
 
 ###################################################################################################
+# - find CIDAToolkit ------------------------------------------------------------------------------------
+
+find_package(CUDAToolkit)
+set(CMAKE_CUDA_ARCHITECTURES ${GPU_ARCHS})
+
+###################################################################################################
 # - third party dependencies-----------------------------------------------------------------------
 # add third party dependencies using CMake FetchContent
 
@@ -293,20 +299,6 @@ endif(Boost_INCLUDE_DIR)
 
 ###################################################################################################
 # - RMM -------------------------------------------------------------------------------------------
-
-#find_path(RMM_INCLUDE "rmm"
-#          HINTS "$ENV{RMM_ROOT}/include")
-
-#find_library(RMM_LIBRARY "rmm"
-#          HINTS "$ENV{RMM_ROOT}/lib" "$ENV{RMM_ROOT}/build")
-
-get_cmake_property(_variableNames VARIABLES)
-list (SORT _variableNames)
-foreach (_variableName ${_variableNames})
-    message(STATUS "${_variableName}=${${_variableName}}")
-endforeach()
-
-find_package(CUDAToolkit)
 
 CPMFindPackage(
   NAME RMM
