@@ -1011,8 +1011,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       assert !columns[i].getType().isDurationType() : "Unsupported column type Duration";
       assert !columns[i].getType().isTimestamp() : "Unsupported column type Timestamp";
       if(columns[i].getType() == DType.LIST) {
-        assert columns[i].getNumChildren() == 2 : "Unrecognized list column format";
-        ColumnViewAccess listDataColumn = columns[i].getChildColumnViewAccess(1);
+        assert columns[i].getNumChildren() == 1 : "Unrecognized list column format";
+        ColumnViewAccess listDataColumn = columns[i].getChildColumnViewAccess(0);
         assert !listDataColumn.getDataType().isDurationType() : "Unsupported column type List of Durations";
         assert !listDataColumn.getDataType().isTimestamp() : "Unsupported column type List of Timestamp";
         assert !listDataColumn.getDataType().isNestedType() : "Unsupported column type List of nested types";
