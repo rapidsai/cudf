@@ -1012,7 +1012,7 @@ static __device__ bool setupLocalPageInfo(page_state_s *const s,
 
       // during the decoding step we need to offset the global output buffers
       // for each level of nesting so that we write to the section this page
-      // is reponsible for.
+      // is responsible for.
       // - for flat schemas, we can do this directly by using row counts
       // - for nested schemas, these offsets are computed during the preprocess step
       if (s->col.column_data_base != nullptr) {

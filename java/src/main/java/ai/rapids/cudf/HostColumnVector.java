@@ -273,14 +273,14 @@ public final class HostColumnVector extends HostColumnVectorCore {
   }
 
   public static<T> HostColumnVector fromLists(DataType dataType, List<T>... values) {
-    ColumnBuilder cb = new ColumnBuilder(dataType, values.length);
+    ColumnBuilder cb = new ColumnBuilder(dataType);
     cb.appendLists(values);
     return cb.build();
   }
 
   public static HostColumnVector fromStructs(DataType dataType,
                                              List<StructData> values) {
-    ColumnBuilder cb = new ColumnBuilder(dataType, values.size());
+    ColumnBuilder cb = new ColumnBuilder(dataType);
     cb.appendStructValues(values);
     return cb.build();
   }
@@ -692,13 +692,13 @@ public final class HostColumnVector extends HostColumnVectorCore {
     private int currentByteIndex = 0;
 
 
-    public ColumnBuilder(HostColumnVector.DataType type, int rows) {
+    public ColumnBuilder(HostColumnVector.DataType type) {
       this.type = type.getType();
       this.nullable = type.isNullable();
-      this.rows = rows;
+      this.rows = 0;
       for (int i = 0; i < type.getNumChildren(); i++) {
         // initially assume 0 rows and increment as we go
-        childBuilders.add(new ColumnBuilder(type.getChild(i), 0));
+        childBuilders.add(new ColumnBuilder(type.getChild(i)));
       }
     }
 
@@ -729,6 +729,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     public ColumnBuilder appendLists(List... inputLists) {
       for (List inputList : inputLists) {
         // one row
+        rows++;
         append(inputList);
       }
       return this;
@@ -737,6 +738,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     public ColumnBuilder appendStructValues(List<StructData> inputList) {
       for (StructData structInput : inputList) {
         // one row
+        rows++;
         append(structInput);
       }
       return this;
@@ -1000,8 +1002,10 @@ public final class HostColumnVector extends HostColumnVectorCore {
     @Override
     public void close() throws Exception {
       if (!built) {
-        data.close();
-        data = null;
+        if (data != null) {
+          data.close();
+          data = null;
+        }
         if (valid != null) {
           valid.close();
           valid = null;

@@ -253,11 +253,11 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
 
 cpdef write_parquet(
         Table table,
-        path,
-        index=None,
-        compression=None,
-        statistics="ROWGROUP",
-        metadata_file_path=None):
+        object path,
+        object index=None,
+        object compression=None,
+        str statistics="ROWGROUP",
+        object metadata_file_path=None):
     """
     Cython function to call into libcudf API, see `write_parquet`.
 
@@ -426,7 +426,7 @@ cdef class ParquetWriter:
             self.state = write_parquet_chunked_begin(args)
 
 
-cpdef merge_filemetadata(filemetadata_list):
+cpdef merge_filemetadata(object filemetadata_list):
     """
     Cython function to call into libcudf API, see `merge_rowgroup_metadata`.
 
