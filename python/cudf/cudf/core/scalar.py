@@ -7,8 +7,8 @@ from cudf.core.index import Index
 from cudf.core.series import Series
 from cudf.utils.dtypes import (
     get_allowed_combinations_for_operator,
+    is_datetime_dtype,
     to_cudf_compatible_scalar,
-    is_datetime_dtype
 )
 
 
@@ -161,14 +161,17 @@ class Scalar(libcudf.scalar.Scalar):
 
         # datetime handling
         if out_dtype in "Mm":
-            if is_datetime_dtype(self.dtype) and not is_datetime_dtype(other.dtype):
+            if self.dtype.char in "Mm" and not other.dtype.char in "Mm":
                 return self.dtype
-            if is_datetime_dtype(other.dtype) and not is_datetime_dtype(self.dtype):
+            if other.dtype.char in "Mm" and not self.dtype.char in "Mm":
                 return other.dtype
             else:
-                if op == '__sub__' and self.dtype.char == other.dtype.char == 'M':
+                if (
+                    op == "__sub__"
+                    and self.dtype.char == other.dtype.char == "M"
+                ):
                     res, _ = np.datetime_data(max(self.dtype, other.dtype))
-                    return np.dtype('m8'+f"[{res}]")
+                    return np.dtype("m8" + f"[{res}]")
                 return np.result_type(self.dtype, other.dtype)
 
         return np.dtype(out_dtype)
@@ -201,10 +204,10 @@ class Scalar(libcudf.scalar.Scalar):
             )
 
         if op in {"__ceil__", "__floor__"}:
-            if self.dtype.char in 'bBhHf':
+            if self.dtype.char in "bBhHf":
                 return np.dtype("float32")
             else:
-                return np.dtype('float64')
+                return np.dtype("float64")
         return self.dtype
 
     def _scalar_unaop(self, op):
