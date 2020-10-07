@@ -15,7 +15,9 @@
  */
 #include <io/utilities/file_utils.hpp>
 
+#include <dlfcn.h>
 #include <fcntl.h>
+#include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -37,10 +39,28 @@ file_wrapper::file_wrapper(std::string const &filepath, int flags, mode_t mode)
   CUDF_EXPECTS(fd != -1, "Cannot open file");
 }
 
+/**
+ * Returns the directory from which the libcudf.so is loaded.
+ */
+std::string get_libcudf_dir_path()
+{
+  Dl_info dl_info;
+  dladdr((void *)get_libcudf_path, &dl_info);
+  std::string full_path{dl_info.dli_fname};
+  auto const dir_path = full_path.substr(0, full_path.find_last_of('/') + 1);
+  return dir_path;
+}
+
 struct cufile_driver {
   cufile_driver()
   {
-    if (cuFileDriverOpen().err != CU_FILE_SUCCESS) CUDF_FAIL("Cannot init cufile driver");
+    // Unless CUFILE_ENV_PATH_JSON is already set, set the env var to point to a config file with
+    // enabled compatiblity mode
+    auto const cufile_config_path = get_libcudf_dir_path() + "config/cufile.json";
+    CUDF_EXPECTS(setenv("CUFILE_ENV_PATH_JSON", cufile_config_path.c_str(), 0) == 0,
+                 "Failed to set the cuFile config file environment variable.");
+
+    CUDF_EXPECTS(cuFileDriverOpen().err == CU_FILE_SUCCESS, "Failed to initialize cuFile driver");
   }
   ~cufile_driver() { cuFileDriverClose(); }
 };

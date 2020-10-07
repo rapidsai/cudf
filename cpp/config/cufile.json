@@ -1,0 +1,70 @@
+{
+            "logging": {
+                            // log directory, if not enabled will create log file under current working directory
+                            //"dir": "/home/<xxxx>",
+
+                            // ERROR|WARN|INFO|DEBUG|TRACE (in decreasing order of priority)
+                            "level": "ERROR"
+            },
+
+            "profile": {
+                            // nvtx profiling on/off
+                            "nvtx": false,
+                            // cufile stats level(0-3)
+                            "cufile_stats": 0
+            },
+
+            "properties": {
+                            // max IO chunk size (4K aligned) used by cuFile per IO request (in KB)
+                            "max_direct_io_size_kb" : 16384,
+                            // device memory size (4K aligned) for reserving bounce buffers for the entire GPU (in KB)
+                            "max_device_cache_size_kb" : 131072,
+                            // limit on maximum memory (4K aligned) that can be pinned for a given process (in KB)
+                            "max_device_pinned_mem_size_kb" : 33554432,
+                            // true or false (true will enable asynchronous io submission to nvidia-fs driver)
+                            "use_poll_mode" : false,
+                            // maximum IO request size (4K aligned) within or equal to which library will poll (in KB)
+                            "poll_mode_max_size_kb": 4,
+                            // allow compat mode, this will enable use of cufile posix read/writes
+                            "allow_compat_mode": true,
+                            // client-side rdma addr list for user-space file-systems(e.g ["10.0.1.0", "10.0.2.0"])
+			    "rdma_dev_addr_list": [
+				    "172.16.8.240","172.16.8.241",
+				    "172.16.8.242","172.16.8.243",
+				    "172.16.8.245","172.16.8.246",
+				    "172.16.8.247","172.16.8.248"
+			    ]
+            },
+
+            "fs": {
+                    "generic": {
+
+                            // for unaligned writes, setting it to true will use posix write instead of cuFileWrite
+                            "posix_unaligned_writes" : false
+                    },
+
+                    "lustre": {
+
+                            // IO threshold for read/write (4K aligned)) equal to or below which cufile will use posix reads (KB)
+                            "posix_gds_min_kb" : 0
+                    }
+            },
+
+            "blacklist": {
+                            // specify list of vendor driver modules to blacklist for nvidia-fs (e.g. ["nvme" , "nvme_rdma"])
+                            "drivers":  [ ],
+
+                            // specify list of block devices to prevent IO using libcufile (e.g. [ "/dev/sda1" ])
+                            "devices": [ ],
+
+                            // specify list of mount points to prevent IO using libcufile (e.g. ["/mnt/test"])
+                            "mounts": [ ],
+
+                            // specify list of file-systems to prevent IO using libcufile (e.g ["lustre", "wekafs"])
+                            "filesystems": [ ]
+            }
+        
+    // Application can override custom configuration via export CUFILE_ENV_PATH_JSON=<filepath>
+    // e.g : export CUFILE_ENV_PATH_JSON="/home/<xxx>/cufile.json"
+}
+
