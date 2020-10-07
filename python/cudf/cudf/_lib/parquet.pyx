@@ -18,7 +18,7 @@ import numpy as np
 from cudf.utils.dtypes import (
     np_to_pa_dtype,
     is_categorical_dtype,
-    is_list_dtype
+    is_list_dtype,
     is_struct_dtype
 )
 from libc.stdlib cimport free
