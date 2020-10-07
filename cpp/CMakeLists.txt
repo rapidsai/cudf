@@ -315,9 +315,7 @@ CPMFindPackage(
   VERSION 0.3
 )
 
-#set(DLPACK_INCLUDE "${dlpack_SOURCE_DIR}/include")
-
-message(STATUS "DLPACK: DLPACK_INCLUDE set to ${DLPACK_INCLUDE}")
+message(STATUS "DLPACK: dlpack_SOURCE_DIR set to ${dlpack_SOURCE_DIR}")
 
 ###################################################################################################
 # - jitify ----------------------------------------------------------------------------------------
@@ -342,12 +340,6 @@ endif(PER_THREAD_DEFAULT_STREAM)
 # - add gtest -------------------------------------------------------------------------------------
 
 if(BUILD_TESTS)
-get_cmake_property(_variableNames VARIABLES)
-list (SORT _variableNames)
-foreach (_variableName ${_variableNames})
-    message(STATUS "${_variableName}=${${_variableName}}")
-endforeach()
-
   CPMFindPackage(
     NAME GTEST
     GITHUB_REPOSITORY google/googletest
@@ -359,20 +351,14 @@ endforeach()
   )
   enable_testing()
   set(GTEST_LIBRARY "gtest gtest_main gmock")
-  
-  #include_directories("${gtest_SOURCE_DIR}/include"
-  #                    "${gmock_SOURCE_DIR}/include")
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tests)
+  message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
 endif(BUILD_TESTS)
-
-
-message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
 
 ###################################################################################################
 # - add google benchmark --------------------------------------------------------------------------
 
 if(BUILD_BENCHMARKS)
-
   CPMFindPackage(
     NAME benchmark
     GITHUB_REPOSITORY google/benchmark
@@ -382,17 +368,12 @@ if(BUILD_BENCHMARKS)
     # The REGEX feature test fails when gbench's cmake is run under CPM because it doesn't assume C++11
     # Additionally, attempting to set the CMAKE_CXX_VERSION here doesn't propogate to the feature test build
     # Therefore, we just disable the feature test and assume platforms we care about have a regex impl available
-    "RUN_HAVE_GNU_POSIX_REGEX 0" #
+    "RUN_HAVE_GNU_POSIX_REGEX 0" 
   )
-
   set(benchmark_LIBRARY "benchmark")
-  #include_directories("${benchmark_INCLUDE_DIR}/include")
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/benchmarks)
-
-  endif(BUILD_BENCHMARKS)
-
-message(STATUS "benchmark_SOURCE_DIR: ${benchmark_SOURCE_DIR}")
-message(STATUS "BENCHMARK_LIST set to: ${BENCHMARK_LIST}")
+  message(STATUS "BENCHMARK_LIST set to: ${BENCHMARK_LIST}")
+endif(BUILD_BENCHMARKS)
 
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
