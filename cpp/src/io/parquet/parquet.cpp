@@ -290,7 +290,7 @@ PARQUET_END_STRUCT()
  */
 bool CompactProtocolReader::InitSchema(FileMetaData *md)
 {
-  if (WalkSchema(md->schema) != md->schema.size()) return false;
+  if (WalkSchema(md) != md->schema.size()) return false;
 
   /* Inside FileMetaData, there is a std::vector of RowGroups and each RowGroup contains a
    * a std::vector of ColumnChunks. Each ColumnChunk has a member ColumnMetaData, which contains
@@ -313,24 +313,19 @@ bool CompactProtocolReader::InitSchema(FileMetaData *md)
         }();
         if (it == md->schema.cend()) return false;
         current_schema_index = std::distance(md->schema.cbegin(), it);
-
-        // if the schema index is already pointing at a nested type, we'll leave it alone.
-        if (column.schema_idx < 0 ||
-            md->schema[column.schema_idx].converted_type != parquet::LIST) {
-          column.schema_idx = current_schema_index;
-        }
-        column.leaf_schema_idx = current_schema_index;
-        parent                 = current_schema_index;
+        column.schema_idx    = current_schema_index;
+        parent               = current_schema_index;
       }
     }
   }
+
   return true;
 }
 
 /**
  * @brief Populates each node in the schema tree
  *
- * @param[out] schema Current node
+ * @param[out] md File metadata
  * @param[in] idx Current node index
  * @param[in] parent_idx Parent node index
  * @param[in] max_def_level Max definition level
@@ -339,10 +334,10 @@ bool CompactProtocolReader::InitSchema(FileMetaData *md)
  * @return The node index that was populated
  */
 int CompactProtocolReader::WalkSchema(
-  std::vector<SchemaElement> &schema, int idx, int parent_idx, int max_def_level, int max_rep_level)
+  FileMetaData *md, int idx, int parent_idx, int max_def_level, int max_rep_level)
 {
-  if (idx >= 0 && (size_t)idx < schema.size()) {
-    SchemaElement *e = &schema[idx];
+  if (idx >= 0 && (size_t)idx < md->schema.size()) {
+    SchemaElement *e = &md->schema[idx];
     if (e->repetition_type == OPTIONAL) {
       ++max_def_level;
     } else if (e->repetition_type == REPEATED) {
@@ -352,12 +347,13 @@ int CompactProtocolReader::WalkSchema(
     e->max_definition_level = max_def_level;
     e->max_repetition_level = max_rep_level;
     e->parent_idx           = parent_idx;
-    parent_idx              = idx;
+
+    parent_idx = idx;
     ++idx;
     if (e->num_children > 0) {
       for (int i = 0; i < e->num_children; i++) {
         int idx_old = idx;
-        idx         = WalkSchema(schema, idx, parent_idx, max_def_level, max_rep_level);
+        idx         = WalkSchema(md, idx, parent_idx, max_def_level, max_rep_level);
         if (idx <= idx_old) break;  // Error
       }
     }

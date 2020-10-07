@@ -178,17 +178,15 @@ cdef dtype_from_lists_column_view(column_view cv):
         return ListDtype(np.dtype("int8"))
     else:
         return ListDtype(
-            cudf_to_np_types[<underlying_type_t_type_id> child.type().id()]
+            dtype_from_column_view(child)
         )
 
-
 cdef dtype_from_structs_column_view(column_view cv):
-    cdef column_view child
-    fields = {}
-    for i in range(cv.num_children()):
-        fields[str(i)] = dtype_from_column_view(cv.child(i))
+    fields = {
+        str(i): dtype_from_column_view(cv.child(i))
+        for i in range(cv.num_children())
+    }
     return StructDtype(fields)
-
 
 cdef dtype_from_column_view(column_view cv):
     cdef libcudf_types.type_id tid = cv.type().id()
