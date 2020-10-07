@@ -1516,3 +1516,62 @@ def test_merge_with_lists(how):
     got = gd_left.merge(gd_right, on="a")
 
     assert_eq(expect, got)
+
+
+def test_merge_index_data_on():
+    pd_left=pd.DataFrame({"a":[1,2,3], "b":[4,5,6]})
+    pd_right=pd.DataFrame({"b":[5,6,7], "c":[7,8,9]}).set_index("b")
+
+    gd_left = cudf.from_pandas(pd_left)
+    gd_right = cudf.from_pandas(pd_right)
+
+    expect = pd_left.merge(pd_right, on="b")
+    got = gd_left.merge(gd_right, on="b")
+
+    assert_eq(got.sort_values(got.columns.to_list()).reset_index(drop=True),
+                expect.sort_values(expect.columns.to_list()).reset_index(
+                    drop=True
+                ))
+
+    pd_left=pd.DataFrame({"a":[1,2,3], "b":[4,5,6]}).set_index("b")
+    pd_right=pd.DataFrame({"b":[5,6,7], "c":[7,8,9]})
+
+    gd_left = cudf.from_pandas(pd_left)
+    gd_right = cudf.from_pandas(pd_right)
+
+    expect = pd_right.merge(pd_left, on="b")
+    got = gd_right.merge(gd_left, on="b")
+
+    assert_eq(got.sort_values(got.columns.to_list()).reset_index(drop=True),
+                expect.sort_values(expect.columns.to_list()).reset_index(
+                    drop=True
+                ))
+
+    pd_left=pd.DataFrame({"a":[1,2,3], "b":[4,5,6]}).set_index("b")
+    pd_right=pd.DataFrame({"b":[4,5,6], "c":[7,8,9]}).set_index("b")
+
+    gd_left = cudf.from_pandas(pd_left)
+    gd_right = cudf.from_pandas(pd_right)
+
+    expect = pd_right.merge(pd_left, on="b")
+    got = gd_right.merge(gd_left, on="b")
+
+    assert_eq(got.sort_values(got.columns.to_list()).reset_index(drop=True),
+                expect.sort_values(expect.columns.to_list()).reset_index(
+                    drop=True
+                ))
+   
+    pd_left=pd.DataFrame({"a":[1,2,3], "b":[4,5,6]})
+    pd_right=pd.DataFrame({"b":[5,6,7], "c":[7,8,9]})
+
+    gd_left = cudf.from_pandas(pd_left)
+    gd_right = cudf.from_pandas(pd_right)
+    
+    pd_right.merge(pd_left, on="b")
+    gd_right.merge(gd_left, on="b")
+
+    assert_eq(got.sort_values(got.columns.to_list()).reset_index(drop=True),
+                expect.sort_values(expect.columns.to_list()).reset_index(
+                    drop=True
+                ))
+
