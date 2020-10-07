@@ -4,6 +4,8 @@
 
 ## Improvements
 
+- PR #6461 Replace index type-dispatch call with indexalator in cudf::scatter
+
 ## Bug Fixes
 
 # cuDF 0.16.0 (Date TBD)
