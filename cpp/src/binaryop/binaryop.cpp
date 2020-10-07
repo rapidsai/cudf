@@ -631,7 +631,7 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
   if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING)
     return binops::compiled::binary_operation(lhs, rhs, op, output_type, mr, stream);
 
-  if (is_fixed_point(lhs.type().id()) or is_fixed_point(rhs.type().id()))
+  if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type()))
     return fixed_point_binary_operation(lhs, rhs, op, mr, stream);
 
   // Check for datatype
@@ -658,7 +658,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING)
     return binops::compiled::binary_operation(lhs, rhs, op, output_type, mr, stream);
 
-  if (is_fixed_point(lhs.type().id()) or is_fixed_point(rhs.type().id()))
+  if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type()))
     return fixed_point_binary_operation(lhs, rhs, op, mr, stream);
 
   // Check for datatype
@@ -687,7 +687,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING)
     return binops::compiled::binary_operation(lhs, rhs, op, output_type, mr, stream);
 
-  if (is_fixed_point(lhs.type().id()) or is_fixed_point(rhs.type().id()))
+  if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type()))
     return fixed_point_binary_operation(lhs, rhs, op, mr, stream);
 
   // Check for datatype
