@@ -4,6 +4,8 @@
 
 ## Improvements
 
+- PR #6415 Support `datetime64[ms]` in row-wise op
+
 ## Bug Fixes
 
 # cuDF 0.16.0 (Date TBD)
