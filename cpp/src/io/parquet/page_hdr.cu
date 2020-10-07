@@ -218,10 +218,10 @@ extern "C" __global__ void __launch_bounds__(128)
     PageInfo *page_info;
 
     if (!t) {
-      bs->base = bs->cur  = bs->ck.compressed_data;
-      bs->end             = bs->base + bs->ck.compressed_size;
-      bs->page.chunk_idx  = chunk;
-      bs->page.column_idx = bs->ck.dst_col_index;
+      bs->base = bs->cur      = bs->ck.compressed_data;
+      bs->end                 = bs->base + bs->ck.compressed_size;
+      bs->page.chunk_idx      = chunk;
+      bs->page.src_col_schema = bs->ck.src_col_schema;
       // this computation is only valid for flat schemas. for nested schemas,
       // they will be recomputed in the preprocess step by examining repetition and
       // definition levels

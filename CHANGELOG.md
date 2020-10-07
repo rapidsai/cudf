@@ -23,6 +23,7 @@
 - PR #6254 Add `cudf::make_dictionary_from_scalar` factory function
 - PR #6262 Add nth_element series aggregation with null handling
 - PR #6277 Add support for LEAD/LAG window functions for fixed-width types
+- PR #6318 Add support for reading Struct and map types from Parquet files
 - PR #6315 Native code for string-map lookups, for cudf-java
 - PR #6302 Add custom dataframe accessors
 - PR #6301 Add JNI bindings to nvcomp
@@ -185,6 +186,8 @@
 - PR #6424 Check for null data in close for ColumnBuilder
 - PR #6426 Fix `RuntimeError` when `np.bool_` is passed as `header` in `to_csv`
 - PR #6443 Make java apis getList and getStruct public
+- PR #6445 Add `dlpack` to run section of libcudf conda recipe to fix downstream build issues
+- PR #6450 Make java Column Builder row agnostic
 
 
 # cuDF 0.15.0 (26 Aug 2020)
