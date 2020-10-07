@@ -272,14 +272,14 @@ public final class HostColumnVector extends HostColumnVectorCore {
   }
 
   public static<T> HostColumnVector fromLists(DataType dataType, List<T>... values) {
-    ColumnBuilder cb = new ColumnBuilder(dataType);
+    ColumnBuilder cb = new ColumnBuilder(dataType, values.length);
     cb.appendLists(values);
     return cb.build();
   }
 
   public static HostColumnVector fromStructs(DataType dataType,
                                              List<StructData> values) {
-    ColumnBuilder cb = new ColumnBuilder(dataType);
+    ColumnBuilder cb = new ColumnBuilder(dataType, values.size());
     cb.appendStructValues(values);
     return cb.build();
   }
@@ -684,6 +684,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     //TODO nullable currently not used
     private boolean nullable;
     private long rows;
+    private long estimatedRows;
     private boolean built = false;
     private List<ColumnBuilder> childBuilders = new ArrayList<>();
 
@@ -691,13 +692,14 @@ public final class HostColumnVector extends HostColumnVectorCore {
     private int currentByteIndex = 0;
 
 
-    public ColumnBuilder(HostColumnVector.DataType type) {
+    public ColumnBuilder(HostColumnVector.DataType type, long estimatedRows) {
       this.type = type.getType();
       this.nullable = type.isNullable();
       this.rows = 0;
+      this.estimatedRows = estimatedRows;
       for (int i = 0; i < type.getNumChildren(); i++) {
         // initially assume 0 rows and increment as we go
-        childBuilders.add(new ColumnBuilder(type.getChild(i)));
+        childBuilders.add(new ColumnBuilder(type.getChild(i), estimatedRows));
       }
     }
 
@@ -720,7 +722,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     private void allocateBitmaskAndSetDefaultValues() {
-      long bitmaskSize = ColumnVector.getNativeValidPointerSize((int) rows);
+      long bitmaskSize = ColumnVector.getNativeValidPointerSize((int) estimatedRows);
       valid = HostMemoryBuffer.allocate(bitmaskSize);
       valid.setMemory(0, bitmaskSize, (byte) 0xFF);
     }
@@ -744,8 +746,12 @@ public final class HostColumnVector extends HostColumnVectorCore {
     private void resizeDataBuffer(int length) {
       // just for strings we want to throw a real exception if we would overrun the buffer
       if (data == null) {
-        // since rows can be updated as we go, make data buffer as big as that or the requested length
-        data = HostMemoryBuffer.allocate(length);
+        // since rows can be updated as we go, make data buffer as big as the estimate or the requested length
+        if (!type.isNestedType() && type != DType.STRING) {
+          data = HostMemoryBuffer.allocate(estimatedRows * type.getSizeInBytes());
+        } else {
+          data = HostMemoryBuffer.allocate(length);
+        }
         return;
       }
       long oldLen = data.getLength();
@@ -774,7 +780,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
 
     private void initAndResizeOffsetBuffer(int currentIndex) {
       if (this.offsets == null) {
-        offsets = HostMemoryBuffer.allocate((rows + 1) * OFFSET_SIZE);
+        offsets = HostMemoryBuffer.allocate((estimatedRows + 1) * OFFSET_SIZE);
         offsets.setInt(0, 0);
       } else {
         if (offsets.length <= currentIndex * OFFSET_SIZE + OFFSET_SIZE) {
